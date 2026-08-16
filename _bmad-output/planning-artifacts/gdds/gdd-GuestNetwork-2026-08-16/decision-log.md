@@ -616,8 +616,8 @@ Three renames, driven by one observation: **the vocabulary still encoded the pre
 
 *Rejected: **Proxy*** (acting-on-behalf-of is exactly right, but too jargon-adjacent), ***Accessory*** (legal accomplice + HomeKit device is a superb double meaning, but reads oddly as a role label), ***Staff*** (best fictional relationship — the house's coerced employees — but a mass noun with no clean singular).
 
-### D-059 · Group action: **group Revoke → Restrain** (reverses D-021's vocabulary change)
-Revision 2 replaced *Evict* with a group *Revoke*, justified as the Residents being forced to speak in the house's vocabulary. **That was too subtle for what it cost.** When an Insider revokes they wield the house's power and it lands; when six people vote, they were borrowing a word for something they do not control.
+### D-059 · Group action: **group Revoke → Restrain**
+Reverses a change inherited from `design-doc-revisions.md` §15.7, which replaced *Evict* with a group *Revoke* and justified it as the Residents being forced to speak in the house's vocabulary. **That was too subtle for what it cost.** When an Insider revokes they wield the house's power and it lands; when six people vote, they were borrowing a word for something they do not control.
 
 > **Restrain is a physical act the house cannot prevent.**
 
