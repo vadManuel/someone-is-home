@@ -15,12 +15,22 @@ enum class TriggerKind { TAP, SCRIPTED }
  * spike — one amber screen, a tap, a timestamp — never triggers a collection inside the test
  * window and returns a clean result you would wrongly read as "Kotlin/Native GC is a
  * non-issue". OFF is the control, not the default.
+ *
+ * **Scales were raised 40x after run 2 measured them useless.** The original numbers assumed
+ * the app's own allocation was near zero. It is not: Compose alone allocates ~46 KB/s, and the
+ * first REPRESENTATIVE run added only 14% on top of that, so pressure ON and pressure OFF were
+ * statistically identical and the GC half of the gate went untested.
+ *
+ * **The label is a guess; the measured MB/s in the report is the fact.** Nobody knows the real
+ * app's allocation rate yet, so the useful experiment is not "is REPRESENTATIVE right" but
+ * "does the pause stay inside a frame as allocation scales by orders of magnitude".
  */
 enum class PressureLevel(val scale: Double) {
     OFF(0.0),
-    LIGHT(0.25),
-    REPRESENTATIVE(1.0),
-    HEAVY(4.0),
+    LIGHT(1.0),
+    REPRESENTATIVE(10.0),
+    HEAVY(50.0),
+    CRUSH(250.0),
 }
 
 /**
@@ -77,7 +87,20 @@ data class RunConfig(
         val VOLUME_HEAVY = VOLUME.copy(
             label = "VOLUME_HEAVY",
             pressure = PressureLevel.HEAVY,
-            note = "Headroom probe: 4x representative allocation.",
+            note = "Headroom probe. 5x REPRESENTATIVE.",
+        )
+
+        /**
+         * Bounds the GC question instead of estimating it. If the pause still fits inside a
+         * frame at an allocation rate far above anything the real app could plausibly reach,
+         * the answer holds whatever that rate turns out to be. Fewer trials because this run
+         * is about collections, not about the latency tail.
+         */
+        val VOLUME_CRUSH = VOLUME.copy(
+            label = "VOLUME_CRUSH",
+            trials = 5_000,
+            pressure = PressureLevel.CRUSH,
+            note = "Bounds the GC half: absurd allocation, does the pause still fit a frame?",
         )
 
         /** 1.7a: the first-run shader stall, with the pre-warm mitigation switched off. */
@@ -131,6 +154,6 @@ data class RunConfig(
             note = "Allocation accounting only. Pressure OFF so the heap delta is attributable.",
         )
 
-        val all = listOf(VOLUME, VOLUME_CONTROL, VOLUME_HEAVY, COLD, LONG_IDLE, CAMERA, ALLOC_PROBE)
+        val all = listOf(VOLUME, VOLUME_CONTROL, VOLUME_CRUSH, VOLUME_HEAVY, COLD, LONG_IDLE, CAMERA, ALLOC_PROBE)
     }
 }
