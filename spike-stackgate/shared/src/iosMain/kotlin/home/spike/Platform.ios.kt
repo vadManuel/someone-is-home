@@ -151,7 +151,13 @@ actual object Vsync {
             // The baseline is re-derived periodically rather than fixed once, because an LTPO
             // panel can genuinely change rate mid-run when the device warms up, and that is a
             // finding rather than something to normalise away.
-            if (_tickIndex % 1024 == 0L || baselineNanos == 0L) {
+            // Wait for a real sample population before trusting the median.
+            //
+            // Seeding it on the first tick meant the baseline was the median of ONE arbitrary
+            // gap, held until tick 1024 — so if that first gap was short, every ordinary frame
+            // for the next thousand ticks tripped the detector. Run 2 reported 1023 stalls, of
+            // which 1022 had a gap of exactly one frame interval. The true count was 1.
+            if (intervalSamples >= 240 && (_tickIndex % 1024 == 0L || baselineNanos == 0L)) {
                 val median = measuredIntervalNanos()
                 if (median > 0L) baselineNanos = median
             }
