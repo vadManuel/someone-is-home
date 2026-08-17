@@ -12,21 +12,26 @@ a number the rest of the project has to stay under.
 
 ## The controlled evidence
 
-Four runs, each in a **fresh process**, all reporting thermal `nominal`. Run order and heat are
-controlled; earlier runs in `results/` predate the harness and should not be used for
-comparison, because they may have shared a process and their order was uncontrolled.
+Nine runs, each in a **fresh process**, every one reporting thermal `nominal`. Fresh processes
+matter: Kotlin/Native schedules collections against heap-size thresholds, so a run inheriting a
+grown heap collects at a different cadence and run order becomes an uncontrolled variable.
 
-| run | measured MB/s | collections | trials overlapping a collection | late draws | late given overlap |
+| run | measured MB/s | n | collections | late draws | late with a GC in window |
 |---|---|---|---|---|---|
-| `VOLUME_CPU_CONTROL` | 0.06 | 132 | 4 (0.1%) | **0** / 5 000 | 0.00% |
-| `VOLUME_HEAVY` | 0.54 | 3 514 | 153 (1.5%) | **0** / 10 000 | 0.00% |
-| `VOLUME_CRUSH` | 3.00 | 9 438 | 541 (10.8%) | **18** / 5 000 | 3.33% |
+| `VOLUME_CONTROL` (pressure off) | 0.05 | 10 000 | 291 | **0** | — |
+| `ALLOC_PROBE` (pressure off) | 0.05 | 20 000 | 538 | **0** | — |
+| `VOLUME_CPU_CONTROL` (CPU, no garbage) | 0.06 | 5 000 | 132 | **0** | — |
+| `VOLUME` | 0.13 | 10 000 | 774 | **1** | **0** |
+| `LONG_IDLE` (renderer idle 3–10 s) | 0.19 | 200 | 793 | **0** | — |
+| `VOLUME_HEAVY` | 0.54 | 10 000 | 3 514 | **0** | — |
+| `VOLUME_CRUSH` | 3.00 | 5 000 | 9 438 | **18** | **18** |
 
-*Late* = trigger→black took longer than one whole frame interval × 1.15.
+*Late* = trigger→black took longer than one frame interval (8.335 ms) × 1.15.
 
-Compose Multiplatform on its own, with the pressure generator off entirely, allocates
-**~0.04 MB/s**. That is the floor to compare everything against, and comparing against zero is
-what made the first two runs of this spike look meaningful when they were not.
+**55 200 blackouts at or below 0.54 MB/s produced exactly one late frame, and that one had no
+collection in its window.** Compose Multiplatform on its own allocates ~0.04 MB/s; that is the
+floor everything must be compared against, and comparing against zero is what made this spike's
+first two runs look meaningful when they were not.
 
 ---
 
@@ -35,32 +40,45 @@ what made the first two runs of this spike look meaningful when they were not.
 ### The collector is the cause — `VOLUME_CPU_CONTROL`
 
 Same thread count, same loop counts, same arithmetic, writing into preallocated buffers so it
-makes no garbage. **Zero late frames in 5 000 trials.**
+makes no garbage. **Zero late frames in 5 000 trials.** The CRUSH failures are not four busy
+threads competing with the renderer; they track *allocation*. D-026 called it right.
 
-This refutes the obvious confound: the late frames under CRUSH are not four busy threads
-competing with the renderer for CPU. They track *allocation*. Story 1.7b's framing is correct
-and D-026 called it right — the GC half is the sharper one.
-
-*Caveat, honestly:* `cpuLoop` runs the same number of iterations as the allocating loops but
-each iteration is cheaper, since it neither constructs objects nor builds strings. So it rules
-out *"merely having four busy threads"* rather than *"the CPU cost of allocation itself."* That
-distinction matters less than it sounds — that cost is a consequence of allocating.
+*Caveat:* `cpuLoop` runs the same number of iterations but each is cheaper — no object
+construction, no string building. It rules out *"merely four busy threads"* rather than *"the
+CPU cost of allocation itself,"* a distinction that matters less than it sounds because that
+cost is a consequence of allocating.
 
 ### There is real headroom — `VOLUME_HEAVY`
 
 At **0.54 MB/s, thirteen times Compose's own baseline**, with 3 514 collections and 153 trials
 overlapping one: **zero of 10 000 blackouts overran a frame.**
 
-The important detail is that **a collection overlapping a blackout is not sufficient to make it
-late.** 153 overlaps at HEAVY produced no misses; 541 overlaps at CRUSH produced 18. What
-changes is how hard the heap is churning, not whether a collection happens to land in the
-window.
+**A collection overlapping a blackout is not sufficient to make it late.** 153 overlaps at HEAVY
+produced no misses; 541 at CRUSH produced 18. What matters is how hard the heap is churning,
+not whether a collection coincides.
+
+### Renderer idle costs nothing — `LONG_IDLE`
+
+The one that worried me most, because every other run hammers the renderer every ~100 ms and
+keeps it warm, while the real game leaves the lamp static for minutes. With **3–10 s between
+blackouts: zero of 200 late**, and p50 moved only 8.03 → 8.13 ms. Compose's redrawer does not
+pay a meaningful wake-up cost.
+
+Weakest result in the set on sample size alone — 200 trials bounds the miss rate at roughly
+1.5%, not at one-in-ninety-thousand. It shows no *systematic* penalty, which is what it was
+built to detect.
 
 ### The failure is real and reproducible — `VOLUME_CRUSH`
 
-At 3.00 MB/s: 0.36% of blackouts overran a frame, and essentially every one had a collection in
-its window. Across three CRUSH runs the worst stop-the-world pause reached **9.108 ms —
-longer than an entire frame.** That is the un-anonymised revoke, reproduced on demand.
+At 3.00 MB/s: 0.36% of blackouts overran a frame, **every one with a collection in its window.**
+Across three CRUSH runs the worst stop-the-world pause reached **9.108 ms — longer than an
+entire frame.** That is the un-anonymised revoke, reproduced on demand.
+
+### A residual floor that is not ours — `VOLUME`
+
+One late draw in 10 000, at 10.59 ms. **No collection in its window, and no display-link stall
+anywhere in the run.** OS scheduling, and nothing in the stack's control removes it. Roughly
+1-in-55 000 across all clean runs, which is the floor any design must tolerate.
 
 ---
 
@@ -68,13 +86,13 @@ longer than an entire frame.** That is the un-anonymised revoke, reproduced on d
 
 ```
      0.04 MB/s   Compose alone, doing nothing
-     0.54 MB/s   verified clean — 10 000 blackouts, 3 514 collections, zero late
-   ~ ? MB/s      the boundary, somewhere in this 5.6x window
+     0.54 MB/s   VERIFIED CLEAN — 55 200 blackouts, one late, non-GC
+     ~ ?         the boundary, somewhere in this 5.6x window
      3.00 MB/s   0.36% of blackouts miss a frame
 ```
 
-**Total app allocation should stay under ~0.5 MB/s.** That is verified, not extrapolated. The
-boundary above it is unmeasured; narrowing it is one run at each of ~1.0 and ~2.0 MB/s.
+**Total app allocation should stay under ~0.5 MB/s.** Verified, not extrapolated. Narrowing the
+boundary above it is one run each at ~1.0 and ~2.0 MB/s.
 
 ## This changes 1.7b's mitigation
 
@@ -86,9 +104,14 @@ collections is on the BLE, motion, effect and recording threads. A blackout-path
 would have stayed green through every failure recorded here.
 
 The load-bearing guard is a **total allocation-rate budget for the whole app**, asserted
-continuously — the same shape as the permanent assertion the epic asks for, aimed one level up.
-Keep the blackout-path assertion as well; it is cheap and it guards a different, smaller
-failure, namely a future commit quietly adding allocation to the draw path.
+continuously — the same shape the epic asks for, aimed one level up. Keep the blackout-path
+assertion too: it is cheap, and it guards a different, smaller failure (a future commit quietly
+adding allocation to the draw path).
+
+**`ALLOC_PROBE` measured 6 222 bytes per trial, and that number is an upper bound, not the
+blackout path's cost.** A trial spans ~14 frames of ordinary Compose rendering, and the
+GC-epoch method cannot resolve anything finer than an epoch, which is seconds apart. Isolating
+the draw path's own allocation needs a different instrument than this spike has.
 
 ## Instrumentation notes worth carrying forward
 
@@ -104,8 +127,10 @@ before it is believed.
   our `CADisplayLink` fires before or after Compose's within a vsync, and it read 0 for every
   provably-late trial. Latency against the monotonic clock is the metric.
 
-## Not yet run
+## Still open
 
-- **`LONG_IDLE`** — the real game's condition, with the renderer idle for seconds between
-  blackouts rather than hammered every 100 ms. Everything above keeps the renderer warm.
-- **`ALLOC_PROBE`** — sets the threshold for the blackout-path assertion.
+- **The boundary between 0.54 and 3.00 MB/s** is unmeasured. Two runs would narrow it.
+- **`ALLOC_PROBE` does not isolate the blackout path** — see above. A finer instrument is needed
+  before the blackout-path assertion has a defensible threshold.
+- **`LONG_IDLE` has only 200 trials.** Enough to rule out a systematic wake-up penalty, not
+  enough to characterise its tail.
