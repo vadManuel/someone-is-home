@@ -17,9 +17,39 @@ FRAMEWORK_DIR="shared/build/bin/iosArm64/releaseFramework"
 
 die() { echo "error: $*" >&2; exit 1; }
 
+# CoreDevice UUID — what devicectl install/copy take.
 resolve_device() {
     xcrun devicectl list devices 2>/dev/null \
         | awk -v name="$DEVICE_NAME" '$1 == name { print $3; exit }'
+}
+
+# Hardware UDID — what xcodebuild -destination takes, and a DIFFERENT identifier from the one
+# above. This must be a real device rather than 'generic/platform=iOS': -allowProvisioningUpdates
+# only registers a device it was actually pointed at, so a generic destination signs against
+# whatever devices the team already had and the install then fails with 0xe8008012.
+resolve_device_udid() {
+    if [[ -n "${SPIKE_DEVICE_UDID:-}" ]]; then
+        echo "$SPIKE_DEVICE_UDID"
+        return
+    fi
+    # Via a temp file, not /dev/stdout: devicectl writes its human-readable table to stdout
+    # too, so the JSON comes back with a table glued to the front of it.
+    local tmp
+    tmp="$(mktemp /tmp/spike-devices.XXXXXX.json)"
+    xcrun devicectl list devices --json-output "$tmp" >/dev/null 2>&1 || true
+    python3 -c '
+import json, sys
+name = sys.argv[2]
+try:
+    devices = json.load(open(sys.argv[1]))["result"]["devices"]
+except Exception:
+    sys.exit(0)
+for d in devices:
+    if d.get("deviceProperties", {}).get("name") == name:
+        print(d.get("hardwareProperties", {}).get("udid", ""))
+        break
+' "$tmp" "$DEVICE_NAME"
+    rm -f "$tmp"
 }
 
 resolve_team() {
@@ -27,9 +57,15 @@ resolve_team() {
         echo "$SPIKE_DEVELOPMENT_TEAM"
         return
     fi
-    # "Apple Development: someone (TEAMID)" -> TEAMID
-    security find-identity -v -p codesigning 2>/dev/null \
-        | sed -n 's/.*"Apple Development: .*(\([A-Z0-9]*\))".*/\1/p' \
+    # The Team ID is the certificate's OU field.
+    #
+    # NOT the value in "Apple Development: Name (XXXXXXXXXX)" — that parenthesised string is
+    # the individual's ID and is a different value entirely. Using it gets you a build that
+    # signs and then fails at install with "No Account for Team", which reads like a missing
+    # Xcode account rather than the wrong identifier.
+    security find-certificate -c "Apple Development" -p 2>/dev/null \
+        | openssl x509 -noout -subject 2>/dev/null \
+        | sed -n 's/.*OU *= *\([A-Z0-9]*\).*/\1/p' \
         | head -1
 }
 
@@ -58,13 +94,19 @@ cmd_build() {
   Open Xcode > Settings > Accounts and add an Apple ID (a free one is enough), then re-run.
   Or set SPIKE_DEVELOPMENT_TEAM=<TEAMID>."
 
-    echo "==> building StackGate.app (team $team)"
+    local udid
+    udid="$(resolve_device_udid)"
+    [[ -n "$udid" ]] || die "could not resolve the hardware UDID for '$DEVICE_NAME'.
+  Plug the phone in and check: xcrun devicectl list devices
+  Or set SPIKE_DEVICE_UDID=<udid>."
+
+    echo "==> building StackGate.app (team $team, device $udid)"
     xcodebuild \
         -project iosApp/iosApp.xcodeproj \
         -scheme StackGate \
         -configuration "$CONFIG" \
         -sdk iphoneos \
-        -destination 'generic/platform=iOS' \
+        -destination "id=$udid" \
         -derivedDataPath build/dd \
         -allowProvisioningUpdates \
         SPIKE_DEVELOPMENT_TEAM="$team" \
