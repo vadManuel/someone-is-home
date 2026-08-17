@@ -21,6 +21,7 @@ import platform.Foundation.NSRunLoopCommonModes
 import platform.Foundation.writeToFile
 import platform.QuartzCore.CACurrentMediaTime
 import platform.QuartzCore.CADisplayLink
+import platform.QuartzCore.CAFrameRateRangeMake
 import platform.UIKit.UIApplication
 import platform.UIKit.UIDevice
 import platform.UIKit.UIScreen
@@ -85,6 +86,8 @@ actual object Vsync {
     private val stallAt = LongArray(STALL_CAPACITY)
     private val stallGaps = LongArray(STALL_CAPACITY)
     private var stalls = 0
+    private var stallsDropped = 0
+    private var baselineNanos = 0L
 
     actual val lastNanos: Long get() = _lastNanos
     actual val tickIndex: Long get() = _tickIndex
@@ -99,11 +102,17 @@ actual object Vsync {
         if (link != null) return
         val t = DisplayLinkTarget()
         val l = CADisplayLink.displayLinkWithTarget(t, NSSelectorFromString("onTick:"))
-        // 0 means "the fastest the display supports". On an LTPO panel that is only honoured
-        // when CADisableMinimumFrameDuration is set in Info.plist — without it the panel will
-        // quietly sit at 60 Hz and every latency number here is measured against the wrong
-        // frame budget.
-        l.preferredFramesPerSecond = 0
+
+        // preferredFrameRateRange, NOT the deprecated preferredFramesPerSecond = 0.
+        //
+        // "0" is documented as "the fastest the display supports" and on a ProMotion panel it
+        // delivers 60. The first VOLUME run was measured with it, and the result was an
+        // instrument sampling at exactly half the rate Compose was rendering at: every trial
+        // reported span 0 because our link never ticked between trigger and draw, and every
+        // ordinary frame tripped the stall detector. Neither number meant anything, and both
+        // looked plausible.
+        val fps = UIScreen.mainScreen.maximumFramesPerSecond.toFloat()
+        l.preferredFrameRateRange = CAFrameRateRangeMake(fps, fps, fps)
         l.addToRunLoop(NSRunLoop.mainRunLoop, NSRunLoopCommonModes)
         target = t
         link = l
@@ -134,13 +143,31 @@ actual object Vsync {
                 intervalHistogram[bucket]++
                 intervalSamples++
             }
-            val nominal = nominalIntervalNanos
-            if (gap > nominal + nominal / 2 && stalls < STALL_CAPACITY) {
-                val i = stalls
-                stallTicks[i] = _tickIndex
-                stallAt[i] = vsyncNanos
-                stallGaps[i] = gap
-                stalls = i + 1
+            // Compared against what the link ACTUALLY does, not against the display's rated
+            // maximum. Using the rated maximum meant that when the link ran at half rate,
+            // every ordinary frame was a "stall" — 8192 of them, saturating the buffer, while
+            // the real signal was that there was no signal.
+            //
+            // The baseline is re-derived periodically rather than fixed once, because an LTPO
+            // panel can genuinely change rate mid-run when the device warms up, and that is a
+            // finding rather than something to normalise away.
+            if (_tickIndex % 1024 == 0L || baselineNanos == 0L) {
+                val median = measuredIntervalNanos()
+                if (median > 0L) baselineNanos = median
+            }
+            val baseline = if (baselineNanos > 0L) baselineNanos else nominalIntervalNanos
+            if (gap > baseline + baseline / 2) {
+                if (stalls < STALL_CAPACITY) {
+                    val i = stalls
+                    stallTicks[i] = _tickIndex
+                    stallAt[i] = vsyncNanos
+                    stallGaps[i] = gap
+                    stalls = i + 1
+                } else {
+                    // Never silently truncate: a saturated buffer reporting its capacity reads
+                    // exactly like a real count.
+                    stallsDropped++
+                }
             }
         }
 
@@ -159,12 +186,15 @@ actual object Vsync {
     }
 
     actual fun stallCount(): Int = stalls
+    actual fun stallsDroppedCount(): Int = stallsDropped
     actual fun stallTickIndex(i: Int): Long = stallTicks[i]
     actual fun stallAtNanos(i: Int): Long = stallAt[i]
     actual fun stallGapNanos(i: Int): Long = stallGaps[i]
 
     actual fun resetStalls() {
         stalls = 0
+        stallsDropped = 0
+        baselineNanos = 0L
         intervalSamples = 0
         for (i in intervalHistogram.indices) intervalHistogram[i] = 0
     }

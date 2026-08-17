@@ -40,6 +40,8 @@ expect object Vsync {
 
     /** Gaps longer than 1.5x nominal: (tickIndex, vsyncNanos, gapNanos). */
     fun stallCount(): Int
+    /** Stalls seen after the buffer filled. Non-zero means stallCount is a floor, not a count. */
+    fun stallsDroppedCount(): Int
     fun stallTickIndex(i: Int): Long
     fun stallAtNanos(i: Int): Long
     fun stallGapNanos(i: Int): Long

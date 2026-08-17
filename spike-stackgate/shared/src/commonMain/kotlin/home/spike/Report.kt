@@ -169,6 +169,12 @@ object Report {
         appendLine("trials           ${s.n} measured, ${s.nPrewarm} pre-warm excluded, ${fmt1(s.runSeconds)}s")
         appendLine("pressure         ${s.pressure} (~${fmt1(s.pressureMbPerSec)} MB/s est.)")
         appendLine("frame interval   nominal ${ms(s.nominalIntervalNanos)}ms, measured ${ms(s.measuredIntervalNanos)}ms")
+        val ratio = if (s.nominalIntervalNanos > 0) s.measuredIntervalNanos.toDouble() / s.nominalIntervalNanos else 1.0
+        if (ratio > 1.25 || ratio < 0.8) {
+            appendLine("  *** MEASURED INTERVAL DISAGREES WITH THE PANEL'S RATED RATE ***")
+            appendLine("  Span and stall figures below are derived from this timeline. If it is")
+            appendLine("  wrong, they are wrong, and the latency figures are the only valid ones.")
+        }
         appendLine()
         appendLine("SPAN — vsync boundaries between trigger and the frame that drew black")
         appendLine("  1 is the passing shape. 2+ means the renderer missed a frame.")
@@ -206,6 +212,9 @@ object Report {
         appendLine()
         appendLine("MAIN-THREAD STALLS (display-link gaps > 1.5x nominal)")
         appendLine("  count ${s.mainThreadStalls}, worst ${ms(s.worstStallNanos)} ms")
+        if (Vsync.stallsDroppedCount() > 0) {
+            appendLine("  BUFFER FULL — ${Vsync.stallsDroppedCount()} more not recorded; count is a floor")
+        }
         appendLine("  trials overlapping a stall  ${s.trialsWithStall}")
         appendLine()
         appendLine("first trial (cold) ${ms(s.coldFirstTrialNanos)} ms")
