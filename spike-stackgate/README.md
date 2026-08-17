@@ -157,10 +157,26 @@ separate question with its own test, story 0.6c — into a rendering test. Kept 
 ## Running it
 
 ```bash
-./run-spike.sh build     # build the framework + app
+./run-spike.sh framework # Kotlin framework only — needs no signing
+./run-spike.sh build     # framework + signed StackGate.app
 ./run-spike.sh install   # install to vadManuel-Phone
 ./run-spike.sh pull      # copy results CSV/JSON off the device
 ```
+
+### Status
+
+Builds clean end to end: the Kotlin framework links, and `StackGate.app` builds and links
+unsigned for `arm64` at 27 MB with both critical Info.plist keys set. Nothing has run on the
+device yet.
+
+**One blocker, and it needs a human.** There is no code-signing identity on this machine
+(`security find-identity -v -p codesigning` reports none) and no Apple ID in Xcode. Fix:
+
+> **Xcode → Settings → Accounts → `+` → Apple ID.** A free account is enough — it gives
+> 7-day personal-team provisioning, which outlasts any run here.
+
+Then `./run-spike.sh build` picks the team up from the keychain automatically.
+`xcodebuild -runFirstLaunch` and `xcodebuild -downloadPlatform iOS` have already been done.
 
 Physical device only. **The iOS Simulator cannot answer this question** — it renders through a
 different path on host hardware with no ProMotion panel and no Kotlin/Native-on-ARM GC

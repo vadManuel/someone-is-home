@@ -21,6 +21,7 @@ object Report {
         val presentLatency: Percentiles,
         val spanHistogram: IntArray,
         val spanWorst: Int,
+        val spanImpossible: Int,
         val trialsWithGc: Int,
         val trialsWithStall: Int,
         val gcEvents: Int,
@@ -71,10 +72,19 @@ object Report {
         var worst = 0
         var withGc = 0
         var withStall = 0
+        // A negative span is impossible and means the instrument is wrong, not that the frame
+        // was early. Counted separately rather than clamped into bucket 0, because bucket 0
+        // is a PASS — clamping would turn a broken clock into a green result.
+        var impossible = 0
         for (i in measured) {
-            val s = t.span(i, interval).coerceIn(0, 7)
+            val raw = t.span(i, interval)
+            if (raw < 0) {
+                impossible++
+                continue
+            }
+            val s = if (raw > 7) 7 else raw
             spans[s]++
-            if (s > worst) worst = s
+            if (raw > worst) worst = raw
             if (t.flags[i] and FLAG_GC_DURING != 0) withGc++
             if (t.flags[i] and FLAG_STALL_DURING != 0) withStall++
         }
@@ -113,6 +123,7 @@ object Report {
             presentLatency = Percentiles(present.size, present),
             spanHistogram = spans,
             spanWorst = worst,
+            spanImpossible = impossible,
             trialsWithGc = withGc,
             trialsWithStall = withStall,
             gcEvents = gcCount,
@@ -139,6 +150,9 @@ object Report {
         val late = s.n - onTime
         return when {
             s.n == 0 -> "NO DATA"
+            // Checked before the pass case: a broken instrument must never report a pass.
+            s.spanImpossible > 0 ->
+                "INVALID — ${s.spanImpossible}/${s.n} trials have an impossible span" 
             late == 0 -> "PASS — every trial drew black on the next frame (n=${s.n})"
             late * 1000 <= s.n -> "MARGINAL — $late/${s.n} missed a frame (<= 0.1%)"
             else -> "FAIL — $late/${s.n} missed a frame, worst span ${s.spanWorst}"
@@ -158,12 +172,17 @@ object Report {
         appendLine()
         appendLine("SPAN — vsync boundaries between trigger and the frame that drew black")
         appendLine("  1 is the passing shape. 2+ means the renderer missed a frame.")
+        appendLine("  0 also passes: our display link and Compose's may fire in either order")
+        appendLine("  within one vsync, so 0 vs 1 is instrument noise. 2+ is not.")
         for (i in s.spanHistogram.indices) {
             val c = s.spanHistogram[i]
             if (c == 0) continue
             val pct = if (s.n > 0) c * 100.0 / s.n else 0.0
             val tag = if (i >= 7) "7+" else i.toString()
             appendLine("  span $tag".padEnd(12) + "$c".padStart(7) + "   " + fmt2(pct) + "%")
+        }
+        if (s.spanImpossible > 0) {
+            appendLine("  IMPOSSIBLE  ${s.spanImpossible}  <- negative span; the clock is wrong, not the renderer")
         }
         appendLine()
         appendLine("LATENCY trigger -> frame that drew black (ms)")
