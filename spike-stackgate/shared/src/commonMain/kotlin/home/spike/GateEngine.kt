@@ -97,7 +97,7 @@ object GateEngine {
         // for the heap delta to be derived from.
         GcProbe.forceCollect()
 
-        Pressure.start(cfg.pressure)
+        Pressure.start(cfg.pressure, cfg.cpuOnlyPressure)
 
         lampArgb.intValue = ARGB_AMBER
         finished.value = false

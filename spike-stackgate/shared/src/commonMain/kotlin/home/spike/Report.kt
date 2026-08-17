@@ -200,7 +200,7 @@ object Report {
         appendLine("device           ${s.device}")
         appendLine("trigger          ${s.triggerName}, idle ${s.idle} (${s.idle.minMillis}-${s.idle.maxMillis}ms)")
         appendLine("trials           ${s.n} measured, ${s.nPrewarm} pre-warm excluded, ${fmt1(s.runSeconds)}s")
-        appendLine("pressure         ${s.pressure} — MEASURED ${fmt2(s.measuredAllocMbPerSec)} MB/s allocated")
+        appendLine("pressure         ${s.pressure}${if (Pressure.cpuOnly) " (CPU-ONLY, no garbage)" else ""} — MEASURED ${fmt2(s.measuredAllocMbPerSec)} MB/s allocated")
         appendLine("                 (the level name is a guess; this measured rate is the fact.")
         appendLine("                  Compose alone allocates ~0.04 MB/s, so compare against that,")
         appendLine("                  not against zero — pressure that does not clear the app's own")

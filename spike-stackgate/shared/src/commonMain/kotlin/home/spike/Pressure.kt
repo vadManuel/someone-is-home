@@ -74,13 +74,21 @@ object Pressure {
     var level: PressureLevel = PressureLevel.OFF
         private set
 
+    var cpuOnly: Boolean = false
+        private set
+
+    /** Preallocated sinks for the CPU-only mode, so it does the work without making garbage. */
+    private val sinkDoubles = DoubleArray(4096)
+    private val sinkBytes = ByteArray(4096)
+
     private var startNanos = 0L
     private var elapsedAtStopNanos = 0L
     private val rings = Array(4) { RetainRing(512) }
 
-    fun start(level: PressureLevel) {
+    fun start(level: PressureLevel, cpuOnly: Boolean = false) {
         stop()
         this.level = level
+        this.cpuOnly = cpuOnly
         estimatedBytes.store(0L)
         elapsedAtStopNanos = 0L
         startNanos = nowNanos()
@@ -89,10 +97,19 @@ object Pressure {
         val s = CoroutineScope(Dispatchers.Default + SupervisorJob())
         scope = s
         val scale = level.scale
-        s.launch { motionLoop(scale, rings[0]) }
-        s.launch { bleLoop(scale, rings[1]) }
-        s.launch { effectLoop(scale, rings[2]) }
-        s.launch { recordingLoop(scale, rings[3]) }
+        if (cpuOnly) {
+            // Same thread count, same loop counts, same arithmetic and memory traffic —
+            // written into preallocated buffers instead of fresh objects.
+            s.launch { cpuLoop(scale, 8, 10) }
+            s.launch { cpuLoop(scale, 6, 33) }
+            s.launch { cpuLoop(scale, 4, 100) }
+            s.launch { cpuLoop(scale, 2, 100) }
+        } else {
+            s.launch { motionLoop(scale, rings[0]) }
+            s.launch { bleLoop(scale, rings[1]) }
+            s.launch { effectLoop(scale, rings[2]) }
+            s.launch { recordingLoop(scale, rings[3]) }
+        }
     }
 
     fun stop() {
@@ -114,6 +131,21 @@ object Pressure {
         val secs = elapsedNanos() / 1e9
         if (secs <= 0.0) return 0.0
         return (estimatedBytes.load() / (1024.0 * 1024.0)) / secs
+    }
+
+    /** The confound control's worker: identical shape to the allocating loops, zero garbage. */
+    private suspend fun CoroutineScope.cpuLoop(scale: Double, base: Int, periodMillis: Long) {
+        val n = (base * scale).toInt().coerceAtLeast(1)
+        var acc = 0.0
+        while (isActive) {
+            for (i in 0 until n) {
+                val k = i and 4095
+                acc += sinkDoubles[k] * 1.000001 + 0.1
+                sinkDoubles[k] = acc
+                sinkBytes[k] = (acc.toInt() and 0xFF).toByte()
+            }
+            delay(periodMillis)
+        }
     }
 
     /** 100 Hz, 8 samples per tick — the motion budget's real sampling rate. */
