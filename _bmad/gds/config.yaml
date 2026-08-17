@@ -14,7 +14,7 @@ primary_platform:
   - other
 
 # Core Configuration Values
-project_name: GuestNetwork
+project_name: someone-is-home
 user_name: Vadmanuel
 communication_language: English
 document_output_language: English
