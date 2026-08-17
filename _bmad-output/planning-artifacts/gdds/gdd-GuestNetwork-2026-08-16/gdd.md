@@ -1392,6 +1392,34 @@ Those need somewhere to live, and so do several other things currently homeless:
 | **Android** | Post-validation | **Not a rewrite.** Shared core and shared UI; only the platform layer is new. See the torch caveat in Assumptions |
 | **The trap** (a row or app that flares to full white, baitable) | Unscheduled | An idea, never designed past the sentence |
 | **Restraint freeing the blackmailed** · **Access pool as a throttled data allowance** · **atmosphere items** (wallpaper from the setup photo, the voicemail nobody left, the app permanently at 47%) | Unscheduled | Recorded so they are not lost |
+| **Trading with the house** — spend subroutine progress at meetings for favours | Unscheduled | A whole economy, not an item. Recorded in full below, with four things that must be resolved before it could be built |
+
+### Trading with the house — unscheduled, recorded whole
+
+**The premise:** the house will do things for you, and the price is your work. At a meeting you can spend accumulated **subroutine progress** to buy a favour from the house — and spending it means that subroutine resets and must be done again. A symbiotic relationship with the thing that is also blackmailing you.
+
+**The delivery mechanism is the best part of the idea.** You do not open a shop. You open **Messages**, pick a reply option, and text the house — and the house texts back. It costs no new app, no new screen furniture, and it lands directly on the established register: the house already texts your friends and arms the perimeter, already speaks in customer-service voice. A vending machine would break that; a text thread deepens it.
+
+**Two purchases sketched:**
+
+- **Torch light, ~5 seconds.** A burst of real illumination, bought.
+- **What the house has on someone.** Reveals the blackmail material the house is holding over a named player.
+
+**The blackmail material is player-authored.** At setup, each player enters something true about themselves. When someone is picked to be blackmailed, the house uses *their own* submission against them, with the text generated at runtime by a small LLM on a self-hosted server. That is the mechanism by which the house stops being flavour and becomes a character that knows you.
+
+> **Naming caution.** "In-game purchases" is the wrong label to carry forward — this document already says **no purchase** under *Explicitly not required, ever*, meaning money and accessories. This economy is barter in fiction and must never read as monetisation.
+
+#### Four things to resolve before this could be built
+
+1. **The blackmail purchase is an alignment oracle as sketched, and would be the worst leak in the game.** Story 2.7 makes the blackmail text *the Insider's role reveal* — Residents get a flat administrative work order instead. So buying "what does the house have on X" returns content for an Insider and nothing for a Resident, and **the absence is the answer**. This is exactly rule 1: the absent effect *is* the leak. It is fixable and the fix already exists as a pattern — **every player has a blackmail file, and the Resident's is a fake**, in the same way every subroutine ships with its fake. But it has to be designed that way from the first line, not patched later.
+
+2. **Spending is itself an alignment tell.** The Insider's subroutines write nothing. If the currency is subroutine progress, the Insider spends a currency that costs them **nothing real**, while a Resident spends work they must genuinely redo. Free-spending behaviour at meetings, in front of everyone, becomes a read. The currency may need to be something both roles pay for identically, or the Insider's fake progress must be made to cost them something equally visible.
+
+3. **A server-hosted LLM assumes connectivity the architecture does not have.** Transport is an embedded Ktor server on the host over the local network, with **manual Personal Hotspot** as the no-wifi fallback — the game is designed to run in a basement with no internet. Either the model runs on the host device, or **the text is generated once during setup, in the light, while connectivity exists**, and stored. The latter is probably right anyway: it removes runtime latency from a moment that must feel immediate, and it keeps a live network dependency out of the round.
+
+4. **Buying "torch light" fights the light ladder.** The torch is optional Tier 1, and on binary-torch hardware it cannot be ramped at all — which this document accepts precisely *because* **every light event in the game is a screen event**. A purchasable torch burst either becomes the one exception, or gives players on some hardware a worse version of a bought good. A bought **lamp** flare has none of those problems and stays on the addressable channel.
+
+**Consent surface, flagged separately because it is not a design question.** Players type real facts about themselves, and this economy makes those facts **purchasable by other players**. That needs an explicit, in-the-light acknowledgement of who can see what — the same treatment as the stairs acknowledgment in story 4.8, which fires at the moment of tagging rather than hiding in a ToS.
 
 ### Explicitly not required, ever
 
