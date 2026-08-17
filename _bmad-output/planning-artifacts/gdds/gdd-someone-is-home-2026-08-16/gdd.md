@@ -12,7 +12,7 @@ updated: 2026-08-16
 **Game Type:** Party Game (social deduction), physically co-located, with Horror atmosphere and fear-mechanic systems
 **Target Platform(s):** iPhone first, Android on the roadmap. **Kotlin Multiplatform + Compose Multiplatform** — see `game-architecture.md` → Engine & Framework, which reverses the original native-Swift decision.
 
-> **Source precedence.** This GDD supersedes `design-record.md` wherever the two disagree. The design record still describes deaths, spaceship subsystems, and synthetic replacements; all three were replaced in the 2026-08-15/16 session. Where a design-record section survives intact it is cited by number for its reasoning, not its conclusions.
+> **Source precedence.** This GDD is the sole source of truth for the design. The earlier design record it was built from described deaths, spaceship subsystems, and synthetic replacements; all three were replaced in the 2026-08-15/16 session, and that record has been retired. Everything load-bearing from it has been carried forward here.
 
 ---
 
@@ -36,14 +36,14 @@ It is a **race between two progress bars**, not a war of attrition. Nobody dies;
 
 Groups of **5–10 friends or family, tuned for 6–8**, physically in one house, at night. Age-rated 12+.
 
-The audience is not "people who like prior art in the genre" — it is people who have already hosted a party game and want the house itself to be the board. The prior real-life version of this game was played and worked; this is the rebuild. Discovery is word-of-mouth and App Store search, not Google (see §Technical → Naming constraint).
+The audience is not fans of any one existing title — it is people who have already hosted a party game and want the house itself to be the board. The prior real-life version of this game was played and worked; this is the rebuild. Discovery is word-of-mouth and App Store search, not Google (see §Technical → Naming constraint).
 
 ### Unique Selling Points
 
 1. **The app owns every photon in the building.** Light is not atmosphere, it is the state channel — every game event is expressible as a change in light, delivered silently to exactly the right subset of players. No competitor does this.
 2. **The map knows the difference between your kitchen and your basement.** A one-time ~15-minute setup walk turns the host's actual house into the board. Every competitor is generic.
 3. **The house is a character that texts your friends and arms the perimeter.** Role assignment arrives as a petty, mundane blackmail text, followed by a house line in a customer-service register. The house is intimate only with the people it owns; it never addresses a Resident directly.
-4. **Ghost mode is solved.** Dying four minutes into a round is the failure state of every social deduction game and nobody has solved it well. Three phases, and the dead end up with the only true information in the building — the tools to deduce, never the answer, and no channel to share it.
+4. **Ghost mode is solved.** Being revoked four minutes into a round is the failure state of every social deduction game and nobody has solved it well. Three phases, and the revoked end up with the only true information in the building — the tools to deduce, never the answer, and no channel to share it.
 5. **A retro amber phone-OS that is the game, not a skin on it.** Every rule the player would have to remember is instead a state the device is in.
 
 ---
@@ -61,11 +61,11 @@ The audience is not "people who like prior art in the genre" — it is people wh
 | Meeting | **House Meeting** | **Human** | The flattest phrase in the game attached to its most dreadful moment |
 | Removing a player (Insider ability) | **Revoke** | System | Access removal, never death. The house's own power, lent out |
 | Removing a player (group, at a meeting) | **Restrain** | **Human** | **A physical act the house cannot prevent** |
-| Sabotage | **Egress** | System | Two events: **Beacon** and **Tether** |
+| House-wide crisis (Insider-triggered) | **Egress** | System | Two events: **Beacon** and **Tether** |
 | Containing it | **Contain** | System | Via **Sync Pulse** |
-| passage | **Override** | System | A permission, not an action |
-| Task | **Subroutine** | System | The house assigns the work; Residents perform it |
-| Task bar | **System Integrity** | System | **Counts down** — Residents dismantle |
+| Insider-only route between rooms | **Override** | System | A permission, not an action |
+| Unit of assigned work | **Subroutine** | System | The house assigns the work; Residents perform it |
+| Collective progress meter | **System Integrity** | System | **Counts down** — Residents dismantle |
 | Map station | **Network Terminal** → **Terminal** | System | Formal name in flavour text; short form everywhere else |
 | Disposal action | **Degauss** | System | Precisely correct for magnetic media, and "the degausser in the basement" is a great object for a house to have |
 
@@ -99,7 +99,7 @@ Resident/Guest implied two disjoint groups, which was true under the old premise
 ### Project Goals
 
 1. **Validate the core loop with a controlled friend group.** Reach in v1 is not a goal — **iPhone ships first** — but Android is on the roadmap, not aspirational, and the stack is chosen so it does not require a second build of the interface.
-2. **Ship.** Two previous attempts (`legacy-web-prototype` 2021, `legacy-project` 2022) died of calendar, not technical walls.
+2. **Ship.** Two previous attempts (a 2021 web app, a 2022 mobile app) died of calendar, not technical walls.
 3. **Be complete at Tier 0** — no purchase, no accessory, no smart home required.
 4. **Clean-room the IP.** New repository, new name, new art, new vocabulary. Nothing carries forward from the legacy directories except the original design intent.
 
@@ -127,7 +127,7 @@ The art direction resolves what looked like the project's central contradiction 
 
 ### Why this theme, and the test it passed
 
-**A compromised smart home**, near-future, in the "embrace the house" branch — the fiction is that this *is* a house, not a spaceship you have to imagine. The genre is shared with the obvious comparison and that is fine: **the differentiation is tone, not genre.**
+**A compromised smart home**, near-future, in the "embrace the house" branch — the fiction is that this *is* a house, not a spaceship you have to imagine. Sharing a genre with other social deduction games is fine: **the differentiation is tone, not genre.**
 
 Themes were scored against a constraint list, and **the discriminating row was the map.** Almost any theme can explain darkness. Almost none can explain why the map knows *someone* is in the kitchen but not *who*, and is sometimes wrong. Occupancy sensors detect presence, not identity — a PIR sensor knows someone is in the kitchen and never who — and degraded sensors explain the injected error exactly.
 
@@ -135,7 +135,7 @@ Themes were scored against a constraint list, and **the discriminating row was t
 
 - Anonymous room-level tracking was invented because BLE cannot do better. Occupancy sensors work exactly that way.
 - Error injection was invented for balance. Degraded sensors do that.
-- Insider-only door control was invented to make passage use work. Admin access does that.
+- Insider-only door control was invented to make Insider-only routes work. Admin access does that.
 - The entire Insider ability list — flare a lamp, black out a light, make a phone emit sound, forge a check-in — is *precisely* the capability set of someone with root on a smart home and its client app. **Nothing on that list needed reflavouring; it was already correct.**
 
 **When a theme explains choices made before it existed, it is the right theme.**
@@ -144,11 +144,11 @@ Themes were scored against a constraint list, and **the discriminating row was t
 
 **Nobody is doing marker-based, co-located, in-app party tasks with darkness as the core mechanic.** That combination is unclaimed.
 
-The one direct competitor is **the one shipped direct competitor** (App Store, launched 2026-05-20, solo dev, free + $2.99/mo, 5–12 players, iPhone only). It ships host-created games with codes, secret roles per device, **physical tasks at stations**, sabotage, meetings and voting — and **no AR, no QR, no physical accessories, and no darkness mechanic.** It is effectively a v1 spec whose gaps are the differentiators here, and its existence is why the physical-tasks decision came out the way it did: physical tasks are parity with a shipped product, while the light-signature axis is unoccupied.
+The one direct competitor is a **solo-developed iPhone app launched on the App Store 2026-05-20** (free, with a $2.99/mo tier, 5–12 players). It ships host-created games with codes, secret roles per device, **physical tasks at stations**, sabotage, meetings and voting — and **no AR, no QR, no physical accessories, and no darkness mechanic.** It is effectively a v1 spec whose gaps are the differentiators here, and its existence is why the physical-tasks decision came out the way it did: physical tasks are parity with a shipped product, while the light-signature axis is unoccupied.
 
 Adjacent and non-threatening: AI-moderator apps for *verbal* games (Wolfia, Mafia Offline IRL) prove people will download an app to run an in-person game. Printable task-card PDFs prove the demand is currently served by paper. Digital clones (Goose Goose Duck, Town of Salem 2, Suspects) are not competitors — **they are the legal precedent.**
 
-**Legal posture.** Game rules and mechanics are not copyrightable (17 U.S.C. §102(b)); the hidden-traitor genre predates *prior art in the genre* by ~35 years and *prior art in the genre* itself derives from Space Station 13 and *The Thing*. What is protected is specific expression, and none of it is being used. The realistic threat is not a lawsuit but an App Store IP complaint that delists in days. **Name clearance, re-run 2026-08-16 after the rename.** `WM:"someones home"` and `WM:someone AND WM:home` both returned **zero results** — all classes, live and dead — with `a known-populated two-word control term` returning 101 as a control proving the syntax executed. Not present on the App Store or Play. *(The earlier `Guest Network` clearance is superseded; `Welcome Home` and `We Are Home` were tested and rejected — see `decision-log.md` D-057.)* **A real clearance opinion is still required before public launch.** Full reasoning: `design-record.md` §1.
+**Legal posture.** Game rules and mechanics are not copyrightable (17 U.S.C. §102(b)); the hidden-traitor genre dates to *Mafia* (1986) and has been re-expressed continuously since. What is protected is specific expression, and none of it is being used — every asset, name and term in this game is original to it. The realistic threat is not a lawsuit but an App Store IP complaint that delists in days. **Name clearance, re-run 2026-08-16 after the rename.** `WM:"someones home"` and `WM:someone AND WM:home` both returned **zero results** — all classes, live and dead — against a two-word control term returning 101, proving the syntax executed. Not present on the App Store or Play. *(The earlier `Guest Network` clearance is superseded; `Welcome Home` and `We Are Home` were tested and rejected — see `decision-log.md` D-057.)* **A real clearance opinion is still required before public launch.**
 
 ---
 
@@ -174,7 +174,7 @@ The device enforces by refusing, not by instructing. There is no rules screen be
 
 The system never confirms alignment, never names an identity, and is deliberately, plausibly wrong.
 
-*Steers:* counts per room, never dots · injected error in both directions · staleness bands · no confirmed alignment on removal, ever · no role reveal at the vote tally · anonymous check-ins · the map as a set of constraints testimony must satisfy.
+*Steers:* counts per room, never dots · injected error in both directions · staleness bands · never a confirmed alignment on removal · no role reveal at the vote tally · anonymous check-ins · the map as a set of constraints testimony must satisfy.
 
 #### P4 — Vulnerability is real, not simulated.
 
@@ -206,11 +206,11 @@ Standing still, glowing, heads-down in a dark house is an actual physical exposu
 | **Insiders win (parity)** | `residents_alive ≤ guests_alive`, counting **living** Insiders. |
 | **Insiders win (outright)** | An **Egress** runs its clock out uncontained. |
 
-**The parity condition is load-bearing beyond pacing.** A live game requires `residents_alive ≥ guests_alive + 1`, so the smallest living Resident population in a running game is 2 — which is exactly the number needed to contain an Egress at two separate markers. **The parity rule is what guarantees an Egress is always containable, so no low-population fallback is needed.** This was verified during the round trace and holds. (`design-record.md` §9.1 survives; only its vocabulary changed.)
+**The parity condition is load-bearing beyond pacing.** A live game requires `residents_alive ≥ guests_alive + 1`, so the smallest living Resident population in a running game is 2 — which is exactly the number needed to contain an Egress at two separate markers. **The parity rule is what guarantees an Egress is always containable, so no low-population fallback is needed.** This was verified during the round trace and holds.
 
 **The win check counts living Insiders, not initial.** A Insider who revokes another Insider has moved the goalposts against themselves and will never know it. Do not tell them.
 
-**Never shown:** any confirmation of alignment, at any point, by any path. Not on revoke, not at the tally, not on a body found, not ever. confirmed alignment on removal are permanently out.
+**Never shown:** any confirmation of alignment, at any point, by any path. Not on revoke, not at the tally, not on finding a revoked player, not ever. Confirming a removed player's alignment is permanently out.
 
 ---
 
@@ -280,7 +280,7 @@ The strongest structural idea in the design: it manufactures the one thing physi
 - **Never display chain membership to anyone but the holder.** Chains are Resident-only, so any visible confirmation of membership is an alignment reveal. Expose the full structure only on the end-of-game screen.
 - **The upstream player IS told someone is waiting on them** — at assignment time only. This reveals only that a Resident exists downstream, which they already know. **Never confirm that the downstream unlock happened.**
 
-**Random unlock delay: 20–120s, applied identically to both paths.** Without it, timing leaks even though content does not: a body found at 21:04 and a task unlocking at 21:03:58 is a trivial correlation that reconstructs who was revoked when. If completion-unlocks were instant and revoke-unlocks delayed, the leak would be rebuilt with extra steps.
+**Random unlock delay: 20–120s, applied identically to both paths.** Without it, timing leaks even though content does not: a revocation discovered at 21:04 and a task unlocking at 21:03:58 is a trivial correlation that reconstructs who was revoked when. If completion-unlocks were instant and revoke-unlocks delayed, the leak would be rebuilt with extra steps.
 
 > **Held at the original 20–120s.** It was briefly shortened when the round was provisionally 15 minutes; at ~25 minutes the original window is proportionate again — a 3-link chain with two long draws consumes ~16% of a round rather than a quarter of it. **Start at the short end and lengthen if playtests show the game is too blind.** See `decision-log.md` F-013.
 
@@ -288,7 +288,7 @@ The delay length is the **fog dial**: long → chains become a strong distribute
 
 **What chains are actually for — two things, and the second is rarer than it sounds:**
 
-1. **Chains are bait.** They create a predictable rendezvous — a known Resident who must be at a known marker, and a partner who will eventually come looking. **Revoking the first link schedules a second victim to walk to a location the Insider is standing in.**
+1. **Chains are bait.** They create a predictable rendezvous — a known Resident who must be at a known marker, and a partner who will eventually come looking. **Revoking the first link schedules a second target to walk to a location the Insider is standing in.**
 2. **Chains create verifiable alibis, which the genre almost never has.** It is structurally impossible for a Insider to have a genuine chain partner. Most alibis are unverifiable assertions; these have a witness with a stake in the truth.
 
 > **Keep verification social. Leave the check-in ledger coarse.** If the app confirms that two players scanned the same marker within seconds of each other, **it is adjudicating alibis** — which is powerful, and considerably more than this design wants. The ledger reports anonymous counts and nothing finer.
@@ -389,7 +389,7 @@ The binding constraint is not balance — it is that a Insider operates the pane
 
 > **Every observable effect must be self-inflictable.**
 
-Light and sound are perceptible to *bystanders*, unlike a screen. That makes them the most dangerous leak surface in the game. **Insiders can target themselves with every ability.** If only Residents could ever *be* victims, then being visibly victimized would be evidence of innocence, and every ability would double as an alignment test.
+Light and sound are perceptible to *bystanders*, unlike a screen. That makes them the most dangerous leak surface in the game. **Insiders can target themselves with every ability.** If only Residents could ever *be* targeted, then being visibly targeted would be evidence of innocence, and every ability would double as an alignment test.
 
 **Corollaries, all non-negotiable:**
 
@@ -399,7 +399,7 @@ Light and sound are perceptible to *bystanders*, unlike a screen. That makes the
 - **The meeting ring is the one permitted phone-emitted sound, and it is global by construction.** Every phone rings, simultaneously, on the same trigger, identically for both roles and both trigger types. It leaks nothing because it fires for everyone at once — and it fires at the one moment in the round when concealment has already ended, since every lamp in the house went white in the same instant. **This is not a precedent for audio anywhere else.** Subroutines stay silent or haptic-only; abilities stay silent; nothing that fires for a subset ever makes a sound.
 - **Self-targeting shares the ability's cooldown.** Otherwise self-sabotage is a free alibi generator. Buying cover must cost offensive capability.
 
-*Accepted residue:* Residents are victimized involuntarily and for free while Insiders must spend a cooldown, so being visibly victimized leans very slightly Resident in expectation. That is a soft statistical lean, not proof, and it is exactly the texture of evidence this game wants.
+*Accepted residue:* Residents are targeted involuntarily and for free while Insiders must spend a cooldown, so being visibly targeted leans very slightly Resident in expectation. That is a soft statistical lean, not proof, and it is exactly the texture of evidence this game wants.
 
 #### M10 — The House Meeting
 
@@ -414,7 +414,7 @@ Designed under one constraint: **minimal phone interaction for anything social.*
 
 **A correct revoke and a catastrophic one look identical.** Attribution is shown because it is consistent with *the app supplies constraints, the players supply the accusations* — the tally is a constraint, and what it means is the players' problem.
 
-**the revoked do not vote.** Not for fairness — **voting is a communication channel.** A ghost who knows who revoked them and can vote is leaking that knowledge through the ballot; even with a secret vote the *tally* leaks, and several ghosts voting as a bloc is a beacon. Ghosts still see the vote; they cast nothing.
+**The revoked do not vote.** Not for fairness — **voting is a communication channel.** A ghost who knows who revoked them and can vote is leaking that knowledge through the ballot; even with a secret vote the *tally* leaks, and several ghosts voting as a bloc is a beacon. Ghosts still see the vote; they cast nothing.
 
 **The house notice.** When a device was unreachable or backgrounded for a meaningful interval, **the house reports it to everyone, at the meeting**, in its own administrative register:
 
@@ -440,7 +440,7 @@ The system logs and localizes voices, so **speaking tells the Insiders where you
 
 **Two consequences of enforced silence, both load-bearing:**
 
-- **A revoked player may not even know who revoked them.** It is a physical tap in the dark; the victim may never see who tapped. And if they do know, they can never say it.
+- **A revoked player may not even know who revoked them.** It is a physical tap in the dark; the target may never see who tapped. And if they do know, they can never say it.
 - **It is what makes ghost mode necessary rather than nice-to-have.** A revoked player has no subroutines, no speech, and no vote. Without ghost mode they are a pure spectator for the remainder of the round.
 
 #### M11 — The Terminal (map station)
@@ -520,7 +520,7 @@ Viewing is treated as an **uncompletable task**, so the motion budget applies: s
 
 **No channel of any kind.** Cannot act, cannot speak, cannot vote, and **cannot message other ghosts.** Several people watch the same truth side by side, unable to share one thought about it.
 
-*Accepted:* ghost screens glow, so the couch becomes a lit island. This reveals nothing new — the living learned the count at the meeting — and the dead glowing is the right image.
+*Accepted:* ghost screens glow, so the couch becomes a lit island. This reveals nothing new — the living learned the count at the meeting — and the revoked glowing is the right image.
 
 ### Controls and Input
 
@@ -533,7 +533,7 @@ The whole game is operated **one-handed, in the dark, without looking.** Every c
 | **Fire an ability** | Tap in the panel, **then a second deliberate confirm** | Accidentally firing an Egress in front of someone is a game-ending misclick and it *will* happen in the dark |
 | **Navigate the springboard** | Horizontal swipe between two pages; tap an icon | Standard, muscle-memory, and identical for both roles |
 | **Revoke a player** (Insider) | Arm in the panel, then **touch your phone to theirs** | Contact *is* the proximity gate. No confirmation step exists on either device |
-| **Report a deactivation** | **Touch your phone to the revoked player's phone** | Same gesture, different outcome by state. No button means no enabled/disabled state to read, so it cannot be used as a detector for revoked players |
+| **Report a deactivation** | **Touch your phone to the revoked player's phone** | Same gesture, different outcome by state. No button means no enabled/disabled state to read, so it cannot be used as a proximity radar for revoked players |
 | **Adjust the lamp** | Dial control in the Status panel | The one Settings row with real content |
 
 *Rejected gestures and why:* **swipe up** (iOS home gesture), **edge swipe** (back-navigation conflict), **two-finger tap** (hard one-handed in the dark), **shake** (visible arm movement, and accidentally discoverable).
@@ -544,9 +544,9 @@ The whole game is operated **one-handed, in the dark, without looking.** Every c
 
 > **It is presented to the player as touching phones. It is not NFC.** iOS exposes no phone-to-phone NFC — Core NFC reads tags, and card emulation is scoped to payment-style contactless with special entitlements. **Build it as a very-tight-RSSI BLE handshake**, with UWB (Nearby Interaction, ~10 cm and direction, iPhone 11+) as an optional precision upgrade. The physical gesture is what makes the tight radius feel deliberate rather than fiddly, and 1–2s latency is acceptable for an intentional two-handed action.
 
-**The radius is a hard constraint, not a tuning value.** BLE penetrates walls and is noisy at range; if the gate fires at "nearby" rather than at contact, the deactivation report becomes a **through-wall detector for revoked players** and *you can walk past a body and never notice* stops being true. Gate it at contact.
+**The radius is a hard constraint, not a tuning value.** BLE penetrates walls and is noisy at range; if the gate fires at "nearby" rather than at contact, the deactivation report becomes a **through-wall detector for revoked players** and *you can walk past a revoked player and never notice* stops being true. Gate it at contact.
 
-**Why a gesture beats a button, beyond removing the radar.** Reporting a body now means kneeling down in the dark next to it — stationary, both hands occupied, exposed. That is the vulnerability this game is built on, and it creates a decision the button version never had: **report it now, or walk away and come back when it suits you.** It also means **a Insider can camp a body they made** — chains-are-bait, applied to corpses.
+**Why a gesture beats a button, beyond removing the radar.** Reporting a revocation now means kneeling down in the dark beside the revoked player — stationary, both hands occupied, exposed. That is the vulnerability this game is built on, and it creates a decision the button version never had: **report it now, or walk away and come back when it suits you.** It also means **a Insider can camp a player they revoked** — chains-are-bait, applied to the revoked.
 
 **The Status panel is identical for both roles** — same layout, same positions, same furniture: your subroutines, carry state, light control. **The bottom row is the ability row for Insiders and inert system readouts for Residents.** A shoulder-surf at close range sees a panel of the right shape with the right contents.
 
@@ -747,9 +747,9 @@ All positions are relative and inherit the scanner's ground truth. Room-level gr
 | **Scans** | **No** — see below |
 | **Appears in rendered counts** | **No** |
 
-**A revoked phone must never contribute sweep observations.** If it kept scanning, a player sitting revoked in a dark room would become an invisible sensor generating fresh occupancy data for a room nobody is scanning in — and **a room with suspiciously fresh counts and no one scanning there implies a hidden sensor, which is a body.** That inverts the rule that coverage holes correlate with where people are not going. **Advertise, never scan.**
+**A revoked phone must never contribute sweep observations.** If it kept scanning, a player sitting revoked in a dark room would become an invisible sensor generating fresh occupancy data for a room nobody is scanning in — and **a room with suspiciously fresh counts and no one scanning there implies a hidden sensor, which means a revoked player is sitting in it.** That inverts the rule that coverage holes correlate with where people are not going. **Advertise, never scan.**
 
-The meeting/couch area is a **mapping dead zone**, producing no data — without this, a sweep near the couch would place a cluster there, and under a count-based system a cluster at the couch *is* a body count. With both rules, absence stays ambiguous between *revoked*, *alone*, and *missed*, so a Insider working quietly in an empty wing looks identical to someone sitting revoked.
+The meeting/couch area is a **mapping dead zone**, producing no data — without this, a sweep near the couch would place a cluster there, and under a count-based system a cluster at the couch *is* a count of the revoked. With both rules, absence stays ambiguous between *revoked*, *alone*, and *missed*, so a Insider working quietly in an empty wing looks identical to someone sitting revoked.
 
 **Live positional tracking would damage the game.** The tension comes from not knowing where people are. ARKit visual positioning is out — it needs visual features and fails in darkness. BLE RSSI is a proximity gate, never a map. UWB is a premium enhancement, never the foundation.
 
@@ -797,7 +797,7 @@ The scarce resources are **time, light, and attention** — not ammunition.
 | **Task marker** | ~8–12 per house | Never in a stairs zone. Never in a passage-tagged room |
 | **Terminal** (map station) | Exactly 1 | Never in a passage-tagged room. Highly campable by design |
 | **Array Wipe: Spares / Rack / Disposal** | 3, designated | Ideally spread across storeys — the circuit is transit |
-| **passage-tagged interior doors** | Host's choice | Insiders only, via Override |
+| **Passage-tagged interior doors** | Host's choice | Insiders only, via Override |
 | **Stairs zones** | As drawn | **Transit only.** No markers, no counting, no timed routes |
 | **Couch / meeting area** | 1 | **Mapping dead zone.** Produces no occupancy data |
 
@@ -808,13 +808,13 @@ Both are easy for a host to get wrong and catastrophic if missed:
 1. **No task markers in stairs zones.** Safety.
 2. **No task markers and no Terminal in passage-tagged rooms.** Residents can never open those doors, so anything placed there is unreachable for the whole game. **A Terminal behind a Insider-only door would be unrecoverable.**
 
-### Doors and passage use
+### Doors and passages
 
 - **Exterior doors** — anyone opens and closes, pure housekeeping. The app never mentions them.
 - **Host-tagged interior doors are passages.** Closed by default. **Only Insiders may change their state**, via the passive Override.
   - The bathroom ambush — hide, wait for an alert, walk out — is the mechanic working as intended.
   - It self-polices: emerging somewhere a Resident just cleared is damning.
-  - **passage use is never tracked by the app.** The app cannot observe a physical door opening, so logging would require a Insider to voluntarily self-report, which no Insider would ever do. **The cost of passage use is entirely social.**
+  - **Passage use is never tracked by the app.** The app cannot observe a physical door opening, so logging would require a Insider to voluntarily self-report, which no Insider would ever do. **The cost of using a passage is entirely social.**
   - **It stays untracked in v2**, even though smart-home contact sensors would make door state genuinely detectable. That would *add* information that does not otherwise exist.
 
 ### Safety — stairs stay in play
@@ -989,7 +989,7 @@ A player calls it. The trigger renders as an **incoming call with the caller nam
 >
 > **The premise was wrong, and the error is instructive enough to record.** "Revoked phones become fully invisible" is a **rendering** decision, not a **radio** decision. Excluding a revoked player from displayed counts is what the design needs; switching their transmitter off is not, and nothing ever required it. **The system may know things it never shows** — that separation holds everywhere in this design, and the trace collapsed it in one place.
 >
-> **With the radio up, the report is verifiable by physical contact, and both meeting triggers survive untouched.** The rule holds unamended. Two rules fall out and are recorded in the body of this document: the revoked phone **advertises but never scans** (or a body becomes an invisible sensor, and a room with fresh counts and nobody scanning in it *is* a body), and the contact gate is **hard-limited to contact range** (or the report becomes a through-wall detector for revoked players).
+> **With the radio up, the report is verifiable by physical contact, and both meeting triggers survive untouched.** The rule holds unamended. Two rules fall out and are recorded in the body of this document: the revoked phone **advertises but never scans** (or a revoked player becomes an invisible sensor, and a room with fresh counts and nobody scanning in it gives them away), and the contact gate is **hard-limited to contact range** (or the report becomes a through-wall detector for revoked players).
 
 Three things fire on the same scheduled timestamp: the **masking track cuts to dead silence**, every lamp **snaps to full white**, and **every phone rings**.
 
@@ -1351,11 +1351,11 @@ From playtests:
 
 | Cut | Reason |
 |---|---|
-| **confirmed alignment on removal** | Alignment is never confirmed, by any path, at any time |
+| **Confirming alignment on removal** | Alignment is never confirmed, by any path, at any time |
 | **Phone-crashing as a separate Insider ability** | Egress replaces it, and the roster must stay tight enough to operate by feel |
 | **The Capgras / synthetic-replacement frame** | Replaced by blackmail. Insiders are coerced friends, not copies |
 | **Conversion mode** | Went with the Capgras frame |
-| **"system-failure event" and all spaceship vocabulary** | Inherited from a 2022 README and never re-themed |
+| **All inherited spaceship vocabulary** | Carried over from a 2022 README and never re-themed. Replaced wholesale by the smart-home register |
 | **Sort (subroutine)** | The only one with no fiction, and its mode is half-covered by Deallocate |
 | **False Alert as an ability** | Core state signals must never be fakeable |
 | **Blackout, Flicker, Brownout, Wipe as abilities** | Folded into Surge, promoted to ambient behaviour, or made redundant |
@@ -1384,7 +1384,14 @@ Those need somewhere to live, and so do several other things currently homeless:
 
 | Deferred | To | Note |
 |---|---|---|
-| **Physical tasks** (basketball, Jenga, nerf guns, locks, hair braiding) | **v2** | **As a host-authored physical marker type** — free-text instruction written during the setup walk, player self-confirms. The shape is decided; only the timing is deferred. Original list preserved in `archive/LEGACY_CONTEXT.md` §3 |
+| **Physical tasks** (see the preserved list below) | **v2** | **As a host-authored physical marker type** — free-text instruction written during the setup walk, player self-confirms. The shape is decided; only the timing is deferred |
+
+**The original physical task list, preserved.** These are the tasks from the real-life version of the game that was actually played and actually worked. They are deferred, not discarded — this is the full record of them:
+
+*Short (physical):* wires · swipe card · shoot a basketball · memory card game (find a pair) · classify items into boxes
+*Long:* Jenga block stacking · shoot down targets with a nerf gun · open locks (find the keys in a box)
+*Two-person:* scan a marker and wait for another person to scan the paired one
+*Manual dexterity:* braiding hair
 | **Node mode** (spare phones as masking sources) | v1.1 | Cheap, and needs no audio sync. Not needed to validate |
 | **Smart home integration** | v2 | **Its priority within v2 should rise.** The house is a character that texts your friends and arms the perimeter, so real control of real lights makes the premise closer to literally true |
 | **The flashbang** (room lights as a real physiological attack) | v2 | Only ever an amplification of Surge, never a new ability |
@@ -1518,7 +1525,7 @@ Every `[ASSUMPTION]` in this document, in one place. **All are numbers, and ever
 ### External dependencies
 
 - **Trademark clearance opinion** ($500–1500) before anything public. The 2026-08-15 knockout search was clean but is not an opinion.
-- **Domain:** take `guestnetwork.game` / `.app` / `playguestnetwork.com` (~$20). The `.com` is parked on Afternic and can wait.
+- **Domain:** take `someoneishome.game` / `.app` / `playsomeoneishome.com` (~$20). **Availability has not been re-checked since the rename** — the old `guestnetwork.*` findings no longer apply.
 - **LLC and general liability insurance** before shipping publicly or selling anything. Add product liability the moment physical goods ship — **the accessory whose purpose is making the room darker is the real exposure, more than the stairs rule.**
 - **DMCA agent registration** ($6) once any UGC surface exists.
 - **Work-for-hire art contract** assigning copyright and warranting originality.

@@ -79,7 +79,9 @@ Real UI, real progress, real completion animation, **writes nothing**. Ten subro
 
 ### 9. Vocabulary in code, not just in strings
 
-`Resident` / `Insider` — never resident, insider, traitor, **guest**. `Revoke` = the Insider ability, never *kill*. `Restrain` = the group's action at a meeting, never *evict*. **Revoke and Restrain are not synonyms and must never be collapsed** — one is system power lent by the house, the other is a physical act the house cannot prevent. `Subroutine` never *task*. `Egress` never *sabotage*. Lint covers `model`, `core`, `ui`.
+`Resident` / `Insider` are the only role words. `Revoke` = the Insider ability. `Restrain` = the group's action at a meeting. **Revoke and Restrain are not synonyms and must never be collapsed** — one is system power lent by the house, the other is a physical act the house cannot prevent. `Subroutine` = the unit of assigned work. `SystemIntegrity` = the collective progress meter. `Egress` = the Insider-triggered house crisis. `Override` = the Insider-only route between rooms.
+
+**That is the complete vocabulary — any identifier outside it is wrong.** The lint's word list carries the mechanical detail; lint covers `model`, `core`, `ui`.
 
 ### 10. Events are facts; Intents are requests
 
@@ -110,6 +112,6 @@ Every other project absorbs a wrong guess as a bug. **Here a wrong guess is sile
 
 **Ask, don't guess, about:** what a client may receive · what an ability reveals to whom · what the lamp does · whether something needs a schema entry.
 
-**Fuller answers:** `_bmad-output/planning-artifacts/game-architecture.md` (patterns, boundaries, decisions) · `.../gdds/gdd-GuestNetwork-2026-08-16/gdd.md` (design intent) · `.../epics.md` (stories) · `.../decision-log.md` (why anything is the way it is, including what was reversed).
+**Fuller answers:** `_bmad-output/planning-artifacts/game-architecture.md` (patterns, boundaries, decisions) · `.../gdds/gdd-someone-is-home-2026-08-16/gdd.md` (design intent) · `.../epics.md` (stories) · `.../decision-log.md` (why anything is the way it is, including what was reversed).
 
-**`design-record.md` at the repo root is SUPERSEDED.** It carries a warning header. Do not act on it.
+**The vocabulary is closed — use those words and no synonyms**, in code, docs, comments, commit messages and filenames alike. If you need a term the list doesn't carry, raise it rather than inpassage use one. A `pre-commit` hook checks, but the rule holds without it.

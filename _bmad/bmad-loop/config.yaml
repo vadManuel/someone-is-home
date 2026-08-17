@@ -6,7 +6,7 @@
 
 # Core Configuration Values
 user_name: Vadmanuel
-project_name: GuestNetwork
+project_name: someone-is-home
 communication_language: English
 document_output_language: English
 output_folder: "{project-root}/_bmad-output"

@@ -10,9 +10,9 @@ engine: 'Kotlin Multiplatform + Compose Multiplatform 1.11.1'
 platform: 'iOS 26+ (iPhone first), Android on roadmap'
 
 # Source Documents
-gdd: '_bmad-output/planning-artifacts/gdds/gdd-GuestNetwork-2026-08-16/gdd.md'
-epics: '_bmad-output/planning-artifacts/gdds/gdd-GuestNetwork-2026-08-16/epics.md'
-decision_log: '_bmad-output/planning-artifacts/gdds/gdd-GuestNetwork-2026-08-16/decision-log.md'
+gdd: '_bmad-output/planning-artifacts/gdds/gdd-someone-is-home-2026-08-16/gdd.md'
+epics: '_bmad-output/planning-artifacts/gdds/gdd-someone-is-home-2026-08-16/epics.md'
+decision_log: '_bmad-output/planning-artifacts/gdds/gdd-someone-is-home-2026-08-16/decision-log.md'
 brief: null
 narrative: null
 ---
@@ -484,7 +484,7 @@ scanner.onFailure { queue.offer(Event.BleUnavailable(deviceId, tick)) }
 
 **Why meetings and not real time:** meetings are already where aggregate evidence arrives in a burst — the System Integrity delta lands there for the same reason. It keeps the house from chattering mid-round, which would dilute *the house speaks last* at the endgame, and it puts the correction exactly where people are arguing from bad data.
 
-**Why it needs no anti-exploit.** The obvious attack is a Insider backgrounding their phone during a kill to manufacture a connectivity excuse. **It backfires: being named as off-network means you generated no check-ins either.** In a game about who was where, *"the system could not see you for three minutes"* is the worst sentence that can be read aloud about you. **The exploit is self-punishing.**
+**Why it needs no anti-exploit.** The obvious attack is a Insider backgrounding their phone during a revoke to manufacture a connectivity excuse. **It backfires: being named as off-network means you generated no check-ins either.** In a game about who was where, *"the system could not see you for three minutes"* is the worst sentence that can be read aloud about you. **The exploit is self-punishing.**
 
 **And it makes the map's unreliability diegetic in writing.** The map is deliberately wrong — injected error, staleness bands, false negatives. Now the house *admits it*, in its own voice, in a form players can argue about.
 
@@ -547,7 +547,7 @@ Decided in D3, restated as rules:
 | **Cheat commands** | Force a role, force an Egress, jump to a meeting, set System Integrity |
 | **Leak harnesses** | Differential (0.6), schema allowlist (0.6b), radio sniffing (0.6c) — CI, not manual |
 
-> **⚠️ Scripted players encode your assumptions and will confirm them at scale.** A simulated Resident that walks efficiently to the nearest marker will run ten thousand rounds and never discover that beelining gets you killed — because the simulated Insiders are also playing the way you imagined. That is **testing a mental model at enormous scale and calling it evidence.**
+> **⚠️ Scripted players encode your assumptions and will confirm them at scale.** A simulated Resident that walks efficiently to the nearest marker will run ten thousand rounds and never discover that beelining gets you revoked — because the simulated Insiders are also playing the way you imagined. That is **testing a mental model at enormous scale and calling it evidence.**
 >
 > **Fuzz, do not model.** Include policies that camp pointlessly, wander, idle, stand still for four minutes, spam abilities, and act at random. **The absurd players find the crashes and the unstaffable chains; the reasonable ones only confirm what you already believe.**
 
@@ -589,7 +589,7 @@ The rules from Steps 3–5 — a pure core with no platform types, thin clients 
 ### Directory Structure
 
 ```
-someones-home/
+someone-is-home/
 ├── model/                    # Pure data. No behaviour.
 │   ├── Event.kt              #   sealed: facts that happened
 │   ├── Intent.kt             #   sealed: requests that may be refused
@@ -718,7 +718,9 @@ A subroutine's pattern arrives as an **Effect**. The UI displays it, captures ta
 
 **Game vocabulary is mandatory in code, not only in UI strings.**
 
-`Resident` / `Insider` — never resident, insider, traitor, **or guest** (the old role name; it encoded a premise that no longer exists). `Revoke` — the Insider ability, never kill. `Restrain` — the group's action at a meeting, never evict or eject. **Revoke and Restrain are not synonyms and must never be collapsed:** one is system power lent by the house, the other is a physical act the house cannot prevent. `Subroutine` — never task or minigame. `Egress` — never sabotage. `SystemIntegrity` — never taskBar.
+`Resident` / `Insider` are the only role words — everyone is a Resident, some are *also* Insiders. `Revoke` — the Insider ability. `Restrain` — the group's action at a meeting. **Revoke and Restrain are not synonyms and must never be collapsed:** one is system power lent by the house, the other is a physical act the house cannot prevent. `Subroutine` — the unit of assigned work. `SystemIntegrity` — the collective progress meter. `Egress` — the Insider-triggered house crisis. `Override` — the Insider-only route between rooms. `Passage` — a map-editor shape tag, alongside `room` and `stairs`.
+
+**That list is exhaustive** — any identifier outside it is wrong. The lint's word list carries the mechanical detail.
 
 The vocabulary encodes **who owns the action** — system words for the house and Insiders, human words for what Residents do among themselves. Code that drifts to `killPlayer()` surfaces as "kill" in a UI string eventually, and the register the whole game rests on dissolves quietly.
 
@@ -747,7 +749,7 @@ The template's categories mostly do not apply — there are no entities, prefabs
 
 ```kotlin
 // ❌ WRONG. The missing effect is a revoke-detector: poll the roster,
-//    learn who is out, never find a body.
+//    learn who is out, never find a revoked player.
 if (target.isRevoked) return Reduction(state, effects = emptyList())
 
 // ✅ RIGHT. Identical effect, identical cooldown spent, no feedback either way.
@@ -893,7 +895,7 @@ A classic determinism killer — invisible until a replay diverges by one effect
 | No wall clock in `core` | **Gradle** — no datetime dependency |
 | No coroutines in `core` | **Gradle** — no coroutines dependency |
 | No game logic in `ui` | **Gradle** — `ui` cannot see `core` |
-| Game vocabulary in code | Lint over **`model`, `core`, `ui` only** — bans `kill`, `task`, `insider`, `sabotage`, **`guest`**, `evict` |
+| Game vocabulary in code | Lint over **`model`, `core`, `ui` only** — allows the vocabulary above and rejects everything else, from a word list held in the lint config |
 | No allocation on the blackout path | Permanent allocation assertion (1.7b) |
 
 > **The vocabulary lint is scoped to the three game-facing modules.** `task` appears in every coroutine API and `kill` in process management — run it over `platform` and you will suppress it forty times a week and then switch it off. `model`, `core` and `ui` are the modules that produce user-visible strings anyway.
@@ -1060,7 +1062,7 @@ The defence is that the leak-critical requirements were derived from the design 
 
 ### Non-code work outstanding
 
-Buy `guestnetwork.game` / `.app` (~$20) · trademark clearance opinion before anything public ($500–1500) · 30-minute iOS NFC spike · LLC and general liability insurance before selling anything physical · DMCA agent registration once any UGC surface exists · work-for-hire art contract.
+Buy `someoneishome.game` / `.app` (~$20, availability not yet checked post-rename) · trademark clearance opinion before anything public ($500–1500) · 30-minute iOS NFC spike · LLC and general liability insurance before selling anything physical · DMCA agent registration once any UGC surface exists · work-for-hire art contract.
 
 ---
 

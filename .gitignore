@@ -28,3 +28,9 @@ Pods/
 # real Egress progress. They are debugging artifacts, never committed.
 recordings/
 *.jsonl
+
+# Local-only planning exhaust. Raw session transcripts, superseded by the
+# GDD and decision log, which carry everything load-bearing from them.
+_bmad-output/brainstorming/
+PRIVATE-NOTES.local.md
+*.local.md

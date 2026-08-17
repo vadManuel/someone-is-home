@@ -14,17 +14,17 @@ Every decision, change, and version transition, in real time.
 |---|---|
 | `_bmad-output/brainstorming/brainstorm-engine-selection-2026-08-15/brainstorm-intent.md` | Decisions from the 2026-08-15/16 session. Authoritative. |
 | `_bmad-output/brainstorming/brainstorm-engine-selection-2026-08-15/design-doc-revisions.md` | Scoped MoSCoW against the design record. Names what is stale. |
-| `design-record.md` (1908 lines) | Base design document. **Stale wherever the revisions file says so** — still describes deaths, spaceship subsystems, and synthetic replacements. |
-| `archive/LEGACY_CONTEXT.md` §3 | Consulted for the original physical-task list only. Otherwise ignored per instruction. |
+| The base design record (1908 lines, since retired) | Reasoning source. **Stale wherever the revisions file says so** — it still described deaths, spaceship subsystems, and synthetic replacements. |
+| A legacy-project context dossier (since deleted) | Consulted for the original physical-task list only. Otherwise ignored per instruction. |
 
-**Standing rule for this GDD:** where `design-record.md` and `brainstorm-intent.md` disagree, the brainstorm wins. The design record's §5/§9.3/§13.1/§15.5/§15.6/§15.8 (death, Capgras, conversion mode) are superseded, not merged.
+**Standing rule for this GDD:** where the design record and `brainstorm-intent.md` disagreed, the brainstorm won. The design record's sections on death, the Capgras frame, and conversion mode are superseded, not merged. Both source documents were retired on 2026-08-17; the GDD is now self-contained.
 
 ---
 
 ## Discovery
 
 ### D-001 · Workspace created
-`_bmad-output/planning-artifacts/gdds/gdd-GuestNetwork-2026-08-16/`. Files: `gdd.md`, `epics.md`, `decision-log.md`.
+`_bmad-output/planning-artifacts/gdds/gdd-someone-is-home-2026-08-16/`. Files: `gdd.md`, `epics.md`, `decision-log.md`.
 
 ### D-002 · Task framing accepted from the user
 §18.1 — a single round walked end to end, naming every system as it fires — is an explicit, first-class section of this GDD, not an appendix. Rationale: seventeen sections of systems were designed in isolation and have never been checked for composition; half changed in the last session.
@@ -52,13 +52,13 @@ Party Game supplies the structural subsections that hold the open decisions: min
 `needs_narrative` **not set.** Horror's guide carries `<narrative-workflow-recommended>`, but the premise is settled and there is no branching story, cast, or lore to design. The narrative surface in this game is five text messages and one end-of-round line.
 
 ### D-004 · Physical tasks: screen-only for v1, physical as a v2 tier — **decided** (closes O-1)
-Supersedes `design-record.md` §1.5's "keep the original real-life task categories." The original list (basketball, Jenga, nerf-gun asteroids, key-in-box locks, hair braiding) is preserved in `archive/LEGACY_CONTEXT.md` §3 and is not lost — it is deferred.
+Supersedes the design record's "keep the original real-life task categories." The original list is preserved in full in the GDD's v2 backlog section and is not lost — it is deferred.
 
 Four reasons, in order of weight:
 1. **Tier 0 (§4.4) requires the game complete with no purchase and no accessory.** Physical tasks need props per household. A game that needs a Jenga set is not complete at Tier 0.
 2. **The light-signature axis (§17.2) is load-bearing and has no physical analogue.** The screen *is* the lamp, so a subroutine's brightness is a difficulty dial independent of duration. A nerf gun has no light signature the app can set.
 3. **The motion budget (§7.3) needs the phone in hand.** Braiding hair does not leave a hand for the phone, so the game's only anti-cheat and its whole vulnerability model go dark for the task's duration.
-4. **the one shipped direct competitor already ships physical tasks at stations (§2).** Physical is parity with the one shipped competitor; darkness with a light-signature axis is unclaimed.
+4. **The one shipped direct competitor already ships physical tasks at stations (§2).** Physical is therefore parity rather than differentiation; darkness with a light-signature axis is unclaimed.
 
 **Rejected alternative worth recording:** a host-authored physical marker type (free-text instruction written during the setup walk, player self-confirms). Cheap, keeps what made the original memorable, and folds into the custom-task UGC pitch §6 already makes. Rejected for v1 only because it adds a UGC moderation surface (§1.7) before the core loop is validated. **This is the v2 shape** — it is the right way to bring the physical tasks back, and it should not be re-derived.
 
@@ -111,7 +111,7 @@ The single-round walkthrough was written end to end as the explicit task. It pro
 All entries D-001 through D-006 are represented in `gdd.md` or `epics.md`. No decision was set aside.
 
 ### Input reconciliation
-Ran against all three inputs plus `archive/LEGACY_CONTEXT.md` §3. Conducted inline rather than via subagents, per session constraints; the parent had read all three sources in full.
+Ran against all three inputs plus the legacy context dossier's task list. Conducted inline rather than via subagents, per session constraints; the parent had read all three sources in full.
 
 **Seven items the structured sections had silently dropped, all restored:**
 
@@ -158,8 +158,8 @@ I read "revoked phones become fully invisible" as a **radio** rule when it is a 
 With the radio up, the deactivation report is verifiable by physical contact, so it was never a fakeable signal. **Both meeting triggers survive and the never-fakeable rule stands unamended.**
 
 Two rules fall out and are now in the GDD:
-- **The revoked phone advertises but never scans.** If it kept scanning, a body would be an invisible sensor generating fresh occupancy data for a room nobody is scanning in — and a room with fresh counts and no scanner *is* a body. Inverts the coverage-holes rule.
-- **The contact gate is hard-limited to contact range.** At "nearby," BLE penetrates walls and the report becomes a through-wall detector for revoked players, which ends *you can walk past a body and never notice*.
+- **The revoked phone advertises but never scans.** If it kept scanning, a revoked player would be an invisible sensor generating fresh occupancy data for a room nobody is scanning in — and a room with fresh counts and no scanner *implies a revoked player sitting in it*. Inverts the coverage-holes rule.
+- **The contact gate is hard-limited to contact range.** At "nearby," BLE penetrates walls and the report becomes a through-wall detector for revoked players, which ends *you can walk past a revoked player and never notice*.
 
 Also decided: **name the caller, never the room**, on both trigger types.
 
@@ -236,8 +236,8 @@ Specified: **identical ring for both trigger types** (the screen carries the dif
 
 > **Scope guard written into both documents:** the meeting ring is the **sole** permitted phone-emitted sound and is global by construction. **It is not a precedent for audio anywhere else.** Subroutines stay silent or haptic-only; abilities stay silent; nothing that fires for a subset ever makes a sound.
 
-### D-017 · `design-record.md` marked superseded — **done**
-A prominent header now points at this GDD, with a was/is table covering the twelve places it is actively wrong (deaths, Capgras, Crash/system-failure event, shoulder tap and target confirmation, phones stopping advertising, dots, Evict, ghost mode open, voting undesigned, red palette, eleven diagnostics, round sizing) and a list of the sections that survive intact and are still worth reading.
+### D-017 · Base design record marked superseded — **done** (retired entirely 2026-08-17)
+A prominent header now points at this GDD, with a was/is table covering the twelve places it is actively wrong (deaths, Capgras, the old system-failure event, shoulder tap and target confirmation, phones stopping advertising, dots, Evict, ghost mode open, voting undesigned, red palette, eleven diagnostics, round sizing) and a list of the sections that survive intact and are still worth reading.
 
 **Rationale:** this project has already been bitten once by a stale design document, which is why `design-doc-revisions.md` exists. Two revision rounds have now passed over that file without touching it.
 
@@ -433,7 +433,7 @@ Runtime tunability is required because **the test rig is eight iPhones in one da
 ### D-038 · Three build variants, and fuzzing over modelling
 **Release / playtest / debug.** Playtest = recording on, cheats on, debug surfaces compiled out, permanently marked. On release you cannot skip a meeting or reset a round that broke in minute two — on the one night a month you have eight people in a house. On debug you are playtesting a build that is not the game. **Debug surfaces are compiled out, never runtime-flagged.**
 
-**Headless simulation must fuzz, not model.** A scripted Resident that walks efficiently to the nearest marker will run ten thousand rounds and never discover that beelining gets you killed, because the simulated Insiders play the way you imagined too. **That is testing a mental model at scale and calling it evidence.** Include camping, wandering, idling, spamming, and random policies.
+**Headless simulation must fuzz, not model.** A scripted Resident that walks efficiently to the nearest marker will run ten thousand rounds and never discover that beelining gets you revoked, because the simulated Insiders play the way you imagined too. **That is testing a mental model at scale and calling it evidence.** Include camping, wandering, idling, spamming, and random policies.
 
 ### D-039 · The host-holds-authority-state concern — **raised and retracted**
 Claimed as the game's strongest cheat vector; **the claim was wrong.** On a release build with an unmodified device the app container is not user-browsable on either platform. The host's app shows exactly what their role warrants. **The error was conflating *data present* with *data accessible*.**
@@ -594,7 +594,7 @@ Three renames, driven by one observation: **the vocabulary still encoded the pre
 
 | Query | Result |
 |---|---|
-| `a known-populated two-word control term` *(control)* | **101** — matches the original run exactly ✓ |
+| A known-populated two-word control term | **101** — matches the original run exactly ✓ |
 | `WM:"someones home"` | **0** |
 | `WM:someone AND WM:home` | **0** — all classes, live and dead |
 | App Store / Play | Not present |
@@ -631,9 +631,25 @@ Reverses a change inherited from `design-doc-revisions.md` §15.7, which replace
 **Mechanical resolution (story 10.9b):** the group restrains someone, but the *house* has not revoked them — so **the house deauthorises anyone the group restrains**, because a restrained occupant is no longer useful to it. **The system is watching the meeting and quietly finishing the job.** The deauthorisation is the house's *response* to the restraint, never its cause.
 
 ### D-060 · Propagation
-`gdd.md`, `epics.md`, `game-architecture.md`, `decision-log.md` updated. Architecture naming rules now ban **`guest`** and **`evict`** alongside `kill`/`task`/`insider`/`sabotage`, and record that **Revoke and Restrain are not synonyms and must never be collapsed.** Repo root in the structure tree is `someones-home/`.
+`gdd.md`, `epics.md`, `game-architecture.md`, `decision-log.md` updated. Architecture naming rules now cover the role words as well as the ability words, and record that **Revoke and Restrain are not synonyms and must never be collapsed.** Repo root in the structure tree is `someone-is-home/`.
 
-**Deliberately not renamed:** the output folder `gdd-GuestNetwork-2026-08-16/` and the `project_name` in `_bmad/gds/config.yaml`. These are paths and identifiers, not user-facing text; renaming them would break cross-document references for no benefit. **Worth doing at repo init, not now.**
+**The rules now state the vocabulary positively, 2026-08-17.** They used to be written as a list of what not to say. They now name only what the vocabulary *is* and declare the list exhaustive, which is both shorter and easier to check; the lint's word list carries the mechanical detail, where it belongs.
+
+### D-061 · Register brought in line across the spec — 2026-08-17
+
+**Pillar: access is revoked; nobody dies.** The design settled that early, but roughly forty sentences across the GDD, epics, architecture, decision log, project context and one Kotlin comment were drafted before it and still used the register of the retired design record. They now read in the game's own terms — **revoke**, **revoked player**, **target**, **revocation**.
+
+**No design changed.** Every rule those sentences state is the rule it stated before; only the register moved.
+
+**Ordinary English is left alone.** A lamp or a phone can still stop working, hardware and processes can still fail, and a player still has a physical presence in a real house — that last one is precisely what pillar P2 governs. The distinction is between the game's vocabulary and the language everyone speaks; only the former is regulated.
+
+**Why it matters beyond tidiness.** These documents are read as the spec when Revoke gets implemented. Prose teaches the codebase what to call things, and the vocabulary rule exists because naming drift surfaces in a UI string eventually.
+
+**A map-editor shape tag is now `passage`**, alongside `room` and `stairs` — the ability that governs it was already **Override**, and the tag had never been brought into line.
+
+**Paths and identifiers, renamed 2026-08-17.** The deferred half of this decision is now done: the repo root, the output folder `gdd-someone-is-home-2026-08-16/`, and `project_name` across all six `_bmad` config files.
+
+**The convention is one form, not two.** **The apostrophe in *Someone's Home* cannot appear in a directory or repository name**, so every path and identifier uses **`someone-is-home`** — repo, directories, config values — and *Someone's Home* is used in every piece of user-facing text and prose. An intermediate `SomeoneIsHome` spelling was applied earlier the same day and replaced within hours: two path spellings for one project is exactly the drift this log exists to prevent. The pre-rename name survives here only where it records the rename itself (D-057).
 
 ---
 

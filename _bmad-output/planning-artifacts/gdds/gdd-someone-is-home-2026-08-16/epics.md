@@ -182,7 +182,7 @@
 | 5.12 | NFC path behind the same hold button (after the iOS spike) |
 | 5.13b | **BLE identity — ephemeral rotating tokens, 15 s, authority-resolvable only.** A stable advertised ID lets any client track an individual all round, which makes *counts, never identities* decorative. The leak is in the radio, below the server, so server-side anonymization cannot fix it. Advertise the token and nothing else — no role, no name, no stable ID |
 | 5.13 | **The contact primitive** — one very-tight-RSSI device-to-device handshake, presented to the player as touching phones. Serves both the Revoke and the deactivation report; outcome determined purely by the two devices' states. **Not NFC — iOS exposes no phone-to-phone NFC.** UWB optional as a precision upgrade |
-| 5.14 | **Gate the handshake at contact range, as a hard constraint.** At "nearby" it becomes a through-wall detector for revoked players and *you can walk past a body and never notice* stops being true |
+| 5.14 | **Gate the handshake at contact range, as a hard constraint.** At "nearby" it becomes a through-wall detector for revoked players and *you can walk past a revoked player and never notice* stops being true |
 
 **Acceptance:** setting the phone down fails. Turning to look behind you does not. Two players report the meter felt fair without being told it was calibrated.
 
