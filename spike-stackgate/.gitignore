@@ -1,0 +1,6 @@
+# Spike-local build output
+build/
+.gradle/
+results/
+iosApp/**/xcuserdata/
+iosApp/**/project.xcworkspace/
