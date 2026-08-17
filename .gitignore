@@ -1,0 +1,30 @@
+# --- Gradle / Kotlin ---
+.gradle/
+build/
+**/build/
+!gradle/wrapper/gradle-wrapper.jar
+local.properties
+.kotlin/
+
+# --- Xcode / iOS ---
+xcuserdata/
+*.xcuserstate
+DerivedData/
+*.hmap
+*.ipa
+*.dSYM.zip
+Pods/
+
+# --- macOS ---
+.DS_Store
+
+# --- IDE ---
+.idea/
+!.idea/codeStyles/
+*.iml
+
+# --- Someone's Home ---
+# Session recordings contain COMPLETE authority state — roles, real positions,
+# real Egress progress. They are debugging artifacts, never committed.
+recordings/
+*.jsonl
