@@ -206,8 +206,11 @@ object GateEngine {
             prewarmRemaining--
         } else {
             completed++
-            // Progress updates are a recomposition. Do them rarely, and never mid-trial.
-            if (completed % 250 == 0) progress.intValue = completed
+            // A recomposition, so it is done between trials and never mid-trial. Short runs
+            // update every trial: the camera pass needs the index legible on video to line a
+            // video segment up with its row, and 30 recompositions cost nothing.
+            val every = if (config.trials <= 500) 1 else 250
+            if (completed % every == 0) progress.intValue = completed
         }
 
         if (completed >= config.trials) {
