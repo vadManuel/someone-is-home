@@ -25,6 +25,9 @@ import platform.QuartzCore.CAFrameRateRangeMake
 import platform.UIKit.UIApplication
 import platform.UIKit.UIDevice
 import platform.UIKit.UIScreen
+import platform.Foundation.NSProcessInfo
+import platform.Foundation.NSProcessInfoThermalState
+import platform.Foundation.thermalState
 import platform.darwin.NSObject
 import platform.darwin.dispatch_after
 import platform.darwin.dispatch_get_main_queue
@@ -352,4 +355,20 @@ actual fun writeResults(fileName: String, contents: String): String {
     @Suppress("CAST_NEVER_SUCCEEDS")
     (contents as NSString).writeToFile(path, true, NSUTF8StringEncoding, null)
     return path
+}
+
+
+actual fun launchArguments(): List<String> =
+    NSProcessInfo.processInfo.arguments.mapNotNull { it as? String }
+
+actual fun exitProcess(code: Int): Unit = platform.posix.exit(code)
+
+actual fun thermalStateName(): String = when (NSProcessInfo.processInfo.thermalState) {
+    NSProcessInfoThermalState.NSProcessInfoThermalStateNominal -> "nominal"
+    NSProcessInfoThermalState.NSProcessInfoThermalStateFair -> "fair"
+    NSProcessInfoThermalState.NSProcessInfoThermalStateSerious ->
+        "SERIOUS — throttling, this run is not comparable to a cool one"
+    NSProcessInfoThermalState.NSProcessInfoThermalStateCritical ->
+        "CRITICAL — throttling, this run is not comparable to a cool one"
+    else -> "unknown"
 }
