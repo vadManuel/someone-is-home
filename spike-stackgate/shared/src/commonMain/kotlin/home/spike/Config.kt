@@ -30,6 +30,10 @@ enum class PressureLevel(val scale: Double) {
     LIGHT(1.0),
     REPRESENTATIVE(10.0),
     HEAVY(50.0),
+    // Bisecting the 0.54 -> 3.00 MB/s window, where the boundary between clean and failing
+    // sits. The scale is a dial, not a claim; the measured MB/s in each report is the fact.
+    MID_A(100.0),
+    MID_B(175.0),
     CRUSH(250.0),
 }
 
@@ -112,6 +116,25 @@ data class RunConfig(
         )
 
         /**
+         * Bisection, to turn "clean at 0.54, fails at 3.00" into an actual ceiling.
+         *
+         * 10 000 trials each rather than CRUSH's 5 000: near the boundary the late rate is
+         * expected to be small, and a rate of a few hundredths of a percent needs the sample
+         * size to be distinguishable from zero.
+         */
+        val VOLUME_MID_A = VOLUME.copy(
+            label = "VOLUME_MID_A",
+            pressure = PressureLevel.MID_A,
+            note = "Bisection, low side of the 0.54-3.00 MB/s window.",
+        )
+
+        val VOLUME_MID_B = VOLUME.copy(
+            label = "VOLUME_MID_B",
+            pressure = PressureLevel.MID_B,
+            note = "Bisection, high side of the 0.54-3.00 MB/s window.",
+        )
+
+        /**
          * Bounds the GC question instead of estimating it. If the pause still fits inside a
          * frame at an allocation rate far above anything the real app could plausibly reach,
          * the answer holds whatever that rate turns out to be. Fewer trials because this run
@@ -175,6 +198,6 @@ data class RunConfig(
             note = "Allocation accounting only. Pressure OFF so the heap delta is attributable.",
         )
 
-        val all = listOf(VOLUME, VOLUME_CONTROL, VOLUME_CRUSH, VOLUME_CPU_CONTROL, VOLUME_HEAVY, COLD, LONG_IDLE, CAMERA, ALLOC_PROBE)
+        val all = listOf(VOLUME, VOLUME_CONTROL, VOLUME_MID_A, VOLUME_MID_B, VOLUME_CRUSH, VOLUME_CPU_CONTROL, VOLUME_HEAVY, COLD, LONG_IDLE, CAMERA, ALLOC_PROBE)
     }
 }
