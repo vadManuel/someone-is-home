@@ -13,6 +13,7 @@ object Report {
         val nPrewarm: Int,
         val pressure: PressureLevel,
         val pressureMbPerSec: Double,
+        val measuredAllocMbPerSec: Double,
         val idle: IdleProfile,
         val triggerName: String,
         val nominalIntervalNanos: Long,
@@ -115,6 +116,8 @@ object Report {
             nPrewarm = nPrewarm,
             pressure = cfg.pressure,
             pressureMbPerSec = Pressure.estimatedMegabytesPerSecond(),
+            measuredAllocMbPerSec =
+                if (runSeconds > 0) allocBytes / runSeconds / (1024.0 * 1024.0) else 0.0,
             idle = cfg.idle,
             triggerName = cfg.trigger.name.lowercase(),
             nominalIntervalNanos = Vsync.nominalIntervalNanos,
@@ -167,7 +170,11 @@ object Report {
         appendLine("device           ${s.device}")
         appendLine("trigger          ${s.triggerName}, idle ${s.idle} (${s.idle.minMillis}-${s.idle.maxMillis}ms)")
         appendLine("trials           ${s.n} measured, ${s.nPrewarm} pre-warm excluded, ${fmt1(s.runSeconds)}s")
-        appendLine("pressure         ${s.pressure} (~${fmt1(s.pressureMbPerSec)} MB/s est.)")
+        appendLine("pressure         ${s.pressure} — MEASURED ${fmt2(s.measuredAllocMbPerSec)} MB/s allocated")
+        appendLine("                 (the level name is a guess; this measured rate is the fact.")
+        appendLine("                  Compose alone allocates ~0.04 MB/s, so compare against that,")
+        appendLine("                  not against zero — pressure that does not clear the app's own")
+        appendLine("                  baseline leaves the GC half of the gate untested.)")
         appendLine("frame interval   nominal ${ms(s.nominalIntervalNanos)}ms, measured ${ms(s.measuredIntervalNanos)}ms")
         val ratio = if (s.nominalIntervalNanos > 0) s.measuredIntervalNanos.toDouble() / s.nominalIntervalNanos else 1.0
         if (ratio > 1.25 || ratio < 0.8) {
