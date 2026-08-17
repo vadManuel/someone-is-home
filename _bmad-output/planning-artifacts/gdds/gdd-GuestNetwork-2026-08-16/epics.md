@@ -76,6 +76,18 @@
 - Battery instrumentation reports cleanly over a full-length round.
 - **THE STACK GATE (story 1.7): the lamp blanks in the same frame as a contact event.**
 
+> **⚠️ Two things about how 1.7 must be measured, or it reports a meaningless pass.**
+>
+> **1. The GC half needs manufactured allocation pressure.** A GC pause only happens when there is garbage to collect. A minimal spike — one amber screen, a tap, a timestamp — allocates almost nothing, never triggers a collection inside the test window, and returns a clean result. **You would conclude Kotlin/Native GC is a non-issue and be wrong**, because the real app allocates constantly: BLE callbacks, 100 Hz motion samples, effect objects, recording writes. The spike must generate representative allocation on other threads while the blackout fires, or 1.7b is a formality rather than a test.
+>
+> **2. The measurement is two-layered, and the camera is not the primary instrument.** A 240 fps camera gives ~30 samples in a session; the gate is about **one frame in ninety thousand**. You cannot find a p99.9 tail with thirty samples.
+> - **In-app instrumentation for volume** — trigger timestamp → frame-presented timestamp, thousands of trials. **Read the tail, never the mean.**
+> - **Camera for calibration** — ~20–30 samples proving the in-app number corresponds to photons actually leaving the glass.
+>
+> The camera validates the instrument; the instrument finds the tail. **Neither alone answers the gate.**
+
+> **Trigger source for the spike: a screen tap, with the trigger kept pluggable.** The gate measures *trigger → pixels dark*, and the rendering pipeline does not care what produced the trigger. Using a real BLE contact handshake needs two devices and drags the radio risk — a separate question with its own test, story 0.6c — into a rendering test. Keep them apart.
+
 **Watched, not gated:** whether a dim amber screen alone produces the ~1-metre bubble. If it does, the Tier 0 promise holds with no accessory. If it does not, the palette moves — four luminance values, cheap to change — or the snoot becomes more load-bearing than planned.
 
 ---
