@@ -23,6 +23,8 @@ object Report {
         val spanHistogram: IntArray,
         val spanWorst: Int,
         val spanImpossible: Int,
+        val lateDraws: Int,
+        val latePresents: Int,
         val trialsWithGc: Int,
         val trialsWithStall: Int,
         val gcEvents: Int,
@@ -103,6 +105,18 @@ object Report {
             if (g > worstStall) worstStall = g
         }
 
+        // A clean trial waits at most one frame interval for the next vsync, then draws a
+        // short render offset into that frame. Anything beyond interval x 1.15 has spent
+        // longer than one whole frame getting to the surface, which is a missed frame however
+        // the vsync bookkeeping labels it.
+        val lateThreshold = (interval * 115) / 100
+        var lateDraws = 0
+        var latePresents = 0
+        for (i in measured) {
+            if (t.drawLatencyNanos(i) > lateThreshold) lateDraws++
+            if (t.presentLatencyNanos(i) > interval + lateThreshold) latePresents++
+        }
+
         val runSeconds = (GateEngine.endedAtNanos - GateEngine.startedAtNanos) / 1e9
         val coldFirst = if (t.count > 0) t.drawLatencyNanos(0) else 0L
         val allocBytes = GcProbe.allocatedBytesAcrossEpochs()
@@ -127,6 +141,8 @@ object Report {
             spanHistogram = spans,
             spanWorst = worst,
             spanImpossible = impossible,
+            lateDraws = lateDraws,
+            latePresents = latePresents,
             trialsWithGc = withGc,
             trialsWithStall = withStall,
             gcEvents = gcCount,
@@ -147,18 +163,32 @@ object Report {
         return padded.dropLast(3) + "." + padded.takeLast(3)
     }
 
-    /** The on-screen verdict. Span is the metric; latency is the sanity check. */
+    /**
+     * The verdict, decided by LATENCY rather than span.
+     *
+     * Span was the original headline and it is blind. In VOLUME_CRUSH it reported span 0 for
+     * every single one of the 39 trials whose draw provably overran a frame interval — because
+     * it is dominated by whether our CADisplayLink callback happens to run before or after
+     * Compose's within a vsync, not by how long the frame actually took. Latency is measured
+     * against the monotonic clock and does not care about callback ordering.
+     */
     fun verdict(s: Summary): String {
-        val onTime = s.spanHistogram.getOrElse(1) { 0 } + s.spanHistogram.getOrElse(0) { 0 }
-        val late = s.n - onTime
+        val late = s.lateDraws
         return when {
             s.n == 0 -> "NO DATA"
-            // Checked before the pass case: a broken instrument must never report a pass.
+            // Checked before any pass case: a broken instrument must never report a pass.
             s.spanImpossible > 0 ->
-                "INVALID — ${s.spanImpossible}/${s.n} trials have an impossible span" 
-            late == 0 -> "PASS — every trial drew black on the next frame (n=${s.n})"
-            late * 1000 <= s.n -> "MARGINAL — $late/${s.n} missed a frame (<= 0.1%)"
-            else -> "FAIL — $late/${s.n} missed a frame, worst span ${s.spanWorst}"
+                "INVALID — ${s.spanImpossible}/${s.n} trials have an impossible span"
+            late == 0 && s.latePresents == 0 ->
+                "PASS — no trial overran a frame (n=${s.n})"
+            late == 0 ->
+                "MARGINAL — draws were on time, but ${s.latePresents}/${s.n} presented late"
+            late * 1000 <= s.n ->
+                "MARGINAL — $late/${s.n} draws overran a frame (<= 0.1%)"
+            else -> {
+                val pct = fmt2(late * 100.0 / s.n)
+                "FAIL — $late/${s.n} draws overran a frame ($pct%), worst ${ms(s.drawLatency.max)}ms"
+            }
         }
     }
 
@@ -183,7 +213,15 @@ object Report {
             appendLine("  wrong, they are wrong, and the latency figures are the only valid ones.")
         }
         appendLine()
-        appendLine("SPAN — vsync boundaries between trigger and the frame that drew black")
+        appendLine("LATE FRAMES — the verdict is decided here")
+        appendLine("  draws over one frame      ${s.lateDraws} / ${s.n}")
+        appendLine("  presentations over one    ${s.latePresents} / ${s.n}")
+        appendLine("  Cross-reference 'trials overlapping a collection' below. If the late")
+        appendLine("  trials are the GC-overlapping ones, the collector is the cause.")
+        appendLine()
+        appendLine("SPAN — UNRELIABLE, kept only for continuity with earlier runs")
+        appendLine("  It reads 0 for late frames too: it is dominated by whether our display")
+        appendLine("  link ticks before or after Compose's, not by how long the frame took.")
         appendLine("  1 is the passing shape. 2+ means the renderer missed a frame.")
         appendLine("  0 also passes: our display link and Compose's may fire in either order")
         appendLine("  within one vsync, so 0 vs 1 is instrument noise. 2+ is not.")
