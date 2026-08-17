@@ -34,14 +34,43 @@ import androidx.compose.ui.unit.sp
 private val mono = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = Color(0xFFDDDDDD))
 private val monoDim = mono.copy(color = Color(0xFF888888))
 
+/**
+ * Batch mode. `--run <LABEL>` starts that run with no screen interaction, and
+ * `--exit-when-done` ends the process once results are written.
+ *
+ * Every run therefore gets a FRESH PROCESS. That is not convenience — Kotlin/Native schedules
+ * collections against heap-size thresholds, so a run inheriting a grown heap from the previous
+ * one collects at a different cadence. Comparing runs from one process makes run order an
+ * uncontrolled variable in exactly the dose-response this spike is trying to measure. Metal
+ * pipeline caches and Compose's own caches carry over too.
+ */
+private fun batchRun(): RunConfig? {
+    val args = launchArguments()
+    val i = args.indexOf("--run")
+    if (i < 0 || i + 1 >= args.size) return null
+    val label = args[i + 1]
+    return RunConfig.all.firstOrNull { it.label == label }
+}
+
+private fun exitWhenDone(): Boolean = launchArguments().contains("--exit-when-done")
+
 @Composable
 fun SpikeApp() {
-    var screen by remember { mutableStateOf(Screen.CONFIG) }
+    val batch = remember { batchRun() }
+    var screen by remember { mutableStateOf(if (batch != null) Screen.RUN else Screen.CONFIG) }
     var report by remember { mutableStateOf<String?>(null) }
     var savedPaths by remember { mutableStateOf<List<String>>(emptyList()) }
 
     val running by GateEngine.running
     val finished by GateEngine.finished
+
+    LaunchedEffect(Unit) {
+        if (batch != null) {
+            // Settle briefly so the first trial is not measured against app-launch work.
+            kotlinx.coroutines.delay(1_500)
+            startRun(batch)
+        }
+    }
 
     LaunchedEffect(finished) {
         if (finished && screen == Screen.RUN) {
@@ -60,6 +89,12 @@ fun SpikeApp() {
                 writeResults("summary-${summary.label}.txt", report!!),
             )
             screen = Screen.REPORT
+
+            if (exitWhenDone()) {
+                // The harness detects completion by this process disappearing.
+                kotlinx.coroutines.delay(500)
+                exitProcess(0)
+            }
         }
     }
 

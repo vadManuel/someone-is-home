@@ -98,3 +98,18 @@ expect fun prepareDeviceForRun(brightness: Double)
 expect fun restoreDeviceAfterRun()
 
 expect fun deviceDescription(): String
+
+/** Launch arguments, so the harness can drive a run without touching the screen. */
+expect fun launchArguments(): List<String>
+
+/** Ends the process so the harness can detect completion by the app disappearing. */
+expect fun exitProcess(code: Int)
+
+/**
+ * Thermal state at report time.
+ *
+ * A full matrix is ~2 hours of continuous rendering and the phone gets hot. An LTPO panel
+ * throttles and the CPU clocks down, so a run late in a sequence is not comparable to one at
+ * the start unless this is recorded. A silent thermal confound would read as a dose-response.
+ */
+expect fun thermalStateName(): String

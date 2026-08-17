@@ -9,6 +9,7 @@ object Report {
         val label: String,
         val note: String,
         val device: String,
+        val thermal: String,
         val n: Int,
         val nPrewarm: Int,
         val pressure: PressureLevel,
@@ -126,6 +127,7 @@ object Report {
             label = cfg.label,
             note = cfg.note,
             device = deviceDescription(),
+            thermal = thermalStateName(),
             n = measured.size,
             nPrewarm = nPrewarm,
             pressure = cfg.pressure,
@@ -198,6 +200,7 @@ object Report {
         appendLine()
         appendLine("run              ${s.label}   ${s.note}")
         appendLine("device           ${s.device}")
+        appendLine("thermal          ${s.thermal}")
         appendLine("trigger          ${s.triggerName}, idle ${s.idle} (${s.idle.minMillis}-${s.idle.maxMillis}ms)")
         appendLine("trials           ${s.n} measured, ${s.nPrewarm} pre-warm excluded, ${fmt1(s.runSeconds)}s")
         appendLine("pressure         ${s.pressure}${if (Pressure.cpuOnly) " (CPU-ONLY, no garbage)" else ""} — MEASURED ${fmt2(s.measuredAllocMbPerSec)} MB/s allocated")
