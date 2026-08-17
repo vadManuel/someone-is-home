@@ -99,8 +99,37 @@ Plus, continuously:
 
 `t_present` is *inferred* — the first vsync after the draw. If Compose commits late and the
 drawable actually lands a frame later, this instrument records the optimistic value. That is
-exactly why the camera pass exists, and it is why **span** (derived from the vsync timeline,
-which does catch main-thread stalls) is the headline rather than inferred presentation time.
+exactly why the camera pass exists.
+
+**Span was originally the headline and has been demoted — it was wrong in every run.** It is
+dominated by whether our `CADisplayLink` callback happens to fire before or after Compose's
+within a vsync, not by how long the frame took, so it read 0 for all 39 provably-late trials in
+the first CRUSH run and reported PASS on a FAIL. **The verdict is decided by latency against
+the monotonic clock.** Span is kept only for continuity with earlier runs.
+
+## The tap and scripted triggers do not sample the same phase
+
+Measured, not predicted — CAMERA vs VOLUME, trigger to drawn-black, p50:
+
+| | |
+|---|---|
+| tap (CAMERA, frame patch on) | **1.69 ms** |
+| scripted (VOLUME) | **8.04 ms** |
+
+A 4.7x gap, and it is structural rather than noise:
+
+1. **UIKit delivers a touch in the run-loop pass just before Compose renders**, so a tap is
+   picked up by the frame already in flight. `dispatch_after` lands just *after* Compose's
+   frame callback and waits out nearly a whole interval.
+2. **Camera mode's frame patch forces a redraw every frame**, keeping the renderer hot.
+
+So the camera pass calibrates a *luckier* path than the tail runs measure. It still does its
+job — confirming the in-app number corresponds to photons — but **do not quote the camera run's
+1.7 ms as the blackout latency.**
+
+Which is more honest about the real game? Closer to the scripted path: a BLE contact event
+arrives on a radio callback thread and has to hop to main. **8 ms is the figure to design
+against.**
 
 ---
 
