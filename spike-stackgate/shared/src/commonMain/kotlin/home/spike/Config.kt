@@ -59,6 +59,14 @@ data class RunConfig(
     /** Corner patch that toggles every drawn frame, so app frames are countable on video. */
     val framePatch: Boolean,
     val note: String,
+    /**
+     * Worker threads do the same arithmetic and memory traffic but allocate nothing.
+     *
+     * The confound control. The allocating generator burns CPU *and* makes garbage, so
+     * "late frames correlate with collections" cannot distinguish a GC problem from four
+     * busy threads competing with the renderer. This isolates the CPU half.
+     */
+    val cpuOnlyPressure: Boolean = false,
 ) {
     companion object {
         /** THE GATE. The tail, under representative load. */
@@ -88,6 +96,19 @@ data class RunConfig(
             label = "VOLUME_HEAVY",
             pressure = PressureLevel.HEAVY,
             note = "Headroom probe. 5x REPRESENTATIVE.",
+        )
+
+        /**
+         * Same CPU load as CRUSH, near-zero allocation. If frames still go late here, the
+         * cause is thread contention rather than the collector, and 1.7b's whole framing —
+         * plus its no-allocation mitigation — is aimed at the wrong thing.
+         */
+        val VOLUME_CPU_CONTROL = VOLUME.copy(
+            label = "VOLUME_CPU_CONTROL",
+            trials = 5_000,
+            pressure = PressureLevel.CRUSH,
+            cpuOnlyPressure = true,
+            note = "Confound control: CRUSH's CPU load with no garbage. Separates GC from CPU.",
         )
 
         /**
@@ -154,6 +175,6 @@ data class RunConfig(
             note = "Allocation accounting only. Pressure OFF so the heap delta is attributable.",
         )
 
-        val all = listOf(VOLUME, VOLUME_CONTROL, VOLUME_CRUSH, VOLUME_HEAVY, COLD, LONG_IDLE, CAMERA, ALLOC_PROBE)
+        val all = listOf(VOLUME, VOLUME_CONTROL, VOLUME_CRUSH, VOLUME_CPU_CONTROL, VOLUME_HEAVY, COLD, LONG_IDLE, CAMERA, ALLOC_PROBE)
     }
 }
