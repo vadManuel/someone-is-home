@@ -33,7 +33,7 @@ narrative: null
 
 **Patterns:** four novel, fifteen consistency rules, **nine of them compiler-, type- or build-enforced.**
 
-**Status:** validated PASS. **One gate before implementation** — story 1.7, whether Compose Multiplatform can blank the lamp in the same frame as phone contact. That single frame is the whole mitigation for losing the anonymous revoke.
+**Status:** validated PASS. **The one gate before implementation — story 1.7 — was executed on hardware 2026-08-17 and passed.** Compose Multiplatform blanks the lamp inside one 8.335 ms frame; the Flutter fallback is not taken. It passed **with a budget**: total app allocation must stay under ~0.5 MB/s, above which the collector starts pushing the blackout past its frame. See D-062/D-063 and `spike-stackgate/FINDINGS.md`.
 
 ---
 
@@ -1080,4 +1080,4 @@ Buy `someoneishome.game` / `.app` (~$20, availability not yet checked post-renam
 | **13 indexed assumptions** | Every one needs a number from a real round |
 | **The scope amber** | Has a trigger (E0–E5 complete) and a cut list. **Resolves at a checkpoint, not in a document** |
 
-**Gating before implementation:** story **1.7a/1.7b** — the stack gate.
+**Gating before implementation:** ~~story 1.7a/1.7b~~ — **CLEARED 2026-08-17.** Both halves pass. 1.7a's pre-warm mitigation proved unnecessary and should not be built; 1.7b's mitigation was aimed one layer too low and is replaced by a whole-app allocation budget (story 1.7c, D-063).

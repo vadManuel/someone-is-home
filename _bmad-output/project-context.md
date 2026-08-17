@@ -69,9 +69,11 @@ No local animation, tween, or easing the core didn't emit. **Light is game state
 
 No dialogs, toasts, or unexpected screen state — an error surfacing as an Insider fires an ability is an alignment tell delivered by the crash handler. **But report the failure as an event**: a dead radio makes a living player invisible on the map, which nobody including them would detect. The house announces it at the next meeting.
 
-### 7. Nothing allocates or logs on the blackout path
+### 7. The whole app has an allocation budget: **~0.5 MB/s**
 
-The lamp must die in the **same frame** as phone contact — the entire mitigation for losing the anonymous revoke. **Kotlin/Native GC pause there doesn't drop a frame, it un-anonymises a revoke.** The path is explicitly marked; there is a permanent allocation assertion. Don't work around it.
+The lamp must die in the **same frame** as phone contact — the entire mitigation for losing the anonymous revoke. **A Kotlin/Native GC pause there doesn't drop a frame, it un-anonymises a revoke.**
+
+**Measured on hardware, not assumed** (story 1.7, `spike-stackgate/FINDINGS.md`): clean at 0.54 MB/s across 55 200 blackouts; at 3.00 MB/s, 0.36% miss a frame. **The allocation that causes this is on the BLE, motion, effect and recording threads — not on the blackout path.** Keeping the draw path allocation-free is necessary and nowhere near sufficient; the budget is a whole-app number, and every thread spends from it.
 
 ### 8. Every subroutine ships with its fake, in the same change
 
