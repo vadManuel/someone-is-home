@@ -23,8 +23,13 @@
 	     iOS caps an app at 60 fps on a ProMotion panel unless it opts in here. At 60 Hz the
 	     frame interval is 16.7 ms instead of 8.33 ms, every latency number gets twice the
 	     budget it should have, and the gate passes for a reason that has nothing to do with
-	     the renderer. -->
-	<key>CADisableMinimumFrameDuration</key>
+	     the renderer.
+
+	     The key is ...OnPhone. The shorter CADisableMinimumFrameDuration is not a real key
+	     and is silently ignored — Compose Multiplatform refuses to start without the correct
+	     one, which is the only reason this was caught rather than shipped as a clean pass at
+	     half the refresh rate. -->
+	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 
 	<!-- So the results CSVs can be pulled off the device. -->
