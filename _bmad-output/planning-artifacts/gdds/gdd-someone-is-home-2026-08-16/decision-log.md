@@ -657,3 +657,50 @@ Reverses a change inherited from `design-doc-revisions.md` §15.7, which replace
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).
 Architecture Steps 1–9 complete. Open: OI-4, OI-5, OI-6. Gating: stories 1.7a/1.7b. Action: create `project-context.md`.
+
+---
+
+# Revision 12 — 2026-08-17 (story 1.7 executed on hardware)
+
+### D-062 · **The stack gate passes. Kotlin Multiplatform is confirmed; the Flutter fallback is not taken.**
+
+Nine runs on an iPhone 16 Pro, release binary, each in a fresh process, all thermally nominal. Evidence in `spike-stackgate/FINDINGS.md`; raw data is deliberately untracked.
+
+**1.7a — shader stalls — is a non-issue and the mitigation should not be built.** The first blackout after a cold launch drew in 3.3–5.6 ms, inside one 8.335 ms frame, and 200 trials with pre-warm disabled produced no late frame. **Pre-warming the blackout draw path at round start is now scope that can be deleted rather than written.** Renderer-idle was cleared in the same pass: 3–10 s between blackouts — the real game's condition, where the lamp sits static for minutes — moved p50 by 0.1 ms.
+
+**1.7b — GC pauses — is real, and resolves to a threshold rather than a verdict.** Late blackouts track allocation, confirmed against a control that ran the same threads and loop counts with preallocated buffers and produced zero late frames in 5 000 trials. So it is the collector, not thread contention.
+
+| | |
+|---|---|
+| Compose alone, idle | ~0.04 MB/s |
+| **Verified clean** | **0.54 MB/s** — 55 200 blackouts, **one** late frame |
+| Fails | 3.00 MB/s — 0.36% miss a frame, every one with a collection in its window |
+
+**The single late frame in the clean set had no collection in its window and no main-thread stall** — OS scheduling, ~1 in 55 000, and no engine choice removes it. That is the floor the design tolerates regardless of stack, and it is worth knowing that the alternative would not have been better.
+
+**A collection landing inside a blackout is not sufficient to make it late** — 153 overlaps at 0.54 MB/s produced no misses, 541 at 3.00 MB/s produced 18. What matters is how hard the heap is churning, not coincidence.
+
+### D-063 · **1.7b's mitigation was aimed at the wrong layer — corrected (story 1.7c)**
+
+The epic specified *a no-allocation discipline on the blackout path, enforced by a permanent allocation assertion.* **That assertion would have stayed green through every failure actually observed.** The allocation driving these collections is on the BLE, motion, effect and recording threads; the blackout path's own allocation never mattered.
+
+**The load-bearing guard is a total allocation-rate budget for the whole app — ~0.5 MB/s, asserted continuously.** Same shape as the original, one level up. The blackout-path assertion is kept because it is cheap and guards a smaller, different failure — a future commit quietly adding allocation to the draw path — but it is not the guard that matters, **and it still has no measured threshold.** `ALLOC_PROBE` returned 6 222 bytes per trial, which is an upper bound covering ~14 frames of ordinary rendering, not the draw path's own cost; the GC-epoch method cannot resolve finer than an epoch.
+
+**This was a good prediction that was one layer off.** D-026 correctly identified the GC as the sharper half and correctly reasoned that a pause can hit any frame forever. The error was assuming the fix belonged where the symptom appears.
+
+### D-064 · **A measurement discipline, learned expensively**
+
+**Four instrument bugs in this spike, and every one produced a plausible pass in the flattering direction.** A wrong Info.plist key that silently capped the app at 60 fps and doubled the apparent frame budget; a display link sampling at half the rate it was measuring; a stall baseline seeded from one sample that flagged 1 022 ordinary frames; and a headline metric — vsync span — that read 0 for every provably-late trial and reported PASS on a FAIL.
+
+**None was caught by the instrument that was wrong.** Each surfaced only when a second, independent number disagreed with it. **This is now the rule for E0's performance instrumentation (G4): no performance number is believed until something that does not share its mechanism agrees.**
+
+It also validates the boxed warnings written into story 1.7 before the spike ran. The first build did report a clean pass while its pressure generator contributed 14% on top of the app's own allocation floor — pressure ON and OFF were statistically indistinguishable, which is precisely the meaningless pass the note predicted. **The control run is what caught it, and the control was only there because the note demanded one.**
+
+---
+
+## State after revision 12
+
+**Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).
+Architecture Steps 1–9 complete. Open: OI-4, OI-5, OI-6. **Gating: CLEARED — 1.7a/1.7b both pass; E0 proceeds on Kotlin Multiplatform.**
+**Carried into E0 as a constraint, not a closed item:** total app allocation ≤ ~0.5 MB/s. Nobody yet knows what the real app allocates with BLE, 100 Hz motion, effects and recording running at once.
+Action: create `project-context.md`.
