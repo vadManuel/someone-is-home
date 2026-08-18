@@ -18,12 +18,15 @@ import home.someoneshome.model.Seat
  */
 fun reduce(state: GameState, event: Event): Reduction<GameState, Effect> = when (event) {
 
+    // Arming CONSTRUCTS the round rather than copying whatever was there. Carrying `revoked` or
+    // `cooldownArmed` across an arming means a round can begin with a player already revoked and
+    // nothing announcing it — and it is what let a recording replay from a different starting
+    // state and still be certified identical.
     is Event.RoundArmed -> Reduction(
-        state.copy(
-            armed = true,
+        GameState.armedRound(
             seed = event.seed,
             seats = event.seats.sortedBy { it.index },
-            insiderSeats = event.seats.filter { s -> event.insiders.any { it.index == s.index } }
+            insiders = event.seats.filter { s -> event.insiders.any { it.index == s.index } }
                 .sortedBy { it.index },
             systemIntegrity = event.seats.size * SUBROUTINES_PER_RESIDENT,
         ),
