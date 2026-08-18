@@ -10,7 +10,7 @@ package home.someoneshome.model
 class GameState private constructor(
     val armed: Boolean,
     val seats: List<Seat>,
-    private val insiderSeats: List<Seat>,
+    val insiderSeats: List<Seat>,
     val revoked: List<Seat>,
     val cooldownArmed: List<Seat>,
     val systemIntegrity: Int,
@@ -38,6 +38,28 @@ class GameState private constructor(
     ) = GameState(armed, seats, insiderSeats, revoked, cooldownArmed, systemIntegrity, nextEntity, seed)
 
     companion object {
+        /**
+         * A freshly armed round. Every field is set explicitly.
+         *
+         * Deliberately not a `copy()` of the previous state: arming is the clean start of a
+         * round, and anything carried across it is invisible to everyone.
+         */
+        fun armedRound(
+            seed: Long,
+            seats: List<Seat>,
+            insiders: List<Seat>,
+            systemIntegrity: Int,
+        ) = GameState(
+            armed = true,
+            seats = seats,
+            insiderSeats = insiders,
+            revoked = emptyList(),
+            cooldownArmed = emptyList(),
+            systemIntegrity = systemIntegrity,
+            nextEntity = 1L,
+            seed = seed,
+        )
+
         val EMPTY = GameState(
             armed = false,
             seats = emptyList(),

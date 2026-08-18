@@ -70,6 +70,8 @@ class RecordingTest {
     fun `replay detects a divergence and says where`() {
         val (_, recording) = record(GameState.EMPTY, round())
         val corrupted = Recording(
+            initialState = recording.initialState,
+            stateTranscript = recording.stateTranscript,
             events = recording.events,
             effectTranscript = recording.effectTranscript.toMutableList().also {
                 it[7] = it[7].replace("cooldownStarted=true", "cooldownStarted=false")
@@ -78,6 +80,7 @@ class RecordingTest {
         )
         val result = replay(GameState.EMPTY, corrupted)
         assertTrue(result is ReplayResult.Diverged, "a corrupted recording must not replay clean")
+        assertEquals(ReplayResult.Diverged.Kind.EFFECT, result.kind)
         assertEquals(7, result.index)
         assertTrue(result.expected != result.actual)
     }
@@ -85,7 +88,10 @@ class RecordingTest {
     @Test
     fun `replay detects a truncated recording rather than passing on the shorter prefix`() {
         val (_, recording) = record(GameState.EMPTY, round())
-        val short = Recording(recording.events, recording.effectTranscript.dropLast(1))
+        val short = Recording(
+            recording.initialState, recording.events,
+            recording.effectTranscript.dropLast(1), recording.stateTranscript,
+        )
         val result = replay(GameState.EMPTY, short)
         assertTrue(result is ReplayResult.Diverged)
         assertEquals(recording.effectTranscript.size - 1, result.index)
@@ -125,5 +131,82 @@ class RecordingTest {
             recordingB.effectTranscript,
             "the effect stream reveals whether the contact landed",
         )
+    }
+
+    /**
+     * THE HOLE THE REVIEW FOUND.
+     *
+     * Rule 1 requires the effect stream to be identical whether a revoke lands or not, so for
+     * the most important transition in the game the transcript carries no information about what
+     * happened. Before state rows, a recording certified a build where the revoke ability did
+     * nothing as replaying correctly — E0's acceptance criterion passing on a broken game.
+     *
+     * This simulates that regression at the recording level: same events, same effects, a state
+     * row where nobody got revoked.
+     */
+    @Test
+    fun `replay detects a state-only regression that leaves the effect stream untouched`() {
+        val events = listOf(
+            Event.RoundArmed(Tick(0), 1L, SEATS, INSIDERS),
+            Event.RevokeArmed(Tick(1), Seat(1)),
+            Event.ContactMade(Tick(2), Seat(1), Seat(3)),
+        )
+        val (state, recording) = record(GameState.EMPTY, events)
+        assertEquals(listOf(3), state.revoked.map { it.index }, "precondition: the revoke landed")
+
+        val asIfRevokeDidNothing = Recording(
+            initialState = recording.initialState,
+            events = recording.events,
+            effectTranscript = recording.effectTranscript,
+            stateTranscript = recording.stateTranscript.map { it.replace("revoked=3", "revoked=") },
+        )
+
+        val result = replay(GameState.EMPTY, asIfRevokeDidNothing)
+        assertTrue(result is ReplayResult.Diverged, "a state-only regression must not replay clean")
+        assertEquals(ReplayResult.Diverged.Kind.STATE, result.kind)
+    }
+
+    /** A recording replayed from a different starting state must not certify as identical. */
+    @Test
+    fun `replay rejects a recording replayed from the wrong starting state`() {
+        val events = listOf(Event.RevokeArmed(Tick(1), Seat(1)), Event.ContactMade(Tick(2), Seat(1), Seat(3)))
+        val armedStart = record(GameState.EMPTY, listOf(Event.RoundArmed(Tick(0), 1L, SEATS, INSIDERS))).first
+        val (_, fromArmed) = record(armedStart, events)
+
+        val result = replay(GameState.EMPTY, fromArmed)
+        assertTrue(result is ReplayResult.Diverged, "replaying from elsewhere must be rejected")
+        assertEquals(ReplayResult.Diverged.Kind.INITIAL_STATE, result.kind)
+    }
+
+    /** Arming constructs the round; nothing survives it. */
+    @Test
+    fun `arming clears any state carried in from before`() {
+        val dirty = record(GameState.EMPTY, listOf(
+            Event.RoundArmed(Tick(0), 1L, SEATS, INSIDERS),
+            Event.RevokeArmed(Tick(1), Seat(1)),
+            Event.ContactMade(Tick(2), Seat(1), Seat(3)),
+        )).first
+        assertEquals(listOf(3), dirty.revoked.map { it.index })
+
+        val rearmed = record(dirty, listOf(Event.RoundArmed(Tick(9), 2L, SEATS, INSIDERS))).first
+        assertEquals(emptyList(), rearmed.revoked.map { it.index })
+        assertEquals(emptyList(), rearmed.cooldownArmed.map { it.index })
+    }
+
+    /** A marker value must not be able to forge rows in the recording. */
+    @Test
+    fun `a marker containing a separator or newline cannot forge a row`() {
+        val nasty = MarkerId("a\nE ContactMade|at=9|actor=1|target=2")
+        val (_, rec) = record(GameState.EMPTY, listOf(Event.MarkerScanned(Tick(1), Seat(0), nasty)))
+        val eventRows = rec.toText().lines().count { it.startsWith("E ") }
+        assertEquals(1, eventRows, "one scan must produce exactly one event row")
+    }
+
+    /** Absence must be distinguishable from a real seat, not collapsed onto a sentinel. */
+    @Test
+    fun `a skipped vote does not render the same as a vote for seat minus one`() {
+        val skip = Transcript.render(Event.VoteCast(Tick(1), Seat(0), null))
+        val negative = Transcript.render(Event.VoteCast(Tick(1), Seat(0), Seat(-1)))
+        assertTrue(skip != negative, "abstention and a seat must not share a transcript row")
     }
 }
