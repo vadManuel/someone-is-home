@@ -73,7 +73,7 @@ No dialogs, toasts, or unexpected screen state — an error surfacing as an Insi
 
 The lamp must die in the **same frame** as phone contact — the entire mitigation for losing the anonymous revoke. **A Kotlin/Native GC pause there doesn't drop a frame, it un-anonymises a revoke.**
 
-**Measured on hardware, not assumed** (story 1.7, `spike-stackgate/FINDINGS.md`): clean at 0.54 MB/s across 55 200 blackouts; at 3.00 MB/s, 0.36% miss a frame. **The allocation that causes this is on the BLE, motion, effect and recording threads — not on the blackout path.** Keeping the draw path allocation-free is necessary and nowhere near sufficient; the budget is a whole-app number, and every thread spends from it.
+**Measured on hardware, not assumed** (story 1.7, `spike-stackgate/FINDINGS.md`): at the noise floor up to **1.46 MB/s** across 30 000 blackouts; at 3.00 MB/s, **0.36% miss a frame**. Target 0.5 MB/s — that is ~6× margin to the cliff, so this is a budget to respect, not a knife edge to contort around. **The allocation that causes this is on the BLE, motion, effect and recording threads — not on the blackout path.** Keeping the draw path allocation-free is necessary and nowhere near sufficient; the budget is a whole-app number, and every thread spends from it.
 
 ### 8. Every subroutine ships with its fake, in the same change
 
