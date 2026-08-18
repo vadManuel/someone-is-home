@@ -34,6 +34,11 @@ private object NativeAllocationCounter {
     private var lastEpoch = -1L
     private var lastHeapAfterBytes = 0L
     private var accumulatedBytes = 0L
+    private var seenFirstEpoch = false
+
+    /** Epochs actually observed. Zero means this counter has never advanced. */
+    var epochsObserved: Long = 0L
+        private set
 
     @OptIn(ExperimentalStdlibApi::class)
     fun sample(): Long {
@@ -41,10 +46,21 @@ private object NativeAllocationCounter {
         if (info.epoch != lastEpoch) {
             val before = info.memoryUsageBefore["heap"]?.totalObjectsSizeBytes ?: 0L
             val after = info.memoryUsageAfter["heap"]?.totalObjectsSizeBytes ?: 0L
-            val grownSinceLastCollection = before - lastHeapAfterBytes
-            if (grownSinceLastCollection > 0) accumulatedBytes += grownSinceLastCollection
+
+            // The FIRST observed epoch establishes a baseline and contributes nothing.
+            //
+            // Charging `before - 0` would bill the entire pre-existing live heap as "allocated
+            // since start" — a large over-report, in a counter whose documentation promises it
+            // only ever under-reports. A monitor built on that reports a false breach at
+            // startup, gets tuned around, and the tuning then masks a real breach later.
+            if (seenFirstEpoch) {
+                val grown = before - lastHeapAfterBytes
+                if (grown > 0) accumulatedBytes += grown
+            }
+            seenFirstEpoch = true
             lastHeapAfterBytes = after
             lastEpoch = info.epoch
+            epochsObserved++
         }
         return accumulatedBytes
     }

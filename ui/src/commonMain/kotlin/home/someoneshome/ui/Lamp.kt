@@ -13,8 +13,9 @@ import androidx.compose.ui.graphics.Color
  *
  * **The state is read inside the draw lambda, not in composition.** That makes a change
  * invalidate draw only, skipping composition and layout entirely. Read it in composition instead
- * and every blackout costs a recomposition. Story 1.7 measured this path at 8.97 ms worst case
- * against an 8.335 ms frame across 10 000 trials.
+ * and every blackout costs a recomposition. Story 1.7 measured this path at 10.59 ms worst case
+ * against an 8.335 ms frame across 10 000 trials — one late draw, with no collection in its
+ * window. See spike-stackgate/FINDINGS.md; do not quote a number from memory here.
  *
  * `MutableIntState`, not `MutableState<Color>`: Color is a value class over ULong and would box
  * on every single write.

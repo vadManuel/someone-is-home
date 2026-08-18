@@ -24,12 +24,18 @@ PROBE="model/src/commonMain/kotlin/home/someoneshome/model/_Probe.kt"
 pass=0; fail=0
 
 expect_failure() { # description, task, expected-message
-    local out
-    out="$(./gradlew "$2" 2>&1)" || true
-    if printf '%s' "$out" | grep -q "$3"; then
+    local out rc
+    out="$(./gradlew "$2" 2>&1)"; rc=$?
+    # BOTH conditions. Matching the message alone is not enough: a guard downgraded from
+    # `throw GradleException` to `logger.warn` still prints its message word for word, and this
+    # script would have recorded PASS while the build sailed through green. The whole claim here
+    # is that the guard FAILS the build, so the exit code is the assertion.
+    if [ "$rc" -ne 0 ] && printf '%s' "$out" | grep -q "$3"; then
         echo "  PASS  $1"; pass=$((pass + 1))
+    elif [ "$rc" -eq 0 ]; then
+        echo "  FAIL  $1 — build SUCCEEDED; the guard did not fail the build"; fail=$((fail + 1))
     else
-        echo "  FAIL  $1 — the guard did not fire"; fail=$((fail + 1))
+        echo "  FAIL  $1 — build failed but not with the expected message"; fail=$((fail + 1))
     fi
 }
 
@@ -47,12 +53,18 @@ fi
 
 # File backups, not `git checkout` — these files may be untracked, and a restore that silently
 # does nothing would leave a deliberate violation sitting in the tree.
-cp core/build.gradle.kts /tmp/guard-core.bak
-cp ui/build.gradle.kts /tmp/guard-ui.bak
+BAK="$(mktemp -d)"
+cp core/build.gradle.kts "$BAK/core"
+cp ui/build.gradle.kts "$BAK/ui"
 restore() {
     rm -f "$PROBE"
-    cp /tmp/guard-core.bak core/build.gradle.kts
-    cp /tmp/guard-ui.bak ui/build.gradle.kts
+    cp "$BAK/core" core/build.gradle.kts
+    cp "$BAK/ui" ui/build.gradle.kts
+    rm -rf "$BAK"
+    # Prove the tree handed back is actually clean, rather than assuming the copies landed.
+    if ! ./gradlew check -q >/dev/null 2>&1; then
+        echo "WARNING: tree is NOT clean after restore — inspect before committing." >&2
+    fi
 }
 trap restore EXIT
 
@@ -85,7 +97,7 @@ f.write_text(f.read_text().replace(
     'implementation(project(":model"))\n        implementation(libs.kotlinx.coroutines.core)'))
 PY
 expect_failure "core stays pure" ":core:boundaryCheck" "Module boundary violated in 'core'"
-cp /tmp/guard-core.bak core/build.gradle.kts
+cp "$BAK/core" core/build.gradle.kts
 
 echo "5/5  boundary — :core reaching ui"
 python3 - <<'PY'
@@ -96,7 +108,7 @@ f.write_text(f.read_text().replace(
     'implementation(project(":model"))\n        implementation(project(":core"))'))
 PY
 expect_failure "ui cannot see the rules" ":ui:boundaryCheck" "Module boundary violated in 'ui'"
-cp /tmp/guard-ui.bak ui/build.gradle.kts
+cp "$BAK/ui" ui/build.gradle.kts
 
 echo
 echo "$pass passed, $fail failed"

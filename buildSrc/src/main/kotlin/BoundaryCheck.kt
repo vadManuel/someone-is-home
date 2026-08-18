@@ -109,16 +109,29 @@ abstract class BoundaryCheckTask : DefaultTask() {
             )
         }
 
-        // If this module has project rules, it must have resolved component identities to check
-        // them against. Zero identities with rules configured means the resolution wiring broke,
-        // and a rule that matches an empty set passes forever.
-        if (forbiddenProjects.get().isNotEmpty() && componentIds.get().isEmpty()) {
-            throw GradleException(
-                "Boundary check for '${moduleName.get()}' has ${forbiddenProjects.get().size} " +
-                    "project rule(s) but resolved NO component identities.\n" +
-                    "Failing rather than passing: a rule evaluated against an empty set reports " +
-                    "success forever."
-            )
+        // POSITIVE CONTROL.
+        //
+        // Non-empty is not enough. If Gradle changes how it renders a component identity — today
+        // it is exactly `project ':core'`, quotes included — the normaliser above silently stops
+        // matching, the list stays full, and the check reports clean forever. That is not
+        // hypothetical: comparing against `project :core` WITHOUT the quotes is the bug that
+        // already shipped here once and passed green while ui depended on core.
+        //
+        // A module always appears in its own resolution, so there is a free known-present
+        // identity to test the normaliser against. If it cannot recognise that one, it cannot be
+        // trusted to recognise a forbidden one.
+        if (forbiddenProjects.get().isNotEmpty()) {
+            val self = ":" + moduleName.get()
+            val normalised = componentIds.get().map { it.removePrefix("project").trim().trim('\'', '"') }
+            if (normalised.none { it == self }) {
+                throw GradleException(
+                    "Boundary check for '${moduleName.get()}' cannot recognise its OWN identity " +
+                        "($self) among ${componentIds.get().size} resolved component(s).\n" +
+                        "The identity format has changed and the normaliser no longer matches, so " +
+                        "every project rule here is silently passing. Failing instead.\n" +
+                        "Saw: " + componentIds.get().take(5).joinToString()
+                )
+            }
         }
 
         // The rule counts are logged deliberately. An earlier version printed "0 rules" while
