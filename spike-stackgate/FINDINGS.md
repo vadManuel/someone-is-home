@@ -139,6 +139,35 @@ blackout path's cost.** A trial spans ~14 frames of ordinary Compose rendering, 
 GC-epoch method cannot resolve anything finer than an epoch, which is seconds apart. Isolating
 the draw path's own allocation needs a different instrument than this spike has.
 
+## The GC attribution was re-derived independently, and holds
+
+A code review flagged that `FLAG_GC_DURING` is a *polled* proxy: it compares GC epochs seen by a
+sampler running `delay(4)` on a background dispatcher, so a collection finishing inside an ~8 ms
+trial window may not be observed until after the trial was recorded — and the sampler's own
+scheduling degrades exactly when the system is loaded, which is exactly when late frames happen.
+The bias runs toward blaming OS scheduling rather than the collector. Every causal claim above
+rests on that flag.
+
+**Re-derived from the recorded GC pause windows instead**, by testing whether any
+`[window_start, window_end]` interval overlaps each trial's `[trigger, draw]` — no polling
+involved, computed offline from `gc-*.csv` and `trials-*.csv`:
+
+| run | late | polled flag says GC | window overlap says GC | flag agreement |
+|---|---|---|---|---|
+| `VOLUME_CRUSH` | 18 | 18 | **18** | 91.2% |
+| `VOLUME_HEAVY` | 0 | 0 | **0** | 98.0% |
+| `VOLUME_CPU_CONTROL` | 0 | 0 | **0** | 99.8% |
+| `VOLUME` | 1 | 0 | **0** | 99.2% |
+
+**Every conclusion survives.** All 18 CRUSH failures genuinely overlap a collection window. The
+single late draw in `VOLUME` genuinely does not — the nearest collection is **28.8 ms away** with
+a 0.028 ms stop-the-world, so the residual-floor claim ("OS scheduling, not the collector") holds
+under the stricter method.
+
+The flag itself is a decent but imperfect proxy — agreement drops to 91% under CRUSH, which is
+where polling is most stressed, exactly as predicted. **It is sound for attributing the late
+trials and should not be quoted as a general overlap rate.**
+
 ## Instrumentation notes worth carrying forward
 
 Three of this spike's own metrics were wrong before they were right, and **all three failed in
