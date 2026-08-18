@@ -34,3 +34,9 @@ recordings/
 _bmad-output/brainstorming/
 PRIVATE-NOTES.local.md
 *.local.md
+
+# --- Real project build output ---
+build/
+**/build/
+.kotlin/
+buildSrc/build/
