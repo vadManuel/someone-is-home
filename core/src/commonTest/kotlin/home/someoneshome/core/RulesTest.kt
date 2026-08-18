@@ -10,7 +10,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 private val SEATS = (0 until 8).map { Seat(it) }
-private val INSIDERS = setOf(Seat(1), Seat(5))
+private val INSIDERS = listOf(Seat(1), Seat(5))
 
 private fun armed(): GameState =
     reduce(GameState.EMPTY, Event.RoundArmed(Tick(0), seed = 42L, seats = SEATS, insiders = INSIDERS)).state
