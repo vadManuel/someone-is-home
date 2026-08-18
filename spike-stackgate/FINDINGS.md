@@ -84,15 +84,41 @@ anywhere in the run.** OS scheduling, and nothing in the stack's control removes
 
 ## The number E0 has to live with
 
+Bisected 2026-08-17 with two further 10 000-trial runs.
+
+| allocation | late | n | rate | 95% upper |
+|---|---|---|---|---|
+| 0.54 MB/s | 0 | 10 000 | 0.000% | 0.030% |
+| 0.99 MB/s | 3 | 10 000 | 0.030% | 0.070% |
+| 1.46 MB/s | 0 | 10 000 | 0.000% | 0.030% |
+| **3.00 MB/s** | **18** | 5 000 | **0.360%** | 0.534% |
+
+**The boundary is not sharp, and it is higher than the first matrix suggested.** 0.99 and 1.46
+overlap — 3 late versus 0 in 10 000 is not a real difference. Combined across 0.54–1.46 MB/s the
+rate is **0.010%** (95% upper 0.023%), the same order as the OS-scheduling floor. At 3.00 MB/s it
+is **0.360%**, a **36×** jump. The cliff is therefore somewhere between **1.5 and 3.0 MB/s**, not
+just above 0.54.
+
 ```
      0.04 MB/s   Compose alone, doing nothing
-     0.54 MB/s   VERIFIED CLEAN — 55 200 blackouts, one late, non-GC
-     ~ ?         the boundary, somewhere in this 5.6x window
+     0.50 MB/s   DESIGN TARGET — 3x margin below anything measured
+     1.46 MB/s   verified at the noise floor across 30 000 trials
+   1.5–3.0       the cliff, still unlocated
      3.00 MB/s   0.36% of blackouts miss a frame
 ```
 
-**Total app allocation should stay under ~0.5 MB/s.** Verified, not extrapolated. Narrowing the
-boundary above it is one run each at ~1.0 and ~2.0 MB/s.
+**Keep ~0.5 MB/s as the design target**, but E0 is **not on a knife edge** — there is roughly 3×
+margin to anything measurable and 6× to the cliff. That is the practically useful outcome:
+allocation needs a budget, not paranoia.
+
+> **⚠️ A confound that weakens this, stated rather than buried.** The two bisection runs have a
+> different trigger-phase distribution from the rest — their draw-latency mode sits at 6.05 ms
+> against 8.03 ms elsewhere, meaning their triggers landed with ~2 ms more slack before the
+> one-frame threshold. Cause unknown; the pressure workers are on background threads and should
+> not move main-queue timing directly. **It makes the two zero-late results mildly flattering**,
+> and it means these runs are not perfectly comparable with HEAVY and CRUSH. It does not
+> threaten the headline, because MID_A produced GC-linked late frames *despite* the extra slack,
+> and CRUSH's 36× elevation is far too large to be a phase artifact.
 
 ## This changes 1.7b's mitigation
 

@@ -696,11 +696,28 @@ The epic specified *a no-allocation discipline on the blackout path, enforced by
 
 It also validates the boxed warnings written into story 1.7 before the spike ran. The first build did report a clean pass while its pressure generator contributed 14% on top of the app's own allocation floor — pressure ON and OFF were statistically indistinguishable, which is precisely the meaningless pass the note predicted. **The control run is what caught it, and the control was only there because the note demanded one.**
 
+### D-065 · **The allocation cliff is higher than the first pass suggested — bisected**
+
+Two further 10 000-trial runs. **The boundary is not sharp and it is not just above 0.54 MB/s.**
+
+| allocation | late | n | rate | 95% upper |
+|---|---|---|---|---|
+| 0.54 MB/s | 0 | 10 000 | 0.000% | 0.030% |
+| 0.99 MB/s | 3 | 10 000 | 0.030% | 0.070% |
+| 1.46 MB/s | 0 | 10 000 | 0.000% | 0.030% |
+| **3.00 MB/s** | **18** | 5 000 | **0.360%** | 0.534% |
+
+0.99 and 1.46 overlap — three late frames versus zero in ten thousand is not a difference. Combined across 0.54–1.46 MB/s the rate is **0.010%**, the same order as the OS-scheduling floor from D-062; at 3.00 MB/s it is **0.360%**, a **36×** jump. **The cliff sits between 1.5 and 3.0 MB/s and remains unlocated.**
+
+**The design target stays ~0.5 MB/s, but the useful finding is that E0 is not on a knife edge** — roughly 3× margin to anything measurable and 6× to the cliff. Allocation needs a budget, not paranoia, and that distinction changes how much E0 should contort to avoid per-event state copies.
+
+**A confound, recorded rather than buried.** The two bisection runs have a different trigger-phase distribution from every other run — draw-latency mode at 6.05 ms against 8.03 ms — so their triggers landed with about 2 ms more slack before the one-frame threshold. Cause unknown; the pressure workers run on background threads and should not move main-queue timing directly. **It makes the two zero-late results mildly flattering.** It does not threaten the conclusion: MID_A produced GC-linked late frames *despite* the extra slack, and a 36× elevation is far too large to be a phase artifact. **Anyone re-running this should expect the phase distribution to move and should not read a shifted median as a regression.**
+
 ---
 
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).
 Architecture Steps 1–9 complete. Open: OI-4, OI-5, OI-6. **Gating: CLEARED — 1.7a/1.7b both pass; E0 proceeds on Kotlin Multiplatform.**
-**Carried into E0 as a constraint, not a closed item:** total app allocation ≤ ~0.5 MB/s. Nobody yet knows what the real app allocates with BLE, 100 Hz motion, effects and recording running at once.
+**Carried into E0 as a constraint, not a closed item:** total app allocation ≤ ~0.5 MB/s as the design target, with the measured cliff between 1.5 and 3.0 MB/s — roughly 6× margin, so this is a budget rather than a knife edge. Nobody yet knows what the real app allocates with BLE, 100 Hz motion, effects and recording running at once.
 Action: create `project-context.md`.
