@@ -3,14 +3,51 @@ package home.someoneshome.platform
 import kotlin.native.runtime.GC
 
 /**
- * Derived from GC epoch deltas: bytes allocated between collections, summed.
+ * Reconstructs an allocation counter, because Kotlin/Native does not expose one.
  *
- * Kotlin/Native exposes no allocation counter, so this reconstructs one. It is only as current
- * as the last collection — which is adequate for a rate budget sampled over seconds, and useless
- * for anything finer. The spike hit exactly that limit trying to measure per-blackout cost.
+ * Each collection reports the heap immediately before and immediately after it ran. The bytes
+ * allocated between two collections is therefore `before(n) - after(n-1)`, and summing that
+ * across epochs gives a cumulative total. This is the method the story 1.7 spike used to derive
+ * every MB/s figure in `FINDINGS.md`.
+ *
+ * **Three limits, all of which under-report rather than over-report:**
+ *
+ * 1. **It only advances when a collection happens.** Between collections the value is stale. At
+ *    low allocation rates that can be seconds — fine for a rate budget averaged over a round,
+ *    useless for anything finer. The spike hit this limit trying to isolate per-blackout cost
+ *    and could only produce an upper bound.
+ * 2. **Epochs missed between samples are lost.** If two collections occur between polls, the
+ *    first one's allocation is never counted. Poll often enough that this stays rare — the
+ *    spike sampled every 4 ms.
+ * 3. **Reading `GC.lastGCInfo` allocates a `GCInfo`.** Never call this on the blackout path.
+ *    Sample it from a monitor thread. An instrument that allocates becomes a cause of the pause
+ *    it is measuring, which is not hypothetical: it is why the spike's probe had to be built
+ *    this way.
+ *
+ * Under-reporting matters for how the result is read. A measured rate near the budget means the
+ * true rate is at least that, so the budget is breached; a measured rate far below it is weaker
+ * evidence than it looks.
+ *
+ * Not thread-safe. Sample it from one thread.
  */
-@OptIn(ExperimentalStdlibApi::class)
-actual fun allocatedBytesSinceStart(): Long {
-    val info = GC.lastGCInfo ?: return 0L
-    return info.memoryUsageAfter["heap"]?.totalObjectsSizeBytes ?: 0L
+private object NativeAllocationCounter {
+    private var lastEpoch = -1L
+    private var lastHeapAfterBytes = 0L
+    private var accumulatedBytes = 0L
+
+    @OptIn(ExperimentalStdlibApi::class)
+    fun sample(): Long {
+        val info = GC.lastGCInfo ?: return accumulatedBytes
+        if (info.epoch != lastEpoch) {
+            val before = info.memoryUsageBefore["heap"]?.totalObjectsSizeBytes ?: 0L
+            val after = info.memoryUsageAfter["heap"]?.totalObjectsSizeBytes ?: 0L
+            val grownSinceLastCollection = before - lastHeapAfterBytes
+            if (grownSinceLastCollection > 0) accumulatedBytes += grownSinceLastCollection
+            lastHeapAfterBytes = after
+            lastEpoch = info.epoch
+        }
+        return accumulatedBytes
+    }
 }
+
+actual fun allocatedBytesSinceStart(): Long = NativeAllocationCounter.sample()
