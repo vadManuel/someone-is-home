@@ -1,5 +1,7 @@
 package home.someoneshome.model
 
+import kotlin.jvm.JvmInline
+
 /**
  * Simulation time, as an integer count of fixed steps.
  *
@@ -10,6 +12,7 @@ package home.someoneshome.model
  * A real timestamp is an *input*: it arrives on an [Event], having been sampled at the edge and
  * written into the recording.
  */
+@JvmInline
 value class Tick(val step: Long) : Comparable<Tick> {
     override fun compareTo(other: Tick): Int = step.compareTo(other.step)
     operator fun plus(steps: Long): Tick = Tick(step + steps)

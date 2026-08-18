@@ -1,5 +1,7 @@
 package home.someoneshome.model
 
+import kotlin.jvm.JvmInline
+
 /**
  * The two roles, and the complete set of them.
  *
@@ -20,4 +22,5 @@ enum class Role { Resident, Insider }
  * accepted, and it is the only cheat in this game that is remote, undetectable, and requires no
  * physical act.
  */
+@JvmInline
 value class Seat(val index: Int)

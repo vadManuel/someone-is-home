@@ -19,7 +19,8 @@ sealed interface Event {
         override val at: Tick,
         val seed: Long,
         val seats: List<Seat>,
-        val insiders: Set<Seat>,
+        /** A List, not a Set. Hash order varies, and this is recorded input. */
+        val insiders: List<Seat>,
     ) : Event
 
     data class MarkerScanned(override val at: Tick, val actor: Seat, val marker: MarkerId) : Event
