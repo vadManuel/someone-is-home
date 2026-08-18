@@ -106,4 +106,7 @@ echo "════ pulling results ════"
 if (( ${#FAILED[@]} )); then
     echo
     echo "runs that did not complete: ${FAILED[*]}"
+    # Exit non-zero. Printing a failure list and returning success means a caller — or a future
+    # cron wrapper — records a clean matrix that never ran.
+    exit 1
 fi

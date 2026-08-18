@@ -81,6 +81,13 @@ object Report {
         // is a PASS — clamping would turn a broken clock into a green result.
         var impossible = 0
         for (i in measured) {
+            // Flags are tallied BEFORE the span branch. They previously sat after a `continue`,
+            // so a trial with an impossible span was dropped from the GC and stall counts too —
+            // deflating exactly the columns the report tells the reader to cross-reference, on
+            // exactly the trials where the instrument misbehaved.
+            if (t.flags[i] and FLAG_GC_DURING != 0) withGc++
+            if (t.flags[i] and FLAG_STALL_DURING != 0) withStall++
+
             val raw = t.span(i, interval)
             if (raw < 0) {
                 impossible++
@@ -89,8 +96,6 @@ object Report {
             val s = if (raw > 7) 7 else raw
             spans[s]++
             if (raw > worst) worst = raw
-            if (t.flags[i] and FLAG_GC_DURING != 0) withGc++
-            if (t.flags[i] and FLAG_STALL_DURING != 0) withStall++
         }
 
         val gcCount = GcProbe.eventCount()
@@ -169,15 +174,30 @@ object Report {
      * The verdict, decided by LATENCY rather than span.
      *
      * Span was the original headline and it is blind. In VOLUME_CRUSH it reported span 0 for
-     * every single one of the 39 trials whose draw provably overran a frame interval — because
+     * every single one of the 18 trials whose draw provably overran a frame interval — because
      * it is dominated by whether our CADisplayLink callback happens to run before or after
      * Compose's within a vsync, not by how long the frame actually took. Latency is measured
      * against the monotonic clock and does not care about callback ordering.
      */
     fun verdict(s: Summary): String {
         val late = s.lateDraws
+        // The late threshold is derived from the MEASURED interval, so if the instrument is
+        // running at the wrong rate the threshold rescales with it and every genuinely late
+        // frame slips under. That is not hypothetical — the display link ran at half rate for
+        // two whole runs. text() warned about the mismatch; verdict() returned PASS anyway, and
+        // the verdict is the headline. Checked here, before any pass case.
+        val ratio =
+            if (s.nominalIntervalNanos > 0) s.measuredIntervalNanos.toDouble() / s.nominalIntervalNanos
+            else 1.0
         return when {
             s.n == 0 -> "NO DATA"
+            ratio > 1.25 || ratio < 0.8 ->
+                "INVALID — measured frame interval ${ms(s.measuredIntervalNanos)}ms disagrees " +
+                    "with the panel's rated ${ms(s.nominalIntervalNanos)}ms; the pass threshold " +
+                    "is derived from it and cannot be trusted"
+            s.thermal != "nominal" ->
+                "INVALID — thermal state '${s.thermal}': a throttled panel has a LONGER frame " +
+                    "budget, so this run yields fewer late draws and a cleaner pass"
             // Checked before any pass case: a broken instrument must never report a pass.
             s.spanImpossible > 0 ->
                 "INVALID — ${s.spanImpossible}/${s.n} trials have an impossible span"
