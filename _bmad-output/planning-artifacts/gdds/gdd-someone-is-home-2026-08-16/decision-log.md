@@ -867,6 +867,24 @@ surface. The perimeter iris follows the panel's ink rather than being pinned to 
 a small lit ring carries across a dark room when text does not.
 
 
+### D-078 · **The status bar is present on every screen — decided**
+
+Not most screens. Every one, including the two where the player has just been removed from the
+round. It is how anyone confirms the perimeter is still armed and what the time is, and a device
+that stopped saying so would be the app abandoning a player at the exact moment it took
+everything else away.
+
+**One variation, and it is not an absence.** The lantern and the scan fill the panel with amber,
+so the shared bar — amber ink on black — would be invisible on them. Those two draw the same row
+themselves, inverted.
+
+**The design's fixture contradicts this on `revoked` and `restrained`**, which are pinned to all
+four edges and paint solid black over a bar the fixture has already computed. That is why D-075's
+carrier work — REVOKED against RESTRAINED, following the cause — would never have been visible on
+the two screens whose entire subject is that distinction. The port does not inherit it, and a
+test asserts no screen can end up without a status row.
+
+
 ---
 
 ## State after revision 12
