@@ -16,7 +16,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 
 /**
@@ -93,7 +92,7 @@ fun Ghost2Screen() {
         Label(
             "STAND\nAND WALK IN",
             size = 19.0, color = Amber.Black, tracking = 0.1, lineHeight = 1.45,
-            weight = FontWeight.Bold, align = TextAlign.Center,
+            align = TextAlign.Center,
         )
         Box(Modifier.width(26.u).height(1.u).background(Amber.Black))
         Label(
@@ -382,7 +381,7 @@ fun WinInsidersScreen(vals: PanelVals) {
                 "INSIDERS\nWIN",
                 modifier = Modifier.padding(top = 6.u),
                 size = 21.0, color = Amber.Black, tracking = 0.1, lineHeight = 1.4,
-                weight = FontWeight.Bold, align = TextAlign.Center,
+                align = TextAlign.Center,
             )
             Label(
                 "THE HOUSE REACHED THE INTERNET",
@@ -470,7 +469,7 @@ fun WinResidentsScreen() {
                 "RESIDENTS\nWIN",
                 modifier = Modifier.padding(top = 6.u),
                 size = 21.0, color = Amber.SlateInk, tracking = 0.1, lineHeight = 1.4,
-                weight = FontWeight.Bold, align = TextAlign.Center,
+                align = TextAlign.Center,
             )
             Label(
                 "PERIMETER DISARMED . YOU CAN LEAVE",
