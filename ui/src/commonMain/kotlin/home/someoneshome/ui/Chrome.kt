@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -18,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 
@@ -125,19 +127,64 @@ private fun Battery(ink: Color, edge: Color) {
  * The bone ground is painted *behind* everything rather than as the column's background, because
  * it is a property of the device being unarmed rather than of any one screen's layout — the same
  * reason the design paints it as an absolutely-positioned fill.
+ *
+ * ### The dim, and why it is not styling
+ *
+ * When [overlay] is present the whole panel — **status bar included** — drops to
+ * [NOTIFIED_DIM], and the overlay draws at full intensity on top. Two jobs at once:
+ *
+ * 1. It makes the banner the only bright thing, so it is noticed.
+ * 2. **It is a notification channel that works when the screen cannot be seen at all.** A phone
+ *    held as a lamp faces away from its owner. They cannot read a banner, but they can see the
+ *    light in the room drop. The buzz says something arrived; the dim confirms it.
+ *
+ * Which makes this a **lamp change**, and lamp changes are game state (project rule 5). Two
+ * consequences that outlive this file:
+ *
+ * - The dim has to arrive as an authored effect from the rules, not as a UI transition, and it
+ *   has to be a step rather than a fade. A ramp nobody authored is a signal nobody authored.
+ * - **Every banner must go to everyone at once.** A lamp dimming is world-observable, so a
+ *   notification addressed to fewer than all players is a beacon pointing at whoever got it. If
+ *   a per-player notification is ever wanted, it cannot use this.
  */
 @Composable
 fun PanelFrame(
     vals: PanelVals,
     modifier: Modifier = Modifier,
+    overlay: (@Composable BoxScope.() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Box(modifier.fillMaxSize().background(Amber.Black)) {
-        if (vals.isPre) Box(Modifier.fillMaxSize().background(Amber.Bone))
+        Box(
+            Modifier.fillMaxSize()
+                .then(if (overlay != null) Modifier.alpha(NOTIFIED_DIM) else Modifier)
+        ) {
+            if (vals.isPre) Box(Modifier.fillMaxSize().background(Amber.Bone))
 
-        Column(Modifier.fillMaxSize()) {
-            if (vals.statusVisible) StatusBar(vals)
-            Column(Modifier.fillMaxWidth().weight(1f), content = content)
+            Column(Modifier.fillMaxSize()) {
+                if (vals.statusVisible) StatusBar(vals)
+                Column(Modifier.fillMaxWidth().weight(1f), content = content)
+            }
+        }
+        if (overlay != null) {
+            // Below the status bar, not over it. The bar is the one thing that stays put when
+            // something arrives -- it is how the player confirms the perimeter and the clock are
+            // still what they were, which is exactly the reassurance a takeover would remove.
+            Box(
+                Modifier.fillMaxSize()
+                    .padding(top = if (vals.statusVisible) 17.u else 0.u)
+            ) {
+                overlay(this)
+            }
         }
     }
 }
+
+/**
+ * How far the panel drops when something arrives unasked.
+ *
+ * Deep enough to read as a light change across a room, shallow enough that the screen underneath
+ * is still legible — the player must be able to see *what they were doing* behind the banner, or
+ * it is a takeover after all.
+ */
+const val NOTIFIED_DIM: Float = 0.32f
