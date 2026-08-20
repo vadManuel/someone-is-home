@@ -21,3 +21,4 @@ include(":core")       // pure rules. No coroutines, no datetime, no platform.
 include(":platform")   // expect/actual — BLE, torch, sensors, clock
 include(":ui")         // Compose. The whole fake phone OS. Never sees :core.
 include(":harness")    // recording, replay, differential leak tests
+include(":app")        // the iOS app root. The one place that sees both :ui and :platform.

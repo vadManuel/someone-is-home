@@ -10,7 +10,7 @@ plugins {
 // A rename silently deletes a guard: `if (name == "model")` matching nothing is
 // indistinguishable from passing, and CLAUDE.md already flags a pending rename at repo init.
 // Assert the named modules exist so the failure is a build error, not a missing rule.
-val vocabularyModules = setOf("model", "core", "ui")
+val vocabularyModules = setOf("model", "core", "ui", "app")
 val redactionModules = setOf("model")
 gradle.projectsEvaluated {
     val present = subprojects.map { it.name }.toSet()
@@ -22,8 +22,11 @@ gradle.projectsEvaluated {
 }
 
 subprojects {
-    // Vocabulary lint covers model, core and ui — the modules where a wrong word reaches a
-    // player. Not platform or harness, which talk to hardware and to tests.
+    // Vocabulary lint covers model, core, ui and app — the modules where a wrong word reaches
+    // a player. `app` holds no copy today and is meant to stay that way; it is listed because
+    // the app root is the likeliest place for a stray string to appear later, and a lint added
+    // after the fact is a lint added after the word shipped.
+    // Not platform or harness, which talk to hardware and to tests.
     if (name in vocabularyModules) {
         val vocabulary = tasks.register<VocabularyLintTask>("vocabularyLint") {
             group = "verification"

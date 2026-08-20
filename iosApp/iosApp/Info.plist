@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Someone's Home</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+
+	<!-- CARRIED FROM THE STACK-GATE SPIKE, WHERE ITS ABSENCE WOULD HAVE FALSIFIED THE RESULT.
+	     iOS caps an app at 60 fps on a ProMotion panel unless it opts in here. At 60 Hz the
+	     frame interval is 16.7 ms instead of 8.33 ms, so every latency figure gets twice the
+	     budget it should have.
+
+	     That matters more here than it did there. The lamp must die in the SAME FRAME as phone
+	     contact — it is the entire mitigation for losing the anonymous revoke — and a frame
+	     budget silently doubled is a blackout that looks fast in testing and is not.
+
+	     The key is ...OnPhone. The shorter CADisableMinimumFrameDuration is not a real key and
+	     is ignored without complaint. -->
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
+
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string></string>
+	</dict>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>arm64</string>
+	</array>
+
+	<!-- Portrait only. The phone is a lamp held in one hand, and a rotation would relayout the
+	     panel mid-round — a light level nobody authored, which rule 5 forbids. -->
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+
+	<!-- The panel IS the interface, edge to edge. A system status bar over it would sit on top
+	     of the device design's own status row, which D-078 requires on every screen. -->
+	<key>UIStatusBarHidden</key>
+	<true/>
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<false/>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+
+	<!-- So a host can pull a house map or a recording off the device without a cable. The map's
+	     stored form is its export form by construction (game-architecture.md:419). -->
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+</dict>
+</plist>
