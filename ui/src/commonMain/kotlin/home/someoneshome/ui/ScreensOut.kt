@@ -34,43 +34,105 @@ import androidx.compose.ui.text.style.TextAlign
 /**
  * Access revoked. **Dark, so it never flares.**
  *
- * A black field with the dimmest ink in the palette, because the alternative — a bright screen at
- * the moment of revocation — would light up the revoked player's position for the whole house and
- * hand the attacker away. The device says only what has been withdrawn, and what to do.
+ * The dimmest ink in the palette, because the alternative — a bright screen at the moment of
+ * revocation — would light the revoked player's position for the whole house and hand the
+ * attacker away. It says only what has been withdrawn, and what to do.
  */
 @Composable
 fun RevokedScreen() {
+    OutNotice(
+        heading = "ACCESS\nREVOKED",
+        withdrawn = "PERMISSIONS WITHDRAWN\nLAMP ALLOCATION WITHDRAWN\nREGISTRY ENTRY CLEARED",
+        instruction = "STAY WHERE YOU ARE.\nDO NOT MOVE. DO NOT SPEAK.\n" +
+            "WALK IN ONLY WHEN A\nMEETING IS CALLED.",
+        footer = "NOTHING FURTHER IS REQUIRED OF YOU",
+        step = OutStep.Dark,
+    )
+}
+
+/**
+ * Restrained — the same notice, **one luminance step brighter, everywhere.**
+ *
+ * It arrives mid-result, at a meeting, with every lamp in the house already up and the vote
+ * public. There is nothing left to conceal, so the screen stops whispering: heading and
+ * instruction go to full intensity, and every other element rises exactly one step with them.
+ *
+ * That step *is* the difference between the two ways out. A revoked player is told in the dark,
+ * quietly, because the light would give them away; a restrained player is told in a lit room in
+ * front of the people who did it.
+ */
+@Composable
+fun RestrainedScreen() {
+    OutNotice(
+        heading = "YOU WERE\nRESTRAINED",
+        withdrawn = "THE VOTE WENT AGAINST YOU\nREGISTRY ENTRY CLEARED",
+        instruction = "STAY AT THE MEETING AREA.\nYOU HAVE NO VOICE.\n" +
+            "DO NOT SPEAK AT ALL,\nNOT EVEN IN A MEETING.",
+        footer = "THE OTHERS ARE STILL READING THE RESULT",
+        step = OutStep.Lit,
+    )
+}
+
+/**
+ * Where on the four-step scale an out-notice sits.
+ *
+ * The two screens are the same structure at two intensities, and holding the ramp in one place is
+ * what keeps them exactly one step apart. Written as two independent screens they would drift the
+ * first time either was touched, and the drift would be invisible — nobody compares two screens
+ * that are never on the same device at the same time.
+ */
+private enum class OutStep(
+    val quiet: Color,
+    val loud: Color,
+    val rule: Color,
+    val footer: Color,
+) {
+    /** Told in the dark. Every element at the bottom of the scale. */
+    Dark(quiet = Amber.Faint, loud = Amber.Dim, rule = Amber.Edge, footer = Amber.Edge),
+
+    /** Told in a lit room. Every element one step up. */
+    Lit(quiet = Amber.Dim, loud = Amber.Bright, rule = Amber.Faint, footer = Amber.Faint),
+}
+
+@Composable
+private fun OutNotice(
+    heading: String,
+    withdrawn: String,
+    instruction: String,
+    footer: String,
+    step: OutStep,
+) {
     Column(
         Modifier.fillMaxSize().background(Amber.Black).padding(horizontal = 16.u, vertical = 22.u),
         verticalArrangement = Arrangement.spacedBy(11.u, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Label("RESIDENT STATUS", size = 6.0, color = Amber.Faint, tracking = 0.24)
+        Label("RESIDENT STATUS", size = 6.0, color = step.quiet, tracking = 0.24)
         Label(
-            "ACCESS\nREVOKED",
-            size = 17.0, color = Amber.Dim, tracking = 0.1, lineHeight = 1.5,
+            heading,
+            size = 17.0, color = step.loud, tracking = 0.1, lineHeight = 1.5,
             align = TextAlign.Center,
         )
-        Box(Modifier.width(26.u).height(1.u).background(Amber.Edge))
+        Box(Modifier.width(26.u).height(1.u).background(step.rule))
         Label(
-            "PERMISSIONS WITHDRAWN\nLAMP ALLOCATION WITHDRAWN\nREGISTRY ENTRY CLEARED",
-            size = 6.5, color = Amber.Faint, tracking = 0.1, lineHeight = 2.2,
+            withdrawn,
+            size = 6.5, color = step.quiet, tracking = 0.1, lineHeight = 2.2,
             align = TextAlign.Center,
         )
         Box(
-            Modifier.padding(top = 6.u).border(1.u, Amber.Edge)
+            Modifier.padding(top = 6.u).border(1.u, step.rule)
                 .padding(horizontal = 9.u, vertical = 8.u)
         ) {
             Label(
-                "STAY WHERE YOU ARE.\nDO NOT MOVE. DO NOT SPEAK.\nWALK IN ONLY WHEN A\nMEETING IS CALLED.",
-                size = 7.0, color = Amber.Dim, tracking = 0.06, lineHeight = 2.1,
+                instruction,
+                size = 7.0, color = step.loud, tracking = 0.06, lineHeight = 2.1,
                 align = TextAlign.Center,
             )
         }
         Label(
-            "NOTHING FURTHER IS REQUIRED OF YOU",
+            footer,
             modifier = Modifier.padding(top = 2.u),
-            size = 6.0, color = Amber.Edge, tracking = 0.14,
+            size = 6.0, color = step.footer, tracking = 0.14,
         )
     }
 }

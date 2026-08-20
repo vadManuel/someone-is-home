@@ -33,7 +33,7 @@ enum class ScreenId {
     Calling, Call, Found, Assemble, Notice, Discussion, Vote, Tally,
 
     // Out.
-    Revoked, Ghost2, GhostMeeting, Ghost3, Disconnect, Settings, WinInsiders, WinResidents,
+    Revoked, Restrained, Ghost2, GhostMeeting, Ghost3, Disconnect, Settings, WinInsiders, WinResidents,
 }
 
 /**
@@ -118,7 +118,8 @@ class PanelVals(val state: PanelState) {
         -> PanelMode.Pre
 
         ScreenId.WinInsiders -> PanelMode.End
-        ScreenId.Revoked, ScreenId.Ghost3, ScreenId.GhostMeeting -> PanelMode.Ghost
+        ScreenId.Revoked, ScreenId.Restrained, ScreenId.Ghost3, ScreenId.GhostMeeting ->
+            PanelMode.Ghost
         else -> PanelMode.Live
     }
 
@@ -169,8 +170,13 @@ class PanelVals(val state: PanelState) {
         state.screen == ScreenId.WinResidents -> "SOMEONE'S HOME"
         isPre -> ""
         mode == PanelMode.Ghost || state.screen == ScreenId.Ghost2 -> when (state.outBy) {
+            OutBy.Revoked -> "REVOKED"
             OutBy.Restrained -> "RESTRAINED"
-            else -> "REVOKED"
+            // Missing cause: say neither. Picking one would be wrong about half the players,
+            // and wrong in the specific way the vocabulary forbids -- naming a physical act by
+            // the room as system power, or the reverse. UNREGISTERED asserts only that you are
+            // out, which is already public by the time any of these screens is on.
+            null -> "UNREGISTERED"
         }
         else -> "SOMEONE'S HOME"
     }
@@ -211,7 +217,7 @@ class PanelVals(val state: PanelState) {
      */
     val buzzes: Boolean = state.screen in setOf(
         ScreenId.Armed, ScreenId.Notify, ScreenId.Banner, ScreenId.Call, ScreenId.Found,
-        ScreenId.Assemble, ScreenId.Notice, ScreenId.Tally, ScreenId.Revoked,
+        ScreenId.Assemble, ScreenId.Notice, ScreenId.Tally, ScreenId.Revoked, ScreenId.Restrained,
         ScreenId.ScanMarker, ScreenId.ScanCaught, ScreenId.ScanBad, ScreenId.ScanUnknown, ScreenId.GhostMeeting,
         ScreenId.WinInsiders, ScreenId.WinResidents,
     )
