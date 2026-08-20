@@ -39,9 +39,9 @@ import androidx.compose.ui.text.style.TextOverflow
  * that is the bug, not the feature.
  */
 @Composable
-fun StatusBar(vals: PanelVals) {
+fun StatusBar(vals: PanelVals, bandHeight: Dp = STATUS_BAR_HEIGHT) {
     Row(
-        Modifier.fillMaxWidth().height(STATUS_BAR_HEIGHT)
+        Modifier.fillMaxWidth().height(maxOf(bandHeight, STATUS_BAR_HEIGHT))
             .edgeLine(PanelSide.Bottom, vals.edge)
             .padding(horizontal = 6.u),
         horizontalArrangement = Arrangement.spacedBy(5.u),
@@ -162,8 +162,20 @@ fun PanelFrame(
     // put a black bar above a lit screen, and on a phone held as a lamp that is a reduction in
     // emitted light the core never authored -- rule 5. So the black base and the light-field
     // below still run edge to edge, and the Dynamic Island sits on bare light.
+    val safe = WindowInsets.safeDrawing.asPaddingValues()
+    val safeTop = safe.calculateTopPadding()
+    val safeBottom = safe.calculateBottomPadding()
     val statusHeight = if (vals.statusVisible) STATUS_BAR_HEIGHT else 0.u
-    val contentTop = (safeAreaTop() - statusHeight).coerceAtLeast(0.u)
+
+    // THE ROW OCCUPIES THE WHOLE BAND THE ISLAND SITS IN, rather than being a 17u strip placed
+    // somewhere inside it. Its glyphs centre vertically, so they come out level with the Island
+    // the way the system's own bar does — and its bottom rule lands exactly on the safe-area
+    // boundary, CLEAR of the Island, instead of being crossed by the pill halfway along.
+    //
+    // Both earlier attempts got this wrong in visible ways: flush to y=0 put the row above the
+    // Island in the corner radius, and centring a 17u strip put the rule behind it.
+    val statusBand = if (vals.statusVisible) maxOf(safeTop, statusHeight) else 0.u
+    val contentTop = if (vals.statusVisible) 0.u else safeTop
 
     Box(modifier.fillMaxSize().background(Amber.Black)) {
         Box(
@@ -177,9 +189,13 @@ fun PanelFrame(
                 // shaped for: signal at the left ear, clock and battery at the right, the way
                 // the system's own bar is laid out. Moving it down would waste the one strip of
                 // screen the Island has already taken.
-                if (vals.statusVisible) StatusBar(vals)
+                if (vals.statusVisible) StatusBar(vals, bandHeight = statusBand)
+                // BOTTOM AS WELL AS TOP. The home indicator takes 34pt and the boot screen's
+                // UPTIME line, progress bar and STARTING label were sitting under it — fixing
+                // only the Island moved the collision to the other end of the panel.
                 Column(
-                    Modifier.fillMaxWidth().weight(1f).padding(top = contentTop),
+                    Modifier.fillMaxWidth().weight(1f)
+                        .padding(top = contentTop, bottom = safeBottom),
                     content = content,
                 )
             }
@@ -190,7 +206,7 @@ fun PanelFrame(
             // still what they were, which is exactly the reassurance a takeover would remove.
             Box(
                 Modifier.fillMaxSize()
-                    .padding(top = statusHeight + contentTop)
+                    .padding(top = statusBand + contentTop, bottom = safeBottom)
             ) {
                 overlay(this)
             }
@@ -205,20 +221,6 @@ fun PanelFrame(
  * required to agree or a banner lands on top of the one row that must never move.
  */
 val STATUS_BAR_HEIGHT: Dp = 17.u
-
-/**
- * The top inset, in DESIGN units.
- *
- * [DeviceCanvas] overrides `LocalDensity`, so converting the platform inset through the current
- * density yields the design's own coordinate space rather than points — which is what every
- * other number in this file is in. Reading it any other way silently mixes two unit systems.
- *
- * Zero on a device with nothing at the top, and on the desktop preview, so the design's layout
- * is unchanged everywhere it was reviewed.
- */
-@Composable
-private fun safeAreaTop(): Dp =
-    WindowInsets.safeDrawing.asPaddingValues().calculateTopPadding()
 
 /**
  * How far the panel drops when something arrives unasked.
