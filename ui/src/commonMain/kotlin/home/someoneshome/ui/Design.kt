@@ -150,6 +150,25 @@ const val DESIGN_HEIGHT: Float = 400f
 val Int.u: Dp get() = this.dp
 val Double.u: Dp get() = this.dp
 
+/**
+ * What the device's own hardware takes out of the panel, in DESIGN units.
+ *
+ * A value rather than a direct `WindowInsets` read, for one reason: a notch cannot be faked
+ * otherwise. Every layout fault this guards against — content under the Island, content under
+ * the home indicator, glyphs shaved by the corner radius — is invisible on the desktop target
+ * where the screens were designed and reviewed, because a Mac window has none of those things.
+ * Passing the insets as a value lets a test render all 56 screens against a *simulated* phone.
+ *
+ * [side] does NOT come from `safeDrawing`, which reports zero left and right in portrait —
+ * measured, not assumed. It comes from `safeContent`, which is the only place iOS exposes a
+ * horizontal margin, and it is what holds the status glyphs off the curved corners.
+ */
+data class PanelInsets(val top: Dp = 0.dp, val bottom: Dp = 0.dp, val side: Dp = 0.dp)
+
+/** Zero everywhere the hardware takes nothing: the desktop preview, and a phone with a flat top. */
+val LocalPanelInsets: ProvidableCompositionLocal<PanelInsets> =
+    staticCompositionLocalOf { PanelInsets() }
+
 /** The scale in force. Almost nothing should read this; it exists for the rare physical check. */
 val LocalPanelScale: ProvidableCompositionLocal<Float> = staticCompositionLocalOf { 1f }
 
