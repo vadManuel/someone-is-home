@@ -715,9 +715,167 @@ Two further 10 000-trial runs. **The boundary is not sharp and it is not just ab
 
 ---
 
+## Revision 13 — the marker system, and what the house is allowed to say
+
+*Decided 2026-08-19 in conversation, alongside the device-design port. Everything here was a
+live question at the start of the day.*
+
+### D-066 · **Events arriving before the round is armed are refused above the rules — decided**
+
+`GameState.armed` had two writers and no readers: the reducer processed every event identically
+whether or not a round existed. Demonstrated rather than argued — feeding `ContactMade`,
+`SubroutineCompleted` and `MeetingCalled` to `GameState.EMPTY` emitted `AbilityFired`,
+`SubroutineProgressed` and `MeetingOpened` respectively.
+
+**The obvious fix is banned.** `if (!state.armed) return Reduction(state, emptyList())` is rule
+1's forbidden shape — the absent effect is the signal.
+
+**Resolution: an admission gate above `reduce`.** The authority refuses non-`RoundArmed` events
+before the rules see them, and records the refusal. `reduce` stays total and never learns the
+flag exists, so the branch is provably outside every client-visible path.
+
+**Severity, stated honestly: this is a replay bug, not a leak.** Arming *constructs* a fresh
+state, so pre-arm effects reach clients while the state that would explain them is discarded —
+the recording's effect rows and state rows disagree about a round that had not begun, and the
+recording is the only debugging instrument this game has. The reachable paths are narrow
+(D-067 removes the widest one) but the fuzzer of story 0.10c will hit it on day one.
+
+### D-067 · **Nothing in-game runs in the lobby, including the contact radio — decided**
+
+`ContactMade` is reported by the radio rather than requested by a button, which made it the one
+pre-arm event a player could cause by standing near someone. It cannot: the radio does not run
+before arming. This is what makes D-066's gate sufficient rather than partial.
+
+### D-068 · **A client may be told it was refused only when the reason is public — decided**
+
+The gate reports its refusal to the client. That is safe **only** because round-state — not armed
+yet, already ended — is publicly observable: everyone can see whether the lights are on.
+
+**This reasoning does not survive generalisation, and the generalisation will look like good
+consistency.** The moment the same path reports a mid-round refusal — you are revoked, that
+target is already revoked, your cooldown is running — the identical code becomes an alignment
+leak, written by someone tidying up error handling.
+
+A second safe category emerged: **events no honest client can emit.** Self-targeting is
+impossible because contact is phone-to-phone; voting for a revoked player is impossible because
+the name is not tappable. Both may be rejected outright.
+
+### D-069 · **Markers are anonymous printed cards carrying an id and a shape — decided**
+
+The host prints a generic sheet and registers each card by selecting a room and scanning. No card
+is meaningful until registered.
+
+**The shape is the marker's name.** The app never shows the id; hosts and players both navigate by
+the shape, because a shape resolves faster than two digits by torchlight and does not need to be
+the right way up. `MARKER 07` is gone from every screen.
+
+**The id exists because paper is lost.** A shape alone was briefly considered sufficient and is
+not: a host who mislays a card and prints a replacement creates two physical cards decoding to
+the same marker. The old one, found later behind a shelf, would report a player as standing in
+whichever room the *new* one was registered to — and that corrupts the Terminal's per-room counts,
+which the design deliberately fills with injected error. **The bug would hide inside noise the
+design added on purpose, and would be undetectable in play.**
+
+Payload is `version + shape + id`, nine characters, which fits **QR Version 1 at error-correction
+level H** — 21×21 modules, the smallest symbol that exists, strongest correction. Capacity
+verified empirically at 10 characters. Micro QR was considered and rejected: one finder pattern
+instead of three and much weaker correction, in a room where blur is the operating condition.
+**Buy scan margin with card size, not with symbol version.**
+
+### D-070 · **The 44-shape roster is the measured one, not the drawn one — decided**
+
+The device design ships a 24-shape fixture. The `shape-encoder` project's 44 are used instead,
+because that set was chosen by measuring pairwise confusability at small sizes rather than by
+eye. The fixture reintroduces `pentagon` and `hexagon`, both of which that measurement had cut
+for reading as "circle with corners"; a test asserts they stay cut.
+
+**THIS SIDE UP is printed on every card**, and it is what earns the full 44 — the tightest pairs
+in the data are `semicircle_up`/`semicircle_down` and `arrow_up`/`arrow_down`, which are rotations
+of each other and safe only when orientation is fixed.
+
+### D-071 · **Residents are fenced to their assigned markers; Insiders open any registered one**
+
+Recorded with its cost. **The scan's response is role-dependent**, and the readable difference is
+behavioural rather than on-screen: scan-and-stay against scan-and-walk-away, where walking away
+identifies a Resident. Narrow — Residents rarely scan markers they know are not theirs — and
+accepted deliberately. Markers may be assigned to more than one Resident, which is what stops a
+Resident's own list from making them a detector for their own markers.
+
+**Every game-side refusal produces one message.** Not assigned to you and blocked upstream are
+indistinguishable, and the wording is about the player rather than the marker: *"Nothing of yours
+opens here"*, never "already completed" or "belongs to another resident", each of which is a
+small statement about someone who is not in the room.
+
+**One refusal is allowed to be specific.** An unregistered card is a fact about a piece of paper,
+so it says so. Both refusal screens are drawn by one function so they stay pixel-identical apart
+from their text — one of them is Resident-only, and differing icons would let an onlooker tell
+which was which from across a room.
+
+### D-072 · **The house announces only what no player could have observed — decided**
+
+Nothing reports an unregistered card to anyone. A count at the end of the round or a notice at
+the next meeting was proposed and **rejected**: either turns the app into an arbiter of a
+player's claim, letting the room verify testimony. Unreported, it becomes material — a Resident
+who mentions it gives up their own position to be useful; an Insider can claim it to explain
+standing at a marker doing nothing; neither can be checked.
+
+This clarifies why the house *does* announce a dead radio at the next meeting. A radio failure is
+invisible to everyone including the player it happened to, so without the announcement a phantom
+appears that nobody designed. **Everything a player saw is theirs to report, or to lie about.**
+
+### D-073 · **Randomness is fresh per match and recorded — decided**
+
+Marker assignment and chain-unlock delays are genuinely random, not fixed. Seeded does not mean
+identical: every match draws a fresh seed and `Event.RoundArmed` already carries it. Two valid
+shapes — derive from the round seed, or sample at the edge and write the value onto the event, the
+way a timestamp already arrives. **The only broken version is drawing inside the rules without
+recording**, which costs E0's byte-identical replay.
+
+### D-074 · **A chain unlock is delayed identically whether it was freed by completion or by a
+revocation — decided**
+
+Otherwise the delay itself is the tell, and "completion is known immediately, revocation needs
+settling" is a natural-sounding implementation that would introduce it silently. Same
+distribution, same wording, and the batched alternative — unblocking at the start of the next
+round after a meeting — is stronger still because a batch has no timing signal at all.
+
+### D-075 · **The vote does not publish attribution; not voting counts as a Skip — decided**
+
+The living see counts. Only a player outside the system sees who cast what, and sees it live,
+which is what makes being out an information privilege rather than a preview. **This reverses
+`brainstorm-intent.md` §6's "attribution is shown"** — that note is now stale.
+
+Not voting counts as a Skip rather than as an abstention. Combined with ties already resolving to
+Skip, the whole weight of inaction sits behind restraining nobody.
+
+### D-076 · **The notification dim is a lamp change, and every banner must go to everyone**
+
+A banner dims the whole panel behind it. That is not styling: **a phone held as a lamp faces away
+from its owner**, so they cannot read a banner but can see the room's light level drop. The buzz
+says something arrived; the dim confirms it with the screen pointed at a wall.
+
+Two consequences. The dim must arrive as an **authored effect** and must be a step rather than a
+fade — a ramp nobody authored is a signal nobody authored (rule 5). And **no notification may be
+addressed to fewer than everyone**: a dimming lamp is world-observable, so a per-player banner is
+a beacon pointing at whoever received it.
+
+### D-077 · **Concealment screens dim their chrome too — decided**
+
+The revoked screen said LAMP ALLOCATION WITHDRAWN while its status bar was the brightest thing on
+the display. Revoked, handshake, disconnect and the outside-the-system screens now dim the whole
+surface. The perimeter iris follows the panel's ink rather than being pinned to full intensity —
+a small lit ring carries across a dark room when text does not.
+
+
+---
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).
 Architecture Steps 1–9 complete. Open: OI-4, OI-5, OI-6. **Gating: CLEARED — 1.7a/1.7b both pass; E0 proceeds on Kotlin Multiplatform.**
+**Revision 13 added D-066 through D-077** — the marker system, the pre-arm gate, and the rule that
+the house announces only what no player could have observed. The device design is ported to
+Compose across 55 screens; 4 of 55 differ by role, and all four are intended.
+
 **Carried into E0 as a constraint, not a closed item:** total app allocation ≤ ~0.5 MB/s as the design target, with the measured cliff between 1.5 and 3.0 MB/s — roughly 6× margin, so this is a budget rather than a knife edge. Nobody yet knows what the real app allocates with BLE, 100 Hz motion, effects and recording running at once.
 Action: create `project-context.md`.

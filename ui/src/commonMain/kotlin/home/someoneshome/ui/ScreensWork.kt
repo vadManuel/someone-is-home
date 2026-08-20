@@ -396,6 +396,23 @@ fun ScanBadScreen() {
  * rather than about any player: the host printed a card and never registered it. Saying so costs
  * nothing and buys the only diagnosis available from inside a dark house — otherwise a missed
  * card reads as another player's marker and the setup fault stays invisible all evening.
+ *
+ * ### Nothing reports this anywhere. That is the decision, not an omission.
+ *
+ * It would be easy to surface a count at the end of the round, or a notice at the next meeting.
+ * **Do not.** Either one turns the app into an arbiter of a player's claim: someone says *"I
+ * scanned a card in the garage and it wasn't a marker"*, and a system report lets the room check
+ * them. Fact-checking testimony is the thing this app refuses to do everywhere else.
+ *
+ * Left unreported it becomes material instead. A Resident who mentions it gives up their own
+ * position to be useful, which is a real cost freely paid. An Insider can claim it to explain
+ * standing at a marker doing nothing. Neither can be verified, which is the point.
+ *
+ * **The general rule, which this is a case of: the house announces only what no player could
+ * have observed.** It reports a dead radio at the next meeting because a radio failure is
+ * invisible to everyone including the player it happened to, so without the announcement a
+ * phantom appears that nobody designed. An unregistered card was seen by whoever scanned it.
+ * Everything a player saw is theirs to report, or to lie about.
  */
 @Composable
 fun ScanUnknownScreen() {
