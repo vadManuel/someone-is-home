@@ -7,6 +7,9 @@ kotlin {
     sourceSets.commonMain.dependencies {
         implementation(libs.kotlinx.coroutines.core)
     }
+    sourceSets.commonTest.dependencies {
+        implementation(kotlin("test"))
+    }
     compilerOptions {
         optIn.addAll(
             "kotlinx.cinterop.ExperimentalForeignApi",
