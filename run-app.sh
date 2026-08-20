@@ -1,8 +1,16 @@
 #!/usr/bin/env bash
 # Build the app, install it, launch it, and confirm it is still running.
 #
-#   ./run-app.sh            simulator (screenshots)
-#   ./run-app.sh device     the phone plugged into this Mac
+#   ./run-app.sh [simulator|device] [debug|playtest|release]
+#
+#   ./run-app.sh                      simulator, debug variant (screenshots)
+#   ./run-app.sh simulator playtest   simulator, playtest variant
+#   ./run-app.sh device playtest      the phone plugged into this Mac, playtest variant
+#
+# The second argument is story 0.10b's build variant and maps one-to-one onto an Xcode
+# configuration: debug -> Debug, playtest -> Playtest, release -> Release. Playtest and debug
+# carry the screen picker and the permanent variant marker; release carries neither, compiled
+# out rather than switched off.
 #
 # WHAT THE SIMULATOR CAN AND CANNOT SHOW. It shows that the ported screens LAY OUT on a
 # phone-shaped panel at phone density, which no desktop preview can: a Mac window has no notch,
@@ -22,6 +30,13 @@ cd "$(dirname "$0")"
 export PATH="$HOME/.local/share/mise/shims:$PATH"
 
 MODE="${1:-simulator}"
+VARIANT="${2:-debug}"
+case "$VARIANT" in
+    debug) CONFIG=Debug ;;
+    playtest) CONFIG=Playtest ;;
+    release) CONFIG=Release ;;
+    *) echo "unknown variant '$VARIANT' — one of: debug, playtest, release" >&2; exit 1 ;;
+esac
 DEVICE="${APP_DEVICE:-iPhone 17 Pro}"
 BUNDLE_ID="home.someoneshome.app"
 DERIVED="${APP_DERIVED_DATA:-/tmp/someones-home-dd}"
@@ -63,12 +78,12 @@ for x in d['result']['devices']:
 EOF
     [ -n "${core:-}" ] || { echo "no connected device" >&2; exit 1; }
 
-    echo "building for device…"
-    xcodebuild -project iosApp/iosApp.xcodeproj -scheme SomeonesHome -configuration Debug \
+    echo "building for device ($VARIANT)…"
+    xcodebuild -project iosApp/iosApp.xcodeproj -scheme SomeonesHome -configuration "$CONFIG" \
         -destination "id=$udid" -derivedDataPath "$DERIVED-device" \
         DEVELOPMENT_TEAM="$TEAM" -allowProvisioningUpdates build >/dev/null
 
-    APP="$DERIVED-device/Build/Products/Debug-iphoneos/SomeonesHome.app"
+    APP="$DERIVED-device/Build/Products/$CONFIG-iphoneos/SomeonesHome.app"
     assert_fonts "$APP"
 
     xcrun devicectl device install app --device "$core" "$APP" >/dev/null
@@ -87,12 +102,12 @@ udid="$(xcrun simctl list devices available \
     | awk -v name="$DEVICE" -F '[()]' '$0 ~ name "\\ \\(" { print $2; exit }')"
 [ -n "$udid" ] || { echo "no available simulator named '$DEVICE'" >&2; exit 1; }
 
-echo "building…"
-xcodebuild -project iosApp/iosApp.xcodeproj -scheme SomeonesHome -configuration Debug \
+echo "building ($VARIANT)…"
+xcodebuild -project iosApp/iosApp.xcodeproj -scheme SomeonesHome -configuration "$CONFIG" \
     -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
     -derivedDataPath "$DERIVED" build >/dev/null
 
-APP="$DERIVED/Build/Products/Debug-iphonesimulator/SomeonesHome.app"
+APP="$DERIVED/Build/Products/$CONFIG-iphonesimulator/SomeonesHome.app"
 
 assert_fonts "$APP"
 

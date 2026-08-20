@@ -21,11 +21,13 @@ cd "$(dirname "$0")"
 export PATH="$HOME/.local/share/mise/shims:$PATH"
 
 PROBE="model/src/commonMain/kotlin/home/someoneshome/model/_Probe.kt"
+APP_PROBE="app/src/variant/release/kotlin/home/someoneshome/app/_Probe.kt"
 pass=0; fail=0
 
-expect_failure() { # description, task, expected-message
+expect_failure() { # description, gradle-args (word-split on purpose), expected-message
     local out rc
-    out="$(./gradlew "$2" 2>&1)"; rc=$?
+    # shellcheck disable=SC2086 -- $2 may carry a -P flag alongside the task name
+    out="$(./gradlew $2 2>&1)"; rc=$?
     # BOTH conditions. Matching the message alone is not enough: a guard downgraded from
     # `throw GradleException` to `logger.warn` still prints its message word for word, and this
     # script would have recorded PASS while the build sailed through green. The whole claim here
@@ -57,7 +59,7 @@ BAK="$(mktemp -d)"
 cp core/build.gradle.kts "$BAK/core"
 cp ui/build.gradle.kts "$BAK/ui"
 restore() {
-    rm -f "$PROBE"
+    rm -f "$PROBE" "$APP_PROBE"
     cp "$BAK/core" core/build.gradle.kts
     cp "$BAK/ui" ui/build.gradle.kts
     rm -rf "$BAK"
@@ -68,17 +70,17 @@ restore() {
 }
 trap restore EXIT
 
-echo "1/5  vocabulary lint — a mechanic synonym in code"
+echo "1/6  vocabulary lint — a mechanic synonym in code"
 printf 'package home.someoneshome.model\nval sabotageCount = 2\n' > "$PROBE"
 expect_failure "mechanic synonym rejected" ":model:vocabularyLint" "use Egress"
 rm -f "$PROBE"
 
-echo "2/5  vocabulary lint — death framing"
+echo "2/6  vocabulary lint — death framing"
 printf 'package home.someoneshome.model\nval victimSeat = 3\n' > "$PROBE"
 expect_failure "death framing rejected" ":model:vocabularyLint" "revoked player"
 rm -f "$PROBE"
 
-echo "3/5  redaction lint — @Serializable without @ClientFacing"
+echo "3/6  redaction lint — @Serializable without @ClientFacing"
 cat > "$PROBE" <<'KT'
 package home.someoneshome.model
 import kotlinx.serialization.Serializable
@@ -88,7 +90,7 @@ KT
 expect_failure "unmarked wire type rejected" ":model:redactionLint" "not @ClientFacing"
 rm -f "$PROBE"
 
-echo "4/5  boundary — coroutines reaching core"
+echo "4/6  boundary — coroutines reaching core"
 python3 - <<'PY'
 import pathlib
 f = pathlib.Path("core/build.gradle.kts")
@@ -99,7 +101,7 @@ PY
 expect_failure "core stays pure" ":core:boundaryCheck" "Module boundary violated in 'core'"
 cp "$BAK/core" core/build.gradle.kts
 
-echo "5/5  boundary — :core reaching ui"
+echo "5/6  boundary — :core reaching ui"
 python3 - <<'PY'
 import pathlib
 f = pathlib.Path("ui/build.gradle.kts")
@@ -109,6 +111,25 @@ f.write_text(f.read_text().replace(
 PY
 expect_failure "ui cannot see the rules" ":ui:boundaryCheck" "Module boundary violated in 'ui'"
 cp "$BAK/ui" ui/build.gradle.kts
+
+echo "6/6  build variants — a cheat surface reachable from a release build"
+# Story 0.10b's compile-out guard: the cheat sources are not IN the release compilation, so a
+# release build that can name one must fail to compile. That structure, not a flag, is what
+# stands between the screen picker and a real round -- and like every guard here it is only
+# believed because this injection watches it fail.
+cat > "$APP_PROBE" <<'KT'
+package home.someoneshome.app
+
+import androidx.compose.runtime.Composable
+
+@Composable
+fun probe() {
+    CheatRoot()
+}
+KT
+expect_failure "release cannot reach the cheats" \
+    ":app:compileKotlinIosSimulatorArm64 -Pvariant=release" "Unresolved reference 'CheatRoot'"
+rm -f "$APP_PROBE"
 
 echo
 echo "$pass passed, $fail failed"
