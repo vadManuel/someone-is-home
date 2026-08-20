@@ -212,24 +212,14 @@ fun PanelFrame(
     // put a black bar above a lit screen, and on a phone held as a lamp that is a reduction in
     // emitted light the core never authored -- rule 5. So the black base and the light-field
     // below still run edge to edge, and the Dynamic Island sits on bare light.
-    val safe = WindowInsets.safeDrawing.asPaddingValues()
-    val safeTop = safe.calculateTopPadding()
-    val safeBottom = safe.calculateBottomPadding()
+    val insets = LocalPanelInsets.current
+    val safeTop = insets.top
+    val safeBottom = insets.bottom
 
     // THE SCREEN'S CORNERS ARE ROUND, and the status row is the one thing that lives up in them.
-    // iOS reports NO horizontal safe-area inset in portrait — measured, not assumed: safeDrawing
-    // comes back l=0 r=0 while the top is 62 and the bottom 34 — so nothing in the top band is
-    // held off the curve, and 6u of the row's own padding is not enough to clear it. The glyphs
-    // at each end were being shaved by the corner radius.
-    //
-    // safeContent carries what safeDrawing does not: 16pt each side on this hardware. A real
-    // system number rather than a guess at Apple's corner geometry, which has no public API.
-    val sideSafe = WindowInsets.safeContent.asPaddingValues()
-    val layout = LocalLayoutDirection.current
-    val sideInset = maxOf(
-        sideSafe.calculateLeftPadding(layout),
-        sideSafe.calculateRightPadding(layout),
-    )
+    // iOS reports NO horizontal safe-area inset in portrait — measured, not assumed — so nothing
+    // in the top band is held off the curve by the system, and the row's own 6u is not enough.
+    val sideInset = insets.side
     val statusHeight = if (vals.statusVisible) STATUS_BAR_HEIGHT else 0.u
 
     // THE ROW OCCUPIES THE WHOLE BAND THE ISLAND SITS IN, rather than being a 17u strip placed

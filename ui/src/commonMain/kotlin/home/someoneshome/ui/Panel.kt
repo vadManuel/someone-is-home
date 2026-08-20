@@ -3,6 +3,11 @@ package home.someoneshome.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.safeContent
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -50,7 +55,17 @@ import androidx.compose.ui.unit.sp
  * player's springboard and not another's would be a difference visible across a dark room.
  */
 @Composable
-fun DeviceCanvas(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+fun DeviceCanvas(
+    modifier: Modifier = Modifier,
+    /**
+     * What the hardware takes out of the panel. `null` reads the real device.
+     *
+     * Passed explicitly so a test can render against a phone this machine is not — see
+     * [PanelInsets]. Nothing in production should supply it.
+     */
+    insets: PanelInsets? = null,
+    content: @Composable () -> Unit,
+) {
     BoxWithConstraints(modifier) {
         val base = LocalDensity.current
         val scale = maxWidth.value / DESIGN_WIDTH
@@ -60,9 +75,27 @@ fun DeviceCanvas(modifier: Modifier = Modifier, content: @Composable () -> Unit)
             LocalPanelScale provides scale,
             LocalPanelHeight provides with(scaled) { constraints.maxHeight.toDp() },
         ) {
-            Box(Modifier.fillMaxSize().background(Amber.Black)) { content() }
+            // Read INSIDE the scaled density, so the platform's points come out as design units
+            // — the coordinate space every other number in the panel is in. Converting anywhere
+            // else silently mixes two unit systems.
+            CompositionLocalProvider(LocalPanelInsets provides (insets ?: platformInsets())) {
+                Box(Modifier.fillMaxSize().background(Amber.Black)) { content() }
+            }
         }
     }
+}
+
+/** The real device's insets, in design units. Zero on the desktop target. */
+@Composable
+private fun platformInsets(): PanelInsets {
+    val safe = WindowInsets.safeDrawing.asPaddingValues()
+    val content = WindowInsets.safeContent.asPaddingValues()
+    val layout = LocalLayoutDirection.current
+    return PanelInsets(
+        top = safe.calculateTopPadding(),
+        bottom = safe.calculateBottomPadding(),
+        side = maxOf(content.calculateLeftPadding(layout), content.calculateRightPadding(layout)),
+    )
 }
 
 // ---------------------------------------------------------------------------------------------
