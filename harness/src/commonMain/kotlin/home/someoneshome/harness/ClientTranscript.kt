@@ -97,6 +97,13 @@ fun recordPerClient(initial: GameState, events: List<Event>): ClientTranscripts 
     // An absent transcript and an empty one are different claims, and only one of them is
     // checkable — a seat missing from the output would silently pass every assertion about what
     // it must not contain.
+    //
+    // Seeded from the INITIAL state as well as from every post-event state. Harvesting only from
+    // post-event states meant an already-armed round with no events returned zero transcripts for
+    // eight seated players, and every "seat N must not contain X" assertion then passed against a
+    // transcript that did not exist.
+    initial.seats.forEach { slot(it) }
+
     drive(initial, events) { after, emitted ->
         after.seats.forEach { slot(it) }
         for (effect in emitted) {

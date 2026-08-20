@@ -30,6 +30,20 @@ class ClientTranscriptTest {
         assertTrue(revokedSeats().isNotEmpty(), "fixture is stale: nobody is revoked in this round")
     }
 
+    /**
+     * Seats come from the initial state as well as from post-event states.
+     *
+     * Harvesting only from post-event states means an already-armed round with no events yields
+     * zero transcripts for eight seated players — and then every "seat N must not contain X"
+     * assertion passes against a transcript that does not exist. That is the silent pass this
+     * recorder is supposed to make impossible.
+     */
+    @Test
+    fun `an already-armed round with no events still yields a transcript per seat`() {
+        val armed = GameState.armedRound(seed = 1L, seats = SEATS, insiders = INSIDERS, systemIntegrity = 42)
+        assertEquals(SEATS.map { it.index }, recordPerClient(armed, emptyList()).seats.map { it.index })
+    }
+
     @Test
     fun `the capture is deterministic`() {
         assertEquals(run().toText(), run().toText())

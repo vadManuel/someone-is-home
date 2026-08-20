@@ -7,9 +7,28 @@ import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class RecordingTest {
+
+    /**
+     * **The state row records every field of authority state, including `ended`.**
+     *
+     * State rows exist so that a build where a transition silently stopped happening cannot
+     * certify clean against a recording made before it broke. A field the row does not render is
+     * a field that guarantee does not cover — and `ended` feeds `roundStateOf`, so it decides
+     * what every client is permitted to receive.
+     */
+    @Test
+    fun `the state row distinguishes an ended round`() {
+        val armed = GameState.armedRound(seed = 1L, seats = SEATS, insiders = INSIDERS, systemIntegrity = 42)
+        assertNotEquals(
+            Transcript.render(armed),
+            Transcript.render(armed.endRound()),
+            "two states differing only in `ended` render byte-identically",
+        )
+    }
 
     @Test
     fun `a round replays byte-identically`() {
