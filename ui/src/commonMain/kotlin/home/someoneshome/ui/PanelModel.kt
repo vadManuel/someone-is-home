@@ -412,6 +412,28 @@ class PanelVals(val state: PanelState) {
     val torchWash: Color = if (state.torch) Amber.TorchWash else Color.Transparent
 
     /**
+     * The one Subroutine the player is being sent to, shared by every screen that mentions it.
+     *
+     * Held in one place because it appears on three: the springboard names it, the work order
+     * highlights its row, and the scan confirms it on arrival. Written separately they drifted —
+     * two screens showed a triangle and the third a ring, for the same marker, because the third
+     * was reading the host-setup fixture by mistake.
+     *
+     * **[name] and [instruction] are different things and both are kept.** `SNIFF` is the kind of
+     * Subroutine; *purge the media cache* is what this instance of it asks for. The work order
+     * lists kinds, and the scan tells you the specific task once you are standing at the marker.
+     */
+    val current: CurrentSubroutine = CurrentSubroutine(
+        name = "SNIFF",
+        instruction = "PURGE THE\nMEDIA CACHE",
+        room = "GARAGE",
+        marker = MarkerShapes["triangle_up"],
+        index = 4,
+        total = 7,
+        done = 3,
+    )
+
+    /**
      * The markers registered in the room the host is holding, and the shape most recently added.
      *
      * Fixture data. The real list comes from the authority, and the *shapes* come from
@@ -571,6 +593,23 @@ object Plan {
     )
 }
 
+/**
+ * The Subroutine a player is currently sent to.
+ *
+ * A fixture today. In play it arrives at the effect boundary like everything else.
+ */
+data class CurrentSubroutine(
+    /** The kind of Subroutine, as the work order lists it. */
+    val name: String,
+    /** What this instance asks for, shown once you are at the marker. */
+    val instruction: String,
+    val room: String,
+    val marker: MarkerShape?,
+    val index: Int,
+    val total: Int,
+    val done: Int,
+)
+
 /** One cell of the plan editor's grid. */
 data class EditorCell(val border: Color, val fill: Color?, val hatch: Boolean = false)
 
@@ -590,7 +629,14 @@ data class MapCell(
     val fill: Color?,
 )
 
-/** The editor grid, with one room optionally held as the current selection. */
+/**
+ * The editor grid, with one room optionally held as the current selection.
+ *
+ * **The held room goes DARKER, and that is correct.** The design carries a comment at the call
+ * site describing the opposite — selection keeps the accent while every other room drops to
+ * neutral putty — which was an earlier intention that the code never implemented. Confirmed as
+ * the code, not the comment. Do not "fix" this to match a comment that is not in this repo.
+ */
 fun Plan.editorCells(focus: PlanRoom? = null): List<EditorCell> =
     List(ROWS * COLS) { i ->
         val room = roomAt(i / COLS, i % COLS)
