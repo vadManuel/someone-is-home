@@ -86,6 +86,12 @@ object Amber {
     val SlateMute = Color(0xFF332E24)
     val SlateDead = Color(0xFF14110B)
 
+    /**
+     * The one warning colour, and it appears only inside the registration viewfinder — a dark
+     * panel embedded in a light-field screen, where neither the bone nor the amber scale reads.
+     */
+    val Caution = Color(0xFFC9A227)
+
     /** The wash the host's torch throws over the registration viewfinder. */
     val TorchWash = Color(0xFF8FA294).copy(alpha = 0.16f)
 }
