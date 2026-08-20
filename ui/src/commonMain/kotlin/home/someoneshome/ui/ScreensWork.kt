@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 
@@ -340,6 +341,66 @@ fun ScanCaughtScreen(vals: PanelVals) {
         )
         PanelButton(
             "NOT THIS ONE",
+            border = Amber.Faint, ink = Amber.Dim,
+            size = 7.0, verticalPadding = 9.u,
+            onClick = { go(ScreenId.Work) },
+        )
+    }
+}
+
+/**
+ * The scan caught something that is not yours.
+ *
+ * **One refusal for every reason.** Not assigned to you, blocked upstream, or a card the host
+ * never registered all land here with the same four words, so the refusal cannot be read
+ * backwards into a fact about the marker or about anybody else. It says nothing about who the
+ * marker belongs to, whether someone has already worked it, or why it is closed.
+ *
+ * *"Nothing of yours opens here"* is phrased about **you**, deliberately — the alternative
+ * phrasings ("already taken", "belongs to another resident") would each be a small statement
+ * about a player who is not in the room.
+ *
+ * The light signature matches a successful scan: both leave the lit scan field for a dark screen,
+ * so an onlooker learns nothing from the change in brightness.
+ */
+@Composable
+fun ScanBadScreen() {
+    val go = navigator()
+    Column(
+        Modifier.fillMaxSize().padding(8.u),
+        verticalArrangement = Arrangement.spacedBy(7.u),
+    ) {
+        Label("SCAN", size = 7.0, color = Amber.Dim, tracking = 0.16)
+
+        Column(
+            Modifier.weight(1f).fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(9.u, Alignment.CenterVertically),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Box(Modifier.padding(vertical = 3.u).size(46.u), contentAlignment = Alignment.Center) {
+                Box(Modifier.fillMaxSize().border(1.3.u, Amber.Bright, CircleShape))
+                Box(
+                    Modifier.fillMaxHeight().width(1.3.u)
+                        .rotate(45f)
+                        .background(Amber.Bright)
+                )
+            }
+            Label("NOT YOURS", size = 13.0, color = Amber.Bright, tracking = 0.1)
+            Label(
+                "Nothing of yours opens here.",
+                size = 7.0, color = Amber.Dim, tracking = 0.02, lineHeight = 1.9,
+                align = TextAlign.Center,
+            )
+        }
+
+        PanelButton(
+            "SCAN ANOTHER",
+            border = Amber.Bright, ink = Amber.Bright,
+            size = 9.0, tracking = 0.18, verticalPadding = 13.u,
+            onClick = { go(ScreenId.Scan) },
+        )
+        PanelButton(
+            "SEE MY SUBROUTINES",
             border = Amber.Faint, ink = Amber.Dim,
             size = 7.0, verticalPadding = 9.u,
             onClick = { go(ScreenId.Work) },

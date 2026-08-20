@@ -24,7 +24,7 @@ enum class ScreenId {
     Home, Page2, Lock,
 
     // Work.
-    Work, Scan, ScanCaught, Sub, SubBright, Files, Notes, TermNo, TermLive, Timelapse,
+    Work, Scan, ScanCaught, ScanBad, Sub, SubBright, Files, Notes, TermNo, TermLive, Timelapse,
 
     // The house's hands.
     Banner, EgressWidget,
@@ -187,7 +187,7 @@ class PanelVals(val state: PanelState) {
     val buzzes: Boolean = state.screen in setOf(
         ScreenId.Armed, ScreenId.Notify, ScreenId.Banner, ScreenId.Call, ScreenId.Found,
         ScreenId.Assemble, ScreenId.Notice, ScreenId.Tally, ScreenId.Revoked,
-        ScreenId.ScanMarker, ScreenId.ScanCaught, ScreenId.GhostMeeting,
+        ScreenId.ScanMarker, ScreenId.ScanCaught, ScreenId.ScanBad, ScreenId.GhostMeeting,
         ScreenId.WinInsiders, ScreenId.WinResidents,
     )
 
