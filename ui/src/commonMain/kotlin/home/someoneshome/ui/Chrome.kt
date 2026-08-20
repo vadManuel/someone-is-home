@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -48,36 +49,81 @@ fun StatusBar(vals: PanelVals, bandHeight: Dp = STATUS_BAR_HEIGHT, sideInset: Dp
             // that stopped short of each edge would read as a shorter bar, not a safer one.
             .edgeLine(PanelSide.Bottom, vals.edge)
             .padding(horizontal = 6.u + sideInset),
-        horizontalArrangement = Arrangement.spacedBy(5.u),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SignalBars(on = vals.signalOn, off = vals.signalOff)
-        ReceptionGlyph(vals.receptionInk)
+        Row(
+            Modifier.weight(LEFT_ZONE),
+            horizontalArrangement = Arrangement.spacedBy(5.u),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SignalBars(on = vals.signalOn, off = vals.signalOff)
+            ReceptionGlyph(vals.receptionInk)
 
-        Label(
-            vals.carrier,
-            modifier = Modifier.weight(1f),
-            size = 7.0, color = vals.dim, tracking = 0.06,
-            maxLines = 1, overflow = TextOverflow.Ellipsis,
-        )
-
-        // The iris follows the panel's ink rather than being pinned to full intensity. The
-        // design hardcodes #FFC759 here, which left it the single brightest element on the very
-        // screens that dim everything else -- and a 7-unit lit ring is exactly the kind of thing
-        // that carries across a dark room when the text does not.
-        if (vals.armedGlyph) PerimeterGlyph(ring = vals.ink, core = vals.ink)
-        if (vals.disarmedGlyph) PerimeterGlyph(ring = vals.dim, core = vals.edge)
-
-        if (vals.lockChip) {
-            Box(Modifier.border(1.u, Amber.Dim).padding(horizontal = 2.u)) {
-                Label("LOCK", size = 7.0, color = Amber.Bright, tracking = 0.06)
-            }
+            Label(
+                vals.carrier,
+                size = 7.0, color = vals.dim, tracking = 0.06,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
         }
 
-        Readout(vals.clock, size = 11.0, color = vals.ink)
-        Battery(ink = vals.ink, edge = vals.dim)
+        // THE MIDDLE IS EMPTY, ON EVERY DEVICE. Not "empty where there is an Island" -- the row
+        // is three zones and the middle is never used, so the layout owes nothing to hardware it
+        // cannot measure. Compose reports that a cutout EXISTS (displayCutout top=62) and nothing
+        // whatever about how wide it is, so any rule keyed on the pill's geometry would be a
+        // guess at Apple's numbers that silently goes wrong on the next phone.
+        //
+        // Reserved a little wider than the pill needs: the Island is about 32% of a 393pt panel,
+        // and this holds 36% clear.
+        Spacer(Modifier.weight(MIDDLE_ZONE))
+
+        Row(
+            Modifier.weight(RIGHT_ZONE),
+            horizontalArrangement = Arrangement.spacedBy(5.u, Alignment.End),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // The iris follows the panel's ink rather than being pinned to full intensity. The
+            // design hardcodes #FFC759 here, which left it the single brightest element on the
+            // very screens that dim everything else -- and a 7-unit lit ring is exactly the kind
+            // of thing that carries across a dark room when the text does not.
+            if (vals.armedGlyph) PerimeterGlyph(ring = vals.ink, core = vals.ink)
+            if (vals.disarmedGlyph) PerimeterGlyph(ring = vals.dim, core = vals.edge)
+
+            if (vals.lockChip) {
+                Box(Modifier.border(1.u, Amber.Dim).padding(horizontal = 2.u)) {
+                    Label("LOCK", size = 7.0, color = Amber.Bright, tracking = 0.06)
+                }
+            }
+
+            Readout(vals.clock, size = 11.0, color = vals.ink)
+            Battery(ink = vals.ink, edge = vals.dim)
+        }
     }
 }
+
+/**
+ * The status row's three zones: content at each end, nothing in the middle.
+ *
+ * Weights rather than widths, so the reserve scales with the panel instead of being a point count
+ * that happens to be right on one phone.
+ *
+ * **Deliberately lopsided.** The right zone holds a clock and a battery and wants about 16% of
+ * the panel; the left holds two glyphs AND the carrier, which is a word. Splitting the sides
+ * evenly looked tidy and truncated UNREGISTERED to `UNREGISTER…` — a game-critical string
+ * clipped to make room for space the right side was not using.
+ *
+ * **Sized so the middle is provably clear, not tuned until this pill happened to fit.** An
+ * earlier pass widened the left zone until UNREGISTERED stopped ellipsizing, which pushed its
+ * last character under the pill's left edge — trading a visible truncation for an invisible one.
+ * Measured: the carrier has about 60 design units before the pill and UNREGISTERED wants 60.3.
+ *
+ * So REVOKED and RESTRAINED — the distinction D-078 exists to keep legible — fit whole with room
+ * to spare, and UNREGISTERED ellipsizes. That is the right one to lose: it is the fallback for a
+ * missing cause, chosen because it "asserts only that you are out", and `UNREGISTER…` still
+ * asserts exactly that. Clipping it under a cutout would not.
+ */
+private const val LEFT_ZONE = 0.30f
+private const val MIDDLE_ZONE = 0.44f
+private const val RIGHT_ZONE = 0.26f
 
 /** Three bars, and after arming all three are spent. The house is the network now. */
 @Composable
