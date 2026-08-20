@@ -36,6 +36,16 @@ enum class ScreenId {
     Revoked, Ghost2, GhostMeeting, Ghost3, Disconnect, Settings, WinInsiders, WinResidents,
 }
 
+/**
+ * How a player left the round.
+ *
+ * **Two different things, and the vocabulary forbids collapsing them.** `Revoke` is system power
+ * lent by the house and spent in the dark; `Restrain` is a physical act by the room at a meeting,
+ * which the house cannot prevent. Both end on the same couch and the same screens, so the screen
+ * alone cannot tell them apart — this is carried from the event that caused it.
+ */
+enum class OutBy { Revoked, Restrained }
+
 /** The ability's three visual states. Both roles render all three; only one role acts. */
 enum class RevokeState { Ready, Armed, Cooldown }
 
@@ -64,6 +74,8 @@ data class PanelState(
     /** Host-side only: the torch while registering markers, in the light, with the back camera. */
     val torch: Boolean = false,
     val roomType: RoomType = RoomType.Room,
+    /** Null while still in play. Set once, by whichever event put the player out. */
+    val outBy: OutBy? = null,
     /** Randomises the backlog's *count and mix*, so inbox density can never imply a role. */
     val inboxSeed: Int = 3,
     val noteSeed: Int = 0,
@@ -114,17 +126,17 @@ class PanelVals(val state: PanelState) {
     val statusVisible: Boolean get() = mode != PanelMode.Hidden
 
     /**
-     * Screens whose whole job is to emit as little light as possible — **the status bar
+     * The two screens whose whole job is to emit as little light as possible — **the status bar
      * included**.
      *
      * A bright bar above deliberately dim text is the same flare the screen exists to avoid, and
-     * it is worse than a bright body would be, because chrome is the part nobody thinks to check.
-     * On a revoked phone it was the brightest thing on screen.
+     * it is worse than a bright body, because chrome is the part nobody thinks to check.
+     *
+     * **Only these two.** The set briefly included every out-screen, and that was wrong: once you
+     * are on the couch the room already knows you are out, so there is nothing left to conceal —
+     * and a reconnecting phone needs to be *noticed*, not hidden.
      */
-    private val concealed: Boolean = state.screen in setOf(
-        ScreenId.Revoked, ScreenId.Sub, ScreenId.Ghost3, ScreenId.GhostMeeting,
-        ScreenId.Disconnect, ScreenId.Ghost2,
-    )
+    private val concealed: Boolean = state.screen == ScreenId.Revoked || state.screen == ScreenId.Sub
 
     val ink: Color = when {
         isPre -> Amber.BoneInk
@@ -139,14 +151,27 @@ class PanelVals(val state: PanelState) {
     val edge: Color = if (isPre) Amber.BoneEdge else Amber.Edge
 
     /**
-     * The carrier names the state once you are out, and distinguishes the two ways it happened —
-     * REVOKED in the dark, RESTRAINED by the room.
+     * Once you are out, the carrier names **what happened to you** — not which screen you are on.
+     *
+     * `Revoke` and `Restrain` are not synonyms and must never be collapsed: one is system power
+     * lent by the house, the other is a physical act the house cannot prevent. So the word follows
+     * [PanelState.outBy], which is carried from the event that put you there.
+     *
+     * The design's fixture derives this from the current screen instead, which cannot express it —
+     * a prototype has no memory of how a player left. `ghost3` and `ghostmeeting` are reached by
+     * *both* routes, so screen-derived logic labels a revoked player RESTRAINED. Driving it from
+     * the cause is what the shipped app needs and what the rule actually says.
+     *
+     * **This is public once you are out**, and that is deliberate: anyone near enough to read the
+     * bar learns whether an Insider acted or the room did.
      */
     val carrier: String = when {
         state.screen == ScreenId.WinResidents -> "SOMEONE'S HOME"
         isPre -> ""
-        state.screen == ScreenId.Revoked -> "REVOKED"
-        mode == PanelMode.Ghost -> "RESTRAINED"
+        mode == PanelMode.Ghost || state.screen == ScreenId.Ghost2 -> when (state.outBy) {
+            OutBy.Restrained -> "RESTRAINED"
+            else -> "REVOKED"
+        }
         else -> "SOMEONE'S HOME"
     }
 
