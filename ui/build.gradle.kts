@@ -10,8 +10,18 @@ kotlin {
         implementation(libs.compose.runtime)
         implementation(libs.compose.foundation)
         implementation(libs.compose.ui)
+        implementation(libs.compose.resources)
         implementation(project(":model"))
     }
+}
+
+// The pixel fonts ARE the interface. Silkscreen and VT323 are bitmap-derived faces whose glyphs
+// only land on whole pixels; substituting a system monospace does not degrade the look, it
+// deletes it. Both are OFL — licences sit beside the files in composeResources/font.
+compose.resources {
+    publicResClass = false
+    packageOfResClass = "home.someoneshome.ui.generated.resources"
+    generateResClass = always
 }
 
 // ui renders Effects and emits Intents. It never reaches into the rules, because a screen that
