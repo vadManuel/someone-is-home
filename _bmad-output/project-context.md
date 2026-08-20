@@ -18,7 +18,7 @@ A social deduction game played in a real dark house. The app is every player's o
 
 ## Stack
 
-Kotlin **2.4.10** · Compose Multiplatform **1.11.1** (needs Kotlin 2.2+; native targets 2.3.10+) · Ktor **3.5.1** · Xcode/Swift **26.5** (iOS shell only) · iOS SDK 26, deployment target 26.
+Kotlin **2.4.10** · Compose Multiplatform **1.11.1** (needs Kotlin 2.2+; native targets 2.3.10+) · Ktor **3.5.1** · Xcode/Swift **26.5** (iOS shell only) · iOS SDK 26, deployment target 18 (the second test device is an iPhone 13 Pro on iOS 18).
 
 ## Modules
 

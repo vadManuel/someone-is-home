@@ -25,8 +25,10 @@ import home.someoneshome.model.Seat
 import home.someoneshome.model.protocol.SeatToken
 import home.someoneshome.model.protocol.TransportFrame
 import home.someoneshome.platform.clearSeatToken
+import home.someoneshome.platform.loadHostAddress
 import home.someoneshome.platform.loadSeatToken
 import home.someoneshome.platform.monotonicNanos
+import home.someoneshome.platform.saveHostAddress
 import home.someoneshome.platform.saveSeatToken
 import home.someoneshome.platform.transport.ClientSession
 import home.someoneshome.platform.transport.SeatLedger
@@ -84,6 +86,10 @@ class TransportCheat(private val scope: CoroutineScope) {
             session = ClientSession(SeatToken(it))
             clientPhase = "TOKEN HELD — JOIN TO RESUME"
         }
+        // And the other half, found on the first two-phone evening: the token says WHO this
+        // phone is, the address says WHERE the house is, and a resume needs both. Without this
+        // the relaunched client dutifully presented its token to 127.0.0.1.
+        loadHostAddress()?.let { address = it }
     }
 
     private fun nowMillis(): Long = monotonicNanos() / 1_000_000
@@ -129,7 +135,21 @@ class TransportCheat(private val scope: CoroutineScope) {
         val c = TransportClient(
             s, address, CHEAT_TRANSPORT_PORT, ::nowMillis,
             onFrame = { note("ME < ${it.brief()}") },
-            onPhase = { clientPhase = it.brief() },
+            onPhase = { phase ->
+                clientPhase = phase.brief()
+                // The token is durable from the moment of seating, or the log says it is not.
+                // This call was missing once: an edit silently matched nothing, the build stayed
+                // green (an unused import compiles), and the 13 Pro relaunched as a stranger —
+                // D-084's failure shape, caught only because a phone was watched.
+                if (phase is ClientSession.Phase.Seated) {
+                    try {
+                        saveSeatToken(phase.token.value)
+                        saveHostAddress(address)
+                    } catch (notSaved: IllegalStateException) {
+                        note("TOKEN NOT SAVED — NO RESUME AFTER A CRASH")
+                    }
+                }
+            },
         )
         client = c
         clientJob = scope.launch { c.run() }

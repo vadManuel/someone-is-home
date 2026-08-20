@@ -96,7 +96,8 @@ for x in d['result']['devices']:
         echo "building for $name ($VARIANT)…"
         xcodebuild -project iosApp/iosApp.xcodeproj -scheme SomeonesHome -configuration "$CONFIG" \
             -destination "id=$udid" -derivedDataPath "$DERIVED-device" \
-            DEVELOPMENT_TEAM="$TEAM" -allowProvisioningUpdates build >/dev/null
+            DEVELOPMENT_TEAM="$TEAM" -allowProvisioningUpdates \
+            -allowProvisioningDeviceRegistration build >/dev/null
 
         assert_fonts "$APP"
 

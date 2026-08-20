@@ -1172,6 +1172,53 @@ panel's own ink, following the perimeter iris's rule — dimmer when out, changi
 emits an effect.
 
 
+
+---
+
+## Revision 16 — the first two phones
+
+*Decided 2026-08-20, the same evening, continuing. Story 0.8's transport went from loopback to
+two physical phones — an iPhone 16 Pro hosting, an iPhone 13 Pro joining over the house Wi-Fi —
+and the whole story held: seated as a stranger, frames attributed, killed mid-connection by
+`devicectl`, relaunched with wiped memory, and resumed as THAT seat. The locked round refused a
+stranger terminally, with a frame. Everything below is what the hardware taught that the
+loopback could not.*
+
+### D-094 · **Resume needs WHERE as well as WHO — decided**
+
+The seat token answers *who this phone is*. Nothing answered *where the house is*. The killed
+and relaunched client held its token and dutifully presented it to `127.0.0.1`, because the
+host's address had only ever lived in memory — the phone knew exactly who it was and had no idea
+where to say so.
+
+**mDNS discovery is the real answer**: a resuming phone should find the host the same way a
+joining phone will, and typing an IP in a dark house was never the design. Until it exists, the
+last known host address is stored beside the token (`HostAddressStore`, same doctrine: text in,
+text out, atomic, failed save throws) and the resume path reads both. This is an interim the
+mDNS story deletes, and it is recorded so the deletion is recognised as one.
+
+### D-095 · **Deployment target 26 → 18 — decided**
+
+The second test device is an iPhone 13 Pro on iOS 18.6, and the target was 26 only because the
+repo was created against the current SDK — nothing in the app touches an iOS-26-only API.
+Lowered to 18 in all three configurations; project-context's stack line updated in place. The
+day something genuinely needs a newer API, raising the floor is a decision to take knowingly,
+not a default to inherit.
+
+### D-096 · **The seventh silent instrument, and what caught it — reaffirmed with a new instrument**
+
+The cheat's token-save call did not exist: the edit that was meant to add it silently matched
+nothing, the import compiled unused, and the build stayed green — D-084's exact failure shape,
+one revision later, performed by the same discipline that documented it. The relaunched 13 Pro
+came back a stranger.
+
+What caught it was **pulling the app's data container off the phone** (`devicectl device copy
+from`) and finding no token file where one was claimed to be: the device's filesystem consulted
+as the instrument, not the build output and not the log. The practice generalises and is now
+named: **when a persistence claim fails on hardware, read the container, not the code.** The
+first pull also mis-derived the container's layout and reported an absence one directory too
+deep — the second look, listing the whole tree, is what made the evidence honest.
+
 ---
 
 ## State after revision 12
@@ -1195,6 +1242,13 @@ found five layout faults in a single strip of screen, none of them visible on th
 where the screens were reviewed; a guard now renders all 56 against a simulated notch on every
 build. **0.6c still remains and still needs hardware — and needs the radio built first, because
 nothing broadcasts yet.**
+
+**Revision 16 added D-094 through D-096** — the first two phones. Story 0.8's transport is
+device-proven: an iPhone 13 Pro was killed mid-connection and resumed as its own seat against an
+iPhone 16 Pro host over real Wi-Fi, and a locked round refused a stranger terminally. Resume
+needs WHERE as well as WHO (D-094; mDNS is the real answer, an address store is the interim),
+the deployment target is 18 (D-095), and the seventh silent-instrument event was caught by
+reading the device's data container rather than the build (D-096).
 
 **Carried into E0 as a constraint, not a closed item:** total app allocation ≤ ~0.5 MB/s as the design target, with the measured cliff between 1.5 and 3.0 MB/s — roughly 6× margin, so this is a budget rather than a knife edge. Nobody yet knows what the real app allocates with BLE, 100 Hz motion, effects and recording running at once.
 Action: create `project-context.md`.
