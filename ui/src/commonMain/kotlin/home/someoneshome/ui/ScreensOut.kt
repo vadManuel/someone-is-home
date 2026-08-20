@@ -76,30 +76,42 @@ fun RevokedScreen() {
 }
 
 /**
- * Stand and walk in — **lit, because a meeting is called and every lamp is up.**
+ * Stand and walk in.
  *
- * The inversion is the point. A revoked player's device was dark for the whole interval; now the
- * whole house is bright, so being bright is camouflage rather than exposure.
+ * **Dark, and it used to be lit.** The earlier version reasoned that a meeting means every lamp
+ * is up, so being bright was camouflage. It is not: a restrained player has no lamp allocation,
+ * so a bright screen would mark them out as they crossed a room full of people who do.
+ *
+ * The instruction is absolute in a way no living player's is — *do not speak at all, not even in
+ * the meeting.* Being out is a complete loss of channel, not a reduced one.
  */
 @Composable
 fun Ghost2Screen() {
+    val go = navigator()
     Column(
-        Modifier.fillMaxSize().background(Amber.Bright).padding(horizontal = 16.u, vertical = 22.u),
-        verticalArrangement = Arrangement.spacedBy(11.u, Alignment.CenterVertically),
+        Modifier.fillMaxSize().padding(14.u),
+        verticalArrangement = Arrangement.spacedBy(10.u, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Label("HOUSE MEETING CALLED", size = 6.0, color = Amber.Black, tracking = 0.24)
         Label(
             "STAND\nAND WALK IN",
-            size = 19.0, color = Amber.Black, tracking = 0.1, lineHeight = 1.45,
+            size = 19.0, color = Amber.Bright, tracking = 0.1, lineHeight = 1.45,
             align = TextAlign.Center,
         )
-        Box(Modifier.width(26.u).height(1.u).background(Amber.Black))
+        Box(Modifier.width(30.u).height(1.u).background(Amber.Faint))
         Label(
-            "DO NOT SPEAK.\nWAIT WITH THE OTHERS\nWHO WERE REVOKED.",
-            size = 7.0, color = Amber.Black, tracking = 0.08, lineHeight = 2.2,
+            "YOU HAVE NO VOICE NOW.\nDO NOT SPEAK AT ALL,\nNOT EVEN IN THE MEETING.",
+            size = 7.0, color = Amber.Dim, tracking = 0.1, lineHeight = 2.1,
             align = TextAlign.Center,
         )
+        Box(
+            Modifier.padding(top = 10.u).border(1.u, Amber.Bright)
+                .tap { go(ScreenId.GhostMeeting) }
+                .padding(horizontal = 22.u, vertical = 12.u)
+        ) {
+            Label("I AM HERE", size = 8.5, color = Amber.Bright, tracking = 0.2)
+        }
+        Label("4 OF 6 CHECKED IN", size = 6.0, color = Amber.Faint, tracking = 0.12)
     }
 }
 
@@ -128,18 +140,18 @@ fun GhostMeetingScreen(vals: PanelVals) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Bottom,
             ) {
-                Label("DISCUSSION ENDS IN", size = 6.0, color = Amber.Dim, tracking = 0.13)
-                Readout("1:48", size = 22.0, color = Amber.Bright, lineHeight = 1.0)
+                Label("VOTING ENDS IN", size = 6.0, color = Amber.Dim, tracking = 0.13)
+                Readout("0:24", size = 22.0, color = Amber.Bright, lineHeight = 1.0)
             }
             SegmentBar(
-                total = PanelVals.METER_SEGMENTS,
+                total = PanelVals.VOTE_SEGMENTS,
                 lit = vals.meetingLit,
                 litColor = Amber.Bright,
                 unlitColor = Amber.Edge,
                 height = 5.u,
             )
             Label(
-                "YOU HAVE NO VOICE AND NO VOTE.\nWAIT WHERE YOU WERE FOUND.",
+                "YOU HAVE NO VOICE AND NO VOTE.",
                 size = 6.0, color = Amber.Faint, tracking = 0.1, lineHeight = 1.8,
             )
         }

@@ -86,7 +86,7 @@ fun WorkScreen() {
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             BackChevron(ScreenId.Home, Amber.Dim)
-            Label("WORK ORDER", size = 7.0, color = Amber.Dim, tracking = 0.16)
+            Label("SUBROUTINES", size = 7.0, color = Amber.Dim, tracking = 0.16)
             Label(
                 "3 OF 7 DONE",
                 modifier = Modifier.weight(1f),
@@ -328,7 +328,7 @@ fun ScanCaughtScreen(vals: PanelVals) {
                 size = 13.0, color = Amber.Bright, tracking = 0.06, lineHeight = 1.4,
                 align = TextAlign.Center,
             )
-            Label("GARAGE . WORK ORDER 4 OF 7", size = 7.0, color = Amber.Dim, tracking = 0.12)
+            Label("GARAGE . SUBROUTINE 4 OF 7", size = 7.0, color = Amber.Dim, tracking = 0.12)
             Label("THE CARD IN YOUR HAND MATCHES", size = 6.0, color = Amber.Faint, tracking = 0.1)
         }
 
@@ -493,7 +493,7 @@ fun FilesScreen() {
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(3.u)) {
-            listOf("WORK", "NOTES", "ARCHIVE").forEach { name ->
+            listOf("SUBROUTINES", "NOTES", "ARCHIVE").forEach { name ->
                 Row(
                     Modifier.fillMaxWidth().border(1.u, Amber.Edge)
                         .padding(horizontal = 7.u, vertical = 6.u),
@@ -642,6 +642,7 @@ fun TermLiveScreen() {
  */
 @Composable
 fun TimelapseScreen() {
+    val go = navigator()
     Column(
         Modifier.fillMaxSize().padding(8.u),
         verticalArrangement = Arrangement.spacedBy(6.u),
@@ -660,6 +661,14 @@ fun TimelapseScreen() {
             Box(Modifier.weight(44f).fillMaxHeight().background(Amber.Bright))
             Box(Modifier.weight(56f).fillMaxHeight().background(Amber.Edge))
         }
+        // Playback can be abandoned. It plays once either way, so stopping early is a real
+        // decision rather than a convenience.
+        PanelButton(
+            "STOP THE PLAYBACK",
+            border = Amber.Edge, ink = Amber.Dim,
+            size = 7.0, tracking = 0.14, verticalPadding = 8.u,
+            onClick = { go(ScreenId.TermLive) },
+        )
     }
 }
 
