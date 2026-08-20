@@ -1,5 +1,8 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.MarkerShape
+import home.someoneshome.model.MarkerShapes
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement

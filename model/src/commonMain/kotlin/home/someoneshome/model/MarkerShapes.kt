@@ -1,4 +1,4 @@
-package home.someoneshome.ui
+package home.someoneshome.model
 
 /**
  * The marker vocabulary: 44 shapes, one character each.
@@ -28,6 +28,20 @@ package home.someoneshome.ui
  *
  * Coordinates are a 16x16 box, y downward, filled **even-odd** — a hole is simply a second
  * contour, which is how `ring` and the three frames work.
+ *
+ * ### Why this lives in `model` and not in `ui`
+ *
+ * A shape is a marker's **identity**, not its decoration. [id] is what a printed card encodes and
+ * what a scan decodes months later, so the roster is wire data that `ui` happens to draw — and it
+ * had to be in one place before map persistence could name a marker at all.
+ *
+ * The alternative was a second roster beside the first, which is precisely the failure D-070 was
+ * written about: two things decoding to the same marker put a player in the wrong room, and that
+ * wrong count lands inside the injected error the Terminal already carries on purpose. **The bug
+ * would hide inside noise the design added deliberately, and would be undetectable in play.**
+ *
+ * Nothing here knows how to draw. [path] is a string; parsing and rendering stay in `ui`, which
+ * is what keeps this side free of a graphics dependency.
  */
 data class MarkerShape(
     /** The upstream name, and the wire identity. Never renumbered, never reused. */
@@ -115,6 +129,21 @@ object MarkerShapes {
     }
 
     operator fun get(id: String): MarkerShape? = byId[id]
+
+    /**
+     * Lookup that refuses to return nothing.
+     *
+     * [get] returning null is right for a scan — an unregistered or misread card is a fact about
+     * a piece of paper (D-071). It is wrong everywhere the id is a constant written by us: a typo
+     * then yields a marker with no shape, and a shape is a marker's whole name. Where the caller
+     * wraps the result in `listOfNotNull`, the typo does not even leave a gap — the list is
+     * simply one shorter, and nobody counts it.
+     */
+    fun require(id: String): MarkerShape = byId[id]
+        ?: throw IllegalArgumentException(
+            "no shape '$id'. The roster is fixed at ${all.size} and ids are never renumbered or " +
+                "reused, so this is a typo rather than a missing shape."
+        )
 
     /** Shape index to its single character. */
     fun encode(index: Int): Char {
