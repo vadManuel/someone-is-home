@@ -1,8 +1,8 @@
 package home.someoneshome.ui
 
 import androidx.compose.ui.graphics.vector.PathParser
+import home.someoneshome.model.MarkerShapes
 import kotlin.test.Test
-import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
@@ -12,6 +12,11 @@ import kotlin.test.assertTrue
  * nothing. A marker whose shape is invisible is a marker with no name, in a game where the shape
  * is the marker's whole identity, and it would be found by a player in a dark house rather than
  * here. So every path is parsed and measured.
+ *
+ * **Only the drawing question is left here.** The roster and its codec moved to `model` with the
+ * shapes themselves — whether a card decodes to the shape printed on it is identity, not
+ * rendering, and map persistence needs it. `home.someoneshome.model.MarkerShapesTest` holds
+ * those. This one needs a path parser and so stays where the parser is.
  */
 class MarkerShapesTest {
 
@@ -35,42 +40,23 @@ class MarkerShapesTest {
         assertTrue(outside.isEmpty(), "shapes outside the viewbox: $outside")
     }
 
-    @Test
-    fun theRosterIsTheAlphabet() {
-        assertEquals(44, MarkerShapes.ALPHABET.length)
-        assertEquals(44, MarkerShapes.all.size)
-        assertEquals(44, MarkerShapes.all.map { it.id }.toSet().size)
-    }
-
     /**
-     * The codec has to agree with `shape-encoder`'s, because the character it produces is what
-     * gets printed into a QR code and scanned back months later. A silent reordering here would
-     * make every card already on a wall decode to the wrong shape.
+     * Every id this module names as a literal resolves.
+     *
+     * `PanelModel` wraps its lookups in `listOfNotNull`, so a typo does not draw a blank marker —
+     * it silently makes the list one shorter, and nobody counts a list they did not write. The
+     * roster moving to `model` removed the risk of a SECOND roster; it does nothing about a
+     * misspelled id, which is what this covers.
+     *
+     * Brittle by construction: a seventh literal added to `ui` will not appear here on its own,
+     * and the `PanelVals` fixtures are not reachable without building a `PanelState`, so this
+     * checks the ids rather than the fixtures that use them. `MarkerShapes.require` is the
+     * non-brittle fix and is available to any call site that wants a typo to be loud.
      */
     @Test
-    fun encodeAndDecodeRoundTrip() {
-        MarkerShapes.all.forEachIndexed { i, shape ->
-            val ch = MarkerShapes.encode(i)
-            assertEquals(shape, MarkerShapes.decode(ch), "round trip failed at $i (${shape.id})")
+    fun everyIdNamedInThisModuleResolves() {
+        for (id in listOf("arrow_right", "cross", "diamond", "ring", "square_frame", "triangle_up")) {
+            assertTrue(MarkerShapes[id] != null, "ui names a shape that is not in the roster: $id")
         }
-        assertEquals('0', MarkerShapes.encode(0))
-        assertEquals("circle", MarkerShapes.decode('0')?.id)
-    }
-
-    @Test
-    fun aCharacterOutsideTheRosterDecodesToNothing() {
-        assertEquals(null, MarkerShapes.decode('!'))
-        assertEquals(null, MarkerShapes.decode(' '))
-    }
-
-    /**
-     * `pentagon` and `hexagon` are absent on purpose — the legibility pass upstream cut anything
-     * reading as "circle with corners". The device design's own fixture reintroduced both, so
-     * this asserts which set won.
-     */
-    @Test
-    fun theShapesTheLegibilityPassRejectedStayRejected() {
-        assertEquals(null, MarkerShapes["pentagon"])
-        assertEquals(null, MarkerShapes["hexagon"])
     }
 }
