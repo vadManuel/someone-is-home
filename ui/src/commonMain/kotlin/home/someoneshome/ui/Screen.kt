@@ -56,6 +56,7 @@ fun Screen(state: PanelState, actions: PanelActions = PanelActions()) {
                 ScreenId.Scan -> ScanScreen()
                 ScreenId.ScanCaught -> ScanCaughtScreen(vals)
                 ScreenId.ScanBad -> ScanBadScreen()
+                ScreenId.ScanUnknown -> ScanUnknownScreen()
                 ScreenId.Sub -> SubScreen()
                 ScreenId.SubBright -> SubBrightScreen()
                 ScreenId.Files -> FilesScreen()
