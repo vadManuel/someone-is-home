@@ -3,6 +3,8 @@ package home.someoneshome.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -546,9 +548,15 @@ fun TermTakenScreen() {
                     size = 8.0, color = Amber.Caution, tracking = 0.1, lineHeight = 1.7,
                     align = TextAlign.Center,
                 )
+                // The room name is lifted out of the sentence, because it is the one thing the
+                // host has to act on -- they are about to go and find it.
                 Label(
-                    "This home has one terminal and it is in HALL. A second one would give the " +
-                        "house two places to be found.",
+                    "This home has one terminal and it is in",
+                    size = 7.0, color = Amber.SlateFill, lineHeight = 1.8, align = TextAlign.Center,
+                )
+                Label("HALL", size = 7.0, color = Amber.BoneChip, tracking = 0.1)
+                Label(
+                    "A second one would give the house two places to be found.",
                     size = 7.0, color = Amber.SlateFill, lineHeight = 1.8, align = TextAlign.Center,
                 )
             }
@@ -844,11 +852,19 @@ fun LobbyScreen() {
                 Label("THE BUNGALOW", size = 7.0, color = Amber.BoneDim, tracking = 0.12)
                 Label("6 JOINED", size = 7.0, color = Amber.BoneInk, tracking = 0.12)
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(3.u)) {
+            // All six, because the line above says six. A truncated row turns the count into
+            // a contradiction on the one screen whose job is to show who is here.
+            FlowRow(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(3.u),
+                verticalArrangement = Arrangement.spacedBy(3.u),
+            ) {
                 SeatChip("ELLIOT", Amber.BoneInk)
                 SeatChip("PRIYA", Amber.BoneDeep)
                 SeatChip("MARCUS", Amber.BoneDeep)
                 SeatChip("DANI", Amber.BoneDeep)
+                SeatChip("ROSE", Amber.BoneDeep)
+                SeatChip("TOMAS", Amber.BoneDeep)
             }
         }
 
