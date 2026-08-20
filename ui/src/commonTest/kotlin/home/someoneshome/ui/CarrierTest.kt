@@ -31,6 +31,7 @@ class CarrierTest {
     @Test
     fun theRevokedAndWalkInScreensAlsoFollowTheCause() {
         assertEquals("REVOKED", carrier(ScreenId.Revoked, OutBy.Revoked))
+        assertEquals("RESTRAINED", carrier(ScreenId.Restrained, OutBy.Restrained))
         assertEquals("REVOKED", carrier(ScreenId.Ghost2, OutBy.Revoked))
         assertEquals("RESTRAINED", carrier(ScreenId.Ghost2, OutBy.Restrained))
     }
@@ -41,6 +42,21 @@ class CarrierTest {
         for (screen in listOf(ScreenId.Home, ScreenId.Page2, ScreenId.Work, ScreenId.Discussion)) {
             assertEquals("SOMEONE'S HOME", carrier(screen), "$screen while in play")
             assertEquals("SOMEONE'S HOME", carrier(screen, OutBy.Revoked), "$screen, stale outBy")
+        }
+    }
+
+    /**
+     * With no cause recorded the bar must claim **neither**.
+     *
+     * Guessing would be wrong for about half the players, and wrong in precisely the way the
+     * vocabulary forbids — calling a physical act by the room "system power lent by the house",
+     * or the reverse.
+     */
+    @Test
+    fun withoutACauseItNamesNeither() {
+        for (screen in shared + listOf(ScreenId.Revoked, ScreenId.Restrained, ScreenId.Ghost2)) {
+            val c = carrier(screen, outBy = null)
+            assertEquals("UNREGISTERED", c, "$screen with no recorded cause")
         }
     }
 

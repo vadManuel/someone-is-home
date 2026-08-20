@@ -76,6 +76,7 @@ fun Screen(state: PanelState, actions: PanelActions = PanelActions()) {
                 ScreenId.Tally -> TallyScreen()
 
                 ScreenId.Revoked -> RevokedScreen()
+                ScreenId.Restrained -> RestrainedScreen()
                 ScreenId.Ghost2 -> Ghost2Screen()
                 ScreenId.GhostMeeting -> GhostMeetingScreen(vals)
                 ScreenId.Ghost3 -> Ghost3Screen(vals)

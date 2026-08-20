@@ -43,13 +43,23 @@ class ScreenshotTest {
         var written = 0
 
         for (id in ScreenId.entries) {
+            // The out-screens are meaningless without a cause: the status bar names what
+            // happened to you, and there is no sensible default. Ghost2/Ghost3/GhostMeeting are
+            // reached by both routes -- rendered here as revoked, which is the route the design
+            // fixture cannot express.
+            val outBy = when (id) {
+                ScreenId.Restrained -> OutBy.Restrained
+                ScreenId.Revoked, ScreenId.Ghost2, ScreenId.Ghost3, ScreenId.GhostMeeting ->
+                    OutBy.Revoked
+                else -> null
+            }
             for (role in PanelRole.entries) {
                 runDesktopComposeUiTest(width = w * 2, height = h * 2) {
                     setContent {
                         Box(Modifier.fillMaxSize().background(Color.Black)) {
                             Box(Modifier.size((w * 2).dp, (h * 2).dp)) {
                                 DeviceCanvas {
-                                    Screen(PanelState(screen = id, role = role))
+                                    Screen(PanelState(screen = id, role = role, outBy = outBy))
                                 }
                             }
                         }
