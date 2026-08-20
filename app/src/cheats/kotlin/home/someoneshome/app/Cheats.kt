@@ -1,0 +1,159 @@
+package home.someoneshome.app
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import home.someoneshome.ui.Amber
+import home.someoneshome.ui.Label
+import home.someoneshome.ui.LocalPanelInsets
+import home.someoneshome.ui.OutBy
+import home.someoneshome.ui.PanelActions
+import home.someoneshome.ui.PanelRole
+import home.someoneshome.ui.PanelState
+import home.someoneshome.ui.RevokeState
+import home.someoneshome.ui.Screen
+import home.someoneshome.ui.ScreenId
+import home.someoneshome.ui.tap
+import home.someoneshome.ui.u
+
+/**
+ * The cheat surfaces: compiled into playtest and debug, ABSENT from release.
+ *
+ * Absent as in not in the compilation — release selects a source set that does not contain this
+ * file, so a release build that could show a cheat is a build that did not compile. That is the
+ * fail-closed direction: the failure mode is "the picker didn't appear on my playtest phone"
+ * (noticed in thirty seconds), never "the picker appeared in a real round".
+ *
+ * ### The first cheat is a screen picker
+ *
+ * The app renders [ScreenId.Boot] and nothing can advance it — there is no transport and no
+ * loop, which is expected, not a regression. The picker makes the other 55 screens reachable on
+ * a phone: jump anywhere from the list, then walk the ported tap targets, because [cheatActions]
+ * wires navigation and the design's toggles straight into local [PanelState]. None of this is
+ * game logic and none of it survives into release; it is the desktop preview's job, on the
+ * hardware the desktop cannot fake.
+ *
+ * ### The marker is permanent, and tapping it opens the picker
+ *
+ * A steady chip naming the variant, drawn over every screen. It is deliberately always there —
+ * a playtest build must never be mistakable for release across a dark room. Steady is what
+ * makes it lawful against the light discipline: constant light carries no signal, changes with
+ * nothing, and is identical on every phone regardless of role.
+ */
+@Composable
+fun CheatRoot() {
+    var state by remember { mutableStateOf(PanelState(screen = ScreenId.Boot)) }
+    var picking by remember { mutableStateOf(false) }
+    Box(Modifier.fillMaxSize().background(Amber.Black)) {
+        if (picking) {
+            CheatPicker(state) { state = it; picking = false }
+        } else {
+            Screen(state, cheatActions(state) { state = it })
+        }
+        MarkerChip { picking = !picking }
+    }
+}
+
+/**
+ * The design's actions, wired to local state so the ported flows can be walked by hand.
+ *
+ * In play these become Intents the authority may refuse; here they mutate the fixture directly,
+ * which is exactly as much game as the desktop preview is — none.
+ */
+private fun cheatActions(state: PanelState, set: (PanelState) -> Unit) = PanelActions(
+    nav = { set(state.withScreen(it)) },
+    stepRevoke = {
+        set(state.copy(revoke = RevokeState.entries[(state.revoke.ordinal + 1) % RevokeState.entries.size]))
+    },
+    toggleMarkers = { set(state.copy(markersOn = !state.markersOn)) },
+    toggleTorch = { set(state.copy(torch = !state.torch)) },
+    pickRoomType = { set(state.copy(roomType = it)) },
+    confirmPassage = { set(state.withScreen(ScreenId.Editor)) },
+)
+
+/**
+ * Jumping to an out screen names the cause, because the carrier reads it from [PanelState.outBy]
+ * — a picker that landed on the revoked screen with no cause would render the UNREGISTERED
+ * fallback and look like a bug in the chrome rather than a choice in the cheat.
+ */
+private fun PanelState.withScreen(id: ScreenId): PanelState = when (id) {
+    ScreenId.Revoked -> copy(screen = id, outBy = OutBy.Revoked)
+    ScreenId.Restrained -> copy(screen = id, outBy = OutBy.Restrained)
+    else -> copy(screen = id)
+}
+
+/** Every screen, as a tappable list, plus the one toggle a screen cannot express: the role. */
+@Composable
+private fun CheatPicker(state: PanelState, onPick: (PanelState) -> Unit) {
+    var draft by remember(state) { mutableStateOf(state) }
+    val insets = LocalPanelInsets.current
+    Column(
+        Modifier.fillMaxSize().background(Amber.Black)
+            .padding(top = insets.top + 6.u, bottom = insets.bottom + 18.u)
+            .padding(horizontal = 14.u)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(3.u),
+    ) {
+        Label("${BuildVariant.MARKER} — PICK A SCREEN", size = 8.0, color = Amber.Bright, tracking = 0.16)
+        Row(
+            Modifier.fillMaxWidth().border(1.u, Amber.Faint)
+                .tap {
+                    val other = if (draft.role == PanelRole.Resident) PanelRole.Insider else PanelRole.Resident
+                    draft = draft.copy(role = other)
+                }
+                .padding(horizontal = 6.u, vertical = 4.u),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Label("ROLE", size = 6.5, color = Amber.Dim)
+            Label(draft.role.name.uppercase(), size = 6.5, color = Amber.Bright)
+        }
+        for (id in ScreenId.entries) {
+            val current = id == draft.screen
+            Label(
+                id.name.uppercase(),
+                Modifier.fillMaxWidth().tap { onPick(draft.withScreen(id)) }.padding(vertical = 1.5.u),
+                size = 7.0,
+                color = if (current) Amber.Bright else Amber.Dim,
+                tracking = 0.08,
+            )
+        }
+    }
+}
+
+/**
+ * The permanent variant marker: a black chip in the panel's own ink, above the home indicator.
+ *
+ * Black-filled so it reads on the two full-amber screens as well as the dark ones, bordered so
+ * it reads on black. It sits over whatever the screen put there — that is the cost of being
+ * unmistakable, and only playtest and debug pay it.
+ */
+@Composable
+private fun BoxScope.MarkerChip(onTap: () -> Unit) {
+    val insets = LocalPanelInsets.current
+    Box(
+        Modifier.align(Alignment.BottomCenter)
+            .padding(bottom = insets.bottom + 2.u)
+            .background(Amber.Black)
+            .border(1.u, Amber.Dim)
+            .tap(onTap)
+            .padding(horizontal = 5.u, vertical = 1.5.u),
+    ) {
+        Label(BuildVariant.MARKER, size = 5.5, color = Amber.Dim, tracking = 0.24)
+    }
+}

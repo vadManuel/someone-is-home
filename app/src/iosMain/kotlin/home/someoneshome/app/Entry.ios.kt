@@ -2,9 +2,6 @@ package home.someoneshome.app
 
 import androidx.compose.ui.window.ComposeUIViewController
 import home.someoneshome.ui.DeviceCanvas
-import home.someoneshome.ui.PanelState
-import home.someoneshome.ui.Screen
-import home.someoneshome.ui.ScreenId
 import platform.UIKit.UIViewController
 
 /**
@@ -17,11 +14,15 @@ import platform.UIKit.UIViewController
  *
  * ### There is no game behind this yet, and it does not pretend otherwise
  *
- * It draws one screen from a fixture. No authority, no radio, no tick loop is wired in — those
+ * It draws screens from fixtures. No authority, no radio, no tick loop is wired in — those
  * arrive with the transport and the loop. **What this proves is exactly one thing: that the
  * ported screens lay out on a real panel**, which nothing before it could show. `ui`'s desktop
  * preview renders on a Mac, and a Mac is not a phone: the panel is a different aspect, the
  * density is different, and the pixel fonts land on different physical pixels.
+ *
+ * What sits inside the canvas is the build variant's root (story 0.10b): release shows the boot
+ * screen and nothing else; playtest and debug add the screen picker and the permanent variant
+ * marker, compiled in for them and out of release.
  *
  * ### What it can never prove
  *
@@ -32,6 +33,6 @@ import platform.UIKit.UIViewController
  */
 fun mainViewController(): UIViewController = ComposeUIViewController {
     DeviceCanvas {
-        Screen(PanelState(screen = ScreenId.Boot))
+        VariantRoot()
     }
 }
