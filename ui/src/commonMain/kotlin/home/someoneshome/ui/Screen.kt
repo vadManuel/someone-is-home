@@ -1,12 +1,7 @@
 package home.someoneshome.ui
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
 
 /**
  * The device, showing one screen.
@@ -48,26 +43,41 @@ fun Screen(state: PanelState, actions: PanelActions = PanelActions()) {
                 ScreenId.RevealThread -> RevealThreadScreen(vals)
                 ScreenId.Lock -> LockScreen()
 
-                else -> NotPorted(state.screen)
+                ScreenId.Home -> HomeScreen(vals)
+                ScreenId.Page2 -> Page2Screen(vals)
+
+                ScreenId.Banner -> BannerScreen()
+                ScreenId.Work -> WorkScreen()
+                ScreenId.Scan -> ScanScreen()
+                ScreenId.ScanCaught -> ScanCaughtScreen(vals)
+                ScreenId.Sub -> SubScreen()
+                ScreenId.SubBright -> SubBrightScreen()
+                ScreenId.Files -> FilesScreen()
+                ScreenId.Notes -> NotesScreen(vals)
+                ScreenId.TermNo -> TermNoScreen()
+                ScreenId.TermLive -> TermLiveScreen()
+                ScreenId.Timelapse -> TimelapseScreen()
+                ScreenId.EgressWidget -> EgressWidgetScreen(vals)
+
+                ScreenId.Calling -> CallingScreen()
+                ScreenId.Call -> CallScreen()
+                ScreenId.Found -> FoundScreen()
+                ScreenId.Assemble -> AssembleScreen()
+                ScreenId.Notice -> NoticeScreen()
+                ScreenId.Discussion -> DiscussionScreen()
+                ScreenId.Vote -> VoteScreen()
+                ScreenId.Tally -> TallyScreen()
+
+                ScreenId.Revoked -> RevokedScreen()
+                ScreenId.Ghost2 -> Ghost2Screen()
+                ScreenId.GhostMeeting -> GhostMeetingScreen(vals)
+                ScreenId.Ghost3 -> Ghost3Screen(vals)
+                ScreenId.Disconnect -> DisconnectScreen()
+                ScreenId.Settings -> SettingsScreen()
+                ScreenId.WinInsiders -> WinInsidersScreen(vals)
+                ScreenId.WinResidents -> WinResidentsScreen()
             }
         }
     }
 }
 
-/**
- * A screen that has not been ported yet, saying so loudly.
- *
- * **Not a blank placeholder.** A screen that renders as plausible emptiness is indistinguishable
- * from a screen that renders correctly and happens to be sparse, and this interface has several
- * genuinely sparse screens. If it is not built, it has to say it is not built.
- */
-@Composable
-private fun NotPorted(id: ScreenId) {
-    Box(Modifier.fillMaxSize(), Alignment.Center) {
-        Label(
-            "NOT PORTED\n${id.name.uppercase()}",
-            size = 8.0, color = Amber.Faint, tracking = 0.2, lineHeight = 2.0,
-            align = TextAlign.Center,
-        )
-    }
-}
