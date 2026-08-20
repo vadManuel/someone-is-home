@@ -13,6 +13,34 @@ import kotlin.test.assertTrue
 class RecordingTest {
 
     /**
+     * A refused event is recorded, and a recording that includes refusals replays identically.
+     *
+     * **An unrecorded refusal is an invisible drop.** The gate exists so the recording's effect
+     * rows and state rows stop disagreeing about a round that had not begun; a gate that silently
+     * swallowed events would fix that by creating a different disagreement, where the recording no
+     * longer says what reached the rules at all.
+     */
+    @Test
+    fun `refusals are recorded and replay identically`() {
+        val events = listOf(
+            Event.MeetingCalled(Tick(0), Seat(2)),
+            Event.ContactMade(Tick(1), Seat(1), Seat(2)),
+        ) + round()
+        val (_, recording) = record(GameState.EMPTY, events)
+        assertEquals(2, recording.refusalTranscript.size, recording.refusalTranscript.toString())
+        assertTrue(recording.refusalTranscript[0].contains("event=MeetingCalled"))
+        assertTrue(recording.refusalTranscript[0].contains("reason=RoundNotArmed"))
+        assertTrue(recording.toText().contains("\nX Refused|"), "refusals are absent from the text form")
+        assertEquals(ReplayResult.Identical, replay(GameState.EMPTY, recording))
+    }
+
+    /** A round that never refuses anything records no refusal rows. */
+    @Test
+    fun `a clean round records no refusals`() {
+        assertEquals(emptyList(), record(GameState.EMPTY, round()).second.refusalTranscript)
+    }
+
+    /**
      * **The state row records every field of authority state, including `ended`.**
      *
      * State rows exist so that a build where a transition silently stopped happening cannot
@@ -75,6 +103,7 @@ class RecordingTest {
                 it[7] = it[7].replace("cooldownStarted=true", "cooldownStarted=false")
                     .replace("luminance=1", "luminance=2")
             },
+            refusalTranscript = recording.refusalTranscript,
         )
         val result = replay(GameState.EMPTY, corrupted)
         assertTrue(result is ReplayResult.Diverged, "a corrupted recording must not replay clean")
@@ -89,6 +118,7 @@ class RecordingTest {
         val short = Recording(
             recording.initialState, recording.events,
             recording.effectTranscript.dropLast(1), recording.stateTranscript,
+            recording.refusalTranscript,
         )
         val result = replay(GameState.EMPTY, short)
         assertTrue(result is ReplayResult.Diverged)
@@ -157,6 +187,7 @@ class RecordingTest {
             events = recording.events,
             effectTranscript = recording.effectTranscript,
             stateTranscript = recording.stateTranscript.map { it.replace("revoked=3", "revoked=") },
+            refusalTranscript = recording.refusalTranscript,
         )
 
         val result = replay(GameState.EMPTY, asIfRevokeDidNothing)

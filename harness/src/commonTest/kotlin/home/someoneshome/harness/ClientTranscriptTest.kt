@@ -6,6 +6,7 @@ import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
 import home.someoneshome.model.Role
 import home.someoneshome.model.RoundState
+import home.someoneshome.model.MarkerId
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
 import kotlin.test.Test
@@ -192,22 +193,28 @@ class ClientTranscriptTest {
     }
 
     /**
-     * D-066's severity, made visible. Pre-arm events still reach the rules and still emit
-     * effects — the gate is decided and not built. What stops those effects reaching a phone
-     * today is that an unarmed state has no seats, so the audience is empty. **That is a
-     * coincidence of state shape, not a refusal**, and this test says so rather than passing as
-     * if the gate existed.
+     * **D-066's gate, from the client side. This test replaced a tripwire that fired.**
+     *
+     * It used to assert the opposite — that the rules still emitted effects for pre-arm events,
+     * and that what stopped them reaching a phone was the coincidence that an unarmed state has
+     * no seats to address. That was a coincidence of state shape, not a refusal, and the test
+     * said so and failed the day the gate was built. This is what it becomes.
      */
     @Test
-    fun `pre-arm effects reach nobody - but only because nobody is seated`() {
+    fun `pre-arm events are refused before the rules see them`() {
         val preArm = listOf(
             Event.MeetingCalled(Tick(0), Seat(3)),
-            Event.SubroutineCompleted(Tick(1), Seat(3), home.someoneshome.model.MarkerId("m0")),
+            Event.SubroutineCompleted(Tick(1), Seat(3), MarkerId("m0")),
         )
-        assertTrue(
-            effectsOf(GameState.EMPTY, preArm).isNotEmpty(),
-            "the rules refused a pre-arm event; D-066's gate may now exist, so update this test",
+        assertEquals(
+            emptyList(), effectsOf(GameState.EMPTY, preArm),
+            "a pre-arm event still reached the rules and emitted an effect",
         )
         assertEquals(emptyList(), recordPerClient(GameState.EMPTY, preArm).perClient.map { it.seat })
+
+        // And the refusal is recorded, so this is a refusal rather than an invisible drop.
+        val (_, recording) = record(GameState.EMPTY, preArm)
+        assertEquals(2, recording.refusalTranscript.size, "the gate swallowed events silently")
+        assertTrue(recording.refusalTranscript.all { it.contains("reason=RoundNotArmed") })
     }
 }
