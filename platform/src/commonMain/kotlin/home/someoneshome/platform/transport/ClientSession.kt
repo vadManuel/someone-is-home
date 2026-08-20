@@ -29,6 +29,12 @@ import home.someoneshome.model.protocol.TransportRefusal
  * Pure, single-threaded (D4), time handed in as monotonic milliseconds.
  */
 class ClientSession(
+    /**
+     * The token a relaunched process read back from [home.someoneshome.platform.loadSeatToken].
+     * A session restored this way NEVER says Hello — it was seated once, the seat is its
+     * token's, and a fresh process is just a very long socket loss.
+     */
+    restored: SeatToken? = null,
     private val backoff: ReconnectBackoff = ReconnectBackoff(),
 ) {
 
@@ -50,7 +56,8 @@ class ClientSession(
         data class Dismissed(val reason: TransportRefusal) : Phase
     }
 
-    var phase: Phase = Phase.Joining
+    var phase: Phase =
+        restored?.let { Phase.Rejoining(it, attempt = 0, nextAttemptAtMillis = 0) } ?: Phase.Joining
         private set
 
     /**
