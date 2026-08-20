@@ -101,7 +101,7 @@ private fun BoxScope.BannerBody(
  * or whose completion would free it, because that would tell you what someone else is doing.
  */
 @Composable
-fun WorkScreen() {
+fun WorkScreen(vals: PanelVals) {
     val go = navigator()
     Column(
         Modifier.fillMaxSize().padding(8.u),
@@ -111,23 +111,25 @@ fun WorkScreen() {
             BackChevron(ScreenId.Home, Amber.Dim)
             Label("SUBROUTINES", size = 7.0, color = Amber.Dim, tracking = 0.16)
             Label(
-                "3 OF 7 DONE",
+                "${vals.current.done} OF ${vals.current.total} DONE",
                 modifier = Modifier.weight(1f),
                 size = 7.0, color = Amber.Bright, tracking = 0.16, align = TextAlign.End,
             )
         }
 
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.u)) {
-            WorkRow("REPLAY", "HALL", "diamond", done = true)
-            WorkRow("SHORT", "GARAGE", "arrow_right", done = true)
-            WorkRow("JAM", "BED 2", "cross", done = true)
-            WorkRow("SNIFF", "GARAGE", "triangle_up", current = true) { go(ScreenId.Scan) }
+            WorkRow("REPLAY", "HALL", MarkerShapes["diamond"], done = true)
+            WorkRow("SHORT", "GARAGE", MarkerShapes["arrow_right"], done = true)
+            WorkRow("JAM", "BED 2", MarkerShapes["cross"], done = true)
+            WorkRow(
+                vals.current.name, vals.current.room, vals.current.marker, current = true,
+            ) { go(ScreenId.Scan) }
             // The design's fixture used a hexagon; the vetted roster has none, because the
             // legibility pass cut everything reading as "circle with corners". The first
             // substitution was `trapezoid`, which at 10 units read as the same amber wedge as
             // SNIFF's triangle two rows up -- exactly the confusion the roster exists to avoid.
             // A frame is topologically distinct from every solid shape in this list.
-            WorkRow("ARRAY WIPE", "STUDY", "square_frame")
+            WorkRow("ARRAY WIPE", "STUDY", MarkerShapes["square_frame"])
             WorkLocked()
             WorkLocked()
         }
@@ -145,7 +147,7 @@ fun WorkScreen() {
 private fun WorkRow(
     name: String,
     room: String,
-    shapeId: String,
+    shape: MarkerShape?,
     done: Boolean = false,
     current: Boolean = false,
     onClick: (() -> Unit)? = null,
@@ -188,7 +190,7 @@ private fun WorkRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Label(room, size = 6.0, color = meta)
-            MarkerShapes[shapeId]?.let { MarkerGlyph(it, if (current) 11.u else 10.u, meta) }
+            shape?.let { MarkerGlyph(it, if (current) 11.u else 10.u, meta) }
         }
     }
 }
@@ -345,13 +347,18 @@ fun ScanCaughtScreen(vals: PanelVals) {
             verticalArrangement = Arrangement.spacedBy(8.u, Alignment.CenterVertically),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            vals.lastRegistered?.let { MarkerGlyph(it, 52.u, Amber.Bright) }
+            // The marker you just scanned -- the same shape the work order sent you to, not the
+            // host-setup fixture this used to read by mistake.
+            vals.current.marker?.let { MarkerGlyph(it, 52.u, Amber.Bright) }
             Label(
-                "PURGE THE\nMEDIA CACHE",
+                vals.current.instruction,
                 size = 13.0, color = Amber.Bright, tracking = 0.06, lineHeight = 1.4,
                 align = TextAlign.Center,
             )
-            Label("GARAGE . SUBROUTINE 4 OF 7", size = 7.0, color = Amber.Dim, tracking = 0.12)
+            Label(
+                "${vals.current.room} . SUBROUTINE ${vals.current.index} OF ${vals.current.total}",
+                size = 7.0, color = Amber.Dim, tracking = 0.12,
+            )
             Label("THE CARD IN YOUR HAND MATCHES", size = 6.0, color = Amber.Faint, tracking = 0.1)
         }
 

@@ -57,15 +57,15 @@ fun HomeScreen(vals: PanelVals, widget: @Composable (PanelVals) -> Unit = { Inte
                     verticalArrangement = Arrangement.spacedBy(3.u),
                 ) {
                     Label("NEXT SUBROUTINE", size = 6.0, color = Amber.Dim, tracking = 0.12)
-                    Label("SNIFF", size = 9.0, color = Amber.Bright, tracking = 0.06)
+                    Label(vals.current.name, size = 9.0, color = Amber.Bright, tracking = 0.06)
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(4.u),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Label("GARAGE", size = 6.5, color = Amber.Mid, tracking = 0.08)
+                        Label(vals.current.room, size = 6.5, color = Amber.Mid, tracking = 0.08)
                         // The marker is named by its SHAPE, not by a number. This is the same
                         // token printed on the card the player is walking towards.
-                        MarkerShapes["triangle_up"]?.let { MarkerGlyph(it, 11.u, Amber.Mid) }
+                        vals.current.marker?.let { MarkerGlyph(it, 11.u, Amber.Mid) }
                     }
                 }
                 Column(
@@ -74,8 +74,14 @@ fun HomeScreen(vals: PanelVals, widget: @Composable (PanelVals) -> Unit = { Inte
                     verticalArrangement = Arrangement.spacedBy(3.u),
                 ) {
                     Label("COMPLETED", size = 6.0, color = Amber.Dim, tracking = 0.12)
-                    Readout("3", size = 26.0, color = Amber.Bright, lineHeight = 0.95)
-                    Label("OF 7 ASSIGNED", size = 5.5, color = Amber.Dim, tracking = 0.08)
+                    Readout(
+                        "${vals.current.done}",
+                        size = 26.0, color = Amber.Bright, lineHeight = 0.95,
+                    )
+                    Label(
+                        "OF ${vals.current.total} ASSIGNED",
+                        size = 5.5, color = Amber.Dim, tracking = 0.08,
+                    )
                 }
             }
 

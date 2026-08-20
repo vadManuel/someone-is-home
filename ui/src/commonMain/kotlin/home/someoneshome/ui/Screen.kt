@@ -52,7 +52,7 @@ fun Screen(state: PanelState, actions: PanelActions = PanelActions()) {
                 ScreenId.Page2 -> Page2Screen(vals)
 
                 ScreenId.Banner -> HomeScreen(vals)
-                ScreenId.Work -> WorkScreen()
+                ScreenId.Work -> WorkScreen(vals)
                 ScreenId.Scan -> ScanScreen()
                 ScreenId.ScanCaught -> ScanCaughtScreen(vals)
                 ScreenId.ScanBad -> ScanBadScreen()
