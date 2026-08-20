@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
@@ -85,6 +86,7 @@ fun Label(
     lineHeight: Double? = null,
     weight: FontWeight = FontWeight.Normal,
     align: TextAlign? = null,
+    decoration: TextDecoration? = null,
     maxLines: Int = Int.MAX_VALUE,
     overflow: TextOverflow = TextOverflow.Clip,
 ) {
@@ -92,6 +94,7 @@ fun Label(
         text = text,
         modifier = modifier,
         style = TextStyle(
+            textDecoration = decoration,
             fontFamily = PanelType.label,
             fontSize = size.sp,
             color = color,

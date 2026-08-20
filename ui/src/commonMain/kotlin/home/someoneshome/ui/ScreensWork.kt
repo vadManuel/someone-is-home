@@ -99,9 +99,12 @@ fun WorkScreen() {
             WorkRow("SHORT", "GARAGE", "arrow_right", done = true)
             WorkRow("JAM", "BED 2", "cross", done = true)
             WorkRow("SNIFF", "GARAGE", "triangle_up", current = true) { go(ScreenId.Scan) }
-            // The design's fixture used a hexagon here; the vetted roster has none, because the
-            // legibility pass cut everything that reads as "circle with corners".
-            WorkRow("ARRAY WIPE", "STUDY", "trapezoid")
+            // The design's fixture used a hexagon; the vetted roster has none, because the
+            // legibility pass cut everything reading as "circle with corners". The first
+            // substitution was `trapezoid`, which at 10 units read as the same amber wedge as
+            // SNIFF's triangle two rows up -- exactly the confusion the roster exists to avoid.
+            // A frame is topologically distinct from every solid shape in this list.
+            WorkRow("ARRAY WIPE", "STUDY", "square_frame")
             WorkLocked()
             WorkLocked()
         }
@@ -153,6 +156,9 @@ private fun WorkRow(
             size = if (current) 8.5 else 7.5,
             color = ink,
             tracking = if (current) 0.06 else 0.0,
+            // Struck through as well as dimmed. Dim alone is ambiguous on this screen, where
+            // "faint" is also how a locked row reads.
+            decoration = if (done) TextDecoration.LineThrough else null,
         )
         Row(
             horizontalArrangement = Arrangement.spacedBy(4.u),

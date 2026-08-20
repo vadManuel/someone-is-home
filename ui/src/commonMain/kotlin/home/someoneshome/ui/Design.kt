@@ -11,7 +11,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import home.someoneshome.ui.generated.resources.Res
-import home.someoneshome.ui.generated.resources.Silkscreen_Bold
 import home.someoneshome.ui.generated.resources.Silkscreen_Regular
 import home.someoneshome.ui.generated.resources.VT323_Regular
 import org.jetbrains.compose.resources.Font
@@ -108,11 +107,19 @@ object Amber {
  * does not soften the look — it removes the device.
  */
 object PanelType {
+    /**
+     * **One weight. Silkscreen Bold is not shipped, and must not be re-added.**
+     *
+     * Its `W` and `M` fill solid — the diagonals close up at bold stroke width, so "WIN" renders
+     * as a blob. The design asks for weight 700 on exactly the headings that contain those
+     * letters ("INSIDERS WIN", "RESIDENTS WIN", "AND WALK IN"), which is how it was found.
+     *
+     * No loss: at 6-21 units a pixel face has no room to carry weight as emphasis anyway. This
+     * interface does emphasis by **inversion and size**, which is what an amber panel actually
+     * does, and which is why the palette has four luminance steps rather than two weights.
+     */
     val label: FontFamily
-        @Composable get() = FontFamily(
-            Font(Res.font.Silkscreen_Regular, FontWeight.Normal),
-            Font(Res.font.Silkscreen_Bold, FontWeight.Bold),
-        )
+        @Composable get() = FontFamily(Font(Res.font.Silkscreen_Regular, FontWeight.Normal))
 
     val readout: FontFamily
         @Composable get() = FontFamily(Font(Res.font.VT323_Regular))
