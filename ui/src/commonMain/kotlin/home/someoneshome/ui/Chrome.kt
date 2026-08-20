@@ -51,7 +51,11 @@ fun StatusBar(vals: PanelVals) {
             maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
 
-        if (vals.armedGlyph) PerimeterGlyph(ring = Amber.Bright, core = Amber.Bright)
+        // The iris follows the panel's ink rather than being pinned to full intensity. The
+        // design hardcodes #FFC759 here, which left it the single brightest element on the very
+        // screens that dim everything else -- and a 7-unit lit ring is exactly the kind of thing
+        // that carries across a dark room when the text does not.
+        if (vals.armedGlyph) PerimeterGlyph(ring = vals.ink, core = vals.ink)
         if (vals.disarmedGlyph) PerimeterGlyph(ring = vals.dim, core = vals.edge)
 
         if (vals.lockChip) {

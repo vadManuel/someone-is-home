@@ -94,7 +94,9 @@ class PanelVals(val state: PanelState) {
     // ---- Status bar ---------------------------------------------------------------------
 
     val mode: PanelMode = when (state.screen) {
-        ScreenId.Lock, ScreenId.Ghost2, ScreenId.Scan -> PanelMode.Hidden
+        // Only the two screens that paint a full amber field of their own. Ghost2 used to be
+        // one of them and is now an ordinary dark-field screen.
+        ScreenId.Lock, ScreenId.Scan -> PanelMode.Hidden
 
         ScreenId.Boot, ScreenId.Join, ScreenId.Maps, ScreenId.Editor, ScreenId.SaveName,
         ScreenId.HomeDetail, ScreenId.Delete, ScreenId.Secret, ScreenId.RoomEdit,
@@ -111,14 +113,40 @@ class PanelVals(val state: PanelState) {
     val isPre: Boolean get() = mode == PanelMode.Pre
     val statusVisible: Boolean get() = mode != PanelMode.Hidden
 
-    val ink: Color = if (isPre) Amber.BoneInk else Amber.Bright
-    val dim: Color = if (isPre) Amber.BoneDim else Amber.Dim
+    /**
+     * Screens whose whole job is to emit as little light as possible — **the status bar
+     * included**.
+     *
+     * A bright bar above deliberately dim text is the same flare the screen exists to avoid, and
+     * it is worse than a bright body would be, because chrome is the part nobody thinks to check.
+     * On a revoked phone it was the brightest thing on screen.
+     */
+    private val concealed: Boolean = state.screen in setOf(
+        ScreenId.Revoked, ScreenId.Sub, ScreenId.Ghost3, ScreenId.GhostMeeting,
+        ScreenId.Disconnect, ScreenId.Ghost2,
+    )
+
+    val ink: Color = when {
+        isPre -> Amber.BoneInk
+        concealed -> Amber.Dim
+        else -> Amber.Bright
+    }
+    val dim: Color = when {
+        isPre -> Amber.BoneDim
+        concealed -> Amber.Faint
+        else -> Amber.Dim
+    }
     val edge: Color = if (isPre) Amber.BoneEdge else Amber.Edge
 
+    /**
+     * The carrier names the state once you are out, and distinguishes the two ways it happened —
+     * REVOKED in the dark, RESTRAINED by the room.
+     */
     val carrier: String = when {
         state.screen == ScreenId.WinResidents -> "SOMEONE'S HOME"
         isPre -> ""
-        mode == PanelMode.Ghost -> "UNREGISTERED"
+        state.screen == ScreenId.Revoked -> "REVOKED"
+        mode == PanelMode.Ghost -> "RESTRAINED"
         else -> "SOMEONE'S HOME"
     }
 
@@ -366,11 +394,14 @@ class PanelVals(val state: PanelState) {
     /** Both bars, seen only from outside the system. */
     val outsideLit: Int = 21
 
-    /** The meeting clock. */
-    val meetingLit: Int = 14
+    /** 24 seconds left of a 60-second vote window. */
+    val meetingLit: Int = 12
 
     companion object {
         const val METER_SEGMENTS = 32
+
+        /** The vote clock is its own bar: 30 segments, not the meter's 32. */
+        const val VOTE_SEGMENTS = 30
 
         /**
          * The scan's own countdown, and it is a safety device rather than a progress bar.

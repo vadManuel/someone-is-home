@@ -244,7 +244,7 @@ fun RevealThreadScreen(vals: PanelVals) {
             ThreadMessage("20:58", "Occupancy nominal. Access reviewed and retained.")
             ThreadMessage(
                 "20:59",
-                "Work order issued. 7 subroutines assigned. Begin at your convenience.",
+                "Seven subroutines assigned. Begin at your convenience.",
             )
             ThreadMessage(
                 "21:02 . NEW", vals.houseLine,

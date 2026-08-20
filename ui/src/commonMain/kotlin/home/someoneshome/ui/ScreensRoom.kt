@@ -137,7 +137,7 @@ fun AssembleScreen() {
         )
         Box(Modifier.width(30.u).height(1.u).background(Amber.Faint))
         Label(
-            "THE LAMPS ARE UP.\nDO NOT SPEAK UNTIL\nEVERYONE HAS ARRIVED.",
+            "DO NOT SPEAK UNTIL\nEVERYONE HAS ARRIVED.",
             size = 7.0, color = Amber.Dim, tracking = 0.1, lineHeight = 2.1,
             align = TextAlign.Center,
         )
@@ -151,7 +151,7 @@ fun AssembleScreen() {
         ) {
             Label("I AM HERE", size = 8.5, color = Amber.Bright, tracking = 0.2)
         }
-        Label("4 OF 6 CHECKED IN . TALK BEGINS AT 6", size = 6.0, color = Amber.Faint, tracking = 0.12)
+        Label("4 OF 6 CHECKED IN", size = 6.0, color = Amber.Faint, tracking = 0.12)
     }
 }
 
@@ -267,7 +267,7 @@ fun VoteScreen() {
         }
 
         Label(
-            "4 OF 6 VOTED . NO VOTE IS AN ABSTENTION",
+            "4 OF 6 VOTED . NOT VOTING COUNTS AS A SKIP",
             modifier = Modifier.fillMaxWidth(),
             size = 6.5, color = Amber.Faint, tracking = 0.1, align = TextAlign.Center,
         )
@@ -309,9 +309,9 @@ fun TallyScreen() {
     ) {
         Label("RESTRAIN . RESULT", size = 7.0, color = Amber.Dim, tracking = 0.16)
 
-        TallyRow("MARCUS", 3, "PRIYA . DANI . ROSE", border = Amber.Bright, nameInk = Amber.Bright, whoInk = Amber.Dim)
-        TallyRow("SKIP", 2, "MARCUS . TOMAS")
-        TallyRow("PRIYA", 1, "ELLIOT")
+        TallyRow("MARCUS", 3, border = Amber.Bright, nameInk = Amber.Bright)
+        TallyRow("SKIP", 2)
+        TallyRow("PRIYA", 1)
 
         Box(Modifier.weight(1f))
 
@@ -339,27 +339,26 @@ fun TallyScreen() {
     }
 }
 
+/**
+ * A count and nothing else.
+ *
+ * **The living never learn who cast what.** Attribution used to publish here; it does not, and
+ * that is what makes the outside-the-system view an actual privilege rather than a preview. It
+ * also means your own vote stays yours, which is a different game from one where it does not.
+ */
 @Composable
 private fun TallyRow(
     name: String,
     count: Int,
-    who: String,
     border: Color = Amber.Edge,
     nameInk: Color = Amber.Mid,
-    whoInk: Color = Amber.Faint,
 ) {
-    Column(
+    Row(
         Modifier.fillMaxWidth().border(1.u, border).padding(7.u),
-        verticalArrangement = Arrangement.spacedBy(3.u),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Bottom,
     ) {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            Label(name, size = 9.0, color = nameInk)
-            Readout("$count", size = 17.0, color = nameInk, lineHeight = 1.0)
-        }
-        Label(who, size = 6.0, color = whoInk, tracking = 0.08)
+        Label(name, size = 9.0, color = nameInk)
+        Readout("$count", size = 17.0, color = nameInk, lineHeight = 1.0)
     }
 }

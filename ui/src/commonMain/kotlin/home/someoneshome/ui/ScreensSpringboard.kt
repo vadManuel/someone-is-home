@@ -237,7 +237,7 @@ private fun Dock() {
     Row(
         Modifier.fillMaxWidth().edgeLine(PanelSide.Top, Amber.Faint).background(Amber.Edge),
     ) {
-        DockButton("WORK", PanelIcons.Work, Modifier.weight(1f), divider = true) { go(ScreenId.Work) }
+        DockButton("SUBROUTINES", PanelIcons.Work, Modifier.weight(1f), divider = true) { go(ScreenId.Work) }
         DockButton("SCAN", PanelIcons.Scan, Modifier.weight(1f), divider = true) { go(ScreenId.Scan) }
         DockButton("LOCK SCREEN", PanelIcons.Lock, Modifier.weight(1f)) { go(ScreenId.Lock) }
     }
