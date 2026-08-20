@@ -239,7 +239,7 @@ fun GhostMeetingScreen(vals: PanelVals) {
         }
 
         Label(
-            "THE DEACTIVATED SEE EVERY VOTE AND WHO CAST IT.\nTHE LIVING SEE ONLY THE TALLY.",
+            "THE REVOKED SEE EVERY VOTE AND WHO CAST IT.\nTHE LIVING SEE ONLY THE TALLY.",
             modifier = Modifier.fillMaxWidth(),
             size = 6.0, color = Amber.Faint, tracking = 0.1, lineHeight = 1.8,
             align = TextAlign.Center,
@@ -393,7 +393,14 @@ fun SettingsScreen() {
             Label("SETTINGS", size = 7.0, color = Amber.Dim, tracking = 0.16)
         }
 
-        SettingRow("DO NOT DISTURB", "OFF", Amber.Mid, Amber.Dim)
+        // Off, and inert. It is here for the device fiction and nothing else.
+        //
+        // A WORKING ONE WOULD BREAK THE BANNER DIM. Every banner goes to everyone at once and
+        // drops every lamp together; a player who had suppressed theirs would be the one phone
+        // in the room that did not react, which is a beacon. They would also miss the Egress
+        // alert. So it renders at the same intensity as the locked rows -- present, legible,
+        // and visibly not a control.
+        SettingRow("DO NOT DISTURB", "OFF", Amber.Faint, Amber.Faint)
         SettingRow("NETWORK", "LOCKED", Amber.Faint, Amber.Faint)
         SettingRow("PERMISSIONS", "LOCKED", Amber.Faint, Amber.Faint)
         SettingRow("OCCUPANCY", "LOCKED", Amber.Faint, Amber.Faint)

@@ -127,8 +127,18 @@ object VocabularyRules {
         "murder" to "use Revoke",
         "corpse" to "nobody dies — there is no body",
         "victim" to "use target, or revoked player",
+        "deactivat" to "use Revoke — the state is REVOKED, on screen as well as in code",
     )
 
+    /**
+     * Every word on the line, which — because [SourceText.blankComments] deliberately keeps
+     * string contents intact — means **player-facing copy is scanned too**, not only identifiers.
+     *
+     * That is load-bearing rather than incidental. The vocabulary is closed *on screen* as much
+     * as in code: `DEACTIVATED` reached two screens as a synonym for REVOKED, and the device
+     * ended up contradicting itself about what to call the same state, while the `revoked` screen
+     * said ACCESS REVOKED three taps away. Nothing about that is visible in a diff.
+     */
     private val IDENTIFIER = Regex("""[A-Za-z_][A-Za-z0-9_]*""")
 
     fun violations(source: String): List<Violation> {

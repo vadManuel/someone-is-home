@@ -115,4 +115,21 @@ class VocabularyRulesTest {
         val v = VocabularyRules.violations("/*\n * filler\n */\nval victimSeat = 3")
         assertEquals(4, v.single().line)
     }
+
+    @Test
+    fun `a vocabulary synonym in player-facing copy is caught, not just in identifiers`() {
+        val src = """
+            fun screen() {
+                Label("DEACTIVATED RESIDENT FOUND")
+            }
+        """.trimIndent()
+        val found = VocabularyRules.violations(src)
+        assertTrue(found.any { it.text == "DEACTIVATED" }, "expected the copy to trip: ${'$'}found")
+    }
+
+    @Test
+    fun `the word it should have been is not itself a violation`() {
+        val src = """Label("REVOKED RESIDENT FOUND")"""
+        assertEquals(emptyList(), VocabularyRules.violations(src))
+    }
 }
