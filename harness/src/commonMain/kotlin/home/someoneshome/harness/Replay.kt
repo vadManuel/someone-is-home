@@ -17,7 +17,7 @@ sealed interface ReplayResult {
         val expected: String?,
         val actual: String?,
     ) : ReplayResult {
-        enum class Kind { INITIAL_STATE, EFFECT, STATE }
+        enum class Kind { INITIAL_STATE, EFFECT, STATE, REFUSAL }
 
         override fun toString(): String = when (kind) {
             Kind.INITIAL_STATE ->
@@ -26,6 +26,8 @@ sealed interface ReplayResult {
                 "diverged at effect $index: recording had ${expected ?: "<end>"}, replay produced ${actual ?: "<end>"}"
             Kind.STATE ->
                 "diverged in state after event $index: recording had ${expected ?: "<end>"}, replay produced ${actual ?: "<end>"}"
+            Kind.REFUSAL ->
+                "diverged at refusal $index: recording had ${expected ?: "<end>"}, replay produced ${actual ?: "<end>"}"
         }
     }
 }
@@ -42,7 +44,10 @@ sealed interface ReplayResult {
  * 1. **The starting state**, because a recording replayed from elsewhere produced a different
  *    outcome and still certified as identical.
  * 2. **The effect stream**, which is what clients would have seen.
- * 3. **The authority state after every event**, which is what the effect stream is REQUIRED to
+ * 3. **Every refusal by the admission gate** (D-066), which is the only record that an event
+ *    arrived at all and was turned away. Without these rows a refused event and an event that
+ *    never happened are the same recording.
+ * 4. **The authority state after every event**, which is what the effect stream is REQUIRED to
  *    hide. Rule 1 makes effects invariant across a landed and a refused revoke, so without state
  *    rows a build with the revoke ability entirely disabled replays clean.
  */
@@ -59,6 +64,8 @@ fun replay(initial: GameState, recording: Recording): ReplayResult {
     compare(recording.effectTranscript, fresh.effectTranscript, ReplayResult.Diverged.Kind.EFFECT)
         ?.let { return it }
     compare(recording.stateTranscript, fresh.stateTranscript, ReplayResult.Diverged.Kind.STATE)
+        ?.let { return it }
+    compare(recording.refusalTranscript, fresh.refusalTranscript, ReplayResult.Diverged.Kind.REFUSAL)
         ?.let { return it }
 
     return ReplayResult.Identical

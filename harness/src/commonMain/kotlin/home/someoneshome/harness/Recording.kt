@@ -1,6 +1,7 @@
 package home.someoneshome.harness
 
-import home.someoneshome.core.reduce
+import home.someoneshome.core.Admission
+import home.someoneshome.core.admit
 import home.someoneshome.model.Effect
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
@@ -29,37 +30,61 @@ class Recording(
     val events: List<Event>,
     val effectTranscript: List<String>,
     val stateTranscript: List<String>,
+    /**
+     * Events the admission gate refused (D-066), in arrival order.
+     *
+     * **Recorded, because an unrecorded refusal is an invisible drop.** The gate exists to stop
+     * the recording's effect rows and state rows disagreeing about a round that had not begun; a
+     * gate that silently swallowed events would fix that disagreement by creating a different
+     * one, where the recording no longer says what reached the rules at all.
+     */
+    val refusalTranscript: List<String>,
 ) {
     fun toText(): String = buildString {
         appendLine(HEADER)
         appendLine("I $initialState")
         events.forEach { appendLine("E ${Transcript.render(it)}") }
+        refusalTranscript.forEach { appendLine("X $it") }
         effectTranscript.forEach { appendLine("F $it") }
         stateTranscript.forEach { appendLine("S $it") }
     }
 
     companion object {
-        const val HEADER = "someone-is-home/recording/3"
+        const val HEADER = "someone-is-home/recording/4"
     }
 }
 
 /**
- * The one walk through the rules, shared by everything in this module that runs a round.
+ * The one walk through the authority, shared by everything in this module that runs a round.
  *
- * [onStep] receives the state AFTER the event and the effects that event emitted. Every capture
- * — the recording, the effect list, the per-client transcripts — is a different observer of the
+ * **Goes through [admit], not [home.someoneshome.core.reduce].** The admission gate is part of
+ * the authority, so a harness that called the rules directly would be exercising a path no real
+ * client can reach — and would have gone on certifying pre-arm effects as correct.
+ *
+ * [onStep] receives the state AFTER the event and the effects that event emitted. [onRefusal]
+ * receives the event's index in the list, the event, and why the gate refused it. Every capture —
+ * the recording, the effect list, the per-client transcripts — is a different observer of the
  * same walk, so no two of them can disagree about what the round did.
  */
 internal inline fun drive(
     initial: GameState,
     events: List<Event>,
+    // Before `onStep` so that `onStep` stays the trailing lambda: a caller that only cares about
+    // effects reads as `drive(initial, events) { after, emitted -> ... }` and cannot accidentally
+    // bind its lambda to the refusal hook instead.
+    onRefusal: (Int, Event, home.someoneshome.model.RefusalReason) -> Unit = { _, _, _ -> },
     onStep: (GameState, List<Effect>) -> Unit,
 ): GameState {
     var state = initial
-    for (event in events) {
-        val reduction = reduce(state, event)
-        state = reduction.state
-        onStep(state, reduction.effects)
+    events.forEachIndexed { index, event ->
+        when (val admission = admit(state, event)) {
+            is Admission.Admitted -> {
+                state = admission.reduction.state
+                onStep(state, admission.reduction.effects)
+            }
+            // No state change and no effects. Refusing is not a quiet version of reducing.
+            is Admission.Refused -> onRefusal(index, event, admission.reason)
+        }
     }
     return state
 }
@@ -73,7 +98,11 @@ internal inline fun drive(
 fun record(initial: GameState, events: List<Event>): Pair<GameState, Recording> {
     val effects = mutableListOf<String>()
     val states = mutableListOf<String>()
-    val state = drive(initial, events) { after, emitted ->
+    val refusals = mutableListOf<String>()
+    val state = drive(
+        initial, events,
+        onRefusal = { index, event, reason -> refusals += Transcript.render(index, event, reason) },
+    ) { after, emitted ->
         emitted.forEach { effects += Transcript.render(it) }
         states += Transcript.render(after)
     }
@@ -82,6 +111,7 @@ fun record(initial: GameState, events: List<Event>): Pair<GameState, Recording> 
         events = events,
         effectTranscript = effects,
         stateTranscript = states,
+        refusalTranscript = refusals,
     )
 }
 

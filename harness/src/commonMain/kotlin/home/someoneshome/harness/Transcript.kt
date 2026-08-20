@@ -3,6 +3,7 @@ package home.someoneshome.harness
 import home.someoneshome.model.Effect
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
+import home.someoneshome.model.RefusalReason
 import home.someoneshome.model.Seat
 
 /**
@@ -40,6 +41,18 @@ object Transcript {
         is Event.MeetingClosed ->
             row("MeetingClosed", event.at)
     }
+
+    /**
+     * A refusal by the admission gate (D-066).
+     *
+     * Carries the event that was refused as well as the reason, because "something was refused at
+     * tick 40" and "a ContactMade was refused at tick 40" lead to different places — and the
+     * whole point of recording a refusal is that the recording must not disagree with reality
+     * about what reached the rules.
+     */
+    fun render(index: Int, event: Event, reason: RefusalReason): String =
+        "Refused|index=${num(index)}|at=${num(event.at.step)}|" +
+            "event=${render(event).substringBefore('|')}|reason=$reason"
 
     fun render(effect: Effect): String = when (effect) {
         is Effect.LampSet ->
