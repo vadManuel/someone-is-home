@@ -101,11 +101,17 @@ object Transcript {
      * weakest possible evidence. A build where the revoke ability did nothing at all replayed
      * clean against a recording made before it was broken.
      *
+     * **Every field of authority state, with no exceptions for fields nothing writes yet.** A
+     * field this row omits is a field that guarantee does not cover, and `ended` is the worst
+     * possible omission to make: it feeds `roundStateOf`, so it decides what every client is
+     * permitted to receive. It was omitted for exactly one commit.
+     *
      * State rows close that hole. They never go to a client — this is authority-side debugging
      * tooling, and `GameState` still has no wire encoding.
      */
     fun render(state: GameState): String = buildString {
         append("armed=").append(state.armed)
+        append("|ended=").append(state.ended)
         append("|seats=").append(state.seats.joinToString(",") { num(it.index) })
         append("|insiders=").append(state.insiderSeats.joinToString(",") { num(it.index) })
         append("|revoked=").append(state.revoked.joinToString(",") { num(it.index) })

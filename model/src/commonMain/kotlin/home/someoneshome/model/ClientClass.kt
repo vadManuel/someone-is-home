@@ -18,6 +18,14 @@ enum class RoundState {
     /**
      * Revoked or restrained: in the building, outside the system.
      *
+     * **Only the revoked half is implemented, and that is a live gap rather than a nuance.**
+     * Nothing in [GameState] stores a restrained player — `Effect.MeetingResolved` carries one
+     * and no state receives it — so a restrained seat still classifies [Live] and keeps every
+     * living-class permission while `ui` renders it the outside-the-system screen. Restrain
+     * cannot borrow the revoked list to fix this: rule 9 forbids collapsing the two, one being
+     * system power lent by the house and the other a physical act it cannot prevent. Closing it
+     * means a second list and a second clause in [roundStateOf].
+     *
      * **The reason the taxonomy needs two axes.** A player who is out sees the real progress bars
      * and true occupancy, which no living player of *either* role may see (gdd.md:1014). Keyed on
      * [Role] alone, the same entry that lets an out Resident see them lets a living Resident see
@@ -48,17 +56,20 @@ data class ClientClass(val role: Role, val roundState: RoundState) {
 /**
  * Which round-state a seat is in.
  *
- * Total, and deliberately ordered so that the *narrowest* condition wins last. Pre-arm dominates
- * because before arming there is no round for anyone to be out of; ended dominates being out
- * because once the round is over every client is in the same after-state.
+ * Total, and the order is load-bearing. A seat that is not seated has no round at all. **[Ended]
+ * outranks `!armed`**, because the round ending disarms the perimeter — checked the other way, a
+ * finished round classifies every seat pre-arm, the pre-arm classes are permitted nothing, and
+ * every phone in the house goes dark at the moment of winning. That presents as a missing effect,
+ * not as a precedence bug. [Ended] also outranks [Out]: once the round is over every client is in
+ * the same after-state.
  *
  * A seat that is not seated at all comes back [RoundState.PreArm] — it has no round. That is the
  * fail-closed direction: [EmitSchema] permits the pre-arm classes nothing.
  */
 fun GameState.roundStateOf(seat: Seat): RoundState = when {
-    !armed -> RoundState.PreArm
     seats.none { it.index == seat.index } -> RoundState.PreArm
     ended -> RoundState.Ended
+    !armed -> RoundState.PreArm
     isRevoked(seat) -> RoundState.Out
     else -> RoundState.Live
 }

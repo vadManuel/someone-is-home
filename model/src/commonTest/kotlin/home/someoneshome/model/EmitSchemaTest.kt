@@ -130,6 +130,21 @@ class EmitSchemaTest {
         assertEquals(RoundState.Ended, out.endRound().roundStateOf(Seat(0)))
     }
 
+    /**
+     * An ended round stays Ended once the perimeter disarms.
+     *
+     * `LAMP_SET` is permitted to the Ended classes precisely so the lamp survives round end. If
+     * `!armed` outranks `ended`, a disarmed finished round classifies every seat as PreArm, which
+     * is permitted nothing, and every phone in the house goes dark — presenting as a missing
+     * effect rather than as a precedence bug.
+     */
+    @Test
+    fun `an ended round outranks a disarmed perimeter`() {
+        val finished = live().endRound().copy(armed = false)
+        assertEquals(RoundState.Ended, finished.roundStateOf(Seat(0)))
+        assertTrue(EmitSchema.permits(EmitSchema.LAMP_SET, finished.clientClassOf(Seat(0))))
+    }
+
     /** Both axes, together, off one state. */
     @Test
     fun client_class_reads_both_axes() {

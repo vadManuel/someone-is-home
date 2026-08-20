@@ -16,7 +16,10 @@ class GameState private constructor(
      * is F-005 (the SystemIntegrity denominator) and is open, so no [Event] sets it. The field
      * exists because the client taxonomy has four round-states and [RoundState.Ended] is one of
      * them: an allowlist that cannot name the ended classes cannot deny them anything either.
-     * Reachable today only through [endRound], which the harness uses to construct the class.
+     * Reachable today only through [endRound], whose sole caller in the repo is
+     * `model/src/commonTest/.../EmitSchemaTest.kt`. The harness does NOT exercise the ended
+     * classes — said plainly, because in this codebase these comments are the record of what is
+     * and is not covered.
      */
     val ended: Boolean,
     val seats: List<Seat>,
