@@ -9,6 +9,16 @@ package home.someoneshome.model
  */
 class GameState private constructor(
     val armed: Boolean,
+    /**
+     * The round is over.
+     *
+     * **Nothing writes this yet, and that is stated rather than hidden.** The round-end condition
+     * is F-005 (the SystemIntegrity denominator) and is open, so no [Event] sets it. The field
+     * exists because the client taxonomy has four round-states and [RoundState.Ended] is one of
+     * them: an allowlist that cannot name the ended classes cannot deny them anything either.
+     * Reachable today only through [endRound], which the harness uses to construct the class.
+     */
+    val ended: Boolean,
     val seats: List<Seat>,
     val insiderSeats: List<Seat>,
     val revoked: List<Seat>,
@@ -26,8 +36,12 @@ class GameState private constructor(
     fun mintId(): Pair<EntityId, GameState> =
         EntityId(nextEntity) to copy(nextEntity = nextEntity + 1)
 
+    /** The only writer of [ended]. Separate from [copy] so the transition is greppable. */
+    fun endRound(): GameState = copy(ended = true)
+
     fun copy(
         armed: Boolean = this.armed,
+        ended: Boolean = this.ended,
         seats: List<Seat> = this.seats,
         insiderSeats: List<Seat> = this.insiderSeats,
         revoked: List<Seat> = this.revoked,
@@ -35,7 +49,7 @@ class GameState private constructor(
         systemIntegrity: Int = this.systemIntegrity,
         nextEntity: Long = this.nextEntity,
         seed: Long = this.seed,
-    ) = GameState(armed, seats, insiderSeats, revoked, cooldownArmed, systemIntegrity, nextEntity, seed)
+    ) = GameState(armed, ended, seats, insiderSeats, revoked, cooldownArmed, systemIntegrity, nextEntity, seed)
 
     companion object {
         /**
@@ -51,6 +65,7 @@ class GameState private constructor(
             systemIntegrity: Int,
         ) = GameState(
             armed = true,
+            ended = false,
             seats = seats,
             insiderSeats = insiders,
             revoked = emptyList(),
@@ -62,6 +77,7 @@ class GameState private constructor(
 
         val EMPTY = GameState(
             armed = false,
+            ended = false,
             seats = emptyList(),
             insiderSeats = emptyList(),
             revoked = emptyList(),
