@@ -59,6 +59,13 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 
+	<!-- D1: the host embeds a server and every phone connects over the local network. iOS gates
+	     that behind a user prompt, and this string is what the prompt says. The architecture's
+	     warning stands: the prompt must be warmed during setup, in the light -- never at arming
+	     in a dark room. -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>The house connects the players' phones to the host's phone over this network. Nothing leaves the room.</string>
+
 	<!-- So a host can pull a house map or a recording off the device without a cable. The map's
 	     stored form is its export form by construction (game-architecture.md:419). -->
 	<key>UIFileSharingEnabled</key>
