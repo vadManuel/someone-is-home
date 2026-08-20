@@ -40,7 +40,7 @@ class ClientSessionTest {
     @Test
     fun retriesFollowTheBoundedBackoff() {
         val backoff = ReconnectBackoff(baseMillis = 500, capMillis = 4_000)
-        val session = ClientSession(backoff)
+        val session = ClientSession(backoff = backoff)
         session.onSeated(SeatToken("tk-0"))
         val delays = mutableListOf<Long>()
         var now = 100_000L
@@ -56,7 +56,7 @@ class ClientSessionTest {
 
     @Test
     fun aSuccessfulRejoinResetsTheBackoff() {
-        val session = ClientSession(ReconnectBackoff(baseMillis = 500, capMillis = 4_000))
+        val session = ClientSession(backoff = ReconnectBackoff(baseMillis = 500, capMillis = 4_000))
         session.onSeated(SeatToken("tk-0"))
         session.onLost(nowMillis = 1_000)
         session.onLost(nowMillis = 2_000)

@@ -24,7 +24,10 @@ import androidx.compose.ui.unit.sp
 import home.someoneshome.model.Seat
 import home.someoneshome.model.protocol.SeatToken
 import home.someoneshome.model.protocol.TransportFrame
+import home.someoneshome.platform.clearSeatToken
+import home.someoneshome.platform.loadSeatToken
 import home.someoneshome.platform.monotonicNanos
+import home.someoneshome.platform.saveSeatToken
 import home.someoneshome.platform.transport.ClientSession
 import home.someoneshome.platform.transport.SeatLedger
 import home.someoneshome.platform.transport.TransportClient
@@ -73,6 +76,15 @@ class TransportCheat(private val scope: CoroutineScope) {
     private var client: TransportClient? = null
     private var clientJob: Job? = null
     private var pings = 0
+
+    init {
+        // The 0.8 property on relaunch: a killed app reads its token back and resumes as THAT
+        // seat. The restored session never says Hello.
+        loadSeatToken()?.let {
+            session = ClientSession(SeatToken(it))
+            clientPhase = "TOKEN HELD — JOIN TO RESUME"
+        }
+    }
 
     private fun nowMillis(): Long = monotonicNanos() / 1_000_000
 
@@ -135,6 +147,7 @@ class TransportCheat(private val scope: CoroutineScope) {
         session = null
         client = null
         clientPhase = "NOT JOINED"
+        clearSeatToken()
         note("TOKEN FORGOTTEN")
     }
 
