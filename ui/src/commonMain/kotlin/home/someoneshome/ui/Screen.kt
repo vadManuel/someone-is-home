@@ -2,6 +2,7 @@ package home.someoneshome.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.layout.BoxScope
 
 /**
  * The device, showing one screen.
@@ -15,7 +16,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 fun Screen(state: PanelState, actions: PanelActions = PanelActions()) {
     val vals = PanelVals(state)
     CompositionLocalProvider(LocalActions provides actions) {
-        PanelFrame(vals) {
+        PanelFrame(vals, overlay = bannerFor(state.screen)) {
             when (state.screen) {
                 ScreenId.Boot -> BootScreen()
                 ScreenId.Perms -> PermsScreen()
@@ -38,7 +39,11 @@ fun Screen(state: PanelState, actions: PanelActions = PanelActions()) {
 
                 ScreenId.Secret -> SecretScreen()
                 ScreenId.Armed -> ArmedScreen()
-                ScreenId.Notify -> NotifyScreen()
+                // Both banner screens draw the springboard they interrupted, dimmed by the
+                // frame, and hand the banner itself up as an overlay so it stays at full
+                // intensity. "A banner, not a takeover" is only true if what was underneath is
+                // still visible and still recognisable.
+                ScreenId.Notify -> HomeScreen(vals)
                 ScreenId.Reveal -> RevealScreen(vals)
                 ScreenId.RevealThread -> RevealThreadScreen(vals)
                 ScreenId.Lock -> LockScreen()
@@ -46,7 +51,7 @@ fun Screen(state: PanelState, actions: PanelActions = PanelActions()) {
                 ScreenId.Home -> HomeScreen(vals)
                 ScreenId.Page2 -> Page2Screen(vals)
 
-                ScreenId.Banner -> BannerScreen()
+                ScreenId.Banner -> HomeScreen(vals)
                 ScreenId.Work -> WorkScreen()
                 ScreenId.Scan -> ScanScreen()
                 ScreenId.ScanCaught -> ScanCaughtScreen(vals)
@@ -80,5 +85,18 @@ fun Screen(state: PanelState, actions: PanelActions = PanelActions()) {
             }
         }
     }
+}
+
+/**
+ * The full-intensity thing on top, for the two screens that have one.
+ *
+ * Returning non-null is what tells [PanelFrame] to dim the panel behind it, so "this screen has a
+ * banner" and "this screen is dimmed" cannot drift apart.
+ */
+@Composable
+private fun bannerFor(screen: ScreenId): (@Composable BoxScope.() -> Unit)? = when (screen) {
+    ScreenId.Notify -> ({ HouseBanner() })
+    ScreenId.Banner -> ({ EgressBanner() })
+    else -> null
 }
 

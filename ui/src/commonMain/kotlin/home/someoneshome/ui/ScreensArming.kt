@@ -115,52 +115,6 @@ fun ArmedScreen() {
 }
 
 /**
- * The text arrives over the springboard — **a banner, not a takeover**.
- *
- * The springboard behind it is dimmed but still there, because the notification is an event in
- * the house rather than a mode the device enters. Everyone gets one, at the same moment, and the
- * banner is identical on every phone.
- */
-@Composable
-fun NotifyScreen() {
-    val go = navigator()
-    Box(Modifier.fillMaxSize()) {
-        // A ghost of page 1, at 30%. Not a screenshot — the shapes only, so nothing behind the
-        // banner can carry information.
-        Column(
-            Modifier.fillMaxSize().padding(horizontal = 7.u).padding(top = 7.u),
-            verticalArrangement = Arrangement.spacedBy(6.u),
-        ) {
-            val ghost = Amber.Faint.copy(alpha = 0.3f)
-            Box(Modifier.fillMaxWidth().height(46.u).border(1.u, ghost))
-            Row(horizontalArrangement = Arrangement.spacedBy(6.u)) {
-                Box(Modifier.weight(1f).height(44.u).border(1.u, ghost))
-                Box(Modifier.width(78.u).height(44.u).border(1.u, ghost))
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.u)) {
-                repeat(4) { Box(Modifier.weight(1f).height(30.u).border(1.u, ghost)) }
-            }
-        }
-
-        Column(
-            Modifier.padding(6.u).fillMaxWidth().background(Amber.Bright)
-                .tap { go(ScreenId.Reveal) }
-                .padding(horizontal = 8.u, vertical = 7.u),
-            verticalArrangement = Arrangement.spacedBy(3.u),
-        ) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Label("HOUSE", size = 6.0, color = Amber.Black, tracking = 0.14)
-                Label("NOW", size = 6.0, color = Amber.Black, tracking = 0.14)
-            }
-            Label(
-                "Regarding this evening. Please read.",
-                size = 8.0, color = Amber.Black, lineHeight = 1.5,
-            )
-        }
-    }
-}
-
-/**
  * The backlog, delivered the moment signal returned.
  *
  * **Randomised leftovers, and the house row looks the same either way.** The count and the mix

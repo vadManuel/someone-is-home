@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -32,41 +33,62 @@ import androidx.compose.ui.text.style.TextDecoration
  */
 
 /**
- * The Egress banner: **a banner, not a takeover.**
+ * The Egress banner — **a banner, not a takeover.**
  *
- * You can't scan a marker through a modal, so the alert has to be dismissable and the springboard
- * has to stay underneath it. It names the two nodes because containment needs coordination and
- * nobody may speak.
+ * Drawn over the springboard rather than instead of it, because you cannot scan a marker through
+ * a modal and the player has to be able to see that their phone still works. The panel behind
+ * dims; this stays at full intensity.
+ *
+ * It names both nodes. Containment needs two people at two separate markers and nobody may
+ * speak, so the only way to coordinate is for the device to have already said where.
  */
 @Composable
-fun BannerScreen() {
+fun BoxScope.EgressBanner() {
     val go = navigator()
-    Box(Modifier.fillMaxSize().padding(7.u)) {
-        Column(verticalArrangement = Arrangement.spacedBy(6.u)) {
-            val ghost = Amber.Faint.copy(alpha = 0.3f)
-            Box(Modifier.fillMaxWidth().height(44.u).border(1.u, ghost))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.u)) {
-                repeat(4) { Box(Modifier.weight(1f).height(30.u).border(1.u, ghost)) }
-            }
+    BannerBody(
+        headline = "EGRESS ATTEMPT IN PROGRESS",
+        detail = "CONTAIN AT UTILITY AND LANDING",
+        onClick = { go(ScreenId.EgressWidget) },
+    )
+}
+
+/** The house's text, arriving over page 1. Everyone gets one, at the same moment. */
+@Composable
+fun BoxScope.HouseBanner() {
+    val go = navigator()
+    BannerBody(
+        headline = "Regarding this evening. Please read.",
+        headlineSize = 8.0,
+        onClick = { go(ScreenId.Reveal) },
+    )
+}
+
+@Composable
+private fun BoxScope.BannerBody(
+    headline: String,
+    detail: String? = null,
+    headlineSize: Double = 9.0,
+    onClick: () -> Unit,
+) {
+    Column(
+        Modifier.align(Alignment.TopCenter)
+            .padding(6.u)
+            .fillMaxWidth()
+            .background(Amber.Bright)
+            .tap(onClick)
+            .padding(horizontal = 8.u, vertical = 7.u),
+        verticalArrangement = Arrangement.spacedBy(3.u),
+    ) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Label("HOUSE", size = 6.0, color = Amber.Black, tracking = 0.14)
+            Label("NOW", size = 6.0, color = Amber.Black, tracking = 0.14)
         }
-        Column(
-            Modifier.fillMaxWidth().background(Amber.Bright)
-                .tap { go(ScreenId.EgressWidget) }
-                .padding(horizontal = 8.u, vertical = 7.u),
-            verticalArrangement = Arrangement.spacedBy(3.u),
-        ) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Label("HOUSE", size = 6.0, color = Amber.Black, tracking = 0.14)
-                Label("NOW", size = 6.0, color = Amber.Black, tracking = 0.14)
-            }
-            Label(
-                "EGRESS ATTEMPT IN PROGRESS",
-                size = 9.0, color = Amber.Black, tracking = 0.02, lineHeight = 1.5,
-            )
-            Label(
-                "CONTAIN AT UTILITY AND LANDING",
-                size = 6.5, color = Amber.Black, tracking = 0.08,
-            )
+        Label(
+            headline,
+            size = headlineSize, color = Amber.Black, tracking = 0.02, lineHeight = 1.5,
+        )
+        if (detail != null) {
+            Label(detail, size = 6.5, color = Amber.Black, tracking = 0.08)
         }
     }
 }
