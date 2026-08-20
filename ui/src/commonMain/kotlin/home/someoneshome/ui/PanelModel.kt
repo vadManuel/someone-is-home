@@ -84,10 +84,21 @@ data class PanelState(
 /**
  * How the status bar reads — a property of where the round is, not of the individual screen.
  *
- * [Hidden] is not an oversight. The lantern, the walk-in screen and the marker scan suppress the
- * bar deliberately: all three are full lit fields whose job is to emit light evenly.
+ * **The status bar is never absent.** Every screen in the game carries one, including the two
+ * where the player has just been removed from the round. It is how anyone confirms the perimeter
+ * is still armed and what the time is, and a device that stopped saying so would be the app
+ * abandoning a player at the exact moment it took everything else away.
+ *
+ * [Inverted] is the one variation, and it is not an absence: the lantern and the scan fill the
+ * panel with amber, so the shared bar — amber ink on black — would be invisible on them. Those
+ * two draw the same row themselves in black on amber instead.
  */
-enum class PanelMode { Pre, Live, Ghost, End, Hidden }
+enum class PanelMode {
+    Pre, Live, Ghost, End,
+
+    /** The screen paints a full amber field and draws its own status row, inverted. */
+    Inverted,
+}
 
 /**
  * The design's `renderVals()`, ported whole.
@@ -106,9 +117,9 @@ class PanelVals(val state: PanelState) {
     // ---- Status bar ---------------------------------------------------------------------
 
     val mode: PanelMode = when (state.screen) {
-        // Only the two screens that paint a full amber field of their own. Ghost2 used to be
-        // one of them and is now an ordinary dark-field screen.
-        ScreenId.Lock, ScreenId.Scan -> PanelMode.Hidden
+        // The only two screens that fill with amber, and therefore the only two that draw their
+        // own inverted status row. Everything else uses the shared one.
+        ScreenId.Lock, ScreenId.Scan -> PanelMode.Inverted
 
         ScreenId.Boot, ScreenId.Join, ScreenId.Maps, ScreenId.Editor, ScreenId.SaveName,
         ScreenId.HomeDetail, ScreenId.Delete, ScreenId.Secret, ScreenId.RoomEdit,
@@ -124,7 +135,17 @@ class PanelVals(val state: PanelState) {
     }
 
     val isPre: Boolean get() = mode == PanelMode.Pre
-    val statusVisible: Boolean get() = mode != PanelMode.Hidden
+
+    /**
+     * Whether the *shared* status bar is drawn.
+     *
+     * False only for [PanelMode.Inverted], where the screen draws its own. It is never false
+     * because a screen has no status row — see [PanelMode].
+     */
+    val statusVisible: Boolean get() = mode != PanelMode.Inverted
+
+    /** True where the screen is responsible for drawing its own inverted status row. */
+    val drawsOwnStatusRow: Boolean get() = mode == PanelMode.Inverted
 
     /**
      * The two screens whose whole job is to emit as little light as possible — **the status bar
