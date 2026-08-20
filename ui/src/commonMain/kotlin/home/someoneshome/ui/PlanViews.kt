@@ -64,17 +64,32 @@ fun MarkerGlyph(shape: MarkerShape, size: Dp, color: Color, modifier: Modifier =
 @Composable
 fun EditorPlan(cells: List<EditorCell>, modifier: Modifier = Modifier) {
     Canvas(modifier) {
-        val cw = size.width / Plan.COLS
-        val ch = size.height / Plan.ROWS
         val hair = 0.5.dp.toPx()
         cells.forEachIndexed { i, cell ->
-            val x = (i % Plan.COLS) * cw
-            val y = (i / Plan.COLS) * ch
-            cell.fill?.let { drawRect(it, Offset(x, y), Size(cw, ch)) }
-            if (cell.hatch) drawHatch(x, y, cw, ch)
-            drawRect(cell.border, Offset(x, y), Size(cw, ch), style = Stroke(hair))
+            val b = cellBounds(i % Plan.COLS, i / Plan.COLS, size.width, size.height)
+            cell.fill?.let { drawRect(it, Offset(b.x, b.y), Size(b.w, b.h)) }
+            if (cell.hatch) drawHatch(b.x, b.y, b.w, b.h)
+            drawRect(cell.border, Offset(b.x, b.y), Size(b.w, b.h), style = Stroke(hair))
         }
     }
+}
+
+/**
+ * A cell's bounds, snapped so neighbours share an exact edge.
+ *
+ * Computing a cell as `index * width / cols` leaves sub-pixel gaps between adjacent fills, and on
+ * a dark-field map those gaps read as faint seams *inside* a room — which is exactly what an
+ * interior wall would look like. Deriving each edge from the same rounded boundary makes adjacent
+ * cells abut precisely.
+ */
+private class CellBounds(val x: Float, val y: Float, val w: Float, val h: Float)
+
+private fun cellBounds(col: Int, row: Int, width: Float, height: Float): CellBounds {
+    val x0 = kotlin.math.round(col * width / Plan.COLS)
+    val x1 = kotlin.math.round((col + 1) * width / Plan.COLS)
+    val y0 = kotlin.math.round(row * height / Plan.ROWS)
+    val y1 = kotlin.math.round((row + 1) * height / Plan.ROWS)
+    return CellBounds(x0, y0, x1 - x0, y1 - y0)
 }
 
 /**
@@ -106,28 +121,55 @@ private fun DrawScope.drawHatch(x: Float, y: Float, w: Float, h: Float) {
 @Composable
 fun LivePlan(cells: List<MapCell>, modifier: Modifier = Modifier) {
     Canvas(modifier) {
-        val cw = size.width / Plan.COLS
-        val ch = size.height / Plan.ROWS
         val t = 1.dp.toPx()
         cells.forEachIndexed { i, cell ->
-            val x = (i % Plan.COLS) * cw
-            val y = (i / Plan.COLS) * ch
-            cell.fill?.let { drawRect(it, Offset(x, y), Size(cw, ch)) }
-            cell.top?.let { drawRect(it, Offset(x, y), Size(cw, t)) }
-            cell.bottom?.let { drawRect(it, Offset(x, y + ch - t), Size(cw, t)) }
-            cell.start?.let { drawRect(it, Offset(x, y), Size(t, ch)) }
-            cell.end?.let { drawRect(it, Offset(x + cw - t, y), Size(t, ch)) }
+            val b = cellBounds(i % Plan.COLS, i / Plan.COLS, size.width, size.height)
+            cell.fill?.let { drawRect(it, Offset(b.x, b.y), Size(b.w, b.h)) }
+            cell.top?.let { drawRect(it, Offset(b.x, b.y), Size(b.w, t)) }
+            cell.bottom?.let { drawRect(it, Offset(b.x, b.y + b.h - t), Size(b.w, t)) }
+            cell.start?.let { drawRect(it, Offset(b.x, b.y), Size(t, b.h)) }
+            cell.end?.let { drawRect(it, Offset(b.x + b.w - t, b.y), Size(t, b.h)) }
         }
     }
 }
 
 /**
- * A room's count and name, placed over a live plan.
+ * Room names, at each room's top-left corner.
+ *
+ * Separate from the counts because the design places them differently and for different reasons:
+ * the name anchors the room in the plan, and the count sits at the centre so it cannot be read as
+ * a position *within* the room.
+ */
+@Composable
+fun PlanRoomLabels(modifier: Modifier = Modifier) {
+    BoxWithConstraints(modifier) {
+        val w = maxWidth
+        val h = maxHeight
+        Plan.rooms.forEach { room ->
+            Box(
+                Modifier.offset(
+                    x = w * (room.c0.toFloat() / Plan.COLS),
+                    y = h * (room.r0.toFloat() / Plan.ROWS),
+                ).padding(horizontal = 4.u, vertical = 3.u)
+            ) {
+                Label(
+                    room.name,
+                    size = 5.5,
+                    color = if (room.name == Plan.HERE) Amber.Bright else Amber.Dim,
+                    tracking = 0.06,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * A room's occupancy count, at the room's centre.
  *
  * **Counts, never dots.** A dot implies a trackable individual and no such thing exists in this
  * system: you learn that four people were in the living room, never which four, and a numeral
- * says exactly that and nothing more. The label sits at the room's centre so it cannot be read
- * as a position within the room.
+ * says exactly that and nothing more. Centring it is part of that — a numeral placed anywhere
+ * else in the room would start to look like a position.
  */
 @Composable
 fun PlanCounts(counts: List<Plan.RoomCount>, modifier: Modifier = Modifier) {
@@ -137,17 +179,8 @@ fun PlanCounts(counts: List<Plan.RoomCount>, modifier: Modifier = Modifier) {
         counts.forEach { rc ->
             val cx = (rc.room.c0 + rc.room.c1 + 1) / 2f / Plan.COLS
             val cy = (rc.room.r0 + rc.room.r1 + 1) / 2f / Plan.ROWS
-            Column(
-                Modifier.offset(x = w * cx - 9.u, y = h * cy - 11.u),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Readout(rc.count.toString(), size = 15.0, color = rc.ink)
-                Label(
-                    rc.room.name,
-                    size = 5.0,
-                    color = if (rc.room.name == Plan.HERE) Amber.Bright else Amber.Dim,
-                    tracking = 0.06,
-                )
+            Box(Modifier.offset(x = w * cx - 5.u, y = h * cy - 10.u)) {
+                Readout(rc.count.toString(), size = 19.0, color = rc.ink, lineHeight = 1.0)
             }
         }
     }
