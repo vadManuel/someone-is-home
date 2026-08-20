@@ -44,20 +44,38 @@ class Recording(
 }
 
 /**
+ * The one walk through the rules, shared by everything in this module that runs a round.
+ *
+ * [onStep] receives the state AFTER the event and the effects that event emitted. Every capture
+ * — the recording, the effect list, the per-client transcripts — is a different observer of the
+ * same walk, so no two of them can disagree about what the round did.
+ */
+internal inline fun drive(
+    initial: GameState,
+    events: List<Event>,
+    onStep: (GameState, List<Effect>) -> Unit,
+): GameState {
+    var state = initial
+    for (event in events) {
+        val reduction = reduce(state, event)
+        state = reduction.state
+        onStep(state, reduction.effects)
+    }
+    return state
+}
+
+/**
  * Runs a round and captures it.
  *
  * Nothing here decides anything: it drives [reduce] and writes down what happened. A rule in
  * this function would mean the recording was of the harness rather than of the game.
  */
 fun record(initial: GameState, events: List<Event>): Pair<GameState, Recording> {
-    var state = initial
     val effects = mutableListOf<String>()
     val states = mutableListOf<String>()
-    for (event in events) {
-        val reduction = reduce(state, event)
-        state = reduction.state
-        reduction.effects.forEach { effects += Transcript.render(it) }
-        states += Transcript.render(state)
+    val state = drive(initial, events) { after, emitted ->
+        emitted.forEach { effects += Transcript.render(it) }
+        states += Transcript.render(after)
     }
     return state to Recording(
         initialState = Transcript.render(initial),
@@ -69,12 +87,7 @@ fun record(initial: GameState, events: List<Event>): Pair<GameState, Recording> 
 
 /** Every effect a round produced, in emission order. Shares the driver, so it cannot drift. */
 fun effectsOf(initial: GameState, events: List<Event>): List<Effect> {
-    var state = initial
     val out = mutableListOf<Effect>()
-    for (event in events) {
-        val reduction = reduce(state, event)
-        state = reduction.state
-        out += reduction.effects
-    }
+    drive(initial, events) { _, emitted -> out += emitted }
     return out
 }
