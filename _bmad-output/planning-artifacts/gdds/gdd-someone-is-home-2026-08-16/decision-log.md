@@ -1027,6 +1027,153 @@ commit message.
 
 ---
 
+## Revision 15 — the map, the app, and the first phone
+
+*Decided 2026-08-20, continuing the same day. Everything from D-085 on came out of building
+story 0.7 and then putting the ported screens on real hardware for the first time.*
+
+### D-085 · **The 44-shape marker roster lives in `model`, not `ui` — decided**
+
+A shape is a marker's **identity**, not its decoration. The id is what a printed card encodes and
+what a scan decodes months later, so the roster is wire data that `ui` happens to draw.
+
+It had to move before map persistence could name a marker at all, and the alternative was a
+second roster beside the first — which is exactly the failure D-070 was written about. Two things
+decoding to the same marker put a player in the wrong room, and that wrong count lands inside the
+injected error the Terminal already carries on purpose.
+
+`MarkerShapes.require(id)` joins `get`. Returning null is right for a *scan* — an unregistered
+card is a fact about a piece of paper (D-071) — and wrong where the id is a constant we wrote:
+`listOfNotNull` turns a typo into a list one item shorter, and nobody counts a list they did not
+write.
+
+### D-086 · **The house map is keyed on the card id. A second card carrying a registered shape is refused — RAISED, NOT SETTLED**
+
+Keyed on the id, per D-069's whole argument: the replacement for a mislaid card is a different
+card, so the original found later behind a shelf is simply unregistered rather than reporting a
+player into the replacement's room.
+
+**The refusal is a judgement call and is flagged as one.** The shape is the marker's whole name —
+`MARKER 07` is gone from every screen — so two registered cards showing one shape give a player
+told to go to the diamond two places to stand. Refusing is fail-closed: the host sees it during
+the setup walk while a card can still be reprinted.
+
+The alternative — allow it, let the id disambiguate internally — keeps the data honest and pushes
+an ambiguity onto people who cannot see ids. **Someone should decide this properly.**
+
+### D-087 · **Map persistence is platform backup plus export, and the stored form IS the export form**
+
+game-architecture.md:419 already decided the mechanism; this records what it actually means.
+
+The map is written where the OS includes it in device backup. **A phone restored from backup keeps
+its houses; a bare reinstall on a wiped device with no restore does not, and nothing in the app
+can change that.** That is what the export path is for, which is why the stored form being
+human-transferable text is load-bearing rather than a convenience — handing a house to another
+host is handing them the file.
+
+**A failed save throws.** The first version discarded the write's result, so on a fresh install
+every save did nothing and every load came back null — fifteen minutes of walking a dark house,
+gone, with no sign until the next evening. A Boolean return would have been dropped the same way.
+This is host-side setup rather than a live round, so rule 6 does not apply: a host who cannot save
+their house needs telling while the cards are still in their hand.
+
+### D-088 · **Resuming a round replays it before trusting it, and rebuilds from EMPTY — decided**
+
+Story 0.10. A recording is written by a process that then crashed, so *"it parsed"* is a much
+weaker claim than *"the rules, run again, produce exactly it"*. Only the second licenses carrying
+on. **Failing is the safe direction**: a round that comes back subtly wrong is worse than one that
+does not come back, because eight people are standing in a dark house and a resumed round that
+disagrees with the one they played hands them a game with no appealable history.
+
+**The state rows are expected OUTPUT, not input.** Rebuilding authority state by parsing one would
+create a second way to construct a `GameState` — one that bypasses the rules entirely and could
+mint a round no sequence of events could produce.
+
+Recordings also became *readable*: `toText()` shipped with stories 0.3 and 0.4 and nothing could
+read it back. A recording that cannot cross a process boundary is not a debugging instrument, it
+is a string a live process prints about itself — and the live process is precisely the one that is
+gone when eight phones have gone wrong.
+
+### D-089 · **Fixtures are named by predicate, and a partial set is fatal — decided**
+
+Story 0.10d. A moment is *"the first time anyone was revoked"*, not a tick number: a tick number is
+a fact about one recording, the predicate is a fact about the game and survives re-recording and a
+rules change.
+
+A mark that matches nothing **throws**. A fixture set that quietly comes back short is this
+project's recurring failure in a new costume, and a test asserting against a dropped fixture passes
+for the one reason that means nothing.
+
+### D-090 · **There is an app root, and what the Simulator may and may not certify — decided**
+
+`:app` is the one module that sees both `:ui` and `:platform`, and stays close to empty: logic
+there is logic no boundary check covers. The Swift side is a window and a root view controller.
+
+**The Simulator may certify layout and nothing else.** It has no BLE, no torch, no camera and no
+haptics, which is every input this game has. That is the same licence `ui`'s desktop target already
+holds, and it does not extend one inch further — the day the shell grows a lamp it stops being
+verifiable anywhere but on plural physical devices in a dark room.
+
+### D-091 · **The status row is three zones and the middle is empty on every device — decided**
+
+Not "empty where there is a cutout". **Compose reports that a cutout exists and nothing whatever
+about how wide it is**, so any rule keyed on the pill is a guess at Apple's geometry that goes
+quietly wrong on the next handset. The middle is simply never used, and the layout owes nothing to
+hardware it cannot measure.
+
+The carrier leaves the middle and lives in the left zone. **The zones are deliberately lopsided**:
+the right holds a clock and a battery and wants about 16% of the panel, the left holds two glyphs
+*and a word*. Splitting them evenly truncated `UNREGISTERED`; widening the left until it fit pushed
+its last character *under* the pill, which is the worse of the two failures.
+
+Measured: the carrier has about 60 design units before the pill and `UNREGISTERED` wants 60.3. It
+does not fit and no tuning makes it fit. So it ellipsizes — the right string to lose, being the
+fallback for a *missing* cause chosen because it "asserts only that you are out", which
+`UNREGISTER…` still does. **REVOKED and RESTRAINED fit whole**, which is what D-078 exists to
+protect.
+
+### D-092 · **The device's insets are a value, so a notch can be faked — decided**
+
+`LocalPanelInsets` replaces a direct `WindowInsets` read inside the chrome. The reason is not
+layering hygiene: **a notch cannot be faked through a platform read**, so without this the screens
+could only ever be checked by holding a phone.
+
+With it, every screen renders against simulated insets in `./gradlew check` and fails if anything
+lands under the cutout, under the home indicator, or in the deep corners. **With the insets removed
+the guard reports 576 faults across all 56 screens** — that was the state of the app before the
+first phone, and hand-inspection had found five of them.
+
+The property it tests is **uniformity**, not "differs from the background". Content is variation; a
+flat fill is not, whatever colour it is — and a flat fill under the pill is *required* on the lamp
+screens, where the amber must reach the edges or the core has emitted light the hardware swallows.
+
+**What it cannot judge:** whether the amber reads right, whether the pixel fonts land on whole
+pixels at 3x, whether a screen is beautiful. It checks that nothing is hidden. That is all.
+
+### D-093 · **No pulsating outline around the Dynamic Island — decided against**
+
+Proposed as a way to use the Island band: a ring around the pill, steady while you are in the
+round, pulsing red once you are out. Declined on three counts, recorded because it is a natural
+idea that will occur again.
+
+**A pulse is a local animation the core never emitted** — rule 5, and D-076's *"a step rather than
+a fade"*.
+
+**A phone held as a lamp faces away from its owner** (D-076's own argument), so the ring would tell
+the room rather than the player. Worse, a bright ring appearing at a revocation lights up the exact
+spot the revoke happened, against the one property the same-frame blackout exists to protect.
+
+**Brighter-when-out inverts D-077**, which dimmed those screens precisely because the status bar
+was the brightest thing on a display whose subject is having everything taken away. Red is also the
+only hue outside a closed five-step amber ramp.
+
+**The version that would survive**, if an Island indicator is still wanted: a *static* ring in the
+panel's own ink, following the perimeter iris's rule — dimmer when out, changing only when the core
+emits an effect.
+
+
+---
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).
@@ -1038,8 +1185,16 @@ Compose across 55 screens; 4 of 55 differ by role, and all four are intended.
 **Revision 14 added D-079 through D-084** — the emit boundary. The client taxonomy has two axes,
 the admission gate's refusal is a distinct return type and is recorded, and the differential
 harness now runs on the count-preserving exchange form because the SystemIntegrity denominator
-reads the Insider count. **E0 stories 0.5, 0.6 and 0.6b are built, injection-verified and pushed;
-0.6c remains, and it needs hardware.** Two leak surfaces of three are instrumented.
+reads the Insider count. Two leak surfaces of three are instrumented.
+
+**Revision 15 added D-085 through D-093** — the map, the app root, and the first phone. E0's
+headless work is done: 0.1–0.5, 0.6, 0.6b, 0.7, 0.10, 0.10c's generator and 0.10d are built,
+injection-verified and pushed, along with the D-066 gate, F-005's denominator, a recording parser
+and resume. **There is now an app that launches on an iPhone.** Putting the ported screens on one
+found five layout faults in a single strip of screen, none of them visible on the desktop target
+where the screens were reviewed; a guard now renders all 56 against a simulated notch on every
+build. **0.6c still remains and still needs hardware — and needs the radio built first, because
+nothing broadcasts yet.**
 
 **Carried into E0 as a constraint, not a closed item:** total app allocation ≤ ~0.5 MB/s as the design target, with the measured cliff between 1.5 and 3.0 MB/s — roughly 6× margin, so this is a budget rather than a knife edge. Nobody yet knows what the real app allocates with BLE, 100 Hz motion, effects and recording running at once.
 Action: create `project-context.md`.
