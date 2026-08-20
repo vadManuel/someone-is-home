@@ -12,8 +12,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -30,35 +28,24 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 
 /**
- * What a screen is allowed to do when tapped.
+ * What a screen may do when tapped.
  *
- * Navigation only, plus the two prototype toggles the design exposes. **No screen calls into the
- * rules**, because `ui` cannot see `core` — in play these become Intents posted to the authority,
- * which may refuse them, and the screen finds out by being told what to draw next rather than by
+ * Navigation, plus the handful of toggles the design exposes. **No screen calls into the rules**
+ * — `ui` cannot see `core`. In play these become Intents posted to the authority, which may
+ * refuse them, and the screen learns the outcome by being told what to draw next rather than by
  * reading a return value.
  */
 class PanelActions(
     val nav: (ScreenId) -> Unit = {},
     val stepRevoke: () -> Unit = {},
     val toggleMarkers: () -> Unit = {},
+    val toggleTorch: () -> Unit = {},
+    val pickRoomType: (RoomType) -> Unit = {},
+    val confirmPassage: () -> Unit = {},
 )
 
-val LocalActions: ProvidableCompositionLocal<PanelActions> = staticCompositionLocalOf { PanelActions() }
-
-/**
- * A tap target with no visual feedback of its own.
- *
- * **Deliberately no indication.** A ripple or a highlight would be a change in lit pixel area
- * that the rules did not author, and on the springboard it would be worse than that: a Resident
- * tapping Revoke must get exactly what an Insider gets, and a control that *looked* different
- * when pressed would answer the question the button exists to refuse. Echo of your own input is
- * fine (project rule), but it has to be designed, not inherited from a theme.
- */
-@Composable
-fun Modifier.tap(onClick: () -> Unit): Modifier {
-    val interaction = remember { MutableInteractionSource() }
-    return this.clickable(interactionSource = interaction, indication = null, onClick = onClick)
-}
+val LocalActions: ProvidableCompositionLocal<PanelActions> =
+    staticCompositionLocalOf { PanelActions() }
 
 /**
  * The navigate function, captured for use inside non-composable click lambdas.
@@ -69,6 +56,21 @@ fun Modifier.tap(onClick: () -> Unit): Modifier {
 @Composable
 fun navigator(): (ScreenId) -> Unit = LocalActions.current.nav
 
+/**
+ * A tap target with no visual feedback of its own.
+ *
+ * **Deliberately no indication.** A ripple or a highlight is a change in lit pixel area the
+ * rules did not author. On the springboard it would be worse than that: a Resident tapping the
+ * ability must get exactly what an Insider gets, and a control that *looked* different when
+ * pressed would answer the question the button exists to refuse. Echo of your own input is
+ * allowed, but it has to be designed, not inherited from a theme.
+ */
+@Composable
+fun Modifier.tap(onClick: () -> Unit): Modifier {
+    val interaction = remember { MutableInteractionSource() }
+    return this.clickable(interactionSource = interaction, indication = null, onClick = onClick)
+}
+
 /** Navigate to [id] on tap. The overwhelmingly common case. */
 @Composable
 fun Modifier.goes(id: ScreenId): Modifier {
@@ -77,10 +79,9 @@ fun Modifier.goes(id: ScreenId): Modifier {
 }
 
 /**
- * The design's primary control: a full-width bordered block with a centred label.
- *
- * Every "do the thing" button in the interface is this shape, in one of three intensities —
- * outlined, filled slate (pre-game commit), or inverted amber (in-game emphasis).
+ * The design's primary control: a full-width bordered block with a centred label, in one of
+ * three intensities — outlined, filled slate (a pre-game commit), or inverted amber (in-game
+ * emphasis).
  */
 @Composable
 fun PanelButton(
@@ -95,11 +96,7 @@ fun PanelButton(
     onClick: () -> Unit = {},
 ) {
     Box(
-        modifier
-            .fillMaxWidth()
-            .border(1.u, border)
-            .background(fill)
-            .tap(onClick)
+        modifier.fillMaxWidth().border(1.u, border).background(fill).tap(onClick)
             .padding(vertical = verticalPadding),
         contentAlignment = Alignment.Center,
     ) {
@@ -108,11 +105,11 @@ fun PanelButton(
 }
 
 /**
- * A list row: a label on the left, a value or affordance pushed to the right.
+ * A list row: label left, value or affordance pushed right.
  *
- * Used for saved homes, nearby networks, settings and the message list. The right-hand slot is
- * a composable rather than a string because it carries signal strength, room counts and unread
- * marks — all of which are drawn, not written.
+ * Saved homes, nearby networks, settings, the message list, and every host-setup line. The
+ * right-hand slot is a composable rather than a string because it carries signal strength,
+ * marker shapes and unread marks — things that are drawn, not written.
  */
 @Composable
 fun RowButton(
@@ -125,11 +122,7 @@ fun RowButton(
     content: @Composable RowScope.() -> Unit,
 ) {
     Row(
-        modifier
-            .fillMaxWidth()
-            .border(1.u, border)
-            .background(fill)
-            .tap(onClick)
+        modifier.fillMaxWidth().border(1.u, border).background(fill).tap(onClick)
             .padding(horizontal = horizontalPadding, vertical = verticalPadding),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
@@ -137,29 +130,15 @@ fun RowButton(
     )
 }
 
-/** A bordered block of explanatory text. The design's only container. */
-@Composable
-fun InfoBox(
-    modifier: Modifier = Modifier,
-    border: Color = Amber.Edge,
-    fill: Color = Color.Transparent,
-    padding: Dp = 7.u,
-    gap: Dp = 0.u,
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    Column(
-        modifier.fillMaxWidth().border(1.u, border).background(fill).padding(padding),
-        verticalArrangement = Arrangement.spacedBy(gap),
-        content = content,
-    )
-}
-
 /**
  * The blinking caret on a field that accepts typing.
  *
- * It appears on Notes, which **never saves**, and on the one line handed to the house, which is
- * deleted when the round ends. A caret is a promise that the device is listening; both screens
- * keep the promise and neither keeps the text.
+ * It appears on the line handed to the house, which is deleted when the round ends, and on the
+ * room-name field. A caret promises the device is listening; both screens keep that promise,
+ * and one of them keeps nothing else.
+ *
+ * **Hard on/off, never a fade** — `steps(1)` in the source. A fading caret is a luminance ramp
+ * nobody authored, which is the one thing the lamp rules forbid outright.
  */
 @Composable
 fun Caret(color: Color, size: Double = 17.0) {
@@ -168,8 +147,6 @@ fun Caret(color: Color, size: Double = 17.0) {
         initialValue = 1f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            // steps(1) in the source: a hard on/off, never a fade. A fading caret would be a
-            // luminance ramp nobody authored, which is the one thing the lamp rules forbid.
             animation = keyframes {
                 durationMillis = 1000
                 1f at 0
@@ -184,9 +161,9 @@ fun Caret(color: Color, size: Double = 17.0) {
 }
 
 /**
- * The slow pulse on an incoming call — the design's only other animation.
+ * The slow pulse on an incoming call.
  *
- * Both animations in this file are on screens that are *demanding attention*, never on ambient
+ * Both animations in this file sit on screens that are *demanding attention*, never on ambient
  * chrome. A pulse anywhere else would be light the rules did not emit.
  */
 @Composable
