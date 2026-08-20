@@ -3,6 +3,10 @@ package home.someoneshome.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
@@ -37,7 +41,7 @@ import androidx.compose.ui.text.style.TextOverflow
 @Composable
 fun StatusBar(vals: PanelVals) {
     Row(
-        Modifier.fillMaxWidth().height(17.u)
+        Modifier.fillMaxWidth().height(STATUS_BAR_HEIGHT)
             .edgeLine(PanelSide.Bottom, vals.edge)
             .padding(horizontal = 6.u),
         horizontalArrangement = Arrangement.spacedBy(5.u),
@@ -154,6 +158,13 @@ fun PanelFrame(
     overlay: (@Composable BoxScope.() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
+    // THE BACKGROUNDS FILL THE SCREEN; ONLY THE CONTENT INSETS. Padding the whole panel would
+    // put a black bar above a lit screen, and on a phone held as a lamp that is a reduction in
+    // emitted light the core never authored -- rule 5. So the black base and the light-field
+    // below still run edge to edge, and the Dynamic Island sits on bare light.
+    val statusHeight = if (vals.statusVisible) STATUS_BAR_HEIGHT else 0.u
+    val contentTop = (safeAreaTop() - statusHeight).coerceAtLeast(0.u)
+
     Box(modifier.fillMaxSize().background(Amber.Black)) {
         Box(
             Modifier.fillMaxSize()
@@ -162,8 +173,15 @@ fun PanelFrame(
             if (vals.isPre) Box(Modifier.fillMaxSize().background(Amber.Bone))
 
             Column(Modifier.fillMaxSize()) {
+                // The status row STAYS in the Island's band, which is what the row was already
+                // shaped for: signal at the left ear, clock and battery at the right, the way
+                // the system's own bar is laid out. Moving it down would waste the one strip of
+                // screen the Island has already taken.
                 if (vals.statusVisible) StatusBar(vals)
-                Column(Modifier.fillMaxWidth().weight(1f), content = content)
+                Column(
+                    Modifier.fillMaxWidth().weight(1f).padding(top = contentTop),
+                    content = content,
+                )
             }
         }
         if (overlay != null) {
@@ -172,13 +190,35 @@ fun PanelFrame(
             // still what they were, which is exactly the reassurance a takeover would remove.
             Box(
                 Modifier.fillMaxSize()
-                    .padding(top = if (vals.statusVisible) 17.u else 0.u)
+                    .padding(top = statusHeight + contentTop)
             ) {
                 overlay(this)
             }
         }
     }
 }
+
+/**
+ * The status row's height, which the overlay and the content inset both measure against.
+ *
+ * Named rather than repeated: it was written as a bare `17.u` in two places, and the two are
+ * required to agree or a banner lands on top of the one row that must never move.
+ */
+val STATUS_BAR_HEIGHT: Dp = 17.u
+
+/**
+ * The top inset, in DESIGN units.
+ *
+ * [DeviceCanvas] overrides `LocalDensity`, so converting the platform inset through the current
+ * density yields the design's own coordinate space rather than points — which is what every
+ * other number in this file is in. Reading it any other way silently mixes two unit systems.
+ *
+ * Zero on a device with nothing at the top, and on the desktop preview, so the design's layout
+ * is unchanged everywhere it was reviewed.
+ */
+@Composable
+private fun safeAreaTop(): Dp =
+    WindowInsets.safeDrawing.asPaddingValues().calculateTopPadding()
 
 /**
  * How far the panel drops when something arrives unasked.
