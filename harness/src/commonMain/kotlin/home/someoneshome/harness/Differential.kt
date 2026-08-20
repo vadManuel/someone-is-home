@@ -167,8 +167,8 @@ private fun refusingANoOp(
     swapped: List<Seat>,
     how: String,
 ): DifferentialResult {
-    val before = Transcript.render(drive(initial, baseline) { _, _ -> })
-    val after = Transcript.render(drive(initial, variant) { _, _ -> })
+    val before = Transcript.render(drive(initial, baseline) { _, _, _ -> })
+    val after = Transcript.render(drive(initial, variant) { _, _, _ -> })
     require(before != after) {
         "$how left the round unchanged, so there is nothing to diff. Both runs end at $before. " +
             "Reporting zero divergence here would be a pass from an instrument measuring nothing."
