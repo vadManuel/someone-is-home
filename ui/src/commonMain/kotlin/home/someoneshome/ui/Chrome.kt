@@ -4,7 +4,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.safeContent
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.layout.Box
@@ -39,11 +41,13 @@ import androidx.compose.ui.text.style.TextOverflow
  * that is the bug, not the feature.
  */
 @Composable
-fun StatusBar(vals: PanelVals, bandHeight: Dp = STATUS_BAR_HEIGHT) {
+fun StatusBar(vals: PanelVals, bandHeight: Dp = STATUS_BAR_HEIGHT, sideInset: Dp = 0.u) {
     Row(
         Modifier.fillMaxWidth().height(maxOf(bandHeight, STATUS_BAR_HEIGHT))
+            // The rule spans the full width; only the GLYPHS are held off the curve. A divider
+            // that stopped short of each edge would read as a shorter bar, not a safer one.
             .edgeLine(PanelSide.Bottom, vals.edge)
-            .padding(horizontal = 6.u),
+            .padding(horizontal = 6.u + sideInset),
         horizontalArrangement = Arrangement.spacedBy(5.u),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -165,6 +169,21 @@ fun PanelFrame(
     val safe = WindowInsets.safeDrawing.asPaddingValues()
     val safeTop = safe.calculateTopPadding()
     val safeBottom = safe.calculateBottomPadding()
+
+    // THE SCREEN'S CORNERS ARE ROUND, and the status row is the one thing that lives up in them.
+    // iOS reports NO horizontal safe-area inset in portrait — measured, not assumed: safeDrawing
+    // comes back l=0 r=0 while the top is 62 and the bottom 34 — so nothing in the top band is
+    // held off the curve, and 6u of the row's own padding is not enough to clear it. The glyphs
+    // at each end were being shaved by the corner radius.
+    //
+    // safeContent carries what safeDrawing does not: 16pt each side on this hardware. A real
+    // system number rather than a guess at Apple's corner geometry, which has no public API.
+    val sideSafe = WindowInsets.safeContent.asPaddingValues()
+    val layout = LocalLayoutDirection.current
+    val sideInset = maxOf(
+        sideSafe.calculateLeftPadding(layout),
+        sideSafe.calculateRightPadding(layout),
+    )
     val statusHeight = if (vals.statusVisible) STATUS_BAR_HEIGHT else 0.u
 
     // THE ROW OCCUPIES THE WHOLE BAND THE ISLAND SITS IN, rather than being a 17u strip placed
@@ -189,7 +208,7 @@ fun PanelFrame(
                 // shaped for: signal at the left ear, clock and battery at the right, the way
                 // the system's own bar is laid out. Moving it down would waste the one strip of
                 // screen the Island has already taken.
-                if (vals.statusVisible) StatusBar(vals, bandHeight = statusBand)
+                if (vals.statusVisible) StatusBar(vals, bandHeight = statusBand, sideInset = sideInset)
                 // BOTTOM AS WELL AS TOP. The home indicator takes 34pt and the boot screen's
                 // UPTIME line, progress bar and STARTING label were sitting under it — fixing
                 // only the Island moved the collision to the other end of the panel.
