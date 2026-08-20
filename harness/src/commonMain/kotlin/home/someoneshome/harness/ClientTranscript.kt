@@ -104,7 +104,7 @@ fun recordPerClient(initial: GameState, events: List<Event>): ClientTranscripts 
     // transcript that did not exist.
     initial.seats.forEach { slot(it) }
 
-    drive(initial, events) { after, emitted ->
+    drive(initial, events) { _, after, emitted ->
         after.seats.forEach { slot(it) }
         for (effect in emitted) {
             val payload = Transcript.render(effect)

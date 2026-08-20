@@ -61,8 +61,10 @@ class Recording(
  * the authority, so a harness that called the rules directly would be exercising a path no real
  * client can reach — and would have gone on certifying pre-arm effects as correct.
  *
- * [onStep] receives the state AFTER the event and the effects that event emitted. [onRefusal]
- * receives the event's index in the list, the event, and why the gate refused it. Every capture —
+ * [onStep] receives the event's index, the state AFTER the event, and the effects it emitted.
+ * [onRefusal] receives the index, the event, and why the gate refused it. **Both carry the index
+ * into the original event list, not a count of how many got through** — a refused event still
+ * occupies a position, and a snapshot that named a different one could not be regenerated. Every capture —
  * the recording, the effect list, the per-client transcripts — is a different observer of the
  * same walk, so no two of them can disagree about what the round did.
  */
@@ -73,14 +75,14 @@ internal inline fun drive(
     // effects reads as `drive(initial, events) { after, emitted -> ... }` and cannot accidentally
     // bind its lambda to the refusal hook instead.
     onRefusal: (Int, Event, home.someoneshome.model.RefusalReason) -> Unit = { _, _, _ -> },
-    onStep: (GameState, List<Effect>) -> Unit,
+    onStep: (Int, GameState, List<Effect>) -> Unit,
 ): GameState {
     var state = initial
     events.forEachIndexed { index, event ->
         when (val admission = admit(state, event)) {
             is Admission.Admitted -> {
                 state = admission.reduction.state
-                onStep(state, admission.reduction.effects)
+                onStep(index, state, admission.reduction.effects)
             }
             // No state change and no effects. Refusing is not a quiet version of reducing.
             is Admission.Refused -> onRefusal(index, event, admission.reason)
@@ -102,7 +104,7 @@ fun record(initial: GameState, events: List<Event>): Pair<GameState, Recording> 
     val state = drive(
         initial, events,
         onRefusal = { index, event, reason -> refusals += Transcript.render(index, event, reason) },
-    ) { after, emitted ->
+    ) { _, after, emitted ->
         emitted.forEach { effects += Transcript.render(it) }
         states += Transcript.render(after)
     }
@@ -118,6 +120,6 @@ fun record(initial: GameState, events: List<Event>): Pair<GameState, Recording> 
 /** Every effect a round produced, in emission order. Shares the driver, so it cannot drift. */
 fun effectsOf(initial: GameState, events: List<Event>): List<Effect> {
     val out = mutableListOf<Effect>()
-    drive(initial, events) { _, emitted -> out += emitted }
+    drive(initial, events) { _, _, emitted -> out += emitted }
     return out
 }
