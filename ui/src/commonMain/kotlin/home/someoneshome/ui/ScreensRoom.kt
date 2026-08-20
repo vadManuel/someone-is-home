@@ -86,7 +86,7 @@ fun CallScreen() {
 @Composable
 fun FoundScreen() {
     val go = navigator()
-    IncomingCall(caller = "ELLIOT", reason = "DEACTIVATED\nRESIDENT FOUND") { go(ScreenId.Assemble) }
+    IncomingCall(caller = "ELLIOT", reason = "REVOKED\nRESIDENT FOUND") { go(ScreenId.Assemble) }
 }
 
 @Composable
