@@ -373,20 +373,48 @@ fun ScanCaughtScreen(vals: PanelVals) {
 /**
  * The scan caught something that is not yours.
  *
- * **One refusal for every reason.** Not assigned to you, blocked upstream, or a card the host
- * never registered all land here with the same four words, so the refusal cannot be read
- * backwards into a fact about the marker or about anybody else. It says nothing about who the
- * marker belongs to, whether someone has already worked it, or why it is closed.
+ * **Every game-side reason lands here.** Not assigned to you and blocked upstream produce the
+ * same four words, so the refusal cannot be read backwards into a fact about the marker or about
+ * anybody else.
  *
- * *"Nothing of yours opens here"* is phrased about **you**, deliberately — the alternative
- * phrasings ("already taken", "belongs to another resident") would each be a small statement
- * about a player who is not in the room.
- *
- * The light signature matches a successful scan: both leave the lit scan field for a dark screen,
- * so an onlooker learns nothing from the change in brightness.
+ * *"Nothing of yours opens here"* is phrased about **you**, deliberately. The alternatives —
+ * "already completed", "belongs to another resident" — would each be a small statement about a
+ * player who is not standing there.
  */
 @Composable
 fun ScanBadScreen() {
+    ScanRefusal(
+        headline = "NOT YOURS",
+        detail = "Nothing of yours opens here.",
+    )
+}
+
+/**
+ * The card is not in this home at all.
+ *
+ * The **one** refusal that can afford to be specific, because it is a fact about a piece of paper
+ * rather than about any player: the host printed a card and never registered it. Saying so costs
+ * nothing and buys the only diagnosis available from inside a dark house — otherwise a missed
+ * card reads as another player's marker and the setup fault stays invisible all evening.
+ */
+@Composable
+fun ScanUnknownScreen() {
+    ScanRefusal(
+        headline = "NOT A MARKER",
+        detail = "This card was never registered in this home. It is not part of the game.",
+    )
+}
+
+/**
+ * Both refusals, drawn by one function.
+ *
+ * **The two screens are identical apart from their two lines of text, and that must stay true.**
+ * If they had different icons or different shapes, an onlooker could tell which refusal you got
+ * from across a room — and one of them (NOT YOURS) is reachable only by a Resident. Sharing the
+ * body makes that identity structural instead of a coincidence someone later "improves" away.
+ */
+@Composable
+private fun ScanRefusal(headline: String, detail: String) {
     val go = navigator()
     Column(
         Modifier.fillMaxSize().padding(8.u),
@@ -401,15 +429,11 @@ fun ScanBadScreen() {
         ) {
             Box(Modifier.padding(vertical = 3.u).size(46.u), contentAlignment = Alignment.Center) {
                 Box(Modifier.fillMaxSize().border(1.3.u, Amber.Bright, CircleShape))
-                Box(
-                    Modifier.fillMaxHeight().width(1.3.u)
-                        .rotate(45f)
-                        .background(Amber.Bright)
-                )
+                Box(Modifier.fillMaxHeight().width(1.3.u).rotate(45f).background(Amber.Bright))
             }
-            Label("NOT YOURS", size = 13.0, color = Amber.Bright, tracking = 0.1)
+            Label(headline, size = 13.0, color = Amber.Bright, tracking = 0.1)
             Label(
-                "Nothing of yours opens here.",
+                detail,
                 size = 7.0, color = Amber.Dim, tracking = 0.02, lineHeight = 1.9,
                 align = TextAlign.Center,
             )
