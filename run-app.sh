@@ -5,7 +5,8 @@
 #
 #   ./run-app.sh                      simulator, debug variant (screenshots)
 #   ./run-app.sh simulator playtest   simulator, playtest variant
-#   ./run-app.sh device playtest      the phone plugged into this Mac, playtest variant
+#   ./run-app.sh device playtest      EVERY phone plugged into this Mac, playtest variant
+#   APP_DEVICE_NAME=fiance ./run-app.sh device   just the phone whose name contains "fiance"
 #
 # The second argument is story 0.10b's build variant and maps one-to-one onto an Xcode
 # configuration: debug -> Debug, playtest -> Playtest, release -> Release. Playtest and debug
@@ -64,37 +65,56 @@ if [ "$MODE" = "device" ]; then
     # TWO DIFFERENT IDENTIFIERS. devicectl takes the CoreDevice UUID; xcodebuild -destination
     # takes the hardware UDID. They are not interchangeable, and a generic iOS destination signs
     # against whatever devices the team already had, so the install then fails with 0xe8008012.
+    #
+    # EVERY connected phone, not the first one found. Story 0.8's verification needs a host
+    # phone and a client phone driven from one Mac, and a script that quietly picked one of two
+    # would report a two-device test that only ever touched one. APP_DEVICE_NAME narrows to a
+    # single phone by (substring of) its name when that is what you want.
     json="$(mktemp /tmp/sh-devices.XXXXXX.json)"
     xcrun devicectl list devices --json-output "$json" >/dev/null 2>&1 || true
-    read -r core udid <<EOF
-$(python3 -c "
-import json
+    devices="$(python3 -c "
+import json, os
 d = json.load(open('$json'))
+want = os.environ.get('APP_DEVICE_NAME', '').lower()
 for x in d['result']['devices']:
-    if x.get('deviceProperties', {}).get('connectionState') != 'disconnected':
-        print(x['identifier'], x['hardwareProperties']['udid'])
-        break
-")
-EOF
-    [ -n "${core:-}" ] || { echo "no connected device" >&2; exit 1; }
-
-    echo "building for device ($VARIANT)…"
-    xcodebuild -project iosApp/iosApp.xcodeproj -scheme SomeonesHome -configuration "$CONFIG" \
-        -destination "id=$udid" -derivedDataPath "$DERIVED-device" \
-        DEVELOPMENT_TEAM="$TEAM" -allowProvisioningUpdates build >/dev/null
+    if x.get('deviceProperties', {}).get('connectionState') == 'disconnected':
+        continue
+    name = x.get('deviceProperties', {}).get('name', '')
+    if want and want not in name.lower():
+        continue
+    print(x['identifier'], x['hardwareProperties']['udid'], name.replace(' ', '_'))
+")"
+    [ -n "$devices" ] || { echo "no connected device${APP_DEVICE_NAME:+ matching '$APP_DEVICE_NAME'}" >&2; exit 1; }
 
     APP="$DERIVED-device/Build/Products/$CONFIG-iphoneos/SomeonesHome.app"
-    assert_fonts "$APP"
+    failed=0
+    while read -r core udid name; do
+        # Built per device, not once against the first: -allowProvisioningUpdates registers THIS
+        # udid in the provisioning profile, and an unregistered second phone fails the install
+        # with the same 0xe8008012 the generic destination produced. The second build is
+        # incremental — the framework does not rebuild, only signing runs again.
+        echo "building for $name ($VARIANT)…"
+        xcodebuild -project iosApp/iosApp.xcodeproj -scheme SomeonesHome -configuration "$CONFIG" \
+            -destination "id=$udid" -derivedDataPath "$DERIVED-device" \
+            DEVELOPMENT_TEAM="$TEAM" -allowProvisioningUpdates build >/dev/null
 
-    xcrun devicectl device install app --device "$core" "$APP" >/dev/null
-    xcrun devicectl device process launch --device "$core" "$BUNDLE_ID" >/dev/null
+        assert_fonts "$APP"
 
-    python3 -c 'import time; time.sleep(5)'
-    procs="$(xcrun devicectl device info processes --device "$core" 2>/dev/null || true)"
-    case "$procs" in
-        *SomeonesHome*) echo "running on the device. Look at the phone." ;;
-        *) echo "the app is not running — it launched and died." >&2; exit 1 ;;
-    esac
+        xcrun devicectl device install app --device "$core" "$APP" >/dev/null
+        xcrun devicectl device process launch --device "$core" "$BUNDLE_ID" >/dev/null
+
+        python3 -c 'import time; time.sleep(5)'
+        procs="$(xcrun devicectl device info processes --device "$core" 2>/dev/null || true)"
+        case "$procs" in
+            *SomeonesHome*) echo "running on $name." ;;
+            *) echo "the app is not running on $name — it launched and died." >&2; failed=1 ;;
+        esac
+    done <<EOF
+$devices
+EOF
+    [ "$failed" -eq 0 ] || exit 1
+    count="$(printf '%s\n' "$devices" | grep -c .)"
+    if [ "$count" -eq 1 ]; then echo "done. Look at the phone."; else echo "done. Look at the phones."; fi
     exit 0
 fi
 
