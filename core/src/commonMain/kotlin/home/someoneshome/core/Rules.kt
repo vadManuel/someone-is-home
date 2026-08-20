@@ -22,18 +22,26 @@ fun reduce(state: GameState, event: Event): Reduction<GameState, Effect> = when 
     // `cooldownArmed` across an arming means a round can begin with a player already revoked and
     // nothing announcing it — and it is what let a recording replay from a different starting
     // state and still be certified identical.
-    is Event.RoundArmed -> Reduction(
+    is Event.RoundArmed -> {
+        val seats = event.seats.sortedBy { it.index }
+        val insiders = seats.filter { s -> event.insiders.any { it.index == s.index } }
+        Reduction(
         GameState.armedRound(
             seed = event.seed,
-            seats = event.seats.sortedBy { it.index },
-            insiders = event.seats.filter { s -> event.insiders.any { it.index == s.index } }
-                .sortedBy { it.index },
-            systemIntegrity = event.seats.size * SUBROUTINES_PER_RESIDENT,
+            seats = seats,
+            insiders = insiders,
+            // Residents, NOT seats. Insiders have no assigned subroutines and no action an
+            // Insider takes ever advances the meter (gdd.md:382), so counting their seats sets a
+            // bar the Residents cannot reach — at 8 seats and 2 Insiders, 56 against 42
+            // completable. That is not an unrefined placeholder, it is a win condition that can
+            // never be met. F-005's proposed resolution, and the operand it names.
+            systemIntegrity = (seats.size - insiders.size) * SUBROUTINES_PER_RESIDENT,
         ),
         // Every seat is lit identically at arming. Any per-role difference here would be a tell
         // delivered at the exact moment everyone is still standing together.
-        event.seats.sortedBy { it.index }.map { Effect.LampSet(it, LAMP_DIM) },
+        seats.map { Effect.LampSet(it, LAMP_DIM) },
     )
+    }
 
     is Event.RevokeArmed -> Reduction(
         state.copy(cooldownArmed = (state.cooldownArmed + event.actor).sortedBy { it.index }),
@@ -89,7 +97,14 @@ private fun contact(state: GameState, event: Event.ContactMade): Reduction<GameS
 
 private fun sameSeat(a: Seat, b: Seat) = a.index == b.index
 
-/** Placeholder until F-005 resolves the SystemIntegrity denominator against the count assigned. */
+/**
+ * Still a placeholder — F-005 has a *proposed* resolution, not a settled one, and the 7 is the
+ * part that is unrefined. The operand beside it is not: see the arming branch.
+ *
+ * F-005's other half is NOT built here. Orphaned subroutines — from a revoked player or a
+ * collapsed chain — are meant to be silently auto-satisfied so the bar stays winnable, and
+ * nothing does that yet. Without it the bar is reachable in arithmetic and not in play.
+ */
 private const val SUBROUTINES_PER_RESIDENT = 7
 
 private const val LAMP_DIM = 1

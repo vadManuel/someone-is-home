@@ -118,60 +118,107 @@ class DifferentialTest {
     }
 
     /**
-     * The acceptance criterion: zero unexplained divergence.
+     * **The acceptance criterion, and it now runs on the exchange form.**
      *
-     * The swapped seat's own transcript is expected to differ and does — seat 1 is the acting
-     * Insider, and AbilityFired is permitted to Insider/Live and to no other class, so as a
-     * Resident seat 1 stops receiving it. That divergence is at the swapped seat, which is the
-     * one place a role is allowed to show.
+     * Two seats trade roles, so the Insider count is identical in both runs. Every seat other
+     * than the two that traded receives byte-identical bytes.
+     *
+     * The toggle form no longer isolates role — see below. This is why `withRolesExchanged` was
+     * called the stronger variant before there was any reason to prefer it.
      */
-    @Test
-    fun `a role swap leaks to nobody else`() {
-        val result = differentialOnRoleSwap(GameState.EMPTY, round(), Seat(1))
-        assertEquals(emptyList(), result.unexplained, "leaked: $result")
-        assertFalse(result.leaked)
-        assertTrue(
-            result.divergences.isNotEmpty(),
-            "not one line differed anywhere, including at the swapped seat — the diff is not " +
-                "reading the transcripts",
-        )
-        assertTrue(result.divergences.all { it.seat.index == 1 })
-    }
-
-    /** The count-preserving form, on two seats that both act during the round. */
     @Test
     fun `a role exchange leaks to nobody else`() {
         val result = differentialOnRoleExchange(GameState.EMPTY, round(), Seat(1), Seat(3))
         assertEquals(emptyList(), result.unexplained, "leaked: $result")
+        assertFalse(result.leaked)
+        assertTrue(
+            result.divergences.isNotEmpty(),
+            "not one line differed anywhere, including at the two swapped seats — the diff is " +
+                "not reading the transcripts",
+        )
+        assertTrue(result.divergences.all { it.seat.index == 1 || it.seat.index == 3 })
     }
 
-    /**
-     * Swapping a seat that acts in no way at all still produces two real runs, and still nothing
-     * escapes. Guards against a diff that only ever compares the busy seats.
-     */
+    /** Two seats that take no ability action all round. Guards against only ever diffing the busy ones. */
     @Test
-    fun `swapping a passive seat leaks to nobody`() {
-        val result = differentialOnRoleSwap(GameState.EMPTY, round(), Seat(6))
+    fun `exchanging two passive seats leaks to nobody`() {
+        val result = differentialOnRoleExchange(GameState.EMPTY, round(), Seat(5), Seat(6))
         assertEquals(emptyList(), result.unexplained, "leaked: $result")
     }
 
     /**
-     * **Stated because a green result here is currently weak evidence.**
+     * **The toggle form is now confounded, and this records why rather than deleting it.**
      *
-     * `reduce` never reads a role, so no effect can depend on one and this harness has nothing to
-     * find. The assertion below is what makes that claim checkable rather than a comment: the
-     * moment a rule branches on role, it fails and this test needs rewriting — which is exactly
-     * the moment the harness above starts being worth running.
+     * Toggling one seat changes the number of Insiders, and the SystemIntegrity denominator is
+     * `7 x initial_residents` — so the two runs are playing for a different bar and every out
+     * player's progress line differs. That is a world change, not a tell: the Insider count is a
+     * host-set lobby option (gdd.md:655, :875), public to everyone before the round starts, and
+     * a balance value that locks at arming.
+     *
+     * The harness cannot know that, so it reports the divergence and is right to. The judgement
+     * that it is explained belongs here, in a test that names the reason.
      */
     @Test
-    fun `role is still inert in the rules`() {
+    fun `toggling one role moves a public balance value and the diff says so`() {
+        val toggled = differentialOnRoleSwap(GameState.EMPTY, round(), Seat(1))
+        assertTrue(
+            toggled.unexplained.isNotEmpty(),
+            "toggling changed the Insider count and therefore the denominator; if this is now " +
+                "clean, the denominator has stopped reading the count and the test needs revisiting",
+        )
+        assertTrue(
+            toggled.unexplained.all { it.baseline?.startsWith("SubroutineProgressed") == true },
+            "toggling diverged in something other than the progress bar: " +
+                "${toggled.unexplained.take(3)}",
+        )
+        assertEquals(
+            emptyList(),
+            differentialOnRoleExchange(GameState.EMPTY, round(), Seat(1), Seat(3)).unexplained,
+            "the same seat, count preserved, must be clean",
+        )
+    }
+
+    /**
+     * **The successor to `role is still inert in the rules`, which fired the day the denominator
+     * was fixed.**
+     *
+     * Role is now read by exactly one rule: the SystemIntegrity denominator counts Residents. So
+     * the inertness claim is dead, and this is the sharper property that replaces it — *with the
+     * Insider count held fixed, no effect depends on WHICH seats hold the role.*
+     *
+     * That is the invariant the whole differential harness rests on. The day it fails, a rule has
+     * started branching on identity rather than on population, and the harness above becomes the
+     * instrument that matters rather than a formality.
+     */
+    @Test
+    fun `with the Insider count fixed no effect depends on who the Insiders are`() {
         val baseline = effectsOf(GameState.EMPTY, round()).map { Transcript.render(it) }
-        val variant = effectsOf(GameState.EMPTY, withRoleSwapped(round(), Seat(1)))
+        val exchanged = effectsOf(GameState.EMPTY, withRolesExchanged(round(), Seat(1), Seat(3)))
             .map { Transcript.render(it) }
         assertEquals(
-            baseline, variant,
-            "a rule now branches on role. The differential harness has become load-bearing; " +
-                "rewrite this test rather than deleting it.",
+            baseline, exchanged,
+            "a rule now branches on which seats hold the role, not merely on how many do. " +
+                "The differential harness has become load-bearing; rewrite this rather than " +
+                "deleting it.",
+        )
+    }
+
+    /** Toggling changes the progress values and nothing else — same kinds, same order. */
+    @Test
+    fun `toggling a role changes only the progress values`() {
+        val baseline = effectsOf(GameState.EMPTY, round()).map { Transcript.render(it) }
+        val toggled = effectsOf(GameState.EMPTY, withRoleSwapped(round(), Seat(1)))
+            .map { Transcript.render(it) }
+        assertEquals(
+            baseline.map { it.substringBefore('|') },
+            toggled.map { it.substringBefore('|') },
+            "toggling a role changed the shape of the effect stream, not just a balance value",
+        )
+        val differing = baseline.zip(toggled).filter { it.first != it.second }
+        assertTrue(differing.isNotEmpty(), "the denominator no longer reads the Insider count")
+        assertTrue(
+            differing.all { it.first.startsWith("SubroutineProgressed") },
+            "toggling changed something other than progress: ${differing.take(3)}",
         )
     }
 }
