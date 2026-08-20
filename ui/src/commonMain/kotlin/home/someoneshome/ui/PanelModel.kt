@@ -5,16 +5,17 @@ import androidx.compose.ui.graphics.Color
 /**
  * Every screen the device can be showing.
  *
- * **This enum is the design's screen list, not a navigation graph.** It says what exists; it says
- * nothing about what may follow what, because in play the house decides that and the device is
- * told. The walkable ordering in the gallery is a review convenience.
+ * **A screen list, not a navigation graph.** It says what exists; it says nothing about what may
+ * follow what, because in play the house decides that and the device is told. The ordering here
+ * follows the design's own grouping, which is a review convenience only.
  */
 enum class ScreenId {
     // Cold start — light-field, because the house lights are still on.
     Boot, Perms, Join,
 
     // Host setup — once per house, in the light.
-    Maps, Editor, RoomEdit, MarkerSheet, NoTerminal, Floors, SaveName, HomeDetail, Delete, Lobby,
+    Maps, Editor, RoomEdit, PassageWarn, MarkerSheet, ScanMarker, TermTaken, TermRemove,
+    NoTerminal, Floors, SaveName, HomeDetail, Delete, Lobby,
 
     // Arming — the host turns the lights off and the house does the rest.
     Secret, Armed, Notify, Reveal, RevealThread,
@@ -23,7 +24,7 @@ enum class ScreenId {
     Home, Page2, Lock,
 
     // Work.
-    Work, Scan, Sub, SubBright, Files, Notes, TermNo, TermLive, Timelapse,
+    Work, Scan, ScanCaught, Sub, SubBright, Files, Notes, TermNo, TermLive, Timelapse,
 
     // The house's hands.
     Banner, EgressWidget,
@@ -35,8 +36,17 @@ enum class ScreenId {
     Revoked, Ghost2, GhostMeeting, Ghost3, Disconnect, Settings, WinInsiders, WinResidents,
 }
 
-/** The Revoke ability's three visual states. Both roles render all three; only one role acts. */
+/** The ability's three visual states. Both roles render all three; only one role acts. */
 enum class RevokeState { Ready, Armed, Cooldown }
+
+/**
+ * What a room is for.
+ *
+ * **Stairs hold nothing** — never counted, never carrying a Subroutine, never a timed route. So
+ * turning an occupied room into one is destructive, and the host is told what it costs before it
+ * happens rather than after.
+ */
+enum class RoomType { Room, Stairs }
 
 /**
  * Everything the device needs in order to draw itself.
@@ -51,26 +61,29 @@ data class PanelState(
     val revoke: RevokeState = RevokeState.Ready,
     val markersOn: Boolean = false,
     val hasTerminal: Boolean = true,
-    /** Randomises the message backlog's *count and mix*, so inbox density can never imply a role. */
+    /** Host-side only: the torch while registering markers, in the light, with the back camera. */
+    val torch: Boolean = false,
+    val roomType: RoomType = RoomType.Room,
+    /** Randomises the backlog's *count and mix*, so inbox density can never imply a role. */
     val inboxSeed: Int = 3,
     val noteSeed: Int = 0,
 )
 
 /**
- * How the status bar reads, which is a property of where the round is rather than of the screen.
+ * How the status bar reads — a property of where the round is, not of the individual screen.
  *
- * [Hidden] is not "no status bar drawn by accident" — the lantern and the walk-in screen suppress
- * it on purpose, because both are lit fields whose entire job is to emit light evenly.
+ * [Hidden] is not an oversight. The lantern, the walk-in screen and the marker scan suppress the
+ * bar deliberately: all three are full lit fields whose job is to emit light evenly.
  */
 enum class PanelMode { Pre, Live, Ghost, End, Hidden }
 
 /**
  * The design's `renderVals()`, ported whole.
  *
- * Kept as one derivation rather than scattered through the screens for the reason the source
+ * Kept as one derivation rather than scattered through the screens, for the reason the source
  * gives: the same rule has to hold on thirty screens at once, and a rule applied thirty times by
  * hand is a rule that holds twenty-nine times. Role-dependent values in particular live *here*,
- * where they can be read side by side and checked against each other.
+ * where they can be read side by side and checked against one another.
  */
 class PanelVals(val state: PanelState) {
 
@@ -78,13 +91,15 @@ class PanelVals(val state: PanelState) {
     val insider: Boolean get() = state.role == PanelRole.Insider
     val resident: Boolean get() = !insider
 
-    // ---- Status bar ------------------------------------------------------------------------
+    // ---- Status bar ---------------------------------------------------------------------
 
     val mode: PanelMode = when (state.screen) {
-        ScreenId.Lock, ScreenId.Ghost2 -> PanelMode.Hidden
+        ScreenId.Lock, ScreenId.Ghost2, ScreenId.Scan -> PanelMode.Hidden
+
         ScreenId.Boot, ScreenId.Join, ScreenId.Maps, ScreenId.Editor, ScreenId.SaveName,
         ScreenId.HomeDetail, ScreenId.Delete, ScreenId.Secret, ScreenId.RoomEdit,
-        ScreenId.MarkerSheet, ScreenId.Floors, ScreenId.NoTerminal, ScreenId.Perms,
+        ScreenId.MarkerSheet, ScreenId.ScanMarker, ScreenId.PassageWarn, ScreenId.TermTaken,
+        ScreenId.TermRemove, ScreenId.Floors, ScreenId.NoTerminal, ScreenId.Perms,
         ScreenId.Lobby, ScreenId.WinResidents,
         -> PanelMode.Pre
 
@@ -116,15 +131,15 @@ class PanelVals(val state: PanelState) {
     }
 
     /**
-     * The perimeter is armed for every in-game screen, *including a revoked phone*.
+     * The perimeter is armed for every in-game screen, **including a revoked phone**.
      *
      * A glyph rather than a word, so the fact is not repeated in text on thirty screens — and so
-     * a revoked player's device says exactly what everyone else's says.
+     * a revoked player's device says exactly what everyone else's device says.
      */
     val armedGlyph: Boolean =
         mode == PanelMode.Live || mode == PanelMode.Ghost || state.screen == ScreenId.WinInsiders
 
-    /** The same iris, drained. An unarmed perimeter, drawn like the dead bars, not as a new symbol. */
+    /** The same iris, drained. An unarmed perimeter drawn like the dead bars, not a new symbol. */
     val disarmedGlyph: Boolean = state.screen == ScreenId.WinResidents
 
     val lockChip: Boolean = state.screen == ScreenId.Files || state.screen == ScreenId.Lock
@@ -139,22 +154,23 @@ class PanelVals(val state: PanelState) {
 
     /**
      * Anything that arrives unasked buzzes: banners, calls, the meeting transitions, revocation,
-     * and the round ending. Nothing the player *chose* to open does.
+     * a caught scan, and the round ending. Nothing the player *chose* to open does.
      */
     val buzzes: Boolean = state.screen in setOf(
         ScreenId.Armed, ScreenId.Notify, ScreenId.Banner, ScreenId.Call, ScreenId.Found,
         ScreenId.Assemble, ScreenId.Notice, ScreenId.Tally, ScreenId.Revoked,
+        ScreenId.ScanMarker, ScreenId.ScanCaught, ScreenId.GhostMeeting,
         ScreenId.WinInsiders, ScreenId.WinResidents,
     )
 
-    // ---- Messages ---------------------------------------------------------------------------
+    // ---- Messages -------------------------------------------------------------------------
 
     /**
      * Leftovers that queued while the phone had no signal.
      *
-     * The count *and* the mix are randomised per player, so inbox density can never imply a role.
-     * A fixed backlog would make "how many unread" a channel, and it would be one nobody thought
-     * of as a channel.
+     * The count *and* the mix are randomised per player, so inbox density can never imply a
+     * role. A fixed backlog would make "how many unread" a channel, and one nobody would think
+     * to look for.
      */
     private val backlog = listOf(
         Triple("MUM", "20:12", "did you get there ok? text me when you"),
@@ -173,22 +189,20 @@ class PanelVals(val state: PanelState) {
         val edge: Color,
         val fromInk: Color,
         val ink: Color,
-        val house: Boolean = false,
     )
 
     val inbox: List<InboxRow> = run {
         val seed = state.inboxSeed
         val keep = 3 + (seed % 4)
-        val start = seed % 3
-        val rest = backlog.drop(start).take(keep).map { (from, at, preview) ->
+        val rest = backlog.drop(seed % 3).take(keep).map { (from, at, preview) ->
             InboxRow(from, at, preview, Amber.Edge, Amber.Faint, Amber.Dim)
         }
-        // Identical sender, time and preview for both roles. The thread must be OPENED to read —
-        // the row itself cannot be a tell to anyone glancing at a neighbour's screen.
+        // Identical sender, time and preview for both roles: the thread must be OPENED to read.
+        // The row itself cannot be a tell to anyone glancing at a neighbour's screen.
         listOf(
             InboxRow(
                 "HOUSE", "21:02", "Regarding this evening. Please read.",
-                Amber.Dim, Amber.Bright, Amber.Bright, house = true,
+                Amber.Dim, Amber.Bright, Amber.Bright,
             )
         ) + rest
     }
@@ -204,8 +218,8 @@ class PanelVals(val state: PanelState) {
     /**
      * Notes writes to you, not the other way round.
      *
-     * The Resident lines are plausible, unverifiable, and deliberately *not* context aware — a
-     * line that referred to something that actually happened would be a channel from the
+     * The Resident lines are plausible, unverifiable and deliberately **not context aware** — a
+     * line referring to something that actually happened would be a private channel from the
      * authority to one player, which is the thing this app does not have.
      */
     private val residentNotes = listOf(
@@ -213,7 +227,7 @@ class PanelVals(val state: PanelState) {
         "i have not seen marcus finish anything yet",
         "priya was upstairs when the lights went",
         "dani walked past the study twice",
-        "somebody was already at marker 07",
+        "somebody was already at the garage marker",
         "tomas has not been in the hall all night",
         "count was four. i only saw three of you",
         "rose scanned nothing for a long time",
@@ -223,14 +237,14 @@ class PanelVals(val state: PanelState) {
         if (insider) "i hope no one finds out"
         else residentNotes[state.noteSeed.mod(residentNotes.size)]
 
-    // ---- The springboard's two tiles ---------------------------------------------------------
+    // ---- The springboard's two tiles --------------------------------------------------------
 
     /**
      * **Baselined to the Insider's brightness for BOTH roles.**
      *
-     * A dimmer page 2 for Residents would be readable across a room as *"this one has nothing to
-     * tap"*, which is the tell the whole parity discipline exists to prevent. The Resident sees
-     * this page lit exactly as an Insider does; nothing here answers them.
+     * A dimmer page 2 for Residents would read across a room as *"this one has nothing to tap"*,
+     * which is the tell the whole parity discipline exists to prevent. The Resident sees this
+     * page lit exactly as an Insider does; nothing here answers them.
      */
     val tileBorder: Color = Amber.Dim
     val tileInk: Color = Amber.Bright
@@ -239,9 +253,9 @@ class PanelVals(val state: PanelState) {
     val abilityName: String = if (insider) "REVOKE" else "POWER"
 
     /**
-     * The subtitle is identical in the armed and cooling states, and differs only in the resting
-     * verb — TAP TO ARM against TAP TO TEST. Both are true sentences about the button in front of
-     * you, and neither confirms anything.
+     * Identical in the armed and cooling states, differing only in the resting verb — TAP TO ARM
+     * against TAP TO TEST. Both are true sentences about the button in front of you, and neither
+     * confirms anything.
      */
     val abilitySub: String = when (state.revoke) {
         RevokeState.Armed -> "ARMED . TOUCH THEIR PHONE"
@@ -253,20 +267,24 @@ class PanelVals(val state: PanelState) {
     val revokeFill: Color = if (state.revoke == RevokeState.Armed) Amber.Edge else Color.Transparent
     val revokeInk: Color = if (state.revoke == RevokeState.Cooldown) Amber.Dim else Amber.Bright
     val revokeSubInk: Color = if (state.revoke == RevokeState.Armed) Amber.Bright else Amber.Dim
-    val revokeBarFraction: Float = if (state.revoke == RevokeState.Cooldown) 0.38f else 1f
+    val revokeBar: Float = if (state.revoke == RevokeState.Cooldown) 0.38f else 1f
     val revokeBarInk: Color = if (state.revoke == RevokeState.Cooldown) Amber.Dim else Amber.Bright
 
     val secondName: String = if (insider) "EGRESS" else "SUBSYS"
     val secondSub: String =
         if (insider) "SHARED WITH THE OTHER INSIDER" else "ALL SYSTEMS RESPONDING"
+    val secondBar: Float = 0.64f
+    val secondBarInk: Color = Amber.Dim
 
     val tier2A: String = if (insider) "SURGE" else "BUS"
     val tier2B: String = if (insider) "SPOOF" else "THERMAL"
     val tier2C: String = if (insider) "ISOLATE" else "CACHE"
+    val tier2Bar: Float = 0.82f
+    val tier2BarInk: Color = Amber.Mid
     val tier2Note: String =
         if (insider) "SURGE, SPOOF AND ISOLATE SHARE THIS" else "BUS, THERMAL AND CACHE NOMINAL"
 
-    // ---- Plan editor state -------------------------------------------------------------------
+    // ---- Host setup -------------------------------------------------------------------------
 
     /** No terminal, no playable plan: the save button says so rather than failing later. */
     val saveLabel: String =
@@ -279,9 +297,9 @@ class PanelVals(val state: PanelState) {
     val markerEdge: Color = if (state.markersOn) Amber.Slate else Amber.BonePale
     val markerFill: Color = if (state.markersOn) Amber.SlateFill else Color.Transparent
     val markerInk: Color = if (state.markersOn) Amber.SlateInk else Amber.SlateMute
-    val markerChipInk: Color = if (state.markersOn) Amber.BoneMute else Amber.BoneFaint
+    val markerChipInk: Color = if (state.markersOn) Amber.BoneInk else Amber.BoneFaint
     val markerChipFill: Color = if (state.markersOn) Amber.BoneChip else Amber.BoneChipOff
-    val markerChipEdge: Color = if (state.markersOn) Amber.BoneMute else Amber.BonePutty
+    val markerChipEdge: Color = if (state.markersOn) Amber.BoneInk else Amber.BonePutty
 
     val editorHint: String = if (state.markersOn) {
         "TAP ANYWHERE TO DROP A MARKER.\nTAP A MARKER TO RENAME OR REMOVE IT."
@@ -289,14 +307,36 @@ class PanelVals(val state: PanelState) {
         "DRAG TWO CORNERS TO ADD A ROOM.\nMARKERS IGNORE YOUR TAPS WHILE OFF."
     }
 
+    /** Room-type chips. Selection is inverted-dark on bone, the light field's emphasis. */
+    fun typeEdge(t: RoomType): Color = if (state.roomType == t) Amber.BoneInk else Amber.BonePale
+    fun typeFill(t: RoomType): Color = if (state.roomType == t) Amber.BoneInk else Color.Transparent
+    fun typeInk(t: RoomType): Color = if (state.roomType == t) Amber.Bone else Amber.BoneDim
+
+    val torchLabel: String = if (state.torch) "TORCH ON" else "TORCH OFF"
+    val torchFill: Color = if (state.torch) Amber.SlateFill else Color.Transparent
+    val torchInk: Color = if (state.torch) Amber.BoneInk else Amber.SlateFill
+    val torchWash: Color = if (state.torch) Amber.TorchWash else Color.Transparent
+
+    /**
+     * The markers registered in the room the host is holding, and the shape most recently added.
+     *
+     * Fixture data. The real list comes from the authority, and the *shapes* come from
+     * [MarkerShapes] — a marker's shape is its whole name here, so this is the one place the
+     * design's own 24-shape sample must not be used.
+     */
+    val roomMarkers: List<MarkerShape> =
+        listOfNotNull(MarkerShapes["triangle_up"], MarkerShapes["ring"])
+    val lastRegistered: MarkerShape? = MarkerShapes["ring"]
+
     // ---- Meeting ------------------------------------------------------------------------------
 
     /**
-     * Being out is an information privilege: a player outside the system sees who voted for whom,
+     * Being out is an information privilege: someone outside the system sees who voted for whom,
      * while the living only ever get a count.
      *
-     * Safe only because of the sequencing — by the time this is visible, the room already knows
-     * who is out, so there is never a window where someone out knows something the living do not.
+     * Safe only because of the sequencing — by the time this is visible the room already knows
+     * who is out, so there is never a window where someone outside knows something the living
+     * do not.
      */
     data class BallotRow(
         val by: String,
@@ -314,15 +354,43 @@ class PanelVals(val state: PanelState) {
         BallotRow("ROSE", "STILL DECIDING", "", Amber.Edge, Amber.Dim, Amber.Faint),
         BallotRow("TOMAS", "STILL DECIDING", "", Amber.Edge, Amber.Dim, Amber.Faint),
     )
+
+    // ---- Meters ---------------------------------------------------------------------------
+
+    /** System Integrity, frozen between meetings. 28 of 32. */
+    val integrityLit: Int = 28
+
+    /** The Egress countdown, which replaces the meter in place and takes the only number back. */
+    val egressLit: Int = 22
+
+    /** Both bars, seen only from outside the system. */
+    val outsideLit: Int = 21
+
+    /** The meeting clock. */
+    val meetingLit: Int = 14
+
+    companion object {
+        const val METER_SEGMENTS = 32
+
+        /**
+         * The scan's own countdown, and it is a safety device rather than a progress bar.
+         *
+         * Seven seconds, then the light dies and the phone goes back to where it was: nobody
+         * should be standing in a dark room holding a lit screen at a wall by accident.
+         */
+        const val SCAN_SEGMENTS = 20
+        const val SCAN_LIT = 12
+    }
 }
 
 /**
  * The bungalow's ground floor — six rooms on a ten-by-twelve grid.
  *
  * **One source of truth for every screen that draws a plan.** The editor, the live map, the
- * timelapse and the outside-the-system view all read these rects, so a room cannot be in one
- * place on the editor and another on the map. The design made that a rule and it is worth
- * keeping: two grids that agree by coincidence stop agreeing the first time one is edited.
+ * timelapse and the outside view all read these rects, so a room cannot sit in one place on the
+ * editor and another on the map. Two grids that agree by coincidence stop agreeing the first
+ * time one is edited, and a map that disagreed with the house the host walked would be a bug
+ * nobody could see from inside the game.
  */
 data class PlanRoom(
     val name: String,
@@ -347,7 +415,7 @@ object Plan {
         PlanRoom("GARAGE", 7, 9, 5, 9),
     )
 
-    /** The room the reader is standing in, which is the only anchor a count-based map can offer. */
+    /** The room the reader is standing in — the only anchor a count-based map can offer. */
     const val HERE = "GARAGE"
 
     fun roomAt(row: Int, col: Int): PlanRoom? =
@@ -385,7 +453,7 @@ object Plan {
         )
     )
 
-    /** True occupancy: live, no injected error, no staleness bands. Still counts, never identities. */
+    /** True occupancy: live, no injected error, no staleness bands. Still counts, never names. */
     val trueCounts = counts(
         mapOf(
             "KITCHEN" to (2 to Amber.Bright),
@@ -397,22 +465,16 @@ object Plan {
     )
 }
 
-/**
- * One cell of the plan editor's grid.
- *
- * The editor draws a filled cell per grid square; the live map draws only the *edges* where a
- * room boundary falls. That is not two styles of the same thing — the editor is about shapes you
- * are building, and the map is about a room you might be standing in.
- */
+/** One cell of the plan editor's grid. */
 data class EditorCell(val border: Color, val fill: Color?, val hatch: Boolean = false)
 
 /**
- * One cell of a live plan. Borders are per-side, because an outline only exists where a cell's
+ * One cell of a live plan. Borders are per-side, because an outline exists only where a cell's
  * neighbour belongs to a different room.
  *
- * **Adjacency falls out of cell neighbours**, which is the whole reason the map is a grid rather
- * than free rectangles: no geometry, no overlap rules, no snapping, and L-shaped rooms work for
- * free because real houses have them.
+ * **Adjacency falls out of cell neighbours**, which is why the map is a grid rather than free
+ * rectangles: no geometry, no overlap rules, no snapping, and L-shaped rooms work for free
+ * because real houses have them.
  */
 data class MapCell(
     val top: Color?,
@@ -425,9 +487,7 @@ data class MapCell(
 /** The editor grid, with one room optionally held as the current selection. */
 fun Plan.editorCells(focus: PlanRoom? = null): List<EditorCell> =
     List(ROWS * COLS) { i ->
-        val row = i / COLS
-        val col = i % COLS
-        val room = roomAt(row, col)
+        val room = roomAt(i / COLS, i % COLS)
         val held = focus != null && room != null && room.name == focus.name
         when {
             held -> EditorCell(Amber.SlateFocus, Amber.SlateFocusFill)
@@ -437,12 +497,7 @@ fun Plan.editorCells(focus: PlanRoom? = null): List<EditorCell> =
         }
     }
 
-/**
- * The live grid. Reads the same rects as the editor, deliberately.
- *
- * Two grids that agree by coincidence stop agreeing the first time one is edited, and a map that
- * disagreed with the plan the host walked would be a bug nobody could see from inside the game.
- */
+/** The live grid. Reads the same rects as the editor, deliberately. */
 fun Plan.mapCells(): List<MapCell> =
     List(ROWS * COLS) { i ->
         val row = i / COLS
@@ -451,8 +506,9 @@ fun Plan.mapCells(): List<MapCell> =
         val mine = room != null && room.name == HERE
 
         fun edgeTo(other: PlanRoom?): Color? =
-            if (other !== room) (if (mine) Amber.Bright else if (room != null) Amber.Dim else Amber.Deep)
-            else null
+            if (other !== room) {
+                if (mine) Amber.Bright else if (room != null) Amber.Dim else Amber.Deep
+            } else null
 
         MapCell(
             top = edgeTo(roomAt(row - 1, col)),
@@ -467,3 +523,26 @@ fun Plan.mapCells(): List<MapCell> =
             },
         )
     }
+
+/**
+ * The parity-check grid: 36 cells, seven corrupt, four of them found so far.
+ *
+ * A found cell inverts to full amber; a corrupt one sits at edge intensity; the rest are wells.
+ */
+object Parity {
+    private val corrupt = setOf(2, 7, 11, 16, 19, 24, 33)
+    private val found = setOf(2, 11, 19, 33)
+
+    data class Cell(val fill: Color, val border: Color)
+
+    val cells: List<Cell> = List(36) { i ->
+        Cell(
+            fill = when {
+                i in found -> Amber.Bright
+                i in corrupt -> Amber.Edge
+                else -> Amber.Well
+            },
+            border = if (i in found) Amber.Bright else Amber.Faint,
+        )
+    }
+}

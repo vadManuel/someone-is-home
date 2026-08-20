@@ -1,7 +1,6 @@
 package home.someoneshome.ui
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
@@ -20,17 +19,17 @@ import org.jetbrains.compose.resources.Font
 /**
  * The amber panel, as a palette.
  *
- * **Four luminance steps, one hue, no second hue** — emphasis comes from inversion (amber
- * ground, black glyphs), the way a real amber panel does it. Adding a colour here is not a
- * styling choice; a second hue is a channel, and a channel can carry a role.
+ * **Four luminance steps, one hue, no second hue.** Emphasis comes from inversion — amber
+ * ground, black glyphs — the way a real amber panel does it. Adding a colour here is not a
+ * styling choice: a second hue is a channel, and a channel can carry a role.
  *
  * **Dark-field, not light-field.** The rule is to minimise lit pixel *area*, not merely
- * brightness: on OLED a black pixel emits nothing, and the phone is a lantern in a dark house.
- * The pre-game screens ([Bone] and below) are the deliberate exception — they run while the
- * lights are still on, and nothing about them has to survive a dark room.
+ * brightness — on OLED a black pixel emits nothing, and the phone is a lantern in a dark house.
+ * The bone values below are the deliberate exception: they belong to screens that run while the
+ * house lights are still on, and nothing about them has to survive a dark room.
  *
  * Values are the design's own, carried across unchanged so a screen can be diffed against the
- * source by eye. Do not "tidy" them toward round numbers.
+ * source by eye. Do not tidy them toward round numbers.
  */
 object Amber {
     /** Step 4 — the only full-intensity ink. Headings, live values, the armed glyph. */
@@ -51,13 +50,15 @@ object Amber {
     /** True black. Not "very dark grey" — the pixel is off. */
     val Black = Color(0xFF000000)
 
-    /** The one darker-than-edge fill the design uses, for an unlit cell inside a lit grid. */
+    /** Darker than an edge: an unlit cell inside a lit grid. */
     val Well = Color(0xFF0B0703)
+
+    /** The fill for the room you are standing in, on a live plan. */
     val Deep = Color(0xFF150E04)
 
-    // ---- Pre-game, light-field. The house lights are still on for all of these. ----
+    // ---- Bone: light-field, pre-game. The house lights are still on for all of these. ----
 
-    /** The bone LCD ground of a device that has not been armed yet. */
+    /** The bone LCD ground of a device whose perimeter is not armed. */
     val Bone = Color(0xFFA29A86)
     val BoneInk = Color(0xFF14110B)
     val BoneDim = Color(0xFF332E24)
@@ -66,32 +67,39 @@ object Amber {
     val BoneDeep = Color(0xFF262117)
     val BonePutty = Color(0xFF8C8470)
     val BonePale = Color(0xFF918975)
+    val BoneSoft = Color(0xFFABA28E)
     val BoneChip = Color(0xFFC6BEAC)
     val BoneChipOff = Color(0xFFA79E8C)
-    val BoneMute = Color(0xFF14110B)
-
-    /** The softest bone rule, used only where a row must barely separate. */
-    val BoneSoft = Color(0xFFABA28E)
 
     /** The pale stripe in the stairs hatch. */
-    val BoneChipHatch = Color(0xFFB3AA96)
+    val BoneHatch = Color(0xFFB3AA96)
 
-    /** The plan editor's slate green — the only non-amber hue, and only ever pre-game. */
+    /**
+     * The plan editor's slate green — the one non-amber hue in the whole interface, and it
+     * appears only before the perimeter arms. It never reaches a screen played in the dark.
+     */
     val Slate = Color(0xFF234A3A)
     val SlateInk = Color(0xFF123328)
     val SlateFill = Color(0xFF8FA294)
     val SlateFocus = Color(0xFF243029)
     val SlateFocusFill = Color(0xFF3E4C44)
-    val SlateDead = Color(0xFF14110B)
     val SlateMute = Color(0xFF332E24)
+    val SlateDead = Color(0xFF14110B)
+
+    /** The wash the host's torch throws over the registration viewfinder. */
+    val TorchWash = Color(0xFF8FA294).copy(alpha = 0.16f)
 }
 
 /**
  * The two faces, both bitmap-derived.
  *
- * Silkscreen carries every label; VT323 carries numerals that need to read at a glance — the
- * clock, counts, a countdown. Neither is decorative. Their glyphs land on whole pixels, so
- * substituting a system monospace does not soften the look, it removes the device.
+ * Silkscreen carries every label; VT323 carries anything read as a *quantity* — a clock, a
+ * count, a countdown. The split is doing work: labels are chrome the player learns once and
+ * stops reading, readouts are values that change, and on a screen with no colour to spare that
+ * distinction has to be carried by the face.
+ *
+ * Neither is decorative. Their glyphs land on whole pixels, so substituting a system monospace
+ * does not soften the look — it removes the device.
  */
 object PanelType {
     val label: FontFamily
@@ -105,59 +113,49 @@ object PanelType {
 }
 
 /**
- * The design canvas is 300 units wide. Everything in this module is written in those units.
+ * The design canvas is 300 units wide, and every dimension in this module is written in those
+ * units — a 7px label is `7.0`, a 17px status bar is `17.u`.
  *
- * The port keeps the source design's numbers *literally* — a 7px label is `7`, a 17px status bar
- * is `17` — and the whole tree is scaled once, at the root, to whatever the real panel is. That
- * is why [DeviceCanvas] exists: without it every dimension would have to be re-derived by hand
- * against a device size, and a hand-derived number cannot be diffed against the design.
+ * The whole tree is scaled once at the root by [DeviceCanvas]. Without that, every number would
+ * have to be re-derived by hand against a real device size, and a hand-derived number cannot be
+ * diffed against the design it came from.
  *
- * Width is pinned and height flows. The design's screens are column layouts with a growing
- * middle, so a taller panel gives the middle more room rather than letterboxing it.
+ * Width is pinned; height flows. The design's screens are column layouts with a growing middle,
+ * so a taller panel gives the middle more room rather than letterboxing the whole thing.
  */
 const val DESIGN_WIDTH: Float = 300f
 
-/** The design canvas height. Screens may exceed it; it is the reference, not a cap. */
+/** The design canvas height. A reference, not a cap — screens may be taller. */
 const val DESIGN_HEIGHT: Float = 400f
 
 /**
- * Design units. `12.u` is twelve units in the design's coordinate space, not twelve device dp.
+ * Design units.
  *
- * Fractional values in the source (`7.5px`, `6.5px`) are kept fractional. Rounding them to whole
- * dp is what turns a deliberately cramped label into an ordinary one.
+ * Fractional values in the source (`7.5px`, `6.5px`, `5.5px`) stay fractional. Rounding them to
+ * whole dp is what turns a deliberately cramped label into an ordinary one.
  */
 val Int.u: Dp get() = this.dp
 val Double.u: Dp get() = this.dp
-val Int.us get() = this.sp
-val Double.us get() = this.sp
 
-/**
- * The scale in force, exposed so the rare composable that must reason in real pixels can.
- *
- * Almost nothing should read this. It exists for the lamp and for hit-target sizing, where a
- * value has to be checked against a physical dimension rather than a design one.
- */
+/** The scale in force. Almost nothing should read this; it exists for the rare physical check. */
 val LocalPanelScale: ProvidableCompositionLocal<Float> = staticCompositionLocalOf { 1f }
 
 /**
  * The panel's height in design units.
  *
- * Screens that fill vertically need it because the design canvas pins width and lets height flow:
- * 400 is the reference height, not a guarantee, and a screen that hard-codes 400 will crop or
- * float depending on the handset.
+ * Screens that fill vertically need it, because the canvas pins width and lets height flow: 400
+ * is the reference, not a guarantee, and a screen that hard-codes it will crop or float
+ * depending on the handset.
  */
 val LocalPanelHeight: ProvidableCompositionLocal<Dp> = staticCompositionLocalOf { DESIGN_HEIGHT.dp }
-
-/** The role the panel is rendering for. Read by screens; never by chrome. */
-val LocalRole: ProvidableCompositionLocal<PanelRole> = staticCompositionLocalOf { PanelRole.Resident }
 
 /**
  * Which of the two roles this device belongs to.
  *
- * **This is a rendering input, not an answer to a question anyone may ask.** `ui` cannot see
- * `core`, so this arrives already decided; nothing here derives it, and nothing here may render
- * it as a difference in brightness, page count or control position. The design's rule, kept
- * verbatim because it is the whole discipline: *brightness must never encode the role, and
- * neither may a working button.*
+ * **A rendering input, not an answer to a question anyone may ask.** `ui` cannot see `core`, so
+ * this arrives already decided; nothing here derives it, and nothing here may render it as a
+ * difference in brightness, page count or control position. The design's rule, kept verbatim
+ * because it is the entire discipline: *brightness must never encode the role, and neither may
+ * a working button.*
  */
 enum class PanelRole { Resident, Insider }

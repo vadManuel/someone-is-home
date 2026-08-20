@@ -13,6 +13,9 @@ kotlin {
         implementation(libs.compose.resources)
         implementation(project(":model"))
     }
+    sourceSets.commonTest.dependencies {
+        implementation(kotlin("test"))
+    }
 }
 
 // The pixel fonts ARE the interface. Silkscreen and VT323 are bitmap-derived faces whose glyphs

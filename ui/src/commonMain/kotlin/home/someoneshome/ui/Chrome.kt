@@ -22,22 +22,20 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 
 /**
- * The status bar — the one piece of chrome that is on screen for nearly the whole round.
+ * The status bar — the one piece of chrome on screen for nearly the whole round.
  *
- * It carries the perimeter state as a **glyph**, so that fact is stated once rather than written
- * out in words on thirty screens, and so a revoked player's device says exactly what everyone
- * else's device says. The signal bars go dead the moment the round starts, because from then on
- * the house owns the network — that is a fiction and a rule at the same time.
+ * It carries the perimeter as a **glyph**, so the fact is stated once rather than written out in
+ * words on thirty screens, and so a revoked player's device says exactly what everyone else's
+ * says. The signal bars go dead the moment the round starts, because from then on the house owns
+ * the network — a fiction and a rule at the same time.
  *
- * Nothing here is role-dependent. If a value in this function ever needs to consult the role,
+ * **Nothing here is role-dependent.** If a value in this function ever needs to consult the role,
  * that is the bug, not the feature.
  */
 @Composable
 fun StatusBar(vals: PanelVals) {
     Row(
-        Modifier
-            .fillMaxWidth()
-            .height(17.u)
+        Modifier.fillMaxWidth().height(17.u)
             .edgeLine(PanelSide.Bottom, vals.edge)
             .padding(horizontal = 6.u),
         horizontalArrangement = Arrangement.spacedBy(5.u),
@@ -49,11 +47,8 @@ fun StatusBar(vals: PanelVals) {
         Label(
             vals.carrier,
             modifier = Modifier.weight(1f),
-            size = 7.0,
-            color = vals.dim,
-            tracking = 0.06,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+            size = 7.0, color = vals.dim, tracking = 0.06,
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
 
         if (vals.armedGlyph) PerimeterGlyph(ring = Amber.Bright, core = Amber.Bright)
@@ -99,26 +94,21 @@ private fun ReceptionGlyph(ink: Color) {
 }
 
 /**
- * The perimeter iris. Armed is a lit ring with a lit core; disarmed is the same iris drained.
+ * The perimeter iris: a lit ring with a lit core when armed, the same iris drained when not.
  *
- * Drawn as one symbol in two intensities rather than two symbols, so "the perimeter came down"
- * reads as a state change on something the player has been looking at all evening.
+ * One symbol in two intensities rather than two symbols, so "the perimeter came down" reads as a
+ * state change on something the player has been looking at all evening.
  */
 @Composable
 private fun PerimeterGlyph(ring: Color, core: Color) {
-    Box(
-        Modifier.size(7.u).border(1.u, ring, CircleShape),
-        contentAlignment = Alignment.Center,
-    ) {
+    Box(Modifier.size(7.u).border(1.u, ring, CircleShape), contentAlignment = Alignment.Center) {
         Box(Modifier.size(3.u).background(core))
     }
 }
 
 @Composable
 private fun Battery(ink: Color, edge: Color) {
-    Row(
-        Modifier.width(11.u).height(6.u).border(1.u, edge).padding(1.u),
-    ) {
+    Row(Modifier.width(11.u).height(6.u).border(1.u, edge).padding(1.u)) {
         Box(Modifier.weight(1f).fillMaxHeight().background(ink))
         Box(Modifier.weight(1f).fillMaxHeight().background(ink))
         Box(Modifier.weight(1f).fillMaxHeight())
@@ -128,9 +118,9 @@ private fun Battery(ink: Color, edge: Color) {
 /**
  * The device screen: ground, status bar, and the content area every screen fills.
  *
- * The pre-game ground is painted *behind* everything rather than as the column's background,
- * because the bone LCD is a property of the device being unarmed, not of any one screen's
- * layout — the same reason the design paints it as an absolutely-positioned fill.
+ * The bone ground is painted *behind* everything rather than as the column's background, because
+ * it is a property of the device being unarmed rather than of any one screen's layout — the same
+ * reason the design paints it as an absolutely-positioned fill.
  */
 @Composable
 fun PanelFrame(
