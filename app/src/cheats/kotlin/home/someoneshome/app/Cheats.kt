@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,17 +57,27 @@ import home.someoneshome.ui.u
  * makes it lawful against the light discipline: constant light carries no signal, changes with
  * nothing, and is identical on every phone regardless of role.
  */
+private enum class CheatView { Panel, Picker, Transport }
+
 @Composable
 fun CheatRoot() {
     var state by remember { mutableStateOf(PanelState(screen = ScreenId.Boot)) }
-    var picking by remember { mutableStateOf(false) }
+    var view by remember { mutableStateOf(CheatView.Panel) }
+    // Hoisted here so the host and client outlive the view: navigating away from the transport
+    // surface mid-evening must not hang up two phones.
+    val scope = rememberCoroutineScope()
+    val transport = remember { TransportCheat(scope) }
     Box(Modifier.fillMaxSize().background(Amber.Black)) {
-        if (picking) {
-            CheatPicker(state) { state = it; picking = false }
-        } else {
-            Screen(state, cheatActions(state) { state = it })
+        when (view) {
+            CheatView.Panel -> Screen(state, cheatActions(state) { state = it })
+            CheatView.Picker -> CheatPicker(
+                state,
+                onPick = { state = it; view = CheatView.Panel },
+                onTransport = { view = CheatView.Transport },
+            )
+            CheatView.Transport -> TransportCheatScreen(transport)
         }
-        MarkerChip { picking = !picking }
+        MarkerChip { view = if (view == CheatView.Panel) CheatView.Picker else CheatView.Panel }
     }
 }
 
@@ -100,7 +111,7 @@ private fun PanelState.withScreen(id: ScreenId): PanelState = when (id) {
 
 /** Every screen, as a tappable list, plus the one toggle a screen cannot express: the role. */
 @Composable
-private fun CheatPicker(state: PanelState, onPick: (PanelState) -> Unit) {
+private fun CheatPicker(state: PanelState, onPick: (PanelState) -> Unit, onTransport: () -> Unit) {
     var draft by remember(state) { mutableStateOf(state) }
     val insets = LocalPanelInsets.current
     Column(
@@ -122,6 +133,14 @@ private fun CheatPicker(state: PanelState, onPick: (PanelState) -> Unit) {
         ) {
             Label("ROLE", size = 6.5, color = Amber.Dim)
             Label(draft.role.name.uppercase(), size = 6.5, color = Amber.Bright)
+        }
+        Row(
+            Modifier.fillMaxWidth().border(1.u, Amber.Faint).tap(onTransport)
+                .padding(horizontal = 6.u, vertical = 4.u),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Label("TRANSPORT", size = 6.5, color = Amber.Dim)
+            Label("0.8 RIG", size = 6.5, color = Amber.Bright)
         }
         for (id in ScreenId.entries) {
             val current = id == draft.screen

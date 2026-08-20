@@ -50,6 +50,7 @@ kotlin {
         // as in not compiled, so no runtime check stands between them and a shipped round.
         if (variant != "release") kotlin.srcDir("src/cheats/kotlin")
         dependencies {
+            implementation(libs.kotlinx.coroutines.core)
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
             implementation(libs.compose.ui)
