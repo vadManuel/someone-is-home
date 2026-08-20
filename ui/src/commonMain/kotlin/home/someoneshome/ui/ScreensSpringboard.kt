@@ -40,14 +40,15 @@ import androidx.compose.ui.text.style.TextAlign
  * Insider run Subroutines that write nothing without noticing the number fail to move.
  */
 @Composable
-fun HomeScreen(vals: PanelVals) {
+fun HomeScreen(vals: PanelVals, widget: @Composable (PanelVals) -> Unit = { IntegrityWidget(it) }) {
     val go = navigator()
     Column(Modifier.fillMaxSize()) {
         Column(
             Modifier.fillMaxWidth().weight(1f).padding(horizontal = 7.u).padding(top = 7.u),
             verticalArrangement = Arrangement.spacedBy(6.u),
         ) {
-            IntegrityWidget(vals)
+            // The one slot the house can take away. Everything below it is unchanged.
+            widget(vals)
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.u)) {
                 Column(
@@ -272,7 +273,7 @@ private fun DockButton(
  * taking the Residents' only number away without anything changing size.
  */
 @Composable
-private fun IntegrityWidget(vals: PanelVals) {
+fun IntegrityWidget(vals: PanelVals) {
     Column(
         Modifier.fillMaxWidth().border(1.u, Amber.Faint).padding(horizontal = 7.u, vertical = 6.u),
         verticalArrangement = Arrangement.spacedBy(5.u),

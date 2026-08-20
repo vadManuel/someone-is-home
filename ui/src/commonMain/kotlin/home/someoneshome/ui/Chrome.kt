@@ -44,7 +44,7 @@ fun StatusBar(vals: PanelVals) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SignalBars(on = vals.signalOn, off = vals.signalOff)
-        ReceptionGlyph(vals.ink)
+        ReceptionGlyph(vals.receptionInk)
 
         Label(
             vals.carrier,

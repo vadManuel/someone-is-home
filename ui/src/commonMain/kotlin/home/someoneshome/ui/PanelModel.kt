@@ -190,6 +190,11 @@ class PanelVals(val state: PanelState) {
     val carrier: String = when {
         state.screen == ScreenId.WinResidents -> "SOMEONE'S HOME"
         isPre -> ""
+        // Blank, exactly as before arming. The carrier names the house you are attached to, and a
+        // phone that has lost the host is not attached to one -- the same fact, so it reads the
+        // same way rather than inventing a third word. Without this the bar claimed a healthy
+        // link directly above a body saying the link was gone.
+        state.screen == ScreenId.Disconnect -> ""
         mode == PanelMode.Ghost || state.screen == ScreenId.Ghost2 -> when (state.outBy) {
             OutBy.Revoked -> "REVOKED"
             OutBy.Restrained -> "RESTRAINED"
@@ -204,6 +209,15 @@ class PanelVals(val state: PanelState) {
 
     /** Once the round starts the house owns the network: no bars on any live screen. */
     val signalOn: Color = if (isPre) Amber.BoneInk else Amber.Edge
+
+    /**
+     * The reception mark drops to the dead intensity while reconnecting.
+     *
+     * The lamp holds its last authorised state throughout — that is the rule, and it is why the
+     * screen says so in words — but the *chrome* carries no such obligation, and a healthy-looking
+     * link above a body announcing the link is gone is the screen contradicting itself.
+     */
+    val receptionInk: Color get() = if (state.screen == ScreenId.Disconnect) Amber.Edge else ink
     val signalOff: Color = when {
         isPre && state.screen != ScreenId.WinResidents -> Amber.BoneEdge
         isPre -> Amber.BoneInk
@@ -527,11 +541,20 @@ object Plan {
         )
     )
 
+    /**
+     * **Every room carries a number, always.** Zero and no-reading are the same fact — the system
+     * cannot tell "nobody was in the study" from "nothing reported the study", and it must not
+     * imply that it can. A blank room would read as the second, so there are no blanks.
+     *
+     * The timelapse fixture originally omitted STUDY, which drew exactly that distinction by
+     * accident.
+     */
     val timelapseCounts = counts(
         mapOf(
             "KITCHEN" to (3 to Amber.Dim),
             "LIVING" to (1 to Amber.Dim),
             "HALL" to (2 to Amber.Dim),
+            "STUDY" to (0 to Amber.Dim),
             "GARAGE" to (0 to Amber.Dim),
         )
     )

@@ -534,6 +534,17 @@ fun SubScreen() {
  *
  * Some Subroutines have to be bright; if every one were concealable, choosing a dark one would
  * itself be a choice worth reading. The pair exists so that being lit at a marker is ordinary.
+ *
+ * **THE MINIGAME ITSELF IS A PLACEHOLDER.** This screen carries the design's *style* — segment
+ * grid, four luminance steps, inverted emphasis — but not its rules. The Subroutines were
+ * designed separately on the diagnostics bench, and that set is the authoritative one; this
+ * fixture is not. Two things visible here are artifacts rather than intent:
+ *
+ * - corrupt-but-unfound cells render lighter than clean ones, which shows the answer if the task
+ *   is genuinely to *find* them
+ * - "PASS 2 OF 2" implies a structure this screen does not otherwise express
+ *
+ * When the real Subroutines land, take their rules from the bench and their look from here.
  */
 @Composable
 fun SubBrightScreen() {
@@ -813,63 +824,49 @@ private fun FloorStrip() {
 /**
  * Containment: **the house takes the only number back.**
  *
- * The Egress countdown replaces System Integrity *in place*, in the same widget, at the same
- * size. The Residents lose their only measure of progress at exactly the moment they most want
- * it — and the springboard behind is dimmed rather than removed, because the phones still work.
+ * This is page 1 with **one widget swapped** — not a screen of its own. The Egress countdown
+ * occupies the System Integrity widget's slot, at the same size, in the same place, and
+ * everything below it carries on working: the next Subroutine, the app grid, the dock. That is
+ * the whole point. The Residents lose their only measure of progress at exactly the moment they
+ * most want it, and nothing else about the phone changes to soften it.
+ *
+ * The design's fixture draws placeholder rectangles below the widget because it only needed to
+ * show the widget. Drawing the real springboard is what the swap actually means.
  */
 @Composable
 fun EgressWidgetScreen(vals: PanelVals) {
+    HomeScreen(vals) { EgressWidget(it) }
+}
+
+/**
+ * The countdown, built to the same measurements as the meter it replaces.
+ *
+ * It names both nodes because containment needs two people at two separate markers and nobody may
+ * speak — the device saying where is the only coordination available.
+ */
+@Composable
+private fun EgressWidget(vals: PanelVals) {
     Column(
-        Modifier.fillMaxSize().padding(horizontal = 7.u).padding(top = 7.u),
-        verticalArrangement = Arrangement.spacedBy(6.u),
+        Modifier.fillMaxWidth().border(1.u, Amber.Bright).padding(horizontal = 7.u, vertical = 6.u),
+        verticalArrangement = Arrangement.spacedBy(5.u),
     ) {
-        Column(
-            Modifier.fillMaxWidth().border(1.u, Amber.Bright).padding(horizontal = 7.u, vertical = 6.u),
-            verticalArrangement = Arrangement.spacedBy(5.u),
-        ) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom,
-            ) {
-                Label("EGRESS . BEACON", size = 6.5, color = Amber.Bright, tracking = 0.14)
-                Readout("1:42", size = 19.0, color = Amber.Bright, lineHeight = 1.0)
-            }
-            SegmentBar(
-                total = PanelVals.METER_SEGMENTS,
-                lit = vals.egressLit,
-                litColor = Amber.Bright,
-                unlitColor = Amber.Edge,
-            )
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Label("CONTAIN AT", size = 6.0, color = Amber.Dim, tracking = 0.1)
-                // Named, because coordination is required and nobody may speak.
-                Label("UTILITY . LANDING", size = 6.0, color = Amber.Bright, tracking = 0.1)
-            }
-        }
-
-        Column(
-            Modifier.weight(1f).fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(5.u),
-        ) {
-            repeat(2) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.u)) {
-                    repeat(4) {
-                        Box(
-                            Modifier.weight(1f).height(44.u)
-                                .border(1.u, Amber.Faint.copy(alpha = 0.55f))
-                        )
-                    }
-                }
-            }
-        }
-
         Row(
-            Modifier.fillMaxWidth().padding(top = 6.u, bottom = 8.u),
-            horizontalArrangement = Arrangement.spacedBy(5.u, Alignment.CenterHorizontally),
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Bottom,
         ) {
-            Box(Modifier.size(5.u).background(Amber.Bright))
-            Box(Modifier.size(5.u).background(Amber.Faint))
+            Label("EGRESS . BEACON", size = 6.5, color = Amber.Bright, tracking = 0.14)
+            Readout("1:42", size = 19.0, color = Amber.Bright, lineHeight = 1.0)
+        }
+        SegmentBar(
+            total = PanelVals.METER_SEGMENTS,
+            lit = vals.egressLit,
+            litColor = Amber.Bright,
+            unlitColor = Amber.Edge,
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Label("CONTAIN AT", size = 6.0, color = Amber.Dim, tracking = 0.1)
+            Label("UTILITY . LANDING", size = 6.0, color = Amber.Bright, tracking = 0.1)
         }
     }
 }
