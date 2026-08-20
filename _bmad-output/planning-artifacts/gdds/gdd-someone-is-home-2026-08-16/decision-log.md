@@ -887,13 +887,159 @@ test asserts no screen can end up without a status row.
 
 ---
 
+## Revision 14 — the emit boundary, and what a green harness is worth
+
+*Decided 2026-08-20 while building E0 stories 0.5, 0.6 and 0.6b. Everything here came out of
+making the leak machinery real; none of it was visible from the design side.*
+
+### D-079 · **The client taxonomy has two axes — role AND round-state — decided**
+
+The emit allowlist is keyed on `ClientClass = Role x RoundState`, eight classes. Not on role.
+
+**Keyed on role alone it would ship the two things being out is made of.** A player outside the
+system sees the real progress bars and true occupancy, *which no living player of either role may
+see* (gdd.md:1014). Two rows prove it and both already existed as decisions:
+
+- **The live SystemIntegrity decrement.** The count is shown to living players only at meetings,
+  batched and then frozen (gdd.md:192, :1002). A continuous decrement is a rate signal nobody
+  living is entitled to.
+- **The vote attribution list** (D-075). The living see counts; only a player outside the system
+  sees who cast what.
+
+Keyed on role, the entry serving an out Resident serves a living Resident. **This was verified by
+building the wrong version:** an allowlist keyed on role alone was injected, and it granted the
+live progress count to `Resident/PreArm`, `Resident/Live` and `Resident/Ended` alongside the two
+out classes.
+
+**The pre-arm classes appear in no row at all.** D-067 — nothing in-game runs in the lobby.
+
+**A consequence, accepted: one kind, one payload, one permission set.** A message shape is
+permitted to a class in full or not at all. If two classes need different content that is two
+message kinds, each with its own row and its own narrower client-facing type. Per-class narrowing
+of a single kind is redaction by nulling fields under another name (rule 3).
+
+**Living players therefore currently receive no progress and no vote outcome at all**, because the
+batched meeting-time messages do not exist yet. That is the fail-closed direction and the correct
+one to be wrong in.
+
+### D-080 · **The gate refuses with a distinct return type, and the refusal is recorded — decided**
+
+D-066 settled *that* pre-arm events are refused above the rules. This settles **where the refusal
+lives**, which was left open and is the part with teeth.
+
+`admit(state, event)` returns `Admitted(reduction)` or `Refused(reason)`. **A refusal carries no
+reduction at all.** Returning `Reduction(state, emptyList())` would be rule 1's forbidden shape
+wearing a different name — the absent effect is the signal — so refusing has to be a different
+*kind* of answer, not a quieter one.
+
+**The recording gains an `X` row type**, compared by replay alongside effects and state. Without
+it a refused event and an event that never happened are the same recording, and the gate would
+have fixed one disagreement by creating another. Recording format 3 -> 4.
+
+**`reduce` never learns the flag exists**, which is what makes the branch *provably* outside every
+client-visible path rather than reviewed as being outside one. A standing test asserts `reduce`
+still processes a pre-arm event when called directly, so a migration back inside the rules fails
+loudly.
+
+**D-068's client-visible refusal is NOT built, and the reason is structural.** The emit boundary
+addresses seats filtered to `state.seats`; pre-arm there are no seats, because the refused party
+is a *connection* that has not become a seat. It needs the connection identity arriving with story
+0.8's seat token. Building a placeholder would mean inventing that concept early.
+
+### D-081 · **The Insider count is public, so the differential harness runs on the exchange form**
+
+Not a new decision — a *consequence* nobody had traced. The lobby settings, Insider count among
+them, are the host's to set and visible to everyone before the round (gdd.md:655, :875).
+
+It matters because F-005's denominator is `7 x initial_residents`, which reads the Insider count.
+**So swapping one player's role changes a balance value, and the two runs of the differential
+harness are no longer the same round.** Every out player's progress line differs, at every seat,
+and the harness reports it as unexplained divergence.
+
+That divergence is a **world change, not a tell** — the count was public before anyone moved. But
+the harness cannot know that, and it is right to report it.
+
+**Resolution: the acceptance criterion moves to the count-preserving exchange form** — two seats
+trade roles, so the count is identical in both runs and only *which* seats hold the role varies.
+The invariant it now checks is the sharper one: **with the Insider count fixed, no effect depends
+on which seats hold the role.**
+
+**The one-seat toggle is kept, and its divergence is asserted as expected**, with the reason named
+in the test. Deleting it would hide the coupling; leaving it unexplained would look like a
+weakened harness. Anyone reading that test and suspecting it was loosened to make something pass
+should read this entry first.
+
+### D-082 · **F-005's denominator counts Residents. The other half is still open**
+
+`event.seats.size * 7` counted Insiders into a bar only Residents can lower — 56 against 42
+completable at 8 players. **Insiders have no assigned subroutines and no action an Insider takes
+ever advances the meter** (gdd.md:382), so Residents could not reach zero and a win condition was
+unreachable. Now `(seats - insiders) * 7`, the operand F-005's proposed resolution names.
+
+**The 7 is still a placeholder and F-005 is still open.** Its other half — orphaned subroutines
+from a revoked player or a collapsed chain being silently auto-satisfied so the fixed denominator
+stays winnable — is **not built**. The bar is reachable in arithmetic and not yet in play.
+
+### D-083 · **Three leak surfaces means three instruments, and the blind spots are now measured**
+
+project-context has always said a green build on one says nothing about the other two. That is now
+a number rather than an argument.
+
+A symmetric leak was injected — the live true progress count widened from the out classes to
+everyone in the house:
+
+| instrument | result |
+|---|---|
+| 0.6 differential harness | `tests="7" failures="0"` — **saw nothing** |
+| 0.6b schema allowlist | `tests="11" failures="2"` |
+
+Both of the differential harness's runs come out of the same redaction code, so the two
+transcripts agree and the diff is clean. **0.6b is independently required, not a second opinion.**
+
+**Two further blind spots, recorded now rather than discovered later:**
+
+- **Leaks carried by the lamp are invisible to the differential harness.** A lamp message is
+  addressed to one phone, so a per-role luminance difference shows up only at the swapped seat and
+  is filed as expected. In the house it is a tell visible across a dark room. **The harness reads
+  the wire; the lamp leaks through the air.**
+- **A restrained player is still classified as living.** `RoundState.Out` means revoked *or*
+  restrained, and nothing in `GameState` stores a restrained player — so such a seat keeps every
+  living-class permission while `ui` already renders it the outside-the-system screen. Rule 9
+  forbids borrowing the revoked list for it: one is system power lent by the house, the other a
+  physical act it cannot prevent. **Closing it needs a second list and a second clause.**
+
+### D-084 · **A guard is proven by injecting the bug it exists for, before it is trusted — reaffirmed**
+
+Not new, but it earned its place three times in one day and the practice is now explicit: **write
+the guard test first and watch it fail.**
+
+- A pre/post classification bug in the per-client recorder was **not caught** by nine tests that
+  all passed. The tenth, written specifically for it, caught it.
+- A source edit during the review fixes **silently matched nothing**. The build stayed green. Only
+  a test written beforehand caught it.
+- A code review of the three finished stories returned **ten findings, all valid**, six of them
+  provable — including a state row that had stopped rendering a field that decides what every
+  client may receive.
+
+**Confirm from test-result XML, never from a build's exit code**, and put the failure text in the
+commit message.
+
+
+---
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).
 Architecture Steps 1–9 complete. Open: OI-4, OI-5, OI-6. **Gating: CLEARED — 1.7a/1.7b both pass; E0 proceeds on Kotlin Multiplatform.**
-**Revision 13 added D-066 through D-077** — the marker system, the pre-arm gate, and the rule that
+**Revision 13 added D-066 through D-078** — the marker system, the pre-arm gate, and the rule that
 the house announces only what no player could have observed. The device design is ported to
 Compose across 55 screens; 4 of 55 differ by role, and all four are intended.
+
+**Revision 14 added D-079 through D-084** — the emit boundary. The client taxonomy has two axes,
+the admission gate's refusal is a distinct return type and is recorded, and the differential
+harness now runs on the count-preserving exchange form because the SystemIntegrity denominator
+reads the Insider count. **E0 stories 0.5, 0.6 and 0.6b are built, injection-verified and pushed;
+0.6c remains, and it needs hardware.** Two leak surfaces of three are instrumented.
 
 **Carried into E0 as a constraint, not a closed item:** total app allocation ≤ ~0.5 MB/s as the design target, with the measured cliff between 1.5 and 3.0 MB/s — roughly 6× margin, so this is a budget rather than a knife edge. Nobody yet knows what the real app allocates with BLE, 100 Hz motion, effects and recording running at once.
 Action: create `project-context.md`.
