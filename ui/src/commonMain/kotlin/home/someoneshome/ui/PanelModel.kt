@@ -492,7 +492,10 @@ fun Plan.editorCells(focus: PlanRoom? = null): List<EditorCell> =
         when {
             held -> EditorCell(Amber.SlateFocus, Amber.SlateFocusFill)
             room == null -> EditorCell(Amber.BonePutty, null)
-            room.transit -> EditorCell(Amber.Slate, null, hatch = true)
+            // Slate underneath, pale stripes on top: the source gradient is 3 units of
+            // BoneHatch against 1 of Slate, so the SLATE is the gap colour. Leaving the
+            // fill null let the bone ground show through and the stairs went pale.
+            room.transit -> EditorCell(Amber.Slate, Amber.Slate, hatch = true)
             else -> EditorCell(Amber.Slate, Amber.SlateFill)
         }
     }

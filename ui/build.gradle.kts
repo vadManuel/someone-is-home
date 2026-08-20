@@ -6,6 +6,16 @@ plugins {
 
 kotlin {
     iosArm64(); iosSimulatorArm64()
+
+    // A desktop target that exists ONLY so the screens can be looked at while they are built.
+    // Writing several thousand lines of layout and inferring correctness from `compileKotlin`
+    // is how you ship a springboard whose tiles are in the wrong grid: weights, aspect ratios
+    // and the density-scaled canvas all fail at runtime, silently, never at compile time.
+    //
+    // This is NOT simulator verification, which project-context rules out. That rule is about
+    // the game -- BLE, torch, camera, haptics -- none of which this touches. It renders layout
+    // on a Mac and nothing else, and it ships in no build variant.
+    jvm("desktop")
     sourceSets.commonMain.dependencies {
         implementation(libs.compose.runtime)
         implementation(libs.compose.foundation)
@@ -16,6 +26,19 @@ kotlin {
     sourceSets.commonTest.dependencies {
         implementation(kotlin("test"))
     }
+    sourceSets.named("desktopMain").dependencies {
+        implementation(compose.desktop.currentOs)
+    }
+    sourceSets.named("desktopTest").dependencies {
+        implementation(kotlin("test"))
+        @OptIn(org.jetbrains.compose.ExperimentalComposeLibrary::class)
+        implementation(compose.uiTest)
+        implementation(compose.desktop.currentOs)
+    }
+}
+
+compose.desktop {
+    application { mainClass = "home.someoneshome.ui.preview.PreviewKt" }
 }
 
 // The pixel fonts ARE the interface. Silkscreen and VT323 are bitmap-derived faces whose glyphs
