@@ -19,7 +19,7 @@ import kotlin.jvm.JvmInline
  * strings are the wire and may never be renamed in place — a rename is a new protocol version. A
  * test pins each one.
  */
-const val TRANSPORT_PROTOCOL: Int = 1
+const val TRANSPORT_PROTOCOL: Int = 2
 
 /**
  * The credential that gets a client back into *its own* seat, and nothing else.
@@ -121,6 +121,27 @@ sealed class TransportFrame {
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("commit")
     data class Commit(val proposal: Long) : TransportFrame()
+
+    /**
+     * A clock-offset round trip, client → host (D5). Carries only the probe number — the
+     * client's own clock reading NEVER goes on the wire; the client keeps its send time locally
+     * and matches it back by [probe]. Protocol 2.
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("probe")
+    data class TimeProbe(val probe: Long) : TransportFrame()
+
+    /**
+     * The host's answer to [TimeProbe]: its monotonic reading at the moment of reply. This is
+     * the one sanctioned crossing of a monotonic value between devices — D5's offset estimation
+     * exists precisely to map every phone's timeline onto the authority's, and this number is
+     * meaningful ONLY as that target, never as a timestamp to store or compare raw.
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("mark")
+    data class TimeMark(val probe: Long, val hostMillis: Long) : TransportFrame()
 
     /**
      * The opaque channel. The body is whatever the emit boundary rendered for this client —
