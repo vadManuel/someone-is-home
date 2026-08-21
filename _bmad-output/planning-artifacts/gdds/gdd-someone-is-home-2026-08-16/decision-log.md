@@ -1219,6 +1219,52 @@ named: **when a persistence claim fails on hardware, read the container, not the
 first pull also mis-derived the container's layout and reported an absence one directory too
 deep — the second look, listing the whole tree, is what made the evidence honest.
 
+
+---
+
+## Revision 17 — the refusal nobody sees
+
+*Decided 2026-08-20, late the same evening, in conversation with Vadmanuel. D-068 left one half
+unbuilt — what the phone that sent a refused event actually experiences — and D-080 recorded why
+it could not be built then: the refused party was a connection, not a seat, and nothing could
+address it. Story 0.8's seat tokens removed that excuse, so the question came due.*
+
+### D-097 · **A refused event is answered with re-assertion, not explanation — decided**
+
+The gate still refuses and still records (D-066 and D-080 unchanged — replay needs the X rows).
+What changes is the client's side of it: **there is no refusal message.** The house answers a
+refused event by re-pushing that client's currently-authorized view through the emit boundary,
+addressed and permitted like any other delivery. The stale phone snaps to the screen it should
+have been on. The refusal is invisible; the correction is ordinary.
+
+**This deletes D-068's standing hazard instead of guarding it.** D-068 allowed a reason to be
+sent only when the reason was publicly observable, and warned that the identical code reporting a
+mid-round refusal — *target already revoked, cooldown running* — would be an alignment leak
+written by someone tidying up error handling. Under D-097 that channel never exists: misuse of
+"re-send the authorized view" sends the authorized view, which is safe **by construction**
+because it passes the same allowlist as everything else. The forbidden sentence has no message
+kind that could carry it.
+
+**One mechanism, two triggers.** A phone that reconnects after a crash needs exactly this — its
+current authorized view, plus the pending flip the ack protocol owes it (D5: proceed without the
+missing client; it flips on reconnect). Reseated and refused-something-stale converge on the same
+redrive.
+
+**Why the client needs nothing new:** clients hold no request/response posture. Intents are
+fire-and-forget — the only optimism the design permits is input echo, reflecting your own touch —
+and the phone renders whatever the house pushes, whenever it arrives. A re-assertion is
+indistinguishable from ordinary delivery, and that indistinguishability *is* the refusal staying
+invisible. Outcome prediction and optimistic rollback stay forbidden for the recorded reasons:
+prediction requires client-side knowledge (the leak surface `ui ↛ core` exists to delete), and a
+rollback is retracted light in a dark room — a broadcast that something was refused.
+
+**Deliberately NOT decided here: the payload.** What "the authorized view" concretely contains is
+loop work and the loop is under reconsideration. Two constraints are recorded for whoever builds
+it: it must be a **snapshot, safe to re-receive redundantly** (the same requirement resume
+imposes), and it enters the schema like any kind — a row somebody decides, or it ships to nobody.
+Transport-level refusals (`Refused` frames to connections that hold no seat) are unaffected;
+there is no view to re-assert for a stranger, and D-068's public-reason logic still governs them.
+
 ---
 
 ## State after revision 12
@@ -1249,6 +1295,11 @@ iPhone 16 Pro host over real Wi-Fi, and a locked round refused a stranger termin
 needs WHERE as well as WHO (D-094; mDNS is the real answer, an address store is the interim),
 the deployment target is 18 (D-095), and the seventh silent-instrument event was caught by
 reading the device's data container rather than the build (D-096).
+
+**Revision 17 added D-097** — the refusal nobody sees. D-068's unbuilt half is settled: a refused
+event is answered by re-asserting the client's authorized view, never by a reason-carrying
+message — the leak-prone channel is not narrowed but never built. Same mechanism serves resume.
+The payload is loop work and stays open; only the mechanism is decided.
 
 **Carried into E0 as a constraint, not a closed item:** total app allocation ≤ ~0.5 MB/s as the design target, with the measured cliff between 1.5 and 3.0 MB/s — roughly 6× margin, so this is a budget rather than a knife edge. Nobody yet knows what the real app allocates with BLE, 100 Hz motion, effects and recording running at once.
 Action: create `project-context.md`.
