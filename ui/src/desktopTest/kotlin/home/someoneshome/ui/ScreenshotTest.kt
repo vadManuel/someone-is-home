@@ -208,7 +208,7 @@ class ScreenshotTest {
     /**
      * **The Subroutines' echo states, which are most of what a Subroutine screen ever is.**
      *
-     * The sweep above renders each of the three from its [ScreenId] and gets the fixture's
+     * The sweep above renders each of the six from its [ScreenId] and gets the fixture's
      * part-way-through state, which is one frame out of a set where every frame is the interesting
      * one. What a Subroutine looks like when nobody has touched it — a screen with no echo at all,
      * the thing a player actually walks onto — and what it looks like once the entry has gone to
@@ -229,20 +229,25 @@ class ScreenshotTest {
             val frames = listOf<Pair<String, SubroutineModel.() -> Unit>>(
                 "untouched" to { },
                 "handed-over" to {
-                    // Enough taps to finish the longest of the three, then one past it: an entry
+                    // Enough taps to finish the longest of the six, then one past it: an entry
                     // that has gone takes nothing more, so the extra is drawn as a no-op on
-                    // purpose rather than being carefully avoided.
+                    // purpose rather than being carefully avoided. Then the hand-over, which four
+                    // of the six need and the two sequences have already done for themselves.
                     repeat(SubroutineModel.HANDSHAKE_BEATS + 1) { at ->
-                        when (subroutine) {
-                            Subroutine.Handshake -> handshake.enter(at)
-                            Subroutine.Replay ->
-                                replay.enter(at % SubroutineModel.REPLAY_DOTS)
-                            else -> {
-                                parity.choose(at)
-                                parity.handOver()
-                            }
-                        }
+                        tap(
+                            subroutine,
+                            when (subroutine) {
+                                Subroutine.Replay -> at % SubroutineModel.REPLAY_DOTS
+                                Subroutine.Jam -> -1
+                                Subroutine.Short -> SubroutineModel.SHORT_FINGERS
+                                Subroutine.SignalTrace -> at.mod(
+                                    SignalGraph.of(SubroutineModel.TRACE_SEED).nodes.size,
+                                )
+                                else -> at
+                            },
+                        )
                     }
+                    handOver(subroutine)
                 },
             )
             for ((state, set) in frames) {
