@@ -130,6 +130,13 @@ fun BoxScope.NotificationBanner(notification: Notification) {
  * **A Subroutine opens only at its marker**, which is what turns the list into travel. The two
  * locked rows say WAITING UPSTREAM and name nothing: you do not learn which Subroutine is blocked
  * or whose completion would free it, because that would tell you what someone else is doing.
+ *
+ * **This is where a dark route is planned (D-106).** Every assigned row carries its light
+ * signature in a column of its own, so the whole order can be read for concealment in one glance
+ * — which is the entire reason the value is knowledge held in advance rather than discovered at
+ * the marker. The key at the foot of the screen is the only place the mark is spelled out; it is
+ * here rather than on the springboard because this is the screen a player reads while deciding,
+ * and the springboard is the one they glance at while walking.
  */
 @Composable
 fun WorkScreen(vals: PanelVals) {
@@ -149,27 +156,77 @@ fun WorkScreen(vals: PanelVals) {
         }
 
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.u)) {
-            WorkRow("REPLAY", "HALL", MarkerShapes["diamond"], done = true)
-            WorkRow("SHORT", "GARAGE", MarkerShapes["arrow_right"], done = true)
-            WorkRow("JAM", "BED 2", MarkerShapes["cross"], done = true)
+            // Every light value on this screen is the design roster's own, not a fixture
+            // invention: Replay is bright, Short is dark, Jam is medium, Sniff is the one short
+            // dark. ARRAY WIPE is the exception and is reasoned about at its own row.
+            WorkRow("REPLAY", "HALL", MarkerShapes["diamond"], LightSignature.Bright, done = true)
+            WorkRow("SHORT", "GARAGE", MarkerShapes["arrow_right"], LightSignature.Dark, done = true)
+            WorkRow("JAM", "BED 2", MarkerShapes["cross"], LightSignature.Medium, done = true)
             WorkRow(
-                vals.current.name, vals.current.room, vals.current.marker, current = true,
+                vals.current.name, vals.current.room, vals.current.marker, vals.current.light,
+                current = true,
             ) { go(ScreenId.Scan) }
             // The design's fixture used a hexagon; the vetted roster has none, because the
             // legibility pass cut everything reading as "circle with corners". The first
             // substitution was `trapezoid`, which at 10 units read as the same amber wedge as
             // SNIFF's triangle two rows up -- exactly the confusion the roster exists to avoid.
             // A frame is topologically distinct from every solid shape in this list.
-            WorkRow("ARRAY WIPE", "STUDY", MarkerShapes["square_frame"])
+            //
+            // ARRAY WIPE is a circuit rather than one of the roster's ten, so the design gives it
+            // no light signature. BRIGHT is this port's reading, not the design's: the work IS the
+            // scanning -- spares to rack to disposal -- and the scan screen is a full amber field,
+            // one of only three lit screens in the game. Flagged for review; it is the one light
+            // value here that nobody has ruled on.
+            WorkRow("ARRAY WIPE", "STUDY", MarkerShapes["square_frame"], LightSignature.Bright)
             WorkLocked()
             WorkLocked()
         }
 
-        Box(Modifier.fillMaxWidth().border(1.u, Amber.Edge).padding(horizontal = 7.u, vertical = 6.u)) {
+        Column(
+            Modifier.fillMaxWidth().border(1.u, Amber.Edge).padding(horizontal = 7.u, vertical = 6.u),
+            verticalArrangement = Arrangement.spacedBy(5.u),
+        ) {
             Label(
                 "A SUBROUTINE OPENS ONLY AT ITS MARKER.\nSCAN TO BEGIN.",
                 size = 6.0, color = Amber.Faint, tracking = 0.1, lineHeight = 1.9,
             )
+            LightKey()
+        }
+    }
+}
+
+/**
+ * The key to the light column — **the one place in the game the mark is spelled out.**
+ *
+ * Built by walking [LightSignature] rather than by listing three rows, so a rung added to the
+ * ladder appears here without anybody remembering to add it, and the word beside each mark is the
+ * rung's own name rather than a second copy of it that can disagree.
+ *
+ * The marks are drawn at the same size as the ones in the rows above. A key whose sample is
+ * larger than the thing it explains teaches a glyph the player will never see again.
+ */
+@Composable
+private fun LightKey() {
+    // **The word comes before its mark, and that is not a preference.** A mark keeps a constant
+    // width while only its lit cells are drawn, so with the mark first the space after it varies
+    // with the value: BRIGHT ends up welded to its own word while DARK floats free of one, and the
+    // eye starts binding each mark to the word on its RIGHT -- reading the row as LIGHT = one
+    // cell. Word first puts the constant gap where the binding is and the varying gap between
+    // pairs, where extra space costs nothing.
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(9.u),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Label("LIGHT", size = 6.0, color = Amber.Dim, tracking = 0.14)
+        LightSignature.entries.forEach { signature ->
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(3.u),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Label(signature.name.uppercase(), size = 6.0, color = Amber.Faint, tracking = 0.1)
+                LightMark(signature, Amber.Mid, sample = true)
+            }
         }
     }
 }
@@ -179,6 +236,7 @@ private fun WorkRow(
     name: String,
     room: String,
     shape: MarkerShape?,
+    light: LightSignature,
     done: Boolean = false,
     current: Boolean = false,
     onClick: (() -> Unit)? = null,
@@ -223,10 +281,23 @@ private fun WorkRow(
             Label(room, size = 6.0, color = meta)
             shape?.let { MarkerGlyph(it, if (current) 11.u else 10.u, meta) }
         }
+        // Its own column, past the destination pair, because it is read DOWN the list rather than
+        // across a row: choosing a dark route means comparing this row's light with the next
+        // one's, and the only column that stays aligned when the names differ in length is the
+        // last one. It takes the row's own intensity, so a completed row's light fades with the
+        // rest of it rather than staying at full step and shouting about work already done.
+        LightMark(light, meta)
     }
 }
 
-/** A blocked chain step. Names nothing — not the Subroutine, not who would free it. */
+/**
+ * A blocked chain step. Names nothing — not the Subroutine, not who would free it.
+ *
+ * **And therefore no light mark either.** The signature is a property of a particular Subroutine,
+ * so drawing one here would describe the very thing this row exists not to describe. Nothing on
+ * the ladder is zero cells, so the empty column reads as *nothing is claimed* rather than as a
+ * dark Subroutine.
+ */
 @Composable
 private fun WorkLocked() {
     Row(
@@ -392,10 +463,20 @@ fun ScanCaughtScreen(vals: PanelVals) {
                 size = 13.0, color = Amber.Bright, tracking = 0.06, lineHeight = 1.4,
                 align = TextAlign.Center,
             )
-            Label(
-                "${vals.current.room} . SUBROUTINE ${vals.current.index} OF ${vals.current.total}",
-                size = 7.0, color = Amber.Dim, tracking = 0.12,
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.u),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Label(
+                    "${vals.current.room} . SUBROUTINE ${vals.current.index} OF ${vals.current.total}",
+                    size = 7.0, color = Amber.Dim, tracking = 0.12,
+                )
+                // The fourth surface, and the one D-106 does not name. It is here because BEGIN
+                // and NOT THIS ONE are both live below: this is the last moment the choice is
+                // still a choice, and a route planned on the work order is re-decided here by
+                // anyone who walked past someone on the way. Flagged for review.
+                LightMark(vals.current.light, Amber.Dim)
+            }
             Label("THE CARD IN YOUR HAND MATCHES", size = 6.0, color = Amber.Faint, tracking = 0.1)
         }
 
@@ -528,9 +609,16 @@ fun SubScreen() {
         Modifier.fillMaxSize().padding(8.u),
         verticalArrangement = Arrangement.spacedBy(7.u),
     ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Label("HANDSHAKE", size = 7.0, color = Amber.Dim, tracking = 0.14)
-            Label("SCREEN STAYS DARK", size = 7.0, color = Amber.Faint, tracking = 0.14)
+            // Where SCREEN STAYS DARK used to be, in the same slot on both Subroutine screens.
+            // One lit cell of three, at the faint step: on the screen whose whole job is to emit
+            // as little as possible, the statement about light costs almost none.
+            LightMark(LightSignature.Dark, Amber.Faint, cell = 5.u, height = 8.u)
         }
 
         Column(
@@ -597,9 +685,16 @@ fun SubBrightScreen() {
         Modifier.fillMaxSize().padding(8.u),
         verticalArrangement = Arrangement.spacedBy(7.u),
     ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Label("PARITY CHECK", size = 7.0, color = Amber.Dim, tracking = 0.14)
-            Label("SCREEN STAYS LIT", size = 7.0, color = Amber.Bright, tracking = 0.14)
+            // The same slot, the same mark, all three rungs lit at the full step -- the two
+            // Subroutine screens in the port are the two ends of the ladder, and putting the mark
+            // in one fixed place on both is what makes it a thing you recognise rather than read.
+            LightMark(LightSignature.Bright, Amber.Bright, cell = 5.u, height = 8.u)
         }
         Label(
             "FIND EVERY CORRUPTED BLOCK . PASS 2 OF 2",
@@ -626,10 +721,10 @@ fun SubBrightScreen() {
             }
         }
 
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Label("FOUND 4 OF 7", size = 6.5, color = Amber.Dim, tracking = 0.1)
-            Label("LIT", size = 6.5, color = Amber.Bright, tracking = 0.1)
-        }
+        // The design's fixture also carried a LIT word at the end of this row, which was the
+        // header's SCREEN STAYS LIT said a second time on the same screen. With the mark in the
+        // header it is one fact in one place, in the slot it occupies on every Subroutine screen.
+        Label("FOUND 4 OF 7", size = 6.5, color = Amber.Dim, tracking = 0.1)
 
         PanelButton(
             "SUBMIT PASS",
