@@ -79,6 +79,15 @@ data class PanelState(
     val roomType: RoomType = RoomType.Room,
     /** Null while still in play. Set once, by whichever event put the player out. */
     val outBy: OutBy? = null,
+    /**
+     * The SystemIntegrity meter's segment total — display data that ARRIVES, never a value this
+     * module computes (F-005, revision 19). The authority owns the denominator —
+     * `(seats − insiders) × 7`, frozen at arming — and sends the panel this number the same way
+     * it sends the role. The default is the ported design's 32, an artifact of an earlier
+     * player count, correct only where no round exists: fixtures, previews, the screens guard.
+     */
+    val meterSegments: Int = PanelVals.METER_SEGMENTS,
+
     /** Randomises the backlog's *count and mix*, so inbox density can never imply a role. */
     val inboxSeed: Int = 3,
     val noteSeed: Int = 0,
@@ -488,7 +497,16 @@ class PanelVals(val state: PanelState) {
     /** 24 seconds left of a 60-second vote window. */
     val meetingLit: Int = 12
 
+    /** The meter total in force — [PanelState.meterSegments], never the fixture constant. */
+    val meterSegments: Int get() = state.meterSegments
+
     companion object {
+        /**
+         * **A fixture default, not a game value** — the ported design drew 32 segments, an
+         * artifact of an earlier player count (F-005). In play the total arrives in
+         * [PanelState.meterSegments] from the authority. Nothing that renders a live round may
+         * read this constant.
+         */
         const val METER_SEGMENTS = 32
 
         /** The vote clock is its own bar: 30 segments, not the meter's 32. */
