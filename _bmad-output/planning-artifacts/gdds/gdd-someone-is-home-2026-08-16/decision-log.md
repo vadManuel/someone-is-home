@@ -1475,6 +1475,529 @@ a record of a deletion has to be able to name what was deleted.
 
 ---
 
+## Revision 23 — what the house grades, and what it never hears
+
+*Decided 2026-08-21, with Vadmanuel, ruling on the overnight run's Subroutine escalations (E10-1,
+E10-2, E10-3) and closing a gap open since the §18.1 trace (F-014).*
+
+### D-109 · **The house grades every entry for real, for both roles, in identical words — decided**
+
+Closes E10-1. The client does get a verdict, it is a true one, and it is the same verdict machinery
+for everybody: the house grades what was handed over on its merits and answers in the same words on
+the same schedule regardless of who sent it. **No fake verdicts and no synthetic failure
+distribution** — the tempting alternative, rolling an Insider's failures so they look plausible, is
+a random number generator standing where the rule should be, and rule 1's answer is simpler: run
+the real rule, emit the real shape.
+
+**The only asymmetry is server-side and appears on no screen: an Insider's success never writes to
+SystemIntegrity.** That is the whole of it — the fake is real work, graded honestly, counting for
+nothing, exactly as `gdd.md:382` has always said, and the difference lives where no player can
+stand.
+
+Identical grading is the *safer* answer and not merely the cheaper one. An Insider whose fake
+always visibly succeeded would be legible **to an observer standing behind them**, which is the one
+reader the device-side guarantee (D-047) never covered. Success looks like success and failure
+looks like failure for both roles, so a screen read over a shoulder in the dark tells a watcher
+nothing but how well that player did.
+
+**Register, ruled here because copy is a leak surface too.** Success is ominous, house-voiced, and
+written as a damage report — the *"THE HOUSE GROWS WEAKER"* family. **Never "the house has it"**:
+the house is not on the residents' side and must never be made to sound like it. Failure is
+rejection plus an instruction to re-scan in place; candidate copy *"REJECTED · RESCAN THE MARKER"*.
+The final wording is a build-time call; the register is not.
+
+### D-110 · **One attempt per scan, and the walk back is the cost — decided**
+
+Closes E10-3, and it ratifies what the unit built rather than reversing it. A handed-over entry is
+spent. The Subroutine re-arms only when the player scans the marker again — the house never re-arms
+it silently and the phone never re-arms it on a timer, because a screen that becomes ready again on
+its own schedule is the phone forming an opinion about an answer.
+
+**The forced re-scan is the design, not a consequence of it.** It costs time, and it keeps the
+player standing at the marker where the house asked them to stand — stationary, lit or blind,
+visible. That is pillar P4 being charged for rather than worked around.
+
+**And it hands the Insider a decision in public.** An Insider who fails may simply not re-scan;
+their success writes nothing either way, so a second attempt buys them nothing but cover. Whether
+to pay for cover, on the spot, in the dark, with someone possibly watching, **is intended
+social-read material** — the same channel E10-2 worried about, left open here deliberately because
+it is a choice a player makes rather than a statistic the house publishes.
+
+**Movement cancels, client-side — recorded as intent.** A player must remain at the marker while
+performing, and walking away ends the minigame on their own phone. This needs proximity hardware
+that does not exist yet, so it is recorded as design intent and future work rather than as
+something the current screens do. It is a device-side rule about the player's own phone and adds no
+report.
+
+### D-111 · **The work plane hears nothing; the presence plane hears the window — decided, and amended within the sitting**
+
+Closes E10-2. The two halves were ruled minutes apart, because the spectator map (D-136) forced the
+second.
+
+**The work plane is absolute: walking away means the entry is never sent.** STOP NOW, a step away,
+somebody in the doorway — the house is told nothing, grades nothing, and holds no partial state
+anywhere. There is no half-returned sequence to resume, so the next scan restarts, which is what
+the port already does. **The house grades only what arrives**, and abandonment therefore cannot
+become the behavioural channel E10-2 named: there is no abandonment count to leak because there is
+no abandonment record.
+
+**The presence plane is the amendment.** While a player is performing, their phone reports
+*performing at room X*, and stopping ends the report. So the house does know a window opened
+and closed — but never the half-finished answer inside it, and nothing at all about correctness.
+The distinction is the point: **the house records, never recites.** This data feeds exactly one
+consumer, the spectator map's expiry (D-136), and may never reach a notice, a count, or any surface
+a living player can read. Anything else rebuilds the leak the work plane just closed.
+
+### F-014 (closed) · **Carry state survives a meeting — decided**
+
+`gdd.md:1022`'s gap, open since the §18.1 trace and raised again by E10-2 as the same shape of
+question. It gets the opposite answer to abandonment, and consistently so: **carry state is a fact
+about the world, not an unfinished answer.** An Array Wipe disk in hand and a Memory Dump pattern
+in memory both persist through a meeting, and the Array Wipe carry flag keeps blocking every other
+scan across it.
+
+The two differ for the reason F-014 always mattered twice over: the carry flag is a *constraint the
+player is visibly under*, legible in what they can and cannot do, and clearing it at a meeting
+would hand everybody a free unlock for the act of walking into a room. A partial entry is nobody's
+fact at all.
+
+
+---
+
+## Revision 24 — the light a Subroutine costs you
+
+*Decided 2026-08-21, with Vadmanuel, resolving E9-1 and E9-2 and extending D-106.*
+
+### D-112 · **The light signature is a fixed property of the Subroutine kind — decided (v1)**
+
+E9-1's first question, answered the cheap way on purpose: **in v1 the light level is fixed per
+Subroutine kind.** The client holds the roster, the house sends only *which* Subroutine, and **no
+field is added to `PanelState`, no `Effect` gains a member, and the redaction schema gains no row.**
+Per-assignment variety — the same Subroutine lit differently for different players — is explicitly
+deferred to v2 rather than left ambiguous. It is the wire that costs something, and nothing in the
+design needs that wire yet.
+
+E9-1's second question — that *the set of signatures a player can see* is a statement about their
+work order — is answered by D-114 rather than by hiding anything: the work order is a menu, and
+choosing your own exposure is what the menu is for.
+
+### D-113 · **Every Subroutine has a light level, structured ones included — Array Wipe is BRIGHT**
+
+Closes E9-2 by ratifying the port's reading rather than overturning it. Array Wipe **is** bright:
+the work *is* the scanning, three markers over minutes, on a full amber field, and the design
+already calls it *"the heaviest map-data generator in the game … the easiest person in the house to
+intercept"*. A dark Array Wipe would have made the circuit a concealment route, which is the
+opposite of what it is for.
+
+**The general rule matters more than the row:** the ten-Subroutine roster table is not the whole
+set, and no Subroutine ships without a rated signature. Memory Dump is rated when it is built.
+
+### D-114 · **A blocked Subroutine is a blocked entry, and the work order is a menu — decided**
+
+Two rulings that only work together.
+
+**Blocked work is visible as a blocked entry.** A Resident whose Subroutine is gated behind another
+sees that *something is there* and cannot see what it is — not its name, not its signature — until
+it unblocks. A known unknown: not absent, which would shorten the order and make its length a tell,
+and not spelled out, which would hand the player a route they have not earned yet.
+
+**The work order is a menu, not a queue.** The player chooses among whatever is currently
+actionable, and sequencing emerges from the dependency graph rather than from an imposed order.
+That is what makes D-106's always-visible signature a **decision surface**: with two actionable
+Subroutines and one of them bright, the player is choosing how visible to be for the next ninety
+seconds, in a house where being seen is the entire risk.
+
+
+---
+
+## Revision 25 — names leave the phone, and the ballot that cannot be taken back
+
+*Decided 2026-08-21, with Vadmanuel, resolving E6-1 and E8-1.*
+
+### D-115 · **Names leave the phone — decided**
+
+Closes E6-1, and reverses the overnight charter's working assumption rather than the unit's
+judgement. The host learns names, and clients receive them wherever the interaction needs them.
+
+**The lobby shows names.** The design's lobby always did; the counts-only lobby built overnight
+(`LobbyBody.Standing` as three integers) was the charter's caution, correctly taken while this was
+undecided, and it now has to widen. **The widening is deliberate and must arrive in a diff that
+says so** — that is exactly the property the two-type split was built for (D-048, D-049), and it is
+the whole difference between a disclosure and an accident.
+
+**Clients receive names where the interaction needs them**, the vote ballot being the obvious second
+site: a house that cannot say who is being Restrained cannot hold a meeting, and the app is
+everybody's only light. Names are **round-scoped**, like everything else the desk holds — they
+arrive for the round and they are gone when it ends.
+
+What this does *not* open is occupancy. Knowing who is in the game is not knowing who is in a room;
+the latter is what the meeting is for, and nothing here touches it.
+
+### D-116 · **Every blackmail line is real; the house only ever uses the Insiders' — corrected**
+
+**Supersedes `gdd.md:1421`'s "every player has a blackmail file and the Resident's is a fake."**
+That framing puts the asymmetry in the wrong place. The correction: every player hands over a real
+one-line in the lobby, all of them real, and the house simply never uses a Resident's.
+
+**The cover is the typing, not the content.** Six people bent over their phones writing a true line
+is six identical acts, and **nobody can be identified as an Insider by having written one** — which
+is what the original sentence was reaching for and could not get, because a fake line is a thing
+that has to be *generated for somebody*, and generation is where asymmetries hide (rule 1 again,
+and D-101's reason for keeping v1's blackmail a verbatim template).
+
+### D-117 · **Live selections, an irrevocable READY, and auto-lock at the buzzer — decided**
+
+Closes E8-1: half of the unit's provisional build is ratified and half is reversed.
+
+**Every selection tap transmits live.** The stream is not an optimisation — it exists so ghosts can
+watch the vote happen (D-134), which is most of what makes the out's meeting screen worth looking
+at.
+
+**The button is a readiness signal, and it is irrevocable.** It converts the current selection into
+the actual vote, and **after it nothing can be changed** — which supersedes *"changeable until the
+clock ends"* at `gdd.md:412` and `:1006`. Rename candidate READY, replacing LOCK IN, for symmetry
+with the discussion's READY TO VOTE; final copy is a build-time call.
+
+**Three consequences, all ruled:**
+
+- **Auto-lock at the buzzer.** Whatever is selected when the clock ends locks itself. This
+  **narrows D-075**: skip-by-silence now applies only to a player who selected nothing at all for
+  the whole window, rather than to anyone who did not press a button.
+- **Unanimous readiness closes the window early**, symmetric with the discussion's unanimous READY
+  TO VOTE — E8-1's second question, answered by the first: if the button is readiness, it behaves
+  like the other readiness.
+- **`N OF 6 VOTED` counts locked players, not selections** — E8-1's first question. The living see
+  the count and never the selections; the ghosts see the live selections and are the only readers
+  who do.
+
+The vote window's default is **45 seconds**, host-changeable in lobby settings — already landed in
+code (`fcfefd6`).
+
+
+---
+
+## Revision 26 — two banners dim the house, and nothing else does
+
+*Decided 2026-08-21, with Vadmanuel, resolving E7-1 and correcting the overnight run's reading of
+D-105.*
+
+### D-118 · **Exactly two events dim the house — decided**
+
+E7-1 asked who owns the undim and got a larger answer: **the dim is not a notification style, it is
+a two-member vocabulary.** Only the Egress and the house's opening text message arrive with the
+bright banner and the screen dim. **Every other notification is quiet** — no dim, no brightness
+spike, nothing world-observable at all.
+
+This dissolves E7-1's staggered-undim worry instead of arbitrating it. Six lamps coming back up at
+six different moments is only a problem if six lamps went down, and reserving the dim for two
+events the whole house already knows about — an Egress is audible, and a dim during the opening
+message is the round starting — keeps the light vocabulary **as closed as the word vocabulary**. A
+light change that means one specific thing is a signal; a light change that happens twenty times a
+round is noise, paid for out of the readability the whole game is built on.
+
+**Lock-screen presentation:** the notification lands under the large clock, which is the phone's own
+idiom, and for the two heavy events the rest of the screen dims around it.
+
+### D-119 · **The swipe is the acknowledgment, and quiet notifications persist — decided**
+
+The other half of E7-1, and the correction of D-105's overnight reading.
+
+**Heavy banners are dismissable and self-clearing:** swipe up on the in-game banner, swipe **left**
+in the lock-screen presentation, and they auto-dismiss after ten seconds regardless. Undim happens
+on personal dismissal or at the ten-second expiry, whichever comes first.
+
+**Quiet banners never auto-dismiss.** They sit until swiped, and **the swipe is the
+acknowledgment** — D-105 deleted read state, so the gesture is the only evidence that a player has
+seen a thing at all, and a quiet banner that cleared itself would leave nothing behind.
+
+**Dim and undim are steps, never fades — both edges, ruled.** Rule 5 stated for the edge nobody had
+stated it for: *a ramp nobody authored is a signal nobody authored*, and that is as true coming back
+up as going down.
+
+**Storage, which the overnight run read backwards:** quiet notifications **are** stored. The
+canonical example is *"your Subroutine has been unblocked"* — a fact about the world that a player
+walking back from a marker has to be able to find again. The only ephemeral notification-like
+things are **house notices during a meeting**; the Egress persists on the Egress widget and never as
+a stored notification. And **no read/unread indicator anywhere, ever** — D-105 stands, the backlog
+header counts messages and nothing tags them.
+
+
+---
+
+## Revision 27 — the circuit moves every round
+
+*Decided 2026-08-21, with Vadmanuel, ratifying E5-1 and then extending it well past what E5-1
+asked.*
+
+### D-120 · **The T shape is the terminal; the Array Wipe stations reserve nothing — ratified**
+
+Closes E5-1. `t_shape` is the reservation, exactly as built: the shape is the only field a scan can
+read as a *kind* of card, the letter T is what is printed on the paper, and paper cannot be patched.
+
+**The second half of E5-1 is answered no.** Spares, Rack and Disposal get **no reserved shapes** —
+they are ordinary registered markers, which is what D-122 makes them.
+
+### D-121 · **The meeting card is the second reserved shape, and a meeting is called by standing at it**
+
+A new reservation, ruled the same sitting. **Meetings are called only by physically scanning the
+meeting card. No remote calls, ever.** The one exception is reporting a Revoked player, which works
+from anywhere — F-011's unconditional claim button, unchanged.
+
+The rest follows from the card being a place. **The caller's scan is their check-in**, and players
+arriving afterwards tap the existing I'M HERE control, so D-104's gate needs nothing new. The
+meeting card lives at the meeting area, and ordinary markers may share its room — it reserves a
+shape, not a room.
+
+**The reserved set is now two, T and meeting, and the registrable roster is 42.** The roster still
+holds all 44 entries, because it is wire data and ids are never renumbered (D-070, D-085): two
+shapes are spoken for, none was removed.
+
+Why physical: a remote call is a button that summons the whole house from a chair. Making it a walk
+to a known place puts the caller somewhere everyone can see them, at the moment they would most
+like to be unseen — the difference between calling a meeting and *being the person who called it*.
+
+### D-122 · **The house draws the stations at arming, every round — decided**
+
+The Array Wipe circuit's three stations — Spares, Rack, Disposal — are drawn **randomly by the
+house, per round, at arming, from the ordinary registered markers.** The host designates nothing.
+
+**Station assignment is round state and is never stored with the home**, which is the load-bearing
+half. A home that remembered where the Rack was would turn the circuit into a fact players learn
+once and keep, and by the second night in the same house there would be no circuit left to run.
+**The circuit moves every round.**
+
+### D-123 · **Markers are capacity, not workload; a card is a place, not a container — decided**
+
+Two statements that between them settle how many markers a home needs and what happens when it has
+few.
+
+**Capacity.** A registered marker is a *slot the house may use*, not work that must be done. At
+arming the house draws the round's active set — stations plus targets, sized to seats and balance —
+and **unused markers sit dark**. The active set is re-drawn each round, like the stations.
+
+**A card is a place, not a container.** The payload never changes and carries nothing about work
+(D-069); the house resolves `(seat, card)` to *that player's current Subroutine*. So one card can be
+a station and two players' anchors at the same time, and **same-player reuse is lawful**: a work
+order deeper than the home's marker count simply visits some markers twice, and where that produces
+a self-dependency the player meets it as **blocked-by-your-own-work**, discovered as they complete
+rather than announced in advance — D-114's blocked entry doing exactly its job.
+
+**Congestion is content.** Two people at one card in the dark is not a scheduling failure; it is the
+game putting two people in a room and leaving them to decide what they saw.
+
+### D-124 · **NOTHING FOR YOU HERE — decided**
+
+Scan refusal gets two distinct vocabularies, because it is answering two distinct facts. A
+**registered** card the house has nothing for *you* at says **NOTHING FOR YOU HERE** — true,
+non-committal, and silent about whether the card is somebody else's anchor. The **unregistered**
+alert is reserved for genuinely unregistered paper, where the honest answer is that this card is
+not part of the home at all.
+
+Collapsing the two would build a detector: a Resident sweeping cards could separate *registered but
+not mine* from *not registered at all* only if the two sound different — and they must sound
+different, because the host needs the unregistered case to be loud during setup and the player needs
+the other case to be unremarkable during a round.
+
+
+---
+
+## Revision 28 — guide, don't gate
+
+*Decided 2026-08-21, with Vadmanuel. Doctrine first, then the one gate it leaves standing —
+generalising D-107's "guide the host, don't gate them" from a story-level ruling to a project one.*
+
+### D-125 · **Guide, don't gate — and clamp only what players cannot perceive**
+
+**The app never has an opinion about what a home *is*.** It has opinions only about what a round
+mechanically requires. A one-room home is lawful. So is a strange footprint, a tiny one, or an
+eccentric idea of what counts as a room. The host knows their home; the app does not.
+
+**The corollary is the sorting rule, and it is the general form of D-103's clamp:** *clamp what
+players cannot perceive; guide what they can.* The Insider band is clamped — hard, on the setting as
+well as on the draw — because a host cannot see the balance consequence and no player can ever check
+it. Home size and seat counts are guided and never blocked, because everybody in the hall can see
+how many people are standing there and how big the house is. **A clamp on a visible fact is
+condescension; a guide on an invisible one is negligence.**
+
+### D-126 · **Fail early, in the light — every gate lives at REVIEW time**
+
+Every check the app does perform happens **while the host is alone, mapping their home, with time
+and light** — at REVIEW, never at hosting time with the party standing in the hall. A refusal at
+hosting time lands at the worst possible moment on the one person who cannot walk away, and it is
+the same argument D-086 settled for the duplicate shape: **put the friction on the host, in the
+light, with the fix in hand.**
+
+### D-127 · **The REVIEW HOME gate, and HOSTS UP TO N — decided**
+
+The one gate, in full: a home passes REVIEW with **one terminal, one meeting card, and at least
+eight ordinary markers.** The eight is arithmetic rather than taste — the minimum party is five
+(D-128) and the Array Wipe circuit takes three stations (D-122), so eight is the smallest home in
+which the smallest lawful round can be armed.
+
+**Capacity is guidance and never a gate.** REVIEW computes and shows **HOSTS UP TO N**, where `N =
+markers − 3` (the three stations again), and the lobby shows a guidance line when the joined count
+exceeds it. **It never blocks** — D-123 is what makes that affordable, since same-card reuse absorbs
+the shortage. The honest thing to tell a host with nine markers and ten players is that it will be
+crowded, not that it is forbidden.
+
+
+---
+
+## Revision 29 — the shape of a round
+
+*Decided 2026-08-21, with Vadmanuel. Party size, workload, and the conditions the round ends on —
+the first time the win conditions have been written down as a set. Amends D-103.*
+
+### D-103 (amended) · **At five and six seats there is exactly one Insider**
+
+The band's lower reach is replaced by a fixed value. **Seats 5–6 → exactly 1 Insider. From 7 seats
+the band resumes**, `1..⌈seats/4⌉`, unchanged.
+
+The arithmetic that forced it: at five or six seats two Insiders reach parity (D-131) after one or
+two Revokes — not a hard round for the Residents but a round that can be over before the first
+meeting has anything to discuss. **Seven seats is where a one-plain-Resident buffer survives two
+Revokes**, so seven is where the second Insider becomes legal. Revision 21's rule that both edges
+clamp the *setting* and not only the draw carries over unchanged: a host cannot hand-pick two
+Insiders into a five-seat round.
+
+### D-128 · **The minimum party is five seats — decided**
+
+Four plain Residents and one Insider. Below that the vote has nothing to work with: three plain
+Residents and an Insider is one wrong Restrain away from parity, and the meeting the whole game is
+built around becomes a formality.
+
+### D-129 · **Work-order size is computed from public facts alone — decided**
+
+The minimum Subroutines per Resident is `K = ⌈M ÷ worstCasePlainResidents⌉ + slack`, where
+`worstCasePlainResidents = seats − bandMax`. **The shape of that formula is the ruling; the numbers
+are not.**
+
+**It is computable from public lobby facts only** — seats, plus the visible setting or the band it
+clamps to — and **never from the hidden draw**. Sizing K against the *actual* Insider count would
+let work-order length divide out the number D-103 spent a whole revision hiding, which is the same
+division the percentage-only meter exists to prevent. The Insider's fake order is drawn from the
+same sizing rule, so **order length is role-independent** on both axes.
+
+**Not a home gate.** A home too small to hold `seats × K` distinct markers is fine, because
+same-card reuse (D-123) absorbs it, so this is enforced at arming and not at REVIEW. `slack` is the
+one new balance knob and playtest owns it.
+
+### D-130 · **SystemIntegrity scales with seats — decided**
+
+The meter total `M` is **proportional to seats**; the coefficient is playtest's. This retires the
+last of the fixed-total thinking F-005 kept catching — `7 × residents` was a coefficient with the
+scaling already implied, and naming the shape apart from the number is what lets playtest move one
+without re-deriving the other. The display rule is untouched: **the meter reaches a panel only as a
+percentage** (D-103), so scaling the total leaks nothing.
+
+### D-131 · **The win conditions, and the Egress that outlives its Insiders — decided**
+
+**Insiders win** when remaining plain Residents ≤ remaining Insiders — parity — or when an Egress
+succeeds. **Parity implies the vote veto**, and that implication is why parity is the line: at
+parity the Insiders can always block a Restrain, so **Restrain is majority-decided** and a Resident
+majority is the Residents' only real instrument.
+
+**Residents win** by completing SystemIntegrity, or by Restraining every Insider — **except that a
+running Egress outlives its Insiders and must still be stopped.** Restraining the last Insider
+during an Egress does not end the round: the house does not stop what it was told to start.
+
+### D-132 · **Every Insider cooldown starts running at round start, at half — decided**
+
+All Insider ability cooldowns begin the round already running, at **half** their normal duration.
+The round therefore opens with a guaranteed stretch of peace, and it closes the opening-Revoke
+problem structurally rather than by asking players not to. It also replaces F-004's *no initial
+cooldowns at arming* gap with a positive rule. The durations themselves are playtest's.
+
+### D-133 · **No meeting is called during an Egress, and a reported Revoke pauses it — decided**
+
+Three rules, and the third is the one that matters. **No meeting can be called during an Egress** —
+the meeting card is inert for the duration, because a house on fire is not a house that debates.
+**Reporting a Revoked player still triggers a meeting from anywhere** (D-121's one exception,
+unchanged). And **that meeting pauses the Egress timer — it never resets it** — resuming when the
+meeting ends. A reset would make the report a free Egress cancellation and every Egress would end
+the same way; a pause makes it a decision about spending time.
+
+
+---
+
+## Revision 30 — the couch, and the map that guesses
+
+*Decided 2026-08-21, with Vadmanuel: correcting E1-2, confirming E1-1 and E8-2, and opening the
+hardware-dependent system that forced revision 23's presence amendment.*
+
+### D-134 · **A player who is out has a screen, not a blank wait — corrected**
+
+E1-2 asked whether *"a screen with nothing on it, waiting"* is the intended resting state for a
+player who is out. **It is not**, and there are two answers depending on which kind of out they are.
+
+**Newly Revoked:** a screen tells them they are Revoked and to sit silently where it happened. When
+a meeting is called they get **no phone call** — they get **STAND AND WALK IN**, with a long haptic
+(D-135). The ringing call is for the living.
+
+**Previously Revoked, and Restrained players:** couch spectators, with a live view. During a
+meeting, the discussion and vote timers plus the **live vote** — ghosts are the only readers who see
+selections rather than a count (D-117). During the round, a live map (D-136), live Egress state, and
+live Resident progress — live percentage, never a denominator (D-103).
+
+**Two loop requirements confirmed rather than newly decided:**
+
+- **E1-1** — the Restrained takeover is a **house push, per seat, at the halfway mark of the Tally
+  countdown**, confirming D-102's line and revision 20's. The unit's reading was right, and the
+  client-scheduled alternative is rejected for the reason the unit gave: a table in `ui` that could
+  say *"…and if it was you, this other screen"* is the device deciding a game answer.
+- **E8-2** — all four meeting transitions (the check-in gate closing, the discussion ending or a
+  unanimous READY arriving, the vote window closing, and the ghost walk-in) are **authority pushes
+  the loop must carry.** Recorded so nobody later reads the missing edges as an omission.
+
+### D-135 · **The long haptic is a closed set — decided**
+
+D-102 ruled that a screen arriving unasked buzzes and that the buzz is identical for every player.
+This closes the remaining question of *which* buzz. **Every event buzzes; the long haptic is
+reserved for five:** the Egress, an incoming phone call, STAND AND WALK IN for a newly Revoked
+player, the Restrained takeover screen change, and the end of the LIGHTS OUT IN *n* countdown for
+everyone still in the game.
+
+The set is closed for the same reason the dim is (D-118): in a silent house a long buzz is
+world-observable through a pocket, and a signal that means five specific things is still a signal.
+D-102's identical-for-every-player rule governs each of them — the reserved list is about duration,
+never about who feels it.
+
+### D-136 · **The spectator map is inference, and a performer's own scan is knowledge — decided**
+
+A new system, hardware-dependent and future work, ruled now because it forced D-111's amendment.
+
+**While a player scans and performs a Subroutine, their phone BLE-scans for nearby phones and places
+those players in that room.** The spectator map is built out of those sightings.
+
+**It is knowingly imperfect, and that is the design.** Short range is preferred, and
+**adjacent-room bleed is accepted** rather than engineered away: a map the out can read perfectly
+turns the couch into an oracle and the living into pieces on it. Misreading each other is this
+game's material, and it does not stop being the material when the reader is on the couch.
+
+**The dedup rule only runs one way: a performer's own scan placement is ground truth.** The house
+*knows* where a scanning player is, because they scanned a card whose room the house knows, and **no other
+phone's BLE sighting may relocate them. Inference never overrides knowledge.** Every other placement
+is a sighting and may be overwritten by the next one.
+
+This is what made the presence plane necessary (D-111): the map has to know when a performance
+window opened and closed in order to expire placements, and that is a report the work plane refuses
+to make. Hence the split — and hence the rule that presence data feeds the map's expiry and nothing
+a living player can read.
+
+### Open and deferred, recorded as such
+
+**Playtest owns:** `slack` (D-129), the meter coefficient (D-130), the cooldown durations (D-132),
+and the vote-window option steps — 45/60/90/30 are candidates and only the 45 is the design's
+(D-117).
+
+**Copy pending at build time:** the READY button (D-117) and the verdict lines (D-109).
+
+**Design-project work, not settled here:** whether the device mockup's vignette joins the scanning
+lines; and the HomeDetail/Delete plan-drawing treatment, which awaits the owner's review.
+
+
+---
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).
@@ -1531,6 +2054,52 @@ gate the talk, D-105 the read concept is deleted, D-106 the light signature show
 and never app data, doors are physical house rules the app never enforces, and 4.7's hazard
 dissolves into walkthrough guidance instead of an editor exclusion; D-108 the ten stale sites in
 the GDD, the epics and the architecture are swept to match D-098.
+
+**Revisions 23–30 are one morning's sitting** — the rulings that answered the overnight run of
+2026-08-21 — every escalation it left open once revision 22 had taken E2-1 — and a good deal it did
+not ask about. **D-109 through D-136**, plus F-014 closed and D-103 amended.
+
+**Revision 23 ruled the Subroutine escalations** — D-109 the house grades every entry for real, for
+both roles, in identical words (an Insider's success simply writes nothing to SystemIntegrity);
+D-110 one attempt per scan and the walk back is the cost; D-111 the work plane hears nothing while
+the presence plane reports the window; F-014 closed — carry state survives a meeting.
+
+**Revision 24 settled the light signature** — D-112 fixed per Subroutine kind in v1, so no field
+arrives and no schema row is needed; D-113 Array Wipe is BRIGHT and nothing ships unrated; D-114
+blocked work is a visible blocked entry and the work order is a menu.
+
+**Revision 25 opened the name channel and closed the ballot** — D-115 names leave the phone and the
+lobby shows them (the overnight counts-only lobby must widen, in a diff that says so); D-116 every
+blackmail line is real and only Insiders' are used, superseding `gdd.md:1421`; D-117 selections
+stream live, READY is irrevocable, the buzzer auto-locks — superseding `gdd.md:412` and `:1006` and
+narrowing D-075.
+
+**Revision 26 closed the light vocabulary** — D-118 exactly two events dim the house, the Egress and
+the opening text message, and every other notification is quiet; D-119 the swipe is the
+acknowledgment, quiet notifications are stored, and both dim edges are steps.
+
+**Revision 27 ratified the T card and moved the circuit** — D-120 `t_shape` stands and the Array
+Wipe stations reserve nothing; D-121 the meeting card is the second reserved shape and a meeting is
+called by walking to it (registrable roster 42); D-122 the house draws the stations at arming, every
+round; D-123 markers are capacity and a card is a place; D-124 NOTHING FOR YOU HERE.
+
+**Revision 28 stated the doctrine** — D-125 guide, don't gate: clamp what players cannot perceive,
+guide what they can; D-126 every gate lives at REVIEW, while the host is alone; D-127 the gate is
+one terminal, one meeting card and eight ordinary markers, with HOSTS UP TO N as guidance that never
+blocks.
+
+**Revision 29 sized the round** — D-103 amended (5–6 seats carry exactly one Insider; the band
+resumes at 7); D-128 five seats minimum; D-129 work-order size computed from public facts alone;
+D-130 the meter scales with seats; D-131 the win conditions as a set, parity implying the vote veto
+and a running Egress outliving its Insiders; D-132 cooldowns start running at half; D-133 no meeting
+during an Egress, and a reported Revoke pauses its timer.
+
+**Revision 30 gave the out a screen** — D-134 the newly Revoked sit and are called in with STAND AND
+WALK IN, while the previously out are couch spectators with a live map, live Egress and the live
+vote (E1-1 and E8-2 confirmed as loop pushes); D-135 the long haptic is a closed set of five; D-136
+the spectator map is BLE inference in which a performer's own scan is ground truth — the system that
+forced
+D-111's presence plane.
 
 **Carried into E0 as a constraint, not a closed item:** total app allocation ≤ ~0.5 MB/s as the design target, with the measured cliff between 1.5 and 3.0 MB/s — roughly 6× margin, so this is a budget rather than a knife edge. Nobody yet knows what the real app allocates with BLE, 100 Hz motion, effects and recording running at once.
 Action: create `project-context.md`.
