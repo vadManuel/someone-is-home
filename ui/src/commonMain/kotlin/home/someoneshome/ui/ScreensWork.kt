@@ -869,7 +869,7 @@ private fun EgressWidget(vals: PanelVals) {
             Readout("1:42", size = 19.0, color = Amber.Bright, lineHeight = 1.0)
         }
         SegmentBar(
-            total = PanelVals.METER_SEGMENTS,
+            total = vals.meterSegments,
             lit = vals.egressLit,
             litColor = Amber.Bright,
             unlitColor = Amber.Edge,

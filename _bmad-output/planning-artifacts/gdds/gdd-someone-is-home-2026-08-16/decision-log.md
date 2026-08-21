@@ -1289,6 +1289,30 @@ and a house uses a dozen. One moment of setup friction against an undetectable m
 and the friction wins. `RegisterResult.ShapeAlreadyRegistered` stays; its KDoc's
 raised-not-settled flag comes off.
 
+
+---
+
+## Revision 19 — the meter total arrives
+
+*Decided 2026-08-20, with Vadmanuel, same session. F-005's contradiction — flagged three times —
+is closed; its genuinely open halves are named and stay open.*
+
+### F-005 (partial) · **`METER_SEGMENTS` stops being a game value — decided**
+
+`ui`'s 32 was an artifact of an earlier player count sitting in a module forbidden from knowing
+game values, contradicting the authority's `(seats − insiders) × 7`. The resolution is the
+architecture's own: **the meter total is display data that arrives.** `PanelState` carries
+`meterSegments`, sent by the authority and frozen at arming exactly like every balance value;
+the constant survives only as the fixture default for the ported screens, documented as the
+artifact it is, and nothing rendering a live round may read it. A test renders a round whose
+total the design never drew and reads it back off the screen — injection-verified: hardcoding
+one readout back to the constant fails it.
+
+**Still open, honestly:** the `7` (subroutines per Resident — a balance value playtesting
+decides, locked at arming regardless), and the orphaned-subroutine auto-satisfaction that keeps
+a frozen denominator winnable after a revocation — loop work, untouched while the loop is
+reconsidered. The denominator's *source* is settled; its *number* and its *upkeep rule* are not.
+
 ---
 
 ## State after revision 12
@@ -1328,6 +1352,10 @@ The payload is loop work and stays open; only the mechanism is decided.
 **Revision 18 settled D-086** — the refusal is ratified. Two live cards may never share a shape:
 the alternative's failure hides inside the Terminal's injected error and would never be seen,
 while the refusal lands on the host in the light with 44 shapes to choose from.
+
+**Revision 19 closed F-005's contradiction** — the meter total arrives in `PanelState` from the
+authority, frozen at arming; ui's 32 is demoted to a documented fixture default. Open still: the
+7 itself (balance) and orphan auto-satisfaction (loop work).
 
 **Carried into E0 as a constraint, not a closed item:** total app allocation ≤ ~0.5 MB/s as the design target, with the measured cliff between 1.5 and 3.0 MB/s — roughly 6× margin, so this is a budget rather than a knife edge. Nobody yet knows what the real app allocates with BLE, 100 Hz motion, effects and recording running at once.
 Action: create `project-context.md`.
