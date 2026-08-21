@@ -236,6 +236,15 @@ fun Modifier.tapTarget(onClick: () -> Unit): Modifier = heightIn(min = TAP_TARGE
  * broken. That matters most where a control is deliberately *present and inert*: the lobby's gated
  * LIGHTS OUT, and a readiness button that has already been pressed. Those have to keep their shape
  * so the layout does not move under a thumb, and must not keep their press.
+ *
+ * **Three tests hold it true**, each on a control that is deliberately present and inert: the
+ * lobby's gated LIGHTS OUT, the meeting's LOCK IN with nothing chosen, and the Jam route with
+ * nothing entered. Injection-verified together — making the null branch tap anyway fails all
+ * three by name.
+ *
+ * Note what is *not* guarded and does not need to be: the `null` **default**. Every call site in
+ * the app passes `onClick` explicitly, so changing the default back changes no screen. The
+ * behaviour that matters is the branch below, and that is what the three tests read.
  */
 @Composable
 fun PanelButton(
