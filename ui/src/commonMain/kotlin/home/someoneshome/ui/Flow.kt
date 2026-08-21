@@ -124,19 +124,30 @@ object ScreenGraph {
         ScreenId.RevealThread -> setOf(ScreenId.Reveal)
         ScreenId.Settings -> setOf(ScreenId.Home)
 
-        // The room. Every one of these is a line with one way forward and no way out — see
-        // Flow.houseDriving.
+        // The room. A line with one way forward and no way out — see Flow.houseDriving — and
+        // three of its steps are not tapped at all.
+        //
+        // I AM HERE, READY TO VOTE and LOCK IN each report ONE PHONE, and what follows depends on
+        // every phone in the house: the check-in gate closes when every living player and every
+        // out player is standing there (D-104), the talk skips ahead only on a UNANIMOUS ready,
+        // and the ballot is read when the window closes. A phone cannot count phones, so none of
+        // those three walks anywhere. They echo, the screen goes on waiting, and the house moves
+        // everybody at once — as Flow.autoAdvance already has it do.
+        //
+        // Answering a ring is different and stays an edge: it is a call, and answering it is
+        // entirely your own phone's business.
         ScreenId.Calling -> emptySet()
         ScreenId.Call, ScreenId.Found -> setOf(ScreenId.Assemble)
-        ScreenId.Assemble -> setOf(ScreenId.Notice)
+        ScreenId.Assemble -> emptySet()
         ScreenId.Notice -> setOf(ScreenId.Discussion)
-        ScreenId.Discussion -> setOf(ScreenId.Vote)
-        ScreenId.Vote -> setOf(ScreenId.Tally)
+        ScreenId.Discussion -> emptySet()
+        ScreenId.Vote -> emptySet()
         ScreenId.Tally -> emptySet()
 
         // Out. The two notices publish no control whatever: nothing further is required of you.
         ScreenId.Revoked, ScreenId.Restrained -> emptySet()
-        ScreenId.Ghost2 -> setOf(ScreenId.GhostMeeting)
+        // The same check-in as the living's, and it moves the same nothing.
+        ScreenId.Ghost2 -> emptySet()
         ScreenId.GhostMeeting -> emptySet()
         ScreenId.Ghost3 -> emptySet()
         ScreenId.Disconnect -> emptySet()
@@ -194,8 +205,9 @@ object Flow {
         ScreenId.Found to AutoAdvance(ScreenId.Assemble, 6_000, "the same ring, different header"),
         // D-104: the talk does not start until every living player AND every out player has
         // checked in. That gate is the house's — it counts phones — and this delay stands in its
-        // place on a phone with no house attached. The design's own device shell auto-advances
-        // this step, which is why the I AM HERE button in the port hands its target to nobody.
+        // place on a phone with no house attached. I AM HERE reports this phone and moves nothing,
+        // so this row is the ONLY way off the screen; the design's own device shell auto-advances
+        // the same step.
         ScreenId.Assemble to AutoAdvance(ScreenId.Notice, 8_000, "4 OF 6 CHECKED IN — the check-in gate closes"),
         ScreenId.Notice to AutoAdvance(ScreenId.Discussion, 9_000, "notices are shown once at the top of the meeting, then gone"),
         ScreenId.Discussion to AutoAdvance(ScreenId.Vote, 90_000, "the discussion clock; unanimous READY skips ahead"),
@@ -403,6 +415,15 @@ class FlowModel(
      * test and every render gets the memory ones.
      */
     val lobby: LobbyModel = LobbyModel.sample(),
+    /**
+     * What this phone has said at the meeting it is at.
+     *
+     * Held here for the reason the three above are: the meeting is five screens and the player
+     * walks the whole line, and a check-in that lived in a screen's own `remember` would be
+     * forgotten the moment the house moved them on from the screen they made it on. It is cleared
+     * when a new meeting begins — see [arrive].
+     */
+    val meeting: MeetingModel = MeetingModel.sample(),
 ) {
 
     var state: PanelState by mutableStateOf(initial)
@@ -432,7 +453,7 @@ class FlowModel(
      */
     fun go(to: ScreenId) {
         if (state.screen in Flow.houseDriving) trail.clear() else remember(state.screen)
-        state = state.arrivingAt(to)
+        arrive(state.arrivingAt(to))
     }
 
     /**
@@ -443,7 +464,7 @@ class FlowModel(
      */
     fun push(to: ScreenId) {
         trail.clear()
-        state = state.arrivingAt(to)
+        arrive(state.arrivingAt(to))
     }
 
     /**
@@ -454,7 +475,7 @@ class FlowModel(
      */
     fun back(): Boolean {
         if (!canGoBack) return false
-        state = state.arrivingAt(trail.removeLast())
+        arrive(state.arrivingAt(trail.removeLast()))
         return true
     }
 
@@ -466,7 +487,23 @@ class FlowModel(
      */
     fun jump(to: PanelState) {
         trail.clear()
-        state = to
+        arrive(to)
+    }
+
+    /**
+     * Land on a screen, whichever way the phone got there.
+     *
+     * The one thing that happens on every arrival: **a new meeting starts with nothing said.** A
+     * round holds several meetings and [meeting] outlives all of them, so a check-in made at the
+     * first would still be lit at the second — a phone telling a player they are already standing
+     * at the meeting area they have this second been called to.
+     *
+     * Keyed on arriving at one of [MeetingModel.STARTS] rather than on leaving the last screen,
+     * because a meeting has four ways in and no screen knows which of them ended.
+     */
+    private fun arrive(next: PanelState) {
+        if (next.screen != state.screen && next.screen in MeetingModel.STARTS) meeting.meetingBegan()
+        state = next
     }
 
     fun stepRevoke() {
@@ -649,6 +686,27 @@ class FlowModel(
         push(ScreenId.Armed)
     }
 
+    // ---- The meeting -------------------------------------------------------------------------
+
+    /**
+     * **The four meeting controls, and what every one of them does: light itself.**
+     *
+     * They are here rather than on [MeetingModel] directly for one reason — so that the place a
+     * screen's tap arrives is the same place every other tap arrives, and so that this file is
+     * where somebody looks to check that none of them navigates. None of them does. The gates they
+     * report to are counts of every phone in the house (D-104's check-in, the unanimous READY, the
+     * vote window closing), and a device that moved itself on the strength of its own button press
+     * would be predicting an outcome it cannot see — which is the leak surface `ui ↛ core` exists
+     * to delete, arriving through the navigation layer instead of through the rules.
+     */
+    fun checkIn() = meeting.checkIn()
+
+    fun sayReady() = meeting.sayReady()
+
+    fun chooseVote(choice: VoteChoice) = meeting.choose(choice)
+
+    fun lockInVote() = meeting.lockIn()
+
     // ---- Notifications -----------------------------------------------------------------------
 
     /**
@@ -703,6 +761,10 @@ class FlowModel(
         handOverLine = ::handOverLine,
         cycleInsiders = lobby::cycleInsiders,
         lightsOut = ::lightsOut,
+        checkIn = ::checkIn,
+        sayReady = ::sayReady,
+        chooseVote = ::chooseVote,
+        lockInVote = ::lockInVote,
         dismissNotification = ::dismissNotification,
     )
 
@@ -740,5 +802,5 @@ fun FlowHost(model: FlowModel = remember { FlowModel() }) {
             if (model.state.screen == screen) model.push(pending.to)
         }
     }
-    Screen(model.state, model.actions(), model.editor, model.homes, model.lobby)
+    Screen(model.state, model.actions(), model.editor, model.homes, model.lobby, model.meeting)
 }

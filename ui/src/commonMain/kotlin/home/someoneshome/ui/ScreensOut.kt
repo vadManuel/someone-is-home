@@ -149,7 +149,6 @@ private fun OutNotice(
  */
 @Composable
 fun Ghost2Screen() {
-    val go = navigator()
     Column(
         Modifier.fillMaxSize().padding(14.u),
         verticalArrangement = Arrangement.spacedBy(10.u, Alignment.CenterVertically),
@@ -166,14 +165,9 @@ fun Ghost2Screen() {
             size = 7.0, color = Amber.Dim, tracking = 0.1, lineHeight = 2.1,
             align = TextAlign.Center,
         )
-        Box(
-            Modifier.padding(top = 10.u).border(1.u, Amber.Bright)
-                .tap { go(ScreenId.GhostMeeting) }
-                .padding(horizontal = 22.u, vertical = 12.u)
-        ) {
-            Label("I AM HERE", size = 8.5, color = Amber.Bright, tracking = 0.2)
-        }
-        Label("4 OF 6 CHECKED IN", size = 6.0, color = Amber.Faint, tracking = 0.12)
+        // The same gate as the living's, and the same control drawing it: D-104 counts the out
+        // players too, so a ghost whose phone has not checked in holds up the whole room's talk.
+        CheckIn()
     }
 }
 
@@ -203,11 +197,11 @@ fun GhostMeetingScreen(vals: PanelVals) {
                 verticalAlignment = Alignment.Bottom,
             ) {
                 Label("VOTING ENDS IN", size = 6.0, color = Amber.Dim, tracking = 0.13)
-                Readout("0:24", size = 22.0, color = Amber.Bright, lineHeight = 1.0)
+                Readout(vals.countdown.text, size = 22.0, color = Amber.Bright, lineHeight = 1.0)
             }
             SegmentBar(
                 total = PanelVals.VOTE_SEGMENTS,
-                lit = vals.meetingLit,
+                lit = vals.countdown.litOf(PanelVals.VOTE_SEGMENTS),
                 litColor = Amber.Bright,
                 unlitColor = Amber.Edge,
                 height = 5.u,
@@ -218,22 +212,40 @@ fun GhostMeetingScreen(vals: PanelVals) {
             )
         }
 
+        // Counted off the rows below rather than written beside them. It was a literal that
+        // happened to agree with them, which is the state two numbers for one fact start in.
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Label("VOTES CAST", size = 6.5, color = Amber.Dim, tracking = 0.14)
-            Label("3 OF 5", size = 6.5, color = Amber.Faint, tracking = 0.14)
+            Label(
+                "${OutsideView.cast} OF ${OutsideView.ballots.size}",
+                size = 6.5, color = Amber.Faint, tracking = 0.14,
+            )
         }
 
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.u)) {
-            vals.ballots.forEach { b ->
+            // A ballot that has not been cast yet is a null target, not the words STILL DECIDING
+            // stored in a fixture — so a row cannot be styled as decided while reading as undecided,
+            // and the count above cannot be computed off a string.
+            OutsideView.ballots.forEach { ballot ->
+                val decided = ballot.forWhom != null
                 Row(
-                    Modifier.fillMaxWidth().border(1.u, b.edge)
+                    Modifier.fillMaxWidth().border(1.u, if (decided) Amber.Faint else Amber.Edge)
                         .padding(horizontal = 7.u, vertical = 6.u),
                     horizontalArrangement = Arrangement.spacedBy(6.u),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Label(b.by, modifier = Modifier.weight(1f), size = 8.5, color = b.ink, tracking = 0.06)
-                    Label(b.arrow, size = 6.0, color = Amber.Faint, tracking = 0.1)
-                    Label(b.forWhom, size = 8.5, color = b.forInk, tracking = 0.06)
+                    Label(
+                        ballot.by,
+                        modifier = Modifier.weight(1f),
+                        size = 8.5, color = if (decided) Amber.Bright else Amber.Dim, tracking = 0.06,
+                    )
+                    if (decided) {
+                        Label(OutsideView.CAST_FOR, size = 6.0, color = Amber.Faint, tracking = 0.1)
+                    }
+                    Label(
+                        ballot.forWhom ?: "STILL DECIDING",
+                        size = 8.5, color = if (decided) Amber.Bright else Amber.Faint, tracking = 0.06,
+                    )
                 }
             }
         }

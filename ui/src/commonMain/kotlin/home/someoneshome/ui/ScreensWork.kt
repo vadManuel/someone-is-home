@@ -252,7 +252,7 @@ private fun WorkLocked() {
  * A lit field, and one of only three in the game. Here that is the function, not the style.
  */
 @Composable
-fun ScanScreen() {
+fun ScanScreen(vals: PanelVals) {
     val go = navigator()
     val ink = Amber.Black
     Column(
@@ -291,13 +291,19 @@ fun ScanScreen() {
             Modifier.fillMaxWidth().border(1.u, ink).padding(horizontal = 8.u, vertical = 7.u),
             verticalArrangement = Arrangement.spacedBy(5.u),
         ) {
+            // The figure and the bar are one value: ten seconds, twenty segments, two a second.
+            // They were a hardcoded `6S LEFT` beside a `SCAN_LIT = 12` — the same fact written
+            // twice, agreeing by hand, on the one countdown here that is a safety device.
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Label("YOU WILL FEEL IT CATCH", size = 6.0, color = ink, tracking = 0.14)
-                Label("6S LEFT", size = 6.0, color = ink.copy(alpha = 0.55f), tracking = 0.14)
+                Label(
+                    "${vals.countdown.text}S LEFT",
+                    size = 6.0, color = ink.copy(alpha = 0.55f), tracking = 0.14,
+                )
             }
             SegmentBar(
                 total = PanelVals.SCAN_SEGMENTS,
-                lit = PanelVals.SCAN_LIT,
+                lit = vals.countdown.litOf(PanelVals.SCAN_SEGMENTS),
                 litColor = ink,
                 unlitColor = ink.copy(alpha = 0.2f),
                 height = 4.u,

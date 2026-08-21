@@ -69,6 +69,20 @@ data class PanelState(
     val torch: Boolean = false,
     /** Null while still in play. Set once, by whichever event put the player out. */
     val outBy: OutBy? = null,
+    /**
+     * **The clock on this screen, as the house last said it stood.**
+     *
+     * Seconds remaining, and nothing else — the window it is counting down is a property of the
+     * screen (see [Countdowns]), so the two cannot be sent inconsistently. Null means the house
+     * has said nothing, which on a phone with no house attached is always.
+     *
+     * **The device never advances it.** No screen in this module runs a clock; a countdown is
+     * redrawn when a new value arrives and is otherwise as still as any other field here. Six
+     * phones each counting down on their own would be six meetings ending at six different
+     * moments, and the one thing every player in a dark house needs is to be looking at the same
+     * clock.
+     */
+    val secondsLeft: Int? = null,
     /** Randomises the backlog's *count and mix*, so inbox density can never imply a role. */
     val inboxSeed: Int = 3,
     val noteSeed: Int = 0,
@@ -447,32 +461,18 @@ class PanelVals(val state: PanelState) {
         done = 3,
     )
 
-    // ---- Meeting ------------------------------------------------------------------------------
+    // ---- Clocks -------------------------------------------------------------------------------
 
     /**
-     * Being out is an information privilege: someone outside the system sees who voted for whom,
-     * while the living only ever get a count.
+     * The countdown this screen is showing, or [Countdown.NONE] where it has none.
      *
-     * Safe only because of the sequencing — by the time this is visible the room already knows
-     * who is out, so there is never a window where someone outside knows something the living
-     * do not.
+     * **Display, not a clock.** The value comes from [PanelState.secondsLeft] when the house has
+     * sent one and from the design's drawn moment when it has not; nothing on the device advances
+     * it either way. The window it counts down is [Countdowns]', which reads it off the
+     * auto-advance that fires when the clock runs out — so the number on screen and the moment
+     * the phone moves cannot drift apart.
      */
-    data class BallotRow(
-        val by: String,
-        val forWhom: String,
-        val arrow: String,
-        val edge: Color,
-        val ink: Color,
-        val forInk: Color,
-    )
-
-    val ballots: List<BallotRow> = listOf(
-        BallotRow("ELLIOT", "DANI", "→", Amber.Faint, Amber.Bright, Amber.Bright),
-        BallotRow("PRIYA", "DANI", "→", Amber.Faint, Amber.Bright, Amber.Bright),
-        BallotRow("DANI", "ROSE", "→", Amber.Faint, Amber.Bright, Amber.Bright),
-        BallotRow("ROSE", "STILL DECIDING", "", Amber.Edge, Amber.Dim, Amber.Faint),
-        BallotRow("TOMAS", "STILL DECIDING", "", Amber.Edge, Amber.Dim, Amber.Faint),
-    )
+    val countdown: Countdown = Countdowns.on(state.screen, state.secondsLeft) ?: Countdown.NONE
 
     // ---- Meters ---------------------------------------------------------------------------
 
@@ -484,9 +484,6 @@ class PanelVals(val state: PanelState) {
 
     /** Both bars, seen only from outside the system. */
     val outsideLit: Int = 21
-
-    /** 24 seconds left of a 60-second vote window. */
-    val meetingLit: Int = 12
 
     companion object {
 
@@ -528,9 +525,12 @@ class PanelVals(val state: PanelState) {
          * Ten seconds (20 segments, two per second — the design lengthened it from an
          * initial seven), then the light dies and the phone goes back to where it was: nobody
          * should be standing in a dark room holding a lit screen at a wall by accident.
+         *
+         * **How many of those segments are lit is not a constant here.** It used to be — a `12`
+         * sitting beside a hardcoded `6S LEFT`, two numbers for one fact, agreeing by hand. Both
+         * now come off [PanelVals.countdown].
          */
         const val SCAN_SEGMENTS = 20
-        const val SCAN_LIT = 12
     }
 }
 

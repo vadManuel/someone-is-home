@@ -163,6 +163,48 @@ class ScreenshotTest {
         println("wrote ${travel.size} banner frames to ${out.absolutePath}")
     }
 
+    /**
+     * **The meeting's echo states, which are the other half of four screens.**
+     *
+     * The sweep above renders every screen from a [ScreenId], and for these four that is only the
+     * state a player arrives in. What a press *looks* like — a spent check-in, a hand up, a ballot
+     * with nothing on it, a vote the house is holding — is a fact about the [MeetingModel] beside
+     * the panel, so none of it has a screen id and none of it is in the sweep.
+     *
+     * These are the frames worth a person's eye: every one of them is a control that has kept its
+     * place and lost its press, and "present and inert" is a thing you can only really check by
+     * looking at it. A viewer, not an assertion — `MeetingInputTest` is where the assertions are.
+     */
+    @OptIn(ExperimentalTestApi::class, ExperimentalComposeUiApi::class)
+    @Test
+    fun renderTheMeetingsEchoStates() {
+        val frames: List<Triple<String, ScreenId, MeetingModel.() -> Unit>> = listOf(
+            Triple("meeting-checked-in", ScreenId.Assemble) { checkIn() },
+            Triple("meeting-checked-in-out", ScreenId.Ghost2) { checkIn() },
+            Triple("meeting-ready", ScreenId.Discussion) { sayReady() },
+            // A ballot nobody has touched: LOCK IN present, and visibly not a control.
+            Triple("meeting-vote-untouched", ScreenId.Vote) { meetingBegan() },
+            Triple("meeting-vote-skip", ScreenId.Vote) { choose(VoteChoice.Skip) },
+            Triple("meeting-vote-locked", ScreenId.Vote) { lockIn() },
+        )
+        for ((name, screen, set) in frames) {
+            runDesktopComposeUiTest(width = 600, height = 1300) {
+                val meeting = MeetingModel.sample().apply(set)
+                setContent {
+                    Box(Modifier.fillMaxSize().background(Color.Black)) {
+                        DeviceCanvas {
+                            Screen(PanelState().arrivingAt(screen), meeting = meeting)
+                        }
+                    }
+                }
+                ImageIO.write(
+                    onRoot().captureToImage().toAwtImage(), "png", File(out, "$name.png"),
+                )
+            }
+        }
+        println("wrote ${frames.size} meeting frames to ${out.absolutePath}")
+    }
+
     private fun lobbyOf(joined: Int, linesIn: Int, hosting: Boolean): LobbyModel {
         val home = NearbyHome("THE BUNGALOW", "192.168.1.24", 47747)
         val model = LobbyModel(

@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.Composable
@@ -115,6 +116,23 @@ class PanelActions(
     val cycleInsiders: () -> Unit = {},
     val lightsOut: () -> Unit = {},
     /**
+     * **The meeting, and the four controls that report one phone and move nothing.**
+     *
+     * None of these navigates, and that is the whole point of them being here rather than being a
+     * `go(...)` on a button: what happens after a check-in, a READY, or a vote depends on every
+     * phone in the house, and no phone can count phones. They are declared in neither
+     * [ScreenGraph] nor [Flow.viaActions] because they walk no edge at all — the meeting's
+     * transitions are the house's, and [Flow.autoAdvance] stands in for it until there is one.
+     *
+     * [chooseVote] and [lockInVote] are two steps rather than one because the design's vote screen
+     * shows *how many have voted, never what*: having voted is a state, distinct from having a
+     * finger on a row, and the vote stays changeable after it either way.
+     */
+    val checkIn: () -> Unit = {},
+    val sayReady: () -> Unit = {},
+    val chooseVote: (VoteChoice) -> Unit = {},
+    val lockInVote: () -> Unit = {},
+    /**
      * **A banner, swiped up.**
      *
      * Not a tap and not a navigation the banner can name: what a dismissal leaves you looking at
@@ -160,9 +178,43 @@ fun Modifier.goes(id: ScreenId): Modifier {
 }
 
 /**
+ * **The smallest a control may be: 36 design units.**
+ *
+ * The canvas is [DESIGN_WIDTH] units wide and [DeviceCanvas] scales it to the panel, so a design
+ * unit is `panelWidth / 300` points. Apple's minimum is 44pt square, and the narrowest phone this
+ * app targets is 375 points across — a scale of 1.25, at which 44pt is 35.2 units. Rounded up:
+ * **36 units clears 44pt on every phone in range, and clears it by more on the wider ones.**
+ *
+ * This is not a general accessibility uplift and the type sizes are untouched — the reference
+ * device is a 2001 organiser and its 6-unit labels are the design (see [Label]). It is about the
+ * *finger*, and specifically about this game's finger: a player standing in an unlit room, holding
+ * the phone at an angle so it does not shine on anybody, forbidden to speak if they miss. A vote
+ * cast on the wrong resident because a 22-unit row was a 27pt target is a game outcome decided by
+ * a touch target.
+ */
+val TAP_TARGET: Dp = 36.u
+
+/**
+ * A tap target that is never shorter than [TAP_TARGET], whatever is drawn inside it.
+ *
+ * The minimum and the click sit on the same node, so the region that answers is the region with
+ * the outline around it. A control whose touch area is larger than its visible edge steals presses
+ * from its neighbour; one whose touch area is smaller teaches people to aim at the wrong place.
+ */
+@Composable
+fun Modifier.tapTarget(onClick: () -> Unit): Modifier = heightIn(min = TAP_TARGET).tap(onClick)
+
+/**
  * The design's primary control: a full-width bordered block with a centred label, in one of
  * three intensities — outlined, filled slate (a pre-game commit), or inverted amber (in-game
  * emphasis).
+ *
+ * **A button with no handler is not a control**, and it publishes no click action — the same fault
+ * [RowButton] had and the same fix. It used to default to an empty lambda, so every decorative
+ * block in the game answered a press by doing nothing, which is indistinguishable from one that is
+ * broken. That matters most where a control is deliberately *present and inert*: the lobby's gated
+ * LIGHTS OUT, and a readiness button that has already been pressed. Those have to keep their shape
+ * so the layout does not move under a thumb, and must not keep their press.
  */
 @Composable
 fun PanelButton(
@@ -174,11 +226,11 @@ fun PanelButton(
     size: Double = 8.0,
     tracking: Double = 0.16,
     verticalPadding: Dp = 10.u,
-    onClick: () -> Unit = {},
+    onClick: (() -> Unit)? = null,
 ) {
+    val base = modifier.fillMaxWidth().heightIn(min = TAP_TARGET).border(1.u, border).background(fill)
     Box(
-        modifier.fillMaxWidth().border(1.u, border).background(fill).tap(onClick)
-            .padding(vertical = verticalPadding),
+        (if (onClick != null) base.tap(onClick) else base).padding(vertical = verticalPadding),
         contentAlignment = Alignment.Center,
     ) {
         Label(text, size = size, color = ink, tracking = tracking, align = TextAlign.Center)
