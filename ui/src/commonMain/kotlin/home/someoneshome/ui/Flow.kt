@@ -1,5 +1,8 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.Cell
+import home.someoneshome.model.RoomKind
+
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -54,8 +57,12 @@ object ScreenGraph {
 
         // Host setup, in the light.
         ScreenId.Maps -> setOf(ScreenId.HomeDetail, ScreenId.Editor)
+        // REVIEW HOME reaches BOTH: the plan is reviewable once some room holds the terminal,
+        // and until then the same button goes to the screen that says where one belongs. The
+        // plan itself is not in here — a tap on it lands on whichever room is under it, which
+        // is an actions-layer decision (see Flow.viaActions).
         ScreenId.Editor -> setOf(
-            ScreenId.Maps, ScreenId.Floors, ScreenId.RoomEdit, ScreenId.SaveName,
+            ScreenId.Maps, ScreenId.Floors, ScreenId.SaveName, ScreenId.NoTerminal,
         )
         ScreenId.RoomEdit -> setOf(ScreenId.MarkerSheet, ScreenId.Editor)
         ScreenId.StairsWarn -> setOf(ScreenId.RoomEdit, ScreenId.MarkerSheet)
@@ -63,7 +70,9 @@ object ScreenGraph {
         ScreenId.ScanMarker -> setOf(ScreenId.MarkerSheet)
         ScreenId.TermTaken -> setOf(ScreenId.ScanMarker)
         ScreenId.TermRemove -> setOf(ScreenId.MarkerSheet)
-        ScreenId.NoTerminal -> setOf(ScreenId.RoomEdit)
+        // OPEN A ROOM goes back to the plan, not into the room panel: the host has to choose
+        // WHICH room the terminal goes in, and the plan is the only screen that can ask that.
+        ScreenId.NoTerminal -> setOf(ScreenId.Editor)
         ScreenId.Floors -> setOf(ScreenId.Editor)
         ScreenId.SaveName -> setOf(ScreenId.Editor, ScreenId.HomeDetail)
         ScreenId.HomeDetail -> setOf(
@@ -252,33 +261,43 @@ object Flow {
     /**
      * **Host-setup screens the port cannot reach, recorded as the gap they are.**
      *
-     * Both are refusals the host is supposed to hit during setup — a terminal card offered to a
-     * second room, and a save attempted with no terminal anywhere — and both are stranded because
-     * the screen that ought to route to them names an unconditional target instead
-     * (`Editor`'s REVIEW HOME always goes to `SaveName`; `ScanMarker`'s DONE always goes to
-     * `MarkerSheet`). Closing it is a change to those screens, not to this file, so it is left
-     * alone and written down. `FlowTest` fails if the list grows or shrinks without anyone saying
-     * so.
+     * `NoTerminal` used to be here beside `TermTaken`, for the same reason: `Editor`'s REVIEW
+     * HOME named `SaveName` unconditionally, so a save attempted with no terminal anywhere had
+     * nowhere to land. It is routed now — the button asks the plan whether any room holds the T
+     * card and goes to the explanation when none does.
+     *
+     * `TermTaken` remains stranded, and its gap is the same shape: `ScanMarker`'s DONE always
+     * goes to `MarkerSheet`, and the refusal belongs to *scanning a second T card*, which is
+     * story 4.5 and has no camera behind it yet. `FlowTest` fails if this list grows or shrinks
+     * without anyone saying so.
      */
-    val unrouted: Set<ScreenId> = setOf(ScreenId.TermTaken, ScreenId.NoTerminal)
+    val unrouted: Set<ScreenId> = setOf(ScreenId.TermTaken)
 
     /**
      * **The edges the actions layer owns**, because the screen hands over a decision instead of
      * naming a target.
      *
      * Almost every control in the port says where it goes — `goes(Editor)`, `go(Home)` — and
-     * `ScreenGraph` reads those straight off the screens. The room-type chips are the exception:
-     * they call `pickRoomType`, and where that lands depends on whether the host is about to
-     * destroy something. Turning an occupied room into stairs unregisters every card in it,
-     * because **stairs hold nothing**, and the host is told what that costs *before* it happens.
+     * `ScreenGraph` reads those straight off the screens. Two do not, and both are on the plan:
      *
-     * So the warning screen has no inbound edge on any screen, and would read as an orphan — a
-     * screen that is drawn and reachable by nothing — while in fact being one tap from
-     * `RoomEdit`. Written down here rather than smuggled into [ScreenGraph], where it would be a
-     * claim about a control that does not exist.
+     * - **The plan itself.** A tap on the grid opens the room under it, and on most of a grid
+     *   there is no room, so it opens nothing. A screen cannot name that target because the
+     *   target is a position.
+     * - **The room-type chips.** They call `pickRoomType`, and where that lands depends on
+     *   whether the host is about to destroy something: turning an *occupied* room into stairs
+     *   unregisters every card in it, because **stairs hold nothing**, and the host is told what
+     *   that costs before it happens. An empty room changes type in place with nothing to warn
+     *   about, and goes nowhere.
+     *
+     * Without these two, `StairsWarn` and `RoomEdit` would both read as orphans — screens that
+     * are drawn and reachable by nothing — while in fact being one gesture away. Written down
+     * here rather than smuggled into [ScreenGraph], where they would be claims about controls
+     * that do not exist.
      */
     val viaActions: Map<ScreenId, Set<ScreenId>> = mapOf(
-        // The STAIRS chip, and the confirmation that answers it.
+        // A tap on the plan, landing on a room.
+        ScreenId.Editor to setOf(ScreenId.RoomEdit),
+        // The STAIRS chip on an occupied room, and the confirmation that answers it.
         ScreenId.RoomEdit to setOf(ScreenId.StairsWarn),
         ScreenId.StairsWarn to setOf(ScreenId.Editor),
     )
@@ -311,7 +330,18 @@ fun PanelState.arrivingAt(id: ScreenId): PanelState = when (id) {
  * nothing else. In play the house pushes state and this drives nothing; it is what a phone does
  * while no house is attached.
  */
-class FlowModel(initial: PanelState = PanelState(screen = ScreenId.Boot)) {
+class FlowModel(
+    initial: PanelState = PanelState(screen = ScreenId.Boot),
+    /**
+     * The plan the host is painting.
+     *
+     * Held here rather than inside a screen because the host walks out of the editor and back in
+     * — into the room panel, the marker sheet, the floors list — and a plan that lived in a
+     * screen's own `remember` would be repainted from scratch every time they did. Fifteen
+     * minutes of walking a house is the thing being protected.
+     */
+    val editor: HomeEditorModel = HomeEditorModel.bungalow(),
+) {
 
     var state: PanelState by mutableStateOf(initial)
         private set
@@ -387,10 +417,24 @@ class FlowModel(initial: PanelState = PanelState(screen = ScreenId.Boot)) {
     fun toggleTorch() { state = state.copy(torch = !state.torch) }
 
     /**
-     * The room-type chips, and the one place the design hands navigation to the actions layer
+     * A tap on the plan: open the room under the finger.
+     *
+     * **Nothing happens where there is no room**, and that is the whole reason this edge is the
+     * actions layer's rather than the screen's — a screen cannot name a target that depends on
+     * where you touched it. Most of a grid is not a room; a tap there is the host aiming at
+     * something they have not painted yet.
+     */
+    fun openRoomAt(cell: Cell) {
+        val room = editor.roomAt(cell) ?: return
+        editor.open(room.name)
+        go(ScreenId.RoomEdit)
+    }
+
+    /**
+     * The room-type chips, and the place the design hands navigation to the actions layer
      * instead of naming a target on the screen.
      *
-     * Turning an occupied room into stairs is destructive — **stairs hold nothing**, so every
+     * Turning an **occupied** room into stairs is destructive — stairs hold nothing, so every
      * card registered in that room would belong to no room at all — and the host is told what it
      * costs *before* it happens rather than after. That is why `RoomEdit`'s STAIRS chip calls
      * this rather than `go`, and why the warning screen would otherwise be unreachable.
@@ -399,21 +443,24 @@ class FlowModel(initial: PanelState = PanelState(screen = ScreenId.Boot)) {
      * afterwards would mean MOVE THEM FIRST returns the host to a room that is already stairs,
      * which is the destructive edit happening before the question about it.
      *
-     * The port's held room always holds markers, so the warning is unconditional here. Whether a
-     * particular room holds anything is host-setup data that arrives with the state; the day it
-     * does, an empty room should change type in place with nothing to warn about.
+     * **An empty room changes in place, with nothing to warn about.** The port could not express
+     * that — its held room always held markers — so the warning was unconditional and a host
+     * tagging a bare stairwell was interrogated about cards that were never there. The plan
+     * knows now, so the question is only asked when there is an answer worth having.
      */
-    fun pickRoomType(type: RoomType) {
+    fun pickRoomType(kind: RoomKind) {
+        val room = editor.heldRoom ?: return
         when {
-            type == state.roomType -> Unit
-            type == RoomType.Stairs -> go(ScreenId.StairsWarn)
-            else -> state = state.copy(roomType = type)
+            kind == room.kind -> Unit
+            kind == RoomKind.Stairs && editor.holdsAnything(room.name) ->
+                go(ScreenId.StairsWarn)
+            else -> editor.setKind(kind)
         }
     }
 
     /** UNREGISTER AND CONTINUE: the cards are given up and the room becomes stairs. */
     fun confirmStairs() {
-        state = state.copy(roomType = RoomType.Stairs)
+        editor.setKind(RoomKind.Stairs)
         go(ScreenId.Editor)
     }
 
@@ -425,6 +472,11 @@ class FlowModel(initial: PanelState = PanelState(screen = ScreenId.Boot)) {
         toggleTorch = ::toggleTorch,
         pickRoomType = ::pickRoomType,
         confirmStairs = ::confirmStairs,
+        openRoomAt = ::openRoomAt,
+        nameRoom = editor::renameHeld,
+        deleteRoom = editor::deleteHeld,
+        openFloor = editor::openFloor,
+        addFloor = { editor.addFloor() },
     )
 
     private fun remember(screen: ScreenId) {
@@ -461,5 +513,5 @@ fun FlowHost(model: FlowModel = remember { FlowModel() }) {
             if (model.state.screen == screen) model.push(pending.to)
         }
     }
-    Screen(model.state, model.actions())
+    Screen(model.state, model.actions(), model.editor)
 }

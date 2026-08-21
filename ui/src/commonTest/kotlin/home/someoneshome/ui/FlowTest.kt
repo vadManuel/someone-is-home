@@ -1,5 +1,8 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.Cell
+import home.someoneshome.model.RoomKind
+
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -333,31 +336,63 @@ class FlowTest {
      */
     @Test
     fun pickingStairsAsksBeforeItChangesAnything() {
-        val model = FlowModel(PanelState(screen = ScreenId.RoomEdit, roomType = RoomType.Room))
-        model.pickRoomType(RoomType.Stairs)
+        val model = FlowModel(PanelState(screen = ScreenId.RoomEdit))
+        model.editor.open("GARAGE")
+        assertTrue(model.editor.holdsAnything("GARAGE"), "the fixture room holds no cards")
+
+        model.pickRoomType(RoomKind.Stairs)
         assertEquals(ScreenId.StairsWarn, model.state.screen)
-        assertEquals(RoomType.Room, model.state.roomType, "the room changed before the host answered")
+        assertEquals(RoomKind.Room, model.editor.heldKind, "the room changed before the host answered")
 
         // MOVE THEM FIRST: the host backs out and the room is untouched.
         model.go(ScreenId.MarkerSheet)
-        assertEquals(RoomType.Room, model.state.roomType)
+        assertEquals(RoomKind.Room, model.editor.heldKind)
+        assertEquals(2, model.editor.heldMarkers.size, "the cards were given up by the question")
 
         // UNREGISTER AND CONTINUE: now, and only now.
         val confirmed = FlowModel(PanelState(screen = ScreenId.StairsWarn))
+        confirmed.editor.open("GARAGE")
         confirmed.confirmStairs()
-        assertEquals(RoomType.Stairs, confirmed.state.roomType)
+        assertEquals(RoomKind.Stairs, confirmed.editor.heldKind)
+        assertEquals(emptyList(), confirmed.editor.heldMarkers, "stairs hold nothing")
         assertEquals(ScreenId.Editor, confirmed.state.screen)
+    }
+
+    /**
+     * The other half, and the one the port could not express: **an empty room changes in place.**
+     *
+     * The design's fixture room always held cards, so the warning was unconditional, and a host
+     * tagging a bare stairwell was interrogated about cards that were never there. The plan knows
+     * what a room holds now, so the question is only asked when there is an answer worth having.
+     */
+    @Test
+    fun anEmptyRoomBecomesStairsWithNothingToWarnAbout() {
+        val model = FlowModel(PanelState(screen = ScreenId.RoomEdit))
+        val name = paintAnEmptyRoom(model)
+
+        model.pickRoomType(RoomKind.Stairs)
+        assertEquals(ScreenId.RoomEdit, model.state.screen, "nothing was at stake and it asked anyway")
+        assertEquals(RoomKind.Stairs, model.editor.heldKind)
+        assertEquals(name, model.editor.heldName)
     }
 
     /**
      * [Flow.viaActions] is the only part of the graph no rendering test can read off a screen, so
      * it is the only part that could quietly become a description of something the app no longer
-     * does. This walks it.
+     * does. This walks all three of them.
      */
     @Test
     fun theEdgesTheActionsLayerOwnsAreEdgesItReallyWalks() {
-        val chip = FlowModel(PanelState(screen = ScreenId.RoomEdit, roomType = RoomType.Room))
-        chip.pickRoomType(RoomType.Stairs)
+        // A tap on the plan, landing on a room the editor knows is there.
+        val plan = FlowModel(PanelState(screen = ScreenId.Editor))
+        val garage = plan.editor.plan.roomNamed("GARAGE")!!
+        plan.openRoomAt(garage.cells.first())
+        assertEquals(Flow.viaActions.getValue(ScreenId.Editor), setOf(plan.state.screen))
+        assertEquals("GARAGE", plan.editor.heldName, "it opened a room, but not the one under the finger")
+
+        val chip = FlowModel(PanelState(screen = ScreenId.RoomEdit))
+        chip.editor.open("GARAGE")
+        chip.pickRoomType(RoomKind.Stairs)
         assertEquals(Flow.viaActions.getValue(ScreenId.RoomEdit), setOf(chip.state.screen))
 
         val confirm = FlowModel(PanelState(screen = ScreenId.StairsWarn))
@@ -365,15 +400,47 @@ class FlowTest {
         assertEquals(Flow.viaActions.getValue(ScreenId.StairsWarn), setOf(confirm.state.screen))
 
         assertEquals(
-            setOf(ScreenId.RoomEdit, ScreenId.StairsWarn), Flow.viaActions.keys,
+            setOf(ScreenId.Editor, ScreenId.RoomEdit, ScreenId.StairsWarn), Flow.viaActions.keys,
             "a new action edge was declared and nothing here walks it",
         )
     }
 
+    /**
+     * A tap on bare grid opens nothing.
+     *
+     * Most of a plan is not a room. If an empty cell opened the panel it would open it on
+     * whatever was held last, and the host would rename a room they were not looking at.
+     */
     @Test
-    fun pickingTheTypeAScreenAlreadyHasChangesNothing() {
-        val model = FlowModel(PanelState(screen = ScreenId.RoomEdit, roomType = RoomType.Stairs))
-        model.pickRoomType(RoomType.Stairs)
-        assertEquals(ScreenId.RoomEdit, model.state.screen, "a room that is already stairs has nothing to warn about")
+    fun aTapWhereThereIsNoRoomOpensNothing() {
+        val model = FlowModel(PanelState(screen = ScreenId.Editor))
+        val bare = (0 until HomeEditorModel.COLS * HomeEditorModel.ROWS)
+            .map { Cell(x = it % HomeEditorModel.COLS, y = it / HomeEditorModel.COLS) }
+            .first { model.editor.roomAt(it) == null }
+
+        model.openRoomAt(bare)
+        assertEquals(ScreenId.Editor, model.state.screen, "an empty cell opened the room panel")
+    }
+
+    @Test
+    fun pickingTheTypeARoomAlreadyHasChangesNothing() {
+        val model = FlowModel(PanelState(screen = ScreenId.RoomEdit))
+        model.editor.open("STAIRS")
+        model.pickRoomType(RoomKind.Stairs)
+        assertEquals(
+            ScreenId.RoomEdit, model.state.screen,
+            "a room that is already stairs has nothing to warn about",
+        )
+    }
+
+    /** Drag two corners over bare grid. Returns the provisional name the new room was given. */
+    private fun paintAnEmptyRoom(model: FlowModel): String {
+        val editor = model.editor
+        val bare = (0 until HomeEditorModel.COLS * HomeEditorModel.ROWS)
+            .map { Cell(x = it % HomeEditorModel.COLS, y = it / HomeEditorModel.COLS) }
+            .first { editor.roomAt(it) == null }
+        editor.dragFrom(bare)
+        editor.dragTo(bare)
+        return editor.dropDrag() ?: throw AssertionError("the drag painted nothing: ${editor.refusal}")
     }
 }

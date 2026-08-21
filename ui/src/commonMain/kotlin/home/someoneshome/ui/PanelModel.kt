@@ -2,6 +2,7 @@ package home.someoneshome.ui
 
 import home.someoneshome.model.MarkerShape
 import home.someoneshome.model.MarkerShapes
+import home.someoneshome.model.RoomKind
 
 import androidx.compose.ui.graphics.Color
 
@@ -53,15 +54,6 @@ enum class OutBy { Revoked, Restrained }
 enum class RevokeState { Ready, Armed, Cooldown }
 
 /**
- * What a room is for.
- *
- * **Stairs hold nothing** — never counted, never carrying a Subroutine, never a timed route. So
- * turning an occupied room into one is destructive, and the host is told what it costs before it
- * happens rather than after.
- */
-enum class RoomType { Room, Stairs }
-
-/**
  * Everything the device needs in order to draw itself.
  *
  * **Deliberately flat and inert.** No behaviour, no derivation from rules — `ui` cannot see
@@ -73,10 +65,8 @@ data class PanelState(
     val role: PanelRole = PanelRole.Resident,
     val revoke: RevokeState = RevokeState.Ready,
     val markersOn: Boolean = false,
-    val hasTerminal: Boolean = true,
     /** Host-side only: the torch while registering markers, in the light, with the back camera. */
     val torch: Boolean = false,
-    val roomType: RoomType = RoomType.Room,
     /** Null while still in play. Set once, by whichever event put the player out. */
     val outBy: OutBy? = null,
     /** Randomises the backlog's *count and mix*, so inbox density can never imply a role. */
@@ -378,12 +368,24 @@ class PanelVals(val state: PanelState) {
 
     // ---- Host setup -------------------------------------------------------------------------
 
-    /** No terminal, no playable plan: the save button says so rather than failing later. */
-    val saveLabel: String =
-        if (state.hasTerminal) "REVIEW HOME" else "REVIEW HOME . NEEDS A TERMINAL"
-    val saveEdge: Color = if (state.hasTerminal) Amber.Slate else Amber.SlateDead
-    val saveFill: Color = if (state.hasTerminal) Amber.SlateFill else Color.Transparent
-    val saveInk: Color = if (state.hasTerminal) Amber.SlateInk else Amber.SlateDead
+    /**
+     * No terminal, no playable home: the save button says so rather than failing later.
+     *
+     * **Asked of the plan rather than of a flag.** Whether this home has a terminal is a fact
+     * about what the host registered, and it lives in [HomeEditorModel] with the rest of the
+     * plan; a second copy of it on [PanelState] is a second copy that would one day disagree
+     * with the plan it describes. The button still *works* when it says NEEDS A TERMINAL — it
+     * goes to the screen that explains where a terminal belongs, because a control that goes
+     * quiet teaches nothing about why.
+     */
+    fun saveLabel(hasTerminal: Boolean): String =
+        if (hasTerminal) "REVIEW HOME" else "REVIEW HOME . NEEDS A TERMINAL"
+
+    fun saveEdge(hasTerminal: Boolean): Color = if (hasTerminal) Amber.Slate else Amber.SlateDead
+    fun saveFill(hasTerminal: Boolean): Color =
+        if (hasTerminal) Amber.SlateFill else Color.Transparent
+
+    fun saveInk(hasTerminal: Boolean): Color = if (hasTerminal) Amber.SlateInk else Amber.SlateDead
 
     val markerState: String = if (state.markersOn) "ON" else "OFF"
     val markerEdge: Color = if (state.markersOn) Amber.Slate else Amber.BonePale
@@ -399,10 +401,20 @@ class PanelVals(val state: PanelState) {
         "DRAG TWO CORNERS TO ADD A ROOM.\nMARKERS IGNORE YOUR TAPS WHILE OFF."
     }
 
-    /** Room-type chips. Selection is inverted-dark on bone, the light field's emphasis. */
-    fun typeEdge(t: RoomType): Color = if (state.roomType == t) Amber.BoneInk else Amber.BonePale
-    fun typeFill(t: RoomType): Color = if (state.roomType == t) Amber.BoneInk else Color.Transparent
-    fun typeInk(t: RoomType): Color = if (state.roomType == t) Amber.Bone else Amber.BoneDim
+    /**
+     * Room-type chips. Selection is inverted-dark on bone, the light field's emphasis.
+     *
+     * The held room's own [RoomKind] decides which chip is lit — the plan is the only place a
+     * room's type is written down, and a chip reading from anywhere else is a chip that can be
+     * lit for a room that is not that type.
+     */
+    fun typeEdge(held: RoomKind, t: RoomKind): Color =
+        if (held == t) Amber.BoneInk else Amber.BonePale
+
+    fun typeFill(held: RoomKind, t: RoomKind): Color =
+        if (held == t) Amber.BoneInk else Color.Transparent
+
+    fun typeInk(held: RoomKind, t: RoomKind): Color = if (held == t) Amber.Bone else Amber.BoneDim
 
     val torchLabel: String = if (state.torch) "TORCH ON" else "TORCH OFF"
     val torchFill: Color = if (state.torch) Amber.SlateFill else Color.Transparent
@@ -432,14 +444,13 @@ class PanelVals(val state: PanelState) {
     )
 
     /**
-     * The markers registered in the room the host is holding, and the shape most recently added.
+     * The shape most recently registered, shown in the viewfinder so the host can match it
+     * against the card in their hand.
      *
-     * Fixture data. The real list comes from the authority, and the *shapes* come from
-     * [MarkerShapes] — a marker's shape is its whole name here, so this is the one place the
-     * design's own 24-shape sample must not be used.
+     * Fixture: registering a card is story 4.5 and there is no camera here. **What room holds
+     * what** is no longer a fixture on this class — it is the editor's, beside the plan it
+     * belongs to, because a room's contents and a room's shape are lost together.
      */
-    val roomMarkers: List<MarkerShape> =
-        listOfNotNull(MarkerShapes["triangle_up"], MarkerShapes["ring"])
     val lastRegistered: MarkerShape? = MarkerShapes["ring"]
 
     // ---- Meeting ------------------------------------------------------------------------------
@@ -536,9 +547,15 @@ class PanelVals(val state: PanelState) {
  * timelapse and the outside view all read these rects, so a room cannot sit in one place on the
  * editor and another on the map. Two grids that agree by coincidence stop agreeing the first
  * time one is edited, and a map that disagreed with the house the host walked would be a bug
- * nobody could see from inside the game.
+ * nobody could see from inside the game. The editor keeps that promise by *converting* these
+ * into strokes — [HomeEditorModel.bungalow] — rather than by typing the same rooms out again.
+ *
+ * **A rect on the live map, not a painted room.** `model.PlanRect` is the painted one: a `Room`
+ * and the strokes it is the union of, which is what an L-shaped kitchen needs and what a single
+ * rect cannot express. This is the fixture the in-round screens draw, where every room happens
+ * to be one rectangle.
  */
-data class PlanRoom(
+data class PlanRect(
     val name: String,
     val r0: Int,
     val r1: Int,
@@ -553,18 +570,18 @@ object Plan {
     const val ROWS = 12
 
     val rooms = listOf(
-        PlanRoom("KITCHEN", 0, 2, 0, 3),
-        PlanRoom("LIVING", 0, 2, 5, 9),
-        PlanRoom("HALL", 4, 5, 0, 5),
-        PlanRoom("STAIRS", 4, 5, 6, 9, transit = true),
-        PlanRoom("STUDY", 7, 10, 0, 3),
-        PlanRoom("GARAGE", 7, 9, 5, 9),
+        PlanRect("KITCHEN", 0, 2, 0, 3),
+        PlanRect("LIVING", 0, 2, 5, 9),
+        PlanRect("HALL", 4, 5, 0, 5),
+        PlanRect("STAIRS", 4, 5, 6, 9, transit = true),
+        PlanRect("STUDY", 7, 10, 0, 3),
+        PlanRect("GARAGE", 7, 9, 5, 9),
     )
 
     /** The room the reader is standing in — the only anchor a count-based map can offer. */
     const val HERE = "GARAGE"
 
-    fun roomAt(row: Int, col: Int): PlanRoom? =
+    fun roomAt(row: Int, col: Int): PlanRect? =
         rooms.firstOrNull { row >= it.r0 && row <= it.r1 && col >= it.c0 && col <= it.c1 }
 
     /**
@@ -574,7 +591,7 @@ object Plan {
      * that four people were in the living room, never which four — and a numeral says exactly
      * that and nothing more.
      */
-    data class RoomCount(val room: PlanRoom, val count: Int, val ink: Color)
+    data class RoomCount(val room: PlanRect, val count: Int, val ink: Color)
 
     private fun counts(spec: Map<String, Pair<Int, Color>>): List<RoomCount> =
         rooms.mapNotNull { room -> spec[room.name]?.let { RoomCount(room, it.first, it.second) } }
@@ -656,30 +673,7 @@ data class MapCell(
     val fill: Color?,
 )
 
-/**
- * The editor grid, with one room optionally held as the current selection.
- *
- * **The held room goes DARKER, and that is correct.** The design carries a comment at the call
- * site describing the opposite — selection keeps the accent while every other room drops to
- * neutral putty — which was an earlier intention that the code never implemented. Confirmed as
- * the code, not the comment. Do not "fix" this to match a comment that is not in this repo.
- */
-fun Plan.editorCells(focus: PlanRoom? = null): List<EditorCell> =
-    List(ROWS * COLS) { i ->
-        val room = roomAt(i / COLS, i % COLS)
-        val held = focus != null && room != null && room.name == focus.name
-        when {
-            held -> EditorCell(Amber.SlateFocus, Amber.SlateFocusFill)
-            room == null -> EditorCell(Amber.BonePutty, null)
-            // Slate underneath, pale stripes on top: the source gradient is 3 units of
-            // BoneHatch against 1 of Slate, so the SLATE is the gap colour. Leaving the
-            // fill null let the bone ground show through and the stairs went pale.
-            room.transit -> EditorCell(Amber.Slate, Amber.Slate, hatch = true)
-            else -> EditorCell(Amber.Slate, Amber.SlateFill)
-        }
-    }
-
-/** The live grid. Reads the same rects as the editor, deliberately. */
+/** The live grid, drawn from the fixture the in-round screens share. */
 fun Plan.mapCells(): List<MapCell> =
     List(ROWS * COLS) { i ->
         val row = i / COLS
@@ -687,7 +681,7 @@ fun Plan.mapCells(): List<MapCell> =
         val room = roomAt(row, col)
         val mine = room != null && room.name == HERE
 
-        fun edgeTo(other: PlanRoom?): Color? =
+        fun edgeTo(other: PlanRect?): Color? =
             if (other !== room) {
                 if (mine) Amber.Bright else if (room != null) Amber.Dim else Amber.Deep
             } else null

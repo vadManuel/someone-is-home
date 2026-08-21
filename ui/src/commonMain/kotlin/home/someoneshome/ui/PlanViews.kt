@@ -1,7 +1,9 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.CellRect
 import home.someoneshome.model.MarkerShape
 import home.someoneshome.model.MarkerShapes
+import home.someoneshome.model.PlanRoom as PaintedRoom
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -63,16 +65,44 @@ fun MarkerGlyph(shape: MarkerShape, size: Dp, color: Color, modifier: Modifier =
     }
 }
 
-/** The host's editor grid: a filled cell per square, in slate, on the bone LCD. */
+/**
+ * The host's editor grid: a filled cell per square, in slate, on the bone LCD — and the rectangle
+ * under the finger, while there is one.
+ *
+ * **The preview is drawn, not composed.** It changes on every frame of a drag, and a rectangle
+ * that recomposed the grid to move would be a layout pass per frame for something that is four
+ * numbers. It is deliberately *not* a room yet: the model has not been asked, and it may refuse —
+ * [blocked] is the editor's live answer to whether it would, drawn in the one warning colour so
+ * the host knows before they lift their finger rather than after.
+ */
 @Composable
-fun EditorPlan(cells: List<EditorCell>, modifier: Modifier = Modifier) {
+fun EditorPlan(
+    cells: List<EditorCell>,
+    modifier: Modifier = Modifier,
+    cols: Int = HomeEditorModel.COLS,
+    rows: Int = HomeEditorModel.ROWS,
+    preview: CellRect? = null,
+    blocked: Boolean = false,
+) {
     Canvas(modifier) {
         val hair = 0.5.dp.toPx()
         cells.forEachIndexed { i, cell ->
-            val b = cellBounds(i % Plan.COLS, i / Plan.COLS, size.width, size.height)
+            val b = cellBounds(i % cols, i / cols, size.width, size.height, cols, rows)
             cell.fill?.let { drawRect(it, Offset(b.x, b.y), Size(b.w, b.h)) }
             if (cell.hatch) drawHatch(b.x, b.y, b.w, b.h)
             drawRect(cell.border, Offset(b.x, b.y), Size(b.w, b.h), style = Stroke(hair))
+        }
+        if (preview != null) {
+            val a = cellBounds(preview.x, preview.y, size.width, size.height, cols, rows)
+            val z = cellBounds(
+                preview.x + preview.width - 1, preview.y + preview.height - 1,
+                size.width, size.height, cols, rows,
+            )
+            val ink = if (blocked) Amber.Caution else Amber.SlateInk
+            val at = Offset(a.x, a.y)
+            val span = Size(z.x + z.w - a.x, z.y + z.h - a.y)
+            drawRect(ink.copy(alpha = 0.35f), at, span)
+            drawRect(ink, at, span, style = Stroke(2.dp.toPx()))
         }
     }
 }
@@ -87,11 +117,18 @@ fun EditorPlan(cells: List<EditorCell>, modifier: Modifier = Modifier) {
  */
 private class CellBounds(val x: Float, val y: Float, val w: Float, val h: Float)
 
-private fun cellBounds(col: Int, row: Int, width: Float, height: Float): CellBounds {
-    val x0 = kotlin.math.round(col * width / Plan.COLS)
-    val x1 = kotlin.math.round((col + 1) * width / Plan.COLS)
-    val y0 = kotlin.math.round(row * height / Plan.ROWS)
-    val y1 = kotlin.math.round((row + 1) * height / Plan.ROWS)
+private fun cellBounds(
+    col: Int,
+    row: Int,
+    width: Float,
+    height: Float,
+    cols: Int = Plan.COLS,
+    rows: Int = Plan.ROWS,
+): CellBounds {
+    val x0 = kotlin.math.round(col * width / cols)
+    val x1 = kotlin.math.round((col + 1) * width / cols)
+    val y0 = kotlin.math.round(row * height / rows)
+    val y1 = kotlin.math.round((row + 1) * height / rows)
     return CellBounds(x0, y0, x1 - x0, y1 - y0)
 }
 
@@ -190,67 +227,67 @@ fun PlanCounts(counts: List<Plan.RoomCount>, modifier: Modifier = Modifier) {
 }
 
 /**
- * Room names and marker chips over the *editor* plan.
+ * Room names and marker chips over the *editor* plan — **read off the painted rooms**.
  *
  * The chip carries a count, or `T` for the terminal. It is drawn inverted because the editor is a
  * light field: on bone, inverted-dark is the emphasis, exactly as inverted-amber is on black.
+ *
+ * The port carried a hand-tuned list of placements here, several of them nudged off their room's
+ * true origin so the text cleared the chip. That list could only ever describe one plan — the
+ * design's own bungalow — so a host who painted their own house got six labels in the wrong
+ * places, or none. Each label now sits at its room's top-left cell, which is a placement that is
+ * right for every plan rather than nudged for one.
  */
 @Composable
-fun EditorLabels(modifier: Modifier = Modifier, held: String? = null) {
+fun EditorLabels(
+    rooms: List<PaintedRoom>,
+    modifier: Modifier = Modifier,
+    held: String? = null,
+    markers: (String) -> Int = { 0 },
+    terminal: String? = null,
+    cols: Int = HomeEditorModel.COLS,
+    rows: Int = HomeEditorModel.ROWS,
+) {
     BoxWithConstraints(modifier) {
         val w = maxWidth
         val h = maxHeight
-        editorLabels.forEach { spec ->
-            val isHeld = held != null && spec.name == held
+        rooms.forEach { room ->
+            val anchor = room.strokes.minWithOrNull(compareBy({ it.y }, { it.x })) ?: return@forEach
+            val isHeld = room.name == held
             val ink = if (isHeld) Amber.BoneChip else Amber.BoneInk
             val chipInk = if (isHeld) Amber.SlateFocusFill else Amber.SlateFill
+            val count = markers(room.name)
             Column(
-                Modifier.offset(
-                    x = spec.leftFraction?.let { w * it } ?: spec.leftInset,
-                    y = spec.topFraction?.let { h * it } ?: spec.topInset,
-                )
+                Modifier
+                    .offset(
+                        x = w * (anchor.x.toFloat() / cols),
+                        y = h * (anchor.y.toFloat() / rows),
+                    )
+                    .padding(start = 3.u, top = 2.u)
             ) {
-                Label(spec.name, size = 5.5, color = ink, tracking = 0.06)
-                if (spec.chip != null) {
-                    Box(
-                        Modifier.padding(top = 1.u).let {
-                            if (spec.round) it.size(8.u).background(ink, CircleShape)
-                            else it.defaultMinSize(minWidth = 8.u).height(8.u).background(ink)
-                        },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Label(spec.chip, size = 4.5, color = chipInk)
-                    }
-                }
+                Label(room.name, size = 5.5, color = ink, tracking = 0.06)
+                if (count > 0) EditorChip("$count", ink, chipInk, round = false)
+                // The T is its own chip rather than replacing the count: a room can hold cards
+                // AND the terminal, and a chip that showed one of them would be the editor
+                // quietly hiding the other from the host who is about to go and find it.
+                if (room.name == terminal) EditorChip("T", ink, chipInk, round = true)
             }
         }
     }
 }
 
-private class EditorLabelSpec(
-    val name: String,
-    val leftInset: Dp = 0.u,
-    val leftFraction: Float? = null,
-    val topInset: Dp = 0.u,
-    val topFraction: Float? = null,
-    val chip: String? = null,
-    val round: Boolean = false,
-)
-
-/**
- * Label placements, kept as the design's own mix of pixel insets and percentages.
- *
- * Not derived from [Plan]'s rects on purpose: the design nudged several off their room's true
- * origin so the text clears the marker chip, and re-deriving them would silently undo that.
- */
-private val editorLabels = listOf(
-    EditorLabelSpec("KITCHEN", leftInset = 3.u, topInset = 2.u, chip = "1"),
-    EditorLabelSpec("LIVING", leftFraction = 0.52f, topInset = 2.u, chip = "1"),
-    EditorLabelSpec("HALL", leftInset = 3.u, topFraction = 0.34f, chip = "T", round = true),
-    EditorLabelSpec("STAIRS", leftFraction = 0.62f, topFraction = 0.34f),
-    EditorLabelSpec("STUDY", leftInset = 3.u, topFraction = 0.59f, chip = "1"),
-    EditorLabelSpec("GARAGE", leftFraction = 0.52f, topFraction = 0.59f, chip = "2"),
-)
+@Composable
+private fun EditorChip(text: String, ink: Color, chipInk: Color, round: Boolean) {
+    Box(
+        Modifier.padding(top = 1.u).let {
+            if (round) it.size(8.u).background(ink, CircleShape)
+            else it.defaultMinSize(minWidth = 8.u).height(8.u).background(ink)
+        },
+        contentAlignment = Alignment.Center,
+    ) {
+        Label(text, size = 4.5, color = chipInk)
+    }
+}
 
 /**
  * The terminal's mark: a `T` in a ring.

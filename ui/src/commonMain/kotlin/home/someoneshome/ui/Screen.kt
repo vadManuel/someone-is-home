@@ -2,6 +2,7 @@ package home.someoneshome.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.foundation.layout.BoxScope
 
 /**
@@ -13,9 +14,21 @@ import androidx.compose.foundation.layout.BoxScope
  * never "it didn't appear".
  */
 @Composable
-fun Screen(state: PanelState, actions: PanelActions = PanelActions()) {
+fun Screen(
+    state: PanelState,
+    actions: PanelActions = PanelActions(),
+    /**
+     * The plan the host-setup screens draw.
+     *
+     * Defaulted and `remember`ed rather than read from a global: every test that renders a screen
+     * then gets its own, so a test that fires every control on the editor cannot leave a
+     * half-deleted house behind for the next one. In the app [FlowHost] passes the one the round
+     * is being set up with.
+     */
+    editor: HomeEditorModel = remember { HomeEditorModel.bungalow() },
+) {
     val vals = PanelVals(state)
-    CompositionLocalProvider(LocalActions provides actions) {
+    CompositionLocalProvider(LocalActions provides actions, LocalEditor provides editor) {
         PanelFrame(vals, overlay = bannerFor(state.screen)) {
             when (state.screen) {
                 ScreenId.Boot -> BootScreen()

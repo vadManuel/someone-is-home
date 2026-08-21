@@ -1,5 +1,7 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.RoomKind
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -82,41 +84,65 @@ private fun SavedHome(
  * adjacency falls out of cell neighbours so nothing downstream needs geometry, L-shaped rooms
  * just work because real houses have them, and there are no resize handles, overlap rules or
  * snapping to build. Simpler to author and simpler to implement at once.
+ *
+ * The grid draws whatever the host has painted, and the counts in the heading are counted rather
+ * than written down. What was a picture of one bungalow is now a picture of any house.
  */
 @Composable
 fun EditorScreen(vals: PanelVals) {
     val go = navigator()
+    val actions = LocalActions.current
+    val editor = LocalEditor.current
     PrePage {
         PreHeading(
-            "THE BUNGALOW", trailing = "6 ROOMS . 5 MARKERS",
+            "THE BUNGALOW",
+            trailing = "${editor.roomsOn(editor.floorName)} ROOMS . " +
+                "${editor.markersOn(editor.floorName)} MARKERS",
             back = ScreenId.Maps, tracking = 0.14, trailingSize = 6.0,
         )
 
         Row(Modifier.fillMaxWidth().height(19.u), horizontalArrangement = Arrangement.spacedBy(3.u)) {
-            FloorTab("GROUND", held = true, modifier = Modifier.weight(1f))
-            FloorTab("UPPER", held = false, modifier = Modifier.weight(1f)) { go(ScreenId.Floors) }
+            editor.plan.floors.forEach { storey ->
+                FloorTab(
+                    storey.name,
+                    held = storey.name == editor.floorName,
+                    modifier = Modifier.weight(1f),
+                ) { actions.openFloor(storey.name) }
+            }
             FloorTab("+", held = false, modifier = Modifier.width(26.u)) { go(ScreenId.Floors) }
         }
 
-        Box(
-            Modifier.fillMaxWidth().weight(1f).border(1.u, Amber.BonePale).goes(ScreenId.RoomEdit)
-        ) {
-            EditorPlan(Plan.editorCells(), Modifier.fillMaxSize())
-            EditorLabels(Modifier.fillMaxSize())
+        Box(Modifier.fillMaxWidth().weight(1f).border(1.u, Amber.BonePale)) {
+            EditorSurface(editor, actions.openRoomAt, Modifier.fillMaxSize())
         }
 
-        InfoBox(border = Amber.BonePale, padding = 0.u) {
+        // The hint, or the refusal that replaces it. The model refuses politely so this can be
+        // said while the finger is still on the screen, and the one warning colour says which of
+        // the two the host is reading without them having to read it to find out.
+        InfoBox(border = if (editor.refusal != null) Amber.Caution else Amber.BonePale, padding = 0.u) {
             Label(
-                "DRAG TWO CORNERS TO ADD A ROOM.\nTAP A ROOM TO NAME IT OR ADD MARKERS.",
+                editor.refusal ?: "DRAG TWO CORNERS TO ADD A ROOM.\n" +
+                    "DRAG FROM INSIDE ONE TO GROW IT.\n" +
+                    "TAP A ROOM TO NAME IT OR ADD MARKERS.",
                 modifier = Modifier.padding(horizontal = 7.u, vertical = 6.u),
-                size = 6.0, color = Amber.BoneDim, tracking = 0.1, lineHeight = 1.8,
+                size = 6.0,
+                color = if (editor.refusal != null) Amber.BoneInk else Amber.BoneDim,
+                tracking = 0.1, lineHeight = 1.8,
             )
         }
 
         PanelButton(
-            vals.saveLabel,
-            border = vals.saveEdge, fill = vals.saveFill, ink = vals.saveInk,
-            onClick = { go(ScreenId.SaveName) },
+            vals.saveLabel(editor.hasTerminal),
+            border = vals.saveEdge(editor.hasTerminal),
+            fill = vals.saveFill(editor.hasTerminal),
+            ink = vals.saveInk(editor.hasTerminal),
+            // The gate. It still goes somewhere when the home has no terminal — to the screen
+            // that says where a terminal belongs, because a button that goes quiet teaches
+            // nothing about why, and this one is the last thing between a host and an evening
+            // spent finding out the hard way.
+            onClick = {
+                go(if (editor.hasTerminal) ScreenId.SaveName else ScreenId.NoTerminal)
+            },
         )
     }
 }
@@ -161,6 +187,7 @@ private fun HeldPlanPage(
     trailing: String,
     panel: @Composable ColumnScope.() -> Unit,
 ) {
+    val editor = LocalEditor.current
     Column(Modifier.fillMaxSize()) {
         Column(
             Modifier.fillMaxWidth().weight(1f).padding(8.u),
@@ -171,15 +198,22 @@ private fun HeldPlanPage(
                 Label(trailing, size = 7.0, color = Amber.BoneFaint, tracking = 0.14)
             }
             Box(
-                Modifier.weight(1f).aspectRatio(Plan.COLS.toFloat() / Plan.ROWS)
+                Modifier.weight(1f)
+                    .aspectRatio(HomeEditorModel.COLS.toFloat() / HomeEditorModel.ROWS)
                     .align(Alignment.CenterHorizontally)
                     .border(1.u, Amber.BonePale)
             ) {
-                EditorPlan(
-                    Plan.editorCells(Plan.rooms.first { it.name == Plan.HERE }),
+                // Read-only here on purpose: this is the plan the host already knows, with the
+                // room under discussion lit. Painting happens on the editor, where the whole
+                // grid is under the finger and nothing is being decided about one room.
+                EditorPlan(editor.editorCells(), Modifier.fillMaxSize())
+                EditorLabels(
+                    editor.rooms,
                     Modifier.fillMaxSize(),
+                    held = editor.held,
+                    markers = { editor.markersIn(it).size },
+                    terminal = editor.terminal,
                 )
-                EditorLabels(Modifier.fillMaxSize(), held = Plan.HERE)
             }
         }
         Column(
@@ -192,17 +226,27 @@ private fun HeldPlanPage(
     }
 }
 
-/** Name chips, type, markers, and a delete that names what it takes with it. */
+/**
+ * Name chips, type, markers, and a delete that names what it takes with it.
+ *
+ * The presets are the five rooms every house has, and tapping one **is** naming the room — the
+ * same act as typing it, so it goes through the same door and is refused the same way if some
+ * other room already has that name.
+ */
 @Composable
 fun RoomEditScreen(vals: PanelVals) {
     val go = navigator()
     val actions = LocalActions.current
-    HeldPlanPage("GARAGE", "ROOM PANEL") {
-        Row(horizontalArrangement = Arrangement.spacedBy(3.u)) {
-            NameChip("KITCHEN", false)
-            NameChip("LIVING", false)
-            NameChip("GARAGE", true)
-            NameChip("BATH 1", false)
+    val editor = LocalEditor.current
+    HeldPlanPage(editor.heldName, "ROOM PANEL") {
+        FlowRow(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(3.u),
+            verticalArrangement = Arrangement.spacedBy(3.u),
+        ) {
+            HomeEditorModel.PRESETS.forEach { preset ->
+                NameChip(preset, held = preset == editor.heldName) { actions.nameRoom(preset) }
+            }
         }
 
         Column(Modifier.fillMaxWidth().border(1.u, Amber.BoneInk).padding(horizontal = 7.u, vertical = 5.u)) {
@@ -212,21 +256,27 @@ fun RoomEditScreen(vals: PanelVals) {
                 size = 6.0, color = Amber.BoneDim, tracking = 0.12,
             )
             Row(verticalAlignment = Alignment.Bottom) {
-                Readout("GARAGE", size = 17.0, color = Amber.BoneInk, tracking = 0.06)
+                Readout(editor.heldName, size = 17.0, color = Amber.BoneInk, tracking = 0.06)
                 Caret(Amber.BoneInk)
             }
         }
 
+        // The refusal a rename can produce, said here rather than on the plan the host is not
+        // looking at. A preset chip for a name another room already holds is the likely one.
+        editor.refusal?.let {
+            Label(it, size = 6.0, color = Amber.BoneInk, tracking = 0.1, lineHeight = 1.6)
+        }
+
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.u)) {
-            TypeChip("ROOM", RoomType.Room, vals, Modifier.weight(1f)) {
-                actions.pickRoomType(RoomType.Room)
+            TypeChip("ROOM", RoomKind.Room, editor.heldKind, vals, Modifier.weight(1f)) {
+                actions.pickRoomType(RoomKind.Room)
             }
-            TypeChip("STAIRS", RoomType.Stairs, vals, Modifier.weight(1f)) {
-                actions.pickRoomType(RoomType.Stairs)
+            TypeChip("STAIRS", RoomKind.Stairs, editor.heldKind, vals, Modifier.weight(1f)) {
+                actions.pickRoomType(RoomKind.Stairs)
             }
         }
 
-        if (vals.state.roomType == RoomType.Room) {
+        if (editor.heldKind == RoomKind.Room) {
             RowButton(
                 border = Amber.BoneInk, verticalPadding = 6.u,
                 onClick = { go(ScreenId.MarkerSheet) },
@@ -236,14 +286,16 @@ fun RoomEditScreen(vals: PanelVals) {
                     horizontalArrangement = Arrangement.spacedBy(4.u),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    vals.roomMarkers.forEach { MarkerGlyph(it, 11.u, Amber.BoneInk) }
+                    editor.heldMarkers.forEach { MarkerGlyph(it, 11.u, Amber.BoneInk) }
                     Label("›", size = 7.0, color = Amber.BoneInk)
                 }
             }
         } else {
             // Stairs are somewhere people walk through, so nothing can live in them. The row
             // stays in place and goes quiet rather than vanishing: a control that disappears
-            // teaches nothing about why.
+            // teaches nothing about why. It is structural rather than drawn — a registration
+            // into stairs cannot be constructed (D-099), and the editor gave the cards up as
+            // part of the type change rather than afterwards.
             Column(verticalArrangement = Arrangement.spacedBy(3.u)) {
                 Row(
                     Modifier.fillMaxWidth().border(1.u, Color(0xFFB8B0A0))
@@ -262,18 +314,40 @@ fun RoomEditScreen(vals: PanelVals) {
 
         SlateButton("DONE", { go(ScreenId.Editor) })
         PanelButton(
-            "DELETE ROOM AND ITS 2 MARKERS",
+            deleteRoomLabel(editor.heldMarkers.size, editor.terminal == editor.heldName),
             border = Amber.BonePale, ink = Amber.BoneDim,
-            onClick = { go(ScreenId.Editor) },
+            onClick = {
+                actions.deleteRoom()
+                go(ScreenId.Editor)
+            },
         )
     }
 }
 
+/**
+ * What deleting this room takes with it, named rather than counted at the host afterwards.
+ *
+ * The design's line is DELETE ROOM AND ITS 2 MARKERS, written for a room that had two. A room
+ * with none must not be told it is losing none, and a room holding the T card is losing the one
+ * thing in the house that cannot simply be printed again — so it gets said out loud.
+ */
+private fun deleteRoomLabel(markers: Int, terminal: Boolean): String {
+    val cards = when (markers) {
+        0 -> null
+        1 -> "ITS 1 MARKER"
+        else -> "ITS $markers MARKERS"
+    }
+    val parts = listOfNotNull(cards, if (terminal) "ITS TERMINAL" else null)
+    return if (parts.isEmpty()) "DELETE ROOM"
+    else "DELETE ROOM AND " + parts.joinToString(" AND ")
+}
+
 @Composable
-private fun NameChip(name: String, held: Boolean) {
+private fun NameChip(name: String, held: Boolean, onClick: () -> Unit) {
     Box(
         Modifier.border(1.u, if (held) Amber.BoneInk else Amber.BonePale)
             .background(if (held) Amber.BoneInk else Color.Transparent)
+            .tap(onClick)
             .padding(horizontal = 5.u, vertical = 3.u)
     ) {
         Label(name, size = 6.5, tracking = 0.06, color = if (held) Amber.Bone else Amber.BoneDim)
@@ -283,17 +357,18 @@ private fun NameChip(name: String, held: Boolean) {
 @Composable
 private fun TypeChip(
     text: String,
-    type: RoomType,
+    type: RoomKind,
+    held: RoomKind,
     vals: PanelVals,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     Box(
-        modifier.border(1.u, vals.typeEdge(type)).background(vals.typeFill(type))
+        modifier.border(1.u, vals.typeEdge(held, type)).background(vals.typeFill(held, type))
             .tap(onClick).padding(vertical = 6.u),
         contentAlignment = Alignment.Center,
     ) {
-        Label(text, size = 6.5, tracking = 0.08, color = vals.typeInk(type))
+        Label(text, size = 6.5, tracking = 0.08, color = vals.typeInk(held, type))
     }
 }
 
@@ -308,8 +383,9 @@ private fun TypeChip(
 fun StairsWarnScreen(vals: PanelVals) {
     val go = navigator()
     val actions = LocalActions.current
+    val editor = LocalEditor.current
     PrePage(gap = 7) {
-        PreHeading("GARAGE BECOMES STAIRS", back = ScreenId.RoomEdit, tracking = 0.14)
+        PreHeading("${editor.heldName} BECOMES STAIRS", back = ScreenId.RoomEdit, tracking = 0.14)
 
         InfoBox(border = Amber.BoneInk, padding = 8.u, gap = 6.u) {
             Label(
@@ -320,12 +396,15 @@ fun StairsWarnScreen(vals: PanelVals) {
                 horizontalArrangement = Arrangement.spacedBy(5.u),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                vals.roomMarkers.forEach {
+                editor.heldMarkers.forEach {
                     Box(Modifier.border(1.u, Amber.BoneInk).padding(4.u)) {
                         MarkerGlyph(it, 13.u, Amber.BoneInk)
                     }
                 }
-                TerminalToken(21.u, Amber.BoneInk)
+                // Only if this room is actually the one holding it. The port drew the T on every
+                // room, which told a host they were about to lose a terminal that was two rooms
+                // away and perfectly safe.
+                if (editor.terminal == editor.heldName) TerminalToken(21.u, Amber.BoneInk)
             }
         }
 
@@ -360,12 +439,13 @@ fun StairsWarnScreen(vals: PanelVals) {
 @Composable
 fun MarkerSheetScreen(vals: PanelVals) {
     val go = navigator()
-    HeldPlanPage("MARKERS", "GARAGE . ${vals.roomMarkers.size}") {
+    val editor = LocalEditor.current
+    HeldPlanPage("MARKERS", "${editor.heldName} . ${editor.heldMarkers.size}") {
         Row(
             Modifier.fillMaxWidth().heightIn(min = 52.u),
             horizontalArrangement = Arrangement.spacedBy(4.u),
         ) {
-            vals.roomMarkers.forEach { shape ->
+            editor.heldMarkers.forEach { shape ->
                 Row(
                     Modifier.border(1.u, Amber.BoneInk)
                         .padding(start = 5.u, end = 4.u, top = 3.u, bottom = 3.u),
@@ -395,8 +475,16 @@ fun MarkerSheetScreen(vals: PanelVals) {
                     horizontalArrangement = Arrangement.spacedBy(4.u),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    TerminalToken(9.u, Amber.BoneInk, textSize = 5.0)
-                    Label("IN HALL", size = 6.5, color = Amber.BoneInk)
+                    // Where the T card is, which is a fact about the whole home rather than
+                    // about this room — the host is told it here because here is where they
+                    // would otherwise scan a second one.
+                    val at = editor.terminal
+                    if (at != null) TerminalToken(9.u, Amber.BoneInk, textSize = 5.0)
+                    Label(
+                        if (at != null) "IN $at" else "NOT PLACED",
+                        size = 6.5,
+                        color = if (at != null) Amber.BoneInk else Amber.BoneDim,
+                    )
                 }
             }
             Box(
@@ -428,8 +516,12 @@ fun MarkerSheetScreen(vals: PanelVals) {
 fun ScanMarkerScreen(vals: PanelVals) {
     val go = navigator()
     val actions = LocalActions.current
+    val editor = LocalEditor.current
     PrePage {
-        PreHeading("REGISTER MARKER", trailing = "GARAGE", back = ScreenId.MarkerSheet, tracking = 0.14)
+        PreHeading(
+            "REGISTER MARKER", trailing = editor.heldName,
+            back = ScreenId.MarkerSheet, tracking = 0.14,
+        )
 
         Box(Modifier.fillMaxWidth().weight(1f).background(Amber.SlateDead)) {
             ViewfinderCorners()
@@ -484,7 +576,7 @@ fun ScanMarkerScreen(vals: PanelVals) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Label("THIS ROOM", size = 6.0, color = Amber.BoneFaint, tracking = 0.12)
-            vals.roomMarkers.forEach { MarkerGlyph(it, 12.u, Amber.BoneInk) }
+            editor.heldMarkers.forEach { MarkerGlyph(it, 12.u, Amber.BoneInk) }
         }
 
         PreNote("KEEP SCANNING TO ADD MORE. THE CODE CARRIES\nTHE SHAPE PRINTED ON IT.")
@@ -533,8 +625,13 @@ private fun ViewfinderCorners() {
 @Composable
 fun TermTakenScreen() {
     val go = navigator()
+    val editor = LocalEditor.current
+    val at = editor.terminal.orEmpty()
     PrePage {
-        PreHeading("REGISTER MARKER", trailing = "GARAGE", back = ScreenId.ScanMarker, tracking = 0.14)
+        PreHeading(
+            "REGISTER MARKER", trailing = editor.heldName,
+            back = ScreenId.ScanMarker, tracking = 0.14,
+        )
 
         Box(Modifier.fillMaxWidth().weight(1f).background(Amber.SlateDead)) {
             Column(
@@ -554,7 +651,7 @@ fun TermTakenScreen() {
                     "This home has one terminal and it is in",
                     size = 7.0, color = Amber.SlateFill, lineHeight = 1.8, align = TextAlign.Center,
                 )
-                Label("HALL", size = 7.0, color = Amber.BoneChip, tracking = 0.1)
+                Label(at, size = 7.0, color = Amber.BoneChip, tracking = 0.1)
                 Label(
                     "A second one would give the house two places to be found.",
                     size = 7.0, color = Amber.SlateFill, lineHeight = 1.8, align = TextAlign.Center,
@@ -562,14 +659,14 @@ fun TermTakenScreen() {
             }
         }
 
-        SlateButton("KEEP IT IN HALL", { go(ScreenId.ScanMarker) })
+        SlateButton("KEEP IT IN $at", { go(ScreenId.ScanMarker) })
         PanelButton(
-            "MOVE THE TERMINAL TO GARAGE",
+            "MOVE THE TERMINAL TO ${editor.heldName}",
             border = Amber.BonePale, ink = Amber.BoneDim, verticalPadding = 9.u,
             onClick = { go(ScreenId.ScanMarker) },
         )
         PreNote(
-            "MOVING IT LEAVES HALL WITH NO TERMINAL.\nTHE T CARD IS NEVER AN ORDINARY MARKER.",
+            "MOVING IT LEAVES $at WITH NO TERMINAL.\nTHE T CARD IS NEVER AN ORDINARY MARKER.",
             align = TextAlign.Center,
         )
     }
@@ -579,6 +676,7 @@ fun TermTakenScreen() {
 @Composable
 fun TermRemoveScreen() {
     val go = navigator()
+    val editor = LocalEditor.current
     PrePage(gap = 7) {
         PreHeading("REMOVE THE TERMINAL", back = ScreenId.MarkerSheet, tracking = 0.14)
 
@@ -589,7 +687,10 @@ fun TermRemoveScreen() {
                 verticalArrangement = Arrangement.spacedBy(6.u),
             ) {
                 TerminalToken(24.u, Amber.BoneInk, stroke = 2.u, textSize = 12.0)
-                Label("IN HALL", size = 8.0, color = Amber.BoneInk, tracking = 0.06)
+                Label(
+                    editor.terminal?.let { "IN $it" } ?: "NOT PLACED",
+                    size = 8.0, color = Amber.BoneInk, tracking = 0.06,
+                )
             }
         }
 
@@ -660,7 +761,10 @@ fun NoTerminalScreen() {
         }
 
         PushDown()
-        SlateButton("OPEN A ROOM", { go(ScreenId.RoomEdit) }, verticalPadding = 11.u)
+        // Back to the plan, not into the room panel. The host has to choose WHICH room the
+        // terminal goes in — "somewhere awkward" is the whole point of it — and the plan is the
+        // only screen that can ask that question.
+        SlateButton("OPEN A ROOM", { go(ScreenId.Editor) }, verticalPadding = 11.u)
     }
 }
 
@@ -678,18 +782,36 @@ fun NoTerminalScreen() {
 @Composable
 fun FloorsScreen() {
     val go = navigator()
+    val actions = LocalActions.current
+    val editor = LocalEditor.current
+    val open = editor.floorName
     PrePage {
-        PreHeading("FLOORS", trailing = "2 IN THIS HOME", back = ScreenId.Editor, tracking = 0.14)
-        PreRow("GROUND", "6 ROOMS . 5 MARKERS", size = 7.5, verticalPadding = 7.u)
-        PreRow(
-            "UPPER", "5 ROOMS . 4 MARKERS",
-            border = Amber.BoneInk, labelInk = Amber.BoneInk, size = 7.5, verticalPadding = 7.u,
+        PreHeading(
+            "FLOORS", trailing = "${editor.floorCount} IN THIS HOME",
+            back = ScreenId.Editor, tracking = 0.14,
         )
+        editor.plan.floors.forEach { storey ->
+            val held = storey.name == open
+            PreRow(
+                storey.name,
+                "${editor.roomsOn(storey.name)} ROOMS . ${editor.markersOn(storey.name)} MARKERS",
+                border = if (held) Amber.BoneInk else Amber.BonePale,
+                labelInk = if (held) Amber.BoneInk else Amber.BoneDeep,
+                size = 7.5, verticalPadding = 7.u,
+                onClick = { actions.openFloor(storey.name) },
+            )
+        }
         PanelButton(
             "ADD A FLOOR",
             border = Amber.BonePale, ink = Amber.BoneDim,
             size = 7.5, tracking = 0.14, verticalPadding = 9.u,
-            onClick = { go(ScreenId.Editor) },
+            // The new storey is added AND opened, and the host lands on it with an empty grid.
+            // Adding one and staying here would leave them looking at a list, wondering whether
+            // it worked.
+            onClick = {
+                actions.addFloor()
+                go(ScreenId.Editor)
+            },
         )
         InfoBox(border = Amber.BonePale, padding = 0.u) {
             Label(
@@ -699,14 +821,19 @@ fun FloorsScreen() {
             )
         }
         PushDown()
+        // Renaming and deleting a storey are the two controls here that are still inert. Both
+        // need something this unit does not build — a text field for one, a two-second hold for
+        // the other — so they name the open storey truthfully and do nothing, rather than
+        // naming a storey that is not open and doing nothing.
         Column(verticalArrangement = Arrangement.spacedBy(5.u)) {
-            PreRow("RENAME UPPER", ">", verticalPadding = 7.u)
+            PreRow("RENAME $open", ">", verticalPadding = 7.u)
             PreRow(
-                "DELETE UPPER", ">",
+                "DELETE $open", ">",
                 border = Amber.BoneInk, labelInk = Amber.BoneInk, verticalPadding = 7.u,
             )
             PreNote(
-                "DELETING UPPER REMOVES 5 ROOMS AND\n4 MARKERS. HOLD TWO SECONDS.",
+                "DELETING $open REMOVES ${editor.roomsOn(open)} ROOMS AND\n" +
+                    "${editor.markersOn(open)} MARKERS. HOLD TWO SECONDS.",
                 lineHeight = 1.8, align = TextAlign.Center,
             )
         }
@@ -717,6 +844,7 @@ fun FloorsScreen() {
 @Composable
 fun SaveNameScreen() {
     val go = navigator()
+    val editor = LocalEditor.current
     PrePage(gap = 7) {
         PreHeading("SAVE HOME", back = ScreenId.Editor)
         InfoBox(border = Amber.BoneDim) {
@@ -730,10 +858,13 @@ fun SaveNameScreen() {
                 Caret(Amber.BoneInk, size = 21.0)
             }
         }
+        // Counted off the plan, because this is the screen where a host checks that what they
+        // walked is what the app has. A number typed in here would agree with the house on the
+        // day it was written and never again.
         Column(verticalArrangement = Arrangement.spacedBy(3.u)) {
-            PreRow("FLOORS", "2")
-            PreRow("ROOMS", "11")
-            PreRow("MARKERS", "9")
+            PreRow("FLOORS", "${editor.floorCount}")
+            PreRow("ROOMS", "${editor.roomCount}")
+            PreRow("MARKERS", "${editor.markerCount}")
         }
         InfoBox(border = Amber.BonePale, padding = 0.u) {
             Label(

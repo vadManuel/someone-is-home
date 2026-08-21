@@ -30,11 +30,38 @@ import kotlin.test.assertEquals
  *
  * ### The state axes
  *
- * Both roles, both room types, markers on and off. Role is the one that matters: the springboard
- * is identical for both, and the Insider's egress tile is the single edge in the whole game that
- * one role can walk and the other cannot. Rendering one role would lose it.
+ * Both roles, markers on and off, and three plans. Role is the one that matters most: the
+ * springboard is identical for both, and the Insider's egress tile is the single edge in the
+ * whole game that one role can walk and the other cannot. Rendering one role would lose it.
+ *
+ * The plans are the second axis, and they exist because the host-setup screens ask the plan
+ * questions that change which controls are drawn — is the held room stairs, does this home have
+ * a terminal yet. Three named plans rather than a full cross of every editor flag: a cross of
+ * things that do not interact costs renders and proves nothing extra, and each of these covers a
+ * branch nothing else does.
+ *
+ * **Nothing here mutates the editor.** The actions passed in wire `nav` and nothing else, so
+ * firing DELETE ROOM records the screen it goes to without deleting anything. That matters: the
+ * targets are fetched once and fired by index, and a control that removed another control
+ * mid-pass would leave this test reading a tree that had moved underneath it.
  */
 class ScreenGraphTest {
+
+    /**
+     * The plans, each named for the branch it is here to reach.
+     *
+     * Built fresh per render rather than shared — a `HomeEditorModel` is mutable, and a fixture
+     * shared across 672 renders is one bad tap away from being a different house halfway through.
+     */
+    private val plans: List<Pair<String, () -> HomeEditorModel>> = listOf(
+        "an ordinary room, terminal placed" to { HomeEditorModel.bungalow() },
+        "stairs held" to { HomeEditorModel.bungalow().apply { open("STAIRS") } },
+        "no terminal anywhere" to {
+            // Deleting the room the T card is in is the only way to reach a home with no
+            // terminal through the editor's own API, which is the point: there is no flag.
+            HomeEditorModel.bungalow().apply { open("HALL"); deleteHeld() }
+        },
+    )
 
     @OptIn(ExperimentalTestApi::class)
     @Test
@@ -44,18 +71,16 @@ class ScreenGraphTest {
         for (id in ScreenId.entries) {
             val asked = linkedSetOf<ScreenId>()
             for (role in PanelRole.entries) {
-                for (roomType in RoomType.entries) {
+                for ((_, plan) in plans) {
                     for (markersOn in listOf(false, true)) {
                         runDesktopComposeUiTest(width = 600, height = 1300) {
                             setContent {
                                 DeviceCanvas(insets = PanelInsets()) {
                                     Screen(
-                                        PanelState(
-                                            role = role,
-                                            roomType = roomType,
-                                            markersOn = markersOn,
-                                        ).arrivingAt(id),
+                                        PanelState(role = role, markersOn = markersOn)
+                                            .arrivingAt(id),
                                         PanelActions(nav = { asked += it }),
+                                        plan(),
                                     )
                                 }
                             }
