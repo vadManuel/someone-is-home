@@ -200,16 +200,33 @@ private fun CheatPicker(state: PanelState, onPick: (PanelState) -> Unit, onTrans
 /**
  * The permanent variant marker: a black chip in the panel's own ink, above the home indicator.
  *
- * Black-filled so it reads on the two full-amber screens as well as the dark ones, bordered so
- * it reads on black. It sits over whatever the screen put there — that is the cost of being
- * unmistakable, and only playtest and debug pay it.
+ * Black-filled so it reads on the two full-amber screens as well as the dark ones, and bordered so
+ * it reads on black.
+ *
+ * ### It lives in the home indicator's band, which is the only strip on the panel that is empty
+ *
+ * It used to sit *above* that band, centred — `insets.bottom + 2.u` — which put it over whatever
+ * the screen had drawn at the bottom. On most screens that was a button's edge. On two it was
+ * worse: it hid the springboard's middle dock label outright, and on the lobby it landed
+ * mid-sentence on WAITING FOR EVERYONE'S LINE. "It sits over whatever the screen put there" was
+ * written down as the cost of being unmistakable, and it turned out to be the cost of not reading
+ * one word of a screen this build exists to look at.
+ *
+ * The home indicator's band is reserved by the hardware and `DeviceLayoutTest` asserts the app
+ * puts nothing in it, so a chip there covers nothing — and it is held to the **start** rather than
+ * centred, because the one thing that IS drawn in that band is the system's own pill, in the
+ * middle. Cheat chrome and the operating system are now beside each other rather than on top of
+ * one another, which is the correct relationship between them.
+ *
+ * On a phone with no bottom inset the band is zero and the chip is simply in the corner. That is
+ * the desktop preview and nothing this game is played on.
  */
 @Composable
 private fun BoxScope.MarkerChip(onTap: () -> Unit) {
     val insets = LocalPanelInsets.current
     Box(
-        Modifier.align(Alignment.BottomCenter)
-            .padding(bottom = insets.bottom + 2.u)
+        Modifier.align(Alignment.BottomStart)
+            .padding(bottom = 2.u, start = insets.side + 2.u)
             .background(Amber.Black)
             .border(1.u, Amber.Dim)
             .tap(onTap)

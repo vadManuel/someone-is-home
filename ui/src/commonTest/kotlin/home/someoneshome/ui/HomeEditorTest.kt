@@ -369,12 +369,12 @@ class HomeEditorTest {
     fun theCountsAreCounted() {
         val editor = bungalow()
         assertEquals(2, editor.floorCount)
-        assertEquals(11, editor.roomCount)
+        assertEquals(9, editor.roomCount, "eleven painted areas, two of them stairs (D-099)")
         assertEquals(9, editor.markerCount)
 
         editor.open("GARAGE")
         editor.deleteHeld()
-        assertEquals(10, editor.roomCount)
+        assertEquals(8, editor.roomCount)
         assertEquals(7, editor.markerCount, "the deleted room's two cards are still being counted")
     }
 

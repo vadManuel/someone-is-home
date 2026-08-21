@@ -1,6 +1,7 @@
 package home.someoneshome.ui
 
 import home.someoneshome.model.CardRejection
+import home.someoneshome.model.HousePlan
 import home.someoneshome.model.RoomKind
 
 import androidx.compose.foundation.background
@@ -336,8 +337,17 @@ fun RoomEditScreen(vals: PanelVals) {
                     horizontalArrangement = Arrangement.spacedBy(4.u),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    editor.heldMarkers.forEach { MarkerGlyph(it, 11.u, Amber.BoneInk) }
-                    Label("›", size = 7.0, color = Amber.BoneInk)
+                    // The row's SUMMARY ink, not the sheet's. A marker glyph is a filled shape and
+                    // reads about twice the weight of a label beside it, so at full ink an
+                    // eleven-unit triangle was the heaviest thing on a screen whose subject is a
+                    // room's name. Same move the springboard already makes with the same glyph in
+                    // the same position: on the sheet the marks ARE the content and carry full
+                    // ink; in a row that merely reports them they sit at the value's weight.
+                    editor.heldMarkers.forEach { MarkerGlyph(it, 11.u, Amber.BoneDim) }
+                    // The affordance every other row in this app draws. This one was a `›` at 7,
+                    // beside a glyph at 11 — a different character at a different size, which is
+                    // how it came out looking like a slip of the hand rather than a control.
+                    Label(">", size = 8.0, color = Amber.BoneFaint)
                 }
             }
         } else {
@@ -1095,7 +1105,13 @@ fun HomeDetailScreen() {
         homes.refusal?.let {
             Label(it, size = 6.5, color = Amber.BoneInk, tracking = 0.1, lineHeight = 1.6)
         }
-        PushDown()
+        // The middle used to be a PushDown() — about sixty percent of a 6.9" panel holding
+        // nothing, with the destructive control pinned alone at the bottom of it. The plan goes
+        // there instead, which is not filler: **a host picks their house out of a list by its
+        // shape**, long before they get to `2 FLOORS . 9 ROOMS . 9 MARKERS` in words. The counts
+        // stay, because they are what the plan cannot say.
+        if (home != null) StoreyPlans(home.plan, Modifier.weight(1f))
+        else PushDown()
         PanelButton(
             "DELETE THIS HOME",
             border = Amber.BoneFaint, ink = Amber.BoneDim,
@@ -1106,11 +1122,58 @@ fun HomeDetailScreen() {
 }
 
 /**
+ * Every storey of a home, side by side and named — the plan as a picture rather than as counts.
+ *
+ * **A reading, never an editor.** Nothing here is tappable and no room is picked out: `focus` is
+ * left null, so this draws a house with nothing selected, which is the difference between showing
+ * a host their home and putting them in the middle of editing it.
+ *
+ * The aspect ratio is held rather than stretched. A plan that filled its box would show a house
+ * the host has never seen — the whole point of drawing it is recognition, and a squashed bungalow
+ * is not recognisable. So each storey is as tall as the room allows and as wide as that implies,
+ * which is also what makes four storeys degrade into four narrow plans rather than into nonsense.
+ */
+@Composable
+private fun StoreyPlans(plan: HousePlan, modifier: Modifier = Modifier) {
+    Row(
+        modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.u),
+    ) {
+        plan.floors.forEach { storey ->
+            Column(
+                Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.u),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Label(storey.name, size = 6.0, color = Amber.BoneFaint, tracking = 0.14)
+                Box(
+                    Modifier.weight(1f).fillMaxWidth(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    EditorPlan(
+                        planCells(storey),
+                        Modifier.fillMaxHeight()
+                            .aspectRatio(
+                                HomeEditorModel.COLS.toFloat() / HomeEditorModel.ROWS,
+                            ),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
  * Hold two seconds to delete. **Keep is the lit button.**
  *
  * The destructive control is outlined and the safe one is filled — inverted from habit, on
  * purpose. Fifteen minutes of walking a house is the thing being protected, so the brighter
  * button should be the one that protects it.
+ *
+ * **And the house is drawn**, in the space that used to be a `PushDown()`. The counts already
+ * argue the case in words — *about fifteen minutes of walking this home* — and the plan is the
+ * same argument as a picture: the host sees the rooms they walked while their finger is on a
+ * control that will take them away.
  */
 @Composable
 fun DeleteScreen() {
@@ -1138,7 +1201,8 @@ fun DeleteScreen() {
                 size = 7.0, color = Amber.BoneDim, tracking = 0.06, lineHeight = 1.9,
             )
         }
-        PushDown()
+        if (home != null) StoreyPlans(home.plan, Modifier.weight(1f))
+        else PushDown()
         Column(verticalArrangement = Arrangement.spacedBy(7.u)) {
             // The destructive control is a two-second hold and is outlined; the safe one is a
             // single tap and is the lit button. Inverted from habit, on purpose: what is being

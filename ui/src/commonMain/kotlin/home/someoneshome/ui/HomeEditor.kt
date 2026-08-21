@@ -188,10 +188,12 @@ class HomeEditorModel(
     val hasTerminal: Boolean get() = map.terminal != null
 
     val floorCount: Int get() = plan.floors.size
-    val roomCount: Int get() = plan.rooms.size
+
+    /** Rooms, and stairs are not rooms — see [HousePlan.roomCount]. */
+    val roomCount: Int get() = plan.roomCount
     val markerCount: Int get() = map.registrations.size
 
-    fun roomsOn(floor: String): Int = plan.floorNamed(floor)?.rooms?.size ?: 0
+    fun roomsOn(floor: String): Int = plan.floorNamed(floor)?.roomCount ?: 0
 
     fun markersOn(floor: String): Int =
         plan.floorNamed(floor)?.rooms?.sumOf { markersIn(it.name).size } ?: 0
@@ -772,9 +774,20 @@ sealed interface ScanOutcome {
  * Row-major over the viewport, so index `i` is column `i % COLS`, row `i / COLS` — the order
  * [EditorPlan] draws in.
  */
-fun HomeEditorModel.editorCells(focus: String? = held): List<EditorCell> {
-    val storey = floor
-    return List(HomeEditorModel.ROWS * HomeEditorModel.COLS) { i ->
+fun HomeEditorModel.editorCells(focus: String? = held): List<EditorCell> =
+    planCells(floor, focus)
+
+/**
+ * The same cells for a storey nobody is editing.
+ *
+ * The editor is not the only screen that wants to draw a plan: a host choosing between four saved
+ * homes recognises theirs by its shape long before they read `2 FLOORS . 9 ROOMS`, and the screen
+ * that asks them to destroy one should show what is about to go. Those screens hold a [SavedHome]
+ * and no editor, so the colouring lives here rather than on the model, and [HomeEditorModel] is
+ * the caller that happens to have an open storey.
+ */
+fun planCells(storey: Floor?, focus: String? = null): List<EditorCell> =
+    List(HomeEditorModel.ROWS * HomeEditorModel.COLS) { i ->
         val room = storey?.roomAt(Cell(x = i % HomeEditorModel.COLS, y = i / HomeEditorModel.COLS))
         when {
             room == null -> EditorCell(Amber.BonePutty, null)
@@ -786,7 +799,6 @@ fun HomeEditorModel.editorCells(focus: String? = held): List<EditorCell> {
             else -> EditorCell(Amber.Slate, Amber.SlateFill)
         }
     }
-}
 
 /** The rectangle two corners span, in either order — a drag runs whichever way the finger went. */
 fun spanning(a: Cell, b: Cell): CellRect = CellRect(

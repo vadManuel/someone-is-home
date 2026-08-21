@@ -91,6 +91,9 @@ data class Floor(val name: String, val rooms: List<PlanRoom> = emptyList()) {
 
     fun roomNamed(name: String): PlanRoom? = rooms.firstOrNull { it.name == name }
 
+    /** How many of this storey's painted areas are rooms. See [HousePlan.roomCount]. */
+    val roomCount: Int get() = rooms.count { it.kind == RoomKind.Room }
+
     /**
      * The rooms sharing an edge with this one — **derived from cell neighbours, with no geometry**.
      *
@@ -176,6 +179,22 @@ sealed interface PaintResult {
 class HousePlan private constructor(val floors: List<Floor>) {
 
     val rooms: List<PlanRoom> get() = floors.flatMap { it.rooms }
+
+    /**
+     * **How many rooms this home has — which is not how many areas were painted.**
+     *
+     * A stairwell is painted like a room and is not one: it holds nothing, structurally (D-099),
+     * and it is not the Insider's route between rooms either, because that is Override and
+     * Override is never drawn on a map (D-098). The editor read `rooms.size` and told a host their
+     * ground floor had `6 ROOMS`, one of which was STAIRS.
+     *
+     * `rooms` itself is deliberately unfiltered: every structural question — which room covers
+     * this cell, which storey is this room on, is this name taken — has to see the stairwell, and
+     * a collection that quietly omitted it would be a stairwell you could paint a room on top of.
+     * The filtering belongs to the count, because the count is the only thing that was ever
+     * claiming these were all rooms.
+     */
+    val roomCount: Int get() = floors.sumOf { it.roomCount }
 
     fun floorNamed(name: String): Floor? = floors.firstOrNull { it.name == name }
 
