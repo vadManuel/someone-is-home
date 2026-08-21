@@ -38,6 +38,7 @@ class LobbyModelTest {
     fun `a phone that has attached to nothing stands at nothing`() {
         val model = LobbyModel()
         assertEquals(LobbyBody.Standing(joined = 0, linesIn = 0), model.standing)
+        assertEquals(emptyList(), model.residents, "a lobby nobody is in listed somebody")
         assertNull(model.attached)
         assertFalse(model.everyLineIn, "an empty lobby offered LIGHTS OUT")
     }
@@ -60,12 +61,51 @@ class LobbyModelTest {
     }
 
     @Test
-    fun `a name is this phone's own and is bounded`() {
+    fun `a name is bounded by the same number the house bounds it by`() {
         val model = LobbyModel()
         model.nameResident("elliot")
         assertEquals("elliot", model.residentName)
         model.nameResident("a".repeat(200))
         assertEquals(LobbyModel.NAME_LIMIT, model.residentName.length, "the name field has no bottom")
+        assertEquals(
+            LobbyBody.Naming.LIMIT, LobbyModel.NAME_LIMIT,
+            "the field and the wire hold two opinions about how long a name is",
+        )
+    }
+
+    // ---- The name goes up, and comes back down as the lobby (D-115) --------------------------
+
+    /**
+     * **Attaching is what puts the name on the wire, and nothing else does.**
+     *
+     * The one authorised exit, and it happens once per attach — a name is not a thing that leaks
+     * out over time, and a lobby that re-announced on every keystroke would be sending player-
+     * identifying text on a timer.
+     */
+    @Test
+    fun `the name leaves the phone at attach and only there`() {
+        val link = MemoryLobbyLink(joined = 6, linesIn = 0)
+        val model = LobbyModel(
+            MemoryHomeFinder(listOf(NearbyHome("THE BUNGALOW", "192.168.1.24", 47747))),
+            link,
+        )
+        model.look()
+        model.nameResident("ELLIOT")
+        assertEquals(emptyList(), link.named, "the name went up before anybody attached to anything")
+        model.attachTo(model.nearby.first())
+        assertEquals(listOf("ELLIOT"), link.named)
+        model.typeLine(secret)
+        model.handOverLine()
+        assertEquals(listOf("ELLIOT"), link.named, "handing the line over sent the name again")
+    }
+
+    /** The house's list, drawn as the house sent it: one entry per seat, blanks and all. */
+    @Test
+    fun `the residents are the house's list and not this phone's arithmetic`() {
+        val (model, _) = lobbyOf(joined = 6)
+        assertEquals(6, model.residents.size, "the list is not as long as the count beside it")
+        assertEquals(listOf("PRIYA", "MARCUS", "DANI", "ROSE", "TOMAS"), model.residents.take(5))
+        assertEquals("", model.residents.last(), "an unnamed seat was dropped or invented for")
     }
 
     // ---- The one line ----------------------------------------------------------------------
@@ -158,6 +198,9 @@ class LobbyModelTest {
             for (word in secret.split(" ").filter { it.length > 4 }) {
                 assertFalse(word in written, "'$word' from the one line was written: $written")
             }
+            // The name is allowed to leave the phone now (D-115) and is still not allowed to stay
+            // on it. Round-scoped means round-scoped on both sides of the wire.
+            assertFalse("elliot" in written, "the resident name was written to this phone: $written")
         }
         assertFalse(secret in "${model.state}", "the line reached the panel a recording captures")
     }

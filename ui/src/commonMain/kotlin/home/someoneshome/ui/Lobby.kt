@@ -37,9 +37,10 @@ interface HomeFinder {
  * **The wire, as far as `ui` is allowed to know about it.**
  *
  * Three verbs and one shape coming back. Note what is *not* here: there is no way to ask this
- * interface who else is in the lobby, because [LobbyBody.Standing] is what comes back and it is
- * counts. A screen that wanted a name would have to be given a way to ask for one, and that is a
- * decision about what a client receives — not something a lobby screen quietly acquires.
+ * interface for anybody's one line. [LobbyBody.Standing] is what comes back, it carries the counts,
+ * the setting and the names (D-115), and there is no second reply and no second question. A screen
+ * that wanted a line would have to be given a way to ask for one, and that is a decision about
+ * what a client receives — not something a lobby screen quietly acquires.
  */
 interface LobbyLink {
 
@@ -53,8 +54,16 @@ interface LobbyLink {
      */
     fun host(homeName: String, onUp: (NearbyHome) -> Unit)
 
-    /** Attach to a home. [onStanding] fires every time the house says how the lobby stands. */
-    fun join(home: NearbyHome, onStanding: (LobbyBody.Standing) -> Unit)
+    /**
+     * Attach to a home under [name]. [onStanding] fires every time the house says how the lobby
+     * stands.
+     *
+     * **The name is a parameter of joining rather than a verb of its own**, because there is no
+     * moment in this game where a phone is in a lobby and has not said what to call its owner. It
+     * rides up again on every re-seating, so a resume comes back to a house that can still list
+     * the person holding the phone; it is never written to this device on either side.
+     */
+    fun join(home: NearbyHome, name: String, onStanding: (LobbyBody.Standing) -> Unit)
 
     /**
      * Hand the one line to the house. **The only authorised exit from this phone for that text.**
@@ -94,13 +103,28 @@ class MemoryHomeFinder(private val homes: List<NearbyHome> = emptyList()) : Home
 class MemoryLobbyLink(
     joined: Int = 0,
     linesIn: Int = 0,
+    /**
+     * The people already in the lobby when this phone walks in, in the order they arrived. This
+     * phone's own name is not among them — it is put in by [join], in the last seat, which is
+     * where a desk would have put it.
+     *
+     * Defaulted to the design's own five rather than to nothing, for the reason [MemoryHomeFinder]
+     * finds homes rather than nothing: a lobby with nobody in it is a screen the app never shows,
+     * and a rendering test looking at one proves nothing about the screen that ships.
+     */
+    private val others: List<String> = THE_OTHERS,
 ) : LobbyLink {
 
-    private var standing = LobbyBody.Standing(joined = joined, linesIn = linesIn)
+    private var mine: String = ""
+    private var standing =
+        LobbyBody.Standing(joined = joined, linesIn = linesIn, names = seatNames(joined))
     private var listener: (LobbyBody.Standing) -> Unit = {}
 
     /** The lines this fixture has been handed, so a test can prove one arrived. Never persisted. */
     val received = mutableListOf<String>()
+
+    /** The names it has been told, for the same reason. */
+    val named = mutableListOf<String>()
 
     override fun host(homeName: String, onUp: (NearbyHome) -> Unit) {
         // Loopback, because that is what the real one does: the house runs here and this phone
@@ -108,8 +132,11 @@ class MemoryLobbyLink(
         onUp(NearbyHome(homeName, "127.0.0.1", 0))
     }
 
-    override fun join(home: NearbyHome, onStanding: (LobbyBody.Standing) -> Unit) {
+    override fun join(home: NearbyHome, name: String, onStanding: (LobbyBody.Standing) -> Unit) {
         listener = onStanding
+        mine = name
+        named += name
+        standing = standing.copy(names = seatNames(standing.joined))
         publish()
     }
 
@@ -129,6 +156,22 @@ class MemoryLobbyLink(
     }
 
     private fun publish() = listener(standing)
+
+    /**
+     * One entry per seat, blanks for the seats nobody has spoken for — the invariant
+     * [LobbyBody.Standing] documents and the host's desk holds by building the list from its
+     * seats. A fixture that published a shorter list would let a screen be written against a
+     * `names` that is sometimes `joined` long and sometimes not.
+     */
+    private fun seatNames(joined: Int): List<String> {
+        val here = (others + mine).filter { it.isNotBlank() }.take(joined)
+        return here + List(joined - here.size) { "" }
+    }
+
+    private companion object {
+        /** The design's own lobby, minus ELLIOT — the name the sample phone types for itself. */
+        val THE_OTHERS: List<String> = listOf("PRIYA", "MARCUS", "DANI", "ROSE", "TOMAS")
+    }
 }
 
 /**
@@ -226,10 +269,13 @@ class LobbyModel(
     /**
      * This phone's own resident name, typed on the way in.
      *
-     * **It does not leave the device in this unit.** Nothing on the far side reads it yet — who is
-     * in a round and what the house calls them is the loop's, and the loop is frozen — and text
-     * that identifies a person, sent to a host that has no lifecycle for it, is a thing to be
-     * asked about rather than started quietly. See the worklog.
+     * **It leaves the device at [attachTo], and only there** (D-115). The host learns it because a
+     * house that cannot say who is being Restrained cannot hold a meeting, and every other phone
+     * learns it because the design's lobby lists the people in it. It is round-scoped on both
+     * sides and written to no store on either.
+     *
+     * Typed before attaching, so a change afterwards moves nothing: there is one screen with this
+     * field on it and it is the one before the lobby.
      */
     var residentName: String by mutableStateOf("")
         private set
@@ -245,14 +291,24 @@ class LobbyModel(
     val line: OneLine = OneLine()
 
     /**
-     * **How the house says the lobby stands. Counts and a setting; never a name.**
+     * **How the house says the lobby stands. Counts, a setting and the names; never a line.**
      *
      * Starts at nothing rather than at a plausible six, because "nobody is here yet" is the true
      * state of a phone that has not attached to anything, and a lobby that opened on a number it
-     * invented would be the device asserting a round.
+     * invented — or on a name it invented — would be the device asserting a round.
      */
     var standing: LobbyBody.Standing by mutableStateOf(LobbyBody.Standing(joined = 0, linesIn = 0))
         private set
+
+    /**
+     * **The residents in this lobby, in the order the house seated them.**
+     *
+     * Blank for a phone that has not said what to call its owner — one entry per seat, so this is
+     * `joined` long and stays that way. Nothing is filtered out here: a seat with no name is a
+     * person standing in the hall who has not typed, and dropping them would make the list
+     * disagree with the count printed above it.
+     */
+    val residents: List<String> get() = standing.names
 
     /** The last refusal, in the player's own words, or none. Cleared by the next thing they do. */
     var refusal: String? by mutableStateOf(null)
@@ -289,11 +345,18 @@ class LobbyModel(
         link.host(homeName) { attachTo(it) }
     }
 
-    /** A tap on a row: attach to that home and start hearing how the lobby stands. */
+    /**
+     * A tap on a row: attach to that home under this phone's name, and start hearing how the lobby
+     * stands.
+     *
+     * **This is where the name leaves the phone** (D-115), and it is the only place it does. A
+     * player who typed nothing joins under a blank, which the house lists as an unnamed seat
+     * rather than refusing: the lobby is a lit room and the fix is to say something, not a dialog.
+     */
     fun attachTo(home: NearbyHome) {
         attached = home
         refusal = null
-        link.join(home) { standing = it }
+        link.join(home, residentName) { standing = it }
     }
 
     fun typeLine(next: String) {
@@ -420,11 +483,11 @@ class LobbyModel(
         val VOTE_WINDOWS: List<Int> = listOf(45, 60, 90, 30)
 
         /**
-         * The field is one line on a 300-unit panel and the design's own name is six characters.
-         * Past this it stops being readable across a dark hall, which is the only thing a name in
-         * this game is for.
+         * The bound on a name, which is [LobbyBody.Naming.LIMIT] and not a second opinion about
+         * it. The host applies the same number to whatever arrives, so a field that let more be
+         * typed would silently truncate on somebody else's screen.
          */
-        const val NAME_LIMIT: Int = 14
+        const val NAME_LIMIT: Int = LobbyBody.Naming.LIMIT
 
         /**
          * **The fixture: the design's three networks, and a lobby with six in it and four lines
@@ -452,6 +515,10 @@ class LobbyModel(
                 hosting = true,
             )
             model.look()
+            // Named before attaching, because that is the order the screens are in and because
+            // the name is what attaching carries up. A sample that skipped it would draw a lobby
+            // with an unnamed seat in it and teach the wrong thing about the common case.
+            model.nameResident("ELLIOT")
             model.attachTo(model.nearby.first())
             // The design's own line, so the screen that asks for one can be looked at with
             // something in it. It is typed and NOT handed over: the lobby row reads REQUIRED,

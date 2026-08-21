@@ -11,8 +11,11 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * The host's lobby table: the counts it publishes, the setting it clamps, and the text it holds
- * that must never come back out of it in any direction but the house's own.
+ * The host's lobby table: the counts it publishes, the setting it clamps, the names it sends back,
+ * and the text it holds that must never come back out of it in any direction but the house's own.
+ *
+ * It holds two maps of text and publishes exactly one of them. Most of what is below is about
+ * which.
  */
 class LobbyDeskTest {
 
@@ -27,7 +30,10 @@ class LobbyDeskTest {
     @Test
     fun `an empty lobby stands at nothing and is not ready`() {
         val desk = LobbyDesk()
-        assertEquals(LobbyBody.Standing(joined = 0, linesIn = 0, insiders = null), desk.standing())
+        assertEquals(
+            LobbyBody.Standing(joined = 0, linesIn = 0, names = emptyList(), insiders = null),
+            desk.standing(),
+        )
         assertFalse(desk.everyLineIn(), "a lobby with nobody in it offered LIGHTS OUT")
     }
 
@@ -71,8 +77,84 @@ class LobbyDeskTest {
         desk.handedOver(elliot, "i still have priya's spare key")
         desk.handedOver(priya, "something else")
         desk.left(elliot)
-        assertEquals(LobbyBody.Standing(joined = 2, linesIn = 1, insiders = null), desk.standing())
+        assertEquals(
+            LobbyBody.Standing(joined = 2, linesIn = 1, names = listOf("", ""), insiders = null),
+            desk.standing(),
+        )
         assertNull(desk.lineOf(elliot), "the desk kept the line of somebody who walked out")
+    }
+
+    // ---- The names (D-115) -------------------------------------------------------------------
+
+    /**
+     * **One entry per seat, in arrival order, blank for a phone that has said nothing.**
+     *
+     * The list is as long as the count beside it because the desk builds it from the seats. A desk
+     * that published the names it happened to hold would send a shorter list than `joined` and the
+     * lobby screen would draw a room with fewer people in it than it has just counted.
+     */
+    @Test
+    fun `the names are one per seat in the order they arrived`() {
+        val desk = deskOfThree()
+        desk.named(marcus, "MARCUS")
+        desk.named(elliot, "ELLIOT")
+        val standing = desk.standing()
+        assertEquals(listOf("ELLIOT", "", "MARCUS"), standing.names)
+        assertEquals(standing.joined, standing.names.size, "the list is not one entry per seat")
+    }
+
+    /** Sent on every seating, so a resume is the same person coming back rather than a second one. */
+    @Test
+    fun `naming twice replaces rather than accumulating`() {
+        val desk = deskOfThree()
+        desk.named(priya, "PRI")
+        desk.named(priya, "PRIYA")
+        assertEquals(listOf("", "PRIYA", ""), desk.standing().names)
+    }
+
+    /** A client may send anything; a lobby screen is not where that is discovered. */
+    @Test
+    fun `a name is trimmed and bounded by the desk and not by the phone that typed it`() {
+        val desk = deskOfThree()
+        desk.named(elliot, "   ROSE  ")
+        assertEquals("ROSE", desk.standing().names.first(), "the desk kept a name as sent")
+        desk.named(priya, "a".repeat(400))
+        assertEquals(
+            LobbyBody.Naming.LIMIT, desk.standing().names[1].length,
+            "a client put a paragraph on everybody's lobby screen",
+        )
+    }
+
+    /**
+     * **A leaver's name goes with their seat, and the seat is genuinely unnamed afterwards.**
+     *
+     * The second half is the whole test. Dropping a leaver out of the published list is what
+     * [LobbyDesk.standing] does anyway — it builds from the seats — so a desk that kept the name
+     * behind looks identical here until the seat comes back. And it does come back: [SeatLedger]
+     * returns a released seat to the pool, so **the next person through the door is granted it**
+     * and would walk into the lobby wearing the name of the person who just walked out.
+     */
+    @Test
+    fun `a seat that leaves takes its name with it`() {
+        val desk = deskOfThree()
+        desk.named(elliot, "ELLIOT")
+        desk.named(priya, "PRIYA")
+        desk.named(marcus, "MARCUS")
+        desk.left(priya)
+        val standing = desk.standing()
+        assertEquals(listOf("ELLIOT", "MARCUS"), standing.names, "the desk kept a leaver's name")
+        assertEquals(2, standing.joined)
+
+        desk.seated(priya)
+        assertEquals(
+            listOf("ELLIOT", "MARCUS", ""), desk.standing().names,
+            "somebody who has just joined is wearing the name of the player who left that seat",
+        )
+    }
+
+    @Test
+    fun `a name from a seat that is not in the lobby is refused loudly`() {
+        assertFailsWith<IllegalArgumentException> { LobbyDesk().named(elliot, "ELLIOT") }
     }
 
     @Test
@@ -130,21 +212,28 @@ class LobbyDeskTest {
     // ---- What goes back down the wire ------------------------------------------------------
 
     /**
-     * **The lines are the house's, and the standing cannot carry one.**
+     * **The lines are the house's, and the standing carries names instead of them.**
      *
-     * Checked against the encoded form rather than the object, because the encoded form is what
-     * actually leaves: a field that existed but was skipped by the serializer would pass an
-     * equality check and still be on the wire, and the reverse — a field that encodes without
-     * appearing in `equals` — is exactly the sort of thing nobody looks for.
+     * The desk holds two maps of text and [LobbyDesk.standing] reads exactly one of them; this is
+     * the test that says which. Checked against the encoded form rather than the object, because
+     * the encoded form is what actually leaves: a field that existed but was skipped by the
+     * serializer would pass an equality check and still be on the wire, and the reverse — a field
+     * that encodes without appearing in `equals` — is exactly the sort of thing nobody looks for.
+     *
+     * Every seat here has a name **and** a line, so a desk that published the wrong map would
+     * publish a full list either way and the failure is the content, not the shape.
      */
     @Test
-    fun `the standing a full desk publishes quotes nobody`() {
+    fun `the standing a full desk publishes names everybody and quotes nobody`() {
         val desk = deskOfThree()
         val secrets = listOf(
             "i still have priya's spare key",
             "i read the group chat i was removed from",
             "i have never watched the film we all say is our favourite",
         )
+        desk.named(elliot, "ELLIOT")
+        desk.named(priya, "PRIYA")
+        desk.named(marcus, "MARCUS")
         desk.handedOver(elliot, secrets[0])
         desk.handedOver(priya, secrets[1])
         desk.handedOver(marcus, secrets[2])
@@ -159,18 +248,35 @@ class LobbyDeskTest {
         for (word in secrets.flatMap { it.split(" ") }.filter { it.length > 4 }) {
             assertFalse(word in onTheWire, "'$word' from a one line reached the wire: $onTheWire")
         }
-        assertEquals(LobbyBody.Standing(joined = 3, linesIn = 3, insiders = 1), desk.standing())
+        assertEquals(
+            LobbyBody.Standing(
+                joined = 3, linesIn = 3, names = listOf("ELLIOT", "PRIYA", "MARCUS"), insiders = 1,
+            ),
+            desk.standing(),
+        )
     }
 
-    /** Deleted when the round ends. The seats stay; who was in the round is not a secret. */
+    /**
+     * Deleted when the round ends — **the names as well as the lines** (D-115: names are
+     * round-scoped, like everything else this desk holds).
+     *
+     * The seats stay; that a round happened and had three people in it is not a secret. What goes
+     * is every piece of text those three handed over, under either heading.
+     */
     @Test
-    fun `the round ending drops every line and keeps the lobby`() {
+    fun `the round ending drops every line and every name and keeps the seats`() {
         val desk = deskOfThree()
+        desk.named(elliot, "ELLIOT")
+        desk.named(priya, "PRIYA")
         desk.handedOver(elliot, "i still have priya's spare key")
         desk.handedOver(priya, "b")
         desk.roundEnded()
         assertNull(desk.lineOf(elliot), "a line survived the round it was handed over for")
         assertNull(desk.lineOf(priya))
-        assertEquals(LobbyBody.Standing(joined = 3, linesIn = 0, insiders = null), desk.standing())
+        assertEquals(
+            LobbyBody.Standing(joined = 3, linesIn = 0, names = listOf("", "", ""), insiders = null),
+            desk.standing(),
+            "a name survived the round it was given for",
+        )
     }
 }

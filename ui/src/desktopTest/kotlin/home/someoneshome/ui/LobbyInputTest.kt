@@ -21,9 +21,11 @@ import kotlin.test.assertTrue
  * nothing types into and a screen quietly printing a name would both pass. These drive the real
  * input stack against the real screens with a real [FlowModel] behind them.
  *
- * The first test is the one that matters. This phone holds two pieces of text nobody else may see
- * — the name its owner typed and the line they handed the house — and the lobby is the screen
- * where showing either would feel most natural and be most wrong.
+ * The first two are the ones that matter. This phone holds two pieces of text and the lobby is the
+ * screen where drawing either would feel most natural: **one of them belongs there** (D-115 — the
+ * design's lobby lists who is here) and **the other must never appear on any screen but the one it
+ * was typed on.** The pair is tested together on purpose, because "the lobby draws no text at all"
+ * would pass the second one while failing the design.
  */
 @OptIn(ExperimentalTestApi::class)
 class LobbyInputTest {
@@ -35,6 +37,7 @@ class LobbyInputTest {
         joined: Int = 6,
         linesIn: Int = 4,
         hosting: Boolean = true,
+        name: String = "ELLIOT",
     ): Pair<FlowModel, MemoryLobbyLink> {
         val link = MemoryLobbyLink(joined = joined, linesIn = linesIn)
         val lobby = LobbyModel(
@@ -43,6 +46,8 @@ class LobbyInputTest {
             hosting = hosting,
         )
         lobby.look()
+        // Named before attaching, because attaching is what carries the name up.
+        lobby.nameResident(name)
         lobby.attachTo(lobby.nearby.first())
         return FlowModel(PanelState(screen = screen), lobby = lobby) to link
     }
@@ -62,31 +67,60 @@ class LobbyInputTest {
         assertEquals(0, found, why)
     }
 
-    // ---- No names, no lines ------------------------------------------------------------------
+    // ---- Names yes, lines no -------------------------------------------------------------------
 
     /**
-     * **The lobby names nobody, and this phone knows two names it could have used.**
+     * **The lobby lists everybody in it, by name** (D-115).
      *
-     * The design's lobby shows counts. The model behind this screen is three integers and is
-     * incapable of naming another player — but the phone's own resident name and its own one line
-     * are right there beside it, and either would be a leak of a different kind on a screen six
-     * people are looking over each other's shoulders at in a lit hall.
+     * Off the wire, not out of a fixture: the five who were already here came down in the house's
+     * standing, and the sixth is this phone's own name, which reached the house by attaching and
+     * came back around with the rest.
      */
     @Test
-    fun theLobbyNamesNobodyThoughThisPhoneKnowsTwoNames() =
+    fun theLobbyListsEverybodyWhoHasJoined() =
         runDesktopComposeUiTest(width = 300, height = 650) {
             val (model, _) = modelOn(ScreenId.Lobby)
-            model.lobby.nameResident("ELLIOT")
+            show(model)
+
+            for (name in listOf("PRIYA", "MARCUS", "DANI", "ROSE", "TOMAS", "ELLIOT")) {
+                onNodeWithText(name).assertExists("the lobby did not list $name")
+            }
+            onNodeWithText("6 JOINED").assertExists()
+        }
+
+    /** A phone that said nothing is a seat nobody has spoken for, not a seat that vanished. */
+    @Test
+    fun aResidentWhoTypedNoNameIsStillInTheRoom() =
+        runDesktopComposeUiTest(width = 300, height = 650) {
+            val (model, _) = modelOn(ScreenId.Lobby, name = "")
+            show(model)
+
+            onNodeWithText("UNNAMED").assertExists("an unnamed seat was dropped from the lobby")
+            onNodeWithText("6 JOINED").assertExists("and the count no longer agrees with the list")
+        }
+
+    /**
+     * **The one line appears on no screen but the one it was typed on**, and the lobby is where
+     * drawing it would feel most natural now that the lobby draws text again.
+     *
+     * The names being on this screen is what makes the test worth running: a lobby that printed
+     * nothing would pass it while failing the design, so both halves are asserted here — the six
+     * names present, the line and every fragment of it absent.
+     */
+    @Test
+    fun theLobbyNeverPrintsTheOneLine() =
+        runDesktopComposeUiTest(width = 300, height = 650) {
+            val (model, _) = modelOn(ScreenId.Lobby)
             model.lobby.typeLine(secret)
             model.handOverLine()
             show(model)
 
-            assertNothingSays("ELLIOT", "the lobby printed the name typed on this phone")
             assertNothingSays(secret, "the lobby printed the one line typed on this phone")
             for (word in secret.split(" ").filter { it.length > 4 }) {
                 assertNothingSays(word, "the lobby printed '$word' from the one line")
             }
-            // And it is not blank instead: the counts the house sent are on it.
+            // And it is not blank instead: the names and the counts the house sent are on it.
+            onNodeWithText("ELLIOT").assertExists()
             onNodeWithText("6 JOINED").assertExists()
             onNodeWithText("5 OF 6 HANDED THEIRS OVER").assertExists()
         }
