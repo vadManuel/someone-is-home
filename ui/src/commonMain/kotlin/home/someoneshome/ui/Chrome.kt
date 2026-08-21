@@ -24,12 +24,21 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 
 /**
  * The status bar — the one piece of chrome on screen for nearly the whole round.
@@ -201,6 +210,19 @@ private fun Battery(ink: Color, edge: Color) {
  * - **Every banner must go to everyone at once.** A lamp dimming is world-observable, so a
  *   notification addressed to fewer than all players is a beacon pointing at whoever got it. If
  *   a per-player notification is ever wanted, it cannot use this.
+ *
+ * ### The panel makes room for the banner rather than being covered by it
+ *
+ * The banner used to be drawn straight over the top of whatever the screen had put there, which on
+ * the springboard is the System Integrity meter: the bar came out cut in half, with FROZEN UNTIL
+ * NEXT HOUSE MEETING under a bright block. Half a widget reads as a rendering fault rather than as
+ * something on top of something, and the meter is the Residents' only number.
+ *
+ * So the content is inset by whatever the banner turns out to be tall, measured rather than
+ * guessed — a notification is one line or three depending on what the house has to say, and a
+ * reserved constant would be wrong for two of those. **The inset does not track the swipe**: the
+ * banner slides up under the finger and the room it left stays open until it is actually gone, so
+ * dismissing a notification does not drag the whole screen up with it.
  */
 @Composable
 fun PanelFrame(
@@ -233,6 +255,12 @@ fun PanelFrame(
     val statusBand = if (vals.statusVisible) maxOf(safeTop, statusHeight) else 0.u
     val contentTop = if (vals.statusVisible) 0.u else safeTop
 
+    // How tall the banner turned out to be, measured at layout. Read back as room for the content
+    // only while there IS an overlay, so a banner that leaves does not leave its hole behind.
+    var bannerHeight by remember { mutableStateOf(0.dp) }
+    val bannerRoom = if (overlay != null) bannerHeight else 0.dp
+    val density = LocalDensity.current
+
     Box(modifier.fillMaxSize().background(Amber.Black)) {
         Box(
             Modifier.fillMaxSize()
@@ -251,7 +279,7 @@ fun PanelFrame(
                 // only the Island moved the collision to the other end of the panel.
                 Column(
                     Modifier.fillMaxWidth().weight(1f)
-                        .padding(top = contentTop, bottom = safeBottom),
+                        .padding(top = contentTop + bannerRoom, bottom = safeBottom),
                     content = content,
                 )
             }
@@ -270,11 +298,95 @@ fun PanelFrame(
                     .padding(top = statusBand + contentTop, bottom = safeBottom)
                     .clipToBounds()
             ) {
-                overlay(this)
+                // Measured on a wrapper rather than asked of the banner, so the overlay slot stays
+                // a `BoxScope` lambda that knows nothing about the frame it is drawn in.
+                Box(
+                    Modifier.fillMaxWidth()
+                        .onSizeChanged { bannerHeight = with(density) { it.height.toDp() } }
+                ) {
+                    overlay(this)
+                }
             }
         }
+
+        // LAST, AND OVER EVERYTHING INCLUDING THE BANNER. The design puts it on the screen
+        // element rather than inside the luminous layer, so it is not dimmed by a notification
+        // and does not move with an overlay -- see [ScanLines].
+        ScanLines()
     }
 }
+
+/**
+ * **The glass: the horizontal banding of the panel this device is pretending to be.**
+ *
+ * A transcription, not a treatment. The design's device mockup
+ * (`_bmad-output/brainstorming/brainstorm-engine-selection-2026-08-15/artifacts/someone-is-home-device.html:53`)
+ * draws it on `.screen::after` as
+ *
+ * ```css
+ * repeating-linear-gradient(0deg, rgba(0,0,0,.32) 0 1px, transparent 1px 3px)
+ * ```
+ *
+ * — one unit of 32% black in every three, black-on-transparent, over the whole panel. Those are
+ * the numbers below and they are not rounded, adjusted or "tuned for the phone": the mockup's
+ * screen is about 312 CSS pixels wide against this canvas's 300 units, so a CSS pixel there and a
+ * design unit here are the same thing to within four percent. That correspondence is the entire
+ * reason the port is written in design units, and it is what makes this a copy rather than an
+ * impression of one.
+ *
+ * ### Why it belongs to the frame and not to a screen
+ *
+ * The design attaches it to the *screen element*, above every screen and outside the layer that
+ * dims — so a banner does not brighten it, a light-field screen does not switch it off, and the
+ * two inverted screens get it like everything else. It is the surface, not the content, which is
+ * how a real panel behaves and why there is exactly one of these in the app.
+ *
+ * ### The three rules it has to not break
+ *
+ * - **Rule 5, the lamp is a pure function of state.** This never varies: same alpha, same period,
+ *   every screen, every frame, every role. It is a constant attenuation of about 11% of emitted
+ *   light, and a constant cannot carry a signal.
+ * - **Rule 7, the allocation budget.** One rectangle with a repeating shader, and the brush is
+ *   remembered against the period rather than rebuilt per frame. The obvious version — a loop of
+ *   a hundred and thirty `drawRect`s — costs a hundred and thirty draw calls a frame to say the
+ *   same thing.
+ * - **It must not eat a tap.** The CSS says `pointer-events:none`; here that is simply a `Box`
+ *   with no pointer input, which Compose does not hit-test. `ScreenGraphTest` walks the whole
+ *   graph by firing clicks and would notice at once if it did.
+ *
+ * ### What is deliberately NOT here
+ *
+ * The same CSS rule carries a second layer — a vignette,
+ * `radial-gradient(ellipse 130% 90% at 50% 50%, transparent 55%, rgba(0,0,0,.55) 100%)` — that
+ * darkens the corners. It is the design's and it is left out, because it was not what was asked
+ * for and because it is a *gradient* on a screen whose art direction says there are none. It is
+ * one brush away if somebody rules for it.
+ */
+@Composable
+private fun ScanLines() {
+    val periodPx = with(LocalDensity.current) { SCAN_LINE_PERIOD.toPx() }
+    val glass = remember(periodPx) {
+        Brush.verticalGradient(
+            0f to SCAN_LINE_INK,
+            SCAN_LINE_DUTY to SCAN_LINE_INK,
+            SCAN_LINE_DUTY to Color.Transparent,
+            1f to Color.Transparent,
+            startY = 0f,
+            endY = periodPx,
+            tileMode = TileMode.Repeated,
+        )
+    }
+    Box(Modifier.fillMaxSize().background(glass))
+}
+
+/** One dark unit in every three — `0 1px, transparent 1px 3px` in the design's own CSS. */
+private val SCAN_LINE_PERIOD: Dp = 3.u
+
+/** Where the dark part ends inside one period. One unit of three. */
+private const val SCAN_LINE_DUTY: Float = 1f / 3f
+
+/** `rgba(0,0,0,.32)`. Black, because the banding is an absence of light rather than a colour. */
+private val SCAN_LINE_INK: Color = Color.Black.copy(alpha = 0.32f)
 
 /**
  * The status row's height, which the overlay and the content inset both measure against.

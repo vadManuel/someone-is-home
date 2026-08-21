@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -28,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.scale
@@ -237,6 +239,19 @@ fun PlanCounts(counts: List<Plan.RoomCount>, modifier: Modifier = Modifier) {
  * design's own bungalow — so a host who painted their own house got six labels in the wrong
  * places, or none. Each label now sits at its room's top-left cell, which is a placement that is
  * right for every plan rather than nudged for one.
+ *
+ * ### A name is held inside its own room, and ellipsised rather than allowed out
+ *
+ * The placement was right and the *width* was unbounded, so a long name ran off to the right for
+ * as far as it wanted. On the design's bungalow that is only untidy — `KITCHEN` crosses one of its
+ * own room's internal gridlines — but the room it starts in is not always four cells wide, and a
+ * `CONSERVATORY` painted on one cell would have printed itself across two other people's rooms.
+ * A label reaching into a room it does not name is a host reading the wrong name for a place they
+ * are about to go and stand in, in the dark, so it is bounded by the room it belongs to.
+ *
+ * The bound is the **anchor stroke's** width rather than the room's overall extent, because the
+ * anchor stroke is the run of cells the label is actually sitting on: an L-shaped room is wider
+ * somewhere else, and somewhere else is not where the text is.
  */
 @Composable
 fun EditorLabels(
@@ -257,15 +272,23 @@ fun EditorLabels(
             val ink = if (isHeld) Amber.BoneChip else Amber.BoneInk
             val chipInk = if (isHeld) Amber.SlateFocusFill else Amber.SlateFill
             val count = markers(room.name)
+            // What the label has to fit in: the anchor stroke's cells, less the inset that holds
+            // it off the room's own border.
+            val inset = 3.u
+            val nameWidth = (w * (anchor.width.toFloat() / cols) - inset).coerceAtLeast(inset)
             Column(
                 Modifier
                     .offset(
                         x = w * (anchor.x.toFloat() / cols),
                         y = h * (anchor.y.toFloat() / rows),
                     )
-                    .padding(start = 3.u, top = 2.u)
+                    .padding(start = inset, top = 2.u)
+                    .width(nameWidth)
             ) {
-                Label(room.name, size = 5.5, color = ink, tracking = 0.06)
+                Label(
+                    room.name, size = 5.5, color = ink, tracking = 0.06,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
                 if (count > 0) EditorChip("$count", ink, chipInk, round = false)
                 // The T is its own chip rather than replacing the count: a room can hold cards
                 // AND the terminal, and a chip that showed one of them would be the editor

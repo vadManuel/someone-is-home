@@ -128,7 +128,7 @@ class DeviceLayoutTest {
     }
 
     /**
-     * A region is at fault when it is NOT UNIFORM.
+     * A region is at fault when one of its ROWS is not uniform.
      *
      * The first version asked whether pixels differed from the image's most common colour, and
      * that was wrong in a way worth keeping written down: `ScanMarker` is a light-field screen
@@ -140,6 +140,21 @@ class DeviceLayoutTest {
      * whatever colour it is — and a flat fill under the pill is not merely tolerable but REQUIRED
      * on the lamp screens, where the amber must reach the edges or the core has emitted light the
      * hardware then swallows.
+     *
+     * ### Why it is per row, and why that gives nothing away
+     *
+     * The panel now carries the design's scan lines — one dark unit in every three, across the
+     * whole screen, above everything (see `ScanLines`). That is the device's glass rather than any
+     * screen's content, and it makes every region in this image vertically striped by
+     * construction. Asked for whole-region uniformity the guard would fire on all 112 renders,
+     * which is the state a check gets switched off in.
+     *
+     * Reading row by row keeps exactly the fault this exists to catch. **The hardware eats a
+     * horizontal band, and everything that ever landed in one was found by its horizontal
+     * variation**: a title under the Island, a half-filled progress bar under the home indicator,
+     * end glyphs shaved by the corner radius. A full-width horizontal rule is the one thing this
+     * cannot see — and that was already true and already deliberate, which is what [ruleAllowance]
+     * is. The scan lines are simply more of the same kind of thing.
      *
      * [TOLERANCE] absorbs the antialiased edge of something legitimately adjacent, such as the
      * status rule sitting on the band's boundary.
@@ -158,20 +173,26 @@ class DeviceLayoutTest {
             val ys = y0.coerceAtLeast(0) until y1.coerceAtMost(img.height)
             if (xs.isEmpty() || ys.isEmpty()) return
 
-            val counts = HashMap<Int, Int>()
-            for (y in ys) for (x in xs) {
-                val c = img.getRGB(x, y)
-                counts[c] = (counts[c] ?: 0) + 1
-            }
             val total = xs.count() * ys.count()
-            val fill = counts.maxByOrNull { it.value }!!
-            val differing = total - fill.value
-            if (differing > total * TOLERANCE) {
-                var at = ""
-                outer@ for (y in ys) for (x in xs) {
-                    if (img.getRGB(x, y) != fill.key) { at = "first at ($x,$y)"; break@outer }
+            var differing = 0
+            var at = ""
+            for (y in ys) {
+                // Each row against its OWN fill, so the glass's vertical banding is not read as
+                // content while anything laid out across a row still is.
+                val counts = HashMap<Int, Int>()
+                for (x in xs) {
+                    val c = img.getRGB(x, y)
+                    counts[c] = (counts[c] ?: 0) + 1
                 }
-                out += "$label — $name: $differing of $total px differ from the fill, $at"
+                val fill = counts.maxByOrNull { it.value }!!
+                differing += xs.count() - fill.value
+                if (at.isEmpty()) {
+                    val x = xs.firstOrNull { img.getRGB(it, y) != fill.key }
+                    if (x != null) at = "first at ($x,$y)"
+                }
+            }
+            if (differing > total * TOLERANCE) {
+                out += "$label — $name: $differing of $total px differ from their row's fill, $at"
             }
         }
 

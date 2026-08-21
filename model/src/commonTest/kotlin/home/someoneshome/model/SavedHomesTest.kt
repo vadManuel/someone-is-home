@@ -64,7 +64,9 @@ class SavedHomesTest {
     fun `a home counts its own floors and rooms and cards`() {
         val bungalow = home()
         assertEquals(2, bungalow.floorCount)
-        assertEquals(4, bungalow.roomCount)
+        // Four painted areas, and TOP OF STAIRS is not one of the rooms — stairs hold nothing
+        // (D-099) and are not the Insider's route either (D-098), so they are not counted.
+        assertEquals(3, bungalow.roomCount)
         assertEquals(3, bungalow.markerCount)
         assertEquals(shapes("ring"), bungalow.markersIn("BED 1"))
         assertEquals(emptyList(), bungalow.markersIn("HALL"), "the terminal is not a marker")
@@ -471,6 +473,6 @@ class SavedHomesTest {
         val back = SavedHomesText.read(SavedHomesText.write(listOf(bare))).single()
         assertEquals(emptyList(), back.map.registrations)
         assertNull(back.terminal)
-        assertEquals(4, back.roomCount)
+        assertEquals(3, back.roomCount, "the stairwell came back counted as a room")
     }
 }

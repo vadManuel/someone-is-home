@@ -556,7 +556,7 @@ class FlowTest {
     @Test
     fun mappingANewHomeEmptiesTheEditorAndClosesWhatWasOpen() {
         val model = FlowModel(PanelState(screen = ScreenId.Maps))
-        assertEquals(11, model.editor.roomCount, "the fixture moved under this test")
+        assertEquals(9, model.editor.roomCount, "the fixture moved under this test")
 
         model.mapNewHome()
 
@@ -595,7 +595,7 @@ class FlowTest {
         model.editOpenHome()
 
         assertEquals("THE BUNGALOW", model.editor.name)
-        assertEquals(11, model.editor.roomCount)
+        assertEquals(9, model.editor.roomCount)
         assertEquals(9, model.editor.markerCount, "the cards stayed behind")
         assertEquals("HALL", model.editor.terminal, "the terminal stayed behind")
     }
@@ -636,7 +636,7 @@ class FlowTest {
         assertEquals(ScreenId.HomeDetail, model.state.screen)
         val saved = assertNotNull(model.homes.open)
         assertEquals("THE ANNEXE", saved.name)
-        assertEquals(11, saved.roomCount)
+        assertEquals(9, saved.roomCount)
         assertEquals(9, saved.markerCount, "the cards did not come across with the name")
         assertEquals(3, model.homes.homes.size, "a rename left a second copy behind")
         assertNull(model.homes.homes.firstOrNull { it.name == "THE BUNGALOW" })

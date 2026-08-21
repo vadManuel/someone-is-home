@@ -41,7 +41,9 @@ class SavedHome(
     }
 
     val floorCount: Int get() = plan.floors.size
-    val roomCount: Int get() = plan.rooms.size
+
+    /** Rooms, and stairs are not rooms — see [HousePlan.roomCount]. */
+    val roomCount: Int get() = plan.roomCount
     val markerCount: Int get() = map.registrations.size
 
     /** The one room holding the T card, by name — what every screen about the terminal asks for. */

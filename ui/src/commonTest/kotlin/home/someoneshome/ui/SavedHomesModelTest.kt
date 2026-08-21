@@ -113,7 +113,7 @@ class SavedHomesModelTest {
         assertEquals(listOf("MUM & DAD'S"), homes.homes.map { it.name })
         assertEquals("MUM & DAD'S", homes.openName)
         assertEquals(9, homes.open!!.markerCount)
-        assertEquals(11, homes.open!!.roomCount)
+        assertEquals(9, homes.open!!.roomCount, "stairs are not rooms — HousePlan.roomCount")
     }
 
     @Test
@@ -218,7 +218,7 @@ class SavedHomesModelTest {
     fun `the sample bungalow is the editor's bungalow`() {
         val bungalow = SavedHomesModel.sample().open!!
         assertEquals(2, bungalow.floorCount)
-        assertEquals(11, bungalow.roomCount)
+        assertEquals(9, bungalow.roomCount, "eleven painted areas, two of them stairs")
         assertEquals(9, bungalow.markerCount)
         assertEquals(HomeEditorModel.bungalow().asSavedHome(), bungalow)
     }
