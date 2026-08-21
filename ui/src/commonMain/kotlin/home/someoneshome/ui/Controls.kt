@@ -12,23 +12,37 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
 
 /**
  * What a screen may do when tapped.
@@ -52,6 +66,22 @@ class PanelActions(
     val deleteRoom: () -> Unit = {},
     val openFloor: (String) -> Unit = {},
     val addFloor: () -> Unit = {},
+    /**
+     * The saved homes.
+     *
+     * Every one of these is a side effect beside a navigation the screen names itself — a tapped
+     * row opens *that* home and then goes to the detail screen, which is where every row goes.
+     * The two that are not are [saveHome] and [deleteHome]: where a save lands depends on whether
+     * it was refused, and a delete is a two-second hold rather than a tap, so both are declared in
+     * [Flow.viaActions] and walked by a test.
+     */
+    val openSavedHome: (String) -> Unit = {},
+    val mapNewHome: () -> Unit = {},
+    val editOpenHome: () -> Unit = {},
+    val duplicateHome: () -> Unit = {},
+    val nameHome: (String) -> Unit = {},
+    val saveHome: () -> Unit = {},
+    val deleteHome: () -> Unit = {},
 )
 
 val LocalActions: ProvidableCompositionLocal<PanelActions> =
@@ -169,6 +199,123 @@ fun Caret(color: Color, size: Double = 17.0) {
     )
     Readout("_", size = size, color = color.copy(alpha = alpha))
 }
+
+/**
+ * **The one field in this interface a host actually types into.**
+ *
+ * A [Readout] with a real keyboard behind it. Everywhere else the caret is drawn by [Caret] as a
+ * promise that the device is listening; here the promise is kept, and the caret is the field's own
+ * so there is exactly one of them and it sits where the next character will go.
+ *
+ * The text is passed through [transform] on the way in rather than on the way out — a home named
+ * in lower case would come back shouted at the moment it was saved, and a field that rewrites what
+ * you typed after you stop looking at it is a field nobody trusts.
+ */
+@Composable
+fun ReadoutField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    size: Double = 17.0,
+    color: Color = Amber.BoneInk,
+    tracking: Double = 0.06,
+    transform: (String) -> String = { it.uppercase() },
+) {
+    BasicTextField(
+        value = value,
+        onValueChange = { onValueChange(transform(it)) },
+        modifier = modifier,
+        textStyle = TextStyle(
+            fontFamily = PanelType.readout,
+            fontSize = size.sp,
+            color = color,
+            letterSpacing = tracking.em,
+        ),
+        singleLine = true,
+        cursorBrush = SolidColor(color),
+    )
+}
+
+/**
+ * **Hold for two seconds. The bar is the hold, not an animation of one.**
+ *
+ * The design's own control for the one irreversible thing in host setup. A tap cannot reach it:
+ * the progress is driven by frames while the finger is down and resets the moment it lifts, so a
+ * mis-tap in a pocket, a fumble in the dark, or a child holding the phone does not delete fifteen
+ * minutes of somebody's evening.
+ *
+ * ### It publishes no click action, and that is the point
+ *
+ * `ScreenGraphTest` reads the whole screen graph off click *semantics* actions, which is how every
+ * other control in this app is checked. A hold has none — a control that could be fired by one
+ * synthetic click would not be a hold — so the edge it walks is declared in [Flow.viaActions] and
+ * proved by a test that really holds a finger down for two seconds.
+ */
+@Composable
+fun HoldToConfirm(
+    label: String,
+    restingNote: String,
+    onConfirm: () -> Unit,
+    modifier: Modifier = Modifier,
+    millis: Int = HOLD_MILLIS,
+) {
+    var holding by remember { mutableStateOf(false) }
+    var elapsed by remember { mutableStateOf(0) }
+
+    LaunchedEffect(holding) {
+        if (!holding) {
+            elapsed = 0
+            return@LaunchedEffect
+        }
+        var last = withFrameMillis { it }
+        var spent = 0L
+        while (spent < millis) {
+            val now = withFrameMillis { it }
+            spent += now - last
+            last = now
+            elapsed = spent.coerceAtMost(millis.toLong()).toInt()
+        }
+        holding = false
+        onConfirm()
+    }
+
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(7.u)) {
+        // Two blocks rather than a fraction of one: the bar has to read at six units tall on a
+        // 300-unit canvas, and a weight of zero is a box that still draws its own hairline.
+        Row(Modifier.fillMaxWidth().height(6.u), horizontalArrangement = Arrangement.spacedBy(1.u)) {
+            val done = elapsed.toFloat() / millis
+            if (done > 0f) Box(Modifier.weight(done).fillMaxHeight().background(Amber.BoneDim))
+            if (done < 1f) Box(Modifier.weight(1f - done).fillMaxHeight().background(Amber.BonePale))
+        }
+        PreNote(
+            if (holding) "KEEP HOLDING . ${seconds(elapsed)}S OF ${seconds(millis)}S"
+            else restingNote,
+            tracking = 0.12, lineHeight = 1.0, align = TextAlign.Center,
+        )
+        Box(
+            Modifier.fillMaxWidth().border(1.u, Amber.BoneFaint)
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onPress = {
+                            holding = true
+                            tryAwaitRelease()
+                            holding = false
+                        },
+                    )
+                }
+                .padding(vertical = 13.u),
+            contentAlignment = Alignment.Center,
+        ) {
+            Label(label, size = 8.0, color = Amber.BoneDim, tracking = 0.16, align = TextAlign.Center)
+        }
+    }
+}
+
+/** Tenths, which is the resolution the design's own note is written at. */
+private fun seconds(millis: Int): String = "${millis / 1000}.${millis % 1000 / 100}"
+
+/** Two seconds, the design's number, and the only place it is written down. */
+const val HOLD_MILLIS: Int = 2_000
 
 /**
  * The slow pulse on an incoming call.

@@ -6,6 +6,8 @@ import home.someoneshome.model.RoomKind
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -399,10 +401,141 @@ class FlowTest {
         confirm.confirmStairs()
         assertEquals(Flow.viaActions.getValue(ScreenId.StairsWarn), setOf(confirm.state.screen))
 
+        // A save that landed. The refused one stays where it is, which is the reason this edge is
+        // the actions layer's rather than the button's.
+        val save = FlowModel(
+            PanelState(screen = ScreenId.SaveName),
+            homes = SavedHomesModel(MemoryHomeStore()),
+        )
+        save.editor.nameHome("somewhere new")
+        save.saveHome()
+        assertEquals(Flow.viaActions.getValue(ScreenId.SaveName), setOf(save.state.screen))
+
+        // Two seconds of a finger, which publishes no click action for a rendering test to fire.
+        val delete = FlowModel(PanelState(screen = ScreenId.Delete))
+        delete.deleteHome()
+        assertEquals(Flow.viaActions.getValue(ScreenId.Delete), setOf(delete.state.screen))
+
         assertEquals(
-            setOf(ScreenId.Editor, ScreenId.RoomEdit, ScreenId.StairsWarn), Flow.viaActions.keys,
+            setOf(
+                ScreenId.Editor, ScreenId.RoomEdit, ScreenId.StairsWarn,
+                ScreenId.SaveName, ScreenId.Delete,
+            ),
+            Flow.viaActions.keys,
             "a new action edge was declared and nothing here walks it",
         )
+    }
+
+    // ---- The saved homes ---------------------------------------------------------------------
+
+    /**
+     * **MAP A NEW HOME starts an empty house**, not a copy of whichever one the editor was last
+     * holding.
+     *
+     * One storey rather than none, because a plan with no storey has nowhere to paint and the
+     * host's first drag would be refused for a reason that is not theirs.
+     */
+    @Test
+    fun mappingANewHomeEmptiesTheEditorAndClosesWhatWasOpen() {
+        val model = FlowModel(PanelState(screen = ScreenId.Maps))
+        assertEquals(11, model.editor.roomCount, "the fixture moved under this test")
+
+        model.mapNewHome()
+
+        assertNull(model.homes.openName, "the new home would have replaced the old one on save")
+        assertEquals(0, model.editor.roomCount)
+        assertEquals(1, model.editor.floorCount)
+        assertEquals(HomeEditorModel.GROUND, model.editor.floorName)
+        assertEquals("HOME 1", model.editor.name, "a new home needs a name to save under")
+        assertFalse(model.editor.hasTerminal)
+    }
+
+    /**
+     * Opening a home is looking at it. **The editor is untouched** — a host who taps a row and
+     * backs out again has not asked for the house they were painting to be thrown away.
+     */
+    @Test
+    fun openingASavedHomeDoesNotTouchTheEditor() {
+        val model = FlowModel(PanelState(screen = ScreenId.Maps))
+        model.mapNewHome()
+        val painting = model.editor.name
+
+        model.openSavedHome("THE LAKE PLACE")
+
+        assertEquals("THE LAKE PLACE", model.homes.openName)
+        assertEquals(painting, model.editor.name, "the half-painted house was replaced by a tap")
+        assertEquals(0, model.editor.roomCount)
+    }
+
+    /** EDIT THE PLAN and RENAME both say they will replace it, and both do — plan, cards and all. */
+    @Test
+    fun editingAnOpenHomeLoadsTheWholeThing() {
+        val model = FlowModel(PanelState(screen = ScreenId.HomeDetail))
+        model.mapNewHome()
+        model.openSavedHome("THE BUNGALOW")
+
+        model.editOpenHome()
+
+        assertEquals("THE BUNGALOW", model.editor.name)
+        assertEquals(11, model.editor.roomCount)
+        assertEquals(9, model.editor.markerCount, "the cards stayed behind")
+        assertEquals("HALL", model.editor.terminal, "the terminal stayed behind")
+    }
+
+    /**
+     * A refused save stays put and says why. The list on screen is the list on the phone, and a
+     * host who was told nothing would go looking for a house that is not there.
+     */
+    @Test
+    fun aRefusedSaveDoesNotLeaveTheScreen() {
+        val model = FlowModel(PanelState(screen = ScreenId.SaveName))
+        model.mapNewHome()
+        model.editor.nameHome("the lake place")
+
+        model.saveHome()
+
+        assertEquals(ScreenId.SaveName, model.state.screen)
+        assertEquals("A HOME IS ALREADY CALLED THE LAKE PLACE", model.homes.refusal)
+        assertEquals(3, model.homes.homes.size)
+    }
+
+    /**
+     * **With a home open, saving under a new name renames it** — one house, moved, rather than
+     * two houses with the same rooms in them.
+     *
+     * This is the RENAME row's whole path: the open home goes into the editor, the field changes
+     * the name, and SAVE HOME writes it back over the one it came from.
+     */
+    @Test
+    fun savingAnOpenHomeUnderANewNameRenamesIt() {
+        val model = FlowModel(PanelState(screen = ScreenId.SaveName))
+        model.openSavedHome("THE BUNGALOW")
+        model.editOpenHome()
+        model.editor.nameHome("the annexe")
+
+        model.saveHome()
+
+        assertEquals(ScreenId.HomeDetail, model.state.screen)
+        val saved = assertNotNull(model.homes.open)
+        assertEquals("THE ANNEXE", saved.name)
+        assertEquals(11, saved.roomCount)
+        assertEquals(9, saved.markerCount, "the cards did not come across with the name")
+        assertEquals(3, model.homes.homes.size, "a rename left a second copy behind")
+        assertNull(model.homes.homes.firstOrNull { it.name == "THE BUNGALOW" })
+    }
+
+    /** With none open, the same act adds. The list grows and nothing is replaced. */
+    @Test
+    fun savingWithNoHomeOpenAddsOne() {
+        val model = FlowModel(PanelState(screen = ScreenId.SaveName))
+        model.homes.closeHome()
+        model.editor.nameHome("the annexe")
+
+        model.saveHome()
+
+        assertEquals(4, model.homes.homes.size)
+        assertEquals("THE ANNEXE", model.homes.homes.first().name, "the newest is not at the top")
+        assertEquals("THE ANNEXE", model.homes.openName)
     }
 
     /**
