@@ -157,7 +157,7 @@ val Double.u: Dp get() = this.dp
  * otherwise. Every layout fault this guards against — content under the Island, content under
  * the home indicator, glyphs shaved by the corner radius — is invisible on the desktop target
  * where the screens were designed and reviewed, because a Mac window has none of those things.
- * Passing the insets as a value lets a test render all 56 screens against a *simulated* phone.
+ * Passing the insets as a value lets a test render every screen in the game against a *simulated* phone.
  *
  * [side] does NOT come from `safeDrawing`, which reports zero left and right in portrait —
  * measured, not assumed. It comes from `safeContent`, which is the only place iOS exposes a

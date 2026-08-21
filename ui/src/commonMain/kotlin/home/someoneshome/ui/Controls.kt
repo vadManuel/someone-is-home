@@ -154,14 +154,26 @@ class PanelActions(
     val tapSubroutine: (Subroutine, Int) -> Unit = { _, _ -> },
     val handOverSubroutine: (Subroutine) -> Unit = {},
     /**
-     * **A banner, swiped up.**
+     * **Something arriving, swiped away — up on a banner, left under the clock.**
      *
-     * Not a tap and not a navigation the banner can name: what a dismissal leaves you looking at
-     * is whatever the notification arrived over, which the banner does not know. It is declared in
-     * [Flow.viaActions] beside the other gestures no synthetic click can reach, and walked by a
+     * Not a tap and not a navigation the notification can name: what a dismissal leaves you
+     * looking at is whatever it arrived over, which the notification does not know. It is declared
+     * in [Flow.viaActions] beside the other gestures no synthetic click can reach, and walked by a
      * test that really drags a finger.
      */
     val dismissNotification: () -> Unit = {},
+    /**
+     * **One of the lock screen's stored notifications, swiped off the list.**
+     *
+     * Separate from [dismissNotification] because it is a different question: that one is *the*
+     * thing arriving now and there is only ever one, this one names which of several standing
+     * notifications the finger was on. It moves no screen at all — the player is still looking at
+     * their lock screen, with one fewer thing on it.
+     *
+     * **What it does is remove, not mark.** There is nowhere to record that a notification was
+     * swiped and nothing that could be asked about it afterwards; see [NotificationsModel].
+     */
+    val dismissStanding: (Notification) -> Unit = {},
 )
 
 val LocalActions: ProvidableCompositionLocal<PanelActions> =

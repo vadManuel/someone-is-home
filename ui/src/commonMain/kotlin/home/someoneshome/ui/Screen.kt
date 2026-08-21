@@ -61,6 +61,15 @@ fun Screen(
      * is a screen with no echo on it — and the echo is the entire content of these screens.
      */
     subroutines: SubroutineModel = remember { SubroutineModel.sample() },
+    /**
+     * What is still standing on this phone's lock screen.
+     *
+     * Defaulted and `remember`ed for the reason the five above are: a test that swipes a
+     * notification away must not leave the next render looking at a phone with one fewer on it.
+     * The default is the design's own two, because a lock screen is the one surface in this app
+     * that is *supposed* to have yesterday's news on it.
+     */
+    notifications: NotificationsModel = remember { NotificationsModel() },
 ) {
     val vals = PanelVals(state)
     CompositionLocalProvider(
@@ -70,8 +79,21 @@ fun Screen(
         LocalLobby provides lobby,
         LocalMeeting provides meeting,
         LocalSubroutine provides subroutines,
+        LocalNotifications provides notifications,
     ) {
-        PanelFrame(vals, overlay = bannerFor(state.screen)) {
+        // THE FRAME DIMS FOR A HEAVY BANNER AND FOR NOTHING ELSE. `dims` is the house-wide
+        // question — is one of D-118's two events on this screen — and the answer is yes on the
+        // lock screen too; but there the dim cannot be `alpha` over the panel, because the amber
+        // field IS the emitted light and the notification has to stay at full intensity while
+        // everything around it drops. [LockScreen] implements the same ruling on its own ground.
+        // Dimming here as well would darken the one bright thing and dim the house twice.
+        val arrival = Notifications.arrivals[state.screen]
+        PanelFrame(
+            vals,
+            overlay = bannerFor(state.screen),
+            dimmed = Notifications.dims(state.screen) &&
+                arrival?.presentation == Presentation.Banner,
+        ) {
             when (state.screen) {
                 ScreenId.Boot -> BootScreen()
                 ScreenId.Perms -> PermsScreen()
@@ -94,17 +116,21 @@ fun Screen(
 
                 ScreenId.Secret -> SecretScreen()
                 ScreenId.Armed -> ArmedScreen()
-                // Both banner screens draw the springboard they interrupted, dimmed by the
-                // frame, and hand the banner itself up as an overlay so it stays at full
-                // intensity. "A banner, not a takeover" is only true if what was underneath is
-                // still visible and still recognisable.
+                // Every banner screen draws the springboard it interrupted and hands the banner
+                // itself up as an overlay. "A banner, not a takeover" is only true if what was
+                // underneath is still visible and still recognisable — which is also why only the
+                // two heavy ones dim it (D-118), and why the third looks like the panel it is on.
                 ScreenId.Notify -> HomeScreen(vals)
                 ScreenId.Reveal -> RevealScreen(vals)
                 ScreenId.RevealThread -> RevealThreadScreen(vals)
-                ScreenId.Lock -> LockScreen()
+                // The lantern, and the lantern with something arriving under its clock. One
+                // composable: a lock screen that drew its notifications differently depending on
+                // whether one was landing would be two lock screens.
+                ScreenId.Lock, ScreenId.LockNotify -> LockScreen(vals)
 
                 ScreenId.Home -> HomeScreen(vals)
                 ScreenId.Page2 -> Page2Screen(vals)
+                ScreenId.Quiet -> HomeScreen(vals)
 
                 ScreenId.Banner -> HomeScreen(vals)
                 ScreenId.Work -> WorkScreen(vals)
@@ -149,19 +175,28 @@ fun Screen(
 }
 
 /**
- * The full-intensity thing on top, for the two screens that have one.
+ * The thing on top, for the screens that have one.
  *
- * Returning non-null is what tells [PanelFrame] to dim the panel behind it, so "this screen has a
- * banner" and "this screen is dimmed" cannot drift apart.
+ * **This no longer decides the dim.** It used to: returning non-null was what dropped the panel to
+ * [NOTIFIED_DIM], on the argument that the two could then never drift apart. D-118 ruled that they
+ * are not the same fact — the dim belongs to two named events and a banner belongs to any
+ * notification at all — so the panel is told both, separately, and [Notifications.dims] is the one
+ * place the second is answered.
+ *
+ * **The lock screen's arrivals are not here.** A notification landing on the lantern goes *under
+ * the clock*, inside [LockScreen], because that screen is already an arrangement around a clock
+ * and a banner across the top of it would be a second idiom on the one screen that has no room for
+ * one. [Presentation] is where that split is written down.
  *
  * **Which notification, and whether there is one at all, is [Notifications]' answer, not this
  * function's.** The banner is one composable taking one piece of data — there is no
  * per-notification composable to forget to write, and adding a kind cannot produce a banner drawn
- * differently from its two siblings.
+ * differently from its siblings.
  */
 @Composable
 private fun bannerFor(screen: ScreenId): (@Composable BoxScope.() -> Unit)? {
-    val notification = Notifications.onScreen(screen) ?: return null
-    return { NotificationBanner(notification) }
+    val arrival = Notifications.arrivals[screen] ?: return null
+    if (arrival.presentation != Presentation.Banner) return null
+    return { NotificationBanner(arrival.notification) }
 }
 

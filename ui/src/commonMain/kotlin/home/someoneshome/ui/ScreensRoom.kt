@@ -219,8 +219,8 @@ fun CheckIn() {
  * **The words are [Notifications.notice]'s, and this screen is the only place they are drawn.**
  * That is D-105's *stored nowhere* made structural rather than promised: a notice belongs to the
  * meeting it arrives at, so there is no thread holding it, no list it lands in, and nothing on any
- * other screen that could still be showing it an hour later. `NotificationsTest` renders all 56
- * screens in both roles and fails the moment a second one has these words on it.
+ * other screen that could still be showing it an hour later. `NotificationsTest` renders every
+ * screen in the game in both roles and fails the moment a second one has these words on it.
  */
 @Composable
 fun NoticeScreen() {

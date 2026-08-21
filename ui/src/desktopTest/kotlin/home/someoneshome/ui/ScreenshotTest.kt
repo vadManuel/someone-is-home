@@ -149,7 +149,7 @@ class ScreenshotTest {
                     }
                 }
                 if (lift > 0f) {
-                    onNode(hasText(Notifications.text.body, substring = true)).performTouchInput {
+                    onNode(hasText(Notifications.opening.body, substring = true)).performTouchInput {
                         down(center)
                         repeat(6) { moveBy(Offset(0f, -lift / 6)) }
                     }
@@ -161,6 +161,51 @@ class ScreenshotTest {
             }
         }
         println("wrote ${travel.size} banner frames to ${out.absolutePath}")
+    }
+
+    /**
+     * **A notification going sideways off the lock screen — the other state no [ScreenId] names.**
+     *
+     * The lock screen's gesture is a swipe *left*, and its notifications are a list rather than a
+     * single banner, which makes two things worth a person's eye and invisible to any sweep: what
+     * a half-swiped row looks like against the amber field it is leaving, and whether the rows
+     * below it hold their place while the one above them goes.
+     *
+     * Rendered on the arriving-notification screen so the darkened field is in shot too — the
+     * whole point of that dim is that the bright card is the only thing left, and a screenshot is
+     * the only way to check that claim about light.
+     */
+    @OptIn(ExperimentalTestApi::class, ExperimentalComposeUiApi::class)
+    @Test
+    fun renderALockScreenNotificationBeingSwipedAway() {
+        val insets = PanelInsets(top = 45.dp, bottom = 25.dp, side = 12.dp)
+        val travel = listOf("lock-rest" to 0f, "lock-swiping" to 40f, "lock-going" to 110f)
+        for ((name, push) in travel) {
+            runDesktopComposeUiTest(width = 600, height = 1300) {
+                val model = FlowModel(PanelState(screen = ScreenId.LockNotify))
+                setContent {
+                    Box(Modifier.fillMaxSize().background(Color.Black)) {
+                        DeviceCanvas(insets = insets) {
+                            Screen(
+                                model.state, model.actions(), model.editor, model.homes,
+                                model.lobby, notifications = model.notifications,
+                            )
+                        }
+                    }
+                }
+                if (push > 0f) {
+                    onNode(hasText(Notifications.opening.body, substring = true)).performTouchInput {
+                        down(center)
+                        repeat(6) { moveBy(Offset(-push / 6, 0f)) }
+                    }
+                    waitForIdle()
+                }
+                ImageIO.write(
+                    onRoot().captureToImage().toAwtImage(), "png", File(out, "$name.png"),
+                )
+            }
+        }
+        println("wrote ${travel.size} lock screen frames to ${out.absolutePath}")
     }
 
     /**

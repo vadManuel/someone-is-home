@@ -27,13 +27,20 @@ class StatusBarPresenceTest {
         assertTrue(missing.isEmpty(), "screens with no status row at all: $missing")
     }
 
-    /** The inverted row belongs to the amber-field screens, and only to them. */
+    /**
+     * The inverted row belongs to the amber-field screens, and only to them.
+     *
+     * Three of them, not two: the lantern with something arriving under its clock is still the
+     * lantern — darkened around the notification (D-118), and still an amber field with black
+     * glyphs, so the shared amber-on-black row would be invisible on it exactly as it is on the
+     * other two.
+     */
     @Test
     fun onlyTheAmberFieldScreensDrawTheirOwn() {
         val own = ScreenId.entries.filter { PanelVals(PanelState(screen = it)).drawsOwnStatusRow }
         assertTrue(
-            own.toSet() == setOf(ScreenId.Lock, ScreenId.Scan),
-            "expected only Lock and Scan to draw their own row, got $own",
+            own.toSet() == setOf(ScreenId.Lock, ScreenId.LockNotify, ScreenId.Scan),
+            "expected only the amber-field screens to draw their own row, got $own",
         )
     }
 

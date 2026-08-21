@@ -194,22 +194,30 @@ private fun Battery(ink: Color, edge: Color) {
  *
  * ### The dim, and why it is not styling
  *
- * When [overlay] is present the whole panel — **status bar included** — drops to
- * [NOTIFIED_DIM], and the overlay draws at full intensity on top. Two jobs at once:
+ * When [dimmed] the whole panel — **status bar included** — drops to [NOTIFIED_DIM], and the
+ * overlay draws at full intensity on top. Two jobs at once:
  *
  * 1. It makes the banner the only bright thing, so it is noticed.
  * 2. **It is a notification channel that works when the screen cannot be seen at all.** A phone
  *    held as a lamp faces away from its owner. They cannot read a banner, but they can see the
  *    light in the room drop. The buzz says something arrived; the dim confirms it.
  *
- * Which makes this a **lamp change**, and lamp changes are game state (project rule 5). Two
+ * Which makes this a **lamp change**, and lamp changes are game state (project rule 5). Three
  * consequences that outlive this file:
  *
  * - The dim has to arrive as an authored effect from the rules, not as a UI transition, and it
- *   has to be a step rather than a fade. A ramp nobody authored is a signal nobody authored.
- * - **Every banner must go to everyone at once.** A lamp dimming is world-observable, so a
+ *   has to be **a step rather than a fade, in both directions**. A ramp nobody authored is a
+ *   signal nobody authored, and that is as true coming back up as going down (D-119). There is no
+ *   `animate*AsState` anywhere near this and `NotificationInputTest` measures the first frame
+ *   after the change to keep it that way.
+ * - **Anything that dims must go to everyone at once.** A lamp dimming is world-observable, so a
  *   notification addressed to fewer than all players is a beacon pointing at whoever got it. If
  *   a per-player notification is ever wanted, it cannot use this.
+ * - **[dimmed] is not [overlay] != null, and the difference is the ruling.** D-118 keys the dim to
+ *   exactly two notification kinds — the Egress and the house's opening text — rather than to a
+ *   banner being up. Every other notification arrives quiet: a dark banner over a panel that never
+ *   changed brightness. The two arguments are separate here because the two questions are
+ *   separate; [Notifications.dims] is the one place the second one is answered.
  *
  * ### The panel makes room for the banner rather than being covered by it
  *
@@ -229,6 +237,7 @@ fun PanelFrame(
     vals: PanelVals,
     modifier: Modifier = Modifier,
     overlay: (@Composable BoxScope.() -> Unit)? = null,
+    dimmed: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     // THE BACKGROUNDS FILL THE SCREEN; ONLY THE CONTENT INSETS. Padding the whole panel would
@@ -264,7 +273,10 @@ fun PanelFrame(
     Box(modifier.fillMaxSize().background(Amber.Black)) {
         Box(
             Modifier.fillMaxSize()
-                .then(if (overlay != null) Modifier.alpha(NOTIFIED_DIM) else Modifier)
+                // A STEP, NOT A FADE, IN BOTH DIRECTIONS (D-119). `alpha` reads a value; nothing
+                // here animates it, and nothing here may. A fade on the way down is a light the
+                // core never authored, and a fade on the way back up is the same light again.
+                .then(if (dimmed) Modifier.alpha(NOTIFIED_DIM) else Modifier)
         ) {
             if (vals.isPre) Box(Modifier.fillMaxSize().background(Amber.Bone))
 
@@ -397,10 +409,15 @@ private val SCAN_LINE_INK: Color = Color.Black.copy(alpha = 0.32f)
 val STATUS_BAR_HEIGHT: Dp = 17.u
 
 /**
- * How far the panel drops when something arrives unasked.
+ * How far the panel drops for the two notifications that dim the house (D-118).
  *
  * Deep enough to read as a light change across a room, shallow enough that the screen underneath
  * is still legible — the player must be able to see *what they were doing* behind the banner, or
  * it is a takeover after all.
+ *
+ * **Two events reach this value and nothing else does.** The Egress and the house's opening text;
+ * see [NotificationKind.heavy] for why the light vocabulary is kept as closed as the word
+ * vocabulary. The same value darkens the lantern's amber field on the lock screen, so a player who
+ * looks up from a lit phone and a player who looks up from a locked one saw the same drop.
  */
 const val NOTIFIED_DIM: Float = 0.32f
