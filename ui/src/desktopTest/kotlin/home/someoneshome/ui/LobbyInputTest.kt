@@ -229,4 +229,54 @@ class LobbyInputTest {
             )
             assertEquals("UNKNOWN", model.lobby.insidersLabel)
         }
+
+    // ---- The vote window -----------------------------------------------------------------------
+
+    /**
+     * **The row on screen reads 45S**, which is the design's number (`gdd.md:412`).
+     *
+     * Read off the rendered screen rather than off the model, because the fault this replaces was
+     * a screen and a flow table each holding their own 60 — agreeing with each other and with
+     * nothing else. A model assertion would not have caught either of them.
+     *
+     * `45S` is asserted rather than the absence of `60S`: REVOKE COOLDOWN is legitimately 60S, so
+     * a substring sweep for the old value would fail on a row that was never wrong.
+     */
+    @Test
+    fun theVotingRowShowsTheDesignsWindow() = runDesktopComposeUiTest(width = 300, height = 650) {
+        val (model, _) = modelOn(ScreenId.Lobby, joined = 6)
+        show(model)
+
+        onNodeWithText("45S").assertExists()
+    }
+
+    /** The host taps it and the row follows, the same way the Insider row does. */
+    @Test
+    fun theHostCanMoveTheVoteWindow() = runDesktopComposeUiTest(width = 300, height = 650) {
+        val (model, _) = modelOn(ScreenId.Lobby, joined = 6)
+        show(model)
+
+        val seen = mutableListOf<String>()
+        repeat(LobbyModel.VOTE_WINDOWS.size) {
+            onNodeWithText("VOTING").performClick()
+            mainClock.advanceTimeBy(50)
+            seen += model.lobby.voteWindowLabel
+        }
+        assertEquals(listOf("60S", "90S", "30S", "45S"), seen)
+        onNodeWithText("45S").assertExists("the row did not come back to the design's default")
+    }
+
+    /** And a client gets a reading, exactly as it does for the count. */
+    @Test
+    fun aClientGetsNoVoteWindowControl() = runDesktopComposeUiTest(width = 300, height = 650) {
+        val (model, _) = modelOn(ScreenId.Lobby, joined = 6, hosting = false)
+        show(model)
+
+        val row = onAllNodes(hasClickAction() and hasText("VOTING", substring = true))
+        assertTrue(
+            row.fetchSemanticsNodes().isEmpty(),
+            "a client was given a live control for the host's vote window",
+        )
+        onNodeWithText("45S").assertExists("a client lost the reading along with the control")
+    }
 }

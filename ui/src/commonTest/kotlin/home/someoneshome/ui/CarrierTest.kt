@@ -40,8 +40,27 @@ class CarrierTest {
     @Test
     fun aPlayerStillInPlayIsNeverLabelled() {
         for (screen in listOf(ScreenId.Home, ScreenId.Page2, ScreenId.Work, ScreenId.Discussion)) {
-            assertEquals("SOMEONE'S HOME", carrier(screen), "$screen while in play")
-            assertEquals("SOMEONE'S HOME", carrier(screen, OutBy.Revoked), "$screen, stale outBy")
+            assertEquals("", carrier(screen), "$screen while in play")
+            assertEquals("", carrier(screen, OutBy.Revoked), "$screen, stale outBy")
+        }
+    }
+
+    /**
+     * **The slot is empty on every screen that has nothing to report** — including the two that
+     * used to be special-cased into carrying the game's name.
+     *
+     * Worth its own test because the emptiness is the feature. The bar carried SOMEONE'S HOME on
+     * every in-play screen and on the Residents' win, which trained the eye to skip the one slot
+     * that later has to deliver REVOKED or RESTRAINED. A screen quietly reacquiring a title would
+     * put that back without anybody noticing it had.
+     */
+    @Test
+    fun theCarrierIsBlankWhereverThereIsNothingToSay() {
+        for (screen in listOf(
+            ScreenId.Home, ScreenId.Lobby, ScreenId.Editor, ScreenId.Armed,
+            ScreenId.Disconnect, ScreenId.WinResidents, ScreenId.WinInsiders,
+        )) {
+            assertEquals("", carrier(screen), "$screen has nothing to report")
         }
     }
 
@@ -60,9 +79,4 @@ class CarrierTest {
         }
     }
 
-    @Test
-    fun beforeArmingTheCarrierIsBlank() {
-        assertEquals("", carrier(ScreenId.Lobby))
-        assertEquals("", carrier(ScreenId.Editor))
-    }
 }

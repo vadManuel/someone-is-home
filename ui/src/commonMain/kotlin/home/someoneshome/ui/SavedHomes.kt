@@ -164,26 +164,6 @@ class SavedHomesModel(private val store: HomeStore = MemoryHomeStore()) {
         return true
     }
 
-    /**
-     * A second copy of the open home, opened.
-     *
-     * The same house on a different evening — a floor closed off, the terminal somewhere else —
-     * without walking it again. The copy is what the host is now looking at, because duplicating
-     * and staying on the original is a list you cannot see changing.
-     */
-    fun duplicateOpen(): Boolean {
-        refusal = null
-        val home = open ?: return false
-        if (unreadable) {
-            refusal = CANNOT_WRITE
-            return false
-        }
-        val copy = home.renamedTo(freeName(baseOf(home.name)))
-        if (!commit(listOf(copy) + homes)) return false
-        openName = copy.name
-        return true
-    }
-
     /** Say why something did not happen, when the caller is the one that knows. */
     fun refuse(why: String) {
         refusal = why
@@ -194,27 +174,17 @@ class SavedHomesModel(private val store: HomeStore = MemoryHomeStore()) {
     }
 
     /**
-     * A name no stored home holds.
+     * A name no stored home holds: `HOME 1`, then `HOME 2`.
      *
-     * `HOME 1` for a new one and `THE BUNGALOW 2` for a copy — obviously provisional, which is
-     * what sends the host to the field to say what the place is really called. Same reasoning as
-     * the editor's `ROOM 2`.
-     */
-    /**
-     * The name without the number a copy was given.
+     * Obviously provisional, which is what sends the host to the field to say what the place is
+     * really called. Same reasoning as the editor's `ROOM 2`.
      *
-     * A copy of THE BUNGALOW 2 is THE BUNGALOW 3, not THE BUNGALOW 2 2. A host who genuinely
-     * calls a place FLAT 2 gets FLAT 3, which is the same answer they would have typed.
+     * It took a `base` while DUPLICATE existed, so a copy of THE BUNGALOW could come out as THE
+     * BUNGALOW 2 without becoming THE BUNGALOW 2 2. There is one caller now and one base.
      */
-    private fun baseOf(name: String): String {
-        val space = name.lastIndexOf(' ')
-        val trailing = if (space > 0) name.substring(space + 1).toIntOrNull() else null
-        return if (trailing == null) name else name.substring(0, space)
-    }
-
-    fun freeName(base: String = "HOME"): String =
-        generateSequence(if (base == "HOME") 1 else 2) { it + 1 }
-            .map { "$base $it" }
+    fun freeName(): String =
+        generateSequence(1) { it + 1 }
+            .map { "HOME $it" }
             .first { candidate -> homes.none { it.name == candidate } }
 
     /**

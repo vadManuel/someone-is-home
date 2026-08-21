@@ -17,28 +17,32 @@ import platform.Foundation.NSFileManager
  * Found the hard way: the first version of the store discarded `writeToFile`'s Boolean, so every
  * save on a fresh install did nothing and every load came back null, with the app showing no sign
  * anything was wrong until the next evening.
+ *
+ * It was written against the house-map store, which is gone; the create-if-absent step it is
+ * really about is `documentPath`'s and is shared by every store in this package. Pointing it at
+ * the homes is pointing it at the only setup file there is.
  */
-class HouseMapStoreFirstLaunchTest {
+class SavedHomesStoreFirstLaunchTest {
 
-    @AfterTest fun finish() = clearHouseMap()
+    @AfterTest fun finish() = clearSavedHomes()
 
     @Test
     fun savingCreatesTheDirectoryWhenItDoesNotExist() {
-        val directory = houseMapStorageDirectory()
+        val directory = savedHomesStorageDirectory()
         NSFileManager.defaultManager.removeItemAtPath(directory, error = null)
         assertFalse(
             NSFileManager.defaultManager.fileExistsAtPath(directory),
             "the fixture could not remove $directory, so this test proves nothing",
         )
 
-        saveHouseMap("someone-is-home/house-map/1\n")
-        assertEquals("someone-is-home/house-map/1\n", loadHouseMap())
+        saveSavedHomes("someone-is-home/saved-homes/1\n")
+        assertEquals("someone-is-home/saved-homes/1\n", loadSavedHomes())
     }
 
     /** And a load before anything was ever saved is null rather than a crash. */
     @Test
     fun loadingBeforeTheDirectoryExistsIsNull() {
-        NSFileManager.defaultManager.removeItemAtPath(houseMapStorageDirectory(), error = null)
-        assertEquals(null, loadHouseMap())
+        NSFileManager.defaultManager.removeItemAtPath(savedHomesStorageDirectory(), error = null)
+        assertEquals(null, loadSavedHomes())
     }
 }

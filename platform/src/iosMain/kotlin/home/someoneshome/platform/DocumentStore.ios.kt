@@ -11,11 +11,11 @@ import platform.Foundation.stringWithContentsOfFile
 import platform.Foundation.writeToFile
 
 /**
- * The one place setup data is written, shared by the house map and the house plan.
+ * The one place this app writes anything, shared by every store in this package.
  *
- * Both halves of the setup walk want the same directory, the same atomicity and the same refusal
- * to report a failed write as a success. Written twice they would drift, and the half that drifted
- * would be the half nobody had a test looking at.
+ * They all want the same directory, the same atomicity and the same refusal to report a failed
+ * write as a success. Written per store they would drift, and the one that drifted would be the
+ * one nobody had a test looking at.
  */
 
 /**

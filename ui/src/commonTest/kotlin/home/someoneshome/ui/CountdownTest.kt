@@ -91,20 +91,36 @@ class CountdownTest {
     }
 
     /**
-     * `m:ss` past a minute, bare seconds below one — read off the length of the WINDOW rather
+     * `m:ss` from half a minute up, bare seconds below — read off the length of the WINDOW rather
      * than off the screen, so no screen can pick the wrong form.
      *
-     * Both forms are the design's own: `1:04 REMAINING` on the ninety-second discussion,
-     * `LIGHTS OUT IN 9` on the fifteen-second result.
+     * **All four forms here are the design's own**, and the threshold is fitted to them rather
+     * than reasoned from anything: `1:04 REMAINING` on the ninety-second discussion and `0:38` on
+     * the forty-five-second vote are `m:ss`; `LIGHTS OUT IN 9` on the fifteen-second result and
+     * `6S LEFT` on the ten-second scan are bare.
+     *
+     * The vote is the one that pins it. It was passing at a threshold of 60 only because the flow
+     * table said the window was 60, which the design never did — correcting the window to 45
+     * turned the design's `0:38` into `38`.
      */
     @Test
     fun theTwoFormsFollowTheWindowRatherThanTheScreen() {
         assertEquals("1:04", Countdown(64, 90).text)
-        assertEquals("0:38", Countdown(38, 60).text)
-        assertEquals("0:09", Countdown(9, 60).text, "a minute-long window keeps its m:ss under ten")
+        assertEquals("0:38", Countdown(38, 45).text, "the design's vote clock lost its m:ss")
+        assertEquals("0:24", Countdown(24, 60).text)
+        assertEquals("0:09", Countdown(9, 45).text, "an m:ss window keeps its m:ss under ten")
         assertEquals("9", Countdown(9, 15).text)
+        assertEquals("6", Countdown(6, 10).text)
         assertEquals("0", Countdown(0, 15).text)
         assertEquals("1:00", Countdown(60, 60).text)
+    }
+
+    /** The threshold itself, from both sides. A window of exactly thirty is `m:ss`. */
+    @Test
+    fun theFormSwitchesAtHalfAMinute() {
+        assertEquals(30, Countdown.CLOCK_FORM_SECONDS)
+        assertEquals("0:29", Countdown(29, 30).text)
+        assertEquals("29", Countdown(29, 29).text)
     }
 
     /** **The house's number wins.** The drawn moment is a stand-in and stands down. */
@@ -113,7 +129,7 @@ class CountdownTest {
         val said = assertNotNull(Countdowns.on(ScreenId.Vote, said = 7))
         assertEquals(7, said.secondsLeft)
         assertEquals("0:07", said.text)
-        assertEquals(60, said.ofSeconds, "the house's number changed the window as well as the hand")
+        assertEquals(45, said.ofSeconds, "the vote window is the design's 45 seconds (gdd.md:412)")
 
         // And through the panel, which is the path a screen actually reads.
         val panel = PanelVals(PanelState(screen = ScreenId.Vote, secondsLeft = 7))
@@ -148,7 +164,7 @@ class CountdownTest {
      */
     @Test
     fun aNumberOutsideTheWindowIsClamped() {
-        assertEquals(60, assertNotNull(Countdowns.on(ScreenId.Vote, said = 900)).secondsLeft)
+        assertEquals(45, assertNotNull(Countdowns.on(ScreenId.Vote, said = 900)).secondsLeft)
         assertEquals(0, assertNotNull(Countdowns.on(ScreenId.Vote, said = -5)).secondsLeft)
         assertEquals(1f, Countdown(90, 60).remaining)
         assertEquals(0f, Countdown(-1, 60).remaining)

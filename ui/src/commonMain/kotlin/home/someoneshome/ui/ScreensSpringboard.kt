@@ -276,11 +276,22 @@ private fun DockButton(
 }
 
 /**
- * System Integrity: 28 of 32, and **frozen until the next house meeting**.
+ * System Integrity: **a percentage, quantised into a bar**, and frozen until the next house
+ * meeting.
  *
- * Thirty-two segments rather than a percentage, because comparing quantities is perception and
- * adding numbers is computation — and because the Egress countdown replaces this widget in place,
- * taking the Residents' only number away without anything changing size.
+ * The KDoc here used to say *thirty-two segments rather than a percentage*, which was the design's
+ * own argument — comparing quantities is perception and adding numbers is computation — and it
+ * stopped being what this widget does. It draws both: the number, and [PanelVals.METER_SEGMENTS]
+ * cells of bar under it.
+ *
+ * **The percentage is not a presentation choice, it is the disclosure boundary** (D-103, revision
+ * 21). SystemIntegrity's real denominator is `(seats − insiders) × 7`, so a screen printing an
+ * absolute total would hand over the Insider count by division — and D-103 lets a host hide that
+ * count. The 32 is display resolution and a fact about pixels; `MeterDisclosureTest` reads the
+ * panels to prove no screen ever prints the total itself.
+ *
+ * The bar earns its place anyway, for the design's second reason: the Egress countdown replaces
+ * this widget in place, taking the Residents' only number away without anything changing size.
  */
 @Composable
 fun IntegrityWidget(vals: PanelVals) {

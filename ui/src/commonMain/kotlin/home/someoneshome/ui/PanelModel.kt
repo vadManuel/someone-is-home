@@ -194,7 +194,13 @@ class PanelVals(val state: PanelState) {
     val edge: Color = if (isPre) Amber.BoneEdge else Amber.Edge
 
     /**
-     * Once you are out, the carrier names **what happened to you** — not which screen you are on.
+     * **The carrier says one thing and only one: what happened to you, once something has.**
+     *
+     * It used to carry the game's name on every in-play screen, which is what a phone's network
+     * name looks like — and that is exactly why it went. A word sitting in the status bar for the
+     * whole evening is a word nobody reads by the second round, so the one moment the slot has
+     * something to say was arriving in a place the eye had already learned to skip. Blank until
+     * there is a fact, and the fact appears against nothing.
      *
      * `Revoke` and `Restrain` are not synonyms and must never be collapsed: one is system power
      * lent by the house, the other is a physical act the house cannot prevent. So the word follows
@@ -209,13 +215,11 @@ class PanelVals(val state: PanelState) {
      * bar learns whether an Insider acted or the room did.
      */
     val carrier: String = when {
-        state.screen == ScreenId.WinResidents -> "SOMEONE'S HOME"
-        isPre -> ""
-        // Blank, exactly as before arming. The carrier names the house you are attached to, and a
-        // phone that has lost the host is not attached to one -- the same fact, so it reads the
-        // same way rather than inventing a third word. Without this the bar claimed a healthy
-        // link directly above a body saying the link was gone.
-        state.screen == ScreenId.Disconnect -> ""
+        // Blank before arming, blank in play, and blank on a phone that has lost the host. The
+        // last of those was a rule of its own once, back when everything else in play said
+        // SOMEONE'S HOME and a disconnected phone claiming a healthy link contradicted the body
+        // of its own screen. Now it is simply the ordinary case.
+        isPre || state.screen == ScreenId.Disconnect -> ""
         mode == PanelMode.Ghost || state.screen == ScreenId.Ghost2 -> when (state.outBy) {
             OutBy.Revoked -> "REVOKED"
             OutBy.Restrained -> "RESTRAINED"
@@ -225,7 +229,7 @@ class PanelVals(val state: PanelState) {
             // out, which is already public by the time any of these screens is on.
             null -> "UNREGISTERED"
         }
-        else -> "SOMEONE'S HOME"
+        else -> ""
     }
 
     /** Once the round starts the house owns the network: no bars on any live screen. */
@@ -483,7 +487,13 @@ class PanelVals(val state: PanelState) {
 
     // ---- Meters ---------------------------------------------------------------------------
 
-    /** System Integrity, frozen between meetings. 28 of 32. */
+    /**
+     * System Integrity, frozen between meetings: 28 of [METER_SEGMENTS] cells lit, which is the
+     * design's 88% drawn.
+     *
+     * **A bar position, not a score.** The cells are display resolution (D-103, revision 21) and
+     * the fraction they stand for is the only form the meter reaches a panel in.
+     */
     val integrityLit: Int = 28
 
     /** The Egress countdown, which replaces the meter in place and takes the only number back. */
