@@ -94,6 +94,26 @@ class PanelActions(
     val nameHome: (String) -> Unit = {},
     val saveHome: () -> Unit = {},
     val deleteHome: () -> Unit = {},
+    /**
+     * The lobby.
+     *
+     * [nameResident] and [typeLine] are typing; [attachToHome] is a tap on a network row, which
+     * navigates as well because attaching to a home is going into its lobby. [handOverLine] is
+     * not, for the reason [saveHome] is not: it can be refused, and a refused hand-over stays on
+     * the screen with the reason on it rather than walking away from a promise the house never
+     * received. It is declared in [Flow.viaActions] and walked by a test.
+     *
+     * [cycleInsiders] is the host's own setting and goes to the house rather than to the screen;
+     * what comes back is what the row draws. [lightsOut] is **presentation only** — see
+     * [FlowModel.lightsOut].
+     */
+    val nameResident: (String) -> Unit = {},
+    val hostHome: (String) -> Unit = {},
+    val attachToHome: (NearbyHome) -> Unit = {},
+    val typeLine: (String) -> Unit = {},
+    val handOverLine: () -> Unit = {},
+    val cycleInsiders: () -> Unit = {},
+    val lightsOut: () -> Unit = {},
 )
 
 val LocalActions: ProvidableCompositionLocal<PanelActions> =
@@ -159,9 +179,15 @@ fun PanelButton(
 /**
  * A list row: label left, value or affordance pushed right.
  *
- * Saved homes, nearby networks, settings, the message list, and every host-setup line. The
- * right-hand slot is a composable rather than a string because it carries signal strength,
- * marker shapes and unread marks — things that are drawn, not written.
+ * Saved homes, nearby homes, settings, the message list, and every host-setup line. The
+ * right-hand slot is a composable rather than a string because it carries an address, marker
+ * shapes and unread marks — things that are drawn, not written.
+ *
+ * **A row with no handler is not a control**, and it does not publish a click action. It used to:
+ * the parameter defaulted to an empty lambda, so every settings line in the game was a tap target
+ * that did nothing. That is a lie told by a row — worst on the lobby, where the same settings are
+ * the host's to change and everybody else's to read, and where the difference between the two has
+ * to be visible in what the screen does when you press it.
  */
 @Composable
 fun RowButton(
@@ -170,11 +196,12 @@ fun RowButton(
     fill: Color = Color.Transparent,
     horizontalPadding: Dp = 7.u,
     verticalPadding: Dp = 8.u,
-    onClick: () -> Unit = {},
+    onClick: (() -> Unit)? = null,
     content: @Composable RowScope.() -> Unit,
 ) {
+    val base = modifier.fillMaxWidth().border(1.u, border).background(fill)
     Row(
-        modifier.fillMaxWidth().border(1.u, border).background(fill).tap(onClick)
+        (if (onClick != null) base.tap(onClick) else base)
             .padding(horizontal = horizontalPadding, vertical = verticalPadding),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
@@ -222,6 +249,12 @@ fun Caret(color: Color, size: Double = 17.0) {
  * The text is passed through [transform] on the way in rather than on the way out — a home named
  * in lower case would come back shouted at the moment it was saved, and a field that rewrites what
  * you typed after you stop looking at it is a field nobody trusts.
+ *
+ * [hint] is drawn in the field's own face while it is empty, and it is not decoration. The design
+ * drew a blinking [Caret] in every field to promise the device was listening; a real field shows
+ * its caret only once it is focused, so an empty one with nothing in it reads as a box rather than
+ * as somewhere to type. That is a fair mistake to make on the two screens in this game where
+ * somebody is being asked for something.
  */
 @Composable
 fun ReadoutField(
@@ -231,21 +264,27 @@ fun ReadoutField(
     size: Double = 17.0,
     color: Color = Amber.BoneInk,
     tracking: Double = 0.06,
+    hint: String = "",
     transform: (String) -> String = { it.uppercase() },
 ) {
-    BasicTextField(
-        value = value,
-        onValueChange = { onValueChange(transform(it)) },
-        modifier = modifier,
-        textStyle = TextStyle(
-            fontFamily = PanelType.readout,
-            fontSize = size.sp,
-            color = color,
-            letterSpacing = tracking.em,
-        ),
-        singleLine = true,
-        cursorBrush = SolidColor(color),
-    )
+    Box(modifier) {
+        if (value.isEmpty() && hint.isNotEmpty()) {
+            Readout(hint, size = size, color = Amber.BoneFaint, tracking = tracking)
+        }
+        BasicTextField(
+            value = value,
+            onValueChange = { onValueChange(transform(it)) },
+            modifier = Modifier.fillMaxWidth(),
+            textStyle = TextStyle(
+                fontFamily = PanelType.readout,
+                fontSize = size.sp,
+                color = color,
+                letterSpacing = tracking.em,
+            ),
+            singleLine = true,
+            cursorBrush = SolidColor(color),
+        )
+    }
 }
 
 /**

@@ -26,6 +26,7 @@ import home.someoneshome.ui.Amber
 import home.someoneshome.ui.FlowHost
 import home.someoneshome.ui.FlowModel
 import home.someoneshome.ui.Label
+import home.someoneshome.ui.LobbyModel
 import home.someoneshome.ui.LocalPanelInsets
 import home.someoneshome.ui.PanelRole
 import home.someoneshome.ui.PanelState
@@ -76,10 +77,23 @@ fun CheatRoot() {
     // being killed. Held above the view switch with everything else: re-reading the file on
     // every trip through the picker would be a file read per tap, and a list rebuilt underneath
     // a host mid-setup.
+    // Hoisted above the flow because the lobby is wired to it, and because the host and client
+    // must outlive the view: navigating away from the transport surface mid-evening must not hang
+    // up two phones.
+    val scope = rememberCoroutineScope()
+    val transport = remember { TransportCheat(scope) }
     val flow = remember {
         FlowModel(
             PanelState(screen = ScreenId.Boot),
             homes = SavedHomesModel(SavedHomesDocument()),
+            // The real radio behind the lobby: mDNS finds the homes, a websocket carries the one
+            // line up and the counts down. Discovery failures land in the rig's log, because mDNS
+            // failing is otherwise completely silent — which was the whole symptom on the first
+            // device run.
+            lobby = LobbyModel(
+                finder = NearbyHomes(onEvent = transport::note),
+                link = LobbyOverTransport(scope, onEvent = transport::note),
+            ),
         )
     }
     // The camera this build does not have. `SeededCardScanner` is a deck of real cards encoded to
@@ -88,10 +102,6 @@ fun CheatRoot() {
     val scanner = remember { SeededCardScanner() }
     LaunchedEffect(scanner) { scanner.start(flow::cardScanned) }
     var view by remember { mutableStateOf(CheatView.Panel) }
-    // Hoisted here so the host and client outlive the view: navigating away from the transport
-    // surface mid-evening must not hang up two phones.
-    val scope = rememberCoroutineScope()
-    val transport = remember { TransportCheat(scope) }
     Box(Modifier.fillMaxSize().background(Amber.Black)) {
         when (view) {
             CheatView.Panel -> FlowHost(flow)

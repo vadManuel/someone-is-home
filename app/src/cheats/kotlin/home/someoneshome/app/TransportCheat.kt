@@ -106,7 +106,14 @@ class TransportCheat(private val scope: CoroutineScope) {
 
     private fun nowMillis(): Long = monotonicNanos() / 1_000_000
 
-    private fun note(line: String) {
+    /**
+     * One line in the rig's log, newest first.
+     *
+     * Public because the lobby wiring writes here too: mDNS failing is silent, and silence was
+     * the entire symptom on the first device run. A playtest phone that cannot find a house needs
+     * somewhere the reason lands.
+     */
+    fun note(line: String) {
         log.add(0, line)
         while (log.size > 12) log.removeAt(log.size - 1)
     }

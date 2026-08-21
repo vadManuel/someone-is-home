@@ -87,7 +87,9 @@ fun PreRow(
         modifier = modifier,
         border = border,
         verticalPadding = verticalPadding,
-        onClick = onClick ?: {},
+        // Passed through, not defaulted to an empty lambda: a settings line nobody may change is
+        // a reading, and a reading must not answer a press.
+        onClick = onClick,
     ) {
         Label(label, size = size, color = labelInk)
         Label(value, size = size, color = valueInk)

@@ -12,10 +12,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 
 /**
  * Cold start: the three screens before anyone has joined anything.
@@ -109,15 +110,31 @@ fun PermsScreen() {
 }
 
 /**
- * Your name, then the networks nearby.
+ * Your name, then the homes nearby.
  *
  * **Discovery is local only. No account, no internet** — a design promise and a technical one at
  * once. The house cannot reach the internet either; that containment line is what the Residents
  * are holding.
+ *
+ * ### The list is the radio's, and the radio is honest about what it knows
+ *
+ * The design's fixture drew three fixed rows with signal bars beside them. mDNS resolves a name,
+ * an address and a port and reports no signal strength at all, so the bars are gone and the
+ * address is in their place: it is the only true thing that tells two homes apart when both
+ * households have called theirs THE BUNGALOW. A row of bars nobody measured would be an
+ * invention on the screen a player uses to pick which house they are walking into.
+ *
+ * The name field is real typing rather than a drawn caret, and it stays on this phone — see
+ * [LobbyModel.residentName].
  */
 @Composable
 fun JoinScreen() {
     val go = navigator()
+    val actions = LocalActions.current
+    val lobby = LocalLobby.current
+    // Listening starts when the screen does. Nothing before this point has any business having
+    // the radio on: permissions are granted one screen back, in the light.
+    LaunchedEffect(lobby) { lobby.look() }
     PrePage {
         Column(
             Modifier.fillMaxWidth().border(1.u, Amber.BoneFaint)
@@ -128,23 +145,38 @@ fun JoinScreen() {
                 modifier = Modifier.padding(bottom = 3.u),
                 size = 6.0, color = Amber.BoneDim, tracking = 0.14,
             )
-            Row(verticalAlignment = Alignment.Bottom) {
-                Readout("ELLIOT", size = 19.0, color = Amber.BoneInk, tracking = 0.08)
-                Caret(Amber.BoneInk, size = 19.0)
-            }
+            ReadoutField(
+                value = lobby.residentName,
+                onValueChange = actions.nameResident,
+                modifier = Modifier.fillMaxWidth(),
+                size = 19.0, color = Amber.BoneInk, tracking = 0.08,
+                hint = "YOUR NAME",
+            )
         }
 
         Label("NETWORKS NEARBY", size = 7.0, color = Amber.BoneDim, tracking = 0.18)
 
         Column(verticalArrangement = Arrangement.spacedBy(4.u)) {
-            NetworkRow("THE BUNGALOW", "///", Amber.BoneFaint, Amber.BoneInk, Amber.BoneDim) {
-                go(ScreenId.Lobby)
+            if (lobby.nearby.isEmpty()) {
+                // Not an error and not a dialog: a house that has not been started yet looks
+                // exactly like this, and the phone says what it is doing rather than what went
+                // wrong.
+                PreNote("LISTENING FOR A HOME ON THIS NETWORK", tracking = 0.12)
             }
-            NetworkRow("MUM & DAD'S", "//", Amber.BonePale, Amber.BoneDeep, Amber.BoneFaint) {
-                go(ScreenId.Lobby)
-            }
-            NetworkRow("FLAT 6", "/", Amber.BonePale, Amber.BoneDeep, Amber.BoneFaint) {
-                go(ScreenId.Lobby)
+            lobby.nearby.forEachIndexed { index, home ->
+                // The first one answered is drawn at full intensity, as the design's strongest
+                // signal was. It is the one most likely to be the house you are standing in.
+                val strongest = index == 0
+                NetworkRow(
+                    home.name,
+                    home.address,
+                    if (strongest) Amber.BoneFaint else Amber.BonePale,
+                    if (strongest) Amber.BoneInk else Amber.BoneDeep,
+                    if (strongest) Amber.BoneDim else Amber.BoneFaint,
+                ) {
+                    actions.attachToHome(home)
+                    go(ScreenId.Lobby)
+                }
             }
         }
 
@@ -167,14 +199,14 @@ fun JoinScreen() {
 @Composable
 private fun NetworkRow(
     name: String,
-    bars: String,
+    where: String,
     border: Color,
     ink: Color,
-    barInk: Color,
+    whereInk: Color,
     onClick: () -> Unit,
 ) {
     RowButton(border = border, onClick = onClick) {
-        Label(name, size = 8.0, color = ink, tracking = 0.08)
-        Label(bars, size = 8.0, color = barInk, tracking = 0.08)
+        Label(name, size = 8.0, color = ink, tracking = 0.08, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Label(where, size = 6.0, color = whereInk, tracking = 0.08)
     }
 }

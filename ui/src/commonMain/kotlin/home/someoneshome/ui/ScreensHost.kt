@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 
 /**
@@ -1047,7 +1048,19 @@ fun HomeDetailScreen() {
             }
         }
         Column(verticalArrangement = Arrangement.spacedBy(4.u)) {
-            RowButton(border = Amber.Slate, fill = Amber.SlateFill, onClick = { go(ScreenId.Lobby) }) {
+            // The house comes up on this phone under this home's name, and then this phone joins
+            // it like everybody else. Both halves are the actions layer's; the screen still names
+            // where it goes, because it goes there either way.
+            RowButton(
+                border = Amber.Slate, fill = Amber.SlateFill,
+                onClick = {
+                    // Only when there is one. With no home open this screen already says so, and
+                    // a house advertised under an empty name is a row every phone on the network
+                    // can see and nobody can identify.
+                    home?.let { actions.hostHome(it.name) }
+                    go(ScreenId.Lobby)
+                },
+            ) {
                 Label("HOST WITH THIS HOME", size = 8.0, color = Amber.SlateInk)
                 Label(">", size = 8.0, color = Amber.BoneDim)
             }
@@ -1143,14 +1156,35 @@ fun DeleteScreen() {
 }
 
 /**
- * Every dial the host owns. **Locks at arming**, and stamps into the recording.
+ * **Counts and settings. Nobody's name appears on this screen.**
  *
- * Balance values cannot be edited mid-round: a round whose numbers changed under it is a round
+ * Every dial the host owns, plus the two numbers the house publishes: how many are here, and how
+ * many have handed their line over. **Locks at arming**, and stamps into the recording — balance
+ * values cannot be edited mid-round, because a round whose numbers changed under it is a round
  * that cannot be replayed, and replay is the only debugging this game has.
+ *
+ * ### There are no names here, and their absence is not an omission
+ *
+ * The design's lobby shows counts, and the model behind this screen is
+ * [home.someoneshome.model.protocol.LobbyBody.Standing] — three integers, incapable of naming
+ * anybody. The seat chips this screen used to draw were a fixture, and reinstating them would
+ * mean widening what a client receives, which is not a call a lobby screen makes.
+ *
+ * The presence strip below is the same two integers drawn rather than written. It carries no
+ * identity and structurally cannot: the marks are filled by arithmetic — `linesIn` of them — not
+ * by seat, because the seat is a thing this phone was never told.
+ *
+ * ### The Insider count is the host's, and the band clamps it (D-103)
+ *
+ * Default UNKNOWN: the house draws the count at arming, locks it, and tells no one until the
+ * round ends. What makes hiding affordable is that SystemIntegrity reaches a panel only as a
+ * percentage. On a phone that is not hosting the row is a reading, not a control.
  */
 @Composable
 fun LobbyScreen() {
-    val go = navigator()
+    val actions = LocalActions.current
+    val lobby = LocalLobby.current
+    val standing = lobby.standing
     PrePage {
         Column(
             Modifier.fillMaxWidth().border(1.u, Amber.BoneFaint)
@@ -1158,33 +1192,35 @@ fun LobbyScreen() {
             verticalArrangement = Arrangement.spacedBy(4.u),
         ) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                // The home the host chose on the way in. Everything else on this screen is still
-                // a fixture; this one would otherwise name a different house from the one they
-                // just tapped HOST WITH THIS HOME on.
+                // The home this phone is in: the one it attached to over the air, or — on the
+                // host's own device, which attached to nothing — the one they chose on the way
+                // in. Otherwise this screen names a different house from the one they just
+                // tapped HOST WITH THIS HOME on.
                 Label(
-                    LocalHomes.current.open?.name ?: HomeEditorModel.BUNGALOW,
+                    lobby.attached?.name ?: LocalHomes.current.open?.name ?: HomeEditorModel.BUNGALOW,
                     size = 7.0, color = Amber.BoneDim, tracking = 0.12,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
-                Label("6 JOINED", size = 7.0, color = Amber.BoneInk, tracking = 0.12)
+                Label(
+                    "${standing.joined} JOINED",
+                    size = 7.0, color = Amber.BoneInk, tracking = 0.12,
+                )
             }
-            // All six, because the line above says six. A truncated row turns the count into
-            // a contradiction on the one screen whose job is to show who is here.
-            FlowRow(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(3.u),
-                verticalArrangement = Arrangement.spacedBy(3.u),
-            ) {
-                SeatChip("ELLIOT", Amber.BoneInk)
-                SeatChip("PRIYA", Amber.BoneDeep)
-                SeatChip("MARCUS", Amber.BoneDeep)
-                SeatChip("DANI", Amber.BoneDeep)
-                SeatChip("ROSE", Amber.BoneDeep)
-                SeatChip("TOMAS", Amber.BoneDeep)
-            }
+            PresenceStrip(joined = standing.joined, linesIn = standing.linesIn)
         }
 
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.u)) {
-            PreRow("INSIDERS", "2", verticalPadding = 5.u)
+            // The one setting this unit wires. UNKNOWN is the default and a real answer, not an
+            // unset value — see D-103. Only the host may move it, so only the host gets a tap.
+            PreRow(
+                "INSIDERS", lobby.insidersLabel,
+                border = if (lobby.hosting) Amber.BoneDim else Amber.BonePale,
+                labelInk = if (lobby.hosting) Amber.BoneInk else Amber.BoneDeep,
+                verticalPadding = 5.u,
+                onClick = if (lobby.hosting) actions.cycleInsiders else null,
+            )
+            // The rest are the design's own numbers, unchanged and not yet wired to anything
+            // that could change them. Playtest owns them, as it owns the 7.
             PreRow(
                 "INSIDERS KNOW EACH OTHER", "ON",
                 border = Amber.BoneDim, labelInk = Amber.BoneInk, verticalPadding = 5.u,
@@ -1196,21 +1232,90 @@ fun LobbyScreen() {
             PreRow("REVOKE COOLDOWN", "60S", verticalPadding = 5.u)
         }
 
-        RowButton(border = Amber.BoneInk, onClick = { go(ScreenId.Secret) }) {
+        RowButton(border = Amber.BoneInk, onClick = { actions.nav(ScreenId.Secret) }) {
             Label("YOUR ONE LINE", size = 7.5, color = Amber.BoneInk)
-            Label("REQUIRED", size = 7.5, color = Amber.BoneDim)
+            Label(
+                if (lobby.line.handedOver) "HANDED OVER" else "REQUIRED",
+                size = 7.5, color = Amber.BoneDim,
+            )
         }
-        PreNote(
-            "4 OF 6 HANDED THEIRS OVER",
-            color = Amber.BoneDim, size = 5.5, lineHeight = 1.0, align = TextAlign.Center,
-        )
-        SlateButton("LIGHTS OUT", { go(ScreenId.Armed) }, tracking = 0.2, size = 9.0, verticalPadding = 11.u)
+        // Not drawn while nobody is here: "0 OF 0 HANDED THEIRS OVER" is arithmetic rather than
+        // information, and the strip above has already said the same thing in words.
+        if (standing.joined > 0) {
+            PreNote(
+                "${standing.linesIn} OF ${standing.joined} HANDED THEIRS OVER",
+                color = Amber.BoneDim, size = 5.5, lineHeight = 1.0, align = TextAlign.Center,
+            )
+        }
+        LightsOut(hosting = lobby.hosting, ready = lobby.everyLineIn, onArm = actions.lightsOut)
     }
 }
 
+/**
+ * The two counts, drawn: one mark per seat, filled once as many lines are in.
+ *
+ * It replaces the fixture's row of names and does the job the names were doing — making the
+ * number legible at a glance rather than only readable — while naming nobody. **The fill order
+ * is arithmetic, not identity**: this phone was told two integers and could not order the marks
+ * by seat if it wanted to.
+ */
 @Composable
-private fun SeatChip(name: String, ink: Color) {
-    Box(Modifier.border(1.u, Amber.BonePale).padding(horizontal = 4.u, vertical = 2.u)) {
-        Label(name, size = 6.5, color = ink)
+private fun PresenceStrip(joined: Int, linesIn: Int) {
+    if (joined <= 0) {
+        PreNote("NOBODY HAS JOINED YET", color = Amber.BoneFaint, size = 6.0, lineHeight = 1.0)
+        return
+    }
+    FlowRow(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(3.u),
+        verticalArrangement = Arrangement.spacedBy(3.u),
+    ) {
+        repeat(joined) { index ->
+            val handed = index < linesIn
+            Box(
+                Modifier.size(width = 12.u, height = 9.u)
+                    .border(1.u, if (handed) Amber.BoneInk else Amber.BonePale)
+                    .background(if (handed) Amber.BoneSoft else Color.Transparent),
+            )
+        }
+    }
+}
+
+/**
+ * **LIGHTS OUT, gated on every line being in — and it is the host's control alone.**
+ *
+ * The host turns the lights off; everything after that is the house answering rather than the
+ * host announcing, so a client gets the same fact without a button that would do nothing. Until
+ * the gate closes the control is present and inert rather than absent: a button that appeared
+ * when the last line arrived would move the layout under a host's thumb at the exact moment they
+ * are about to press it.
+ *
+ * **What this button does is presentation only.** It walks the phone to the ARMED screen; it does
+ * not arm a round, lock a ledger, draw an Insider count or start a clock. Real arming is the
+ * loop's, and the loop is frozen.
+ */
+@Composable
+private fun LightsOut(hosting: Boolean, ready: Boolean, onArm: () -> Unit) {
+    when {
+        !hosting -> PreNote(
+            if (ready) "WAITING FOR THE HOST" else "WAITING FOR EVERYONE'S LINE",
+            color = Amber.BoneDim, size = 7.0, lineHeight = 1.0, align = TextAlign.Center,
+        )
+        ready -> SlateButton(
+            "LIGHTS OUT", onArm, tracking = 0.2, size = 9.0, verticalPadding = 11.u,
+        )
+        // The same block, the same size, no tap target. Written out rather than reusing
+        // [PanelButton]: that one always publishes a click action, and a control that answers a
+        // press by doing nothing is indistinguishable from one that is broken — on the screen
+        // where a host is waiting to find out why the evening has not started.
+        else -> Box(
+            Modifier.fillMaxWidth().border(1.u, Amber.BonePale).padding(vertical = 11.u),
+            contentAlignment = Alignment.Center,
+        ) {
+            Label(
+                "LIGHTS OUT",
+                size = 9.0, color = Amber.BoneFaint, tracking = 0.2, align = TextAlign.Center,
+            )
+        }
     }
 }

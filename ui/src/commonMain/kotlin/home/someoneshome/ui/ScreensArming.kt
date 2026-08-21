@@ -38,7 +38,8 @@ import androidx.compose.ui.text.style.TextOverflow
  */
 @Composable
 fun SecretScreen() {
-    val go = navigator()
+    val actions = LocalActions.current
+    val lobby = LocalLobby.current
     PrePage(gap = 7) {
         Label("BEFORE THE LIGHTS GO OUT", size = 7.0, color = Amber.BoneDim, tracking = 0.16)
 
@@ -60,21 +61,39 @@ fun SecretScreen() {
                 modifier = Modifier.padding(bottom = 5.u),
                 size = 6.0, color = Amber.BoneDim, tracking = 0.14,
             )
-            Row(verticalAlignment = Alignment.Bottom) {
-                Readout(
-                    "i still have priya's spare key",
-                    size = 17.0, color = Amber.BoneInk, lineHeight = 1.35,
-                )
-                Caret(Amber.BoneInk)
-            }
+            // Real typing, in lower case. `transform` is identity here rather than the field's
+            // usual shout: a house name is a label and a confession is a sentence, and the one
+            // screen that asks somebody for something true must not restyle it as they type.
+            ReadoutField(
+                value = lobby.line.text,
+                onValueChange = actions.typeLine,
+                modifier = Modifier.fillMaxWidth(),
+                size = 17.0, color = Amber.BoneInk,
+                hint = "one line",
+                transform = { it },
+            )
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(3.u)) {
+            // The two promises, in the host's own words. They are on this screen because the
+            // player is being asked for something real on the strength of them, and both are
+            // kept below: the host holds the line in memory and writes it nowhere, and the round
+            // ending drops it on both phones.
             PreRow("SEEN BY", "THE HOUSE ONLY", border = Amber.BoneSoft, size = 6.5, verticalPadding = 5.u)
             PreRow("DELETED", "WHEN THE ROUND ENDS", border = Amber.BoneSoft, size = 6.5, verticalPadding = 5.u)
         }
 
-        SlateButton("HAND IT OVER", { go(ScreenId.Lobby) }, tracking = 0.18, verticalPadding = 11.u)
+        // A refused hand-over stays on this screen with the reason under the button. Nothing
+        // about this is mid-round: the lights are still on and the player is owed the reason.
+        lobby.refusal?.let {
+            PreNote(it, color = Amber.BoneDim, size = 6.5, lineHeight = 1.0, align = TextAlign.Center)
+        }
+
+        SlateButton(
+            if (lobby.line.handedOver) "HAND IT OVER AGAIN" else "HAND IT OVER",
+            actions.handOverLine,
+            tracking = 0.18, verticalPadding = 11.u,
+        )
     }
 }
 
