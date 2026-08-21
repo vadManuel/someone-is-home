@@ -1,5 +1,8 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.Cell
+import home.someoneshome.model.RoomKind
+
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -40,8 +43,15 @@ class PanelActions(
     val stepRevoke: () -> Unit = {},
     val toggleMarkers: () -> Unit = {},
     val toggleTorch: () -> Unit = {},
-    val pickRoomType: (RoomType) -> Unit = {},
+    val pickRoomType: (RoomKind) -> Unit = {},
     val confirmStairs: () -> Unit = {},
+    /** A tap on the plan. Opens the room under it, or does nothing where there is no room. */
+    val openRoomAt: (Cell) -> Unit = {},
+    /** The plan's own controls: a name, a preset chip, a storey, a room the host is done with. */
+    val nameRoom: (String) -> Unit = {},
+    val deleteRoom: () -> Unit = {},
+    val openFloor: (String) -> Unit = {},
+    val addFloor: () -> Unit = {},
 )
 
 val LocalActions: ProvidableCompositionLocal<PanelActions> =
