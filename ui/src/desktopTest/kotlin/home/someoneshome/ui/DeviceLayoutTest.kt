@@ -22,7 +22,7 @@ import kotlin.test.assertTrue
 /**
  * **Every screen, against a phone this machine is not.**
  *
- * The 56 screens were designed and reviewed on a desktop window, which has no notch, no rounded
+ * Every screen was designed and reviewed on a desktop window, which has no notch, no rounded
  * corners and no home indicator. On the first phone they ever ran on, ONE strip of screen turned
  * out to have five separate faults — the title under the Dynamic Island, the boot progress under
  * the home indicator, the status row above the pill rather than level with it, its rule crossing

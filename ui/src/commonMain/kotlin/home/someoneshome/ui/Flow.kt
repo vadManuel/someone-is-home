@@ -94,8 +94,10 @@ object ScreenGraph {
         ScreenId.Secret -> emptySet()
         ScreenId.Armed -> setOf(ScreenId.Home)
 
-        // The springboard, and the two screens that ARE the springboard with something on top.
-        ScreenId.Home, ScreenId.Notify, ScreenId.EgressWidget -> SPRINGBOARD
+        // The springboard, and the screens that ARE the springboard with something on top.
+        // `Quiet`'s banner opens the Subroutines list, which the springboard already reaches, so
+        // it adds no edge of its own — the tile and the banner are two doors to one screen.
+        ScreenId.Home, ScreenId.Notify, ScreenId.Quiet, ScreenId.EgressWidget -> SPRINGBOARD
         ScreenId.Banner -> SPRINGBOARD + ScreenId.EgressWidget
         ScreenId.Page2 -> setOf(
             ScreenId.Home, ScreenId.Work, ScreenId.Scan, ScreenId.Lock,
@@ -104,7 +106,10 @@ object ScreenGraph {
             // caught on. This is the only role-asymmetric edge in the graph.
             ScreenId.Banner,
         )
-        ScreenId.Lock -> setOf(ScreenId.Home)
+        // The lantern, and the lantern with something under its clock. A notification on a locked
+        // phone is READ, not opened: this screen has one control and it is SLIDE TO OPEN, so a
+        // card that also navigated would be an unlock nobody performed.
+        ScreenId.Lock, ScreenId.LockNotify -> setOf(ScreenId.Home)
 
         // Work.
         ScreenId.Work -> setOf(ScreenId.Home, ScreenId.Scan)
@@ -196,6 +201,28 @@ object Flow {
     val autoAdvance: Map<ScreenId, AutoAdvance> = mapOf(
         ScreenId.Boot to AutoAdvance(ScreenId.Perms, 2_400, "the self-test says STARTING and falls through on its own"),
 
+        // **THE TEN SECONDS A HEAVY NOTIFICATION LASTS (D-119).** The three rows here are the
+        // three arrivals that dim the house, and the undim is this transition: the panel comes
+        // back up because the screen it lands on has no heavy notification on it, not because
+        // anything animates.
+        //
+        // They are written out rather than derived from `Notifications.arrivals` so that the
+        // reader of this table sees them and so that `FlowTest` can check one copy against the
+        // other. A derived row would agree with itself about a rule nobody had checked.
+        //
+        // **There is deliberately no row for `Quiet`.** A quiet notification sits until it is
+        // swiped, and this table's fail-closed default — a screen with no row waits — is exactly
+        // the behaviour it needs. Adding one would delete the only acknowledgment D-105 left.
+        ScreenId.Notify to AutoAdvance(
+            ScreenId.Home, HEAVY_HOLD, "the house's opening message clears itself and the light comes back",
+        ),
+        ScreenId.Banner to AutoAdvance(
+            ScreenId.Home, HEAVY_HOLD, "the Egress alert clears itself; the countdown is on the widget",
+        ),
+        ScreenId.LockNotify to AutoAdvance(
+            ScreenId.Lock, HEAVY_HOLD, "the same ten seconds, under the clock, on a phone nobody picked up",
+        ),
+
         // The scan's countdown, and the ONE number here that is a safety device rather than
         // pacing: ten seconds, then the light dies and the phone goes back where it was. Nobody
         // should be standing in a dark room holding a lit screen at a wall by accident. Derived
@@ -286,7 +313,12 @@ object Flow {
      * of them are the authority pushing a screen, and none of them can be a client-side rule.
      */
     val housePushed: Set<ScreenId> = setOf(
-        ScreenId.Notify,
+        // The three notifications nothing on this phone can produce: the house's opening text
+        // over the springboard, the same text under the clock on a phone lying face down, and a
+        // Subroutine coming unblocked by somebody else's work. The Egress alert is NOT here — an
+        // Insider walks to it from their own page 2, which is the one role-asymmetric edge in the
+        // game.
+        ScreenId.Notify, ScreenId.LockNotify, ScreenId.Quiet,
         ScreenId.Call, ScreenId.Found,
         ScreenId.ScanCaught, ScreenId.ScanBad, ScreenId.ScanUnknown,
         ScreenId.Revoked, ScreenId.Restrained, ScreenId.Ghost2,
@@ -377,9 +409,15 @@ object Flow {
         // A line that was real, handed over; and the lights going out once every line is in.
         ScreenId.Secret to setOf(ScreenId.Lobby),
         ScreenId.Lobby to setOf(ScreenId.Armed),
-        // The two banners, swiped up. Both arrive over the springboard, so both leave it behind.
+        // Every notification, swiped away — up on the three banners, left under the clock. The
+        // banners arrive over the springboard so all three leave it behind; the lock screen's
+        // arrival leaves the lock screen. Each of these is the `under` of an entry in
+        // `Notifications.arrivals`, and `FlowTest` walks the gesture on every one of them rather
+        // than trusting the two lists to agree.
         ScreenId.Notify to setOf(ScreenId.Home),
         ScreenId.Banner to setOf(ScreenId.Home),
+        ScreenId.Quiet to setOf(ScreenId.Home),
+        ScreenId.LockNotify to setOf(ScreenId.Lock),
     )
 }
 
@@ -456,6 +494,16 @@ class FlowModel(
      * cleared when a Subroutine is opened afresh; see [beginSubroutine].
      */
     val subroutines: SubroutineModel = SubroutineModel.sample(),
+    /**
+     * What is still standing on this phone's lock screen.
+     *
+     * Held here for the reason the five above are, and more plainly than any of them: the lock
+     * screen is walked away from constantly — it is the screen a phone is left on — and a list
+     * that lived in the screen's own `remember` would put every swiped notification back the next
+     * time the player picked the phone up. **It holds what is still there and nothing else**; see
+     * [NotificationsModel] for the fields it deliberately does not have.
+     */
+    val notifications: NotificationsModel = NotificationsModel(),
 ) {
 
     var state: PanelState by mutableStateOf(initial)
@@ -791,26 +839,42 @@ class FlowModel(
     // ---- Notifications -----------------------------------------------------------------------
 
     /**
-     * **A banner, swiped up (D-105).**
+     * **Something arriving, swiped away (D-105, D-119).**
      *
-     * What is left behind is the screen the notification arrived over, and in the port both
-     * banners arrive over the springboard — `Notify` and `Banner` *are* `Home` with something on
-     * top, which is why both draw [HomeScreen]. So a dismissal is a move to `Home`, and the panel
-     * comes back up out of [NOTIFIED_DIM] because there is no longer an overlay to dim behind.
+     * What is left behind is the screen it arrived over — the springboard for the three banners,
+     * the lock screen for the one under the clock — which is [Arrival.under] and not a constant.
+     * The panel comes back up out of [NOTIFIED_DIM] because the screen it lands on has no heavy
+     * notification on it, in the same step the navigation happens.
+     *
+     * **A quiet notification swiped here is gone from the lock screen too.** One acknowledgment,
+     * one gesture: a player who dismissed the banner and then found the same sentence waiting
+     * under their clock would learn that the swipe means nothing, which is the only thing D-105
+     * left that means anything.
      *
      * **Nothing is written down.** Not which notification it was, not that it was dismissed, not
      * when. There is no read concept and this is the method that would grow one first: a `seen`
      * set here is three months from being a count on a tile. What survives a notification is the
-     * surface that already held the thing — Messages, the Egress widget — and a house notice
-     * survives nowhere at all, which is [NotificationKind.heldBy].
+     * surface that already held the thing — Messages, the Egress widget, the Subroutines list —
+     * and a house notice survives nowhere at all, which is [NotificationKind.heldBy].
      *
-     * A swipe on a screen with no banner does nothing rather than navigating somewhere, which is
-     * the fail-closed direction: a gesture the panel cannot service must not move the phone.
+     * A swipe on a screen with nothing on it does nothing rather than navigating somewhere, which
+     * is the fail-closed direction: a gesture the panel cannot service must not move the phone.
      */
     fun dismissNotification() {
-        if (Notifications.onScreen(state.screen) == null) return
-        go(ScreenId.Home)
+        val arrival = Notifications.arrivals[state.screen] ?: return
+        notifications.dismiss(arrival.notification)
+        go(arrival.under)
     }
+
+    /**
+     * **One of the lock screen's stored notifications, swiped left off the list.**
+     *
+     * No navigation: the player is still looking at their lock screen, with one fewer thing on it.
+     * That is the whole of it, and the whole of it is the point — this is the acknowledgment
+     * D-105 left in place of read state, and an acknowledgment that moved the phone would be a
+     * gesture people avoid making.
+     */
+    fun dismissStanding(notification: Notification) = notifications.dismiss(notification)
 
     /** Every action a screen can take, wired to this model. */
     fun actions(): PanelActions = PanelActions(
@@ -850,6 +914,7 @@ class FlowModel(
         tapSubroutine = ::tapSubroutine,
         handOverSubroutine = ::handOverSubroutine,
         dismissNotification = ::dismissNotification,
+        dismissStanding = ::dismissStanding,
     )
 
     private fun remember(screen: ScreenId) {
@@ -888,6 +953,6 @@ fun FlowHost(model: FlowModel = remember { FlowModel() }) {
     }
     Screen(
         model.state, model.actions(), model.editor, model.homes, model.lobby, model.meeting,
-        model.subroutines,
+        model.subroutines, model.notifications,
     )
 }

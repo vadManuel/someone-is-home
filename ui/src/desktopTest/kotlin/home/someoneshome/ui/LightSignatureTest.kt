@@ -44,14 +44,15 @@ class LightSignatureTest {
             LightSignature.Medium to 1,
             LightSignature.Dark to 2,
         ),
-        // The springboard's NEXT SUBROUTINE widget, on all four screens that draw page 1: the
-        // page itself, the two that put a notification over it, and the one where the Egress
+        // The springboard's NEXT SUBROUTINE widget, on all five screens that draw page 1: the
+        // page itself, the three that put a notification over it, and the one where the Egress
         // countdown occupies the meter's slot. The house taking the only number away must not
-        // take the light with it — and this list is four rather than the one I wrote first,
-        // because the sweep below found the fourth.
+        // take the light with it — and this list has grown twice by being caught here rather than
+        // by being reasoned about, most recently when a quiet banner became its own screen.
         ScreenId.Home to mapOf(LightSignature.Dark to 1),
         ScreenId.Notify to mapOf(LightSignature.Dark to 1),
         ScreenId.Banner to mapOf(LightSignature.Dark to 1),
+        ScreenId.Quiet to mapOf(LightSignature.Dark to 1),
         ScreenId.EgressWidget to mapOf(LightSignature.Dark to 1),
         // The last moment before BEGIN, where NOT THIS ONE is still live.
         ScreenId.ScanCaught to mapOf(LightSignature.Dark to 1),

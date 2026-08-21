@@ -263,7 +263,7 @@ object OutsideView {
      * **The mark between a voter and the resident they voted for.**
      *
      * A constant rather than a glyph typed into a screen, because it is the one thing on any panel
-     * in this game that means *attribution*, and `MeetingDisclosureTest` sweeps all 56 screens for
+     * in this game that means *attribution*, and `MeetingDisclosureTest` sweeps every screen in the game for
      * it: it must be readable on this one and on no other (D-075). A second screen drawing a
      * pairing would render, build green and play — and would quietly be a different game, because
      * *your own vote stays yours* is what makes a meeting an argument rather than an audit.

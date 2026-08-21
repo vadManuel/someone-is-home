@@ -447,16 +447,20 @@ class FlowTest {
         arm.lightsOut()
         assertEquals(Flow.viaActions.getValue(ScreenId.Lobby), setOf(arm.state.screen))
 
-        // Both banners, swiped up (D-105). A drag rather than a tap, so no rendering test that
-        // fires click actions can reach it, and where it lands is the screen the notification
-        // arrived over rather than anything the banner itself names.
-        val text = FlowModel(PanelState(screen = ScreenId.Notify))
-        text.dismissNotification()
-        assertEquals(Flow.viaActions.getValue(ScreenId.Notify), setOf(text.state.screen))
-
-        val egress = FlowModel(PanelState(screen = ScreenId.Banner))
-        egress.dismissNotification()
-        assertEquals(Flow.viaActions.getValue(ScreenId.Banner), setOf(egress.state.screen))
+        // EVERY notification, swiped away (D-105, D-119). A drag rather than a tap, so no
+        // rendering test that fires click actions can reach it, and where it lands is the screen
+        // the notification arrived over rather than anything the notification itself names.
+        // Walked off the arrivals map rather than off two fixtures, so a kind given a screen and
+        // no gesture off it fails here.
+        for ((from, arrival) in Notifications.arrivals) {
+            val model = FlowModel(PanelState(screen = from))
+            model.dismissNotification()
+            assertEquals(
+                Flow.viaActions.getValue(from), setOf(model.state.screen),
+                "swiping the ${arrival.notification.kind} notification away left the phone on " +
+                    "${model.state.screen}; it arrived over ${arrival.under}",
+            )
+        }
 
         // BEGIN, on a caught scan. The screen names no target because which Subroutine opens is a
         // fact about the card that was read — so this walks the roster rather than one fixture,
@@ -480,7 +484,7 @@ class FlowTest {
                 ScreenId.Editor, ScreenId.RoomEdit, ScreenId.StairsWarn,
                 ScreenId.SaveName, ScreenId.Delete, ScreenId.ScanMarker,
                 ScreenId.Secret, ScreenId.Lobby, ScreenId.ScanCaught,
-                ScreenId.Notify, ScreenId.Banner,
+                ScreenId.Notify, ScreenId.Banner, ScreenId.Quiet, ScreenId.LockNotify,
             ),
             Flow.viaActions.keys,
             "a new action edge was declared and nothing here walks it",
@@ -506,7 +510,131 @@ class FlowTest {
     }
 
     /**
-     * **The three kinds, and what each one leaves behind (D-105).**
+     * **Exactly two events dim the house, and the design named both (D-118).**
+     *
+     * The ruling this unit exists for, and the one a later kind will break by accident: the dim is
+     * not a notification style, it is a two-member vocabulary. A light change that means one
+     * specific thing is a signal; a light change that happens twenty times a round is noise, and
+     * it is paid for out of the readability everything else in this game is built on.
+     *
+     * Written as the exact pair rather than as a count. `assertEquals(2, ...)` would pass on a
+     * build where the Egress had gone quiet and a Subroutine notification had gone heavy — which
+     * is not a smaller mistake than three, it is a bigger one.
+     */
+    @Test
+    fun exactlyTwoKindsOfNotificationDimTheHouse() {
+        assertEquals(
+            listOf(NotificationKind.Opening, NotificationKind.Egress),
+            NotificationKind.entries.filter { it.heavy },
+            "the Egress and the house's opening message are the whole light vocabulary (D-118)",
+        )
+    }
+
+    /**
+     * **The ten seconds, and the screens that must never have them (D-119).**
+     *
+     * Heavy notifications clear themselves after [HEAVY_HOLD] whether anybody touches them or not,
+     * because the two of them dim every phone in the building and the light has to come back for
+     * a player who is holding theirs as a lamp with both hands busy. **Quiet ones never do**: they
+     * sit until swiped, and the swipe is the only acknowledgment D-105 left in the game.
+     *
+     * Read off [Notifications.arrivals] against [Flow.autoAdvance], which are two independent
+     * lists — the timing table is written out by hand where a reader of the flow will find it, and
+     * this is the check that it says what the kinds say.
+     */
+    @Test
+    fun heavyNotificationsClearThemselvesAndQuietOnesNeverDo() {
+        // THE NUMBER IS WRITTEN OUT, not read back off the constant being checked. Comparing the
+        // table against `HEAVY_HOLD` alone is a value asserted equal to itself: it passed green
+        // with the hold moved to seven seconds, and the whole point of ten is that it is the
+        // design's, chosen for a player holding the phone as a lamp with both hands busy.
+        assertEquals(10_000, HEAVY_HOLD, "D-119 gives a heavy notification ten seconds")
+
+        for ((from, arrival) in Notifications.arrivals) {
+            val rule = Flow.autoAdvance[from]
+            if (arrival.notification.kind.heavy) {
+                assertNotNull(rule, "$from is heavy and dims the house with nothing to undim it")
+                assertEquals(HEAVY_HOLD, rule.afterMillis, "$from holds the dim for the wrong time")
+                assertEquals(
+                    arrival.under, rule.to,
+                    "$from expires onto ${rule.to} but was swiped away onto ${arrival.under}",
+                )
+            } else {
+                assertNull(
+                    rule,
+                    "$from clears itself after ${rule?.afterMillis}ms — a quiet notification sits " +
+                        "until it is swiped, and the swipe is the only acknowledgment there is",
+                )
+            }
+        }
+    }
+
+    /**
+     * **What is stored, and what the storage ruling actually partitions (D-119).**
+     *
+     * Quiet notifications are stored — they stand on the lock screen until swiped, because a
+     * player walking back from a marker has to be able to find the thing again. The two heavy ones
+     * are not: they clear themselves, and what they were about is in its own home. **An Egress is
+     * never a stored notification** and a house notice at a meeting is stored nowhere at all.
+     *
+     * Named per kind rather than derived, because the derivation is the thing that would go wrong:
+     * `!heavy && heldBy != null` is true of everything here today and would silently decide the
+     * next kind's storage for whoever adds it.
+     */
+    @Test
+    fun theStoredNotificationsAreTheQuietOnesTheHouseWantsFoundAgain() {
+        assertEquals(
+            listOf(NotificationKind.Text, NotificationKind.Unblocked),
+            NotificationKind.entries.filter { it.stored },
+            "a later text and an unblocked Subroutine are what stands under the clock (D-119)",
+        )
+        assertFalse(
+            NotificationKind.Egress.stored,
+            "the Egress persists on its widget and never as a stored notification",
+        )
+        assertFalse(
+            NotificationKind.Notice.stored,
+            "a house notice is shown once at the meeting it is about and stored nowhere",
+        )
+        assertEquals(
+            Notifications.all.filter { it.kind.stored }.toSet(), Notifications.stored.toSet(),
+            "the lock screen's list and the storage ruling disagree",
+        )
+    }
+
+    /**
+     * **Swiping is removal, not a mark.**
+     *
+     * The whole of what a dismissal does to the stored list, and the whole of what it is allowed
+     * to do. There is no method here that could answer *was this one seen* and no field that could
+     * hold the answer — a notification is standing or it is gone, and D-105 is that sentence.
+     */
+    @Test
+    fun aSwipedNotificationIsRemovedRatherThanMarked() {
+        val model = FlowModel(PanelState(screen = ScreenId.Lock))
+        val first = model.notifications.standing.first()
+        assertTrue(model.notifications.standing.size >= 2, "nothing to prove with one row")
+
+        model.dismissStanding(first)
+        assertFalse(first in model.notifications.standing, "the swipe left it on the lock screen")
+        assertEquals(
+            ScreenId.Lock, model.state.screen,
+            "swiping one notification off the lock screen moved the phone somewhere",
+        )
+
+        // AND THE BANNER'S SWIPE IS THE SAME ACKNOWLEDGMENT. A quiet notification dismissed on the
+        // springboard must not be waiting under the clock afterwards — a swipe that has to be made
+        // twice is a swipe that means nothing.
+        val quiet = FlowModel(PanelState(screen = ScreenId.Quiet))
+        quiet.dismissNotification()
+        assertFalse(
+            Notifications.unblocked in quiet.notifications.standing,
+            "the quiet banner was swiped away and the same sentence is still on the lock screen",
+        )
+    }
+
+    /**
+     * **The five kinds, and what each one leaves behind (D-105).**
      *
      * The persistence claim is a field rather than a sentence in a comment precisely so it can be
      * checked, and this is half of the check: that the screen a kind names is a real screen, and

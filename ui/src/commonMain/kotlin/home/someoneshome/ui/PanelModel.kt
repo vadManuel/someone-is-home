@@ -25,7 +25,13 @@ enum class ScreenId {
     Secret, Armed, Notify, Reveal, RevealThread,
 
     // The springboard — identical for both roles.
-    Home, Page2, Lock,
+    //
+    // `Quiet` and `LockNotify` are the last two the same way `Notify` and `Banner` are: a screen
+    // with a notification on top of it. They are separate ids because the two things a
+    // notification does — dim or not, banner or under the clock — are properties of a *drawn
+    // panel*, and every sweep in this module walks `ScreenId.entries`. A quiet banner hiding
+    // behind a flag on `Notify` would be a presentation none of them ever looked at.
+    Home, Page2, Lock, Quiet, LockNotify,
 
     // Work. The Subroutine screens are named for the Subroutine and not for how much light it
     // makes: the port's two were `Sub` and `SubBright`, which is the light ladder used as an
@@ -131,9 +137,11 @@ class PanelVals(val state: PanelState) {
     // ---- Status bar ---------------------------------------------------------------------
 
     val mode: PanelMode = when (state.screen) {
-        // The only two screens that fill with amber, and therefore the only two that draw their
-        // own inverted status row. Everything else uses the shared one.
-        ScreenId.Lock, ScreenId.Scan -> PanelMode.Inverted
+        // The only screens that fill with amber, and therefore the only ones that draw their
+        // own inverted status row. Everything else uses the shared one. `LockNotify` is the lock
+        // screen with something arriving on it, so it is the lantern too -- darkened, but still
+        // the lantern, and still drawing its own row.
+        ScreenId.Lock, ScreenId.LockNotify, ScreenId.Scan -> PanelMode.Inverted
 
         ScreenId.Boot, ScreenId.Join, ScreenId.Maps, ScreenId.Editor, ScreenId.SaveName,
         ScreenId.HomeDetail, ScreenId.Delete, ScreenId.Secret, ScreenId.RoomEdit,
@@ -314,14 +322,24 @@ class PanelVals(val state: PanelState) {
         // Identical sender, time and preview for both roles: the thread must be OPENED to read.
         // The row itself cannot be a tell to anyone glancing at a neighbour's screen.
         //
-        // THE PREVIEW IS THE BANNER'S OWN WORDS, not a second copy of them. This row is where the
-        // text SURVIVES its notification -- NotificationKind.Text says Messages holds it -- so the
-        // two saying different things would make that claim false while both looked right.
+        // THE PREVIEW IS THE BANNER'S OWN WORDS, not a second copy of them. These rows are where
+        // the two texts SURVIVE their notification -- both kinds name Messages as what holds them
+        // -- so the two saying different things would make that claim false while both looked
+        // right.
+        //
+        // BOTH HOUSE ROWS ARE DRAWN THE SAME. The older one dimmed would be indistinguishable
+        // from a read mark, which is the one thing D-105 removes from every surface in the game:
+        // the eye reads "bright above, faint below" as attended-to, and nobody would ever call it
+        // a feature, which is exactly why it would survive review.
         listOf(
             InboxRow(
-                Notifications.text.from, "21:02", Notifications.text.body,
+                Notifications.opening.from, "21:02", Notifications.opening.body,
                 Amber.Dim, Amber.Bright, Amber.Bright,
-            )
+            ),
+            InboxRow(
+                Notifications.text.from, Notifications.text.at, Notifications.text.body,
+                Amber.Dim, Amber.Bright, Amber.Bright,
+            ),
         ) + rest
     }
 
@@ -543,9 +561,19 @@ class PanelVals(val state: PanelState) {
          *
          * It is also the one place the design's buzzing set is written down, which is what lets
          * [Flow.houseDriving] be derived from it rather than kept in step with it by hand.
+         *
+         * ### `Quiet` is not in here, and that is D-118 applied to the hand rather than the eye
+         *
+         * A quiet notification is *"no dim, no brightness spike, nothing world-observable at
+         * all"* — and in a house where nobody may speak, a buzz is about as world-observable as a
+         * phone gets. Six pockets buzzing at once is the same broadcast the dim would have been,
+         * arriving through a different sense. So the two heavy kinds buzz on every phone, on the
+         * banner (`Notify`, `Banner`) and under the clock (`LockNotify`) alike, and a quiet one
+         * waits to be found.
          */
         val BUZZING: Set<ScreenId> = setOf(
-            ScreenId.Armed, ScreenId.Notify, ScreenId.Banner, ScreenId.Call, ScreenId.Found,
+            ScreenId.Armed, ScreenId.Notify, ScreenId.Banner, ScreenId.LockNotify,
+            ScreenId.Call, ScreenId.Found,
             ScreenId.Assemble, ScreenId.Notice, ScreenId.Tally, ScreenId.Revoked,
             ScreenId.Restrained, ScreenId.ScanMarker, ScreenId.ScanCaught, ScreenId.ScanBad,
             ScreenId.ScanUnknown, ScreenId.GhostMeeting, ScreenId.WinInsiders,

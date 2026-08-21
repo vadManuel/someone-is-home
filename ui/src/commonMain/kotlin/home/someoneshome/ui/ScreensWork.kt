@@ -45,11 +45,22 @@ import androidx.compose.ui.unit.IntOffset
  */
 
 /**
- * **A banner, not a takeover — and swipe up is the whole gesture vocabulary (D-105).**
+ * **A banner, not a takeover — and one of them costs the house its light (D-105, D-118).**
  *
  * Drawn over the springboard rather than instead of it, because you cannot scan a marker through
- * a modal and the player has to be able to see that their phone still works. The panel behind
- * dims; this stays at full intensity.
+ * a modal and the player has to be able to see that their phone still works.
+ *
+ * ### Two treatments, and the difference is emitted light rather than taste
+ *
+ * A **heavy** banner is a bright amber block on a panel dropped to [NOTIFIED_DIM]: the two
+ * notifications D-118 admits to the light vocabulary, arriving on every phone in the house at
+ * once. A **quiet** banner is drawn in the panel's own ink on the panel's own black, over a panel
+ * that did not change at all — *"no dim, no brightness spike, nothing world-observable at all"*.
+ * A quiet notification lit up an amber block would be the broadcast without the meaning: the room
+ * would see a light change and learn nothing from it, and the next real one would mean less.
+ *
+ * So [NotificationKind.heavy] is read here for colour and read again in [Screen] for the dim, and
+ * neither of those is a style flag.
  *
  * ### The swipe is a real gesture, not a control shaped like one
  *
@@ -58,18 +69,21 @@ import androidx.compose.ui.unit.IntOffset
  * asking anybody — and it is what makes the gesture discoverable in a dark room: you learn the
  * banner moves before you learn that it goes.
  *
- * It only ever moves **up**. Down is not a shorter swipe up, it is a different gesture, and this
- * app has one; a banner that could be dragged down would be teaching a vocabulary that does not
- * exist. It cannot be pushed above the status row either — that row is the one thing on screen
- * that stays put while something arrives, and [PanelFrame] clips it there rather than trusting
- * this to stop.
+ * It only ever moves **up**. Down is not a shorter swipe up, it is a different gesture; a banner
+ * that could be dragged down would be teaching a vocabulary that does not exist. It cannot be
+ * pushed above the status row either — that row is the one thing on screen that stays put while
+ * something arrives, and [PanelFrame] clips it there rather than trusting this to stop.
+ *
+ * **A heavy banner also goes on its own after [HEAVY_HOLD], and a quiet one never does.** That is
+ * not here: it is a transition of the whole panel and it lives in [Flow.autoAdvance] with the rest
+ * of the house's timing. Here is only what a finger does.
  *
  * ### A tap still opens it, where there is something to open
  *
  * Both gestures live on the same surface and neither eats the other: a drag consumes nothing until
  * it passes touch slop, and a tap that has moved past slop is no longer a tap. **Which of the two
  * modifiers is written first turns out not to matter** — that was checked by swapping them and
- * watching all seven gesture tests stay green — so the order here is the readable one and not a
+ * watching all the gesture tests stay green — so the order here is the readable one and not a
  * load-bearing incantation. What is load-bearing is that a test really drags a finger, because
  * a banner that cannot be dismissed looks exactly like one that can.
  *
@@ -80,6 +94,7 @@ import androidx.compose.ui.unit.IntOffset
 fun BoxScope.NotificationBanner(notification: Notification) {
     val actions = LocalActions.current
     val threshold = with(LocalDensity.current) { SWIPE_DISMISS.toPx() }
+    val heavy = notification.kind.heavy
 
     // Where the finger has taken it, in pixels, never below zero. Keyed on the notification so a
     // second one arriving does not inherit half a swipe made at the first.
@@ -93,7 +108,10 @@ fun BoxScope.NotificationBanner(notification: Notification) {
             .offset { IntOffset(0, lifted.toInt()) }
             .padding(6.u)
             .fillMaxWidth()
-            .background(Amber.Bright)
+            // THE QUIET BANNER EMITS NOTHING THE PANEL WAS NOT ALREADY EMITTING: black ground,
+            // one hairline, and the same ink every other panel is written in.
+            .background(if (heavy) Amber.Bright else Amber.Black)
+            .then(if (heavy) Modifier else Modifier.border(1.u, Amber.Edge))
             .pointerInput(notification) {
                 detectVerticalDragGestures(
                     onDragEnd = { if (-lifted >= threshold) actions.dismissNotification() else lifted = 0f },
@@ -110,16 +128,18 @@ fun BoxScope.NotificationBanner(notification: Notification) {
             .padding(horizontal = 8.u, vertical = 7.u),
         verticalArrangement = Arrangement.spacedBy(3.u),
     ) {
+        val ink = if (heavy) Amber.Black else Amber.Bright
+        val faint = if (heavy) Amber.Black else Amber.Dim
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Label(notification.from, size = 6.0, color = Amber.Black, tracking = 0.14)
-            Label(notification.at, size = 6.0, color = Amber.Black, tracking = 0.14)
+            Label(notification.from, size = 6.0, color = faint, tracking = 0.14)
+            Label(notification.at, size = 6.0, color = faint, tracking = 0.14)
         }
         Label(
             notification.body,
-            size = notification.bodySize, color = Amber.Black, tracking = 0.02, lineHeight = 1.5,
+            size = notification.bodySize, color = ink, tracking = 0.02, lineHeight = 1.5,
         )
         notification.detail?.let {
-            Label(it, size = 6.5, color = Amber.Black, tracking = 0.08)
+            Label(it, size = 6.5, color = ink, tracking = 0.08)
         }
     }
 }
