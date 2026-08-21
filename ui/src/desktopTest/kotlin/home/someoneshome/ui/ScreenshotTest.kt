@@ -282,6 +282,9 @@ class ScreenshotTest {
             hosting = hosting,
         )
         model.look()
+        // Named before attaching, because attaching is what carries the name up (D-115) — a
+        // screenshot of a lobby with an unnamed seat in it would be a picture of the odd case.
+        model.nameResident("ELLIOT")
         model.attachTo(home)
         return model
     }

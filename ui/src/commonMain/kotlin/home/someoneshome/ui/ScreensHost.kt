@@ -1219,23 +1219,28 @@ fun DeleteScreen() {
 }
 
 /**
- * **Counts and settings. Nobody's name appears on this screen.**
+ * **Who is here, the counts, and the settings.**
  *
  * Every dial the host owns, plus the two numbers the house publishes: how many are here, and how
  * many have handed their line over. **Locks at arming**, and stamps into the recording — balance
  * values cannot be edited mid-round, because a round whose numbers changed under it is a round
  * that cannot be replayed, and replay is the only debugging this game has.
  *
- * ### There are no names here, and their absence is not an omission
+ * ### The names arrived by a ruling, and the presence strip went with them (D-115)
  *
- * The design's lobby shows counts, and the model behind this screen is
- * [home.someoneshome.model.protocol.LobbyBody.Standing] — three integers, incapable of naming
- * anybody. The seat chips this screen used to draw were a fixture, and reinstating them would
- * mean widening what a client receives, which is not a call a lobby screen makes.
+ * This screen listed nobody while E6-1 was open, and drew a strip of marks instead — one per seat,
+ * `linesIn` of them filled — which was the counts made legible in the absence of the names the
+ * design's lobby always had. D-115 closed it: the host learns names and every phone receives them,
+ * so the list is back, off the wire this time rather than out of a fixture.
  *
- * The presence strip below is the same two integers drawn rather than written. It carries no
- * identity and structurally cannot: the marks are filled by arithmetic — `linesIn` of them — not
- * by seat, because the seat is a thing this phone was never told.
+ * **The strip is gone rather than kept above the names, and that is the load-bearing part.** Its
+ * marks were positional and so is the name list; drawn one above the other, the eye pairs the nth
+ * mark with the nth name and reads *who* has handed a line over. The house never said that — it
+ * sent a count — so the screen must not be able to be read as saying it. What is left is a set of
+ * people and, separately, a number.
+ *
+ * A blank name is drawn as a seat nobody has spoken for rather than dropped, so the list is as
+ * long as the count above it says.
  *
  * ### The Insider count is the host's, and the band clamps it (D-103)
  *
@@ -1276,7 +1281,7 @@ fun LobbyScreen() {
                     size = 7.0, color = Amber.BoneInk, tracking = 0.12,
                 )
             }
-            PresenceStrip(joined = standing.joined, linesIn = standing.linesIn)
+            ResidentStrip(lobby.residents)
         }
 
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.u)) {
@@ -1323,7 +1328,11 @@ fun LobbyScreen() {
             )
         }
         // Not drawn while nobody is here: "0 OF 0 HANDED THEIRS OVER" is arithmetic rather than
-        // information, and the strip above has already said the same thing in words.
+        // information, and the strip above has already said the room is empty in words.
+        //
+        // It stays a count and stays down here, away from the names. How many lines are in is a
+        // fact about the lobby; whose line is in is a fact about people, and the house sends the
+        // first and not the second.
         if (standing.joined > 0) {
             PreNote(
                 "${standing.linesIn} OF ${standing.joined} HANDED THEIRS OVER",
@@ -1335,16 +1344,23 @@ fun LobbyScreen() {
 }
 
 /**
- * The two counts, drawn: one mark per seat, filled once as many lines are in.
+ * **The residents in this lobby, one chip each, in the order the house seated them.**
  *
- * It replaces the fixture's row of names and does the job the names were doing — making the
- * number legible at a glance rather than only readable — while naming nobody. **The fill order
- * is arithmetic, not identity**: this phone was told two integers and could not order the marks
- * by seat if it wanted to.
+ * All six identical, on purpose. The chip carries the name and nothing else — no fill, no
+ * brightness, no order that means anything beyond arrival — because every other thing a chip could
+ * say about a person is something the house did not send. The one difference drawn is between a
+ * name and no name, and the chip that has no name says so in words rather than by being dimmer.
+ *
+ * **This phone's own chip is not marked**, though it could be guessed at: two people in a house
+ * may well both be a ROSE, and a screen that pointed at the wrong one would be worse than a screen
+ * that points at none.
+ *
+ * All of them are drawn, never a truncated row — the count above says six, and a row that stopped
+ * at four would turn that count into a contradiction on the one screen whose job is who is here.
  */
 @Composable
-private fun PresenceStrip(joined: Int, linesIn: Int) {
-    if (joined <= 0) {
+private fun ResidentStrip(residents: List<String>) {
+    if (residents.isEmpty()) {
         PreNote("NOBODY HAS JOINED YET", color = Amber.BoneFaint, size = 6.0, lineHeight = 1.0)
         return
     }
@@ -1353,13 +1369,15 @@ private fun PresenceStrip(joined: Int, linesIn: Int) {
         horizontalArrangement = Arrangement.spacedBy(3.u),
         verticalArrangement = Arrangement.spacedBy(3.u),
     ) {
-        repeat(joined) { index ->
-            val handed = index < linesIn
-            Box(
-                Modifier.size(width = 12.u, height = 9.u)
-                    .border(1.u, if (handed) Amber.BoneInk else Amber.BonePale)
-                    .background(if (handed) Amber.BoneSoft else Color.Transparent),
-            )
+        for (name in residents) {
+            Box(Modifier.border(1.u, Amber.BonePale).padding(horizontal = 4.u, vertical = 2.u)) {
+                Label(
+                    name.ifBlank { "UNNAMED" },
+                    size = 6.5,
+                    color = if (name.isBlank()) Amber.BoneFaint else Amber.BoneInk,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }

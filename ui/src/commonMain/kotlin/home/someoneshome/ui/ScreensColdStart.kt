@@ -124,8 +124,11 @@ fun PermsScreen() {
  * households have called theirs THE BUNGALOW. A row of bars nobody measured would be an
  * invention on the screen a player uses to pick which house they are walking into.
  *
- * The name field is real typing rather than a drawn caret, and it stays on this phone — see
- * [LobbyModel.residentName].
+ * The name field is real typing rather than a drawn caret, and **tapping a row is what sends it**:
+ * a home is chosen and the name goes up with the join, because the design's lobby lists the people
+ * in it (D-115). It is typed here rather than in the lobby for that reason — there is no moment in
+ * this game where a phone is in a lobby and has not said what to call its owner. See
+ * [LobbyModel.residentName] and [LobbyModel.attachTo].
  */
 @Composable
 fun JoinScreen() {

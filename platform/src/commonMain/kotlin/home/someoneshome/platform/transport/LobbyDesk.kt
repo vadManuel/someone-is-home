@@ -5,7 +5,8 @@ import home.someoneshome.model.Seat
 import home.someoneshome.model.protocol.LobbyBody
 
 /**
- * **The host's lobby table: who is here, whose line has arrived, and what the host has set.**
+ * **The host's lobby table: who is here, what they are called, whose line has arrived, and what
+ * the host has set.**
  *
  * Sits beside [SeatLedger] and for the same reason — this is transport-side, pre-arm bookkeeping,
  * not the game. No `Event` is minted here, no `Effect` leaves here, nothing in this class survives
@@ -27,7 +28,17 @@ import home.someoneshome.model.protocol.LobbyBody
  * [lineOf] is the house's own reader, and the house runs on the host's phone. It exists so the
  * one line can do the only job it has, which is to be quoted back to the player the house picks.
  * **Nothing a host sends to a client may call it**, and nothing can accidentally: the downward
- * body has no text field to put the answer in.
+ * body has no field to put the answer in.
+ *
+ * ### The names are held the same way, and they are not the lines (D-115)
+ *
+ * A name goes back down and a line never does, so the two live in two maps and [standing] reads
+ * exactly one of them. That is the whole structural difference between them, and it is deliberate
+ * that it is a difference of *which map*, not of a flag on one: "the standing quoted a line" then
+ * takes writing `lines` where `names` is written, in a diff a reader can see.
+ *
+ * Names are round-scoped like the lines — [roundEnded] drops both — and a leaver takes their name
+ * with them exactly as they take their line.
  *
  * ### The Insider setting is clamped here, not where it is drawn
  *
@@ -46,10 +57,18 @@ class LobbyDesk {
     /**
      * The lines, by seat. **In memory, for the lifetime of one round, and nowhere else.**
      *
-     * Keyed by seat rather than by name because the desk has no names: a client never names
-     * itself, so attribution here is the seat the ledger granted and nothing a player typed.
+     * Keyed by seat rather than by the name its author gave: a client names its owner and never
+     * its seat, so attribution here is the seat the ledger granted and nothing a player typed.
      */
     private val lines = HashMap<Seat, String>()
+
+    /**
+     * What each seat asked to be called. **In memory, for the lifetime of one round.**
+     *
+     * Keyed by seat for [lines]' reason: a client never names its *seat*, only its owner, and the
+     * attribution is the one the ledger granted.
+     */
+    private val names = HashMap<Seat, String>()
 
     /**
      * The host's Insider-count setting. **Null is UNKNOWN, and that is the default** (D-103): the
@@ -67,14 +86,30 @@ class LobbyDesk {
     /**
      * A seat left the lobby.
      *
-     * **The line goes with them.** Someone who walks out before the lights go off has not handed
-     * the house anything, and a desk that kept the text of a player who is no longer in the round
-     * would be holding it past the only moment it was ever for.
+     * **The line goes with them, and so does the name.** Someone who walks out before the lights
+     * go off has not handed the house anything, and a desk that kept the text of a player who is
+     * no longer in the round would be holding it past the only moment it was ever for. A name left
+     * behind is worse than untidy: it is a person on six lobby screens who is not in the house.
      */
     fun left(seat: Seat) {
         seats -= seat
         lines -= seat
+        names -= seat
         reclamp()
+    }
+
+    /**
+     * **A phone said what to call its owner.** Sent on every seating, so this replaces rather than
+     * accumulates — a resume is the same person coming back, not a second one.
+     *
+     * Trimmed and bounded here as well as where it is typed: a client is free to send whatever it
+     * likes, and a lobby screen is not the place to find out that one of them sent a paragraph.
+     *
+     * Refused from a seat that is not in the lobby, loudly, for [handedOver]'s reason.
+     */
+    fun named(seat: Seat, name: String) {
+        require(seat in seats) { "a name arrived from $seat, which is not in this lobby" }
+        names[seat] = name.trim().take(LobbyBody.Naming.LIMIT)
     }
 
     /**
@@ -113,15 +148,21 @@ class LobbyDesk {
     fun band(): IntRange = InsiderBand.of(seats.size)
 
     /**
-     * **What every phone in the lobby is shown: counts and a setting.**
+     * **What every phone in the lobby is shown: counts, a setting, and the names.**
      *
-     * Counted from the seats currently here, so the two numbers cannot contradict each other —
-     * a line whose player has left is gone with them, and `linesIn` can never exceed `joined`.
-     * The gate below depends on that being true rather than usually true.
+     * Counted from the seats currently here, so the numbers cannot contradict each other — a line
+     * whose player has left is gone with them, `linesIn` can never exceed `joined`, and `names`
+     * is one entry per seat because it is *built* from the seats rather than collected. The gate
+     * below depends on the first of those being true rather than usually true.
+     *
+     * **It reads [names] and never [lines].** That is the single line of this class that decides
+     * whether a one line goes back down the wire, and it is why the two are separate maps: the
+     * bug has to be written, not left in.
      */
     fun standing(): LobbyBody.Standing = LobbyBody.Standing(
         joined = seats.size,
         linesIn = lines.size,
+        names = seats.map { names[it].orEmpty() },
         insiders = insiders,
     )
 
@@ -138,10 +179,12 @@ class LobbyDesk {
      * typed, kept in the one place it can be.
      *
      * The seats stay: who was in the round is not a secret, and the round ending is not everybody
-     * standing up. Only the text goes.
+     * standing up. Only the text goes — and the names are text, held for one round like everything
+     * else on this desk (D-115), so they go with the lines rather than outliving them.
      */
     fun roundEnded() {
         lines.clear()
+        names.clear()
     }
 
     private fun reclamp() {

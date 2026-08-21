@@ -46,6 +46,13 @@ class OneLineNeverPersistedTest {
         "i have never watched the film we all say is our favourite",
     )
 
+    /**
+     * The names, swept alongside the lines. D-115 lets a name leave the phone it was typed on; it
+     * does not let one **stay** on the phone it arrived at. Round-scoped means round-scoped, and
+     * the host's desk is the only thing in this game that ever holds more than one person's.
+     */
+    private val names = listOf("ELLIOT", "PRIYA", "MARCUS")
+
     @BeforeTest fun start() = clearSavedHomes()
     @AfterTest fun finish() = clearSavedHomes()
 
@@ -78,6 +85,7 @@ class OneLineNeverPersistedTest {
         val seats = List(secrets.size) { Seat(it) }
         seats.forEach(desk::seated)
         desk.setInsiders(1)
+        seats.forEachIndexed { i, seat -> desk.named(seat, names[i]) }
         seats.forEachIndexed { i, seat ->
             // The client's half too: the line's one authorised exit is this body, and encoding it
             // is the moment a well-meaning cache would be tempted into existence.
@@ -103,11 +111,26 @@ class OneLineNeverPersistedTest {
             }
         }
 
+        // --- and the names went down the wire and onto no disk ---------------------------------
+        //
+        // The names ARE in the standing, on purpose (D-115) — so unlike the lines, the assertion
+        // here is only about storage, and the sweep above is the only place it can be made.
+        for (name in names) {
+            assertTrue(name in standing, "the standing stopped carrying the names D-115 put in it")
+            for ((path, text) in kept) {
+                assertTrue(name !in text, "a resident name was written to $path")
+            }
+        }
+
         // --- deleted when the round ends ------------------------------------------------------
         desk.roundEnded()
         for (seat in seats) assertNull(desk.lineOf(seat), "a line survived the round")
+        for (name in desk.standing().names) {
+            assertTrue(name.isEmpty(), "a name survived the round it was given for: $name")
+        }
         for ((path, text) in everythingThisPhoneKeeps()) {
             for (secret in secrets) assertTrue(secret !in text, "the round ended and $path still has it")
+            for (name in names) assertTrue(name !in text, "the round ended and $path still has $name")
         }
     }
 }

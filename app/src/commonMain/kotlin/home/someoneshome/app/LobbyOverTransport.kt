@@ -36,8 +36,8 @@ import kotlin.random.Random
  *
  * No `Event` is minted here, no `Effect` leaves here, no schema row is consulted and nothing is
  * redacted, because before arming there is no round for anything to be redacted out of. What
- * crosses the wire is two shapes: a line going up and three integers coming down, and the type
- * that comes down is incapable of carrying the one that went up.
+ * crosses the wire is three shapes: a name and a line going up, the standing coming down. The
+ * standing carries the names back (D-115) and has nowhere at all to put a line.
  */
 
 /** How many seats the ledger opens. Not a design cap — see [LobbyHouse]. */
@@ -160,6 +160,12 @@ class LobbyHouse(
                 // a line leaves is the count going up by one.
                 publish()
             }
+            // The name does go back down, to every phone, which is the whole of D-115 — and it
+            // goes down as part of the standing, never as an echo of the body that brought it.
+            is LobbyBody.Naming -> {
+                desk.named(seat, body.name)
+                publish()
+            }
             // The standing is the host's to send, never to receive. A client that sent one is
             // saying nothing this house is obliged to hear.
             is LobbyBody.Standing -> Unit
@@ -204,7 +210,7 @@ class LobbyOverTransport(
 
     override fun host(homeName: String, onUp: (NearbyHome) -> Unit) = house.start(homeName, onUp)
 
-    override fun join(home: NearbyHome, onStanding: (LobbyBody.Standing) -> Unit) {
+    override fun join(home: NearbyHome, name: String, onStanding: (LobbyBody.Standing) -> Unit) {
         if (clientJob?.isActive == true) return
         val s = session ?: ClientSession().also { session = it }
         val c = TransportClient(
@@ -212,9 +218,9 @@ class LobbyOverTransport(
             nowMillis = { monotonicNanos() / 1_000_000 },
             onFrame = { frame ->
                 val body = (frame as? TransportFrame.Carry)?.body?.let(LobbyWire::decodeOrNull)
-                // Only the standing is acted on. A `Handover` arriving at a client would be the
-                // house sending somebody's line down, which the type system says cannot happen —
-                // and if it ever did, ignoring it here is the fail-closed direction.
+                // Only the standing is acted on. Either upward body arriving at a client would be
+                // the house sending one phone's text to another, which nothing on the host side
+                // does — and if it ever did, ignoring it here is the fail-closed direction.
                 if (body is LobbyBody.Standing) onStanding(body)
             },
             onPhase = { phase ->
@@ -229,6 +235,12 @@ class LobbyOverTransport(
                     } catch (notSaved: IllegalStateException) {
                         onEvent("TOKEN NOT SAVED — NO RESUME AFTER A CRASH")
                     }
+                    // On every seating, not only the first: a phone that dropped and came back to
+                    // the seat its token owns arrives at a desk that dropped its name with it, and
+                    // a lobby listing an empty chip for somebody standing in the room is a fault
+                    // nobody could diagnose from the screen. The name is never persisted — it is
+                    // re-sent from what this phone still has in memory, or not at all.
+                    client?.let { c -> scope.launch { c.send(naming(name)) } }
                 }
             },
         )
@@ -246,6 +258,9 @@ class LobbyOverTransport(
         val c = client ?: return
         scope.launch { c.send(TransportFrame.Carry(LobbyWire.encode(LobbyBody.Handover(line)))) }
     }
+
+    private fun naming(name: String): TransportFrame =
+        TransportFrame.Carry(LobbyWire.encode(LobbyBody.Naming(name)))
 
     /** The host's setting. On a phone that is not hosting, [LobbyHouse] was never started. */
     override fun setInsiders(chosen: Int?) = house.setInsiders(chosen)
