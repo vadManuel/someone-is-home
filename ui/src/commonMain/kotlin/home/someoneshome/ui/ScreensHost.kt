@@ -41,34 +41,75 @@ import androidx.compose.ui.unit.Dp
 // Saved homes and the plan
 // ---------------------------------------------------------------------------------------------
 
-/** Saved homes. Fifteen minutes of walking, kept forever. */
+/**
+ * Saved homes. Fifteen minutes of walking, kept forever — **and read off the phone, not written
+ * down here.**
+ *
+ * The counts beside each name are counted off the plan that was stored, so a home cannot say two
+ * floors in this list and draw three in the editor. The topmost row is the one saved most
+ * recently and is the brighter of the two intensities the design uses, which is the only ordering
+ * claim the list makes.
+ */
 @Composable
 fun MapsScreen() {
     val go = navigator()
+    val actions = LocalActions.current
+    val homes = LocalHomes.current
     PrePage {
         PreHeading("SAVED HOMES", tracking = 0.18)
-        Column(verticalArrangement = Arrangement.spacedBy(4.u)) {
-            SavedHome("THE BUNGALOW", "2FL . 11RM", Amber.BoneFaint, Amber.BoneInk, Amber.BoneDim) {
-                go(ScreenId.HomeDetail)
+        when {
+            // The file is there and this build cannot read it. Said here, where the host is
+            // looking for their houses, and nothing is written over them until somebody decides
+            // what to do about it.
+            homes.unreadable -> InfoBox(border = Amber.Caution, gap = 5.u) {
+                Label("THESE COULD NOT BE READ", size = 8.0, color = Amber.BoneInk, tracking = 0.04)
+                Label(
+                    "Something on this phone is holding homes in a form this build does not " +
+                        "know. Nothing has been changed and nothing will be written over them.",
+                    size = 7.0, color = Amber.BoneDim, lineHeight = 1.8,
+                )
             }
-            SavedHome("MUM & DAD'S", "2FL . 9RM", Amber.BonePale, Amber.BoneDeep, Amber.BoneFaint) {
-                go(ScreenId.HomeDetail)
+
+            homes.isEmpty -> InfoBox(border = Amber.BonePale, padding = 0.u) {
+                Label(
+                    "NO HOMES YET.\nMAP ONE AND IT STAYS ON THIS PHONE.",
+                    modifier = Modifier.padding(horizontal = 7.u, vertical = 6.u),
+                    size = 6.0, color = Amber.BoneDim, tracking = 0.1, lineHeight = 1.9,
+                )
             }
-            SavedHome("THE LAKE PLACE", "1FL . 6RM", Amber.BonePale, Amber.BoneDeep, Amber.BoneFaint) {
-                go(ScreenId.HomeDetail)
+
+            else -> Column(verticalArrangement = Arrangement.spacedBy(4.u)) {
+                homes.homes.forEachIndexed { index, home ->
+                    val newest = index == 0
+                    SavedHomeRow(
+                        home.name,
+                        "${home.floorCount}FL . ${home.roomCount}RM",
+                        border = if (newest) Amber.BoneFaint else Amber.BonePale,
+                        ink = if (newest) Amber.BoneInk else Amber.BoneDeep,
+                        metaInk = if (newest) Amber.BoneDim else Amber.BoneFaint,
+                    ) {
+                        actions.openSavedHome(home.name)
+                        go(ScreenId.HomeDetail)
+                    }
+                }
             }
         }
         PushDown()
         PanelButton(
             "MAP A NEW HOME",
             border = Amber.BoneDim, ink = Amber.BoneInk,
-            onClick = { go(ScreenId.Editor) },
+            // Nothing is open after this, so the save at the end of the walk adds a home rather
+            // than replacing whichever one the host last looked at.
+            onClick = {
+                actions.mapNewHome()
+                go(ScreenId.Editor)
+            },
         )
     }
 }
 
 @Composable
-private fun SavedHome(
+private fun SavedHomeRow(
     name: String, meta: String, border: Color, ink: Color, metaInk: Color, onClick: () -> Unit,
 ) {
     RowButton(border = border, onClick = onClick) {
@@ -76,6 +117,10 @@ private fun SavedHome(
         Label(meta, size = 6.0, color = metaInk)
     }
 }
+
+/** `2 FLOORS`, `1 FLOOR` — a count the host reads as a sentence rather than as a readout. */
+private fun counted(n: Int, one: String, many: String = one + "S"): String =
+    "$n " + if (n == 1) one else many
 
 /**
  * The plan editor. **Drag two corners; the shape becomes a room.**
@@ -95,7 +140,9 @@ fun EditorScreen(vals: PanelVals) {
     val editor = LocalEditor.current
     PrePage {
         PreHeading(
-            "THE BUNGALOW",
+            // The home under edit, not a fixture's name. A host who mapped their own house was
+            // told they were editing THE BUNGALOW for as long as this screen existed.
+            editor.name,
             trailing = "${editor.roomsOn(editor.floorName)} ROOMS . " +
                 "${editor.markersOn(editor.floorName)} MARKERS",
             back = ScreenId.Maps, tracking = 0.14, trailingSize = 6.0,
@@ -840,11 +887,18 @@ fun FloorsScreen() {
     }
 }
 
-/** The plan is drawn; now name it. A nickname, not an address — nothing leaves this device. */
+/**
+ * The plan is drawn; now name it. A nickname, not an address — nothing leaves this device.
+ *
+ * **The field is real and the name it holds is the home's.** It is also the rename screen: with a
+ * home open, saving under a different name moves that home, its plan and its cards across rather
+ * than leaving a second copy behind under the old one.
+ */
 @Composable
 fun SaveNameScreen() {
-    val go = navigator()
+    val actions = LocalActions.current
     val editor = LocalEditor.current
+    val homes = LocalHomes.current
     PrePage(gap = 7) {
         PreHeading("SAVE HOME", back = ScreenId.Editor)
         InfoBox(border = Amber.BoneDim) {
@@ -853,10 +907,18 @@ fun SaveNameScreen() {
                 modifier = Modifier.padding(bottom = 4.u),
                 size = 6.0, color = Amber.BoneDim, tracking = 0.14,
             )
-            Row(verticalAlignment = Alignment.Bottom) {
-                Readout("THE BUNGALOW", size = 21.0, color = Amber.BoneInk, tracking = 0.06)
-                Caret(Amber.BoneInk, size = 21.0)
-            }
+            ReadoutField(
+                editor.name,
+                actions.nameHome,
+                modifier = Modifier.fillMaxWidth(),
+                size = 21.0,
+            )
+        }
+        // What a save can refuse: an empty name, a name another home holds, and a phone that did
+        // not write the file. Said here, because here is where the host is standing when it
+        // happens and the alternative is a button that appears not to work.
+        homes.refusal?.let {
+            Label(it, size = 6.5, color = Amber.BoneInk, tracking = 0.1, lineHeight = 1.6)
         }
         // Counted off the plan, because this is the screen where a host checks that what they
         // walked is what the app has. A number typed in here would agree with the house on the
@@ -874,40 +936,88 @@ fun SaveNameScreen() {
             )
         }
         PushDown()
-        SlateButton("SAVE HOME", { go(ScreenId.HomeDetail) }, tracking = 0.18, verticalPadding = 11.u)
+        // The one control here that does not name where it goes: a refused save stays put, so the
+        // target depends on an answer the screen does not have. Flow.viaActions carries it.
+        SlateButton("SAVE HOME", actions.saveHome, tracking = 0.18, verticalPadding = 11.u)
     }
 }
 
-/** Host with it, edit the plan, rename, duplicate. */
+/**
+ * One saved home: host with it, edit the plan, rename it, take a copy — or throw it away.
+ *
+ * **Every number here is counted off the stored home**, including what it cost to walk. The port
+ * also carried PLAYED 3 TIMES and LAST PLAYED 12 AUGUST, and both are gone rather than
+ * approximated: nothing in this app has ever hosted a round, so a play count would be a number
+ * with no source that a host would nonetheless believe. The line that replaced them is the one
+ * fact the plan really does know.
+ */
 @Composable
 fun HomeDetailScreen() {
     val go = navigator()
+    val actions = LocalActions.current
+    val homes = LocalHomes.current
+    val home = homes.open
     PrePage {
-        PreHeading("SAVED HOME", trailing = "PLAYED 3 TIMES", back = ScreenId.Maps)
-        InfoBox(border = Amber.BoneDim, gap = 4.u) {
-            Label("THE BUNGALOW", size = 11.0, color = Amber.BoneInk, tracking = 0.06)
-            Label(
-                "2 FLOORS . 11 ROOMS . 9 MARKERS\nLAST PLAYED 12 AUGUST",
-                size = 6.0, color = Amber.BoneDim, tracking = 0.1, lineHeight = 1.9,
-            )
+        PreHeading("SAVED HOME", back = ScreenId.Maps)
+        if (home == null) {
+            // No home is open. Unreachable by walking — every route here opens one first — and
+            // drawn rather than left blank because the picker can land on any screen.
+            InfoBox(border = Amber.BonePale, padding = 0.u) {
+                Label(
+                    "NO HOME IS OPEN.\nGO BACK AND CHOOSE ONE.",
+                    modifier = Modifier.padding(horizontal = 7.u, vertical = 6.u),
+                    size = 6.0, color = Amber.BoneDim, tracking = 0.1, lineHeight = 1.9,
+                )
+            }
+        } else {
+            InfoBox(border = Amber.BoneDim, gap = 4.u) {
+                Label(home.name, size = 11.0, color = Amber.BoneInk, tracking = 0.06)
+                Label(
+                    counted(home.floorCount, "FLOOR") + " . " +
+                        counted(home.roomCount, "ROOM") + " . " +
+                        counted(home.markerCount, "MARKER") + "\nABOUT " +
+                        walkedInWords(home.roomCount, home.markerCount).uppercase() +
+                        " OF WALKING",
+                    size = 6.0, color = Amber.BoneDim, tracking = 0.1, lineHeight = 1.9,
+                )
+            }
         }
         Column(verticalArrangement = Arrangement.spacedBy(4.u)) {
             RowButton(border = Amber.Slate, fill = Amber.SlateFill, onClick = { go(ScreenId.Lobby) }) {
                 Label("HOST WITH THIS HOME", size = 8.0, color = Amber.SlateInk)
                 Label(">", size = 8.0, color = Amber.BoneDim)
             }
-            RowButton(border = Amber.BoneFaint, onClick = { go(ScreenId.Editor) }) {
+            // Both of these open the home in the editor first. A rename that did not would type a
+            // new name over whichever house the editor happened to be holding.
+            RowButton(
+                border = Amber.BoneFaint,
+                onClick = {
+                    actions.editOpenHome()
+                    go(ScreenId.Editor)
+                },
+            ) {
                 Label("EDIT THE PLAN", size = 8.0, color = Amber.BoneDeep)
                 Label(">", size = 8.0, color = Amber.BoneFaint)
             }
-            RowButton(border = Amber.BoneFaint, onClick = { go(ScreenId.SaveName) }) {
+            RowButton(
+                border = Amber.BoneFaint,
+                onClick = {
+                    actions.editOpenHome()
+                    go(ScreenId.SaveName)
+                },
+            ) {
                 Label("RENAME", size = 8.0, color = Amber.BoneDeep)
                 Label(">", size = 8.0, color = Amber.BoneFaint)
             }
-            RowButton(border = Amber.BonePale) {
+            // Stays here, on the copy. The same house on a different evening — a floor closed
+            // off, the terminal moved — without walking it again.
+            RowButton(border = Amber.BonePale, onClick = actions.duplicateHome) {
                 Label("DUPLICATE", size = 8.0, color = Amber.BoneDim)
                 Label(">", size = 8.0, color = Amber.BoneFaint)
             }
+        }
+        homes.refusal?.let {
+            Label(it, size = 6.5, color = Amber.BoneInk, tracking = 0.1, lineHeight = 1.6)
         }
         PushDown()
         PanelButton(
@@ -929,12 +1039,20 @@ fun HomeDetailScreen() {
 @Composable
 fun DeleteScreen() {
     val go = navigator()
+    val actions = LocalActions.current
+    val home = LocalHomes.current.open
     PrePage(gap = 7) {
         PreHeading("DELETE HOME", back = ScreenId.HomeDetail)
         InfoBox(border = Amber.BoneDim, padding = 8.u, gap = 5.u) {
-            Label("THE BUNGALOW", size = 10.0, color = Amber.BoneInk, tracking = 0.06)
+            Label(home?.name ?: "NO HOME IS OPEN", size = 10.0, color = Amber.BoneInk, tracking = 0.06)
+            // What is about to be lost, counted off the home rather than described. The minutes
+            // are the argument: the plan can be painted again, and the evening cannot.
             Label(
-                "2 floors, 11 rooms and 9 markers. About fifteen minutes of walking this home.",
+                if (home == null) "Nothing is open, so nothing here would be deleted."
+                else counted(home.floorCount, "floor").lowercase() + ", " +
+                    counted(home.roomCount, "room").lowercase() + " and " +
+                    counted(home.markerCount, "marker").lowercase() + ". About " +
+                    walkedInWords(home.roomCount, home.markerCount) + " of walking this home.",
                 size = 7.5, color = Amber.BoneDeep, lineHeight = 1.7,
             )
         }
@@ -946,18 +1064,14 @@ fun DeleteScreen() {
         }
         PushDown()
         Column(verticalArrangement = Arrangement.spacedBy(7.u)) {
-            Row(Modifier.fillMaxWidth().height(6.u), horizontalArrangement = Arrangement.spacedBy(1.u)) {
-                Box(Modifier.weight(3f).fillMaxHeight().background(Amber.BoneDim))
-                Box(Modifier.weight(7f).fillMaxHeight().background(Amber.BonePale))
-            }
-            PreNote(
-                "KEEP HOLDING . 0.6S OF 2.0S",
-                tracking = 0.12, lineHeight = 1.0, align = TextAlign.Center,
-            )
-            PanelButton(
+            // The destructive control is a two-second hold and is outlined; the safe one is a
+            // single tap and is the lit button. Inverted from habit, on purpose: what is being
+            // protected is fifteen minutes of walking a real house, so the brighter button is
+            // the one that protects it.
+            HoldToConfirm(
                 "HOLD TO DELETE",
-                border = Amber.BoneFaint, ink = Amber.BoneDim, verticalPadding = 13.u,
-                onClick = { go(ScreenId.Maps) },
+                restingNote = "HOLD THE BUTTON FOR TWO SECONDS.",
+                onConfirm = actions.deleteHome,
             )
             SlateButton("KEEP THIS HOME", { go(ScreenId.HomeDetail) }, verticalPadding = 11.u)
         }
@@ -980,7 +1094,13 @@ fun LobbyScreen() {
             verticalArrangement = Arrangement.spacedBy(4.u),
         ) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Label("THE BUNGALOW", size = 7.0, color = Amber.BoneDim, tracking = 0.12)
+                // The home the host chose on the way in. Everything else on this screen is still
+                // a fixture; this one would otherwise name a different house from the one they
+                // just tapped HOST WITH THIS HOME on.
+                Label(
+                    LocalHomes.current.open?.name ?: HomeEditorModel.BUNGALOW,
+                    size = 7.0, color = Amber.BoneDim, tracking = 0.12,
+                )
                 Label("6 JOINED", size = 7.0, color = Amber.BoneInk, tracking = 0.12)
             }
             // All six, because the line above says six. A truncated row turns the count into

@@ -27,6 +27,7 @@ import home.someoneshome.ui.Label
 import home.someoneshome.ui.LocalPanelInsets
 import home.someoneshome.ui.PanelRole
 import home.someoneshome.ui.PanelState
+import home.someoneshome.ui.SavedHomesModel
 import home.someoneshome.ui.ScreenId
 import home.someoneshome.ui.arrivingAt
 import home.someoneshome.ui.tap
@@ -69,7 +70,16 @@ fun CheatRoot() {
     // back must not restart the round the phone is walking, and rebuilding it here would do
     // exactly that — silently, because a screen that resets to boot looks like a screen that was
     // always on boot.
-    val flow = remember { FlowModel(PanelState(screen = ScreenId.Boot)) }
+    // The homes come off the phone's own filesystem, so what this list shows survives the app
+    // being killed. Held above the view switch with everything else: re-reading the file on
+    // every trip through the picker would be a file read per tap, and a list rebuilt underneath
+    // a host mid-setup.
+    val flow = remember {
+        FlowModel(
+            PanelState(screen = ScreenId.Boot),
+            homes = SavedHomesModel(SavedHomesDocument()),
+        )
+    }
     var view by remember { mutableStateOf(CheatView.Panel) }
     // Hoisted here so the host and client outlive the view: navigating away from the transport
     // surface mid-evening must not hang up two phones.

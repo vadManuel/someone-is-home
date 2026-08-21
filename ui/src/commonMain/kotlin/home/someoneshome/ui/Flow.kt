@@ -74,11 +74,15 @@ object ScreenGraph {
         // WHICH room the terminal goes in, and the plan is the only screen that can ask that.
         ScreenId.NoTerminal -> setOf(ScreenId.Editor)
         ScreenId.Floors -> setOf(ScreenId.Editor)
-        ScreenId.SaveName -> setOf(ScreenId.Editor, ScreenId.HomeDetail)
+        // SAVE HOME is not in here: a refused save stays on this screen, so where it lands
+        // depends on an answer the screen does not have (see Flow.viaActions).
+        ScreenId.SaveName -> setOf(ScreenId.Editor)
         ScreenId.HomeDetail -> setOf(
             ScreenId.Maps, ScreenId.Lobby, ScreenId.Editor, ScreenId.SaveName, ScreenId.Delete,
         )
-        ScreenId.Delete -> setOf(ScreenId.HomeDetail, ScreenId.Maps)
+        // HOLD TO DELETE publishes no click action at all — it is a two-second hold, and a
+        // control a single synthetic click could fire would not be one. Also in viaActions.
+        ScreenId.Delete -> setOf(ScreenId.HomeDetail)
         ScreenId.Lobby -> setOf(ScreenId.Secret, ScreenId.Armed)
 
         // Arming.
@@ -278,7 +282,7 @@ object Flow {
      * naming a target.
      *
      * Almost every control in the port says where it goes — `goes(Editor)`, `go(Home)` — and
-     * `ScreenGraph` reads those straight off the screens. Two do not, and both are on the plan:
+     * `ScreenGraph` reads those straight off the screens. Five do not:
      *
      * - **The plan itself.** A tap on the grid opens the room under it, and on most of a grid
      *   there is no room, so it opens nothing. A screen cannot name that target because the
@@ -288,11 +292,16 @@ object Flow {
      *   unregisters every card in it, because **stairs hold nothing**, and the host is told what
      *   that costs before it happens. An empty room changes type in place with nothing to warn
      *   about, and goes nowhere.
+     * - **SAVE HOME.** A save can be refused — an empty name, a name another home holds, a phone
+     *   that did not write the file — and a refused save stays where it is with the reason on
+     *   screen. A button that navigated away from a refusal would leave the host looking at a
+     *   list their house is not in.
+     * - **HOLD TO DELETE.** Two seconds of a finger, not a tap, so it publishes no click action
+     *   for `ScreenGraphTest` to read.
      *
-     * Without these two, `StairsWarn` and `RoomEdit` would both read as orphans — screens that
-     * are drawn and reachable by nothing — while in fact being one gesture away. Written down
-     * here rather than smuggled into [ScreenGraph], where they would be claims about controls
-     * that do not exist.
+     * Without these, four screens would read as orphans — drawn and reachable by nothing — while
+     * in fact being one gesture away. Written down here rather than smuggled into [ScreenGraph],
+     * where they would be claims about controls that do not exist.
      */
     val viaActions: Map<ScreenId, Set<ScreenId>> = mapOf(
         // A tap on the plan, landing on a room.
@@ -300,6 +309,9 @@ object Flow {
         // The STAIRS chip on an occupied room, and the confirmation that answers it.
         ScreenId.RoomEdit to setOf(ScreenId.StairsWarn),
         ScreenId.StairsWarn to setOf(ScreenId.Editor),
+        // A save that landed, and a home the host held a finger on for two seconds.
+        ScreenId.SaveName to setOf(ScreenId.HomeDetail),
+        ScreenId.Delete to setOf(ScreenId.Maps),
     )
 }
 
@@ -341,6 +353,14 @@ class FlowModel(
      * minutes of walking a house is the thing being protected.
      */
     val editor: HomeEditorModel = HomeEditorModel.bungalow(),
+    /**
+     * The homes this phone holds.
+     *
+     * Held here for the reason the editor is: the host walks out of the list into the editor and
+     * back, and a list rebuilt from the file on every visit would be a file read on every tap.
+     * The app hands this one a real store; every test and every render gets the memory one.
+     */
+    val homes: SavedHomesModel = SavedHomesModel.sample(),
 ) {
 
     var state: PanelState by mutableStateOf(initial)
@@ -464,6 +484,56 @@ class FlowModel(
         go(ScreenId.Editor)
     }
 
+    // ---- The saved homes -------------------------------------------------------------------
+
+    /**
+     * A row in the list: that home is now the open one.
+     *
+     * The editor is **not** loaded here. Opening a home is looking at it, and a host who taps a
+     * row and backs out again has not asked for the house they were painting to be thrown away.
+     * EDIT THE PLAN and RENAME are the two controls that say they will replace it, and they do.
+     */
+    fun openSavedHome(name: String) {
+        homes.openHome(name)
+    }
+
+    /** MAP A NEW HOME: nothing open, an empty grid, one storey, a provisional name. */
+    fun mapNewHome() {
+        homes.closeHome()
+        editor.startNewHome(homes.freeName())
+    }
+
+    /** EDIT THE PLAN and RENAME: the open home goes into the editor, whole. */
+    fun editOpenHome() {
+        homes.open?.let { editor.load(it) }
+    }
+
+    /**
+     * SAVE HOME.
+     *
+     * The blank name is refused here rather than in the model, because it is the only refusal the
+     * screen's own field can produce and [SavedHome] cannot be built to carry it — a home with no
+     * name is not a home that failed to save, it is not a home.
+     */
+    fun saveHome() {
+        val name = editor.name.trim()
+        if (name.isEmpty()) {
+            homes.refuse("A HOME NEEDS A NAME")
+            return
+        }
+        if (homes.save(editor.asSavedHome(name))) go(ScreenId.HomeDetail)
+    }
+
+    /** Two seconds of a finger, and fifteen minutes of walking is gone. */
+    fun deleteHome() {
+        if (homes.deleteOpen()) go(ScreenId.Maps)
+    }
+
+    /** A copy of the open home, opened, on the screen the host is already on. */
+    fun duplicateHome() {
+        if (homes.duplicateOpen()) editor.load(homes.open ?: return)
+    }
+
     /** Every action a screen can take, wired to this model. */
     fun actions(): PanelActions = PanelActions(
         nav = ::go,
@@ -477,6 +547,13 @@ class FlowModel(
         deleteRoom = editor::deleteHeld,
         openFloor = editor::openFloor,
         addFloor = { editor.addFloor() },
+        openSavedHome = ::openSavedHome,
+        mapNewHome = ::mapNewHome,
+        editOpenHome = ::editOpenHome,
+        duplicateHome = ::duplicateHome,
+        nameHome = editor::nameHome,
+        saveHome = ::saveHome,
+        deleteHome = ::deleteHome,
     )
 
     private fun remember(screen: ScreenId) {
@@ -513,5 +590,5 @@ fun FlowHost(model: FlowModel = remember { FlowModel() }) {
             if (model.state.screen == screen) model.push(pending.to)
         }
     }
-    Screen(model.state, model.actions(), model.editor)
+    Screen(model.state, model.actions(), model.editor, model.homes)
 }

@@ -26,9 +26,21 @@ fun Screen(
      * is being set up with.
      */
     editor: HomeEditorModel = remember { HomeEditorModel.bungalow() },
+    /**
+     * The homes this phone holds.
+     *
+     * Defaulted the same way and for the same reason: a test that deletes a home must not leave
+     * the next one with a shorter list than it expected. The default is the design's own three,
+     * with the bungalow open — which is the state every host-setup screen was drawn in.
+     */
+    homes: SavedHomesModel = remember { SavedHomesModel.sample() },
 ) {
     val vals = PanelVals(state)
-    CompositionLocalProvider(LocalActions provides actions, LocalEditor provides editor) {
+    CompositionLocalProvider(
+        LocalActions provides actions,
+        LocalEditor provides editor,
+        LocalHomes provides homes,
+    ) {
         PanelFrame(vals, overlay = bannerFor(state.screen)) {
             when (state.screen) {
                 ScreenId.Boot -> BootScreen()

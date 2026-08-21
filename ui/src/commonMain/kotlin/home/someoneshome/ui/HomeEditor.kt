@@ -9,6 +9,7 @@ import home.someoneshome.model.MarkerShapes
 import home.someoneshome.model.PaintResult
 import home.someoneshome.model.Room
 import home.someoneshome.model.RoomKind
+import home.someoneshome.model.SavedHome
 import home.someoneshome.model.PlanRoom as PaintedRoom
 
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -65,9 +66,21 @@ class HomeEditorModel(
     floorName: String,
     markers: Map<String, List<MarkerShape>> = emptyMap(),
     terminal: String? = null,
+    name: String = "",
 ) {
 
     var plan: HousePlan by mutableStateOf(plan)
+        private set
+
+    /**
+     * The home under edit, by name.
+     *
+     * The editor holds a whole home rather than only its geometry — the plan, what is registered
+     * in it, and what the host calls it — because those are saved together and lost together. The
+     * heading reads this, the save screen types into it, and [asSavedHome] is the whole thing
+     * handed over in one piece.
+     */
+    var name: String by mutableStateOf(name)
         private set
 
     /** The storey the host has open. Floors are unordered, so this is a name and not an index. */
@@ -325,6 +338,66 @@ class HomeEditorModel(
         refusal = null
     }
 
+    // ---- The home the editor is holding ---------------------------------------------------------
+
+    /**
+     * Type over the home's name. Uppercased like a room's, and for the same reason: it is one
+     * name in one interface, and a house called `the bungalow` in a list of shouted ones reads as
+     * a different kind of thing.
+     */
+    fun nameHome(to: String) {
+        name = to.uppercase()
+    }
+
+    /**
+     * Open a stored home for editing — **the plan, the cards and the terminal together.**
+     *
+     * A home is one thing. Loading the geometry and leaving the previous home's cards behind
+     * would register this house's rooms with the last one's markers, and the only person who
+     * would ever know is the host standing in a room with nothing in it.
+     */
+    fun load(home: SavedHome) {
+        plan = home.plan
+        markers = home.markers
+        terminal = home.terminal
+        name = home.name
+        floorName = home.plan.floors.firstOrNull()?.name ?: GROUND
+        held = floor?.rooms?.firstOrNull()?.name
+        drag = null
+        anchor = null
+        growing = null
+        refusal = null
+    }
+
+    /**
+     * MAP A NEW HOME: an empty grid with one storey on it, under a provisional name.
+     *
+     * One floor rather than none, because a plan with no storey has nowhere to paint and the
+     * host's first drag would be refused for a reason that is not their fault.
+     */
+    fun startNewHome(name: String) {
+        plan = HousePlan.EMPTY.withFloor(GROUND)
+        markers = emptyMap()
+        terminal = null
+        this.name = name
+        floorName = GROUND
+        held = null
+        drag = null
+        anchor = null
+        growing = null
+        refusal = null
+    }
+
+    /**
+     * The home as it would be stored.
+     *
+     * [SavedHome] refuses a home with no name and refuses cards in a room that is not there or is
+     * stairs — the same last-ditch guarantee [HousePlan.of] is behind [paint]. Nothing this
+     * editor can do reaches those, which is the point of asking it here rather than trusting it.
+     */
+    fun asSavedHome(named: String = name): SavedHome =
+        SavedHome(name = named, plan = plan, markers = markers, terminal = terminal)
+
     // ---- Internals -----------------------------------------------------------------------------
 
     /**
@@ -442,6 +515,7 @@ class HomeEditorModel(
                 ),
             )
             return HomeEditorModel(
+                name = BUNGALOW,
                 plan = HousePlan.of(listOf(ground, upper)),
                 floorName = GROUND,
                 // Five cards on the ground floor and four upstairs — the nine the save screen
@@ -463,6 +537,9 @@ class HomeEditorModel(
 
         const val GROUND = "GROUND"
         const val UPPER = "UPPER"
+
+        /** The fixture's own name, which is also the first row of [SavedHomesModel.sample]. */
+        const val BUNGALOW = "THE BUNGALOW"
 
         private fun painted(name: String, kind: RoomKind, x: Int, y: Int, w: Int, h: Int) =
             PaintedRoom(Room(name, kind), listOf(CellRect(x, y, w, h)))
