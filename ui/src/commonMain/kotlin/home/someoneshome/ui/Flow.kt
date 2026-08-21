@@ -218,7 +218,15 @@ object Flow {
         ScreenId.Assemble to AutoAdvance(ScreenId.Notice, 8_000, "4 OF 6 CHECKED IN — the check-in gate closes"),
         ScreenId.Notice to AutoAdvance(ScreenId.Discussion, 9_000, "notices are shown once at the top of the meeting, then gone"),
         ScreenId.Discussion to AutoAdvance(ScreenId.Vote, 90_000, "the discussion clock; unanimous READY skips ahead"),
-        ScreenId.Vote to AutoAdvance(ScreenId.Tally, 60_000, "the vote window closes and the ballot is read"),
+        // **45 seconds, which is the design's own number** (`gdd.md:412`, restated at `:1006`).
+        // This row said 60 for as long as it existed and nothing in the design ever did — the
+        // lobby's settings line said 60S beside it, so the two agreed with each other and with
+        // nothing else. The host may now move this in the lobby, but that control is a
+        // client-side echo (see [LobbyModel.cycleVoteWindow]) and this table is not wired to it:
+        // when the window is really enforced it will be the house's clock, not this one's.
+        ScreenId.Vote to AutoAdvance(
+            ScreenId.Tally, 45_000, "the vote window closes and the ballot is read",
+        ),
         ScreenId.Tally to AutoAdvance(ScreenId.Home, 15_000, "LIGHTS OUT IN 9, over a bar with 6 spent"),
 
         // The same meeting from outside the system. A player who is out walks in, watches, and
@@ -672,11 +680,6 @@ class FlowModel(
         if (homes.deleteOpen()) go(ScreenId.Maps)
     }
 
-    /** A copy of the open home, opened, on the screen the host is already on. */
-    fun duplicateHome() {
-        if (homes.duplicateOpen()) editor.load(homes.open ?: return)
-    }
-
     // ---- The lobby -------------------------------------------------------------------------
 
     /** A tap on a network row: attach to that home, and go into its lobby. */
@@ -828,7 +831,6 @@ class FlowModel(
         openSavedHome = ::openSavedHome,
         mapNewHome = ::mapNewHome,
         editOpenHome = ::editOpenHome,
-        duplicateHome = ::duplicateHome,
         nameHome = editor::nameHome,
         saveHome = ::saveHome,
         deleteHome = ::deleteHome,
@@ -838,6 +840,7 @@ class FlowModel(
         typeLine = lobby::typeLine,
         handOverLine = ::handOverLine,
         cycleInsiders = lobby::cycleInsiders,
+        cycleVoteWindow = lobby::cycleVoteWindow,
         lightsOut = ::lightsOut,
         checkIn = ::checkIn,
         sayReady = ::sayReady,

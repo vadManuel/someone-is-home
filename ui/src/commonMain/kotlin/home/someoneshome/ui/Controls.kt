@@ -91,7 +91,6 @@ class PanelActions(
     val openSavedHome: (String) -> Unit = {},
     val mapNewHome: () -> Unit = {},
     val editOpenHome: () -> Unit = {},
-    val duplicateHome: () -> Unit = {},
     val nameHome: (String) -> Unit = {},
     val saveHome: () -> Unit = {},
     val deleteHome: () -> Unit = {},
@@ -105,7 +104,10 @@ class PanelActions(
      * received. It is declared in [Flow.viaActions] and walked by a test.
      *
      * [cycleInsiders] is the host's own setting and goes to the house rather than to the screen;
-     * what comes back is what the row draws. [lightsOut] is **presentation only** — see
+     * what comes back is what the row draws. [cycleVoteWindow] is the host's too and does *not* —
+     * it moves a number this phone holds and nothing else reads, because what a client may send
+     * is a decision about the protocol rather than about a settings row (see
+     * [LobbyModel.cycleVoteWindow]). [lightsOut] is **presentation only** — see
      * [FlowModel.lightsOut].
      */
     val nameResident: (String) -> Unit = {},
@@ -114,6 +116,7 @@ class PanelActions(
     val typeLine: (String) -> Unit = {},
     val handOverLine: () -> Unit = {},
     val cycleInsiders: () -> Unit = {},
+    val cycleVoteWindow: () -> Unit = {},
     val lightsOut: () -> Unit = {},
     /**
      * **The meeting, and the four controls that report one phone and move nothing.**

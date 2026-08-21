@@ -1008,13 +1008,18 @@ fun SaveNameScreen() {
 }
 
 /**
- * One saved home: host with it, edit the plan, rename it, take a copy — or throw it away.
+ * One saved home: host with it, edit the plan, rename it — or throw it away.
  *
  * **Every number here is counted off the stored home**, including what it cost to walk. The port
  * also carried PLAYED 3 TIMES and LAST PLAYED 12 AUGUST, and both are gone rather than
  * approximated: nothing in this app has ever hosted a round, so a play count would be a number
  * with no source that a host would nonetheless believe. The line that replaced them is the one
  * fact the plan really does know.
+ *
+ * **DUPLICATE is gone too**, and the whole of it went with it — the row, the action, the model's
+ * `duplicateOpen` and the free-name arithmetic that produced `THE BUNGALOW 2`. It worked; nobody
+ * needs it yet. Left in place it would be a fourth row a host has to read past on the way to the
+ * three that do something, on a screen that is already mostly air.
  */
 @Composable
 fun HomeDetailScreen() {
@@ -1084,12 +1089,6 @@ fun HomeDetailScreen() {
                 },
             ) {
                 Label("RENAME", size = 8.0, color = Amber.BoneDeep)
-                Label(">", size = 8.0, color = Amber.BoneFaint)
-            }
-            // Stays here, on the copy. The same house on a different evening — a floor closed
-            // off, the terminal moved — without walking it again.
-            RowButton(border = Amber.BonePale, onClick = actions.duplicateHome) {
-                Label("DUPLICATE", size = 8.0, color = Amber.BoneDim)
                 Label(">", size = 8.0, color = Amber.BoneFaint)
             }
         }
@@ -1179,6 +1178,13 @@ fun DeleteScreen() {
  * Default UNKNOWN: the house draws the count at arming, locks it, and tells no one until the
  * round ends. What makes hiding affordable is that SystemIntegrity reaches a panel only as a
  * percentage. On a phone that is not hosting the row is a reading, not a control.
+ *
+ * ### The vote window is the host's too, and it is the only live row that does not travel
+ *
+ * The two are drawn the same and behave differently one layer down: INSIDERS is sent, clamped and
+ * echoed back, while VOTING moves a number this phone holds alone. The difference is deliberate —
+ * what a client may put on the wire is a protocol decision — and it is invisible here on purpose,
+ * because a host should not have to know which of their settings has reached the house yet.
  */
 @Composable
 fun LobbyScreen() {
@@ -1219,15 +1225,28 @@ fun LobbyScreen() {
                 verticalPadding = 5.u,
                 onClick = if (lobby.hosting) actions.cycleInsiders else null,
             )
-            // The rest are the design's own numbers, unchanged and not yet wired to anything
-            // that could change them. Playtest owns them, as it owns the 7.
+            // The rest are the design's own numbers, in the design's own order. Two of them are
+            // live and the others are not yet wired to anything that could change them; playtest
+            // owns those, as it owns the 7.
             PreRow(
                 "INSIDERS KNOW EACH OTHER", "ON",
                 border = Amber.BoneDim, labelInk = Amber.BoneInk, verticalPadding = 5.u,
             )
             PreRow("SUBROUTINES EACH", "7", verticalPadding = 5.u)
             PreRow("DISCUSSION", "90S", verticalPadding = 5.u)
-            PreRow("VOTING", "60S", verticalPadding = 5.u)
+            // The second row a host may touch, and it stays where the design put it rather than
+            // moving up beside the other live one. It reads 45S because that is the design's
+            // number (gdd.md:412) — it said 60S, agreeing with a flow table that had invented
+            // the same wrong number. Unlike INSIDERS the tap goes no further than this phone:
+            // see LobbyModel.cycleVoteWindow for why a settings row does not get to widen what a
+            // client sends.
+            PreRow(
+                "VOTING", lobby.voteWindowLabel,
+                border = if (lobby.hosting) Amber.BoneDim else Amber.BonePale,
+                labelInk = if (lobby.hosting) Amber.BoneInk else Amber.BoneDeep,
+                verticalPadding = 5.u,
+                onClick = if (lobby.hosting) actions.cycleVoteWindow else null,
+            )
             PreRow("EGRESS TIMER", "120S", verticalPadding = 5.u)
             PreRow("REVOKE COOLDOWN", "60S", verticalPadding = 5.u)
         }

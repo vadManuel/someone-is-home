@@ -10,11 +10,15 @@ import kotlin.test.assertTrue
 /**
  * File storage, not game hardware — one of the few things the simulator can honestly verify.
  *
- * Like [HouseMapStoreTest] and [HousePlanStoreTest] this deliberately does **not** claim a home
- * survives a reinstall. Nothing running inside the app can observe that: it is a property of
- * device backup, and an instrument reporting a pass about something it cannot see is worse than
- * no instrument. What it does prove is that a save lands, that a load reads back exactly what was
- * written, and that the three setup files leave each other alone.
+ * It deliberately does **not** claim a home survives a reinstall. Nothing running inside the app
+ * can observe that: it is a property of device backup, and an instrument reporting a pass about
+ * something it cannot see is worse than no instrument. What it does prove is that a save lands and
+ * that a load reads back exactly what was written, byte for byte, including the text a host
+ * actually types into a phone.
+ *
+ * It used to prove a third thing — that the three setup files left each other alone — and that
+ * test went with the two stores it was about. A home carries its plan and its registrations
+ * inside itself, so there is one file now and nothing left for it to collide with.
  */
 class SavedHomesStoreTest {
 
@@ -83,32 +87,19 @@ class SavedHomesStoreTest {
     }
 
     /**
-     * **The three setup files are stored separately and do not overwrite each other.**
+     * **A home's plan and its registrations survive inside the home, not beside it.**
      *
-     * The homes are the list; the map and the plan are the two halves of one walk. They are
-     * written at different moments and lost differently, and the failure would be silent: a host
-     * saves a home and forty registrations are gone with nothing on screen to say so until the
-     * next evening.
+     * This is what replaced the three-file separation test. The failure it guards is the same one
+     * and it is still silent: a host keeps a home, forty registrations go, and nothing on screen
+     * says so until the next evening. What changed is where they could go — into the same write,
+     * rather than into a neighbouring file somebody overwrote.
      */
     @Test
-    fun `saving homes leaves the map and the plan alone`() {
-        val map = "someone-is-home/house-map/1\nR 10AAAAAAA|HALL\n"
-        val plan = "someone-is-home/house-plan/1\nF GROUND\nR room|0,0,1,1|HALL\n"
-        val homes = "someone-is-home/saved-homes/1\nH X\nsomeone-is-home/house-plan/1\nF GROUND\n"
-        try {
-            saveHouseMap(map)
-            saveHousePlan(plan)
-            saveSavedHomes(homes)
-            assertEquals(map, loadHouseMap(), "keeping a home destroyed the registrations")
-            assertEquals(plan, loadHousePlan(), "keeping a home destroyed the painted plan")
-            assertEquals(homes, loadSavedHomes())
-
-            clearSavedHomes()
-            assertEquals(map, loadHouseMap(), "forgetting the homes forgot the registrations too")
-            assertEquals(plan, loadHousePlan(), "forgetting the homes forgot the plan too")
-        } finally {
-            clearHouseMap()
-            clearHousePlan()
-        }
+    fun `a home keeps its plan and its registrations in one write`() {
+        val homes = "someone-is-home/saved-homes/1\nH THE BUNGALOW\n" +
+            "someone-is-home/house-plan/1\nF GROUND\nR room|0,0,3,2|HALL\nT HALL\n" +
+            "someone-is-home/house-map/1\nR 10AAAAAAA|HALL\n"
+        saveSavedHomes(homes)
+        assertEquals(homes, loadSavedHomes(), "a home came back without everything it went in with")
     }
 }

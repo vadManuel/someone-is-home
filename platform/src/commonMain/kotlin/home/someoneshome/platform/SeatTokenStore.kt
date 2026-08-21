@@ -8,9 +8,9 @@ package home.someoneshome.platform
  * stranger, and a stranger cannot be re-seated without rebuilding the attribution hole G1 names
  * — so the token is written at seating and the relaunched app constructs its session from it.
  * Text in, text out: this layer stores a string and does not know what a token is, the same
- * doctrine as [saveHouseMap].
+ * doctrine as [saveSavedHomes].
  *
- * ### A failed save THROWS, same as the map store, and for a sharper reason
+ * ### A failed save THROWS, same as the homes store, and for a sharper reason
  *
  * A token that silently failed to persist is a phone that plays the whole round normally and
  * becomes unresumable at the exact moment resuming matters — the failure ships invisibly and is

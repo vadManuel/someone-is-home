@@ -351,6 +351,43 @@ class LobbyModel(
     }
 
     /**
+     * **The vote window, in seconds. The host's to set; this phone's to echo.**
+     *
+     * The design makes it a lobby setting and gives 45 as the default (`gdd.md:412`, restated at
+     * `:1006`). What it does not give is a *range*, so [VOTE_WINDOWS] is this control's shape
+     * rather than the design's number, and it is playtest's to rule on — the same standing this
+     * screen's `7` and `120S` have.
+     *
+     * ### It goes nowhere, and that is the whole of what it is
+     *
+     * Unlike [cycleInsiders] this does not reach [LobbyLink]: the wire carries the Insider count
+     * because the house clamps it, and adding a second setting to what a client sends is a
+     * decision about the protocol rather than about a row. **So the number here is presentation
+     * and nothing reads it** — not [Flow.autoAdvance], which still stands in for the house's clock
+     * with the design's 45, and not any rule, because the rules are the house's and the loop is
+     * frozen. When the window is really enforced it will arrive the way `insiders` does.
+     */
+    var voteWindowSeconds: Int by mutableStateOf(VOTE_WINDOWS.first())
+        private set
+
+    /** The row's right-hand value, in the design's own form: `45S`. */
+    val voteWindowLabel: String get() = "${voteWindowSeconds}S"
+
+    /**
+     * The vote-window control: the windows in order, then back to the first.
+     *
+     * A cycle rather than a stepper for the reason [cycleInsiders] is one — it is the presentation
+     * family the lobby already has — though the argument is weaker here, because unlike UNKNOWN
+     * none of these is a different *kind* of answer. On a phone that is not hosting this does
+     * nothing, and the screen does not draw it as a control.
+     */
+    fun cycleVoteWindow() {
+        if (!hosting) return
+        val at = VOTE_WINDOWS.indexOf(voteWindowSeconds)
+        voteWindowSeconds = VOTE_WINDOWS[(at + 1) % VOTE_WINDOWS.size]
+    }
+
+    /**
      * **Whether LIGHTS OUT may be offered: everybody here, everybody's line in.**
      *
      * An empty lobby is not ready — "0 of 0" is true in arithmetic and false in every other
@@ -368,6 +405,19 @@ class LobbyModel(
 
     companion object {
         const val UNKNOWN: String = "UNKNOWN"
+
+        /**
+         * **The windows the host may choose between, first one being the design's default.**
+         *
+         * 45 is `gdd.md:412` and is not negotiable here. The other three are the control's range,
+         * which the design never states, chosen to bracket the default rather than to say
+         * anything: half a minute for a house that already knows who it suspects, ninety seconds
+         * for one that changes its mind. **Playtest owns these three**, the way it owns the
+         * subroutine count on the row above.
+         *
+         * Ordered, and read by index — the list *is* the cycle.
+         */
+        val VOTE_WINDOWS: List<Int> = listOf(45, 60, 90, 30)
 
         /**
          * The field is one line on a 300-unit panel and the design's own name is six characters.

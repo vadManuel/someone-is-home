@@ -150,7 +150,6 @@ class LobbyModelTest {
         // Every write path this module has, after the line exists.
         model.editor.nameHome("somewhere new")
         model.saveHome()
-        model.duplicateHome()
         model.deleteHome()
 
         assertTrue(store.writes.isNotEmpty(), "nothing was written at all — this proves nothing")
@@ -221,6 +220,55 @@ class LobbyModelTest {
         val (model, _) = lobbyOf(joined = 6, hosting = false)
         repeat(5) { model.cycleInsiders() }
         assertEquals("UNKNOWN", model.insidersLabel, "a client moved the host's setting")
+    }
+
+    // ---- The vote window ----------------------------------------------------------------------
+
+    /**
+     * **It opens on the design's 45 seconds** (`gdd.md:412`), which is the assertion that matters:
+     * the row read 60S and the flow table said 60 000, and each was a plausible number backed by
+     * the other rather than by the design.
+     */
+    @Test
+    fun `the vote window opens on the design's forty-five seconds`() {
+        val (model, _) = lobbyOf(joined = 6)
+        assertEquals(45, model.voteWindowSeconds)
+        assertEquals("45S", model.voteWindowLabel)
+        assertEquals(45, LobbyModel.VOTE_WINDOWS.first(), "the default stopped being first in the cycle")
+    }
+
+    /** Every window in the list, in order, and then round to the start. */
+    @Test
+    fun `the vote window control cycles and returns to the default`() {
+        val (model, _) = lobbyOf(joined = 6)
+        val seen = mutableListOf(model.voteWindowSeconds)
+        repeat(LobbyModel.VOTE_WINDOWS.size) { model.cycleVoteWindow(); seen += model.voteWindowSeconds }
+        assertEquals(LobbyModel.VOTE_WINDOWS + 45, seen)
+    }
+
+    /** The same rule the Insider count has: a client's tap moves nothing, control or no control. */
+    @Test
+    fun `a client cannot set the vote window`() {
+        val (model, _) = lobbyOf(joined = 6, hosting = false)
+        repeat(5) { model.cycleVoteWindow() }
+        assertEquals(45, model.voteWindowSeconds, "a client moved the host's setting")
+    }
+
+    /**
+     * **The setting does not reach the wire, and that is the design of it rather than an omission.**
+     *
+     * [LobbyLink] carries the Insider count because the house clamps it. Widening what a client
+     * sends is a protocol decision, not a settings row's, so this proves the row stayed on this
+     * phone — if the vote window is ever really enforced it should arrive the way `insiders` does,
+     * and this test should be the thing that fails.
+     */
+    @Test
+    fun `moving the vote window changes nothing the house published`() {
+        val (model, _) = lobbyOf(joined = 6, linesIn = 4)
+        val before = model.standing
+        repeat(3) { model.cycleVoteWindow() }
+        assertEquals(30, model.voteWindowSeconds, "the control did not move at all")
+        assertEquals(before, model.standing, "the vote window reached the house's standing")
     }
 
     // ---- The gate ---------------------------------------------------------------------------

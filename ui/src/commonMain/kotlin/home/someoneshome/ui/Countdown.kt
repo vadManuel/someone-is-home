@@ -24,16 +24,27 @@ import kotlin.math.roundToInt
 data class Countdown(val secondsLeft: Int, val ofSeconds: Int) {
 
     /**
-     * `m:ss` where the window runs to a minute or more, bare seconds where it does not.
+     * `m:ss` on a window of [CLOCK_FORM_SECONDS] or more, bare seconds below it.
      *
-     * The design's own two forms — `1:04` on a ninety-second discussion, `LIGHTS OUT IN 9` on a
-     * fifteen-second one — read off the length of the window rather than off the screen, so a
-     * screen cannot pick the wrong one.
+     * The form reads off the length of the window rather than off the screen, so a screen cannot
+     * pick the wrong one. **The threshold is fitted to the design's four drawn clocks**, all of
+     * which it has to reproduce: `1:04 REMAINING` on the ninety-second discussion and `VOTING ENDS
+     * IN 0:24` on the sixty-second ghost meeting are `m:ss`; `LIGHTS OUT IN 9` on the fifteen-
+     * second result and `6S LEFT` on the ten-second scan are bare.
+     *
+     * **It was 60, and 60 was only ever right by accident.** The vote screen is the fourth clock,
+     * drawn `0:38` — and the design's vote window is 45 seconds (`gdd.md:412`). While the flow
+     * table wrongly said 60 the m:ss form came out of the threshold; correcting the window to 45
+     * turned the design's own `0:38` into `38` without anybody asking for it. Thirty is the round
+     * number that keeps all four, and it is fitted to them rather than reasoned from anything.
      */
     val text: String
         get() =
-            if (ofSeconds >= 60) "${secondsLeft / 60}:${(secondsLeft % 60).toString().padStart(2, '0')}"
-            else "$secondsLeft"
+            if (ofSeconds >= CLOCK_FORM_SECONDS) {
+                "${secondsLeft / 60}:${(secondsLeft % 60).toString().padStart(2, '0')}"
+            } else {
+                "$secondsLeft"
+            }
 
     /** How much of the window is still to run, `0f..1f`. Bars drain; they do not fill. */
     val remaining: Float
@@ -43,6 +54,9 @@ data class Countdown(val secondsLeft: Int, val ofSeconds: Int) {
     fun litOf(segments: Int): Int = (segments * remaining).roundToInt()
 
     companion object {
+        /** The shortest window still drawn as `m:ss`. See [text] for the four clocks it fits. */
+        const val CLOCK_FORM_SECONDS: Int = 30
+
         /**
          * A screen with no clock on it.
          *

@@ -151,20 +151,6 @@ class SavedHomesModelTest {
         assertEquals(1, homes.homes.size)
     }
 
-    @Test
-    fun `duplicating takes a copy under a free name and opens it`() {
-        val homes = SavedHomesModel(MemoryHomeStore())
-        homes.save(bungalow())
-
-        assertTrue(homes.duplicateOpen())
-        assertEquals(listOf("THE BUNGALOW 2", "THE BUNGALOW"), homes.homes.map { it.name })
-        assertEquals("THE BUNGALOW 2", homes.openName)
-        assertEquals(9, homes.open!!.markerCount, "the copy came back empty")
-
-        assertTrue(homes.duplicateOpen())
-        assertEquals("THE BUNGALOW 3", homes.openName, "the second copy took a name that was gone")
-    }
-
     /**
      * **A save that did not land does not update the list.**
      *
@@ -197,7 +183,6 @@ class SavedHomesModelTest {
 
         assertFalse(homes.save(bungalow()))
         assertFalse(homes.deleteOpen())
-        assertFalse(homes.duplicateOpen())
         assertEquals(0, store.writes, "something was written over homes that could not be read")
     }
 
