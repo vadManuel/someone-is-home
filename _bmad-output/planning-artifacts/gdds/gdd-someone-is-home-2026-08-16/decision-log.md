@@ -1265,6 +1265,30 @@ imposes), and it enters the schema like any kind — a row somebody decides, or 
 Transport-level refusals (`Refused` frames to connections that hold no seat) are unaffected;
 there is no view to re-assert for a stranger, and D-068's public-reason logic still governs them.
 
+
+---
+
+## Revision 18 — the flag comes off D-086
+
+*Decided 2026-08-20, with Vadmanuel, continuing the same session.*
+
+### D-086 · **A second card carrying a registered shape is refused — SETTLED, refusal ratified**
+
+The judgement call is now a decision, and what decided it is the failure class of the
+alternative. Allowing the duplicate keeps the *data* honest — the map is keyed on the id either
+way, so that benefit was already had — but puts two identical symbols in a dark house, and the
+shape is the marker's whole name. A player told to go to the diamond has two places to stand,
+and the wrong-room reports that follow are **indistinguishable from the error the Terminal
+injects on purpose**: a systematically wrong count hiding inside deliberately-wrong counts. No
+player, host or instrument would ever see it. Silent and permanent — the definitional worst
+failure this project has.
+
+The refusal, by contrast, lands on the *host*, in the *light*, during setup, with the fix in
+hand: forget the stale registration or take one of the other cards — the roster holds 44 shapes
+and a house uses a dozen. One moment of setup friction against an undetectable mid-round wrong,
+and the friction wins. `RegisterResult.ShapeAlreadyRegistered` stays; its KDoc's
+raised-not-settled flag comes off.
+
 ---
 
 ## State after revision 12
@@ -1300,6 +1324,10 @@ reading the device's data container rather than the build (D-096).
 event is answered by re-asserting the client's authorized view, never by a reason-carrying
 message — the leak-prone channel is not narrowed but never built. Same mechanism serves resume.
 The payload is loop work and stays open; only the mechanism is decided.
+
+**Revision 18 settled D-086** — the refusal is ratified. Two live cards may never share a shape:
+the alternative's failure hides inside the Terminal's injected error and would never be seen,
+while the refusal lands on the host in the light with 44 shapes to choose from.
 
 **Carried into E0 as a constraint, not a closed item:** total app allocation ≤ ~0.5 MB/s as the design target, with the measured cliff between 1.5 and 3.0 MB/s — roughly 6× margin, so this is a budget rather than a knife edge. Nobody yet knows what the real app allocates with BLE, 100 Hz motion, effects and recording running at once.
 Action: create `project-context.md`.

@@ -16,15 +16,14 @@ sealed interface RegisterResult {
     /**
      * A different card already carries this shape.
      *
-     * **Refused, and this is a judgement call rather than a decided one.** The shape is the
-     * marker's whole name — `MARKER 07` is gone from every screen (D-069) — so two registered
-     * cards showing the same shape give the house two markers with one name, and a player told
-     * to go to the diamond has two places to stand. Refusing is the fail-closed direction: the
-     * host sees it during the setup walk, when a card can still be reprinted, rather than a
-     * player discovering it in the dark.
-     *
-     * The alternative — allow it, and let the id disambiguate internally — keeps the data honest
-     * and pushes an ambiguity onto people who cannot see ids. **Raised rather than settled.**
+     * **Refused — settled, D-086 (revision 18).** The shape is the marker's whole name —
+     * `MARKER 07` is gone from every screen (D-069) — so two registered cards showing the same
+     * shape give the house two markers with one name, and a player told to go to the diamond has
+     * two places to stand. The wrong-room reports that follow are indistinguishable from the
+     * error the Terminal injects on purpose, which makes the failure silent and permanent — the
+     * exact class this project is organised around refusing. The refusal lands on the host in
+     * the light, during setup, with 44 shapes to choose from; the alternative's only benefit,
+     * data honesty, is already had because the map is keyed on the id either way.
      */
     data class ShapeAlreadyRegistered(val to: Registration) : RegisterResult
 }
