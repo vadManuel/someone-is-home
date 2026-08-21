@@ -31,6 +31,7 @@ import home.someoneshome.platform.monotonicNanos
 import home.someoneshome.platform.saveHostAddress
 import home.someoneshome.platform.saveSeatToken
 import home.someoneshome.platform.transport.ClientSession
+import home.someoneshome.platform.transport.ClockSync
 import home.someoneshome.platform.transport.HostAdvertiser
 import home.someoneshome.platform.transport.HostBrowser
 import home.someoneshome.platform.transport.SeatLedger
@@ -76,6 +77,8 @@ class TransportCheat(private val scope: CoroutineScope) {
     var address by mutableStateOf("127.0.0.1")
     var port by mutableStateOf(CHEAT_TRANSPORT_PORT)
         private set
+    var clock by mutableStateOf("NO FIX")
+        private set
 
     private var ledger: SeatLedger? = null
     private var host: TransportHost? = null
@@ -84,6 +87,8 @@ class TransportCheat(private val scope: CoroutineScope) {
     private var session: ClientSession? = null
     private var client: TransportClient? = null
     private var clientJob: Job? = null
+    private var sync: ClockSync? = null
+    private var probeJob: Job? = null
     private var pings = 0
 
     init {
@@ -117,6 +122,7 @@ class TransportCheat(private val scope: CoroutineScope) {
         ledger = seats
         val h = TransportHost(
             seats,
+            nowMillis = ::nowMillis,
             onFrame = { seat, frame -> note("HOST < S${seat.index} ${frame.brief()}") },
             onSeated = { note("HOST SEATED S${it.index}") },
             onLost = { note("HOST LOST S${it.index}") },
@@ -161,7 +167,21 @@ class TransportCheat(private val scope: CoroutineScope) {
         val s = session ?: ClientSession().also { session = it }
         val c = TransportClient(
             s, address, port, ::nowMillis,
-            onFrame = { note("ME < ${it.brief()}") },
+            onFrame = { frame ->
+                // Clock marks feed the estimator and the display, not the log — five arrive
+                // every thirty seconds and would scroll everything else away.
+                if (frame is TransportFrame.TimeMark) {
+                    val now = nowMillis()
+                    sync?.let { est ->
+                        est.onMark(frame.probe, frame.hostMillis, now)
+                        val offset = est.appliedOffsetMillis(now)
+                        val rtt = est.lastRttMillis
+                        if (offset != null && rtt != null) clock = "OFFSET ${offset}MS · RTT ${rtt}MS"
+                    }
+                } else {
+                    note("ME < ${frame.brief()}")
+                }
+            },
             onPhase = { phase ->
                 clientPhase = phase.brief()
                 // The log is the record; the phase line is only the present tense. A seating
@@ -186,6 +206,19 @@ class TransportCheat(private val scope: CoroutineScope) {
         )
         client = c
         clientJob = scope.launch { c.run() }
+        // D5's discipline rides the same socket: a burst of probes at join, another every 30 s,
+        // the minimum-RTT sample believed, corrections slewed. The loop just asks the estimator
+        // what is due and puts it on the wire.
+        val est = sync ?: ClockSync().also { sync = it }
+        probeJob?.cancel()
+        probeJob = scope.launch {
+            while (true) {
+                if (session?.phase is ClientSession.Phase.Seated) {
+                    est.dueProbes(nowMillis()).forEach { c.send(TransportFrame.TimeProbe(it)) }
+                }
+                kotlinx.coroutines.delay(500)
+            }
+        }
         note("JOINING $address")
     }
 
@@ -197,6 +230,9 @@ class TransportCheat(private val scope: CoroutineScope) {
     /** Discard the stored token and become a stranger. The one deliberate way to lose a seat. */
     fun forget() {
         clientJob?.cancel()
+        probeJob?.cancel()
+        sync = null
+        clock = "NO FIX"
         session = null
         client = null
         clientPhase = "NOT JOINED"
@@ -222,6 +258,8 @@ private fun TransportFrame.brief(): String = when (this) {
     is TransportFrame.Proposed -> "PROPOSED $proposal"
     is TransportFrame.Ack -> "ACK $proposal"
     is TransportFrame.Commit -> "COMMIT $proposal"
+    is TransportFrame.TimeProbe -> "PROBE $probe"
+    is TransportFrame.TimeMark -> "MARK $probe"
     is TransportFrame.Carry -> "CARRY '$body'"
 }
 
@@ -271,6 +309,7 @@ fun TransportCheatScreen(cheat: TransportCheat) {
             Label("FIND", Modifier.tap(cheat::find), size = 6.5, color = Amber.Bright)
         }
         Label(cheat.clientPhase, size = 7.0, color = Amber.Mid)
+        Label("CLOCK ${cheat.clock}", size = 6.5, color = Amber.Dim)
         Row(horizontalArrangement = Arrangement.spacedBy(4.u)) {
             Box(Modifier.weight(1f)) { PanelButton("JOIN", ink = Amber.Bright, onClick = cheat::join) }
             Box(Modifier.weight(1f)) { PanelButton("PING", ink = Amber.Bright, onClick = cheat::ping) }

@@ -42,6 +42,8 @@ const val TRANSPORT_PATH: String = "/round"
  */
 class TransportHost(
     private val ledger: SeatLedger,
+    /** The authority's monotonic clock, read at the edge — [TransportFrame.TimeMark] carries it. */
+    private val nowMillis: () -> Long,
     private val onFrame: (Seat, TransportFrame) -> Unit,
     private val onSeated: (Seat) -> Unit = {},
     private val onLost: (Seat) -> Unit = {},
@@ -129,6 +131,13 @@ class TransportHost(
         try {
             while (true) {
                 val frame = ws.nextFrameOrNull() ?: break
+                // Clock probes are answered HERE, below the app: the reply must carry the time
+                // the probe was seen, not the time some handler got around to it — every
+                // millisecond of detour becomes rtt, and rtt is the noise floor of D5's offset.
+                if (frame is TransportFrame.TimeProbe) {
+                    ws.send(Frame.Text(TransportWire.encode(TransportFrame.TimeMark(frame.probe, nowMillis()))))
+                    continue
+                }
                 onFrame(seat, frame)
             }
         } finally {

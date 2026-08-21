@@ -23,6 +23,8 @@ class TransportFrameTest {
         "proposed" to TransportFrame.Proposed(proposal = 3, body = "opaque"),
         "ack" to TransportFrame.Ack(proposal = 3),
         "commit" to TransportFrame.Commit(proposal = 3),
+        "probe" to TransportFrame.TimeProbe(probe = 4),
+        "mark" to TransportFrame.TimeMark(probe = 4, hostMillis = 12_345),
         "carry" to TransportFrame.Carry(body = "opaque"),
     )
 
@@ -59,6 +61,8 @@ class TransportFrameTest {
             is TransportFrame.Proposed -> "proposed"
             is TransportFrame.Ack -> "ack"
             is TransportFrame.Commit -> "commit"
+            is TransportFrame.TimeProbe -> "probe"
+            is TransportFrame.TimeMark -> "mark"
             is TransportFrame.Carry -> "carry"
         }
         for ((wireName, frame) in everyFrame) {
