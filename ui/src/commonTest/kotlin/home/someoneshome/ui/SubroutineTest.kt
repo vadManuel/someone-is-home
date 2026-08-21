@@ -4,6 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -67,6 +68,41 @@ class SubroutineTest {
             assertEquals(
                 subroutine, Subroutine.on(subroutine.screen!!),
                 "a screen does not lead back to the Subroutine that claims it",
+            )
+        }
+    }
+
+    /**
+     * **A built Subroutine has an entry behind it, and a tap on it reaches that entry.**
+     *
+     * The way a Subroutine ships half-built is not that somebody forgets the screen — the screen is
+     * the part you can see. It is that the roster gets a row, the screen gets a `when` branch, and
+     * the *dispatch* in [SubroutineModel.tap] keeps its `else -> Unit`, so every finger that lands
+     * on the new screen goes nowhere and the screen simply never echoes. In a game whose Subroutine
+     * screens are mostly echo, that looks like a screen that has not loaded yet.
+     *
+     * One is a number the screens agree on: it is a finger on the first element, the first cell,
+     * one finger on the glass, one press of +, a tap on the first node. Every one of them is
+     * something.
+     */
+    @Test
+    fun everyBuiltSubroutineHasAnEntryAndATapReachesIt() {
+        for (subroutine in Subroutine.built) {
+            val model = SubroutineModel()
+            val entry = model.entry(subroutine)
+            assertNotNull(entry, "${subroutine.label} has a screen and no entry behind it")
+            assertFalse(entry.touched, "${subroutine.label} started out already touched")
+            model.tap(subroutine, 1)
+            assertTrue(
+                model.entry(subroutine)!!.touched,
+                "a tap on ${subroutine.label} reached nothing — it has a screen, a roster row and " +
+                    "no wiring in SubroutineModel.tap",
+            )
+        }
+        for (subroutine in Subroutine.entries - Subroutine.built.toSet()) {
+            assertNull(
+                SubroutineModel().entry(subroutine),
+                "${subroutine.label} is unbuilt and has an entry that would take input",
             )
         }
     }
@@ -184,12 +220,223 @@ class SubroutineTest {
     @Test
     fun openingASubroutineAgainClearsEveryEntry() {
         val model = SubroutineModel.sample()
-        assertTrue(model.handshake.entered.isNotEmpty(), "the fixture proves nothing when empty")
+        for (subroutine in Subroutine.built) {
+            assertTrue(
+                model.entry(subroutine)!!.touched,
+                "the fixture leaves ${subroutine.label} untouched, so clearing it proves nothing",
+            )
+        }
         model.beganAgain()
-        assertTrue(model.handshake.entered.isEmpty())
-        assertTrue(model.replay.entered.isEmpty())
-        assertNull(model.parity.choice)
-        assertFalse(model.handshake.handedOver)
+        for (subroutine in Subroutine.built) {
+            val entry = model.entry(subroutine)!!
+            assertFalse(entry.touched, "${subroutine.label} kept an entry across a fresh scan")
+            assertFalse(entry.gone, "${subroutine.label} began already handed over")
+        }
+    }
+
+    // ---- The hold, the scalar and the route ----------------------------------------------------
+
+    /**
+     * **Short's hold ends on the clock, and it goes with whatever hand was on the glass.**
+     *
+     * The property that keeps one screen serving both roles, stated for the one Subroutine where
+     * it would be easiest to get wrong: a hold that completed *when the right number of fingers
+     * arrived* would be the device grading the answer, and it would grade it visibly, because a
+     * wrong hand would sit there while a right one went.
+     *
+     * Injecting the bug this exists for means giving [HoldEntry] the asked-for count and refusing
+     * [HoldEntry.handOver] unless [HoldEntry.fingers] matches it.
+     */
+    @Test
+    fun aHoldGoesWithWhateverHandWasOnTheGlass() {
+        for (fingers in 1..5) {
+            val entry = HoldEntry()
+            entry.press(fingers)
+            entry.handOver()
+            assertEquals(
+                fingers, entry.handedOver,
+                "a hold of $fingers finger(s) did not go, or went as something else",
+            )
+        }
+    }
+
+    /**
+     * An empty glass has made no hold, and lifting off after it has gone does not withdraw it.
+     *
+     * The second half is the echo: what is drawn after the hand-over is what this phone *sent*,
+     * and a count draining back to nothing while the house has not answered would read as the
+     * entry being taken back.
+     */
+    @Test
+    fun anEmptyGlassSendsNothingAndAHandLiftedAfterwardsTakesNothingBack() {
+        val entry = HoldEntry()
+        entry.handOver()
+        assertNull(entry.handedOver, "a hold nobody was making went to the house")
+
+        entry.press(3)
+        entry.handOver()
+        entry.press(0)
+        assertEquals(3, entry.handedOver)
+        assertEquals(3, entry.fingers, "the echo drained after the entry had gone")
+    }
+
+    /**
+     * **Jam knows how far it has walked and not how far it has to go.**
+     *
+     * [ScalarEntry] holds the net steps pressed from wherever the house opened the Subroutine.
+     * Nothing in it is the target, so nothing in it can be subtracted from anything to find the
+     * gap — which is [ParityGrid]'s discipline applied to a number instead of to a grid.
+     *
+     * SUBMIT is accepted with nothing pressed on purpose: refusing it would be the phone asserting
+     * that the opening position is not the answer.
+     */
+    @Test
+    fun aScalarWalksBothWaysAndCanBeSentWithoutMoving() {
+        val untouched = ScalarEntry(reach = 4)
+        untouched.handOver()
+        assertEquals(0, untouched.handedOver, "an unmoved shape was refused")
+
+        val entry = ScalarEntry(reach = 4)
+        entry.step(1)
+        entry.step(1)
+        entry.step(-1)
+        assertEquals(1, entry.offset)
+        assertEquals(3, entry.presses, "a press that moved nothing still happened")
+        entry.handOver()
+        entry.step(1)
+        assertEquals(1, entry.offset, "it moved after it had gone to the house")
+    }
+
+    /** The reach is a stop, and it is symmetric: a shape cannot be driven off either edge. */
+    @Test
+    fun aScalarStopsAtItsReachInBothDirections() {
+        val entry = ScalarEntry(reach = 3)
+        repeat(10) { entry.step(1) }
+        assertEquals(3, entry.offset)
+        repeat(20) { entry.step(-1) }
+        assertEquals(-3, entry.offset)
+    }
+
+    /**
+     * **A route accepts a move the graph does not have.**
+     *
+     * Rule 1 as a type: *never early-return on invalid in a client-visible path — the absent effect
+     * is the leak.* A [PathEntry] that refused a tap on an unconnected node would be a screen
+     * telling a player their move was illegal, which is the house's answer arriving from the phone.
+     *
+     * Injecting the bug this exists for means handing [PathEntry] the wiring and having
+     * [PathEntry.walk] check [SignalGraph.Wiring.joinedTo] before it accepts.
+     */
+    @Test
+    fun aRouteTakesEveryTapWhetherOrNotTheNodesAreJoined() {
+        val wiring = SignalGraph.of(SubroutineModel.TRACE_SEED)
+        val far = wiring.nodes.indices.first { it !in wiring.joinedTo(wiring.source) && it != wiring.source }
+        val entry = PathEntry()
+        entry.walk(wiring.source)
+        entry.walk(far)
+        assertContentEquals(
+            listOf(wiring.source, far), entry.walked,
+            "a tap on a node the graph does not join was refused, which is the house's answer " +
+                "being given by the phone",
+        )
+    }
+
+    /** Tapping a node already walked steps back to it; tapping the one you are on changes nothing. */
+    @Test
+    fun aRouteRetracesToANodeItAlreadyHolds() {
+        val entry = PathEntry()
+        listOf(0, 3, 5, 8).forEach(entry::walk)
+        entry.walk(3)
+        assertContentEquals(listOf(0, 3), entry.walked, "the route did not step back")
+        entry.walk(3)
+        assertContentEquals(listOf(0, 3), entry.walked, "standing still moved the route")
+        entry.handOver()
+        entry.walk(9)
+        assertContentEquals(listOf(0, 3), entry.walked, "the route changed after it had gone")
+    }
+
+    /** SUBMIT with an empty route is refused, the same refusal LOCK IN makes on an empty ballot. */
+    @Test
+    fun anEmptyRouteIsRefused() {
+        val entry = PathEntry()
+        entry.handOver()
+        assertNull(entry.handedOver, "an empty route went to the house")
+    }
+
+    // ---- The signal graph ----------------------------------------------------------------------
+
+    /**
+     * **Every graph is walkable, and the generator does not say how.**
+     *
+     * [SignalGraph.of] returns nodes and edges and nothing else — the walk it used to guarantee
+     * connectivity is a local, discarded on return, exactly as [ParityGrid] discards the cell it
+     * flipped. So the only way to check its work is the way a player does it: breadth-first across
+     * the wiring that came back.
+     *
+     * Swept over many seeds because the fault would be a seed whose sink is stranded, and one
+     * fixture seed would never show it.
+     */
+    @Test
+    fun everyGraphHasARouteFromSourceToSink() {
+        for (seed in 0 until 120) {
+            val wiring = SignalGraph.of(seed)
+            assertTrue(wiring.source >= 0 && wiring.sink >= 0, "seed $seed lost an end of the route")
+            assertTrue(
+                hops(wiring) != null,
+                "seed $seed draws a graph whose sink cannot be reached from its source",
+            )
+        }
+    }
+
+    /**
+     * **No node floats.** A node with no edge is a dot drawn in the middle of nothing, which reads
+     * as a rendering fault rather than as a dead end — and a dead end is the whole point of a decoy.
+     */
+    @Test
+    fun noNodeIsDrawnWithoutAnEdge() {
+        for (seed in 0 until 120) {
+            val wiring = SignalGraph.of(seed)
+            for (at in wiring.nodes.indices) {
+                assertTrue(
+                    wiring.joinedTo(at).isNotEmpty(),
+                    "seed $seed strands node $at with no edge on it",
+                )
+            }
+        }
+    }
+
+    /**
+     * The decoys are really there, and they really are extra.
+     *
+     * The count is a placeholder rather than a tuning value ([SignalGraph.DECOYS]), but *whether
+     * decoys exist at all* is not: a graph that was only its own route is a corridor, and the
+     * Subroutine's whole content is choosing among the ways across.
+     */
+    @Test
+    fun everyGraphCarriesMoreNodesThanItsShortestRoute() {
+        for (seed in 0 until 120) {
+            val wiring = SignalGraph.of(seed)
+            val shortest = hops(wiring)
+            assertNotNull(shortest, "seed $seed has no route at all, so there is none to measure")
+            assertTrue(
+                wiring.nodes.size > shortest + 1,
+                "seed $seed draws ${wiring.nodes.size} node(s) for a route of ${shortest + 1} — " +
+                    "there is nothing to choose between",
+            )
+        }
+    }
+
+    /** How many edges the shortest route crosses, or null if the sink cannot be reached. */
+    private fun hops(wiring: SignalGraph.Wiring): Int? {
+        val seen = mutableSetOf(wiring.source)
+        var frontier = listOf(wiring.source)
+        var distance = 0
+        while (frontier.isNotEmpty()) {
+            if (wiring.sink in frontier) return distance
+            frontier = frontier.flatMap { wiring.joinedTo(it) }.filter { seen.add(it) }
+            distance++
+        }
+        return null
     }
 
     // ---- The parity grid -----------------------------------------------------------------------

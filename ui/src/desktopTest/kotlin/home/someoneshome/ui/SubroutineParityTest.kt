@@ -30,9 +30,9 @@ import kotlin.test.assertTrue
  *
  * The way that stays true is not diligence. It is that there is **no second screen and no role
  * anywhere in the interaction**: `SubroutineModel` holds no `isFake`, `PanelActions` passes no
- * role, and the three screens read neither. So the claim to check is the strongest form of it —
- * given the same input, the two roles render the same pixels — and it is checked at every step of
- * the input rather than only at the end, because a difference that appears halfway through a
+ * role, and none of the six screens reads either. So the claim to check is the strongest form of
+ * it — given the same input, the two roles render the same pixels — and it is checked at every step
+ * of the input rather than only at the end, because a difference that appears halfway through a
  * sequence and closes again is exactly the sort a final-state check would miss.
  *
  * ### Pixels, not semantics
@@ -55,24 +55,53 @@ class SubroutineParityTest {
      */
     private fun drive(model: SubroutineModel, subroutine: Subroutine, step: Int) {
         val actions = PanelActions(
-            tapSubroutine = { which, at ->
-                when (which) {
-                    Subroutine.Handshake -> model.handshake.enter(at)
-                    Subroutine.Replay -> model.replay.enter(at)
-                    Subroutine.ParityCheck -> model.parity.choose(at)
-                    else -> Unit
-                }
-            },
+            tapSubroutine = model::tap,
+            handOverSubroutine = model::handOver,
         )
-        actions.tapSubroutine(subroutine, step)
+        // What one step means is the screen's own vocabulary — an element, a cell, a signed press,
+        // a node, a count of fingers. All this needs is that it is the SAME for both roles, and
+        // that it is a number every screen does something with: a step that no screen answered
+        // would be a parity comparison of two identical untouched screens, which proves nothing.
+        // Signal Trace's is taken modulo its node count so the route stays inside the graph.
+        val at = when (subroutine) {
+            Subroutine.SignalTrace ->
+                step.mod(SignalGraph.of(SubroutineModel.TRACE_SEED).nodes.size)
+            // Jam's is a signed step, so a plain index would walk it one way only. Alternating
+            // presses also exercise the direction the ring shrinks in, which is the one the
+            // player uses.
+            Subroutine.Jam -> if (step % 2 == 0) -1 else 1
+            // Short's is a count of fingers, and zero is an empty glass rather than a touch.
+            Subroutine.Short -> step + 1
+            else -> step
+        }
+        actions.tapSubroutine(subroutine, at)
+    }
+
+    /**
+     * A fresh model, driven [steps] taps in and optionally handed over.
+     *
+     * **The hand-over is a separate flag rather than one more tap**, because three of the six no
+     * longer go by being tapped enough times: Parity Check, Jam and Signal Trace go on SUBMIT, and
+     * Short goes when its two seconds run out. A sweep that only counted taps would compare the
+     * two roles' *unsent* screens forever and never look at the state every one of them ends in.
+     */
+    private fun driven(subroutine: Subroutine, steps: Int, handOver: Boolean): SubroutineModel {
+        val model = SubroutineModel()
+        repeat(steps) { drive(model, subroutine, it) }
+        if (handOver) model.handOver(subroutine)
+        return model
     }
 
     /** The Subroutine's screen, in [role], after [steps] further taps on a fresh entry. */
-    private fun shot(subroutine: Subroutine, role: PanelRole, steps: Int): BufferedImage {
+    private fun shot(
+        subroutine: Subroutine,
+        role: PanelRole,
+        steps: Int,
+        handOver: Boolean = false,
+    ): BufferedImage {
         var image: BufferedImage? = null
         runDesktopComposeUiTest(width = width, height = height) {
-            val model = SubroutineModel()
-            repeat(steps) { drive(model, subroutine, it) }
+            val model = driven(subroutine, steps, handOver)
             setContent {
                 Box(Modifier.fillMaxSize()) {
                     DeviceCanvas(insets = PanelInsets()) {
@@ -109,7 +138,7 @@ class SubroutineParityTest {
     /**
      * **The Insider's Subroutine is the Resident's Subroutine, pixel for pixel, at every step.**
      *
-     * Injecting the bug this exists for means giving any of the three screens something that reads
+     * Injecting the bug this exists for means giving any of the six screens something that reads
      * `vals.insider` — a different intensity on a returned beat, an extra line under the grid, a
      * button that dims a step earlier. All of them are invisible in review and all of them fail
      * here, naming the Subroutine and the step.
@@ -120,15 +149,18 @@ class SubroutineParityTest {
 
         for (subroutine in Subroutine.built) {
             // Zero taps is the screen a player walks onto; each step after it is one more finger.
-            // The last is past the point every entry of the three has gone to the house, so the
-            // handed-over state is compared too.
+            // The last is past the point the two sequences have gone to the house on their own,
+            // and the second pass sends the four that need sending.
             for (steps in 0..SubroutineModel.HANDSHAKE_BEATS + 1) {
-                val resident = shot(subroutine, PanelRole.Resident, steps)
-                val insider = shot(subroutine, PanelRole.Insider, steps)
-                val (count, at) = diff(resident, insider)
-                if (count > 0) {
-                    wrong += "${subroutine.label} after $steps tap(s) — $count pixels differ by " +
-                        "role, first at $at"
+                for (handOver in listOf(false, true)) {
+                    val resident = shot(subroutine, PanelRole.Resident, steps, handOver)
+                    val insider = shot(subroutine, PanelRole.Insider, steps, handOver)
+                    val (count, at) = diff(resident, insider)
+                    if (count > 0) {
+                        val sent = if (handOver) ", handed over" else ""
+                        wrong += "${subroutine.label} after $steps tap(s)$sent — $count pixels " +
+                            "differ by role, first at $at"
+                    }
                 }
             }
         }
@@ -164,23 +196,25 @@ class SubroutineParityTest {
 
         for (subroutine in Subroutine.built) {
             for (steps in 0..SubroutineModel.HANDSHAKE_BEATS + 1) {
-                for (role in PanelRole.entries) {
-                    runDesktopComposeUiTest(width = width, height = height) {
-                        val model = SubroutineModel()
-                        repeat(steps) { drive(model, subroutine, it) }
-                        setContent {
-                            DeviceCanvas(insets = PanelInsets()) {
-                                Screen(
-                                    PanelState(screen = subroutine.screen!!, role = role),
-                                    subroutines = model,
-                                )
+                for (handOver in listOf(false, true)) {
+                    for (role in PanelRole.entries) {
+                        runDesktopComposeUiTest(width = width, height = height) {
+                            val model = driven(subroutine, steps, handOver)
+                            setContent {
+                                DeviceCanvas(insets = PanelInsets()) {
+                                    Screen(
+                                        PanelState(screen = subroutine.screen!!, role = role),
+                                        subroutines = model,
+                                    )
+                                }
                             }
-                        }
-                        for (verdict in verdicts) {
-                            val nodes = onAllNodes(hasText(verdict, substring = true))
-                            if (nodes.fetchSemanticsNodes().isNotEmpty()) {
-                                wrong += "${subroutine.label}/$role after $steps tap(s) says " +
-                                    "\"$verdict\""
+                            for (verdict in verdicts) {
+                                val nodes = onAllNodes(hasText(verdict, substring = true))
+                                if (nodes.fetchSemanticsNodes().isNotEmpty()) {
+                                    val sent = if (handOver) ", handed over" else ""
+                                    wrong += "${subroutine.label}/$role after $steps tap(s)$sent " +
+                                        "says \"$verdict\""
+                                }
                             }
                         }
                     }
@@ -265,5 +299,162 @@ class SubroutineParityTest {
 
         assertEquals(listOf(0), model.replay.entered, "the tap did not reach the entry")
         assertEquals(emptyList(), asked, "a tap inside a Subroutine moved the phone")
+    }
+
+    /**
+     * **The same claim across all six: nothing inside a Subroutine is a step in a route.**
+     *
+     * Every click target on every one of the six is fired, and the only screen the phone may be
+     * asked to go to is the work order — which is STOP NOW, the player walking away. Anything else
+     * is this phone deciding on its own that the work is finished, and the six screens have
+     * different controls to get that wrong with: dots, cells, a grid, +/−, nodes, and two SUBMITs.
+     *
+     * **One fresh screen per control**, rather than one screen clicked all over: pressing SUBMIT
+     * takes the rest of the screen inert, so a single pass would fire the first few controls and
+     * then find the list it was walking had got shorter underneath it.
+     */
+    @Test
+    fun noControlOnAnySubroutineScreenWalksAnywhereButTheWorkOrder() {
+        val wrong = mutableListOf<String>()
+
+        for (subroutine in Subroutine.built) {
+            var targets = 0
+            runDesktopComposeUiTest(width = width, height = height) {
+                setContent {
+                    DeviceCanvas(insets = PanelInsets()) {
+                        Screen(
+                            PanelState(screen = subroutine.screen!!),
+                            subroutines = SubroutineModel.sample(),
+                        )
+                    }
+                }
+                targets = onAllNodes(hasClickAction()).fetchSemanticsNodes().size
+            }
+            assertTrue(targets > 0, "${subroutine.label} publishes no controls at all")
+
+            for (at in 0 until targets) {
+                runDesktopComposeUiTest(width = width, height = height) {
+                    val model = SubroutineModel.sample()
+                    val asked = mutableListOf<ScreenId>()
+                    setContent {
+                        DeviceCanvas(insets = PanelInsets()) {
+                            Screen(
+                                PanelState(screen = subroutine.screen!!),
+                                PanelActions(
+                                    nav = { asked += it },
+                                    tapSubroutine = model::tap,
+                                    handOverSubroutine = model::handOver,
+                                ),
+                                subroutines = model,
+                            )
+                        }
+                    }
+                    onAllNodes(hasClickAction())[at]
+                        .performSemanticsAction(SemanticsActions.OnClick)
+                    val strayed = asked.filter { it != ScreenId.Work }
+                    if (strayed.isNotEmpty()) {
+                        wrong += "${subroutine.label} control $at walked to $strayed"
+                    }
+                }
+            }
+        }
+
+        wrong.forEach { println("ROUTE  $it") }
+        assertTrue(
+            wrong.isEmpty(),
+            "a control inside a Subroutine moved the phone somewhere other than the work order:" +
+                wrong.joinToString("") { "\n  $it" },
+        )
+    }
+
+    /**
+     * **Signal Trace takes a tap on a node its own graph does not join.**
+     *
+     * Rule 1, on the one screen in this port where the tempting thing is a guard: *never
+     * early-return on invalid in a client-visible path — the absent effect is the leak.* A node
+     * that stopped answering because it is not connected to the one you are standing on would be
+     * the screen telling a player their move was illegal, which is the house's answer arriving from
+     * the phone, and it would be the only place in the game where the device says anything about
+     * whether the work is going well.
+     *
+     * Driven through the screen rather than the entry, because that is where the guard would be
+     * written: a `.then(if (joined) Modifier.tap …)` on the node, which `SubroutineTest` — reading
+     * the entry, which has no wiring in it to check against — cannot see.
+     */
+    @Test
+    fun everyNodeStaysTappableEvenWhereTheGraphHasNoEdge() =
+        runDesktopComposeUiTest(width = width, height = height) {
+            val wiring = SignalGraph.of(SubroutineModel.TRACE_SEED)
+            val joined = wiring.joinedTo(wiring.source)
+            val stranger = wiring.nodes.indices.first { it != wiring.source && it !in joined }
+            val model = SubroutineModel()
+            setContent {
+                DeviceCanvas(insets = PanelInsets()) {
+                    Screen(
+                        PanelState(screen = ScreenId.SubTrace),
+                        PanelActions(tapSubroutine = model::tap),
+                        subroutines = model,
+                    )
+                }
+            }
+
+            // The nodes are drawn before the two buttons, in index order, so target n is node n.
+            val targets = onAllNodes(hasClickAction())
+            assertTrue(
+                targets.fetchSemanticsNodes().size > wiring.nodes.size,
+                "the nodes are not publishing tap targets, so nothing here is being tested",
+            )
+            targets[wiring.source].performSemanticsAction(SemanticsActions.OnClick)
+            targets[stranger].performSemanticsAction(SemanticsActions.OnClick)
+
+            assertEquals(
+                listOf(wiring.source, stranger), model.trace.walked,
+                "a tap on node $stranger was refused because the graph does not join it to the " +
+                    "source — the screen adjudicated a move",
+            )
+        }
+
+    /**
+     * **Jam's SUBMIT is a control before anything has been pressed.**
+     *
+     * An inert SUBMIT would be the phone saying *the opening position is not the answer*, which it
+     * has no way of knowing and no business saying. It is the mirror of Signal Trace's, which
+     * **is** inert on an empty route — and the difference between the two is the whole distinction:
+     * refusing to send *nothing* is honest, refusing to send *this* is a verdict.
+     */
+    @Test
+    fun jamCanBeSentWithoutBeingTouchedAndAnEmptyRouteCannot() {
+        val cases = listOf(
+            Subroutine.Jam to true,
+            Subroutine.SignalTrace to false,
+        )
+        for ((subroutine, live) in cases) {
+            runDesktopComposeUiTest(width = width, height = height) {
+                val model = SubroutineModel()
+                setContent {
+                    DeviceCanvas(insets = PanelInsets()) {
+                        Screen(
+                            PanelState(screen = subroutine.screen!!),
+                            PanelActions(handOverSubroutine = model::handOver),
+                            subroutines = model,
+                        )
+                    }
+                }
+                onAllNodes(hasText("SUBMIT")).fetchSemanticsNodes().let {
+                    assertEquals(1, it.size, "${subroutine.label} has no SUBMIT to press")
+                }
+                val pressable = onAllNodes(hasText("SUBMIT") and hasClickAction())
+                    .fetchSemanticsNodes().isNotEmpty()
+                assertEquals(
+                    live, pressable,
+                    if (live) {
+                        "${subroutine.label}'s SUBMIT is inert with nothing pressed, which is the " +
+                            "phone claiming the opening position is not the answer"
+                    } else {
+                        "${subroutine.label}'s SUBMIT would send an empty answer"
+                    },
+                )
+            }
+        }
     }
 }

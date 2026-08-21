@@ -61,6 +61,9 @@ class LightSignatureTest {
         ScreenId.SubHandshake to mapOf(LightSignature.Dark to 1),
         ScreenId.SubReplay to mapOf(LightSignature.Bright to 1),
         ScreenId.SubParity to mapOf(LightSignature.Bright to 1),
+        ScreenId.SubShort to mapOf(LightSignature.Dark to 1),
+        ScreenId.SubTrace to mapOf(LightSignature.Medium to 1),
+        ScreenId.SubJam to mapOf(LightSignature.Medium to 1),
     )
 
     private fun SemanticsNodeInteractionsProvider.marks(): Map<LightSignature, Int> =

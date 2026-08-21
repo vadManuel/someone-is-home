@@ -120,7 +120,8 @@ object ScreenGraph {
         // walked away on the strength of its own last tap would be this phone announcing a
         // completion it cannot see. The three used to chain into one another — Sub to SubBright to
         // Work — which was a fixture convenience wearing a game route's clothes.
-        ScreenId.SubHandshake, ScreenId.SubReplay, ScreenId.SubParity -> setOf(ScreenId.Work)
+        ScreenId.SubHandshake, ScreenId.SubReplay, ScreenId.SubParity,
+        ScreenId.SubShort, ScreenId.SubTrace, ScreenId.SubJam -> setOf(ScreenId.Work)
         ScreenId.Files -> setOf(ScreenId.Home)
         ScreenId.Notes -> setOf(ScreenId.Home)
         ScreenId.TermNo -> setOf(ScreenId.Home, ScreenId.TermLive)
@@ -770,28 +771,19 @@ class FlowModel(
      * that threw would turn a routing mistake into a dead phone in a dark house, and rule 6 is
      * that errors are silent to the player.
      */
-    fun tapSubroutine(subroutine: Subroutine, at: Int) {
-        when (subroutine) {
-            Subroutine.Handshake -> subroutines.handshake.enter(at)
-            Subroutine.Replay -> subroutines.replay.enter(at)
-            Subroutine.ParityCheck -> subroutines.parity.choose(at)
-            else -> Unit
-        }
-    }
+    fun tapSubroutine(subroutine: Subroutine, at: Int) = subroutines.tap(subroutine, at)
 
     /**
-     * SUBMIT, on the one Subroutine of the three whose answer can still change.
+     * The entry goes to the house — SUBMIT, or on Short the two seconds running out.
      *
-     * A sequence hands itself over when its last element goes in — there is nothing left to
-     * change, so there is nothing to confirm. A single choice can be moved right up until it is
-     * sent, which is the vote's shape and the vote's reason.
+     * A sequence hands itself over when its last element goes in: there is nothing left to change,
+     * so there is nothing to confirm. Everything else can be moved right up until it is sent,
+     * which is the vote's shape and the vote's reason.
+     *
+     * The dispatch is [SubroutineModel.handOver] rather than a second `when` here, for the reason
+     * given there: two copies of it is how a Subroutine gets a screen and no wiring.
      */
-    fun handOverSubroutine(subroutine: Subroutine) {
-        when (subroutine) {
-            Subroutine.ParityCheck -> subroutines.parity.handOver()
-            else -> Unit
-        }
-    }
+    fun handOverSubroutine(subroutine: Subroutine) = subroutines.handOver(subroutine)
 
     // ---- Notifications -----------------------------------------------------------------------
 
