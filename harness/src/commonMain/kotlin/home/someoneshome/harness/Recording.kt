@@ -50,11 +50,16 @@ class Recording(
     }
 
     companion object {
+        // 6: the meeting engine. `VoteCast(voter, target)` became `VoteSelected` plus `VoteLocked`
+        // -- the *changeable until the clock ends* model D-117 superseded, split into the live tap
+        // and the irrevocable READY -- and six more meeting events arrived with them. The state row
+        // gained the whole meeting, both out lists and the Egress flag. A version 5 recording holds
+        // an event this build cannot construct, and its state rows are missing the ballots a tally
+        // is computed from.
+        //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
-        // entry; the state row gained the work order. A version 4 recording holds an event this
-        // build cannot construct and a state row missing the field a verdict is computed from, so
-        // reading one under this schema would replay a round that never happened.
-        const val HEADER = "someone-is-home/recording/5"
+        // entry; the state row gained the work order.
+        const val HEADER = "someone-is-home/recording/6"
     }
 }
 

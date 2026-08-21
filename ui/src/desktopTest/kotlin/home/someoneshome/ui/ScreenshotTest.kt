@@ -274,10 +274,10 @@ class ScreenshotTest {
             Triple("meeting-checked-in", ScreenId.Assemble) { checkIn() },
             Triple("meeting-checked-in-out", ScreenId.Ghost2) { checkIn() },
             Triple("meeting-ready", ScreenId.Discussion) { sayReady() },
-            // A ballot nobody has touched: LOCK IN present, and visibly not a control.
+            // A ballot nobody has touched: READY present, and visibly not a control.
             Triple("meeting-vote-untouched", ScreenId.Vote) { meetingBegan() },
             Triple("meeting-vote-skip", ScreenId.Vote) { choose(VoteChoice.Skip) },
-            Triple("meeting-vote-locked", ScreenId.Vote) { lockIn() },
+            Triple("meeting-vote-locked", ScreenId.Vote) { readyToVote() },
         )
         for ((name, screen, set) in frames) {
             runDesktopComposeUiTest(width = 600, height = 1300) {

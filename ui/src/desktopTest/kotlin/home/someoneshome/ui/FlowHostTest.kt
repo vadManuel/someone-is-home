@@ -45,18 +45,26 @@ class FlowHostTest {
      * Every step is one the house takes, and each one has to hand off to the next. A chain that
      * stops in the middle is the failure this exists for — the room would be standing there
      * looking at a screen that has stopped being true, with no control on it.
+     *
+     * **Four of the seven are pushes now**, so this runs with `standingInForTheHouse` — the bench's
+     * stand-in for an authority. That is the harness saying out loud what it is doing, and the test
+     * below is the other half of it: without the stand-in the meeting stops dead, which is what a
+     * phone with no house attached should do.
      */
     @OptIn(ExperimentalTestApi::class)
     @Test
     fun theHouseWalksTheWholeMeetingWithoutBeingTouched() = runDesktopComposeUiTest {
         val model = FlowModel(PanelState(screen = ScreenId.Call))
         mainClock.autoAdvance = false
-        setContent { DeviceCanvas(insets = PanelInsets()) { FlowHost(model) } }
+        setContent {
+            DeviceCanvas(insets = PanelInsets()) { FlowHost(model, standingInForTheHouse = true) }
+        }
 
         val walked = mutableListOf(model.state.screen)
         repeat(6) {
-            val rule = Flow.autoAdvance.getValue(model.state.screen)
-            mainClock.advanceTimeBy(rule.afterMillis + 100L)
+            val at = model.state.screen
+            val wait = Flow.autoAdvance[at]?.afterMillis?.toLong() ?: HOUSE_STAND_IN_MS
+            mainClock.advanceTimeBy(wait + 100L)
             walked += model.state.screen
         }
         assertEquals(
@@ -65,6 +73,34 @@ class FlowHostTest {
                 ScreenId.Vote, ScreenId.Tally, ScreenId.Home,
             ),
             walked,
+        )
+    }
+
+    /**
+     * **With no house attached the meeting stops at the check-in screen and stays there.**
+     *
+     * The important half of the pair above, and the one that would be silently lost if the
+     * stand-in ever became the default. D-104's gate closes when every living player and every out
+     * player has walked in; a phone that moved itself on after some number of seconds would be one
+     * player at the talk while the other five were still walking.
+     */
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun withNoHouseAttachedTheMeetingWaitsAtTheGate() = runDesktopComposeUiTest {
+        val model = FlowModel(PanelState(screen = ScreenId.Call))
+        mainClock.autoAdvance = false
+        setContent { DeviceCanvas(insets = PanelInsets()) { FlowHost(model) } }
+
+        mainClock.advanceTimeBy(Flow.autoAdvance.getValue(ScreenId.Call).afterMillis + 100L)
+        assertEquals(ScreenId.Assemble, model.state.screen, "the ring never finished")
+
+        // Well past the bench's stand-in and past every window the design carries. Not longer:
+        // the frame clock is advanced a frame at a time, and ten minutes of it times the runner
+        // out rather than proving anything further.
+        mainClock.advanceTimeBy(HOUSE_STAND_IN_MS * 15)
+        assertEquals(
+            ScreenId.Assemble, model.state.screen,
+            "the phone walked itself past a gate that counts every phone in the house",
         )
     }
 

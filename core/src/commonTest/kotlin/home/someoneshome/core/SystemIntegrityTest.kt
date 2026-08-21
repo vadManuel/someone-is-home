@@ -4,6 +4,7 @@ import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
 import home.someoneshome.model.InsiderBand
 import home.someoneshome.model.MarkerId
+import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.Role
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
@@ -107,7 +108,7 @@ class SystemIntegrityTest {
         val seats = seatsOf(8)
         var state = armedWith(seats, listOf(Seat(1), Seat(5)))
         val atArming = state.systemIntegrity
-        state = reduce(state, Event.MeetingCalled(Tick(1), Seat(0))).state
+        state = reduce(state, Event.MeetingCalled(Tick(1), Seat(0), MeetingTrigger.MeetingCard)).state
         state = reduce(state, Event.RevokeArmed(Tick(2), Seat(1))).state
         state = reduce(state, Event.ContactMade(Tick(3), Seat(1), Seat(2))).state
         assertEquals(atArming, state.systemIntegrity, "a revocation moved the denominator")

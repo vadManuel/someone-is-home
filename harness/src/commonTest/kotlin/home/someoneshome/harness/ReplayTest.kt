@@ -3,6 +3,7 @@ package home.someoneshome.harness
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
 import home.someoneshome.model.MarkerId
+import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
 import kotlin.test.Test
@@ -23,7 +24,7 @@ class RecordingTest {
     @Test
     fun `refusals are recorded and replay identically`() {
         val events = listOf(
-            Event.MeetingCalled(Tick(0), Seat(2)),
+            Event.MeetingCalled(Tick(0), Seat(2), MeetingTrigger.MeetingCard),
             Event.ContactMade(Tick(1), Seat(1), Seat(2)),
         ) + round()
         val (_, recording) = record(GameState.EMPTY, events)
@@ -234,8 +235,8 @@ class RecordingTest {
     /** Absence must be distinguishable from a real seat, not collapsed onto a sentinel. */
     @Test
     fun `a skipped vote does not render the same as a vote for seat minus one`() {
-        val skip = Transcript.render(Event.VoteCast(Tick(1), Seat(0), null))
-        val negative = Transcript.render(Event.VoteCast(Tick(1), Seat(0), Seat(-1)))
+        val skip = Transcript.render(Event.VoteSelected(Tick(1), Seat(0), null))
+        val negative = Transcript.render(Event.VoteSelected(Tick(1), Seat(0), Seat(-1)))
         assertTrue(skip != negative, "abstention and a seat must not share a transcript row")
     }
 }

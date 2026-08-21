@@ -118,16 +118,17 @@ class MeetingInputTest {
      * one player a tally the house has not read.
      */
     @Test
-    fun lockingInHandsItOverAndGoesNowhere() = runDesktopComposeUiTest(width = 300, height = 650) {
+    fun sayingYouAreReadyCastsTheVoteAndGoesNowhere() = runDesktopComposeUiTest(width = 300, height = 650) {
         val model = modelOn(ScreenId.Vote)
         show(model)
 
-        onNodeWithText("LOCK IN").performClick()
+        onNodeWithText("READY").performClick()
         mainClock.advanceTimeBy(50)
 
-        assertEquals(VoteChoice.Named("MARCUS"), model.meeting.handedOver)
+        assertTrue(model.meeting.locked, "the ballot was not cast")
+        assertEquals(VoteChoice.Named("MARCUS"), model.meeting.choice)
         assertEquals(ScreenId.Vote, model.state.screen, "one phone's press walked to the result")
-        onNodeWithText("LOCKED IN").assertExists()
+        onNodeWithText("VOTE CAST").assertExists()
         // The house's count is the house's. It did not move because this phone pressed a button.
         onNodeWithText("4 OF 6 VOTED", substring = true).assertExists()
     }
@@ -138,7 +139,7 @@ class MeetingInputTest {
      * that is visibly not ready.
      */
     @Test
-    fun lockInIsPresentAndInertWithNothingChosen() =
+    fun readyIsPresentAndInertWithNothingChosen() =
         runDesktopComposeUiTest(width = 300, height = 650) {
             val model = FlowModel(PanelState(screen = ScreenId.Home), meeting = MeetingModel.sample())
             // A meeting begins with nothing said, which is the state this asserts against.
@@ -146,33 +147,43 @@ class MeetingInputTest {
             model.push(ScreenId.Vote)
             show(model)
 
-            onNodeWithText("LOCK IN").assertExists()
+            onNodeWithText("READY").assertExists()
             assertEquals(
                 0,
-                onAllNodes(hasClickAction() and hasText("LOCK IN", substring = true))
+                onAllNodes(hasClickAction() and hasText("READY", substring = true))
                     .fetchSemanticsNodes().size,
                 "an empty vote could be handed over",
             )
         }
 
-    /** Changing the vote after locking it in stops the button claiming the house has this one. */
+    /**
+     * **A tap after READY changes nothing on screen** (D-117).
+     *
+     * This test asserted the opposite while the design did: it checked that moving the vote after
+     * LOCK IN *unlocked* the button again, which was *changeable until the clock ends*. D-117
+     * supersedes that — READY is irrevocable — so the row does not move, the button goes on
+     * reading VOTE CAST, and the house refuses the same tap and re-asserts what it holds.
+     */
     @Test
-    fun movingTheVoteAfterLockingItInSaysSoOnTheButton() =
+    fun aTapAfterReadyMovesNothingOnTheScreen() =
         runDesktopComposeUiTest(width = 300, height = 650) {
             val model = modelOn(ScreenId.Vote)
             show(model)
 
-            onNodeWithText("LOCK IN").performClick()
+            onNodeWithText("READY").performClick()
             mainClock.advanceTimeBy(50)
-            assertTrue(says("LOCKED IN"))
+            assertTrue(says("VOTE CAST"))
 
             onNodeWithText("ROSE").performClick()
             mainClock.advanceTimeBy(50)
-            assertFalse(
-                says("LOCKED IN"),
-                "the button said the house held ROSE, and the house has never heard of ROSE",
+            assertTrue(
+                says("VOTE CAST"),
+                "the ballot came unlocked; READY cannot be taken back",
             )
-            onNodeWithText("LOCK IN").assertExists()
+            assertEquals(
+                VoteChoice.Named("MARCUS"), model.meeting.choice,
+                "the phone echoed a tap the house will refuse",
+            )
         }
 
     // ---- Checking in ----------------------------------------------------------------------------

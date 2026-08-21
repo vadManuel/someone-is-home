@@ -23,23 +23,34 @@ import kotlin.test.assertTrue
 class CountdownTest {
 
     /**
-     * **Every clock's window is the auto-advance that ends it.**
+     * **Every clock is a promise that something happens at zero, and the something has to exist.**
      *
-     * A countdown is a promise that something happens at zero. Written as two numbers — one on
-     * the screen, one in the table that moves the phone — they drift, and the drift is a screen
-     * that says nine seconds and moves after fifteen. Nobody debugs that from a dark hallway.
+     * Two shapes of something, since the meeting's transitions became the house's. Where a timer
+     * on this phone ends the screen, the window is *read off* that timer — written as two numbers
+     * they drift, and the drift is a screen that says nine seconds and moves after fifteen. Where
+     * the house ends it, there is a push waiting on a message, and the window is the design's own
+     * number.
+     *
+     * What must never happen either way is a clock counting down to nothing at all: a screen that
+     * reaches zero and sits there is the room standing in a dark hallway watching a stopped clock.
      */
     @Test
     fun everyClockCountsDownToTheThingThatEndsIt() {
         assertTrue(Countdowns.screens.isNotEmpty(), "no screen carries a clock; the table emptied")
         for (screen in Countdowns.screens) {
             val rule = Flow.autoAdvance[screen]
-                ?: throw AssertionError("$screen draws a countdown and nothing happens when it ends")
+            val push = Flow.housePushes[screen]
+            if (rule == null && push == null) {
+                throw AssertionError("$screen draws a countdown and nothing happens when it ends")
+            }
             val clock = assertNotNull(Countdowns.on(screen))
-            assertEquals(
-                rule.afterMillis / 1000, clock.ofSeconds,
-                "$screen counts down ${clock.ofSeconds}s and moves after ${rule.afterMillis}ms",
-            )
+            if (rule != null) {
+                assertEquals(
+                    rule.afterMillis / 1000, clock.ofSeconds,
+                    "$screen counts down ${clock.ofSeconds}s and moves after ${rule.afterMillis}ms",
+                )
+            }
+            assertTrue(clock.ofSeconds > 0, "$screen draws a clock with no window at all")
             assertTrue(
                 clock.secondsLeft in 0..clock.ofSeconds,
                 "$screen is drawn at ${clock.secondsLeft}s of a ${clock.ofSeconds}s window",

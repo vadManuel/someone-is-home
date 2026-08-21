@@ -71,13 +71,19 @@ data class Countdown(val secondsLeft: Int, val ofSeconds: Int) {
 /**
  * **Which screens carry a clock, and how long each clock runs.**
  *
- * ### The window is the auto-advance, not a second opinion about it
+ * ### Where a window comes from, and why there are now two answers
  *
- * A countdown on screen is a promise that something happens when it reaches zero, and the thing
- * that happens is [Flow.autoAdvance]'s row for that screen. Written as two numbers they drift, and
- * the drift is a phone that says nine seconds and moves after fifteen. So the window is *read off*
- * the row rather than restated here — the same argument [PanelVals.SCAN_SEGMENTS] already won for
- * the scan window, applied to every clock in the game.
+ * A countdown on screen is a promise that something happens when it reaches zero. **Where the thing
+ * that happens is a timer this phone runs, the window is read off that timer** rather than restated
+ * — written as two numbers they drift, and the drift is a phone that says nine seconds and moves
+ * after fifteen. That is [Flow.autoAdvance], and after the meeting's transitions became house
+ * pushes the only clock still in it is the scan's.
+ *
+ * **Where the thing that happens is the house moving everybody at once, the window is the design's
+ * own number** and is listed in [MEETING_WINDOWS]. It cannot be derived from anything on this phone,
+ * because nothing on this phone ends a meeting phase — and it is not a loss: the discussion's ninety
+ * seconds and the vote's forty-five (`gdd.md:412`, `:1006`, D-117) were always the design's, and the
+ * flow table was borrowing them rather than owning them.
  *
  * ### [DRAWN_AT] is a fixture, exactly like [PanelState.arrivingAt]'s cause
  *
@@ -109,12 +115,43 @@ object Countdowns {
         ScreenId.GhostMeeting to 24,
     )
 
+    /**
+     * **The meeting's four windows, which the house runs and this phone only draws.**
+     *
+     * Each is the design's own number rather than a presentation choice, which is why they are
+     * written here with a citation apiece instead of being inferred from a timer. A meeting phase
+     * ends when every phone in the house says so or when the house's clock says so, and neither is
+     * a thing this table could compute.
+     *
+     * **The vote's 45 is host-changeable in lobby settings** (D-117) and the lobby already draws a
+     * control for it (`LobbyModel.cycleVoteWindow`). That control still reaches nothing — the wire
+     * does not carry the setting — so this is the default, and when the setting is really sent the
+     * house's number will arrive with the phase and replace it, exactly as [DRAWN_AT] is replaced.
+     */
+    private val MEETING_WINDOWS: Map<ScreenId, Int> = mapOf(
+        // `1:04 REMAINING` on the design's own discussion screen, of ninety.
+        ScreenId.Discussion to 90,
+        // gdd.md:412 and :1006. Unanimous READY closes it early, which shortens the wait and
+        // never the window — a clock that redrew itself shorter would be the phone predicting it.
+        ScreenId.Vote to 45,
+        // LIGHTS OUT IN 9, over a bar with 6 of 15 spent. The Restrained takeover lands at the
+        // halfway mark of this one (D-102), which is the house's business and not the bar's.
+        ScreenId.Tally to 15,
+        // VOTING ENDS IN 0:24, from outside the system.
+        ScreenId.GhostMeeting to 60,
+    )
+
     /** The screens that draw a clock. Nothing else has one, whatever the house sends. */
     val screens: Set<ScreenId> get() = DRAWN_AT.keys
 
-    /** How long this screen's clock runs, in seconds — the auto-advance that ends it. */
+    /**
+     * How long this screen's clock runs, in seconds.
+     *
+     * The timer that ends the screen wins where there is one, so the scan's bar and the moment its
+     * light dies still cannot disagree. Everything else is the house's window.
+     */
     fun windowOf(screen: ScreenId): Int? =
-        Flow.autoAdvance[screen]?.let { it.afterMillis / 1000 }
+        Flow.autoAdvance[screen]?.let { it.afterMillis / 1000 } ?: MEETING_WINDOWS[screen]
 
     /**
      * The clock [screen] is showing, or null where it has none.

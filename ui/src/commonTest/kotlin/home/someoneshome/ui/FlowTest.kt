@@ -1,6 +1,8 @@
 package home.someoneshome.ui
 
 import home.someoneshome.model.CardPayload
+import home.someoneshome.model.EmitSchema
+import home.someoneshome.model.MessageKind
 import home.someoneshome.model.Cell
 import home.someoneshome.model.MarkerCard
 import home.someoneshome.model.MarkerId
@@ -49,10 +51,18 @@ class FlowTest {
 
     /**
      * Every way off a screen: what its own controls reach, what the actions layer reaches for the
-     * one chip that hands over its decision, and what the screen does on its own.
+     * one chip that hands over its decision, what the screen does on its own, **and what the house
+     * does to it**.
+     *
+     * The last is not a loosening. A house push is a real way onward — it is just not one this
+     * phone takes, which is the whole distinction between [Flow.autoAdvance] and
+     * [Flow.housePushes]. Left out, the meeting's four screens would read as dead ends the moment
+     * their timers became pushes, and the honest reading of that would have been to add them to
+     * [awaitingTheHouse] — which is the set of screens nothing ever moves you off at all.
      */
     private fun onward(id: ScreenId): Set<ScreenId> =
-        ScreenGraph.exitsOf(id) + Flow.viaActions[id].orEmpty() + setOfNotNull(Flow.autoAdvance[id]?.to)
+        ScreenGraph.exitsOf(id) + Flow.viaActions[id].orEmpty() +
+            setOfNotNull(Flow.autoAdvance[id]?.to) + setOfNotNull(Flow.housePushes[id]?.to)
 
     /** The card marked T, as a piece of paper the deck could have printed. */
     private fun terminalCard(id: String = "SEEDT01") =
@@ -120,12 +130,20 @@ class FlowTest {
      */
     @Test
     fun nothingWalksToAScreenOnlyTheHouseCanPush() {
-        val walkedTo = ScreenId.entries.flatMapTo(mutableSetOf()) { onward(it) }
+        // WALKED to, not pushed to. [onward] counts a house push as a way onward, which is right
+        // for "is this screen a dead end" and exactly wrong here: every screen in [housePushed]
+        // is reached by the house, and asking whether the house reaches it would make this test
+        // assert its own negation.
+        fun walked(id: ScreenId): Set<ScreenId> =
+            ScreenGraph.exitsOf(id) + Flow.viaActions[id].orEmpty() +
+                setOfNotNull(Flow.autoAdvance[id]?.to)
+
+        val walkedTo = ScreenId.entries.flatMapTo(mutableSetOf()) { walked(it) }
         for (id in Flow.housePushed + Flow.unrouted) {
             assertFalse(
                 id in walkedTo,
                 "$id is listed as unreachable by tapping, but something reaches it: " +
-                    ScreenId.entries.filter { id in onward(it) },
+                    ScreenId.entries.filter { id in walked(it) },
             )
         }
     }
@@ -172,6 +190,10 @@ class FlowTest {
     /**
      * The meeting is a line: ring, walk in, notices, talk, vote, result, lights out. No branches,
      * and every step taken by the house rather than waited on.
+     *
+     * **Four of those steps are now really taken by the house**, which is what D-134's E8-2
+     * recorded them as. The walk is over the union of the two tables and the line is unchanged;
+     * what changed is which table each step is in, and that is asserted directly below.
      */
     @Test
     fun theMeetingRunsFromTheRingToTheLightsGoingOut() {
@@ -182,19 +204,72 @@ class FlowTest {
         for (start in listOf(ScreenId.Calling, ScreenId.Call, ScreenId.Found)) {
             var at = start
             for (expected in line) {
-                val rule = Flow.autoAdvance[at]
+                val next = Flow.autoAdvance[at]?.to ?: Flow.housePushes[at]?.to
                     ?: throw AssertionError("$at does not move on; the meeting stalls there")
-                assertEquals(expected, rule.to, "from $at")
-                at = rule.to
+                assertEquals(expected, next, "from $at")
+                at = next
             }
+        }
+    }
+
+    /**
+     * **The four transitions D-134's E8-2 named are pushes, and nothing about them is a timer.**
+     *
+     * The gate closing, the talk ending or a unanimous READY arriving, the window closing, and the
+     * ghost walk-in. Each is a count of phones — every living player and every out player standing
+     * at the meeting area (D-104), every hand up, every ballot locked — and a phone cannot count
+     * phones. A row for any of these back in [Flow.autoAdvance] would be a device moving a player
+     * on while the room is still talking, and six devices doing it at six different moments.
+     *
+     * Asserted both ways round, because a build that added the push and left the timer in place
+     * would pass the walk above and race itself in play.
+     */
+    @Test
+    fun theMeetingsOwnTransitionsAreTheHousesAndNotTimers() {
+        val pushed = listOf(
+            ScreenId.Assemble, ScreenId.Discussion, ScreenId.Vote, ScreenId.Tally,
+            ScreenId.Ghost2, ScreenId.GhostMeeting,
+        )
+        for (screen in pushed) {
+            assertTrue(
+                Flow.housePushes.containsKey(screen),
+                "$screen is not pushed by the house; the meeting stalls or a phone guesses",
+            )
+            assertNull(
+                Flow.autoAdvance[screen],
+                "$screen moves on a timer as well as on a push, and the two will race",
+            )
+        }
+    }
+
+    /**
+     * Every push names a message the emit schema actually knows.
+     *
+     * A push waiting on a kind nobody emits is a screen a player never leaves, and it would look
+     * exactly like a push that works. Keying [Flow.HousePush.on] on [MessageKind] rather than on a
+     * sentence is what makes that checkable from `ui` without `ui` ever seeing `core`.
+     */
+    @Test
+    fun everyHousePushWaitsOnAMessageTheSchemaEmits() {
+        val known = EmitSchema.knownKinds().toSet()
+        for ((from, push) in Flow.housePushes) {
+            assertTrue(push.on in known, "$from waits on ${push.on}, which nothing emits")
+            assertTrue(push.why.isNotBlank(), "$from is pushed for no stated reason")
+            assertTrue(
+                push.to in ScreenGraph.exits, "$from is pushed to ${push.to}, not in the graph",
+            )
+            assertTrue(
+                onward(push.to).isNotEmpty() || push.to in awaitingTheHouse,
+                "$from is pushed to ${push.to}, which is a dead end",
+            )
         }
     }
 
     /** The same meeting from outside the system, and the outside view arrives only after it. */
     @Test
     fun aPlayerWhoIsOutWalksInWatchesAndOnlyThenSeesOutside() {
-        assertEquals(ScreenId.GhostMeeting, Flow.autoAdvance.getValue(ScreenId.Ghost2).to)
-        assertEquals(ScreenId.Ghost3, Flow.autoAdvance.getValue(ScreenId.GhostMeeting).to)
+        assertEquals(ScreenId.GhostMeeting, Flow.housePushes.getValue(ScreenId.Ghost2).to)
+        assertEquals(ScreenId.Ghost3, Flow.housePushes.getValue(ScreenId.GhostMeeting).to)
     }
 
     // ---- The house is driving ----------------------------------------------------------------

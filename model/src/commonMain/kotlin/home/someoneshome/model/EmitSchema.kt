@@ -70,7 +70,17 @@ object EmitSchema {
         is Effect.SubroutineProgressed -> SUBROUTINE_PROGRESSED
         is Effect.MessageDelivered -> MESSAGE_DELIVERED
         is Effect.MeetingOpened -> MEETING_OPENED
+        is Effect.StandAndWalkIn -> STAND_AND_WALK_IN
+        is Effect.CheckInProgressed -> CHECK_IN_PROGRESSED
+        is Effect.MeetingPhaseOpened -> MEETING_PHASE_OPENED
+        is Effect.ReadyProgressed -> READY_PROGRESSED
+        is Effect.VoteHeld -> VOTE_HELD
+        is Effect.VoteSelectionShown -> VOTE_SELECTION_SHOWN
+        is Effect.VoteProgressed -> VOTE_PROGRESSED
+        is Effect.MeetingResult -> MEETING_RESULT
         is Effect.MeetingResolved -> MEETING_RESOLVED
+        is Effect.RestrainedTakeover -> RESTRAINED_TAKEOVER
+        is Effect.MeetingEnded -> MEETING_ENDED
     }
 
     val LAMP_SET = MessageKind("LampSet")
@@ -79,7 +89,17 @@ object EmitSchema {
     val SUBROUTINE_PROGRESSED = MessageKind("SubroutineProgressed")
     val MESSAGE_DELIVERED = MessageKind("MessageDelivered")
     val MEETING_OPENED = MessageKind("MeetingOpened")
+    val STAND_AND_WALK_IN = MessageKind("StandAndWalkIn")
+    val CHECK_IN_PROGRESSED = MessageKind("CheckInProgressed")
+    val MEETING_PHASE_OPENED = MessageKind("MeetingPhaseOpened")
+    val READY_PROGRESSED = MessageKind("ReadyProgressed")
+    val VOTE_HELD = MessageKind("VoteHeld")
+    val VOTE_SELECTION_SHOWN = MessageKind("VoteSelectionShown")
+    val VOTE_PROGRESSED = MessageKind("VoteProgressed")
+    val MEETING_RESULT = MessageKind("MeetingResult")
     val MEETING_RESOLVED = MessageKind("MeetingResolved")
+    val RESTRAINED_TAKEOVER = MessageKind("RestrainedTakeover")
+    val MEETING_ENDED = MessageKind("MeetingEnded")
 
     private val LIVING = setOf(
         ClientClass(Role.Resident, RoundState.Live),
@@ -143,14 +163,65 @@ object EmitSchema {
         // observable, so a notification addressed to fewer than everyone is a beacon (D-076).
         MESSAGE_DELIVERED to (LIVING + OUTSIDE),
 
-        // A meeting is called out loud. Everyone still in the round knows; the out watch it.
-        MEETING_OPENED to (LIVING + OUTSIDE),
+        // **The ring, and it is for the living** (D-134). A player who is out gets no phone call
+        // -- they get STAND AND WALK IN, which is the row below. This narrows on the ROUND-STATE
+        // axis and never on role, which is the axis the two-axis taxonomy exists for: both roles
+        // hear the same ring, and everyone in the house can already see whether the lights are on.
+        MEETING_OPENED to LIVING,
+
+        // The other half of the same call. Two kinds rather than one with a flag, because the two
+        // audiences are told different things: the living are told who called it, and the out are
+        // told to stand up. D-135's long haptic rides this one for a NEWLY Revoked player.
+        STAND_AND_WALK_IN to OUTSIDE,
+
+        // D-104's gate is ONE gate -- every living player and every out player -- so it is one
+        // count, drawn on both screens. Anonymous: a count and a total, never a list of who
+        // (gdd.md:294, and the design's own "anonymous check-ins" steer at gdd.md:177).
+        CHECK_IN_PROGRESSED to (LIVING + OUTSIDE),
+
+        // Where the meeting has got to. The talk starting, the ballot opening and the result
+        // arriving are each known to the whole room at the moment they happen.
+        MEETING_PHASE_OPENED to (LIVING + OUTSIDE),
+
+        // The readiness count, which appears on the living's discussion screen and nowhere else.
+        // D-134 lists what the couch watches -- the discussion and vote timers and the live vote
+        // -- and this is not on it, so it is not sent. The fail-closed direction, deliberately.
+        READY_PROGRESSED to LIVING,
+
+        // **One seat's own ballot, addressed to that seat.** The living see a count and never a
+        // selection (D-117), so this is not a widening: it tells a player what THEY hold. It is
+        // also the re-assertion that makes a post-READY tap a refusal rather than a silence, and
+        // it is emitted on every tap so that its absence can never be the message (rule 1).
+        VOTE_HELD to LIVING,
+
+        // **The live selections, and the couch is the only reader** (D-117, D-134). Ghosts see
+        // selections rather than a count, and that is most of what makes being out an information
+        // privilege rather than a preview. Widened to either living class it would hand the room
+        // its own thinking in real time, which is the single largest disclosure in this table.
+        VOTE_SELECTION_SHOWN to OUTSIDE,
+
+        // `N OF 6 VOTED`, counting LOCKED seats (D-117). The number the living are entitled to,
+        // and the reason VOTE_SELECTION_SHOWN can be denied them without leaving a blank screen.
+        VOTE_PROGRESSED to LIVING,
+
+        // The outcome, to everyone: most votes is Restrained, ties resolve to Skip. No role, no
+        // confirmation, no reveal -- a correct restraint and a catastrophic one look identical.
+        MEETING_RESULT to (LIVING + OUTSIDE),
 
         // D-075: the vote does not publish attribution. The living see counts; only a player
         // outside the system sees who cast what, and sees it live. This carries the attribution
-        // list, so it goes to the out and to nobody else. The counts the living see are a
-        // different message and are not built.
+        // list, so it goes to the out and to nobody else -- MEETING_RESULT is what the living get.
         MEETING_RESOLVED to OUTSIDE,
+
+        // The takeover, addressed to the one seat the room restrained, at the halfway mark. By
+        // the time it is emitted that seat classifies Out, because the halfway mark is when the
+        // house deauthorises them (gdd.md:1009) -- so this row is OUTSIDE and the addressing does
+        // the rest. Permitted to no living class: a takeover reaching a living phone would be the
+        // house telling somebody else's device that the vote went against them.
+        RESTRAINED_TAKEOVER to OUTSIDE,
+
+        // Lights out. Everybody, because everybody's screen changes.
+        MEETING_ENDED to (LIVING + OUTSIDE),
     )
 
     /**
@@ -196,8 +267,23 @@ object EmitSchema {
             is Effect.SubroutineGraded -> listOf(effect.seat)
             is Effect.MessageDelivered -> listOf(effect.seat)
             is Effect.SubroutineProgressed -> state.seats
+            // Broadcast, and left to the allowlist to narrow. Addressing these by round-state
+            // here as well would state the same rule in two places, and the day they disagreed
+            // the quieter one would win.
             is Effect.MeetingOpened -> state.seats
+            is Effect.CheckInProgressed -> state.seats
+            is Effect.MeetingPhaseOpened -> state.seats
+            is Effect.ReadyProgressed -> state.seats
+            is Effect.VoteSelectionShown -> state.seats
+            is Effect.VoteProgressed -> state.seats
+            is Effect.MeetingResult -> state.seats
             is Effect.MeetingResolved -> state.seats
+            is Effect.MeetingEnded -> state.seats
+            // The three that name one seat. Each is that player's own screen changing: they were
+            // told to walk in, they are being shown their own ballot, or the room restrained them.
+            is Effect.StandAndWalkIn -> listOf(effect.seat)
+            is Effect.VoteHeld -> listOf(effect.seat)
+            is Effect.RestrainedTakeover -> listOf(effect.seat)
         }
         return state.seats.filter { seated -> addressed.any { it.index == seated.index } }
     }

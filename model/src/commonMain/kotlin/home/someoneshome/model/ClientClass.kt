@@ -18,13 +18,18 @@ enum class RoundState {
     /**
      * Revoked or restrained: in the building, outside the system.
      *
-     * **Only the revoked half is implemented, and that is a live gap rather than a nuance.**
-     * Nothing in [GameState] stores a restrained player — `Effect.MeetingResolved` carries one
-     * and no state receives it — so a restrained seat still classifies [Live] and keeps every
-     * living-class permission while `ui` renders it the outside-the-system screen. Restrain
-     * cannot borrow the revoked list to fix this: rule 9 forbids collapsing the two, one being
-     * system power lent by the house and the other a physical act it cannot prevent. Closing it
-     * means a second list and a second clause in [roundStateOf].
+     * **Both halves are implemented.** They were not: `Effect.MeetingResolved` carried a
+     * restrained seat and no state received it, so a restrained player classified [Live] and kept
+     * every living-class permission while `ui` drew them the outside-the-system screen. The fix
+     * is the one this comment used to prescribe — [GameState.restrained] is a **second list**, not
+     * a second use of `revoked`, because rule 9 forbids collapsing a Revoke and a Restrain, and a
+     * second clause below reads it.
+     *
+     * **A Restrain reaches this state at the halfway mark of the countdown, not at the buzzer**
+     * (D-102, `gdd.md:1009`): the room holds them, and the house deauthorises them moments later.
+     * Between those two moments they are still [Live] and are told nothing, which is exactly what
+     * the design asks for — otherwise the attribution list meant for the out would land on a phone
+     * whose owner is still looking at the living's result screen.
      *
      * **The reason the taxonomy needs two axes.** A player who is out sees the real progress bars
      * and true occupancy, which no living player of *either* role may see (gdd.md:1014). Keyed on
@@ -70,7 +75,11 @@ fun GameState.roundStateOf(seat: Seat): RoundState = when {
     seats.none { it.index == seat.index } -> RoundState.PreArm
     ended -> RoundState.Ended
     !armed -> RoundState.PreArm
+    // Two clauses, never one list. Revoke is system power the house lent an Insider; Restrain is
+    // a physical act the house cannot prevent and then ratifies. They land in the same client
+    // class and they are not the same fact (rule 9).
     isRevoked(seat) -> RoundState.Out
+    isRestrained(seat) -> RoundState.Out
     else -> RoundState.Live
 }
 
