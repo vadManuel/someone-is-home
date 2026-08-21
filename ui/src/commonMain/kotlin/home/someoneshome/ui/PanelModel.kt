@@ -79,15 +79,6 @@ data class PanelState(
     val roomType: RoomType = RoomType.Room,
     /** Null while still in play. Set once, by whichever event put the player out. */
     val outBy: OutBy? = null,
-    /**
-     * The SystemIntegrity meter's segment total — display data that ARRIVES, never a value this
-     * module computes (F-005, revision 19). The authority owns the denominator —
-     * `(seats − insiders) × 7`, frozen at arming — and sends the panel this number the same way
-     * it sends the role. The default is the ported design's 32, an artifact of an earlier
-     * player count, correct only where no round exists: fixtures, previews, the screens guard.
-     */
-    val meterSegments: Int = PanelVals.METER_SEGMENTS,
-
     /** Randomises the backlog's *count and mix*, so inbox density can never imply a role. */
     val inboxSeed: Int = 3,
     val noteSeed: Int = 0,
@@ -497,15 +488,13 @@ class PanelVals(val state: PanelState) {
     /** 24 seconds left of a 60-second vote window. */
     val meetingLit: Int = 12
 
-    /** The meter total in force — [PanelState.meterSegments], never the fixture constant. */
-    val meterSegments: Int get() = state.meterSegments
-
     companion object {
         /**
-         * **A fixture default, not a game value** — the ported design drew 32 segments, an
-         * artifact of an earlier player count (F-005). In play the total arrives in
-         * [PanelState.meterSegments] from the authority. Nothing that renders a live round may
-         * read this constant.
+         * The meter bar's DISPLAY RESOLUTION — how many cells the percentage is quantised into,
+         * a fact about pixels and nothing else (D-103, revision 21). SystemIntegrity reaches a
+         * panel only as a percentage: the denominator `(seats − insiders) × 7` would disclose
+         * the Insider count by division, and under D-103 that count can be hidden. No screen may
+         * ever print an absolute meter total; MeterDisclosureTest reads the panels to prove it.
          */
         const val METER_SEGMENTS = 32
 

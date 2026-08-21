@@ -132,7 +132,7 @@ fun RevealScreen(vals: PanelVals) {
             BackChevron(ScreenId.Home, Amber.Dim)
             Label("MESSAGES", size = 7.0, color = Amber.Dim, tracking = 0.14)
             Label(
-                "${vals.inbox.size} UNREAD",
+                "${vals.inbox.size} MESSAGES",
                 modifier = Modifier.weight(1f),
                 size = 7.0, color = Amber.Faint, tracking = 0.14, align = TextAlign.End,
             )
