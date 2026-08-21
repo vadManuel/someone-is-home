@@ -17,7 +17,7 @@ The three that catch people out:
 **Resident** / **Insider** are the only role words. Everyone is a Resident; some are *also* Insiders.
 **Revoke** = the Insider's ability. **Restrain** = the group's action at a meeting.
 **These are not synonyms and must never be collapsed** — one is system power lent by the house, the other is a physical act the house cannot prevent.
-**Subroutine** = the unit of assigned work. **System Integrity** = the collective progress meter. **Egress** = the Insider-triggered house crisis. **Override** = the Insider-only route between rooms. **Passage** = a map-editor shape tag, alongside room and stairs.
+**Subroutine** = the unit of assigned work. **System Integrity** = the collective progress meter. **Egress** = the Insider-triggered house crisis. **Override** = the Insider-only route between rooms — never a map type; the map knows only room and stairs, and stairs hold nothing. **House** is the AI's word; **home** is the residents' — “map a new home”, never “map a new house”.
 
 That list is the whole vocabulary. If a word you want isn't on it, it's wrong — the lint holds the rejected forms and will tell you.
 
@@ -31,6 +31,6 @@ That list is the whole vocabulary. If a word you want isn't on it, it's wrong �
 | Stories | `.../epics.md` |
 | Why anything is the way it is | `.../decision-log.md` |
 
-⚠️ **The vocabulary above is closed.** Use those words and no synonyms — in code, docs, comments, commit messages and filenames alike. If you need a term the list doesn't have, raise it rather than inpassage use one. A `pre-commit` hook checks, but it does not travel with a clone, so the rule stands on its own.
+⚠️ **The vocabulary above is closed.** Use those words and no synonyms — in code, docs, comments, commit messages and filenames alike. If you need a term the list doesn't have, raise it rather than quietly using one. A `pre-commit` hook checks, but it does not travel with a clone, so the rule stands on its own.
 
 *(The game is **Someone's Home**. Every path and identifier — repo, directories, `project_name` — uses `someone-is-home`; the apostrophe cannot appear in a directory or repo name. Prose always keeps it.)*

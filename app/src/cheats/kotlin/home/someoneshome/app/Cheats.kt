@@ -95,7 +95,7 @@ private fun cheatActions(state: PanelState, set: (PanelState) -> Unit) = PanelAc
     toggleMarkers = { set(state.copy(markersOn = !state.markersOn)) },
     toggleTorch = { set(state.copy(torch = !state.torch)) },
     pickRoomType = { set(state.copy(roomType = it)) },
-    confirmPassage = { set(state.withScreen(ScreenId.Editor)) },
+    confirmStairs = { set(state.withScreen(ScreenId.Editor)) },
 )
 
 /**

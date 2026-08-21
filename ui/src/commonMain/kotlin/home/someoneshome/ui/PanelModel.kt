@@ -17,7 +17,7 @@ enum class ScreenId {
     Boot, Perms, Join,
 
     // Host setup — once per house, in the light.
-    Maps, Editor, RoomEdit, PassageWarn, MarkerSheet, ScanMarker, TermTaken, TermRemove,
+    Maps, Editor, RoomEdit, StairsWarn, MarkerSheet, ScanMarker, TermTaken, TermRemove,
     NoTerminal, Floors, SaveName, HomeDetail, Delete, Lobby,
 
     // Arming — the host turns the lights off and the house does the rest.
@@ -135,7 +135,7 @@ class PanelVals(val state: PanelState) {
 
         ScreenId.Boot, ScreenId.Join, ScreenId.Maps, ScreenId.Editor, ScreenId.SaveName,
         ScreenId.HomeDetail, ScreenId.Delete, ScreenId.Secret, ScreenId.RoomEdit,
-        ScreenId.MarkerSheet, ScreenId.ScanMarker, ScreenId.PassageWarn, ScreenId.TermTaken,
+        ScreenId.MarkerSheet, ScreenId.ScanMarker, ScreenId.StairsWarn, ScreenId.TermTaken,
         ScreenId.TermRemove, ScreenId.Floors, ScreenId.NoTerminal, ScreenId.Perms,
         ScreenId.Lobby, ScreenId.WinResidents,
         -> PanelMode.Pre

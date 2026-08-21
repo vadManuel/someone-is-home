@@ -41,7 +41,7 @@ class PanelActions(
     val toggleMarkers: () -> Unit = {},
     val toggleTorch: () -> Unit = {},
     val pickRoomType: (RoomType) -> Unit = {},
-    val confirmPassage: () -> Unit = {},
+    val confirmStairs: () -> Unit = {},
 )
 
 val LocalActions: ProvidableCompositionLocal<PanelActions> =

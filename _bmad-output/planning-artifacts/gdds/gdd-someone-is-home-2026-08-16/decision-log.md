@@ -1313,6 +1313,65 @@ decides, locked at arming regardless), and the orphaned-subroutine auto-satisfac
 a frozen denominator winnable after a revocation — loop work, untouched while the loop is
 reconsidered. The denominator's *source* is settled; its *number* and its *upkeep rule* are not.
 
+
+---
+
+## Revision 20 — what the design chat knew
+
+*Decided 2026-08-20, with Vadmanuel, after mining the full 193k-token conversation behind the
+claude.ai/design project the screens were ported from. The port tracked the design faithfully;
+what follows is the context that existed only in that chat, now ruled on.*
+
+### D-098 · **"Passage" is deleted, everywhere — ratified**
+
+The design removed the passage room type deliberately: the Insider's route between rooms is
+Override, and Override must never be drawable on a map. The map knows room and stairs, nothing
+else. Ratified into the repo: CLAUDE.md's vocabulary no longer lists Passage, and the stale
+identifiers (`ScreenId.PassageWarn`, `confirmPassage`) are renamed for what the screen actually
+is — the stairs type-change warning.
+
+### D-099 · **Stairs hold nothing, structurally — decided**
+
+The rule existed in the design's flows and nowhere below them. Now `Room` carries a
+[RoomKind], `HouseMap.register` refuses a card offered to stairs with its own distinct result,
+and a `Registration` into stairs **cannot be constructed** — the `require` guards every other
+path, `HouseMap.of()` included. The stairwell's invisibility to the Terminal is the game's
+natural hiding place, and it holds by construction. The storage format is unchanged: a file of
+registrations can never contain stairs, because a registration into stairs cannot exist.
+Injection-verified: with both guards removed, `tests="3" failures="2"`.
+
+### D-100 · **House is the AI's word; home is the residents' — ratified into the vocabulary**
+
+"Map a new home", never "map a new house". The ported copy already obeyed this; now the
+vocabulary says so.
+
+### D-101 · **v1 blackmail is a verbatim template; the LLM is v2 — decided**
+
+The design chat's intent — feed the player's one line through an LLM to write the house's
+blackmail text — is deferred to v2. In v1 the house says, in substance, *"I know you said
+'<the line>'."* That keeps the lobby's promise exactly as written: the line is seen by the
+house only (the host device), deleted when the round ends, and never sent anywhere that could
+generate from it.
+
+### D-102 · **The haptic doctrine — ratified from the design chat**
+
+A screen that arrives unasked buzzes; a screen you tapped into does not (a buzz there trains
+people to ignore the ones that matter). **The buzz is identical for every player — same
+pattern, same duration, including when an Insider's own Revoke lands — or it is an audible tell
+in a silent house.** The design's canonical buzzing set is twelve screens; perimeter-armed is
+the one that matters most (the round begins in a room about to go dark, and the haptic is the
+only cue that is not light). The restrained player's takeover appears at the **halfway mark of
+the vote results** so they do not walk away when the countdown ends. The host's registration
+scan buzzes, because the phone is against a card with the screen angled away.
+
+### Raised, not settled — carried to discussion
+
+The Insider-count lobby setting (host-set, default UNKNOWN meaning the house draws a balanced
+random count, with an enforced minimum) and its interaction with D-081's "the count is public"
+premise and revision 19's meter total; the ghost check-in gate; the swipe-dismiss semantics;
+the light-signature visibility. Player count is "virtually unlimited" as design intent against
+engineering notes sized for 8. The Guest-to-Host study is parked until the game exists.
+
 ---
 
 ## State after revision 12
@@ -1356,6 +1415,12 @@ while the refusal lands on the host in the light with 44 shapes to choose from.
 **Revision 19 closed F-005's contradiction** — the meter total arrives in `PanelState` from the
 authority, frozen at arming; ui's 32 is demoted to a documented fixture default. Open still: the
 7 itself (balance) and orphan auto-satisfaction (loop work).
+
+**Revision 20 mined the design chat** — D-098 passage deleted everywhere, D-099 stairs hold
+nothing structurally, D-100 house/home in the vocabulary, D-101 v1 blackmail as verbatim
+template (LLM is v2), D-102 the haptic doctrine (identical buzz for all, twelve screens, the
+halfway-mark restrained reveal). Insider-count setting, check-in gate, swipe semantics and
+light-signature visibility are raised, not settled.
 
 **Carried into E0 as a constraint, not a closed item:** total app allocation ≤ ~0.5 MB/s as the design target, with the measured cliff between 1.5 and 3.0 MB/s — roughly 6× margin, so this is a budget rather than a knife edge. Nobody yet knows what the real app allocates with BLE, 100 Hz motion, effects and recording running at once.
 Action: create `project-context.md`.
