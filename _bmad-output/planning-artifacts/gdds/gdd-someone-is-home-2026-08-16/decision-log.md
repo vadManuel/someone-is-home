@@ -1382,9 +1382,17 @@ engineering notes sized for 8. The Guest-to-Host study is parked until the game 
 ### D-103 · **The Insider count can be hidden, because the meter speaks only percent — decided**
 
 The lobby's Insider-count setting is the host's, and its default is **UNKNOWN**: the house draws
-the count at arming from a band — placeholder `max(1, ⌊seats/6⌋)` to `⌈seats/4⌉`, playtest owns
-the numbers — locks it, and tells no one until the round ends. Player count itself is virtually
-unlimited by design intent; the engineering posture is *designed for 6–10, no hard cap built*.
+the count at arming, locks it, and tells no one until the round ends.
+
+**The band is a balance envelope, and both edges are load-bearing.** The minimum protects the
+Insider side — one Insider against fifteen Residents is unwinnable for the one — and the maximum
+protects the Resident side, who must still be able to complete `(seats − insiders) × 7` and who
+are guaranteed a living population of at least two by the parity rule (F-016). **Both edges clamp
+the setting itself, not just the draw**: a host cannot hand-pick a count outside the band any
+more than UNKNOWN can land on one. Placeholder edges `max(1, ⌊seats/6⌋)` to `⌈seats/4⌉` — 6
+players → 1–2, 8 → 1–2, 12 → 2–3, 16 → 2–4 — and playtest owns the numbers, as it owns the 7.
+Player count itself is virtually unlimited by design intent; the engineering posture is
+*designed for 6–10, no hard cap built*.
 
 What makes hiding affordable is a display rule that is **unconditional, not a consequence of
 UNKNOWN: SystemIntegrity reaches a panel only as a percentage.** The denominator is
