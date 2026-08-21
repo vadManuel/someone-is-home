@@ -1387,18 +1387,21 @@ private fun LightsOut(hosting: Boolean, ready: Boolean, onArm: () -> Unit) {
         ready -> SlateButton(
             "LIGHTS OUT", onArm, tracking = 0.2, size = 9.0, verticalPadding = 11.u,
         )
-        // The same block, the same size, no tap target. Written out rather than reusing
-        // [PanelButton]: that one always publishes a click action, and a control that answers a
-        // press by doing nothing is indistinguishable from one that is broken — on the screen
-        // where a host is waiting to find out why the evening has not started.
-        else -> Box(
-            Modifier.fillMaxWidth().border(1.u, Amber.BonePale).padding(vertical = 11.u),
-            contentAlignment = Alignment.Center,
-        ) {
-            Label(
-                "LIGHTS OUT",
-                size = 9.0, color = Amber.BoneFaint, tracking = 0.2, align = TextAlign.Center,
-            )
-        }
+        // The same block, the same size, no tap target — and it goes through [PanelButton] like
+        // the armed one, which it could not do while that composable published a click action
+        // whether or not it had a handler. It does not any more, so the hand-rolled copy of it
+        // that used to live here is gone: two blocks meant to be indistinguishable were in fact
+        // slightly different heights, because only one of them carried the tap-target minimum.
+        //
+        // One of the three places where that behaviour is load-bearing rather than tidy, and it
+        // is the sharpest of them: a control that answers a press by doing nothing is
+        // indistinguishable from one that is broken, on the exact screen where a host is waiting
+        // to find out why the evening has not started.
+        else -> PanelButton(
+            "LIGHTS OUT",
+            border = Amber.BonePale, ink = Amber.BoneFaint,
+            size = 9.0, tracking = 0.2, verticalPadding = 11.u,
+            onClick = null,
+        )
     }
 }
