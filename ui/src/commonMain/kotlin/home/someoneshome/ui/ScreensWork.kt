@@ -5,6 +5,7 @@ import home.someoneshome.model.MarkerShapes
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -14,17 +15,25 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.IntOffset
 
 /**
  * Work — what Residents actually do, and what an Insider imitates.
@@ -36,62 +45,81 @@ import androidx.compose.ui.text.style.TextDecoration
  */
 
 /**
- * The Egress banner — **a banner, not a takeover.**
+ * **A banner, not a takeover — and swipe up is the whole gesture vocabulary (D-105).**
  *
  * Drawn over the springboard rather than instead of it, because you cannot scan a marker through
  * a modal and the player has to be able to see that their phone still works. The panel behind
  * dims; this stays at full intensity.
  *
- * It names both nodes. Containment needs two people at two separate markers and nobody may
- * speak, so the only way to coordinate is for the device to have already said where.
+ * ### The swipe is a real gesture, not a control shaped like one
+ *
+ * The banner tracks the finger the whole way up and springs back if it lifts short of
+ * [SWIPE_DISMISS]. That is echo of your own input — the one thing `ui` is allowed to draw without
+ * asking anybody — and it is what makes the gesture discoverable in a dark room: you learn the
+ * banner moves before you learn that it goes.
+ *
+ * It only ever moves **up**. Down is not a shorter swipe up, it is a different gesture, and this
+ * app has one; a banner that could be dragged down would be teaching a vocabulary that does not
+ * exist. It cannot be pushed above the status row either — that row is the one thing on screen
+ * that stays put while something arrives, and [PanelFrame] clips it there rather than trusting
+ * this to stop.
+ *
+ * ### A tap still opens it, where there is something to open
+ *
+ * Both gestures live on the same surface and neither eats the other: a drag consumes nothing until
+ * it passes touch slop, and a tap that has moved past slop is no longer a tap. **Which of the two
+ * modifiers is written first turns out not to matter** — that was checked by swapping them and
+ * watching all seven gesture tests stay green — so the order here is the readable one and not a
+ * load-bearing incantation. What is load-bearing is that a test really drags a finger, because
+ * a banner that cannot be dismissed looks exactly like one that can.
+ *
+ * [Notification.opens] is null on a notification that is not a door, and then there is nothing to
+ * reach — the banner still swipes away.
  */
 @Composable
-fun BoxScope.EgressBanner() {
-    val go = navigator()
-    BannerBody(
-        headline = "EGRESS ATTEMPT IN PROGRESS",
-        detail = "CONTAIN AT UTILITY AND LANDING",
-        onClick = { go(ScreenId.EgressWidget) },
-    )
-}
+fun BoxScope.NotificationBanner(notification: Notification) {
+    val actions = LocalActions.current
+    val threshold = with(LocalDensity.current) { SWIPE_DISMISS.toPx() }
 
-/** The house's text, arriving over page 1. Everyone gets one, at the same moment. */
-@Composable
-fun BoxScope.HouseBanner() {
-    val go = navigator()
-    BannerBody(
-        headline = "Regarding this evening. Please read.",
-        headlineSize = 8.0,
-        onClick = { go(ScreenId.Reveal) },
-    )
-}
+    // Where the finger has taken it, in pixels, never below zero. Keyed on the notification so a
+    // second one arriving does not inherit half a swipe made at the first.
+    var lifted by remember(notification) { mutableStateOf(0f) }
 
-@Composable
-private fun BoxScope.BannerBody(
-    headline: String,
-    detail: String? = null,
-    headlineSize: Double = 9.0,
-    onClick: () -> Unit,
-) {
     Column(
         Modifier.align(Alignment.TopCenter)
+            // The lambda form: it reads `lifted` at draw time rather than at composition, so a
+            // finger moving up the screen does not recompose the banner on every frame. The whole
+            // app has an allocation budget of about 0.5 MB/s and a drag is sixty frames a second.
+            .offset { IntOffset(0, lifted.toInt()) }
             .padding(6.u)
             .fillMaxWidth()
             .background(Amber.Bright)
-            .tap(onClick)
+            .pointerInput(notification) {
+                detectVerticalDragGestures(
+                    onDragEnd = { if (-lifted >= threshold) actions.dismissNotification() else lifted = 0f },
+                    onDragCancel = { lifted = 0f },
+                ) { _, delta -> lifted = (lifted + delta).coerceAtMost(0f) }
+            }
+            .then(
+                if (notification.opens != null) {
+                    Modifier.tap { actions.nav(notification.opens) }
+                } else {
+                    Modifier
+                }
+            )
             .padding(horizontal = 8.u, vertical = 7.u),
         verticalArrangement = Arrangement.spacedBy(3.u),
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Label("HOUSE", size = 6.0, color = Amber.Black, tracking = 0.14)
-            Label("NOW", size = 6.0, color = Amber.Black, tracking = 0.14)
+            Label(notification.from, size = 6.0, color = Amber.Black, tracking = 0.14)
+            Label(notification.at, size = 6.0, color = Amber.Black, tracking = 0.14)
         }
         Label(
-            headline,
-            size = headlineSize, color = Amber.Black, tracking = 0.02, lineHeight = 1.5,
+            notification.body,
+            size = notification.bodySize, color = Amber.Black, tracking = 0.02, lineHeight = 1.5,
         )
-        if (detail != null) {
-            Label(detail, size = 6.5, color = Amber.Black, tracking = 0.08)
+        notification.detail?.let {
+            Label(it, size = 6.5, color = Amber.Black, tracking = 0.08)
         }
     }
 }
@@ -853,6 +881,12 @@ fun EgressWidgetScreen(vals: PanelVals) {
  *
  * It names both nodes because containment needs two people at two separate markers and nobody may
  * speak — the device saying where is the only coordination available.
+ *
+ * **This is where the Egress notification survives being swiped away** —
+ * [NotificationKind.Egress]'s `heldBy` — so it names the same two rooms the banner did, out of
+ * [Notifications.EGRESS_NODES] rather than out of a second string. Two copies of that pair would
+ * send two people who may not speak to two different places, and the mistake would look like a
+ * typo in a diff.
  */
 @Composable
 private fun EgressWidget(vals: PanelVals) {
@@ -876,7 +910,10 @@ private fun EgressWidget(vals: PanelVals) {
         )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Label("CONTAIN AT", size = 6.0, color = Amber.Dim, tracking = 0.1)
-            Label("UTILITY . LANDING", size = 6.0, color = Amber.Bright, tracking = 0.1)
+            Label(
+                Notifications.EGRESS_NODES.joinToString(" . "),
+                size = 6.0, color = Amber.Bright, tracking = 0.1,
+            )
         }
     }
 }

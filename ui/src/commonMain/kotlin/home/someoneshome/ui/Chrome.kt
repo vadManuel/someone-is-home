@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 
@@ -259,9 +260,15 @@ fun PanelFrame(
             // Below the status bar, not over it. The bar is the one thing that stays put when
             // something arrives -- it is how the player confirms the perimeter and the clock are
             // still what they were, which is exactly the reassurance a takeover would remove.
+            //
+            // CLIPPED, because the banner MOVES. A swipe-up dismiss tracks the finger, and a
+            // banner that slid over the status row on its way out would take the one fixed thing
+            // on the screen with it. Clipping here rather than capping the travel in the banner
+            // keeps the rule where the rule is: this box is the region an overlay may occupy.
             Box(
                 Modifier.fillMaxSize()
                     .padding(top = statusBand + contentTop, bottom = safeBottom)
+                    .clipToBounds()
             ) {
                 overlay(this)
             }

@@ -129,11 +129,15 @@ fun Screen(
  *
  * Returning non-null is what tells [PanelFrame] to dim the panel behind it, so "this screen has a
  * banner" and "this screen is dimmed" cannot drift apart.
+ *
+ * **Which notification, and whether there is one at all, is [Notifications]' answer, not this
+ * function's.** The banner is one composable taking one piece of data — there is no
+ * per-notification composable to forget to write, and adding a kind cannot produce a banner drawn
+ * differently from its two siblings.
  */
 @Composable
-private fun bannerFor(screen: ScreenId): (@Composable BoxScope.() -> Unit)? = when (screen) {
-    ScreenId.Notify -> ({ HouseBanner() })
-    ScreenId.Banner -> ({ EgressBanner() })
-    else -> null
+private fun bannerFor(screen: ScreenId): (@Composable BoxScope.() -> Unit)? {
+    val notification = Notifications.onScreen(screen) ?: return null
+    return { NotificationBanner(notification) }
 }
 

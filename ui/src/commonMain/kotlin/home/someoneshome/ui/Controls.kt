@@ -114,6 +114,15 @@ class PanelActions(
     val handOverLine: () -> Unit = {},
     val cycleInsiders: () -> Unit = {},
     val lightsOut: () -> Unit = {},
+    /**
+     * **A banner, swiped up.**
+     *
+     * Not a tap and not a navigation the banner can name: what a dismissal leaves you looking at
+     * is whatever the notification arrived over, which the banner does not know. It is declared in
+     * [Flow.viaActions] beside the other gestures no synthetic click can reach, and walked by a
+     * test that really drags a finger.
+     */
+    val dismissNotification: () -> Unit = {},
 )
 
 val LocalActions: ProvidableCompositionLocal<PanelActions> =
