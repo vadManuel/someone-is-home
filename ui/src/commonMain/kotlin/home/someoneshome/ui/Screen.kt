@@ -43,6 +43,15 @@ fun Screen(
      * lobby with nobody in it is a screen the app never shows.
      */
     lobby: LobbyModel = remember { LobbyModel.sample() },
+    /**
+     * What this phone has said at the meeting it is at.
+     *
+     * Defaulted and `remember`ed for the reason the three above are: a test that checks in or
+     * votes must not leave the next render looking at a phone that has already done both. The
+     * default is the design's own meeting — counts from the house and five names to vote for —
+     * because a meeting with nobody at it is a screen the app never shows.
+     */
+    meeting: MeetingModel = remember { MeetingModel.sample() },
 ) {
     val vals = PanelVals(state)
     CompositionLocalProvider(
@@ -50,6 +59,7 @@ fun Screen(
         LocalEditor provides editor,
         LocalHomes provides homes,
         LocalLobby provides lobby,
+        LocalMeeting provides meeting,
     ) {
         PanelFrame(vals, overlay = bannerFor(state.screen)) {
             when (state.screen) {
@@ -88,7 +98,7 @@ fun Screen(
 
                 ScreenId.Banner -> HomeScreen(vals)
                 ScreenId.Work -> WorkScreen(vals)
-                ScreenId.Scan -> ScanScreen()
+                ScreenId.Scan -> ScanScreen(vals)
                 ScreenId.ScanCaught -> ScanCaughtScreen(vals)
                 ScreenId.ScanBad -> ScanBadScreen()
                 ScreenId.ScanUnknown -> ScanUnknownScreen()
@@ -106,9 +116,9 @@ fun Screen(
                 ScreenId.Found -> FoundScreen()
                 ScreenId.Assemble -> AssembleScreen()
                 ScreenId.Notice -> NoticeScreen()
-                ScreenId.Discussion -> DiscussionScreen()
-                ScreenId.Vote -> VoteScreen()
-                ScreenId.Tally -> TallyScreen()
+                ScreenId.Discussion -> DiscussionScreen(vals)
+                ScreenId.Vote -> VoteScreen(vals)
+                ScreenId.Tally -> TallyScreen(vals)
 
                 ScreenId.Revoked -> RevokedScreen()
                 ScreenId.Restrained -> RestrainedScreen()
