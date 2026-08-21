@@ -291,12 +291,11 @@ fun IntegrityWidget(vals: PanelVals) {
         ) {
             Label("SYSTEM INTEGRITY", size = 6.5, color = Amber.Dim, tracking = 0.14)
             Row(verticalAlignment = Alignment.Bottom) {
-                Readout("${vals.integrityLit}", size = 19.0, color = Amber.Bright, lineHeight = 1.0)
-                Readout("/${vals.meterSegments}", size = 11.0, color = Amber.Dim)
+                Readout("88%", size = 19.0, color = Amber.Bright, lineHeight = 1.0)
             }
         }
         SegmentBar(
-            total = vals.meterSegments,
+            total = PanelVals.METER_SEGMENTS,
             lit = vals.integrityLit,
             litColor = Amber.Bright,
             unlitColor = Amber.Edge,

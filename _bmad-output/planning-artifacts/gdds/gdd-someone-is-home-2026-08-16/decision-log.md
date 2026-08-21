@@ -1372,6 +1372,58 @@ premise and revision 19's meter total; the ghost check-in gate; the swipe-dismis
 the light-signature visibility. Player count is "virtually unlimited" as design intent against
 engineering notes sized for 8. The Guest-to-Host study is parked until the game exists.
 
+
+---
+
+## Revision 21 — the count that hides, and the meter that stopped counting
+
+*Decided 2026-08-20, with Vadmanuel, closing the four questions revision 20 left open.*
+
+### D-103 · **The Insider count can be hidden, because the meter speaks only percent — decided**
+
+The lobby's Insider-count setting is the host's, and its default is **UNKNOWN**: the house draws
+the count at arming from a band — placeholder `max(1, ⌊seats/6⌋)` to `⌈seats/4⌉`, playtest owns
+the numbers — locks it, and tells no one until the round ends. Player count itself is virtually
+unlimited by design intent; the engineering posture is *designed for 6–10, no hard cap built*.
+
+What makes hiding affordable is a display rule that is **unconditional, not a consequence of
+UNKNOWN: SystemIntegrity reaches a panel only as a percentage.** The denominator is
+`(seats − insiders) × 7`, and any screen printing it — `28/42`, or a bar whose segments can be
+counted across a room — hands every reader the Insider count by division. So the living see a
+batched percentage at meetings (updates only there, so successive readings do not factor), the
+out see a **live** percentage — their privilege is liveness, never the denominator — and the bar
+is fixed display resolution (32 cells, a fact about pixels).
+
+**Supersedes in part:** revision 19's surface (the meter total no longer arrives at all;
+`METER_SEGMENTS` returns to a pure display constant; the guard becomes `MeterDisclosureTest`,
+which reads the panels and fails on any slash-total — injection-verified, `tests="2"
+failures="1"` with `28/32` reintroduced) and D-081's premise that the count is public (the
+settings row may read UNKNOWN; the harness's count-preserving exchange form is unchanged and
+still the acceptance criterion).
+
+### D-104 · **Living AND ghosts gate the discussion clock — decided**
+
+The talk does not start until every living player *and* every out player has checked in at the
+meeting area. The accepted risk, named: a ghost whose phone died stalls the gate until 0.8's
+reconnect brings them back or the room resolves it socially. Vadmanuel chose presence over
+proceed-without here — a meeting that starts while someone is still walking is a worse game
+than a meeting that waits.
+
+### D-105 · **There is no "read" — decided**
+
+The concept is deleted. Everything that pops — egress alert, text banner, any banner — is a
+*notification*: swipe up dismisses it, and that is the whole gesture vocabulary. Persistence
+already lives where it matters (Messages holds every text; the egress widget holds the
+countdown), and **house notices** is the one dismissable surface that never persists — the
+popup from a phantom app. No unread badges, no NEW tags; the backlog header counts messages.
+
+### D-106 · **The light signature shows everywhere — decided**
+
+How much light a subroutine makes a phone emit is knowledge a player holds *in advance*: on the
+work-order list, on the springboard widget, and on the subroutine screen itself. Residents may
+plan a dark route. The presentation (the widget line was once removed for how it read, not what
+it said) is design-project work, not settled here.
+
 ---
 
 ## State after revision 12
@@ -1421,6 +1473,10 @@ nothing structurally, D-100 house/home in the vocabulary, D-101 v1 blackmail as 
 template (LLM is v2), D-102 the haptic doctrine (identical buzz for all, twelve screens, the
 halfway-mark restrained reveal). Insider-count setting, check-in gate, swipe semantics and
 light-signature visibility are raised, not settled.
+
+**Revision 21 closed revision 20's questions** — D-103 the Insider count can hide behind an
+always-percentage meter (rev 19 and D-081 partially superseded), D-104 living and ghosts both
+gate the talk, D-105 the read concept is deleted, D-106 the light signature shows everywhere.
 
 **Carried into E0 as a constraint, not a closed item:** total app allocation ≤ ~0.5 MB/s as the design target, with the measured cliff between 1.5 and 3.0 MB/s — roughly 6× margin, so this is a budget rather than a knife edge. Nobody yet knows what the real app allocates with BLE, 100 Hz motion, effects and recording running at once.
 Action: create `project-context.md`.

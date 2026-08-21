@@ -275,10 +275,10 @@ fun Ghost3Screen(vals: PanelVals) {
                 verticalAlignment = Alignment.Bottom,
             ) {
                 Label("SYSTEM INTEGRITY", size = 6.5, color = Amber.Dim, tracking = 0.13)
-                Readout("${vals.outsideLit}/${vals.meterSegments}", size = 15.0, color = Amber.Bright, lineHeight = 1.0)
+                Readout("66%", size = 15.0, color = Amber.Bright, lineHeight = 1.0)
             }
             SegmentBar(
-                total = vals.meterSegments, lit = vals.outsideLit,
+                total = PanelVals.METER_SEGMENTS, lit = vals.outsideLit,
                 litColor = Amber.Mid, unlitColor = Amber.Edge, height = 6.u,
             )
         }
@@ -296,7 +296,7 @@ fun Ghost3Screen(vals: PanelVals) {
                 Readout("71%", size = 15.0, color = Amber.Bright, lineHeight = 1.0)
             }
             SegmentBar(
-                total = vals.meterSegments, lit = vals.egressLit,
+                total = PanelVals.METER_SEGMENTS, lit = vals.egressLit,
                 litColor = Amber.Bright, unlitColor = Amber.Edge, height = 6.u,
             )
         }
