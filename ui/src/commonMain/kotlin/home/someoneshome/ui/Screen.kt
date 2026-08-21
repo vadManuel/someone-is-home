@@ -34,12 +34,22 @@ fun Screen(
      * with the bungalow open — which is the state every host-setup screen was drawn in.
      */
     homes: SavedHomesModel = remember { SavedHomesModel.sample() },
+    /**
+     * The lobby this phone is in.
+     *
+     * Defaulted and `remember`ed for the reason the two above are: a test that hands a one line
+     * over must not leave the next render looking at a lobby already one line further on. The
+     * default is the design's own — three networks nearby, six seats, four lines in — because a
+     * lobby with nobody in it is a screen the app never shows.
+     */
+    lobby: LobbyModel = remember { LobbyModel.sample() },
 ) {
     val vals = PanelVals(state)
     CompositionLocalProvider(
         LocalActions provides actions,
         LocalEditor provides editor,
         LocalHomes provides homes,
+        LocalLobby provides lobby,
     ) {
         PanelFrame(vals, overlay = bannerFor(state.screen)) {
             when (state.screen) {

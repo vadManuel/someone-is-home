@@ -434,10 +434,24 @@ class FlowTest {
         scan.cardScanned(CardPayload.encode(terminalCard()))
         assertEquals(Flow.viaActions.getValue(ScreenId.ScanMarker), setOf(scan.state.screen))
 
+        // A line that was real, handed over. The refused one stays put, which is the reason this
+        // edge is the actions layer's rather than the button's — see the walk below.
+        val hand = FlowModel(PanelState(screen = ScreenId.Secret))
+        hand.lobby.typeLine("i still have priya's spare key")
+        hand.handOverLine()
+        assertEquals(Flow.viaActions.getValue(ScreenId.Secret), setOf(hand.state.screen))
+
+        // The lights going out, once every line is in. With the gate open this is a button; with
+        // it closed the screen publishes no control at all.
+        val arm = FlowModel(PanelState(screen = ScreenId.Lobby))
+        arm.lightsOut()
+        assertEquals(Flow.viaActions.getValue(ScreenId.Lobby), setOf(arm.state.screen))
+
         assertEquals(
             setOf(
                 ScreenId.Editor, ScreenId.RoomEdit, ScreenId.StairsWarn,
                 ScreenId.SaveName, ScreenId.Delete, ScreenId.ScanMarker,
+                ScreenId.Secret, ScreenId.Lobby,
             ),
             Flow.viaActions.keys,
             "a new action edge was declared and nothing here walks it",

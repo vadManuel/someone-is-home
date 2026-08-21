@@ -73,4 +73,59 @@ class ScreenshotTest {
         }
         println("wrote $written screenshots to ${out.absolutePath}")
     }
+
+    /**
+     * **The lobby's other three states, which the loop above cannot reach.**
+     *
+     * Every screen in this game is drawn from a [PanelState] and can therefore be rendered by
+     * naming a [ScreenId] — except this one. The lobby draws counts that arrive off the wire and a
+     * control only the host has, so *which* lobby you are looking at is a fact about the
+     * [LobbyModel] beside the panel, not about the screen id. Three of the four states it can be
+     * in are consequently invisible to the sweep above:
+     *
+     * - **empty** — attached to a house nobody has joined, which is what a host sees for the first
+     *   thirty seconds every single evening;
+     * - **client** — no settings control and no LIGHTS OUT, because both are the host's;
+     * - **ready** — every line in, the gate open, the one moment the commit button is live.
+     *
+     * A viewer, not an assertion, exactly as above.
+     */
+    @OptIn(ExperimentalTestApi::class, ExperimentalComposeUiApi::class)
+    @Test
+    fun renderTheLobbysOtherStates() {
+        val states = listOf(
+            "lobby-empty" to lobbyOf(joined = 0, linesIn = 0, hosting = true),
+            "lobby-client" to lobbyOf(joined = 6, linesIn = 4, hosting = false),
+            "lobby-ready" to lobbyOf(joined = 6, linesIn = 6, hosting = true),
+        )
+        for ((name, lobby) in states) {
+            runDesktopComposeUiTest(width = 600, height = 800) {
+                setContent {
+                    Box(Modifier.fillMaxSize().background(Color.Black)) {
+                        Box(Modifier.size(600.dp, 800.dp)) {
+                            DeviceCanvas {
+                                Screen(PanelState(screen = ScreenId.Lobby), lobby = lobby)
+                            }
+                        }
+                    }
+                }
+                ImageIO.write(
+                    onRoot().captureToImage().toAwtImage(), "png", File(out, "$name.png"),
+                )
+            }
+        }
+        println("wrote ${states.size} lobby states to ${out.absolutePath}")
+    }
+
+    private fun lobbyOf(joined: Int, linesIn: Int, hosting: Boolean): LobbyModel {
+        val home = NearbyHome("THE BUNGALOW", "192.168.1.24", 47747)
+        val model = LobbyModel(
+            MemoryHomeFinder(listOf(home)),
+            MemoryLobbyLink(joined = joined, linesIn = linesIn),
+            hosting = hosting,
+        )
+        model.look()
+        model.attachTo(home)
+        return model
+    }
 }

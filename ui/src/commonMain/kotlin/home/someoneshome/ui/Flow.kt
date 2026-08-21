@@ -85,10 +85,13 @@ object ScreenGraph {
         // HOLD TO DELETE publishes no click action at all — it is a two-second hold, and a
         // control a single synthetic click could fire would not be one. Also in viaActions.
         ScreenId.Delete -> setOf(ScreenId.HomeDetail)
-        ScreenId.Lobby -> setOf(ScreenId.Secret, ScreenId.Armed)
+        // LIGHTS OUT is not in here: it is a control only while every line is in, so whether the
+        // screen publishes it at all depends on a count the house sent (see Flow.viaActions).
+        ScreenId.Lobby -> setOf(ScreenId.Secret)
 
-        // Arming.
-        ScreenId.Secret -> setOf(ScreenId.Lobby)
+        // Arming. HAND IT OVER is not in here either — a blank line is refused and the refusal
+        // stays on this screen, same shape as SAVE HOME.
+        ScreenId.Secret -> emptySet()
         ScreenId.Armed -> setOf(ScreenId.Home)
 
         // The springboard, and the two screens that ARE the springboard with something on top.
@@ -308,6 +311,14 @@ object Flow {
      *   depends on what the map says about the card: five of the six outcomes are a line on the
      *   viewfinder and no movement, and the sixth is the terminal already being in another room,
      *   which is a decision the host has to make and therefore a screen.
+     * - **HAND IT OVER.** A blank line is refused and the refusal stays on the screen, for the
+     *   reason a refused save does: walking away would leave the player believing the house holds
+     *   something it does not, with the lobby's own count agreeing with them.
+     * - **LIGHTS OUT.** Gated on every line being in, and the gate is a count the *house* sent.
+     *   With it closed the screen publishes no control at all, so whether this edge exists on any
+     *   given render is not a fact about the screen — which is the definition of an edge that
+     *   belongs here. It is also the host's alone; a client's lobby draws a line of text where
+     *   the button would be.
      *
      * Without these, five screens would read as orphans — drawn and reachable by nothing — while
      * in fact being one gesture away. Written down here rather than smuggled into [ScreenGraph],
@@ -324,6 +335,9 @@ object Flow {
         ScreenId.Delete to setOf(ScreenId.Maps),
         // The T card, read in a room while the terminal is in another one.
         ScreenId.ScanMarker to setOf(ScreenId.TermTaken),
+        // A line that was real, handed over; and the lights going out once every line is in.
+        ScreenId.Secret to setOf(ScreenId.Lobby),
+        ScreenId.Lobby to setOf(ScreenId.Armed),
     )
 }
 
@@ -373,6 +387,15 @@ class FlowModel(
      * The app hands this one a real store; every test and every render gets the memory one.
      */
     val homes: SavedHomesModel = SavedHomesModel.sample(),
+    /**
+     * The lobby this phone is in.
+     *
+     * Held here for the reason the two above are: the player walks out of the lobby into the
+     * one-line screen and back, and a lobby rebuilt on each visit would re-discover the network
+     * and forget what had been typed. The app hands this one a real finder and a real link; every
+     * test and every render gets the memory ones.
+     */
+    val lobby: LobbyModel = LobbyModel.sample(),
 ) {
 
     var state: PanelState by mutableStateOf(initial)
@@ -586,6 +609,39 @@ class FlowModel(
         if (homes.duplicateOpen()) editor.load(homes.open ?: return)
     }
 
+    // ---- The lobby -------------------------------------------------------------------------
+
+    /** A tap on a network row: attach to that home, and go into its lobby. */
+    fun attachToHome(home: NearbyHome) {
+        lobby.attachTo(home)
+    }
+
+    /**
+     * HAND IT OVER.
+     *
+     * Refused when the line is blank, and a refusal stays on the screen with the reason — the
+     * same shape as [saveHome], and for the same reason: walking away from a refused hand-over
+     * would leave the player believing the house holds something it does not, with the lobby's
+     * count agreeing with them.
+     */
+    fun handOverLine() {
+        if (lobby.handOverLine()) go(ScreenId.Lobby)
+    }
+
+    /**
+     * **LIGHTS OUT — presentation only, and this is the line it stops at.**
+     *
+     * It walks this phone to the ARMED screen and does nothing else. It does not lock the seat
+     * ledger, draw the Insider count, stamp the balance values into a recording, start a clock or
+     * tell another phone anything. Every one of those is arming, arming belongs to the loop, and
+     * the loop is frozen — so what exists here is the transition, and the round behind it does
+     * not exist yet. In play this button becomes an intent the house answers by pushing a screen
+     * to everybody at once, which is why nothing about it may be decided on a device.
+     */
+    fun lightsOut() {
+        push(ScreenId.Armed)
+    }
+
     /** Every action a screen can take, wired to this model. */
     fun actions(): PanelActions = PanelActions(
         nav = ::go,
@@ -609,6 +665,13 @@ class FlowModel(
         nameHome = editor::nameHome,
         saveHome = ::saveHome,
         deleteHome = ::deleteHome,
+        nameResident = lobby::nameResident,
+        hostHome = lobby::hostHome,
+        attachToHome = ::attachToHome,
+        typeLine = lobby::typeLine,
+        handOverLine = ::handOverLine,
+        cycleInsiders = lobby::cycleInsiders,
+        lightsOut = ::lightsOut,
     )
 
     private fun remember(screen: ScreenId) {
@@ -645,5 +708,5 @@ fun FlowHost(model: FlowModel = remember { FlowModel() }) {
             if (model.state.screen == screen) model.push(pending.to)
         }
     }
-    Screen(model.state, model.actions(), model.editor, model.homes)
+    Screen(model.state, model.actions(), model.editor, model.homes, model.lobby)
 }
