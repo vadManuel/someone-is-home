@@ -1,0 +1,379 @@
+package home.someoneshome.ui
+
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+
+/**
+ * The flow layer's properties — the ones that hold over the whole graph at once, which is exactly
+ * the kind nobody checks by walking a phone.
+ *
+ * A screen list is easy to eyeball. A screen *graph* is not: an auto-advance pointing at a dead
+ * end, a screen with no inbound edge, a meeting you can step backwards out of — each is one wrong
+ * line among sixty, invisible in review, and each is only ever discovered by somebody standing in
+ * a dark house holding a phone that will not move.
+ *
+ * The companion to this is `ScreenGraphTest`, which renders every screen and fires every tap
+ * target it publishes, and fails if [ScreenGraph] and the ported screens disagree. Between the
+ * two, the graph is checked against the code and the code is checked against itself.
+ */
+class FlowTest {
+
+    /**
+     * Screens with no way onward at all, and the reason each one has none: **the house has to
+     * move you**.
+     *
+     * A revoked player sits in the dark until a meeting is called; a restrained player waits for
+     * the others to finish reading the result; a player outside the system waits for the round to
+     * end; a disconnected phone waits for the house to come back; and the two endings wait for
+     * nothing, because there is nothing after them.
+     *
+     * Everything else must publish a control or say it will move on. A screen that does neither
+     * is a phone that has stopped, and in this game a phone that has stopped is a player standing
+     * in the dark with no instruction.
+     */
+    private val awaitingTheHouse = setOf(
+        ScreenId.Revoked, ScreenId.Restrained, ScreenId.Ghost3, ScreenId.Disconnect,
+        ScreenId.WinInsiders, ScreenId.WinResidents,
+    )
+
+    /**
+     * Every way off a screen: what its own controls reach, what the actions layer reaches for the
+     * one chip that hands over its decision, and what the screen does on its own.
+     */
+    private fun onward(id: ScreenId): Set<ScreenId> =
+        ScreenGraph.exitsOf(id) + Flow.viaActions[id].orEmpty() + setOfNotNull(Flow.autoAdvance[id]?.to)
+
+    // ---- The graph -------------------------------------------------------------------------
+
+    @Test
+    fun everyScreenEitherOffersAWayOnwardOrIsWaitingForTheHouse() {
+        val stuck = ScreenId.entries.filter { onward(it).isEmpty() }.toSet()
+        assertEquals(
+            awaitingTheHouse, stuck,
+            "screens with no exit and no fall-through must be exactly the ones the house has to " +
+                "move: unexpectedly stuck ${stuck - awaitingTheHouse}, " +
+                "unexpectedly moving ${awaitingTheHouse - stuck}",
+        )
+    }
+
+    @Test
+    fun noScreenListsItselfAsAWayOnward() {
+        for (id in ScreenId.entries) {
+            assertFalse(id in onward(id), "$id leads to itself")
+        }
+    }
+
+    /**
+     * **The whole screen list is accounted for.**
+     *
+     * Start at [ScreenId.Boot] and walk every tap and every fall-through; then start again at each
+     * screen only the house can push, and at the two the port cannot route to. Between them, every
+     * screen in the game must be covered.
+     *
+     * A screen missing from the result is an orphan: it exists, `Screen` draws it, and no route in
+     * the app or on paper reaches it. That is how a designed screen quietly stops being part of
+     * the game.
+     */
+    @Test
+    fun everyScreenIsReachedByWalkingOrIsOneTheHouseMustPush() {
+        val seen = mutableSetOf<ScreenId>()
+        val queue = ArrayDeque(listOf(ScreenId.Boot) + Flow.housePushed + Flow.unrouted)
+        seen += queue
+        while (queue.isNotEmpty()) {
+            for (next in onward(queue.removeFirst())) if (seen.add(next)) queue.addLast(next)
+        }
+        assertEquals(
+            emptySet(), ScreenId.entries.toSet() - seen,
+            "orphaned screens — drawn, and reachable by nothing",
+        )
+    }
+
+    /**
+     * The other half of the same claim: a screen listed as house-pushed must really be
+     * unreachable, or the list is a comforting fiction.
+     *
+     * This is the one that bites. Wiring a tap straight to `Revoked` — a debug shortcut, a
+     * convenience during a playtest — would make the client able to put itself out of the round,
+     * and the list here would still say the house does it.
+     */
+    @Test
+    fun nothingWalksToAScreenOnlyTheHouseCanPush() {
+        val walkedTo = ScreenId.entries.flatMapTo(mutableSetOf()) { onward(it) }
+        for (id in Flow.housePushed + Flow.unrouted) {
+            assertFalse(
+                id in walkedTo,
+                "$id is listed as unreachable by tapping, but something reaches it: " +
+                    ScreenId.entries.filter { id in onward(it) },
+            )
+        }
+    }
+
+    // ---- Auto-advance ------------------------------------------------------------------------
+
+    @Test
+    fun everyAutoAdvanceLandsSomewhereWithAWayOnward() {
+        for ((from, rule) in Flow.autoAdvance) {
+            assertTrue(
+                rule.to in ScreenGraph.exits,
+                "$from advances to ${rule.to}, which is not in the screen graph",
+            )
+            assertTrue(
+                onward(rule.to).isNotEmpty() || rule.to in awaitingTheHouse,
+                "$from advances to ${rule.to}, which is a dead end",
+            )
+        }
+    }
+
+    @Test
+    fun everyAutoAdvanceCarriesAReasonAndARealDelay() {
+        for ((from, rule) in Flow.autoAdvance) {
+            assertTrue(rule.afterMillis > 0, "$from advances after ${rule.afterMillis}ms")
+            assertTrue(rule.why.isNotBlank(), "$from advances for no stated reason")
+        }
+    }
+
+    /**
+     * The scan's ten seconds are the bar's, not a second opinion about it.
+     *
+     * The countdown on screen and the moment the light dies are the same fact; written as two
+     * numbers they drift, and the drift is a lit phone held at a wall for longer than the bar
+     * said it would be.
+     */
+    @Test
+    fun theScanWindowIsTheBarThatDrawsIt() {
+        val rule = Flow.autoAdvance.getValue(ScreenId.Scan)
+        assertEquals(PanelVals.SCAN_SEGMENTS * 500, rule.afterMillis)
+        assertEquals(10_000, rule.afterMillis, "the design's final scan window is ten seconds")
+        assertEquals(ScreenId.Home, rule.to, "the phone goes back to where it was")
+    }
+
+    /**
+     * The meeting is a line: ring, walk in, notices, talk, vote, result, lights out. No branches,
+     * and every step taken by the house rather than waited on.
+     */
+    @Test
+    fun theMeetingRunsFromTheRingToTheLightsGoingOut() {
+        val line = listOf(
+            ScreenId.Assemble, ScreenId.Notice, ScreenId.Discussion, ScreenId.Vote,
+            ScreenId.Tally, ScreenId.Home,
+        )
+        for (start in listOf(ScreenId.Calling, ScreenId.Call, ScreenId.Found)) {
+            var at = start
+            for (expected in line) {
+                val rule = Flow.autoAdvance[at]
+                    ?: throw AssertionError("$at does not move on; the meeting stalls there")
+                assertEquals(expected, rule.to, "from $at")
+                at = rule.to
+            }
+        }
+    }
+
+    /** The same meeting from outside the system, and the outside view arrives only after it. */
+    @Test
+    fun aPlayerWhoIsOutWalksInWatchesAndOnlyThenSeesOutside() {
+        assertEquals(ScreenId.GhostMeeting, Flow.autoAdvance.getValue(ScreenId.Ghost2).to)
+        assertEquals(ScreenId.Ghost3, Flow.autoAdvance.getValue(ScreenId.GhostMeeting).to)
+    }
+
+    // ---- The house is driving ----------------------------------------------------------------
+
+    /**
+     * D-102, read backwards: **a screen that arrives unasked buzzes**, so a screen that buzzes is
+     * one the house put you on, and there is nothing behind it to step back into.
+     *
+     * The doctrine names one exception and this asserts it is the only one. The host's
+     * registration scan buzzes because the phone is against a card with the display angled away —
+     * the host tapped REGISTER MARKER to get there, so back is theirs to use.
+     */
+    @Test
+    fun everyScreenThatArrivesUnaskedIsOneTheHouseIsDriving() {
+        val unasked = PanelVals.BUZZING - ScreenId.ScanMarker
+        assertEquals(
+            emptySet(), unasked - Flow.houseDriving,
+            "these buzz, so they arrived unasked, so back must be refused on them",
+        )
+        assertFalse(
+            ScreenId.ScanMarker in Flow.houseDriving,
+            "the host's registration scan buzzes for the card, not because it arrived unasked",
+        )
+    }
+
+    /**
+     * The no-back set, named in full, so it cannot grow or shrink by accident.
+     *
+     * The derived half above only proves the set is big enough. This proves it is not bigger:
+     * every screen beyond the ones that arrive unasked has to be argued for, and the argument is
+     * at [Flow.houseDriving]. Adding a screen here on a hunch strands a player on something they
+     * opened themselves — in a dark house, on a phone with no way back, which means asking someone
+     * out loud in a game played in silence.
+     */
+    @Test
+    fun theHousesScreensAreExactlyTheOnesNamed() {
+        val arrivedUnasked = PanelVals.BUZZING - ScreenId.ScanMarker
+        val andTheseSeven = setOf(
+            ScreenId.Boot,        // the app just started; nothing is behind it
+            ScreenId.Calling,     // you called the meeting and are now waiting like everyone else
+            ScreenId.Discussion,  // mid-meeting, on the room's clock
+            ScreenId.Vote,        // the same
+            ScreenId.Ghost2,      // out, and walking in
+            ScreenId.Ghost3,      // out, and watching from outside
+            ScreenId.Disconnect,  // the house is gone; every screen behind assumes it is not
+        )
+        assertEquals(
+            arrivedUnasked + andTheseSeven, Flow.houseDriving,
+            "the no-back set changed. Widening it strands a player on a screen they opened; " +
+                "narrowing it lets a phone walk backwards out of a meeting. Neither is a tidy-up",
+        )
+    }
+
+    /**
+     * Back is refused on exactly the house's screens — and works everywhere else.
+     *
+     * Both halves matter. Refusing too little lets a phone walk backwards out of a meeting;
+     * refusing too much strands a player on a screen they opened themselves, and in a dark house
+     * a phone with no way back is a player who has to ask someone out loud.
+     */
+    @Test
+    fun backIsRefusedOnTheHousesScreensAndNowhereElse() {
+        for (id in ScreenId.entries) {
+            val model = FlowModel(PanelState(screen = ScreenId.Home))
+            model.go(id)
+            val moved = model.back()
+            if (id in Flow.houseDriving) {
+                assertFalse(moved, "$id let the player step backwards; the house is driving")
+                assertEquals(id, model.state.screen, "$id refused back and moved anyway")
+            } else {
+                assertTrue(moved, "$id refused back, stranding the player who opened it")
+                assertEquals(ScreenId.Home, model.state.screen, "$id went back to the wrong place")
+            }
+        }
+    }
+
+    @Test
+    fun backReturnsYouWhereYouCameFrom() {
+        val model = FlowModel(PanelState(screen = ScreenId.Home))
+        model.go(ScreenId.Files)
+        model.go(ScreenId.Home)
+        model.go(ScreenId.Notes)
+        assertTrue(model.back()); assertEquals(ScreenId.Home, model.state.screen)
+        assertTrue(model.back()); assertEquals(ScreenId.Files, model.state.screen)
+        assertTrue(model.back()); assertEquals(ScreenId.Home, model.state.screen)
+        assertFalse(model.back(), "the trail is spent")
+    }
+
+    /**
+     * Walking out of a meeting leaves nothing behind to walk back into. The round has moved on,
+     * and every screen on the trail described one that has not.
+     */
+    @Test
+    fun leavingTheHousesScreensLeavesNoTrail() {
+        val model = FlowModel(PanelState(screen = ScreenId.Home))
+        model.go(ScreenId.Files)
+        model.go(ScreenId.Calling)
+        model.go(ScreenId.Assemble)
+        model.push(ScreenId.Home)
+        assertFalse(model.canGoBack, "the springboard before the meeting is still on the trail")
+        assertFalse(model.back())
+    }
+
+    @Test
+    fun theHousePushingClearsTheTrail() {
+        val model = FlowModel(PanelState(screen = ScreenId.Home))
+        model.go(ScreenId.Files)
+        model.push(ScreenId.Notify)
+        assertFalse(model.back(), "a push is not somewhere you came from")
+    }
+
+    /**
+     * The trail does not grow all round.
+     *
+     * Twenty-five minutes of tapping around a springboard against a whole-app allocation budget of
+     * about half a megabyte a second — and the lamp has to die in the same frame as phone contact.
+     * A list that only ever grows is the wrong shape to have in the room.
+     */
+    @Test
+    fun theTrailIsCapped() {
+        val model = FlowModel(PanelState(screen = ScreenId.Home))
+        repeat(500) { model.go(if (it % 2 == 0) ScreenId.Files else ScreenId.Home) }
+        var steps = 0
+        while (model.back()) steps++
+        assertTrue(steps in 1..64, "the trail kept $steps screens; it is supposed to be capped")
+    }
+
+    // ---- Arriving --------------------------------------------------------------------------
+
+    /**
+     * The two ways out are not synonyms, and the carrier says which one happened.
+     *
+     * `Revoke` is system power lent by the house; `Restrain` is a physical act by the room that
+     * the house cannot prevent. Both end on the same couch and the same screens, so the screen
+     * alone cannot tell them apart — the cause has to be carried, and a phone with no house
+     * attached has to carry it too or the chrome reads UNREGISTERED and looks broken.
+     */
+    @Test
+    fun steppingOntoAnOutScreenCarriesTheCause() {
+        val model = FlowModel(PanelState(screen = ScreenId.Home))
+        model.go(ScreenId.Revoked)
+        assertEquals(OutBy.Revoked, model.state.outBy)
+        assertEquals("REVOKED", PanelVals(model.state).carrier)
+
+        model.push(ScreenId.Restrained)
+        assertEquals(OutBy.Restrained, model.state.outBy)
+        assertEquals("RESTRAINED", PanelVals(model.state).carrier)
+    }
+
+    // ---- The one place a chip navigates ------------------------------------------------------
+
+    /**
+     * **Stairs hold nothing**, so turning an occupied room into one unregisters every card in it.
+     * The host is told what that costs *before* it happens, which is why the chip hands its
+     * decision to this layer instead of naming a screen: there is a question in between.
+     */
+    @Test
+    fun pickingStairsAsksBeforeItChangesAnything() {
+        val model = FlowModel(PanelState(screen = ScreenId.RoomEdit, roomType = RoomType.Room))
+        model.pickRoomType(RoomType.Stairs)
+        assertEquals(ScreenId.StairsWarn, model.state.screen)
+        assertEquals(RoomType.Room, model.state.roomType, "the room changed before the host answered")
+
+        // MOVE THEM FIRST: the host backs out and the room is untouched.
+        model.go(ScreenId.MarkerSheet)
+        assertEquals(RoomType.Room, model.state.roomType)
+
+        // UNREGISTER AND CONTINUE: now, and only now.
+        val confirmed = FlowModel(PanelState(screen = ScreenId.StairsWarn))
+        confirmed.confirmStairs()
+        assertEquals(RoomType.Stairs, confirmed.state.roomType)
+        assertEquals(ScreenId.Editor, confirmed.state.screen)
+    }
+
+    /**
+     * [Flow.viaActions] is the only part of the graph no rendering test can read off a screen, so
+     * it is the only part that could quietly become a description of something the app no longer
+     * does. This walks it.
+     */
+    @Test
+    fun theEdgesTheActionsLayerOwnsAreEdgesItReallyWalks() {
+        val chip = FlowModel(PanelState(screen = ScreenId.RoomEdit, roomType = RoomType.Room))
+        chip.pickRoomType(RoomType.Stairs)
+        assertEquals(Flow.viaActions.getValue(ScreenId.RoomEdit), setOf(chip.state.screen))
+
+        val confirm = FlowModel(PanelState(screen = ScreenId.StairsWarn))
+        confirm.confirmStairs()
+        assertEquals(Flow.viaActions.getValue(ScreenId.StairsWarn), setOf(confirm.state.screen))
+
+        assertEquals(
+            setOf(ScreenId.RoomEdit, ScreenId.StairsWarn), Flow.viaActions.keys,
+            "a new action edge was declared and nothing here walks it",
+        )
+    }
+
+    @Test
+    fun pickingTheTypeAScreenAlreadyHasChangesNothing() {
+        val model = FlowModel(PanelState(screen = ScreenId.RoomEdit, roomType = RoomType.Stairs))
+        model.pickRoomType(RoomType.Stairs)
+        assertEquals(ScreenId.RoomEdit, model.state.screen, "a room that is already stairs has nothing to warn about")
+    }
+}

@@ -21,15 +21,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import home.someoneshome.ui.Amber
+import home.someoneshome.ui.FlowHost
+import home.someoneshome.ui.FlowModel
 import home.someoneshome.ui.Label
 import home.someoneshome.ui.LocalPanelInsets
-import home.someoneshome.ui.OutBy
-import home.someoneshome.ui.PanelActions
 import home.someoneshome.ui.PanelRole
 import home.someoneshome.ui.PanelState
-import home.someoneshome.ui.RevokeState
-import home.someoneshome.ui.Screen
 import home.someoneshome.ui.ScreenId
+import home.someoneshome.ui.arrivingAt
 import home.someoneshome.ui.tap
 import home.someoneshome.ui.u
 
@@ -43,12 +42,17 @@ import home.someoneshome.ui.u
  *
  * ### The first cheat is a screen picker
  *
- * The app renders [ScreenId.Boot] and nothing can advance it — there is no transport and no
- * loop, which is expected, not a regression. The picker makes the other 55 screens reachable on
- * a phone: jump anywhere from the list, then walk the ported tap targets, because [cheatActions]
- * wires navigation and the design's toggles straight into local [PanelState]. None of this is
- * game logic and none of it survives into release; it is the desktop preview's job, on the
- * hardware the desktop cannot fake.
+ * The app opens on [ScreenId.Boot] and walks itself from there: [FlowHost] drives the ported
+ * flows, so the self-test falls through, a call rings out into the meeting, and the meeting runs
+ * to lights out with nobody touching the phone. There is still no transport and no loop, which is
+ * expected rather than a regression — the house is not deciding any of this, a local table is,
+ * and it goes away the day the house can push.
+ *
+ * The picker is for the screens no walk reaches (`Flow.housePushed` — a text arriving, a scan
+ * being answered, a revocation) plus the one thing no tap can set, the role. Jump anywhere from
+ * the list, then walk the ported tap targets from there. None of this is game logic and none of
+ * it survives into release; it is the desktop preview's job, on the hardware the desktop cannot
+ * fake.
  *
  * ### The marker is permanent, and tapping it opens the picker
  *
@@ -61,7 +65,11 @@ private enum class CheatView { Panel, Picker, Transport }
 
 @Composable
 fun CheatRoot() {
-    var state by remember { mutableStateOf(PanelState(screen = ScreenId.Boot)) }
+    // ONE model for the whole session, held above the view switch. Dropping into the picker and
+    // back must not restart the round the phone is walking, and rebuilding it here would do
+    // exactly that — silently, because a screen that resets to boot looks like a screen that was
+    // always on boot.
+    val flow = remember { FlowModel(PanelState(screen = ScreenId.Boot)) }
     var view by remember { mutableStateOf(CheatView.Panel) }
     // Hoisted here so the host and client outlive the view: navigating away from the transport
     // surface mid-evening must not hang up two phones.
@@ -69,44 +77,16 @@ fun CheatRoot() {
     val transport = remember { TransportCheat(scope) }
     Box(Modifier.fillMaxSize().background(Amber.Black)) {
         when (view) {
-            CheatView.Panel -> Screen(state, cheatActions(state) { state = it })
+            CheatView.Panel -> FlowHost(flow)
             CheatView.Picker -> CheatPicker(
-                state,
-                onPick = { state = it; view = CheatView.Panel },
+                flow.state,
+                onPick = { flow.jump(it); view = CheatView.Panel },
                 onTransport = { view = CheatView.Transport },
             )
             CheatView.Transport -> TransportCheatScreen(transport)
         }
         MarkerChip { view = if (view == CheatView.Panel) CheatView.Picker else CheatView.Panel }
     }
-}
-
-/**
- * The design's actions, wired to local state so the ported flows can be walked by hand.
- *
- * In play these become Intents the authority may refuse; here they mutate the fixture directly,
- * which is exactly as much game as the desktop preview is — none.
- */
-private fun cheatActions(state: PanelState, set: (PanelState) -> Unit) = PanelActions(
-    nav = { set(state.withScreen(it)) },
-    stepRevoke = {
-        set(state.copy(revoke = RevokeState.entries[(state.revoke.ordinal + 1) % RevokeState.entries.size]))
-    },
-    toggleMarkers = { set(state.copy(markersOn = !state.markersOn)) },
-    toggleTorch = { set(state.copy(torch = !state.torch)) },
-    pickRoomType = { set(state.copy(roomType = it)) },
-    confirmStairs = { set(state.withScreen(ScreenId.Editor)) },
-)
-
-/**
- * Jumping to an out screen names the cause, because the carrier reads it from [PanelState.outBy]
- * — a picker that landed on the revoked screen with no cause would render the UNREGISTERED
- * fallback and look like a bug in the chrome rather than a choice in the cheat.
- */
-private fun PanelState.withScreen(id: ScreenId): PanelState = when (id) {
-    ScreenId.Revoked -> copy(screen = id, outBy = OutBy.Revoked)
-    ScreenId.Restrained -> copy(screen = id, outBy = OutBy.Restrained)
-    else -> copy(screen = id)
 }
 
 /** Every screen, as a tappable list, plus the one toggle a screen cannot express: the role. */
@@ -146,7 +126,10 @@ private fun CheatPicker(state: PanelState, onPick: (PanelState) -> Unit, onTrans
             val current = id == draft.screen
             Label(
                 id.name.uppercase(),
-                Modifier.fillMaxWidth().tap { onPick(draft.withScreen(id)) }.padding(vertical = 1.5.u),
+                // `arrivingAt` rather than a bare copy: the carrier on the two out screens reads
+                // the CAUSE, not the screen, so a picker that landed there with none would render
+                // the UNREGISTERED fallback and look like a bug in the chrome.
+                Modifier.fillMaxWidth().tap { onPick(draft.arrivingAt(id)) }.padding(vertical = 1.5.u),
                 size = 7.0,
                 color = if (current) Amber.Bright else Amber.Dim,
                 tracking = 0.08,

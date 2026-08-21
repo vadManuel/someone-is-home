@@ -253,12 +253,7 @@ class PanelVals(val state: PanelState) {
      * Anything that arrives unasked buzzes: banners, calls, the meeting transitions, revocation,
      * a caught scan, and the round ending. Nothing the player *chose* to open does.
      */
-    val buzzes: Boolean = state.screen in setOf(
-        ScreenId.Armed, ScreenId.Notify, ScreenId.Banner, ScreenId.Call, ScreenId.Found,
-        ScreenId.Assemble, ScreenId.Notice, ScreenId.Tally, ScreenId.Revoked, ScreenId.Restrained,
-        ScreenId.ScanMarker, ScreenId.ScanCaught, ScreenId.ScanBad, ScreenId.ScanUnknown, ScreenId.GhostMeeting,
-        ScreenId.WinInsiders, ScreenId.WinResidents,
-    )
+    val buzzes: Boolean get() = state.screen in BUZZING
 
     // ---- Messages -------------------------------------------------------------------------
 
@@ -489,6 +484,27 @@ class PanelVals(val state: PanelState) {
     val meetingLit: Int = 12
 
     companion object {
+
+        /**
+         * The screens that arrive unasked, and therefore buzz.
+         *
+         * **A constant, not a literal rebuilt per screen.** It used to be a `setOf(...)` inside
+         * [buzzes], so every construction of a `PanelVals` — every recomposition of every screen —
+         * allocated a seventeen-element set to ask one membership question. The whole app has an
+         * allocation budget of about 0.5 MB/s, and the lamp has to die in the same frame as phone
+         * contact; a per-frame allocation to answer a constant is the wrong direction on both.
+         *
+         * It is also the one place the design's buzzing set is written down, which is what lets
+         * [Flow.houseDriving] be derived from it rather than kept in step with it by hand.
+         */
+        val BUZZING: Set<ScreenId> = setOf(
+            ScreenId.Armed, ScreenId.Notify, ScreenId.Banner, ScreenId.Call, ScreenId.Found,
+            ScreenId.Assemble, ScreenId.Notice, ScreenId.Tally, ScreenId.Revoked,
+            ScreenId.Restrained, ScreenId.ScanMarker, ScreenId.ScanCaught, ScreenId.ScanBad,
+            ScreenId.ScanUnknown, ScreenId.GhostMeeting, ScreenId.WinInsiders,
+            ScreenId.WinResidents,
+        )
+
         /**
          * The meter bar's DISPLAY RESOLUTION — how many cells the percentage is quantised into,
          * a fact about pixels and nothing else (D-103, revision 21). SystemIntegrity reaches a
