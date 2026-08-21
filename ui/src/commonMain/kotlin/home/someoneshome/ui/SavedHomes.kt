@@ -3,6 +3,7 @@ package home.someoneshome.ui
 import home.someoneshome.model.CardPayload
 import home.someoneshome.model.CellRect
 import home.someoneshome.model.Floor
+import home.someoneshome.model.HomeReview
 import home.someoneshome.model.HouseMap
 import home.someoneshome.model.HousePlan
 import home.someoneshome.model.MarkerCard
@@ -237,12 +238,14 @@ class SavedHomesModel(private val store: HomeStore = MemoryHomeStore()) {
                     sampleHome(
                         "MUM & DAD'S",
                         terminal = "UTILITY",
+                        meeting = "LIVING",
                         "GROUND" to listOf("KITCHEN", "LIVING", "HALL", "UTILITY", "GARAGE"),
                         "UPPER" to listOf("BED 1", "BED 2", "BATH 1", "LANDING"),
                     ),
                     sampleHome(
                         "THE LAKE PLACE",
                         terminal = "BOOT ROOM",
+                        meeting = "DECK",
                         "GROUND" to
                             listOf("KITCHEN", "LIVING", "DECK", "BATH 1", "BED 1", "BOOT ROOM"),
                     ),
@@ -256,10 +259,21 @@ class SavedHomesModel(private val store: HomeStore = MemoryHomeStore()) {
          * These two are seen as rows and counts. The geometry only has to be a real plan — rooms
          * that hold cells, do not overlap and can be opened in the editor — so it is generated,
          * five to a row, instead of being hand-painted like the bungalow.
+         *
+         * **Eight markers, because eight is the floor** (D-127). They used to carry four, from
+         * before there was a gate; a sample list where two of three homes cannot be hosted would
+         * put HOSTS UP TO 1 on a screen whose job is to show a host what a saved home looks like.
+         * Eight is deliberately the minimum rather than a comfortable number — the row that shows
+         * the tightest lawful home is the one worth having in a fixture.
+         *
+         * The cards cycle the rooms, so a home with five rooms gets eight markers with some rooms
+         * holding two. That is ordinary — a card is a place, not a container (D-123) — and it is
+         * the same shape as the bungalow's GARAGE.
          */
         private fun sampleHome(
             name: String,
             terminal: String,
+            meeting: String,
             vararg floors: Pair<String, List<String>>,
         ): SavedHome {
             val plan = HousePlan.of(
@@ -275,7 +289,9 @@ class SavedHomesModel(private val store: HomeStore = MemoryHomeStore()) {
                     )
                 }
             )
-            val cards = plan.rooms.filter { it.name != terminal }.take(4)
+            // Not the terminal's room: standing at the terminal is meant to be a walk nobody
+            // makes by accident, and a marker there would send somebody every round.
+            val rooms = plan.rooms.filter { it.name != terminal }
             // The ids are the home's initial and a number, because a fixture whose card ids are
             // noise is a fixture nobody can follow on a screenshot. Seven characters, and out of
             // the alphabet a printed card is allowed to carry — no space.
@@ -284,10 +300,20 @@ class SavedHomesModel(private val store: HomeStore = MemoryHomeStore()) {
                 name = name,
                 plan = plan,
                 map = HouseMap.of(
-                    cards.mapIndexed { i, room ->
-                        Registration(sampleCard(MarkerShapes.registrable[i * 3], stem, i + 1), Room(room.name))
+                    List(HomeReview.MARKERS) { i ->
+                        Registration(
+                            sampleCard(MarkerShapes.registrable[i * 3], stem, i + 1),
+                            Room(rooms[i % rooms.size].name),
+                        )
                     },
-                    Registration(sampleCard(MarkerShapes.TERMINAL, stem, 0), Room(terminal)),
+                    terminal = Registration(
+                        sampleCard(MarkerShapes.TERMINAL, stem, 0),
+                        Room(terminal),
+                    ),
+                    meeting = Registration(
+                        sampleCard(MarkerShapes.MEETING, stem, HomeReview.MARKERS + 1),
+                        Room(meeting),
+                    ),
                 ),
             )
         }

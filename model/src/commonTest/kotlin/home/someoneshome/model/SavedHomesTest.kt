@@ -3,6 +3,8 @@ package home.someoneshome.model
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -37,14 +39,22 @@ private fun payload(shape: String, id: String) = CardPayload.encode(card(shape, 
 private fun registered(shape: String, id: String, room: String, kind: RoomKind = RoomKind.Room) =
     Registration(card(shape, id), Room(room, kind))
 
-/** Three ordinary cards and the T card in the hall — what a short setup walk leaves behind. */
+/**
+ * Three ordinary cards, the T card in the hall and the meeting card in the kitchen — what a short
+ * setup walk leaves behind.
+ *
+ * The meeting card shares KITCHEN with two markers on purpose: it reserves a shape and not a room
+ * (D-121), and a fixture where it sat alone would let every screen and every round trip be written
+ * as though it did.
+ */
 private fun map(): HouseMap = HouseMap.of(
     listOf(
         registered("triangle_up", "CARD-01", "KITCHEN"),
         registered("square", "CARD-02", "KITCHEN"),
         registered("ring", "CARD-03", "BED 1"),
     ),
-    registered("t_shape", "CARD-0T", "HALL"),
+    terminal = registered("t_shape", "CARD-0T", "HALL"),
+    meeting = registered("u_shape", "CARD-0U", "KITCHEN"),
 )
 
 private fun home(name: String = "THE BUNGALOW") = SavedHome(name, plan(), map())
@@ -71,6 +81,29 @@ class SavedHomesTest {
         assertEquals(shapes("ring"), bungalow.markersIn("BED 1"))
         assertEquals(emptyList(), bungalow.markersIn("HALL"), "the terminal is not a marker")
         assertEquals("HALL", bungalow.terminal)
+        assertEquals("KITCHEN", bungalow.meeting)
+        assertEquals(
+            shapes("triangle_up", "square"),
+            bungalow.markersIn("KITCHEN"),
+            "the meeting card is not a marker",
+        )
+    }
+
+    /**
+     * **The gate a home carries with it** (D-127), asked of a stored home rather than of a screen.
+     *
+     * The fixture has three markers, so it is a home that is real, saveable and not yet hostable —
+     * which is exactly the state the REVIEW screen exists for, and the state a host is in for most
+     * of their setup walk.
+     */
+    @Test
+    fun `a home says what it is still short of`() {
+        val bungalow = home()
+        assertFalse(bungalow.review.passes)
+        val markers = bungalow.review.missing.single()
+        assertIs<HomeReview.Missing.Markers>(markers)
+        assertEquals(3, markers.have)
+        assertEquals(0, bungalow.review.hosts, "three markers is fewer than the three stations")
     }
 
     @Test
@@ -110,6 +143,37 @@ class SavedHomesTest {
                 SavedHome("H", plan(), HouseMap.of(emptyList(), registered("t_shape", "CARD-0T", room)))
             }
         }
+    }
+
+    @Test
+    fun `a meeting card in stairs or in no room is refused`() {
+        for (room in listOf("TOP OF STAIRS", "CELLAR")) {
+            val thrown = assertFailsWith<IllegalArgumentException> {
+                SavedHome(
+                    "H",
+                    plan(),
+                    HouseMap.of(emptyList(), meeting = registered("u_shape", "CARD-0U", room)),
+                )
+            }
+            assertTrue("the meeting card is in" in thrown.message.orEmpty(), thrown.message.orEmpty())
+        }
+    }
+
+    /** **The meeting card is never an ordinary marker.** Not a convention — the map refuses one. */
+    @Test
+    fun `the meeting card cannot be an ordinary registration`() {
+        val thrown = assertFailsWith<IllegalArgumentException> {
+            HouseMap.of(listOf(registered("u_shape", "CARD-0U", "KITCHEN")))
+        }
+        assertTrue("never is" in thrown.message.orEmpty(), thrown.message.orEmpty())
+    }
+
+    @Test
+    fun `a meeting card that is not the card marked U is refused`() {
+        val thrown = assertFailsWith<IllegalArgumentException> {
+            HouseMap.of(emptyList(), meeting = registered("ring", "CARD-01", "KITCHEN"))
+        }
+        assertTrue("not the card marked U" in thrown.message.orEmpty(), thrown.message.orEmpty())
     }
 
     /** **The T card is never an ordinary marker.** Not a convention — the map cannot hold one. */
@@ -244,7 +308,7 @@ class SavedHomesTest {
 
     @Test
     fun `another format version is refused rather than guessed at`() {
-        val other = refusal("someone-is-home/saved-homes/3\nH X\n")
+        val other = refusal("someone-is-home/saved-homes/9\nH X\n")
         assertEquals(1, other.line)
         assertTrue("cannot be read under this one" in other.detail, other.detail)
     }
@@ -261,6 +325,20 @@ class SavedHomesTest {
         val old = refusal("someone-is-home/saved-homes/1\nH X\n")
         assertEquals(1, old.line)
         assertTrue("before markers carried the id" in old.detail, old.detail)
+    }
+
+    /**
+     * **Version 2 is named too, and for a reason of its own.**
+     *
+     * A v2 home has no meeting card, and D-127 makes one a condition of hosting. Read back under
+     * v3 it would be a home that silently fails a gate over a card the host has never printed, and
+     * there is nothing honest to invent: where a meeting is called is a place in a real house.
+     */
+    @Test
+    fun `homes written before the meeting card are refused by name`() {
+        val old = refusal("someone-is-home/saved-homes/2\nH X\n")
+        assertEquals(1, old.line)
+        assertTrue("before the meeting card" in old.detail, old.detail)
     }
 
     @Test
@@ -454,6 +532,77 @@ class SavedHomesTest {
 
         val asTerminal = refusal(oneRoom(HouseMapText.HEADER, "T ${payload("ring", "CARD-01")}|KITCHEN"))
         assertTrue("not the card marked T" in asTerminal.detail, asTerminal.detail)
+    }
+
+    @Test
+    fun `a meeting card in a room the plan does not have is refused`() {
+        val thrown = refusal(
+            oneRoom(HouseMapText.HEADER, "M ${payload("u_shape", "CARD-0U")}|CELLAR")
+        )
+        assertTrue("the meeting card is in" in thrown.detail, thrown.detail)
+        assertTrue("not a room in 'X'" in thrown.detail, thrown.detail)
+    }
+
+    /** One home, one meeting card. A second is a second place the house would be called to. */
+    @Test
+    fun `two meeting cards in one home are refused`() {
+        val thrown = refusal(
+            linesOf(
+                "H X", HousePlanText.HEADER, "F GROUND",
+                "R room|0,0,2,2|KITCHEN", "R room|2,0,2,2|HALL",
+                HouseMapText.HEADER,
+                "M ${payload("u_shape", "CARD-0U")}|KITCHEN",
+                "M ${payload("u_shape", "CARD-1U")}|HALL",
+            )
+        )
+        assertEquals(9, thrown.line)
+        assertTrue("a second meeting card" in thrown.detail, thrown.detail)
+    }
+
+    /** D-069's hazard again, through the file: one printed id cannot be two things in a home. */
+    @Test
+    fun `a card id used by a marker and by the meeting card is refused`() {
+        val id = "CARD-0U"
+        val thrown = refusal(
+            oneRoom(
+                HouseMapText.HEADER,
+                "M ${payload("u_shape", id)}|KITCHEN",
+                "R ${payload("ring", id)}|KITCHEN",
+            )
+        )
+        assertEquals(8, thrown.line)
+        assertTrue("appears twice" in thrown.detail, thrown.detail)
+    }
+
+    /** The U card in an ordinary row, and an ordinary card in the meeting row. Both refused. */
+    @Test
+    fun `the meeting card is refused in an ordinary row and the other way round`() {
+        val asMarker = refusal(oneRoom(HouseMapText.HEADER, "R ${payload("u_shape", "CARD-0U")}|KITCHEN"))
+        assertTrue("never is" in asMarker.detail, asMarker.detail)
+
+        val asMeeting = refusal(oneRoom(HouseMapText.HEADER, "M ${payload("ring", "CARD-01")}|KITCHEN"))
+        assertTrue("not the card marked U" in asMeeting.detail, asMeeting.detail)
+    }
+
+    /**
+     * **The reserved cards' rows are distinct rows and are not interchangeable.**
+     *
+     * `T` and `M` are one character apart in a text file somebody could edit. The T card filed on
+     * an `M` row would read back as a home whose meeting is called at the terminal — which passes
+     * the gate, reads clean, and sends the whole party to the one room the design put a Resident
+     * alone in.
+     */
+    @Test
+    fun `the two reserved rows cannot be swapped`() {
+        val onMeetingRow = refusal(
+            oneRoom(HouseMapText.HEADER, "M ${payload("t_shape", "CARD-0T")}|KITCHEN")
+        )
+        assertTrue("not the card marked U" in onMeetingRow.detail, onMeetingRow.detail)
+
+        val onTerminalRow = refusal(
+            oneRoom(HouseMapText.HEADER, "T ${payload("u_shape", "CARD-0U")}|KITCHEN")
+        )
+        assertTrue("not the card marked T" in onTerminalRow.detail, onTerminalRow.detail)
     }
 
     @Test

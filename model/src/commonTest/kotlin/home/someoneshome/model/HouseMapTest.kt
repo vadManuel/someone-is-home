@@ -208,7 +208,7 @@ class TerminalTest {
     fun `the card marked T says so itself`() {
         assertTrue(tCard.isTerminal)
         assertTrue(!card("ring", "BBBBBBB").isTerminal)
-        assertEquals(43, MarkerShapes.registrable.size, "the roster minus the one that is spoken for")
+        assertEquals(42, MarkerShapes.registrable.size, "the roster minus the two spoken for")
     }
 
     @Test
@@ -282,6 +282,202 @@ class TerminalTest {
         val reread = HouseMapText.read(HouseMapText.write(map))
         assertEquals(map.terminal, reread.terminal)
         assertEquals(map.registrations, reread.registrations)
+    }
+}
+
+/**
+ * **The meeting card, and the one room a home can have it in** (D-121).
+ *
+ * A meeting is called by physically walking to this card and scanning it — never remotely — and
+ * the caller's scan is their check-in. A home with two of them is a home the house would take a
+ * meeting from in two places, and half the party would walk to the wrong one in the dark.
+ *
+ * Everything here mirrors [TerminalTest] because the two cards are the same kind of thing, and the
+ * one place they differ is asserted rather than assumed: **the meeting card reserves a shape, not
+ * a room**, so ordinary markers may share the room it is in.
+ */
+class MeetingTest {
+
+    private fun card(shapeId: String, id: String) =
+        MarkerCard(CardPayload.VERSION, MarkerShapes.require(shapeId), MarkerId(id))
+
+    private val uCard = card("u_shape", "UUUUUUU")
+
+    private fun placed(room: String = "LIVING"): HouseMap =
+        (HouseMap.EMPTY.register(uCard, Room(room)) as RegisterResult.Registered).map
+
+    /** Read off the payload, so it is a fact about the paper and not a flag somebody set. */
+    @Test
+    fun `the meeting card says so itself`() {
+        assertTrue(uCard.isMeeting)
+        assertTrue(!uCard.isTerminal)
+        assertTrue(!card("ring", "BBBBBBB").isMeeting)
+        assertTrue(card("ring", "BBBBBBB").isOrdinary)
+        assertEquals(2, MarkerShapes.reserved.size, "T and the meeting card, and nothing else")
+        assertTrue(MarkerShapes.MEETING !in MarkerShapes.registrable)
+    }
+
+    @Test
+    fun `the meeting card places the meeting area and is not an ordinary marker`() {
+        val map = placed()
+        assertEquals(Room("LIVING"), map.meeting?.room)
+        assertEquals(emptyList(), map.registrations, "the meeting card was filed as a marker")
+        assertEquals(emptyList(), map.inRoomNamed("LIVING"), "the meeting card was filed as a marker")
+        assertTrue(map.holdsAnything("LIVING"), "LIVING holds it and says it holds nothing")
+    }
+
+    /**
+     * **A shape is reserved, a room is not** (D-121) — the one way this differs from the terminal.
+     *
+     * The meeting area is a room people already gather in, so ordinary markers being registered
+     * there is the expected case rather than an edge one. A map that excluded the room would
+     * quietly cost the host a card in the busiest room of the house.
+     */
+    @Test
+    fun `ordinary markers may share the meeting card's room`() {
+        val map = placed()
+        val result = map.register(card("ring", "BBBBBBB"), Room("LIVING"))
+        assertIs<RegisterResult.Registered>(result)
+        assertEquals(Room("LIVING"), result.map.meeting?.room)
+        assertEquals(listOf(MarkerId("BBBBBBB")), result.map.inRoomNamed("LIVING").map { it.card.id })
+    }
+
+    /** Nothing is at stake, so nothing is asked. The host scanned the card where it already is. */
+    @Test
+    fun `scanning the meeting card in the room it is already in is not a question`() {
+        val result = placed().register(uCard, Room("LIVING"))
+        assertIs<RegisterResult.Registered>(result)
+        assertEquals(Room("LIVING"), result.map.meeting?.room)
+    }
+
+    /** **Never a silent move.** The host is told where it is, because they have to go and get it. */
+    @Test
+    fun `the meeting card in a second room is refused and names the first`() {
+        val result = placed().register(uCard, Room("KITCHEN"))
+        assertIs<RegisterResult.MeetingTaken>(result)
+        assertEquals(Room("LIVING"), result.at.room)
+    }
+
+    @Test
+    fun `moving the meeting card is a separate act and says where it came from`() {
+        val result = placed().moveMeeting(uCard, Room("KITCHEN"))
+        assertIs<RegisterResult.Moved>(result)
+        assertEquals(Room("LIVING"), result.from)
+        assertEquals(Room("KITCHEN"), result.map.meeting?.room)
+    }
+
+    /** D-099 covers it too: stairs hold nothing, and nobody holds a meeting on the stairs. */
+    @Test
+    fun `the meeting card cannot go into stairs whichever way it is offered`() {
+        val stairs = Room("LANDING WELL", RoomKind.Stairs)
+        assertIs<RegisterResult.StairsHoldNothing>(HouseMap.EMPTY.register(uCard, stairs))
+        assertIs<RegisterResult.StairsHoldNothing>(placed().moveMeeting(uCard, stairs))
+    }
+
+    @Test
+    fun `forgetting the meeting card takes the meeting area with it`() {
+        assertNull(placed().forget(uCard.id).meeting)
+        assertNull(placed().forgetMeeting().meeting)
+    }
+
+    @Test
+    fun `forgetting a room takes its cards and its meeting card`() {
+        val map = (placed().register(card("ring", "BBBBBBB"), Room("LIVING")) as RegisterResult.Registered).map
+        val after = map.forgetIn("LIVING")
+        assertEquals(emptyList(), after.registrations)
+        assertNull(after.meeting)
+    }
+
+    @Test
+    fun `renaming a room carries its cards and its meeting card`() {
+        val map = (placed().register(card("ring", "BBBBBBB"), Room("LIVING")) as RegisterResult.Registered).map
+        val after = map.renamedRoom("LIVING", Room("LOUNGE"))
+        assertEquals(listOf("LOUNGE"), after.registrations.map { it.room.name })
+        assertEquals(Room("LOUNGE"), after.meeting?.room)
+    }
+
+    /**
+     * The two reserved cards are independent, and each stays where it is while the other moves.
+     *
+     * Held as one test because the failure it is written against is a shared field: an
+     * implementation that kept "the reserved card" in one place would pass every test above and
+     * lose the terminal the moment the meeting card was placed.
+     */
+    @Test
+    fun `the terminal and the meeting card do not disturb each other`() {
+        val tCard = card("t_shape", "TTTTTTT")
+        val both = (placed().register(tCard, Room("CELLAR")) as RegisterResult.Registered).map
+        assertEquals(Room("LIVING"), both.meeting?.room)
+        assertEquals(Room("CELLAR"), both.terminal?.room)
+
+        val movedMeeting = (both.moveMeeting(uCard, Room("KITCHEN")) as RegisterResult.Moved).map
+        assertEquals(Room("CELLAR"), movedMeeting.terminal?.room, "moving one lost the other")
+
+        // The other direction, and it is not symmetry for its own sake: found asleep. Every test
+        // above walked the meeting card, so a `moveTerminal` that rebuilt the map without carrying
+        // the meeting field through deleted the meeting card and nothing failed. A host would meet
+        // that by moving their terminal and finding the house had nowhere to hold a meeting.
+        val movedTerminal = (both.moveTerminal(tCard, Room("GARAGE")) as RegisterResult.Moved).map
+        assertEquals(Room("LIVING"), movedTerminal.meeting?.room, "moving the terminal lost it")
+
+        assertEquals(Room("KITCHEN"), movedMeeting.forgetTerminal().meeting?.room)
+        assertEquals(Room("CELLAR"), movedMeeting.forgetMeeting().terminal?.room)
+    }
+
+    @Test
+    fun `the meeting card survives the stored form`() {
+        val map = (placed().register(card("ring", "BBBBBBB"), Room("GARAGE")) as RegisterResult.Registered).map
+        val reread = HouseMapText.read(HouseMapText.write(map))
+        assertEquals(map.meeting, reread.meeting)
+        assertEquals(map.registrations, reread.registrations)
+    }
+
+    /** The reader refuses what the writer can never produce, because a file can be edited. */
+    @Test
+    fun `a stored meeting row that is not the U card is refused`() {
+        val ordinary = CardPayload.encode(card("ring", "BBBBBBB"))
+        val failure = assertFailsWith<MalformedHouseMap> {
+            HouseMapText.read(HouseMapText.HEADER + "\nM $ordinary|LIVING\n")
+        }
+        assertTrue("is not the card marked U" in failure.detail, failure.detail)
+    }
+
+    @Test
+    fun `the U card stored as an ordinary marker is refused`() {
+        val payload = CardPayload.encode(uCard)
+        val failure = assertFailsWith<MalformedHouseMap> {
+            HouseMapText.read(HouseMapText.HEADER + "\nR $payload|LIVING\n")
+        }
+        assertTrue("registered as an ordinary marker" in failure.detail, failure.detail)
+        assertFailsWith<IllegalArgumentException> {
+            HouseMap.of(listOf(Registration(uCard, Room("LIVING"))))
+        }
+    }
+
+    @Test
+    fun `a second stored meeting row is refused`() {
+        val payload = CardPayload.encode(uCard)
+        val second = CardPayload.encode(card("u_shape", "UUUUUU2"))
+        val failure = assertFailsWith<MalformedHouseMap> {
+            HouseMapText.read("${HouseMapText.HEADER}\nM $payload|LIVING\nM $second|KITCHEN\n")
+        }
+        assertTrue("a second meeting card" in failure.detail, failure.detail)
+    }
+
+    /**
+     * D-069's hazard, arriving through the file rather than through a reprint.
+     *
+     * One printed id named as a marker and as the meeting card reads back clean otherwise, and the
+     * card it collides with is a real piece of paper somebody is holding.
+     */
+    @Test
+    fun `a card id used by a marker and by the meeting card is refused`() {
+        val marker = CardPayload.encode(card("ring", "SHARED1"))
+        val same = CardPayload.encode(card("u_shape", "SHARED1"))
+        val failure = assertFailsWith<MalformedHouseMap> {
+            HouseMapText.read("${HouseMapText.HEADER}\nR $marker|GARAGE\nM $same|LIVING\n")
+        }
+        assertTrue("appears twice" in failure.detail, failure.detail)
     }
 }
 

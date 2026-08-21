@@ -5,6 +5,7 @@ import home.someoneshome.model.CardRejection
 import home.someoneshome.model.Cell
 import home.someoneshome.model.CellRect
 import home.someoneshome.model.Floor
+import home.someoneshome.model.HomeReview
 import home.someoneshome.model.HouseMap
 import home.someoneshome.model.HousePlan
 import home.someoneshome.model.MarkerCard
@@ -62,12 +63,12 @@ import kotlin.math.floor
  *
  * ### The cards are real cards
  *
- * [map] is a [HouseMap]: printed [MarkerCard]s with the ids on them, bound to rooms, and the one
- * card marked T. It used to be a fixture — room name to a list of shapes — and every rule that
- * depended on it was real while the data under it was not. What the rules were always about is
- * unchanged: **stairs hold nothing** (D-099), so [setKind] to stairs unregisters the room's cards
- * as part of the change rather than in a flow that remembers to, and REVIEW HOME is gated on a
- * terminal existing rather than on a flag somebody sets.
+ * [map] is a [HouseMap]: printed [MarkerCard]s with the ids on them, bound to rooms, and the two
+ * reserved cards — the one marked T and the meeting card. It used to be a fixture — room name to a
+ * list of shapes — and every rule that depended on it was real while the data under it was not.
+ * What the rules were always about is unchanged: **stairs hold nothing** (D-099), so [setKind] to
+ * stairs unregisters the room's cards as part of the change rather than in a flow that remembers
+ * to, and [review] is counted off the map rather than off a flag somebody sets.
  *
  * **Every refusal a scan can produce is the map's**, translated here into a line of screen copy
  * exactly as [HousePlan.paint]'s are. This class still holds no rule of its own.
@@ -184,8 +185,24 @@ class HomeEditorModel(
     /** The one room holding the T card, by name. Every screen about the terminal asks for this. */
     val terminal: String? get() = map.terminal?.room?.name
 
-    /** **No terminal, no playable home.** The gate on REVIEW HOME, and it is a fact, not a flag. */
+    /** The one room holding the meeting card, by name. Where meetings are called from (D-121). */
+    val meeting: String? get() = map.meeting?.room?.name
+
+    /** **No terminal, no playable home.** Part of the REVIEW gate, and a fact rather than a flag. */
     val hasTerminal: Boolean get() = map.terminal != null
+
+    /** **No meeting card, nowhere to call a meeting.** The gate's second requirement (D-127). */
+    val hasMeeting: Boolean get() = map.meeting != null
+
+    /**
+     * **The REVIEW HOME gate, asked of the home rather than kept as a flag** (D-127).
+     *
+     * Every requirement is counted off the map the host has been building, on every read. A cached
+     * verdict is a verdict that can be right about a home the host has since changed, and the one
+     * change it would be wrong about is the one they made to fix it.
+     */
+    val review: HomeReview
+        get() = HomeReview.of(markerCount, hasTerminal = hasTerminal, hasMeeting = hasMeeting)
 
     val floorCount: Int get() = plan.floors.size
 
@@ -386,11 +403,16 @@ class HomeEditorModel(
             is RegisterResult.StairsHoldNothing ->
                 ScanOutcome.Refused(card, "${result.room.name} IS STAIRS. STAIRS HOLD NOTHING")
 
-            // The one refusal that is a screen: the host has to be told where the terminal is and
-            // offered the move, because they are about to go and find it.
+            // The two refusals that are screens: the host has to be told where the card already is
+            // and offered the move, because they are about to go and find it.
             is RegisterResult.TerminalTaken -> ScanOutcome.Refused(
                 card,
                 "THE TERMINAL IS IN ${result.at.room.name}",
+            )
+
+            is RegisterResult.MeetingTaken -> ScanOutcome.Refused(
+                card,
+                "THE MEETING CARD IS IN ${result.at.room.name}",
             )
         }
         return result
@@ -427,9 +449,39 @@ class HomeEditorModel(
         }
     }
 
+    /**
+     * MOVE THE MEETING CARD TO THIS ROOM: the answer to [RegisterResult.MeetingTaken].
+     *
+     * The terminal's move, in every respect — see [moveTerminal] for why the card comes off
+     * [lastScan] rather than off the map, and why doing nothing is the honest answer when no scan
+     * is outstanding.
+     */
+    fun moveMeeting() {
+        val card = lastScan?.card ?: return
+        val room = heldRoom ?: return
+        when (val result = map.moveMeeting(card, room.room)) {
+            is RegisterResult.Registered -> {
+                map = result.map
+                lastScan = ScanOutcome.Landed(card, room.name, from = null)
+            }
+
+            is RegisterResult.Moved -> {
+                map = result.map
+                lastScan = ScanOutcome.Landed(card, room.name, from = result.from.name)
+            }
+
+            else -> lastScan = ScanOutcome.Refused(card, "${room.name} CANNOT HOLD IT")
+        }
+    }
+
     /** REMOVE IT: the T card belongs to no room, and this home cannot be saved until one does. */
     fun removeTerminal() {
         map = map.forgetTerminal()
+    }
+
+    /** REMOVE IT: the meeting card belongs to no room, and there is nowhere to call a meeting. */
+    fun removeMeeting() {
+        map = map.forgetMeeting()
     }
 
     /** A tap on a marker in the sheet: that card is no longer registered anywhere. */
@@ -655,16 +707,23 @@ class HomeEditorModel(
         }
 
         /**
-         * The nine cards the save screen has always counted, as cards.
+         * The nine ordinary cards the save screen has always counted, plus the two reserved ones.
          *
-         * Five on the ground floor and four upstairs, plus the T card in the hall. The shapes come
-         * off the real roster because a marker's shape is its whole identity to everyone who is
-         * not the app, and the ids are seven readable characters — a fixture whose ids are noise
-         * is a fixture nobody can follow on a screenshot.
+         * Five on the ground floor and four upstairs; the T card in the hall and the meeting card
+         * in LIVING. The shapes come off the real roster because a marker's shape is its whole
+         * identity to everyone who is not the app, and the ids are seven readable characters — a
+         * fixture whose ids are noise is a fixture nobody can follow on a screenshot.
          *
          * **GARAGE holding two cards is deliberate**: a room with more than one is what the marker
          * sheet was drawn for, and a fixture where every room held exactly one would never show it.
          * They carry different shapes, because two live cards may never share one (D-086).
+         *
+         * **LIVING holds an ordinary marker as well as the meeting card, and that is deliberate
+         * too.** D-121 reserves a shape, not a room, and a fixture where the meeting area held
+         * nothing else would let a screen be written as though it did.
+         *
+         * Nine markers is one over D-127's floor of eight, so the fixture passes REVIEW — and
+         * HOSTS UP TO 6, which is the party the design's own lobby is drawn with.
          */
         private fun bungalowMap(): HouseMap {
             val cards = listOf(
@@ -683,12 +742,13 @@ class HomeEditorModel(
             }
             return HouseMap.of(
                 registrations,
-                Registration(fixtureCard(MarkerShapes.TERMINAL.id, 0), Room("HALL")),
+                terminal = Registration(fixtureCard(MarkerShapes.TERMINAL.id, 0), Room("HALL")),
+                meeting = Registration(fixtureCard(MarkerShapes.MEETING.id, 10), Room("LIVING")),
             )
         }
 
         /**
-         * A card with a readable id: `HOME-00` through `HOME-09`, seven characters.
+         * A card with a readable id: `HOME-00` through `HOME-10`, seven characters.
          *
          * The hyphen rather than a space because [MarkerShapes.ALPHABET] is QR's alphanumeric set
          * **minus SPACE** — a space is ambiguous in print, and one here would push the encoder out
@@ -733,6 +793,8 @@ sealed interface ScanOutcome {
     val shape: MarkerShape? get() = card?.shape
 
     val isTerminal: Boolean get() = card?.isTerminal == true
+
+    val isMeeting: Boolean get() = card?.isMeeting == true
 
     /**
      * The card is registered here now.
@@ -896,6 +958,7 @@ fun EditorSurface(
             Modifier.fillMaxSize(),
             markers = { editor.markersIn(it).size },
             terminal = editor.terminal,
+            meeting = editor.meeting,
         )
     }
 }

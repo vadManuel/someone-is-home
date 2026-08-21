@@ -67,6 +67,22 @@ sealed interface RegisterResult {
      * nothing is asked.
      */
     data class TerminalTaken(val at: Registration) : RegisterResult
+
+    /**
+     * The meeting card, and this home already has its meeting area in another room.
+     *
+     * **One home, one meeting card** (D-121), for a reason that is not the terminal's. A meeting is
+     * called by physically walking to the card and scanning it, and the caller's scan is their
+     * check-in — so a second card is a second place the house would accept a meeting from, and
+     * half the party would walk to the wrong one in the dark.
+     *
+     * Refused rather than added, and the refusal names the room the existing one is in, because
+     * the host is about to go and get it — or decide to move it, which is [HouseMap.moveMeeting].
+     *
+     * Scanning the meeting card in the room it is already in is not this: nothing is at stake and
+     * nothing is asked.
+     */
+    data class MeetingTaken(val at: Registration) : RegisterResult
 }
 
 /**
@@ -83,12 +99,13 @@ sealed interface RegisterResult {
  * injected error the Terminal already carries on purpose. Keyed on the id, the stale card is
  * simply a card nobody registered, and says so.
  *
- * ### The terminal is in here, not beside it
+ * ### The two reserved cards are in here, not beside it
  *
- * A home has exactly one terminal and the T card is what places it. It is a [Registration] like
- * every other card and it sits in [terminal] rather than in [registrations], because it is never
- * an ordinary marker: nobody is sent to find it as a subroutine, and it is the one place in the
- * house a Resident stands alone in the dark on purpose.
+ * A home has exactly one terminal and one meeting card, and the T and U cards are what place them.
+ * Each is a [Registration] like every other card and each sits in its own field rather than in
+ * [registrations], because neither is ever an ordinary marker: nobody is sent to find one as a
+ * Subroutine, the terminal is the one place a Resident stands alone in the dark on purpose, and
+ * the meeting card is the one place a meeting can be called from at all (D-121).
  *
  * ### Ordered, because it is recorded
  *
@@ -117,15 +134,28 @@ class HouseMap private constructor(
      * describe.
      */
     val terminal: Registration?,
+    /**
+     * Where the meeting card is, or nowhere yet.
+     *
+     * Held here for the reason [terminal] is, and the disagreement it prevents is sharper: a
+     * meeting card kept in a second field somewhere else could disagree with this one about which
+     * room the party walks to, and the party would find out by standing in two rooms at once.
+     *
+     * **The meeting card reserves a shape, not a room** (D-121). Ordinary markers may share the
+     * room it is in, so nothing here excludes a room for holding it.
+     */
+    val meeting: Registration?,
 ) {
 
-    /** Every room something is registered in, the terminal's included, in registration order. */
-    val rooms: List<Room> get() = (registrations.map { it.room } + listOfNotNull(terminal?.room)).distinct()
+    /** Every room something is registered in, both reserved cards' included, in order. */
+    val rooms: List<Room> get() = (
+        registrations.map { it.room } + listOfNotNull(terminal?.room, meeting?.room)
+        ).distinct()
 
     fun registrationOf(id: MarkerId): Registration? =
         registrations.firstOrNull { it.card.id == id }
 
-    /** Every registered card in a room, in registration order. The terminal is not one of them. */
+    /** Every registered card in a room, in registration order. Neither reserved card is one. */
     fun inRoom(room: Room): List<Registration> = registrations.filter { it.room == room }
 
     /**
@@ -145,21 +175,23 @@ class HouseMap private constructor(
      */
     fun inRoomNamed(name: String): List<Registration> = registrations.filter { it.room.name == name }
 
-    /** Whether this room holds anything a type change would take away, the terminal included. */
-    fun holdsAnything(name: String): Boolean =
-        inRoomNamed(name).isNotEmpty() || terminal?.room?.name == name
+    /** Whether this room holds anything a type change would take away, reserved cards included. */
+    fun holdsAnything(name: String): Boolean = inRoomNamed(name).isNotEmpty() ||
+        terminal?.room?.name == name || meeting?.room?.name == name
 
     /**
      * Register a scanned card to a room.
      *
      * Re-registering the same id moves it, which is a host correcting themselves mid-walk. A
      * different id carrying an already-registered shape is refused — see
-     * [RegisterResult.ShapeAlreadyRegistered]. **The card marked T goes to the terminal and never
-     * into [registrations]**, whichever room it is offered to.
+     * [RegisterResult.ShapeAlreadyRegistered]. **Neither reserved card ever reaches
+     * [registrations]**, whichever room it is offered to: the T card goes to [terminal] and the
+     * meeting card to [meeting].
      */
     fun register(card: MarkerCard, room: Room): RegisterResult {
         if (room.kind == RoomKind.Stairs) return RegisterResult.StairsHoldNothing(room)
         if (card.isTerminal) return registerTerminal(card, room)
+        if (card.isMeeting) return registerMeeting(card, room)
 
         val existingShape = registrations.firstOrNull {
             it.card.shape.id == card.shape.id && it.card.id != card.id
@@ -168,7 +200,7 @@ class HouseMap private constructor(
 
         val existing = registrationOf(card.id)
         val without = registrations.filterNot { it.card.id == card.id }
-        val next = HouseMap(without + Registration(card, room), terminal)
+        val next = HouseMap(without + Registration(card, room), terminal, meeting)
         return if (existing == null) RegisterResult.Registered(next)
         else RegisterResult.Moved(next, existing.room)
     }
@@ -183,19 +215,37 @@ class HouseMap private constructor(
     fun moveTerminal(card: MarkerCard, room: Room): RegisterResult {
         if (room.kind == RoomKind.Stairs) return RegisterResult.StairsHoldNothing(room)
         val from = terminal?.room
-        val next = HouseMap(registrations, Registration(card, room))
+        val next = HouseMap(registrations, Registration(card, room), meeting)
         return if (from == null) RegisterResult.Registered(next)
         else RegisterResult.Moved(next, from)
     }
 
-    /** Forget a card. The host tore one up, or a room went out of play. The T card counts. */
+    /**
+     * MOVE THE MEETING CARD TO THIS ROOM: the answer to [RegisterResult.MeetingTaken].
+     *
+     * Separate from [register] for the reason [moveTerminal] is: the host was told what the move
+     * costs — the old room stops being where meetings are called — and said yes.
+     */
+    fun moveMeeting(card: MarkerCard, room: Room): RegisterResult {
+        if (room.kind == RoomKind.Stairs) return RegisterResult.StairsHoldNothing(room)
+        val from = meeting?.room
+        val next = HouseMap(registrations, terminal, Registration(card, room))
+        return if (from == null) RegisterResult.Registered(next)
+        else RegisterResult.Moved(next, from)
+    }
+
+    /** Forget a card. The host tore one up, or a room went out of play. Both reserved cards count. */
     fun forget(id: MarkerId): HouseMap = HouseMap(
         registrations.filterNot { it.card.id == id },
         terminal?.takeIf { it.card.id != id },
+        meeting?.takeIf { it.card.id != id },
     )
 
     /** REMOVE THE TERMINAL: the T card belongs to no room, and this home cannot be saved again. */
-    fun forgetTerminal(): HouseMap = HouseMap(registrations, null)
+    fun forgetTerminal(): HouseMap = HouseMap(registrations, null, meeting)
+
+    /** REMOVE THE MEETING CARD: it belongs to no room, and this home cannot be saved again. */
+    fun forgetMeeting(): HouseMap = HouseMap(registrations, terminal, null)
 
     /**
      * Everything in a room stops being registered, the terminal with it.
@@ -208,6 +258,7 @@ class HouseMap private constructor(
     fun forgetIn(name: String): HouseMap = HouseMap(
         registrations.filterNot { it.room.name == name },
         terminal?.takeIf { it.room.name != name },
+        meeting?.takeIf { it.room.name != name },
     )
 
     /**
@@ -221,6 +272,7 @@ class HouseMap private constructor(
     fun renamedRoom(from: String, to: Room): HouseMap = HouseMap(
         registrations.map { if (it.room.name == from) Registration(it.card, to) else it },
         terminal?.let { if (it.room.name == from) Registration(it.card, to) else it },
+        meeting?.let { if (it.room.name == from) Registration(it.card, to) else it },
     )
 
     /**
@@ -232,27 +284,53 @@ class HouseMap private constructor(
      */
     private fun registerTerminal(card: MarkerCard, room: Room): RegisterResult {
         val at = terminal
+        val placed = HouseMap(registrations, Registration(card, room), meeting)
         return when {
-            at == null -> RegisterResult.Registered(HouseMap(registrations, Registration(card, room)))
-            at.room.name == room.name -> RegisterResult.Registered(
-                HouseMap(registrations, Registration(card, room))
-            )
+            at == null -> RegisterResult.Registered(placed)
+            at.room.name == room.name -> RegisterResult.Registered(placed)
             else -> RegisterResult.TerminalTaken(at)
         }
     }
 
+    /**
+     * The meeting card, offered to a room.
+     *
+     * The same three answers [registerTerminal] gives and no fourth, because the fact underneath
+     * is the same: one home, one of these. **Never a silent move** — see
+     * [RegisterResult.MeetingTaken].
+     */
+    private fun registerMeeting(card: MarkerCard, room: Room): RegisterResult {
+        val at = meeting
+        val placed = HouseMap(registrations, terminal, Registration(card, room))
+        return when {
+            at == null -> RegisterResult.Registered(placed)
+            at.room.name == room.name -> RegisterResult.Registered(placed)
+            else -> RegisterResult.MeetingTaken(at)
+        }
+    }
+
     companion object {
-        val EMPTY = HouseMap(emptyList(), null)
+        val EMPTY = HouseMap(emptyList(), null, null)
 
         /** Rebuild from storage. Order is preserved because order is what was written. */
-        fun of(registrations: List<Registration>, terminal: Registration? = null): HouseMap {
+        fun of(
+            registrations: List<Registration>,
+            terminal: Registration? = null,
+            meeting: Registration? = null,
+        ): HouseMap {
             require(terminal == null || terminal.card.isTerminal) {
                 "'" + terminal!!.card.id.value + "' is the terminal but is not the card marked T"
+            }
+            require(meeting == null || meeting.card.isMeeting) {
+                "'" + meeting!!.card.id.value + "' is the meeting card but is not the card marked U"
             }
             require(registrations.none { it.card.isTerminal }) {
                 "the card marked T is registered as an ordinary marker — it never is"
             }
-            return HouseMap(registrations.toList(), terminal)
+            require(registrations.none { it.card.isMeeting }) {
+                "the meeting card is registered as an ordinary marker — it never is"
+            }
+            return HouseMap(registrations.toList(), terminal, meeting)
         }
     }
 }

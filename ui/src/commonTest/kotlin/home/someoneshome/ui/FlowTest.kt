@@ -58,6 +58,10 @@ class FlowTest {
     private fun terminalCard(id: String = "SEEDT01") =
         MarkerCard(CardPayload.VERSION, MarkerShapes.TERMINAL, MarkerId(id))
 
+    /** The meeting card, the same way. */
+    private fun meetingCard(id: String = "SEEDU01") =
+        MarkerCard(CardPayload.VERSION, MarkerShapes.MEETING, MarkerId(id))
+
     private fun card(shape: String, id: String) =
         MarkerCard(CardPayload.VERSION, MarkerShapes.require(shape), MarkerId(id))
 
@@ -427,12 +431,19 @@ class FlowTest {
         delete.deleteHome()
         assertEquals(Flow.viaActions.getValue(ScreenId.Delete), setOf(delete.state.screen))
 
-        // The T card, read in a room while the terminal is in another one. Not a tap at all: the
-        // camera raises it, and where it lands depends on what the map says about the card.
-        val scan = FlowModel(PanelState(screen = ScreenId.ScanMarker))
-        scan.editor.open("GARAGE")
-        scan.cardScanned(CardPayload.encode(terminalCard()))
-        assertEquals(Flow.viaActions.getValue(ScreenId.ScanMarker), setOf(scan.state.screen))
+        // Either reserved card, read in a room while this home already has one somewhere else.
+        // Not a tap at all: the camera raises it, and where it lands depends on what the map says
+        // about the card. Both are walked, because the edge set has two members and a walk that
+        // only ever fired the T card would let the meeting card's route rot unnoticed.
+        val reserved = ScreenId.ScanMarker.let { from ->
+            listOf(terminalCard(), meetingCard()).mapTo(mutableSetOf()) { card ->
+                val scan = FlowModel(PanelState(screen = from))
+                scan.editor.open("GARAGE")
+                scan.cardScanned(CardPayload.encode(card))
+                scan.state.screen
+            }
+        }
+        assertEquals(Flow.viaActions.getValue(ScreenId.ScanMarker), reserved)
 
         // A line that was real, handed over. The refused one stays put, which is the reason this
         // edge is the actions layer's rather than the button's — see the walk below.

@@ -35,11 +35,18 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalTestApi::class)
 class HostSetupInputTest {
 
-    /** The screen under test, wired to a model the test can then interrogate. */
+    /**
+     * The screen under test, wired to a model the test can then interrogate.
+     *
+     * The model's own lobby is handed over rather than left to `Screen`'s default. It used to be
+     * left, which was harmless while nothing on a host-setup screen read it — and would have
+     * silently defeated the capacity-guidance tests, because the rendered screen would have been
+     * asking a different lobby than the one the test set up.
+     */
     private fun DesktopComposeUiTest.show(model: FlowModel) {
         setContent {
             DeviceCanvas(insets = PanelInsets()) {
-                Screen(model.state, model.actions(), model.editor, model.homes)
+                Screen(model.state, model.actions(), model.editor, model.homes, model.lobby)
             }
         }
         mainClock.autoAdvance = false
@@ -321,4 +328,264 @@ class HostSetupInputTest {
         assertEquals("HALL", model.editor.terminal)
         assertEquals(ScreenId.MarkerSheet, model.state.screen)
     }
+
+    // ---- The meeting card, through the real screens ---------------------------------------------
+
+    /**
+     * The sheet says where **both** reserved cards are, and it is the only screen that does.
+     *
+     * A host who cannot see that this home has a meeting card here is a host who scans a second
+     * one — which is the exact refusal the row exists to prevent them meeting.
+     */
+    @Test
+    fun theMarkerSheetSaysWhereBothReservedCardsAre() =
+        runDesktopComposeUiTest(width = 300, height = 650) {
+            val model = openOn(ScreenId.MarkerSheet, "GARAGE")
+            show(model)
+
+            onNodeWithText("TERMINAL").assertExists()
+            onNodeWithText("IN HALL").assertExists()
+            onNodeWithText("MEETING CARD").assertExists()
+            onNodeWithText("IN LIVING").assertExists()
+        }
+
+    /**
+     * The meeting card's own outcomes, read back off the viewfinder rather than off the model.
+     *
+     * **The token is asserted as well as the line, and that came from an injection that slept.**
+     * Deleting the `MeetingToken` from the readout left the line and the id in place and broke no
+     * test — so the host would have been shown a scan result with no mark on it at all, on the one
+     * screen whose whole job is matching what the app says against the paper in their hand. The
+     * `U` is the token's own label and nothing else on this screen carries it.
+     */
+    @Test
+    fun theMeetingCardIsSaidOnTheViewfinderToo() =
+        runDesktopComposeUiTest(width = 300, height = 650) {
+            val model = openOn(ScreenId.ScanMarker, "KITCHEN")
+            model.removeMeeting()
+            model.go(ScreenId.ScanMarker)
+            show(model)
+
+            model.cardScanned(CardPayload.encode(meetingCard()))
+            mainClock.advanceTimeBy(100)
+
+            onNodeWithText("MEETING CARD . KITCHEN").assertExists()
+            onNodeWithText("SEEDU01").assertExists()
+            onNodeWithText("U").assertExists()
+        }
+
+    /**
+     * And the terminal's, which had the same gap for the same reason — every test on this screen
+     * read the words and none of them read the mark.
+     */
+    @Test
+    fun theTerminalsTokenIsOnTheViewfinderToo() =
+        runDesktopComposeUiTest(width = 300, height = 650) {
+            val model = openOn(ScreenId.ScanMarker, "KITCHEN")
+            model.removeTerminal()
+            model.go(ScreenId.ScanMarker)
+            show(model)
+
+            model.cardScanned(
+                CardPayload.encode(
+                    MarkerCard(CardPayload.VERSION, MarkerShapes.TERMINAL, MarkerId("SEEDT01"))
+                )
+            )
+            mainClock.advanceTimeBy(100)
+
+            onNodeWithText("TERMINAL . KITCHEN").assertExists()
+            onNodeWithText("T").assertExists()
+        }
+
+    @Test
+    fun movingTheMeetingCardFromTheRefusalScreenRebindsIt() =
+        runDesktopComposeUiTest(width = 300, height = 650) {
+            val model = openOn(ScreenId.ScanMarker, "KITCHEN")
+            model.cardScanned(CardPayload.encode(meetingCard()))
+            assertEquals(ScreenId.MeetTaken, model.state.screen)
+            show(model)
+
+            onNodeWithText("This home has one meeting card and it is in").assertExists()
+            onNode(hasText("MOVE THE MEETING CARD TO KITCHEN") and hasClickAction()).performClick()
+            mainClock.advanceTimeBy(100)
+
+            assertEquals("KITCHEN", model.editor.meeting, "the meeting card did not move")
+            assertEquals(ScreenId.ScanMarker, model.state.screen)
+        }
+
+    @Test
+    fun removingTheMeetingCardTakesItOffTheHome() =
+        runDesktopComposeUiTest(width = 300, height = 650) {
+            val model = openOn(ScreenId.MeetRemove, "KITCHEN")
+            assertEquals("LIVING", model.editor.meeting)
+            show(model)
+
+            onNode(hasText("REMOVE IT") and hasClickAction()).performClick()
+            mainClock.advanceTimeBy(100)
+
+            assertEquals(null, model.editor.meeting, "REMOVE IT navigated and removed nothing")
+            assertEquals(ScreenId.MarkerSheet, model.state.screen)
+        }
+
+    @Test
+    fun keepingTheMeetingCardLeavesItWhereItIs() =
+        runDesktopComposeUiTest(width = 300, height = 650) {
+            val model = openOn(ScreenId.MeetRemove, "KITCHEN")
+            show(model)
+
+            onNode(hasText("KEEP IT") and hasClickAction()).performClick()
+            mainClock.advanceTimeBy(100)
+
+            assertEquals("LIVING", model.editor.meeting)
+            assertEquals(ScreenId.MarkerSheet, model.state.screen)
+        }
+
+    // ---- The REVIEW gate, through the real screens (D-127) --------------------------------------
+
+    /**
+     * **Every missing requirement is named on the screen, not the first one that fails.**
+     *
+     * This is the U5 lesson applied to a gate: a refusal the host cannot read is a refusal that
+     * sends them round the house guessing. Each of the three is read back off the rendered screen,
+     * with the other two removed so the assertion cannot be satisfied by a screen that only ever
+     * draws the terminal's paragraph.
+     */
+    @Test
+    fun theGateScreenNamesEveryMissingRequirement() =
+        runDesktopComposeUiTest(width = 300, height = 650) {
+            val model = FlowModel(PanelState(screen = ScreenId.ReviewNeeds))
+            model.editor.startNewHome("SOMEWHERE NEW")
+            show(model)
+
+            onNodeWithText("THIS HOME NEEDS 3 MORE THINGS").assertExists()
+            onNodeWithText("SCAN THE CARD MARKED T").assertExists()
+            onNodeWithText("SCAN THE CARD MARKED U").assertExists()
+            onNodeWithText("8 MORE MARKERS").assertExists()
+            // The number the host is working towards, on the screen that is refusing them.
+            onNode(hasText("HOSTS UP TO NOBODY YET", substring = true)).assertExists()
+        }
+
+    /** One thing short reads as one thing, in the singular, and draws only that paragraph. */
+    @Test
+    fun theGateScreenNamesOnlyWhatIsActuallyMissing() =
+        runDesktopComposeUiTest(width = 300, height = 650) {
+            val model = FlowModel(PanelState(screen = ScreenId.ReviewNeeds))
+            model.editor.removeMeeting()
+            show(model)
+
+            onNodeWithText("THIS HOME NEEDS ONE MORE THING").assertExists()
+            onNodeWithText("SCAN THE CARD MARKED U").assertExists()
+            onNodeWithText("SCAN THE CARD MARKED T").assertDoesNotExist()
+            onNode(hasText("HOSTS UP TO 6", substring = true)).assertExists()
+        }
+
+    /**
+     * The button carries the count and the route, and both come off the same verdict.
+     *
+     * A label saying the home is ready while the tap lands on the refusal screen — or the other
+     * way round — is the failure this walks, and it is one a host meets at the end of an hour.
+     */
+    @Test
+    fun reviewHomeGoesWhereItsLabelSays() = runDesktopComposeUiTest(width = 300, height = 650) {
+        val passing = FlowModel(PanelState(screen = ScreenId.Editor))
+        show(passing)
+        onNode(hasText("REVIEW HOME") and hasClickAction()).performClick()
+        mainClock.advanceTimeBy(100)
+        assertEquals(ScreenId.SaveName, passing.state.screen)
+    }
+
+    @Test
+    fun reviewHomeOnAShortHomeSaysHowManyThingsAndGoesToTheGate() =
+        runDesktopComposeUiTest(width = 300, height = 650) {
+            val short = FlowModel(PanelState(screen = ScreenId.Editor))
+            short.editor.removeTerminal()
+            short.editor.removeMeeting()
+            show(short)
+
+            onNode(hasText("REVIEW HOME . 2 THINGS MISSING") and hasClickAction()).performClick()
+            mainClock.advanceTimeBy(100)
+            assertEquals(ScreenId.ReviewNeeds, short.state.screen)
+        }
+
+    /** Capacity is on the last screen before the home is kept, and it is not a gate. */
+    @Test
+    fun theSaveScreenShowsWhatThisHomeHostsUpTo() =
+        runDesktopComposeUiTest(width = 300, height = 650) {
+            val model = FlowModel(PanelState(screen = ScreenId.SaveName))
+            show(model)
+
+            onNodeWithText("HOSTS UP TO").assertExists()
+            onNodeWithText("6").assertExists()
+            // And it refuses nothing: SAVE HOME is a live control on this screen either way.
+            onNode(hasText("SAVE HOME") and hasClickAction()).assertExists()
+        }
+
+    @Test
+    fun theHomeDetailScreenShowsWhatThatHomeHostsUpTo() =
+        runDesktopComposeUiTest(width = 300, height = 650) {
+            val model = FlowModel(PanelState(screen = ScreenId.HomeDetail))
+            model.openSavedHome(HomeEditorModel.BUNGALOW)
+            show(model)
+
+            onNodeWithText("HOSTS UP TO 6").assertExists()
+            onNode(hasText("HOST WITH THIS HOME") and hasClickAction()).assertExists()
+        }
+
+    // ---- The lobby's capacity guidance (D-125, D-127) --------------------------------------------
+
+    /**
+     * **More people than the home is sized for is a line, never a block.**
+     *
+     * LIGHTS OUT is asserted to still be there — the point of D-127's ruling is that capacity
+     * guides and does not gate, and a test that only read the sentence would pass just as well
+     * against a build that had quietly started refusing the round.
+     */
+    @Test
+    fun aCrowdedLobbySaysSoAndStillArms() = runDesktopComposeUiTest(width = 300, height = 650) {
+        val model = hostingWith(joined = 9)
+        show(model)
+
+        onNode(hasText("IT WILL BE CROWDED", substring = true)).assertExists()
+        onNode(hasText("LIGHTS OUT")).assertExists()
+    }
+
+    /** A party that fits draws nothing. A line that only ever says "this is fine" is noise. */
+    @Test
+    fun aLobbyThatFitsSaysNothingAboutCapacity() =
+        runDesktopComposeUiTest(width = 300, height = 650) {
+            val model = hostingWith(joined = 6)
+            show(model)
+
+            onNode(hasText("IT WILL BE CROWDED", substring = true)).assertDoesNotExist()
+        }
+
+    /**
+     * The guidance is the host's. A client has never been sent the home's marker count, so a
+     * client drawing this line would be drawing a number it guessed.
+     */
+    @Test
+    fun aClientsLobbyDrawsNoCapacityLine() = runDesktopComposeUiTest(width = 300, height = 650) {
+        val model = FlowModel(
+            PanelState(screen = ScreenId.Lobby),
+            lobby = LobbyModel(link = MemoryLobbyLink(joined = 9, linesIn = 9)),
+        )
+        model.lobby.attachTo(NearbyHome("THE BUNGALOW", "10.0.0.2", 1234))
+        show(model)
+
+        onNode(hasText("IT WILL BE CROWDED", substring = true)).assertDoesNotExist()
+    }
+
+    /** The host's own lobby, with a home open and that many people standing in the hall. */
+    private fun hostingWith(joined: Int): FlowModel {
+        val model = FlowModel(
+            PanelState(screen = ScreenId.Lobby),
+            lobby = LobbyModel(link = MemoryLobbyLink(joined = joined, linesIn = joined)),
+        )
+        model.openSavedHome(HomeEditorModel.BUNGALOW)
+        model.lobby.hostHome(HomeEditorModel.BUNGALOW)
+        return model
+    }
+
+    private fun meetingCard(id: String = "SEEDU01") =
+        MarkerCard(CardPayload.VERSION, MarkerShapes.MEETING, MarkerId(id))
 }
