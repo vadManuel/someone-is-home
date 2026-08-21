@@ -458,11 +458,28 @@ class FlowTest {
         egress.dismissNotification()
         assertEquals(Flow.viaActions.getValue(ScreenId.Banner), setOf(egress.state.screen))
 
+        // BEGIN, on a caught scan. The screen names no target because which Subroutine opens is a
+        // fact about the card that was read — so this walks the roster rather than one fixture,
+        // which is also what proves the declared set is every built Subroutine and not a list
+        // somebody typed. An unbuilt one opens nothing and the phone stays where it is, which is
+        // asserted rather than assumed: the failure mode has to be a Subroutine that does not
+        // open, never a player put through somebody else's work.
+        val opened = Subroutine.entries.mapNotNullTo(mutableSetOf()) { subroutine ->
+            val begin = FlowModel(PanelState(screen = ScreenId.ScanCaught))
+            begin.beginSubroutine(subroutine)
+            begin.state.screen.takeIf { it != ScreenId.ScanCaught }
+        }
+        assertEquals(Flow.viaActions.getValue(ScreenId.ScanCaught), opened)
+        assertEquals(
+            Subroutine.built.size, opened.size,
+            "every built Subroutine opens on its own screen, and no unbuilt one opens at all",
+        )
+
         assertEquals(
             setOf(
                 ScreenId.Editor, ScreenId.RoomEdit, ScreenId.StairsWarn,
                 ScreenId.SaveName, ScreenId.Delete, ScreenId.ScanMarker,
-                ScreenId.Secret, ScreenId.Lobby,
+                ScreenId.Secret, ScreenId.Lobby, ScreenId.ScanCaught,
                 ScreenId.Notify, ScreenId.Banner,
             ),
             Flow.viaActions.keys,

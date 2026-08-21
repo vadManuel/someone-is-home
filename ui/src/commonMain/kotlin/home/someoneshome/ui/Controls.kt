@@ -133,6 +133,24 @@ class PanelActions(
     val chooseVote: (VoteChoice) -> Unit = {},
     val lockInVote: () -> Unit = {},
     /**
+     * **The Subroutines: one control that navigates and two that only ever echo.**
+     *
+     * [beginSubroutine] is here rather than on the caught-scan screen because BEGIN opens
+     * whichever Subroutine the scanned card holds, and a screen cannot name a target that depends
+     * on a piece of paper. It is declared in [Flow.viaActions] with the other decisions the
+     * actions layer owns.
+     *
+     * [tapSubroutine] and [handOverSubroutine] navigate nowhere and decide nothing. A tap lights
+     * what you touched — your own input, the one thing a screen may draw without asking — and the
+     * entry goes to the house as an Intent that the *house* verifies (D-042). **Neither of them
+     * takes a role**, and nothing they reach holds one: an Insider's Subroutine is a fake in the
+     * ledger and identical everywhere a player can see it, which is rule 8 built rather than
+     * promised.
+     */
+    val beginSubroutine: () -> Unit = {},
+    val tapSubroutine: (Subroutine, Int) -> Unit = { _, _ -> },
+    val handOverSubroutine: (Subroutine) -> Unit = {},
+    /**
      * **A banner, swiped up.**
      *
      * Not a tap and not a navigation the banner can name: what a dismissal leaves you looking at

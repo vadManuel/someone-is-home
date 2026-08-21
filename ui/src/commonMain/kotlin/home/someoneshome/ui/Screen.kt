@@ -52,6 +52,15 @@ fun Screen(
      * because a meeting with nobody at it is a screen the app never shows.
      */
     meeting: MeetingModel = remember { MeetingModel.sample() },
+    /**
+     * What this phone has entered into the Subroutine it has open.
+     *
+     * Defaulted and `remember`ed for the reason the four above are: a test that taps four dots
+     * must not leave the next render looking at a phone that has already handed its sequence over.
+     * The default is part-way through each of the three, because a Subroutine nobody has touched
+     * is a screen with no echo on it — and the echo is the entire content of these screens.
+     */
+    subroutines: SubroutineModel = remember { SubroutineModel.sample() },
 ) {
     val vals = PanelVals(state)
     CompositionLocalProvider(
@@ -60,6 +69,7 @@ fun Screen(
         LocalHomes provides homes,
         LocalLobby provides lobby,
         LocalMeeting provides meeting,
+        LocalSubroutine provides subroutines,
     ) {
         PanelFrame(vals, overlay = bannerFor(state.screen)) {
             when (state.screen) {
@@ -102,8 +112,9 @@ fun Screen(
                 ScreenId.ScanCaught -> ScanCaughtScreen(vals)
                 ScreenId.ScanBad -> ScanBadScreen()
                 ScreenId.ScanUnknown -> ScanUnknownScreen()
-                ScreenId.Sub -> SubScreen()
-                ScreenId.SubBright -> SubBrightScreen()
+                ScreenId.SubHandshake -> HandshakeScreen()
+                ScreenId.SubReplay -> ReplayScreen()
+                ScreenId.SubParity -> ParityCheckScreen()
                 ScreenId.Files -> FilesScreen()
                 ScreenId.Notes -> NotesScreen(vals)
                 ScreenId.TermNo -> TermNoScreen()

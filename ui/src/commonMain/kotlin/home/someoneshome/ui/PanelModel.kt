@@ -27,8 +27,15 @@ enum class ScreenId {
     // The springboard — identical for both roles.
     Home, Page2, Lock,
 
-    // Work.
-    Work, Scan, ScanCaught, ScanBad, ScanUnknown, Sub, SubBright, Files, Notes, TermNo, TermLive, Timelapse,
+    // Work. The Subroutine screens are named for the Subroutine and not for how much light it
+    // makes: the port's two were `Sub` and `SubBright`, which is the light ladder used as an
+    // identity, and it stops describing anything the moment a third Subroutine is built. One id
+    // per Subroutine is also what keeps the sweeps honest — every guard in this module walks
+    // `ScreenId.entries`, so a Subroutine hiding behind a field on a shared screen would be a
+    // Subroutine none of them ever looked at.
+    Work, Scan, ScanCaught, ScanBad, ScanUnknown,
+    SubHandshake, SubReplay, SubParity,
+    Files, Notes, TermNo, TermLive, Timelapse,
 
     // The house's hands.
     Banner, EgressWidget,
@@ -164,8 +171,15 @@ class PanelVals(val state: PanelState) {
      * **Only these two.** The set briefly included every out-screen, and that was wrong: once you
      * are on the couch the room already knows you are out, so there is nothing left to conceal —
      * and a reconnecting phone needs to be *noticed*, not hidden.
+     *
+     * **Asked of the roster rather than named.** It used to name `Sub` — the one dark Subroutine
+     * screen the port had — so a second dark Subroutine would have shipped with a bright status
+     * bar above a screen built to emit nothing, and the fault would live in a file nobody edits
+     * when adding a Subroutine. The question *is* the light signature, so it is asked of the
+     * light signature.
      */
-    private val concealed: Boolean = state.screen == ScreenId.Revoked || state.screen == ScreenId.Sub
+    private val concealed: Boolean = state.screen == ScreenId.Revoked ||
+        Subroutine.on(state.screen)?.light == LightSignature.Dark
 
     val ink: Color = when {
         isPre -> Amber.BoneInk
@@ -447,23 +461,12 @@ class PanelVals(val state: PanelState) {
      * two screens showed a triangle and the third a ring, for the same marker, because the third
      * was reading the host-setup fixture by mistake.
      *
-     * **[name] and [instruction] are different things and both are kept.** `SNIFF` is the kind of
-     * Subroutine; *purge the media cache* is what this instance of it asks for. The work order
-     * lists kinds, and the scan tells you the specific task once you are standing at the marker.
+     * **[CurrentSubroutine.subroutine] and [CurrentSubroutine.instruction] are different things
+     * and both are kept.** `HANDSHAKE` is the kind of Subroutine; *resync the keepalive* is what
+     * this instance of it asks for. The work order lists kinds, and the scan tells you the
+     * specific work once you are standing at the marker.
      */
-    val current: CurrentSubroutine = CurrentSubroutine(
-        name = "SNIFF",
-        instruction = "PURGE THE\nMEDIA CACHE",
-        room = "GARAGE",
-        marker = MarkerShapes["triangle_up"],
-        index = 4,
-        total = 7,
-        done = 3,
-        // SNIFF is the roster's one SHORT DARK Subroutine -- haptic counting, the phone buzzes N
-        // times and you tap N -- which is the cell where a Resident can take a quick one without
-        // becoming a beacon. The value is the design's, not a fixture invention.
-        light = LightSignature.Dark,
-    )
+    val current: CurrentSubroutine get() = CURRENT
 
     // ---- Clocks -------------------------------------------------------------------------------
 
@@ -490,6 +493,34 @@ class PanelVals(val state: PanelState) {
     val outsideLit: Int = 21
 
     companion object {
+
+        /**
+         * **The Subroutine this phone is being sent to — one value, read by four screens and by
+         * the actions layer.**
+         *
+         * A `companion` constant rather than a per-instance field because `FlowModel` needs it
+         * too: BEGIN on the caught-scan screen opens whichever Subroutine the scanned marker
+         * holds, and that is a navigation decision the actions layer takes. Two copies of the
+         * fixture — one for the screens and one for the router — would send a player to a screen
+         * for a Subroutine other than the one they are looking at, which is the exact fault the
+         * shared fixture was introduced to stop.
+         *
+         * **HANDSHAKE, and not the SNIFF that used to be here.** The port's fixture named SNIFF
+         * while carrying the instruction *purge the media cache*, and the roster's Sniff is haptic
+         * counting — a name and a piece of work that were never the same Subroutine. Handshake is
+         * the design's own *build this one first*, keeps the DARK signature the four surfaces
+         * already show, and is one of the three with an interaction behind it, so BEGIN now
+         * reaches the screen it names.
+         */
+        val CURRENT: CurrentSubroutine = CurrentSubroutine(
+            subroutine = Subroutine.Handshake,
+            instruction = "RESYNC THE\nKEEPALIVE",
+            room = "GARAGE",
+            marker = MarkerShapes["triangle_up"],
+            index = 4,
+            total = 7,
+            done = 3,
+        )
 
         /**
          * The screens that arrive unasked, and therefore buzz.
@@ -663,8 +694,8 @@ enum class LightSignature(val rung: Int) { Dark(1), Medium(2), Bright(3) }
  * A fixture today. In play it arrives at the effect boundary like everything else.
  */
 data class CurrentSubroutine(
-    /** The kind of Subroutine, as the work order lists it. */
-    val name: String,
+    /** Which of the design's ten. The name and the light signature are both its. */
+    val subroutine: Subroutine,
     /** What this instance asks for, shown once you are at the marker. */
     val instruction: String,
     val room: String,
@@ -672,9 +703,18 @@ data class CurrentSubroutine(
     val index: Int,
     val total: Int,
     val done: Int,
-    /** What this Subroutine will do to the lamp. Held here so the three surfaces cannot drift. */
-    val light: LightSignature,
-)
+) {
+    /**
+     * The name and the light, taken off the roster rather than stored beside it.
+     *
+     * They were two fields here, set by hand at the one construction site, which meant a fixture
+     * could name HANDSHAKE and promise BRIGHT and nothing in the type would object. A Subroutine's
+     * signature is a property of the Subroutine — so it is read from the Subroutine, on all four
+     * surfaces at once.
+     */
+    val name: String get() = subroutine.label
+    val light: LightSignature get() = subroutine.light
+}
 
 /** One cell of the plan editor's grid. */
 data class EditorCell(val border: Color, val fill: Color?, val hatch: Boolean = false)
@@ -722,25 +762,3 @@ fun Plan.mapCells(): List<MapCell> =
         )
     }
 
-/**
- * The parity-check grid: 36 cells, seven corrupt, four of them found so far.
- *
- * A found cell inverts to full amber; a corrupt one sits at edge intensity; the rest are wells.
- */
-object Parity {
-    private val corrupt = setOf(2, 7, 11, 16, 19, 24, 33)
-    private val found = setOf(2, 11, 19, 33)
-
-    data class Cell(val fill: Color, val border: Color)
-
-    val cells: List<Cell> = List(36) { i ->
-        Cell(
-            fill = when {
-                i in found -> Amber.Bright
-                i in corrupt -> Amber.Edge
-                else -> Amber.Well
-            },
-            border = if (i in found) Amber.Bright else Amber.Faint,
-        )
-    }
-}
