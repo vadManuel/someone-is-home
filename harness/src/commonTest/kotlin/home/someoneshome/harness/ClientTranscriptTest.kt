@@ -204,7 +204,7 @@ class ClientTranscriptTest {
     fun `pre-arm events are refused before the rules see them`() {
         val preArm = listOf(
             Event.MeetingCalled(Tick(0), Seat(3)),
-            Event.SubroutineCompleted(Tick(1), Seat(3), MarkerId("m0")),
+            Event.SubroutineReturned(Tick(1), Seat(3), MarkerId("m0"), listOf(0, 0)),
         )
         assertEquals(
             emptyList(), effectsOf(GameState.EMPTY, preArm),

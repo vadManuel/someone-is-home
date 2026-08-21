@@ -435,9 +435,12 @@ object Flow {
  * decides nothing**: in play [PanelState] arrives whole and this is never consulted.
  */
 fun PanelState.arrivingAt(id: ScreenId): PanelState = when (id) {
-    ScreenId.Revoked -> copy(screen = id, outBy = OutBy.Revoked)
-    ScreenId.Restrained -> copy(screen = id, outBy = OutBy.Restrained)
-    else -> copy(screen = id)
+    // The verdict is dropped on every arrival, this one included. It belongs to one instance of
+    // one Subroutine: carried across a navigation it would sit under the next piece of work, and
+    // carried into a re-scan it would be the phone answering an entry nobody has made yet.
+    ScreenId.Revoked -> copy(screen = id, outBy = OutBy.Revoked, verdict = null)
+    ScreenId.Restrained -> copy(screen = id, outBy = OutBy.Restrained, verdict = null)
+    else -> copy(screen = id, verdict = null)
 }
 
 /**
@@ -835,6 +838,24 @@ class FlowModel(
      * given there: two copies of it is how a Subroutine gets a screen and no wiring.
      */
     fun handOverSubroutine(subroutine: Subroutine) = subroutines.handOver(subroutine)
+
+    /**
+     * **The house answered (D-109). The one push that lands on a Subroutine screen.**
+     *
+     * A verdict is not a navigation and does not move the phone: the player is still standing at
+     * the marker, and where they go next is their decision — STOP NOW, or the walk back to the
+     * work order. **A rejected entry does not re-arm anything here either**, which is D-110 read as
+     * a thing this method does *not* do: the controls stay inert because the entry is still handed
+     * over, and the only way back to ready is [beginSubroutine], which is a fresh scan.
+     *
+     * Separate from [push] because it changes no screen, and separate from the entry model because
+     * the entries hold this phone's own hand and this is the house's answer. In play it arrives at
+     * the effect boundary like every other field of [PanelState]; until there is a house, it is the
+     * seam a test drives.
+     */
+    fun houseGraded(verdict: SubroutineVerdict) {
+        state = state.copy(verdict = verdict)
+    }
 
     // ---- Notifications -----------------------------------------------------------------------
 

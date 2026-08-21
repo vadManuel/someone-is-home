@@ -93,6 +93,61 @@ class EmitSchemaTest {
     }
 
     /**
+     * **D-109's row, and the one that must never be narrowed to one role.**
+     *
+     * A verdict reaches a living Resident and a living Insider, in the same class list, so the
+     * allowlist itself cannot become the place an Insider's fake goes to die. Narrowing this to
+     * `Insider/Live` or to `Resident/Live` is a one-word edit that reads like a tightening and is
+     * a role oracle after a single Subroutine — which is why the expected list is written out in
+     * full rather than asserted as *"contains both living classes"*.
+     */
+    @Test
+    fun `a verdict reaches both living roles and nobody else`() {
+        assertEquals(
+            listOf(
+                ClientClass(Role.Resident, RoundState.Live),
+                ClientClass(Role.Insider, RoundState.Live),
+            ),
+            EmitSchema.classesFor(EmitSchema.SUBROUTINE_GRADED),
+        )
+    }
+
+    /**
+     * **The verdict is addressed to the seat that returned the entry, and to no other phone.**
+     *
+     * The allowlist cannot see this: every living Resident is in the same class, so a verdict
+     * broadcast to the house would pass every row in the table. What it would publish is who is
+     * completing work and how often — the per-player read that the percentage-only meter (D-103)
+     * exists to keep out of aggregate, arriving one player at a time instead.
+     */
+    @Test
+    fun `a verdict is addressed to its own seat only`() {
+        val state = live()
+        assertEquals(
+            listOf(Seat(3)),
+            EmitSchema.deliveries(Effect.SubroutineGraded(Seat(3), accepted = true), state)
+                .map { it.seat },
+        )
+    }
+
+    /**
+     * A seat revoked between its scan and its entry is out, and the verdict is denied.
+     *
+     * Fail-closed, and it carries no role information: the round-state axis moved, and round-state
+     * is publicly observable (D-068). Asserted rather than left implicit because the tempting fix
+     * — widening the row to the out classes so the effect "always lands" — would put a Subroutine
+     * verdict on a screen that no longer has a Subroutine on it.
+     */
+    @Test
+    fun `a verdict addressed to a seat that is out is denied`() {
+        val out = live().copy(revoked = listOf(Seat(3)))
+        assertEquals(
+            emptyList(),
+            EmitSchema.deliveries(Effect.SubroutineGraded(Seat(3), accepted = true), out),
+        )
+    }
+
+    /**
      * Addressing is a second, independent gate.
      *
      * Both seats here are living Residents in the same class, so the allowlist permits the kind to

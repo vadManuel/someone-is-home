@@ -67,6 +67,20 @@ enum class OutBy { Revoked, Restrained }
 enum class RevokeState { Ready, Armed, Cooldown }
 
 /**
+ * **The house's answer to an entry this phone handed over (D-109).**
+ *
+ * Two cases and no third, because the effect that carries it has one boolean and no room for one.
+ * There is no `Pending` member: *waiting* is the absence of a verdict, which is what a nullable
+ * field already says, and a third enum case would be a state the device could reach on its own.
+ *
+ * **Byte-identical for both roles, on the same schedule.** The house grades every entry for real —
+ * an Insider's fake is real work, graded honestly, counting for nothing — so nothing here is
+ * generated, delayed or suppressed for one role. That is not a promise this file can keep on its
+ * own; it is kept by there being no role in the file, and checked in `SubroutineParityTest`.
+ */
+enum class SubroutineVerdict { Accepted, Rejected }
+
+/**
  * Everything the device needs in order to draw itself.
  *
  * **Deliberately flat and inert.** No behaviour, no derivation from rules — `ui` cannot see
@@ -82,6 +96,18 @@ data class PanelState(
     val torch: Boolean = false,
     /** Null while still in play. Set once, by whichever event put the player out. */
     val outBy: OutBy? = null,
+    /**
+     * **What the house said about the entry this phone handed over. Null means it has not said.**
+     *
+     * A pushed fact, like every other field here: the device never forms one, because nothing on
+     * it can — the entry types hold the player's own input and have no field for the answer to sit
+     * in. `RETURNED . WAITING` is what a null renders as, and *waiting* is the honest word.
+     *
+     * **Cleared by walking anywhere**, including by scanning the marker again ([PanelState.arrivingAt]).
+     * A verdict is about one instance of one Subroutine, and one left standing across a
+     * navigation would put the last one's answer under the next one's work.
+     */
+    val verdict: SubroutineVerdict? = null,
     /**
      * **The clock on this screen, as the house last said it stood.**
      *

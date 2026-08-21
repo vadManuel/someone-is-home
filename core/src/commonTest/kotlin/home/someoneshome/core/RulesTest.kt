@@ -33,7 +33,7 @@ class DeterminismTest {
         val events = listOf(
             Event.RevokeArmed(Tick(1), Seat(1)),
             Event.ContactMade(Tick(2), Seat(1), Seat(3)),
-            Event.SubroutineCompleted(Tick(3), Seat(2), home.someoneshome.model.MarkerId("m1")),
+            Event.SubroutineReturned(Tick(3), Seat(2), home.someoneshome.model.MarkerId("m1"), listOf(1, 2)),
         )
         val (s1, e1) = run(armed(), events)
         val (s2, e2) = run(armed(), events)

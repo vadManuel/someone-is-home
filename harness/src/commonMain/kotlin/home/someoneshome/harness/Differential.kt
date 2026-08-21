@@ -1,7 +1,9 @@
 package home.someoneshome.harness
 
+import home.someoneshome.model.EmitSchema
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
+import home.someoneshome.model.MessageKind
 import home.someoneshome.model.Seat
 
 /**
@@ -128,9 +130,11 @@ fun differentialOnRoleSwap(
     initial: GameState,
     events: List<Event>,
     seat: Seat,
+    ignoring: Set<MessageKind> = emptySet(),
 ): DifferentialResult = refusingANoOp(
     initial, events, withRoleSwapped(events, seat), listOf(seat),
     how = "swapping seat ${seat.index}",
+    ignoring = ignoring,
 )
 
 /** The count-preserving form: [a] and [b] trade roles. Both are expected to differ. */
@@ -139,10 +143,32 @@ fun differentialOnRoleExchange(
     events: List<Event>,
     a: Seat,
     b: Seat,
+    ignoring: Set<MessageKind> = emptySet(),
 ): DifferentialResult = refusingANoOp(
     initial, events, withRolesExchanged(events, a, b), listOf(a, b),
     how = "exchanging seats ${a.index} and ${b.index}",
+    ignoring = ignoring,
 )
+
+/**
+ * **D-109's one asymmetry, named so that it can be subtracted and then measured on its own.**
+ *
+ * A plain Resident's accepted entry moves SystemIntegrity and an Insider's does not, so the meter
+ * genuinely depends on *which* seats hold the role, not merely on how many do. That reaches
+ * players outside the system — who see the real bars live (`gdd.md:1014`) — and nobody else.
+ *
+ * **Subtracting it is not softening the harness, and the difference matters.** One inserted or
+ * withheld line shifts every later line in a transcript, so a raw diff of two runs that banked at
+ * different moments reports lamps and meetings as divergent too — the cascade [LineDivergence]
+ * warns about. Dropping this one kind from *both* runs asks the question that is actually open:
+ * **is there anything OTHER than the meter that depends on who the Insiders are?** The tests that
+ * use it pair it with the complementary assertion — that the meter divergence is really there, and
+ * that it reaches no living player — so nothing is hidden by being filtered.
+ *
+ * **Never add a kind here to make a test pass.** Every entry is a documented, ruled-on asymmetry;
+ * a second one would need its own decision-log number before it needed a line of code.
+ */
+val METER_ASYMMETRY: Set<MessageKind> = setOf(EmitSchema.SUBROUTINE_PROGRESSED)
 
 /**
  * **Refuses to report on two runs that are the same round.**
@@ -166,6 +192,7 @@ private fun refusingANoOp(
     variant: List<Event>,
     swapped: List<Seat>,
     how: String,
+    ignoring: Set<MessageKind> = emptySet(),
 ): DifferentialResult {
     val before = Transcript.render(drive(initial, baseline) { _, _, _ -> })
     val after = Transcript.render(drive(initial, variant) { _, _, _ -> })
@@ -173,7 +200,7 @@ private fun refusingANoOp(
         "$how left the round unchanged, so there is nothing to diff. Both runs end at $before. " +
             "Reporting zero divergence here would be a pass from an instrument measuring nothing."
     }
-    return diff(initial, baseline, variant, swapped)
+    return diff(initial, baseline, variant, swapped, ignoring)
 }
 
 /**
@@ -185,9 +212,17 @@ internal fun diff(
     baseline: List<Event>,
     variant: List<Event>,
     swapped: List<Seat>,
+    ignoring: Set<MessageKind> = emptySet(),
 ): DifferentialResult {
     val a = recordPerClient(initial, baseline)
     val b = recordPerClient(initial, variant)
+
+    // The kind is the line's prefix, which is why Transcript renders it there. Dropped from BOTH
+    // runs before the walk, so an ignored kind cannot shift the indices of the lines around it.
+    val ignoredNames = ignoring.map { it.name }.toSet()
+    fun kept(lines: List<String>): List<String> =
+        if (ignoredNames.isEmpty()) lines
+        else lines.filterNot { it.substringBefore('|') in ignoredNames }
 
     val seats = (a.seats + b.seats).map { it.index }.distinct().sorted().map { Seat(it) }
     val seatsA = a.seats.map { it.index }.toSet()
@@ -206,8 +241,8 @@ internal fun diff(
                 if (inB) "seated" else "absent",
             )
         }
-        val left = a.linesFor(seat)
-        val right = b.linesFor(seat)
+        val left = kept(a.linesFor(seat))
+        val right = kept(b.linesFor(seat))
         for (i in 0 until maxOf(left.size, right.size)) {
             val l = left.getOrNull(i)
             val r = right.getOrNull(i)

@@ -50,7 +50,11 @@ class Recording(
     }
 
     companion object {
-        const val HEADER = "someone-is-home/recording/4"
+        // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
+        // entry; the state row gained the work order. A version 4 recording holds an event this
+        // build cannot construct and a state row missing the field a verdict is computed from, so
+        // reading one under this schema would replay a round that never happened.
+        const val HEADER = "someone-is-home/recording/5"
     }
 }
 

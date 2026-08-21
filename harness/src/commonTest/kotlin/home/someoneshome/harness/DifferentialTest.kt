@@ -118,17 +118,21 @@ class DifferentialTest {
     }
 
     /**
-     * **The acceptance criterion, and it now runs on the exchange form.**
+     * **The acceptance criterion, and D-109 moved one line of it.**
      *
-     * Two seats trade roles, so the Insider count is identical in both runs. Every seat other
-     * than the two that traded receives byte-identical bytes.
+     * Two seats trade roles, so the Insider count is identical in both runs. Every seat other than
+     * the two that traded receives byte-identical bytes — **apart from the meter**, which is the
+     * one thing in the game that genuinely depends on *which* seats hold the role: a plain
+     * Resident's accepted entry banks and an Insider's does not (`gdd.md:382`, D-109).
      *
-     * The toggle form no longer isolates role — see below. This is why `withRolesExchanged` was
-     * called the stronger variant before there was any reason to prefer it.
+     * The meter is subtracted here and measured on its own in the two tests below, so nothing is
+     * being waved past. See [METER_ASYMMETRY] for why subtracting rather than loosening.
      */
     @Test
-    fun `a role exchange leaks to nobody else`() {
-        val result = differentialOnRoleExchange(GameState.EMPTY, round(), Seat(1), Seat(3))
+    fun `a role exchange leaks nothing but the meter`() {
+        val result = differentialOnRoleExchange(
+            GameState.EMPTY, round(), Seat(1), Seat(3), ignoring = METER_ASYMMETRY,
+        )
         assertEquals(emptyList(), result.unexplained, "leaked: $result")
         assertFalse(result.leaked)
         assertTrue(
@@ -141,84 +145,151 @@ class DifferentialTest {
 
     /** Two seats that take no ability action all round. Guards against only ever diffing the busy ones. */
     @Test
-    fun `exchanging two passive seats leaks to nobody`() {
-        val result = differentialOnRoleExchange(GameState.EMPTY, round(), Seat(5), Seat(6))
+    fun `exchanging two passive seats leaks nothing but the meter`() {
+        val result = differentialOnRoleExchange(
+            GameState.EMPTY, round(), Seat(5), Seat(6), ignoring = METER_ASYMMETRY,
+        )
         assertEquals(emptyList(), result.unexplained, "leaked: $result")
     }
 
     /**
-     * **The toggle form is now confounded, and this records why rather than deleting it.**
+     * **The subtraction is not hiding an empty diff: without it, the meter really does diverge.**
      *
-     * Toggling one seat changes the number of Insiders, and the SystemIntegrity denominator is
-     * `7 x initial_residents` — so the two runs are playing for a different bar and every out
-     * player's progress line differs. That is a world change, not a tell: the Insider count is a
-     * host-set lobby option (gdd.md:655, :875), public to everyone before the round starts, and
-     * a balance value that locks at arming.
+     * Every filtered assertion in this file would pass vacuously if exchanging two roles had
+     * stopped changing anything at all — which is the shape of every instrument this project has
+     * caught reporting a confident pass while measuring nothing. So the unfiltered exchange is run
+     * too, and it must be dirty.
+     */
+    @Test
+    fun `without the subtraction the exchange is visibly dirty`() {
+        val raw = differentialOnRoleExchange(GameState.EMPTY, round(), Seat(5), Seat(6))
+        assertTrue(
+            raw.unexplained.isNotEmpty(),
+            "the meter no longer depends on who the Insiders are, so METER_ASYMMETRY is " +
+                "subtracting nothing and every test that uses it has gone vacuous",
+        )
+    }
+
+    /**
+     * **D-109's asymmetry reaches players who are outside the system, and NO living player.**
      *
-     * The harness cannot know that, so it reports the divergence and is right to. The judgement
-     * that it is explained belongs here, in a test that names the reason.
+     * The complement of the subtraction, and the property that decides whether the asymmetry is
+     * survivable at all. The meter moving differently is a fact about the aggregate bar; the day
+     * it reaches a phone still in the round, it becomes a per-player statement about who banked —
+     * and the living see SystemIntegrity only as a frozen percentage at meetings (D-103).
+     */
+    @Test
+    fun `the meter asymmetry reaches no living player`() {
+        val baseline = round()
+        val exchanged = withRolesExchanged(baseline, Seat(5), Seat(6))
+        val out = record(GameState.EMPTY, baseline).first.revoked.map { it.index }.toSet()
+        assertTrue(out.isNotEmpty(), "nobody is out in this round, so this proves nothing")
+
+        val raw = diff(GameState.EMPTY, baseline, exchanged, listOf(Seat(5), Seat(6)))
+        val living = raw.unexplained.filterNot { it.seat.index in out }
+        assertEquals(
+            emptyList(), living,
+            "a seat that stayed in the round saw the meter asymmetry: ${living.take(3)}",
+        )
+    }
+
+    /**
+     * **THE ROLE ORACLE TEST. The same entry, graded the same way, answered in the same words.**
+     *
+     * The successor to *"role is still inert in the rules"* and to *"no effect depends on who the
+     * Insiders are"*, both of which D-109 retired by giving the rules their first real role branch.
+     * This is the property that replaces them, and it is the one the whole verdict model rests on:
+     * **every seat's verdicts are byte-identical when two seats trade roles**, including the two
+     * that traded.
+     *
+     * The fixture hands over the entries the house asked for, so the round is full of accepted
+     * verdicts, and seats 1 and 3 answer identically in both runs. A fake that never failed, a fake
+     * that failed on a rolled distribution, a verdict withheld from an Insider, a verdict that
+     * arrived a beat later — every one of them shows up here as a differing or missing line.
+     */
+    @Test
+    fun `a verdict never depends on who the Insiders are`() {
+        val baseline = recordPerClient(GameState.EMPTY, round())
+        val exchanged = recordPerClient(GameState.EMPTY, withRolesExchanged(round(), Seat(1), Seat(3)))
+
+        fun verdicts(t: ClientTranscripts, seat: Seat) =
+            t.linesFor(seat).filter { it.startsWith("SubroutineGraded") }
+
+        var seen = 0
+        for (seat in SEATS) {
+            val a = verdicts(baseline, seat)
+            val b = verdicts(exchanged, seat)
+            seen += a.size
+            assertEquals(
+                a, b,
+                "seat ${seat.index}'s verdicts changed when two seats traded roles — the house " +
+                    "graded the asker rather than the entry",
+            )
+        }
+        assertTrue(seen > 0, "no verdict reached anybody, so this held because nothing fired")
+    }
+
+    /**
+     * The same claim one layer lower: the effect stream itself, meter subtracted.
+     *
+     * Transcripts are what a phone receives; this is what the rules emitted. Both are asserted
+     * because the emit boundary sits between them, and a leak that the allowlist happens to be
+     * hiding today is still a rule branching on identity.
+     */
+    @Test
+    fun `with the Insider count fixed only the meter depends on who the Insiders are`() {
+        fun stream(events: List<Event>) = effectsOf(GameState.EMPTY, events)
+            .map { Transcript.render(it) }
+            .filterNot { it.startsWith("SubroutineProgressed") }
+
+        assertEquals(
+            stream(round()),
+            stream(withRolesExchanged(round(), Seat(1), Seat(3))),
+            "a rule now branches on which seats hold the role in something other than the meter. " +
+                "The differential harness has become load-bearing; rewrite this rather than " +
+                "deleting it.",
+        )
+    }
+
+    /**
+     * **Toggling changes two public balance values now, and the diff still says so.**
+     *
+     * Toggling one seat changes the number of Insiders, which moves both the meter's trajectory
+     * (one fewer or one more seat banks) and — before D-130 — the total itself. The total is now a
+     * function of seats alone, so what is left is the trajectory: still a world change rather than
+     * a tell, still something the harness cannot know, and still a judgement that belongs here in
+     * a test that names the reason.
      */
     @Test
     fun `toggling one role moves a public balance value and the diff says so`() {
         val toggled = differentialOnRoleSwap(GameState.EMPTY, round(), Seat(1))
         assertTrue(
             toggled.unexplained.isNotEmpty(),
-            "toggling changed the Insider count and therefore the denominator; if this is now " +
-                "clean, the denominator has stopped reading the count and the test needs revisiting",
-        )
-        assertTrue(
-            toggled.unexplained.all { it.baseline?.startsWith("SubroutineProgressed") == true },
-            "toggling diverged in something other than the progress bar: " +
-                "${toggled.unexplained.take(3)}",
+            "toggling changed the Insider count and therefore how many seats bank; if this is " +
+                "now clean, the meter has stopped reading the roles and the test needs revisiting",
         )
         assertEquals(
             emptyList(),
-            differentialOnRoleExchange(GameState.EMPTY, round(), Seat(1), Seat(3)).unexplained,
-            "the same seat, count preserved, must be clean",
+            differentialOnRoleSwap(
+                GameState.EMPTY, round(), Seat(1), ignoring = METER_ASYMMETRY,
+            ).unexplained,
+            "toggling diverged in something other than the meter",
         )
     }
 
-    /**
-     * **The successor to `role is still inert in the rules`, which fired the day the denominator
-     * was fixed.**
-     *
-     * Role is now read by exactly one rule: the SystemIntegrity denominator counts Residents. So
-     * the inertness claim is dead, and this is the sharper property that replaces it — *with the
-     * Insider count held fixed, no effect depends on WHICH seats hold the role.*
-     *
-     * That is the invariant the whole differential harness rests on. The day it fails, a rule has
-     * started branching on identity rather than on population, and the harness above becomes the
-     * instrument that matters rather than a formality.
-     */
+    /** Toggling changes the meter and nothing else — same kinds, same order, once it is taken out. */
     @Test
-    fun `with the Insider count fixed no effect depends on who the Insiders are`() {
-        val baseline = effectsOf(GameState.EMPTY, round()).map { Transcript.render(it) }
-        val exchanged = effectsOf(GameState.EMPTY, withRolesExchanged(round(), Seat(1), Seat(3)))
+    fun `toggling a role changes only the meter`() {
+        fun stream(events: List<Event>) = effectsOf(GameState.EMPTY, events)
             .map { Transcript.render(it) }
-        assertEquals(
-            baseline, exchanged,
-            "a rule now branches on which seats hold the role, not merely on how many do. " +
-                "The differential harness has become load-bearing; rewrite this rather than " +
-                "deleting it.",
-        )
-    }
 
-    /** Toggling changes the progress values and nothing else — same kinds, same order. */
-    @Test
-    fun `toggling a role changes only the progress values`() {
-        val baseline = effectsOf(GameState.EMPTY, round()).map { Transcript.render(it) }
-        val toggled = effectsOf(GameState.EMPTY, withRoleSwapped(round(), Seat(1)))
-            .map { Transcript.render(it) }
+        val baseline = stream(round())
+        val toggled = stream(withRoleSwapped(round(), Seat(1)))
+        assertNotEquals(baseline, toggled, "the meter no longer reads the Insider count")
         assertEquals(
-            baseline.map { it.substringBefore('|') },
-            toggled.map { it.substringBefore('|') },
-            "toggling a role changed the shape of the effect stream, not just a balance value",
-        )
-        val differing = baseline.zip(toggled).filter { it.first != it.second }
-        assertTrue(differing.isNotEmpty(), "the denominator no longer reads the Insider count")
-        assertTrue(
-            differing.all { it.first.startsWith("SubroutineProgressed") },
-            "toggling changed something other than progress: ${differing.take(3)}",
+            baseline.filterNot { it.startsWith("SubroutineProgressed") },
+            toggled.filterNot { it.startsWith("SubroutineProgressed") },
+            "toggling a role changed something other than the meter",
         )
     }
 }

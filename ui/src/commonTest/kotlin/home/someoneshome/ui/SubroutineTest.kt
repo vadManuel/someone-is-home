@@ -482,4 +482,74 @@ class SubroutineTest {
         }
         assertEquals(ParityGrid.SIZE, reached.size, "some cells can never be the odd one")
     }
+
+    /**
+     * **The house's answer arrives, stays put, and is gone the moment the player walks anywhere.**
+     *
+     * Three properties of the one push a Subroutine screen receives (D-109), each of which would
+     * be a different bug.
+     *
+     * A verdict that **moved the phone** would decide for the player that they are finished with
+     * this marker — and after a rejection it would walk them away from the one place D-110 says
+     * they have to stand to try again.
+     *
+     * A verdict that **survived a navigation** would sit under the next Subroutine's work, so the
+     * first thing a player saw at their next marker would be the last one's answer.
+     *
+     * A verdict that **survived a re-scan** is the same bug at its most dangerous: BEGIN clears the
+     * entries, so the screen would come back ready, with nothing entered, and REJECTED still on it.
+     */
+    @Test
+    fun theHousesVerdictLandsWithoutMovingThePhoneAndDoesNotOutliveTheSubroutine() {
+        for (subroutine in Subroutine.built) {
+            val screen = subroutine.screen!!
+            val model = FlowModel(PanelState(screen = screen))
+
+            model.houseGraded(SubroutineVerdict.Rejected)
+            assertEquals(
+                screen, model.state.screen,
+                "${subroutine.label}: the house's answer moved the phone",
+            )
+            assertEquals(SubroutineVerdict.Rejected, model.state.verdict)
+
+            // The walk back to the marker: BEGIN on a fresh scan, which is D-110's only way to
+            // re-arm anything at all.
+            model.beginSubroutine(subroutine)
+            assertEquals(
+                null, model.state.verdict,
+                "${subroutine.label}: a re-scan left the previous attempt's verdict standing",
+            )
+            assertEquals(screen, model.state.screen)
+
+            // And any other walk. STOP NOW is the one every Subroutine screen has.
+            model.houseGraded(SubroutineVerdict.Accepted)
+            model.go(ScreenId.Work)
+            assertEquals(
+                null, model.state.verdict,
+                "${subroutine.label}: the verdict followed the player off the screen",
+            )
+        }
+    }
+
+    /**
+     * **Nothing on the device can produce a verdict, so the field starts and stays null on its own.**
+     *
+     * Every tap and every hand-over on every built Subroutine, driven through the actions layer,
+     * and the pushed field never moves. It is the type-level claim — the entries have no room for
+     * an answer — asserted through the thing that would actually break it: somebody wiring a
+     * hand-over to set the verdict locally so the screen "feels responsive".
+     */
+    @Test
+    fun noAmountOfInputEverProducesAVerdict() {
+        for (subroutine in Subroutine.built) {
+            val model = FlowModel(PanelState(screen = subroutine.screen!!))
+            val actions = model.actions()
+            repeat(8) { actions.tapSubroutine(subroutine, it) }
+            actions.handOverSubroutine(subroutine)
+            assertEquals(
+                null, model.state.verdict,
+                "${subroutine.label} answered its own entry",
+            )
+        }
+    }
 }

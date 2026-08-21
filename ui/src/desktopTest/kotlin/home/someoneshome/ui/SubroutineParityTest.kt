@@ -98,6 +98,7 @@ class SubroutineParityTest {
         role: PanelRole,
         steps: Int,
         handOver: Boolean = false,
+        verdict: SubroutineVerdict? = null,
     ): BufferedImage {
         var image: BufferedImage? = null
         runDesktopComposeUiTest(width = width, height = height) {
@@ -106,7 +107,7 @@ class SubroutineParityTest {
                 Box(Modifier.fillMaxSize()) {
                     DeviceCanvas(insets = PanelInsets()) {
                         Screen(
-                            PanelState(screen = subroutine.screen!!, role = role),
+                            PanelState(screen = subroutine.screen!!, role = role, verdict = verdict),
                             subroutines = model,
                         )
                     }
@@ -174,7 +175,166 @@ class SubroutineParityTest {
     }
 
     /**
-     * **No Subroutine screen ever says whether you were right, in any state, for either role.**
+     * **THE ROLE ORACLE, on the frame where the house answers.**
+     *
+     * The verdict is the one thing the house says to a Subroutine, and it is the one place a role
+     * could be encoded without anybody noticing: a fake answered a shade dimmer, a beat later, in
+     * different words, or not at all. D-109 rules that the grading is real for both roles and the
+     * words are the same — so the two roles are rendered through the identical input into the
+     * identical verdict and compared pixel for pixel.
+     *
+     * **Both verdicts, not just the interesting one.** An Insider whose fake always succeeded is
+     * legible to somebody standing behind them, which is the reader the device-side guarantee
+     * (D-047) never covered, so REJECTED has to look the same for both roles as much as ACCEPTED
+     * does.
+     *
+     * Injecting the bug: `if (vals.insider)` anywhere near [ReturnLine], or a role-dependent colour
+     * on the line. Both are one word, both are invisible in review, and both fail here naming the
+     * Subroutine and the verdict.
+     */
+    @Test
+    fun theHousesVerdictIsTheSameScreenForBothRolesPixelForPixel() {
+        val wrong = mutableListOf<String>()
+
+        for (subroutine in Subroutine.built) {
+            for (verdict in SubroutineVerdict.entries) {
+                // Handed over, because that is the only state the house can be answering; and
+                // NOT handed over as well, because a screen that drew the verdict differently
+                // depending on what its own entry held would be the device qualifying the
+                // house's answer with its own opinion of the entry.
+                for (handOver in listOf(false, true)) {
+                    val steps = SubroutineModel.HANDSHAKE_BEATS
+                    val resident = shot(subroutine, PanelRole.Resident, steps, handOver, verdict)
+                    val insider = shot(subroutine, PanelRole.Insider, steps, handOver, verdict)
+                    val (count, at) = diff(resident, insider)
+                    if (count > 0) {
+                        val sent = if (handOver) "handed over" else "still open"
+                        wrong += "${subroutine.label} $verdict ($sent) — $count pixels differ by " +
+                            "role, first at $at"
+                    }
+                }
+            }
+        }
+
+        wrong.forEach { println("VERDICT-FAKE  $it") }
+        assertTrue(
+            wrong.isEmpty(),
+            "the house's answer is drawn differently for the two roles, which is the one thing " +
+                "D-109 exists to prevent:" + wrong.joinToString("") { "\n  $it" },
+        )
+    }
+
+    /**
+     * **The house's answer reaches every one of the six, in the same words, and nothing else does.**
+     *
+     * Two failures this catches, and they are opposite. A Subroutine whose screen forgot to draw
+     * the line is one where the player waits forever on a verdict that arrived — the *"my thing
+     * didn't appear"* half. A screen that drew the wrong one, or both, is a screen inventing an
+     * answer. Six screens, two verdicts, both roles, and the words come from the constants so the
+     * assertion cannot drift from the copy.
+     */
+    @Test
+    fun everySubroutineDrawsTheHousesVerdictAndOnlyThatVerdict() {
+        val lines = mapOf(
+            SubroutineVerdict.Accepted to HOUSE_WEAKER,
+            SubroutineVerdict.Rejected to RESCAN,
+        )
+        val wrong = mutableListOf<String>()
+
+        for (subroutine in Subroutine.built) {
+            for ((verdict, expected) in lines) {
+                for (role in PanelRole.entries) {
+                    runDesktopComposeUiTest(width = width, height = height) {
+                        val model = driven(subroutine, SubroutineModel.HANDSHAKE_BEATS, true)
+                        setContent {
+                            DeviceCanvas(insets = PanelInsets()) {
+                                Screen(
+                                    PanelState(
+                                        screen = subroutine.screen!!,
+                                        role = role,
+                                        verdict = verdict,
+                                    ),
+                                    subroutines = model,
+                                )
+                            }
+                        }
+                        val here = "${subroutine.label}/$role/$verdict"
+                        if (onAllNodes(hasText(expected)).fetchSemanticsNodes().isEmpty()) {
+                            wrong += "$here never drew \"$expected\""
+                        }
+                        val other = lines.values.single { it != expected }
+                        if (onAllNodes(hasText(other)).fetchSemanticsNodes().isNotEmpty()) {
+                            wrong += "$here also drew \"$other\""
+                        }
+                        if (onAllNodes(hasText("RETURNED . WAITING"))
+                                .fetchSemanticsNodes().isNotEmpty()
+                        ) {
+                            wrong += "$here is still waiting for an answer it has"
+                        }
+                    }
+                }
+            }
+        }
+
+        wrong.forEach { println("VERDICT-COPY  $it") }
+        assertTrue(wrong.isEmpty(), wrong.joinToString("") { "\n  $it" })
+    }
+
+    /**
+     * **D-110 — a rejection re-arms nothing, and only a fresh scan does.**
+     *
+     * *One attempt per scan, and the walk back is the cost.* The forced re-scan is the design
+     * rather than a consequence of it: it costs time and it keeps the player standing at the
+     * marker, stationary, lit or blind, visible. So a REJECTED verdict must leave every control on
+     * the screen exactly as inert as it was a frame earlier — a RETRY appearing beside the
+     * rejection would be the phone handing back an attempt the house just spent.
+     *
+     * Checked as *"the same controls are live"* rather than as *"there is no RETRY button"*,
+     * because the way this breaks is somebody making an existing control live again.
+     */
+    @Test
+    fun aRejectionOffersNoWayToTryAgainWithoutTheMarker() {
+        val wrong = mutableListOf<String>()
+
+        for (subroutine in Subroutine.built) {
+            fun live(verdict: SubroutineVerdict?): List<String> {
+                val found = mutableListOf<String>()
+                runDesktopComposeUiTest(width = width, height = height) {
+                    val model = driven(subroutine, SubroutineModel.HANDSHAKE_BEATS, true)
+                    setContent {
+                        DeviceCanvas(insets = PanelInsets()) {
+                            Screen(
+                                PanelState(screen = subroutine.screen!!, verdict = verdict),
+                                subroutines = model,
+                            )
+                        }
+                    }
+                    found += onAllNodes(hasClickAction()).fetchSemanticsNodes().size.toString()
+                }
+                return found
+            }
+
+            val waiting = live(null)
+            for (verdict in SubroutineVerdict.entries) {
+                val answered = live(verdict)
+                if (answered != waiting) {
+                    wrong += "${subroutine.label}: $verdict changed the live controls from " +
+                        "$waiting to $answered"
+                }
+            }
+        }
+
+        wrong.forEach { println("REARM  $it") }
+        assertTrue(
+            wrong.isEmpty(),
+            "a verdict re-armed a Subroutine on the device. D-110: the only way back to ready is " +
+                "scanning the marker again:" + wrong.joinToString("") { "\n  $it" },
+        )
+    }
+
+    /**
+     * **No Subroutine screen says whether you were right UNTIL THE HOUSE HAS, in any state, for
+     * either role.**
      *
      * The verdict is the house's — the entry goes back as an Intent and the server verifies it
      * (D-042) — and there is nothing on the device that could form an opinion, because
@@ -182,12 +342,18 @@ class SubroutineParityTest {
      * claim read off the screens rather than off the types, and it is a sweep for a reason: the way
      * this breaks is somebody adding a helpful line, not somebody rewriting the model.
      *
+     * **D-109 gave the house a verdict to send, and that is exactly why this sweep survives rather
+     * than being retired.** Every render below is made with `verdict = null` — the house has said
+     * nothing — and in that state not one of these words may be on the screen. The point was never
+     * that the words are forbidden; it is that the device must not be the thing that puts them
+     * there. What the house pushes is checked separately, next door.
+     *
      * The words are the ones that could only ever be a judgement. *Waiting* is not among them and
      * is on screen deliberately: it is the honest state, and the honest state is what stops
      * somebody filling the silence with a guess.
      */
     @Test
-    fun noSubroutineScreenEverSaysWhetherTheEntryWasRight() {
+    fun noSubroutineScreenSaysWhetherTheEntryWasRightBeforeTheHouseHas() {
         val verdicts = listOf(
             "CORRECT", "INCORRECT", "WRONG", "MISMATCH", "FAILED", "FAILURE", "PASSED",
             "SUCCESS", "COMPLETE", "ACCEPTED", "REJECTED", "VERIFIED", "TRY AGAIN",

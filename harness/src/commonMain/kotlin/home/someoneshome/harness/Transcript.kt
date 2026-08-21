@@ -28,8 +28,10 @@ object Transcript {
                 "insiders" to event.insiders.joinToString(",") { num(it.index) })
         is Event.MarkerScanned ->
             row("MarkerScanned", event.at, "actor" to num(event.actor.index), "marker" to text(event.marker.value))
-        is Event.SubroutineCompleted ->
-            row("SubroutineCompleted", event.at, "actor" to num(event.actor.index), "marker" to text(event.marker.value))
+        is Event.SubroutineReturned ->
+            row("SubroutineReturned", event.at, "actor" to num(event.actor.index),
+                "marker" to text(event.marker.value),
+                "entered" to event.entered.joinToString(",") { num(it) })
         is Event.RevokeArmed ->
             row("RevokeArmed", event.at, "actor" to num(event.actor.index))
         is Event.ContactMade ->
@@ -59,6 +61,8 @@ object Transcript {
             "LampSet|seat=${effect.seat.index}|luminance=${effect.luminance}"
         is Effect.AbilityFired ->
             "AbilityFired|actor=${effect.actor.index}|cooldownStarted=${effect.cooldownStarted}"
+        is Effect.SubroutineGraded ->
+            "SubroutineGraded|seat=${effect.seat.index}|accepted=${effect.accepted}"
         is Effect.SubroutineProgressed ->
             "SubroutineProgressed|remaining=${effect.remaining}"
         is Effect.MessageDelivered ->
@@ -130,6 +134,16 @@ object Transcript {
         append("|revoked=").append(state.revoked.joinToString(",") { num(it.index) })
         append("|armedRevoke=").append(state.cooldownArmed.joinToString(",") { num(it.index) })
         append("|integrity=").append(num(state.systemIntegrity))
+        // The work order, ANSWER KEY INCLUDED. A state row is authority-side debugging and holds
+        // complete ground truth by design — recordings are gitignored and never handed to a
+        // player. Omitting `expected` would leave the one piece of state a verdict is computed
+        // from outside the guarantee, which is the `ended` omission again in a new costume.
+        append("|open=").append(
+            state.openSubroutines.joinToString(",") { open ->
+                "${num(open.seat.index)}:${open.armedAt?.let { text(it.value) } ?: "none"}" +
+                    ":${open.expected.joinToString(".") { num(it) }}"
+            }
+        )
         append("|nextEntity=").append(num(state.nextEntity))
         append("|seed=").append(num(state.seed))
     }

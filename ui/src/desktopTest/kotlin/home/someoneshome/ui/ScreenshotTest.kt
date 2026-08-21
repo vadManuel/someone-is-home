@@ -121,6 +121,53 @@ class ScreenshotTest {
     }
 
     /**
+     * **The three states of the return line, on all six Subroutines — the frames the sweep above
+     * renders only one of.**
+     *
+     * Naming a [ScreenId] gets you a Subroutine mid-work: nothing has gone to the house, so the
+     * line is empty. The two states that needed a person's eye are the ones the loop just built —
+     * `RETURNED . WAITING`, and each of the house's two answers under it — and what has to be
+     * checked there is not the words but **the light**: whether a longer line at the same
+     * intensity reads as the same slot on the near-black screens as on the lit ones, and whether
+     * anything above it moved when the answer arrived.
+     *
+     * Rendered handed-over, so the frame is the real one: the controls inert, the entry spent, and
+     * the only thing that changed between the three shots being the one line. A viewer, not an
+     * assertion — `SubroutineParityTest` is where the assertions are.
+     */
+    @OptIn(ExperimentalTestApi::class, ExperimentalComposeUiApi::class)
+    @Test
+    fun renderEverySubroutinesVerdict() {
+        var written = 0
+        for (subroutine in Subroutine.built) {
+            for (verdict in listOf(null) + SubroutineVerdict.entries) {
+                runDesktopComposeUiTest(width = 600, height = 1300) {
+                    val model = SubroutineModel()
+                    repeat(SubroutineModel.HANDSHAKE_BEATS) { model.tap(subroutine, it) }
+                    model.handOver(subroutine)
+                    setContent {
+                        Box(Modifier.fillMaxSize().background(Color.Black)) {
+                            DeviceCanvas {
+                                Screen(
+                                    PanelState(screen = subroutine.screen!!, verdict = verdict),
+                                    subroutines = model,
+                                )
+                            }
+                        }
+                    }
+                    val tail = verdict?.name?.lowercase() ?: "waiting"
+                    val name = "${subroutine.screen!!.name.lowercase()}-$tail.png"
+                    ImageIO.write(
+                        onRoot().captureToImage().toAwtImage(), "png", File(out, name),
+                    )
+                    written++
+                }
+            }
+        }
+        println("wrote $written verdict frames to ${out.absolutePath}")
+    }
+
+    /**
      * **A banner on its way out — the other state no [ScreenId] can name.**
      *
      * `Notify` is the springboard with a banner at rest on it, and that is as far as a screen id

@@ -66,6 +66,7 @@ object EmitSchema {
     fun kindOf(effect: Effect): MessageKind = when (effect) {
         is Effect.LampSet -> LAMP_SET
         is Effect.AbilityFired -> ABILITY_FIRED
+        is Effect.SubroutineGraded -> SUBROUTINE_GRADED
         is Effect.SubroutineProgressed -> SUBROUTINE_PROGRESSED
         is Effect.MessageDelivered -> MESSAGE_DELIVERED
         is Effect.MeetingOpened -> MEETING_OPENED
@@ -74,6 +75,7 @@ object EmitSchema {
 
     val LAMP_SET = MessageKind("LampSet")
     val ABILITY_FIRED = MessageKind("AbilityFired")
+    val SUBROUTINE_GRADED = MessageKind("SubroutineGraded")
     val SUBROUTINE_PROGRESSED = MessageKind("SubroutineProgressed")
     val MESSAGE_DELIVERED = MessageKind("MessageDelivered")
     val MEETING_OPENED = MessageKind("MeetingOpened")
@@ -113,6 +115,19 @@ object EmitSchema {
         // revoke landed or not, which is exactly why it must not be widened: shipped to a
         // Resident it would be an unexplained event on a screen with no ability behind it.
         ABILITY_FIRED to setOf(ClientClass(Role.Insider, RoundState.Live)),
+
+        // D-109: the house grades every entry for real, for both roles, in identical words. So
+        // this row names BOTH living classes and it is the row that must never be narrowed to one
+        // of them -- an Insider whose fake never came back would be a role oracle after a single
+        // Subroutine, delivered by the allowlist rather than by a screen. Rule 1's exact shape.
+        //
+        // Not the out classes. A player outside the system has no Subroutine open and never
+        // returns an entry, so a verdict could only reach them addressed to a seat that is out --
+        // which happens when somebody is revoked between their scan and their entry. The verdict
+        // is then denied, and that denial carries no role information: it is the round-state axis
+        // moving, and round-state is publicly observable (D-068). Their screen is D-134's, not a
+        // Subroutine's.
+        SUBROUTINE_GRADED to LIVING,
 
         // The live true remaining count. gdd.md:192 — the number is shown to living players ONLY
         // AT MEETINGS, batched and then frozen (gdd.md:1002). Continuous decrements are a rate
@@ -174,6 +189,11 @@ object EmitSchema {
         val addressed = when (effect) {
             is Effect.LampSet -> listOf(effect.seat)
             is Effect.AbilityFired -> listOf(effect.actor)
+            // The one seat that handed the entry over, and nobody else. Addressed rather than
+            // broadcast because a verdict reaching the house at large would publish who is
+            // completing work and how often -- which is the whole read the meter is quantised
+            // into a percentage to prevent (D-103), arriving per player instead of in aggregate.
+            is Effect.SubroutineGraded -> listOf(effect.seat)
             is Effect.MessageDelivered -> listOf(effect.seat)
             is Effect.SubroutineProgressed -> state.seats
             is Effect.MeetingOpened -> state.seats
