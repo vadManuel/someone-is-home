@@ -121,7 +121,7 @@ object MarkerShapes {
     private val byId: Map<String, MarkerShape> = all.associateBy { it.id }
 
     /**
-     * **The one shape that is never an ordinary marker: the card marked T.**
+     * **The card marked T, ratified: the terminal's shape** (D-120).
      *
      * The host-setup screens have always said *scan the card marked T* and *the T card is never an
      * ordinary marker*, and something has to make that true of a piece of paper. A card's payload
@@ -134,19 +134,44 @@ object MarkerShapes {
      * terminal, and [MarkerCard.isTerminal] is a fact about the paper rather than a flag somebody
      * set. [all] keeps all 44 entries because the roster is wire data and ids are never renumbered
      * or reused — this is a shape that is spoken for, not a shape that was removed.
-     *
-     * **This is a provisional ruling and is written up for ratification.** It decides what is
-     * printed on paper, and paper cannot be patched.
      */
     val TERMINAL: MarkerShape = requireNotNull(byId["t_shape"]) { "the roster lost t_shape" }
 
     /**
-     * The shapes an ordinary marker card may carry — the roster minus [TERMINAL].
+     * **The second reserved shape: the meeting card** (D-121).
+     *
+     * A meeting is called by walking to a known place and scanning the card there — never
+     * remotely, with one exception that is not a card at all (reporting a Revoked player, which
+     * works from anywhere). That makes the meeting card *a place*, and a place has to survive a
+     * reprint the way the terminal does, by the same route: the shape is the only field of a
+     * payload that can say what kind of card this is.
+     *
+     * **`u_shape`, and the U is a couch seen from above.** The design's own word for where a
+     * meeting happens is the couch; the roster's U is the shape of one looked down on, and it is
+     * a letterform like the T rather than one of the 42 abstract marks, so the two reserved cards
+     * read as a pair on a printed sheet and neither reads as an ordinary marker.
+     *
+     * **This is a provisional ruling and is written up for ratification.** D-121 reserved a second
+     * shape without naming which; this names it, and naming it decides what is printed on paper,
+     * which cannot be patched.
+     */
+    val MEETING: MarkerShape = requireNotNull(byId["u_shape"]) { "the roster lost u_shape" }
+
+    /**
+     * The two shapes that are never ordinary markers — **the reserved set, and it is two**.
+     *
+     * Held as a set rather than as two constants read separately, so that every question of the
+     * form "is this shape spoken for" has one answer and [registrable] cannot drift from it.
+     */
+    val reserved: Set<MarkerShape> = setOf(TERMINAL, MEETING)
+
+    /**
+     * The shapes an ordinary marker card may carry — the roster minus the [reserved] two, so 42.
      *
      * What the printable sheet (story 4.11) draws from, and the answer to "how many markers can
-     * one home hold" that is not off by one.
+     * one home hold" that is not off by one or by two.
      */
-    val registrable: List<MarkerShape> = all.filterNot { it.id == TERMINAL.id }
+    val registrable: List<MarkerShape> = all.filterNot { it in reserved }
 
     init {
         require(ALPHABET.length == 44) { "alphabet is ${ALPHABET.length}, expected 44" }
@@ -154,6 +179,13 @@ object MarkerShapes {
             "${all.size} shapes exceeds the ${ALPHABET.length}-character alphabet"
         }
         require(all.map { it.id }.toSet().size == all.size) { "duplicate shape id" }
+        // Two reserved, 42 registrable (D-121). Stated as arithmetic rather than trusted, because
+        // reserving a shape twice — or reserving one that is not in the roster — would leave the
+        // registrable count silently right and the reserved set silently wrong.
+        require(reserved.size == 2) { "the reserved set is ${reserved.size}, expected 2" }
+        require(registrable.size == all.size - reserved.size) {
+            "${registrable.size} registrable shapes, expected ${all.size - reserved.size}"
+        }
     }
 
     operator fun get(id: String): MarkerShape? = byId[id]

@@ -1,6 +1,7 @@
 package home.someoneshome.ui
 
 import home.someoneshome.model.CardRejection
+import home.someoneshome.model.HomeReview
 import home.someoneshome.model.HousePlan
 import home.someoneshome.model.RoomKind
 
@@ -182,17 +183,18 @@ fun EditorScreen(vals: PanelVals) {
             )
         }
 
+        val review = editor.review
         PanelButton(
-            vals.saveLabel(editor.hasTerminal),
-            border = vals.saveEdge(editor.hasTerminal),
-            fill = vals.saveFill(editor.hasTerminal),
-            ink = vals.saveInk(editor.hasTerminal),
-            // The gate. It still goes somewhere when the home has no terminal — to the screen
-            // that says where a terminal belongs, because a button that goes quiet teaches
+            vals.saveLabel(review),
+            border = vals.saveEdge(review),
+            fill = vals.saveFill(review),
+            ink = vals.saveInk(review),
+            // The gate (D-127). It still goes somewhere when the home is short — to the screen
+            // that names every missing thing at once, because a button that goes quiet teaches
             // nothing about why, and this one is the last thing between a host and an evening
             // spent finding out the hard way.
             onClick = {
-                go(if (editor.hasTerminal) ScreenId.SaveName else ScreenId.NoTerminal)
+                go(if (review.passes) ScreenId.SaveName else ScreenId.ReviewNeeds)
             },
         )
     }
@@ -264,6 +266,7 @@ private fun HeldPlanPage(
                     held = editor.held,
                     markers = { editor.markersIn(it).size },
                     terminal = editor.terminal,
+                    meeting = editor.meeting,
                 )
             }
         }
@@ -374,7 +377,11 @@ fun RoomEditScreen(vals: PanelVals) {
 
         SlateButton("DONE", { go(ScreenId.Editor) })
         PanelButton(
-            deleteRoomLabel(editor.heldMarkers.size, editor.terminal == editor.heldName),
+            deleteRoomLabel(
+                editor.heldMarkers.size,
+                terminal = editor.terminal == editor.heldName,
+                meeting = editor.meeting == editor.heldName,
+            ),
             border = Amber.BonePale, ink = Amber.BoneDim,
             onClick = {
                 actions.deleteRoom()
@@ -388,16 +395,20 @@ fun RoomEditScreen(vals: PanelVals) {
  * What deleting this room takes with it, named rather than counted at the host afterwards.
  *
  * The design's line is DELETE ROOM AND ITS 2 MARKERS, written for a room that had two. A room
- * with none must not be told it is losing none, and a room holding the T card is losing the one
- * thing in the house that cannot simply be printed again — so it gets said out loud.
+ * with none must not be told it is losing none, and a room holding a reserved card is losing
+ * something the home cannot be hosted without — so each one gets said out loud, by name.
  */
-private fun deleteRoomLabel(markers: Int, terminal: Boolean): String {
+private fun deleteRoomLabel(markers: Int, terminal: Boolean, meeting: Boolean): String {
     val cards = when (markers) {
         0 -> null
         1 -> "ITS 1 MARKER"
         else -> "ITS $markers MARKERS"
     }
-    val parts = listOfNotNull(cards, if (terminal) "ITS TERMINAL" else null)
+    val parts = listOfNotNull(
+        cards,
+        if (terminal) "ITS TERMINAL" else null,
+        if (meeting) "ITS MEETING CARD" else null,
+    )
     return if (parts.isEmpty()) "DELETE ROOM"
     else "DELETE ROOM AND " + parts.joinToString(" AND ")
 }
@@ -465,6 +476,7 @@ fun StairsWarnScreen(vals: PanelVals) {
                 // room, which told a host they were about to lose a terminal that was two rooms
                 // away and perfectly safe.
                 if (editor.terminal == editor.heldName) TerminalToken(21.u, Amber.BoneInk)
+                if (editor.meeting == editor.heldName) MeetingToken(21.u, Amber.BoneInk)
             }
         }
 
@@ -529,38 +541,15 @@ fun MarkerSheetScreen(vals: PanelVals) {
             lineHeight = 1.0, align = TextAlign.Center,
         )
 
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.u)) {
-            Row(
-                Modifier.weight(1f).dashedBorder(Amber.BonePale)
-                    .padding(horizontal = 7.u, vertical = 5.u),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Label("TERMINAL", size = 6.5, color = Amber.BoneDim)
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.u),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    // Where the T card is, which is a fact about the whole home rather than
-                    // about this room — the host is told it here because here is where they
-                    // would otherwise scan a second one.
-                    val at = editor.terminal
-                    if (at != null) TerminalToken(9.u, Amber.BoneInk, textSize = 5.0)
-                    Label(
-                        if (at != null) "IN $at" else "NOT PLACED",
-                        size = 6.5,
-                        color = if (at != null) Amber.BoneInk else Amber.BoneDim,
-                    )
-                }
-            }
-            Box(
-                Modifier.border(1.u, Amber.BonePale).goes(ScreenId.TermRemove)
-                    .padding(horizontal = 8.u, vertical = 5.u),
-                contentAlignment = Alignment.Center,
-            ) {
-                Label("×", size = 8.0, color = Amber.BoneDim)
-            }
-        }
+        // The two reserved cards, drawn the same way and for the same reason: where each one is
+        // is a fact about the whole home rather than about this room, and here is where the host
+        // would otherwise scan a second one.
+        ReservedRow(
+            "TERMINAL", editor.terminal, ScreenId.TermRemove,
+        ) { size, ink -> TerminalToken(size, ink, textSize = 5.0) }
+        ReservedRow(
+            "MEETING CARD", editor.meeting, ScreenId.MeetRemove,
+        ) { size, ink -> MeetingToken(size, ink, textSize = 5.0) }
 
         SlateButton("REGISTER MARKER", { go(ScreenId.ScanMarker) })
         PanelButton(
@@ -568,6 +557,53 @@ fun MarkerSheetScreen(vals: PanelVals) {
             border = Amber.BonePale, ink = Amber.BoneDim, verticalPadding = 9.u,
             onClick = { go(ScreenId.RoomEdit) },
         )
+    }
+}
+
+/**
+ * One reserved card on the marker sheet: what it is, where it is, and the way to take it out.
+ *
+ * **Present whether or not the card is placed**, saying NOT PLACED when it is not. A row that
+ * appeared once the card existed would be a row a host never sees while they still need to be
+ * told the card exists at all — and this sheet is the only screen that says so.
+ *
+ * The token is passed in rather than switched on inside, so that adding a third reserved card
+ * cannot get here by reusing the terminal's mark.
+ */
+@Composable
+private fun ReservedRow(
+    name: String,
+    at: String?,
+    remove: ScreenId,
+    token: @Composable (Dp, Color) -> Unit,
+) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.u)) {
+        Row(
+            Modifier.weight(1f).dashedBorder(Amber.BonePale)
+                .padding(horizontal = 7.u, vertical = 5.u),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Label(name, size = 6.5, color = Amber.BoneDim)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(4.u),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (at != null) token(9.u, Amber.BoneInk)
+                Label(
+                    if (at != null) "IN $at" else "NOT PLACED",
+                    size = 6.5,
+                    color = if (at != null) Amber.BoneInk else Amber.BoneDim,
+                )
+            }
+        }
+        Box(
+            Modifier.border(1.u, Amber.BonePale).goes(remove)
+                .padding(horizontal = 8.u, vertical = 5.u),
+            contentAlignment = Alignment.Center,
+        ) {
+            Label("×", size = 8.0, color = Amber.BoneDim)
+        }
     }
 }
 
@@ -655,11 +691,14 @@ private fun BoxScope.ScanReadout(outcome: ScanOutcome) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(5.u),
     ) {
-        // The T card is never an ordinary marker and is never drawn as one: it is the token the
-        // host-setup screens have always used for it, so the one card that is not a marker does
-        // not arrive looking like the letter T happened to be printed on a marker.
-        if (outcome.isTerminal) TerminalToken(30.u, ink, stroke = 2.u, textSize = 15.0)
-        else outcome.shape?.let { MarkerGlyph(it, 34.u, ink) }
+        // Neither reserved card is ever an ordinary marker and neither is ever drawn as one: each
+        // gets the token the host-setup screens use for it, so a card that is not a marker does
+        // not arrive looking like a letter happened to be printed on a marker.
+        when {
+            outcome.isTerminal -> TerminalToken(30.u, ink, stroke = 2.u, textSize = 15.0)
+            outcome.isMeeting -> MeetingToken(30.u, ink, stroke = 2.u, textSize = 15.0)
+            else -> outcome.shape?.let { MarkerGlyph(it, 34.u, ink) }
+        }
 
         Row(
             horizontalArrangement = Arrangement.spacedBy(5.u),
@@ -687,6 +726,7 @@ private fun scanLine(outcome: ScanOutcome): String = when (outcome) {
     is ScanOutcome.Landed -> when {
         outcome.from != null -> "MOVED FROM ${outcome.from}"
         outcome.isTerminal -> "TERMINAL . ${outcome.room}"
+        outcome.isMeeting -> "MEETING CARD . ${outcome.room}"
         else -> "${outcome.room} . ADDED"
     }
 
@@ -793,6 +833,64 @@ fun TermTakenScreen() {
     }
 }
 
+/**
+ * A second meeting card, refused.
+ *
+ * **One home, one meeting card** (D-121), and the screen says where the existing one is rather
+ * than only that there is one. The argument is not the terminal's: a meeting is called by walking
+ * to this card and scanning it, and the caller's scan is their check-in — so a second card is a
+ * second place the house would take a meeting from, and half the party would walk to the wrong
+ * one in the dark.
+ */
+@Composable
+fun MeetTakenScreen() {
+    val go = navigator()
+    val actions = LocalActions.current
+    val editor = LocalEditor.current
+    val at = editor.meeting.orEmpty()
+    PrePage {
+        PreHeading(
+            "REGISTER MARKER", trailing = editor.heldName,
+            back = ScreenId.ScanMarker, tracking = 0.14,
+        )
+
+        Box(Modifier.fillMaxWidth().weight(1f).background(Amber.SlateDead)) {
+            Column(
+                Modifier.fillMaxSize().padding(horizontal = 14.u),
+                verticalArrangement = Arrangement.spacedBy(6.u, Alignment.CenterVertically),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                MeetingToken(26.u, Amber.Caution, stroke = 2.u, textSize = 13.0)
+                Label(
+                    "ALREADY REGISTERED",
+                    size = 8.0, color = Amber.Caution, tracking = 0.1, lineHeight = 1.7,
+                    align = TextAlign.Center,
+                )
+                Label(
+                    "This home has one meeting card and it is in",
+                    size = 7.0, color = Amber.SlateFill, lineHeight = 1.8, align = TextAlign.Center,
+                )
+                Label(at, size = 7.0, color = Amber.BoneChip, tracking = 0.1)
+                Label(
+                    "A second one would give the house two places to be called to.",
+                    size = 7.0, color = Amber.SlateFill, lineHeight = 1.8, align = TextAlign.Center,
+                )
+            }
+        }
+
+        SlateButton("KEEP IT IN $at", { go(ScreenId.ScanMarker) })
+        PanelButton(
+            "MOVE THE MEETING CARD TO ${editor.heldName}",
+            border = Amber.BonePale, ink = Amber.BoneDim, verticalPadding = 9.u,
+            onClick = actions.moveMeeting,
+        )
+        PreNote(
+            "MOVING IT LEAVES $at WITH NOWHERE TO MEET.\nTHE MEETING CARD IS NEVER AN ORDINARY MARKER.",
+            align = TextAlign.Center,
+        )
+    }
+}
+
 /** Demoting the terminal, and saying what it costs. */
 @Composable
 fun TermRemoveScreen() {
@@ -836,57 +934,176 @@ fun TermRemoveScreen() {
     }
 }
 
+/** Demoting the meeting card, and saying what it costs. */
+@Composable
+fun MeetRemoveScreen() {
+    val go = navigator()
+    val actions = LocalActions.current
+    val editor = LocalEditor.current
+    PrePage(gap = 7) {
+        PreHeading("REMOVE THE MEETING CARD", back = ScreenId.MarkerSheet, tracking = 0.14)
+
+        InfoBox(border = Amber.BoneInk, padding = 9.u, gap = 6.u) {
+            Column(
+                Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.u),
+            ) {
+                MeetingToken(24.u, Amber.BoneInk, stroke = 2.u, textSize = 12.0)
+                Label(
+                    editor.meeting?.let { "IN $it" } ?: "NOT PLACED",
+                    size = 8.0, color = Amber.BoneInk, tracking = 0.06,
+                )
+            }
+        }
+
+        InfoBox(border = Amber.BonePale) {
+            Label(
+                "The meeting card belongs to no room after this, and it can only ever be a " +
+                    "meeting card. It is not a marker. A meeting is called by standing at it and " +
+                    "nowhere else, so this home cannot be saved again until some room has one.",
+                size = 7.0, color = Amber.BoneDim, lineHeight = 1.85,
+            )
+        }
+
+        PushDown()
+        Column(verticalArrangement = Arrangement.spacedBy(5.u)) {
+            PanelButton(
+                "REMOVE IT",
+                border = Amber.BonePale, ink = Amber.BoneDim,
+                onClick = actions.removeMeeting,
+            )
+            SlateButton("KEEP IT", { go(ScreenId.MarkerSheet) })
+        }
+    }
+}
+
 /**
- * Save is blocked, and the screen says where a terminal belongs rather than only that one is
- * missing.
+ * **REVIEW is refused, and the screen names every reason at once** (D-126, D-127).
  *
- * *"Put it somewhere awkward"* is the load-bearing line. Standing at the terminal costs a
- * Resident time and puts them alone in the dark; that trade is what the whole map is built on,
- * and a terminal by the front door quietly deletes it.
+ * Was `NoTerminalScreen`, when a missing terminal was the only thing that could hold a home back.
+ * D-127 made the gate three requirements — one terminal, one meeting card, eight ordinary markers
+ * — and **all of them are drawn**, not the first one that fails. A host sent back for a terminal,
+ * then for a meeting card, then for three more markers is a host walking their own house three
+ * times over a fact the app knew on the first pass.
+ *
+ * Each requirement keeps the copy that says *where the thing belongs*, because that is the part
+ * the host cannot work out from the word alone. *"Put it somewhere awkward"* is the terminal's and
+ * is load-bearing: standing at the terminal costs a Resident time and puts them alone in the dark,
+ * which is the trade the whole map is built on, and a terminal by the front door quietly deletes
+ * it. The meeting card's is the opposite instruction and is load-bearing for the opposite reason.
+ *
+ * **This screen is guidance about mechanics, never about houses** (D-125). Nothing here has an
+ * opinion about how big a home is, how many rooms it has or what shape it is.
  */
 @Composable
-fun NoTerminalScreen() {
+fun ReviewNeedsScreen(vals: PanelVals) {
     val go = navigator()
+    val editor = LocalEditor.current
+    val review = editor.review
     PrePage(gap = 7) {
-        PreHeading("THIS HOME NEEDS A TERMINAL", tracking = 0.14)
+        PreHeading(
+            if (review.missing.size == 1) "THIS HOME NEEDS ONE MORE THING"
+            else "THIS HOME NEEDS ${review.missing.size} MORE THINGS",
+            tracking = 0.14,
+        )
 
+        // Drawn in the gate's own order, which is the order a host would go and fix them. An
+        // empty list cannot reach this screen — REVIEW HOME goes to SaveName then — and if it
+        // ever did, the list simply has nothing in it rather than the screen claiming otherwise.
+        review.missing.forEach { MissingRequirement(it) }
+
+        PushDown()
+        // The capacity the home would have if the markers stopped here — guidance, never a gate
+        // (D-127). Shown on the screen that is refusing, because the number the host is working
+        // towards is the reason they are being asked for more markers at all.
+        PreNote(
+            "${vals.capacityLine(review)} . MARKERS MINUS THE THREE STATIONS",
+            align = TextAlign.Center,
+        )
+        // Back to the plan, not into the room panel. The host has to choose WHICH room each card
+        // goes in, and the plan is the only screen that can ask that question.
+        SlateButton("OPEN A ROOM", { go(ScreenId.Editor) }, verticalPadding = 11.u)
+    }
+}
+
+/**
+ * One line of the gate, with its token, its instruction and where the thing belongs.
+ *
+ * Every branch is written out rather than derived from a string on [HomeReview.Missing], so the
+ * copy stays in the layer that owns copy and a new requirement is a compile error here rather
+ * than a blank box on the screen a host is stuck on.
+ */
+@Composable
+private fun MissingRequirement(missing: HomeReview.Missing) {
+    when (missing) {
+        HomeReview.Missing.Terminal -> Requirement(
+            title = "SCAN THE CARD MARKED T",
+            body = "Open a room, register a marker, and scan the T card there. That room becomes " +
+                "the terminal.",
+            note = "PUT IT SOMEWHERE AWKWARD" to
+                "A back room, a basement, the far end of the house. Somewhere nobody passes by " +
+                "accident. It is the only place residents can see who is where, so standing at " +
+                "it costs them time and puts them alone in the dark.",
+            token = { TerminalToken(30.u, Amber.BoneInk, stroke = 2.u, textSize = 15.0) },
+        )
+
+        HomeReview.Missing.MeetingCard -> Requirement(
+            title = "SCAN THE CARD MARKED U",
+            body = "Open a room, register a marker, and scan the U card there. That room becomes " +
+                "where meetings are called.",
+            note = "PUT IT WHERE EVERYONE FITS" to
+                "The couch, the kitchen table, wherever the house already gathers. A meeting is " +
+                "called by walking to this card and scanning it — never from a chair — so the " +
+                "caller is standing somewhere everyone can see them at the moment they would " +
+                "most like to be unseen.",
+            token = { MeetingToken(30.u, Amber.BoneInk, stroke = 2.u, textSize = 15.0) },
+        )
+
+        is HomeReview.Missing.Markers -> Requirement(
+            title = if (missing.short == 1) "ONE MORE MARKER" else "${missing.short} MORE MARKERS",
+            body = "This home has ${missing.have} of the ${missing.need} a round needs. Open a " +
+                "room, register a marker, and scan a card there.",
+            note = "WHY EIGHT" to
+                "Five is the smallest party, and the Array Wipe circuit takes three stations the " +
+                "house draws fresh every round. Eight is the smallest home the smallest round " +
+                "fits in. Markers above that are capacity, not extra work.",
+            // The count, where the other two draw a token. There is no mark for "markers" that
+            // is not one particular marker's shape, and putting a diamond here would send a host
+            // looking for the diamond card.
+            token = {
+                Label(
+                    "${missing.have}/${missing.need}",
+                    size = 9.0, color = Amber.BoneInk, tracking = 0.04,
+                )
+            },
+        )
+    }
+}
+
+@Composable
+private fun Requirement(
+    title: String,
+    body: String,
+    note: Pair<String, String>,
+    token: @Composable () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.u)) {
         Row(
             Modifier.fillMaxWidth().border(1.u, Amber.BoneInk).padding(8.u),
             horizontalArrangement = Arrangement.spacedBy(9.u),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TerminalToken(30.u, Amber.BoneInk, stroke = 2.u, textSize = 15.0)
-            Column(
-                Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.u),
-            ) {
-                Label(
-                    "SCAN THE CARD MARKED T",
-                    size = 8.5, color = Amber.BoneInk, tracking = 0.04, lineHeight = 1.5,
-                )
-                Label(
-                    "Open a room, register a marker, and scan the T card there. That room " +
-                        "becomes the terminal.",
-                    size = 7.0, color = Amber.BoneDeep, lineHeight = 1.75,
-                )
+            Box(Modifier.size(30.u), contentAlignment = Alignment.Center) { token() }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.u)) {
+                Label(title, size = 8.5, color = Amber.BoneInk, tracking = 0.04, lineHeight = 1.5)
+                Label(body, size = 7.0, color = Amber.BoneDeep, lineHeight = 1.75)
             }
         }
-
         InfoBox(border = Amber.BonePale, gap = 5.u) {
-            Label("PUT IT SOMEWHERE AWKWARD", size = 6.5, color = Amber.BoneDim, tracking = 0.12)
-            Label(
-                "A back room, a basement, the far end of the house. Somewhere nobody passes by " +
-                    "accident. It is the only place residents can see who is where, so standing " +
-                    "at it costs them time and puts them alone in the dark.",
-                size = 7.0, color = Amber.BoneDim, lineHeight = 1.8,
-            )
+            Label(note.first, size = 6.5, color = Amber.BoneDim, tracking = 0.12)
+            Label(note.second, size = 7.0, color = Amber.BoneDim, lineHeight = 1.8)
         }
-
-        PushDown()
-        // Back to the plan, not into the room panel. The host has to choose WHICH room the
-        // terminal goes in — "somewhere awkward" is the whole point of it — and the plan is the
-        // only screen that can ask that question.
-        SlateButton("OPEN A ROOM", { go(ScreenId.Editor) }, verticalPadding = 11.u)
     }
 }
 
@@ -1002,6 +1219,10 @@ fun SaveNameScreen() {
             PreRow("FLOORS", "${editor.floorCount}")
             PreRow("ROOMS", "${editor.roomCount}")
             PreRow("MARKERS", "${editor.markerCount}")
+            // Capacity, on the last screen before the home is kept. Guidance and never a gate
+            // (D-127) — nothing on this screen refuses a save because of it, and the honest thing
+            // to tell a host with nine markers and ten players is that it will be crowded.
+            PreRow("HOSTS UP TO", "${editor.review.hosts}")
         }
         InfoBox(border = Amber.BonePale, padding = 0.u) {
             Label(
@@ -1059,6 +1280,14 @@ fun HomeDetailScreen() {
                         walkedInWords(home.roomCount, home.markerCount).uppercase() +
                         " OF WALKING",
                     size = 6.0, color = Amber.BoneDim, tracking = 0.1, lineHeight = 1.9,
+                )
+                // Capacity, on the screen a host is looking at when they decide to host with this
+                // home. Guidance and never a gate (D-127): HOST WITH THIS HOME below is not
+                // conditioned on it, and more people than this simply means some markers get
+                // visited twice (D-123).
+                Label(
+                    "HOSTS UP TO ${home.review.hosts}",
+                    size = 6.0, color = Amber.BoneInk, tracking = 0.14,
                 )
             }
         }
@@ -1256,10 +1485,14 @@ fun DeleteScreen() {
  * because a host should not have to know which of their settings has reached the house yet.
  */
 @Composable
-fun LobbyScreen() {
+fun LobbyScreen(vals: PanelVals) {
     val actions = LocalActions.current
     val lobby = LocalLobby.current
     val standing = lobby.standing
+    // The hosted home, and only on the phone hosting it. A client has never been sent this home's
+    // marker count and must not draw a number it would be guessing at — the guidance belongs to
+    // the one person who can do anything about it anyway.
+    val hosted = if (lobby.hosting) LocalHomes.current.open else null
     PrePage {
         Column(
             Modifier.fillMaxWidth().border(1.u, Amber.BoneFaint)
@@ -1282,6 +1515,15 @@ fun LobbyScreen() {
                 )
             }
             ResidentStrip(lobby.residents)
+            // Capacity guidance, and it is guidance (D-127) — LIGHTS OUT below is not conditioned
+            // on it and nothing here refuses anybody a seat. Absent entirely when the party fits,
+            // because a line that appeared only to say "this is fine" is a line a host learns to
+            // stop reading.
+            hosted?.let { home ->
+                vals.crowdedLine(standing.joined, home.review)?.let {
+                    Label(it, size = 5.5, color = Amber.BoneDim, tracking = 0.06, lineHeight = 1.7)
+                }
+            }
         }
 
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.u)) {

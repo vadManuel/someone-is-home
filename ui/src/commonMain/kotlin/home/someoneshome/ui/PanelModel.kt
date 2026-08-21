@@ -1,5 +1,6 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.HomeReview
 import home.someoneshome.model.MarkerShape
 import home.someoneshome.model.MarkerShapes
 import home.someoneshome.model.RoomKind
@@ -17,9 +18,15 @@ enum class ScreenId {
     // Cold start — light-field, because the house lights are still on.
     Boot, Perms, Join,
 
-    // Host setup — once per house, in the light.
-    Maps, Editor, RoomEdit, StairsWarn, MarkerSheet, ScanMarker, TermTaken, TermRemove,
-    NoTerminal, Floors, SaveName, HomeDetail, Delete, Lobby,
+    // Host setup — once per house, in the light. The two reserved cards each have the same pair
+    // of screens, because each raises the same two questions: this home already has one, and
+    // are you sure you want it to have none.
+    Maps, Editor, RoomEdit, StairsWarn, MarkerSheet, ScanMarker,
+    TermTaken, TermRemove, MeetTaken, MeetRemove,
+    // Was `NoTerminal`, when a missing terminal was the only thing that could hold a home back.
+    // D-127 made the gate three requirements, and a screen named after one of them would be a
+    // screen that tells a host about the terminal and says nothing about the other two.
+    ReviewNeeds, Floors, SaveName, HomeDetail, Delete, Lobby,
 
     // Arming — the host turns the lights off and the house does the rest.
     Secret, Armed, Notify, Reveal, RevealThread,
@@ -172,7 +179,8 @@ class PanelVals(val state: PanelState) {
         ScreenId.Boot, ScreenId.Join, ScreenId.Maps, ScreenId.Editor, ScreenId.SaveName,
         ScreenId.HomeDetail, ScreenId.Delete, ScreenId.Secret, ScreenId.RoomEdit,
         ScreenId.MarkerSheet, ScreenId.ScanMarker, ScreenId.StairsWarn, ScreenId.TermTaken,
-        ScreenId.TermRemove, ScreenId.Floors, ScreenId.NoTerminal, ScreenId.Perms,
+        ScreenId.TermRemove, ScreenId.MeetTaken, ScreenId.MeetRemove,
+        ScreenId.Floors, ScreenId.ReviewNeeds, ScreenId.Perms,
         ScreenId.Lobby, ScreenId.WinResidents,
         -> PanelMode.Pre
 
@@ -449,23 +457,61 @@ class PanelVals(val state: PanelState) {
     // ---- Host setup -------------------------------------------------------------------------
 
     /**
-     * No terminal, no playable home: the save button says so rather than failing later.
+     * The REVIEW HOME button, saying what the home is still short of rather than failing later.
      *
-     * **Asked of the plan rather than of a flag.** Whether this home has a terminal is a fact
-     * about what the host registered, and it lives in [HomeEditorModel] with the rest of the
-     * plan; a second copy of it on [PanelState] is a second copy that would one day disagree
-     * with the plan it describes. The button still *works* when it says NEEDS A TERMINAL — it
-     * goes to the screen that explains where a terminal belongs, because a control that goes
-     * quiet teaches nothing about why.
+     * **Asked of the map rather than of a flag** (D-127). What this home has registered is a fact
+     * about what the host scanned, and it lives in [HomeEditorModel] with the rest of the plan; a
+     * second copy of it on [PanelState] is a second copy that would one day disagree with the home
+     * it describes.
+     *
+     * The label names **how many** things are outstanding rather than which, because there can be
+     * three and a button is one line. The screen behind it names them all. The button still
+     * *works* when it is short — it goes to that screen — because a control that goes quiet
+     * teaches nothing about why.
      */
-    fun saveLabel(hasTerminal: Boolean): String =
-        if (hasTerminal) "REVIEW HOME" else "REVIEW HOME . NEEDS A TERMINAL"
+    fun saveLabel(review: HomeReview): String = when (review.missing.size) {
+        0 -> "REVIEW HOME"
+        1 -> "REVIEW HOME . 1 THING MISSING"
+        else -> "REVIEW HOME . ${review.missing.size} THINGS MISSING"
+    }
 
-    fun saveEdge(hasTerminal: Boolean): Color = if (hasTerminal) Amber.Slate else Amber.SlateDead
-    fun saveFill(hasTerminal: Boolean): Color =
-        if (hasTerminal) Amber.SlateFill else Color.Transparent
+    fun saveEdge(review: HomeReview): Color =
+        if (review.passes) Amber.Slate else Amber.SlateDead
 
-    fun saveInk(hasTerminal: Boolean): Color = if (hasTerminal) Amber.SlateInk else Amber.SlateDead
+    fun saveFill(review: HomeReview): Color =
+        if (review.passes) Amber.SlateFill else Color.Transparent
+
+    fun saveInk(review: HomeReview): Color =
+        if (review.passes) Amber.SlateInk else Amber.SlateDead
+
+    /**
+     * **HOSTS UP TO N** — capacity as guidance, never as a gate (D-127).
+     *
+     * Drawn wherever a host is looking at a whole home: at REVIEW, on the save screen, and on the
+     * home's own screen. `N = markers − 3`, the three being the Array Wipe circuit's stations
+     * (D-122), and a home short of the floor says so instead of advertising a number it cannot
+     * honour yet.
+     */
+    fun capacityLine(review: HomeReview): String =
+        if (review.hosts == 0) "HOSTS UP TO NOBODY YET"
+        else "HOSTS UP TO ${review.hosts}"
+
+    /**
+     * **The lobby's guidance line, or none — and it never blocks anything** (D-127).
+     *
+     * Null when the party fits, which is the common case and draws nothing. When more people have
+     * joined than the home has capacity for, the host is told what that means rather than told no:
+     * a card is a place and not a container (D-123), so the round is armed either way and some
+     * markers are simply visited twice. **The honest thing to tell a host with nine markers and
+     * ten players is that it will be crowded, not that it is forbidden.**
+     *
+     * D-125 is why this is a line and not a clamp: how many people are standing in the hall is a
+     * thing everybody there can see, and clamping a visible fact is condescension.
+     */
+    fun crowdedLine(joined: Int, review: HomeReview): String? =
+        if (joined <= review.hosts) null
+        else "$joined HERE, AND THIS HOME IS SIZED FOR ${review.hosts}. " +
+            "IT WILL BE CROWDED — SOME MARKERS GET VISITED TWICE."
 
     val markerState: String = if (state.markersOn) "ON" else "OFF"
     val markerEdge: Color = if (state.markersOn) Amber.Slate else Amber.BonePale

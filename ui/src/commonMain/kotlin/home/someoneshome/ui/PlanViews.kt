@@ -260,6 +260,7 @@ fun EditorLabels(
     held: String? = null,
     markers: (String) -> Int = { 0 },
     terminal: String? = null,
+    meeting: String? = null,
     cols: Int = HomeEditorModel.COLS,
     rows: Int = HomeEditorModel.ROWS,
 ) {
@@ -290,10 +291,12 @@ fun EditorLabels(
                     maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
                 if (count > 0) EditorChip("$count", ink, chipInk, round = false)
-                // The T is its own chip rather than replacing the count: a room can hold cards
-                // AND the terminal, and a chip that showed one of them would be the editor
-                // quietly hiding the other from the host who is about to go and find it.
+                // The T and the U are their own chips rather than replacing the count: a room can
+                // hold cards AND a reserved card — the meeting card in particular is expected to
+                // share (D-121) — and a chip that showed one of them would be the editor quietly
+                // hiding another from the host who is about to go and find it.
                 if (room.name == terminal) EditorChip("T", ink, chipInk, round = true)
+                if (room.name == meeting) EditorChip("U", ink, chipInk, round = true)
             }
         }
     }
@@ -315,13 +318,33 @@ private fun EditorChip(text: String, ink: Color, chipInk: Color, round: Boolean)
 /**
  * The terminal's mark: a `T` in a ring.
  *
- * **The T card is never an ordinary marker**, and it is drawn as the one circular token in a set
- * of 44 angular ones so that is obvious across a room and on a printed sheet.
+ * **The T card is never an ordinary marker**, and it is drawn as a circular token in a set of
+ * angular ones so that is obvious across a room and on a printed sheet.
  */
 @Composable
 fun TerminalToken(size: Dp, ink: Color, stroke: Dp = 1.u, textSize: Double = 10.0) {
+    ReservedToken("T", size, ink, stroke, textSize)
+}
+
+/**
+ * The meeting card's mark: a `U` in a ring.
+ *
+ * **A ring, like the terminal's, because the two are the same kind of thing** (D-121) — a card
+ * that is never an ordinary marker, printed with a letter, belonging to one room in the whole
+ * home. Drawing the meeting card as a marker glyph would put the one card a whole party walks to
+ * in the middle of a sheet of cards one person walks to, looking like any of them.
+ *
+ * The letter differs and nothing else does, which is also what the paper looks like.
+ */
+@Composable
+fun MeetingToken(size: Dp, ink: Color, stroke: Dp = 1.u, textSize: Double = 10.0) {
+    ReservedToken("U", size, ink, stroke, textSize)
+}
+
+@Composable
+private fun ReservedToken(letter: String, size: Dp, ink: Color, stroke: Dp, textSize: Double) {
     Box(Modifier.size(size).border(stroke, ink, CircleShape), contentAlignment = Alignment.Center) {
-        Label("T", size = textSize, color = ink)
+        Label(letter, size = textSize, color = ink)
     }
 }
 

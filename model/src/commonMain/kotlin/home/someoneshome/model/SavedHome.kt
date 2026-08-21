@@ -24,7 +24,7 @@ package home.someoneshome.model
  * [HousePlan] is a class with no `equals`, so a `data class` here would compare two identical
  * plans as different and every round-trip test would be asserting object identity while looking
  * like it asserted content. The comparison is spelled out below and is exactly what the file
- * holds: the name, the floors, the cards and the terminal.
+ * holds: the name, the floors, the cards, the terminal and the meeting card.
  */
 class SavedHome(
     val name: String,
@@ -38,6 +38,7 @@ class SavedHome(
             requirePainted(registration.room.name, "cards are registered in")
         }
         map.terminal?.let { requirePainted(it.room.name, "the terminal is in") }
+        map.meeting?.let { requirePainted(it.room.name, "the meeting card is in") }
     }
 
     val floorCount: Int get() = plan.floors.size
@@ -48,6 +49,12 @@ class SavedHome(
 
     /** The one room holding the T card, by name — what every screen about the terminal asks for. */
     val terminal: String? get() = map.terminal?.room?.name
+
+    /** The one room holding the meeting card, by name. Where meetings are called from (D-121). */
+    val meeting: String? get() = map.meeting?.room?.name
+
+    /** What this home passes and what it is missing (D-127) — the same answer REVIEW HOME gives. */
+    val review: HomeReview get() = HomeReview.of(markerCount, terminal != null, meeting != null)
 
     fun markersIn(room: String): List<MarkerShape> =
         map.inRoomNamed(room).map { it.card.shape }
@@ -74,16 +81,18 @@ class SavedHome(
         name == other.name &&
         plan.floors == other.plan.floors &&
         map.registrations == other.map.registrations &&
-        map.terminal == other.map.terminal
+        map.terminal == other.map.terminal &&
+        map.meeting == other.map.meeting
 
     override fun hashCode(): Int {
         var result = name.hashCode()
         result = 31 * result + plan.floors.hashCode()
         result = 31 * result + map.registrations.hashCode()
         result = 31 * result + map.terminal.hashCode()
+        result = 31 * result + map.meeting.hashCode()
         return result
     }
 
-    override fun toString(): String =
-        "SavedHome($name, ${floorCount}fl, ${roomCount}rm, ${markerCount}mk, terminal=$terminal)"
+    override fun toString(): String = "SavedHome($name, ${floorCount}fl, ${roomCount}rm, " +
+        "${markerCount}mk, terminal=$terminal, meeting=$meeting)"
 }

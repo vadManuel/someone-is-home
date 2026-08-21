@@ -73,11 +73,15 @@ class PanelActions(
      *
      * The scan itself is not here: a card arriving is the camera's event and not a tap, so it
      * enters through [FlowModel.cardScanned] rather than through anything a screen can do. These
-     * three are the taps that *answer* a scan — moving the terminal to the room the host is
-     * standing in, taking it out of the house altogether, and pulling one card back off the sheet.
+     * are the taps that *answer* a scan — moving a reserved card to the room the host is standing
+     * in, taking one out of the house altogether, and pulling one marker back off the sheet. The
+     * terminal and the meeting card get one pair each rather than one pair with a parameter,
+     * because a screen naming which card it means cannot be given the wrong one.
      */
     val moveTerminal: () -> Unit = {},
     val removeTerminal: () -> Unit = {},
+    val moveMeeting: () -> Unit = {},
+    val removeMeeting: () -> Unit = {},
     val forgetMarker: (MarkerId) -> Unit = {},
     /**
      * The saved homes.

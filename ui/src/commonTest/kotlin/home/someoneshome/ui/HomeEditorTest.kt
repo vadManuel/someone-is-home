@@ -1,11 +1,13 @@
 package home.someoneshome.ui
 
 import home.someoneshome.model.Cell
+import home.someoneshome.model.HomeReview
 import home.someoneshome.model.RoomKind
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -302,6 +304,100 @@ class HomeEditorTest {
         editor.deleteHeld()
         assertFalse(editor.hasTerminal)
         assertNull(editor.terminal)
+    }
+
+    @Test
+    fun deletingTheMeetingCardsRoomLeavesTheHomeWithoutOne() {
+        val editor = bungalow()
+        editor.open("LIVING")
+        editor.deleteHeld()
+        assertFalse(editor.hasMeeting)
+        assertNull(editor.meeting)
+    }
+
+    // ---- The REVIEW gate (D-127) -----------------------------------------------------------------
+
+    /**
+     * **The fixture passes**, which is the state every host-setup screen is drawn in.
+     *
+     * A fixture that failed its own gate would put the port's screens permanently on the refusal
+     * path, and nobody would notice the pass path had stopped being rendered.
+     */
+    @Test
+    fun theFixtureIsAHostableHome() {
+        val editor = bungalow()
+        assertTrue(editor.review.passes)
+        assertEquals(emptyList(), editor.review.missing)
+        assertEquals(9, editor.markerCount)
+        assertEquals(6, editor.review.hosts, "nine markers less the circuit's three stations")
+    }
+
+    /** Each requirement is a fact about the map, so taking one away names that one and no other. */
+    @Test
+    fun removingTheTerminalNamesTheTerminalAndNothingElse() {
+        val editor = bungalow()
+        editor.removeTerminal()
+        assertEquals(listOf(HomeReview.Missing.Terminal), editor.review.missing)
+    }
+
+    @Test
+    fun removingTheMeetingCardNamesTheMeetingCardAndNothingElse() {
+        val editor = bungalow()
+        editor.removeMeeting()
+        assertEquals(listOf(HomeReview.Missing.MeetingCard), editor.review.missing)
+    }
+
+    /**
+     * Eight is the floor, so the ninth card is the one that can go — and the tenth cannot.
+     *
+     * Written as the boundary rather than as "some markers" because the whole number is arithmetic
+     * (D-127: five seats plus three stations) and an off-by-one here is a home refused for a card
+     * it has.
+     */
+    @Test
+    fun theNinthMarkerMayGoAndTheEighthMayNot() {
+        val editor = bungalow()
+        val cards = editor.map.registrations.map { it.card.id }
+
+        editor.forgetMarker(cards[0])
+        assertEquals(8, editor.markerCount)
+        assertTrue(editor.review.passes, "eight markers is the floor and this home has eight")
+
+        editor.forgetMarker(cards[1])
+        val short = editor.review.missing.single()
+        assertIs<HomeReview.Missing.Markers>(short)
+        assertEquals(7, short.have)
+        assertEquals(1, short.short)
+    }
+
+    /** All three at once, in the order a host would go and fix them. */
+    @Test
+    fun aHomeWithNothingInItNamesEveryRequirement() {
+        val editor = bungalow()
+        editor.startNewHome("SOMEWHERE NEW")
+        assertEquals(
+            listOf(
+                HomeReview.Missing.Terminal,
+                HomeReview.Missing.MeetingCard,
+                HomeReview.Missing.Markers(have = 0, need = HomeReview.MARKERS),
+            ),
+            editor.review.missing,
+        )
+        assertEquals(0, editor.review.hosts)
+    }
+
+    /**
+     * **Capacity moves with the map and is never held as a number somebody set.**
+     *
+     * A cached verdict would be right about a home the host has since changed, and the one change
+     * it would be wrong about is the one they made to fix it.
+     */
+    @Test
+    fun capacityFollowsTheMarkersAsTheHostRegistersThem() {
+        val editor = bungalow()
+        assertEquals(6, editor.review.hosts)
+        editor.forgetMarker(editor.map.registrations.first().card.id)
+        assertEquals(5, editor.review.hosts)
     }
 
     // ---- Floors --------------------------------------------------------------------------------

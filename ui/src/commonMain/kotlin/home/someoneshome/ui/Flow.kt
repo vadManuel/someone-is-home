@@ -59,22 +59,24 @@ object ScreenGraph {
 
         // Host setup, in the light.
         ScreenId.Maps -> setOf(ScreenId.HomeDetail, ScreenId.Editor)
-        // REVIEW HOME reaches BOTH: the plan is reviewable once some room holds the terminal,
-        // and until then the same button goes to the screen that says where one belongs. The
+        // REVIEW HOME reaches BOTH: the plan is reviewable once the home passes D-127's gate,
+        // and until then the same button goes to the screen that names what it is short of. The
         // plan itself is not in here — a tap on it lands on whichever room is under it, which
         // is an actions-layer decision (see Flow.viaActions).
         ScreenId.Editor -> setOf(
-            ScreenId.Maps, ScreenId.Floors, ScreenId.SaveName, ScreenId.NoTerminal,
+            ScreenId.Maps, ScreenId.Floors, ScreenId.SaveName, ScreenId.ReviewNeeds,
         )
         ScreenId.RoomEdit -> setOf(ScreenId.MarkerSheet, ScreenId.Editor)
         ScreenId.StairsWarn -> setOf(ScreenId.RoomEdit, ScreenId.MarkerSheet)
-        ScreenId.MarkerSheet -> setOf(ScreenId.TermRemove, ScreenId.ScanMarker, ScreenId.RoomEdit)
+        ScreenId.MarkerSheet -> setOf(
+            ScreenId.TermRemove, ScreenId.MeetRemove, ScreenId.ScanMarker, ScreenId.RoomEdit,
+        )
         ScreenId.ScanMarker -> setOf(ScreenId.MarkerSheet)
-        ScreenId.TermTaken -> setOf(ScreenId.ScanMarker)
-        ScreenId.TermRemove -> setOf(ScreenId.MarkerSheet)
+        ScreenId.TermTaken, ScreenId.MeetTaken -> setOf(ScreenId.ScanMarker)
+        ScreenId.TermRemove, ScreenId.MeetRemove -> setOf(ScreenId.MarkerSheet)
         // OPEN A ROOM goes back to the plan, not into the room panel: the host has to choose
-        // WHICH room the terminal goes in, and the plan is the only screen that can ask that.
-        ScreenId.NoTerminal -> setOf(ScreenId.Editor)
+        // WHICH room each missing card goes in, and the plan is the only screen that can ask.
+        ScreenId.ReviewNeeds -> setOf(ScreenId.Editor)
         ScreenId.Floors -> setOf(ScreenId.Editor)
         // SAVE HOME is not in here: a refused save stays on this screen, so where it lands
         // depends on an answer the screen does not have (see Flow.viaActions).
@@ -329,16 +331,17 @@ object Flow {
     /**
      * **Host-setup screens the port cannot reach, recorded as the gap they are.**
      *
-     * `NoTerminal` used to be here beside `TermTaken`, for the same reason: `Editor`'s REVIEW
-     * HOME named `SaveName` unconditionally, so a save attempted with no terminal anywhere had
-     * nowhere to land. It is routed now — the button asks the plan whether any room holds the T
-     * card and goes to the explanation when none does.
+     * `ReviewNeeds` — `NoTerminal`, as it was called then — used to be here beside `TermTaken`,
+     * for the same reason: `Editor`'s REVIEW HOME named `SaveName` unconditionally, so a save
+     * attempted by a home that could not be hosted had nowhere to land. It is routed now — the
+     * button asks the home what it is short of and goes to the explanation when the answer is not
+     * "nothing".
      *
      * `TermTaken` was here too, for a gap of the same shape: `ScanMarker`'s DONE always goes to
      * `MarkerSheet`, and the refusal belongs to *scanning a second T card*, which had no scanner
      * behind it. It is routed now, and it is the actions layer's rather than a screen's — a scan
      * is not a tap, and where the host lands depends on what the map says about the card that was
-     * read (see [viaActions]).
+     * read (see [viaActions]). `MeetTaken` arrived already routed, by the same edge.
      *
      * **The list is empty, and that is the state to keep it in.** `FlowTest` fails if it grows
      * without anyone saying so: a screen nothing reaches is a screen drawn for nobody.
@@ -401,8 +404,8 @@ object Flow {
         // A save that landed, and a home the host held a finger on for two seconds.
         ScreenId.SaveName to setOf(ScreenId.HomeDetail),
         ScreenId.Delete to setOf(ScreenId.Maps),
-        // The T card, read in a room while the terminal is in another one.
-        ScreenId.ScanMarker to setOf(ScreenId.TermTaken),
+        // Either reserved card, read in a room while this home already has one somewhere else.
+        ScreenId.ScanMarker to setOf(ScreenId.TermTaken, ScreenId.MeetTaken),
         // BEGIN, opening whichever Subroutine this marker holds. Derived from the roster rather
         // than listed, so building a Subroutine cannot leave its screen an orphan.
         ScreenId.ScanCaught to Subroutine.built.mapNotNullTo(mutableSetOf()) { it.screen },
@@ -655,11 +658,15 @@ class FlowModel(
      * real build the scanner calls this, in a build without one the playtest deck does — and a
      * screen that could raise it would be a screen claiming to have seen a piece of paper.
      *
-     * **Every outcome ends somewhere the host can see.** Only one of them is a screen: the terminal
-     * already being in another room, because that is a decision and not a message. Everything else
-     * — registered, moved, a shape already taken, stairs, a card this build cannot read — is said
-     * on the viewfinder the host is already looking at, and the screen does not move. That is what
-     * KEEP SCANNING TO ADD MORE means: the flow does not walk away between cards.
+     * **Every outcome ends somewhere the host can see.** Only two of them are screens: a reserved
+     * card — the terminal's or the meeting card's — already being in another room, because that is
+     * a decision and not a message. Everything else — registered, moved, a shape already taken,
+     * stairs, a card this build cannot read — is said on the viewfinder the host is already looking
+     * at, and the screen does not move. That is what KEEP SCANNING TO ADD MORE means: the flow does
+     * not walk away between cards.
+     *
+     * The `when` is over the map's own answers and is exhaustive, so an outcome added later cannot
+     * arrive as a screen that does not move.
      */
     fun cardScanned(payload: String) {
         when (val read = CardPayload.decode(payload)) {
@@ -667,10 +674,15 @@ class FlowModel(
             // not a statement about a player, and the host is standing in a lit room holding it.
             is CardPayload.Result.Rejected -> editor.refuseScan(read.why)
 
-            is CardPayload.Result.Read ->
-                if (editor.register(read.card) is RegisterResult.TerminalTaken) {
-                    go(ScreenId.TermTaken)
-                }
+            is CardPayload.Result.Read -> when (editor.register(read.card)) {
+                is RegisterResult.TerminalTaken -> go(ScreenId.TermTaken)
+                is RegisterResult.MeetingTaken -> go(ScreenId.MeetTaken)
+                // Said on the viewfinder, which the host is already looking at.
+                is RegisterResult.Registered, is RegisterResult.Moved,
+                is RegisterResult.ShapeAlreadyRegistered, is RegisterResult.StairsHoldNothing,
+                null,
+                -> Unit
+            }
         }
     }
 
@@ -680,9 +692,21 @@ class FlowModel(
         go(ScreenId.ScanMarker)
     }
 
+    /** MOVE THE MEETING CARD TO THIS ROOM, then back to the viewfinder to carry on. */
+    fun moveMeeting() {
+        editor.moveMeeting()
+        go(ScreenId.ScanMarker)
+    }
+
     /** REMOVE IT: the T card belongs to no room, and this home cannot be saved until one does. */
     fun removeTerminal() {
         editor.removeTerminal()
+        go(ScreenId.MarkerSheet)
+    }
+
+    /** REMOVE IT: the meeting card belongs to no room, and there is nowhere to call a meeting. */
+    fun removeMeeting() {
+        editor.removeMeeting()
         go(ScreenId.MarkerSheet)
     }
 
@@ -912,6 +936,8 @@ class FlowModel(
         addFloor = { editor.addFloor() },
         moveTerminal = ::moveTerminal,
         removeTerminal = ::removeTerminal,
+        moveMeeting = ::moveMeeting,
+        removeMeeting = ::removeMeeting,
         forgetMarker = editor::forgetMarker,
         openSavedHome = ::openSavedHome,
         mapNewHome = ::mapNewHome,

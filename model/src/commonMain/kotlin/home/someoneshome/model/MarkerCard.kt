@@ -29,6 +29,18 @@ data class MarkerCard(val version: Int, val shape: MarkerShape, val id: MarkerId
      * and there is nowhere else for a card to enter a map.
      */
     val isTerminal: Boolean get() = shape.id == MarkerShapes.TERMINAL.id
+
+    /**
+     * Whether this is the meeting card (D-121).
+     *
+     * The same fact about paper that [isTerminal] is, asked the same way and for the same reason:
+     * a meeting is called by standing at this card, so the card is a place, and a place that could
+     * be filed as an ordinary marker by a path that forgot to look is a house with nowhere to meet.
+     */
+    val isMeeting: Boolean get() = shape.id == MarkerShapes.MEETING.id
+
+    /** Neither reserved card — what an ordinary marker is, said once. */
+    val isOrdinary: Boolean get() = !isTerminal && !isMeeting
 }
 
 /** Why a scanned payload could not become a card. Every case is a fact about a piece of paper. */

@@ -18,8 +18,8 @@ class MalformedSavedHomes(val line: Int, val detail: String) :
  * the middle of this file, and read back by them. Restating either grammar here would be a second
  * description of the same layout, and the one that drifted would be the one nobody had a test
  * looking at. It also keeps the three version numbers answering their own questions:
- * `house-plan/1` is how a plan is laid out, `house-map/2` is how registered cards are, and
- * `saved-homes/2` is how a list of homes is.
+ * `house-plan/1` is how a plan is laid out, `house-map/3` is how registered cards are, and
+ * `saved-homes/3` is how a list of homes is.
  *
  * **Both embedded formats use an `R` row and they do not mean the same thing** — a painted room in
  * one, a registered card in the other. A row belongs to whichever section is open, and a section
@@ -45,18 +45,27 @@ class MalformedSavedHomes(val line: Int, val detail: String) :
 object SavedHomesText {
 
     /**
-     * Version 2: the cards are cards.
+     * Version 3: the home has a meeting card.
      *
      * Version 1 stored a room's contents as a list of shape ids and the terminal as a room name,
      * because registration had no camera behind it and there were no printed ids to write down.
      * A v1 file describes markers that cannot be scanned, and there is nothing honest to turn one
-     * into — a fabricated id is a card the host does not have — so it is refused rather than
-     * migrated, and the refusal says so.
+     * into — a fabricated id is a card the host does not have.
+     *
+     * Version 2 fixed that and knew one reserved card. **A v2 home has no meeting card**, and D-127
+     * makes one a condition of hosting, so a v2 file read under this version would come back as a
+     * home that passes nothing — silently short of the one card the host has never printed. There
+     * is no honest way to invent it either: the meeting card is a place in a real house and only
+     * the host knows where.
+     *
+     * **Both are refused rather than migrated, and each refusal names what changed.** Loud, at the
+     * moment the file is opened, in the light.
      */
-    const val HEADER: String = "someone-is-home/saved-homes/2"
+    const val HEADER: String = "someone-is-home/saved-homes/3"
 
-    /** What a v1 file's header says, so the refusal can name what changed rather than shrug. */
+    /** What the older headers say, so a refusal can name what changed rather than shrug. */
     private const val HEADER_V1 = "someone-is-home/saved-homes/1"
+    private const val HEADER_V2 = "someone-is-home/saved-homes/2"
 
     private const val HOME_ROW = "H "
 
@@ -81,13 +90,22 @@ object SavedHomesText {
         if (lines.isEmpty()) throw MalformedSavedHomes(0, "empty")
         if (lines[0] != HEADER) {
             val was = lines[0]
-            val detail = if (was == HEADER_V1) {
-                "these homes were saved before markers carried the id printed on the card. " +
-                    "There is no honest way to read them under '$HEADER' — an invented id is a " +
-                    "card the host does not have — so they are refused rather than half-read."
-            } else {
-                "expected header '$HEADER', got '$was'. Homes written by another format " +
-                    "version cannot be read under this one."
+            val detail = when (was) {
+                HEADER_V1 ->
+                    "these homes were saved before markers carried the id printed on the card. " +
+                        "There is no honest way to read them under '$HEADER' — an invented id " +
+                        "is a card the host does not have — so they are refused rather than " +
+                        "half-read."
+
+                HEADER_V2 ->
+                    "these homes were saved before the meeting card. There is no honest way to " +
+                        "read them under '$HEADER' — where a meeting is called is a place in a " +
+                        "real house and only the host knows it — so they are refused rather " +
+                        "than read back as homes that cannot be hosted."
+
+                else ->
+                    "expected header '$HEADER', got '$was'. Homes written by another format " +
+                        "version cannot be read under this one."
             }
             throw MalformedSavedHomes(1, detail)
         }
@@ -193,6 +211,7 @@ object SavedHomesText {
                 requirePainted(house, registration, "cards are registered in")
             }
             cards.terminal?.let { requirePainted(house, it, "the terminal is in") }
+            cards.meeting?.let { requirePainted(house, it, "the meeting card is in") }
             return SavedHome(name = name, plan = house, map = cards)
         }
 

@@ -59,15 +59,34 @@ class SeededWalkTest {
         assertEquals(ScreenId.ScanMarker, model.state.screen)
     }
 
-    /** No card in the deck may collide with the sample home, or the walk starts on a refusal. */
+    /**
+     * No card in the deck may collide with the sample home, or the walk starts on a refusal.
+     *
+     * Only the ordinary cards: the two reserved shapes are what is printed on the paper (D-120,
+     * D-121), so a deck that avoided them to dodge a collision would be demonstrating an ordinary
+     * marker where the flow expects a terminal or a meeting card.
+     */
     @Test
     fun noOrdinaryCardInTheDeckClashesWithTheSampleHome() {
         val held = FlowModel().editor.map.registrations.map { it.card.shape.id }.toSet()
-        val clashing = SeededCardScanner.DECK.filterNot { it.isTerminal }.filter { it.shape.id in held }
+        val clashing = SeededCardScanner.DECK.filter { it.isOrdinary }.filter { it.shape.id in held }
         assertEquals(
             emptyList(), clashing.map { it.id.value },
             "these cards are refused before they can demonstrate anything, against $held",
         )
+    }
+
+    /**
+     * **The deck carries both reserved cards**, so a playtest walk demonstrates both refusals.
+     *
+     * The lesson this file exists for, applied to the new card: a deck that had gained the meeting
+     * card and not its duplicate would walk the placement and never the refusal, and the refusal
+     * is the half a host actually meets.
+     */
+    @Test
+    fun theDeckCarriesBothReservedCardsAndASecondOfEach() {
+        assertEquals(2, SeededCardScanner.DECK.count { it.isTerminal })
+        assertEquals(2, SeededCardScanner.DECK.count { it.isMeeting })
     }
 
     /**
@@ -94,6 +113,22 @@ class SeededWalkTest {
 
         assertEquals(ScreenId.TermTaken, model.state.screen)
         assertEquals("HALL", model.editor.terminal)
+    }
+
+    /**
+     * The sixth is the meeting card, and the home already has one in LIVING.
+     *
+     * Dealt as the sixth rather than reached by its own route, because what this file is about is
+     * the deck as a phone deals it: a card that only demonstrates something when a test hands it
+     * over directly is a card no playtest walk would ever reach.
+     */
+    @Test
+    fun theMeetingCardWalksOntoItsOwnRefusalScreen() {
+        val model = walking()
+        deal(model, 6)
+
+        assertEquals(ScreenId.MeetTaken, model.state.screen)
+        assertEquals("LIVING", model.editor.meeting)
     }
 
     /** Whole laps, so the deck can be walked on a phone without it quietly running out. */

@@ -98,12 +98,14 @@ class SeededCardScanner(cards: List<MarkerCard> = DECK) : CardScanner {
     companion object {
 
         /**
-         * **Six cards, chosen so that walking the deck walks every refusal.**
+         * **Eight cards, chosen so that walking the deck walks every refusal.**
          *
          * In order: two ordinary cards that simply register; a third card whose shape one of them
          * already carries, which D-086 refuses; the card marked T, which places the terminal; a
-         * *second* T card, which one home has no room for; and one more ordinary card. Then it
-         * comes round again, and every id on the second lap is one the map already holds.
+         * *second* T card, which one home has no room for; the meeting card, which places the
+         * meeting area; a *second* meeting card, which one home has no room for either; and one
+         * more ordinary card. Then it comes round again, and every id on the second lap is one the
+         * map already holds.
          *
          * The ids are the seven characters a printed card carries and are readable on purpose —
          * a playtest phone showing `SEED001` is a phone whose scan can be followed by somebody
@@ -114,15 +116,22 @@ class SeededCardScanner(cards: List<MarkerCard> = DECK) : CardScanner {
          * before it could demonstrate anything: a deck whose first outcome is a refusal proves the
          * refusal and nothing else. The one collision here is between two cards of the deck's own,
          * so the refusal happens because of the walk rather than because of the fixture.
+         *
+         * The two reserved shapes are exempt from that rule and must not be swapped for ones the
+         * fixture lacks: `t_shape` and `u_shape` are what is printed on the paper (D-120, D-121),
+         * so a deck carrying anything else there would demonstrate an ordinary marker.
          */
         val DECK: List<MarkerCard> = listOf(
             seeded("bowtie", "SEED001"),
             seeded("lightning", "SEED002"),
             // Same shape as SEED001, different card. Two live cards may never share a shape.
             seeded("bowtie", "SEED003"),
-            seeded("t_shape", "SEEDT01"),
+            seeded(MarkerShapes.TERMINAL.id, "SEEDT01"),
             // A second card marked T. One home, one terminal.
-            seeded("t_shape", "SEEDT02"),
+            seeded(MarkerShapes.TERMINAL.id, "SEEDT02"),
+            seeded(MarkerShapes.MEETING.id, "SEEDU01"),
+            // A second meeting card. One home, one meeting card.
+            seeded(MarkerShapes.MEETING.id, "SEEDU02"),
             seeded("chevron", "SEED004"),
         )
 

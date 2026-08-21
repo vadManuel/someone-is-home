@@ -34,6 +34,9 @@ class RegistrationTest {
     private fun terminalCard(id: String = "SEEDT01") =
         MarkerCard(CardPayload.VERSION, MarkerShapes.TERMINAL, MarkerId(id))
 
+    private fun meetingCard(id: String = "SEEDU01") =
+        MarkerCard(CardPayload.VERSION, MarkerShapes.MEETING, MarkerId(id))
+
     /** The host, in a room, with the phone open on the viewfinder. */
     private fun scanning(room: String = "KITCHEN"): FlowModel {
         val model = FlowModel(PanelState(screen = ScreenId.ScanMarker))
@@ -213,6 +216,95 @@ class RegistrationTest {
         assertNull(model.editor.terminal)
         assertTrue(!model.editor.hasTerminal)
         assertEquals(ScreenId.MarkerSheet, model.state.screen)
+    }
+
+    // ---- The meeting card ----------------------------------------------------------------------
+
+    @Test
+    fun theMeetingCardPlacesTheMeetingAreaAndIsNotAMarker() {
+        val model = scanning()
+        model.removeMeeting()
+        model.editor.open("KITCHEN")
+        val before = model.editor.markerCount
+
+        model.scan(meetingCard())
+
+        assertEquals("KITCHEN", model.editor.meeting)
+        assertTrue(model.editor.hasMeeting)
+        assertEquals(before, model.editor.markerCount, "the U card was filed as an ordinary marker")
+        val landed = assertIs<ScanOutcome.Landed>(model.editor.lastScan)
+        assertTrue(landed.isMeeting)
+        assertTrue(!landed.isTerminal, "the meeting card was read as the terminal")
+    }
+
+    /**
+     * **One home, one meeting card**, and the host is asked rather than overruled.
+     *
+     * A second is a second place the house would take a meeting from, and half the party would
+     * walk to the wrong one in the dark.
+     */
+    @Test
+    fun aSecondMeetingCardAsksInsteadOfMovingIt() {
+        val model = scanning()
+        assertEquals("LIVING", model.editor.meeting)
+
+        model.scan(meetingCard())
+
+        assertEquals(ScreenId.MeetTaken, model.state.screen)
+        assertEquals("LIVING", model.editor.meeting, "it moved before the host answered")
+    }
+
+    /** KEEP IT IN LIVING: the card in the host's hand is simply not the one that places it. */
+    @Test
+    fun keepingTheMeetingCardWhereItIsChangesNothing() {
+        val model = scanning()
+        model.scan(meetingCard())
+        model.go(ScreenId.ScanMarker)
+
+        assertEquals("LIVING", model.editor.meeting)
+    }
+
+    @Test
+    fun movingTheMeetingCardRebindsItAndLeavesTheOldRoomWithout() {
+        val model = scanning()
+        model.scan(meetingCard())
+        model.moveMeeting()
+
+        assertEquals("KITCHEN", model.editor.meeting)
+        assertEquals(ScreenId.ScanMarker, model.state.screen)
+        val landed = assertIs<ScanOutcome.Landed>(model.editor.lastScan)
+        assertEquals("LIVING", landed.from, "the host was not told which room lost it")
+    }
+
+    @Test
+    fun removingTheMeetingCardLeavesTheHomeUnsaveable() {
+        val model = scanning()
+        model.removeMeeting()
+
+        assertNull(model.editor.meeting)
+        assertTrue(!model.editor.hasMeeting)
+        assertTrue(!model.editor.review.passes)
+        assertEquals(ScreenId.MarkerSheet, model.state.screen)
+    }
+
+    /**
+     * **A shape is reserved, a room is not** (D-121).
+     *
+     * An ordinary card registered in the meeting card's room is the expected case — the meeting
+     * area is a room people already gather in — and the refusal that would come instead is one a
+     * host would meet in the busiest room of the house.
+     */
+    @Test
+    fun anOrdinaryCardMayBeRegisteredInTheMeetingCardsRoom() {
+        val model = scanning("LIVING")
+        assertEquals("LIVING", model.editor.meeting)
+        val before = model.editor.markersIn("LIVING").size
+
+        model.scan(card("bowtie", "CARD-09"))
+
+        assertIs<ScanOutcome.Landed>(model.editor.lastScan)
+        assertEquals(before + 1, model.editor.markersIn("LIVING").size)
+        assertEquals("LIVING", model.editor.meeting, "the marker displaced the meeting card")
     }
 
     // ---- Taking one back off ------------------------------------------------------------------
