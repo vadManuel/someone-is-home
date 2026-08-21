@@ -1,10 +1,30 @@
 package home.someoneshome.model
 
-/** A room in the house, named by the host during the setup walk. */
-data class Room(val name: String)
+/**
+ * What a mapped space is. The complete list — the design deleted "passage" on purpose (D-098):
+ * the Insider's route between rooms is Override, and Override must never be drawable on a map.
+ */
+enum class RoomKind { Room, Stairs }
 
-/** One card, bound to one room. No card is meaningful until it has one of these (D-069). */
-data class Registration(val card: MarkerCard, val room: Room)
+/** A room in the house, named by the host during the setup walk. */
+data class Room(val name: String, val kind: RoomKind = RoomKind.Room)
+
+/**
+ * One card, bound to one room. No card is meaningful until it has one of these (D-069).
+ *
+ * **A registration into stairs cannot exist** (D-099). Stairs hold nothing — that is what makes
+ * the stairwell invisible to the Terminal and therefore the natural hiding place, and it holds
+ * by construction rather than by a check some flow remembers to run: [HouseMap.register] refuses
+ * politely first, and this `require` is the last-ditch guarantee for every other constructor
+ * path, [HouseMap.of] included. Loud is correct here — this is host-side setup, in the light.
+ */
+data class Registration(val card: MarkerCard, val room: Room) {
+    init {
+        require(room.kind != RoomKind.Stairs) {
+            "a card cannot be registered into stairs ('" + room.name + "') — stairs hold nothing"
+        }
+    }
+}
 
 /** What happened when a card was offered to the map. */
 sealed interface RegisterResult {
@@ -12,6 +32,14 @@ sealed interface RegisterResult {
 
     /** The same id, now in a different room. The host moved a card; that is allowed. */
     data class Moved(val map: HouseMap, val from: Room) : RegisterResult
+
+    /**
+     * The room is stairs, and stairs hold nothing (D-099).
+     *
+     * Refused with a distinct kind so the scan flow can tell the host while the card is still in
+     * their hand — the same shape every other refusal in this project takes.
+     */
+    data class StairsHoldNothing(val room: Room) : RegisterResult
 
     /**
      * A different card already carries this shape.
@@ -71,6 +99,7 @@ class HouseMap private constructor(val registrations: List<Registration>) {
      * [RegisterResult.ShapeAlreadyRegistered].
      */
     fun register(card: MarkerCard, room: Room): RegisterResult {
+        if (room.kind == RoomKind.Stairs) return RegisterResult.StairsHoldNothing(room)
         val existingShape = registrations.firstOrNull {
             it.card.shape.id == card.shape.id && it.card.id != card.id
         }

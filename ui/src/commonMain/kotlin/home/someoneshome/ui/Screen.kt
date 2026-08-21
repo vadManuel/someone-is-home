@@ -25,7 +25,7 @@ fun Screen(state: PanelState, actions: PanelActions = PanelActions()) {
                 ScreenId.Maps -> MapsScreen()
                 ScreenId.Editor -> EditorScreen(vals)
                 ScreenId.RoomEdit -> RoomEditScreen(vals)
-                ScreenId.PassageWarn -> PassageWarnScreen(vals)
+                ScreenId.StairsWarn -> StairsWarnScreen(vals)
                 ScreenId.MarkerSheet -> MarkerSheetScreen(vals)
                 ScreenId.ScanMarker -> ScanMarkerScreen(vals)
                 ScreenId.TermTaken -> TermTakenScreen()

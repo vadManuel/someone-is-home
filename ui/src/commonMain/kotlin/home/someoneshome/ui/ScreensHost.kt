@@ -305,7 +305,7 @@ private fun TypeChip(
  * paper, so a number would be the wrong thing to give them.
  */
 @Composable
-fun PassageWarnScreen(vals: PanelVals) {
+fun StairsWarnScreen(vals: PanelVals) {
     val go = navigator()
     val actions = LocalActions.current
     PrePage(gap = 7) {
@@ -344,7 +344,7 @@ fun PassageWarnScreen(vals: PanelVals) {
             PanelButton(
                 "UNREGISTER AND CONTINUE",
                 border = Amber.BonePale, ink = Amber.BoneDim, tracking = 0.14,
-                onClick = { actions.confirmPassage() },
+                onClick = { actions.confirmStairs() },
             )
         }
     }

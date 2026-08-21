@@ -185,3 +185,32 @@ class HouseMapTest {
         assertEquals(6, failure.line, "four registrations plus a header, then the junk row")
     }
 }
+
+class StairsHoldNothingTest {
+
+    private fun card(shapeId: String, id: String) =
+        MarkerCard(CardPayload.VERSION, MarkerShapes.require(shapeId), MarkerId(id))
+
+    @Test
+    fun registeringIntoStairsIsRefusedWithItsOwnKind() {
+        val stairs = Room("LANDING WELL", RoomKind.Stairs)
+        val result = HouseMap.EMPTY.register(card("diamond", "AAAAAAA"), stairs)
+        assertIs<RegisterResult.StairsHoldNothing>(result)
+        assertEquals(stairs, result.room)
+    }
+
+    @Test
+    fun aStairsRegistrationCannotEvenBeConstructed() {
+        // The last-ditch guarantee behind the polite refusal: HouseMap.of() rebuilds from
+        // storage, and a hand-built list must not be able to smuggle a card into stairs.
+        assertFailsWith<IllegalArgumentException> {
+            Registration(card("ring", "BBBBBBB"), Room("LANDING WELL", RoomKind.Stairs))
+        }
+    }
+
+    @Test
+    fun ordinaryRoomsStillRegister() {
+        val result = HouseMap.EMPTY.register(card("cross", "CCCCCCC"), Room("GARAGE"))
+        assertIs<RegisterResult.Registered>(result)
+    }
+}
