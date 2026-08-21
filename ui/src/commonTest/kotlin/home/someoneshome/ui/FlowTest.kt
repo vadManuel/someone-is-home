@@ -447,15 +447,84 @@ class FlowTest {
         arm.lightsOut()
         assertEquals(Flow.viaActions.getValue(ScreenId.Lobby), setOf(arm.state.screen))
 
+        // Both banners, swiped up (D-105). A drag rather than a tap, so no rendering test that
+        // fires click actions can reach it, and where it lands is the screen the notification
+        // arrived over rather than anything the banner itself names.
+        val text = FlowModel(PanelState(screen = ScreenId.Notify))
+        text.dismissNotification()
+        assertEquals(Flow.viaActions.getValue(ScreenId.Notify), setOf(text.state.screen))
+
+        val egress = FlowModel(PanelState(screen = ScreenId.Banner))
+        egress.dismissNotification()
+        assertEquals(Flow.viaActions.getValue(ScreenId.Banner), setOf(egress.state.screen))
+
         assertEquals(
             setOf(
                 ScreenId.Editor, ScreenId.RoomEdit, ScreenId.StairsWarn,
                 ScreenId.SaveName, ScreenId.Delete, ScreenId.ScanMarker,
                 ScreenId.Secret, ScreenId.Lobby,
+                ScreenId.Notify, ScreenId.Banner,
             ),
             Flow.viaActions.keys,
             "a new action edge was declared and nothing here walks it",
         )
+    }
+
+    /**
+     * **A swipe on a screen with no banner moves nothing.**
+     *
+     * The fail-closed direction, and not a theoretical one: the gesture is a vertical drag on a
+     * springboard whose two banner screens draw the *same* springboard underneath. A dismissal
+     * that navigated regardless of whether anything was up would send a player who flicked at a
+     * tile back to page 1 from wherever they were, and it would be blamed on the touchscreen.
+     */
+    @Test
+    fun swipingWhereThereIsNoBannerDoesNothing() {
+        for (id in ScreenId.entries) {
+            if (Notifications.onScreen(id) != null) continue
+            val model = FlowModel(PanelState(screen = id))
+            model.dismissNotification()
+            assertEquals(id, model.state.screen, "$id has no banner and a swipe moved the phone")
+        }
+    }
+
+    /**
+     * **The three kinds, and what each one leaves behind (D-105).**
+     *
+     * The persistence claim is a field rather than a sentence in a comment precisely so it can be
+     * checked, and this is half of the check: that the screen a kind names is a real screen, and
+     * that exactly one kind names nothing. The other half is `NotificationsTest`, which renders
+     * every screen in the game and looks for the words.
+     */
+    @Test
+    fun exactlyOneKindOfNotificationSurvivesNowhere() {
+        val nowhere = NotificationKind.entries.filter { it.heldBy == null }
+        assertEquals(
+            listOf(NotificationKind.Notice), nowhere,
+            "a house notice is the one thing shown once and held nowhere",
+        )
+        for (kind in NotificationKind.entries - NotificationKind.Notice) {
+            assertNotNull(kind.heldBy, "$kind claims to persist and names nowhere it persists in")
+        }
+        // Every kind is a notification somebody can actually receive. A kind with no notification
+        // is a persistence rule about nothing, and it would pass every test above.
+        assertEquals(
+            NotificationKind.entries.toSet(), Notifications.all.map { it.kind }.toSet(),
+            "a kind was declared and nothing was written for it",
+        )
+
+        // WHERE A NOTIFICATION OPENS IS WHERE IT SURVIVES. Not a coincidence of the three that
+        // exist: the reason to tap a banner rather than swipe it away is to go to the thing it is
+        // about, and the thing it is about is exactly what is still there afterwards. A banner
+        // that opened somewhere it does not persist would leave a player who followed it standing
+        // on a screen with no trace of what they came to look at.
+        for (notification in Notifications.all) {
+            assertEquals(
+                notification.kind.heldBy, notification.opens,
+                "the ${notification.kind} notification opens ${notification.opens} and survives " +
+                    "into ${notification.kind.heldBy}",
+            )
+        }
     }
 
     // ---- The saved homes ---------------------------------------------------------------------

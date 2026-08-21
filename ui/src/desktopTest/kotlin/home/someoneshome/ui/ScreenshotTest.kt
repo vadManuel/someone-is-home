@@ -6,10 +6,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.unit.dp
@@ -115,6 +118,49 @@ class ScreenshotTest {
             }
         }
         println("wrote ${states.size} lobby states to ${out.absolutePath}")
+    }
+
+    /**
+     * **A banner on its way out — the other state no [ScreenId] can name.**
+     *
+     * `Notify` is the springboard with a banner at rest on it, and that is as far as a screen id
+     * goes. The gesture in between is a position, and a position is not a screen: how far the
+     * banner has travelled, how much of it has gone under the status row, and what the panel
+     * behind it looks like at [NOTIFIED_DIM] while it goes.
+     *
+     * Three frames, rendered against a phone with a notch so the clipping boundary is where the
+     * hardware really puts it. A viewer, not an assertion — `NotificationInputTest` is where the
+     * assertions are.
+     */
+    @OptIn(ExperimentalTestApi::class, ExperimentalComposeUiApi::class)
+    @Test
+    fun renderABannerBeingSwipedAway() {
+        val insets = PanelInsets(top = 45.dp, bottom = 25.dp, side = 12.dp)
+        // At rest, a third of the way up, and far enough that it is going.
+        val travel = listOf("banner-rest" to 0f, "banner-swiping" to 40f, "banner-going" to 90f)
+        for ((name, lift) in travel) {
+            runDesktopComposeUiTest(width = 600, height = 1300) {
+                val model = FlowModel(PanelState(screen = ScreenId.Notify))
+                setContent {
+                    Box(Modifier.fillMaxSize().background(Color.Black)) {
+                        DeviceCanvas(insets = insets) {
+                            Screen(model.state, model.actions(), model.editor, model.homes, model.lobby)
+                        }
+                    }
+                }
+                if (lift > 0f) {
+                    onNode(hasText(Notifications.text.body, substring = true)).performTouchInput {
+                        down(center)
+                        repeat(6) { moveBy(Offset(0f, -lift / 6)) }
+                    }
+                    waitForIdle()
+                }
+                ImageIO.write(
+                    onRoot().captureToImage().toAwtImage(), "png", File(out, "$name.png"),
+                )
+            }
+        }
+        println("wrote ${travel.size} banner frames to ${out.absolutePath}")
     }
 
     private fun lobbyOf(joined: Int, linesIn: Int, hosting: Boolean): LobbyModel {

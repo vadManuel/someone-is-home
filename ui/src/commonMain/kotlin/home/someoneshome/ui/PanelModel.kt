@@ -281,9 +281,13 @@ class PanelVals(val state: PanelState) {
         }
         // Identical sender, time and preview for both roles: the thread must be OPENED to read.
         // The row itself cannot be a tell to anyone glancing at a neighbour's screen.
+        //
+        // THE PREVIEW IS THE BANNER'S OWN WORDS, not a second copy of them. This row is where the
+        // text SURVIVES its notification -- NotificationKind.Text says Messages holds it -- so the
+        // two saying different things would make that claim false while both looked right.
         listOf(
             InboxRow(
-                "HOUSE", "21:02", "Regarding this evening. Please read.",
+                Notifications.text.from, "21:02", Notifications.text.body,
                 Amber.Dim, Amber.Bright, Amber.Bright,
             )
         ) + rest

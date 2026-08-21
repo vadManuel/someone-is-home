@@ -161,6 +161,12 @@ fun AssembleScreen() {
  * This is rule 6 in its constructive form: a dead radio made a living player invisible, and the
  * house announces the gap rather than letting it look like evidence. It reports an *interval of
  * missing data*, never a person's behaviour.
+ *
+ * **The words are [Notifications.notice]'s, and this screen is the only place they are drawn.**
+ * That is D-105's *stored nowhere* made structural rather than promised: a notice belongs to the
+ * meeting it arrives at, so there is no thread holding it, no list it lands in, and nothing on any
+ * other screen that could still be showing it an hour later. `NotificationsTest` renders all 56
+ * screens in both roles and fails the moment a second one has these words on it.
  */
 @Composable
 fun NoticeScreen() {
@@ -173,9 +179,8 @@ fun NoticeScreen() {
         InfoBox(border = Amber.Bright, padding = 8.u, gap = 5.u) {
             Label("NOTICE 1 OF 1", size = 6.0, color = Amber.Dim, tracking = 0.14)
             Label(
-                "Resident MARCUS was unreachable 21:04–21:07. Occupancy data for this interval " +
-                    "is incomplete.",
-                size = 8.5, color = Amber.Bright, lineHeight = 1.7,
+                Notifications.notice.body,
+                size = Notifications.notice.bodySize, color = Amber.Bright, lineHeight = 1.7,
             )
         }
         Box(Modifier.weight(1f))

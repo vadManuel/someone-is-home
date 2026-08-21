@@ -291,7 +291,7 @@ object Flow {
      * naming a target.
      *
      * Almost every control in the port says where it goes — `goes(Editor)`, `go(Home)` — and
-     * `ScreenGraph` reads those straight off the screens. Six do not:
+     * `ScreenGraph` reads those straight off the screens. These do not:
      *
      * - **The plan itself.** A tap on the grid opens the room under it, and on most of a grid
      *   there is no room, so it opens nothing. A screen cannot name that target because the
@@ -319,6 +319,10 @@ object Flow {
      *   given render is not a fact about the screen — which is the definition of an edge that
      *   belongs here. It is also the host's alone; a client's lobby draws a line of text where
      *   the button would be.
+     * - **A banner, swiped up.** D-105's whole gesture vocabulary, and a drag rather than a tap,
+     *   so it publishes no click action for `ScreenGraphTest` to fire. Where it lands is the
+     *   screen the notification arrived over rather than anything the banner names — the banner
+     *   does not know what is behind it, and in the port both arrive over the springboard.
      *
      * Without these, five screens would read as orphans — drawn and reachable by nothing — while
      * in fact being one gesture away. Written down here rather than smuggled into [ScreenGraph],
@@ -338,6 +342,9 @@ object Flow {
         // A line that was real, handed over; and the lights going out once every line is in.
         ScreenId.Secret to setOf(ScreenId.Lobby),
         ScreenId.Lobby to setOf(ScreenId.Armed),
+        // The two banners, swiped up. Both arrive over the springboard, so both leave it behind.
+        ScreenId.Notify to setOf(ScreenId.Home),
+        ScreenId.Banner to setOf(ScreenId.Home),
     )
 }
 
@@ -642,6 +649,30 @@ class FlowModel(
         push(ScreenId.Armed)
     }
 
+    // ---- Notifications -----------------------------------------------------------------------
+
+    /**
+     * **A banner, swiped up (D-105).**
+     *
+     * What is left behind is the screen the notification arrived over, and in the port both
+     * banners arrive over the springboard — `Notify` and `Banner` *are* `Home` with something on
+     * top, which is why both draw [HomeScreen]. So a dismissal is a move to `Home`, and the panel
+     * comes back up out of [NOTIFIED_DIM] because there is no longer an overlay to dim behind.
+     *
+     * **Nothing is written down.** Not which notification it was, not that it was dismissed, not
+     * when. There is no read concept and this is the method that would grow one first: a `seen`
+     * set here is three months from being a count on a tile. What survives a notification is the
+     * surface that already held the thing — Messages, the Egress widget — and a house notice
+     * survives nowhere at all, which is [NotificationKind.heldBy].
+     *
+     * A swipe on a screen with no banner does nothing rather than navigating somewhere, which is
+     * the fail-closed direction: a gesture the panel cannot service must not move the phone.
+     */
+    fun dismissNotification() {
+        if (Notifications.onScreen(state.screen) == null) return
+        go(ScreenId.Home)
+    }
+
     /** Every action a screen can take, wired to this model. */
     fun actions(): PanelActions = PanelActions(
         nav = ::go,
@@ -672,6 +703,7 @@ class FlowModel(
         handOverLine = ::handOverLine,
         cycleInsiders = lobby::cycleInsiders,
         lightsOut = ::lightsOut,
+        dismissNotification = ::dismissNotification,
     )
 
     private fun remember(screen: ScreenId) {
