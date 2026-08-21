@@ -18,7 +18,18 @@ package home.someoneshome.model
  *
  * The [id] is what makes the stale card recognisable as a card nobody registered.
  */
-data class MarkerCard(val version: Int, val shape: MarkerShape, val id: MarkerId)
+data class MarkerCard(val version: Int, val shape: MarkerShape, val id: MarkerId) {
+
+    /**
+     * Whether this is the card marked T.
+     *
+     * **A fact about the paper, read off the payload** — see [MarkerShapes.TERMINAL]. It is asked
+     * rather than remembered so that a T card the host scans in a room can never be added to the
+     * map as an ordinary marker by a path that forgot to look: [HouseMap.register] routes on this,
+     * and there is nowhere else for a card to enter a map.
+     */
+    val isTerminal: Boolean get() = shape.id == MarkerShapes.TERMINAL.id
+}
 
 /** Why a scanned payload could not become a card. Every case is a fact about a piece of paper. */
 enum class CardRejection {

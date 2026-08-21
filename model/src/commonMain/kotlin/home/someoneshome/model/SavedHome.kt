@@ -8,20 +8,16 @@ package home.someoneshome.model
  * and can be hosted with, edited, renamed or thrown away. Fifteen minutes of walking a real house
  * in the light, kept forever, which is the whole reason story 0.7 exists.
  *
- * ### The cards here are the editor's fixture, and the format version is how they stop being one
+ * ### The cards are real cards now
  *
- * [markers] is room name to the shapes registered in it, and [terminal] is the one room holding
- * the T card. Registering a card is story 4.5 and there is no camera behind it yet, so what is
- * stored is *which room holds what* — the half that is already real and already load-bearing,
- * because **stairs hold nothing** (D-099) and a home with no terminal cannot be played. When 4.5
- * lands, a card is a [MarkerCard] with an id and these rows are keyed on that id instead of on the
- * shape; that is a format change, and the header carries a version number so it is one.
+ * [map] is what the host scanned: a [MarkerCard] with a printed id, bound to a room, and the one
+ * card marked T that says which room is the terminal. The rows used to be shapes with no ids
+ * because there was no camera behind them; the format's own note said that when registration
+ * landed the rows would be keyed on the card instead, and that it would be a version change. It
+ * is, and the header says so.
  *
- * ### A room with no cards writes no row, and an empty list is the same fact
- *
- * `markersIn` is how the contents of a room are asked for, so `KITCHEN to emptyList()` and no
- * KITCHEN entry at all are the same answer. The writer emits nothing for the first, which is why
- * a home carrying one comes back without it and is still equal to what went in.
+ * The two rules the plan and the map have to agree about are checked here rather than assumed:
+ * every room named by a card is a room in the plan, and **stairs hold nothing** (D-099).
  *
  * ### Equality is the written form, deliberately
  *
@@ -33,26 +29,28 @@ package home.someoneshome.model
 class SavedHome(
     val name: String,
     val plan: HousePlan,
-    markers: Map<String, List<MarkerShape>> = emptyMap(),
-    val terminal: String? = null,
+    val map: HouseMap = HouseMap.EMPTY,
 ) {
-
-    /** Empty entries dropped, so the map is what the file holds and nothing else. */
-    val markers: Map<String, List<MarkerShape>> = markers.filterValues { it.isNotEmpty() }
 
     init {
         require(name.isNotEmpty()) { "a home with no name" }
-        for (room in this.markers.keys) requirePainted(room, "cards are registered in")
-        if (terminal != null) requirePainted(terminal, "the terminal is in")
+        for (registration in map.registrations) {
+            requirePainted(registration.room.name, "cards are registered in")
+        }
+        map.terminal?.let { requirePainted(it.room.name, "the terminal is in") }
     }
 
     val floorCount: Int get() = plan.floors.size
     val roomCount: Int get() = plan.rooms.size
-    val markerCount: Int get() = markers.values.sumOf { it.size }
+    val markerCount: Int get() = map.registrations.size
 
-    fun markersIn(room: String): List<MarkerShape> = markers[room].orEmpty()
+    /** The one room holding the T card, by name — what every screen about the terminal asks for. */
+    val terminal: String? get() = map.terminal?.room?.name
 
-    fun renamedTo(to: String): SavedHome = SavedHome(to, plan, markers, terminal)
+    fun markersIn(room: String): List<MarkerShape> =
+        map.inRoomNamed(room).map { it.card.shape }
+
+    fun renamedTo(to: String): SavedHome = SavedHome(to, plan, map)
 
     /**
      * A room named by a card or by the terminal has to be a room in this home, and it cannot be
@@ -73,14 +71,14 @@ class SavedHome(
     override fun equals(other: Any?): Boolean = other is SavedHome &&
         name == other.name &&
         plan.floors == other.plan.floors &&
-        markers == other.markers &&
-        terminal == other.terminal
+        map.registrations == other.map.registrations &&
+        map.terminal == other.map.terminal
 
     override fun hashCode(): Int {
         var result = name.hashCode()
         result = 31 * result + plan.floors.hashCode()
-        result = 31 * result + markers.hashCode()
-        result = 31 * result + terminal.hashCode()
+        result = 31 * result + map.registrations.hashCode()
+        result = 31 * result + map.terminal.hashCode()
         return result
     }
 

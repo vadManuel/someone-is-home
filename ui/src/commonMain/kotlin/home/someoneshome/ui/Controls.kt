@@ -1,6 +1,7 @@
 package home.someoneshome.ui
 
 import home.someoneshome.model.Cell
+import home.someoneshome.model.MarkerId
 import home.someoneshome.model.RoomKind
 
 import androidx.compose.animation.core.RepeatMode
@@ -66,6 +67,17 @@ class PanelActions(
     val deleteRoom: () -> Unit = {},
     val openFloor: (String) -> Unit = {},
     val addFloor: () -> Unit = {},
+    /**
+     * Registration.
+     *
+     * The scan itself is not here: a card arriving is the camera's event and not a tap, so it
+     * enters through [FlowModel.cardScanned] rather than through anything a screen can do. These
+     * three are the taps that *answer* a scan — moving the terminal to the room the host is
+     * standing in, taking it out of the house altogether, and pulling one card back off the sheet.
+     */
+    val moveTerminal: () -> Unit = {},
+    val removeTerminal: () -> Unit = {},
+    val forgetMarker: (MarkerId) -> Unit = {},
     /**
      * The saved homes.
      *
