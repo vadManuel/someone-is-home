@@ -515,7 +515,8 @@ class PanelVals(val state: PanelState) {
         /**
          * The scan's own countdown, and it is a safety device rather than a progress bar.
          *
-         * Seven seconds, then the light dies and the phone goes back to where it was: nobody
+         * Ten seconds (20 segments, two per second — the design lengthened it from an
+         * initial seven), then the light dies and the phone goes back to where it was: nobody
          * should be standing in a dark room holding a lit screen at a wall by accident.
          */
         const val SCAN_SEGMENTS = 20
