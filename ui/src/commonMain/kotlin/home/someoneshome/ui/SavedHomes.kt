@@ -1,9 +1,15 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.CardPayload
 import home.someoneshome.model.CellRect
 import home.someoneshome.model.Floor
+import home.someoneshome.model.HouseMap
 import home.someoneshome.model.HousePlan
+import home.someoneshome.model.MarkerCard
+import home.someoneshome.model.MarkerId
+import home.someoneshome.model.MarkerShape
 import home.someoneshome.model.MarkerShapes
+import home.someoneshome.model.Registration
 import home.someoneshome.model.Room
 import home.someoneshome.model.RoomKind
 import home.someoneshome.model.SavedHome
@@ -300,15 +306,27 @@ class SavedHomesModel(private val store: HomeStore = MemoryHomeStore()) {
                 }
             )
             val cards = plan.rooms.filter { it.name != terminal }.take(4)
+            // The ids are the home's initial and a number, because a fixture whose card ids are
+            // noise is a fixture nobody can follow on a screenshot. Seven characters, and out of
+            // the alphabet a printed card is allowed to carry — no space.
+            val stem = name.filter { it in MarkerShapes.ALPHABET }.take(4).padEnd(4, '-')
             return SavedHome(
                 name = name,
                 plan = plan,
-                markers = cards.mapIndexed { i, room ->
-                    room.name to listOfNotNull(MarkerShapes.all.getOrNull(i * 3))
-                }.toMap(),
-                terminal = terminal,
+                map = HouseMap.of(
+                    cards.mapIndexed { i, room ->
+                        Registration(sampleCard(MarkerShapes.registrable[i * 3], stem, i + 1), Room(room.name))
+                    },
+                    Registration(sampleCard(MarkerShapes.TERMINAL, stem, 0), Room(terminal)),
+                ),
             )
         }
+
+        private fun sampleCard(shape: MarkerShape, stem: String, number: Int) = MarkerCard(
+            version = CardPayload.VERSION,
+            shape = shape,
+            id = MarkerId(stem + number.toString().padStart(3, '0')),
+        )
     }
 }
 

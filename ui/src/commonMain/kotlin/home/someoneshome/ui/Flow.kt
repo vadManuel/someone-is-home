@@ -1,6 +1,8 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.CardPayload
 import home.someoneshome.model.Cell
+import home.someoneshome.model.RegisterResult
 import home.someoneshome.model.RoomKind
 
 import androidx.compose.runtime.Composable
@@ -270,19 +272,23 @@ object Flow {
      * nowhere to land. It is routed now — the button asks the plan whether any room holds the T
      * card and goes to the explanation when none does.
      *
-     * `TermTaken` remains stranded, and its gap is the same shape: `ScanMarker`'s DONE always
-     * goes to `MarkerSheet`, and the refusal belongs to *scanning a second T card*, which is
-     * story 4.5 and has no camera behind it yet. `FlowTest` fails if this list grows or shrinks
-     * without anyone saying so.
+     * `TermTaken` was here too, for a gap of the same shape: `ScanMarker`'s DONE always goes to
+     * `MarkerSheet`, and the refusal belongs to *scanning a second T card*, which had no scanner
+     * behind it. It is routed now, and it is the actions layer's rather than a screen's — a scan
+     * is not a tap, and where the host lands depends on what the map says about the card that was
+     * read (see [viaActions]).
+     *
+     * **The list is empty, and that is the state to keep it in.** `FlowTest` fails if it grows
+     * without anyone saying so: a screen nothing reaches is a screen drawn for nobody.
      */
-    val unrouted: Set<ScreenId> = setOf(ScreenId.TermTaken)
+    val unrouted: Set<ScreenId> = emptySet()
 
     /**
      * **The edges the actions layer owns**, because the screen hands over a decision instead of
      * naming a target.
      *
      * Almost every control in the port says where it goes — `goes(Editor)`, `go(Home)` — and
-     * `ScreenGraph` reads those straight off the screens. Five do not:
+     * `ScreenGraph` reads those straight off the screens. Six do not:
      *
      * - **The plan itself.** A tap on the grid opens the room under it, and on most of a grid
      *   there is no room, so it opens nothing. A screen cannot name that target because the
@@ -298,8 +304,12 @@ object Flow {
      *   list their house is not in.
      * - **HOLD TO DELETE.** Two seconds of a finger, not a tap, so it publishes no click action
      *   for `ScreenGraphTest` to read.
+     * - **A card being read.** Not a tap at all — the camera raises it — and where it lands
+     *   depends on what the map says about the card: five of the six outcomes are a line on the
+     *   viewfinder and no movement, and the sixth is the terminal already being in another room,
+     *   which is a decision the host has to make and therefore a screen.
      *
-     * Without these, four screens would read as orphans — drawn and reachable by nothing — while
+     * Without these, five screens would read as orphans — drawn and reachable by nothing — while
      * in fact being one gesture away. Written down here rather than smuggled into [ScreenGraph],
      * where they would be claims about controls that do not exist.
      */
@@ -312,6 +322,8 @@ object Flow {
         // A save that landed, and a home the host held a finger on for two seconds.
         ScreenId.SaveName to setOf(ScreenId.HomeDetail),
         ScreenId.Delete to setOf(ScreenId.Maps),
+        // The T card, read in a room while the terminal is in another one.
+        ScreenId.ScanMarker to setOf(ScreenId.TermTaken),
     )
 }
 
@@ -484,6 +496,46 @@ class FlowModel(
         go(ScreenId.Editor)
     }
 
+    // ---- Registration ---------------------------------------------------------------------------
+
+    /**
+     * **A card was read: nine characters off a symbol, exactly as printed.**
+     *
+     * This is not a tap and is not in [PanelActions]. A card arriving is the camera's event — in a
+     * real build the scanner calls this, in a build without one the playtest deck does — and a
+     * screen that could raise it would be a screen claiming to have seen a piece of paper.
+     *
+     * **Every outcome ends somewhere the host can see.** Only one of them is a screen: the terminal
+     * already being in another room, because that is a decision and not a message. Everything else
+     * — registered, moved, a shape already taken, stairs, a card this build cannot read — is said
+     * on the viewfinder the host is already looking at, and the screen does not move. That is what
+     * KEEP SCANNING TO ADD MORE means: the flow does not walk away between cards.
+     */
+    fun cardScanned(payload: String) {
+        when (val read = CardPayload.decode(payload)) {
+            // Allowed to be specific (D-071): an unreadable card is a fact about a piece of paper,
+            // not a statement about a player, and the host is standing in a lit room holding it.
+            is CardPayload.Result.Rejected -> editor.refuseScan(read.why)
+
+            is CardPayload.Result.Read ->
+                if (editor.register(read.card) is RegisterResult.TerminalTaken) {
+                    go(ScreenId.TermTaken)
+                }
+        }
+    }
+
+    /** MOVE THE TERMINAL TO THIS ROOM, then back to the viewfinder to carry on. */
+    fun moveTerminal() {
+        editor.moveTerminal()
+        go(ScreenId.ScanMarker)
+    }
+
+    /** REMOVE IT: the T card belongs to no room, and this home cannot be saved until one does. */
+    fun removeTerminal() {
+        editor.removeTerminal()
+        go(ScreenId.MarkerSheet)
+    }
+
     // ---- The saved homes -------------------------------------------------------------------
 
     /**
@@ -547,6 +599,9 @@ class FlowModel(
         deleteRoom = editor::deleteHeld,
         openFloor = editor::openFloor,
         addFloor = { editor.addFloor() },
+        moveTerminal = ::moveTerminal,
+        removeTerminal = ::removeTerminal,
+        forgetMarker = editor::forgetMarker,
         openSavedHome = ::openSavedHome,
         mapNewHome = ::mapNewHome,
         editOpenHome = ::editOpenHome,

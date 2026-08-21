@@ -443,16 +443,6 @@ class PanelVals(val state: PanelState) {
         done = 3,
     )
 
-    /**
-     * The shape most recently registered, shown in the viewfinder so the host can match it
-     * against the card in their hand.
-     *
-     * Fixture: registering a card is story 4.5 and there is no camera here. **What room holds
-     * what** is no longer a fixture on this class — it is the editor's, beside the plan it
-     * belongs to, because a room's contents and a room's shape are lost together.
-     */
-    val lastRegistered: MarkerShape? = MarkerShapes["ring"]
-
     // ---- Meeting ------------------------------------------------------------------------------
 
     /**

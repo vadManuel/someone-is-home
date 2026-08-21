@@ -29,13 +29,23 @@ class MalformedHouseMap(val line: Int, val detail: String) :
  */
 object HouseMapText {
 
-    const val HEADER: String = "someone-is-home/house-map/1"
+    /**
+     * Version 2 carries the terminal.
+     *
+     * Version 1 had no `T` row, because the terminal was a room name held somewhere else. A v1
+     * reader handed a v2 file would refuse the row it has never heard of, which is the correct
+     * failure and the reason this is a version and not a quiet addition.
+     */
+    const val HEADER: String = "someone-is-home/house-map/2"
+
+    private const val REGISTRATION_ROW = "R "
+    private const val TERMINAL_ROW = "T "
 
     private const val SEPARATOR = '|'
     private const val ESCAPED_SEPARATOR = "\\p"
 
     /**
-     * One line per registration: the printed payload, then the room.
+     * One line per registration: the printed payload, then the room. The terminal last, as `T`.
      *
      * The payload is stored rather than the decoded fields, so what is written is exactly what is
      * printed on the card. A file holding decoded fields could disagree with the paper, and the
@@ -43,12 +53,15 @@ object HouseMapText {
      */
     fun write(map: HouseMap): String = buildString {
         appendLine(HEADER)
-        for (registration in map.registrations) {
-            append("R ")
-            append(CardPayload.encode(registration.card))
-            append(SEPARATOR)
-            appendLine(escape(registration.room.name))
-        }
+        for (registration in map.registrations) row(REGISTRATION_ROW, registration)
+        map.terminal?.let { row(TERMINAL_ROW, it) }
+    }
+
+    private fun StringBuilder.row(kind: String, registration: Registration) {
+        append(kind)
+        append(CardPayload.encode(registration.card))
+        append(SEPARATOR)
+        appendLine(escape(registration.room.name))
     }
 
     fun read(text: String): HouseMap {
@@ -63,16 +76,19 @@ object HouseMapText {
         }
 
         val registrations = mutableListOf<Registration>()
+        var terminal: Registration? = null
         for ((i, line) in lines.withIndex().drop(1)) {
             val number = i + 1
-            if (!line.startsWith("R ")) {
-                throw MalformedHouseMap(
+            val kind = when {
+                line.startsWith(REGISTRATION_ROW) -> REGISTRATION_ROW
+                line.startsWith(TERMINAL_ROW) -> TERMINAL_ROW
+                else -> throw MalformedHouseMap(
                     number,
                     "unknown row '$line'. Refusing rather than skipping: a map that comes back " +
                         "one registration short is a marker nobody knows is missing.",
                 )
             }
-            val row = line.substring(2)
+            val row = line.substring(kind.length)
             val split = row.indexOf(SEPARATOR)
             if (split < 0) throw MalformedHouseMap(number, "no room on this row")
 
@@ -80,18 +96,46 @@ object HouseMapText {
             val room = Room(unescape(row.substring(split + 1), number))
             if (room.name.isEmpty()) throw MalformedHouseMap(number, "a room with no name")
 
-            when (val result = CardPayload.decode(payload)) {
+            val registration = when (val result = CardPayload.decode(payload)) {
                 is CardPayload.Result.Rejected ->
                     throw MalformedHouseMap(number, "card payload '$payload' rejected: ${result.why}")
                 is CardPayload.Result.Read -> {
-                    if (registrations.any { it.card.id == result.card.id }) {
+                    val taken = registrations.any { it.card.id == result.card.id } ||
+                        terminal?.card?.id == result.card.id
+                    if (taken) {
                         throw MalformedHouseMap(number, "card ${result.card.id.value} appears twice")
                     }
-                    registrations += Registration(result.card, room)
+                    Registration(result.card, room)
                 }
             }
+
+            if (kind == TERMINAL_ROW) {
+                if (terminal != null) {
+                    throw MalformedHouseMap(
+                        number,
+                        "a second terminal. One home, one terminal — a second gives the house " +
+                            "two places to be found.",
+                    )
+                }
+                if (!registration.card.isTerminal) {
+                    throw MalformedHouseMap(
+                        number,
+                        "'$payload' is the terminal row but is not the card marked T",
+                    )
+                }
+                terminal = registration
+            } else {
+                if (registration.card.isTerminal) {
+                    throw MalformedHouseMap(
+                        number,
+                        "'$payload' is the card marked T, registered as an ordinary marker — it " +
+                            "never is",
+                    )
+                }
+                registrations += registration
+            }
         }
-        return HouseMap.of(registrations)
+        return HouseMap.of(registrations, terminal)
     }
 
     /**

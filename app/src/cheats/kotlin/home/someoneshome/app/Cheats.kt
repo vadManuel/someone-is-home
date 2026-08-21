@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -20,6 +21,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import home.someoneshome.platform.SeededCardScanner
 import home.someoneshome.ui.Amber
 import home.someoneshome.ui.FlowHost
 import home.someoneshome.ui.FlowModel
@@ -80,6 +82,11 @@ fun CheatRoot() {
             homes = SavedHomesModel(SavedHomesDocument()),
         )
     }
+    // The camera this build does not have. `SeededCardScanner` is a deck of real cards encoded to
+    // real payloads; the chip below is the shutter. Held above the view switch with the rest so
+    // that dropping into the picker and back does not deal the deck from the top again.
+    val scanner = remember { SeededCardScanner() }
+    LaunchedEffect(scanner) { scanner.start(flow::cardScanned) }
     var view by remember { mutableStateOf(CheatView.Panel) }
     // Hoisted here so the host and client outlive the view: navigating away from the transport
     // surface mid-evening must not hang up two phones.
@@ -96,6 +103,38 @@ fun CheatRoot() {
             CheatView.Transport -> TransportCheatScreen(transport)
         }
         MarkerChip { view = if (view == CheatView.Panel) CheatView.Picker else CheatView.Panel }
+        // Only where a card could actually be read. A shutter on the springboard would be a
+        // control for an event that cannot happen there.
+        if (view == CheatView.Panel && flow.state.screen == ScreenId.ScanMarker) {
+            ShutterChip(scanner.peek?.id?.value.orEmpty()) { scanner.present() }
+        }
+    }
+}
+
+/**
+ * **The shutter: the one thing a build with no camera cannot do for itself.**
+ *
+ * Everything downstream of a card being read is real — the payload is decoded by `model`, offered
+ * to the real `HouseMap`, and every refusal it can produce is the map's own. What is faked is the
+ * camera resolving a symbol, and this is that event with a finger on it.
+ *
+ * It names the card it is about to present, because a scan whose outcome you cannot predict is a
+ * scan you cannot use to check anything. **Compiled out of release** with the rest of this file,
+ * which is the fail-closed direction: the failure mode is "the shutter is missing on my playtest
+ * phone", never "a card registered itself in a real round".
+ */
+@Composable
+private fun BoxScope.ShutterChip(next: String, onTap: () -> Unit) {
+    val insets = LocalPanelInsets.current
+    Box(
+        Modifier.align(Alignment.BottomStart)
+            .padding(start = 6.u, bottom = insets.bottom + 2.u)
+            .background(Amber.Black)
+            .border(1.u, Amber.Dim)
+            .tap(onTap)
+            .padding(horizontal = 5.u, vertical = 1.5.u),
+    ) {
+        Label("SCAN $next", size = 5.5, color = Amber.Dim, tracking = 0.18)
     }
 }
 

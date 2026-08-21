@@ -12,17 +12,22 @@ class MalformedSavedHomes(val line: Int, val detail: String) :
  * language or a library is free to change is a format that silently loses the setup walk on the
  * evening eight people are already standing in the hall.
  *
- * ### The plan's rows are the plan's, not a second copy of them
+ * ### The plan's rows are the plan's, and the map's are the map's
  *
- * A home's plan is written by [HousePlanText], header and all, in the middle of this file, and
- * read back by it. Restating the grammar here would be a second description of the same layout,
- * and the one that drifted would be the one nobody had a test looking at. It also keeps the two
- * version numbers answering their own questions: `house-plan/1` is how a plan is laid out,
- * `saved-homes/1` is how a list of homes is.
+ * A home's plan is written by [HousePlanText] and its cards by [HouseMapText], headers and all, in
+ * the middle of this file, and read back by them. Restating either grammar here would be a second
+ * description of the same layout, and the one that drifted would be the one nobody had a test
+ * looking at. It also keeps the three version numbers answering their own questions:
+ * `house-plan/1` is how a plan is laid out, `house-map/2` is how registered cards are, and
+ * `saved-homes/2` is how a list of homes is.
  *
- * A refusal from inside a plan is re-thrown against the line it really occupies in *this* file,
- * because a host is looking at one file and a line number that counts from somewhere else is a
- * line number that sends them to the wrong row.
+ * **Both embedded formats use an `R` row and they do not mean the same thing** — a painted room in
+ * one, a registered card in the other. A row belongs to whichever section is open, and a section
+ * opens at its own header, which is why the headers are written out rather than stripped.
+ *
+ * A refusal from inside a plan or a map is re-thrown against the line it really occupies in *this*
+ * file, because a host is looking at one file and a line number that counts from somewhere else is
+ * a line number that sends them to the wrong row.
  *
  * ### Strict, and loud
  *
@@ -32,26 +37,28 @@ class MalformedSavedHomes(val line: Int, val detail: String) :
  *
  * ### Only two characters ever need escaping
  *
- * A home name and a room name are typed by a host on a phone and can hold anything. There is no
- * pipe-escaping here because no row ends in a field that could be confused for another: `H` and
- * `T` take the whole rest of the line, and `M` puts the shapes first — they are lowercase words
- * by construction — and splits at the first pipe, so the name after it survives intact whatever
- * is in it. That leaves the backslash and the newline, which would forge a row rather than a
- * field.
+ * A home name is typed by a host on a phone and can hold anything. There is no pipe-escaping on
+ * this format's own row because `H` takes the whole rest of the line. That leaves the backslash
+ * and the newline, which would forge a row rather than a field. The embedded formats escape their
+ * own room names, which is the one place a pipe matters.
  */
 object SavedHomesText {
 
-    const val HEADER: String = "someone-is-home/saved-homes/1"
+    /**
+     * Version 2: the cards are cards.
+     *
+     * Version 1 stored a room's contents as a list of shape ids and the terminal as a room name,
+     * because registration had no camera behind it and there were no printed ids to write down.
+     * A v1 file describes markers that cannot be scanned, and there is nothing honest to turn one
+     * into — a fabricated id is a card the host does not have — so it is refused rather than
+     * migrated, and the refusal says so.
+     */
+    const val HEADER: String = "someone-is-home/saved-homes/2"
+
+    /** What a v1 file's header says, so the refusal can name what changed rather than shrug. */
+    private const val HEADER_V1 = "someone-is-home/saved-homes/1"
 
     private const val HOME_ROW = "H "
-    private const val MARKERS_ROW = "M "
-    private const val TERMINAL_ROW = "T "
-
-    private const val SEPARATOR = '|'
-    private const val SHAPE_SEPARATOR = ';'
-
-    /** The rows a plan is made of, so a plan row can be told from one of this format's own. */
-    private val PLAN_ROWS = listOf("F ", "R ")
 
     /**
      * One home after another, in the order the list holds them — which is the order the host sees.
@@ -65,17 +72,7 @@ object SavedHomesText {
             append(HOME_ROW)
             appendLine(escape(home.name))
             append(HousePlanText.write(home.plan))
-            for ((room, shapes) in home.markers) {
-                if (shapes.isEmpty()) continue
-                append(MARKERS_ROW)
-                append(shapes.joinToString(SHAPE_SEPARATOR.toString()) { it.id })
-                append(SEPARATOR)
-                appendLine(escape(room))
-            }
-            home.terminal?.let {
-                append(TERMINAL_ROW)
-                appendLine(escape(it))
-            }
+            append(HouseMapText.write(home.map))
         }
     }
 
@@ -83,11 +80,16 @@ object SavedHomesText {
         val lines = text.lines().filter { it.isNotEmpty() }
         if (lines.isEmpty()) throw MalformedSavedHomes(0, "empty")
         if (lines[0] != HEADER) {
-            throw MalformedSavedHomes(
-                1,
-                "expected header '$HEADER', got '${lines[0]}'. Homes written by another format " +
-                    "version cannot be read under this one.",
-            )
+            val was = lines[0]
+            val detail = if (was == HEADER_V1) {
+                "these homes were saved before markers carried the id printed on the card. " +
+                    "There is no honest way to read them under '$HEADER' — an invented id is a " +
+                    "card the host does not have — so they are refused rather than half-read."
+            } else {
+                "expected header '$HEADER', got '$was'. Homes written by another format " +
+                    "version cannot be read under this one."
+            }
+            throw MalformedSavedHomes(1, detail)
         }
 
         val homes = mutableListOf<SavedHome>()
@@ -106,50 +108,14 @@ object SavedHomesText {
                     open = OpenHome(name, number)
                 }
 
-                line == HousePlanText.HEADER || PLAN_ROWS.any { line.startsWith(it) } ->
-                    open.orRefuse(number, "a plan").plan += number to line
+                line == HousePlanText.HEADER -> open.orRefuse(number, "a plan").openPlan(number, line)
 
-                line.startsWith(MARKERS_ROW) -> {
-                    val row = line.substring(MARKERS_ROW.length)
-                    val split = row.indexOf(SEPARATOR)
-                    if (split < 0) throw MalformedSavedHomes(number, "no room on this row")
-                    val room = unescape(row.substring(split + 1), number)
-                    val shapes = row.substring(0, split).split(SHAPE_SEPARATOR).map { id ->
-                        MarkerShapes[id] ?: throw MalformedSavedHomes(
-                            number,
-                            "'$id' is not a marker shape. The roster is 44 shapes and a card " +
-                                "carrying anything else is a card nobody can be sent to.",
-                        )
-                    }
-                    val home = open.orRefuse(number, "cards")
-                    if (home.markers.any { it.second == room }) {
-                        throw MalformedSavedHomes(
-                            number,
-                            "'${home.name}' lists the cards in '$room' twice. Refusing rather " +
-                                "than keeping one row: the other row's cards are cards the host " +
-                                "registered and would never be told about.",
-                        )
-                    }
-                    home.markers += Triple(number, room, shapes)
-                }
+                line == HouseMapText.HEADER -> open.orRefuse(number, "cards").openMap(number, line)
 
-                line.startsWith(TERMINAL_ROW) -> {
-                    val home = open.orRefuse(number, "a terminal")
-                    if (home.terminal != null) {
-                        throw MalformedSavedHomes(
-                            number,
-                            "'${home.name}' has two terminals. One home, one terminal — a second " +
-                                "gives the house two places to be found.",
-                        )
-                    }
-                    home.terminal = number to unescape(line.substring(TERMINAL_ROW.length), number)
-                }
-
-                else -> throw MalformedSavedHomes(
-                    number,
-                    "unknown row '$line'. Refusing rather than skipping: a list that comes back " +
-                        "one home short is fifteen minutes of walking nobody knows is missing.",
-                )
+                // Everything else belongs to whichever section is open. Both embedded formats
+                // spell a row `R `, so which one this is cannot be read off the row — only off
+                // the header above it.
+                else -> open.orRefuse(number, "a row").section(number, line)
             }
         }
         open?.let { homes += it.build() }
@@ -168,8 +134,40 @@ object SavedHomesText {
      */
     private class OpenHome(val name: String, val line: Int) {
         val plan = mutableListOf<Pair<Int, String>>()
-        val markers = mutableListOf<Triple<Int, String, List<MarkerShape>>>()
-        var terminal: Pair<Int, String>? = null
+        val map = mutableListOf<Pair<Int, String>>()
+
+        /** The section rows are currently landing in, or none before the first header. */
+        private var section: MutableList<Pair<Int, String>>? = null
+
+        fun openPlan(number: Int, header: String) {
+            if (plan.isNotEmpty()) {
+                throw MalformedSavedHomes(number, "'$name' has two plans. A home is one house.")
+            }
+            section = plan
+            plan += number to header
+        }
+
+        fun openMap(number: Int, header: String) {
+            if (map.isNotEmpty()) {
+                throw MalformedSavedHomes(
+                    number,
+                    "'$name' lists its cards twice. Refusing rather than keeping one list: the " +
+                        "other one's cards are cards the host registered and would never be told " +
+                        "about.",
+                )
+            }
+            section = map
+            map += number to header
+        }
+
+        fun section(number: Int, line: String) {
+            val open = section ?: throw MalformedSavedHomes(
+                number,
+                "row '$line' belongs to no section. A plan row and a card row are both spelled " +
+                    "'R' and are told apart only by the header above them.",
+            )
+            open += number to line
+        }
 
         fun build(): SavedHome {
             if (plan.isEmpty()) {
@@ -179,15 +177,23 @@ object SavedHomesText {
                         "is nothing to host in.",
                 )
             }
+            // The plan is read before the card list is even looked for, so that a file which is
+            // both malformed and truncated is refused for the row a host could go and fix rather
+            // than for the section that is missing behind it.
             val house = readPlan()
-            for ((row, room, _) in markers) requirePainted(house, room, row, "cards are registered in")
-            terminal?.let { (row, room) -> requirePainted(house, room, row, "the terminal is in") }
-            return SavedHome(
-                name = name,
-                plan = house,
-                markers = markers.associate { (_, room, shapes) -> room to shapes },
-                terminal = terminal?.second,
-            )
+            if (map.isEmpty()) {
+                throw MalformedSavedHomes(
+                    line,
+                    "'$name' has no card list. A home with nothing registered writes an empty " +
+                        "one; a home missing it altogether is a file that lost rows.",
+                )
+            }
+            val cards = readMap()
+            for (registration in cards.registrations) {
+                requirePainted(house, registration, "cards are registered in")
+            }
+            cards.terminal?.let { requirePainted(house, it, "the terminal is in") }
+            return SavedHome(name = name, plan = house, map = cards)
         }
 
         /**
@@ -203,7 +209,24 @@ object SavedHomesText {
             throw MalformedSavedHomes(plan.getOrNull(e.line - 1)?.first ?: line, e.detail)
         }
 
-        private fun requirePainted(plan: HousePlan, room: String, row: Int, what: String) {
+        /** The map's own reader, re-numbered the same way and for the same reason. */
+        private fun readMap(): HouseMap = try {
+            HouseMapText.read(map.joinToString("\n") { it.second })
+        } catch (e: MalformedHouseMap) {
+            throw MalformedSavedHomes(map.getOrNull(e.line - 1)?.first ?: line, e.detail)
+        }
+
+        /**
+         * A room a card names has to be a room in this home, and it cannot be stairs.
+         *
+         * The map holds room names and the plan holds what a room *is*, so this is the one place
+         * the two are made to agree. The line reported is the card's own row, because that is the
+         * row the host would have to change.
+         */
+        private fun requirePainted(plan: HousePlan, registration: Registration, what: String) {
+            val room = registration.room.name
+            val row = map.firstOrNull { it.second.contains(CardPayload.encode(registration.card)) }
+                ?.first ?: line
             val painted = plan.roomNamed(room)
                 ?: throw MalformedSavedHomes(row, "$what '$room', which is not a room in '$name'")
             if (painted.kind == RoomKind.Stairs) {

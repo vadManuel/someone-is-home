@@ -1,5 +1,6 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.CardRejection
 import home.someoneshome.model.RoomKind
 
 import androidx.compose.foundation.background
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -486,20 +488,26 @@ fun StairsWarnScreen(vals: PanelVals) {
 @Composable
 fun MarkerSheetScreen(vals: PanelVals) {
     val go = navigator()
+    val actions = LocalActions.current
     val editor = LocalEditor.current
-    HeldPlanPage("MARKERS", "${editor.heldName} . ${editor.heldMarkers.size}") {
+    val cards = editor.cardsIn(editor.heldName)
+    HeldPlanPage("MARKERS", "${editor.heldName} . ${cards.size}") {
         Row(
             Modifier.fillMaxWidth().heightIn(min = 52.u),
             horizontalArrangement = Arrangement.spacedBy(4.u),
         ) {
-            editor.heldMarkers.forEach { shape ->
+            // Keyed on the card, not on the shape. Two rooms can never hold the same shape
+            // (D-086) but the chip has to name a card to take one off, and the shape is what the
+            // host reads — so the chip shows the shape and removes the id underneath it.
+            cards.forEach { registration ->
                 Row(
                     Modifier.border(1.u, Amber.BoneInk)
+                        .tap { actions.forgetMarker(registration.card.id) }
                         .padding(start = 5.u, end = 4.u, top = 3.u, bottom = 3.u),
                     horizontalArrangement = Arrangement.spacedBy(4.u),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    MarkerGlyph(shape, 11.u, Amber.BoneInk)
+                    MarkerGlyph(registration.card.shape, 11.u, Amber.BoneInk)
                     Label("×", size = 8.0, color = Amber.BoneInk, tracking = 0.06)
                 }
             }
@@ -581,28 +589,11 @@ fun ScanMarkerScreen(vals: PanelVals) {
 
             Box(Modifier.fillMaxSize().background(vals.torchWash))
 
-            // What was just registered, shown as the shape rather than as a confirmation line:
-            // the host has to match it against the card in their hand.
-            Column(
-                Modifier.align(Alignment.Center),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(5.u),
-            ) {
-                vals.lastRegistered?.let { MarkerGlyph(it, 34.u, Amber.SlateFill) }
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(5.u),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(1.u)) {
-                        Block(2.u, 8.u, Amber.SlateFill)
-                        Block(2.u, 8.u, Amber.SlateFill)
-                    }
-                    Label(
-                        "${vals.lastRegistered?.id?.uppercase() ?: ""} . ADDED",
-                        size = 6.5, color = Amber.SlateFill, tracking = 0.14,
-                    )
-                }
-            }
+            // What the last card did, shown as the shape rather than as a confirmation line: the
+            // host has to match it against the piece of paper in their hand. Nothing is drawn
+            // before the first card of this visit — an empty viewfinder is the honest state, and
+            // the last session's card sitting there would read as one that had just been read.
+            editor.lastScan?.let { ScanReadout(it) }
 
             Row(
                 Modifier.align(Alignment.BottomEnd).padding(6.u)
@@ -628,6 +619,73 @@ fun ScanMarkerScreen(vals: PanelVals) {
 
         PreNote("KEEP SCANNING TO ADD MORE. THE CODE CARRIES\nTHE SHAPE PRINTED ON IT.")
         SlateButton("DONE SCANNING", { go(ScreenId.MarkerSheet) })
+    }
+}
+
+/**
+ * **What the last card did, in the middle of the viewfinder.**
+ *
+ * One place for all six outcomes, because they are one thing to the host: they scanned a card and
+ * the app has an answer. Splitting the refusals onto their own screens would take the viewfinder
+ * away between cards, and the design's own instruction on this screen is KEEP SCANNING TO ADD
+ * MORE — the host has a stack of paper in one hand and is not putting the phone down between them.
+ *
+ * The shape is drawn large whichever way it went, in caution ink when the card was turned away.
+ * **A refusal that named a room and not a shape would leave a host holding three cards with no way
+ * to tell which one the app meant.** The one outcome with no shape is a symbol that was not one of
+ * our cards at all, and it says exactly that instead.
+ */
+@Composable
+private fun BoxScope.ScanReadout(outcome: ScanOutcome) {
+    val refused = outcome !is ScanOutcome.Landed
+    val ink = if (refused) Amber.Caution else Amber.SlateFill
+    Column(
+        Modifier.align(Alignment.Center).padding(horizontal = 12.u),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(5.u),
+    ) {
+        // The T card is never an ordinary marker and is never drawn as one: it is the token the
+        // host-setup screens have always used for it, so the one card that is not a marker does
+        // not arrive looking like the letter T happened to be printed on a marker.
+        if (outcome.isTerminal) TerminalToken(30.u, ink, stroke = 2.u, textSize = 15.0)
+        else outcome.shape?.let { MarkerGlyph(it, 34.u, ink) }
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(5.u),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(1.u)) {
+                Block(2.u, 8.u, ink)
+                Block(2.u, 8.u, ink)
+            }
+            Label(scanLine(outcome), size = 6.5, color = ink, tracking = 0.14)
+        }
+
+        // The card's printed id, quietly, and only when the card was read. It is the only place
+        // in the app that ever shows one: a host looking for one specific card among nine
+        // identical-looking ones has nothing else to go on, and D-069's whole argument is that the
+        // id is what tells two cards carrying the same shape apart.
+        outcome.card?.let {
+            Label(it.id.value, size = 5.5, color = ink, tracking = 0.2)
+        }
+    }
+}
+
+/** The outcome in the host's words. Every branch, so a new one cannot arrive as an empty line. */
+private fun scanLine(outcome: ScanOutcome): String = when (outcome) {
+    is ScanOutcome.Landed -> when {
+        outcome.from != null -> "MOVED FROM ${outcome.from}"
+        outcome.isTerminal -> "TERMINAL . ${outcome.room}"
+        else -> "${outcome.room} . ADDED"
+    }
+
+    is ScanOutcome.Refused -> outcome.why
+
+    // D-071: an unreadable card is a fact about a piece of paper and may be said plainly.
+    is ScanOutcome.Unreadable -> when (outcome.why) {
+        CardRejection.WrongLength, CardRejection.NotInAlphabet -> "NOT ONE OF OUR CARDS"
+        CardRejection.UnknownVersion -> "A NEWER CARD THAN THIS APP KNOWS"
+        CardRejection.UnknownShape -> "A SHAPE THIS APP DOES NOT HAVE"
     }
 }
 
@@ -672,6 +730,7 @@ private fun ViewfinderCorners() {
 @Composable
 fun TermTakenScreen() {
     val go = navigator()
+    val actions = LocalActions.current
     val editor = LocalEditor.current
     val at = editor.terminal.orEmpty()
     PrePage {
@@ -706,11 +765,15 @@ fun TermTakenScreen() {
             }
         }
 
+        // KEEP goes back to the viewfinder and changes nothing: the card the host is holding is
+        // simply not the one that places the terminal, and there is nothing to undo because
+        // nothing happened. MOVE is the one that acts, and it is the actions layer's — where it
+        // lands is the same place either way, but what it does to the map is not.
         SlateButton("KEEP IT IN $at", { go(ScreenId.ScanMarker) })
         PanelButton(
             "MOVE THE TERMINAL TO ${editor.heldName}",
             border = Amber.BonePale, ink = Amber.BoneDim, verticalPadding = 9.u,
-            onClick = { go(ScreenId.ScanMarker) },
+            onClick = actions.moveTerminal,
         )
         PreNote(
             "MOVING IT LEAVES $at WITH NO TERMINAL.\nTHE T CARD IS NEVER AN ORDINARY MARKER.",
@@ -723,6 +786,7 @@ fun TermTakenScreen() {
 @Composable
 fun TermRemoveScreen() {
     val go = navigator()
+    val actions = LocalActions.current
     val editor = LocalEditor.current
     PrePage(gap = 7) {
         PreHeading("REMOVE THE TERMINAL", back = ScreenId.MarkerSheet, tracking = 0.14)
@@ -754,7 +818,7 @@ fun TermRemoveScreen() {
             PanelButton(
                 "REMOVE IT",
                 border = Amber.BonePale, ink = Amber.BoneDim,
-                onClick = { go(ScreenId.MarkerSheet) },
+                onClick = actions.removeTerminal,
             )
             SlateButton("KEEP IT", { go(ScreenId.MarkerSheet) })
         }

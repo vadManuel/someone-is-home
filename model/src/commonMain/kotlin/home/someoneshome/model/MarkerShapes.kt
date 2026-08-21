@@ -120,6 +120,34 @@ object MarkerShapes {
 
     private val byId: Map<String, MarkerShape> = all.associateBy { it.id }
 
+    /**
+     * **The one shape that is never an ordinary marker: the card marked T.**
+     *
+     * The host-setup screens have always said *scan the card marked T* and *the T card is never an
+     * ordinary marker*, and something has to make that true of a piece of paper. A card's payload
+     * carries a version, a shape and an id (D-069) and nothing else, so the shape is the only field
+     * that can say what kind of card this is — and `t_shape` is literally the letter T, which is
+     * what is printed on the card the host is holding.
+     *
+     * Reserving it costs the ordinary roster one of its 44 shapes and buys the terminal an
+     * identity that survives a reprint: a T card found behind a shelf a year later still says
+     * terminal, and [MarkerCard.isTerminal] is a fact about the paper rather than a flag somebody
+     * set. [all] keeps all 44 entries because the roster is wire data and ids are never renumbered
+     * or reused — this is a shape that is spoken for, not a shape that was removed.
+     *
+     * **This is a provisional ruling and is written up for ratification.** It decides what is
+     * printed on paper, and paper cannot be patched.
+     */
+    val TERMINAL: MarkerShape = requireNotNull(byId["t_shape"]) { "the roster lost t_shape" }
+
+    /**
+     * The shapes an ordinary marker card may carry — the roster minus [TERMINAL].
+     *
+     * What the printable sheet (story 4.11) draws from, and the answer to "how many markers can
+     * one home hold" that is not off by one.
+     */
+    val registrable: List<MarkerShape> = all.filterNot { it.id == TERMINAL.id }
+
     init {
         require(ALPHABET.length == 44) { "alphabet is ${ALPHABET.length}, expected 44" }
         require(all.size <= ALPHABET.length) {

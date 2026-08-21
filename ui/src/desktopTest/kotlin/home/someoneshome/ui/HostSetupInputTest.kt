@@ -1,5 +1,10 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.CardPayload
+import home.someoneshome.model.MarkerCard
+import home.someoneshome.model.MarkerId
+import home.someoneshome.model.MarkerShapes
+
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.hasClickAction
@@ -16,15 +21,16 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * **The two host-setup controls a synthetic click cannot reach.**
+ * **The host-setup controls a synthetic click cannot reach, or reaches without proving anything.**
  *
  * `ScreenGraphTest` fires click *semantics actions* and `DeviceLayoutTest` measures pixels;
- * between them, a field nothing types into and a hold nothing holds would both pass. These are
- * the same gap `EditorSurfaceTest` was written for, on the two controls that decide whether a
- * home gets a name and whether one gets thrown away.
+ * between them, a field nothing types into and a hold nothing holds would both pass. So would a
+ * button that navigates correctly and changes nothing on the way — which is what every control in
+ * host setup was until there was something behind it. These are the same gap `EditorSurfaceTest`
+ * was written for.
  *
- * Both drive the real input stack against the real screens, with a real [FlowModel] behind them,
- * so what is being proved is the whole path: finger, screen, actions layer, store.
+ * Every one drives the real input stack against the real screens, with a real [FlowModel] behind
+ * them, so what is being proved is the whole path: finger, screen, actions layer, map, store.
  */
 @OptIn(ExperimentalTestApi::class)
 class HostSetupInputTest {
@@ -197,5 +203,122 @@ class HostSetupInputTest {
         assertTrue(model.homes.isEmpty)
         assertEquals("A HOME NEEDS A NAME", model.homes.refusal)
         assertEquals(ScreenId.SaveName, model.state.screen)
+    }
+
+    // ---- Registration, through the real screens -----------------------------------------------
+
+    private fun openOn(screen: ScreenId, room: String): FlowModel {
+        val model = FlowModel(PanelState(screen = screen))
+        model.editor.open(room)
+        return model
+    }
+
+    /**
+     * **TAP A MARKER TO REMOVE IT**, which the screen has said since the day it was drawn and
+     * which did nothing until there were cards to remove.
+     *
+     * The chip is keyed on the card, not on the shape it draws — two cards in one room draw two
+     * different shapes, and a control that removed "the ring" rather than "this card" would be
+     * removing something by a name the map is deliberately not keyed on.
+     */
+    @Test
+    fun tappingAMarkerChipUnregistersThatCard() = runDesktopComposeUiTest(width = 300, height = 650) {
+        val model = openOn(ScreenId.MarkerSheet, "GARAGE")
+        val before = model.editor.cardsIn("GARAGE")
+        assertEquals(2, before.size, "the fixture room no longer holds two cards")
+        show(model)
+
+        // The chips come first on the screen; the terminal's own × is the one after them.
+        onAllNodes(hasText("×") and hasClickAction())[0].performClick()
+        mainClock.advanceTimeBy(100)
+
+        assertEquals(
+            before.drop(1).map { it.card.id },
+            model.editor.cardsIn("GARAGE").map { it.card.id },
+            "the wrong card came off the sheet",
+        )
+    }
+
+    /**
+     * **Every outcome reaches the viewfinder the host is looking at.**
+     *
+     * Found by injection: deleting the readout from the scan screen altogether broke no test. The
+     * whole unit is a card being offered to a map, and the visible half of it is one line in the
+     * middle of a black rectangle — a scan that changed the map and said nothing, or was turned
+     * away and said nothing, is a host walking out of a room with the wrong idea about what is in
+     * it. So each branch is read back off the rendered screen rather than off the model.
+     */
+    @Test
+    fun everyScanOutcomeIsSaidOnTheViewfinder() = runDesktopComposeUiTest(width = 300, height = 650) {
+        val model = openOn(ScreenId.ScanMarker, "KITCHEN")
+        show(model)
+
+        // It landed.
+        model.cardScanned(
+            CardPayload.encode(MarkerCard(CardPayload.VERSION, MarkerShapes.require("bowtie"), MarkerId("CARD-01")))
+        )
+        mainClock.advanceTimeBy(100)
+        onNodeWithText("KITCHEN . ADDED").assertExists()
+        onNodeWithText("CARD-01").assertExists()
+
+        // D-086: a second card carrying a shape the house already has.
+        model.cardScanned(
+            CardPayload.encode(MarkerCard(CardPayload.VERSION, MarkerShapes.require("ring"), MarkerId("CARD-99")))
+        )
+        mainClock.advanceTimeBy(100)
+        onNodeWithText("THAT SHAPE IS ALREADY IN GARAGE").assertExists()
+
+        // D-071: a fact about a piece of paper, so it may be said plainly.
+        model.cardScanned("NOTACARD")
+        mainClock.advanceTimeBy(100)
+        onNodeWithText("NOT ONE OF OUR CARDS").assertExists()
+    }
+
+    /**
+     * MOVE THE TERMINAL TO THIS ROOM: the card in the host's hand is put down here, and the room
+     * it came from is left without one — which is what the screen said it would do.
+     */
+    @Test
+    fun movingTheTerminalFromTheRefusalScreenRebindsIt() =
+        runDesktopComposeUiTest(width = 300, height = 650) {
+            val model = openOn(ScreenId.ScanMarker, "KITCHEN")
+            val tCard = MarkerCard(CardPayload.VERSION, MarkerShapes.TERMINAL, MarkerId("SEEDT01"))
+            model.cardScanned(CardPayload.encode(tCard))
+            assertEquals(ScreenId.TermTaken, model.state.screen)
+            show(model)
+
+            onNode(hasText("MOVE THE TERMINAL TO KITCHEN") and hasClickAction()).performClick()
+            mainClock.advanceTimeBy(100)
+
+            assertEquals("KITCHEN", model.editor.terminal, "the terminal did not move")
+            assertEquals(ScreenId.ScanMarker, model.state.screen)
+        }
+
+    /** REMOVE IT, and the home cannot be saved again until some room has a terminal. */
+    @Test
+    fun removingTheTerminalTakesItOffTheHome() = runDesktopComposeUiTest(width = 300, height = 650) {
+        val model = openOn(ScreenId.TermRemove, "KITCHEN")
+        assertEquals("HALL", model.editor.terminal)
+        show(model)
+
+        onNode(hasText("REMOVE IT") and hasClickAction()).performClick()
+        mainClock.advanceTimeBy(100)
+
+        assertEquals(null, model.editor.terminal, "REMOVE IT navigated and removed nothing")
+        assertTrue(!model.editor.hasTerminal)
+        assertEquals(ScreenId.MarkerSheet, model.state.screen)
+    }
+
+    /** KEEP IT is the same screen's other button and must not be the same act. */
+    @Test
+    fun keepingTheTerminalLeavesItWhereItIs() = runDesktopComposeUiTest(width = 300, height = 650) {
+        val model = openOn(ScreenId.TermRemove, "KITCHEN")
+        show(model)
+
+        onNode(hasText("KEEP IT") and hasClickAction()).performClick()
+        mainClock.advanceTimeBy(100)
+
+        assertEquals("HALL", model.editor.terminal)
+        assertEquals(ScreenId.MarkerSheet, model.state.screen)
     }
 }

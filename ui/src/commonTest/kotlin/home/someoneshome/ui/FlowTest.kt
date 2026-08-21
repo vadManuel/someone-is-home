@@ -1,6 +1,10 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.CardPayload
 import home.someoneshome.model.Cell
+import home.someoneshome.model.MarkerCard
+import home.someoneshome.model.MarkerId
+import home.someoneshome.model.MarkerShapes
 import home.someoneshome.model.RoomKind
 
 import kotlin.test.Test
@@ -49,6 +53,13 @@ class FlowTest {
      */
     private fun onward(id: ScreenId): Set<ScreenId> =
         ScreenGraph.exitsOf(id) + Flow.viaActions[id].orEmpty() + setOfNotNull(Flow.autoAdvance[id]?.to)
+
+    /** The card marked T, as a piece of paper the deck could have printed. */
+    private fun terminalCard(id: String = "SEEDT01") =
+        MarkerCard(CardPayload.VERSION, MarkerShapes.TERMINAL, MarkerId(id))
+
+    private fun card(shape: String, id: String) =
+        MarkerCard(CardPayload.VERSION, MarkerShapes.require(shape), MarkerId(id))
 
     // ---- The graph -------------------------------------------------------------------------
 
@@ -416,10 +427,17 @@ class FlowTest {
         delete.deleteHome()
         assertEquals(Flow.viaActions.getValue(ScreenId.Delete), setOf(delete.state.screen))
 
+        // The T card, read in a room while the terminal is in another one. Not a tap at all: the
+        // camera raises it, and where it lands depends on what the map says about the card.
+        val scan = FlowModel(PanelState(screen = ScreenId.ScanMarker))
+        scan.editor.open("GARAGE")
+        scan.cardScanned(CardPayload.encode(terminalCard()))
+        assertEquals(Flow.viaActions.getValue(ScreenId.ScanMarker), setOf(scan.state.screen))
+
         assertEquals(
             setOf(
                 ScreenId.Editor, ScreenId.RoomEdit, ScreenId.StairsWarn,
-                ScreenId.SaveName, ScreenId.Delete,
+                ScreenId.SaveName, ScreenId.Delete, ScreenId.ScanMarker,
             ),
             Flow.viaActions.keys,
             "a new action edge was declared and nothing here walks it",

@@ -1,12 +1,19 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.CardPayload
+import home.someoneshome.model.CardRejection
 import home.someoneshome.model.Cell
 import home.someoneshome.model.CellRect
 import home.someoneshome.model.Floor
+import home.someoneshome.model.HouseMap
 import home.someoneshome.model.HousePlan
+import home.someoneshome.model.MarkerCard
+import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MarkerShape
 import home.someoneshome.model.MarkerShapes
 import home.someoneshome.model.PaintResult
+import home.someoneshome.model.RegisterResult
+import home.someoneshome.model.Registration
 import home.someoneshome.model.Room
 import home.someoneshome.model.RoomKind
 import home.someoneshome.model.SavedHome
@@ -53,19 +60,22 @@ import kotlin.math.floor
  * of the model's, translated into a line of screen copy. A second opinion about what is legal is
  * a second opinion that will one day disagree.
  *
- * ### Markers and the terminal are fixtures, and are marked as such
+ * ### The cards are real cards
  *
- * Dropping markers into cells is story 4.4 and the Terminal designation is 4.5; neither is built
- * yet. What is here is the *shape* of that data — which room holds what — so the rules that
- * depend on it can be real now: **stairs hold nothing** (D-099), so [setKind] to stairs
- * unregisters the room's cards as part of the change rather than in a flow that remembers to,
- * and REVIEW HOME is gated on a terminal existing rather than on a flag somebody sets.
+ * [map] is a [HouseMap]: printed [MarkerCard]s with the ids on them, bound to rooms, and the one
+ * card marked T. It used to be a fixture — room name to a list of shapes — and every rule that
+ * depended on it was real while the data under it was not. What the rules were always about is
+ * unchanged: **stairs hold nothing** (D-099), so [setKind] to stairs unregisters the room's cards
+ * as part of the change rather than in a flow that remembers to, and REVIEW HOME is gated on a
+ * terminal existing rather than on a flag somebody sets.
+ *
+ * **Every refusal a scan can produce is the map's**, translated here into a line of screen copy
+ * exactly as [HousePlan.paint]'s are. This class still holds no rule of its own.
  */
 class HomeEditorModel(
     plan: HousePlan,
     floorName: String,
-    markers: Map<String, List<MarkerShape>> = emptyMap(),
-    terminal: String? = null,
+    map: HouseMap = HouseMap.EMPTY,
     name: String = "",
 ) {
 
@@ -111,12 +121,22 @@ class HomeEditorModel(
     var refusal: String? by mutableStateOf(null)
         private set
 
-    /** Fixture. Room name to the cards registered in it — story 4.4 replaces the contents. */
-    var markers: Map<String, List<MarkerShape>> by mutableStateOf(markers)
+    /** What the host has scanned: cards bound to rooms, and the one card marked T. */
+    var map: HouseMap by mutableStateOf(map)
         private set
 
-    /** Fixture. The one room holding the T card, or none — story 4.5 replaces the contents. */
-    var terminal: String? by mutableStateOf(terminal)
+    /**
+     * What the last scan did, so the scan screen can show it.
+     *
+     * Held here rather than on [PanelState] because it is editing state and `PanelState` is flat
+     * and inert.
+     *
+     * **Cleared when the host opens a different room**, and not when the scan screen is left. A
+     * readout is about a card *in a room*: carrying it into the next room would tell the host a
+     * card had just been read somewhere they have only walked into, while dropping it every time
+     * they step out to the marker sheet and back would erase the confirmation they went to look at.
+     */
+    var lastScan: ScanOutcome? by mutableStateOf(null)
         private set
 
     private var anchor: Cell? = null
@@ -148,7 +168,10 @@ class HomeEditorModel(
 
     val heldMarkers: List<MarkerShape> get() = markersIn(heldName)
 
-    fun markersIn(room: String): List<MarkerShape> = markers[room].orEmpty()
+    /** The cards in a room, as shapes — a shape is a marker's whole name to everyone but the app. */
+    fun markersIn(room: String): List<MarkerShape> = map.inRoomNamed(room).map { it.card.shape }
+
+    fun cardsIn(room: String): List<Registration> = map.inRoomNamed(room)
 
     /**
      * Whether a room holds anything a type change would take away.
@@ -156,15 +179,17 @@ class HomeEditorModel(
      * The one question the stairs warning turns on. An empty room becoming stairs costs nothing
      * and must not be interrogated about it; an occupied one costs every card in it.
      */
-    fun holdsAnything(room: String): Boolean =
-        markersIn(room).isNotEmpty() || terminal == room
+    fun holdsAnything(room: String): Boolean = map.holdsAnything(room)
+
+    /** The one room holding the T card, by name. Every screen about the terminal asks for this. */
+    val terminal: String? get() = map.terminal?.room?.name
 
     /** **No terminal, no playable home.** The gate on REVIEW HOME, and it is a fact, not a flag. */
-    val hasTerminal: Boolean get() = terminal != null
+    val hasTerminal: Boolean get() = map.terminal != null
 
     val floorCount: Int get() = plan.floors.size
     val roomCount: Int get() = plan.rooms.size
-    val markerCount: Int get() = markers.values.sumOf { it.size }
+    val markerCount: Int get() = map.registrations.size
 
     fun roomsOn(floor: String): Int = plan.floorNamed(floor)?.rooms?.size ?: 0
 
@@ -248,6 +273,7 @@ class HomeEditorModel(
     /** Open a room in the panel. The plan is what says which rooms there are. */
     fun open(name: String) {
         if (plan.roomNamed(name) == null) return
+        if (name != held) lastScan = null
         held = name
         refusal = null
     }
@@ -275,8 +301,7 @@ class HomeEditorModel(
         val without = plan.forget(room.name)
         val painted = without.paint(storey, PaintedRoom(Room(name, room.kind), room.strokes))
         if (accept(painted)) {
-            markers = markers - room.name + (name to markersIn(room.name))
-            if (terminal == room.name) terminal = name
+            map = map.renamedRoom(room.name, Room(name, room.kind))
             held = name
         }
     }
@@ -310,6 +335,111 @@ class HomeEditorModel(
         refusal = null
     }
 
+    // ---- Registration --------------------------------------------------------------------------
+
+    /**
+     * **A card was read. Offer it to the room the host has open.**
+     *
+     * Every outcome the map defines is answered here, and the `when` is exhaustive so that a new
+     * one cannot arrive as silence. That is the shape rule 1 is about, one layer up from the loop:
+     * a scan that produced nothing on screen is indistinguishable from a scan that never happened,
+     * and the host walks away believing a card is registered.
+     *
+     * Returns the map's own answer so the flow layer can decide where the host goes — the one
+     * refusal that is a screen rather than a line is the terminal already being somewhere else.
+     * **Null is not one of the map's answers**: it means there was no room to offer the card to,
+     * which the map was never asked about. The screen still says so.
+     */
+    fun register(card: MarkerCard): RegisterResult? {
+        val room = heldRoom
+        if (room == null) {
+            lastScan = ScanOutcome.Refused(card, "OPEN A ROOM FIRST")
+            return null
+        }
+        val result = map.register(card, room.room)
+        lastScan = when (result) {
+            is RegisterResult.Registered -> {
+                map = result.map
+                ScanOutcome.Landed(card, room.name, from = null)
+            }
+
+            is RegisterResult.Moved -> {
+                map = result.map
+                ScanOutcome.Landed(card, room.name, from = result.from.name)
+            }
+
+            // D-086, settled at revision 18. Two live cards may never share a shape: the shape is
+            // the marker's whole name, so a player told to go to the circle would have two places
+            // to stand — and the wrong-room reports that follow are indistinguishable from the
+            // error the Terminal injects on purpose. The host is holding the card, in the light,
+            // with 43 other shapes to choose from.
+            is RegisterResult.ShapeAlreadyRegistered -> ScanOutcome.Refused(
+                card,
+                "THAT SHAPE IS ALREADY IN ${result.to.room.name}",
+            )
+
+            // Unreachable through the screens — the marker sheet is only offered for a room — and
+            // answered anyway. A room can become stairs from the room panel while this room is the
+            // one the scan screen is holding, and the absent refusal would be the leak.
+            is RegisterResult.StairsHoldNothing ->
+                ScanOutcome.Refused(card, "${result.room.name} IS STAIRS. STAIRS HOLD NOTHING")
+
+            // The one refusal that is a screen: the host has to be told where the terminal is and
+            // offered the move, because they are about to go and find it.
+            is RegisterResult.TerminalTaken -> ScanOutcome.Refused(
+                card,
+                "THE TERMINAL IS IN ${result.at.room.name}",
+            )
+        }
+        return result
+    }
+
+    /**
+     * MOVE THE TERMINAL TO THIS ROOM: the answer to [RegisterResult.TerminalTaken].
+     *
+     * **The card is the one that was just scanned**, read back off [lastScan], rather than the one
+     * already placed: the host is holding it, and moving the terminal is done by putting that card
+     * down in this room. The old one becomes a piece of paper in a room that no longer has a
+     * terminal, which is what the screen warned it would.
+     *
+     * Does nothing when no scan is outstanding. Nothing on any screen can reach that — the button
+     * only exists on the screen a scan put the host on — and it is the honest answer rather than a
+     * terminal placed with a card nobody read.
+     */
+    fun moveTerminal() {
+        val card = lastScan?.card ?: return
+        val room = heldRoom ?: return
+        val result = map.moveTerminal(card, room.room)
+        when (result) {
+            is RegisterResult.Registered -> {
+                map = result.map
+                lastScan = ScanOutcome.Landed(card, room.name, from = null)
+            }
+
+            is RegisterResult.Moved -> {
+                map = result.map
+                lastScan = ScanOutcome.Landed(card, room.name, from = result.from.name)
+            }
+
+            else -> lastScan = ScanOutcome.Refused(card, "${room.name} CANNOT HOLD IT")
+        }
+    }
+
+    /** REMOVE IT: the T card belongs to no room, and this home cannot be saved until one does. */
+    fun removeTerminal() {
+        map = map.forgetTerminal()
+    }
+
+    /** A tap on a marker in the sheet: that card is no longer registered anywhere. */
+    fun forgetMarker(id: MarkerId) {
+        map = map.forget(id)
+    }
+
+    /** A symbol resolved and was not a card this build can read. */
+    fun refuseScan(why: CardRejection) {
+        lastScan = ScanOutcome.Unreadable(why)
+    }
+
     // ---- Floors --------------------------------------------------------------------------------
 
     /**
@@ -332,6 +462,7 @@ class HomeEditorModel(
     fun openFloor(name: String) {
         if (plan.floorNamed(name) == null) return
         floorName = name
+        lastScan = null
         held = plan.floorNamed(name)?.rooms?.firstOrNull()?.name
         drag = null
         anchor = null
@@ -358,8 +489,8 @@ class HomeEditorModel(
      */
     fun load(home: SavedHome) {
         plan = home.plan
-        markers = home.markers
-        terminal = home.terminal
+        map = home.map
+        lastScan = null
         name = home.name
         floorName = home.plan.floors.firstOrNull()?.name ?: GROUND
         held = floor?.rooms?.firstOrNull()?.name
@@ -377,8 +508,8 @@ class HomeEditorModel(
      */
     fun startNewHome(name: String) {
         plan = HousePlan.EMPTY.withFloor(GROUND)
-        markers = emptyMap()
-        terminal = null
+        map = HouseMap.EMPTY
+        lastScan = null
         this.name = name
         floorName = GROUND
         held = null
@@ -396,7 +527,7 @@ class HomeEditorModel(
      * editor can do reaches those, which is the point of asking it here rather than trusting it.
      */
     fun asSavedHome(named: String = name): SavedHome =
-        SavedHome(name = named, plan = plan, markers = markers, terminal = terminal)
+        SavedHome(name = named, plan = plan, map = map)
 
     // ---- Internals -----------------------------------------------------------------------------
 
@@ -431,8 +562,7 @@ class HomeEditorModel(
     }
 
     private fun unregisterAll(room: String) {
-        markers = markers - room
-        if (terminal == room) terminal = null
+        map = map.forgetIn(room)
     }
 
     /**
@@ -518,22 +648,55 @@ class HomeEditorModel(
                 name = BUNGALOW,
                 plan = HousePlan.of(listOf(ground, upper)),
                 floorName = GROUND,
-                // Five cards on the ground floor and four upstairs — the nine the save screen
-                // has always counted. The shapes are drawn from the real roster, because a
-                // marker's shape is its whole identity to everyone who is not the app.
-                markers = mapOf(
-                    "KITCHEN" to shapes("triangle_up"),
-                    "LIVING" to shapes("square"),
-                    "STUDY" to shapes("diamond"),
-                    "GARAGE" to shapes("triangle_up", "ring"),
-                    "BED 1" to shapes("crescent"),
-                    "BED 2" to shapes("wide_rect"),
-                    "LANDING" to shapes("circle"),
-                    "BATH 1" to shapes("triangle_down"),
-                ),
-                terminal = "HALL",
+                map = bungalowMap(),
             )
         }
+
+        /**
+         * The nine cards the save screen has always counted, as cards.
+         *
+         * Five on the ground floor and four upstairs, plus the T card in the hall. The shapes come
+         * off the real roster because a marker's shape is its whole identity to everyone who is
+         * not the app, and the ids are seven readable characters — a fixture whose ids are noise
+         * is a fixture nobody can follow on a screenshot.
+         *
+         * **GARAGE holding two cards is deliberate**: a room with more than one is what the marker
+         * sheet was drawn for, and a fixture where every room held exactly one would never show it.
+         * They carry different shapes, because two live cards may never share one (D-086).
+         */
+        private fun bungalowMap(): HouseMap {
+            val cards = listOf(
+                "KITCHEN" to "triangle_up",
+                "LIVING" to "square",
+                "STUDY" to "diamond",
+                "GARAGE" to "ring",
+                "GARAGE" to "star",
+                "BED 1" to "crescent",
+                "BED 2" to "wide_rect",
+                "LANDING" to "circle",
+                "BATH 1" to "triangle_down",
+            )
+            val registrations = cards.mapIndexed { i, (room, shape) ->
+                Registration(fixtureCard(shape, i + 1), Room(room))
+            }
+            return HouseMap.of(
+                registrations,
+                Registration(fixtureCard(MarkerShapes.TERMINAL.id, 0), Room("HALL")),
+            )
+        }
+
+        /**
+         * A card with a readable id: `HOME-00` through `HOME-09`, seven characters.
+         *
+         * The hyphen rather than a space because [MarkerShapes.ALPHABET] is QR's alphanumeric set
+         * **minus SPACE** — a space is ambiguous in print, and one here would push the encoder out
+         * of alphanumeric mode and grow the printed symbol past Version 1.
+         */
+        private fun fixtureCard(shape: String, number: Int) = MarkerCard(
+            version = CardPayload.VERSION,
+            shape = MarkerShapes.require(shape),
+            id = MarkerId("HOME-" + number.toString().padStart(2, '0')),
+        )
 
         const val GROUND = "GROUND"
         const val UPPER = "UPPER"
@@ -543,9 +706,52 @@ class HomeEditorModel(
 
         private fun painted(name: String, kind: RoomKind, x: Int, y: Int, w: Int, h: Int) =
             PaintedRoom(Room(name, kind), listOf(CellRect(x, y, w, h)))
+    }
+}
 
-        private fun shapes(vararg ids: String): List<MarkerShape> =
-            ids.mapNotNull { MarkerShapes[it] }
+/**
+ * **What the last scan did, in the words the viewfinder shows.**
+ *
+ * The scan screen is the one place in host setup where the host is looking at a card in their hand
+ * and at the phone, and has to be told which of the two the app is talking about. So an outcome
+ * always carries a shape: what landed, or what was turned away. A refusal with no shape on it
+ * would leave a host reading THAT SHAPE IS ALREADY IN GARAGE with three cards in their hand.
+ */
+sealed interface ScanOutcome {
+
+    /**
+     * The card the message is about — the one in the host's hand.
+     *
+     * **Null on exactly one outcome**: a payload this build could not read is not a card, and
+     * inventing one to fill the field would put a shape on the screen that is on nothing the host
+     * is holding.
+     */
+    val card: MarkerCard?
+
+    val shape: MarkerShape? get() = card?.shape
+
+    val isTerminal: Boolean get() = card?.isTerminal == true
+
+    /**
+     * The card is registered here now.
+     *
+     * [from] is the room it was in before, when the host is correcting themselves mid-walk. Null
+     * on a card that had not been registered anywhere, which is most of them.
+     */
+    data class Landed(override val card: MarkerCard, val room: String, val from: String?) : ScanOutcome
+
+    /** Nothing was registered, and this is why — said out loud, because host setup is in the light. */
+    data class Refused(override val card: MarkerCard, val why: String) : ScanOutcome
+
+    /**
+     * The symbol resolved and was not one of ours, or was one this build cannot read.
+     *
+     * D-071 allows this one to be specific where the in-round scan may not: an unreadable card is
+     * a fact about a piece of paper, not a statement about a player, and the host is standing in a
+     * lit room holding the paper.
+     */
+    data class Unreadable(val why: CardRejection) : ScanOutcome {
+        override val card: MarkerCard? get() = null
     }
 }
 
