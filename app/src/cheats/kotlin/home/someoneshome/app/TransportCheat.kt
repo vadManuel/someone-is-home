@@ -31,6 +31,8 @@ import home.someoneshome.platform.monotonicNanos
 import home.someoneshome.platform.saveHostAddress
 import home.someoneshome.platform.saveSeatToken
 import home.someoneshome.platform.transport.ClientSession
+import home.someoneshome.platform.transport.HostAdvertiser
+import home.someoneshome.platform.transport.HostBrowser
 import home.someoneshome.platform.transport.SeatLedger
 import home.someoneshome.platform.transport.TransportClient
 import home.someoneshome.platform.transport.TransportHost
@@ -38,6 +40,7 @@ import home.someoneshome.ui.Amber
 import home.someoneshome.ui.Label
 import home.someoneshome.ui.LocalPanelInsets
 import home.someoneshome.ui.PanelButton
+import home.someoneshome.ui.tap
 import home.someoneshome.ui.u
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -71,9 +74,13 @@ class TransportCheat(private val scope: CoroutineScope) {
     var clientPhase by mutableStateOf("NOT JOINED")
         private set
     var address by mutableStateOf("127.0.0.1")
+    var port by mutableStateOf(CHEAT_TRANSPORT_PORT)
+        private set
 
     private var ledger: SeatLedger? = null
     private var host: TransportHost? = null
+    private var advertiser: HostAdvertiser? = null
+    private var browser: HostBrowser? = null
     private var session: ClientSession? = null
     private var client: TransportClient? = null
     private var clientJob: Job? = null
@@ -116,10 +123,30 @@ class TransportCheat(private val scope: CoroutineScope) {
         )
         host = h
         scope.launch {
-            val port = h.start(CHEAT_TRANSPORT_PORT)
-            hostingPort = port
-            note("HOSTING ON :$port")
+            val bound = h.start(CHEAT_TRANSPORT_PORT)
+            hostingPort = bound
+            // D-094 closed properly: the host says where it is, nobody types an IP. The
+            // instance name carries nothing about any round — it is on the air for the whole
+            // LAN before any permission this app controls.
+            advertiser = HostAdvertiser("Someone's Home", bound, onEvent = ::note).also { it.start() }
+            note("HOSTING ON :$bound")
         }
+    }
+
+    /** Browse for an advertised host; the first one found fills the address and port. */
+    fun find() {
+        if (browser != null) return
+        note("LOOKING FOR A HOST…")
+        browser = HostBrowser(
+            onFound = { name, foundAddress, foundPort ->
+                address = foundAddress
+                port = foundPort
+                note("FOUND '$name' $foundAddress:$foundPort")
+                browser?.stop()
+                browser = null
+            },
+            onEvent = ::note,
+        ).also { it.start() }
     }
 
     fun lockRound() {
@@ -133,10 +160,16 @@ class TransportCheat(private val scope: CoroutineScope) {
         if (clientJob?.isActive == true) return
         val s = session ?: ClientSession().also { session = it }
         val c = TransportClient(
-            s, address, CHEAT_TRANSPORT_PORT, ::nowMillis,
+            s, address, port, ::nowMillis,
             onFrame = { note("ME < ${it.brief()}") },
             onPhase = { phase ->
                 clientPhase = phase.brief()
+                // The log is the record; the phase line is only the present tense. A seating
+                // that never entered the log was invisible the moment anything else happened —
+                // Vadmanuel noticed on the first successful discovery run.
+                if (phase is ClientSession.Phase.Seated || phase is ClientSession.Phase.Dismissed) {
+                    note("ME: ${phase.brief()}")
+                }
                 // The token is durable from the moment of seating, or the log says it is not.
                 // This call was missing once: an edit silently matched nothing, the build stayed
                 // green (an unused import compiles), and the 13 Pro relaunched as a stranger —
@@ -235,6 +268,7 @@ fun TransportCheatScreen(cheat: TransportCheat) {
                 cursorBrush = SolidColor(Amber.Bright),
                 singleLine = true,
             )
+            Label("FIND", Modifier.tap(cheat::find), size = 6.5, color = Amber.Bright)
         }
         Label(cheat.clientPhase, size = 7.0, color = Amber.Mid)
         Row(horizontalArrangement = Arrangement.spacedBy(4.u)) {

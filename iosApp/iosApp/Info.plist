@@ -66,6 +66,14 @@
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>The house connects the players' phones to the host's phone over this network. Nothing leaves the room.</string>
 
+	<!-- Without this list, browsing for the host's service silently finds NOTHING on iOS 14+ --
+	     no error, no prompt, an empty result forever. A fail-closed OS behaviour worth a comment
+	     precisely because the failure has no symptom. -->
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_someones-home._tcp</string>
+	</array>
+
 	<!-- So a host can pull a house map or a recording off the device without a cable. The map's
 	     stored form is its export form by construction (game-architecture.md:419). -->
 	<key>UIFileSharingEnabled</key>
