@@ -129,16 +129,21 @@ class PanelActions(
      * `go(...)` on a button: what happens after a check-in, a READY, or a vote depends on every
      * phone in the house, and no phone can count phones. They are declared in neither
      * [ScreenGraph] nor [Flow.viaActions] because they walk no edge at all — the meeting's
-     * transitions are the house's, and [Flow.autoAdvance] stands in for it until there is one.
+     * transitions are the house's, and they are now in [Flow.housePushes] rather than standing in
+     * as timers.
      *
-     * [chooseVote] and [lockInVote] are two steps rather than one because the design's vote screen
+     * **They do reach the house**, which is what changed: each one publishes a [MeetingRequest],
+     * seat-free, and the connection attaches the seat (see [MeetingModel.send]).
+     *
+     * [chooseVote] and [readyToVote] are two steps rather than one because the design's vote screen
      * shows *how many have voted, never what*: having voted is a state, distinct from having a
-     * finger on a row, and the vote stays changeable after it either way.
+     * finger on a row. **After [readyToVote] the selection cannot be changed** (D-117), which
+     * reverses what these two comments used to say about it.
      */
     val checkIn: () -> Unit = {},
     val sayReady: () -> Unit = {},
     val chooseVote: (VoteChoice) -> Unit = {},
-    val lockInVote: () -> Unit = {},
+    val readyToVote: () -> Unit = {},
     /**
      * **The Subroutines: one control that navigates and two that only ever echo.**
      *

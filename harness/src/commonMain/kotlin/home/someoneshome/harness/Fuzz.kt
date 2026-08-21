@@ -4,6 +4,7 @@ import home.someoneshome.core.reduce
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
 import home.someoneshome.model.MarkerId
+import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
 
@@ -112,14 +113,77 @@ fun fuzzRound(
                 }
                 4 -> add(Event.RevokeArmed(Tick(t++), anySeat()))
                 5 -> add(Event.ContactMade(Tick(t++), anySeat(), anySeat()))
-                6 -> add(Event.MeetingCalled(Tick(t++), anySeat()))
-                7 -> add(
-                    Event.VoteCast(Tick(t++), anySeat(), if (rng.chance(4)) null else anySeat())
+                6, 7 -> {
+                    // **A whole meeting, about half the time, and the rest of the time any of the
+                    // ways one goes wrong.** Same lesson the entries learned: a fuzzer that only
+                    // ever calls a meeting and taps at random never once closes the check-in gate,
+                    // never opens a ballot and never reads one -- so the tally, the auto-lock, the
+                    // takeover and every property that rests on them would hold over 150 rounds in
+                    // which the rules under test never fired.
+                    if (rng.chance(2)) addAll(wholeMeeting(rng, seats) { t++ }) else {
+                        add(Event.MeetingCalled(Tick(t++), anySeat(), anyTrigger(rng, ::anySeat)))
+                        add(Event.MeetingCheckedIn(Tick(t++), anySeat()))
+                        add(Event.ReadyToVoteDeclared(Tick(t++), anySeat()))
+                        add(
+                            Event.VoteSelected(
+                                Tick(t++), anySeat(), if (rng.chance(4)) null else anySeat(),
+                            )
+                        )
+                        add(Event.VoteLocked(Tick(t++), anySeat()))
+                    }
+                }
+                else -> add(
+                    // The four clock events, on their own, out of order and mostly out of phase.
+                    when (rng.nextInt(4)) {
+                        0 -> Event.DiscussionClosed(Tick(t++))
+                        1 -> Event.VoteWindowClosed(Tick(t++))
+                        2 -> Event.TallyHalfwayReached(Tick(t++))
+                        else -> Event.MeetingClosed(Tick(t++))
+                    }
                 )
-                else -> add(Event.MeetingClosed(Tick(t++)))
             }
         }
     }
+}
+
+/** Either way a meeting can be called, the report naming a seat that may not exist. */
+private fun anyTrigger(rng: Rng, anySeat: () -> Seat): MeetingTrigger =
+    if (rng.chance(2)) MeetingTrigger.MeetingCard else MeetingTrigger.RevokeReported(anySeat())
+
+/**
+ * **A meeting walked end to end**, so the lifecycle's own rules get to run.
+ *
+ * Everybody checks in — D-104's gate does not close a player short, so a meeting that skipped one
+ * would stall in CheckIn and every phase after it would be refused, which is a fuzzer quietly
+ * testing the admission gate and nothing else.
+ *
+ * Inside the vote it stays absurd: seats select more than once, some press READY and some do not,
+ * and some tap again after pressing it. The buzzer then auto-locks whatever is left, which is the
+ * path D-117 rests on.
+ *
+ * The revoked and restrained are still handed ballots to tap on, because they are not supposed to
+ * have any and the point of a fuzzer is to hand them one.
+ */
+private fun wholeMeeting(rng: Rng, seats: List<Seat>, tick: () -> Long): List<Event> = buildList {
+    val caller = rng.pick(seats)
+    add(Event.MeetingCalled(Tick(tick()), caller, anyTrigger(rng) { rng.pick(seats) }))
+    for (seat in seats) add(Event.MeetingCheckedIn(Tick(tick()), seat))
+
+    for (seat in seats) if (rng.chance(2)) add(Event.ReadyToVoteDeclared(Tick(tick()), seat))
+    add(Event.DiscussionClosed(Tick(tick())))
+
+    for (seat in seats) {
+        if (rng.chance(3)) continue
+        add(Event.VoteSelected(Tick(tick()), seat, if (rng.chance(4)) null else rng.pick(seats)))
+        if (rng.chance(2)) {
+            add(Event.VoteLocked(Tick(tick()), seat))
+            // A tap after READY. It must come back refused and re-asserted, never silently.
+            if (rng.chance(2)) add(Event.VoteSelected(Tick(tick()), seat, rng.pick(seats)))
+        }
+    }
+    add(Event.VoteWindowClosed(Tick(tick())))
+    add(Event.TallyHalfwayReached(Tick(tick())))
+    add(Event.MeetingClosed(Tick(tick())))
 }
 
 /** Deterministic shuffle. `List.shuffled()` reaches for the platform's default random source. */

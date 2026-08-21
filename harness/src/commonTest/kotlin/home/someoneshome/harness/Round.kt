@@ -4,6 +4,7 @@ import home.someoneshome.core.reduce
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
 import home.someoneshome.model.MarkerId
+import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
 
@@ -54,8 +55,21 @@ internal fun round(insiders: List<Seat> = INSIDERS): List<Event> {
             if (i % 9 == 0) add(Event.RevokeArmed(Tick(t++), Seat(1)))
             if (i % 9 == 4) add(Event.ContactMade(Tick(t++), Seat(1), SEATS[(i + 3) % SEATS.size]))
             if (i % 17 == 16) {
-                add(Event.MeetingCalled(Tick(t++), seat))
-                SEATS.forEach { v -> add(Event.VoteCast(Tick(t++), v, if (v.index % 3 == 0) null else Seat(1))) }
+                // A whole meeting, walked. It has to be whole: D-104's gate does not close a
+                // player short, so a fixture that checked in four of six would stall in CheckIn
+                // and every phase after it would be refused rather than reduced -- a fixture round
+                // that quietly stopped exercising the vote.
+                add(Event.MeetingCalled(Tick(t++), seat, MeetingTrigger.MeetingCard))
+                SEATS.forEach { v -> add(Event.MeetingCheckedIn(Tick(t++), v)) }
+                add(Event.DiscussionClosed(Tick(t++)))
+                SEATS.forEach { v ->
+                    add(Event.VoteSelected(Tick(t++), v, if (v.index % 3 == 0) null else Seat(1)))
+                    // Two seats never press READY, so the buzzer's auto-lock is on the fixture's
+                    // path rather than only on the fuzzer's.
+                    if (v.index % 5 != 4) add(Event.VoteLocked(Tick(t++), v))
+                }
+                add(Event.VoteWindowClosed(Tick(t++)))
+                add(Event.TallyHalfwayReached(Tick(t++)))
                 add(Event.MeetingClosed(Tick(t++)))
             }
         }

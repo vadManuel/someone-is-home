@@ -3,6 +3,7 @@ package home.someoneshome.harness
 import home.someoneshome.model.Effect
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
+import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.RefusalReason
 import home.someoneshome.model.Seat
 
@@ -37,11 +38,37 @@ object Transcript {
         is Event.ContactMade ->
             row("ContactMade", event.at, "actor" to num(event.actor.index), "target" to num(event.target.index))
         is Event.MeetingCalled ->
-            row("MeetingCalled", event.at, "caller" to num(event.caller.index))
-        is Event.VoteCast ->
-            row("VoteCast", event.at, "voter" to num(event.voter.index), "target" to seatOrNone(event.target))
+            row("MeetingCalled", event.at, "caller" to num(event.caller.index),
+                "trigger" to trigger(event.trigger))
+        is Event.MeetingCheckedIn ->
+            row("MeetingCheckedIn", event.at, "seat" to num(event.seat.index))
+        is Event.ReadyToVoteDeclared ->
+            row("ReadyToVoteDeclared", event.at, "seat" to num(event.seat.index))
+        is Event.VoteSelected ->
+            row("VoteSelected", event.at, "voter" to num(event.voter.index),
+                "target" to seatOrNone(event.target))
+        is Event.VoteLocked ->
+            row("VoteLocked", event.at, "voter" to num(event.voter.index))
+        is Event.DiscussionClosed ->
+            row("DiscussionClosed", event.at)
+        is Event.VoteWindowClosed ->
+            row("VoteWindowClosed", event.at)
+        is Event.TallyHalfwayReached ->
+            row("TallyHalfwayReached", event.at)
         is Event.MeetingClosed ->
             row("MeetingClosed", event.at)
+    }
+
+    /**
+     * How a meeting was called. Two forms, and the reported seat is part of the fact.
+     *
+     * `card` and `report:3` rather than a bare seat or a bare word: the discriminator is on the
+     * page, so a recording cannot be read as the wrong trigger by a parser that guessed from the
+     * shape of the value.
+     */
+    private fun trigger(trigger: MeetingTrigger): String = when (trigger) {
+        is MeetingTrigger.MeetingCard -> "card"
+        is MeetingTrigger.RevokeReported -> "report:${num(trigger.reported.index)}"
     }
 
     /**
@@ -68,10 +95,32 @@ object Transcript {
         is Effect.MessageDelivered ->
             "MessageDelivered|seat=${effect.seat.index}|body=${text(effect.body)}"
         is Effect.MeetingOpened ->
-            "MeetingOpened|caller=${effect.caller.index}"
+            "MeetingOpened|caller=${effect.caller.index}|trigger=${trigger(effect.trigger)}" +
+                "|haptic=${effect.haptic}"
+        is Effect.StandAndWalkIn ->
+            "StandAndWalkIn|seat=${effect.seat.index}|haptic=${effect.haptic}"
+        is Effect.CheckInProgressed ->
+            "CheckInProgressed|present=${effect.present}|expected=${effect.expected}"
+        is Effect.MeetingPhaseOpened ->
+            "MeetingPhaseOpened|phase=${effect.phase}|haptic=${effect.haptic}"
+        is Effect.ReadyProgressed ->
+            "ReadyProgressed|ready=${effect.ready}|expected=${effect.expected}"
+        is Effect.VoteHeld ->
+            "VoteHeld|seat=${effect.seat.index}|selection=${seatOrNone(effect.selection)}" +
+                "|locked=${effect.locked}"
+        is Effect.VoteSelectionShown ->
+            "VoteSelectionShown|voter=${effect.voter.index}|selection=${seatOrNone(effect.selection)}"
+        is Effect.VoteProgressed ->
+            "VoteProgressed|locked=${effect.locked}|expected=${effect.expected}"
+        is Effect.MeetingResult ->
+            "MeetingResult|restrained=${seatOrNone(effect.restrained)}|haptic=${effect.haptic}"
         is Effect.MeetingResolved ->
             "MeetingResolved|restrained=${seatOrNone(effect.restrained)}|attribution=" +
                 effect.attribution.joinToString(",") { "${it.first.index}>${seatOrNone(it.second)}" }
+        is Effect.RestrainedTakeover ->
+            "RestrainedTakeover|seat=${effect.seat.index}|haptic=${effect.haptic}"
+        is Effect.MeetingEnded ->
+            "MeetingEnded|haptic=${effect.haptic}"
     }
 
     /**
@@ -132,7 +181,13 @@ object Transcript {
         append("|seats=").append(state.seats.joinToString(",") { num(it.index) })
         append("|insiders=").append(state.insiderSeats.joinToString(",") { num(it.index) })
         append("|revoked=").append(state.revoked.joinToString(",") { num(it.index) })
+        // Two lists, never one. A Revoke is system power the house lent; a Restrain is a physical
+        // act it could not prevent and then ratified (rule 9). A state row that folded them
+        // together would replay a round in which the distinction had never existed.
+        append("|newlyRevoked=").append(state.newlyRevoked.joinToString(",") { num(it.index) })
+        append("|restrained=").append(state.restrained.joinToString(",") { num(it.index) })
         append("|armedRevoke=").append(state.cooldownArmed.joinToString(",") { num(it.index) })
+        append("|egress=").append(state.egressRunning)
         append("|integrity=").append(num(state.systemIntegrity))
         // The work order, ANSWER KEY INCLUDED. A state row is authority-side debugging and holds
         // complete ground truth by design — recordings are gitignored and never handed to a
@@ -144,6 +199,19 @@ object Transcript {
                     ":${open.expected.joinToString(".") { num(it) }}"
             }
         )
+        // **The meeting, ballots and all.** Live selections are the one thing at a meeting that
+        // only a player outside the system may read (D-075), which is exactly why they belong in
+        // an authority-side state row: a recording that stopped short of them could not tell a
+        // replayed vote from a different one that happened to reach the same result.
+        append("|meeting=").append(state.meeting?.let { meeting ->
+            "${meeting.caller.index}:${trigger(meeting.trigger)}:${meeting.phase}" +
+                ":in=${meeting.checkedIn.joinToString(".") { num(it.index) }}" +
+                ":ready=${meeting.ready.joinToString(".") { num(it.index) }}" +
+                ":ballots=${meeting.ballots.joinToString(".") {
+                    "${num(it.voter.index)}>${seatOrNone(it.selection)}${if (it.locked) "!" else ""}"
+                }}" +
+                ":pending=${seatOrNone(meeting.restrainPending)}"
+        } ?: "none")
         append("|nextEntity=").append(num(state.nextEntity))
         append("|seed=").append(num(state.seed))
     }

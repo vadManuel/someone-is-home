@@ -104,7 +104,10 @@ fun CheatRoot() {
     var view by remember { mutableStateOf(CheatView.Panel) }
     Box(Modifier.fillMaxSize().background(Amber.Black)) {
         when (view) {
-            CheatView.Panel -> FlowHost(flow)
+            // `standingInForTheHouse` is the bench's stand-in for the authority: nothing here
+            // is attached to a round, and without it the meeting stops at the check-in screen and
+            // stays there, which is true and unwalkable.
+            CheatView.Panel -> FlowHost(flow, standingInForTheHouse = true)
             CheatView.Picker -> CheatPicker(
                 flow.state,
                 onPick = { flow.jump(it); view = CheatView.Panel },

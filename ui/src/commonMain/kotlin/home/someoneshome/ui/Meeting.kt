@@ -5,6 +5,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import home.someoneshome.model.Intent
+import home.someoneshome.model.Seat
 
 /**
  * **What this phone said at the meeting — and nothing about what the room decided.**
@@ -28,6 +30,20 @@ import androidx.compose.runtime.staticCompositionLocalOf
  * separation is [OutsideView]'s whole reason for being a different type in the same file.
  */
 class MeetingModel(
+    /**
+     * **Where a control goes when it is pressed — and it does not carry a seat.**
+     *
+     * *Intents are attributed by connection, never by a client naming itself. A client that could
+     * name its own seat could claim another player's — the only cheat in this game that is remote,
+     * undetectable, and requires no physical act.* So the screen says **what happened**, not **who
+     * it happened to**, and [asIntent] attaches the seat one layer out, where the connection is.
+     *
+     * These four used to go nowhere at all, which was correct while nothing could receive them:
+     * a control that predicted an outcome would have been worse than one that did nothing. They
+     * still predict nothing — every count on every meeting screen is the house's, and none of them
+     * moves when a button here is pressed.
+     */
+    val send: (MeetingRequest) -> Unit = {},
     /**
      * The house's counts, as they stood when the screen was drawn.
      *
@@ -74,54 +90,70 @@ class MeetingModel(
     /**
      * The name this phone has its finger on, or none.
      *
-     * **Changeable until the clock ends**, which the design says outright — so nothing here ever
-     * freezes it, including [lockIn]. And *not voting counts as a Skip* (D-075), so there is no
-     * un-vote to draw: the two things a player can express are *this one* and *nobody*, and both
-     * are rows on the screen.
+     * *Not voting counts as a Skip* (D-075), so there is no un-vote to draw: the two things a
+     * player can express are *this one* and *nobody*, and both are rows on the screen.
+     *
+     * **It stops being changeable the moment READY is pressed** — see [locked].
      */
     var choice: VoteChoice? by mutableStateOf(null)
         private set
 
     /**
-     * What was last handed to the house, which is not the same as what is selected.
+     * **The vote has been cast and cannot be taken back** (D-117).
      *
-     * The design's vote screen shows *how many have voted, never what* — so having voted is a real
-     * state, distinct from having a finger on a row, and LOCK IN is the step between them. Changing
-     * the selection afterwards leaves this holding the old one until it is locked in again, which
-     * is why [locked] compares the two rather than being a flag of its own: a flag would say LOCKED
-     * IN over a row the house has never heard of.
+     * This is a real flag rather than a comparison between what is selected and what was sent, and
+     * the change is a **ruling and not a refactor**: the design said the vote was *changeable until
+     * the clock ends* at `gdd.md:412` and `:1006`, and D-117 supersedes both. READY converts the
+     * current selection into the actual vote, and after it nothing can be changed.
      *
-     * **It is an echo of what this phone sent, not of what the house received.** The count on the
-     * screen — *4 OF 6 VOTED* — is the house's and does not move when you press the button.
+     * **A locked phone stops echoing, and that is not the phone forming an opinion.** Echo exists
+     * to reflect a player's own input; a tap the house will refuse is not input the game accepted,
+     * and lighting a row that would then snap back is worse than not lighting it. This is one of
+     * the few facts a phone genuinely holds about itself — it pressed the button — which is why it
+     * can be honoured here without asking anybody. The house refuses the tap as well, and
+     * re-asserts what it holds (`Effect.VoteHeld`), so the two agree without the screen guessing.
      */
-    var handedOver: VoteChoice? by mutableStateOf(null)
+    var locked: Boolean by mutableStateOf(false)
         private set
 
     /** I AM HERE. */
     fun checkIn() {
         checkedIn = true
+        send(MeetingRequest.CheckIn)
     }
 
     /** READY TO VOTE. */
     fun sayReady() {
         ready = true
-    }
-
-    /** A tap on a name, or on SKIP. Re-tapping what is already held changes nothing. */
-    fun choose(next: VoteChoice) {
-        choice = next
+        send(MeetingRequest.ReadyToVote)
     }
 
     /**
-     * LOCK IN: hand the selection to the house.
+     * A tap on a name, or on SKIP. Re-tapping what is already held changes nothing.
+     *
+     * **Ignored once the ballot is locked**, and nothing is sent — see [locked].
+     */
+    fun choose(next: VoteChoice) {
+        if (locked) return
+        choice = next
+        send(MeetingRequest.Select(next))
+    }
+
+    /**
+     * READY: turn the selection into the vote, irrevocably (D-117).
      *
      * **Refused when nothing is selected**, rather than quietly sending nothing. Not voting is
      * already a Skip and SKIP is already a row — a button that handed over an empty vote would be
      * a third way to say the same thing, and the only one of the three with nothing on screen to
-     * show for it.
+     * show for it. The buzzer's auto-lock is what handles a player who never chose at all, and
+     * that is the house's to run.
+     *
+     * **Refused a second time when already locked**, for the reason [locked] gives.
      */
-    fun lockIn() {
-        if (choice != null) handedOver = choice
+    fun readyToVote() {
+        if (choice == null || locked) return
+        locked = true
+        send(MeetingRequest.LockVote)
     }
 
     /** Whether [name]'s row is the one holding this phone's vote. */
@@ -129,9 +161,6 @@ class MeetingModel(
 
     /** Whether SKIP is the one holding it. */
     val skipping: Boolean get() = choice == VoteChoice.Skip
-
-    /** True while the house has been handed exactly what is on the screen. */
-    val locked: Boolean get() = choice != null && choice == handedOver
 
     /**
      * **A new meeting starts with nothing said.**
@@ -147,7 +176,7 @@ class MeetingModel(
         checkedIn = false
         ready = false
         choice = null
-        handedOver = null
+        locked = false
     }
 
     companion object {
@@ -177,6 +206,62 @@ class MeetingModel(
             counts = MeetingCounts(),
             names = listOf("PRIYA", "MARCUS", "DANI", "ROSE", "TOMAS"),
         ).apply { choose(VoteChoice.Named("MARCUS")) }
+    }
+}
+
+/**
+ * **What a meeting control asks the house for — with no seat on it.**
+ *
+ * The four controls at a meeting are the first ones in this app that reach the authority rather
+ * than only the screen, and the shape they reach it in is the whole point of this type.
+ *
+ * `Intent` carries an `actor: Seat` and this does not, deliberately: *intents are attributed by
+ * connection, never by a client naming itself* — a client that could name its own seat could claim
+ * another player's, which is the only cheat in this game that is remote, undetectable and requires
+ * no physical act. A screen that could construct `Intent.CheckIn(Seat(4))` is a screen that could
+ * check somebody else in. So the screen says what happened and [asIntent] attaches the seat one
+ * layer out, at the connection that already knows it.
+ */
+sealed interface MeetingRequest {
+
+    /** I AM HERE (D-104). */
+    data object CheckIn : MeetingRequest
+
+    /** READY TO VOTE. */
+    data object ReadyToVote : MeetingRequest
+
+    /** A finger on a row. Transmitted live so the couch can watch the vote happen (D-117). */
+    data class Select(val choice: VoteChoice) : MeetingRequest
+
+    /** READY. Irrevocable, and it carries no target: it converts whatever was last selected. */
+    data object LockVote : MeetingRequest
+}
+
+/**
+ * The seat goes on here, and nowhere earlier.
+ *
+ * **Exhaustive on purpose**: a fifth control at a meeting does not compile until somebody decides
+ * what it asks the house for, which is the same discipline `EmitSchema.kindOf` and
+ * `ScreenGraph.exitsOf` use. A `when` with an `else` here would let a new control quietly become a
+ * request nobody named.
+ *
+ * [names] is the ballot the screen was drawn with, because a vote row carries a name and an
+ * `Intent` carries a seat — names are round-scoped and arrive from the house (D-115), so turning
+ * one back into a seat is a lookup against the same list the house sent. A name that is not on it
+ * resolves to **Skip**, which is the fail-closed direction: not voting counts as a Skip already
+ * (D-075), so an unresolvable row can only ever cost a vote and never cast one at somebody.
+ */
+fun MeetingRequest.asIntent(seat: Seat, names: List<String>): Intent = when (this) {
+    is MeetingRequest.CheckIn -> Intent.CheckIn(seat)
+    is MeetingRequest.ReadyToVote -> Intent.DeclareReadyToVote(seat)
+    is MeetingRequest.LockVote -> Intent.LockVote(seat)
+    is MeetingRequest.Select -> {
+        val picked = choice
+        val target = when (picked) {
+            is VoteChoice.Skip -> null
+            is VoteChoice.Named -> names.indexOf(picked.name).takeIf { it >= 0 }?.let { Seat(it) }
+        }
+        Intent.SelectVote(actor = seat, target = target)
     }
 }
 

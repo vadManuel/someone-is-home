@@ -3,6 +3,7 @@ package home.someoneshome.harness
 import home.someoneshome.model.EmitSchema
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
+import home.someoneshome.model.RoundState
 import home.someoneshome.model.Seat
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -79,16 +80,16 @@ class FuzzPropertyTest {
         for (seed in SEEDS) {
             val events = fuzzRound(seed)
             val (finalState, _) = record(GameState.EMPTY, events)
-            val everRevoked = everRevoked(events)
+            val everOut = everOut(events)
             val transcripts = recordPerClient(GameState.EMPTY, events)
 
             for (client in transcripts.perClient) {
                 outOnlyDelivered += client.lines.count { it.startsWith("SubroutineProgressed") }
-                if (client.seat.index in everRevoked) continue
+                if (client.seat.index in everOut) continue
                 if (finalState.seats.none { it.index == client.seat.index }) continue
                 livingSeatsChecked++
-                val forbidden = client.lines.filter {
-                    it.startsWith("SubroutineProgressed") || it.startsWith("MeetingResolved")
+                val forbidden = client.lines.filter { line ->
+                    OUT_ONLY.any { line.startsWith(it) }
                 }
                 assertEquals(
                     emptyList(), forbidden,
@@ -260,14 +261,74 @@ class FuzzPropertyTest {
         assertTrue(selfContact > 0, "no self-contact in ${SEEDS.count()} rounds")
     }
 
-    private fun everRevoked(events: List<Event>): Set<Int> {
+    /**
+     * **The kinds only a player outside the system may receive — WRITTEN OUT, not derived.**
+     *
+     * This list was briefly computed from `EmitSchema` itself, and the injection that was supposed
+     * to prove it caught nothing: widening a row to a living class removes that kind from the
+     * derived list, so the property went on passing over a leak it was pointed straight at. **A
+     * test derived from the thing it is testing agrees with itself.** That is the whole reason
+     * the schema allowlist is described as *independently required, not a second opinion* — and
+     * a harness that re-derives it is a second opinion after all.
+     *
+     * So the three are restated here as a decision, and [theOutOnlyKindsAreExactlyTheOnesNamed]
+     * is the other half: it fails when a fourth out-only kind appears and nobody adds it, which is
+     * the failure a literal list would otherwise have.
+     */
+    private val OUT_ONLY: List<String> = listOf(
+        // The live SystemIntegrity decrement. A continuous rate signal nobody living may read.
+        "SubroutineProgressed",
+        // Who voted for whom (D-075). The living get a count and the outcome, never the ballot.
+        "MeetingResolved",
+        // Every selection tap, live (D-117, D-134). The couch is the only reader of selections,
+        // and this is the largest single disclosure in the table -- widened by one class it hands
+        // the room its own thinking in real time, to the people still in it.
+        "VoteSelectionShown",
+        // The two the completeness check below found when it was first written, which is what it
+        // is for. Both are ADDRESSED to one seat as well as permitted only to the out classes, so
+        // a living player was never going to receive one by accident -- but "never by accident" is
+        // the argument this project keeps refusing, and the row is what actually denies them.
+        //
+        // STAND AND WALK IN: what a player outside the system gets instead of a ringing call.
+        "StandAndWalkIn",
+        // The Restrained takeover, at the halfway mark, to the losing seat (D-102, D-134's E1-1).
+        "RestrainedTakeover",
+    )
+
+    /**
+     * The list above is complete against the allowlist.
+     *
+     * Not a derivation of the property, a check ON it: the property must name every kind the table
+     * gives to the out and to nobody living, so a fourth one cannot appear un-covered.
+     */
+    @Test
+    fun `the out-only kinds are exactly the ones named`() {
+        val fromTheTable = EmitSchema.knownKinds()
+            .filter { kind ->
+                val classes = EmitSchema.classesFor(kind)
+                classes.isNotEmpty() && classes.all { it.roundState == RoundState.Out }
+            }
+            .map { it.name }
+        assertEquals(
+            OUT_ONLY.sorted(), fromTheTable.sorted(),
+            "an out-only kind is not covered by the fuzz property, or one named here has been " +
+                "widened to a living class -- either way somebody should say which they meant",
+        )
+    }
+
+    private fun everOut(events: List<Event>): Set<Int> {
         val seen = mutableSetOf<Int>()
         var state = GameState.EMPTY
         drive(GameState.EMPTY, events) { _, after, _ ->
             after.revoked.forEach { seen += it.index }
+            // **Both lists, and this one was added the day a Restrain first reached state.** It
+            // read `revoked` alone for as long as nothing stored a Restrain, and the two are never
+            // interchangeable (rule 9) -- so a seat the room restrained looked living to this
+            // helper while the allowlist, correctly, was treating it as out.
+            after.restrained.forEach { seen += it.index }
             state = after
         }
-        // A re-arm wipes `revoked`, so anyone revoked before it is living again afterwards and
+        // A re-arm wipes both lists, so anyone put out before it is living again afterwards and
         // this set is deliberately the union across the whole round: it is used to EXCLUDE seats
         // from a strict assertion, so over-including is the safe direction.
         return seen

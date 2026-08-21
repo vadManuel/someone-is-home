@@ -7,6 +7,7 @@ import home.someoneshome.model.GameState
 import home.someoneshome.model.Role
 import home.someoneshome.model.RoundState
 import home.someoneshome.model.MarkerId
+import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
 import kotlin.test.Test
@@ -20,15 +21,24 @@ class ClientTranscriptTest {
     private fun run() = recordPerClient(GameState.EMPTY, round())
     private fun finalState() = record(GameState.EMPTY, round()).first
 
-    /** Seats 0, 2 and 7 are revoked by seat 1 over the course of the fixture round. */
-    private fun revokedSeats() = finalState().revoked.map { it.index }.toSet()
-    private fun neverRevoked() = SEATS.filter { it.index !in revokedSeats() }
+    /**
+     * Everyone the fixture round puts outside the system — **both ways, and they are not one way.**
+     *
+     * Seats are Revoked by seat 1 over the course of the round, and the round's meetings Restrain
+     * whoever the ballot lands on. A helper reading `revoked` alone called a Restrained seat living
+     * and then asserted that a living seat receives no attribution — against a client the allowlist
+     * was correctly treating as out. Rule 9 in a test helper: the two lists are never one list.
+     */
+    private fun outSeats() =
+        finalState().let { it.revoked + it.restrained }.map { it.index }.toSet()
+
+    private fun neverOut() = SEATS.filter { it.index !in outSeats() }
 
     @Test
     fun `every seated player gets a transcript - including one that receives nothing`() {
         val transcripts = run()
         assertEquals(SEATS.map { it.index }, transcripts.seats.map { it.index })
-        assertTrue(revokedSeats().isNotEmpty(), "fixture is stale: nobody is revoked in this round")
+        assertTrue(outSeats().isNotEmpty(), "fixture is stale: nobody goes out in this round")
     }
 
     /**
@@ -84,7 +94,7 @@ class ClientTranscriptTest {
     @Test
     fun `a player who is never out receives no live progress and no attribution`() {
         val transcripts = run()
-        for (seat in neverRevoked()) {
+        for (seat in neverOut()) {
             val lines = transcripts.linesFor(seat)
             assertTrue(lines.isNotEmpty(), "seat ${seat.index} received nothing at all")
             assertFalse(
@@ -102,7 +112,7 @@ class ClientTranscriptTest {
     @Test
     fun `a player who is out does receive the live progress count`() {
         val transcripts = run()
-        val out = revokedSeats().map { Seat(it) }
+        val out = outSeats().map { Seat(it) }
         val receiving = out.filter { seat ->
             transcripts.linesFor(seat).any { it.startsWith("SubroutineProgressed") }
         }
@@ -173,22 +183,42 @@ class ClientTranscriptTest {
     /**
      * The class a line was offered under is recorded, and both axes move during the round.
      *
-     * Seat 1 is an Insider and is never revoked; a revoked seat is a Resident who was Live and
-     * became Out. If [ClientTranscript.classesSeen] only ever held one value, the round-state axis
-     * would be inert and every assertion above about "living" versus "out" would be vacuous.
+     * If [ClientTranscript.classesSeen] only ever held one value, the round-state axis would be
+     * inert and every assertion above about "living" versus "out" would be vacuous.
+     *
+     * **Every mover moves along the round-state axis and never along the role axis.** That is the
+     * sharper property and it is what the pair of assertions below says: a class list holding two
+     * roles would mean a seat's alignment changed mid-round, which nothing in this game does.
+     *
+     * It used to require that every mover be a **Resident** going Live → Out, which was true only
+     * for as long as the fixture's only way out was a Revoke. A Restrain lands on whoever the
+     * ballot lands on, so an Insider now moves too — and an assertion naming one role would have
+     * had to be loosened by whoever noticed, rather than saying what it means.
      */
     @Test
     fun `the round-state axis actually moves during the round`() {
         val transcripts = run()
         val movers = transcripts.perClient.filter { it.classesSeen.size > 1 }
         assertTrue(movers.isNotEmpty(), "no client changed class; the second axis is inert")
+        for (mover in movers) {
+            val role = mover.classesSeen.map { it.role }.distinct()
+            assertEquals(
+                1, role.size,
+                "seat ${mover.seat.index} changed ROLE mid-round: ${mover.classesSeen}",
+            )
+            assertTrue(
+                mover.classesSeen.containsAll(
+                    listOf(
+                        ClientClass(role.single(), RoundState.Live),
+                        ClientClass(role.single(), RoundState.Out),
+                    )
+                ),
+                "expected Live then Out, got ${mover.classesSeen}",
+            )
+        }
         assertTrue(
-            movers.all { m ->
-                m.classesSeen.containsAll(
-                    listOf(ClientClass(Role.Resident, RoundState.Live), ClientClass(Role.Resident, RoundState.Out))
-                )
-            },
-            "expected Live then Out, got ${movers.map { it.classesSeen }}",
+            movers.any { m -> m.classesSeen.any { it.role == Role.Resident } },
+            "no Resident went out; the fixture round has stopped exercising the common case",
         )
     }
 
@@ -203,7 +233,7 @@ class ClientTranscriptTest {
     @Test
     fun `pre-arm events are refused before the rules see them`() {
         val preArm = listOf(
-            Event.MeetingCalled(Tick(0), Seat(3)),
+            Event.MeetingCalled(Tick(0), Seat(3), MeetingTrigger.MeetingCard),
             Event.SubroutineReturned(Tick(1), Seat(3), MarkerId("m0"), listOf(0, 0)),
         )
         assertEquals(

@@ -62,7 +62,68 @@ sealed interface Event {
     /** Phone touched to phone. Physical, so it is reported, never requested. */
     data class ContactMade(override val at: Tick, val actor: Seat, val target: Seat) : Event
 
-    data class MeetingCalled(override val at: Tick, val caller: Seat) : Event
-    data class VoteCast(override val at: Tick, val voter: Seat, val target: Seat?) : Event
+    /**
+     * **A meeting was called, and how** (D-121).
+     *
+     * Two ways and no third: the caller scanned the meeting card, or somebody reported a Revoked
+     * player. [MeetingTrigger] carries which, because the admission gate has to tell them apart —
+     * the card is inert during an Egress and the report is not (D-133).
+     *
+     * The caller's check-in is not a second event. Their scan *is* their check-in and they are
+     * counted from the instant the meeting exists.
+     */
+    data class MeetingCalled(
+        override val at: Tick,
+        val caller: Seat,
+        val trigger: MeetingTrigger,
+    ) : Event
+
+    /** I'M HERE. One phone, standing at the meeting area. The gate is the house's (D-104). */
+    data class MeetingCheckedIn(override val at: Tick, val seat: Seat) : Event
+
+    /** READY TO VOTE. One hand up; only a **unanimous** one ends the talk early. */
+    data class ReadyToVoteDeclared(override val at: Tick, val seat: Seat) : Event
+
+    /**
+     * A finger landed on a name, or on Skip.
+     *
+     * **Every selection tap transmits live** (D-117) — the stream is not an optimisation, it
+     * exists so players outside the system can watch the vote happen, which is most of what makes
+     * the out's meeting screen worth looking at (D-134).
+     */
+    data class VoteSelected(override val at: Tick, val voter: Seat, val target: Seat?) : Event
+
+    /**
+     * READY: the current selection becomes the vote, **irrevocably** (D-117).
+     *
+     * **It carries no target, and that is the ruling rather than a saving.** The button is a
+     * readiness signal that converts whatever is already selected; a target here would let a
+     * client lock a vote it never transmitted, and would make the live selection stream — the
+     * whole reason the out have anything to watch — optional decoration.
+     *
+     * This and [VoteSelected] together replaced a single `VoteCast(voter, target)`, which was the
+     * *changeable until the clock ends* model D-117 superseded.
+     */
+    data class VoteLocked(override val at: Tick, val voter: Seat) : Event
+
+    /** The discussion clock ran out. The house's clock, sampled at the edge like every other. */
+    data class DiscussionClosed(override val at: Tick) : Event
+
+    /**
+     * The buzzer. **Whatever is selected when the clock ends locks itself** (D-117), and a seat
+     * that selected nothing at all for the whole window is a Skip (D-075, narrowed).
+     */
+    data class VoteWindowClosed(override val at: Tick) : Event
+
+    /**
+     * The LIGHTS OUT countdown reached its halfway mark.
+     *
+     * A separate fact from the countdown ending because two different things happen: here the
+     * Restrained takeover reaches the losing seat — *so they do not walk away when the countdown
+     * ends* (D-102) — and only at zero does everybody else go back to the round.
+     */
+    data class TallyHalfwayReached(override val at: Tick) : Event
+
+    /** Lights out. The meeting is over and the round resumes. */
     data class MeetingClosed(override val at: Tick) : Event
 }

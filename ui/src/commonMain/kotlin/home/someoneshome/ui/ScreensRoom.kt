@@ -28,17 +28,30 @@ import androidx.compose.ui.text.style.TextAlign
  *
  * ### Every control on these screens echoes one phone, and none of them moves the meeting
  *
- * I AM HERE, READY TO VOTE and LOCK IN look like three different buttons and are the same button:
+ * I AM HERE, READY TO VOTE and READY look like three different buttons and are the same button:
  * *one player says they are done*. What happens next depends on **all** the phones — the check-in
  * gate closes when every living player and every out player is standing there (D-104), the talk
  * skips ahead only on a unanimous READY, the ballot is read when the window closes — and no phone
  * can count phones.
  *
  * So each of them lights its own control and the screen goes on waiting, which is exactly what the
- * player is doing. The house moves everybody at once, and until there is a house the
- * [Flow.autoAdvance] table stands in for it. **The counts beside these buttons do not move when
- * you press them**: they are the house's numbers and they change when the house says so.
+ * player is doing. **The house moves everybody at once, and it now really does**: the meeting's
+ * transitions are pushes the authority makes, listed in [Flow.housePushes] against the effect that
+ * carries each one. **The counts beside these buttons do not move when you press them**: they are
+ * the house's numbers and they change when the house says so.
  */
+
+/**
+ * **The vote button's two faces.** Named, so that settling the copy is one edit and not six.
+ *
+ * D-117 named READY as the rename candidate for LOCK IN, *for symmetry with the discussion's READY
+ * TO VOTE*, and left the final wording as a build-time call. This is that call being taken, and it
+ * is the kind that somebody should agree with rather than inherit.
+ */
+private const val VOTE_READY = "READY"
+
+/** The irrevocable half. Not *YOU ARE READY*, which is the discussion's button on another screen. */
+private const val VOTE_CAST = "VOTE CAST"
 
 /** You called it. Every phone in the building rings, and you wait with everyone else. */
 @Composable
@@ -299,19 +312,23 @@ fun DiscussionScreen(vals: PanelVals) {
 /**
  * The vote. **You see how many have voted, never what.**
  *
- * Changeable until the clock ends, and **not voting counts as a Skip** rather than as an
- * abstention (D-075) — which is what the line at the foot of the screen has always said. Combined
- * with ties already resolving to Skip, the whole weight of inaction sits behind restraining
- * nobody. *(The KDoc here used to claim the opposite, carried over from the GDD paragraph D-075
- * reversed; the screen's own copy was right and the comment above it was not.)*
+ * **Not voting counts as a Skip** rather than as an abstention (D-075) — which is what the line at
+ * the foot of the screen has always said. Combined with ties resolving to Skip, the whole weight of
+ * inaction sits behind restraining nobody. *(The KDoc here used to claim the opposite, carried over
+ * from the GDD paragraph D-075 reversed; the screen's own copy was right and the comment above it
+ * was not.)*
  *
  * ### The rows echo your finger. Nothing on this screen knows the result
  *
  * Tapping a name lights that row and nothing else happens — no count moves, no other phone is
- * consulted, and the row is not a claim that the vote landed. LOCK IN is the step that hands it to
- * the house, and the selection stays changeable afterwards because the design says the vote is
- * changeable until the clock ends. The result arrives when the house reads the ballot and pushes
- * the screen; a LOCK IN that walked to it would be this phone announcing a tally it cannot see.
+ * consulted, and the row is not a claim that the vote landed. **READY converts the selection into
+ * the vote, and after it nothing can be changed** (D-117, superseding *changeable until the clock
+ * ends* at `gdd.md:412` and `:1006`): the rows stop echoing, and the house refuses a later tap and
+ * re-asserts what it holds. The result arrives when the house reads the ballot and pushes the
+ * screen; a READY that walked to it would be this phone announcing a tally it cannot see.
+ *
+ * The count is of **locked** seats, never of selections — the living see how many have voted, and
+ * only a player outside the system sees what anybody chose.
  */
 @Composable
 fun VoteScreen(vals: PanelVals) {
@@ -360,14 +377,15 @@ fun VoteScreen(vals: PanelVals) {
             size = 6.5, color = Amber.Faint, tracking = 0.1, align = TextAlign.Center,
         )
         // Three states, all of them facts about this phone: nothing chosen yet, something chosen
-        // and not yet sent, and the house holding exactly what is on the screen. Present and inert
-        // in the first and last rather than absent, so the row under the player's thumb never moves.
+        // and not yet handed over, and a ballot that has been cast and cannot be taken back.
+        // Present and inert in the first and last rather than absent, so the row under the
+        // player's thumb never moves.
         PanelButton(
-            if (meeting.locked) "LOCKED IN" else "LOCK IN",
+            if (meeting.locked) VOTE_CAST else VOTE_READY,
             border = if (meeting.choice == null || meeting.locked) Amber.Faint else Amber.Dim,
             ink = if (meeting.choice == null || meeting.locked) Amber.Dim else Amber.Bright,
             tracking = 0.18,
-            onClick = if (meeting.choice == null || meeting.locked) null else actions.lockInVote,
+            onClick = if (meeting.choice == null || meeting.locked) null else actions.readyToVote,
         )
     }
 }

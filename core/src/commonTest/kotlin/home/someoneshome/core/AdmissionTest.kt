@@ -3,6 +3,7 @@ package home.someoneshome.core
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
 import home.someoneshome.model.MarkerId
+import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.RefusalReason
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
@@ -20,7 +21,7 @@ class AdmissionTest {
     private fun theDemonstration(): List<Event> = listOf(
         Event.ContactMade(Tick(0), Seat(1), Seat(2)),
         Event.SubroutineReturned(Tick(1), Seat(3), MarkerId("m0"), listOf(0, 0)),
-        Event.MeetingCalled(Tick(2), Seat(4)),
+        Event.MeetingCalled(Tick(2), Seat(4), MeetingTrigger.MeetingCard),
     )
 
     private fun armed(): GameState = reduce(

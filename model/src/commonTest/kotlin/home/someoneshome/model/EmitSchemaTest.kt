@@ -148,6 +148,132 @@ class EmitSchemaTest {
     }
 
     /**
+     * **THE MEETING'S SHARPEST ROW, BOTH DIRECTIONS: the couch sees selections, the living cannot.**
+     *
+     * D-117: *the living see the count and never the selections; the ghosts see the live
+     * selections and are the only readers who do.* Two assertions rather than one, because either
+     * alone passes on a build that is wrong the other way — a row permitted to nobody satisfies
+     * "no living class sees it", and a row permitted to everybody satisfies "the out see it".
+     *
+     * Written out in full for the reason the verdict's row is: narrowing or widening this by one
+     * class is a one-word edit, and what it would hand over is the room's own thinking in real
+     * time, to the people still in the room.
+     */
+    @Test
+    fun `live selections reach the couch and no living class`() {
+        assertEquals(
+            listOf(
+                ClientClass(Role.Resident, RoundState.Out),
+                ClientClass(Role.Insider, RoundState.Out),
+            ),
+            EmitSchema.classesFor(EmitSchema.VOTE_SELECTION_SHOWN),
+        )
+        assertEquals(
+            listOf(
+                ClientClass(Role.Resident, RoundState.Live),
+                ClientClass(Role.Insider, RoundState.Live),
+            ),
+            EmitSchema.classesFor(EmitSchema.VOTE_PROGRESSED),
+            "the count is the living's half of the same disclosure and must not have moved with it",
+        )
+    }
+
+    /** The other half of D-075, unchanged by D-117: attribution is the couch's and nobody's else. */
+    @Test
+    fun `attribution reaches the couch and the result reaches everyone`() {
+        assertEquals(
+            listOf(
+                ClientClass(Role.Resident, RoundState.Out),
+                ClientClass(Role.Insider, RoundState.Out),
+            ),
+            EmitSchema.classesFor(EmitSchema.MEETING_RESOLVED),
+        )
+        assertEquals(
+            listOf(
+                ClientClass(Role.Resident, RoundState.Live),
+                ClientClass(Role.Insider, RoundState.Live),
+                ClientClass(Role.Resident, RoundState.Out),
+                ClientClass(Role.Insider, RoundState.Out),
+            ),
+            EmitSchema.classesFor(EmitSchema.MEETING_RESULT),
+        )
+    }
+
+    /**
+     * **The ring and the walk-in split on round-state and never on role** (D-134).
+     *
+     * Both rows name both roles or neither. A row that named one would make the meeting's very
+     * first push an alignment tell, delivered before anybody had said a word.
+     */
+    @Test
+    fun `the ring is for the living and the walk-in for the out - both roles either way`() {
+        for (kind in listOf(EmitSchema.MEETING_OPENED, EmitSchema.STAND_AND_WALK_IN)) {
+            val roles = EmitSchema.classesFor(kind).map { it.role }.distinct().sortedBy { it.name }
+            assertEquals(listOf(Role.Insider, Role.Resident), roles, "$kind split on role")
+        }
+        assertEquals(
+            listOf(RoundState.Live),
+            EmitSchema.classesFor(EmitSchema.MEETING_OPENED).map { it.roundState }.distinct(),
+        )
+        assertEquals(
+            listOf(RoundState.Out),
+            EmitSchema.classesFor(EmitSchema.STAND_AND_WALK_IN).map { it.roundState }.distinct(),
+        )
+    }
+
+    /**
+     * A seat's own ballot goes to that seat. The allowlist cannot see this — every living player
+     * is in the same class as every other, so a broadcast [Effect.VoteHeld] would pass every row
+     * in the table and hand the room a running commentary on one player's finger.
+     */
+    @Test
+    fun `a ballot answer is addressed to its own seat only`() {
+        assertEquals(
+            listOf(Seat(3)),
+            EmitSchema.deliveries(Effect.VoteHeld(Seat(3), Seat(2), locked = true), live())
+                .map { it.seat },
+        )
+    }
+
+    /**
+     * **The takeover reaches the one seat the room restrained, and it reaches them as an out
+     * client** — which is only true because the Restrain has already landed in state by then.
+     *
+     * Both halves are asserted. Addressed to a seat still classified `Live` the row would deny it
+     * and the player would never be told; broadcast, it would tell five other phones how the vote
+     * went against somebody before the countdown had finished running.
+     */
+    @Test
+    fun `the takeover reaches exactly the restrained seat`() {
+        val after = live().copy(restrained = listOf(Seat(3)))
+        assertEquals(
+            listOf(Seat(3)),
+            EmitSchema.deliveries(Effect.RestrainedTakeover(Seat(3), Haptic.Long), after)
+                .map { it.seat },
+        )
+        assertEquals(
+            emptyList(),
+            EmitSchema.deliveries(Effect.RestrainedTakeover(Seat(3), Haptic.Long), live()),
+            "a takeover addressed to a seat the house has not yet deauthorised was delivered",
+        )
+    }
+
+    /**
+     * A Restrain puts a seat in the out classes, by its own list.
+     *
+     * The gap [RoundState.Out] used to document — *nothing in GameState stores a restrained
+     * player* — closed here, and closed the way that comment required: a second list, never a
+     * second use of `revoked` (rule 9).
+     */
+    @Test
+    fun `a restrained seat is out without borrowing the revoked list`() {
+        val after = live().copy(restrained = listOf(Seat(3)))
+        assertEquals(ClientClass(Role.Resident, RoundState.Out), after.clientClassOf(Seat(3)))
+        assertTrue(after.revoked.isEmpty(), "a Restrain was stored as a Revoke")
+        assertEquals(ClientClass(Role.Resident, RoundState.Live), after.clientClassOf(Seat(4)))
+    }
+
+    /**
      * Addressing is a second, independent gate.
      *
      * Both seats here are living Residents in the same class, so the allowlist permits the kind to

@@ -2,6 +2,7 @@ package home.someoneshome.harness
 
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
+import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
 import kotlin.test.Test
@@ -55,7 +56,7 @@ class ResumeTest {
     /** Refusals survive, or a resumed round disagrees with its own recording immediately. */
     @Test
     fun `refusals are replayed on resume`() {
-        val events = listOf(Event.MeetingCalled(Tick(0), Seat(2))) + round()
+        val events = listOf(Event.MeetingCalled(Tick(0), Seat(2), MeetingTrigger.MeetingCard)) + round()
         val result = resumeFromText(record(GameState.EMPTY, events).second.toText())
         assertIs<ResumeResult.Resumed>(result)
         assertEquals(1, result.refusalsReplayed)
@@ -92,7 +93,7 @@ class ResumeTest {
     /** The gate's refusals are compared like everything else, not carried along unchecked. */
     @Test
     fun `a recording whose refusal rows were tampered with is refused`() {
-        val events = listOf(Event.MeetingCalled(Tick(0), Seat(2))) + round()
+        val events = listOf(Event.MeetingCalled(Tick(0), Seat(2), MeetingTrigger.MeetingCard)) + round()
         val recording = record(GameState.EMPTY, events).second
         val text = recording.toText().replace("reason=RoundNotArmed", "reason=RoundAlreadyEnded")
         val result = resumeFromText(text)

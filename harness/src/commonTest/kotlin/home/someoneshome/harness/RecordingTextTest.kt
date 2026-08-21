@@ -3,6 +3,7 @@ package home.someoneshome.harness
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
 import home.someoneshome.model.MarkerId
+import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
 import kotlin.test.Test
@@ -50,7 +51,7 @@ class RecordingTextTest {
     fun `refusal rows survive the round-trip`() {
         val withRefusals = record(
             GameState.EMPTY,
-            listOf(Event.MeetingCalled(Tick(0), Seat(2))) + round(),
+            listOf(Event.MeetingCalled(Tick(0), Seat(2), MeetingTrigger.MeetingCard)) + round(),
         ).second
         val reparsed = RecordingText.parse(withRefusals.toText())
         assertEquals(withRefusals.refusalTranscript, reparsed.refusalTranscript)
@@ -79,12 +80,12 @@ class RecordingTextTest {
     fun `an abstained vote survives as an abstained vote`() {
         val events = listOf(
             Event.RoundArmed(Tick(0), 1L, listOf(Seat(0), Seat(1)), emptyList()),
-            Event.VoteCast(Tick(1), Seat(0), null),
-            Event.VoteCast(Tick(2), Seat(1), Seat(0)),
+            Event.VoteSelected(Tick(1), Seat(0), null),
+            Event.VoteSelected(Tick(2), Seat(1), Seat(0)),
         )
         val reparsed = RecordingText.parse(record(GameState.EMPTY, events).second.toText())
-        assertEquals(null, (reparsed.events[1] as Event.VoteCast).target)
-        assertEquals(Seat(0), (reparsed.events[2] as Event.VoteCast).target)
+        assertEquals(null, (reparsed.events[1] as Event.VoteSelected).target)
+        assertEquals(Seat(0), (reparsed.events[2] as Event.VoteSelected).target)
     }
 
     /** An empty insider list is a real state, not a missing field. */

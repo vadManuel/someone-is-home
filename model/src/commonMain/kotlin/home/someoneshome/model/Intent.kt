@@ -15,6 +15,22 @@ sealed interface Intent {
     data class ArmRevoke(val actor: Seat) : Intent
     data class BeginSubroutine(val actor: Seat, val marker: MarkerId) : Intent
     data class CallMeeting(val actor: Seat) : Intent
-    data class CastVote(val actor: Seat, val target: Seat?) : Intent
+
+    /** I'M HERE. Reports one phone; the gate that closes on it is the house's (D-104). */
+    data class CheckIn(val actor: Seat) : Intent
+
+    /** READY TO VOTE. One hand up. Only a unanimous one ends the talk early. */
     data class DeclareReadyToVote(val actor: Seat) : Intent
+
+    /** A finger on a name, or on Skip. Transmitted live so the couch can watch (D-117). */
+    data class SelectVote(val actor: Seat, val target: Seat?) : Intent
+
+    /**
+     * READY: turn the current selection into the vote, irrevocably (D-117).
+     *
+     * **Carries no target**, exactly as [Event.VoteLocked] does not — a target here would let a
+     * client lock a vote it never transmitted. This replaced `CastVote(actor, target)`, which was
+     * the *changeable until the clock ends* model the design has since superseded.
+     */
+    data class LockVote(val actor: Seat) : Intent
 }

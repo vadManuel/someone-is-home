@@ -1,6 +1,8 @@
 package home.someoneshome.ui
 
 import home.someoneshome.model.CardPayload
+import home.someoneshome.model.EmitSchema
+import home.someoneshome.model.MessageKind
 import home.someoneshome.model.Cell
 import home.someoneshome.model.RegisterResult
 import home.someoneshome.model.RoomKind
@@ -187,6 +189,19 @@ object ScreenGraph {
  */
 data class AutoAdvance(val to: ScreenId, val afterMillis: Int, val why: String)
 
+/**
+ * **A transition the AUTHORITY makes, and the message that carries it.**
+ *
+ * Beside [AutoAdvance] because it is the other half of the same question — *what moves this screen
+ * on* — and the whole difference between them is who does the moving.
+ *
+ * [on] is a [MessageKind] rather than a sentence, so a row names a message that either exists in
+ * the emit schema or does not: `FlowTest` checks every one against `EmitSchema.knownKinds()`, and
+ * a push waiting on a kind nobody emits fails the build instead of stranding a player on a screen
+ * forever. It is the strongest thing this module can say about the authority without importing it.
+ */
+data class HousePush(val to: ScreenId, val on: MessageKind, val why: String)
+
 object Flow {
 
     /**
@@ -234,36 +249,68 @@ object Flow {
             ScreenId.Home, PanelVals.SCAN_SEGMENTS * 500, "the scan window, two segments a second",
         ),
 
-        // The meeting: call, walk in, notices, talk, vote, result, lights out. One line, no
-        // branches, and each step is the house moving everybody at once.
+        // **The ring, and it is the last of the meeting's timers.** Answering a call is your own
+        // phone's business, so the moment it stops ringing is a presentation number like the
+        // notification hold above. Everything past it is the house's and lives in [housePushes].
         ScreenId.Calling to AutoAdvance(ScreenId.Assemble, 6_000, "WAITING FOR THE REST — the last phone answers"),
         ScreenId.Call to AutoAdvance(ScreenId.Assemble, 6_000, "the ring; a house meeting cannot be declined"),
         ScreenId.Found to AutoAdvance(ScreenId.Assemble, 6_000, "the same ring, different header"),
-        // D-104: the talk does not start until every living player AND every out player has
-        // checked in. That gate is the house's — it counts phones — and this delay stands in its
-        // place on a phone with no house attached. I AM HERE reports this phone and moves nothing,
-        // so this row is the ONLY way off the screen; the design's own device shell auto-advances
-        // the same step.
-        ScreenId.Assemble to AutoAdvance(ScreenId.Notice, 8_000, "4 OF 6 CHECKED IN — the check-in gate closes"),
+
+        // House notices are shown once at the top of the meeting and then gone. This is the one
+        // step inside the meeting that really is presentation: the talk's clock started when the
+        // gate closed, and how long a notice sits on screen changes nothing the house is counting.
         ScreenId.Notice to AutoAdvance(ScreenId.Discussion, 9_000, "notices are shown once at the top of the meeting, then gone"),
-        ScreenId.Discussion to AutoAdvance(ScreenId.Vote, 90_000, "the discussion clock; unanimous READY skips ahead"),
-        // **45 seconds, which is the design's own number** (`gdd.md:412`, restated at `:1006`).
-        // This row said 60 for as long as it existed and nothing in the design ever did — the
-        // lobby's settings line said 60S beside it, so the two agreed with each other and with
-        // nothing else. The host may now move this in the lobby, but that control is a
-        // client-side echo (see [LobbyModel.cycleVoteWindow]) and this table is not wired to it:
-        // when the window is really enforced it will be the house's clock, not this one's.
-        ScreenId.Vote to AutoAdvance(
-            ScreenId.Tally, 45_000, "the vote window closes and the ballot is read",
+    )
+
+    /**
+     * **The meeting's own transitions, every one of them a push.**
+     *
+     * These were rows in [autoAdvance] with delays on them, which was the honest thing to do while
+     * nothing could send them and was labelled as a stand-in from the day it was written. D-134's
+     * E8-2 recorded all four as authority pushes *so nobody later reads the missing edges as an
+     * omission*, and the rules now make them: the gate closing, the talk ending or a unanimous
+     * READY arriving, the vote window closing, and the ghost walk-in.
+     *
+     * **Why they cannot be timers.** Every one of them is a count of phones — every living player
+     * and every out player standing at the meeting area (D-104), every hand up, every ballot
+     * locked — and a phone cannot count phones. A device that ran its own 90 seconds would move a
+     * player on while the room was still talking, and six devices would do it at six different
+     * moments.
+     *
+     * **The delays that are gone were not a loss of information.** Where the design carries a
+     * number it still does: the vote window is 45 seconds, host-changeable in lobby settings
+     * (D-117), and it is the house's clock that runs it — this table never was where that lived.
+     */
+    val housePushes: Map<ScreenId, HousePush> = mapOf(
+        ScreenId.Assemble to HousePush(
+            ScreenId.Notice, EmitSchema.MEETING_PHASE_OPENED,
+            "4 OF 6 CHECKED IN — the gate closes when the LAST player walks in (D-104)",
         ),
-        ScreenId.Tally to AutoAdvance(ScreenId.Home, 15_000, "LIGHTS OUT IN 9, over a bar with 6 spent"),
+        ScreenId.Discussion to HousePush(
+            ScreenId.Vote, EmitSchema.MEETING_PHASE_OPENED,
+            "the discussion clock runs out, or every hand goes up — both are the house's to see",
+        ),
+        ScreenId.Vote to HousePush(
+            ScreenId.Tally, EmitSchema.MEETING_PHASE_OPENED,
+            "the window closes and the ballot is read; unanimous READY closes it early (D-117)",
+        ),
+        ScreenId.Tally to HousePush(
+            ScreenId.Home, EmitSchema.MEETING_ENDED,
+            "LIGHTS OUT reaches zero and everybody still in the round goes back to it",
+        ),
 
         // The same meeting from outside the system. A player who is out walks in, watches, and
         // gets the outside view only once the meeting has ended — by which time the room already
         // knows they are out, so there is never a window where they know something the living do
         // not.
-        ScreenId.Ghost2 to AutoAdvance(ScreenId.GhostMeeting, 8_000, "4 OF 6 CHECKED IN — the same gate, from outside"),
-        ScreenId.GhostMeeting to AutoAdvance(ScreenId.Ghost3, 60_000, "VOTING ENDS IN 0:24 — the meeting ends"),
+        ScreenId.Ghost2 to HousePush(
+            ScreenId.GhostMeeting, EmitSchema.MEETING_PHASE_OPENED,
+            "4 OF 6 CHECKED IN — the same gate, from outside, because it is one gate",
+        ),
+        ScreenId.GhostMeeting to HousePush(
+            ScreenId.Ghost3, EmitSchema.MEETING_ENDED,
+            "the meeting ends and the couch gets the ballot with names against it (D-075)",
+        ),
     )
 
     /**
@@ -324,6 +371,12 @@ object Flow {
         ScreenId.Call, ScreenId.Found,
         ScreenId.ScanCaught, ScreenId.ScanBad, ScreenId.ScanUnknown,
         ScreenId.Revoked, ScreenId.Restrained, ScreenId.Ghost2,
+        // **The meeting, past the ring.** Each of these was reachable by a timer and is now
+        // reachable only by the house — see [housePushes] for which effect carries which. They are
+        // named here as well because this set is the honest answer to *why can I not walk there?*,
+        // and the cheat picker reads it.
+        ScreenId.Notice, ScreenId.Vote, ScreenId.Tally,
+        ScreenId.GhostMeeting, ScreenId.Ghost3,
         ScreenId.Disconnect,
         ScreenId.WinInsiders, ScreenId.WinResidents,
     )
@@ -527,6 +580,9 @@ class FlowModel(
 
     /** What this screen will do on its own, if anything. */
     val pending: AutoAdvance? get() = Flow.autoAdvance[state.screen]
+
+    /** What the house will do to this screen, if anything. Nothing here fires it — see [FlowHost]. */
+    val awaitingPush: HousePush? get() = Flow.housePushes[state.screen]
 
     /** True when [back] would move. False on the house's screens and at the start of the trail. */
     val canGoBack: Boolean get() = state.screen !in Flow.houseDriving && trail.isNotEmpty()
@@ -807,7 +863,7 @@ class FlowModel(
 
     fun chooseVote(choice: VoteChoice) = meeting.choose(choice)
 
-    fun lockInVote() = meeting.lockIn()
+    fun readyToVote() = meeting.readyToVote()
 
     // ---- Subroutines ---------------------------------------------------------------------------
 
@@ -956,7 +1012,7 @@ class FlowModel(
         checkIn = ::checkIn,
         sayReady = ::sayReady,
         chooseVote = ::chooseVote,
-        lockInVote = ::lockInVote,
+        readyToVote = ::readyToVote,
         beginSubroutine = { beginSubroutine() },
         tapSubroutine = ::tapSubroutine,
         handOverSubroutine = ::handOverSubroutine,
@@ -984,18 +1040,35 @@ class FlowModel(
  * house decides every one of these transitions and pushes the result; the auto-advance table
  * becomes the house's schedule and this coroutine goes away. Until then it is the only thing that
  * makes the ported flows walkable end to end.
+ *
+ * ### [standingInForTheHouse] is a debug harness and must never be true in a real round
+ *
+ * The meeting's own transitions are [Flow.housePushes] and there is no house attached to this
+ * module yet — so on a bench the meeting stops at the check-in screen, correctly and forever. That
+ * is the truth, and it is also unwalkable, which is how a ported flow stops being looked at.
+ *
+ * So the playtest and debug roots pass `true` and get a **stand-in for the authority**: after
+ * [HOUSE_STAND_IN_MS] it fires whatever push the current screen is waiting on. It is deliberately
+ * one flat number for every push rather than a schedule — a schedule would be a table of meeting
+ * timings living in `ui`, which is the thing that was just deleted, and it would be believed.
  */
 @Composable
-fun FlowHost(model: FlowModel = remember { FlowModel() }) {
+fun FlowHost(
+    model: FlowModel = remember { FlowModel() },
+    standingInForTheHouse: Boolean = false,
+) {
     val pending = model.pending
+    val awaiting = if (standingInForTheHouse) model.awaitingPush else null
     val screen = model.state.screen
-    LaunchedEffect(screen, pending) {
+    LaunchedEffect(screen, pending, awaiting) {
+        // Only if nothing else moved first. The keys above already restart this effect on every
+        // screen change, so reaching either branch means the screen is still the one that owed it.
         if (pending != null) {
             delay(pending.afterMillis.toLong())
-            // Only if nothing else moved first. The key above already restarts this effect on
-            // every screen change, so reaching here means the screen is still the one that owed
-            // the advance.
             if (model.state.screen == screen) model.push(pending.to)
+        } else if (awaiting != null) {
+            delay(HOUSE_STAND_IN_MS)
+            if (model.state.screen == screen) model.push(awaiting.to)
         }
     }
     Screen(
@@ -1003,3 +1076,13 @@ fun FlowHost(model: FlowModel = remember { FlowModel() }) {
         model.subroutines, model.notifications,
     )
 }
+
+/**
+ * How long the bench pretends the house takes. **Not a game number and not a design one.**
+ *
+ * Every real one of these is a count of phones or the house's own clock — the check-in gate, the
+ * discussion, the vote window, the LIGHTS OUT countdown — and none of them is four seconds. This
+ * is long enough to read a screen and short enough to walk a meeting, and it exists only so that
+ * somebody looking at layout on a bench can get past the check-in screen.
+ */
+const val HOUSE_STAND_IN_MS: Long = 4_000L

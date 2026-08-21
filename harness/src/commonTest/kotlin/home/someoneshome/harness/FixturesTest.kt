@@ -2,6 +2,7 @@ package home.someoneshome.harness
 
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
+import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
 import kotlin.test.Test
@@ -106,7 +107,7 @@ class FixturesTest {
      */
     @Test
     fun `a refused event cannot produce a snapshot`() {
-        val events = listOf(Event.MeetingCalled(Tick(0), Seat(2))) + round()
+        val events = listOf(Event.MeetingCalled(Tick(0), Seat(2), MeetingTrigger.MeetingCard)) + round()
         val found = snapshots(GameState.EMPTY, events, listOf(Marks.FIRST_MEETING))
         assertTrue(found[0].afterEvent > 0, "snapshot taken at the refused pre-arm meeting")
         assertTrue(found[0].state.armed)
@@ -118,7 +119,7 @@ class FixturesTest {
      */
     @Test
     fun `the index survives refused events for regeneration`() {
-        val events = listOf(Event.MeetingCalled(Tick(0), Seat(2))) + round()
+        val events = listOf(Event.MeetingCalled(Tick(0), Seat(2), MeetingTrigger.MeetingCard)) + round()
         for (snapshot in snapshots(GameState.EMPTY, events, marks)) {
             assertEquals(
                 Transcript.render(snapshot.state),

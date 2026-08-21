@@ -2,6 +2,7 @@ package home.someoneshome.harness
 
 import home.someoneshome.model.Event
 import home.someoneshome.model.MarkerId
+import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
 
@@ -141,8 +142,14 @@ object RecordingText {
                 Event.SubroutineReturned(at, seat("actor"), marker("marker"), ints("entered"))
             "RevokeArmed" -> Event.RevokeArmed(at, seat("actor"))
             "ContactMade" -> Event.ContactMade(at, seat("actor"), seat("target"))
-            "MeetingCalled" -> Event.MeetingCalled(at, seat("caller"))
-            "VoteCast" -> Event.VoteCast(at, seat("voter"), seatOrNone("target"))
+            "MeetingCalled" -> Event.MeetingCalled(at, seat("caller"), trigger(req("trigger"), line))
+            "MeetingCheckedIn" -> Event.MeetingCheckedIn(at, seat("seat"))
+            "ReadyToVoteDeclared" -> Event.ReadyToVoteDeclared(at, seat("seat"))
+            "VoteSelected" -> Event.VoteSelected(at, seat("voter"), seatOrNone("target"))
+            "VoteLocked" -> Event.VoteLocked(at, seat("voter"))
+            "DiscussionClosed" -> Event.DiscussionClosed(at)
+            "VoteWindowClosed" -> Event.VoteWindowClosed(at)
+            "TallyHalfwayReached" -> Event.TallyHalfwayReached(at)
             "MeetingClosed" -> Event.MeetingClosed(at)
             else -> throw MalformedRecording(
                 line,
@@ -165,10 +172,35 @@ object RecordingText {
         "SubroutineReturned" -> setOf("at", "actor", "marker", "entered")
         "RevokeArmed" -> setOf("at", "actor")
         "ContactMade" -> setOf("at", "actor", "target")
-        "MeetingCalled" -> setOf("at", "caller")
-        "VoteCast" -> setOf("at", "voter", "target")
+        "MeetingCalled" -> setOf("at", "caller", "trigger")
+        "MeetingCheckedIn" -> setOf("at", "seat")
+        "ReadyToVoteDeclared" -> setOf("at", "seat")
+        "VoteSelected" -> setOf("at", "voter", "target")
+        "VoteLocked" -> setOf("at", "voter")
+        "DiscussionClosed" -> setOf("at")
+        "VoteWindowClosed" -> setOf("at")
+        "TallyHalfwayReached" -> setOf("at")
         "MeetingClosed" -> setOf("at")
         else -> emptySet()
+    }
+
+    /**
+     * How a meeting was called, read back.
+     *
+     * **An unrecognised trigger is fatal rather than defaulted to the card.** The two forms differ
+     * at exactly one place — an Egress makes the card inert and leaves the report alone (D-133) —
+     * so a parser that guessed would replay a refusal that never happened, or fail to replay one
+     * that did.
+     */
+    private fun trigger(raw: String, line: Int): MeetingTrigger = when {
+        raw == "card" -> MeetingTrigger.MeetingCard
+        raw.startsWith("report:") -> MeetingTrigger.RevokeReported(
+            Seat(
+                raw.removePrefix("report:").toIntOrNull()
+                    ?: throw MalformedRecording(line, "'$raw' names no seat"),
+            ),
+        )
+        else -> throw MalformedRecording(line, "unknown meeting trigger '$raw'")
     }
 
     /**
