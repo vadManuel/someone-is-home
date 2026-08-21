@@ -29,6 +29,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -256,6 +257,70 @@ fun FillBar(
         Box(Modifier.fillMaxWidth(fraction).fillMaxHeight().background(color))
     }
 }
+
+/**
+ * **The light signature, as a mark rather than a sentence (D-106).**
+ *
+ * One cell per rung of the ladder, lit up to this Subroutine's own — one for [LightSignature.Dark],
+ * three for [LightSignature.Bright]. Unlit rungs are **not drawn at all**, which is the whole
+ * design of it: the mark emits in proportion to what it describes, so the brightest signature is
+ * the brightest thing in the row and the darkest is nearly nothing. On a screen whose governing
+ * rule is *minimise lit pixel area*, a legend that spends the same light on every value would be
+ * saying "dark" in a bright voice.
+ *
+ * **It replaces the sentence form.** `SCREEN STAYS DARK` was tried on the springboard widget and
+ * removed for how it read — a full line of chrome, in the one slot the player checks constantly,
+ * to carry one of three values. A mark is read at a glance, is the same width everywhere it
+ * appears, and reads at the dimmest amber step where a 6-unit label does not.
+ *
+ * **An absent mark is not a value.** Nothing on the ladder is zero cells, so a row with no mark —
+ * a locked step of a chain, which names nothing on purpose — cannot be read as a dark Subroutine.
+ * That is the same fail-closed direction as the redaction schema: the failure mode is *my mark did
+ * not appear*, never *my mark said something I did not mean*.
+ *
+ * The tag is for tests only. `LightSignatureTest` counts marks per screen, which is how D-106's
+ * "everywhere" is held to being everywhere — a screen that names a Subroutine and forgets its
+ * light is exactly the regression the sentence form's removal already caused once.
+ */
+@Composable
+fun LightMark(
+    signature: LightSignature,
+    color: Color,
+    modifier: Modifier = Modifier,
+    /**
+     * True where the mark is explaining *itself* — the key at the foot of the work order — rather
+     * than describing a Subroutine on screen. The distinction is real and not a test hook: a
+     * count of what the screen tells a player about their work must not include the legend that
+     * teaches them to read it.
+     */
+    sample: Boolean = false,
+    cell: Dp = 4.u,
+    height: Dp = 6.5.u,
+    gap: Dp = 2.u,
+) {
+    val rungs = LightSignature.entries.size
+    Row(
+        modifier
+            .width(cell * rungs + gap * (rungs - 1))
+            .height(height)
+            .testTag(if (sample) sampleTag(signature) else markTag(signature)),
+        horizontalArrangement = Arrangement.spacedBy(gap),
+    ) {
+        repeat(rungs) { index ->
+            // The unlit rungs hold their place and emit nothing. A Box with no background is a
+            // measured gap, not a dark cell someone could mistake for a fourth luminance step.
+            Box(Modifier.width(cell).fillMaxHeight().then(
+                if (index < signature.rung) Modifier.background(color) else Modifier
+            ))
+        }
+    }
+}
+
+/** What [LightMark] tags itself with, so a test names a signature rather than a magic string. */
+fun markTag(signature: LightSignature): String = "light-${signature.name.lowercase()}"
+
+/** The key's own marks, which describe no Subroutine and must not be counted as if they did. */
+fun sampleTag(signature: LightSignature): String = "light-key-${signature.name.lowercase()}"
 
 /** A bordered block of text or content. The design's only container. */
 @Composable

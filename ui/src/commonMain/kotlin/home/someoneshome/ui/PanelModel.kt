@@ -459,6 +459,10 @@ class PanelVals(val state: PanelState) {
         index = 4,
         total = 7,
         done = 3,
+        // SNIFF is the roster's one SHORT DARK Subroutine -- haptic counting, the phone buzzes N
+        // times and you tap N -- which is the cell where a Resident can take a quick one without
+        // becoming a beacon. The value is the design's, not a fixture invention.
+        light = LightSignature.Dark,
     )
 
     // ---- Clocks -------------------------------------------------------------------------------
@@ -632,6 +636,28 @@ object Plan {
 }
 
 /**
+ * **How much light a Subroutine will make this phone emit — known before you walk to it (D-106).**
+ *
+ * The screen is the lamp, so this is a risk axis independent of duration: a bright Subroutine
+ * makes you a beacon for its whole length, a dark one hides you and blinds you to the room, and a
+ * six-second bright one and a thirty-second dark one are different decisions rather than two
+ * points on "how long". D-106 settles that a player holds this knowledge *in advance* — on the
+ * work order, on the springboard widget and on the Subroutine screen itself — because a Resident
+ * planning a dark route can only do it from the list.
+ *
+ * **Three rungs, and the lowest is not off.** The design's roster spreads ten Subroutines 3
+ * bright / 4 medium / 3 dark, and even the darkest is *near-black* rather than black: this device
+ * has no off, and a phone that stopped emitting would be a player who had been revoked. So
+ * [LightMark] lights one cell of three at [Dark] and never zero — nothing on the ladder is
+ * darkness, and an absent mark can therefore never be misread as a dark Subroutine.
+ *
+ * [rung] is the position on that ladder, which is also how many cells the mark lights. It is not
+ * a brightness value and nothing may treat it as one: the actual luminance a Subroutine screen
+ * draws at is a property of the screen, and in play it is the lamp's, which `ui` does not decide.
+ */
+enum class LightSignature(val rung: Int) { Dark(1), Medium(2), Bright(3) }
+
+/**
  * The Subroutine a player is currently sent to.
  *
  * A fixture today. In play it arrives at the effect boundary like everything else.
@@ -646,6 +672,8 @@ data class CurrentSubroutine(
     val index: Int,
     val total: Int,
     val done: Int,
+    /** What this Subroutine will do to the lamp. Held here so the three surfaces cannot drift. */
+    val light: LightSignature,
 )
 
 /** One cell of the plan editor's grid. */

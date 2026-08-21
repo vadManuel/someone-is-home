@@ -66,6 +66,10 @@ fun HomeScreen(vals: PanelVals, widget: @Composable (PanelVals) -> Unit = { Inte
                         // The marker is named by its SHAPE, not by a number. This is the same
                         // token printed on the card the player is walking towards.
                         vals.current.marker?.let { MarkerGlyph(it, 11.u, Amber.Mid) }
+                        // D-106's springboard surface, and the slot where a full sentence was
+                        // tried and removed. A mark sits inside the line the widget already has,
+                        // so the widget does not grow and the glance stays a glance.
+                        LightMark(vals.current.light, Amber.Mid, Modifier.padding(start = 2.u))
                     }
                 }
                 Column(
