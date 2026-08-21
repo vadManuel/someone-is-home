@@ -156,14 +156,16 @@ fun WorkScreen(vals: PanelVals) {
         }
 
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.u)) {
-            // Every light value on this screen is the design roster's own, not a fixture
-            // invention: Replay is bright, Short is dark, Jam is medium, Sniff is the one short
-            // dark. ARRAY WIPE is the exception and is reasoned about at its own row.
-            WorkRow("REPLAY", "HALL", MarkerShapes["diamond"], LightSignature.Bright, done = true)
-            WorkRow("SHORT", "GARAGE", MarkerShapes["arrow_right"], LightSignature.Dark, done = true)
-            WorkRow("JAM", "BED 2", MarkerShapes["cross"], LightSignature.Medium, done = true)
+            // **The name and the light come off the roster together, or not at all.** They used
+            // to be two literals per row agreeing by hand -- REPLAY beside Bright, SHORT beside
+            // Dark -- which is the arrangement D-106 already lost once, and the failure mode is
+            // silent: a row keeps its name and quietly changes what it promises the lamp will do.
+            // ARRAY WIPE is the exception and is reasoned about at its own row.
+            WorkRow(Subroutine.Replay, "HALL", MarkerShapes["diamond"], done = true)
+            WorkRow(Subroutine.Short, "GARAGE", MarkerShapes["arrow_right"], done = true)
+            WorkRow(Subroutine.Jam, "BED 2", MarkerShapes["cross"], done = true)
             WorkRow(
-                vals.current.name, vals.current.room, vals.current.marker, vals.current.light,
+                vals.current.subroutine, vals.current.room, vals.current.marker,
                 current = true,
             ) { go(ScreenId.Scan) }
             // The design's fixture used a hexagon; the vetted roster has none, because the
@@ -230,6 +232,24 @@ private fun LightKey() {
         }
     }
 }
+
+/**
+ * A row for one of the design's ten, which is the only kind of row that may carry a light value
+ * it did not choose for itself.
+ *
+ * The overload below still takes a name and a signature because ARRAY WIPE needs it: the circuit
+ * is not on the roster, the design rates it nowhere, and its mark is this port's reading. Making
+ * that the awkward path rather than the ordinary one is deliberate.
+ */
+@Composable
+private fun WorkRow(
+    subroutine: Subroutine,
+    room: String,
+    shape: MarkerShape?,
+    done: Boolean = false,
+    current: Boolean = false,
+    onClick: (() -> Unit)? = null,
+) = WorkRow(subroutine.label, room, shape, subroutine.light, done, current, onClick)
 
 @Composable
 private fun WorkRow(
@@ -444,6 +464,7 @@ fun InvertedStatusRow(carrier: String) {
 @Composable
 fun ScanCaughtScreen(vals: PanelVals) {
     val go = navigator()
+    val actions = LocalActions.current
     Column(
         Modifier.fillMaxSize().padding(8.u),
         verticalArrangement = Arrangement.spacedBy(7.u),
@@ -480,11 +501,20 @@ fun ScanCaughtScreen(vals: PanelVals) {
             Label("THE CARD IN YOUR HAND MATCHES", size = 6.0, color = Amber.Faint, tracking = 0.1)
         }
 
+        // **BEGIN does not name a screen, and cannot.** Which Subroutine opens is a fact about
+        // the card that was just read, so the target is the actions layer's — the same shape as a
+        // tap on the plan, which opens whichever room is under the finger. Declared in
+        // Flow.viaActions, where every built Subroutine screen is listed as a place this can land.
+        //
+        // A Subroutine with no interaction built yet opens nothing and the phone stays here,
+        // which is the fail-closed direction: routing an unbuilt Subroutine to the nearest built
+        // one would put a player through the wrong work and read as a routing bug rather than as
+        // a missing screen.
         PanelButton(
             "BEGIN",
             border = Amber.Bright, ink = Amber.Bright,
             size = 9.0, tracking = 0.18, verticalPadding = 13.u,
-            onClick = { go(ScreenId.Sub) },
+            onClick = actions.beginSubroutine,
         )
         PanelButton(
             "NOT THIS ONE",
@@ -591,145 +621,6 @@ private fun ScanRefusal(headline: String, detail: String) {
             "SEE MY SUBROUTINES",
             border = Amber.Faint, ink = Amber.Dim,
             size = 7.0, verticalPadding = 9.u,
-            onClick = { go(ScreenId.Work) },
-        )
-    }
-}
-
-/**
- * The handshake — **near-black, haptic, maximum concealment.**
- *
- * You return a rhythm by feel. Nothing on this screen needs to be seen, so almost nothing is lit,
- * which makes it the safest Subroutine to be caught doing in a corridor.
- */
-@Composable
-fun SubScreen() {
-    val go = navigator()
-    Column(
-        Modifier.fillMaxSize().padding(8.u),
-        verticalArrangement = Arrangement.spacedBy(7.u),
-    ) {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Label("HANDSHAKE", size = 7.0, color = Amber.Dim, tracking = 0.14)
-            // Where SCREEN STAYS DARK used to be, in the same slot on both Subroutine screens.
-            // One lit cell of three, at the faint step: on the screen whose whole job is to emit
-            // as little as possible, the statement about light costs almost none.
-            LightMark(LightSignature.Dark, Amber.Faint, cell = 5.u, height = 8.u)
-        }
-
-        Column(
-            Modifier.weight(1f).fillMaxWidth().border(1.u, Amber.Edge).padding(10.u),
-            verticalArrangement = Arrangement.spacedBy(12.u, Alignment.CenterVertically),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Label(
-                "RETURN THE RHYTHM\nBY FEEL",
-                size = 6.5, color = Amber.Faint, tracking = 0.14, lineHeight = 2.0,
-                align = TextAlign.Center,
-            )
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(4.u),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Block(8.u, 8.u, Amber.Dim)
-                Block(16.u, 8.u, Amber.Dim)
-                Block(8.u, 8.u, Amber.Faint)
-                Block(8.u, 8.u, Amber.Faint)
-                Block(16.u, 8.u, Amber.Edge)
-            }
-            Label("3 OF 5 RETURNED", size = 6.0, color = Amber.Faint, tracking = 0.12)
-        }
-
-        Row(
-            Modifier.fillMaxWidth().border(1.u, Amber.Edge).padding(horizontal = 7.u, vertical = 6.u),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Label("MOTION BUDGET", size = 6.0, color = Amber.Faint, tracking = 0.1)
-            Label("HOLDING", size = 6.0, color = Amber.Dim, tracking = 0.1)
-        }
-
-        PanelButton(
-            "TAP",
-            border = Amber.Faint, ink = Amber.Dim,
-            size = 16.0, tracking = 0.2, verticalPadding = 26.u,
-            onClick = { go(ScreenId.SubBright) },
-        )
-    }
-}
-
-/**
- * The parity check — **lit for its whole duration**, and that is the point.
- *
- * Some Subroutines have to be bright; if every one were concealable, choosing a dark one would
- * itself be a choice worth reading. The pair exists so that being lit at a marker is ordinary.
- *
- * **THE MINIGAME ITSELF IS A PLACEHOLDER.** This screen carries the design's *style* — segment
- * grid, four luminance steps, inverted emphasis — but not its rules. The Subroutines were
- * designed separately on the diagnostics bench, and that set is the authoritative one; this
- * fixture is not. Two things visible here are artifacts rather than intent:
- *
- * - corrupt-but-unfound cells render lighter than clean ones, which shows the answer if the task
- *   is genuinely to *find* them
- * - "PASS 2 OF 2" implies a structure this screen does not otherwise express
- *
- * When the real Subroutines land, take their rules from the bench and their look from here.
- */
-@Composable
-fun SubBrightScreen() {
-    val go = navigator()
-    Column(
-        Modifier.fillMaxSize().padding(8.u),
-        verticalArrangement = Arrangement.spacedBy(7.u),
-    ) {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Label("PARITY CHECK", size = 7.0, color = Amber.Dim, tracking = 0.14)
-            // The same slot, the same mark, all three rungs lit at the full step -- the two
-            // Subroutine screens in the port are the two ends of the ladder, and putting the mark
-            // in one fixed place on both is what makes it a thing you recognise rather than read.
-            LightMark(LightSignature.Bright, Amber.Bright, cell = 5.u, height = 8.u)
-        }
-        Label(
-            "FIND EVERY CORRUPTED BLOCK . PASS 2 OF 2",
-            modifier = Modifier.fillMaxWidth(),
-            size = 6.5, color = Amber.Dim, tracking = 0.12, align = TextAlign.Center,
-        )
-
-        Column(
-            Modifier.weight(1f).fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(3.u),
-        ) {
-            Parity.cells.chunked(6).forEach { row ->
-                Row(
-                    Modifier.fillMaxWidth().weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(3.u),
-                ) {
-                    row.forEach { cell ->
-                        Box(
-                            Modifier.weight(1f).fillMaxHeight()
-                                .background(cell.fill).border(1.u, cell.border)
-                        )
-                    }
-                }
-            }
-        }
-
-        // The design's fixture also carried a LIT word at the end of this row, which was the
-        // header's SCREEN STAYS LIT said a second time on the same screen. With the mark in the
-        // header it is one fact in one place, in the slot it occupies on every Subroutine screen.
-        Label("FOUND 4 OF 7", size = 6.5, color = Amber.Dim, tracking = 0.1)
-
-        PanelButton(
-            "SUBMIT PASS",
-            border = Amber.Dim, ink = Amber.Bright,
-            tracking = 0.18, verticalPadding = 9.u,
             onClick = { go(ScreenId.Work) },
         )
     }

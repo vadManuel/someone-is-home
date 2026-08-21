@@ -205,6 +205,70 @@ class ScreenshotTest {
         println("wrote ${frames.size} meeting frames to ${out.absolutePath}")
     }
 
+    /**
+     * **The Subroutines' echo states, which are most of what a Subroutine screen ever is.**
+     *
+     * The sweep above renders each of the three from its [ScreenId] and gets the fixture's
+     * part-way-through state, which is one frame out of a set where every frame is the interesting
+     * one. What a Subroutine looks like when nobody has touched it — a screen with no echo at all,
+     * the thing a player actually walks onto — and what it looks like once the entry has gone to
+     * the house are facts about the [SubroutineModel] beside the panel, so neither has a screen id.
+     *
+     * The handed-over frames are the ones worth a person's eye. Every control on them has kept its
+     * place and lost its press, RETURNED . WAITING has appeared in a slot that was already there,
+     * and *nothing says whether it worked* — which is easy to assert and much harder to be sure
+     * reads as deliberate rather than as a screen that failed to update. A viewer, not an assertion
+     * — `SubroutineParityTest` is where the assertions are.
+     */
+    @OptIn(ExperimentalTestApi::class, ExperimentalComposeUiApi::class)
+    @Test
+    fun renderTheSubroutinesEchoStates() {
+        var written = 0
+        for (subroutine in Subroutine.built) {
+            val slug = subroutine.label.lowercase().replace(' ', '-')
+            val frames = listOf<Pair<String, SubroutineModel.() -> Unit>>(
+                "untouched" to { },
+                "handed-over" to {
+                    // Enough taps to finish the longest of the three, then one past it: an entry
+                    // that has gone takes nothing more, so the extra is drawn as a no-op on
+                    // purpose rather than being carefully avoided.
+                    repeat(SubroutineModel.HANDSHAKE_BEATS + 1) { at ->
+                        when (subroutine) {
+                            Subroutine.Handshake -> handshake.enter(at)
+                            Subroutine.Replay ->
+                                replay.enter(at % SubroutineModel.REPLAY_DOTS)
+                            else -> {
+                                parity.choose(at)
+                                parity.handOver()
+                            }
+                        }
+                    }
+                },
+            )
+            for ((state, set) in frames) {
+                runDesktopComposeUiTest(width = 600, height = 1300) {
+                    val model = SubroutineModel().apply(set)
+                    setContent {
+                        Box(Modifier.fillMaxSize().background(Color.Black)) {
+                            DeviceCanvas {
+                                Screen(
+                                    PanelState(screen = subroutine.screen!!),
+                                    subroutines = model,
+                                )
+                            }
+                        }
+                    }
+                    ImageIO.write(
+                        onRoot().captureToImage().toAwtImage(), "png",
+                        File(out, "$slug-$state.png"),
+                    )
+                    written++
+                }
+            }
+        }
+        println("wrote $written Subroutine frames to ${out.absolutePath}")
+    }
+
     private fun lobbyOf(joined: Int, linesIn: Int, hosting: Boolean): LobbyModel {
         val home = NearbyHome("THE BUNGALOW", "192.168.1.24", 47747)
         val model = LobbyModel(

@@ -109,12 +109,18 @@ object ScreenGraph {
         // Work.
         ScreenId.Work -> setOf(ScreenId.Home, ScreenId.Scan)
         ScreenId.Scan -> setOf(ScreenId.Home)
-        ScreenId.ScanCaught -> setOf(ScreenId.Sub, ScreenId.Work)
+        // NOT THIS ONE, and nothing else: BEGIN names no screen, because which Subroutine opens
+        // is a fact about the card that was read. See Flow.viaActions.
+        ScreenId.ScanCaught -> setOf(ScreenId.Work)
         // Both refusals, pixel-identical apart from their text, and identical here too. One of
         // them is Resident-only; differing exits would be the tell the shared body prevents.
         ScreenId.ScanBad, ScreenId.ScanUnknown -> setOf(ScreenId.Scan, ScreenId.Work)
-        ScreenId.Sub -> setOf(ScreenId.SubBright)
-        ScreenId.SubBright -> setOf(ScreenId.Work)
+        // **Every Subroutine screen has exactly one exit, and it is STOP NOW.** Handing your
+        // entry over is not one: whether the work landed is the house's answer, and a screen that
+        // walked away on the strength of its own last tap would be this phone announcing a
+        // completion it cannot see. The three used to chain into one another — Sub to SubBright to
+        // Work — which was a fixture convenience wearing a game route's clothes.
+        ScreenId.SubHandshake, ScreenId.SubReplay, ScreenId.SubParity -> setOf(ScreenId.Work)
         ScreenId.Files -> setOf(ScreenId.Home)
         ScreenId.Notes -> setOf(ScreenId.Home)
         ScreenId.TermNo -> setOf(ScreenId.Home, ScreenId.TermLive)
@@ -331,6 +337,11 @@ object Flow {
      *   given render is not a fact about the screen — which is the definition of an edge that
      *   belongs here. It is also the host's alone; a client's lobby draws a line of text where
      *   the button would be.
+     * - **BEGIN, on a caught scan.** Which Subroutine opens is a fact about the card that was just
+     *   read, so the screen cannot name a target any more than a tap on the plan can — it is the
+     *   same shape as opening the room under a finger. Every *built* Subroutine screen is listed
+     *   as a place it can land, because any of them can be behind a BEGIN; a Subroutine whose
+     *   interaction does not exist yet opens nothing and the phone stays where it is.
      * - **A banner, swiped up.** D-105's whole gesture vocabulary, and a drag rather than a tap,
      *   so it publishes no click action for `ScreenGraphTest` to fire. Where it lands is the
      *   screen the notification arrived over rather than anything the banner names — the banner
@@ -351,6 +362,9 @@ object Flow {
         ScreenId.Delete to setOf(ScreenId.Maps),
         // The T card, read in a room while the terminal is in another one.
         ScreenId.ScanMarker to setOf(ScreenId.TermTaken),
+        // BEGIN, opening whichever Subroutine this marker holds. Derived from the roster rather
+        // than listed, so building a Subroutine cannot leave its screen an orphan.
+        ScreenId.ScanCaught to Subroutine.built.mapNotNullTo(mutableSetOf()) { it.screen },
         // A line that was real, handed over; and the lights going out once every line is in.
         ScreenId.Secret to setOf(ScreenId.Lobby),
         ScreenId.Lobby to setOf(ScreenId.Armed),
@@ -424,6 +438,15 @@ class FlowModel(
      * when a new meeting begins — see [arrive].
      */
     val meeting: MeetingModel = MeetingModel.sample(),
+    /**
+     * What this phone has entered into the Subroutine it has open.
+     *
+     * Held here for the reason the four above are: a Subroutine is walked out of and back into —
+     * the player stops because somebody came in, waits in the hall, scans again — and an entry
+     * that lived in a screen's own `remember` would be gone the moment they looked away. It is
+     * cleared when a Subroutine is opened afresh; see [beginSubroutine].
+     */
+    val subroutines: SubroutineModel = SubroutineModel.sample(),
 ) {
 
     var state: PanelState by mutableStateOf(initial)
@@ -707,6 +730,69 @@ class FlowModel(
 
     fun lockInVote() = meeting.lockIn()
 
+    // ---- Subroutines ---------------------------------------------------------------------------
+
+    /**
+     * **BEGIN: open whichever Subroutine the marker you just scanned holds.**
+     *
+     * Here rather than on the screen because the screen cannot name the target — the same reason
+     * a tap on the plan is here. A Subroutine with no interaction built yet opens **nothing** and
+     * the phone stays on the caught scan, which is the fail-closed direction: the failure mode is
+     * *it did not open*, noticed immediately, rather than *it opened somebody else's work*.
+     *
+     * The entries are cleared on the way in. A round has several visits to the same marker — you
+     * stop because somebody walked in, you come back — and an entry left standing would hand a
+     * player a sequence they part-returned ten minutes ago as though it were still live.
+     *
+     * **The parameter is the card's answer, and the default is the fixture's.** In play the
+     * scanned marker says which Subroutine opens; on a phone with no house attached there is one
+     * Subroutine and it is [PanelVals.CURRENT]. Written as a parameter rather than read straight
+     * off the fixture so that the port's single-marker limitation is visible in the signature
+     * instead of being a thing you discover when a second marker exists.
+     */
+    fun beginSubroutine(subroutine: Subroutine = PanelVals.CURRENT.subroutine) {
+        val screen = subroutine.screen ?: return
+        subroutines.beganAgain()
+        go(screen)
+    }
+
+    /**
+     * **A finger landing on a dot, a cell, or the one big button — and that is all it is.**
+     *
+     * It echoes. It does not compare what was entered with anything, because there is nothing on
+     * this device to compare it with (see [SequenceEntry]); the sequence goes to the house as an
+     * Intent and the house is what verifies it (D-042). Both roles arrive here, through the same
+     * screens, into the same entries: an Insider's Subroutine is a fake in the ledger and nowhere
+     * else, which is what rule 8 means by *the fake is not a backlog item*.
+     *
+     * A Subroutine with no entry behind it is ignored rather than crashing. Six of the ten are
+     * unbuilt and none of them has a screen, so nothing can reach this with one — but a `when`
+     * that threw would turn a routing mistake into a dead phone in a dark house, and rule 6 is
+     * that errors are silent to the player.
+     */
+    fun tapSubroutine(subroutine: Subroutine, at: Int) {
+        when (subroutine) {
+            Subroutine.Handshake -> subroutines.handshake.enter(at)
+            Subroutine.Replay -> subroutines.replay.enter(at)
+            Subroutine.ParityCheck -> subroutines.parity.choose(at)
+            else -> Unit
+        }
+    }
+
+    /**
+     * SUBMIT, on the one Subroutine of the three whose answer can still change.
+     *
+     * A sequence hands itself over when its last element goes in — there is nothing left to
+     * change, so there is nothing to confirm. A single choice can be moved right up until it is
+     * sent, which is the vote's shape and the vote's reason.
+     */
+    fun handOverSubroutine(subroutine: Subroutine) {
+        when (subroutine) {
+            Subroutine.ParityCheck -> subroutines.parity.handOver()
+            else -> Unit
+        }
+    }
+
     // ---- Notifications -----------------------------------------------------------------------
 
     /**
@@ -765,6 +851,9 @@ class FlowModel(
         sayReady = ::sayReady,
         chooseVote = ::chooseVote,
         lockInVote = ::lockInVote,
+        beginSubroutine = { beginSubroutine() },
+        tapSubroutine = ::tapSubroutine,
+        handOverSubroutine = ::handOverSubroutine,
         dismissNotification = ::dismissNotification,
     )
 
@@ -802,5 +891,8 @@ fun FlowHost(model: FlowModel = remember { FlowModel() }) {
             if (model.state.screen == screen) model.push(pending.to)
         }
     }
-    Screen(model.state, model.actions(), model.editor, model.homes, model.lobby, model.meeting)
+    Screen(
+        model.state, model.actions(), model.editor, model.homes, model.lobby, model.meeting,
+        model.subroutines,
+    )
 }

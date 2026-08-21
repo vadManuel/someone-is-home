@@ -55,9 +55,12 @@ class LightSignatureTest {
         ScreenId.EgressWidget to mapOf(LightSignature.Dark to 1),
         // The last moment before BEGIN, where NOT THIS ONE is still live.
         ScreenId.ScanCaught to mapOf(LightSignature.Dark to 1),
-        // The two Subroutine screens are the two ends of the ladder.
-        ScreenId.Sub to mapOf(LightSignature.Dark to 1),
-        ScreenId.SubBright to mapOf(LightSignature.Bright to 1),
+        // One row per built Subroutine, each showing its own rung in the same fixed slot: the
+        // header's mark is what makes the ladder a thing a player recognises rather than reads.
+        // HANDSHAKE is one faint cell and the two bright ones are three.
+        ScreenId.SubHandshake to mapOf(LightSignature.Dark to 1),
+        ScreenId.SubReplay to mapOf(LightSignature.Bright to 1),
+        ScreenId.SubParity to mapOf(LightSignature.Bright to 1),
     )
 
     private fun SemanticsNodeInteractionsProvider.marks(): Map<LightSignature, Int> =
@@ -109,7 +112,7 @@ class LightSignatureTest {
      */
     @Test
     fun theKeyOnTheWorkOrderSpellsOutEveryRungAndAppearsNowhereElse() {
-        for (id in listOf(ScreenId.Work, ScreenId.Home, ScreenId.Sub, ScreenId.SubBright)) {
+        for (id in listOf(ScreenId.Work, ScreenId.Home, ScreenId.SubHandshake, ScreenId.SubParity)) {
             runDesktopComposeUiTest(width = 600, height = 1300) {
                 setContent {
                     DeviceCanvas(insets = PanelInsets()) { Screen(PanelState(screen = id)) }
