@@ -1434,6 +1434,47 @@ it said) is design-project work, not settled here.
 
 ---
 
+## Revision 22 — the room the app is never told about
+
+*Decided 2026-08-21, with Vadmanuel, resolving escalation E2-1 (unit 2, overnight 2026-08-21).*
+
+### D-107 · **Insider-only rooms are a spoken fact, never app data — decided**
+
+D-098 deleted the third map type; what it did not settle was story 4.7, whose editor exclusion
+was written entirely in terms of that type and carried a real hazard — *a Terminal behind an
+Insider-only door is unrecoverable*. The ruling is that **the map type went and the fact stayed,
+but the fact was never the app's to hold.** The host declares Insider-only rooms aloud during the
+setup walkthrough, with every player present — *"this bathroom is Insider-only"*, *"here is the
+terminal"* — and the app never learns which rooms they are. A room the editor could mark is a
+room a Resident's phone could read; keeping it out of the data is a leak surface that never
+exists rather than one that is guarded.
+
+**Doors are physical house rules, and the app enforces none of them.** Residents may open the
+door of a playable room and may never close one. Insiders may close playable-room doors, and are
+the only ones who may open *or* close the door of a declared Insider-only room — that is the
+passive Override, unchanged and still untracked.
+
+**The hazard dissolves rather than moving.** The Terminal's room is playable by definition, so a
+closed door can inconvenience the Residents but can never put the Terminal out of reach: *"a
+Terminal behind an Insider-only door"* is not a state the game can reach. Story 4.7 therefore
+stops being an editor exclusion and becomes walkthrough copy — **guide the host, don't gate
+them** — and E4 is left with exactly one exclusion the editor enforces, the stairs one, which is
+a safety rule.
+
+### D-108 · **The planning artifacts are swept to match D-098 — ratified**
+
+Five sites still described the deleted type as live, one of them defining it as *mandatory*
+vocabulary in the document CLAUDE.md points at for architecture — an agent reading it in good
+faith would have written the identifier the lint rejects. All are now purged: the grid painter
+paragraph and the marker taxonomy in `gdd.md`, stories 4.2 and 4.7 in `epics.md`, and the
+architecture's vocabulary list. The sweep found five more of the same word in the same two
+documents (the ability table, the doors section, the T−15:00 walkthrough, the E4 scope row,
+story 9.13) and took those too — half a document describing a deleted type as live is the same
+contradiction, just further down the page. The decision log keeps its own occurrences, because
+a record of a deletion has to be able to name what was deleted.
+
+---
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).
@@ -1485,6 +1526,11 @@ light-signature visibility are raised, not settled.
 **Revision 21 closed revision 20's questions** — D-103 the Insider count can hide behind an
 always-percentage meter (rev 19 and D-081 partially superseded), D-104 living and ghosts both
 gate the talk, D-105 the read concept is deleted, D-106 the light signature shows everywhere.
+
+**Revision 22 closed escalation E2-1** — D-107 Insider-only rooms are a spoken walkthrough fact
+and never app data, doors are physical house rules the app never enforces, and 4.7's hazard
+dissolves into walkthrough guidance instead of an editor exclusion; D-108 the ten stale sites in
+the GDD, the epics and the architecture are swept to match D-098.
 
 **Carried into E0 as a constraint, not a closed item:** total app allocation ≤ ~0.5 MB/s as the design target, with the measured cliff between 1.5 and 3.0 MB/s — roughly 6× margin, so this is a budget rather than a knife edge. Nobody yet knows what the real app allocates with BLE, 100 Hz motion, effects and recording running at once.
 Action: create `project-context.md`.

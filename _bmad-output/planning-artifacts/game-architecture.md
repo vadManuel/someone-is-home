@@ -718,7 +718,7 @@ A subroutine's pattern arrives as an **Effect**. The UI displays it, captures ta
 
 **Game vocabulary is mandatory in code, not only in UI strings.**
 
-`Resident` / `Insider` are the only role words — everyone is a Resident, some are *also* Insiders. `Revoke` — the Insider ability. `Restrain` — the group's action at a meeting. **Revoke and Restrain are not synonyms and must never be collapsed:** one is system power lent by the house, the other is a physical act the house cannot prevent. `Subroutine` — the unit of assigned work. `SystemIntegrity` — the collective progress meter. `Egress` — the Insider-triggered house crisis. `Override` — the Insider-only route between rooms. `Passage` — a map-editor shape tag, alongside `room` and `stairs`.
+`Resident` / `Insider` are the only role words — everyone is a Resident, some are *also* Insiders. `Revoke` — the Insider ability. `Restrain` — the group's action at a meeting. **Revoke and Restrain are not synonyms and must never be collapsed:** one is system power lent by the house, the other is a physical act the house cannot prevent. `Subroutine` — the unit of assigned work. `SystemIntegrity` — the collective progress meter. `Egress` — the Insider-triggered house crisis. `Override` — the Insider-only route between rooms, never a map type: the map knows only `Room` and `Stairs` (D-098).
 
 **That list is exhaustive** — any identifier outside it is wrong. The lint's word list carries the mechanical detail.
 

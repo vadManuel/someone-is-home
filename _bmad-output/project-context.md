@@ -116,4 +116,4 @@ Every other project absorbs a wrong guess as a bug. **Here a wrong guess is sile
 
 **Fuller answers:** `_bmad-output/planning-artifacts/game-architecture.md` (patterns, boundaries, decisions) · `.../gdds/gdd-someone-is-home-2026-08-16/gdd.md` (design intent) · `.../epics.md` (stories) · `.../decision-log.md` (why anything is the way it is, including what was reversed).
 
-**The vocabulary is closed — use those words and no synonyms**, in code, docs, comments, commit messages and filenames alike. If you need a term the list doesn't carry, raise it rather than inpassage use one. A `pre-commit` hook checks, but the rule holds without it.
+**The vocabulary is closed — use those words and no synonyms**, in code, docs, comments, commit messages and filenames alike. If you need a term the list doesn't carry, raise it rather than inventing one. A `pre-commit` hook checks, but the rule holds without it.

@@ -312,7 +312,7 @@ The binding constraint is not balance — it is that a Insider operates the pane
 | **Surge** | Target's lamp slams to full, then to black — **and** their phone emits sound. One event | Ranged |
 | **Spoof** | False check-in in a room you are not in. Manufactures a phantom occupant | Ranged |
 | **Isolate** | Take a marker — or the Terminal — offline temporarily | Ranged |
-| **Override** | Interior doors tagged as passages. Only Insiders may change their state | Physical |
+| **Override** | The doors of rooms the host declared Insider-only. Only Insiders may open or close them | Physical |
 
 **Why Revoke and Egress each get their own cooldown:** they are the two time-critical abilities, and they must always be ticking toward available independently. Only Tier 2 shares the Access pool, so **one tunable number governs the entire support kit and self-targeting without touching either win condition.**
 
@@ -780,7 +780,7 @@ The scarce resources are **time, light, and attention** — not ammunition.
 
 **The host walks their own house once and maps it. ~15 minutes, once — not per round.** This is the sleeper feature: every competitor is generic; ours knows the difference between your kitchen and your basement.
 
-**The grid painter, one plan per storey.** Drag across cells to define a shape; that shape becomes a **room**, a **passage**, or **stairs**. Name it. Markers go into single cells afterwards.
+**The grid painter, one plan per storey.** Drag across cells to define a shape; that shape becomes a **room** or **stairs** — those two, and nothing else. Name it. Markers go into single cells afterwards.
 
 **Floors are purely additive** — start with Floor 0 (renameable), add more as you go. Nothing fixed, and **no vertical-connection logic**: the app renders what was drawn.
 
@@ -794,27 +794,26 @@ The scarce resources are **time, light, and attention** — not ammunition.
 
 | Marker | Count | Placement rules |
 |---|---|---|
-| **Task marker** | ~8–12 per house | Never in a stairs zone. Never in a passage-tagged room |
-| **Terminal** (map station) | Exactly 1 | Never in a passage-tagged room. Highly campable by design |
+| **Task marker** | ~8–12 per house | Never in a stairs zone |
+| **Terminal** (map station) | Exactly 1 | Anywhere a room is drawn. Highly campable by design |
 | **Array Wipe: Spares / Rack / Disposal** | 3, designated | Ideally spread across storeys — the circuit is transit |
-| **Passage-tagged interior doors** | Host's choice | Insiders only, via Override |
+| **Insider-only rooms** | Host's choice | **Never app data.** Spoken aloud in the setup walkthrough; their doors are Override's business |
 | **Stairs zones** | As drawn | **Transit only.** No markers, no counting, no timed routes |
 | **Couch / meeting area** | 1 | **Mapping dead zone.** Produces no occupancy data |
 
-### Two exclusions the editor must enforce
+### The one exclusion the editor enforces
 
-Both are easy for a host to get wrong and catastrophic if missed:
+**No task markers in stairs zones.** Safety. Easy for a host to get wrong, catastrophic if missed, and the editor refuses it with a legible reason.
 
-1. **No task markers in stairs zones.** Safety.
-2. **No task markers and no Terminal in passage-tagged rooms.** Residents can never open those doors, so anything placed there is unreachable for the whole game. **A Terminal behind a Insider-only door would be unrecoverable.**
+**There is no second exclusion, because Insider-only rooms are not app data.** The host declares them aloud during the setup walkthrough, with every player present — *"this bathroom is Insider-only"*, *"here is the terminal"* — and the app never learns which rooms they are. Nothing to exclude, and nothing to leak: a room the editor could mark is a room a Resident's phone could read. **The Terminal's room is playable by definition**, so a closed door can inconvenience the Residents but can never put the Terminal out of reach. The old hazard — a Terminal behind an Insider-only door — cannot occur, so it becomes walkthrough guidance rather than an editor rule. **Guide the host; don't gate them.**
 
-### Doors and passages
+### Doors
 
 - **Exterior doors** — anyone opens and closes, pure housekeeping. The app never mentions them.
-- **Host-tagged interior doors are passages.** Closed by default. **Only Insiders may change their state**, via the passive Override.
+- **Interior doors are physical house rules the app never enforces.** Residents may open the door of a playable room and may never close one. Insiders may close playable-room doors, and are the only ones who may open *or* close the door of a room the host declared Insider-only — that is the passive Override.
   - The bathroom ambush — hide, wait for an alert, walk out — is the mechanic working as intended.
   - It self-polices: emerging somewhere a Resident just cleared is damning.
-  - **Passage use is never tracked by the app.** The app cannot observe a physical door opening, so logging would require a Insider to voluntarily self-report, which no Insider would ever do. **The cost of using a passage is entirely social.**
+  - **Door use is never tracked by the app.** The app cannot observe a physical door opening, so logging would require an Insider to voluntarily self-report, which no Insider would ever do. **The cost of using an Insider-only door is entirely social.**
   - **It stays untracked in v2**, even though smart-home contact sensors would make door state genuinely detectable. That would *add* information that does not otherwise exist.
 
 ### Safety — stairs stay in play
@@ -856,11 +855,11 @@ The shape to avoid is *Lemmon v. Snap*: a design that **rewards** a dangerous re
 
 The host opens the app and creates a session; **the host's device owns the server**. Because of that, **a downed device must be a game *state*, never a real process death** — a crash on the host's phone cannot be allowed to end the game.
 
-The host paints **Floor 0** on the grid: drag cells, tag each shape as room / passage / stairs, name it. Adds **Floor 1**. Floors are purely additive with no vertical-connection logic.
+The host paints **Floor 0** on the grid: drag cells, tag each shape as room or stairs, name it. Adds **Floor 1**. Floors are purely additive with no vertical-connection logic.
 
 The moment the host tags a staircase, the **host acknowledgment screen** fires — contemporaneous and specific, at the moment of the decision.
 
-The host drops markers into single cells. The editor **refuses** a marker in a stairs zone and refuses a marker or the Terminal in a passage-tagged room. It designates the **Terminal**, and the three Array Wipe markers — **Spares, Rack, Disposal**.
+The host drops markers into single cells. The editor **refuses** a marker in a stairs zone. It designates the **Terminal**, and the three Array Wipe markers — **Spares, Rack, Disposal**.
 
 **Adjacency is now known for free**, from grid cell neighbours. Plausible error injection and Egress node selection both draw on it without a line of geometry.
 
@@ -1298,7 +1297,7 @@ Fourteen epics. Detailed story breakdown in `epics.md`.
 | **E1** | **The lamp** | Full-screen amber lamp, torch level, brightness override, the white flip, and **every connected phone flipping at once**. **Carries the stack gate (1.7)** | — |
 | **E2** | Session, sync, and arming | Host-owned server, join, lobby settings, clock-offset measurement, scheduled-timestamp flips, perimeter arming, role reveal by text | E1 |
 | **E3** | The device shell | Springboard (two pages, role-identical), status bar, the five apps as device states, Status panel long-press, Settings | E2 |
-| **E4** | The house | Grid painter per storey, room/passage/stairs tagging, additive floors, markers, host acknowledgment, editor exclusions, adjacency from cell neighbours | E3 |
+| **E4** | The house | Grid painter per storey, room/stairs tagging, additive floors, markers, host acknowledgment, the stairs exclusion, adjacency from cell neighbours | E3 |
 | **E5** | Scanning and the motion budget | Hold-to-scan, preview-less capture, routing/check-in decoupling, motion accumulator with per-player calibration and both bounds, the draining meter | E4 |
 | **E6** | The subroutine set | Ten subroutines across 3 bright / 4 medium / 3 dark, **plus the fake versions**, plus degradation | E5 |
 | **E7** | Task structures | Short/medium/long/circuit scheduling, Memory Dump, Array Wipe carry state, chains with lazy linking and randomized unlock, System Integrity | E6 |

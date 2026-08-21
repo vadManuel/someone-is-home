@@ -148,12 +148,12 @@
 | # | Story |
 |---|---|
 | 4.1 | **Grid painter**, one plan per storey. Drag cells to define a shape |
-| 4.2 | Tag a shape as **room / passage / stairs**; name it |
+| 4.2 | Tag a shape as **room or stairs** — those two kinds and no third; name it |
 | 4.3 | **Additive floors** — Floor 0 first, renameable, add more. **No vertical-connection logic** |
 | 4.4 | Drop markers into single cells |
 | 4.5 | Designate the **Terminal** and the three Array Wipe markers (**Spares, Rack, Disposal**) |
 | 4.6 | **Editor exclusion:** no marker in a stairs zone |
-| 4.7 | **Editor exclusion:** no marker and no Terminal in a passage-tagged room. **A Terminal behind a Insider-only door is unrecoverable** |
+| 4.7 | **Walkthrough guidance, not an editor rule.** Insider-only rooms are a *spoken* fact: the host declares them during the setup walk with all players present, and the app never records which they are — so there is nothing for the editor to exclude. Doors are physical house rules the app never enforces (Residents open playable-room doors and never close them; Insiders may close those, and alone may open or close an Insider-only door). **The Terminal's room is playable by definition**, so a closed door can inconvenience but never exclude. The story is the walkthrough copy that tells the host to say it aloud |
 | 4.8 | **Host acknowledgment screen, fired at the moment a staircase is tagged** — not in a ToS |
 | 4.9 | **Adjacency derived from cell neighbours.** Consumed by error injection and Egress node selection; no geometry code |
 | 4.10 | Couch / meeting area designation — a **mapping dead zone** |
@@ -161,7 +161,7 @@
 | 4.12 | **Snoot printable** — tube with fold instructions, plus the **optional end cap** for hardware without fine-grained torch control. Cap the tube; never tape paper across the lens (thermal + optical) |
 | 4.13 | **The play manual** — the only thing a player reads. The four physical conduct rules (don't run / speak / dodge / conceal your phone), snoot folding, host setup guidance, the photosensitivity notice, and how to explain the contact tap in ten seconds. **Everything else in this design refuses to explain itself on purpose; this is the exception** |
 
-**Acceptance:** an L-shaped room is expressible. Adjacency is queryable without geometry. The editor refuses both exclusions with a legible reason.
+**Acceptance:** an L-shaped room is expressible. Adjacency is queryable without geometry. The editor refuses a marker in a stairs zone with a legible reason.
 
 ---
 
@@ -285,7 +285,7 @@
 | 9.10 | **Surge** — lamp to full, then to black, **and** the target's phone emits sound. One event. **Longest cooldown in the Access pool** |
 | 9.11 | **Spoof** — false check-in in a room you are not in |
 | 9.12 | **Isolate** — take a marker or the Terminal offline temporarily |
-| 9.13 | **Override** — passive; passage-tagged interior doors. **No UI at all**, and never tracked |
+| 9.13 | **Override** — passive; the doors of rooms the host declared Insider-only aloud at setup. **No UI at all**, no app data, and never tracked |
 | 9.14 | **Access pool** shared by Tier 2 only. Revoke and Egress each have their own |
 | 9.15 | **Self-targeting on every ability, drawing from the same cooldown** |
 | 9.16 | **Targeting an already-revoked player appears to succeed** — same animation, same cooldown spent, no feedback. Otherwise the panel is a revoke-detector |
