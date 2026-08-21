@@ -32,8 +32,8 @@ sealed interface Admission {
  * ### Why it existed as a bug at all
  *
  * `GameState.armed` had two writers and no readers, so the rules processed every event identically
- * whether or not a round existed. Feeding `ContactMade`, `SubroutineCompleted` and `MeetingCalled`
- * to `GameState.EMPTY` emitted `AbilityFired`, `SubroutineProgressed` and `MeetingOpened`.
+ * whether or not a round existed. Feeding `ContactMade`, `SubroutineReturned` and `MeetingCalled`
+ * to `GameState.EMPTY` emitted `AbilityFired`, a verdict and `MeetingOpened`.
  *
  * **Severity, stated honestly: this is a replay bug, not a leak.** Arming *constructs* a fresh
  * state, so pre-arm effects reached clients while the state that would explain them was thrown

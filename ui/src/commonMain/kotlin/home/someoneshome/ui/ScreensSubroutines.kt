@@ -88,7 +88,7 @@ import androidx.compose.ui.unit.Dp
  * of the two, and on this screen that is not a coincidence.
  */
 @Composable
-fun HandshakeScreen() {
+fun HandshakeScreen(verdict: SubroutineVerdict? = null) {
     val entry = LocalSubroutine.current.handshake
     val actions = LocalActions.current
     SubroutineFrame(Subroutine.Handshake, ink = Amber.Dim, mark = Amber.Faint) {
@@ -103,7 +103,7 @@ fun HandshakeScreen() {
                 align = TextAlign.Center,
             )
             SequenceCells(entry, lit = Amber.Dim, unlit = Amber.Edge)
-            HandedOverLine(entry.handedOver, Amber.Faint)
+            ReturnLine(entry.handedOver, verdict, Amber.Faint)
         }
 
         MotionBudgetRow(Amber.Faint, Amber.Dim)
@@ -145,7 +145,7 @@ fun HandshakeScreen() {
  * target pressed one-handed, in the dark, by somebody watching a doorway.
  */
 @Composable
-fun ReplayScreen() {
+fun ReplayScreen(verdict: SubroutineVerdict? = null) {
     val entry = LocalSubroutine.current.replay
     val actions = LocalActions.current
     SubroutineFrame(Subroutine.Replay, ink = Amber.Dim, mark = Amber.Bright) {
@@ -187,7 +187,7 @@ fun ReplayScreen() {
                 }
             }
             SequenceCells(entry, lit = Amber.Bright, unlit = Amber.Edge)
-            HandedOverLine(entry.handedOver, Amber.Dim)
+            ReturnLine(entry.handedOver, verdict, Amber.Dim)
         }
 
         MotionBudgetRow(Amber.Dim, Amber.Bright)
@@ -222,7 +222,7 @@ fun ReplayScreen() {
  * *this is the cell I chose*.
  */
 @Composable
-fun ParityCheckScreen() {
+fun ParityCheckScreen(verdict: SubroutineVerdict? = null) {
     val entry = LocalSubroutine.current.parity
     val actions = LocalActions.current
     val cells = ParityGrid.of(SubroutineModel.PARITY_SEED)
@@ -264,6 +264,7 @@ fun ParityCheckScreen() {
             }
         }
 
+        ReturnLine(entry.gone, verdict, Amber.Dim)
         MotionBudgetRow(Amber.Dim, Amber.Bright)
 
         PanelButton(
@@ -312,7 +313,7 @@ fun ParityCheckScreen() {
  * RETURNED . WAITING line the other five use.
  */
 @Composable
-fun ShortScreen() {
+fun ShortScreen(verdict: SubroutineVerdict? = null) {
     val entry = LocalSubroutine.current.short
     val actions = LocalActions.current
     SubroutineFrame(Subroutine.Short, ink = Amber.Dim, mark = Amber.Faint) {
@@ -329,7 +330,7 @@ fun ShortScreen() {
             )
             CountRow("ASKS", SubroutineModel.SHORT_FINGERS, Amber.Faint, Amber.Dim)
             CountRow("DOWN", entry.handedOver ?: entry.fingers, Amber.Faint, Amber.Dim)
-            HandedOverLine(entry.handedOver != null, Amber.Faint)
+            ReturnLine(entry.handedOver != null, verdict, Amber.Faint)
         }
 
         MotionBudgetRow(Amber.Faint, Amber.Dim)
@@ -361,7 +362,7 @@ fun ShortScreen() {
  * steps pressed and nothing else; the gap is a thing the eye measures.
  */
 @Composable
-fun JamScreen() {
+fun JamScreen(verdict: SubroutineVerdict? = null) {
     val entry = LocalSubroutine.current.jam
     val actions = LocalActions.current
     val live = entry.handedOver == null
@@ -405,6 +406,7 @@ fun JamScreen() {
             }
         }
 
+        ReturnLine(entry.gone, verdict, Amber.Dim)
         MotionBudgetRow(Amber.Dim, Amber.Mid)
         // Live with nothing pressed: an inert SUBMIT would be the phone saying the opening
         // position is not the answer, and it is not the phone's to know. See ScalarEntry.
@@ -434,7 +436,7 @@ fun JamScreen() {
  * throughout and only the nodes you touched change — which is your own input and nothing else.
  */
 @Composable
-fun SignalTraceScreen() {
+fun SignalTraceScreen(verdict: SubroutineVerdict? = null) {
     val entry = LocalSubroutine.current.trace
     val actions = LocalActions.current
     val live = entry.handedOver == null
@@ -505,6 +507,7 @@ fun SignalTraceScreen() {
             }
         }
 
+        ReturnLine(entry.gone, verdict, Amber.Dim)
         MotionBudgetRow(Amber.Dim, Amber.Mid)
         // Inert with an empty route, which is the refusal LOCK IN makes on an empty ballot: a
         // control that sends nothing and looks like it sent something is a phone lying about what
@@ -742,23 +745,69 @@ private fun SubmitButton(subroutine: Subroutine, sent: Boolean, enabled: Boolean
 }
 
 /**
- * **The one line that says the phone is no longer waiting for you.**
+ * **The one line that says the phone is no longer waiting for you — and then what the house said.**
  *
- * A fixed slot whether or not there is anything in it, so the cells above do not move when the
- * last element goes in — a layout that jumps at the moment of completion is a change in lit area
- * that nobody authored, on the frame where the player is most likely to be looking away.
+ * Three states in one fixed slot: empty while the player is still working, `RETURNED . WAITING`
+ * once the entry has gone, and the house's verdict once it arrives. A fixed slot whether or not
+ * there is anything in it, so nothing above it moves at the moment of completion or at the moment
+ * of the answer — a layout that jumps is a change in lit area nobody authored, on the two frames
+ * the player is most likely to be looking away.
  *
- * *Waiting* is the honest word and the only one available: whether the sequence was right is the
- * house's answer, it has not arrived, and the device has no opinion to offer in the meantime.
+ * *Waiting* is the honest word for the middle state and the only one available: whether the entry
+ * was right is the house's answer, and the device has no opinion to offer in the meantime. It is
+ * the state every one of these screens sat in permanently before the loop had a verdict in it.
+ *
+ * ### The copy, and the register it is in (D-109)
+ *
+ * **Success is a damage report, and the house is not on your side.** *THE HOUSE GROWS WEAKER* is
+ * the decision log's own candidate and the family it names; the house narrates its own decline
+ * rather than congratulating anybody, and *"the house has it"* is ruled out explicitly — the house
+ * must never be made to sound like an ally. The final wording is a build-time call and this is a
+ * draft; **the register is not a draft.**
+ *
+ * **Failure is a rejection plus an instruction to re-scan in place**, and the instruction is load-
+ * bearing rather than helpful: D-110 makes the walk back to the marker the price of a wrong
+ * answer, so the line has to say where the player must stand. It says nothing about *what* was
+ * wrong — a mismatch reports only that it was a mismatch (`gdd.md:608`).
+ *
+ * **Neither line offers a retry, and no control on any of these screens re-arms.** The entry has
+ * gone, so every control is already inert, and it stays inert: the only way back to ready is a
+ * fresh scan of the marker. A RETRY button here would be the phone re-arming work on its own
+ * schedule, which D-110 rules out in the same breath.
+ *
+ * ### Identical for both roles, which is the whole of D-109
+ *
+ * There is no role in this file and none in this function. An Insider's fake is graded honestly
+ * and answered in these exact words, on this exact schedule; the only difference is a number in
+ * the authority's ledger that no screen can read. `SubroutineParityTest` renders both roles in all
+ * three states and compares the pixels.
  */
 @Composable
-private fun HandedOverLine(handedOver: Boolean, color: Color) {
-    Box(Modifier.height(9.u), contentAlignment = Alignment.Center) {
-        if (handedOver) {
-            Label("RETURNED . WAITING", size = 6.0, color = color, tracking = 0.12)
+private fun ReturnLine(handedOver: Boolean, verdict: SubroutineVerdict?, color: Color) {
+    // Full width and centred, not wrap-content. Three of the six place this at the root of the
+    // screen's column, where wrapping put the line hard against the left edge while the other
+    // three -- inside a centred column -- had it in the middle. The same sentence in two places
+    // depending on which Subroutine you are doing is the opposite of the muscle memory the rest
+    // of this file is built around.
+    Box(Modifier.fillMaxWidth().height(9.u), contentAlignment = Alignment.Center) {
+        val line = when {
+            verdict == SubroutineVerdict.Accepted -> HOUSE_WEAKER
+            verdict == SubroutineVerdict.Rejected -> RESCAN
+            handedOver -> "RETURNED . WAITING"
+            else -> null
         }
+        if (line != null) Label(line, size = 6.0, color = color, tracking = 0.12)
     }
 }
+
+/**
+ * **Drafted copy, flagged. The register is ruled (D-109); these exact words are not.**
+ *
+ * Named constants rather than literals at six call sites, so the two lines cannot drift into six
+ * variants of themselves — and so that whoever settles the wording changes it in one place.
+ */
+const val HOUSE_WEAKER: String = "THE HOUSE GROWS WEAKER"
+const val RESCAN: String = "REJECTED . RESCAN THE MARKER"
 
 /**
  * The motion budget, as a readout rather than as a bar.

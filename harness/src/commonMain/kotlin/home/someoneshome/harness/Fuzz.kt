@@ -1,6 +1,8 @@
 package home.someoneshome.harness
 
+import home.someoneshome.core.reduce
 import home.someoneshome.model.Event
+import home.someoneshome.model.GameState
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
@@ -73,22 +75,49 @@ fun fuzzRound(
     }
 
     var t = 0L
+    val arming = Event.RoundArmed(Tick(t), seed, seats, insiders)
+
+    /**
+     * What the house asked this seat for at the opening arming.
+     *
+     * **The absurd player has to score sometimes.** A fuzzer whose entries were always wrong would
+     * never once take the graded-and-correct path — the only one that moves the meter, and the one
+     * D-109's asymmetry lives on — so every property below would hold over 150 rounds in which the
+     * rule under test never fired. That is this project's recurring failure, not a stricter test.
+     *
+     * Read off the rules rather than reimplemented, so it cannot drift from what is being graded.
+     * A round that re-arms mid-way moves on to different questions and these go stale, which is
+     * left alone: a stale answer is a wrong answer, and wrong answers are the other half of the mix.
+     */
+    val opening = reduce(GameState.EMPTY, arming).state
+    fun asked(seat: Seat): List<Int> = opening.openSubroutineFor(seat)?.expected ?: emptyList()
+
     return buildList {
-        if (armFirst) add(Event.RoundArmed(Tick(t++), seed, seats, insiders))
+        if (armFirst) add(arming.also { t++ })
         repeat(events) {
-            val at = Tick(t++)
-            add(
-                when (rng.nextInt(9)) {
-                    0 -> Event.RoundArmed(at, rng.nextLong(), seats, insiders)
-                    1 -> Event.MarkerScanned(at, anySeat(), rng.pick(markers))
-                    2, 3 -> Event.SubroutineCompleted(at, anySeat(), rng.pick(markers))
-                    4 -> Event.RevokeArmed(at, anySeat())
-                    5 -> Event.ContactMade(at, anySeat(), anySeat())
-                    6 -> Event.MeetingCalled(at, anySeat())
-                    7 -> Event.VoteCast(at, anySeat(), if (rng.chance(4)) null else anySeat())
-                    else -> Event.MeetingClosed(at)
+            when (rng.nextInt(9)) {
+                0 -> add(Event.RoundArmed(Tick(t++), rng.nextLong(), seats, insiders))
+                1 -> add(Event.MarkerScanned(Tick(t++), anySeat(), rng.pick(markers)))
+                2, 3 -> {
+                    // Sometimes the whole walk — scan the card, then hand over exactly what was
+                    // asked for — and sometimes any of the ways that goes wrong: an entry against
+                    // a Subroutine nobody armed, at a card it was not armed at, or simply wrong.
+                    val seat = anySeat()
+                    val marker = rng.pick(markers)
+                    if (rng.chance(2)) add(Event.MarkerScanned(Tick(t++), seat, marker))
+                    val entered =
+                        if (rng.chance(2)) asked(seat)
+                        else List(rng.nextInt(4)) { rng.nextInt(4) }
+                    add(Event.SubroutineReturned(Tick(t++), seat, marker, entered))
                 }
-            )
+                4 -> add(Event.RevokeArmed(Tick(t++), anySeat()))
+                5 -> add(Event.ContactMade(Tick(t++), anySeat(), anySeat()))
+                6 -> add(Event.MeetingCalled(Tick(t++), anySeat()))
+                7 -> add(
+                    Event.VoteCast(Tick(t++), anySeat(), if (rng.chance(4)) null else anySeat())
+                )
+                else -> add(Event.MeetingClosed(Tick(t++)))
+            }
         }
     }
 }

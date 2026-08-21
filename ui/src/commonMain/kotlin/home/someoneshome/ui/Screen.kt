@@ -138,12 +138,17 @@ fun Screen(
                 ScreenId.ScanCaught -> ScanCaughtScreen(vals)
                 ScreenId.ScanBad -> ScanBadScreen()
                 ScreenId.ScanUnknown -> ScanUnknownScreen()
-                ScreenId.SubHandshake -> HandshakeScreen()
-                ScreenId.SubReplay -> ReplayScreen()
-                ScreenId.SubParity -> ParityCheckScreen()
-                ScreenId.SubShort -> ShortScreen()
-                ScreenId.SubTrace -> SignalTraceScreen()
-                ScreenId.SubJam -> JamScreen()
+                // The verdict, and DELIBERATELY NOT `vals`. Every other screen that needs
+                // anything derived takes the whole `PanelVals`, which carries `insider` -- and
+                // handing that to a Subroutine screen would make "no role reaches this file" a
+                // convention rather than a fact about what the six functions can see. One
+                // nullable field is the only thing the house says to a Subroutine.
+                ScreenId.SubHandshake -> HandshakeScreen(state.verdict)
+                ScreenId.SubReplay -> ReplayScreen(state.verdict)
+                ScreenId.SubParity -> ParityCheckScreen(state.verdict)
+                ScreenId.SubShort -> ShortScreen(state.verdict)
+                ScreenId.SubTrace -> SignalTraceScreen(state.verdict)
+                ScreenId.SubJam -> JamScreen(state.verdict)
                 ScreenId.Files -> FilesScreen()
                 ScreenId.Notes -> NotesScreen(vals)
                 ScreenId.TermNo -> TermNoScreen()

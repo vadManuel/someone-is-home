@@ -131,23 +131,95 @@ class FuzzPropertyTest {
     }
 
     /**
-     * **D-081 under random input.** With the Insider count held fixed, exchanging which seats
-     * hold the role must leak to nobody else.
+     * **D-081 under random input, and D-109's one exception.** With the Insider count held fixed,
+     * exchanging which seats hold the role must leak nothing but the meter.
+     *
+     * The meter is subtracted for the reason [METER_ASYMMETRY] gives, and the subtraction is
+     * checked for emptiness at the end: if no round in a hundred and fifty ever diverged on the
+     * meter, this property is holding because the rule under test never fired.
      */
     @Test
-    fun `a role exchange leaks to nobody else in any round`() {
+    fun `a role exchange leaks nothing but the meter in any round`() {
         var exercised = 0
+        var meterMoved = 0
         for (seed in SEEDS) {
             val events = fuzzRound(seed)
             val armed = events.filterIsInstance<Event.RoundArmed>().first()
             val insider = armed.insiders.firstOrNull() ?: continue
             val resident = armed.seats.firstOrNull { s -> armed.insiders.none { it.index == s.index } }
                 ?: continue
-            val result = differentialOnRoleExchange(GameState.EMPTY, events, insider, resident)
+            val result = differentialOnRoleExchange(
+                GameState.EMPTY, events, insider, resident, ignoring = METER_ASYMMETRY,
+            )
             assertEquals(emptyList(), result.unexplained, "seed $seed leaked: $result")
+            if (differentialOnRoleExchange(GameState.EMPTY, events, insider, resident)
+                    .unexplained.isNotEmpty()
+            ) {
+                meterMoved++
+            }
             exercised++
         }
         assertTrue(exercised > SEEDS.count() / 2, "only $exercised seeds exercised the exchange")
+        assertTrue(
+            meterMoved > 0,
+            "no round in ${SEEDS.count()} diverged on the meter at all, so the subtraction is " +
+                "removing nothing and this property is vacuous",
+        )
+    }
+
+    /**
+     * **THE ROLE ORACLE TEST, over rounds nobody wrote.**
+     *
+     * The house grades every entry for real, for both roles, in identical words (D-109). Exchange
+     * which seats hold the role and **not one verdict may move** — not its value, not its position
+     * in the stream, not whether it exists at all. A fake that never failed, a fake graded against
+     * a rolled distribution, or a verdict simply withheld from an Insider all show up here.
+     */
+    @Test
+    fun `a verdict never depends on who the Insiders are in any round`() {
+        var verdicts = 0
+        for (seed in SEEDS) {
+            val events = fuzzRound(seed)
+            val armed = events.filterIsInstance<Event.RoundArmed>().first()
+            val insider = armed.insiders.firstOrNull() ?: continue
+            val resident = armed.seats.firstOrNull { s -> armed.insiders.none { it.index == s.index } }
+                ?: continue
+
+            fun graded(list: List<Event>) = effectsOf(GameState.EMPTY, list)
+                .map { Transcript.render(it) }
+                .filter { it.startsWith("SubroutineGraded") }
+
+            val baseline = graded(events)
+            verdicts += baseline.size
+            assertEquals(
+                baseline, graded(withRolesExchanged(events, insider, resident)),
+                "seed $seed: a verdict changed when seats ${insider.index} and " +
+                    "${resident.index} traded roles — the house graded the asker, not the entry",
+            )
+        }
+        assertTrue(verdicts > 100, "only $verdicts verdicts were compared across all rounds")
+    }
+
+    /**
+     * The absurd player scores sometimes, and the grading says both things.
+     *
+     * Coverage for every assertion above that mentions a verdict: a fuzzer whose entries were
+     * always wrong would exercise one half of one branch, and `accepted=true` — the half the meter
+     * and D-109's whole asymmetry hang off — would never once be reached.
+     */
+    @Test
+    fun `the generator produces both verdicts`() {
+        var accepted = 0
+        var rejected = 0
+        for (seed in SEEDS) {
+            for (line in effectsOf(GameState.EMPTY, fuzzRound(seed)).map { Transcript.render(it) }) {
+                if (line.startsWith("SubroutineGraded")) {
+                    if (line.endsWith("accepted=true")) accepted++ else rejected++
+                }
+            }
+        }
+        assertTrue(accepted > 0, "no entry was ever graded correct in ${SEEDS.count()} rounds")
+        assertTrue(rejected > 0, "no entry was ever graded wrong in ${SEEDS.count()} rounds")
     }
 
     /** The gate holds: a round with no arming event emits nothing to anyone, whatever it contains. */

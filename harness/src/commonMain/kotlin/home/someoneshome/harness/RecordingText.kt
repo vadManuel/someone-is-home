@@ -112,6 +112,19 @@ object RecordingText {
         fun marker(key: String) = MarkerId(unescape(req(key), line))
         fun seatOrNone(key: String): Seat? = if (req(key) == "none") null else seat(key)
 
+        /**
+         * A list of plain integers. Empty value means an empty list — an entry a player handed
+         * over having touched nothing is a real entry and grades like any other, so it must
+         * survive the round trip as itself rather than as a missing field.
+         */
+        fun ints(key: String): List<Int> {
+            val raw = req(key)
+            if (raw.isEmpty()) return emptyList()
+            return raw.split(',').map {
+                it.toIntOrNull() ?: throw MalformedRecording(line, "'$it' in $key is not a number")
+            }
+        }
+
         fun seats(key: String): List<Seat> {
             val raw = req(key)
             if (raw.isEmpty()) return emptyList()
@@ -124,7 +137,8 @@ object RecordingText {
         val event = when (name) {
             "RoundArmed" -> Event.RoundArmed(at, long("seed"), seats("seats"), seats("insiders"))
             "MarkerScanned" -> Event.MarkerScanned(at, seat("actor"), marker("marker"))
-            "SubroutineCompleted" -> Event.SubroutineCompleted(at, seat("actor"), marker("marker"))
+            "SubroutineReturned" ->
+                Event.SubroutineReturned(at, seat("actor"), marker("marker"), ints("entered"))
             "RevokeArmed" -> Event.RevokeArmed(at, seat("actor"))
             "ContactMade" -> Event.ContactMade(at, seat("actor"), seat("target"))
             "MeetingCalled" -> Event.MeetingCalled(at, seat("caller"))
@@ -147,7 +161,8 @@ object RecordingText {
 
     private fun expectedFields(name: String): Set<String> = when (name) {
         "RoundArmed" -> setOf("at", "seed", "seats", "insiders")
-        "MarkerScanned", "SubroutineCompleted" -> setOf("at", "actor", "marker")
+        "MarkerScanned" -> setOf("at", "actor", "marker")
+        "SubroutineReturned" -> setOf("at", "actor", "marker", "entered")
         "RevokeArmed" -> setOf("at", "actor")
         "ContactMade" -> setOf("at", "actor", "target")
         "MeetingCalled" -> setOf("at", "caller")

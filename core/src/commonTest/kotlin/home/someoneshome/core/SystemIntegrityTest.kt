@@ -2,6 +2,9 @@ package home.someoneshome.core
 
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
+import home.someoneshome.model.InsiderBand
+import home.someoneshome.model.MarkerId
+import home.someoneshome.model.Role
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
 import kotlin.test.Test
@@ -9,11 +12,16 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * The SystemIntegrity denominator, which is a win condition (F-005).
+ * **The meter total, under D-130: proportional to SEATS, coefficient owned by playtest.**
  *
- * `7 × initial_residents`, fixed at arming, never moving afterwards. The placeholder 7 is still a
- * placeholder; the *operand* is not a matter of refinement, because counting Insiders makes the
- * meter unreachable and Residents cannot win.
+ * This replaced the assertions for `7 × initial_residents`, which D-130 explicitly retires. The
+ * old operand was not merely a different arithmetic — under D-103 the Insider count can be hidden,
+ * and a total built out of `seats − insiders` **is** that count, recoverable by division from any
+ * absolute meter value that ever escapes. The percentage-only display rule closes the panel; this
+ * closes the arithmetic behind it.
+ *
+ * Every assertion below is written as the property rather than as the number, so playtest can move
+ * the coefficient without rewriting the file.
  */
 class SystemIntegrityTest {
 
@@ -23,44 +31,70 @@ class SystemIntegrityTest {
             Event.RoundArmed(Tick(0), seed = 1L, seats = seats, insiders = insiders),
         ).state
 
-    /**
-     * **Insiders have no assigned subroutines** (gdd.md:382), so no action an Insider takes ever
-     * advances the meter. Counting their seats into the denominator sets a bar higher than the
-     * Residents can ever reach — the arithmetic is wrong now, not merely unrefined.
-     */
-    @Test
-    fun `the denominator counts Residents rather than seats`() {
-        val seats = (0 until 8).map { Seat(it) }
-        val state = armedWith(seats, listOf(Seat(1), Seat(5)))
-        assertEquals(6 * 7, state.systemIntegrity, "8 seats, 2 Insiders, so 6 Residents")
-    }
+    private fun seatsOf(count: Int) = (0 until count).map { Seat(it) }
 
     /**
-     * The meter must be reachable: every point on it has a Resident subroutine behind it.
+     * **The total is a function of seats alone — the Insider count cannot be divided back out.**
      *
-     * Stated as the property rather than as the number, so it survives the 7 being replaced.
+     * The sharp form of D-130, and the one that would have caught the old arithmetic: arm the same
+     * home with every lawful Insider count and the bar must not move. If it does, an absolute meter
+     * value is a statement about a number D-103 spent a whole revision hiding.
      */
     @Test
-    fun `the meter is reachable by the Residents alone`() {
-        for (insiderCount in 1..3) {
-            val seats = (0 until 8).map { Seat(it) }
-            val insiders = (1..insiderCount).map { Seat(it) }
-            val state = armedWith(seats, insiders)
-            val residents = seats.size - insiderCount
-            val completable = residents * (state.systemIntegrity / residents)
-            assertTrue(
-                state.systemIntegrity <= completable,
-                "$insiderCount Insiders: bar at ${state.systemIntegrity} against $completable " +
-                    "completable subroutines — Residents cannot reach zero",
+    fun `the total reads seats and never the Insider count`() {
+        for (count in 5..16) {
+            val seats = seatsOf(count)
+            val band = InsiderBand.of(count)
+            val totals = band.map { armedWith(seats, seatsOf(it)).systemIntegrity }.distinct()
+            assertEquals(
+                1, totals.size,
+                "$count seats: the bar moved with the Insider count across band $band — $totals, " +
+                    "so the hidden count is recoverable from the meter by division",
             )
-            assertEquals(0, state.systemIntegrity % residents, "the bar must divide by Residents")
         }
     }
 
-    /** An unseated Insider is not a Resident. Only seated players count either way. */
+    /** Proportional, not merely insensitive: twice the seats is twice the bar. */
     @Test
-    fun `an Insider who is not seated changes nothing`() {
-        val seats = (0 until 6).map { Seat(it) }
+    fun `the total scales with seats`() {
+        val six = armedWith(seatsOf(6), listOf(Seat(1))).systemIntegrity
+        val twelve = armedWith(seatsOf(12), listOf(Seat(1), Seat(2))).systemIntegrity
+        assertTrue(six > 0, "a six-seat home has no bar to complete")
+        assertEquals(2 * six, twelve, "the total is not proportional to seats")
+    }
+
+    /**
+     * **The meter must stay reachable, and under D-130 that rests on D-129 rather than on the
+     * operand.**
+     *
+     * Work-order size is `K = ⌈M ÷ worstCasePlainResidents⌉ + slack`, where
+     * `worstCasePlainResidents = seats − bandMax` — computed from public lobby facts only, never
+     * from the hidden draw. So the Residents who actually exist are never fewer than the number the
+     * order was sized against, and `residents × K ≥ M` whatever the house drew.
+     *
+     * `K` is not built yet (it is drawn at arming, which is L3's), so this asserts the arithmetic
+     * D-129 rests on: the worst case can carry the bar at a whole-number order length.
+     */
+    @Test
+    fun `the bar is reachable by the fewest Residents the band allows`() {
+        for (count in 5..16) {
+            val seats = seatsOf(count)
+            val bandMax = InsiderBand.of(count).last
+            val worstCase = count - bandMax
+            val total = armedWith(seats, seatsOf(bandMax)).systemIntegrity
+            val k = (total + worstCase - 1) / worstCase
+            assertTrue(worstCase >= 2, "$count seats: the band leaves fewer than two Residents")
+            assertTrue(
+                worstCase * k >= total,
+                "$count seats: $worstCase Residents at $k each cannot reach a bar of $total",
+            )
+        }
+    }
+
+    /** An unseated Insider is not seated. Only seated players count, and now only as seats. */
+    @Test
+    fun `an unseated Insider changes nothing`() {
+        val seats = seatsOf(6)
         assertEquals(
             armedWith(seats, listOf(Seat(1))).systemIntegrity,
             armedWith(seats, listOf(Seat(1), Seat(99))).systemIntegrity,
@@ -70,12 +104,44 @@ class SystemIntegrityTest {
     /** The denominator never moves after arming (gdd.md:1322). */
     @Test
     fun `the denominator is fixed at arming`() {
-        val seats = (0 until 8).map { Seat(it) }
+        val seats = seatsOf(8)
         var state = armedWith(seats, listOf(Seat(1), Seat(5)))
         val atArming = state.systemIntegrity
         state = reduce(state, Event.MeetingCalled(Tick(1), Seat(0))).state
         state = reduce(state, Event.RevokeArmed(Tick(2), Seat(1))).state
         state = reduce(state, Event.ContactMade(Tick(3), Seat(1), Seat(2))).state
         assertEquals(atArming, state.systemIntegrity, "a revocation moved the denominator")
+    }
+
+    /**
+     * **D-109's one asymmetry, read off the meter: a plain Resident banks, an Insider does not.**
+     *
+     * `gdd.md:382` — Insiders have no assigned Subroutines and no action an Insider takes ever
+     * advances the meter. The fake is real work, graded honestly, counting for nothing.
+     */
+    @Test
+    fun `only a plain Resident's accepted entry moves the meter`() {
+        val seats = seatsOf(8)
+        val armed = armedWith(seats, listOf(Seat(1)))
+        val marker = MarkerId("m0")
+
+        fun walk(seat: Seat): GameState {
+            val asked = armed.openSubroutineFor(seat)!!.expected
+            val scanned = reduce(armed, Event.MarkerScanned(Tick(1), seat, marker)).state
+            return reduce(scanned, Event.SubroutineReturned(Tick(2), seat, marker, asked)).state
+        }
+
+        val resident = walk(Seat(0))
+        val insider = walk(Seat(1))
+        assertEquals(Role.Resident, armed.roleOf(Seat(0)))
+        assertEquals(Role.Insider, armed.roleOf(Seat(1)))
+        assertEquals(
+            armed.systemIntegrity - 1, resident.systemIntegrity,
+            "a Resident's accepted entry did not bank",
+        )
+        assertEquals(
+            armed.systemIntegrity, insider.systemIntegrity,
+            "an Insider's fake advanced the meter (gdd.md:382)",
+        )
     }
 }

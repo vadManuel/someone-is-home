@@ -27,6 +27,28 @@ sealed interface Effect {
      */
     data class AbilityFired(val actor: Seat, val cooldownStarted: Boolean) : Effect
 
+    /**
+     * **The house's answer to a returned entry — the same words on the same schedule for both
+     * roles (D-109).**
+     *
+     * Two fields, and that is deliberately the whole of it. There is no `remaining`, no *which
+     * elements were wrong*, no attempt count and no reason: a mismatch reports only that it was a
+     * mismatch (`gdd.md:608`), and every extra field would be one more thing that could be
+     * generated differently for a fake.
+     *
+     * ### This is rule 1's exact shape, and it is the reason the effect exists
+     *
+     * An Insider's Subroutines are fakes: real UI, real progress, real completion, **writing
+     * nothing**. The tempting implementation is to say nothing back about a fake, or to roll a
+     * plausible failure distribution for one. Both are role oracles — the first after one
+     * completion, the second after enough of them — and D-109 refuses both: *run the real rule,
+     * emit the real shape.* **The Insider's verdict is emitted, never omitted.**
+     *
+     * The single asymmetry lives where no player can stand: an Insider's [accepted] verdict does
+     * not move `SystemIntegrity`. Nothing here carries that, and nothing on any screen can read it.
+     */
+    data class SubroutineGraded(val seat: Seat, val accepted: Boolean) : Effect
+
     data class SubroutineProgressed(val remaining: Int) : Effect
     data class MessageDelivered(val seat: Seat, val body: String) : Effect
     data class MeetingOpened(val caller: Seat) : Effect

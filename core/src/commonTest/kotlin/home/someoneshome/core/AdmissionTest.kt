@@ -19,7 +19,7 @@ class AdmissionTest {
     /** The exact three events that showed `armed` had two writers and no readers. */
     private fun theDemonstration(): List<Event> = listOf(
         Event.ContactMade(Tick(0), Seat(1), Seat(2)),
-        Event.SubroutineCompleted(Tick(1), Seat(3), MarkerId("m0")),
+        Event.SubroutineReturned(Tick(1), Seat(3), MarkerId("m0"), listOf(0, 0)),
         Event.MeetingCalled(Tick(2), Seat(4)),
     )
 
