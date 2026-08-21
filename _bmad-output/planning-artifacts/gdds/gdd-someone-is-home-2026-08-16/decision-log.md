@@ -1998,6 +1998,141 @@ lines; and the HomeDetail/Delete plan-drawing treatment, which awaits the owner'
 
 ---
 
+## Revision 31 — the four with no game in them
+
+*Decided 2026-08-21, afternoon, with Vadmanuel, specifying the four Subroutines the overnight run's
+batch-1 triage marked UNDERSPECIFIED (`_bmad-output/overnight/2026-08-21.md:1445`, `:1447`, `:1448`,
+`:1449`). The triage said precisely what was missing for each; these four rulings supply exactly
+that and nothing more.*
+
+### D-137 · **Sniff is a magnitude comparison, not a count — decided**
+
+Closes the triage's line on Sniff (`overnight:1447`), which showed that *"the phone buzzes N times;
+tap N"* (`gdd.md:568`) is two different Subroutines and that both are wrong: tapping N *times* is
+Handshake with the rhythm taken out, and tapping a choice labelled N puts a numeral on screen, which
+the bench's own rule calls suspect (`gdd.md:588`). **The GDD's line is superseded.**
+
+**Sniff is a magnitude comparison and nothing else.** The phone buzzes **two haptic groups separated
+by a pause**, and the player answers **which group was bigger**. That is pure perception, exactly as
+`gdd.md:588` asks — there is no arithmetic for the player to carry because there is no arithmetic.
+
+**The screen is fully dark until the answer.** No numeral, no running count, no rhythm to hold. It
+stays the roster's only *short dark* (`gdd.md:580`), which is the cell the design most needs filled:
+the quick one a Resident can take without becoming a beacon.
+
+**Its identity against its neighbours is what makes it a tenth Subroutine rather than a variant.**
+Handshake is a pattern echoed back; Sniff has no pattern. Short is a pose held; Sniff has no pose.
+What is left is one comparison and one answer.
+
+**Equal groups never occur.** The answer must exist and must be unique — a tie is a coin flip the
+house would then grade, and D-109 grades entries on their merits or not at all.
+
+**The answer gesture is a presentation choice** — how a player says *the second one* on a black
+screen. The builder decides it and flags it, as with every presentation fixture.
+
+**Playtest owns the gap between the two group sizes.** It is the difficulty knob and the only one.
+
+### D-138 · **A Deallocate tap removes a dot, and evening out means levelling down — decided**
+
+Closes `overnight:1448`, which named three candidate games hiding inside *"tap to even them out"*
+(`gdd.md:569`) and observed that the choice decides whether the answer is even unique.
+
+**A tap removes one dot from the tapped column.** Evening out means bringing every column **down to
+the shortest** — deallocating what was over-allocated. **The verb is the fiction**, and the fiction
+was the answer all along.
+
+**So the answer is unique and the work is countable:** the required number of taps is the sum of the
+excess over the shortest column. Nothing on screen is a numeral; the columns carry the arithmetic
+(`gdd.md:588`).
+
+**Over-taps are the player's to make.** Columns can go below level, the screen only echoes the tap,
+and the house rejects a wrong final state on hand-over (D-109, D-110). A column that refused to go
+below level would be the phone forming an opinion about the answer, and D-125 is explicit: clamp
+only what players cannot perceive. Column heights are the one thing here a player *can* perceive.
+
+**Playtest owns the column count and the dot distribution.**
+
+### D-139 · **The Interrupt sweep bounces, and it never stops — decided**
+
+Closes `overnight:1445`, which found that removing the unauthored motion and the balance number from
+*"a slow bar sweeps; tap inside a generous band"* (`gdd.md:566`) leaves a static bar with no moment
+to tap. **The GDD's line is superseded in both respects.**
+
+**The sweep bounces.** It ping-pongs along a visible bar carrying a visible band, and the player taps
+to catch the sweep inside the band. Ping-pong rather than wrap: there is no dead return stroke to
+wait through and no discontinuity at the edge for a player to time against instead of the band.
+
+**The sweep runs forever until tapped or abandoned.** There is no timeout. **Hesitation is taxed by
+exposure, not by a clock** — the screen is MEDIUM and lit, the player is standing at the marker where
+D-110 keeps them, and every extra pass is another second of being visible to whoever walks in. That
+also keeps constraint 4 (`gdd.md:595`): the sweep is slow and the band is generous, so the pressure
+lives in the room rather than in a fail window.
+
+**The architecture is the point, and D-140 reuses it.** The house sends the parameters — band
+position, speed, phase — when the scan opens the Subroutine; **the client renders the motion
+deterministically** from them; **the tap's sweep-position is the entry**; the house grades it. No
+authored Effect, no motion on the wire, no new schema row — which is exactly the wall the triage said
+this Subroutine was standing at.
+
+**Every re-scan re-draws band position and phase**, so a retry under D-110 is a fresh judgment rather
+than a second run at a picture the player has already memorised.
+
+**Playtest owns the speed and the band width.**
+
+### D-140 · **Drift is object permanence against a house-authored NOW — decided**
+
+Closes `overnight:1449`, which named the same unauthored motion as Interrupt plus three things the
+design never said: path, occluder layout, and what radius counts as *"where it is now"*
+(`gdd.md:570`). The ruling answers the one the triage called *the whole difficulty* — **when *now*
+is** — by making it the house's to choose.
+
+**A dot drifts at constant velocity along a straight path, passes behind occluders and hides. At a
+house-chosen instant a haptic pulse says *now*, and the player taps where the dot is at that
+moment.** The tap position is the entry; the house grades it against the true position within a hit
+radius. The pulse is a short one — D-135 reserves the long haptic for five events and this is not
+among them.
+
+**The hidden duration is the difficulty, and it is house-authored and invisible.** The player cannot
+see how far they will have to carry the dot in their head before being asked, which is the entire
+test and the reason the answer cannot be read off the screen.
+
+**Its identity against Interrupt is a clean split:** Interrupt is the player's timing against a
+visible rhythm; Drift is the house's timing against the player's mental model. One asks *when*, the
+other asks *where*.
+
+**It uses D-139's pattern exactly.** Path, occluder layout and speed are seeded per scan, sent at
+scan time, rendered deterministically by the client, and **re-drawn on every re-scan** — so a retry
+is again a fresh judgment. Both are single taps, so constraint 5 (`gdd.md:596`) holds too.
+
+**Playtest owns the speed, the hidden duration and the hit radius.**
+
+### The roster is fully specced, and where the GDD is now wrong
+
+**All ten roster Subroutines are specified.** Six are built as of `14d502d` — Replay, Parity Check,
+Short, Signal Trace, Jam, Handshake — and **these four are now buildable**, which was the last thing
+standing between the roster and a complete set of interactions.
+
+**The roster lines at `gdd.md:563`–`:588` are superseded by this revision where they conflict.**
+Specifically:
+
+| line | the superseded phrasing | what replaces it |
+|---|---|---|
+| `gdd.md:568` | Sniff — *"The phone buzzes N times; tap N"* | D-137: two haptic groups, and the answer is which was bigger |
+| `gdd.md:569` | Deallocate — *"tap to even them out"* | D-138: a tap removes one dot, and level is the shortest column |
+| `gdd.md:566` | Interrupt — *"A slow bar sweeps; tap inside a generous band"* | D-139: the sweep bounces and never times out, and the band is drawn per scan |
+| `gdd.md:570` | Drift — *"tap where it is now"* | D-140: *now* is a house-sent haptic instant, not a moment the player picks |
+
+**What the roster keeps.** Every light signature stands unchanged (D-112, D-113), the tiers stand,
+Sniff remains the only *short dark* (`gdd.md:580`), and `gdd.md:588`'s rule survives all four intact
+— not one of them shows a numeral.
+
+**Playtest owns**, added to revision 30's list: Sniff's group gap (D-137), Deallocate's column count
+and distribution (D-138), Interrupt's speed and band width (D-139), and Drift's speed, hidden
+duration and hit radius (D-140). **Presentation pending at build time:** Sniff's answer gesture.
+
+
+---
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).
@@ -2100,6 +2235,14 @@ vote (E1-1 and E8-2 confirmed as loop pushes); D-135 the long haptic is a closed
 the spectator map is BLE inference in which a performer's own scan is ground truth — the system that
 forced
 D-111's presence plane.
+
+**Revision 31 finished the roster** — the afternoon's rulings on the four Subroutines the overnight
+triage marked UNDERSPECIFIED. D-137 Sniff is a magnitude comparison of two haptic groups on a black
+screen, never a count; D-138 a Deallocate tap removes a dot and level is the shortest column; D-139
+the Interrupt sweep bounces forever until tapped, with the house sending band, speed and phase and
+the client rendering them deterministically; D-140 Drift grades a tap against a house-authored
+haptic *now*, reusing D-139's pattern. The roster lines at `gdd.md:566`, `:568`, `:569` and `:570`
+are superseded. All ten are specced; six built as of `14d502d`, these four now buildable.
 
 **Carried into E0 as a constraint, not a closed item:** total app allocation ≤ ~0.5 MB/s as the design target, with the measured cliff between 1.5 and 3.0 MB/s — roughly 6× margin, so this is a budget rather than a knife edge. Nobody yet knows what the real app allocates with BLE, 100 Hz motion, effects and recording running at once.
 Action: create `project-context.md`.
