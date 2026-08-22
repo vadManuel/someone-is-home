@@ -312,8 +312,19 @@ class NotificationsTest {
     }
 
     private companion object {
-        /** NEW as a word, anywhere in a node's text, except in front of the home a host makes. */
-        val NEW_TAG = Regex("""\bNEW\b(?!\s+HOME)""")
+        /**
+         * NEW as a word, anywhere in a node's text, except in front of a noun the host *makes*.
+         *
+         * Two exemptions and they are the same exemption twice: a new **home** is a thing the host
+         * builds, and a new **round** is a thing the host starts (D-157). Neither is a claim about
+         * what anybody has looked at, which is the whole of what this guard is for — `NEW`,
+         * `3 NEW`, `. NEW`, `NEW MESSAGES` are a phone counting its owner's attention, and a
+         * control labelled with a verb's object is not.
+         *
+         * Written as an alternation rather than as a second regex so that the list of things a
+         * host may make is one list, in one place, and somebody adding a third has to look at it.
+         */
+        val NEW_TAG = Regex("""\bNEW\b(?!\s+(HOME|ROUND))""")
     }
 
     /**

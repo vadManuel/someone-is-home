@@ -5,10 +5,14 @@ import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MeetingTrigger
+import home.someoneshome.model.Outcome
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
+import home.someoneshome.model.WinRoute
+import home.someoneshome.model.Winner
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
@@ -53,20 +57,61 @@ class RecordingTest {
     }
 
     /**
-     * **The state row records every field of authority state, including `ended`.**
+     * **The state row records every field of authority state, including the outcome.**
      *
      * State rows exist so that a build where a transition silently stopped happening cannot
      * certify clean against a recording made before it broke. A field the row does not render is
      * a field that guarantee does not cover — and `ended` feeds `roundStateOf`, so it decides
-     * what every client is permitted to receive.
+     * what every client is permitted to receive. It was omitted for exactly one commit.
+     *
+     * **It was a boolean and it is the outcome now**, so the row has to distinguish more than
+     * *over* from *running*: a recording that held only the first could not tell a Resident win
+     * from an Insider win, or a meter cleared from a countdown that ran out — which is the only
+     * question anybody asks about a round afterwards, and the one a replay would have certified
+     * either answer to.
      */
     @Test
-    fun `the state row distinguishes an ended round`() {
+    fun `the state row distinguishes a running round and every way one can end`() {
         val armed = GameState.armedRound(seed = 1L, seats = SEATS, insiders = INSIDERS, systemIntegrity = 42)
-        assertNotEquals(
-            Transcript.render(armed),
-            Transcript.render(armed.endRound()),
-            "two states differing only in `ended` render byte-identically",
+        val rows = listOf(
+            armed,
+            armed.endRound(Outcome(Winner.Residents, WinRoute.SystemIntegrityCleared)),
+            armed.endRound(Outcome(Winner.Residents, WinRoute.InsidersRestrained)),
+            armed.endRound(Outcome(Winner.Insiders, WinRoute.Parity)),
+            armed.endRound(Outcome(Winner.Insiders, WinRoute.EgressUncontained)),
+        ).map { Transcript.render(it) }
+
+        assertEquals(
+            rows.size, rows.distinct().size,
+            "a running round and D-131's four routes do not all render differently: $rows",
+        )
+    }
+
+    /**
+     * **THE INJECTION: a recording is physically incapable of holding a one line** (D-116).
+     *
+     * A player types one line they would rather not explain, on the strength of two promises — seen
+     * by the house only, and deleted when the round ends — and a recording is the one artefact of
+     * this game that outlives the evening. `Transcript` therefore writes the *seats* that handed
+     * one over and never the text, in the arming row, in the state row, and in the reveal.
+     *
+     * The fixture's lines name their own seats, so this is a substring sweep over the whole text
+     * form: a build that rendered any of them fails here with the line in the message. It fails
+     * whichever of the three sites reintroduced it, which is what makes it worth writing as a
+     * sweep rather than as three assertions about three formats.
+     */
+    @Test
+    fun `a recording holds the seats that handed a line over and never the text`() {
+        val text = record(GameState.EMPTY, round()).second.toText()
+        for (held in LINES) {
+            assertFalse(
+                text.contains(held.text),
+                "seat ${held.seat.index}'s one line is in the recording: it outlives the evening",
+            )
+        }
+        assertTrue(
+            text.contains("|lines=" + SEATS.joinToString(",") { it.index.toString() }),
+            "the arming row does not record who handed one over, so a replay cannot rebuild the desk",
         )
     }
 
@@ -74,6 +119,26 @@ class RecordingTest {
     fun `a round replays byte-identically`() {
         val (_, recording) = record(GameState.EMPTY, round())
         assertEquals(ReplayResult.Identical, replay(GameState.EMPTY, recording))
+    }
+
+    /**
+     * **A round that ends replays byte-identically — outcome, reveal and all.**
+     *
+     * The sharp half is that it replays *despite* the recording having thrown the words away. The
+     * parser rebuilds blank lines for the seats it recorded, the reveal renders as seats alone, and
+     * every row therefore matches: the game is reproduced without the confessions. A build that
+     * rendered the text would still replay clean here — which is why the sweep above exists — but a
+     * build that rendered it in one of the three places and not the others would fail this one.
+     */
+    @Test
+    fun `a round that ends replays byte-identically`() {
+        val (finished, recording) = record(GameState.EMPTY, roundThatEnds())
+        assertTrue(finished.ended, "the fixture never reached an ending; this proves nothing")
+        assertEquals(ReplayResult.Identical, replay(GameState.EMPTY, recording))
+        assertEquals(
+            RecordingText.parse(recording.toText()).events.size, recording.events.size,
+            "the ending's recording does not survive a round trip through its text form",
+        )
     }
 
     @Test

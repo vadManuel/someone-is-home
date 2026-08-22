@@ -241,8 +241,8 @@ internal fun diff(
                 if (inB) "seated" else "absent",
             )
         }
-        val left = kept(a.linesFor(seat))
-        val right = kept(b.linesFor(seat))
+        val left = untilTheRoundEnds(kept(a.linesFor(seat)), kept(b.linesFor(seat)))
+        val right = untilTheRoundEnds(kept(b.linesFor(seat)), kept(a.linesFor(seat)))
         for (i in 0 until maxOf(left.size, right.size)) {
             val l = left.getOrNull(i)
             val r = right.getOrNull(i)
@@ -251,3 +251,57 @@ internal fun diff(
     }
     return DifferentialResult(swapped.sortedBy { it.index }, found)
 }
+
+/**
+ * **The second ruled asymmetry, and unlike the meter it cannot be subtracted by kind** (D-131).
+ *
+ * ### Why the round ending is a function of who holds the role
+ *
+ * Parity counts **living plain Residents against living Insiders**. That is not an incidental
+ * dependency on the assignment — it *is* the assignment, arithmetic on it. So exchanging two
+ * seats' roles genuinely ends one round and not the other: in the shared fixture, seat 1 restrained
+ * and seats 0, 2 and 7 revoked leaves `3 > 1` under the baseline draw and `2 <= 2` under the
+ * exchange, and the second round is over at that meeting. `WinRoute.InsidersRestrained` is the same
+ * story in a different arithmetic.
+ *
+ * ### Why [METER_ASYMMETRY]'s treatment does not work here
+ *
+ * The meter asymmetry is one message kind, so it can be dropped from both runs and the surrounding
+ * lines stay aligned. **An ending is not a message — it is the round stopping.** The admission gate
+ * refuses everything afterwards, so the shorter run's transcript simply stops, for every seat at
+ * once. Dropping the three ending kinds would leave that truncation untouched and every remaining
+ * line of the longer run would be reported as divergent: the cascade [LineDivergence] warns about,
+ * several hundred lines of it, with nothing in it that anybody could act on.
+ *
+ * ### What this therefore does, and what it deliberately keeps
+ *
+ * It compares **everything that happened while both rounds were still running** — up to, and not
+ * including, the first ending line in either — and the comparison there is exactly as strict as it
+ * ever was. Past that point the two runs are not two views of one round, they are two different
+ * games, and a diff between them is a category error rather than a leak report.
+ *
+ * **The truncation detection is untouched in every other case.** When neither run ends there is no
+ * `RoundEnded` line to find, both lists come back whole, and a seat that went silent early is still
+ * a run of `<end>` divergences. This narrows nothing except the one thing D-131 makes legitimately
+ * asymmetric.
+ *
+ * **It is a subtraction and must be visible as one**, exactly as the meter's is: `DifferentialTest`
+ * pairs it with the assertion that the two runs really do end differently, so it can never quietly
+ * become a filter over two identical rounds. ⚠️ **Escalated in the worklog**: this weakens a leak
+ * instrument, and a second reader should agree that ending-time is not a channel — the argument is
+ * that in any real round exactly one assignment exists, nothing follows the ending, and the reveal
+ * on that very message states the alignment outright.
+ *
+ * **`internal`, because the two direct comparisons in `DifferentialTest` need the same rule.** They
+ * compare verdict streams and effect streams without going through [diff], and a second hand-rolled
+ * copy of *stop where the round stopped* is two definitions of one concept — the day they disagreed,
+ * the quieter one would be the one deciding whether a leak had been found.
+ */
+internal fun untilTheRoundEnds(lines: List<String>, other: List<String>): List<String> {
+    fun endsAt(rows: List<String>) = rows.indexOfFirst { it.startsWith(ENDING_PREFIX) }
+    val cut = listOf(endsAt(lines), endsAt(other)).filter { it >= 0 }.minOrNull() ?: return lines
+    return lines.take(cut)
+}
+
+/** The kind that says the round is over, as it appears at the head of a transcript line. */
+private const val ENDING_PREFIX = "RoundEnded|"

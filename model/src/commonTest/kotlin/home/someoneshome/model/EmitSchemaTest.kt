@@ -19,6 +19,15 @@ class EmitSchemaTest {
     )
 
     /**
+     * Any ending will do for a test about the round-state axis.
+     *
+     * Named rather than inlined so that the two tests below are visibly about *the round is over*
+     * and not about which of D-131's four routes ended it — the axis does not care, and a literal
+     * repeated at two call sites is a thing somebody eventually makes differ.
+     */
+    private val ROUND_OVER = Outcome(Winner.Residents, WinRoute.SystemIntegrityCleared)
+
+    /**
      * **The fail-closed hinge.**
      *
      * A kind with no row in the allowlist is permitted to none of the eight classes. This is the
@@ -458,7 +467,7 @@ class EmitSchemaTest {
 
         val out = state.copy(revoked = listOf(Seat(0)))
         assertEquals(RoundState.Out, out.roundStateOf(Seat(0)))
-        assertEquals(RoundState.Ended, out.endRound().roundStateOf(Seat(0)))
+        assertEquals(RoundState.Ended, out.endRound(ROUND_OVER).roundStateOf(Seat(0)))
     }
 
     /**
@@ -471,7 +480,7 @@ class EmitSchemaTest {
      */
     @Test
     fun `an ended round outranks a disarmed perimeter`() {
-        val finished = live().endRound().copy(armed = false)
+        val finished = live().endRound(ROUND_OVER).copy(armed = false)
         assertEquals(RoundState.Ended, finished.roundStateOf(Seat(0)))
         assertTrue(EmitSchema.permits(EmitSchema.LAMP_SET, finished.clientClassOf(Seat(0))))
     }
@@ -524,7 +533,6 @@ class EmitSchemaTest {
             EmitSchema.EGRESS_HELD,
             EmitSchema.SYNC_PULSE_ANSWERED,
             EmitSchema.EGRESS_CONTAINED,
-            EmitSchema.EGRESS_SUCCEEDED,
         )
         for (kind in egress) {
             assertTrue(
@@ -533,7 +541,12 @@ class EmitSchemaTest {
             )
         }
         // Completeness. Every permitted kind belonging to this system is in the list above -- so a
-        // sixth cannot be added, given a row, and left out of these assertions.
+        // fifth cannot be added, given a row, and left out of these assertions.
+        //
+        // **EGRESS_SUCCEEDED is deliberately absent from both sides**, which is what makes this
+        // still a completeness check rather than a list somebody shortened: it has no row at all
+        // now (see the test that says so), so it is not among the known kinds either, and the two
+        // sides agree for the right reason.
         assertEquals(
             egress.map { it.name }.sorted(),
             EmitSchema.knownKinds().map { it.name }
@@ -620,9 +633,151 @@ class EmitSchemaTest {
             seats,
             EmitSchema.deliveries(Effect.EgressContained(Haptic.Short), live()).map { it.seat },
         )
+    }
+
+    /**
+     * **The terminal fact reaches nobody, on purpose, and the ending is why** (D-131, D-156).
+     *
+     * It had a row while it was the last thing that happened in a round. It is not any more: every
+     * emission of it now sits in the same reduction that ends the round, and the round-state axis
+     * has moved by the time the boundary is consulted — so the row could only ever have delivered
+     * to classes that no longer exist. What the room gets is `RoundEnded` carrying
+     * `WinRoute.EgressUncontained`: the same fact, once, with one buzz.
+     *
+     * Asserted both ways round, because a row restored "to fix the missing delivery" would put a
+     * second long haptic on every phone in the house on one of the four routes and one on the
+     * other three — which is exactly the shape F-003 found and D-156 closed.
+     */
+    @Test
+    fun `the terminal fact reaches nobody and the ending carries it instead`() {
+        val fact = Effect.EgressSucceeded(Haptic.Long)
+        assertEquals(
+            emptyList(), EmitSchema.classesFor(EmitSchema.EGRESS_SUCCEEDED),
+            "the terminal fact has a row again; every delivery it makes is a second buzz",
+        )
+        assertEquals(emptyList(), EmitSchema.deliveries(fact, live()))
+        assertEquals(emptyList(), EmitSchema.deliveries(fact, over()))
         assertEquals(
             seats,
-            EmitSchema.deliveries(Effect.EgressSucceeded(Haptic.Long), live()).map { it.seat },
+            seats.flatMap {
+                EmitSchema.deliveries(
+                    Effect.RoundEnded(it, Winner.Insiders, WinRoute.EgressUncontained, Haptic.Short),
+                    over(),
+                )
+            }.map { it.seat },
+            "nothing tells the house the Egress ran out",
+        )
+    }
+
+    // ---- The ending ---------------------------------------------------------------------------
+
+    /** The round, over: every seat classifies [RoundState.Ended] and the three rows can deliver. */
+    private fun over() = live().endRound(ROUND_OVER)
+
+    private val REVEAL = Effect.InsidersRevealed(listOf(InsiderNamed(Seat(1), "the spare key")))
+
+    /**
+     * **THE COMPLETENESS CHECK: no effect in this app states an alignment before the ending.**
+     *
+     * *Never shown: any confirmation of alignment, at any point, by any path* (`gdd.md:213`). This
+     * walks **every kind the schema knows** and asserts that the only ones permitted to a class
+     * that exists while a round is running carry no [InsiderNamed] and no [Winner] — which is the
+     * property stated as a type rather than as a review note.
+     *
+     * It is written over `knownKinds()` rather than over a list, so a new effect that named a role
+     * and was given a LIVING row would fail here rather than being caught by whoever happened to
+     * read the diff. The three ending kinds are named as the exemptions and the exemption list is
+     * asserted to be exactly those three: an effect added to it is a decision, and this is where
+     * somebody has to make it.
+     */
+    @Test
+    fun `nothing that states an alignment is permitted before the round ends`() {
+        val ending = listOf(
+            EmitSchema.ROUND_ENDED, EmitSchema.INSIDERS_REVEALED, EmitSchema.HOUSE_SIGNED_OFF,
+        )
+        for (kind in ending) {
+            val classes = EmitSchema.classesFor(kind)
+            assertTrue(classes.isNotEmpty(), "$kind has no row: the round would end and reach nobody")
+            assertTrue(
+                classes.all { it.roundState == RoundState.Ended },
+                "$kind is permitted to $classes — an alignment reaches a round that is still running",
+            )
+        }
+        // Completeness, the other way round: these three are the whole of what may name anybody.
+        // A fourth cannot be added, given a row, and left out of the assertion above.
+        assertEquals(
+            ending.map { it.name }.sorted(),
+            EmitSchema.knownKinds().map { it.name }
+                .filter { it in setOf("RoundEnded", "InsidersRevealed", "HouseSignedOff") }
+                .sorted(),
+            "an ending kind exists that this test does not name",
+        )
+    }
+
+    /**
+     * **The reveal is bounded by time, in the type, and that is stronger than any of its
+     * contents.**
+     *
+     * [RoundState.Ended] is reachable only through `GameState.outcome`, whose only writer is the
+     * transition that emits these effects. So a reveal constructed at any other moment in the round
+     * is offered to classes that do not exist yet and is delivered to **nobody** — rule 2 doing the
+     * work rule 3 would otherwise have to. Asserted by building the leak: the same effect, against
+     * a live round, reaching no phone in the house.
+     */
+    @Test
+    fun `the reveal reaches nobody while the round is running`() {
+        assertEquals(
+            emptyList(), EmitSchema.deliveries(REVEAL, live()),
+            "the app named an Insider to a living phone",
+        )
+        assertEquals(
+            seats, EmitSchema.deliveries(REVEAL, over()).map { it.seat },
+            "the round ended and the reveal reached fewer than everybody",
+        )
+    }
+
+    /**
+     * **The house signs off to the Insiders it owned, and to no Resident** (`gdd.md:1051`).
+     *
+     * The narrowest row in the table, and it is lawful for exactly one reason: by the time it is
+     * delivered, [Effect.InsidersRevealed] has already published who the Insiders were, to
+     * everybody, on the screen this message appears on.
+     *
+     * Both denials are asserted, because they are independent and either alone would be enough to
+     * ship a leak. The **row** stops it reaching a Resident's class; the **addressing** stops it
+     * reaching the other Insider, who is in the permitted class and is still not the recipient.
+     */
+    @Test
+    fun `the sign-off reaches the addressed Insider and nobody else`() {
+        val finished = over()
+        assertEquals(
+            listOf(ClientClass(Role.Insider, RoundState.Ended)),
+            EmitSchema.classesFor(EmitSchema.HOUSE_SIGNED_OFF),
+        )
+        assertEquals(
+            listOf(Seat(1)),
+            EmitSchema.deliveries(Effect.HouseSignedOff(Seat(1), "Unfortunate."), finished).map { it.seat },
+        )
+        // Seat 0 is a Resident. Addressed to them by mistake, the row still declines it -- which is
+        // the denial that survives somebody widening the addressing for an unrelated reason.
+        assertEquals(
+            emptyList(),
+            EmitSchema.deliveries(Effect.HouseSignedOff(Seat(0), "Unfortunate."), finished),
+            "the house spoke to somebody it never owned",
+        )
+    }
+
+    /** The ending itself is addressed per seat, and every seat gets exactly one. */
+    @Test
+    fun `the ending reaches every seat once`() {
+        val finished = over()
+        assertEquals(
+            seats,
+            seats.flatMap {
+                EmitSchema.deliveries(
+                    Effect.RoundEnded(it, Winner.Residents, WinRoute.Parity, Haptic.Short), finished,
+                )
+            }.map { it.seat },
         )
     }
 }

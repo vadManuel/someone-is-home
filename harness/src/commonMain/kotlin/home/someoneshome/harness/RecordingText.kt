@@ -4,6 +4,7 @@ import home.someoneshome.model.EgressType
 import home.someoneshome.model.Event
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MeetingTrigger
+import home.someoneshome.model.OneLineHeld
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
 
@@ -160,11 +161,27 @@ object RecordingText {
          */
         fun chosen(key: String): Int? = if (req(key) == "none") null else int(key)
 
+        /**
+         * **The seats that handed a line over, rebuilt with nothing in them** (D-116).
+         *
+         * The recording holds the seats and not the text — see `Transcript.render(RoundArmed)`,
+         * which explains at length why a debugging artefact that outlives the evening may not
+         * quote anybody. This is the other half of that decision, and the blank is deliberate
+         * rather than a loss: nothing a replay renders reads the text, so a round rebuilt this way
+         * produces byte-identical rows and is simply a round in which the house has nothing to
+         * quote.
+         *
+         * **A replayed reveal therefore publishes blanks.** Said plainly rather than left to be
+         * discovered: replay reproduces the *game*, and the words people typed are not part of it.
+         */
+        fun heldLines(key: String): List<OneLineHeld> =
+            seats(key).map { OneLineHeld(it, "") }
+
         val at = Tick(long("at"))
         val event = when (name) {
             "RoundArmed" -> Event.RoundArmed(
                 at, long("seed"), seats("seats"), seats("insiders"),
-                chosen("chosen"), markers("markers"),
+                chosen("chosen"), markers("markers"), heldLines("lines"),
             )
             "MarkerScanned" -> Event.MarkerScanned(at, seat("actor"), marker("marker"))
             "SubroutineReturned" ->
@@ -202,7 +219,7 @@ object RecordingText {
     }
 
     private fun expectedFields(name: String): Set<String> = when (name) {
-        "RoundArmed" -> setOf("at", "seed", "seats", "insiders", "chosen", "markers")
+        "RoundArmed" -> setOf("at", "seed", "seats", "insiders", "chosen", "markers", "lines")
         "MarkerScanned" -> setOf("at", "actor", "marker")
         "SubroutineReturned" -> setOf("at", "actor", "marker", "entered")
         "PerformanceEnded" -> setOf("at", "actor")

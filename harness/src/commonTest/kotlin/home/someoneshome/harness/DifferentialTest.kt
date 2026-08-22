@@ -153,6 +153,40 @@ class DifferentialTest {
     }
 
     /**
+     * **The second subtraction is not hiding an empty diff either: the exchange really does end
+     * one round and not the other** (D-131).
+     *
+     * `diff` compares two runs only up to the first ending in either, because past that point they
+     * are two different games rather than two views of one round — see `untilTheRoundEnds`, which
+     * carries the argument. That is a real narrowing of a leak instrument, so like the meter's it
+     * is paired with the assertion that the thing being subtracted is *there*: if exchanging seats
+     * 1 and 3 ever stops ending one of the two rounds, this fails and says so, and the narrowing
+     * has quietly become a filter over two identical rounds.
+     *
+     * The arithmetic, written out because it is the whole reason: six of the eight seats are plain
+     * Residents under the baseline draw and the fixture takes four of them out of the round.
+     * Exchanging seat 1 (an Insider) with seat 3 (a Resident) moves the restrained seat from the
+     * Insider side of parity to the Resident side, which is the difference between `3 > 1` and
+     * `2 <= 2`.
+     */
+    @Test
+    fun `the exchange really does end one round and not the other`() {
+        val baseline = record(GameState.EMPTY, round()).first
+        val variant = record(GameState.EMPTY, withRolesExchanged(round(), Seat(1), Seat(3))).first
+
+        assertFalse(
+            baseline.ended,
+            "the shared fixture round now ends on its own, so both runs end and the ending " +
+                "subtraction in `diff` is comparing two truncated rounds against each other",
+        )
+        assertTrue(
+            variant.ended,
+            "exchanging seats 1 and 3 no longer ends the round, so `untilTheRoundEnds` subtracts " +
+                "nothing and the assertions that rely on it have gone vacuous",
+        )
+    }
+
+    /**
      * **The subtraction is not hiding an empty diff: without it, the meter really does diverge.**
      *
      * Every filtered assertion in this file would pass vacuously if exchanging two roles had
@@ -212,13 +246,19 @@ class DifferentialTest {
         val baseline = recordPerClient(GameState.EMPTY, round())
         val exchanged = recordPerClient(GameState.EMPTY, withRolesExchanged(round(), Seat(1), Seat(3)))
 
-        fun verdicts(t: ClientTranscripts, seat: Seat) =
-            t.linesFor(seat).filter { it.startsWith("SubroutineGraded") }
+        // **Up to the moment either round ended** (D-131) — `untilTheRoundEnds`, the same rule
+        // `diff` uses and not a second copy of it. Exchanging seats 1 and 3 moves the restrained
+        // seat across parity, so the variant round is over at the second meeting and stops
+        // producing verdicts; past that point the two runs are different games and a missing
+        // verdict is a round that finished rather than a verdict withheld from an Insider.
+        fun verdicts(t: ClientTranscripts, other: ClientTranscripts, seat: Seat) =
+            untilTheRoundEnds(t.linesFor(seat), other.linesFor(seat))
+                .filter { it.startsWith("SubroutineGraded") }
 
         var seen = 0
         for (seat in SEATS) {
-            val a = verdicts(baseline, seat)
-            val b = verdicts(exchanged, seat)
+            val a = verdicts(baseline, exchanged, seat)
+            val b = verdicts(exchanged, baseline, seat)
             seen += a.size
             assertEquals(
                 a, b,
@@ -242,9 +282,15 @@ class DifferentialTest {
             .map { Transcript.render(it) }
             .filterNot { it.startsWith("SubroutineProgressed") }
 
+        // Both subtractions, and they are different shapes on purpose: the meter is a KIND, dropped
+        // from both runs so the surrounding lines stay aligned; the ending is the round STOPPING,
+        // so what is compared is everything that happened while both were still running. See
+        // `untilTheRoundEnds` for why the second cannot be expressed as the first.
+        val a = stream(round())
+        val b = stream(withRolesExchanged(round(), Seat(1), Seat(3)))
         assertEquals(
-            stream(round()),
-            stream(withRolesExchanged(round(), Seat(1), Seat(3))),
+            untilTheRoundEnds(a, b),
+            untilTheRoundEnds(b, a),
             "a rule now branches on which seats hold the role in something other than the meter. " +
                 "The differential harness has become load-bearing; rewrite this rather than " +
                 "deleting it.",

@@ -202,6 +202,16 @@ class LobbyOverTransport(
     private var client: TransportClient? = null
     private var clientJob: Job? = null
 
+    /**
+     * What this phone last said to call its owner, kept so it can be said again.
+     *
+     * **In memory and nowhere else**, exactly like the one line it sits beside. The desk drops
+     * names at the end of every round (D-115) and the protocol's answer has always been that the
+     * name rides back up on every re-seating; NEW ROUND is a third occasion for the same re-send,
+     * and it needs the same thing to re-send.
+     */
+    private var residentName: String = ""
+
     init {
         // The 0.8 property on relaunch: a killed app reads its token back and resumes as THAT
         // seat, never as *a* seat. The restored session never says Hello.
@@ -211,6 +221,7 @@ class LobbyOverTransport(
     override fun host(homeName: String, onUp: (NearbyHome) -> Unit) = house.start(homeName, onUp)
 
     override fun join(home: NearbyHome, name: String, onStanding: (LobbyBody.Standing) -> Unit) {
+        residentName = name
         if (clientJob?.isActive == true) return
         val s = session ?: ClientSession().also { session = it }
         val c = TransportClient(
@@ -264,6 +275,26 @@ class LobbyOverTransport(
 
     /** The host's setting. On a phone that is not hosting, [LobbyHouse] was never started. */
     override fun setInsiders(chosen: Int?) = house.setInsiders(chosen)
+
+    /**
+     * **The round ended: the desk drops every line, and this phone stays in the lobby** (D-116,
+     * D-157).
+     *
+     * On a phone that is not hosting the desk is not here, so the first call does nothing — the
+     * same shape [setInsiders] has, and for the same reason: the desk belongs to the host and a
+     * client that had one would be a second copy of the lobby.
+     *
+     * **The name goes back up afterwards**, because the desk drops names with the lines (D-115 —
+     * they are text, held for one round like everything else on it). That is the same re-send a
+     * re-seating does, for the same reason: a lobby listing an empty chip for somebody standing in
+     * the room is a fault nobody could diagnose from the screen. It is re-sent from what this
+     * phone still has in memory; it is never persisted.
+     */
+    override fun roundEnded() {
+        house.roundEnded()
+        val c = client ?: return
+        scope.launch { c.send(naming(residentName)) }
+    }
 
     override fun leave() {
         clientJob?.cancel()

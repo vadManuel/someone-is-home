@@ -50,6 +50,25 @@ class Recording(
     }
 
     companion object {
+        // 10: the ending. `ended` was a boolean and is the OUTCOME now -- winner and route -- so a
+        // version 9 recording can say a round finished and cannot say who took it or how, which is
+        // the only question anybody asks afterwards. Three effects a version 9 build cannot
+        // construct arrive with it, and `RoundArmed` gained the seats that handed a one line over.
+        //
+        // **What version 10 deliberately does NOT gain is the lines themselves** (D-116). Both new
+        // rows carry seats and no text: a recording is the one artefact of this game that outlives
+        // the evening, and the promise printed on the screen where a line is typed does not survive
+        // being written into one. A replayed round therefore rebuilds blanks and publishes blanks
+        // at its reveal, and every row it produces is byte-identical to the row it is compared
+        // against -- the game is reproduced without the words.
+        //
+        // 9: the Egress. Three events a version 8 build cannot construct -- and the first of them,
+        // `EgressFired`, carries the two nodes and the type as INPUTS, drawn above the rules
+        // against a home the recording does not hold. The state row's `egress` was a boolean and
+        // is now the whole lifecycle: deadline, pause mark, held Sync Pulse offers and lockouts,
+        // beside the house-wide shared cooldown. A version 8 recording says only that a house was
+        // on fire, which cannot tell a contained Egress from one that ran out.
+        //
         // 8: the scan answers. `MarkerScanned` stopped being silent -- it emits ScanAnswered and
         // PresenceChanged now -- and `PerformanceEnded` is a new event a version 7 build cannot
         // construct. The answer key moved off the work order and onto the open instance, where a
@@ -72,13 +91,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        // 8: the Egress. Three events a version 8 build cannot construct -- and the first of them,
-        // `EgressFired`, carries the two nodes and the type as INPUTS, drawn above the rules
-        // against a home the recording does not hold. The state row's `egress` was a boolean and
-        // is now the whole lifecycle: deadline, pause mark, held Sync Pulse offers and lockouts,
-        // beside the house-wide shared cooldown. A version 8 recording says only that a house was
-        // on fire, which cannot tell a contained Egress from one that ran out.
-        const val HEADER = "someone-is-home/recording/9"
+        const val HEADER = "someone-is-home/recording/10"
     }
 }
 

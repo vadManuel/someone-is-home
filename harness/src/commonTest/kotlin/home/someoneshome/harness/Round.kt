@@ -9,6 +9,7 @@ import home.someoneshome.model.GameState
 import home.someoneshome.model.InsiderAbility
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MeetingTrigger
+import home.someoneshome.model.OneLineHeld
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
 
@@ -23,6 +24,19 @@ internal val INSIDERS = listOf(Seat(1), Seat(5))
 
 /** The home the fixture round is played in. Eight ordinary markers is D-127's floor. */
 internal val MARKERS = (0 until 8).map { MarkerId("m$it") }
+
+/**
+ * **Every seat's one line, on the fixture's path** (D-116).
+ *
+ * On the path rather than only in a unit test, because what is being covered is a *rendering*
+ * decision: `Transcript` writes these as a list of seats and never as text, so a recording is
+ * physically incapable of quoting anybody, and the parser rebuilds blanks. A fixture that armed
+ * without them would round-trip an empty list and prove nothing about either half.
+ *
+ * The text names its own seat so that a leak is legible on sight — `line-3` appearing anywhere in
+ * a recording is the whole of the report.
+ */
+internal val LINES = SEATS.map { OneLineHeld(it, "line-${it.index}") }
 
 /**
  * How far the clock moves between passes. Wider than half a Revoke cooldown, deliberately — see
@@ -52,6 +66,7 @@ private const val ROUND_STRIDE = 40L
 internal fun round(insiders: List<Seat> = INSIDERS): List<Event> {
     val arming = Event.RoundArmed(
         Tick(0), seed = 20260818L, seats = SEATS, insiders = insiders, markers = MARKERS,
+        oneLines = LINES,
     )
     // **The round is walked forward as it is built.** Each seat's next piece of work depends on
     // what it has already completed, and an Insider's Revoke depends on a cooldown that started at
@@ -185,3 +200,34 @@ internal fun round(insiders: List<Seat> = INSIDERS): List<Event> {
  * meetings so that both halves are exercised in a round that already has people out of it.
  */
 private const val EGRESS_PASS = 34
+
+/**
+ * **[round], carried through to an ending** — a second Egress, fired and left to run out (D-131).
+ *
+ * Built by appending to the shared fixture rather than by writing a second round, so the two cannot
+ * drift into two different games: everything the replay guarantee already covers is still on the
+ * path, and what is added is the transition it did not cover.
+ *
+ * **Expiry rather than a Restrain, and that is the pragmatic choice as well as the sharp one.** It
+ * is the one route whose outcome is a *fact* rather than a predicate over state — `outcomeOf` has
+ * to read the event to know an Egress ran out rather than being contained — so it is the route a
+ * replay is most able to get wrong while looking right. It is also two events, where driving a
+ * round to parity through real meetings is thirty and depends on who the fixture's Revokes happened
+ * to reach.
+ *
+ * The nodes and the tick are read off the state the fixture actually reached, for [round]'s reason:
+ * a fixture that named a card or a moment would be asserting against its own idea of the round and
+ * would keep agreeing after the draw moved.
+ */
+internal fun roundThatEnds(): List<Event> {
+    val base = round()
+    val after = record(GameState.EMPTY, base).first
+    check(!after.ended) { "the shared fixture round now ends on its own; this helper has nothing to add" }
+
+    val actor = after.livingInsiders.first()
+    val nodes = after.activeMarkers.distinctBy { it.value }.take(2)
+    val firedAt = maxOf(after.egressReadyAt.step, base.last().at.step + 1)
+    return base +
+        Event.EgressFired(Tick(firedAt), actor, EgressType.Tether, nodes) +
+        Event.EgressExpired(Tick(firedAt + Balance.EGRESS_TIMER))
+}

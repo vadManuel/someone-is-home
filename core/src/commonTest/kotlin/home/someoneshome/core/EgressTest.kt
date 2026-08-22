@@ -17,6 +17,7 @@ import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MarkerShapes
 import home.someoneshome.model.MeetingPhase
 import home.someoneshome.model.MeetingTrigger
+import home.someoneshome.model.Outcome
 import home.someoneshome.model.PlanRoom
 import home.someoneshome.model.Presence
 import home.someoneshome.model.RefusalReason
@@ -24,6 +25,8 @@ import home.someoneshome.model.Registration
 import home.someoneshome.model.Room
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
+import home.someoneshome.model.WinRoute
+import home.someoneshome.model.Winner
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -707,41 +710,94 @@ class EgressTest {
     // ---- The outcomes -------------------------------------------------------------------------
 
     /**
-     * **Uncontained: the terminal fact, to everybody** (`gdd.md:361`, D-131).
+     * **Uncontained: the terminal fact, and it takes the round with it** (`gdd.md:361`, D-131).
      *
-     * And the countdown stops being on anybody's widget. The round is deliberately **not** ended
-     * here — the win conditions as a set are the ending unit's — so what is asserted is the fact,
-     * its audience, and the state it leaves behind.
+     * The countdown stops being on anybody's widget **and** the round ends, in that order, in one
+     * reduction. Two effects rather than one because they are two disclosures: the Egress is over,
+     * and the evening is over. The fact is asserted first because everything downstream of it
+     * depends on the Egress having actually been cleared.
      */
     @Test
     fun `expiry emits the terminal fact`() {
         val fired = Tick(60)
         val walk = EgressWalk(burning(fired)).feed(Event.EgressExpired(Tick(fired.step + Balance.EGRESS_TIMER)))
-        assertEquals(
-            listOf(Effect.EgressSucceeded(Haptic.Long)), walk.drain(),
-        )
+        val emitted = walk.drain()
+
+        assertEquals(Effect.EgressSucceeded(Haptic.Long), emitted.first())
         assertNull(walk.state.egress, "the countdown outlived its own expiry")
         assertEquals(emptyList(), walk.refusals)
+
+        assertEquals(
+            Outcome(Winner.Insiders, WinRoute.EgressUncontained), walk.state.outcome,
+            "a countdown reached zero with the doors open and the round carried on",
+        )
+        assertEquals(
+            SEATS.map { Effect.RoundEnded(it, Winner.Insiders, WinRoute.EgressUncontained, Haptic.Short) },
+            emitted.filterIsInstance<Effect.RoundEnded>(),
+            "the ending has to reach every seat, once each",
+        )
     }
 
     /**
-     * **A running Egress outlives its Insiders** (D-131).
+     * **A running Egress outlives its Insiders, and then wins the round for them** (D-131).
      *
      * *Restraining the last Insider during an Egress does not end the round: the house does not
-     * stop what it was told to start.* Both Insiders are restrained here, mid-Egress, and the
-     * countdown is still running afterwards — which is a rule expressed as an absence, so it is
-     * asserted rather than trusted.
+     * stop what it was told to start.* Both Insiders are restrained here, mid-Egress. Two things
+     * are asserted and the first is the one written as an absence: the round is **still running**
+     * after the Restrain, even though `WinRoute.InsidersRestrained` is otherwise satisfied — and
+     * then the expiry ends it in the Insiders' favour, from a state in which not one of them is
+     * left to enjoy it.
      */
     @Test
     fun `restraining every Insider does not stop a running Egress`() {
         val fired = Tick(60)
         val start = burning(fired).copy(restrained = INSIDERS)
         assertNotNull(start.egress, "the fixture is stale")
+        assertTrue(start.livingInsiders.isEmpty(), "the fixture is stale")
 
         val walk = EgressWalk(start).feed(Event.EgressExpired(Tick(fired.step + Balance.EGRESS_TIMER)))
         assertEquals(
-            listOf(Effect.EgressSucceeded(Haptic.Long)), walk.drain(),
+            Effect.EgressSucceeded(Haptic.Long), walk.drain().first(),
             "an Egress with no Insiders left to win it was quietly cancelled",
+        )
+        assertEquals(
+            Outcome(Winner.Insiders, WinRoute.EgressUncontained), walk.state.outcome,
+            "the house stopped what it was told to start",
+        )
+    }
+
+    /**
+     * **The other half of the same rule: containment wins it for the Residents.**
+     *
+     * With no Insider left in the round, `WinRoute.InsidersRestrained` is held back by exactly one
+     * clause — the running Egress — and the instant the pair contains it, that clause stops
+     * holding and the round ends. Nothing new fires; the same predicate that declined on the
+     * previous transition answers on this one.
+     *
+     * This is the pair to `restraining every Insider does not stop a running Egress` and neither
+     * is worth much alone: together they say the Egress *decides* a round its own Insiders are no
+     * longer in, either way.
+     */
+    @Test
+    fun `containment ends a round whose Insiders are all Restrained`() {
+        val fired = Tick(60)
+        val start = burning(fired).copy(restrained = INSIDERS)
+
+        val walk = EgressWalk(start)
+        walk.feed(Event.SyncPulseReturned(Tick(beatAt(fired, 3)), Seat(0), onBeat(fired)))
+        assertNull(walk.state.outcome, "a held offer ended the round on its own")
+
+        walk.drain()
+        walk.feed(Event.SyncPulseReturned(Tick(beatAt(fired, 3)), Seat(2), onBeat(fired)))
+        val emitted = walk.drain()
+
+        assertTrue(
+            emitted.any { it is Effect.EgressContained },
+            "the pair did not contain; the rest of this test proves nothing",
+        )
+        assertEquals(
+            Outcome(Winner.Residents, WinRoute.InsidersRestrained), walk.state.outcome,
+            "the house was no longer on fire and nobody was left to have set it, and the round ran on",
         )
     }
 

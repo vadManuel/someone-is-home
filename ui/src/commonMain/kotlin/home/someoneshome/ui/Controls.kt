@@ -123,6 +123,15 @@ class PanelActions(
     val cycleVoteWindow: () -> Unit = {},
     val lightsOut: () -> Unit = {},
     /**
+     * **NEW ROUND — the host's control on the two ending screens** (D-157). See
+     * [FlowModel.newRound].
+     *
+     * Beside [lightsOut] because it is the same kind of thing seen from the other end of the
+     * evening: the host acts in front of the whole party, and the house moves everybody. On a
+     * phone that is not hosting, the ending screens do not attach it.
+     */
+    val newRound: () -> Unit = {},
+    /**
      * **The meeting, and the four controls that report one phone and move nothing.**
      *
      * None of these navigates, and that is the whole point of them being here rather than being a

@@ -47,4 +47,48 @@ class MeterDisclosureTest {
     fun theOutsideViewSpeaksOnlyPercent() {
         assertNoDenominator(ScreenId.Ghost3, outBy = OutBy.Revoked)
     }
+
+    /**
+     * **THE INJECTION: the endings are not the safe place for a real number** (D-153).
+     *
+     * Both ending screens drew one — `SYSTEM INTEGRITY 14 / 32` on the Insiders' and `0 / 32` on
+     * the Residents' — and both were defects twice over: the `32` was a fossil of the count F-005
+     * had already corrected, and the denominator divides out the Insider count whatever it is.
+     *
+     * **They looked safe and they were not.** The round is over, the reveal has happened, nothing
+     * can be acted on — and the app is played *two to three rounds in an evening* (D-157), so a
+     * denominator printed at the end of round one is a denominator carried into round two, where
+     * it divides out the thing D-103 spent a whole revision hiding. One ending screen would
+     * retroactively unhide the Insider count for every round that follows.
+     *
+     * Reintroducing either row fails here by name. The percentage assertions beside the
+     * denominator sweep are what stop the row being *deleted* instead of converted — a screen that
+     * says nothing about the meter also has no denominator on it.
+     */
+    @Test
+    fun theEndingsSpeakOnlyPercent() {
+        for (ending in listOf(ScreenId.WinInsiders, ScreenId.WinResidents)) {
+            assertNoDenominator(ending)
+        }
+        // The Residents took it by clearing the meter, and the Insiders took it with this much
+        // still standing. Read off the screens rather than off PanelVals, because the defect being
+        // guarded was a literal in a composable and a test that read the model would not have seen
+        // it.
+        runDesktopComposeUiTest {
+            setContent {
+                DeviceCanvas(insets = PanelInsets()) {
+                    Screen(PanelState(screen = ScreenId.WinResidents))
+                }
+            }
+            onAllNodesWithText("0%").assertCountEquals(1)
+        }
+        runDesktopComposeUiTest {
+            setContent {
+                DeviceCanvas(insets = PanelInsets()) {
+                    Screen(PanelState(screen = ScreenId.WinInsiders, role = PanelRole.Insider))
+                }
+            }
+            onAllNodesWithText("43%").assertCountEquals(1)
+        }
+    }
 }

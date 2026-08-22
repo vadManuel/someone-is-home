@@ -78,6 +78,17 @@ interface LobbyLink {
      */
     fun setInsiders(chosen: Int?)
 
+    /**
+     * **The round ended: the house drops every line it is holding, and the connection stays up**
+     * (D-116, D-157).
+     *
+     * Separate from [leave] and that separation is the ruling. Both wipe the desk; only one of
+     * them takes the house down — and D-157 keeps the home, the seats and the settings across a
+     * NEW ROUND, so an evening whose second round began by tearing down the lobby would be five
+     * people re-typing a lobby code in the dark to play again.
+     */
+    fun roundEnded()
+
     fun leave()
 }
 
@@ -144,6 +155,24 @@ class MemoryLobbyLink(
     override fun handOver(line: String) {
         received += line
         standing = standing.copy(linesIn = minOf(standing.joined, standing.linesIn + 1))
+        publish()
+    }
+
+    /**
+     * The desk dropped every line, so the count it publishes goes to nothing — **and the seats do
+     * not** (D-157).
+     *
+     * That is the fixture answering the way the real desk answers rather than doing nothing, for
+     * the reason this class clamps the Insider band: a stand-in that quietly kept the count would
+     * let the next round's LIGHTS OUT gate open with nobody having typed anything, and the screen
+     * would look right the whole time.
+     *
+     * [received] is deliberately **not** cleared. It is the test's window onto what crossed the
+     * link, not a store the house reads — and a fixture that erased its own evidence would make
+     * *the line never arrived* and *the line arrived and was dropped* the same observation.
+     */
+    override fun roundEnded() {
+        standing = standing.copy(linesIn = 0)
         publish()
     }
 
@@ -488,10 +517,17 @@ class LobbyModel(
         else -> null
     }
 
-    /** **Deleted when the round ends.** */
+    /**
+     * **Deleted when the round ends**, on this phone and on the house's desk, and the lobby stays
+     * up (D-116, D-157).
+     *
+     * It used to call `link.leave()`, which kept the deletion promise by taking the whole house
+     * down with it — correct while the app had no way to play a second round and wrong the moment
+     * NEW ROUND existed. The seats, the home and the settings survive; the text does not.
+     */
     fun roundEnded() {
         line.roundEnded()
-        link.leave()
+        link.roundEnded()
     }
 
     companion object {
