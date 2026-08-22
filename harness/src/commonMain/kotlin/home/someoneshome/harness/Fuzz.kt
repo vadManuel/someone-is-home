@@ -1,10 +1,12 @@
 package home.someoneshome.harness
 
-import home.someoneshome.core.reduce
+import home.someoneshome.core.Admission
+import home.someoneshome.core.admit
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MeetingTrigger
+import home.someoneshome.model.OrderEntry
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
 
@@ -66,7 +68,8 @@ fun fuzzRound(
     val rng = Rng(seed)
     val seats = (0 until seatCount).map { Seat(it) }
     val insiders = seats.shuffledBy(rng).take(insiderCount).sortedBy { it.index }
-    val markers = (0 until 7).map { MarkerId("m$it") }
+    // Eight ordinary markers, which is D-127's floor for a home that may be hosted in.
+    val markers = (0 until 8).map { MarkerId("m$it") }
 
     // A seat that may not exist. Low probability, deliberately including negatives.
     fun anySeat(): Seat = when {
@@ -76,43 +79,72 @@ fun fuzzRound(
     }
 
     var t = 0L
-    val arming = Event.RoundArmed(Tick(t), seed, seats, insiders)
+    val arming = Event.RoundArmed(Tick(t), seed, seats, insiders, markers = markers)
 
     /**
-     * What the house asked this seat for at the opening arming.
+     * **The line of this seat's work order the house would open next**, and what it will be graded
+     * against — replayed from the events built so far rather than read off the opening state.
      *
      * **The absurd player has to score sometimes.** A fuzzer whose entries were always wrong would
      * never once take the graded-and-correct path — the only one that moves the meter, and the one
      * D-109's asymmetry lives on — so every property below would hold over 150 rounds in which the
      * rule under test never fired. That is this project's recurring failure, not a stricter test.
      *
-     * Read off the rules rather than reimplemented, so it cannot drift from what is being graded.
-     * A round that re-arms mid-way moves on to different questions and these go stale, which is
-     * left alone: a stale answer is a wrong answer, and wrong answers are the other half of the mix.
+     * The **card** matters as much as the answer now: a scan resolves `(seat, card)` to that
+     * player's own work, so a fuzzer scanning a card at random arms nothing and every entry it
+     * hands over grades false. And it has to be the seat's CURRENT line rather than its opening
+     * one — a seat can complete each line once, so a generator that kept asking for the first
+     * would bank once per seat in the first few events and never again, which puts every banked
+     * entry in the round before anybody has been revoked. The meter only reaches a player who is
+     * out, so the whole D-109 asymmetry would then be invisible to the differential harness.
+     *
+     * Read off the rules rather than reimplemented, so it cannot drift from what is being graded,
+     * and read through the **admission gate** so the round the generator thinks it is building is
+     * the one the driver will actually run.
      */
-    val opening = reduce(GameState.EMPTY, arming).state
-    fun asked(seat: Seat): List<Int> = opening.openSubroutineFor(seat)?.expected ?: emptyList()
+    fun assigned(seat: Seat, soFar: List<Event>): OrderEntry? {
+        var state = GameState.EMPTY
+        for (event in soFar) {
+            (admit(state, event) as? Admission.Admitted)?.let { state = it.reduction.state }
+        }
+        val order = state.workOrderFor(seat) ?: return null
+        return order.entries.firstOrNull { order.isActionable(it) }
+    }
+
+    /**
+     * **The clock moves in strides, and the stride is wider than half a Revoke cooldown** (D-132).
+     *
+     * At one tick per event a sixty-event round finished inside the guaranteed stretch of peace
+     * the round now opens with — so not one `RevokeArmed` armed anything, nobody was ever revoked,
+     * and every property about a player who is out held over rounds where nobody was.
+     */
+    fun tick(): Long {
+        t += FUZZ_STRIDE
+        return t
+    }
 
     return buildList {
-        if (armFirst) add(arming.also { t++ })
+        if (armFirst) add(arming.also { tick() })
         repeat(events) {
             when (rng.nextInt(9)) {
-                0 -> add(Event.RoundArmed(Tick(t++), rng.nextLong(), seats, insiders))
-                1 -> add(Event.MarkerScanned(Tick(t++), anySeat(), rng.pick(markers)))
+                0 -> add(Event.RoundArmed(Tick(tick()), rng.nextLong(), seats, insiders, markers = markers))
+                1 -> add(Event.MarkerScanned(Tick(tick()), anySeat(), rng.pick(markers)))
                 2, 3 -> {
-                    // Sometimes the whole walk — scan the card, then hand over exactly what was
-                    // asked for — and sometimes any of the ways that goes wrong: an entry against
+                    // Sometimes the whole walk — scan the card the house anchored this seat's work
+                    // at, then hand over exactly what was asked for — and sometimes any of the ways
+                    // that goes wrong: a card that holds nothing for this player, an entry against
                     // a Subroutine nobody armed, at a card it was not armed at, or simply wrong.
                     val seat = anySeat()
-                    val marker = rng.pick(markers)
-                    if (rng.chance(2)) add(Event.MarkerScanned(Tick(t++), seat, marker))
+                    val open = if (rng.chance(2)) assigned(seat, this) else null
+                    val marker = open?.marker ?: rng.pick(markers)
+                    if (rng.chance(2)) add(Event.MarkerScanned(Tick(tick()), seat, marker))
                     val entered =
-                        if (rng.chance(2)) asked(seat)
+                        if (open != null && rng.chance(2)) open.expected
                         else List(rng.nextInt(4)) { rng.nextInt(4) }
-                    add(Event.SubroutineReturned(Tick(t++), seat, marker, entered))
+                    add(Event.SubroutineReturned(Tick(tick()), seat, marker, entered))
                 }
-                4 -> add(Event.RevokeArmed(Tick(t++), anySeat()))
-                5 -> add(Event.ContactMade(Tick(t++), anySeat(), anySeat()))
+                4 -> add(Event.RevokeArmed(Tick(tick()), anySeat()))
+                5 -> add(Event.ContactMade(Tick(tick()), anySeat(), anySeat()))
                 6, 7 -> {
                     // **A whole meeting, about half the time, and the rest of the time any of the
                     // ways one goes wrong.** Same lesson the entries learned: a fuzzer that only
@@ -120,25 +152,25 @@ fun fuzzRound(
                     // never opens a ballot and never reads one -- so the tally, the auto-lock, the
                     // takeover and every property that rests on them would hold over 150 rounds in
                     // which the rules under test never fired.
-                    if (rng.chance(2)) addAll(wholeMeeting(rng, seats) { t++ }) else {
-                        add(Event.MeetingCalled(Tick(t++), anySeat(), anyTrigger(rng, ::anySeat)))
-                        add(Event.MeetingCheckedIn(Tick(t++), anySeat()))
-                        add(Event.ReadyToVoteDeclared(Tick(t++), anySeat()))
+                    if (rng.chance(2)) addAll(wholeMeeting(rng, seats) { tick() }) else {
+                        add(Event.MeetingCalled(Tick(tick()), anySeat(), anyTrigger(rng, ::anySeat)))
+                        add(Event.MeetingCheckedIn(Tick(tick()), anySeat()))
+                        add(Event.ReadyToVoteDeclared(Tick(tick()), anySeat()))
                         add(
                             Event.VoteSelected(
-                                Tick(t++), anySeat(), if (rng.chance(4)) null else anySeat(),
+                                Tick(tick()), anySeat(), if (rng.chance(4)) null else anySeat(),
                             )
                         )
-                        add(Event.VoteLocked(Tick(t++), anySeat()))
+                        add(Event.VoteLocked(Tick(tick()), anySeat()))
                     }
                 }
                 else -> add(
                     // The four clock events, on their own, out of order and mostly out of phase.
                     when (rng.nextInt(4)) {
-                        0 -> Event.DiscussionClosed(Tick(t++))
-                        1 -> Event.VoteWindowClosed(Tick(t++))
-                        2 -> Event.TallyHalfwayReached(Tick(t++))
-                        else -> Event.MeetingClosed(Tick(t++))
+                        0 -> Event.DiscussionClosed(Tick(tick()))
+                        1 -> Event.VoteWindowClosed(Tick(tick()))
+                        2 -> Event.TallyHalfwayReached(Tick(tick()))
+                        else -> Event.MeetingClosed(Tick(tick()))
                     }
                 )
             }
@@ -185,6 +217,9 @@ private fun wholeMeeting(rng: Rng, seats: List<Seat>, tick: () -> Long): List<Ev
     add(Event.TallyHalfwayReached(Tick(tick())))
     add(Event.MeetingClosed(Tick(tick())))
 }
+
+/** How far the clock moves per event. See `tick` in [fuzzRound] for why it is not one. */
+private const val FUZZ_STRIDE = 7L
 
 /** Deterministic shuffle. `List.shuffled()` reaches for the platform's default random source. */
 private fun <T> List<T>.shuffledBy(rng: Rng): List<T> {

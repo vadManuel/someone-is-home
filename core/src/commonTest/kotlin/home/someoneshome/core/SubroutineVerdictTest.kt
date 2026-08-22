@@ -27,24 +27,42 @@ private val SEATS = (0 until 8).map { Seat(it) }
 /** Seat 1 is the Insider throughout, so *the same seat index* is never the variable under test. */
 private val INSIDERS = listOf(Seat(1))
 
-private val CARD = MarkerId("m0")
-private val OTHER_CARD = MarkerId("m3")
+/** The home this fixture is armed in. Eight is D-127's floor, which makes it the honest one. */
+private val MARKERS = (0 until 8).map { MarkerId("m$it") }
 
 private fun armed(): GameState = reduce(
     GameState.EMPTY,
-    Event.RoundArmed(Tick(0), seed = 20260821L, seats = SEATS, insiders = INSIDERS),
+    Event.RoundArmed(
+        Tick(0), seed = 20260821L, seats = SEATS, insiders = INSIDERS, markers = MARKERS,
+    ),
 ).state
 
+/**
+ * **The card this seat's first Subroutine is anchored at, read off the draw rather than typed in.**
+ *
+ * A hand-picked card would agree with somebody's model of where the house puts work, and would go
+ * on agreeing after the draw changed. Falls back to a real card for a seat that was assigned
+ * nothing, so the *seat assigned nothing* case is a scan of a card that exists and holds no work
+ * for that player (D-124) rather than a crash in the fixture.
+ */
+private fun cardFor(state: GameState, seat: Seat): MarkerId =
+    state.workOrderFor(seat)?.entries?.firstOrNull()?.marker ?: MARKERS.first()
+
+/** Any other card in the round. The one thing it is not is the card above. */
+private fun otherCard(state: GameState, seat: Seat): MarkerId =
+    state.activeMarkers.first { it.value != cardFor(state, seat).value }
+
 private fun asked(state: GameState, seat: Seat): List<Int> =
-    state.openSubroutineFor(seat)?.expected ?: error("seat ${seat.index} was assigned nothing")
+    state.workOrderFor(seat)?.entries?.firstOrNull()?.expected
+        ?: error("seat ${seat.index} was assigned nothing")
 
 /** Scan then return, the walk D-110 describes, collecting everything emitted along the way. */
 private fun walk(
     from: GameState,
     seat: Seat,
     entered: List<Int>,
-    scan: MarkerId? = CARD,
-    at: MarkerId = CARD,
+    scan: MarkerId? = cardFor(from, seat),
+    at: MarkerId = cardFor(from, seat),
 ): Pair<GameState, List<Effect>> {
     val effects = mutableListOf<Effect>()
     var state = from
@@ -120,8 +138,10 @@ class VerdictIsNeverWithheldTest {
         val right = asked(base, Seat(0))
         val cases = listOf(
             "never scanned" to walk(base, Seat(0), right, scan = null),
-            "scanned another card" to walk(base, Seat(0), right, scan = OTHER_CARD, at = CARD),
-            "returned at another card" to walk(base, Seat(0), right, scan = CARD, at = OTHER_CARD),
+            "scanned another card" to
+                walk(base, Seat(0), right, scan = otherCard(base, Seat(0))),
+            "returned at another card" to
+                walk(base, Seat(0), right, at = otherCard(base, Seat(0))),
             "assigned nothing" to walk(base, Seat(99), listOf(0, 0)),
             "empty entry" to walk(base, Seat(0), emptyList()),
         )
@@ -165,12 +185,12 @@ class VerdictIsNeverWithheldTest {
         val base = armed()
         assertEquals(
             emptyList(),
-            reduce(base, Event.MarkerScanned(Tick(1), Seat(0), CARD)).effects,
+            reduce(base, Event.MarkerScanned(Tick(1), Seat(0), cardFor(base, Seat(0)))).effects,
             "a scan that found work announced it",
         )
         assertEquals(
             emptyList(),
-            reduce(base, Event.MarkerScanned(Tick(1), Seat(99), CARD)).effects,
+            reduce(base, Event.MarkerScanned(Tick(1), Seat(99), MARKERS.first())).effects,
             "a scan that found nothing announced that",
         )
     }
@@ -193,7 +213,10 @@ class OneAttemptPerScanTest {
         val (after, first) = walk(base, Seat(0), right)
         assertTrue(first.filterIsInstance<Effect.SubroutineGraded>().single().accepted)
 
-        val again = reduce(after, Event.SubroutineReturned(Tick(3), Seat(0), CARD, right))
+        val again = reduce(
+            after,
+            Event.SubroutineReturned(Tick(3), Seat(0), cardFor(base, Seat(0)), right),
+        )
         assertEquals(
             listOf(Effect.SubroutineGraded(Seat(0), accepted = false)),
             again.effects.filterIsInstance<Effect.SubroutineGraded>(),

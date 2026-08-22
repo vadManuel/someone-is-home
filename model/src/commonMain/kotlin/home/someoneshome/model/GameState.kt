@@ -46,6 +46,19 @@ class GameState private constructor(
      */
     val restrained: List<Seat>,
     val cooldownArmed: List<Seat>,
+    /**
+     * **Every Insider ability's cooldown, already running when the round opens** (D-132).
+     *
+     * Each begins at **half** its normal duration, so the round opens with a guaranteed stretch of
+     * peace — which closes the opening-Revoke problem structurally rather than by asking players
+     * not to, and replaces F-004's *no initial cooldowns at arming* gap with a positive rule.
+     *
+     * A List in seat order, like everything else here, and drawn for **every** seat rather than
+     * only for the Insiders. A list whose membership was the Insider list would be the Insider
+     * list, and state that answers *is this seat an Insider* twice is state with two chances to be
+     * read once.
+     */
+    val cooldowns: List<Cooldown>,
     val systemIntegrity: Int,
     /**
      * **What each seat currently has open, and what the house will grade it against** (D-109).
@@ -54,10 +67,37 @@ class GameState private constructor(
      * graded in hash order emit their verdicts in hash order, and a recording that does not replay
      * is the only debugging instrument this game has, broken.
      *
-     * **One row per seat, and the row is the spine L3 fills in.** See [OpenSubroutine] for what is
-     * provisional about it. Nothing outside the rules ever reads this: it carries the answer.
+     * **One row per seat, and the row is one line of that seat's [WorkOrder].** Nothing outside
+     * the rules ever reads this: it carries the answer.
+     *
+     * A seat with no row has nothing open — the fail-closed direction, and the state a scan that
+     * found nothing leaves behind (D-124).
      */
     val openSubroutines: List<OpenSubroutine>,
+    /**
+     * **Every seat's work order, drawn at arming, answer keys included** (D-129, D-114).
+     *
+     * One per seat and both roles: the Insider's is a fake of the same length drawn by the same
+     * rule, so nothing about an order separates the two. In seat order, for the reason every
+     * collection here is ordered.
+     */
+    val workOrders: List<WorkOrder>,
+    /**
+     * **Spares, Rack and Disposal — the Array Wipe circuit, drawn fresh every round** (D-122).
+     *
+     * Round state, and **never stored with the home**, which is the load-bearing half: a home that
+     * remembered where the Rack was would turn the circuit into a fact players learn once and
+     * keep, and by the second night in the same house there would be no circuit left to run. Three
+     * distinct ordinary markers; the host designates nothing.
+     */
+    val stations: List<MarkerId>,
+    /**
+     * **The markers this round is using. The rest sit dark** (D-123).
+     *
+     * *A registered marker is a slot the house may use, not work that must be done.* Re-drawn each
+     * round like the stations, so a home's geography stops being learnable in one evening.
+     */
+    val activeMarkers: List<MarkerId>,
     /**
      * The meeting in progress, or null. **The whole lifecycle lives in here** — see [Meeting].
      *
@@ -103,17 +143,51 @@ class GameState private constructor(
     fun openSubroutineFor(seat: Seat): OpenSubroutine? =
         openSubroutines.firstOrNull { it.seat.index == seat.index }
 
-    /**
-     * Replace one seat's open Subroutine, leaving every other row and the list's order alone.
-     *
-     * A seat with no row is left with no row rather than being given one: an assignment nobody
-     * made is work nobody can do, and inventing one here would hide a missing draw behind a scan.
-     */
-    fun withOpenSubroutine(replacement: OpenSubroutine): GameState = copy(
-        openSubroutines = openSubroutines.map {
+    /** This seat's work order, or null for a seat that was never drawn one. */
+    fun workOrderFor(seat: Seat): WorkOrder? =
+        workOrders.firstOrNull { it.seat.index == seat.index }
+
+    /** When this seat's [ability] is ready, or null for a seat the round never drew one for. */
+    fun cooldownFor(seat: Seat, ability: InsiderAbility): Cooldown? =
+        cooldowns.firstOrNull { it.seat.index == seat.index && it.ability == ability }
+
+    /** Replace one seat's work order, leaving every other row and the list's order alone. */
+    fun withWorkOrder(replacement: WorkOrder): GameState = copy(
+        workOrders = workOrders.map {
             if (it.seat.index == replacement.seat.index) replacement else it
         },
     )
+
+    /** Replace one cooldown, leaving every other row and the list's order alone. */
+    fun withCooldown(replacement: Cooldown): GameState = copy(
+        cooldowns = cooldowns.map {
+            val same = it.seat.index == replacement.seat.index && it.ability == replacement.ability
+            if (same) replacement else it
+        },
+    )
+
+    /**
+     * Open one seat's Subroutine, leaving every other row and the list's order alone.
+     *
+     * **A seat with no row gets one, appended in seat order.** That is a scan doing its job: the
+     * round is armed with nothing open, and the row is created the moment a card resolves to a
+     * line of that seat's work order (D-123). The guard against inventing work is one layer up —
+     * a scan can only open a line the order already holds — rather than here, where it would have
+     * meant a seat's first scan silently doing nothing.
+     */
+    fun withOpenSubroutine(replacement: OpenSubroutine): GameState {
+        val held = openSubroutines.any { it.seat.index == replacement.seat.index }
+        return copy(
+            openSubroutines =
+                if (held) {
+                    openSubroutines.map {
+                        if (it.seat.index == replacement.seat.index) replacement else it
+                    }
+                } else {
+                    (openSubroutines + replacement).sortedBy { it.seat.index }
+                },
+        )
+    }
 
     /** Seeded, recorded, monotonic. Never `Uuid.random()` — replay would mint different ids. */
     fun mintId(): Pair<EntityId, GameState> =
@@ -131,15 +205,20 @@ class GameState private constructor(
         newlyRevoked: List<Seat> = this.newlyRevoked,
         restrained: List<Seat> = this.restrained,
         cooldownArmed: List<Seat> = this.cooldownArmed,
+        cooldowns: List<Cooldown> = this.cooldowns,
         systemIntegrity: Int = this.systemIntegrity,
         openSubroutines: List<OpenSubroutine> = this.openSubroutines,
+        workOrders: List<WorkOrder> = this.workOrders,
+        stations: List<MarkerId> = this.stations,
+        activeMarkers: List<MarkerId> = this.activeMarkers,
         meeting: Meeting? = this.meeting,
         egressRunning: Boolean = this.egressRunning,
         nextEntity: Long = this.nextEntity,
         seed: Long = this.seed,
     ) = GameState(
         armed, ended, seats, insiderSeats, revoked, newlyRevoked, restrained, cooldownArmed,
-        systemIntegrity, openSubroutines, meeting, egressRunning, nextEntity, seed,
+        cooldowns, systemIntegrity, openSubroutines, workOrders, stations, activeMarkers,
+        meeting, egressRunning, nextEntity, seed,
     )
 
     companion object {
@@ -162,6 +241,16 @@ class GameState private constructor(
              * fail-closed direction: no seat has anything open, so every entry grades false.
              */
             openSubroutines: List<OpenSubroutine> = emptyList(),
+            /**
+             * The round's draw. Defaulted empty for the same reason [openSubroutines] is: a test
+             * that only cares about the meter should not have to invent a home to arm in, and an
+             * empty draw is the fail-closed direction — no order, so no entry grades true; no
+             * stations, so no circuit; no active markers, so nothing is lit.
+             */
+            workOrders: List<WorkOrder> = emptyList(),
+            stations: List<MarkerId> = emptyList(),
+            activeMarkers: List<MarkerId> = emptyList(),
+            cooldowns: List<Cooldown> = emptyList(),
         ) = GameState(
             armed = true,
             ended = false,
@@ -171,8 +260,12 @@ class GameState private constructor(
             newlyRevoked = emptyList(),
             restrained = emptyList(),
             cooldownArmed = emptyList(),
+            cooldowns = cooldowns,
             systemIntegrity = systemIntegrity,
             openSubroutines = openSubroutines,
+            workOrders = workOrders,
+            stations = stations,
+            activeMarkers = activeMarkers,
             meeting = null,
             egressRunning = false,
             nextEntity = 1L,
@@ -188,8 +281,12 @@ class GameState private constructor(
             newlyRevoked = emptyList(),
             restrained = emptyList(),
             cooldownArmed = emptyList(),
+            cooldowns = emptyList(),
             systemIntegrity = 0,
             openSubroutines = emptyList(),
+            workOrders = emptyList(),
+            stations = emptyList(),
+            activeMarkers = emptyList(),
             meeting = null,
             egressRunning = false,
             nextEntity = 1L,

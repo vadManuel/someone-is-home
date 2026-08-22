@@ -1,5 +1,6 @@
 package home.someoneshome.platform.transport
 
+import home.someoneshome.model.Balance
 import home.someoneshome.model.Seat
 import home.someoneshome.model.protocol.LobbyBody
 import home.someoneshome.model.protocol.LobbyWire
@@ -180,7 +181,7 @@ class LobbyDeskTest {
 
     @Test
     fun `a hand-picked count is clamped into the band`() {
-        val desk = LobbyDesk().apply { repeat(6) { seated(Seat(it)) } }
+        val desk = LobbyDesk().apply { repeat(8) { seated(Seat(it)) } }
         assertEquals(1..2, desk.band())
         desk.setInsiders(5)
         assertEquals(2, desk.insiders, "the maximum edge did not clamp the setting")
@@ -188,6 +189,37 @@ class LobbyDeskTest {
         assertEquals(1, desk.insiders, "the minimum edge did not clamp the setting")
         desk.setInsiders(null)
         assertNull(desk.insiders, "UNKNOWN was turned into a number by the clamp")
+    }
+
+    /**
+     * **D-128 — the house will not arm below five seats, however many lines are in.**
+     *
+     * The desk's gate, which is the one the house acts on: a client that decided for itself that
+     * the lobby was ready would be a phone arming a round. Written as the constant on both sides,
+     * because the number is playtest's and the property is not.
+     */
+    @Test
+    fun `the house will not arm a party below the minimum`() {
+        val short = LobbyDesk().apply {
+            repeat(Balance.MINIMUM_SEATS - 1) { seated(Seat(it)); handedOver(Seat(it), "a line") }
+        }
+        assertTrue(short.everyLineIn(), "the fixture did not put every line in")
+        assertFalse(short.readyToArm(), "a party one short of the minimum armed a round")
+
+        val enough = LobbyDesk().apply {
+            repeat(Balance.MINIMUM_SEATS) { seated(Seat(it)); handedOver(Seat(it), "a line") }
+        }
+        assertTrue(enough.readyToArm(), "the minimum party could not arm")
+    }
+
+    /** Enough people is not enough on its own: the second condition still has to close. */
+    @Test
+    fun `a full party one line short cannot arm`() {
+        val desk = LobbyDesk().apply { repeat(6) { seated(Seat(it)) } }
+        repeat(5) { desk.handedOver(Seat(it), "a line") }
+        assertFalse(desk.readyToArm(), "five of six lines was enough to arm")
+        desk.handedOver(Seat(5), "a line")
+        assertTrue(desk.readyToArm())
     }
 
     /**

@@ -1,8 +1,10 @@
 package home.someoneshome.harness
 
-import home.someoneshome.core.reduce
+import home.someoneshome.core.Admission
+import home.someoneshome.core.admit
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
+import home.someoneshome.model.InsiderAbility
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.Seat
@@ -16,6 +18,15 @@ import home.someoneshome.model.Tick
  */
 internal val SEATS = (0 until 8).map { Seat(it) }
 internal val INSIDERS = listOf(Seat(1), Seat(5))
+
+/** The home the fixture round is played in. Eight ordinary markers is D-127's floor. */
+internal val MARKERS = (0 until 8).map { MarkerId("m$it") }
+
+/**
+ * How far the clock moves between passes. Wider than half a Revoke cooldown, deliberately — see
+ * where it is used.
+ */
+private const val ROUND_STRIDE = 40L
 
 /**
  * A round with every event kind in it, long enough that ordering mistakes have room to show.
@@ -37,40 +48,81 @@ internal val INSIDERS = listOf(Seat(1), Seat(5))
  * then unambiguously the grading having noticed who was asking.
  */
 internal fun round(insiders: List<Seat> = INSIDERS): List<Event> {
-    val arming = Event.RoundArmed(Tick(0), seed = 20260818L, seats = SEATS, insiders = insiders)
-    val opening = reduce(GameState.EMPTY, arming).state
+    val arming = Event.RoundArmed(
+        Tick(0), seed = 20260818L, seats = SEATS, insiders = insiders, markers = MARKERS,
+    )
+    // **The round is walked forward as it is built.** Each seat's next piece of work depends on
+    // what it has already completed, and an Insider's Revoke depends on a cooldown that started at
+    // arming (D-132) — neither is knowable from the opening state alone. A fixture that read both
+    // off the arming would scan the same card forty times, bank once per seat, and quietly stop
+    // exercising the order it was written to walk.
+    //
+    // Through the gate rather than through the rules, for the harness's own reason: half the
+    // meeting's rules are refusals, and a fixture built against a path no client can reach would
+    // record events the real driver then declines.
+    var state = GameState.EMPTY
+    fun walk(event: Event): Event {
+        (admit(state, event) as? Admission.Admitted)?.let { state = it.reduction.state }
+        return event
+    }
     return buildList {
-        add(arming)
+        add(walk(arming))
         var t = 1L
         repeat(40) { i ->
+            // **Each pass starts a stride further on, and the stride is wider than an opening
+            // cooldown** (D-132). At one tick per event the whole fixture round finished inside
+            // the guaranteed stretch of peace the round now opens with, so not one Revoke armed,
+            // nobody was ever revoked, and every property that rests on somebody being out held
+            // over a round in which the rule under test never fired.
+            t = maxOf(t, i.toLong() * ROUND_STRIDE)
             val seat = SEATS[i % SEATS.size]
-            val marker = MarkerId("m${i % 7}")
-            add(Event.MarkerScanned(Tick(t++), seat, marker))
+            // The next piece of work the house will actually open for this seat, read off the draw
+            // rather than typed in. A fixture that named a card would be asserting against its own
+            // idea of where the work is, and would keep agreeing after the draw moved.
+            val order = state.workOrderFor(seat)
+            val entry = order?.entries?.firstOrNull { order.isActionable(it) }
+            val marker = entry?.marker ?: MARKERS[i % MARKERS.size]
+            add(walk(Event.MarkerScanned(Tick(t++), seat, marker)))
             add(
-                Event.SubroutineReturned(
-                    Tick(t++), seat, marker,
-                    opening.openSubroutineFor(seat)?.expected ?: emptyList(),
+                walk(
+                    Event.SubroutineReturned(
+                        Tick(t++), seat, marker, entry?.expected ?: emptyList(),
+                    )
                 )
             )
-            if (i % 9 == 0) add(Event.RevokeArmed(Tick(t++), Seat(1)))
-            if (i % 9 == 4) add(Event.ContactMade(Tick(t++), Seat(1), SEATS[(i + 3) % SEATS.size]))
+            if (i % 9 == 0) {
+                // Pushed to the moment the house says this seat is ready, so the fixture's Revokes
+                // land instead of being refused inside the opening stretch of peace.
+                val ready = state.cooldownFor(Seat(1), InsiderAbility.Revoke)?.readyAt?.step ?: 0L
+                t = maxOf(t, ready)
+                add(walk(Event.RevokeArmed(Tick(t++), Seat(1))))
+            }
+            if (i % 9 == 4) {
+                add(walk(Event.ContactMade(Tick(t++), Seat(1), SEATS[(i + 3) % SEATS.size])))
+            }
             if (i % 17 == 16) {
                 // A whole meeting, walked. It has to be whole: D-104's gate does not close a
                 // player short, so a fixture that checked in four of six would stall in CheckIn
                 // and every phase after it would be refused rather than reduced -- a fixture round
                 // that quietly stopped exercising the vote.
-                add(Event.MeetingCalled(Tick(t++), seat, MeetingTrigger.MeetingCard))
-                SEATS.forEach { v -> add(Event.MeetingCheckedIn(Tick(t++), v)) }
-                add(Event.DiscussionClosed(Tick(t++)))
+                add(walk(Event.MeetingCalled(Tick(t++), seat, MeetingTrigger.MeetingCard)))
+                SEATS.forEach { v -> add(walk(Event.MeetingCheckedIn(Tick(t++), v))) }
+                add(walk(Event.DiscussionClosed(Tick(t++))))
                 SEATS.forEach { v ->
-                    add(Event.VoteSelected(Tick(t++), v, if (v.index % 3 == 0) null else Seat(1)))
+                    add(
+                        walk(
+                            Event.VoteSelected(
+                                Tick(t++), v, if (v.index % 3 == 0) null else Seat(1),
+                            )
+                        )
+                    )
                     // Two seats never press READY, so the buzzer's auto-lock is on the fixture's
                     // path rather than only on the fuzzer's.
-                    if (v.index % 5 != 4) add(Event.VoteLocked(Tick(t++), v))
+                    if (v.index % 5 != 4) add(walk(Event.VoteLocked(Tick(t++), v)))
                 }
-                add(Event.VoteWindowClosed(Tick(t++)))
-                add(Event.TallyHalfwayReached(Tick(t++)))
-                add(Event.MeetingClosed(Tick(t++)))
+                add(walk(Event.VoteWindowClosed(Tick(t++))))
+                add(walk(Event.TallyHalfwayReached(Tick(t++))))
+                add(walk(Event.MeetingClosed(Tick(t++))))
             }
         }
     }

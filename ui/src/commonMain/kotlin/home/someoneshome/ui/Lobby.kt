@@ -1,5 +1,6 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.Balance
 import home.someoneshome.model.InsiderBand
 import home.someoneshome.model.protocol.LobbyBody
 
@@ -451,14 +452,41 @@ class LobbyModel(
     }
 
     /**
-     * **Whether LIGHTS OUT may be offered: everybody here, everybody's line in.**
+     * **Whether LIGHTS OUT may be offered: enough people, and everybody's line in.**
      *
-     * An empty lobby is not ready — "0 of 0" is true in arithmetic and false in every other
-     * sense — and this is read off the house's counts rather than off anything this phone
-     * decided. The transition it gates is presentation only for now; see [PanelActions.lightsOut].
+     * Two conditions, and they fail differently on purpose — see [waitingFor], which is what the
+     * screen says while one of them is open. Both are read off the house's counts rather than off
+     * anything this phone decided.
+     *
+     * **The party floor is a gate rather than guidance**, which is the one place this screen
+     * departs from D-125's *guide, don't gate*. The sorting rule is what makes it lawful: clamp
+     * what players cannot perceive, guide what they can. A host can see how many people are
+     * standing in their hall — that is why HOSTS UP TO N never blocks — but *this party is too
+     * small for the vote to mean anything* (D-128) is a balance consequence nobody in the hall can
+     * check, and it is the same kind of fact as the Insider band.
+     *
+     * An empty lobby is not ready twice over: "0 of 0" is true in arithmetic and false in every
+     * other sense, and zero is below the floor anyway.
      */
-    val everyLineIn: Boolean
-        get() = standing.joined > 0 && standing.linesIn == standing.joined
+    val readyToArm: Boolean
+        get() = enoughSeated && standing.joined > 0 && standing.linesIn == standing.joined
+
+    /** D-128's floor, read off the house's own count of who is seated. */
+    val enoughSeated: Boolean get() = standing.joined >= Balance.MINIMUM_SEATS
+
+    /**
+     * **What the screen says while the gate is open**, or null once it is closed.
+     *
+     * The party floor is named first, because it is the one a host can do something about that
+     * does not involve waiting for somebody else to finish typing — and because a lobby three
+     * people short that said WAITING FOR EVERYONE'S LINE would send the host looking for a phone
+     * that is not the problem.
+     */
+    fun waitingFor(): String? = when {
+        !enoughSeated -> "NEEDS ${Balance.MINIMUM_SEATS} RESIDENTS"
+        standing.linesIn < standing.joined -> "WAITING FOR EVERYONE'S LINE"
+        else -> null
+    }
 
     /** **Deleted when the round ends.** */
     fun roundEnded() {

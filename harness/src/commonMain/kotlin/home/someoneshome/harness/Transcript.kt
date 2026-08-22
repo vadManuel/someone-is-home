@@ -4,6 +4,7 @@ import home.someoneshome.model.Effect
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
 import home.someoneshome.model.MeetingTrigger
+import home.someoneshome.model.OrderLine
 import home.someoneshome.model.RefusalReason
 import home.someoneshome.model.Seat
 
@@ -26,7 +27,12 @@ object Transcript {
         is Event.RoundArmed ->
             row("RoundArmed", event.at, "seed" to num(event.seed),
                 "seats" to event.seats.joinToString(",") { num(it.index) },
-                "insiders" to event.insiders.joinToString(",") { num(it.index) })
+                // Both Insider numbers, because they are two different facts and a recording that
+                // held only the draw could not tell a round the host set from one the house chose.
+                // `chosen` is the public setting; `insiders` is what was drawn behind it (D-103).
+                "insiders" to event.insiders.joinToString(",") { num(it.index) },
+                "chosen" to (event.chosenInsiders?.let { num(it) } ?: "none"),
+                "markers" to event.markers.joinToString(",") { text(it.value) })
         is Event.MarkerScanned ->
             row("MarkerScanned", event.at, "actor" to num(event.actor.index), "marker" to text(event.marker.value))
         is Event.SubroutineReturned ->
@@ -94,6 +100,21 @@ object Transcript {
             "SubroutineProgressed|remaining=${effect.remaining}"
         is Effect.MessageDelivered ->
             "MessageDelivered|seat=${effect.seat.index}|body=${text(effect.body)}"
+        // The lines as the seat receives them, blocked ones as `?`. A blocked line renders with no
+        // name because it HAS no name to render -- OrderLine.Blocked cannot carry one -- so the
+        // transcript is as narrow here as the wire is, and a leak could not hide in the recording's
+        // own formatting.
+        is Effect.WorkOrderIssued ->
+            "WorkOrderIssued|seat=${effect.seat.index}|lines=" +
+                effect.lines.joinToString(",") { line ->
+                    when (line) {
+                        is OrderLine.Known ->
+                            "${line.index}:${line.subroutine}${if (line.done) "!" else ""}"
+                        is OrderLine.Blocked -> "${line.index}:?"
+                    }
+                }
+        is Effect.OpeningMessage ->
+            "OpeningMessage|seat=${effect.seat.index}|haptic=${effect.haptic}"
         is Effect.MeetingOpened ->
             "MeetingOpened|caller=${effect.caller.index}|trigger=${trigger(effect.trigger)}" +
                 "|haptic=${effect.haptic}"
@@ -155,8 +176,15 @@ object Transcript {
      */
     private fun seatOrNone(seat: Seat?): String = seat?.let { num(it.index) } ?: "none"
 
-    /** Field separators must not survive inside a value, or a body could forge a row. */
-    private fun escape(s: String): String = s.replace("\\", "\\\\").replace("|", "\\p").replace("\n", "\\n")
+    /**
+     * Field separators must not survive inside a value, or a body could forge a row.
+     *
+     * **The comma is in here because lists are comma-joined**, and a marker id is external input
+     * read off a card in somebody's house. One containing a comma would have forged a second
+     * element in the arming event's marker list — the same fault the pipe had, one separator down.
+     */
+    private fun escape(s: String): String = s
+        .replace("\\", "\\\\").replace("|", "\\p").replace(",", "\\c").replace("\n", "\\n")
 
     /**
      * A canonical rendering of authority STATE.
@@ -187,6 +215,13 @@ object Transcript {
         append("|newlyRevoked=").append(state.newlyRevoked.joinToString(",") { num(it.index) })
         append("|restrained=").append(state.restrained.joinToString(",") { num(it.index) })
         append("|armedRevoke=").append(state.cooldownArmed.joinToString(",") { num(it.index) })
+        // Every Insider cooldown, as the tick it is ready at (D-132). A remaining count would be a
+        // fact about the moment somebody asked; a tick is a fact about the round, and it replays.
+        append("|cooldowns=").append(
+            state.cooldowns.joinToString(",") {
+                "${num(it.seat.index)}:${it.ability}:${num(it.readyAt.step)}"
+            }
+        )
         append("|egress=").append(state.egressRunning)
         append("|integrity=").append(num(state.systemIntegrity))
         // The work order, ANSWER KEY INCLUDED. A state row is authority-side debugging and holds
@@ -195,10 +230,28 @@ object Transcript {
         // from outside the guarantee, which is the `ended` omission again in a new costume.
         append("|open=").append(
             state.openSubroutines.joinToString(",") { open ->
-                "${num(open.seat.index)}:${open.armedAt?.let { text(it.value) } ?: "none"}" +
+                "${num(open.seat.index)}:${num(open.entry)}" +
+                    ":${open.armedAt?.let { text(it.value) } ?: "none"}" +
                     ":${open.expected.joinToString(".") { num(it) }}"
             }
         )
+        // **The round's draw, in full — orders with their answer keys, the stations and the lit
+        // markers.** Same argument the work order's `expected` was added under: a state row that
+        // stopped short of what a verdict is computed from would leave the one thing that decides
+        // an outcome outside the replay guarantee. Recordings hold complete authority state, are
+        // gitignored, and are never handed to a player.
+        append("|orders=").append(
+            state.workOrders.joinToString(",") { order ->
+                "${num(order.seat.index)}:" + order.entries.joinToString(".") { entry ->
+                    "${num(entry.index)}/${entry.subroutine}/${text(entry.marker.value)}" +
+                        "/${entry.expected.joinToString("-") { num(it) }}" +
+                        "/${entry.blockedBy.joinToString("-") { num(it) }}" +
+                        "/${if (entry.done) "done" else "open"}"
+                }
+            }
+        )
+        append("|stations=").append(state.stations.joinToString(",") { text(it.value) })
+        append("|active=").append(state.activeMarkers.joinToString(",") { text(it.value) })
         // **The meeting, ballots and all.** Live selections are the one thing at a meeting that
         // only a player outside the system may read (D-075), which is exactly why they belong in
         // an authority-side state row: a recording that stopped short of them could not tell a

@@ -1,10 +1,13 @@
 package home.someoneshome.core
 
+import home.someoneshome.model.Balance
 import home.someoneshome.model.Ballot
+import home.someoneshome.model.Cooldown
 import home.someoneshome.model.Effect
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
 import home.someoneshome.model.Haptic
+import home.someoneshome.model.InsiderAbility
 import home.someoneshome.model.Meeting
 import home.someoneshome.model.MeetingPhase
 import home.someoneshome.model.OpenSubroutine
@@ -25,50 +28,32 @@ import home.someoneshome.model.tallyOf
  */
 fun reduce(state: GameState, event: Event): Reduction<GameState, Effect> = when (event) {
 
-    // Arming CONSTRUCTS the round rather than copying whatever was there. Carrying `revoked` or
-    // `cooldownArmed` across an arming means a round can begin with a player already revoked and
-    // nothing announcing it — and it is what let a recording replay from a different starting
-    // state and still be certified identical.
-    is Event.RoundArmed -> {
-        val seats = event.seats.sortedBy { it.index }
-        val insiders = seats.filter { s -> event.insiders.any { it.index == s.index } }
-        Reduction(
-        GameState.armedRound(
-            seed = event.seed,
-            seats = seats,
-            insiders = insiders,
-            // D-130: the total scales with SEATS, and the coefficient is playtest's.
-            systemIntegrity = seats.size * METER_PER_SEAT,
-            openSubroutines = seats.map { seat ->
-                OpenSubroutine(seat, expected = openingEntry(event.seed, seat), armedAt = null)
-            },
-        ),
-        // Every seat is lit identically at arming. Any per-role difference here would be a tell
-        // delivered at the exact moment everyone is still standing together.
-        seats.map { Effect.LampSet(it, LAMP_DIM) },
-    )
-    }
+    is Event.RoundArmed -> armed(event)
 
-    is Event.RevokeArmed -> Reduction(
-        state.copy(cooldownArmed = (state.cooldownArmed + event.actor).sortedBy { it.index }),
-        // Silent and invisible: arming changes nothing on any screen. The effect exists so the
-        // recording holds the fact, not so a client renders it.
-        emptyList(),
-    )
+    is Event.RevokeArmed -> revokeArmed(state, event)
 
     is Event.ContactMade -> contact(state, event)
 
     is Event.SubroutineReturned -> returned(state, event)
 
-    // A scan arms whatever that seat has open, and emits nothing to anybody (D-110).
+    // A scan resolves (seat, card) to THAT PLAYER'S current Subroutine and arms it, emitting
+    // nothing to anybody (D-110, D-123).
     //
     // Deliberately silent in BOTH outcomes. A scan that found work and a scan that found none
     // must be indistinguishable from outside this branch, because "the house has nothing for you
     // at this card" is a sentence the client composes from the absence of work rather than a
     // thing the rules announce -- D-124's NOTHING FOR YOU HERE, held one layer below the copy.
+    //
+    // The first ACTIONABLE entry at that card, which is what walks a self-chain: an order deeper
+    // than the active set visits some cards twice, and the second visit is blocked by the first
+    // until the first is done (D-123's blocked-by-your-own-work).
     is Event.MarkerScanned -> Reduction(
-        state.openSubroutineFor(event.actor)
-            ?.let { state.withOpenSubroutine(it.armedAt(event.marker)) }
+        state.workOrderFor(event.actor)?.openAt(event.marker)
+            ?.let {
+                state.withOpenSubroutine(
+                    OpenSubroutine(event.actor, it.index, it.expected, event.marker),
+                )
+            }
             ?: state,
         emptyList(),
     )
@@ -81,6 +66,102 @@ fun reduce(state: GameState, event: Event): Reduction<GameState, Effect> = when 
     is Event.VoteWindowClosed -> withMeeting(state) { readTheBallot(state, it) }
     is Event.TallyHalfwayReached -> withMeeting(state) { takeover(state, it) }
     is Event.MeetingClosed -> withMeeting(state) { lightsOut(state) }
+}
+
+/**
+ * **LIGHTS OUT — the round is constructed here, and everything about it is drawn from one seed.**
+ *
+ * Arming CONSTRUCTS the round rather than copying whatever was there. Carrying `revoked` or
+ * `cooldownArmed` across an arming means a round can begin with a player already revoked and
+ * nothing announcing it — and it is what let a recording replay from a different starting state
+ * and still be certified identical.
+ *
+ * ### What the house draws, in order
+ *
+ * - **The Insider count and who holds it** arrive already drawn, on the event, clamped by D-103's
+ *   band. See `Arming.insidersFor` for why that one draw sits above the rules.
+ * - **The three stations** — Spares, Rack, Disposal — from the ordinary registered markers, every
+ *   round, held as round state and never stored with the home (D-122).
+ * - **The active marker set**, sized to seats. Everything else sits dark this round (D-123).
+ * - **Every seat's work order**, `Balance.orderSize` entries long — the same length for every seat
+ *   and both roles, computed from **public lobby facts alone** so that order length cannot divide
+ *   out the count D-103 hides (D-129).
+ * - **Every Insider cooldown, already running at half** its normal duration, so the round opens
+ *   with a guaranteed stretch of peace (D-132).
+ *
+ * ### The effects, and why they are grouped by kind
+ *
+ * A lamp for every seat, then a work order for every seat, then the opening message for every
+ * seat. Grouped rather than interleaved per seat so that the *shape* of the arming burst is a
+ * property of the round rather than of the seat list — and so that a kind going missing for one
+ * seat is a gap in a run of identical lines rather than a subtle reordering.
+ *
+ * **Nothing here reads `Role`**, apart from recording who was drawn. The lamps are identical, the
+ * orders are drawn by a rule that never sees a role, and the opening message is the same fact sent
+ * to everybody — any per-role difference at arming would be a tell delivered at the exact moment
+ * the whole party is still standing together in the light.
+ */
+private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
+    val seats = event.seats.sortedBy { it.index }
+    val insiders = seats.filter { s -> event.insiders.any { it.index == s.index } }
+    val stations = stationsFor(event.seed, event.markers)
+    val active = activeFor(event.seed, event.markers, stations, seats.size)
+    val size = Balance.orderSize(seats.size, event.chosenInsiders)
+    val orders = seats.map { workOrderFor(event.seed, it, size, active) }
+
+    val state = GameState.armedRound(
+        seed = event.seed,
+        seats = seats,
+        insiders = insiders,
+        systemIntegrity = Balance.meterTotal(seats.size),
+        // Nothing is open until somebody scans something. The spine drew one entry per seat and
+        // left it open all round, which made the meter farmable from a single assignment; work is
+        // opened by a scan now and spent by an entry, and advancing the order is arming's job.
+        openSubroutines = emptyList(),
+        workOrders = orders,
+        stations = stations,
+        activeMarkers = active,
+        // D-132, and it is drawn for every seat rather than for the Insiders alone: a list whose
+        // membership was the Insider list would BE the Insider list.
+        cooldowns = seats.map {
+            Cooldown(it, InsiderAbility.Revoke, event.at + Balance.REVOKE_COOLDOWN / 2)
+        },
+    )
+
+    return Reduction(
+        state,
+        seats.map { Effect.LampSet(it, LAMP_DIM) } +
+            orders.map { Effect.WorkOrderIssued(it.seat, it.asLines()) } +
+            seats.map { Effect.OpeningMessage(it, Haptic.Short) },
+    )
+}
+
+/**
+ * **Armed, not fired — and it is refused while the cooldown is still running** (D-132).
+ *
+ * The cooldown starts here rather than at contact, which is what makes a botched stalk cost a full
+ * one: an Insider who arms and then cannot get close has still spent it.
+ *
+ * **Silent in both outcomes, and that is what keeps rule 1 satisfied.** Arming changes nothing on
+ * any screen and emits nothing to anybody whether or not the cooldown had run down, so the branch
+ * below is on state alone. The player's own phone knows what it pressed and when its own cooldown
+ * ends — that is input echo, not a game answer — and no other phone is told anything, because an
+ * Insider whose cooldown reached the house at large would be an Insider announced by a timer.
+ *
+ * A seat with no cooldown row has no ability to arm. That is the fail-closed direction: a round
+ * armed without cooldowns (an empty home, a hand-built state) grants nobody a Revoke rather than
+ * granting everybody one.
+ */
+private fun revokeArmed(state: GameState, event: Event.RevokeArmed): Reduction<GameState, Effect> {
+    val cooldown = state.cooldownFor(event.actor, InsiderAbility.Revoke)
+    val next = if (cooldown == null || !cooldown.readyBy(event.at)) {
+        state
+    } else {
+        state
+            .copy(cooldownArmed = (state.cooldownArmed + event.actor).sortedBy { it.index })
+            .withCooldown(cooldown.restartedAt(event.at, Balance.REVOKE_COOLDOWN))
+    }
+    return Reduction(next, emptyList())
 }
 
 /**
@@ -168,13 +249,34 @@ private fun returned(
     val remaining = (state.systemIntegrity - 1).coerceAtLeast(0)
 
     val spent = if (open == null) state else state.withOpenSubroutine(open.spent())
-    val next = if (banks) spent.copy(systemIntegrity = remaining) else spent
+    // An accepted entry marks its line of the work order done, which is what unblocks whatever was
+    // chained behind it (D-114, D-123). A rejected one leaves the line standing: D-110's re-scan
+    // is the only way back to ready, and there is no RETRY and must never be one.
+    val advanced = if (open == null || !accepted) spent else {
+        spent.workOrderFor(event.actor)
+            ?.let { spent.withWorkOrder(it.withCompleted(open.entry)) }
+            ?: spent
+    }
+    val next = if (banks) advanced.copy(systemIntegrity = remaining) else advanced
 
-    // Constructed once, outside every branch above. Deliberately not inside them.
+    // Both constructed once, outside every branch above. Deliberately not inside them.
+    //
+    // The order goes back on EVERY return, not only on the ones that changed it. Sending it only
+    // when something moved would make its presence a second verdict -- one the client could read
+    // without being told, arriving beside the real one -- which is rule 1's forbidden shape wearing
+    // an optimisation's clothes.
     val verdict = Effect.SubroutineGraded(seat = event.actor, accepted = accepted)
+    val order = Effect.WorkOrderIssued(
+        seat = event.actor,
+        lines = next.workOrderFor(event.actor)?.asLines() ?: emptyList(),
+    )
     return Reduction(
         next,
-        if (banks) listOf(verdict, Effect.SubroutineProgressed(remaining)) else listOf(verdict),
+        if (banks) {
+            listOf(verdict, order, Effect.SubroutineProgressed(remaining))
+        } else {
+            listOf(verdict, order)
+        },
     )
 }
 
@@ -497,58 +599,11 @@ private fun gateCount(state: GameState, meeting: Meeting): Effect =
     Effect.CheckInProgressed(present(state, meeting), state.seats.size)
 
 /**
- * **D-130 — the meter total scales with SEATS, and this coefficient is playtest's.**
+ * The luminance every phone is set to at arming. Identical for every seat, deliberately.
  *
- * `M = seats × METER_PER_SEAT`. The shape is the ruling; the number is not, and naming them apart
- * is the whole point of D-130 — `7 × residents` was a coefficient with the scaling already implied
- * inside it, so moving one meant re-deriving the other.
- *
- * **It retires the Resident operand, and the reason is not tidiness.** Under D-103 the Insider
- * count can be hidden — drawn at arming, locked, told to nobody — and a total of
- * `(seats − insiders) × K` *is* that count, recoverable by anyone who ever sees an absolute meter
- * value. The display rule (percentage only, never `28/42`) closes the panel; this closes the
- * arithmetic behind it.
- *
- * **Reachability now rests on D-129 rather than on this operand.** Each Resident is given
- * `K = ⌈M ÷ (seats − bandMax)⌉ + slack` Subroutines, computed from public lobby facts alone, so
- * the actual Residents can always complete at least `M`. Five per seat puts `K` at 7 for an
- * eight-seat home, which is where the old placeholder sat — deliberately, so that the number
- * moving is a decision somebody makes rather than a side effect of this change.
- *
- * **`K` itself is NOT built here.** Work-order size is drawn at arming, which is L3's, and `slack`
- * is the balance knob D-129 names. See the L3 boundary note in the worklog.
- *
- * F-005's other half is still not built: orphaned Subroutines — from a revoked player or a
- * collapsed chain — are meant to be silently auto-satisfied so the bar stays winnable.
+ * F-005's other half is still not built: orphaned Subroutines — from a revoked player, or from a
+ * chain whose blocker can no longer be completed — are meant to be silently auto-satisfied so the
+ * bar stays winnable. The meter's own arithmetic lives in [Balance] now, where the lobby and the
+ * reachability tests can read the same numbers the rules do.
  */
-private const val METER_PER_SEAT = 5
-
-/**
- * **The spine's stand-in for a drawn Subroutine, and L3 deletes it.**
- *
- * A seat's opening entry, derived from the round seed and the seat index — seeded and recorded,
- * never `Uuid.random()` (rule 4), so a round replays to the same questions and therefore to the
- * same verdicts.
- *
- * **It does not read `Role`, and that is load-bearing rather than incidental.** An Insider's fake
- * is drawn by the same rule and sized by the same rule (D-129 — order length is role-independent
- * on both axes), so the differential harness swapping two seats changes not one question asked of
- * anybody. A derivation that took the role would put the answer key itself on the role axis.
- *
- * Two elements over four values is a fixture, not a difficulty: the real questions are the six
- * built Subroutines' own shapes — a returned rhythm, a chosen cell, a finger count, a signed
- * offset, a walked route — and the roster that says which one a card holds is L3's.
- */
-private fun openingEntry(seed: Long, seat: Seat): List<Int> {
-    var x = seed + seat.index.toLong() * SEAT_STRIDE
-    return List(SPINE_ENTRY_LENGTH) {
-        x = x * 6364136223846793005L + 1442695040888963407L
-        ((x ushr 33) % SPINE_ENTRY_VALUES).toInt()
-    }
-}
-
-private const val SPINE_ENTRY_LENGTH = 2
-private const val SPINE_ENTRY_VALUES = 4L
-private const val SEAT_STRIDE = -0x61c8864680b583ebL
-
 private const val LAMP_DIM = 1
