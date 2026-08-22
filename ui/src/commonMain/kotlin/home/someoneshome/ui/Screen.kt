@@ -175,7 +175,7 @@ fun Screen(
                 ScreenId.Disconnect -> DisconnectScreen()
                 ScreenId.Settings -> SettingsScreen()
                 ScreenId.WinInsiders -> WinInsidersScreen(vals)
-                ScreenId.WinResidents -> WinResidentsScreen()
+                ScreenId.WinResidents -> WinResidentsScreen(vals)
             }
         }
     }

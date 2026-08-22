@@ -32,7 +32,22 @@ object Transcript {
                 // `chosen` is the public setting; `insiders` is what was drawn behind it (D-103).
                 "insiders" to event.insiders.joinToString(",") { num(it.index) },
                 "chosen" to (event.chosenInsiders?.let { num(it) } ?: "none"),
-                "markers" to event.markers.joinToString(",") { text(it.value) })
+                "markers" to event.markers.joinToString(",") { text(it.value) },
+                // **The seats that handed a line over, and NOT what any of them said** (D-116).
+                //
+                // The only recorded input this file deliberately refuses to record. A one line is
+                // typed on the strength of two promises -- seen by the house only, deleted when
+                // the round ends -- and a recording is the one artefact of this game that outlives
+                // the evening. Rendering the text here would keep every player's confession in a
+                // debugging file, forever, on the host's phone, in a game whose whole premise is
+                // that the house is the only thing that ever sees it.
+                //
+                // **Replay is exact anyway**, which is what makes this affordable rather than a
+                // trade. The parser rebuilds blank lines for these seats; the only effect that
+                // ever reads one renders as seats alone (see Effect.InsidersRevealed below); so
+                // every row a replay produces is byte-identical to the row it is compared against,
+                // and the round is reproduced without the words.
+                "lines" to event.oneLines.joinToString(",") { num(it.seat.index) })
         is Event.MarkerScanned ->
             row("MarkerScanned", event.at, "actor" to num(event.actor.index), "marker" to text(event.marker.value))
         is Event.SubroutineReturned ->
@@ -193,6 +208,25 @@ object Transcript {
             "EgressContained|haptic=${effect.haptic}"
         is Effect.EgressSucceeded ->
             "EgressSucceeded|haptic=${effect.haptic}"
+        is Effect.RoundEnded ->
+            "RoundEnded|seat=${effect.seat.index}|winner=${effect.winner}|by=${effect.by}" +
+                "|haptic=${effect.haptic}"
+        // **The seats, and not one word of what was held over any of them** (D-116).
+        //
+        // The names are the seats and they belong in a recording -- who was drawn is the single
+        // most useful thing an authority-side artefact can tell you about a round that went wrong.
+        // The LINES do not, for the reason the arming row above gives at length: a recording
+        // outlives the evening and the promise printed on the screen where a line was typed does
+        // not survive being written into one.
+        //
+        // This is also the hinge that keeps replay exact. Rendering seats alone means the row a
+        // replayed round produces is identical whether the lines were rebuilt as blanks or never
+        // supplied at all -- so the recording is narrower than the wire here, on purpose, and it
+        // is the only effect in this file of which that is true.
+        is Effect.InsidersRevealed ->
+            "InsidersRevealed|seats=" + effect.insiders.joinToString(",") { num(it.seat.index) }
+        is Effect.HouseSignedOff ->
+            "HouseSignedOff|seat=${effect.seat.index}|body=${text(effect.body)}"
     }
 
     /**
@@ -256,7 +290,12 @@ object Transcript {
      */
     fun render(state: GameState): String = buildString {
         append("armed=").append(state.armed)
-        append("|ended=").append(state.ended)
+        // **`ended` and the reason, as one field.** It used to be a bare boolean with no writer,
+        // and it was the worst possible omission when it was omitted -- it feeds `roundStateOf`,
+        // so it decides what every client is permitted to receive. It is derived from `outcome`
+        // now, so the row prints the outcome and a replay that ended a round the right way for the
+        // wrong reason no longer matches.
+        append("|ended=").append(state.outcome?.let { "${it.winner}:${it.by}" } ?: "none")
         append("|seats=").append(state.seats.joinToString(",") { num(it.index) })
         append("|insiders=").append(state.insiderSeats.joinToString(",") { num(it.index) })
         append("|revoked=").append(state.revoked.joinToString(",") { num(it.index) })
@@ -352,6 +391,11 @@ object Transcript {
                 }}" +
                 ":pending=${seatOrNone(meeting.restrainPending)}"
         } ?: "none")
+        // **The seats whose line the house is holding, and never the text** (D-116). The arming
+        // row's argument, applied to the state it produced — and this is the field that goes to
+        // EMPTY the instant the round ends, so a replay that skipped the deletion stops matching
+        // here rather than nowhere.
+        append("|lines=").append(state.oneLines.joinToString(",") { num(it.seat.index) })
         append("|nextEntity=").append(num(state.nextEntity))
         append("|seed=").append(num(state.seed))
     }

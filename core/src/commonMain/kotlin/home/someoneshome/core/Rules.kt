@@ -9,13 +9,17 @@ import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
 import home.someoneshome.model.Haptic
 import home.someoneshome.model.InsiderAbility
+import home.someoneshome.model.InsiderNamed
 import home.someoneshome.model.Meeting
 import home.someoneshome.model.MeetingPhase
+import home.someoneshome.model.Outcome
 import home.someoneshome.model.Presence
 import home.someoneshome.model.PulseOffer
 import home.someoneshome.model.Role
 import home.someoneshome.model.Seat
 import home.someoneshome.model.SubroutineInstance
+import home.someoneshome.model.WinRoute
+import home.someoneshome.model.Winner
 import home.someoneshome.model.tallyOf
 
 /**
@@ -29,7 +33,10 @@ import home.someoneshome.model.tallyOf
  * byte-identically from its recording, and lets the rules be exercised headless in milliseconds
  * instead of with eight phones in a dark room once a month.
  */
-fun reduce(state: GameState, event: Event): Reduction<GameState, Effect> = when (event) {
+fun reduce(state: GameState, event: Event): Reduction<GameState, Effect> =
+    ending(event, dispatch(state, event))
+
+private fun dispatch(state: GameState, event: Event): Reduction<GameState, Effect> = when (event) {
 
     is Event.RoundArmed -> armed(event)
 
@@ -56,6 +63,182 @@ fun reduce(state: GameState, event: Event): Reduction<GameState, Effect> = when 
     is Event.EgressFired -> egressFired(state, event)
     is Event.SyncPulseReturned -> pulseReturned(state, event)
     is Event.EgressExpired -> withEgress(state) { egressExpired(state) }
+}
+
+// =================================================================================================
+// The ending.
+//
+// One wrapper around every handler above, rather than a check inside four of them. The round can
+// end on a Subroutine returning, on a takeover at a meeting, on a Sync Pulse pairing and on a
+// countdown reaching zero — and it will one day be able to end on something nobody has written
+// yet. A check written into each of those is a check the fifth one is missing, and the symptom of
+// missing it is a round that carries on after it is over, in a dark house, with nobody able to say
+// so out loud.
+// =================================================================================================
+
+/**
+ * **Did that end the round — and if it did, say so to everybody.**
+ *
+ * ### Why this is a wrapper and not a branch in four handlers
+ *
+ * See the block above. The stronger half of the argument is that the wrapper cannot be forgotten:
+ * a new handler is inside it the moment it is added to [dispatch], and a new **win route** is one
+ * clause in [outcomeOf] rather than an edit to whichever handlers happen to reach it.
+ *
+ * ### Rule 1, and why an early return is allowed to live here
+ *
+ * `?: return base` is rule 1's forbidden shape, so it is worth being explicit about why this is
+ * not an instance of it. **The branch is on the single most public fact in the game.** A round
+ * that ended takes over every screen in the house, at the same moment, with the lights coming on;
+ * a round that did not end emits nothing here and every phone carries on exactly as it was. There
+ * is no audience for whom the absence of these effects is news — the presence of them is what is
+ * news, to everybody at once. This is [takeover]'s exception in a wider form: a branch on
+ * something the room already knows.
+ *
+ * ### The effects are built from the state BEFORE `endRound`, deliberately
+ *
+ * `GameState.endRound` empties the one-line desk, and [endingEffects] is the last thing in the
+ * app entitled to read it. Building from `base.state` and applying the wipe to the result puts
+ * D-116's deletion exactly one instruction after the final read, which is what *deleted when the
+ * round ends* means when the publish **is** the round ending.
+ */
+private fun ending(
+    event: Event,
+    base: Reduction<GameState, Effect>,
+): Reduction<GameState, Effect> {
+    val outcome = outcomeOf(base.state, event) ?: return base
+    return Reduction(
+        base.state.endRound(outcome),
+        base.effects + endingEffects(base.state, outcome),
+    )
+}
+
+/**
+ * **D-131's four routes, in one place, in the order they are checked.**
+ *
+ * ```
+ * (a) SystemIntegrity reaches 0                     Residents, immediately
+ * (b) no Insider is left in the round               Residents — unless an Egress is running
+ * (c) living plain Residents <= living Insiders     Insiders  — the vote veto made formal
+ * (d) an Egress ran its clock out                   Insiders  — outright
+ * ```
+ *
+ * ### (a) is the one exception to the frozen meter
+ *
+ * The meter is batched and frozen between meetings (`gdd.md:1002`) and this does not wait for one:
+ * *Residents win immediately — no meeting required.* A group that finished the work and then stood
+ * in a dark house for six minutes waiting to be told so has been robbed of the moment they earned.
+ *
+ * ### (b) is written as *nobody left*, and it is checked before (c)
+ *
+ * D-131 says *Restraining every Insider*; the check counts **living** Insiders, because
+ * `gdd.md:213` says it does and because the two are the same set — a Revoke needs a living Insider
+ * to fire it and cannot be spent on its own seat, so Revokes alone can never take the last one off
+ * the board. Before (c) because with no Insiders left parity reads `plainResidents <= 0`, which is
+ * only true in a round where nobody is left at all; checking it second would let a degenerate
+ * state answer with the wrong winner.
+ *
+ * **`insiderSeats.isNotEmpty()` is a guard against arithmetic, not against a game.** A round drawn
+ * with no Insider at all is not a round the Residents have won, it is a round nobody armed
+ * properly — `InsiderBand` makes it unreachable in play, and the clause is here so that a state
+ * built by hand to exercise something else cannot end itself before the rule under test runs.
+ *
+ * ### (b) yields to a running Egress, which is the whole of D-131's exception
+ *
+ * *A running Egress outlives its Insiders and must still be stopped.* The house does not stop what
+ * it was told to start, so Restraining the last Insider during one does not end the round: the
+ * clause simply does not fire, the round continues, and the Egress decides it — containment clears
+ * the flag and this route fires on the very next transition, expiry takes (d).
+ *
+ * ### (d) is a fact and not a predicate, which is why this function reads the event
+ *
+ * Once the Egress is cleared there is nothing left in [GameState] that can tell an expiry from a
+ * containment, and giving the state a second field to remember it by would be a flag beside
+ * `egress` that a build could de-synchronise. The gate has already refused [Event.EgressExpired]
+ * unless an Egress was actually running and unpaused, so by the time it is seen here the fact is
+ * established. **It is checked first**, ahead of the meter and ahead of parity: an Egress that ran
+ * out is over before anything else is counted.
+ */
+internal fun outcomeOf(state: GameState, event: Event): Outcome? = when {
+    // A round that is already over cannot end twice, and a round that never started cannot end at
+    // all. Neither is reachable through the admission gate -- it refuses both -- but `reduce` is
+    // callable directly and this function is the one place the answer should live.
+    state.ended || !state.armed -> null
+
+    event is Event.EgressExpired -> Outcome(Winner.Insiders, WinRoute.EgressUncontained)
+
+    state.systemIntegrity == 0 -> Outcome(Winner.Residents, WinRoute.SystemIntegrityCleared)
+
+    state.insiderSeats.isNotEmpty() && state.livingInsiders.isEmpty() && !state.egressRunning ->
+        Outcome(Winner.Residents, WinRoute.InsidersRestrained)
+
+    state.livingPlainResidents.size <= state.livingInsiders.size ->
+        Outcome(Winner.Insiders, WinRoute.Parity)
+
+    else -> null
+}
+
+/**
+ * **The reveal, in the order the design puts it in** (`gdd.md:1051`).
+ *
+ * *The house speaks last. Lights up, and the Insiders stand. The blackmail publishes.* The room
+ * does the middle one and the app does the other two, which is why there are three effects here
+ * and not four — nothing on any screen announces that the Insiders should stand up.
+ *
+ * ### The order the effects are emitted in is not the order the room experiences
+ *
+ * The ending push goes first because it is what moves every screen; the reveal and the sign-off
+ * are content that lands on the screen it moved them to. Grouped by kind rather than interleaved
+ * per seat, exactly as arming's lamps are, so a seat going missing is a gap in a run of identical
+ * lines rather than a subtle reordering.
+ *
+ * ### The publish reads every Insider's line and no Resident's
+ *
+ * The house never uses a Resident's (D-116). A Resident's line is typed, handed over, held for the
+ * round, and dropped without ever having been read — which is what makes the promise worth
+ * anything to the people who were never picked. The list is built by mapping
+ * [GameState.insiderSeats], so a Resident's line is not filtered out of it: it was never in it.
+ *
+ * **Every Insider is named, living or not.** The reveal is about who was working for the house,
+ * and somebody Restrained at the first meeting was working for it just as much as the two who were
+ * still walking around at the end. `insiderSeats` is the draw and not the survivors, deliberately.
+ *
+ * ### One haptic, on the push, and nothing else here buzzes
+ *
+ * D-156: the underlying message count never drives the buzz count. The house has three things to
+ * say and the room feels one of them.
+ */
+private fun endingEffects(state: GameState, outcome: Outcome): List<Effect> {
+    val revealed = Effect.InsidersRevealed(
+        state.insiderSeats.sortedBy { it.index }.map {
+            InsiderNamed(seat = it, line = state.lineOf(it).orEmpty())
+        },
+    )
+    return state.seats.map {
+        Effect.RoundEnded(
+            seat = it,
+            winner = outcome.winner,
+            by = outcome.by,
+            // D-135's set is closed at five and this is not one of them. See Effect.RoundEnded.
+            haptic = Haptic.Short,
+        )
+    } + revealed + state.insiderSeats.sortedBy { it.index }.map {
+        Effect.HouseSignedOff(seat = it, body = signOff(outcome.winner))
+    }
+}
+
+/**
+ * **The house's last words, and there are exactly two of them** (`gdd.md:1051`).
+ *
+ * The register is the one it used all evening: polite, incurious, and entirely unbothered by what
+ * just happened to the people it was talking to. *Unfortunate* is the whole of what it has to say
+ * about losing, and the flatness is the joke.
+ *
+ * On [Winner] rather than on [WinRoute], because the house does not care how.
+ */
+private fun signOff(winner: Winner): String = when (winner) {
+    Winner.Insiders -> "Thank you for your cooperation."
+    Winner.Residents -> "Unfortunate."
 }
 
 /**
@@ -119,6 +302,10 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
         // D-132 again, and it is ONE value rather than a row per seat because the Egress cooldown
         // is house-wide -- *shared with the other Insider*. See GameState.egressReadyAt.
         egressReadyAt = event.at + Balance.EGRESS_COOLDOWN / 2,
+        // The house takes custody of the lines here and gives them back once, at the ending, and
+        // only the Insiders' (D-116). Carried across arming rather than drawn, because they are
+        // the one thing in the round a player wrote themselves.
+        oneLines = event.oneLines,
     )
 
     return Reduction(
@@ -920,11 +1107,11 @@ private fun pulseReturned(
  * any Insider is left in the round. Restraining the last one during an Egress does not end it: the
  * house does not stop what it was told to start.
  *
- * **The Egress is cleared and the round is NOT ended here**, which is stated rather than hidden.
- * `GameState.ended`, the win conditions as a set and the screens that follow are the ending unit's;
- * splitting them across two units would put the round's most consequential transition in two
- * places. What is guaranteed today is that the fact is emitted, recorded, and replays — and that
- * the countdown stops being on anybody's widget.
+ * **The Egress is cleared here and the round is ended one layer up**, by [ending], on
+ * `WinRoute.EgressUncontained`. That split is not tidiness: clearing the Egress is what takes the
+ * countdown off every widget in the building, and it is the reason [outcomeOf] has to read the
+ * event rather than the state — after this line there is nothing left in [GameState] that can tell
+ * an expiry from a containment.
  */
 private fun egressExpired(state: GameState): Reduction<GameState, Effect> = Reduction(
     state.copy(egress = null),

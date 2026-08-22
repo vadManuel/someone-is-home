@@ -55,6 +55,20 @@ sealed interface Event {
          * where a silent default would actually cost something.
          */
         val markers: List<MarkerId> = emptyList(),
+        /**
+         * **Every seat's one line, off the house's desk** (D-116). See [GameState.oneLines].
+         *
+         * An input like [insiders] and for the same reason — the lines are typed in the lobby, on
+         * a desk the rules have never held, and arming is the moment the house takes custody of
+         * them. Defaulted empty like [markers]: a round armed to exercise a meeting does not have
+         * to invent six confessions to hold it in.
+         *
+         * **It is the one recorded input the recording does not hold.** `Transcript` renders these
+         * as a count and never as text, and the parser rebuilds blanks — so a recording replays
+         * the same round and is physically incapable of quoting anybody. That is D-116's promise
+         * kept in the one artefact of this game that outlives the evening.
+         */
+        val oneLines: List<OneLineHeld> = emptyList(),
     ) : Event
 
     /**

@@ -393,11 +393,111 @@ sealed interface Effect {
      * *A running Egress outlives its Insiders and must still be stopped* — so this can arrive after
      * the room has Restrained every Insider it had, and it still ends the round in their favour.
      *
-     * **It ends nothing by itself, deliberately, and that is stated rather than hidden.** This
-     * effect and its event are the *fact*; the win conditions as a set, `GameState.ended`, and the
-     * screens that follow are the ending unit's, and building half of them here would put the
-     * round's most consequential transition in two places. What is guaranteed today is that the
-     * fact is emitted, recorded, and replays.
+     * **It ends nothing by itself, and it is still the reason the round ended.** The fact and the
+     * ending are two effects because they are two disclosures with two different jobs: this one
+     * says the countdown reached zero, and [RoundEnded] says the evening is over.
+     * `WinRoute.EgressUncontained` is where the two meet, and it is read off the event rather than
+     * off state — see `Rules.outcomeOf`.
+     *
+     * **It reaches no client at all, and that is deliberate** — see [EmitSchema], where its row
+     * used to be. Every emission of this sits in the same reduction that ends the round, so the
+     * old row could not have delivered it to anybody; what the house tells the room is
+     * [RoundEnded], once, with one buzz. This is what it tells the recording.
      */
     data class EgressSucceeded(val haptic: Haptic) : Effect
+
+    // ---- The ending ---------------------------------------------------------------------------
+    //
+    // Three kinds, and the reason there are three is the reason there are twelve for the meeting:
+    // a kind is permitted to a class in full or not at all, so two audiences told different
+    // amounts is two kinds. Everybody is told the round is over and who won; everybody is told who
+    // the Insiders were and what they were coerced with; and the house says one last thing to the
+    // people it owned, which is nobody else's message.
+    //
+    // **All three are permitted to the ENDED classes and to nothing else**, which is a stronger
+    // guarantee than any of their contents. `RoundState.Ended` is reachable only through
+    // `GameState.outcome`, and the only writer of that is the transition that emits these — so a
+    // reveal cannot be delivered before the round ends even if somebody constructs one, because
+    // there is no class alive at that moment that the allowlist would hand it to.
+
+    /**
+     * **The round is over, and this is every phone learning it at once** (D-131, D-157).
+     *
+     * Addressed per seat and emitted once per seat, exactly as [OpeningMessage] and [EgressOpened]
+     * are, and for their reason: the ending takes over every screen in the house, so the effect
+     * must reach everyone — and a broadcast *shape* is a thing a quieter message could inherit
+     * later.
+     *
+     * **[winner] and [by] are both public, without exception.** Every one of D-131's four routes is
+     * something the whole house watched happen, and the reveal on the same screen states more than
+     * either of them does. See [WinRoute], which carries the argument route by route.
+     *
+     * **[haptic] is Short, and that is a ruling rather than a default.** D-135 closes the long
+     * haptic to five events and the round ending is not one of them. It is tempting — it is the
+     * biggest moment in the round — and that is precisely the reason the set is closed: a signal
+     * that means five specific things stops meaning them the moment a sixth is added, and this
+     * one would arrive in a house where the lights are about to come on anyway.
+     */
+    data class RoundEnded(
+        val seat: Seat,
+        val winner: Winner,
+        val by: WinRoute,
+        val haptic: Haptic,
+    ) : Effect
+
+    /**
+     * **THE INSIDERS WERE — the one moment this app ever states an alignment** (`gdd.md:1063`).
+     *
+     * *Never shown: any confirmation of alignment, at any point, by any path* (`gdd.md:213`) holds
+     * everywhere before this and nowhere after it. Not on a Revoke, not at the tally, not on
+     * finding a Revoked player — and then, once, when the round is over, all of it at once.
+     *
+     * ### The blackmail publishes with the names, in one kind, on purpose
+     *
+     * *Everyone learns who **and why** — the petty, mundane thing each Insider was coerced with.*
+     * The names and the lines are one disclosure and therefore one kind: split into two, the day
+     * somebody narrowed one of them the app would name Insiders without publishing what was held
+     * over them, which is the half that makes the reveal land as a person rather than as a result.
+     *
+     * ### It is the deletion, not something before it
+     *
+     * D-116 promises the line is deleted when the round ends, and **the publish is the round
+     * ending**. `GameState.endRound` empties the desk in the same transition that builds this, so
+     * the last read of a one line and its deletion are one instruction apart.
+     *
+     * ### Only Insiders' lines are in here
+     *
+     * The house never uses a Resident's (D-116, as swept in revision 33 — *all the one-lines are
+     * real; the house never uses a Resident's*). A Resident's line is typed, handed over, held for
+     * the round and then dropped without ever being read: that is what makes the promise worth
+     * anything to the people who were never picked.
+     *
+     * Ordered by seat, like every collection the rules produce.
+     */
+    data class InsidersRevealed(val insiders: List<InsiderNamed>) : Effect
+
+    /**
+     * **The house speaks last, and only to the people it owned** (`gdd.md:1051`).
+     *
+     * *"Thank you for your cooperation"* on a Insider win; *"Unfortunate"* on a Resident win. Its
+     * only direct address of the round, in the same customer-service register it used all evening,
+     * arriving on the phones of the players it spent the evening being intimate with and on
+     * nobody else's.
+     *
+     * **Addressed to a Insider and permitted only to a Insider who is out of a round that has
+     * ended** — the narrowest row in the allowlist. Lawful for one reason and it is worth stating,
+     * because on any other screen this would be the leak the whole app is built to prevent: by the
+     * time this is delivered [InsidersRevealed] has already published who the Insiders were, to
+     * everybody, on the screen this message appears on. There is nothing left for it to disclose.
+     *
+     * **It carries its words**, unlike [OpeningMessage], and for the reason [MessageDelivered]
+     * does: the line depends on who won, and a client composing it would be a client deciding what
+     * the house thinks of them.
+     *
+     * **No haptic.** The buzz for the ending is [RoundEnded]'s, once, for everybody. D-156: the
+     * underlying message count never drives the buzz count — not at the reveal and not here, where
+     * an extra buzz on two phones in a room that has just stood up would be the tell arriving
+     * after the answer.
+     */
+    data class HouseSignedOff(val seat: Seat, val body: String) : Effect
 }

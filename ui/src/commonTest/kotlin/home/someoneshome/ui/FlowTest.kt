@@ -37,8 +37,12 @@ class FlowTest {
      *
      * A revoked player sits in the dark until a meeting is called; a restrained player waits for
      * the others to finish reading the result; a player outside the system waits for the round to
-     * end; a disconnected phone waits for the house to come back; and the two endings wait for
-     * nothing, because there is nothing after them.
+     * end; and a disconnected phone waits for the house to come back.
+     *
+     * **The two endings used to be in here and are not any more** (D-157). They were terminals —
+     * the evening finished wherever the round did — and NEW ROUND is the walk off both of them.
+     * The set shrinking is the change; a test that had left them in would have gone on asserting
+     * that the app could not have a second round.
      *
      * Everything else must publish a control or say it will move on. A screen that does neither
      * is a phone that has stopped, and in this game a phone that has stopped is a player standing
@@ -46,7 +50,6 @@ class FlowTest {
      */
     private val awaitingTheHouse = setOf(
         ScreenId.Revoked, ScreenId.Restrained, ScreenId.Ghost3, ScreenId.Disconnect,
-        ScreenId.WinInsiders, ScreenId.WinResidents,
     )
 
     /**
@@ -565,11 +568,26 @@ class FlowTest {
             "every built Subroutine opens on its own screen, and no unbuilt one opens at all",
         )
 
+        // NEW ROUND, off both endings, and it is the actions layer's for LIGHTS OUT's reason:
+        // whether the screen publishes it as a control depends on whether this phone is running
+        // the house. Both are walked, because the control is on both and one that rotted on the
+        // losing side's screen would be an evening that could only continue if it had gone one
+        // particular way.
+        for (ending in listOf(ScreenId.WinInsiders, ScreenId.WinResidents)) {
+            val again = FlowModel(PanelState(screen = ending), lobby = LobbyModel.sample())
+            again.newRound()
+            assertEquals(
+                Flow.viaActions.getValue(ending), setOf(again.state.screen),
+                "NEW ROUND on $ending went somewhere the actions table does not name",
+            )
+        }
+
         assertEquals(
             setOf(
                 ScreenId.Editor, ScreenId.RoomEdit, ScreenId.StairsWarn,
                 ScreenId.SaveName, ScreenId.Delete, ScreenId.ScanMarker,
                 ScreenId.Secret, ScreenId.Lobby, ScreenId.ScanCaught,
+                ScreenId.WinInsiders, ScreenId.WinResidents,
                 ScreenId.Notify, ScreenId.Banner, ScreenId.Quiet, ScreenId.LockNotify,
             ),
             Flow.viaActions.keys,
@@ -896,6 +914,91 @@ class FlowTest {
             ScreenId.RoomEdit, model.state.screen,
             "a room that is already stairs has nothing to warn about",
         )
+    }
+
+    // ---- NEW ROUND (D-157) ---------------------------------------------------------------------
+
+    /**
+     * **NEW ROUND returns this phone to the lobby and takes its one line with it** (D-157, D-116).
+     *
+     * Both halves, from both endings. The walk is the visible half; the deletion is the half that
+     * cannot be seen on any screen, which is exactly why it is asserted here rather than trusted
+     * to whichever composable happens to be drawn.
+     *
+     * **THE INJECTION** for the desk: dropping `lobby.roundEnded()` out of `FlowModel.newRound`
+     * leaves `linesIn` at four and this fails by name — the house is still holding six confessions
+     * and the next round's LIGHTS OUT gate opens with nobody having typed anything.
+     */
+    @Test
+    fun newRoundGoesBackToTheLobbyWithTheLinesGone() {
+        for (ending in listOf(ScreenId.WinInsiders, ScreenId.WinResidents)) {
+            val model = FlowModel(PanelState(screen = ending), lobby = LobbyModel.sample())
+            model.lobby.typeLine("I still have your spare key.")
+            model.lobby.handOverLine()
+            assertTrue(model.lobby.line.handedOver, "$ending: the fixture handed nothing over")
+
+            model.newRound()
+
+            assertEquals(ScreenId.Lobby, model.state.screen, "$ending: NEW ROUND went somewhere else")
+            assertEquals("", model.lobby.line.text, "$ending: the line survived the round it was for")
+            assertFalse(model.lobby.line.handedOver)
+            assertEquals(
+                0, model.lobby.standing.linesIn,
+                "$ending: the house is still holding lines after the round ended",
+            )
+        }
+    }
+
+    /**
+     * **What survives is the home, the seats and the settings** (D-157).
+     *
+     * *It would be absurd to walk the home again at midnight.* The failure this guards is the one
+     * `LobbyModel.roundEnded` used to have: it kept the deletion promise by calling `link.leave()`
+     * and taking the whole house down, which was correct while the app had no second round and
+     * became an evening that ends after one the moment NEW ROUND existed.
+     */
+    @Test
+    fun newRoundKeepsTheHouseTheSeatsAndTheSettings() {
+        val model = FlowModel(PanelState(screen = ScreenId.WinResidents), lobby = LobbyModel.sample())
+        val attached = model.lobby.attached
+        val seated = model.lobby.standing.joined
+        val setting = model.lobby.standing.insiders
+        assertTrue(attached != null && seated > 0, "the fixture is not in a lobby")
+
+        model.newRound()
+
+        assertEquals(attached, model.lobby.attached, "NEW ROUND detached this phone from the house")
+        assertEquals(seated, model.lobby.standing.joined, "NEW ROUND emptied the seats")
+        assertEquals(setting, model.lobby.standing.insiders, "NEW ROUND discarded the host's setting")
+    }
+
+    /**
+     * **The ending is not a row in [Flow.housePushes] and must not become one.**
+     *
+     * That table is keyed on the screen you are standing on; the ending can land on any of them.
+     * `Tally` is the sharp case — it already has a row, and a second one keyed on the same screen
+     * would replace the first *silently*, so the meeting would stop ending and nothing would say
+     * so. The two [Flow.endings] are keyed on the winner instead, which is what decides the screen.
+     */
+    @Test
+    fun theEndingIsKeyedOnTheWinnerAndNotOnTheScreen() {
+        assertEquals(
+            setOf(ScreenId.WinResidents, ScreenId.WinInsiders),
+            Flow.endings.values.map { it.to }.toSet(),
+            "the two endings do not lead to the two ending screens",
+        )
+        assertTrue(
+            Flow.housePushes.values.none { it.to == ScreenId.WinInsiders || it.to == ScreenId.WinResidents },
+            "an ending crept into the per-screen push table, where it can only be right for one screen",
+        )
+        // Every push names a kind somebody actually emits -- the same check the meeting's rows get,
+        // extended to the two rows that were added outside that table.
+        for (push in Flow.endings.values) {
+            assertTrue(
+                push.on in EmitSchema.knownKinds(),
+                "${push.on} is not a kind the schema permits to anybody; the ending would never arrive",
+            )
+        }
     }
 
     /** Drag two corners over bare grid. Returns the provisional name the new room was given. */

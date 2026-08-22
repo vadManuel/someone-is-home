@@ -28,13 +28,44 @@ class RecordingTextTest {
         assertEquals(original.toText(), reparsed.toText())
     }
 
-    /** Every event comes back as the same event, not merely as the same rendering. */
+    /**
+     * Every event comes back as the same event, not merely as the same rendering — **with one
+     * field deliberately excepted, and the exception is D-116.**
+     *
+     * A recording records the *seats* that handed a one line over and never the text, so the arming
+     * event comes back with blanks where the confessions were. That is the promise printed on the
+     * screen where a line is typed, kept in the one artefact of this game that outlives the
+     * evening. Everything else about the arming — the seed, the seats, the draw, the public
+     * setting, the markers — round-trips exactly, and every other event round-trips whole.
+     *
+     * Written as *blank the lines on both sides and compare* rather than as *skip the arming
+     * event*, so the arming's other six fields stay under the guarantee: skipping it would have
+     * let the seed or the draw stop surviving and nothing would have said so.
+     */
     @Test
     fun `every event survives the round-trip as a typed event`() {
         val original = recorded()
         val reparsed = RecordingText.parse(original.toText())
-        assertEquals(original.events, reparsed.events)
+
+        fun withoutTheText(events: List<Event>) = events.map { event ->
+            if (event !is Event.RoundArmed) event
+            else event.copy(oneLines = event.oneLines.map { it.copy(text = "") })
+        }
+
+        assertEquals(withoutTheText(original.events), reparsed.events)
         assertTrue(original.events.size > 100, "the fixture must exercise every event kind")
+
+        // And the seats really are on the row: a recording that dropped the list entirely would
+        // pass the comparison above for the wrong reason, because both sides would hold nothing.
+        val armed = reparsed.events.filterIsInstance<Event.RoundArmed>().single()
+        assertEquals(
+            SEATS.map { it.index }, armed.oneLines.map { it.seat.index },
+            "the recording forgot who handed a line over, so a replay cannot rebuild the desk",
+        )
+        assertTrue(
+            armed.oneLines.all { it.text.isEmpty() },
+            "a one line came back out of a recording: ${armed.oneLines}",
+        )
     }
 
     /**

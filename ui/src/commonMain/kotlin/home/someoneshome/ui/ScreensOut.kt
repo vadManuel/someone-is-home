@@ -460,6 +460,21 @@ private fun SettingRow(name: String, value: String, nameInk: Color, valueInk: Co
  * The only moment the app ever states an alignment, and it comes after the round is over. The
  * house texts the Insiders alone, in the same customer-service register it used all evening: it
  * is intimate only with the people it owns, right to the end.
+ *
+ * ### What arrives here, and what is drawn from it
+ *
+ * This screen is a **house push** ([Flow.housePushes]) and not somewhere a phone walks. Three
+ * effects land together: the ending itself, the reveal that fills [PanelVals.revealed], and the
+ * sign-off that fills [PanelVals.signOff] on two phones and nobody else's.
+ *
+ * ### The meter is a percentage, here as everywhere (D-153)
+ *
+ * The row under the names used to read `SYSTEM INTEGRITY 14 / 32` and that was a defect twice
+ * over: the denominator divides out the Insider count, and the `32` was a fossil of a count F-005
+ * had already corrected. The endings look like the safe place for a real number — the round is
+ * over, nothing can be acted on — and they are not, because the app is played two to three rounds
+ * in an evening (D-157) and a denominator printed at the end of round one is a denominator
+ * carried into round two.
  */
 @Composable
 fun WinInsidersScreen(vals: PanelVals) {
@@ -484,23 +499,7 @@ fun WinInsidersScreen(vals: PanelVals) {
         }
 
         // The house speaks last, and only to the people it owned.
-        if (vals.insider) {
-            Column(
-                Modifier.padding(horizontal = 8.u).padding(top = 7.u)
-                    .fillMaxWidth().border(1.u, Amber.Dim)
-                    .padding(horizontal = 7.u, vertical = 6.u),
-                verticalArrangement = Arrangement.spacedBy(3.u),
-            ) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Label("NUMBER WITHHELD", size = 5.5, color = Amber.Dim, tracking = 0.12)
-                    Label("21:38", size = 5.5, color = Amber.Faint, tracking = 0.12)
-                }
-                Label(
-                    "Thank you for your cooperation.",
-                    size = 9.0, color = Amber.Bright, lineHeight = 1.5,
-                )
-            }
-        }
+        vals.signOff?.let { HouseSignOff(it) }
 
         Column(
             Modifier.weight(1f).padding(horizontal = 8.u, vertical = 9.u),
@@ -508,25 +507,58 @@ fun WinInsidersScreen(vals: PanelVals) {
         ) {
             Label("THE INSIDERS WERE", size = 6.5, color = Amber.Dim, tracking = 0.16)
             Column(verticalArrangement = Arrangement.spacedBy(4.u)) {
-                NamedInsider("DANI")
-                NamedInsider("TOMAS")
+                vals.revealed.forEach { NamedInsider(it) }
             }
             SummaryRow("EGRESS COMPLETE", "21:38 . BEACON")
-            SummaryRow("SYSTEM INTEGRITY", "14 / 32")
+            SummaryRow("SYSTEM INTEGRITY", vals.integrityPercent)
+
+            Box(Modifier.weight(1f))
+
+            NewRound(Amber.Bright, Amber.Dim)
         }
     }
 }
 
+/**
+ * **The house's message card, on both endings, on two phones.**
+ *
+ * Lifted out of the Insiders' ending so the Residents' ending can draw the identical card — the
+ * house says something either way (`gdd.md:1051`) and a second hand-written copy of this block
+ * would be the two screens disagreeing about its shape.
+ *
+ * Its number is withheld, as it has been all evening. That is the whole characterisation.
+ */
 @Composable
-private fun NamedInsider(name: String) {
-    Row(
-        Modifier.fillMaxWidth().border(1.u, Amber.Bright).padding(7.u),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
+private fun HouseSignOff(body: String) {
+    Column(
+        Modifier.padding(horizontal = 8.u).padding(top = 7.u)
+            .fillMaxWidth().border(1.u, Amber.Dim)
+            .padding(horizontal = 7.u, vertical = 6.u),
+        verticalArrangement = Arrangement.spacedBy(3.u),
     ) {
-        Label(name, size = 10.0, color = Amber.Bright)
-        // The blackmail publishes: everyone learns who, and why.
-        Label("BLACKMAILED", size = 6.0, color = Amber.Dim)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Label("NUMBER WITHHELD", size = 5.5, color = Amber.Dim, tracking = 0.12)
+            Label("21:38", size = 5.5, color = Amber.Faint, tracking = 0.12)
+        }
+        Label(body, size = 9.0, color = Amber.Bright, lineHeight = 1.5)
+    }
+}
+
+/**
+ * One Insider, named, **with what was held over them printed underneath**.
+ *
+ * The row used to say `BLACKMAILED` beside the name, which is the fact without the content — and
+ * the content is the half that matters. *Everyone learns who **and why** — the petty, mundane
+ * thing each Insider was coerced with.* The line is the reveal; the label was a placeholder for it.
+ */
+@Composable
+private fun NamedInsider(who: RevealedInsider) {
+    Column(
+        Modifier.fillMaxWidth().border(1.u, Amber.Bright).padding(7.u),
+        verticalArrangement = Arrangement.spacedBy(3.u),
+    ) {
+        Label(who.name, size = 10.0, color = Amber.Bright)
+        Label(who.line, size = 6.5, color = Amber.Dim, lineHeight = 1.5)
     }
 }
 
@@ -547,9 +579,20 @@ private fun SummaryRow(name: String, value: String) {
  * The only screen that returns to the bone field mid-round-end, and the palette is doing the
  * work: the perimeter is disarmed, the lights are on, the device is an organiser again. Slate
  * rather than amber for the banner, because slate has only ever meant "before the round".
+ *
+ * **PERIMETER DISARMED is not written twice.** The status bar carries it off
+ * [PanelVals.disarmedGlyph], which is true on this screen and on no other — so the moment the
+ * house pushes this ending, the row that has read `ARMED` for twenty-five minutes changes for
+ * everybody at once (`gdd.md:203`). The banner's own line says the same thing to the eye that is
+ * looking at the middle of the screen rather than the top of it.
+ *
+ * **The reveal is the same reveal** the Insiders' ending draws, off the same [PanelVals.revealed],
+ * and the house's message card is the same card: it has something to say when it loses too, and
+ * the register does not improve. What differs between the two screens is the palette and the
+ * headline — the disclosure is identical, because it is one disclosure to one room.
  */
 @Composable
-fun WinResidentsScreen() {
+fun WinResidentsScreen(vals: PanelVals) {
     Column(Modifier.fillMaxSize()) {
         Column(
             Modifier.fillMaxWidth().background(Amber.SlateFill)
@@ -571,12 +614,19 @@ fun WinResidentsScreen() {
             )
         }
 
+        // The house speaks last here too, and to the same two people. Nothing about a Resident win
+        // makes it apologetic.
+        vals.signOff?.let { HouseSignOff(it) }
+
         Column(
             Modifier.weight(1f).padding(horizontal = 8.u, vertical = 9.u),
             verticalArrangement = Arrangement.spacedBy(6.u),
         ) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Label("THE RESIDENTS", size = 6.5, color = Amber.BoneDim, tracking = 0.16)
+                // Who is still standing, which everybody in the room can already see. A count of
+                // seats is not a count of Insiders and divides nothing out -- see
+                // PanelVals.integrityPercent for the number that would.
                 Label("4 OF 6", size = 6.5, color = Amber.BoneFaint, tracking = 0.16)
             }
             Column(verticalArrangement = Arrangement.spacedBy(4.u)) {
@@ -587,15 +637,79 @@ fun WinResidentsScreen() {
                     }
                 }
             }
-            BoneSummaryRow("SYSTEM INTEGRITY", "0 / 32")
+            BoneSummaryRow("SYSTEM INTEGRITY", vals.integrityPercent)
             BoneSummaryRow("EGRESSES CONTAINED", "2")
 
             Box(Modifier.weight(1f))
 
-            // Named without their alignment ever having been confirmed in play. The blackmail
-            // publishes here, so everyone learns who and why at the same moment.
-            BoneSummaryRow("WORKING FOR THE HOUSE", "DANI . TOMAS", nameInk = Amber.BoneFaint)
+            // Named without their alignment ever having been confirmed in play, and the blackmail
+            // publishes with them: everyone learns who AND why, at the same moment, on the winning
+            // side's screen as much as on the losing side's. This used to be a summary row reading
+            // `WORKING FOR THE HOUSE  DANI . TOMAS` -- the names without the reason, which is the
+            // half that turns a result into a person.
+            Label("WORKING FOR THE HOUSE", size = 6.5, color = Amber.BoneFaint, tracking = 0.16)
+            Column(verticalArrangement = Arrangement.spacedBy(4.u)) {
+                vals.revealed.forEach { BoneNamedInsider(it) }
+            }
+
+            NewRound(Amber.BoneInk, Amber.BoneDim, border = Amber.BonePale)
         }
+    }
+}
+
+/** [NamedInsider] in the bone palette, for the ending that comes back to the light. */
+@Composable
+private fun BoneNamedInsider(who: RevealedInsider) {
+    Column(
+        Modifier.fillMaxWidth().border(1.u, Amber.BoneInk).padding(7.u),
+        verticalArrangement = Arrangement.spacedBy(3.u),
+    ) {
+        Label(who.name, size = 10.0, color = Amber.BoneInk)
+        Label(who.line, size = 6.5, color = Amber.BoneDim, lineHeight = 1.5)
+    }
+}
+
+/**
+ * **NEW ROUND — the host's control, on both endings, and the app's only way to have a second one**
+ * (D-157).
+ *
+ * *Two to three rounds in an evening* is the design's own expectation, and until this existed the
+ * app had no way to meet it: both ending screens were graph terminals, and the evening finished
+ * wherever the round did.
+ *
+ * ### Host-only, for LIGHTS OUT's reason and not quite in LIGHTS OUT's way
+ *
+ * It starts a round in front of the whole party, so it is the host's to press. Whether it takes
+ * D-141's two-second hold is a build-time call and this does not take one: D-141's argument is
+ * about a control **pressed in the dark**, where a thumb finds a tile by feel and a mis-tap cannot
+ * be taken back. This is pressed in the light, with everyone watching, on the one screen in the
+ * game where the lights are on and nobody is hiding their display. *(The label and the hold are
+ * both recorded as copy-pending in revision 33; this is the shape, not the last word on either.)*
+ *
+ * ### It returns everybody, and the house is what returns them
+ *
+ * The host's tap goes to the house and the house pushes every phone back to the lobby — the same
+ * arrangement LIGHTS OUT has, and for the same reason: a device that walked itself to the lobby on
+ * its own button press would be one phone leaving a round the other seven were still in. What
+ * survives is the home, the seats and the settings; what does not is every one line, dropped at
+ * the moment the round ended and dropped again here (D-116, D-157).
+ *
+ * On a phone that is not hosting it is present and inert with `HOST ONLY` beside it, exactly as
+ * `END SESSION` is on the settings screen — a control that appeared only on one phone would be
+ * a layout that moves under a thumb, and one that vanished would be a host wondering where it went.
+ */
+@Composable
+private fun NewRound(ink: Color, subInk: Color, border: Color = Amber.Dim) {
+    val actions = LocalActions.current
+    val hosting = LocalLobby.current.hosting
+    Row(
+        Modifier.fillMaxWidth().border(1.u, border)
+            .then(if (hosting) Modifier.tapTarget(actions.newRound) else Modifier)
+            .padding(8.u),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Label("NEW ROUND", size = 7.5, color = if (hosting) ink else subInk)
+        Label(if (hosting) "EVERYONE RETURNS" else "HOST ONLY", size = 7.5, color = subInk)
     }
 }
 

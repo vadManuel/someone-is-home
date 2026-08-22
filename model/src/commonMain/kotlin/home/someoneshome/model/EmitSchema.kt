@@ -90,6 +90,9 @@ object EmitSchema {
         is Effect.SyncPulseAnswered -> SYNC_PULSE_ANSWERED
         is Effect.EgressContained -> EGRESS_CONTAINED
         is Effect.EgressSucceeded -> EGRESS_SUCCEEDED
+        is Effect.RoundEnded -> ROUND_ENDED
+        is Effect.InsidersRevealed -> INSIDERS_REVEALED
+        is Effect.HouseSignedOff -> HOUSE_SIGNED_OFF
     }
 
     val LAMP_SET = MessageKind("LampSet")
@@ -125,6 +128,9 @@ object EmitSchema {
     val SYNC_PULSE_ANSWERED = MessageKind("SyncPulseAnswered")
     val EGRESS_CONTAINED = MessageKind("EgressContained")
     val EGRESS_SUCCEEDED = MessageKind("EgressSucceeded")
+    val ROUND_ENDED = MessageKind("RoundEnded")
+    val INSIDERS_REVEALED = MessageKind("InsidersRevealed")
+    val HOUSE_SIGNED_OFF = MessageKind("HouseSignedOff")
 
     private val LIVING = setOf(
         ClientClass(Role.Resident, RoundState.Live),
@@ -331,10 +337,56 @@ object EmitSchema {
         // leave somebody counting down toward a loss that is not coming.
         EGRESS_CONTAINED to (LIVING + OUTSIDE),
 
-        // The terminal fact: uncontained, the Insiders win outright (D-131). Everyone, because a
-        // round ending is the least private thing that can happen -- and because a class denied it
-        // would be a phone still playing a round that is over.
-        EGRESS_SUCCEEDED to (LIVING + OUTSIDE),
+        // **EGRESS_SUCCEEDED HAS NO ROW ANY MORE, AND THAT IS THE DECISION** (D-131, D-156).
+        //
+        // It had `LIVING + OUTSIDE` while the terminal fact was the last thing that happened in a
+        // round. It is not any more: `egressExpired` is its only emitter, every emission of it now
+        // sits in the same reduction that ends the round, and classification uses the state AFTER
+        // the event -- so by the moment of delivery every seat is already Ended and the old row
+        // could not have delivered it to anybody. **A row that cannot fire is worse than no row**:
+        // it reads as a permission somebody granted, and the next person to widen it would be
+        // "fixing" a delivery that was never missing.
+        //
+        // What every phone receives instead is ROUND_ENDED carrying `WinRoute.EgressUncontained`,
+        // which is the same fact on the row built for it. **And the deletion is what keeps D-156**:
+        // EgressSucceeded rides Haptic.Long, so a widened row would put a second buzz on every
+        // phone in the house on one of the four routes and one buzz on the other three. The
+        // underlying message count never drives the buzz count -- so the house says this to the
+        // recording, and says the ending to the room.
+        //
+        // **Written down rather than left as an omission**, exactly as PRESENCE_CHANGED is: an
+        // absent row is indistinguishable from a forgotten one.
+
+        // ---- The ending -----------------------------------------------------------------------
+        //
+        // **These three rows are the only rows in this table that name an AFTER class as anything
+        // but a passenger, and that is the strongest guarantee any of them has.** `RoundState.Ended`
+        // is reachable only through `GameState.outcome`, whose only writer is the transition that
+        // emits these effects -- so a reveal constructed at any other moment in the round is
+        // offered to classes that do not exist yet and delivered to nobody. Rule 2 doing the work
+        // rule 3 would otherwise have to: the audience is bounded by time, in the type.
+
+        // The round is over and who won, to every seat, once each. Both AFTER classes and it must
+        // never be narrowed to one of them: an ending that reached only Residents would leave two
+        // people looking at a live round in a lit room, and one narrowed the other way is the same
+        // sentence with the roles exchanged.
+        ROUND_ENDED to AFTER,
+
+        // **The reveal. Everybody, and this is the row the whole app has been avoiding all
+        // evening** (gdd.md:213, gdd.md:1063). Names and blackmail in one kind, to both classes --
+        // the point of a reveal is that the room learns it together, and a class denied it would be
+        // a player watching everybody else stand up.
+        INSIDERS_REVEALED to AFTER,
+
+        // **The narrowest row in the table: a Insider, out of a round that has ended, and nothing
+        // else.** On any other screen this would be the leak the app exists to prevent. It is
+        // lawful here for one reason, and the reason is a row above: INSIDERS_REVEALED has already
+        // published who the Insiders were, to everyone, on the screen this message appears on.
+        //
+        // Written as an explicit one-class set rather than as `AFTER - Residents`, for
+        // ABILITY_FIRED's reason -- a row derived by subtraction is a row that widens the day
+        // somebody adds a class to the set it was subtracted from.
+        HOUSE_SIGNED_OFF to setOf(ClientClass(Role.Insider, RoundState.Ended)),
     )
 
     /**
@@ -430,6 +482,20 @@ object EmitSchema {
             is Effect.EgressHeld -> state.seats
             is Effect.EgressContained -> state.seats
             is Effect.EgressSucceeded -> state.seats
+            // Addressed per seat and emitted once per seat, exactly as OpeningMessage and
+            // EgressOpened are. The ending takes over every screen in the house, so it must reach
+            // everyone -- and a broadcast SHAPE here is a thing a quieter message could inherit
+            // later, which is the mistake that would not show up in a diff.
+            is Effect.RoundEnded -> listOf(effect.seat)
+            // Broadcast, and left to the allowlist to narrow. One fact about the round rather than
+            // about the phone it arrives on -- and the one fact in the game that is the same
+            // sentence on every screen in the building.
+            is Effect.InsidersRevealed -> state.seats
+            // The one seat the house is talking to, and no other phone. Broadcasting the sign-off
+            // would publish who the house owned a second time, in a different shape, on a row that
+            // was written for exactly two people -- and it is the addressing rather than the row
+            // that stops a Insider reading the sign-off sent to the OTHER Insider.
+            is Effect.HouseSignedOff -> listOf(effect.seat)
         }
         return state.seats.filter { seated -> addressed.any { it.index == seated.index } }
     }

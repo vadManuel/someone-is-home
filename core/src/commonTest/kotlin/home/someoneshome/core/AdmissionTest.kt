@@ -2,6 +2,9 @@ package home.someoneshome.core
 
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
+import home.someoneshome.model.Outcome
+import home.someoneshome.model.WinRoute
+import home.someoneshome.model.Winner
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.RefusalReason
@@ -76,7 +79,7 @@ class AdmissionTest {
     /** The other publicly observable round-state. D-068's second safe reason. */
     @Test
     fun `events arriving after the round has ended are refused`() {
-        val finished = armed().endRound()
+        val finished = armed().endRound(Outcome(Winner.Residents, WinRoute.SystemIntegrityCleared))
         for (event in theDemonstration()) {
             val admission = admit(finished, event)
             assertIs<Admission.Refused>(admission, "${event::class.simpleName} admitted after the end")

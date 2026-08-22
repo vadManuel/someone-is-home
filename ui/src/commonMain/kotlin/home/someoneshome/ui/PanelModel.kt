@@ -147,10 +147,45 @@ data class PanelState(
      */
     val egressType: String? = null,
     val egressNodes: List<String>? = null,
+    /**
+     * **Who was working for the house, and what was held over them — as the house published it.**
+     *
+     * The only field on this class that carries an alignment, and it is null on every screen but
+     * the two endings. It arrives once, at the end of the round, on the one push the house ever
+     * sends that names anybody (`gdd.md:1063`); before that the app has spent an evening being
+     * physically incapable of saying it, and a phone that held this early would be holding the
+     * answer to the only question in the game.
+     *
+     * **Null means the house has said nothing**, which on a phone with no house attached is
+     * always; the port's drawn pair stands in. Exactly [egressNodes]' arrangement.
+     *
+     * ### A published line on this class is not the thing D-116 protects
+     *
+     * `OneLine` lives beside this class rather than in it precisely because a line typed in the
+     * lobby would otherwise ride into every capture of every round. This is the other side of that
+     * rule and not an exception to it: **the lines here have already been read out to the entire
+     * room**, by the house, as the round's last act. What the promise protects is the line of
+     * somebody the house never used — and a Resident's line is never in this list, because it is
+     * never in the effect that fills it.
+     *
+     * **Percentages, not totals, apply here too.** Nothing about the reveal changes D-103: see
+     * [PanelVals.integrityPercent], which is what both ending screens draw.
+     */
+    val revealed: List<RevealedInsider>? = null,
     /** Randomises the backlog's *count and mix*, so inbox density can never imply a role. */
     val inboxSeed: Int = 3,
     val noteSeed: Int = 0,
 )
+
+/**
+ * **One named Insider and their one line, on the ending screen.**
+ *
+ * Flat and inert, like everything on [PanelState]: two strings the house sent, already resolved to
+ * a name. Seat-to-name resolution belongs to the transport, which is the only layer holding the
+ * lobby's roster — a `ui` that mapped seats to names would be `ui` keeping a second copy of who is
+ * in the house.
+ */
+data class RevealedInsider(val name: String, val line: String)
 
 /**
  * How the status bar reads — a property of where the round is, not of the individual screen.
@@ -602,7 +637,33 @@ class PanelVals(val state: PanelState) {
      * **A bar position, not a score.** The cells are display resolution (D-103, revision 21) and
      * the fraction they stand for is the only form the meter reaches a panel in.
      */
-    val integrityLit: Int = 28
+    val integrityLit: Int = when (state.screen) {
+        // **The two endings carry the round's final reading**, and the port's figures are the
+        // design's own: the Residents took it by clearing the meter, and the Insiders took it with
+        // this much still standing. Screen-dependent rather than pushed because nothing pushes the
+        // meter yet — the springboard's bar is a fixture too — and a `PanelState.integrity` added
+        // here would be a field with no sender, which is the shape this class already refuses.
+        ScreenId.WinResidents -> 0
+        ScreenId.WinInsiders -> 14
+        else -> 28
+    }
+
+    /**
+     * **The meter as a percentage, and the only form it may ever be drawn in** (D-103, D-153).
+     *
+     * Computed from [integrityLit] against [METER_SEGMENTS] so the bar and the number cannot
+     * disagree — two hand-maintained facts about one meter is how `SYSTEM INTEGRITY 14 / 32` came
+     * to sit under a bar drawn at a different fraction, with a denominator that was a fossil of a
+     * count F-005 had already corrected.
+     *
+     * **The endings are not the safe place for a real number, and that is D-153's whole argument.**
+     * The round is over, nothing can be acted on, and it is still not safe: the app is played two
+     * to three rounds in an evening (D-157), so a denominator printed at the end of round one is a
+     * denominator carried into round two — where it divides out the Insider count for every round
+     * that follows. One ending screen would retroactively unhide a number D-103 spent a whole
+     * revision hiding.
+     */
+    val integrityPercent: String = "${integrityLit * 100 / METER_SEGMENTS}%"
 
     /** The Egress countdown, which replaces the meter in place and takes the only number back. */
     val egressLit: Int = 22
@@ -626,6 +687,34 @@ class PanelVals(val state: PanelState) {
      * people who cannot speak to each other.
      */
     val arrival: Arrival? = Notifications.arrivalOn(state.screen, egressType, egressNodes)
+
+    /**
+     * **THE INSIDERS WERE, with the blackmail published beside each name** — from the house when
+     * there is one, and the port's pair when there is not.
+     *
+     * [PanelState.revealed]'s arrangement exactly, for [egressNodes]' reason: derived once, here,
+     * so that the two ending screens resolve the *same* list rather than each keeping its own. The
+     * Residents' ending and the Insiders' ending name the same people, and a fixture reached
+     * directly by one of them would agree with itself and with nothing else.
+     */
+    val revealed: List<RevealedInsider> = state.revealed ?: REVEALED
+
+    /**
+     * **The house's last words, and it says them only to the people it owned** (`gdd.md:1051`).
+     *
+     * Which of the two depends on who won, and *who won* is what the screen is: there is one
+     * ending screen per winner. Drawn on both of them, behind [insider], because the house has
+     * something to say either way and its tone does not improve when it loses.
+     *
+     * Null on a Resident's phone, which is what the message card branches on. Not a secret by the
+     * time it is drawn — [revealed] is on the same screen — but it is not theirs to read either.
+     */
+    val signOff: String? = when {
+        !insider -> null
+        state.screen == ScreenId.WinInsiders -> "Thank you for your cooperation."
+        state.screen == ScreenId.WinResidents -> "Unfortunate."
+        else -> null
+    }
 
     /** Both bars, seen only from outside the system. */
     val outsideLit: Int = 21
@@ -714,6 +803,23 @@ class PanelVals(val state: PanelState) {
          * now come off [PanelVals.countdown].
          */
         const val SCAN_SEGMENTS = 20
+
+        /**
+         * **The port's reveal: the design's two Insiders, with what the house had on them.**
+         *
+         * A fixture, for [CURRENT]'s reason — a screen rendered with an empty list is a screen the
+         * app never shows, and a test looking at one proves nothing about the screen that ships.
+         * In play the house sends the real thing and this is not consulted.
+         *
+         * **The lines are the point and they are deliberately small.** *The petty, mundane thing
+         * each Insider was coerced with* is the design's own phrasing, and a fixture holding
+         * anything lurid would quietly teach every future writer of this screen that the game is
+         * about secrets rather than about how little it takes.
+         */
+        val REVEALED: List<RevealedInsider> = listOf(
+            RevealedInsider("DANI", "I still have your spare key."),
+            RevealedInsider("TOMAS", "You never cancelled the second account."),
+        )
     }
 }
 

@@ -10,18 +10,18 @@ package home.someoneshome.model
 class GameState private constructor(
     val armed: Boolean,
     /**
-     * The round is over.
+     * **The round is over, and which of D-131's four routes ended it** — or null while it runs.
      *
-     * **Nothing writes this yet, and that is stated rather than hidden.** The round-end condition
-     * is F-005 (the SystemIntegrity denominator) and is open, so no [Event] sets it. The field
-     * exists because the client taxonomy has four round-states and [RoundState.Ended] is one of
-     * them: an allowlist that cannot name the ended classes cannot deny them anything either.
-     * Reachable today only through [endRound], whose sole caller in the repo is
-     * `model/src/commonTest/.../EmitSchemaTest.kt`. The harness does NOT exercise the ended
-     * classes — said plainly, because in this codebase these comments are the record of what is
-     * and is not covered.
+     * This was a bare `ended: Boolean` with no writer, carrying the note that the round-end
+     * condition was open and that the field existed only so the allowlist could name
+     * [RoundState.Ended] and deny it things. Both halves are paid now: the rules write it, and
+     * [ended] is derived from it so there is no second field that could disagree with the reason
+     * about whether the evening is still going.
+     *
+     * **Nothing about it reaches a client as itself.** What every phone is told is
+     * [Effect.RoundEnded], which carries the same two facts; this is the state they are read from.
      */
-    val ended: Boolean,
+    val outcome: Outcome?,
     val seats: List<Seat>,
     val insiderSeats: List<Seat>,
     val revoked: List<Seat>,
@@ -145,6 +145,24 @@ class GameState private constructor(
      * cooldown pushed to a subset would be an Insider announced by a timer.
      */
     val egressReadyAt: Tick,
+    /**
+     * **Every seat's one line, held for the length of one round and dropped when it ends** (D-116).
+     *
+     * The house holds these so it can do the two things the design asks of them: quote a Insider's
+     * own line back to them at the reveal, and **publish the Insiders' lines to everybody when the
+     * round ends**. Nothing else may read them, and nothing else does — [lineOf] has two callers in
+     * the rules and both of them are the ending.
+     *
+     * **[endRound] drops the list, and that is the deletion promise made structural.** Not a wipe
+     * somebody remembers to call: the transition that ends a round is the transition that empties
+     * this, so a state in which the round is over is a state that is physically incapable of
+     * quoting anybody. The desk keeps the same promise independently, one layer out — two copies,
+     * two wipes, neither trusting the other.
+     *
+     * A List in seat order, like everything else here, and defaulted empty everywhere: a round
+     * armed with no lines publishes blanks, which is the fail-closed direction for text.
+     */
+    val oneLines: List<OneLineHeld>,
     val nextEntity: Long,
     val seed: Long,
 ) {
@@ -164,8 +182,39 @@ class GameState private constructor(
      */
     fun isOut(seat: Seat): Boolean = isRevoked(seat) || isRestrained(seat)
 
+    /**
+     * **The round is over.** Derived rather than stored — see [outcome].
+     *
+     * It feeds [roundStateOf], so it decides what every client is permitted to receive. That is
+     * why it may not be a field of its own: a flag and a reason are two things a build can
+     * de-synchronise, and this is the half nobody would notice had gone stale.
+     */
+    val ended: Boolean get() = outcome != null
+
     /** In the round: seated, and neither Revoked nor Restrained. Ordered, like everything here. */
     val livingSeats: List<Seat> get() = seats.filterNot { isRevoked(it) || isRestrained(it) }
+
+    /**
+     * **The Insiders still in the round.** The win check counts these and never the initial draw
+     * (`gdd.md:213`).
+     *
+     * *A Insider who revokes another Insider has moved the goalposts against themselves and will
+     * never know it. Do not tell them.* That sentence is a property of this one accessor: nothing
+     * about the count reaches an effect, so the goalposts move in silence.
+     */
+    val livingInsiders: List<Seat> get() = insiderSeats.filterNot { isRevoked(it) || isRestrained(it) }
+
+    /**
+     * **The living who are Residents and nothing else** — the left-hand side of D-131's parity.
+     *
+     * Named *plain* rather than *Resident* because everyone is a Resident and some are also
+     * Insiders (the vocabulary's first line): a `livingResidents` that quietly meant *not Insiders*
+     * would be the one identifier in the module where the word had lost half its meaning.
+     */
+    val livingPlainResidents: List<Seat> get() = livingSeats.filterNot { roleOf(it) == Role.Insider }
+
+    /** This seat's one line, or null for a seat that never handed one over. See [oneLines]. */
+    fun lineOf(seat: Seat): String? = oneLines.firstOrNull { it.seat.index == seat.index }?.text
 
     /** In the building, outside the system. The complement of [livingSeats], in seat order. */
     val outSeats: List<Seat> get() = seats.filter { isRevoked(it) || isRestrained(it) }
@@ -260,12 +309,22 @@ class GameState private constructor(
     fun mintId(): Pair<EntityId, GameState> =
         EntityId(nextEntity) to copy(nextEntity = nextEntity + 1)
 
-    /** The only writer of [ended]. Separate from [copy] so the transition is greppable. */
-    fun endRound(): GameState = copy(ended = true)
+    /**
+     * **The only writer of [outcome], and the only thing that empties [oneLines].**
+     *
+     * The two happen together on purpose. D-116's promise is *deleted when the round ends*, and
+     * the publish **is** the round ending — so the ending effects are built from the state as it
+     * stands and this is applied to what is left, which puts the deletion exactly one instruction
+     * after the last read. A separate `wipeLines()` would be a second call somebody can forget on
+     * the day a fifth win route is added.
+     *
+     * Separate from [copy] so the transition stays greppable, exactly as [withEgress] is.
+     */
+    fun endRound(outcome: Outcome): GameState = copy(outcome = outcome, oneLines = emptyList())
 
     fun copy(
         armed: Boolean = this.armed,
-        ended: Boolean = this.ended,
+        outcome: Outcome? = this.outcome,
         seats: List<Seat> = this.seats,
         insiderSeats: List<Seat> = this.insiderSeats,
         revoked: List<Seat> = this.revoked,
@@ -282,12 +341,13 @@ class GameState private constructor(
         meeting: Meeting? = this.meeting,
         egress: Egress? = this.egress,
         egressReadyAt: Tick = this.egressReadyAt,
+        oneLines: List<OneLineHeld> = this.oneLines,
         nextEntity: Long = this.nextEntity,
         seed: Long = this.seed,
     ) = GameState(
-        armed, ended, seats, insiderSeats, revoked, newlyRevoked, restrained, cooldownArmed,
+        armed, outcome, seats, insiderSeats, revoked, newlyRevoked, restrained, cooldownArmed,
         cooldowns, systemIntegrity, openSubroutines, workOrders, stations, activeMarkers,
-        presence, meeting, egress, egressReadyAt, nextEntity, seed,
+        presence, meeting, egress, egressReadyAt, oneLines, nextEntity, seed,
     )
 
     companion object {
@@ -332,9 +392,17 @@ class GameState private constructor(
              * exercise the rule.
              */
             egressReadyAt: Tick = Tick(0),
+            /**
+             * Every seat's one line, from the house's desk (D-116).
+             *
+             * Defaulted empty for [openSubroutines]' reason, and empty is the fail-closed
+             * direction here too: a round armed without them publishes blank lines at the reveal,
+             * which is a visible nothing rather than an invisible somebody else's.
+             */
+            oneLines: List<OneLineHeld> = emptyList(),
         ) = GameState(
             armed = true,
-            ended = false,
+            outcome = null,
             seats = seats,
             insiderSeats = insiders,
             revoked = emptyList(),
@@ -354,13 +422,14 @@ class GameState private constructor(
             meeting = null,
             egress = null,
             egressReadyAt = egressReadyAt,
+            oneLines = oneLines.sortedBy { it.seat.index },
             nextEntity = 1L,
             seed = seed,
         )
 
         val EMPTY = GameState(
             armed = false,
-            ended = false,
+            outcome = null,
             seats = emptyList(),
             insiderSeats = emptyList(),
             revoked = emptyList(),
@@ -377,6 +446,7 @@ class GameState private constructor(
             meeting = null,
             egress = null,
             egressReadyAt = Tick(0),
+            oneLines = emptyList(),
             nextEntity = 1L,
             seed = 0L,
         )

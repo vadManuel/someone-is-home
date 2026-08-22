@@ -186,14 +186,23 @@ class FuzzPropertyTest {
             val resident = armed.seats.firstOrNull { s -> armed.insiders.none { it.index == s.index } }
                 ?: continue
 
-            fun graded(list: List<Event>) = effectsOf(GameState.EMPTY, list)
+            fun stream(list: List<Event>) = effectsOf(GameState.EMPTY, list)
                 .map { Transcript.render(it) }
-                .filter { it.startsWith("SubroutineGraded") }
 
-            val baseline = graded(events)
+            // **Up to the moment either round ended** (D-131), through `untilTheRoundEnds` rather
+            // than a second copy of the rule. Parity counts living plain Residents against living
+            // Insiders, so an exchange genuinely ends one of these rounds and not the other — and
+            // past that point a missing verdict is a round that finished, not a verdict withheld
+            // from an Insider. Everything before it is compared exactly as strictly as it ever was.
+            val a = stream(events)
+            val b = stream(withRolesExchanged(events, insider, resident))
+            fun graded(lines: List<String>, other: List<String>) =
+                untilTheRoundEnds(lines, other).filter { it.startsWith("SubroutineGraded") }
+
+            val baseline = graded(a, b)
             verdicts += baseline.size
             assertEquals(
-                baseline, graded(withRolesExchanged(events, insider, resident)),
+                baseline, graded(b, a),
                 "seed $seed: a verdict changed when seats ${insider.index} and " +
                     "${resident.index} traded roles — the house graded the asker, not the entry",
             )

@@ -3,6 +3,7 @@ package home.someoneshome.ui
 import home.someoneshome.model.CardPayload
 import home.someoneshome.model.EmitSchema
 import home.someoneshome.model.MessageKind
+import home.someoneshome.model.Winner
 import home.someoneshome.model.Cell
 import home.someoneshome.model.RegisterResult
 import home.someoneshome.model.RoomKind
@@ -167,6 +168,11 @@ object ScreenGraph {
         ScreenId.GhostMeeting -> emptySet()
         ScreenId.Ghost3 -> emptySet()
         ScreenId.Disconnect -> emptySet()
+
+        // **The endings are no longer terminals** (D-157) — but NEW ROUND is not in here, for
+        // LIGHTS OUT's reason exactly: whether the screen publishes it as a control at all depends
+        // on whether this phone is running the house, and that is not a fact a screen graph can
+        // hold. It is in [Flow.viaActions], where the other host-only control already is.
         ScreenId.WinInsiders, ScreenId.WinResidents -> emptySet()
     }
 
@@ -310,6 +316,47 @@ object Flow {
         ScreenId.GhostMeeting to HousePush(
             ScreenId.Ghost3, EmitSchema.MEETING_ENDED,
             "the meeting ends and the couch gets the ballot with names against it (D-075)",
+        ),
+
+        // **The ending is deliberately NOT in here** — see [endings], which explains why it cannot
+        // be. It is the one push in the game that does not care what screen you are standing on.
+    )
+
+    /**
+     * **The ending: the one push that can arrive on any screen in the game** (D-131, D-157).
+     *
+     * ### Why it is not a row in [housePushes], and must not become one
+     *
+     * That table is keyed on **the screen you are standing on**, because every push in it answers
+     * a screen that is explicitly waiting — the assembly gate closing, the ballot being read, the
+     * couch being let in. The ending answers nothing. All four of D-131's routes can land while a
+     * player is anywhere: on the springboard between meetings when the meter reaches nothing, at
+     * the tally when the room Restrains the last Insider, at a node with a countdown on it, inside
+     * a Subroutine, on the lock screen with the phone in a pocket. A row per screen would be
+     * thirty rows saying the same thing and one screen somebody forgot.
+     *
+     * It would also not *fit*: `Tally` already has a row, and a second one keyed on the same
+     * screen replaces the first silently.
+     *
+     * ### Keyed on the winner, because that is what decides the screen
+     *
+     * The destination is carried by the message — `Effect.RoundEnded` names the winner — and this
+     * is the two-entry table that turns it into a screen. Keyed on anything else it would push
+     * every phone in the house to the same ending regardless of who took the round, which is the
+     * one fact the whole evening was about.
+     *
+     * **PERIMETER DISARMED rides the Resident entry and nothing else.** Landing on `WinResidents`
+     * is what flips [PanelVals.disarmedGlyph], and the status row that has read `ARMED` for
+     * twenty-five minutes changes for everybody at once (`gdd.md:203`).
+     */
+    val endings: Map<Winner, HousePush> = mapOf(
+        Winner.Residents to HousePush(
+            ScreenId.WinResidents, EmitSchema.ROUND_ENDED,
+            "the meter reached nothing, or the room ran out of Insiders — the perimeter disarms",
+        ),
+        Winner.Insiders to HousePush(
+            ScreenId.WinInsiders, EmitSchema.ROUND_ENDED,
+            "parity, or an Egress that ran its clock out uncontained (D-131)",
         ),
     )
 
@@ -474,6 +521,13 @@ object Flow {
         ScreenId.Banner to setOf(ScreenId.Home),
         ScreenId.Quiet to setOf(ScreenId.Home),
         ScreenId.LockNotify to setOf(ScreenId.Lock),
+        // **NEW ROUND, off both endings, and it is here rather than in the graph for LIGHTS OUT's
+        // reason** (D-157). Whether either ending publishes it as a control at all depends on
+        // whether this phone is running the house — present and inert with HOST ONLY beside it
+        // otherwise — and *is this the host* is not a fact a screen graph can hold. The lobby's
+        // arming control sits three lines up for exactly the same reason.
+        ScreenId.WinInsiders to setOf(ScreenId.Lobby),
+        ScreenId.WinResidents to setOf(ScreenId.Lobby),
     )
 }
 
@@ -844,6 +898,31 @@ class FlowModel(
         push(ScreenId.Armed)
     }
 
+    /**
+     * **NEW ROUND — back to the lobby, with the lines gone** (D-157, D-116).
+     *
+     * Presentation and one deletion, and the line it stops at is [lightsOut]'s line. It walks this
+     * phone to the lobby and wipes what this phone typed. It does not redraw roles, reset a
+     * cooldown, clear the meter or tell another phone anything: **roles are redrawn at the next
+     * arming**, which is arming's job, and every other reset falls out of `Rules.armed`
+     * constructing a round rather than copying one. In play the host's tap is an intent the house
+     * answers by pushing every phone to the lobby at once.
+     *
+     * **What survives is the home, the seats and the settings.** The home was walked once, ever,
+     * and it would be absurd to walk it again at midnight; the seats are who is in the house; the
+     * settings are what the host tuned. So this calls neither `attach` nor `leave` — a return to
+     * the lobby that dropped the connection would be an evening that ends after one round with
+     * five people re-typing a lobby code in the dark.
+     *
+     * **[LobbyModel.roundEnded] is the deletion and it is called here rather than trusted to the
+     * ending screen**, because a promise kept by whichever composable happens to be on screen is
+     * a promise that lapses the day somebody adds a second route to the lobby.
+     */
+    fun newRound() {
+        lobby.roundEnded()
+        push(ScreenId.Lobby)
+    }
+
     // ---- The meeting -------------------------------------------------------------------------
 
     /**
@@ -1009,6 +1088,7 @@ class FlowModel(
         cycleInsiders = lobby::cycleInsiders,
         cycleVoteWindow = lobby::cycleVoteWindow,
         lightsOut = ::lightsOut,
+        newRound = ::newRound,
         checkIn = ::checkIn,
         sayReady = ::sayReady,
         chooseVote = ::chooseVote,
