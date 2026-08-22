@@ -34,7 +34,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 
 /**
- * **The Subroutines themselves — six of the design's ten, with their interaction.**
+ * **The Subroutines themselves — eight of the design's ten, with their interaction.**
  *
  * The screens in this file echo input and nothing else. A Subroutine's pattern arrives as an
  * Effect, the screen displays it, captures taps and echoes them locally, and what the player
@@ -46,7 +46,9 @@ import androidx.compose.ui.unit.Dp
  *
  * Every Subroutine ships with its fake in the same change — real UI, real progress, real
  * completion, writing nothing (rule 8). Nothing in this file takes a role, reads
- * [PanelState.role], or branches on one, so an Insider's Handshake *is* a Resident's Handshake:
+ * [PanelState.role], or branches on one — **including [SniffScreen], whose whole palette turns on
+ * one question and that question is *has this phone answered yet***, so an Insider's Handshake *is*
+ * a Resident's Handshake:
  * one screen, one code path, nothing to keep in step and nothing to get wrong at four in the
  * morning six months from now. `SubroutineParityTest` renders both roles through the identical
  * input and compares the pixels.
@@ -63,9 +65,12 @@ import androidx.compose.ui.unit.Dp
  *   to feel them on. Built: the return.
  * - **Short's asked-for count arrives from the house** and is a fixture here, as every number in
  *   this port is. The *gesture* is whole: several fingers, two seconds, and a hand-over.
- * - **Parity Check, Jam and Signal Trace have no timed presentation at all**, which is why those
- *   three are whole: the grid, the rings and the wiring are on the screen, the work is what you do
- *   to them, and the only thing the house owns is the verdict.
+ * - **Sniff's two groups are buzzed**, for Handshake's reason and with Handshake's consequence: on
+ *   a build with no phone attached the question never arrives, and the screen is black until
+ *   somebody taps it. Built: the answer, and the darkness it is given in.
+ * - **Parity Check, Jam, Signal Trace and Deallocate have no timed presentation at all**, which is
+ *   why those four are whole: the grid, the rings, the wiring and the columns are on the screen,
+ *   the work is what you do to them, and the only thing the house owns is the verdict.
  */
 
 /**
@@ -517,10 +522,268 @@ fun SignalTraceScreen(verdict: SubroutineVerdict? = null) {
     }
 }
 
+/**
+ * **Sniff — the screen that emits nothing, and the answer gesture that had to be invented for it.**
+ *
+ * D-137 supersedes `gdd.md:568`. The phone buzzes **two haptic groups separated by a pause** and
+ * the player answers **which group was bigger**: pure perception, no numeral, no count to hold, no
+ * rhythm. It is the roster's only *short dark* — the quick one a Resident can take without becoming
+ * a beacon — and the ruling is unambiguous about what that costs: **the screen is fully dark until
+ * the answer.**
+ *
+ * ### ⚠️ THE TREATMENT — the whole screen is drawn in black, and every control is where it always is
+ *
+ * *"Fully dark"* is taken literally. The layout below is built in full from the first frame — the
+ * header, the two halves, the return slot, the motion row, SUBMIT, STOP NOW, all in their usual
+ * places — and **every colour on it is [Amber.Black] until the player has answered.** Nothing is
+ * hidden, nothing is added later, and **nothing moves at the moment it lights**: the difference
+ * between the dark screen and the lit one is a palette and not a layout.
+ *
+ * That matters more than it sounds. A screen that *grew* its controls when the answer arrived would
+ * be a change in lit area on the frame the player is most likely to be looking away from — and on
+ * this Subroutine, which exists to keep somebody invisible, the arrival of light is the one thing a
+ * person across the room can read.
+ *
+ * **The answer gesture is the two halves of the panel.** The left half is the group that buzzed
+ * first, the right half is the one that buzzed second, and the tap target is half a phone: no
+ * precision, no boundary to find, nothing to look at. Left-to-right is reading order and it is also
+ * the order the two groups arrived in, which is the only mapping a player can be expected to hold
+ * while feeling for a doorway. **A mark cannot be made on the darkest screen in the game, so the
+ * screen answers instead**: the first tap is what lights it, and what it lights is which side the
+ * finger landed on.
+ *
+ * **The answer is not sent by the tap.** A single choice takes SUBMIT — the vote's shape, for the
+ * vote's reason — and here it earns it twice over: the tap is made blind, on a target the size of a
+ * hand, by somebody who cannot see what they hit. So the tap moves the mark, the screen lights, and
+ * the player confirms what it says. Tapping the other half moves it back, exactly as
+ * [ParityCheckScreen]'s mark moves.
+ *
+ * ### STOP NOW is drawn in black and is live from the first frame
+ *
+ * Somebody walked in. The player is heads-down and blind, and the control is in the place it is on
+ * every other Subroutine screen, with the same words, doing the same thing — it simply cannot be
+ * seen. **In the dark that is what STOP NOW already was**: the reason it never changes is that it
+ * is pressed by muscle memory rather than read. An invisible live control is the strongest form of
+ * this file's rule, not an exception to it. Flagged, and it is the piece of this screen most worth
+ * a person's judgement in an actual dark room.
+ *
+ * ### What the house owns, and what a phone with no house shows
+ *
+ * **The buzzing is the house's** — haptics are, and this build has no phone attached to feel them
+ * on — so on a desktop render this screen is black and stays black until something taps it. That is
+ * the honest picture of a Subroutine whose entire question arrives through a channel this build
+ * does not have, and it is the same gap [HandshakeScreen] has.
+ *
+ * **There is no instruction on this screen and there cannot be one.** *Which group was bigger* is a
+ * sentence made of light, and the ruling forbids light until the answer. The instruction has to live
+ * on the screen before this one, and that is recorded as owed rather than quietly solved here.
+ */
+@Composable
+fun SniffScreen(verdict: SubroutineVerdict? = null) {
+    val entry = LocalSubroutine.current.sniff
+    val actions = LocalActions.current
+
+    // The one thing that decides every colour below. A verdict lights the screen too, even with
+    // nothing chosen: a screen that could not show the house's answer would be the device
+    // withholding it, which is the opposite of what D-109 gave the house a verdict for.
+    val lit = entry.choice != null || verdict != null
+    val ink = if (lit) Amber.Dim else Amber.Black
+    val mark = if (lit) Amber.Faint else Amber.Black
+    val edge = if (lit) Amber.Edge else Amber.Black
+    // The brightest thing this screen ever draws, and it is [Amber.Dim] — the same ceiling
+    // HANDSHAKE has. The dark rung is a claim about how much light a Subroutine makes a player
+    // emit (D-106), and a screen that went dark for the perception and then flared for the answer
+    // would be making that claim about half of itself.
+    val chosen = if (lit) Amber.Dim else Amber.Black
+
+    SubroutineFrame(Subroutine.Sniff, ink = ink, mark = mark) {
+        // The whole body, split down the middle. No divider between them: a line drawn on a dark
+        // screen is light, and the two halves are told apart by the phone's own edges.
+        Row(
+            Modifier.weight(1f).fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(7.u),
+        ) {
+            for (at in listOf(SubroutineModel.SNIFF_FIRST, SubroutineModel.SNIFF_SECOND)) {
+                val held = entry.holds(at)
+                Box(
+                    Modifier.weight(1f).fillMaxHeight()
+                        .border(if (held) 2.u else 1.u, if (held) chosen else edge)
+                        .then(
+                            if (entry.handedOver != null) Modifier
+                            else Modifier.tap { actions.tapSubroutine(Subroutine.Sniff, at) }
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    // The echo, and its only claim: this is the side you touched. Drawn as a block
+                    // in the same grammar as every other count on these screens, and drawn on one
+                    // side only -- an unheld half shows nothing at all, so there is no pair of
+                    // marks for the eye to compare and no second thing to read.
+                    if (held) Block(26.u, 26.u, chosen)
+                }
+            }
+        }
+
+        ReturnLine(entry.gone, verdict, ink)
+        MotionBudgetRow(ink, mark, border = edge)
+
+        // Refused with nothing chosen, which is [ChoiceEntry]'s refusal and the one LOCK IN makes
+        // on an empty ballot: refusing to send NOTHING is honest. It is drawn in its place from
+        // the first frame either way -- the layout must not move under a thumb, least of all one
+        // that cannot see.
+        PanelButton(
+            if (entry.locked) "SUBMITTED" else "SUBMIT",
+            border = if (entry.choice == null || entry.locked) mark else ink,
+            ink = if (entry.choice == null || entry.locked) ink else chosen,
+            tracking = 0.18, verticalPadding = 9.u,
+            onClick = if (entry.choice == null || entry.locked) {
+                null
+            } else {
+                { actions.handOverSubroutine(Subroutine.Sniff) }
+            },
+        )
+
+        StopNow(edge, ink)
+    }
+}
+
+/**
+ * **Deallocate — columns of dots, and a tap takes one off the column you touched.**
+ *
+ * D-138 supersedes `gdd.md:569`, which did not say what a tap does. **A tap removes one dot from
+ * the tapped column, and evening out means bringing every column down to the shortest** —
+ * deallocating what was over-allocated. *The verb is the fiction, and the fiction was the answer
+ * all along.* So the answer is unique, the work is countable, and nothing on the screen is a
+ * numeral: the columns carry the arithmetic (`gdd.md:588`).
+ *
+ * Bright for its whole duration, which is the point of having bright ones — *a bright Subroutine
+ * makes you a beacon for its whole duration*, and it is what makes standing lit at a marker
+ * ordinary rather than a choice worth reading.
+ *
+ * ### A column can be taken below level, and the screen watches it happen
+ *
+ * *Over-taps are the player's to make.* A column that stopped at level would be the phone holding
+ * an opinion about the answer, and D-125 is explicit: **clamp only what players cannot perceive**,
+ * and column heights are the one thing here a player can. So every tap on a column that still has a
+ * dot lands, the column goes past its neighbours, and the house rejects a wrong final state on
+ * hand-over (D-109, D-110).
+ *
+ * ### ⚠️ The one refusal, and it is the picture's rather than the answer's
+ *
+ * **A column with no dots left is not a target.** That is not the guard rule 1 forbids: the refusal
+ * at *level* would be the screen saying *that would be wrong*, while the refusal at *empty* is that
+ * there is nothing under the finger to take. The alternative is worse than a verdict — an entry
+ * quietly counting removals the picture cannot show would send the house a number the player was
+ * never shown, and grade them on it. What is drawn and what is sent stay the same fact.
+ *
+ * ### The removed dots are gone rather than dimmed
+ *
+ * A ghost where a dot used to be would leave the *dealt* height on screen for the whole Subroutine,
+ * and the dealt heights are where the level came from — the eye would then be comparing wells
+ * instead of dots and the work would be over at a glance. What a column is now is the only thing it
+ * shows, which is also the only thing the house is going to grade.
+ *
+ * **SUBMIT is live from the first frame**, for Jam's reason: an inert one would be the phone saying
+ * the distribution you were dealt is not already level, which it has no way of knowing.
+ */
+@Composable
+fun DeallocateScreen(verdict: SubroutineVerdict? = null) {
+    val entry = LocalSubroutine.current.deallocate
+    val actions = LocalActions.current
+    val columns = SubroutineModel.DEALLOCATE
+    val live = entry.handedOver == null
+    SubroutineFrame(Subroutine.Deallocate, ink = Amber.Dim, mark = Amber.Bright) {
+        Label(
+            "TAP A COLUMN TO TAKE A DOT OFF IT\nBRING THEM DOWN TO THE SHORTEST",
+            modifier = Modifier.fillMaxWidth(),
+            size = 6.5, color = Amber.Dim, tracking = 0.12, lineHeight = 1.8,
+            align = TextAlign.Center,
+        )
+
+        // **The field is a fixed height and the body is not.** A column area that stretched with
+        // the panel would draw the same five dots against a different amount of nothing on every
+        // handset, and *how tall is that column* is the entire question — so the field is exactly
+        // as tall as the tallest distribution this panel accepts, centred in whatever room the
+        // body has. It is also what guarantees a full column is never clipped: the space is
+        // reserved whether or not anything is standing in it.
+        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Column(Modifier.fillMaxWidth().border(1.u, Amber.Edge).padding(8.u)) {
+                Row(
+                    Modifier.height(DEAL_FIELD).fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.u),
+                ) {
+                    for (at in columns.indices) {
+                        // What is left of this column: what it was dealt, less what this phone
+                        // has taken off it. Floored at nothing in the same expression that
+                        // decides whether it is a target — see the note above about the two
+                        // staying one fact.
+                        val height = (columns[at] - entry.taken(at)).coerceAtLeast(0)
+                        Box(
+                            Modifier.weight(1f).fillMaxHeight()
+                                .then(
+                                    if (live && height > 0) {
+                                        Modifier.tap {
+                                            actions.tapSubroutine(Subroutine.Deallocate, at)
+                                        }
+                                    } else {
+                                        Modifier
+                                    }
+                                ),
+                            contentAlignment = Alignment.BottomCenter,
+                        ) {
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(DEAL_GAP),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                repeat(height) {
+                                    Box(
+                                        Modifier.size(DEAL_DOT)
+                                            .background(Amber.Bright, CircleShape),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                // The floor they all stand on. Without it the columns are lengths hanging in a
+                // box and the comparison is a judgement about where each one ends; with it they
+                // are heights off one line, which is the comparison the Subroutine is made of.
+                Hairline(Amber.Faint, Modifier.padding(top = 6.u))
+            }
+        }
+
+        ReturnLine(entry.gone, verdict, Amber.Dim)
+        MotionBudgetRow(Amber.Dim, Amber.Bright)
+        // Live from the first frame: see Jam's note, and ScalarEntry's.
+        SubmitButton(Subroutine.Deallocate, sent = entry.gone, enabled = live)
+        StopNow(Amber.Faint, Amber.Dim)
+    }
+}
+
 // ---- The furniture every Subroutine screen shares ------------------------------------------
 
 /** How big a Replay dot is. Named because it is a decision about a finger, not a layout number. */
 private val DOT: Dp = 44.u
+
+/**
+ * **Deallocate's dot, and the gap above it.**
+ *
+ * Smaller than [DOT] because a dot here is not a target — the *column* is, at a strip the full
+ * height of the body, which is a far larger thing to hit than any single dot could be. What these
+ * two have to do instead is let [DotColumns.MOST_DOTS] of them stand up inside the body without
+ * being clipped: seven at 16 units with 3 between them is 130, against roughly 195 of body.
+ */
+private val DEAL_DOT: Dp = 16.u
+private val DEAL_GAP: Dp = 3.u
+
+/**
+ * How tall the field the columns stand in is: the tallest distribution the panel accepts, exactly.
+ *
+ * Derived rather than typed, so the two numbers above and [DotColumns.MOST_DOTS] cannot disagree —
+ * a field short of what the reader lets through is a clipped column, which is a *different
+ * question* from the one the house asked.
+ */
+private val DEAL_FIELD: Dp =
+    DEAL_DOT * DotColumns.MOST_DOTS + DEAL_GAP * (DotColumns.MOST_DOTS - 1)
 
 /**
  * **Jam's three sizes, and the step is a placeholder.**
@@ -820,9 +1083,19 @@ const val RESCAN: String = "REJECTED . RESCAN THE MARKER"
  * is the worst place to put a decorative animation.
  */
 @Composable
-private fun MotionBudgetRow(ink: Color, value: Color) {
+private fun MotionBudgetRow(
+    ink: Color,
+    value: Color,
+    /**
+     * The outline, which is [Amber.Edge] on seven of the eight and **black on Sniff until the
+     * answer** — a hairline is still emitted light, and D-137 does not carve an exception for
+     * chrome. It is a parameter rather than a `when` on the screen for the reason every colour on
+     * these screens is one: the caller knows what it is drawing on and this row does not.
+     */
+    border: Color = Amber.Edge,
+) {
     Row(
-        Modifier.fillMaxWidth().border(1.u, Amber.Edge).padding(horizontal = 7.u, vertical = 6.u),
+        Modifier.fillMaxWidth().border(1.u, border).padding(horizontal = 7.u, vertical = 6.u),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Label("MOTION BUDGET", size = 6.0, color = ink, tracking = 0.1)

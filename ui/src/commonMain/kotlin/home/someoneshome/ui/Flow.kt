@@ -128,8 +128,14 @@ object ScreenGraph {
         // walked away on the strength of its own last tap would be this phone announcing a
         // completion it cannot see. The three used to chain into one another — Sub to SubBright to
         // Work — which was a fixture convenience wearing a game route's clothes.
+        //
+        // **SNIFF's is drawn in black until the answer has been given, and it is still this
+        // one.** A screen whose exit moved because it is unlit would be a different screen at
+        // the moment the player most needs the one they already know; the control keeps its
+        // words, its place and its destination, and only its colour changes. See [SniffScreen].
         ScreenId.SubHandshake, ScreenId.SubReplay, ScreenId.SubParity,
-        ScreenId.SubShort, ScreenId.SubTrace, ScreenId.SubJam -> setOf(ScreenId.Work)
+        ScreenId.SubShort, ScreenId.SubTrace, ScreenId.SubJam,
+        ScreenId.SubSniff, ScreenId.SubDeallocate -> setOf(ScreenId.Work)
         ScreenId.Files -> setOf(ScreenId.Home)
         ScreenId.Notes -> setOf(ScreenId.Home)
         ScreenId.TermNo -> setOf(ScreenId.Home, ScreenId.TermLive)

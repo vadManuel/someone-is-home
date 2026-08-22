@@ -129,7 +129,36 @@ class ScreenshotTest {
     }
 
     /**
-     * **The three states of the return line, on all six Subroutines — the frames the sweep above
+     * **One step of input, in the screen's own vocabulary — and there is one of these, not two.**
+     *
+     * What a number means is different on every Subroutine: an element, a cell, a count of
+     * fingers, a signed press, a node, **one of two halves of the panel**, a column. The two
+     * fixture loops below each used to carry their own copy of that translation, and the copies
+     * drifted the day a Subroutine was added to one and not the other — SNIFF was driven with a
+     * plain index, chose a half that does not exist, and rendered a lit screen with the answer
+     * missing from it. The frame looked like a screen that had failed to draw its own echo, which
+     * is exactly the thing these renders exist to catch, produced by the instrument rather than by
+     * the screen.
+     *
+     * The parity sweep keeps its own, deliberately: it drives through `PanelActions` because it is
+     * testing the path a finger drives, and this is a viewer.
+     */
+    private fun SubroutineModel.step(subroutine: Subroutine, at: Int) = tap(
+        subroutine,
+        when (subroutine) {
+            Subroutine.Replay -> at % SubroutineModel.REPLAY_DOTS
+            Subroutine.Jam -> -1
+            Subroutine.Short -> SubroutineModel.SHORT_FINGERS
+            Subroutine.SignalTrace ->
+                at.mod(SignalGraph.of(SubroutineModel.TRACE_SEED).nodes.size)
+            Subroutine.Sniff -> at % 2
+            Subroutine.Deallocate -> at.mod(SubroutineModel.DEALLOCATE.size)
+            else -> at
+        },
+    )
+
+    /**
+     * **The three states of the return line, on all eight Subroutines — the frames the sweep above
      * renders only one of.**
      *
      * Naming a [ScreenId] gets you a Subroutine mid-work: nothing has gone to the house, so the
@@ -151,7 +180,7 @@ class ScreenshotTest {
             for (verdict in listOf(null) + SubroutineVerdict.entries) {
                 runDesktopComposeUiTest(width = 600, height = 1300) {
                     val model = SubroutineModel()
-                    repeat(SubroutineModel.HANDSHAKE_BEATS) { model.tap(subroutine, it) }
+                    repeat(SubroutineModel.HANDSHAKE_BEATS) { model.step(subroutine, it) }
                     model.handOver(subroutine)
                     setContent {
                         Box(Modifier.fillMaxSize().background(Color.Black)) {
@@ -333,20 +362,7 @@ class ScreenshotTest {
                     // that has gone takes nothing more, so the extra is drawn as a no-op on
                     // purpose rather than being carefully avoided. Then the hand-over, which four
                     // of the six need and the two sequences have already done for themselves.
-                    repeat(SubroutineModel.HANDSHAKE_BEATS + 1) { at ->
-                        tap(
-                            subroutine,
-                            when (subroutine) {
-                                Subroutine.Replay -> at % SubroutineModel.REPLAY_DOTS
-                                Subroutine.Jam -> -1
-                                Subroutine.Short -> SubroutineModel.SHORT_FINGERS
-                                Subroutine.SignalTrace -> at.mod(
-                                    SignalGraph.of(SubroutineModel.TRACE_SEED).nodes.size,
-                                )
-                                else -> at
-                            },
-                        )
-                    }
+                    repeat(SubroutineModel.HANDSHAKE_BEATS + 1) { at -> step(subroutine, at) }
                     handOver(subroutine)
                 },
             )

@@ -72,6 +72,26 @@ class SubroutineParityTest {
             Subroutine.Jam -> if (step % 2 == 0) -1 else 1
             // Short's is a count of fingers, and zero is an empty glass rather than a touch.
             Subroutine.Short -> step + 1
+            // Sniff's is one of two halves of the panel, and alternating them exercises the mark
+            // moving from one side to the other -- which is the gesture, and the state a plain
+            // index would never reach because every step past the first would re-choose the same
+            // half and change nothing.
+            Subroutine.Sniff -> step % 2
+            // **Deallocate's is the tallest column that is left**, which is what a player does and
+            // — this is the point — is what walks the distribution all the way down to level.
+            //
+            // It was `step.mod(columns)` first, walking across them in order, and that was a hole
+            // rather than a choice: the fixture never reaches level under it, so **the one state a
+            // screen would be tempted to grade is the one state the sweep never rendered.** An
+            // injected `COMPLETE` on a levelled screen passed every test in this file. Reading the
+            // model to find the tallest is not the answer key arriving in the test — it is the
+            // rule *take from the biggest pile*, and both roles are driven by it identically.
+            Subroutine.Deallocate -> {
+                val left = SubroutineModel.DEALLOCATE.indices.map {
+                    SubroutineModel.DEALLOCATE[it] - model.deallocate.taken(it)
+                }
+                left.indexOf(left.max())
+            }
             else -> step
         }
         actions.tapSubroutine(subroutine, at)
@@ -577,6 +597,135 @@ class SubroutineParityTest {
                 listOf(wiring.source, stranger), model.trace.walked,
                 "a tap on node $stranger was refused because the graph does not join it to the " +
                     "source — the screen adjudicated a move",
+            )
+        }
+
+    /**
+     * **SNIFF emits nothing until the player has answered, and then it emits something.**
+     *
+     * D-137: *the screen is fully dark until the answer.* It is the roster's only short dark and
+     * the reason that cell matters is that a Resident can take it without becoming a beacon — so
+     * *dark* here is not a dim palette, it is **no lit pixel in the panel's body at all**, header
+     * and STOP NOW included. Every control is present, in its usual place, drawn in black.
+     *
+     * **The status band is outside this and deliberately so.** The row above the body is the
+     * device's own chrome and D-077 already rules what it does on a dark Subroutine — `PanelVals.
+     * concealed` asks the roster, so Sniff got the dimmed bar for free. What this measures is the
+     * screen the Subroutine is drawn on.
+     *
+     * ### Both halves, because a screen that never lights would pass the first one
+     *
+     * A composable that rendered nothing at all — a layout collapsed to zero, a `when` branch that
+     * fell through — is black, forever, for both roles, and would sail through a check that only
+     * looked at the dark frame. So the answered frame is measured too and has to be lit.
+     *
+     * Injecting the bug this exists for means giving any one thing on that screen a colour: the
+     * name in the header, the border of a half, STOP NOW's outline. Each is one word, each looks
+     * like an improvement in review, and each is a lit phone in a dark corridor.
+     */
+    @Test
+    fun sniffEmitsNoLightUntilTheAnswerHasBeenGiven() {
+        for (role in PanelRole.entries) {
+            val dark = shot(Subroutine.Sniff, role, steps = 0)
+            val (bright, at) = brightestBelowTheStatusBand(dark)
+            assertEquals(
+                0, bright,
+                "SNIFF/$role is emitting light before the answer — brightest pixel $bright at $at",
+            )
+
+            val answered = shot(Subroutine.Sniff, role, steps = 1)
+            val (lit, _) = brightestBelowTheStatusBand(answered)
+            assertTrue(
+                lit > 0,
+                "SNIFF/$role stayed black after the answer, so the check above is measuring a " +
+                    "screen that never draws anything",
+            )
+        }
+    }
+
+    /**
+     * How bright the brightest pixel below the status band is, and where it is.
+     *
+     * Below the band because the band is the device's chrome rather than the Subroutine's screen —
+     * see the caller. The panel's glass attenuates and never adds (`ScanLinesTest`), so a black
+     * ground stays black through it and this measures ink rather than the banding.
+     */
+    private fun brightestBelowTheStatusBand(img: BufferedImage): Pair<Int, String> {
+        val top = (STATUS_BAR_HEIGHT.value * img.width / DESIGN_WIDTH).toInt()
+        var brightest = 0
+        var at = "nowhere"
+        for (y in top until img.height) {
+            for (x in 0 until img.width) {
+                val rgb = img.getRGB(x, y)
+                val value = maxOf((rgb shr 16) and 0xFF, (rgb shr 8) and 0xFF, rgb and 0xFF)
+                if (value > brightest) {
+                    brightest = value
+                    at = "($x,$y)"
+                }
+            }
+        }
+        return brightest to at
+    }
+
+    /**
+     * **A Deallocate column takes a tap it does not owe, and stops only when it is empty.**
+     *
+     * D-138: *over-taps are the player's to make. Columns can go below level, the screen only
+     * echoes the tap, and the house rejects a wrong final state on hand-over.* The column driven
+     * here is the **shortest** one, which owes nothing at all, so every tap on it is already past
+     * level — and every one of them lands.
+     *
+     * The second half is the one refusal on that screen, and it is the picture's rather than the
+     * answer's: **a column with no dots left is not a target**, because there is nothing under the
+     * finger to take. An entry quietly counting removals the screen cannot draw would send the
+     * house a number the player was never shown.
+     *
+     * Driven through the screen rather than the entry, because that is where a guard would be
+     * written — a `.then(if (height > level) …)` on the strip, which `SubroutineTest`, reading an
+     * entry that has never seen a height, structurally cannot see.
+     */
+    @Test
+    fun aDeallocateColumnIsTakenBelowLevelAndGoesInertOnlyWhenItIsEmpty() =
+        runDesktopComposeUiTest(width = width, height = height) {
+            val columns = SubroutineModel.DEALLOCATE
+            val shortest = columns.indexOf(columns.min())
+            val model = SubroutineModel()
+            setContent {
+                DeviceCanvas(insets = PanelInsets()) {
+                    Screen(
+                        PanelState(screen = ScreenId.SubDeallocate),
+                        PanelActions(tapSubroutine = model::tap),
+                        subroutines = model,
+                    )
+                }
+            }
+
+            // The columns are drawn before the two buttons, in column order, so target n is
+            // column n — the same addressing Signal Trace's nodes use, and for the same reason.
+            val before = onAllNodes(hasClickAction()).fetchSemanticsNodes().size
+            assertTrue(
+                before > columns.size,
+                "the columns are not publishing tap targets, so nothing here is being tested",
+            )
+
+            onAllNodes(hasClickAction())[shortest].performSemanticsAction(SemanticsActions.OnClick)
+            assertEquals(
+                1, model.deallocate.taken(shortest),
+                "a tap on the shortest column was refused — every tap on it is already past " +
+                    "level, and the screen adjudicated one",
+            )
+
+            // The rest of it, down to nothing. It is still the target at that index throughout,
+            // because it still has a dot in it until the last of these.
+            repeat(columns[shortest] - 1) {
+                onAllNodes(hasClickAction())[shortest]
+                    .performSemanticsAction(SemanticsActions.OnClick)
+            }
+            assertEquals(columns[shortest], model.deallocate.taken(shortest))
+            assertEquals(
+                before - 1, onAllNodes(hasClickAction()).fetchSemanticsNodes().size,
+                "a column with no dots left is still taking taps, so the entry is counting " +
+                    "removals the screen cannot draw",
             )
         }
 

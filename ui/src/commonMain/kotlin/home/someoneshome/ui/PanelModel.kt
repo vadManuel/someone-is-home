@@ -49,7 +49,7 @@ enum class ScreenId {
     // `ScreenId.entries`, so a Subroutine hiding behind a field on a shared screen would be a
     // Subroutine none of them ever looked at.
     Work, Scan, ScanCaught, ScanBad, ScanUnknown,
-    SubHandshake, SubReplay, SubParity, SubShort, SubTrace, SubJam,
+    SubHandshake, SubReplay, SubParity, SubShort, SubTrace, SubJam, SubSniff, SubDeallocate,
     Files, Notes, TermNo, TermLive, Timelapse,
 
     // The house's hands.
