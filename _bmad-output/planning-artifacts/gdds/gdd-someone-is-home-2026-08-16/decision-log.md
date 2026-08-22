@@ -2674,6 +2674,346 @@ ranges.)*
 
 ---
 
+## Revision 34 — the scan that closes itself, and the panel that is gone
+
+*Decided 2026-08-22, daytime, with Vadmanuel. A working session rather than a trace: the scan
+gesture is corrected at the root, the haptic alphabet grows a word for **no**, a whole surface is
+deleted, and the round gains a unit of time it has been describing without naming. Six escalations
+close — E-D2-1, E-D2-2, E-D2-4, E-L5-6, E-S2-3 and the harness question L6 raised. The written
+sites each ruling touches are swept in the same pass.*
+
+### D-159 · **The scan is a tap, a turn, and a door that opens by itself — corrected**
+
+**Press-and-hold-then-release is superseded.** The scan is: **tap SCAN → turn the phone so the lamp
+faces the code → the subroutine opens on acquire, by itself.** A **ten-second window** counts down
+from the tap; **timing out closes the scanner, with a double vibrate** (D-160). Nothing is spent by
+a timeout — tap again.
+
+**The reason is geometry, and it was always there.** The front camera sits on the same face as the
+lamp, so the light that lets a phone read a printed code in a dark house is on the side pointed *at
+the marker* — which means **the player cannot see their own screen while scanning.** A hold-and-
+release gesture asks the player to decide when the read succeeded, on evidence that is facing a wall
+three inches from their hand. Auto-open is not a convenience: **it is the only way a scan can end in
+the player's favour**, because the surface that would say *got it* is the surface doing the reading.
+
+The **ten-second window is the ported one and was always right** — the design's final number, and
+the KDoc that had it at seven was corrected on 2026-08-19 (`3319bfe`). What changes here is only
+what the window is *counting down to*: it now bounds an unattended read rather than a held button.
+
+Superseded sites, swept below: `gdd.md`'s M1 mechanic, the *Scan a marker* control row, the
+first-sixty-seconds trace, the Resident's cycle, the battery note, the NFC-sheet risk row, the E5
+summary, and epics stories 5.1, 5.2 and 5.12.
+
+### D-160 · **One vibrate is yes, two is no, and a call rings until answered — decided**
+
+The haptic alphabet had one word — *something arrived* (D-102) — and a reserved set of five long
+buzzes (D-135). **It gains two more, by owner decision:**
+
+- **ONE vibrate = yes.** Confirm, accept, acquired, graded.
+- **TWO vibrates = no.** Refuse, reject, expired, declined.
+- **A phone call vibrates LONG–pause–LONG, repeating indefinitely until answered.**
+
+**D-135 is amended, not replaced.** Its set was five single long buzzes; the incoming call leaves
+that set and becomes **the repeating pattern** instead. The other four are unchanged. A call is the
+one event in the game the house *insists* on — a meeting has been called and the round stops until
+everybody has it — and a signal that fires once and gives up is a signal a player in another room,
+mid-subroutine, with the phone face-down on a shelf, will miss. **Everything else in the game says a
+thing once. The call is the exception because it is not a notification; it is a summons.**
+
+This is the vocabulary D-159 needs: a scan that times out with nobody looking at the screen has to
+say so through the one channel that reaches a player whose eyes are elsewhere, and *no* now has a
+word.
+
+**D-102's identical-for-every-player rule governs all of it**, unchanged. One vibrate means yes on
+an Insider's phone and on a Resident's, at the same length, for the same reasons.
+
+### D-161 · **No seat until the device is ready — the warming rule covers every permission**
+
+**A player cannot join a lobby until device setup is complete**, and complete means **the whole
+Perms set, camera included.** The gate is at setup, in the light, before anybody sits down.
+
+E2's story 2.10 already warmed Local Network for exactly this reason. **The generalisation is the
+ruling:** the argument was never about mDNS, it was that *iOS asks once, ever, on whichever screen
+first needs the thing* — and in this game the screen that first needs the camera is a player alone
+in a dark corridor, where a system modal is **both a light nobody authored (rule 5) and a tell.**
+Warming one permission and leaving three to ambush the round is the same bug with a smaller blast
+radius.
+
+**Making it a gate rather than a prompt is the other half.** A warmed permission that was declined
+leaves a phone that looks like it is working and is not — E-D2-1's whole finding: *Don't Allow*
+leaves the scan screen lit, instructive, counting down and registering nothing. **A refusal at setup
+is recoverable in ninety seconds; the same refusal at arming costs the round.** So the lobby will
+not seat a device that cannot do the job, and the host is never handed a party that will fail in the
+dark.
+
+**A permission that flips mid-round is a different event and gets a different answer:** it surfaces
+as a **house notice** at the next meeting, in the administrative register `gdd.md` already uses for
+a device that went unreachable. Same shape, same words, same reason — silent degradation is a real
+advantage, and *the system could not see you for three minutes* is the worst sentence that can be
+read aloud about you.
+
+**E-D2-1 and E-D2-2 are closed.** E-D3-4 — an uninstall silently resetting the Local Network grant —
+is this ruling met in the wild, and it arrived in the one place it is survivable: on setup, in the
+light.
+
+### D-162 · **A node is a marker, so containment opens by scanning it — E-L5-6 ratified**
+
+**Scanning the node's marker opens containment.** This is ratified as the obvious reading
+rather than decided as new policy: **a node *is* a marker** — D-148 says an Egress node is two
+ordinary registered markers the house picks at fire time — and everything in this house that a
+marker offers, it offers to a scan.
+
+E-L5-6 was right that nothing in the GDD said so, and right that the symptom was bad: a player who
+walks to the correct room and taps is told `held=false` with no reason. **The fix is that there is
+nothing to tap** — you scan, the same as you do at every other card in the building, and the reason
+you are at the card is D-136: a scan is the only way the house can know where anybody actually is.
+Containment is a race across a house between two people, and it ends the way every other errand in
+this game ends, by putting a phone in front of a piece of paper.
+
+### D-163 · **One vote clock, one number: 45 seconds — decided**
+
+**The couch vote clock is 45 seconds**, the same as the living's. The 60 was **a drawing artifact**,
+and `Countdown.kt` has been documenting its own provenance since it was written: the ghost's 60 was
+kept because it reproduced a mockup frame — `VOTING ENDS IN 0:24` over twelve lit segments of
+thirty — and moving it to 45 redraws that picture.
+
+**Redraw the picture.** D-145 gave the out a live vote precisely so they watch the same event the
+living are in; two clocks means the couch's bar empties at a different rate from the bar in the
+hallway, for no reason a player could ever be told, in a game where the couch and the living room
+are twelve feet apart and can see each other. **One clock, one number, host-changeable in lobby
+settings (D-117).**
+
+`Countdown.kt`'s `GhostMeeting` entry is a **code site owed a sweep**, listed below. It is deliberate
+today and stops being deliberate now.
+
+### D-164 · **The Array Wipe circuit is a line on the work order — decided**
+
+**The assigned mix's *1 circuit* IS the Array Wipe circuit**, and it is **a real work-order entry**
+like every other. It is not a house event, not a side quest, and not something a Resident discovers
+by walking into it.
+
+The consequence is a wire consequence and it belongs to **W1**: **the order format must be able to
+carry a circuit** — three markers and one carried state (D-123's *a card is a place*), where an
+ordinary entry carries one. An order line that can only name a single marker cannot express the
+entry the design has been costing at ~160s in the per-Resident load since the mix was written.
+
+**This is why the widening is authorized rather than argued** (D-171). The circuit was never a
+missing feature; it was a feature the format could not say.
+
+### D-165 · **An early Drift tap spends the attempt and fails — decided, superseding E-S2-3**
+
+**A tap before the buzz is handed over, graded REJECTED, and the attempt is gone.** To retry you
+walk back and re-scan.
+
+S2 took the dark-room reading — a control that swallows a tap in silence is indistinguishable from a
+flat phone — and echoed the early tap instead of sending it. **The reading was reasonable and the
+conclusion is the opposite one**, because the game already has an answer to *did my tap land*, and
+it is not silence and it is not an echo: **it is a grade.** D-109 grades every entry for real, for
+both roles, in identical words. An early tap is an entry. It is a wrong one. **The house says so.**
+
+**D-110's rule does the rest:** one attempt per scan, and the walk back is the cost. An early tap
+that costs nothing is a free probe of the house's `now` — tap, learn you were early, tap again — and
+D-140 built Drift specifically as object permanence *against* a house-authored NOW. A mechanic whose
+entire content is *when* cannot let you ask *when is it* for free.
+
+**And it is honest about the thing that matters.** The player is told they were early, at the moment
+they were early, by the same grader that tells them they were on time. Nothing about the timing
+model is hidden; only the retry is expensive.
+
+### D-166 · **The role-swap diff stops at the first ending — the harness narrowing is accepted**
+
+**L6's narrowing is accepted:** the differential harness diffs the two client transcripts **up to the
+first round-ending in either run**, and stops there.
+
+**When the round ends is not a guarded secret.** It is the loudest public fact in the game — every
+lamp in the house comes up, every phone rings or goes to an ending screen, and D-153 already rules
+that the ending screens print no total anybody could arithmetic backwards. A harness that keeps
+diffing past that point is comparing two runs that are no longer the same round, and its
+disagreements are about *which ending happened*, which is exactly the thing the role swap was
+supposed to change.
+
+**The guarantee that matters is untouched.** The role-swap diff was never the whole instrument —
+the architecture is explicit that a symmetric leak yields two identical transcripts and a clean
+diff, which is why the **per-message schema check at the emit boundary** exists as an independent
+second test. **That one runs to the end of both runs**, unnarrowed. Two tests, two failure modes,
+neither covering the other, and only one of them was narrowed.
+
+### D-167 · **Four numbers ratified, two reclassified — decided**
+
+Ratified as the design's, not as a builder's guess:
+
+| number | value | note |
+|---|---|---|
+| **simulation tick** | **20 Hz** | the authority's step rate |
+| **Egress cooldown** | **120 s default, host-changeable** | one clock for the whole house (D-151); the lobby already owns the Egress *timer* as a setting (F-009), and the cooldown joins it |
+| **Sync Pulse beat** | **1.5 s** | four taps on the beat (A-11) is therefore ~6 s of tapping after the run across the house |
+| **Sync Pulse tap window** | **400 ms** | the tolerance around each beat |
+
+**Two are reclassified from invented to derived**, which changes nothing about their values and
+everything about whether they are open questions:
+
+- **The ~2 s scheduling lead was already the design's** (`gdd.md:1261`), written down with its
+  argument — broadcast *the event begins at T*, never *go* — and used in three places. It is not a
+  number somebody picked while building.
+- **The printed id's length is D-069's payload arithmetic.** D-069 ruled that an id exists so a
+  stale card is recognisable, and the length falls out of the payload rather than out of taste.
+
+**The distinction is worth the paragraph.** A number in the *invented* column is a standing question
+that somebody has to answer before ship; a number in the *derived* column already has its answer
+written above it. Two entries were in the wrong column and were going to be re-litigated.
+
+### D-168 · **The Status panel is deleted — decided**
+
+**There is no Status panel. The lamp dial does not exist as a concept.** No corner long-press, no
+summoned surface, no dial.
+
+Revision 33 flagged this and refused to guess: D-142 moved *arming* to springboard page 2 and said
+nothing about whether a panel survived for the lamp. **It does not, because the lamp was the last
+thing in it and the lamp is not the player's.** The house sets the level — that is what the whole
+light-signature system is (D-112, D-113): a subroutine lights you up or blacks you out according to
+what the house decided it costs, and a dial that let a player override that would be a dimmer switch
+on the game's central tension.
+
+**What the panel held goes to surfaces that already exist.** Abilities left for page 2 (D-142).
+**Carry state moves to the work-order widget**, which is where it belongs: carrying blocks every
+other entry, so the state and the list it blocks are now one surface, and **the widget says so on
+its face** rather than making the player hold the rule in their head in a dark room. The role parity
+argument survives intact on page 2, which is identical at rest for both roles.
+
+**Four fossils swept:** `gdd.md`'s *Open the Status panel* and *Adjust the lamp* control rows, the
+*identical for both roles* paragraph, and **the tier table's *top and bottom half***, which was
+describing the panel's geometry two hundred lines before anybody noticed. Also `gdd.md`'s E3 and
+reference-artifact rows, `epics.md` story 3.8, story 3.9's *opening the panel is cheap*, and E3's
+acceptance line.
+
+### D-169 · **Card ids are unique across prints, and a mislaid card is simply unregistered — settled**
+
+E-D2-4 and D-086 are both ratified, and together they close the card-identity question:
+
+- **Ids are unique across prints.** A reprint never reissues an id. The **printed four-of-run-tag,
+  three-of-card split stands as the implementation** of that uniqueness — adopted from the build
+  rather than replaced, because it is correct and because **paper cannot be patched** (D-120).
+- **Registration dedupes on shape.** Two live cards may never share a shape — D-086, ratified in
+  revision 18, and the refusal lands on the host in the light with 42 registrable shapes to choose
+  from.
+- **A scan validates the id against the map.** A mislaid card's id is **no longer registered**, so it
+  is refused as *unregistered* — which is the whole point of D-069's id and needs no separate
+  staleness concept. There is no *this card is old* state; there is only *this house does not know
+  this card*.
+
+The three fit together only because ids are never renumbered (D-070, D-085): the id is a permanent
+name, the shape is what the house resolves by, and the map is what makes either mean anything.
+
+### D-170 · **SHIFT — the work interval between meetings — new vocabulary**
+
+**`Round` keeps its code meaning, unchanged: lobby to victory, one word.** The vocabulary gains a
+second unit of time beneath it:
+
+> **A SHIFT is the work interval between meetings. The first shift runs from lights-out to the first
+> meeting. A meeting ends the shift it interrupts.**
+
+The game has been describing this interval since it was designed and has had no name for it, which
+is why sentences about it kept reaching for *round* and coming out wrong. With the word, the
+derived phrasings say themselves:
+
+- **cooldowns run during shifts and pause during meetings** (D-133's *no meeting during an Egress*
+  is the same clock seen from the other side);
+- **the living's meter freezes for the length of a shift**;
+- **carry state persists across shifts** — F-014, closed in revision 23, is exactly this sentence
+  and could not be written before.
+
+**Added to the enforced vocabulary** in `project-context.md`, `game-architecture.md`'s list and
+`CLAUDE.md`. It needs no lint entry: the lint holds rejected stems, and `shift` is a word being
+*allowed*, not one being replaced.
+
+### D-171 · **W1 is authorized — six wire widenings**
+
+Six widenings, authorized as a set:
+
+| # | widening | why |
+|---|---|---|
+| 1 | **order line carries marker + room** | an entry the player can walk to has to name where |
+| 2 | **the meter to clients** | revision 19's `PanelState` total, reaching the surfaces that draw it |
+| 3 | **vote window into arming** | one clock, one number (D-163), issued where every other round setting is |
+| 4 | **seat → name for the reveal** | D-115 put names on the wire; the reveal is where they are read |
+| 5 | **marker → room map** | the spectator map (D-136) and containment (D-162) both resolve through it |
+| 6 | **the circuit in the order format** | D-164 — the assigned *1 circuit* has to be expressible |
+
+**Each is a widening of an existing shape, not a new `Effect`**, and every one of them lands in the
+redaction schema in the same change that adds it — **the schema fails closed, so a field with no
+entry ships to nobody** and the widening would be silently inert. That is rule 2 doing its job, and
+it is the reason six of these can be authorized at once rather than one at a time.
+
+### Swept in this pass
+
+Sixteen sites. No ruling is made here that is not made above.
+
+| site | superseded by | what it now says |
+|---|---|---|
+| `gdd.md` — M1, *press and hold to scan … release, subroutine opens* | D-159 | tap SCAN, turn the lamp onto the code, opens on acquire; ten-second window; double vibrate on timeout |
+| `gdd.md` — *one hold-button drives both paths* | D-159 | one SCAN button |
+| `gdd.md` — *Scan a marker* control row | D-159 | the tap, the turn, the window, and why the tap is the only input the player sees themselves make |
+| `gdd.md` — the first-sixty-seconds trace, *holds to scan* | D-159 | taps SCAN and turns the lamp onto the code |
+| `gdd.md` — a Resident's cycle, *hold to scan* | D-159 | same |
+| `gdd.md` — battery, *the scan is a ~0.5s acquire* | D-159 | a ten-second window that usually closes on acquire |
+| `gdd.md` — NFC risk row, *the one-hold-button design* | D-159 | the one-SCAN-button design |
+| `gdd.md` — E5 summary row, *hold-to-scan* | D-159 | tap-to-scan with the window and auto-open |
+| `gdd.md` — *Open the Status panel* and *Adjust the lamp* control rows | D-168 | deleted; replaced by a carry-state row that says there is no dial |
+| `gdd.md` — *the Status panel is identical for both roles* | D-168, D-142 | there is no panel; parity lives on page 2 |
+| `gdd.md` — tier table, *two big targets, top and bottom half* | D-168, D-151 | page 2, and the Egress clock named as house-wide |
+| `gdd.md` — E3 row and the device-mockup reference row | D-168 | the work-order widget; the mockup's dial marked a fossil |
+| `gdd.md` — the house-notice register | D-161 | mid-round permission flips land here, in the same words |
+| `epics.md` story 2.10 — *warm the Local Network permission* | D-161 | every permission, and the lobby gates on it |
+| `epics.md` stories 3.8, 3.9, and E3's acceptance | D-168, D-141 | the work-order widget; the two-second hold; page 2 at rest |
+| `epics.md` stories 5.1, 5.2, 5.12 | D-159 | the tap, the window, the auto-open, the SCAN button |
+| `epics.md` — acceptance *±50 ms* | D-019 | ±150 ms |
+| `epics.md` story 7.15 — *graceful collapse when a chain cannot be staffed* | D-146 | **deleted.** D-146 rules the mechanism out by name: nothing auto-satisfies, a Revoke strands a chain, and over-provisioning is the whole rescue |
+
+**Closed as correct-on-purpose, with no edit:** the standing question about **the empty lower halves
+of several subroutine layouts.** They are not an oversight. `gdd.md`'s **minimise lit pixel *area*,
+not just brightness** rule makes unlit screen the default state of every surface in this game, and a
+layout that fills its lower half to look finished is a lantern in a dark house. **A line in the log
+is the whole ruling; the layouts are already right.**
+
+### Where the code and the epics are still wrong
+
+| site | the superseded phrasing | what replaces it |
+|---|---|---|
+| `Countdown.kt` — `ScreenId.GhostMeeting to 60`, and the KDoc explaining why it is deliberate | the ghost's separate 60 s vote clock | D-163: 45, the same as the living's. Client work, queued — and the KDoc's *left alone deliberately* has to go with it |
+| everything carried into this revision from revision 33's list | — | unchanged and still owed: `ScreensOut.kt`'s `14 / 32` rows (D-153), `epics.md` story 4.10 and the marker-taxonomy blind zone row (D-155), and three further orphan auto-satisfaction sites (D-146) |
+
+### Open — awaiting a ruling
+
+The four escalations the evening device unit raised on 2026-08-21, recorded here so they are queued
+rather than remembered:
+
+- **E-D3-1 · A stored seat token is refused in silence.** A phone that played a round presents its
+  token to a host that never issued one; the resume is refused, correctly (D-087), and **the lobby
+  says nothing to anybody** — not the player, not the host. `LobbyOverTransport.onPhase` acts on
+  `Seated` and on nothing else, so `Dismissed` reaches no log, no screen and no host. **Rule 6
+  exactly inverted.** It will happen on the second evening of every household that plays twice. The
+  refusal is right; the silence is the bug — and **what a refused client is told is a decision about
+  what a client receives**, which is why it is a ruling and not a one-line fix.
+- **E-D3-2 · Two homes with one name: the advertisement fails outright and the host is not told.**
+  Bonjour returns `-72001` (collision), the second house is **never published at all**, and its host
+  sits in a one-seat lobby with no reason given. The nearby list already dedupes by address and port
+  and deliberately **not** by name, with the reason at the call site — so the screen is built for a
+  duplicate name the radio cannot publish. Two halves want rulings: whether the advertisement
+  carries a disambiguator (Bonjour will auto-rename if asked), and **what the host's screen says
+  when its own house could not go on the air.**
+- **E-D3-3 · There is no effect push, so five seats armed one phone.** `LIGHTS OUT` passed the gate
+  on the house's own counts and then `ARMED THIS PHONE ONLY`. `FlowModel.lightsOut` is presentation
+  only and says so; `armingFor` has no production caller. **There is no host→client effect push for
+  any effect** — L2 and L3 left the same seam — so the arming draws and the opening message cannot
+  reach a second seat at any party size. Recorded as the state of the tree rather than as a
+  shortfall of that run.
+- **E-D3-4 · An uninstall resets Local Network, and mDNS then fails with no symptom whatsoever.**
+  Recorded rather than open: it is **D-161 met in the wild**, and it arrived on setup, in the light,
+  which is the one place it is survivable. Two taps from a person cleared it and the advertisement
+  went out the moment they happened. The warning is now evidenced rather than predicted.
+
+---
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

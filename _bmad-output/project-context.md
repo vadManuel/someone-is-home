@@ -81,7 +81,7 @@ Real UI, real progress, real completion animation, **writes nothing**. Ten subro
 
 ### 9. Vocabulary in code, not just in strings
 
-`Resident` / `Insider` are the only role words. `Revoke` = the Insider ability. `Restrain` = the group's action at a meeting. **Revoke and Restrain are not synonyms and must never be collapsed** — one is system power lent by the house, the other is a physical act the house cannot prevent. `Subroutine` = the unit of assigned work. `SystemIntegrity` = the collective progress meter. `Egress` = the Insider-triggered house crisis. `Override` = the Insider-only route between rooms.
+`Resident` / `Insider` are the only role words. `Revoke` = the Insider ability. `Restrain` = the group's action at a meeting. **Revoke and Restrain are not synonyms and must never be collapsed** — one is system power lent by the house, the other is a physical act the house cannot prevent. `Subroutine` = the unit of assigned work. `SystemIntegrity` = the collective progress meter. `Egress` = the Insider-triggered house crisis. `Override` = the Insider-only route between rooms. `Shift` = the work interval between meetings — the first runs from lights-out to the first meeting, and a meeting ends the shift it interrupts. **`Round` is not a synonym**: a round is lobby to victory and contains many shifts (D-170).
 
 **That is the complete vocabulary — any identifier outside it is wrong.** The lint's word list carries the mechanical detail; lint covers `model`, `core`, `ui`.
 

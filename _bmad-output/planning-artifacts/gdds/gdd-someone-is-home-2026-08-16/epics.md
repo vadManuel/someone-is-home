@@ -110,11 +110,11 @@
 | 2.7 | **Role reveal by text message.** Insider: blackmail text → house line in customer-service register → fellow Insiders if `Known`. Resident: flat administrative work order |
 | 2.8 | **F-003 — identical message count and haptic pattern across roles.** Buzz count is a tell in a silent room at the exact moment everyone is still clustered. Pad the Resident sequence, or deliver the whole reveal as one batch with a single haptic |
 | 2.9 | **Transport — decided.** Embedded **Ktor 3.5.1** server on the host, **mDNS** discovery (NSD / Bonjour behind `expect`/`actual`), **websockets**. All multiplatform Kotlin, so transport is in the shared column. No-wifi fallback is **manual Personal Hotspot**, documented in the play manual — iOS will not let an app toggle it |
-| 2.10 | **Warm the iOS Local Network permission during setup, in the light.** First local-network discovery raises a system modal; firing it at arming in a dark room is the same failure as the NFC sheet |
+| 2.10 | **Warm every permission during setup, in the light — and gate the lobby on it.** Local Network, camera, motion, notifications: **a player cannot take a seat until the whole Perms set is complete** (D-161). First use of any of them raises a system modal, and firing one at arming in a dark room is a light nobody authored and a tell. A permission that flips *after* the gate surfaces as a house notice at the next meeting, in the `gdd.md` administrative register |
 | 2.11b | **Client attribution — session token bound to a SEAT, issued at join.** Intents are attributed **by connection**; a client never names itself, so it cannot claim to be another player. **A lobby code gets you *a* seat, never *that* seat.** Without this, a second websocket asserting it is Marcus is accepted — the only cheat in this game that is remote, undetectable, and requires no physical act |
 | 2.11 | **Clock.** Monotonic timebase; NTP-style offset at join taking the **minimum-RTT** sample; **re-sync every 30 s**; **slew, never jump** — a backward jump could skip a scheduled event |
 
-**Acceptance:** two phones in different rooms flip within ±50 ms. A Resident and a Insider standing side by side receive indistinguishable haptic activity at arming.
+**Acceptance:** two phones in different rooms flip within ±150 ms (D-019). A Resident and a Insider standing side by side receive indistinguishable haptic activity at arming.
 
 ---
 
@@ -131,13 +131,13 @@
 | 3.5 | **Notes** — accepts typing, never saves |
 | 3.6 | **Messages** — receives, cannot send |
 | 3.7 | **Settings** — mostly locked. Lamp control and *About* have content; **End Session** for the host |
-| 3.8 | **Status panel** — long-press bottom-left ~400 ms. Identical layout for both roles; bottom row is abilities for Insiders and inert readouts for Residents |
-| 3.9 | **Second-confirm on every ability fire.** Opening the panel is cheap; firing must not be |
+| 3.8 | **The work-order widget** — your subroutines, and **carry state**, which says on its face that carrying blocks every other entry. **No Status panel and no lamp dial exist** (D-168): the house sets the light level, and there is no corner long-press |
+| 3.9 | **The two-second hold on every ability fire** (D-141). Reaching page 2 is cheap; firing must not be |
 | 3.10 | Incoming-call screen component (used by both meeting triggers), with the caller named |
 | 3.12 | **The ring.** Full-volume ringtone on the call screen, **identical for both trigger types**, playing **regardless of the hardware silent switch** (audio session category — standard iOS gotcha). Stops on acknowledgement or when lights-up completes; **never rings indefinitely**, or a slow player is localized by their own phone |
 | 3.11 | Ambient lamp flicker as permanent system behaviour — **not an ability** |
 
-**Acceptance:** a shoulder-surf at close range cannot distinguish a Insider's device from a Resident's in any state, including the Status panel.
+**Acceptance:** a shoulder-surf at close range cannot distinguish a Insider's device from a Resident's in any state, springboard page 2 at rest included.
 
 ---
 
@@ -171,8 +171,8 @@
 
 | # | Story |
 |---|---|
-| 5.1 | **Hold-to-scan**, ~0.5 s acquire, haptic tick on detection, release |
-| 5.2 | **Preview-less capture session.** The lamp screen *is* the scanner — no "open scanner" step exists |
+| 5.1 | **Tap SCAN; the front camera reads through the lamp face.** A **ten-second window** counts down from the tap; **acquire auto-opens the subroutine**, and **timing out auto-closes with a double vibrate** (D-159, D-160). There is no hold and no release |
+| 5.2 | **Preview-less capture session.** The lamp screen *is* the scanner — no "open scanner" step exists, and the screen is pointed at the marker rather than at the player, which is why 5.1 opens by itself |
 | 5.3 | **Routing** — the marker ID selects which subroutine opens, if the player has one there |
 | 5.4 | **Check-in** — always logs, task or no task. Decoupled from routing |
 | 5.5 | **Motion accumulator** at 100 Hz on gravity-removed acceleration magnitude |
@@ -182,7 +182,7 @@
 | 5.9 | **Budget scales with tier.** Strict for a 5 s short; forgiving for a 60 s circuit leg |
 | 5.10 | **The draining meter, always visible.** Failure must never be a surprise |
 | 5.11 | Sweep for nearby devices on every scan, and every 5 s during a motion-restricted task |
-| 5.12 | NFC path behind the same hold button (after the iOS spike) |
+| 5.12 | NFC path behind the same SCAN button (after the iOS spike) |
 | 5.13b | **BLE identity — ephemeral rotating tokens, 15 s, authority-resolvable only.** A stable advertised ID lets any client track an individual all round, which makes *counts, never identities* decorative. The leak is in the radio, below the server, so server-side anonymization cannot fix it. Advertise the token and nothing else — no role, no name, no stable ID |
 | 5.13 | **The contact primitive** — one very-tight-RSSI device-to-device handshake, presented to the player as touching phones. Serves both the Revoke and the deactivation report; outcome determined purely by the two devices' states. **Not NFC — iOS exposes no phone-to-phone NFC.** UWB optional as a precision upgrade |
 | 5.14 | **Gate the handshake at contact range, as a hard constraint.** At "nearby" it becomes a through-wall detector for revoked players and *you can walk past a revoked player and never notice* stops being true |
@@ -233,7 +233,6 @@
 | 7.12 | **Lazy linking, sliding window of two.** Next link chosen at resolution time from living eligible players |
 | 7.13 | **Randomized unlock delay 20–120 s, identical distribution on both paths** (completed *and* revoked). **F-013 — the 15–60 s revision was tuned for a 15-minute round and was reverted when the round returned to ~25 minutes; 20–120 s is proportionate again.** What survives F-013 is the *coupling*: this number must be re-derived whenever the round-length estimate moves, and the two live in different sections |
 | 7.14 | **Upstream notification at assignment only.** Never confirm the downstream unlock happened |
-| 7.15 | **Graceful collapse** when a chain cannot be staffed |
 | 7.16 | Chain seeding — each link's output seeds the next, so a chain reads as a pipeline rather than three numbered errands |
 
 **Acceptance:** a chain whose holder is revoked behaves identically, from the waiting player's side, to one whose holder completed. Verified by inspection of both code paths and by a blind playtest.

@@ -220,12 +220,13 @@ Standing still, glowing, heads-down in a dark house is an actual physical exposu
 
 #### M1 — Scanning: routing and check-in, decoupled
 
-Press and hold to scan; ~0.5s to acquire, haptic tick on detection, release, subroutine opens. It is aiming, **not** the task.
+**Tap SCAN, then turn the lamp to face the code.** The front camera is on the same face as the lamp, so presenting the light to the marker *is* aiming it. **The subroutine opens by itself the instant the code is acquired** — there is no release, and no second tap. It is aiming, **not** the Subroutine.
 
-- **No camera preview.** `AVCaptureSession` + metadata output with no preview layer attached. The lamp screen *is* the scanner — there is no "open scanner" step.
-- **Aim feedback via haptics**, since there is no preview.
+- **A ten-second window runs from the tap**, counting down. **Timing out closes the scanner by itself, with a double vibrate** — two vibrates being the house's word for *no* (D-160). Nothing is spent; tap SCAN again.
+- **No camera preview.** `AVCaptureSession` + metadata output with no preview layer attached. The lamp screen *is* the scanner — there is no "open scanner" step, and while you are scanning the screen is pointed away from you and cannot show you anything. **Auto-open is not a convenience; it is the only way a scan can end in the player's favour** when the surface that would say *got it* is facing the wall.
+- **Aim feedback via haptics**, since there is no preview and no line of sight to the screen.
 - **Check-in always fires**, task or no task. A Resident can sweep the house scanning everything to prove a route; a Insider can scan markers to manufacture task activity they never performed.
-- QR ships in v1 (free, printed at home). NFC (NTAG213/215/216, ~$0.15–0.30/sticker) is the paid add-on, sold because it is better — it works blind, by feel, and cannot be photographed and completed from the couch. One hold-button drives both paths.
+- QR ships in v1 (free, printed at home). NFC (NTAG213/215/216, ~$0.15–0.30/sticker) is the paid add-on, sold because it is better — it works blind, by feel, and cannot be photographed and completed from the couch. One SCAN button drives both paths.
 
 #### M2 — The motion energy budget
 
@@ -301,8 +302,8 @@ The binding constraint is not balance — it is that a Insider operates the pane
 
 | Tier | Contents | Cost | Why |
 |---|---|---|---|
-| **1 — muscle memory** | **Revoke**, **Egress** | Each has **its own** cooldown | Two big targets, top and bottom half. Time-critical; must be hittable without looking, mid-chase. |
-| **2 — deliberate** | **Surge**, **Spoof**, **Isolate** | Shared **Access pool** | One swipe further, smaller targets. Setup, never used while running. Harder to reach is a *feature*. |
+| **1 — muscle memory** | **Revoke**, **Egress** | Revoke is **per-Insider**; the Egress clock is **shared house-wide** (D-151) | Two big targets on springboard page 2. Time-critical; must be findable without looking, mid-chase. |
+| **2 — deliberate** | **Surge**, **Spoof**, **Isolate** | Shared **Access pool** | Smaller targets, further down the same page. Setup, never used while running. Harder to reach is a *feature*. |
 | **Passive** | **Override** | None | Interior doors. No UI at all. |
 
 | Ability | Effect | Range |
@@ -420,7 +421,7 @@ Designed under one constraint: **minimal phone interaction for anything social.*
 
 > **NOTICE:** Occupant **Marcus** was unreachable 21:04–21:07. Occupancy data for this interval is incomplete.
 
-Radio failure and backgrounding both degrade advertising identically, so both trigger it. **This exists because silent degradation is a real advantage** — a player whose radio fails is invisible on the map while alive, and nobody, including them, would ever know.
+Radio failure and backgrounding both degrade advertising identically, so both trigger it. **A permission revoked mid-round reads the same way and lands in the same register** — every permission is granted at setup, in the light, before a player may take a seat (D-161), so a permission that is missing *during* a round is something that changed under the house, and the house says so here rather than letting one phone quietly stop contributing. **This exists because silent degradation is a real advantage** — a player whose radio fails is invisible on the map while alive, and nobody, including them, would ever know.
 
 **It needs no anti-exploit.** Backgrounding deliberately to manufacture a connectivity excuse backfires: being named as off-network means you generated no check-ins either, and in a game about who was where, *"the system could not see you for three minutes"* is the worst sentence that can be read aloud about you. **The exploit is self-punishing.**
 
@@ -528,13 +529,12 @@ The whole game is operated **one-handed, in the dark, without looking.** Every c
 
 | Action | Input | Why this input |
 |---|---|---|
-| **Scan a marker** | Press and hold the single scan button, ~0.5s | One button drives both QR and NFC. NFC requires a user-initiated action anyway, so the system sheet appears in response to a deliberate press rather than ambushing the player |
-| **Open the Status panel** | **Long-press bottom-left corner, ~400ms** | Corners are physical landmarks findable by feel without looking. A 400ms hold cannot fire accidentally. No conflict with iOS system gestures. Invisible to bystanders — the thumb is already on the phone |
+| **Scan a marker** | **Tap SCAN, then turn the lamp to face the code.** Ten-second window; opens by itself on acquire, closes by itself on timeout with a double vibrate | One button drives both QR and NFC. NFC requires a user-initiated action anyway, so the system sheet appears in response to a deliberate tap rather than ambushing the player. The tap is the only input the player can see themselves make — from there the screen is facing the marker (D-159) |
 | **Fire an ability** | **Springboard page 2, in place — select the tile, then a two-second hold** | Accidentally firing an Egress in front of someone is a game-ending misclick and it *will* happen in the dark, and two seconds of continued intent is the one thing an accident cannot supply. Nothing opens; the hold *is* the second confirm (D-141, D-142) |
 | **Navigate the springboard** | Horizontal swipe between two pages; tap an icon | Standard, muscle-memory, and identical for both roles |
 | **Revoke a player** (Insider) | **Arm on springboard page 2 with a two-second hold**, then **touch your phone to theirs** | Contact *is* the proximity gate. No confirmation step exists on either device. Both roles' page 2 is identical at rest; a Resident's tiles are **entirely disabled** — no press feedback, no hold that fills and then declines (D-142) |
 | **Report a deactivation** | **Touch your phone to the revoked player's phone** | Same gesture, different outcome by state. No button means no enabled/disabled state to read, so it cannot be used as a proximity radar for revoked players |
-| **Adjust the lamp** | Dial control in the Status panel | The one Settings row with real content |
+| **Carry something** | Nothing to press. **Carry state lives on the work-order widget**, which says so and says that it blocks every other entry | There is no lamp dial and no panel to put one in — **the house sets the light level, always** (D-168). The one piece of state that used to justify a panel now sits on the surface that already lists your work |
 
 *Rejected gestures and why:* **swipe up** (iOS home gesture), **edge swipe** (back-navigation conflict), **two-finger tap** (hard one-handed in the dark), **shake** (visible arm movement, and accidentally discoverable).
 
@@ -548,7 +548,7 @@ The whole game is operated **one-handed, in the dark, without looking.** Every c
 
 **Why a gesture beats a button, beyond removing the radar.** Reporting a revocation now means kneeling down in the dark beside the revoked player — stationary, both hands occupied, exposed. That is the vulnerability this game is built on, and it creates a decision the button version never had: **report it now, or walk away and come back when it suits you.** It also means **a Insider can camp a player they revoked** — chains-are-bait, applied to the revoked.
 
-**The Status panel is identical for both roles** — same layout, same positions, same furniture: your subroutines, carry state, light control. **The bottom row is the ability row for Insiders and inert system readouts for Residents.** A shoulder-surf at close range sees a panel of the right shape with the right contents.
+**There is no Status panel** (D-168). What it was going to hold has gone to the two surfaces that already exist: **your subroutines and your carry state live on the work-order widget**, and **the light level is the house's, never yours.** The role parity it was built to provide now lives on **springboard page 2**, which is identical for both roles at rest and entirely inert for a Resident (D-142) — a shoulder-surf at close range sees a page of the right shape with the right contents, and one fewer surface to keep in sync.
 
 **Subroutine input vocabulary.** At four luminance steps of amber, no hue discrimination, no audio, no twitch timing, and no precise dragging, what remains is: **position, shape, count, size, order, presence/absence, slow motion** — plus **haptics**, which in an enforced-silence game is the only fully private channel available, and which no game in this space uses.
 
@@ -924,7 +924,7 @@ Each Resident's list holds **7 subroutines: 1 circuit, 1 long, 3 medium, 2 short
 
 Everyone disperses. Nobody has been revoked. The **timelapse floor is the start of the round**, so there is no history; the Terminal offers only the live count view, and every count in the house is fresh and uninformative because everybody just scanned nothing.
 
-A Resident walks to their nearest marker, **holds to scan** (~0.5s to acquire, haptic tick on detection), and a subroutine opens. The **motion budget calibrates on entry** against that player's hand steadiness, and the draining bar appears.
+A Resident walks to their nearest marker, **taps SCAN and turns the lamp onto the code** (haptic tick on detection), and the subroutine opens by itself. The **motion budget calibrates on entry** against that player's hand steadiness, and the draining bar appears.
 
 **What a Resident actually does in the first sixty seconds is: pure task execution with zero information — and that is correct.** It is the only stretch of the round when the house is quiet, and its tension is entirely anticipatory. Nothing needs adding here. The design's instinct to check this seam was right, and the answer is that the seam is a feature.
 
@@ -936,7 +936,7 @@ The Insiders, meanwhile, are walking to markers and going through the motions, b
 
 The steady state, running for every player simultaneously.
 
-**A Resident's cycle.** Move (~25s) → hold to scan → **routing** opens the subroutine, **check-in** logs the presence regardless → the subroutine runs, lighting them up or blacking them out per its light signature → their phone **sweeps every 5s** for nearby devices, making them a stationary sensor → complete → System Integrity decrements silently → move.
+**A Resident's cycle.** Move (~25s) → tap SCAN, turn the lamp onto the code → **routing** opens the subroutine, **check-in** logs the presence regardless → the subroutine runs, lighting them up or blacking them out per its light signature → their phone **sweeps every 5s** for nearby devices, making them a stationary sensor → complete → System Integrity decrements silently → move.
 
 **A Insider's cycle.** The same, for cover. Plus: **swipe to springboard page 2** — the same swipe every Resident has — → **hold a tile for two seconds** to **arm Revoke** (silent, invisible, nothing changes on any screen, and nothing opens) → close the distance on someone heads-down in a subroutine → **touch phone to phone.**
 
@@ -1254,7 +1254,7 @@ Torch **level** control (not binary) · screen brightness override · keep-awake
 | **Lamp luminance** | Dimmest step **≤2 nits** full-screen; lamp-screen lit pixel area **≤15%** of the panel | Photometer, and pixel-area measurement from a screenshot |
 | **Lamp blackout on contact** | **Same frame** as the contact handshake resolves | Single-device, and the one genuinely tight timing requirement in the game — it is the entire mitigation for losing the anonymous revoke |
 
-**Battery is a non-issue by construction**, because the camera duty-cycles to ~2–3 minutes per round rather than running for fifteen. The scan is a ~0.5s acquire, not a live preview.
+**Battery is a non-issue by construction**, because the camera duty-cycles to ~2–3 minutes per round rather than running for fifteen. A scan is a ten-second window that usually closes on acquire long before it expires, not a live preview.
 
 ### Multi-device timing
 
@@ -1272,7 +1272,7 @@ Torch **level** control (not binary) · screen brightness override · keep-awake
 |---|---|
 | **Kotlin/Native GC pause on the blackout frame** | Kotlin/Native uses a tracing collector, and the lamp blackout is the only hard real-time requirement in the game. **A pause there does not drop a frame — it un-anonymises a revoke.** Unlike a shader stall it cannot be pre-warmed away; the fix is a no-allocation discipline on that path, enforced by a **permanent allocation assertion** rather than a one-time check |
 | **Backgrounding degrades BLE advertising** | A phone call, a notification tap, or a lock silently reduces a player's visibility to everyone. Keep-awake is planned; **also log backgrounding as a game event**, or phantom false negatives will appear that were never designed and cannot be tuned |
-| **iOS NFC system sheet** | `NFCTagReaderSession` presents a "Ready to Scan" sheet that cannot be styled, branded, or suppressed. **Checked 2026-08-16: current docs still require user-initiated scans, a 60 s timeout, and a foregrounded app — no evidence the sheet became suppressible.** Prior is now *restriction persists*; the 30-minute spike stands. The one-hold-button design is correct regardless |
+| **iOS NFC system sheet** | `NFCTagReaderSession` presents a "Ready to Scan" sheet that cannot be styled, branded, or suppressed. **Checked 2026-08-16: current docs still require user-initiated scans, a 60 s timeout, and a foregrounded app — no evidence the sheet became suppressible.** Prior is now *restriction persists*; the 30-minute spike stands. The one-SCAN-button design is correct regardless |
 | **QR is photographable** | Mitigations: require the marker in frame for the full task duration, cross-check against BLE proximity, and accept that among friends it is mostly a non-issue. NFC is the real fix and it is the paid tier |
 | **Anonymize server-side** | Resolve identity on the backend and ship only anonymized counts to clients, or a proxy trivially unmasks the map. Low stakes among friends, free to get right from the start |
 | **Amber vs. scotopic vision** | The Tier 0 promise now depends on a palette chosen for art reasons. The first prototype must test it |
@@ -1296,9 +1296,9 @@ Fourteen epics. Detailed story breakdown in `epics.md`.
 | **E0** | **Foundations** | Pure deterministic simulation core (no platform types), fixed-timestep tick, session recording, deterministic replay, client-transcript recorder, differential leak harness, map persistence, disconnect/rejoin | 1.7 spike |
 | **E1** | **The lamp** | Full-screen amber lamp, torch level, brightness override, the white flip, and **every connected phone flipping at once**. **Carries the stack gate (1.7)** | — |
 | **E2** | Session, sync, and arming | Host-owned server, join, lobby settings, clock-offset measurement, scheduled-timestamp flips, perimeter arming, role reveal by text | E1 |
-| **E3** | The device shell | Springboard (two pages, role-identical), status bar, the five apps as device states, Status panel long-press, Settings | E2 |
+| **E3** | The device shell | Springboard (two pages, role-identical), status bar, the five apps as device states, the work-order widget, Settings | E2 |
 | **E4** | The house | Grid painter per storey, room/stairs tagging, additive floors, markers, host acknowledgment, the stairs exclusion, adjacency from cell neighbours | E3 |
-| **E5** | Scanning and the motion budget | Hold-to-scan, preview-less capture, routing/check-in decoupling, motion accumulator with per-player calibration and both bounds, the draining meter | E4 |
+| **E5** | Scanning and the motion budget | Tap-to-scan with the ten-second window and auto-open, preview-less capture, routing/check-in decoupling, motion accumulator with per-player calibration and both bounds, the draining meter | E4 |
 | **E6** | The subroutine set | Ten subroutines across 3 bright / 4 medium / 3 dark, **plus the fake versions**, plus degradation | E5 |
 | **E7** | Task structures | Short/medium/long/circuit scheduling, Memory Dump, Array Wipe carry state, chains with lazy linking and randomized unlock, System Integrity | E6 |
 | **E8** | The Terminal | Live counts, staleness bands with stored jitter, error injection, exclusive access, timelapse with cooldown-scales-to-history | E5, E4 |
@@ -1537,7 +1537,7 @@ Two working prototypes exist from the 2026-08-15/16 session and should be consul
 
 | Artifact | What it holds | Feeds |
 |---|---|---|
-| **Device mockup** — 26 screens, launch through endgame, with a working lamp dial | The springboard, the status bar, the app states, the incoming-call screens, the amber palette in situ | **E3**, and the art direction |
+| **Device mockup** — 26 screens, launch through endgame | The springboard, the status bar, the app states, the incoming-call screens, the amber palette in situ. **Its working lamp dial is a fossil — do not build it** (D-168) | **E3**, and the art direction |
 | **Diagnostics bench** — ten playable subroutines | Every subroutine's actual interaction, including the light-signature differences | **E6** |
 
 Sources are checked in at `_bmad-output/brainstorming/brainstorm-engine-selection-2026-08-15/artifacts/`; live URLs are in that folder's `README.md`. **The bench is where the design rule *comparing quantities is perception; adding numbers is computation* came from** — it was learned by playing, not by reasoning.

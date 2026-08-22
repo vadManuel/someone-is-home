@@ -17,7 +17,7 @@ The three that catch people out:
 **Resident** / **Insider** are the only role words. Everyone is a Resident; some are *also* Insiders.
 **Revoke** = the Insider's ability. **Restrain** = the group's action at a meeting.
 **These are not synonyms and must never be collapsed** — one is system power lent by the house, the other is a physical act the house cannot prevent.
-**Subroutine** = the unit of assigned work. **System Integrity** = the collective progress meter. **Egress** = the Insider-triggered house crisis. **Override** = the Insider-only route between rooms — never a map type; the map knows only room and stairs, and stairs hold nothing. **House** is the AI's word; **home** is the residents' — “map a new home”, never “map a new house”.
+**Subroutine** = the unit of assigned work. **System Integrity** = the collective progress meter. **Egress** = the Insider-triggered house crisis. **Override** = the Insider-only route between rooms — never a map type; the map knows only room and stairs, and stairs hold nothing. **Shift** = the work interval between meetings; the first runs from lights-out to the first meeting, and a meeting ends the shift it interrupts. **Round** keeps its own meaning — lobby to victory — and contains many shifts; the two are never swapped. **House** is the AI's word; **home** is the residents' — “map a new home”, never “map a new house”.
 
 That list is the whole vocabulary. If a word you want isn't on it, it's wrong — the lint holds the rejected forms and will tell you.
 
