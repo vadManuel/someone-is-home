@@ -66,6 +66,17 @@
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>The house connects the players' phones to the host's phone over this network. Nothing leaves the room.</string>
 
+	<!-- D2: the front camera reads the printed cards, and iOS kills an app that touches a camera
+	     without this string rather than refusing the request. The wording says WHAT IS READ and
+	     WHERE IT GOES, because the sentence is read by somebody who is about to hand a phone to
+	     seven friends: the camera reads the symbols on the cards, and no picture is kept.
+
+	     Same warning as the local-network prompt above, and it is the more serious one here: iOS
+	     asks ONCE EVER, and the scan screen is a screen a player is on in a dark house. The prompt
+	     must be warmed during setup, in the light. -->
+	<key>NSCameraUsageDescription</key>
+	<string>The house reads the printed cards through the camera. No picture is taken, kept or sent anywhere.</string>
+
 	<!-- Without this list, browsing for the host's service silently finds NOTHING on iOS 14+ --
 	     no error, no prompt, an empty result forever. A fail-closed OS behaviour worth a comment
 	     precisely because the failure has no symptom. -->
