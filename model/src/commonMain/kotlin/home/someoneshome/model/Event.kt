@@ -89,6 +89,26 @@ sealed interface Event {
         val entered: List<Int>,
     ) : Event
 
+    /**
+     * **The performance window closed without an entry** — STOP NOW, or a step away from the
+     * marker (D-111).
+     *
+     * One event for both, and **it carries no reason**. That is the ruling rather than a saving:
+     * a reason field is an abandonment record, and an abandonment record is exactly the
+     * behavioural channel D-111 split the two planes to close — how often somebody walks away from
+     * work that was never going to count is a statistic separating a real Subroutine from a fake,
+     * published by nobody and readable by anyone holding the log.
+     *
+     * **It carries no marker either.** Where this player was, is what the house recorded when they
+     * scanned; a report naming its own location would be a phone asserting a placement, and
+     * *inference never overrides knowledge* (D-136).
+     *
+     * The step-away half needs proximity hardware that does not exist yet, so on today's phones
+     * only STOP NOW produces this. D-110 recorded that as design intent and this is where it
+     * lands: a device-side rule about the player's own phone, adding no report to the work plane.
+     */
+    data class PerformanceEnded(override val at: Tick, val actor: Seat) : Event
+
     /** Armed, not fired. The cooldown starts here — a botched stalk costs a full cooldown. */
     data class RevokeArmed(override val at: Tick, val actor: Seat) : Event
 

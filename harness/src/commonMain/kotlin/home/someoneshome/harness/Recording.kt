@@ -50,6 +50,13 @@ class Recording(
     }
 
     companion object {
+        // 8: the scan answers. `MarkerScanned` stopped being silent -- it emits ScanAnswered and
+        // PresenceChanged now -- and `PerformanceEnded` is a new event a version 7 build cannot
+        // construct. The answer key moved off the work order and onto the open instance, where a
+        // re-scan re-draws it (D-139), so `orders` lost `expected` and `open` gained the
+        // parameters beside it; the state row gained the whole presence plane. A version 7
+        // recording replays into a round whose questions are drawn somewhere else.
+        //
         // 7: arming. `RoundArmed` gained the host's public Insider SETTING beside the hidden draw,
         // and the home's markers -- without which the stations, the active set and every work
         // order are undrawable, so a version 6 recording replays into a round with no work in it.
@@ -65,7 +72,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/7"
+        const val HEADER = "someone-is-home/recording/8"
     }
 }
 

@@ -102,14 +102,31 @@ fun fuzzRound(
      * and read through the **admission gate** so the round the generator thinks it is building is
      * the one the driver will actually run.
      */
-    fun assigned(seat: Seat, soFar: List<Event>): OrderEntry? {
+    fun stateAfter(soFar: List<Event>): GameState {
         var state = GameState.EMPTY
         for (event in soFar) {
             (admit(state, event) as? Admission.Admitted)?.let { state = it.reduction.state }
         }
-        val order = state.workOrderFor(seat) ?: return null
+        return state
+    }
+
+    fun assigned(seat: Seat, soFar: List<Event>): OrderEntry? {
+        val order = stateAfter(soFar).workOrderFor(seat) ?: return null
         return order.entries.firstOrNull { order.isActionable(it) }
     }
+
+    /**
+     * **What the house is actually asking this seat, which only exists once the scan is in the
+     * list** (D-139, D-140).
+     *
+     * The answer used to sit on the work order and could be read before scanning anything. It is
+     * drawn BY the scan now and re-drawn by every re-scan, so a generator that still read it off
+     * the order would hand over the answer to a question the house never asked — and every entry
+     * it produced would grade false, which is this project's recurring failure: a property holding
+     * over rounds where the rule under test never fired.
+     */
+    fun askedOf(seat: Seat, soFar: List<Event>): List<Int>? =
+        stateAfter(soFar).openSubroutineFor(seat)?.takeIf { it.armed }?.expected
 
     /**
      * **The clock moves in strides, and the stride is wider than half a Revoke cooldown** (D-132).
@@ -128,7 +145,13 @@ fun fuzzRound(
         repeat(events) {
             when (rng.nextInt(9)) {
                 0 -> add(Event.RoundArmed(Tick(tick()), rng.nextLong(), seats, insiders, markers = markers))
-                1 -> add(Event.MarkerScanned(Tick(tick()), anySeat(), rng.pick(markers)))
+                1 -> {
+                    add(Event.MarkerScanned(Tick(tick()), anySeat(), rng.pick(markers)))
+                    // And sometimes walk away from it. The seat is drawn independently, so the
+                    // report often comes from somebody who never scanned anything -- which is the
+                    // absurd player asking whether closing a window nobody opened is quiet.
+                    if (rng.chance(3)) add(Event.PerformanceEnded(Tick(tick()), anySeat()))
+                }
                 2, 3 -> {
                     // Sometimes the whole walk — scan the card the house anchored this seat's work
                     // at, then hand over exactly what was asked for — and sometimes any of the ways
@@ -137,10 +160,10 @@ fun fuzzRound(
                     val seat = anySeat()
                     val open = if (rng.chance(2)) assigned(seat, this) else null
                     val marker = open?.marker ?: rng.pick(markers)
-                    if (rng.chance(2)) add(Event.MarkerScanned(Tick(tick()), seat, marker))
-                    val entered =
-                        if (open != null && rng.chance(2)) open.expected
-                        else List(rng.nextInt(4)) { rng.nextInt(4) }
+                    val scanned = rng.chance(2)
+                    if (scanned) add(Event.MarkerScanned(Tick(tick()), seat, marker))
+                    val asked = if (scanned && rng.chance(2)) askedOf(seat, this) else null
+                    val entered = asked ?: List(rng.nextInt(4)) { rng.nextInt(4) }
                     add(Event.SubroutineReturned(Tick(tick()), seat, marker, entered))
                 }
                 4 -> add(Event.RevokeArmed(Tick(tick()), anySeat()))

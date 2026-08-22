@@ -52,15 +52,31 @@ private fun cardFor(state: GameState, seat: Seat): MarkerId =
 private fun otherCard(state: GameState, seat: Seat): MarkerId =
     state.activeMarkers.first { it.value != cardFor(state, seat).value }
 
+/**
+ * **What the house would ask this seat if it scanned its own card right now** (D-139, D-140).
+ *
+ * The answer is a property of the instance a scan opens, not of the work order, and every scan
+ * draws a new one. So this scans from [state] and reads what came out — and it is only a usable
+ * fixture value because [walk] scans from the same state at the same tick, which draws the same
+ * instance. Hand it to a walk that starts anywhere else and it is a stale answer, which is exactly
+ * the property `a re-scan arms it again` is about.
+ */
 private fun asked(state: GameState, seat: Seat): List<Int> =
-    state.workOrderFor(seat)?.entries?.firstOrNull()?.expected
+    reduce(state, Event.MarkerScanned(Tick(1), seat, cardFor(state, seat)))
+        .state.openSubroutineFor(seat)?.expected
         ?: error("seat ${seat.index} was assigned nothing")
 
-/** Scan then return, the walk D-110 describes, collecting everything emitted along the way. */
+/**
+ * Scan then return, the walk D-110 describes, collecting everything emitted along the way.
+ *
+ * [entered] defaults to **whatever the house asked for on this scan**, which is the only way to
+ * spell *a correct entry* now that the question is re-drawn every time: naming an answer up front
+ * would be answering a question from a previous instance.
+ */
 private fun walk(
     from: GameState,
     seat: Seat,
-    entered: List<Int>,
+    entered: List<Int>? = null,
     scan: MarkerId? = cardFor(from, seat),
     at: MarkerId = cardFor(from, seat),
 ): Pair<GameState, List<Effect>> {
@@ -71,7 +87,8 @@ private fun walk(
         state = r.state
         effects += r.effects
     }
-    val r = reduce(state, Event.SubroutineReturned(Tick(2), seat, at, entered))
+    val answer = entered ?: state.openSubroutineFor(seat)?.expected ?: emptyList()
+    val r = reduce(state, Event.SubroutineReturned(Tick(2), seat, at, answer))
     return r.state to (effects + r.effects)
 }
 
@@ -88,8 +105,8 @@ class VerdictIsNeverWithheldTest {
     @Test
     fun `an Insider's correct entry is answered exactly as a Resident's is`() {
         val base = armed()
-        val (_, resident) = walk(base, Seat(0), asked(base, Seat(0)))
-        val (_, insider) = walk(base, Seat(1), asked(base, Seat(1)))
+        val (_, resident) = walk(base, Seat(0))
+        val (_, insider) = walk(base, Seat(1))
 
         assertEquals(Role.Resident, base.roleOf(Seat(0)))
         assertEquals(Role.Insider, base.roleOf(Seat(1)))
@@ -142,7 +159,7 @@ class VerdictIsNeverWithheldTest {
                 walk(base, Seat(0), right, scan = otherCard(base, Seat(0))),
             "returned at another card" to
                 walk(base, Seat(0), right, at = otherCard(base, Seat(0))),
-            "assigned nothing" to walk(base, Seat(99), listOf(0, 0)),
+            "assigned nothing" to walk(base, Seat(99), listOf(0, 0), scan = MARKERS.first(), at = MARKERS.first()),
             "empty entry" to walk(base, Seat(0), emptyList()),
         )
         for ((how, result) in cases) {
@@ -179,21 +196,6 @@ class VerdictIsNeverWithheldTest {
         )
     }
 
-    /** A scan on its own tells nobody anything, whether or not it found work. */
-    @Test
-    fun `a scan emits nothing to anybody`() {
-        val base = armed()
-        assertEquals(
-            emptyList(),
-            reduce(base, Event.MarkerScanned(Tick(1), Seat(0), cardFor(base, Seat(0)))).effects,
-            "a scan that found work announced it",
-        )
-        assertEquals(
-            emptyList(),
-            reduce(base, Event.MarkerScanned(Tick(1), Seat(99), MARKERS.first())).effects,
-            "a scan that found nothing announced that",
-        )
-    }
 }
 
 /** **D-110 — one attempt per scan, and the walk back is the cost.** */
@@ -236,7 +238,16 @@ class OneAttemptPerScanTest {
         val (afterWrong, _) = walk(base, Seat(0), listOf(9, 9))
         assertFalse(afterWrong.openSubroutineFor(Seat(0))!!.armed, "a returned entry is spent")
 
-        val (afterRight, effects) = walk(afterWrong, Seat(0), right)
+        // No answer named: the re-scan draws a FRESH question (D-139), so the only correct entry
+        // is the one the house has just asked for. Handing back `right` here would be answering
+        // the instance that was already spent, and it must not be accepted.
+        val (afterRight, effects) = walk(afterWrong, Seat(0))
+        assertFalse(
+            walk(afterWrong, Seat(0), right).second
+                .filterIsInstance<Effect.SubroutineGraded>().single().accepted,
+            "the re-scan re-used the spent instance's answer, so a retry is a second run at a " +
+                "picture the player has already memorised",
+        )
         assertTrue(
             effects.filterIsInstance<Effect.SubroutineGraded>().single().accepted,
             "scanning the marker again did not re-arm the Subroutine",

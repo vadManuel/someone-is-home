@@ -43,6 +43,12 @@ private fun arm(
     Event.RoundArmed(at, seed, seatsOf(seats), insiders, chosen, markers),
 ).state
 
+/** What a scan of [marker] opens for [seat]: the question, the answer, and which line. */
+private fun openedBy(state: GameState, seat: Seat, marker: MarkerId) =
+    reduce(state, Event.MarkerScanned(Tick(1), seat, marker)).state
+        .openSubroutineFor(seat)
+        ?.let { Triple(it.entry, it.parameters, it.expected) }
+
 private fun armEffects(
     seats: Int = 8,
     insiders: List<Seat> = listOf(Seat(1)),
@@ -279,8 +285,10 @@ class WorkOrderDrawTest {
                 step, state.openSubroutineFor(seat)!!.entry,
                 "the scan opened a line the order was not up to",
             )
-            val expected = order.entries[step].expected
-            state = reduce(state, Event.SubroutineReturned(Tick(2), seat, card, expected)).state
+            // Read off the instance the scan just opened, not off the order: the question and its
+            // answer are drawn by the scan and re-drawn by every re-scan (D-139).
+            val asked = state.openSubroutineFor(seat)!!.expected
+            state = reduce(state, Event.SubroutineReturned(Tick(2), seat, card, asked)).state
         }
         val finished = state.workOrderFor(seat)!!
         assertTrue(finished.entries.all { it.done }, "the order did not finish")
@@ -313,10 +321,10 @@ class WorkOrderDrawTest {
      * **D-123 and D-124 — a scan resolves `(seat, card)` to THAT player's work, or to nothing.**
      *
      * A card the house has nothing for *you* at opens nothing, whether it is somebody else's anchor
-     * or a card sitting dark this round — and the rules say so by staying silent, which is what
-     * lets the client answer NOTHING FOR YOU HERE without the house having composed it. The
-     * alternative, a scan that opens whatever that seat has next wherever they happen to be, was
-     * the spine's stand-in and it made every card in the house every player's card.
+     * or a card sitting dark this round — and the house **says so**, in the same effect and the
+     * same shape a real opening arrives in (D-124, rule 1). The alternative, a scan that opens
+     * whatever that seat has next wherever they happen to be, was the spine's stand-in and it made
+     * every card in the house every player's card.
      */
     @Test
     fun `a card that holds nothing for you opens nothing`() {
@@ -329,7 +337,11 @@ class WorkOrderDrawTest {
         val elsewhere = state.activeMarkers.first { it.value !in mine }
         for (card in listOf(dark, elsewhere)) {
             val scanned = reduce(state, Event.MarkerScanned(Tick(1), seat, card))
-            assertEquals(emptyList(), scanned.effects, "a scan that found nothing announced it")
+            assertEquals(
+                listOf(Effect.ScanAnswered(seat, opened = null)),
+                scanned.effects.filterIsInstance<Effect.ScanAnswered>(),
+                "a scan that found nothing said something other than NOTHING FOR YOU HERE",
+            )
             assertEquals(
                 null, scanned.state.openSubroutineFor(seat),
                 "scanning ${card.value} opened work the house did not put there",
@@ -368,8 +380,14 @@ class WorkOrderDrawTest {
             val a = none.workOrderFor(seat)!!.entries
             val b = some.workOrderFor(seat)!!.entries
             assertEquals(a.map { it.marker.value }, b.map { it.marker.value }, "seat ${seat.index}")
-            assertEquals(a.map { it.expected }, b.map { it.expected }, "seat ${seat.index}")
             assertEquals(a.map { it.subroutine }, b.map { it.subroutine }, "seat ${seat.index}")
+            assertEquals(a.map { it.blockedBy }, b.map { it.blockedBy }, "seat ${seat.index}")
+            // And the QUESTION does not move with the role either, which is where the answer key
+            // lives now: open the same line in both rounds and the house asks the same thing.
+            assertEquals(
+                openedBy(none, seat, a.first().marker), openedBy(some, seat, b.first().marker),
+                "the question the scan drew moved with the role, seat ${seat.index}",
+            )
         }
     }
 }
@@ -440,14 +458,13 @@ class ArmingEffectsTest {
         val seat = Seat(0)
         val entry = state.workOrderFor(seat)!!.entries.first()
 
-        fun shapeOf(entered: List<Int>): List<String> {
-            val scanned = reduce(state, Event.MarkerScanned(Tick(1), seat, entry.marker)).state
-            return reduce(scanned, Event.SubroutineReturned(Tick(2), seat, entry.marker, entered))
+        val scanned = reduce(state, Event.MarkerScanned(Tick(1), seat, entry.marker)).state
+        fun shapeOf(entered: List<Int>): List<String> =
+            reduce(scanned, Event.SubroutineReturned(Tick(2), seat, entry.marker, entered))
                 .effects.filterNot { it is Effect.SubroutineProgressed }
                 .map { it::class.simpleName ?: "?" }
-        }
         assertEquals(
-            shapeOf(entry.expected), shapeOf(listOf(9, 9, 9)),
+            shapeOf(scanned.openSubroutineFor(seat)!!.expected), shapeOf(listOf(9, 9, 9)),
             "a wrong entry came back a different shape from a right one",
         )
     }

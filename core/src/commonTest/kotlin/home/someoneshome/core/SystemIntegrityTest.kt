@@ -171,7 +171,12 @@ class SystemIntegrityTest {
             val scanned = reduce(armed, Event.MarkerScanned(Tick(1), seat, entry.marker)).state
             return reduce(
                 scanned,
-                Event.SubroutineReturned(Tick(2), seat, entry.marker, entry.expected),
+                Event.SubroutineReturned(
+                    Tick(2), seat, entry.marker,
+                    // Read off the instance the scan opened: the question is the scan's now, and
+                    // both seats scan from the same state so both are asked the same thing.
+                    scanned.openSubroutineFor(seat)!!.expected,
+                ),
             ).state
         }
 

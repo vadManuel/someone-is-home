@@ -83,13 +83,23 @@ internal fun round(insiders: List<Seat> = INSIDERS): List<Event> {
             val entry = order?.entries?.firstOrNull { order.isActionable(it) }
             val marker = entry?.marker ?: MARKERS[i % MARKERS.size]
             add(walk(Event.MarkerScanned(Tick(t++), seat, marker)))
+            // **Read AFTER the scan, because the scan is what draws it** (D-139, D-140). The
+            // question and its answer are a property of the instance the scan opened, re-drawn on
+            // every re-scan; a fixture that read the order's own row would hand over the answer to
+            // a question the house never asked, and every entry in the round would grade false.
             add(
                 walk(
                     Event.SubroutineReturned(
-                        Tick(t++), seat, marker, entry?.expected ?: emptyList(),
+                        Tick(t++), seat, marker,
+                        state.openSubroutineFor(seat)?.takeIf { it.armed }?.expected ?: emptyList(),
                     )
                 )
             )
+            // Somebody walks away from a marker without handing anything over, twice a round. It
+            // closes the presence window and spends what the scan armed (D-111), and it is on the
+            // fixture's path so that the replay guarantee covers a window that shut without an
+            // entry — the one way a window closes that the work plane never hears about.
+            if (i % 13 == 7) add(walk(Event.PerformanceEnded(Tick(t++), SEATS[(i + 2) % SEATS.size])))
             if (i % 9 == 0) {
                 // Pushed to the moment the house says this seat is ready, so the fixture's Revokes
                 // land instead of being refused inside the opening stretch of peace.

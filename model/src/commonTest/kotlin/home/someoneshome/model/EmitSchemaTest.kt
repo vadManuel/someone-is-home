@@ -132,6 +132,84 @@ class EmitSchemaTest {
     }
 
     /**
+     * **The answer to a scan reaches both living roles, in one class list, and nobody else**
+     * (D-124, D-109).
+     *
+     * Written out in full for the verdict row's reason. Narrowed to `Resident/Live` an Insider's
+     * every scan would come back NOTHING FOR YOU HERE — a role oracle after one card, delivered by
+     * the allowlist rather than by a screen, on the one surface a player navigates a dark house by.
+     *
+     * **And the null answer is the same kind as a real opening, which is what makes one row
+     * enough.** Split into two kinds this table would hold two rows, and the day somebody narrowed
+     * one of them the difference between *this card holds nothing for you* and *this card opened
+     * work* would be readable from the permissions without either payload being seen.
+     */
+    @Test
+    fun `a scan answer reaches both living roles and nobody else`() {
+        assertEquals(
+            listOf(
+                ClientClass(Role.Resident, RoundState.Live),
+                ClientClass(Role.Insider, RoundState.Live),
+            ),
+            EmitSchema.classesFor(EmitSchema.SCAN_ANSWERED),
+        )
+        assertEquals(
+            EmitSchema.kindOf(Effect.ScanAnswered(Seat(0), opened = null)),
+            EmitSchema.kindOf(
+                Effect.ScanAnswered(
+                    Seat(0),
+                    SubroutineInstance(0, SubroutineKind.Sniff, listOf(1, 2, 3)),
+                ),
+            ),
+            "NOTHING FOR YOU HERE and a real opening became two kinds, so the allowlist can now " +
+                "tell them apart",
+        )
+    }
+
+    /** A scan answer is that player's own card in their own hand, and nobody else's business. */
+    @Test
+    fun `a scan answer is addressed to its own seat only`() {
+        assertEquals(
+            listOf(Seat(3)),
+            EmitSchema.deliveries(Effect.ScanAnswered(Seat(3), opened = null), live())
+                .map { it.seat },
+        )
+    }
+
+    /**
+     * **THE PRESENCE PLANE'S ROW, AND IT DOES NOT EXIST** (D-111, D-136, rule 2).
+     *
+     * *The house records, never recites.* The one designed consumer is the spectator map's expiry
+     * and it is frozen, so presence goes to nobody — and it goes to nobody by having no row, which
+     * is the fail-closed hinge being used deliberately rather than by accident.
+     *
+     * Both directions, for `live selections reach the couch`'s reason: a build that permitted it to
+     * the living and a build that permitted it to everybody are different bugs, and the second
+     * would look like *the map works now*.
+     */
+    @Test
+    fun `presence has no row and reaches nobody`() {
+        assertEquals(emptyList(), EmitSchema.classesFor(EmitSchema.PRESENCE_CHANGED))
+        assertTrue(
+            EmitSchema.PRESENCE_CHANGED !in EmitSchema.knownKinds(),
+            "presence acquired a row; if the spectator map has landed, this test is the review",
+        )
+        assertEquals(
+            emptyList(),
+            EmitSchema.deliveries(
+                Effect.PresenceChanged(Seat(3), MarkerId("m1"), open = true), live(),
+            ),
+        )
+        // The other half: it is addressed to one seat too, so the two denials are independent.
+        assertEquals(
+            listOf(Seat(3)),
+            EmitSchema.audienceOf(
+                Effect.PresenceChanged(Seat(3), MarkerId("m1"), open = true), live(),
+            ),
+        )
+    }
+
+    /**
      * **The opening message reaches everybody in the house** (D-118, D-076).
      *
      * It is one of exactly two events that dim every panel, and a dimming lamp is world-observable
