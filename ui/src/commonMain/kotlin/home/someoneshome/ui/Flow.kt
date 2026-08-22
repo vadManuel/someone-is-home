@@ -135,7 +135,12 @@ object ScreenGraph {
         // words, its place and its destination, and only its colour changes. See [SniffScreen].
         ScreenId.SubHandshake, ScreenId.SubReplay, ScreenId.SubParity,
         ScreenId.SubShort, ScreenId.SubTrace, ScreenId.SubJam,
-        ScreenId.SubSniff, ScreenId.SubDeallocate -> setOf(ScreenId.Work)
+        ScreenId.SubSniff, ScreenId.SubDeallocate,
+        // **INTERRUPT and DRIFT have a running clock behind them and it is still this one edge.**
+        // Neither screen ever walks off on its own: D-139's sweep has no timeout to walk off at,
+        // and D-140's buzz asks a question rather than ending one. The only way out of either is
+        // the player pressing STOP NOW or the house answering what they sent.
+        ScreenId.SubInterrupt, ScreenId.SubDrift -> setOf(ScreenId.Work)
         ScreenId.Files -> setOf(ScreenId.Home)
         ScreenId.Notes -> setOf(ScreenId.Home)
         ScreenId.TermNo -> setOf(ScreenId.Home, ScreenId.TermLive)

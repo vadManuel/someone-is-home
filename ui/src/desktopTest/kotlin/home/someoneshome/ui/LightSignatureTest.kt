@@ -73,6 +73,12 @@ class LightSignatureTest {
         // would be a surface that stops carrying the value, which is the exact regression the
         // sentence form's removal caused once already and the reason this sweep exists.
         ScreenId.SubSniff to mapOf(LightSignature.Dark to 1),
+        // The last two, and the mark is in the header on both of them for the same reason it is on
+        // the other eight — including while something on the screen is moving, which is the one
+        // way these two could have lost it: a header redrawn every frame beside a sweep is a
+        // header somebody is tempted to leave out of the frame.
+        ScreenId.SubInterrupt to mapOf(LightSignature.Medium to 1),
+        ScreenId.SubDrift to mapOf(LightSignature.Medium to 1),
     )
 
     private fun SemanticsNodeInteractionsProvider.marks(): Map<LightSignature, Int> =

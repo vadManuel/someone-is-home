@@ -153,6 +153,15 @@ class ScreenshotTest {
                 at.mod(SignalGraph.of(SubroutineModel.TRACE_SEED).nodes.size)
             Subroutine.Sniff -> at % 2
             Subroutine.Deallocate -> at.mod(SubroutineModel.DEALLOCATE.size)
+            // The two that move are positions rather than indices, and both are put somewhere the
+            // viewer can see them: an index of 0..4 is a mark hard against the left edge of a
+            // hundred-step bar, which is a frame that says nothing about either screen.
+            // **A quarter along, which is clear of the band the fixture draws.** A viewer frame
+            // showing a catch on the band's edge is one a person reads as *did that count?* — and
+            // the honest answer, that this phone has no idea, is not what the picture would be
+            // saying. The parity sweep next door deliberately does the opposite: see its note.
+            Subroutine.Interrupt -> InterruptSweep.SPAN / 4 + at
+            Subroutine.Drift -> DriftPath.SPAN / 3 + at
             else -> at
         },
     )
