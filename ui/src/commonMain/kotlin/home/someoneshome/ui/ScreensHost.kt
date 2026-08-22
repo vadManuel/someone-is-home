@@ -1265,6 +1265,7 @@ fun HomeDetailScreen() {
     val go = navigator()
     val actions = LocalActions.current
     val homes = LocalHomes.current
+    val lobby = LocalLobby.current
     val home = homes.open
     PrePage {
         PreHeading("SAVED HOME", back = ScreenId.Maps)
@@ -1301,8 +1302,10 @@ fun HomeDetailScreen() {
         }
         Column(verticalArrangement = Arrangement.spacedBy(4.u)) {
             // The house comes up on this phone under this home's name, and then this phone joins
-            // it like everybody else. Both halves are the actions layer's; the screen still names
-            // where it goes, because it goes there either way.
+            // it like everybody else. **The screen does not name where this goes**, and that is
+            // the ruling on E-D3-2 rather than an omission: a home the radio will not carry never
+            // reaches a lobby, so the target depends on an answer the screen does not have. The
+            // edge is declared in Flow.viaActions and walked by a test, exactly as SAVE HOME's is.
             RowButton(
                 border = Amber.Slate, fill = Amber.SlateFill,
                 onClick = {
@@ -1310,7 +1313,6 @@ fun HomeDetailScreen() {
                     // a house advertised under an empty name is a row every phone on the network
                     // can see and nobody can identify.
                     home?.let { actions.hostHome(it.name) }
-                    go(ScreenId.Lobby)
                 },
             ) {
                 Label("HOST WITH THIS HOME", size = 8.0, color = Amber.SlateInk)
@@ -1340,6 +1342,15 @@ fun HomeDetailScreen() {
             }
         }
         homes.refusal?.let {
+            Label(it, size = 6.5, color = Amber.BoneInk, tracking = 0.1, lineHeight = 1.6)
+        }
+        // **The home that could not go on the air, said here, in the light** (E-D3-2). Two
+        // refusal lines rather than one merged line because they belong to two different things —
+        // the store refuses a save, the radio refuses an advertisement — and at most one of them
+        // is ever set: hosting clears its own, and every other control on this screen clears the
+        // store's. Drawn in the same ink as the other, because a host reading this screen in a lit
+        // room is being told a fact, not warned.
+        lobby.refusal?.let {
             Label(it, size = 6.5, color = Amber.BoneInk, tracking = 0.1, lineHeight = 1.6)
         }
         // The middle used to be a PushDown() — about sixty percent of a 6.9" panel holding

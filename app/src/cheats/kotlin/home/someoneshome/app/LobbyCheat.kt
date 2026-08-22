@@ -72,9 +72,13 @@ class LobbyCheat(
         lobby.look()
 
         if (hosting != null) {
-            lobby.hostHome(hosting)
-            flow.go(ScreenId.Lobby)
-            note("HOSTING '$hosting' — WAITING FOR THIS PHONE'S OWN SEAT")
+            // HOST WITH THIS HOME, through the action the button calls — which now walks to the
+            // lobby only once the home is really on the air, and stays put with a reason when it
+            // is not (E-D3-2). The bench reports whichever happened rather than deciding: a run
+            // that printed HOSTING over a home the radio refused would be the bench inventing the
+            // one fact this ruling exists to surface.
+            flow.hostHome(hosting)
+            if (!waitForTheAir(hosting)) return
         } else {
             val wanted = launchValue(JOIN_SWITCH).orEmpty()
             val home = waitForHome(wanted)
@@ -90,6 +94,33 @@ class LobbyCheat(
         handOverLine()
         cycleInsiders()
         watch(armed = lightsOut())
+    }
+
+    /**
+     * **Whether this phone's own home went on the air**, which is now the thing that decides
+     * whether there is a lobby at all (E-D3-2).
+     *
+     * The screen is the answer: `hostHome` walks to the lobby when the advertisement is published
+     * and stays on the saved-home screen with `lobby.refusal` set when it is refused. So this
+     * watches both and prints whichever arrived. **A refusal ends the evening here**, on the
+     * screen a person would be looking at, rather than falling through to a seat wait that would
+     * print NOT SEATED YET for as long as the phone is up and say nothing about why.
+     */
+    private suspend fun waitForTheAir(homeName: String): Boolean {
+        var waited = 0L
+        while (flow.state.screen != ScreenId.Lobby) {
+            lobby.refusal?.let {
+                note("NOT HOSTING — $it · ON ${flow.state.screen.name.uppercase()}")
+                return false
+            }
+            if (waited > 0 && waited % PATIENCE_MILLIS == 0L) {
+                note("'$homeName' HAS NOT GONE ON THE AIR YET — ${waited / 1000}S")
+            }
+            delay(STEP_MILLIS)
+            waited += STEP_MILLIS
+        }
+        note("HOSTING '$homeName' — ON THE AIR · WAITING FOR THIS PHONE'S OWN SEAT")
+        return true
     }
 
     /**
@@ -286,12 +317,12 @@ class LobbyCheat(
          * the session in memory still presents it. The first version of this switch did exactly
          * that and reported `TOKEN FORGOTTEN` over a phone that then failed to seat.
          *
-         * **It is here because of a bug rather than for convenience** — see E-D3-1: a phone that
-         * played a round presents its stored token to the next house, which never issued it, and
-         * the refusal is silent on every surface there is. Until that is ruled on, a second run
-         * against a fresh house seats nobody, and clearing the token is the only way to get one
-         * without uninstalling the app — which resets the Local Network grant and costs a person
-         * two taps.
+         * **It came from a bug and outlived it.** E-D3-1 — a phone presenting a stored token to a
+         * house that never issued it, refused in silence on every surface there is — is ruled and
+         * fixed: the phone now drops the stale token and joins fresh by itself, invisibly, so a
+         * second evening needs no switch and no uninstall. What this is still good for is the
+         * *other* half of that: it makes a run start as a phone that has never played, which is
+         * the only way to tell a fresh join from a resume in a log where both end up seated.
          */
         const val FORGET_SWITCH = "SOMEONES_HOME_LOBBY_FORGET"
 

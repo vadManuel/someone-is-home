@@ -2987,6 +2987,10 @@ is the whole ruling; the layouts are already right.**
 The four escalations the evening device unit raised on 2026-08-21, recorded here so they are queued
 rather than remembered:
 
+> **Two of these four are now ruled — see revision 35 below: E-D3-1 by D-172, E-D3-2 by D-173.**
+> They are left standing here as they were raised, because what they said about the tree on the
+> night is the reason the rulings say what they say.
+
 - **E-D3-1 · A stored seat token is refused in silence.** A phone that played a round presents its
   token to a host that never issued one; the resume is refused, correctly (D-087), and **the lobby
   says nothing to anybody** — not the player, not the host. `LobbyOverTransport.onPhase` acts on
@@ -3011,6 +3015,84 @@ rather than remembered:
   Recorded rather than open: it is **D-161 met in the wild**, and it arrived on setup, in the light,
   which is the one place it is survivable. Two taps from a person cleared it and the advertisement
   went out the moment they happened. The warning is now evidenced rather than predicted.
+
+---
+
+## Revision 35 — what a phone does when the house says no
+
+**Two rulings, both about a refusal that reached nobody**, and they go in opposite directions on
+purpose. The seat token is handled where the player never sees it; the advertisement is handed to
+the host in the light. The difference is not taste: **one of them is something a person can act on
+and the other is not.**
+
+### D-172 · **A stale seat token is dropped and the phone joins fresh — E-D3-1 closed, seamless**
+
+A phone that played a round stores its seat token and presents it to the next house it meets. A
+house that never issued that token refuses it, and **the refusal stays right** — D-087's property is
+that a resume asks for *that* seat, and a house that honoured a token it never minted would be
+handing out somebody else's chair. What was wrong was everything after the refusal: the session went
+terminal, `LobbyOverTransport` acted on `Seated` and nothing else, and the result was a lobby that
+never filled, forever, on both phones and with no reason given anywhere. **It happens on the second
+evening of every household that plays twice.**
+
+**Ruled: the client drops the stale token and joins fresh, by itself, and the player is shown
+nothing.** No message, no refusal, no state the eye can catch — the lobby fills the way it does for
+a phone that had never played. The reasoning is the sorting rule D-125 already gives: *clamp what
+players cannot perceive, guide what they can.* A seat token is not a thing a player has, knows about,
+or can do anything about. Telling them their token was refused is telling them a fact with no action
+attached to it, in a dark room, in a game whose whole discipline is that the screen says only what
+it must.
+
+**Silent to the player is not silent to the authority.** Both ends record it: the house logs the
+refused connection with its reason, and the phone logs that it was refused and that it started over.
+**The token itself is never printed at either end** — the reason is the record, the token is the
+secret, and a leak detector that writes down what it caught is the shape D3 already refused once.
+
+Three things this ruling does *not* do:
+
+- **It does not weaken `ClientSession`.** That class still presents its token or nothing, and still
+  goes terminal on a refusal. The starting-over is a decision made one layer above it by the thing
+  that owns the lobby, which is where a policy about what this app does belongs.
+- **It does not retry.** Only `UnknownToken` starts over. A locked round and a full house refuse a
+  stranger for the same reason they refused the token, so a phone that started over on those would
+  be knocking at a door it has been told is shut, forever.
+- **It happens once.** The second attempt is a Hello, and a Hello cannot be refused for holding an
+  unknown token — but the fuse is written down rather than argued from somebody else's protocol.
+
+### D-173 · **A home that could not go on the air refuses HOST WITH THIS HOME — E-D3-2 closed, loudly**
+
+Bonjour returned `-72001` on the night: a second home called THE BUNGALOW was **never published at
+all**, and the phone that ran it sat in a one-seat lobby while every other phone searched for a home
+that was not there.
+
+**Ruled: the refusal reaches the host, at hosting time, on the screen they are standing on.** HOST
+WITH THIS HOME becomes a refusable control — the shape SAVE HOME and HAND IT OVER already have — and
+the lobby opens only when the home is really on the air. The two failures are named apart because
+the host acts on them differently:
+
+| what happened | what the host reads |
+|---|---|
+| the name is already on the air here | `ANOTHER HOME HERE IS ALREADY CALLED THE BUNGALOW` |
+| the advertisement was refused for anything else | `THIS HOME DID NOT GO ON THE AIR` |
+
+**This is the opposite call to D-172 and for the reason D-172 is what it is.** A duplicate home name
+is the most actionable refusal in the app: the fix is a rename, the host is holding the phone in a
+lit room with the party in front of them, and the RENAME row is on the same screen as the refusal.
+Rule 6 is about a round in a dark house; **hosting happens in the light, before there is a round**,
+and D-126 already puts every gate where the host is alone with the setup.
+
+**No disambiguator.** Bonjour will auto-rename on request, and the second half of E-D3-2 asked
+whether it should. It should not: a house that quietly became `THE BUNGALOW (2)` would be a home
+whose name on five other phones is not the name its host typed, in a game where *tap the row with
+your house's name on it* is the entire joining ceremony. The nearby list still dedupes by address
+and port and never by name (two households may legitimately both be THE BUNGALOW) — what changes is
+that the *second* one is now told it never went up, instead of finding out from an empty lobby.
+
+**A refused home also takes the server back down.** A bound port under a home nobody can find is not
+a house, and leaving it up would make the next attempt — under a better name — fail for a second,
+unrelated reason.
+
+**E-D3-3 stays open.** There is still no host→client effect push, and nothing here changes that.
 
 ---
 

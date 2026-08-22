@@ -84,8 +84,11 @@ object ScreenGraph {
         // SAVE HOME is not in here: a refused save stays on this screen, so where it lands
         // depends on an answer the screen does not have (see Flow.viaActions).
         ScreenId.SaveName -> setOf(ScreenId.Editor)
+        // HOST WITH THIS HOME is not in here: a home the radio refuses never goes on the air and
+        // the host stays on this screen with the reason (E-D3-2), so where that button lands
+        // depends on an answer the screen does not have (see Flow.viaActions).
         ScreenId.HomeDetail -> setOf(
-            ScreenId.Maps, ScreenId.Lobby, ScreenId.Editor, ScreenId.SaveName, ScreenId.Delete,
+            ScreenId.Maps, ScreenId.Editor, ScreenId.SaveName, ScreenId.Delete,
         )
         // HOLD TO DELETE publishes no click action at all — it is a two-second hold, and a
         // control a single synthetic click could fire would not be one. Also in viaActions.
@@ -524,6 +527,10 @@ object Flow {
         // A save that landed, and a home the host held a finger on for two seconds.
         ScreenId.SaveName to setOf(ScreenId.HomeDetail),
         ScreenId.Delete to setOf(ScreenId.Maps),
+        // HOST WITH THIS HOME, once the home is really on the air. A refused advertisement stays
+        // on the detail screen with the reason under the buttons — including the RENAME row that
+        // answers the refusal a host is most likely to get (E-D3-2).
+        ScreenId.HomeDetail to setOf(ScreenId.Lobby),
         // Either reserved card, read in a room while this home already has one somewhere else.
         ScreenId.ScanMarker to setOf(ScreenId.TermTaken, ScreenId.MeetTaken),
         // BEGIN, opening whichever Subroutine this marker holds. Derived from the roster rather
@@ -929,6 +936,19 @@ class FlowModel(
 
     // ---- The lobby -------------------------------------------------------------------------
 
+    /**
+     * **HOST WITH THIS HOME — and the lobby only opens once the home is on the air** (E-D3-2).
+     *
+     * Refusable, the same shape as [saveHome] and [handOverLine]: an advertisement the OS turns
+     * down is a home no other phone can find, and walking into a lobby over one would be this
+     * phone showing a party that cannot happen. The reason stays on the screen the host is
+     * already on — where the RENAME row is, which is the fix for the refusal they will actually
+     * get.
+     */
+    fun hostHome(homeName: String) {
+        lobby.hostHome(homeName) { go(ScreenId.Lobby) }
+    }
+
     /** A tap on a network row: attach to that home, and go into its lobby. */
     fun attachToHome(home: NearbyHome) {
         lobby.attachTo(home)
@@ -1144,7 +1164,7 @@ class FlowModel(
         saveHome = ::saveHome,
         deleteHome = ::deleteHome,
         nameResident = lobby::nameResident,
-        hostHome = lobby::hostHome,
+        hostHome = ::hostHome,
         attachToHome = ::attachToHome,
         typeLine = lobby::typeLine,
         handOverLine = ::handOverLine,

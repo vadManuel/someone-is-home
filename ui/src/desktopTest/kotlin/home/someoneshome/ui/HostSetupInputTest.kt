@@ -531,6 +531,54 @@ class HostSetupInputTest {
             onNode(hasText("HOST WITH THIS HOME") and hasClickAction()).assertExists()
         }
 
+    // ---- The home that could not go on the air (E-D3-2) ------------------------------------
+
+    /**
+     * **A real finger on HOST WITH THIS HOME, against a radio that refuses the name.**
+     *
+     * The whole path, which is the only way this ruling can be checked: the button is pressed on
+     * the rendered screen, the actions layer asks the link, the link refuses, and what the host
+     * is looking at afterwards is *this screen with a reason on it* rather than a lobby.
+     *
+     * The RENAME row is asserted still present, because it is the fix for this particular refusal
+     * and a screen that had walked away from it would be honest and useless.
+     */
+    @Test
+    fun aHomeThatCannotGoOnTheAirRefusesInTheLightAndStaysPut() =
+        runDesktopComposeUiTest(width = 300, height = 650) {
+            val model = FlowModel(
+                PanelState(screen = ScreenId.HomeDetail),
+                lobby = LobbyModel(link = RefusingLobbyLink(HostRefusal.NameAlreadyOnTheAir)),
+            )
+            model.openSavedHome(HomeEditorModel.BUNGALOW)
+            show(model)
+
+            onNode(hasText("HOST WITH THIS HOME") and hasClickAction()).performClick()
+            mainClock.advanceTimeBy(100)
+
+            assertEquals(
+                ScreenId.HomeDetail, model.state.screen,
+                "the lobby opened over a home the radio never put on the air",
+            )
+            onNode(hasText("ALREADY CALLED THE BUNGALOW", substring = true)).assertExists()
+            onNode(hasText("RENAME") and hasClickAction()).assertExists()
+        }
+
+    /** And a home that goes up walks into the lobby, off the same button. */
+    @Test
+    fun aHomeThatGoesOnTheAirOpensTheLobby() =
+        runDesktopComposeUiTest(width = 300, height = 650) {
+            val model = FlowModel(PanelState(screen = ScreenId.HomeDetail))
+            model.openSavedHome(HomeEditorModel.BUNGALOW)
+            show(model)
+
+            onNode(hasText("HOST WITH THIS HOME") and hasClickAction()).performClick()
+            mainClock.advanceTimeBy(100)
+
+            assertEquals(ScreenId.Lobby, model.state.screen)
+            assertTrue(model.lobby.hosting, "it walked into a lobby it is not hosting")
+        }
+
     // ---- The lobby's capacity guidance (D-125, D-127) --------------------------------------------
 
     /**

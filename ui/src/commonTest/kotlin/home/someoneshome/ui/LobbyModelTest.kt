@@ -5,6 +5,7 @@ import home.someoneshome.model.protocol.LobbyBody
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -72,6 +73,67 @@ class LobbyModelTest {
             LobbyBody.Naming.LIMIT, LobbyModel.NAME_LIMIT,
             "the field and the wire hold two opinions about how long a name is",
         )
+    }
+
+    // ---- HOST WITH THIS HOME, and the home that never went on the air (E-D3-2) ---------------
+
+    /**
+     * **A home that went on the air: hosting, attached, and the caller told once.**
+     *
+     * The positive control for the two below. Without it, a build that had quietly stopped
+     * hosting altogether would satisfy every assertion about refusals on this page.
+     */
+    @Test
+    fun `a home that goes on the air is hosted and the caller is told once`() {
+        val model = LobbyModel(link = MemoryLobbyLink(joined = 2, linesIn = 0))
+        var toldTimes = 0
+        model.hostHome("THE BUNGALOW") { toldTimes++ }
+        assertEquals(1, toldTimes, "the caller was told the home was up $toldTimes times")
+        assertTrue(model.hosting, "the home is on the air and this phone is not hosting it")
+        assertEquals("THE BUNGALOW", model.attached?.name, "the host did not join its own house")
+        assertNull(model.refusal, "a home that went up refused something")
+    }
+
+    /**
+     * **The name collision, in the host's own words** (E-D3-2).
+     *
+     * The refusal a host will really get: two households on one network, or one household running
+     * two phones as hosts by accident. It names the home rather than the error, because the fix is
+     * a rename and the RENAME row is on the screen this is drawn on.
+     *
+     * **Nothing is hosted and the caller is never told the home is up.** That is the half that
+     * matters: what shipped was a lobby that opened over an advertisement the OS had refused, so
+     * the host sat in a one-seat room that no other phone on the network could see, with no reason
+     * given anywhere.
+     */
+    @Test
+    fun `a home refused for its name hosts nothing and says which name`() {
+        val model = LobbyModel(link = RefusingLobbyLink(HostRefusal.NameAlreadyOnTheAir))
+        var toldTimes = 0
+        model.hostHome("THE BUNGALOW") { toldTimes++ }
+        assertEquals(0, toldTimes, "a home that never went on the air opened a lobby anyway")
+        assertFalse(model.hosting, "this phone is hosting a home no other phone can find")
+        assertNull(model.attached, "it joined a house that is not on the air")
+        assertEquals("ANOTHER HOME HERE IS ALREADY CALLED THE BUNGALOW", model.refusal)
+    }
+
+    /** Any other refusal: still honest, still named, still nothing hosted. */
+    @Test
+    fun `a home refused for any other reason says that it did not go on the air`() {
+        val model = LobbyModel(link = RefusingLobbyLink(HostRefusal.CouldNotGoOnTheAir))
+        model.hostHome("THE BUNGALOW") { throw AssertionError("a refused home reported itself up") }
+        assertFalse(model.hosting)
+        assertEquals("THIS HOME DID NOT GO ON THE AIR", model.refusal)
+    }
+
+    /** The refusal is the last thing that happened, not a permanent state of the phone. */
+    @Test
+    fun `hosting again clears the refusal the last attempt left`() {
+        val model = LobbyModel(link = RefusingLobbyLink())
+        model.hostHome("THE BUNGALOW")
+        assertNotNull(model.refusal)
+        model.nameResident("ELLIOT")
+        assertNull(model.refusal, "the refusal outlived the next thing the host did")
     }
 
     // ---- The name goes up, and comes back down as the lobby (D-115) --------------------------

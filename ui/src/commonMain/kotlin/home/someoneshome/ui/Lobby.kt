@@ -35,6 +35,27 @@ interface HomeFinder {
 }
 
 /**
+ * **Why HOST WITH THIS HOME was refused: the home never went on the air.**
+ *
+ * `ui` cannot see the radio and has no business knowing what Bonjour returned, so what crosses
+ * this seam is the distinction a *host* can act on — rename the home, or go and look at the
+ * network. The words are [LobbyModel.hostHome]'s, one layer up, where every other refusal on
+ * these screens is written.
+ *
+ * It exists because the failure used to reach nobody (E-D3-2): a second house called THE BUNGALOW
+ * was refused by the OS, never published, and its host waited in a lobby that no phone on the
+ * network could see, with no reason given on any screen.
+ */
+enum class HostRefusal {
+
+    /** A home of this name is already on the air here. Two households, one name — or one host twice. */
+    NameAlreadyOnTheAir,
+
+    /** The advertisement was refused for some other reason, so nobody can find this home. */
+    CouldNotGoOnTheAir,
+}
+
+/**
  * **The wire, as far as `ui` is allowed to know about it.**
  *
  * Three verbs and one shape coming back. Note what is *not* here: there is no way to ask this
@@ -52,8 +73,13 @@ interface LobbyLink {
      * too, and a host that talked to its own lobby through a side door would be a second code
      * path nobody exercises — with the counts on the host's screen coming from somewhere the
      * other five phones' counts do not.
+     *
+     * **[onUp] fires when the home is on the air, and [onRefused] when it could not go on it.**
+     * Exactly one of them, and neither at the call — a house is up when the rest of the network
+     * can find it, not when a socket has bound. The alternative is what shipped and what E-D3-2
+     * is: a lobby that opens, fills with nobody and never explains itself.
      */
-    fun host(homeName: String, onUp: (NearbyHome) -> Unit)
+    fun host(homeName: String, onUp: (NearbyHome) -> Unit, onRefused: (HostRefusal) -> Unit = {})
 
     /**
      * Attach to a home under [name]. [onStanding] fires every time the house says how the lobby
@@ -138,9 +164,11 @@ class MemoryLobbyLink(
     /** The names it has been told, for the same reason. */
     val named = mutableListOf<String>()
 
-    override fun host(homeName: String, onUp: (NearbyHome) -> Unit) {
+    override fun host(homeName: String, onUp: (NearbyHome) -> Unit, onRefused: (HostRefusal) -> Unit) {
         // Loopback, because that is what the real one does: the house runs here and this phone
-        // joins it over the local interface like everybody else.
+        // joins it over the local interface like everybody else. The fixture always gets on the
+        // air; the refusal has its own stand-in ([RefusingLobbyLink]) rather than a flag here,
+        // because every render and every screen test wants a home that went up.
         onUp(NearbyHome(homeName, "127.0.0.1", 0))
     }
 
@@ -202,6 +230,24 @@ class MemoryLobbyLink(
         /** The design's own lobby, minus ELLIOT — the name the sample phone types for itself. */
         val THE_OTHERS: List<String> = listOf("PRIYA", "MARCUS", "DANI", "ROSE", "TOMAS")
     }
+}
+
+/**
+ * **The link for the one case [MemoryLobbyLink] cannot show: a home the radio would not carry.**
+ *
+ * A separate fixture rather than a flag on the other one, because the two are asked for by
+ * different tests and a link that sometimes hosts and sometimes does not is a fixture every
+ * caller has to configure. Nothing else about it works — a home that never went on the air has no
+ * lobby behind it, which is the whole of the ruling.
+ */
+class RefusingLobbyLink(private val why: HostRefusal = HostRefusal.NameAlreadyOnTheAir) : LobbyLink {
+    override fun host(homeName: String, onUp: (NearbyHome) -> Unit, onRefused: (HostRefusal) -> Unit) =
+        onRefused(why)
+    override fun join(home: NearbyHome, name: String, onStanding: (LobbyBody.Standing) -> Unit) = Unit
+    override fun handOver(line: String) = Unit
+    override fun setInsiders(chosen: Int?) = Unit
+    override fun roundEnded() = Unit
+    override fun leave() = Unit
 }
 
 /**
@@ -363,16 +409,43 @@ class LobbyModel(
     fun stopLooking() = finder.stop()
 
     /**
-     * **HOST WITH THIS HOME: the house comes up here, and this phone joins it.**
+     * **HOST WITH THIS HOME: the house comes up here, and this phone joins it — if it went on the
+     * air at all.**
      *
      * The second half is the part worth writing down. A host that read its own lobby out of its
      * own desk would have counts arriving by a route no other phone uses, and the route no other
      * phone uses is the one nobody tests.
+     *
+     * ### Nothing here happens until the radio says the home is up (E-D3-2)
+     *
+     * [hosting] used to be set on the way in and the caller walked to the lobby on the same tap.
+     * Both were the phone asserting a house that might not exist: an advertisement the OS refuses
+     * is a home no other phone can see, and the host sat in a one-seat lobby with no reason given.
+     * So this is a **refusable action** now, the shape [handOverLine] and SAVE HOME already have —
+     * [onAir] is where the navigation goes, and a refusal stays on the screen the host is on with
+     * [refusal] naming what happened. The failure a host can fix is named as such: a duplicate
+     * home name is one RENAME away, and the rename row is on that same screen.
      */
-    fun hostHome(homeName: String) {
-        hosting = true
+    fun hostHome(homeName: String, onAir: () -> Unit = {}) {
         refusal = null
-        link.host(homeName) { attachTo(it) }
+        link.host(
+            homeName,
+            onUp = {
+                hosting = true
+                attachTo(it)
+                onAir()
+            },
+            onRefused = { why ->
+                // Not hosting, because there is no house: whatever came up locally is not on the
+                // air, and a phone drawing the host's controls over it would be offering settings
+                // for a lobby nobody can join.
+                hosting = false
+                refusal = when (why) {
+                    HostRefusal.NameAlreadyOnTheAir -> "ANOTHER HOME HERE IS ALREADY CALLED $homeName"
+                    HostRefusal.CouldNotGoOnTheAir -> "THIS HOME DID NOT GO ON THE AIR"
+                }
+            },
+        )
     }
 
     /**
@@ -473,14 +546,18 @@ class LobbyModel(
      * rather than the design's number, and it is playtest's to rule on — the same standing this
      * screen's `7` and `120S` have.
      *
-     * ### It goes nowhere, and that is the whole of what it is
+     * ### It reaches the desk, and it goes no further than the host's own phone
      *
-     * Unlike [cycleInsiders] this does not reach [LobbyLink]: the wire carries the Insider count
-     * because the house clamps it, and adding a second setting to what a client sends is a
-     * decision about the protocol rather than about a row. **So the number here is presentation
-     * and nothing reads it** — not [Flow.autoAdvance], which still stands in for the house's clock
-     * with the design's 45, and not any rule, because the rules are the house's and the loop is
-     * frozen. When the window is really enforced it will arrive the way `insiders` does.
+     * It reaches [LobbyLink] now, exactly as [cycleInsiders] does, and lands on the desk a round is
+     * armed from — which is what closes the gap where the row moved a number nothing read. **It
+     * does not go down the wire in either direction.** The Insider count travels because the house
+     * clamps it and every phone draws the clamped value; a ballot length needs neither, and the
+     * clients learn it when the ballot opens, on the push that opens it.
+     *
+     * The value shown is therefore this phone's own rather than one that came back from the house,
+     * which is the one asymmetry with the row above it. That is honest here and would not be there:
+     * nothing clamps a ballot length (D-125 — it is a number the whole room watches run out), so
+     * there is no second opinion for the screen to be waiting on.
      */
     var voteWindowSeconds: Int by mutableStateOf(VOTE_WINDOWS.first())
         private set

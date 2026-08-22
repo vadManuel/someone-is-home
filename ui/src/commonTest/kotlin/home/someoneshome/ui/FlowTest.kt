@@ -509,6 +509,25 @@ class FlowTest {
         delete.deleteHome()
         assertEquals(Flow.viaActions.getValue(ScreenId.Delete), setOf(delete.state.screen))
 
+        // HOST WITH THIS HOME, on a home that went on the air. The refused one stays where it is
+        // — the reason this edge is the actions layer's rather than the button's (E-D3-2) — and
+        // that half is walked immediately below, because an edge that is only ever proved in the
+        // direction it moves is an edge nobody has checked can refuse.
+        val onAir = FlowModel(PanelState(screen = ScreenId.HomeDetail))
+        onAir.hostHome("THE BUNGALOW")
+        assertEquals(Flow.viaActions.getValue(ScreenId.HomeDetail), setOf(onAir.state.screen))
+
+        val offAir = FlowModel(
+            PanelState(screen = ScreenId.HomeDetail),
+            lobby = LobbyModel(link = RefusingLobbyLink()),
+        )
+        offAir.hostHome("THE BUNGALOW")
+        assertEquals(
+            ScreenId.HomeDetail, offAir.state.screen,
+            "a home the radio refused walked into a lobby no other phone can join",
+        )
+        assertNotNull(offAir.lobby.refusal, "it stayed put and said nothing about why")
+
         // Either reserved card, read in a room while this home already has one somewhere else.
         // Not a tap at all: the camera raises it, and where it lands depends on what the map says
         // about the card. Both are walked, because the edge set has two members and a walk that
@@ -598,7 +617,7 @@ class FlowTest {
         assertEquals(
             setOf(
                 ScreenId.Editor, ScreenId.RoomEdit, ScreenId.StairsWarn,
-                ScreenId.SaveName, ScreenId.Delete, ScreenId.ScanMarker,
+                ScreenId.SaveName, ScreenId.Delete, ScreenId.HomeDetail, ScreenId.ScanMarker,
                 ScreenId.Secret, ScreenId.Lobby, ScreenId.ScanCaught,
                 ScreenId.WinInsiders, ScreenId.WinResidents,
                 ScreenId.Page2, ScreenId.Notice,

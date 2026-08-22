@@ -2,6 +2,7 @@ package home.someoneshome.platform.transport
 
 import home.someoneshome.model.Seat
 import home.someoneshome.model.protocol.TransportFrame
+import home.someoneshome.model.protocol.TransportRefusal
 import home.someoneshome.model.protocol.TransportWire
 import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
@@ -47,6 +48,19 @@ class TransportHost(
     private val onFrame: (Seat, TransportFrame) -> Unit,
     private val onSeated: (Seat) -> Unit = {},
     private val onLost: (Seat) -> Unit = {},
+    /**
+     * **A connection that was turned away, and why.**
+     *
+     * The authority's half of rule 6, and it is here because it was missing: on 2026-08-21 a
+     * phone presented a token to a house that had never issued it, the ledger refused it
+     * correctly (D-087), and the refusal reached no log, no screen and no host — silent to the
+     * player *and* to the authority, which is rule 6 exactly inverted (E-D3-1).
+     *
+     * **It carries the reason and never the token.** A refused resume is worth recording; the
+     * token that was presented is the one piece of the exchange that identifies a seat, and a
+     * host's log is not where it belongs.
+     */
+    private val onRefused: (TransportRefusal) -> Unit = {},
 ) {
 
     private class Link(val id: Long, val ws: DefaultWebSocketServerSession)
@@ -106,6 +120,7 @@ class TransportHost(
         when (admission) {
             null -> ws.close(CloseReason(CloseReason.Codes.VIOLATED_POLICY, "handshake first"))
             is SeatLedger.Admission.Refused -> {
+                onRefused(admission.reason)
                 ws.send(Frame.Text(TransportWire.encode(TransportFrame.Refused(admission.reason))))
                 ws.close(CloseReason(CloseReason.Codes.NORMAL, "refused"))
             }

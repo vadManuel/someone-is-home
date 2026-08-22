@@ -36,6 +36,8 @@ actual class HostAdvertiser actual constructor(
     name: String,
     port: Int,
     private val onEvent: (String) -> Unit,
+    private val onAir: () -> Unit,
+    private val onFailed: (AdvertiseFailure) -> Unit,
 ) {
 
     private val service = NSNetService(
@@ -48,10 +50,20 @@ actual class HostAdvertiser actual constructor(
     private val listener = object : NSObject(), NSNetServiceDelegateProtocol {
         override fun netServiceDidPublish(sender: NSNetService) {
             onEvent("ADVERTISED AS '${sender.name}'")
+            onAir()
         }
 
+        /**
+         * The refusal, reported twice: in words for the log and as a [AdvertiseFailure] for
+         * whoever has to say something to the host.
+         *
+         * The error dictionary is read by key name rather than through the Foundation constant so
+         * that the code the mapping turns on is [BONJOUR_COLLISION] and lives in `commonMain`. An
+         * unreadable dictionary is still a refusal — [advertiseFailureOf] takes a null.
+         */
         override fun netService(sender: NSNetService, didNotPublish: Map<Any?, *>) {
             onEvent("ADVERTISE FAILED $didNotPublish")
+            onFailed(advertiseFailureOf(errorCodeOf(didNotPublish)))
         }
     }
 
@@ -123,6 +135,17 @@ actual class HostBrowser actual constructor(
         browser.stop()
     }
 }
+
+/**
+ * `NSNetServicesErrorCode` out of a delegate's error dictionary, or null.
+ *
+ * By key name and through `toString`, because both ends of that entry are bridged Foundation
+ * objects: the key arrives as an `NSString` and the value as an `NSNumber`, and neither is a
+ * Kotlin `Int` to match on.
+ */
+private fun errorCodeOf(errors: Map<Any?, *>): Int? = errors.entries
+    .firstOrNull { it.key.toString() == "NSNetServicesErrorCode" }
+    ?.value?.toString()?.toIntOrNull()
 
 /** The dotted-quad of an AF_INET sockaddr, or null for anything else (v6 is skipped, not parsed). */
 private fun ipv4Of(data: NSData): String? {
