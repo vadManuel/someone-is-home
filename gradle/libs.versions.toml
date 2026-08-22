@@ -5,6 +5,7 @@ coroutines = "1.11.0"
 serialization = "1.9.0"
 ktor = "3.5.1"
 datetime = "0.7.1"
+zxing = "3.5.3"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
@@ -20,6 +21,12 @@ compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.re
 compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "compose" }
 compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "compose" }
 compose-resources = { module = "org.jetbrains.compose.components:components-resources", version.ref = "compose" }
+# HOST-SIDE ONLY, and the only third-party library in this repo that is not JetBrains'. It is used
+# by :cards to lay out a QR symbol for printing, and by :cards' tests to read one back. Encoding a
+# QR by hand is a Reed-Solomon implementation nobody would ever check; the round trip through a
+# decoder somebody else wrote is what makes the printed sheet believable. Nothing links it into the
+# app -- :cards has no iOS target.
+zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 
 [plugins]
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }

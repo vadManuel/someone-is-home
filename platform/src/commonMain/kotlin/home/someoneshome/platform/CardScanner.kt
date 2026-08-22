@@ -27,12 +27,13 @@ import home.someoneshome.model.MarkerShapes
  * what a repeat means, and for registration a repeat is a card being registered to the room it is
  * already in, which is a no-op the host cannot tell from the first scan and does not need to.
  *
- * ### There is no real implementation yet, and that is deliberate
+ * ### The real one is a camera, and it lives on the far side of an expect
  *
- * AVFoundation, a capture session, a permission prompt and a preview layer are hardware work on a
- * physical device — **the simulator has no camera** — so this build ships the interface, the fake,
- * and the whole of what happens *after* a card is read. The one thing that is missing is the one
- * thing a phone in a hand would provide.
+ * AVFoundation, a capture session and a permission prompt are hardware work on a physical device —
+ * **the simulator has no camera** — so [deviceCardScanner] returns something that cannot be
+ * exercised by `./gradlew check` on any target this repo builds. What check *can* certify is
+ * everything on this side of the seam: the fake below, the decoder in `model`, and the whole of
+ * what happens after a card is read.
  */
 interface CardScanner {
 
@@ -47,6 +48,21 @@ interface CardScanner {
     /** Stop reading. Safe to call when nothing was started; the screen is gone either way. */
     fun stop()
 }
+
+/**
+ * **The camera this phone actually has**, or something silent on a target with none.
+ *
+ * Built where a scan screen is, and stopped when it goes away: a capture session holds the camera
+ * and the power that goes with it, and the evening runs on batteries in a dark house. It is not
+ * held for the life of the app the way the haptic engine is, because a motor costs milliseconds to
+ * start and a camera costs the camera.
+ *
+ * A target with no lens — the Simulator, and any future desktop harness — returns a scanner that
+ * starts nothing and delivers nothing, rather than one that refuses loudly. Rule 6, and rule 5
+ * behind it: a screen that blanked because the camera threw is a screen that went dark in a room
+ * where dark means something.
+ */
+expect fun deviceCardScanner(): CardScanner
 
 /**
  * **The playtest scanner: a deck of cards that arrive when something says one did.**

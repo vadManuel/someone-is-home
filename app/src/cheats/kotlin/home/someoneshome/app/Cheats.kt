@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -67,7 +68,7 @@ import home.someoneshome.ui.u
  * makes it lawful against the light discipline: constant light carries no signal, changes with
  * nothing, and is identical on every phone regardless of role.
  */
-private enum class CheatView { Panel, Picker, Transport, Haptics }
+private enum class CheatView { Panel, Picker, Transport, Haptics, Camera }
 
 @Composable
 fun CheatRoot() {
@@ -98,22 +99,38 @@ fun CheatRoot() {
             ),
         )
     }
-    // The camera this build does not have. `SeededCardScanner` is a deck of real cards encoded to
-    // real payloads; the chip below is the shutter. Held above the view switch with the rest so
-    // that dropping into the picker and back does not deal the deck from the top again.
+    // The deck that stands in for a camera, kept now that there IS a camera. It is a tour of the
+    // refusals in a fixed order — two cards that share a shape, two cards marked T, two meeting
+    // cards — and no stack of paper in the house is guaranteed to contain that walk. Held above
+    // the view switch so dropping into the picker and back does not deal from the top again.
     val scanner = remember { SeededCardScanner() }
     LaunchedEffect(scanner) { scanner.start(flow::cardScanned) }
-    // The motor, held above the view switch with everything else: CoreHaptics takes tens of
-    // milliseconds to start an engine, and rebuilding one on every trip through the picker would
-    // put that cost in front of the first buzz every time.
-    val bench = remember { HapticCheat(deviceHaptics()) }
+    // ONE motor for the whole session, lent to both benches: CoreHaptics takes tens of
+    // milliseconds to start an engine, and two of them on one phone is two engines competing for
+    // one Taptic Engine.
+    val haptics = remember { deviceHaptics() }
+    val bench = remember { HapticCheat(haptics) }
+    // And one camera, held here for the same reason and released far more carefully: a capture
+    // session holds the lens, the ISP and the battery, so it is started where a card could be read
+    // and stopped the moment that screen goes away.
+    val scan = remember { ScanCheat(haptics) }
     // The bench, driving itself, when the process was launched with the switch set. It is how a
     // unit with no hand on the phone gets a device log out of the one output that has no picture:
     // the app opens on the bench and every row fires once. Absent the switch this is false and
     // nothing here happens, which is every launch a person makes.
     val sweeping = remember { launchSwitch(HapticCheat.SWEEP_SWITCH) }
-    var view by remember { mutableStateOf(if (sweeping) CheatView.Haptics else CheatView.Panel) }
+    val scanSweeping = remember { launchSwitch(ScanCheat.SWEEP_SWITCH) }
+    var view by remember {
+        mutableStateOf(
+            when {
+                sweeping -> CheatView.Haptics
+                scanSweeping -> CheatView.Camera
+                else -> CheatView.Panel
+            }
+        )
+    }
     LaunchedEffect(sweeping) { if (sweeping) bench.sweep() }
+    LaunchedEffect(scanSweeping) { if (scanSweeping) scan.sweep() }
     Box(Modifier.fillMaxSize().background(Amber.Black)) {
         when (view) {
             // `standingInForTheHouse` is the bench's stand-in for the authority: nothing here
@@ -125,14 +142,28 @@ fun CheatRoot() {
                 onPick = { flow.jump(it); view = CheatView.Panel },
                 onTransport = { view = CheatView.Transport },
                 onHaptics = { view = CheatView.Haptics },
+                onCamera = { view = CheatView.Camera },
             )
             CheatView.Transport -> TransportCheatScreen(transport)
             CheatView.Haptics -> HapticCheatScreen(bench)
+            CheatView.Camera -> ScanCheatScreen(scan)
         }
         MarkerChip { view = if (view == CheatView.Panel) CheatView.Picker else CheatView.Panel }
         // Only where a card could actually be read. A shutter on the springboard would be a
         // control for an event that cannot happen there.
         if (view == CheatView.Panel && flow.state.screen == ScreenId.ScanMarker) {
+            // THE REAL CAMERA, on the real scan screen, and only while it is on screen. This is the
+            // doctrine as wiring: the lit screen IS the scanner, so the session is bound to the
+            // screen's own lifetime rather than to the app's — walk off it and the lens comes back.
+            DisposableEffect(scan) {
+                scan.watch(flow::cardScanned)
+                onDispose {
+                    scan.release()
+                    // The deck gets its listener back, or the shutter below would silently stop
+                    // working after the first trip through the scan screen.
+                    scanner.start(flow::cardScanned)
+                }
+            }
             ShutterChip(scanner.peek?.id?.value.orEmpty()) { scanner.present() }
         }
     }
@@ -172,6 +203,7 @@ private fun CheatPicker(
     onPick: (PanelState) -> Unit,
     onTransport: () -> Unit,
     onHaptics: () -> Unit,
+    onCamera: () -> Unit,
 ) {
     var draft by remember(state) { mutableStateOf(state) }
     val insets = LocalPanelInsets.current
@@ -210,6 +242,14 @@ private fun CheatPicker(
         ) {
             Label("HAPTICS", size = 6.5, color = Amber.Dim)
             Label("D-135 BENCH", size = 6.5, color = Amber.Bright)
+        }
+        Row(
+            Modifier.fillMaxWidth().border(1.u, Amber.Faint).tap(onCamera)
+                .padding(horizontal = 6.u, vertical = 4.u),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Label("CAMERA", size = 6.5, color = Amber.Dim)
+            Label("FRONT, NO PREVIEW", size = 6.5, color = Amber.Bright)
         }
         for (id in ScreenId.entries) {
             val current = id == draft.screen
