@@ -3,6 +3,7 @@ package home.someoneshome.ui
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -361,6 +362,227 @@ class SubroutineTest {
         val entry = PathEntry()
         entry.handOver()
         assertNull(entry.handedOver, "an empty route went to the house")
+    }
+
+    // ---- Sniff's question ------------------------------------------------------------------------
+
+    /**
+     * **Equal groups are refused by name, and that is D-137 rather than defensive coding.**
+     *
+     * *The answer must exist and must be unique — a tie is a coin flip the house would then grade,
+     * and D-109 grades entries on their merits or not at all.* There is no clamp, no nudge and no
+     * arbitrary winner: a tie is a question this client cannot ask, and it says so.
+     *
+     * It is not hypothetical. The stand-in draw in `core` produces three numbers out of one range
+     * with no idea what they mean (E-L4-3), so it can draw one of these today.
+     */
+    @Test
+    fun sniffRefusesTwoGroupsOfTheSameSize() {
+        for (size in 1..4) {
+            val thrown = assertFailsWith<MalformedSubroutineParameters>(
+                "SNIFF accepted two groups of $size, which is a tie the house would then grade",
+            ) { SniffGroups.of(listOf(size, size, 8)) }
+            assertTrue(
+                thrown.detail.contains("equal groups never occur"),
+                "the refusal does not name what is wrong with it: ${thrown.detail}",
+            )
+        }
+        // And the other direction, so this is a guard rather than a type that refuses everything.
+        val asked = SniffGroups.of(listOf(2, 5, 8))
+        assertEquals(2, asked.first)
+        assertEquals(5, asked.second)
+    }
+
+    /**
+     * The three other ways a Sniff instance can fail to be a question, each refused by name.
+     *
+     * A list of the wrong length is a client reading a Subroutine it was not sent. A group with no
+     * buzzes in it is one group, not two. A pause of nothing is the same fault wearing a different
+     * field: what separates the groups is the silence, and without it the player feels one run.
+     */
+    @Test
+    // Named `…ThatIsNotAQuestion` rather than `…ItCannotAsk`, which the vocabulary lint reads as
+    // the forbidden word for Subroutine hiding inside `cannotAsk`. Containment, not prefix — and
+    // the lint is right to be that blunt.
+    fun sniffRefusesAnInstanceThatIsNotAQuestion() {
+        val malformed = listOf(
+            listOf(3, 5) to "two numbers cannot say how long the pause is",
+            listOf(3, 5, 8, 2) to "a fourth number is a Subroutine this client is not reading",
+            listOf(0, 5, 8) to "a group of nothing is not a group",
+            listOf(3, 0, 8) to "and neither is the second one",
+            listOf(3, 5, 0) to "two groups with no pause between them are one group",
+        )
+        for ((parameters, why) in malformed) {
+            assertFailsWith<MalformedSubroutineParameters>("SNIFF accepted $parameters — $why") {
+                SniffGroups.of(parameters)
+            }
+        }
+    }
+
+    /**
+     * **The script is two groups and one pause, and every buzz in it is the same length.**
+     *
+     * The pulse count is the whole question, so a script that buzzed unevenly would be handing the
+     * player a rhythm — which is Handshake, and the reason D-137 makes Sniff a magnitude judgment
+     * is that there is nothing to hold. Checked as *one rest longer than every other*, because that
+     * is what "two groups separated by a pause" comes to when it is read off a list of durations.
+     */
+    @Test
+    fun theSniffScriptIsTwoGroupsSeparatedByOnePauseAndCarriesNoRhythm() {
+        val groups = SniffGroups.of(listOf(3, 5, 8))
+        val buzzes = groups.script.filterIsInstance<HapticStep.Buzz>()
+        assertEquals(
+            groups.first + groups.second, buzzes.size,
+            "the script does not buzz as many times as the two groups say",
+        )
+        assertEquals(
+            1, buzzes.map { it.millis }.toSet().size,
+            "the buzzes are not all the same length, so the script carries a rhythm",
+        )
+
+        val rests = groups.script.filterIsInstance<HapticStep.Rest>()
+        val between = rests.filter { it.millis == groups.gapMillis }
+        assertEquals(1, between.size, "there is not exactly one pause between the two groups")
+        assertTrue(
+            rests.all { it.millis <= groups.gapMillis },
+            "a gap inside a group is as long as the gap between them, so there are not two groups",
+        )
+        // The pulses before the pause are the first group and the ones after it are the second.
+        val at = groups.script.indexOf(between.single())
+        assertEquals(
+            groups.first, groups.script.take(at).count { it is HapticStep.Buzz },
+            "the pause is in the wrong place — the first group is the wrong size",
+        )
+        assertTrue(groups.script.last() is HapticStep.Buzz, "the script ends on silence")
+    }
+
+    // ---- Deallocate's columns and its entry -------------------------------------------------------
+
+    /**
+     * **A column can be taken below level, and the entry simply counts it.**
+     *
+     * D-138: *over-taps are the player's to make. Columns can go below level, the screen only
+     * echoes the tap, and the house rejects a wrong final state on hand-over.* A column that
+     * refused to go below level would be the phone forming an opinion about the answer, and D-125
+     * is explicit — clamp only what players cannot perceive, and a column's height is the one thing
+     * here a player can.
+     *
+     * Injecting the bug this exists for means handing [ColumnEntry] the distribution and refusing a
+     * removal that would take a column past the shortest.
+     */
+    @Test
+    fun aColumnTakesEveryTapIncludingTheOnesPastLevel() {
+        val entry = ColumnEntry(columns = 3)
+        repeat(9) { entry.remove(1) }
+        assertEquals(listOf(0, 9, 0), entry.removed, "a removal was refused")
+        assertEquals(9, entry.taken(1))
+        assertEquals(0, entry.taken(0), "a column nobody touched came back short")
+    }
+
+    /**
+     * The entry counts its own taps and nothing else, and a column it does not have is ignored.
+     *
+     * Silent rather than thrown: nothing on a drawn screen can produce an index that is not a
+     * column, and a `when` that threw would turn a routing mistake into a dead phone in a dark
+     * home (rule 6).
+     */
+    @Test
+    fun aColumnEntryCountsOnlyItsOwnTapsAndIgnoresAColumnItDoesNotHave() {
+        val entry = ColumnEntry(columns = 2)
+        assertFalse(entry.touched, "it started out already touched")
+        entry.remove(5)
+        entry.remove(-1)
+        assertEquals(listOf(0, 0), entry.removed, "a tap on a column that is not there landed")
+        assertFalse(entry.touched)
+        entry.remove(0)
+        assertTrue(entry.touched)
+        entry.handOver()
+        entry.remove(0)
+        assertEquals(listOf(1, 0), entry.removed, "a tap landed after the entry had gone")
+        assertTrue(entry.locked)
+    }
+
+    /**
+     * **SUBMIT with nothing removed is accepted**, which is [ScalarEntry]'s refusal to refuse.
+     *
+     * An inert SUBMIT would be the phone saying *the distribution you were dealt is not already
+     * level*, and it has no way of knowing: nothing in the entry is a height and nothing in it is
+     * the shortest column.
+     */
+    @Test
+    fun columnsCanBeSentWithoutATap() {
+        val entry = ColumnEntry(columns = 4)
+        entry.handOver()
+        assertEquals(listOf(0, 0, 0, 0), entry.handedOver, "an untouched distribution was refused")
+    }
+
+    /**
+     * **A distribution the panel cannot draw is refused, and one it can is returned untouched.**
+     *
+     * Not a difficulty rule. Dots clipped off the top of a column change the height a player
+     * reads, so a truncated distribution asks a *different question* from the one the house sent —
+     * and the player answers the picture, correctly, and is graded wrong.
+     *
+     * **Equal columns are deliberately absent from this list.** A distribution that arrives level
+     * asks for no removals, which is a trivial instance rather than a malformed one, and refusing
+     * it would be this client deciding how much work a piece of work has to contain.
+     */
+    @Test
+    fun theDistributionIsRefusedOnlyWhereThePanelCannotDrawIt() {
+        val malformed = listOf(
+            listOf(4) to "one column is already level and there is nothing to compare it with",
+            emptyList<Int>() to "no columns at all",
+            List(DotColumns.MOST_COLUMNS + 1) { 3 } to "more strips than the panel has room for",
+            listOf(3, 0, 4) to "a column with no dots in it is a column that is not there",
+            listOf(3, DotColumns.MOST_DOTS + 1) to "a column taller than the panel draws",
+        )
+        for ((parameters, why) in malformed) {
+            assertFailsWith<MalformedSubroutineParameters>(
+                "DEALLOCATE accepted $parameters — $why",
+            ) { DotColumns.of(parameters) }
+        }
+
+        assertContentEquals(
+            listOf(1, DotColumns.MOST_DOTS),
+            DotColumns.of(listOf(1, DotColumns.MOST_DOTS)),
+            "the edges of what the panel can draw were refused",
+        )
+        // Already level, and accepted: see the note above.
+        assertContentEquals(listOf(2, 2, 2), DotColumns.of(listOf(2, 2, 2)))
+    }
+
+    /**
+     * **The two fixtures are questions with an answer in them, and the answer is computed HERE.**
+     *
+     * The arithmetic below — the shortest column, and what each of the others owes over it — is the
+     * answer key, which is why there is no function in `ui` that does it. `DotColumns` returns the
+     * heights and computes nothing; a `level` or an `owed` helper would be one call away from a
+     * screen that could tell a player when to stop, on a Subroutine whose entire content is
+     * deciding that for yourself.
+     *
+     * This is a test, it never ships, and it is the only place in the module where the two halves
+     * of a Deallocate instance are in the same expression.
+     */
+    @Test
+    fun theFixtureQuestionsHaveAnAnswerAndItIsNotOnThePhone() {
+        assertTrue(
+            SubroutineModel.SNIFF.first != SubroutineModel.SNIFF.second,
+            "the SNIFF fixture is a tie, which D-137 says never occurs",
+        )
+
+        val columns = SubroutineModel.DEALLOCATE
+        val level = columns.min()
+        val owed = columns.sumOf { it - level }
+        assertTrue(owed > 0, "the DEALLOCATE fixture arrives level, so there is nothing to look at")
+        assertTrue(
+            columns.count { it == level } == 1,
+            "more than one column is already at level, so the fixture is easier than it reads",
+        )
+        assertTrue(
+            columns.indexOf(level) !in listOf(0, columns.lastIndex),
+            "the shortest column is on an end, so the Subroutine can be done without looking at " +
+                "the whole screen",
+        )
     }
 
     // ---- The signal graph ----------------------------------------------------------------------

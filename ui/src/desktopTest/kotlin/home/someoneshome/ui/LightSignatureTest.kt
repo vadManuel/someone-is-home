@@ -65,6 +65,14 @@ class LightSignatureTest {
         ScreenId.SubShort to mapOf(LightSignature.Dark to 1),
         ScreenId.SubTrace to mapOf(LightSignature.Medium to 1),
         ScreenId.SubJam to mapOf(LightSignature.Medium to 1),
+        ScreenId.SubDeallocate to mapOf(LightSignature.Bright to 1),
+        // **SNIFF carries its mark in the same slot as the other seven, and on this render it is
+        // drawn in black** — the screen emits nothing until the player has answered (D-137), and
+        // that includes its own header. The mark is present, in its place, at the size it is
+        // everywhere else; what changes is one colour. A screen that dropped the mark while dark
+        // would be a surface that stops carrying the value, which is the exact regression the
+        // sentence form's removal caused once already and the reason this sweep exists.
+        ScreenId.SubSniff to mapOf(LightSignature.Dark to 1),
     )
 
     private fun SemanticsNodeInteractionsProvider.marks(): Map<LightSignature, Int> =

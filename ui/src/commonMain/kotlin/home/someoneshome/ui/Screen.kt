@@ -151,6 +151,8 @@ fun Screen(
                 ScreenId.SubShort -> ShortScreen(state.verdict)
                 ScreenId.SubTrace -> SignalTraceScreen(state.verdict)
                 ScreenId.SubJam -> JamScreen(state.verdict)
+                ScreenId.SubSniff -> SniffScreen(state.verdict)
+                ScreenId.SubDeallocate -> DeallocateScreen(state.verdict)
                 ScreenId.Files -> FilesScreen()
                 ScreenId.Notes -> NotesScreen(vals)
                 ScreenId.TermNo -> TermNoScreen()

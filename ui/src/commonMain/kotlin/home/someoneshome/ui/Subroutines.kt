@@ -23,13 +23,19 @@ import home.someoneshome.model.SubroutineKind
  * | 1 | Replay | Short | Sequence memory | 3–5 dots flash in order; tap them back | Bright |
  * | 2 | Interrupt | Short | Timing | A slow bar sweeps; tap inside a generous band | Medium |
  * | 3 | Parity Check | Short | Visual search | Grid of filled/empty cells; tap the one breaking the pattern | Bright |
- * | 4 | Sniff | Short | Haptic counting | The phone buzzes N times; tap N | Dark |
- * | 5 | Deallocate | Short | Counting | Unequal columns of dots; tap to even them out | Bright |
+ * | 4 | Sniff | Short | Magnitude | Two buzzed groups; say which was bigger (D-137) | Dark |
+ * | 5 | Deallocate | Short | Counting | A tap removes a dot; level is the shortest column (D-138) | Bright |
  * | 6 | Drift | Medium | Tracking under occlusion | A dot drifts behind occluders; tap where it is now | Medium |
  * | 7 | Short | Short | Gross motor | Hold N fingers on the screen for two seconds | Dark |
  * | 8 | Signal Trace | Medium | Pathfinding | Tap node-to-node from source to sink | Medium |
  * | 9 | Jam | Medium | Convergence | Tap +/− until two shapes overlap | Medium |
  * | 10 | Handshake | Medium | Haptic echo | The phone buzzes a pattern; you tap it back | Dark |
+ *
+ * **Rows 4 and 5 are revision 31's, not the roster's.** `gdd.md:568` and `:569` are superseded by
+ * D-137 and D-138 and the table above carries the rulings rather than the lines they replaced —
+ * *"the phone buzzes N times; tap N"* was two Subroutines and both were wrong, and *"tap to even
+ * them out"* did not say what a tap does. Rows 2 and 6 still quote the GDD because Interrupt and
+ * Drift are unbuilt; D-139 and D-140 supersede those two lines as well.
  *
  * ### The ten, and not the two structured ones
  *
@@ -63,8 +69,8 @@ enum class Subroutine(
     Replay("REPLAY", SubroutineTier.Short, LightSignature.Bright, SubroutineKind.Replay, ScreenId.SubReplay),
     Interrupt("INTERRUPT", SubroutineTier.Short, LightSignature.Medium, SubroutineKind.Interrupt),
     ParityCheck("PARITY CHECK", SubroutineTier.Short, LightSignature.Bright, SubroutineKind.ParityCheck, ScreenId.SubParity),
-    Sniff("SNIFF", SubroutineTier.Short, LightSignature.Dark, SubroutineKind.Sniff),
-    Deallocate("DEALLOCATE", SubroutineTier.Short, LightSignature.Bright, SubroutineKind.Deallocate),
+    Sniff("SNIFF", SubroutineTier.Short, LightSignature.Dark, SubroutineKind.Sniff, ScreenId.SubSniff),
+    Deallocate("DEALLOCATE", SubroutineTier.Short, LightSignature.Bright, SubroutineKind.Deallocate, ScreenId.SubDeallocate),
     Drift("DRIFT", SubroutineTier.Medium, LightSignature.Medium, SubroutineKind.Drift),
     Short("SHORT", SubroutineTier.Short, LightSignature.Dark, SubroutineKind.Short, ScreenId.SubShort),
     SignalTrace("SIGNAL TRACE", SubroutineTier.Medium, LightSignature.Medium, SubroutineKind.SignalTrace, ScreenId.SubTrace),
@@ -446,6 +452,88 @@ class PathEntry : SubroutineEntry {
 }
 
 /**
+ * **What this phone took off each column — Deallocate's entry, and it has never seen the columns.**
+ *
+ * D-138: *a tap removes one dot from the tapped column, and evening out means bringing every column
+ * down to the shortest.* What this keeps is [removed]: how many dots this phone has taken off each
+ * column, in column order. **Not the heights, and not the distribution the house drew.**
+ *
+ * ### It is told the column COUNT and nothing else, and the difference is the whole answer
+ *
+ * The required entry is the sum of each column's excess over the shortest, so **the shortest column
+ * is the answer key** — and an entry handed the heights could find it with one `min()`. That is
+ * [HoldEntry]'s ruling one Subroutine along: `SHORT_FINGERS` lives on [SubroutineModel] and not on
+ * the entry, because an entry that knew the ask could subtract it from what it holds. Here the ask
+ * is a whole list and the subtraction is a one-liner, which makes the narrowing worth more, not
+ * less.
+ *
+ * A count of columns is structure rather than answer, exactly as [SequenceEntry.length] is: there
+ * have to be that many places a finger can land, and knowing how many says nothing about how tall
+ * any of them was.
+ *
+ * ### Over-taps land, because a column that refused to go below level would be a verdict
+ *
+ * D-138 is explicit — *over-taps are the player's to make, columns can go below level, and the
+ * house rejects a wrong final state on hand-over.* Nothing here compares a removal with anything,
+ * so a column can be taken past level, and past it again. D-125's clamp rule is the reason: *clamp
+ * only what players cannot perceive*, and a column's height is the one thing on this screen a
+ * player can.
+ *
+ * What the *screen* will not do is take a dot off a column that has none — see [DeallocateScreen],
+ * where that refusal is the picture's rather than the answer's.
+ *
+ * ### Sent by SUBMIT, and it is live from the first frame
+ *
+ * A removal cannot be undone, but another one can always be made, so the entry can still change and
+ * the rule *an entry goes when it can no longer change* puts a button on it. The button is live
+ * with nothing removed for [ScalarEntry]'s reason: an inert SUBMIT would be the phone saying *the
+ * distribution you were dealt is not already level*, which is a thing it cannot know.
+ */
+class ColumnEntry(
+    /** How many places a finger can land. Structure, not answer — see the note above. */
+    val columns: Int,
+) : SubroutineEntry {
+
+    /** How many dots this phone has taken off each column, in column order. */
+    var removed: List<Int> by mutableStateOf(List(columns) { 0 })
+        private set
+
+    var handedOver: List<Int>? by mutableStateOf(null)
+        private set
+
+    override val touched: Boolean get() = removed.any { it > 0 } || handedOver != null
+
+    override val gone: Boolean get() = handedOver != null
+
+    /**
+     * One dot off column [at].
+     *
+     * A column index this entry does not have is ignored rather than throwing: nothing on a drawn
+     * screen can produce one, and a `when` that threw would turn a routing mistake into a dead
+     * phone in a dark home (rule 6).
+     */
+    fun remove(at: Int) {
+        if (handedOver != null || at !in removed.indices) return
+        removed = removed.mapIndexed { column, count -> if (column == at) count + 1 else count }
+    }
+
+    /** How many dots this phone has taken off column [at]. The echo, and the whole of it. */
+    fun taken(at: Int): Int = removed.getOrElse(at) { 0 }
+
+    /** SUBMIT. Accepted with nothing removed — see the note above about what refusing would say. */
+    fun handOver() {
+        if (handedOver == null) handedOver = removed
+    }
+
+    val locked: Boolean get() = handedOver != null && handedOver == removed
+
+    override fun restart() {
+        removed = List(columns) { 0 }
+        handedOver = null
+    }
+}
+
+/**
  * **The parity grid: a regular pattern with exactly one cell breaking it, and no memory of which.**
  *
  * The design's Parity Check is *a grid of filled/empty cells; tap the one breaking the pattern* —
@@ -630,6 +718,238 @@ object SignalGraph {
 }
 
 /**
+ * **A scan parameter this client cannot read as the question it is supposed to be.**
+ *
+ * The house draws an instance's parameters at scan time and the client renders from them (D-139's
+ * pattern, and the plumbing L4 built). This is what happens when what arrives is not a question:
+ * two Sniff groups of the same size, a column of no dots, a list of the wrong length.
+ *
+ * ### Loud, and at the READ rather than at the draw
+ *
+ * The house map's format is the precedent and the reasoning is the same one (`HouseMapText` —
+ * *strict, and loud*): a reader that quietly skipped what it did not understand hands back
+ * something that looks complete and is not, and the fault surfaces as a player standing in the
+ * dark being asked an impossible question. So nothing is defaulted, nothing is coerced, and every
+ * failure names the fault.
+ *
+ * **It is thrown where the parameters are read, and never from a draw.** Rule 6 is that errors are
+ * silent to the player, and rule 5 is that no error path may touch the lamp: a screen that threw
+ * mid-composition would blank, and a phone that blanks in a dark house is indistinguishable from a
+ * revocation. Today the read happens once, at class-load, against the port's own fixtures — so a
+ * malformed one fails the build. **When the house's push exists this belongs at the effect
+ * boundary, with the rest of the arrival**, and the worklog says so.
+ */
+class MalformedSubroutineParameters(val detail: String) :
+    IllegalArgumentException("the house asked something this client cannot draw: $detail")
+
+/**
+ * **One step of a haptic pattern — data on this side of the boundary, a vibration on the other.**
+ *
+ * `ui` has no motor and this build has no phone attached, so a script here is a list, not a buzz.
+ * It is shaped for the thing that will play it: alternating durations, no intensities, nothing to
+ * interpret — the vocabulary every platform vibration API already has.
+ *
+ * **Every [Buzz] in a Sniff script is the same length** (D-135 reserves the long haptic for five
+ * named events and this is not among them), which is not a detail: a script whose pulses varied
+ * would be a rhythm, and D-137 makes Sniff a magnitude judgment precisely so that there is no
+ * pattern to hold. What the player counts is *how many*, never *how they went*.
+ */
+sealed interface HapticStep {
+
+    /** The motor is on for [millis]. */
+    data class Buzz(val millis: Int) : HapticStep
+
+    /** The motor is off for [millis]. */
+    data class Rest(val millis: Int) : HapticStep
+}
+
+/**
+ * **Sniff's question: two groups of buzzes with a pause between them, and one of them is bigger.**
+ *
+ * D-137 supersedes `gdd.md:568`. The phone buzzes **two haptic groups separated by a pause** and
+ * the player answers **which group was bigger** — pure perception, no arithmetic to carry, no
+ * numeral on screen, and nothing for the player to count *to*. It is the roster's only short dark
+ * (`gdd.md:580`), the quick one a Resident can take without becoming a beacon.
+ *
+ * ### It holds the question and not the answer, and that is not the same sentence twice
+ *
+ * *Which group was bigger* is a fact about these two numbers, so this type **can** be asked it —
+ * and must never be. It is the [ParityGrid] situation rather than the [SequenceEntry] one: the
+ * answer is not secret (a player who felt both groups knows it) and it is the *judgement* that
+ * stays on the house. What keeps the judgement off the phone is that [ChoiceEntry] holds the
+ * player's answer, this holds the question, and **nothing in `ui` is given both** — no screen, no
+ * model, no function takes a `SniffGroups` and a `ChoiceEntry` and compares them. There is no
+ * `wasRight` here and there must never be one.
+ *
+ * ### Equal groups are refused, loudly (D-137)
+ *
+ * *The answer must exist and must be unique — a tie is a coin flip the house would then grade, and
+ * D-109 grades entries on their merits or not at all.* So a tie is not clamped, nudged or answered
+ * arbitrarily; it is a malformed question and it is said so. **The stand-in draw in `core` can
+ * still produce one** — it draws three numbers out of one range with no idea what they mean
+ * (`Scanning.kt`, E-L4-3) — which is exactly why this refusal has work to do rather than being a
+ * defensive flourish.
+ */
+class SniffGroups private constructor(
+    /** How many buzzes are in the first group. */
+    val first: Int,
+    /** How many are in the second. Never equal to [first]. */
+    val second: Int,
+    /** How long the phone is still between the two groups. The thing that makes them two. */
+    val gapMillis: Int,
+) {
+
+    /**
+     * The pattern, as the device unit will play it: the first group, the pause, the second group.
+     *
+     * Ends on a [HapticStep.Buzz] rather than on a trailing rest — a script that finished with
+     * silence would be a script whose end the player cannot feel, and *when the question is over*
+     * is the moment they are expected to answer.
+     */
+    val script: List<HapticStep> = buildList {
+        repeat(first) {
+            if (isNotEmpty()) add(HapticStep.Rest(PULSE_GAP_MILLIS))
+            add(HapticStep.Buzz(PULSE_MILLIS))
+        }
+        add(HapticStep.Rest(gapMillis))
+        repeat(second) {
+            add(HapticStep.Buzz(PULSE_MILLIS))
+            if (it < second - 1) add(HapticStep.Rest(PULSE_GAP_MILLIS))
+        }
+    }
+
+    companion object {
+
+        /**
+         * **One buzz, and the same one every time.** A presentation fixture in the way
+         * `HANDSHAKE_BEATS` is, and short: D-135 reserves the long haptic for five named events.
+         */
+        const val PULSE_MILLIS: Int = 90
+
+        /** The silence between two buzzes of the same group. Even, so the group carries no rhythm. */
+        const val PULSE_GAP_MILLIS: Int = 220
+
+        /** How many numbers a Sniff instance is: two group sizes and the pause between them. */
+        const val LENGTH: Int = 3
+
+        /**
+         * The pause arrives in **tenths of a second**, so the one duration on the wire is a small
+         * integer like every other parameter. Nothing on the wire is ever milliseconds.
+         */
+        const val GAP_TENTHS: Int = 100
+
+        /**
+         * Read a scan's parameters as a Sniff question, or refuse them by name.
+         *
+         * Four ways to be malformed and only one of them is D-137's: a list of the wrong length, a
+         * group with no buzzes in it, no pause between the groups — and **two groups of the same
+         * size**, which is the one the ruling is about.
+         */
+        fun of(parameters: List<Int>): SniffGroups {
+            if (parameters.size != LENGTH) {
+                throw MalformedSubroutineParameters(
+                    "SNIFF is $LENGTH numbers — two group sizes and the pause — and this is " +
+                        "${parameters.size}: $parameters",
+                )
+            }
+            val (first, second, gapTenths) = parameters
+            if (first < 1 || second < 1) {
+                throw MalformedSubroutineParameters(
+                    "SNIFF was given a group of $first and a group of $second, and a group with " +
+                        "no buzzes in it is not a group",
+                )
+            }
+            if (first == second) {
+                throw MalformedSubroutineParameters(
+                    "SNIFF was given two groups of $first. D-137: equal groups never occur — the " +
+                        "answer must exist and must be unique, and a tie is a coin flip the house " +
+                        "would then grade",
+                )
+            }
+            if (gapTenths < 1) {
+                throw MalformedSubroutineParameters(
+                    "SNIFF was given a pause of $gapTenths tenths of a second, and two groups " +
+                        "with no pause between them are one group",
+                )
+            }
+            return SniffGroups(first, second, gapTenths * GAP_TENTHS)
+        }
+    }
+}
+
+/**
+ * **Deallocate's question: the columns as they were dealt, and no opinion about what is owed.**
+ *
+ * D-138 supersedes `gdd.md:569`. A tap removes one dot from the tapped column and evening out
+ * means bringing every column **down to the shortest** — so the answer is unique, the work is
+ * countable, and *the verb is the fiction.* The columns carry the arithmetic and nothing on the
+ * screen is a numeral (`gdd.md:588`).
+ *
+ * ### [of] returns the heights and computes nothing from them
+ *
+ * There is deliberately **no `level`, no `excess` and no `owed` in this file.** Every one of them
+ * is one line and every one of them is the answer: the required entry is the sum of each column's
+ * excess over the shortest, so a helper that returned the shortest column would put the answer key
+ * on the phone, one `min()` from a screen that could then tell a player when to stop. The answer
+ * is not secret — the columns are drawn and reading them is the work — but the *judgement* is the
+ * house's, exactly as it is for [ParityGrid]'s odd cell.
+ *
+ * ### The refusals are the panel's capacity and nothing more
+ *
+ * A column that will not fit on the panel is not a harder Subroutine, it is a **different question
+ * from the one the house asked**: dots clipped off the top of a column change the height a player
+ * reads, and they would then answer the picture correctly and be graded wrong. So a distribution
+ * that cannot be drawn is refused by name rather than truncated.
+ *
+ * **Equal columns are NOT refused.** A distribution that arrives already level asks for no
+ * removals, which is a trivial instance rather than a malformed one — and refusing it would be
+ * this client deciding how much work a piece of work has to contain, which is balance and is not
+ * its to decide. `gdd.md:569` says *unequal*; D-138 does not, and the difference is left where the
+ * ruling left it.
+ */
+object DotColumns {
+
+    /**
+     * **The panel's capacity, not a difficulty setting.**
+     *
+     * A column strip has to stay wider than [TAP_TARGET] — it is pressed one-handed, in the dark,
+     * by somebody watching a doorway — and six strips with their gaps is where a 300-unit panel
+     * runs out of room. [MOST_DOTS] is the same question vertically: seven dots and their gaps is
+     * 130 units, against roughly 195 of body once the instruction, the return line, the motion row
+     * and the two buttons have taken theirs.
+     */
+    const val LEAST_COLUMNS: Int = 2
+    const val MOST_COLUMNS: Int = 6
+    const val MOST_DOTS: Int = 7
+
+    /** Read a scan's parameters as a column distribution, or refuse them by name. */
+    fun of(parameters: List<Int>): List<Int> {
+        if (parameters.size !in LEAST_COLUMNS..MOST_COLUMNS) {
+            throw MalformedSubroutineParameters(
+                "DEALLOCATE was dealt ${parameters.size} column(s); this panel draws " +
+                    "$LEAST_COLUMNS to $MOST_COLUMNS, and one column is already level",
+            )
+        }
+        val short = parameters.withIndex().firstOrNull { it.value < 1 }
+        if (short != null) {
+            throw MalformedSubroutineParameters(
+                "DEALLOCATE was dealt ${short.value} dot(s) in column ${short.index}, and a " +
+                    "column with no dots in it is a column that is not there: $parameters",
+            )
+        }
+        val tall = parameters.withIndex().firstOrNull { it.value > MOST_DOTS }
+        if (tall != null) {
+            throw MalformedSubroutineParameters(
+                "DEALLOCATE was dealt ${tall.value} dots in column ${tall.index} and this panel " +
+                    "draws $MOST_DOTS — a clipped column is a different question from the one " +
+                    "the house asked: $parameters",
+            )
+        }
+        return parameters
+    }
+}
+
+/**
  * **What this phone has entered into the Subroutine it has open.**
  *
  * Sits beside [PanelState] with [HomeEditorModel], [SavedHomesModel], [LobbyModel] and
@@ -666,6 +986,16 @@ class SubroutineModel(
     val short: HoldEntry = HoldEntry(),
     val trace: PathEntry = PathEntry(),
     val jam: ScalarEntry = ScalarEntry(JAM_REACH),
+    /**
+     * **Sniff's answer is a [ChoiceEntry], and reusing it is the point.**
+     *
+     * *Which group was bigger* is one selection out of two, made in the dark, by somebody who may
+     * have to change it — which is the vote's situation and Parity Check's, and they already have
+     * a type. An eighth entry class holding a boolean would be a second way to say the same thing
+     * and a second place for a mistake to be made.
+     */
+    val sniff: ChoiceEntry = ChoiceEntry(),
+    val deallocate: ColumnEntry = ColumnEntry(DEALLOCATE.size),
 ) {
 
     /**
@@ -681,7 +1011,9 @@ class SubroutineModel(
         Subroutine.Short -> short
         Subroutine.SignalTrace -> trace
         Subroutine.Jam -> jam
-        Subroutine.Interrupt, Subroutine.Sniff, Subroutine.Deallocate, Subroutine.Drift -> null
+        Subroutine.Sniff -> sniff
+        Subroutine.Deallocate -> deallocate
+        Subroutine.Interrupt, Subroutine.Drift -> null
     }
 
     /**
@@ -689,8 +1021,9 @@ class SubroutineModel(
      *
      * What [at] means is the screen's own vocabulary, because the screens have nothing in common
      * to say: an element for a sequence, a cell for the parity grid, **how many fingers are now on
-     * the glass** for Short, a signed step for Jam, a node for Signal Trace. None of them is
-     * compared with anything.
+     * the glass** for Short, a signed step for Jam, a node for Signal Trace, **which of the two
+     * groups was bigger** for Sniff, and a column for Deallocate. None of them is compared with
+     * anything.
      *
      * A Subroutine with no entry behind it is ignored rather than crashing — a `when` that threw
      * would turn a routing mistake into a dead phone in a dark home, and rule 6 is that errors are
@@ -704,6 +1037,8 @@ class SubroutineModel(
             Subroutine.Short -> short.press(at)
             Subroutine.SignalTrace -> trace.walk(at)
             Subroutine.Jam -> jam.step(at)
+            Subroutine.Sniff -> sniff.choose(at)
+            Subroutine.Deallocate -> deallocate.remove(at)
             else -> Unit
         }
     }
@@ -723,6 +1058,8 @@ class SubroutineModel(
             Subroutine.Short -> short.handOver()
             Subroutine.SignalTrace -> trace.handOver()
             Subroutine.Jam -> jam.handOver()
+            Subroutine.Sniff -> sniff.handOver()
+            Subroutine.Deallocate -> deallocate.handOver()
             else -> Unit
         }
     }
@@ -776,6 +1113,41 @@ class SubroutineModel(
         const val TRACE_SEED = 5
 
         /**
+         * **Sniff's two groups and its pause, as the scan would send them.**
+         *
+         * Three buzzes, then five, with eight tenths of a second between — *playtest owns the gap
+         * between the two group sizes; it is the difficulty knob and the only one* (D-137). Two
+         * apart is a comfortable magnitude judgment and nothing here has been played with.
+         *
+         * Written as the parameter list the house sends rather than as three named numbers, so
+         * the fixture is the same shape as the arrival that will replace it, and so the reader
+         * that will read the real one is the reader being exercised now.
+         */
+        val SNIFF_PARAMETERS: List<Int> = listOf(3, 5, 8)
+
+        /**
+         * **The question, read once.**
+         *
+         * At class-load, from the fixture, so a malformed one fails the build rather than a
+         * player — see [MalformedSubroutineParameters] for why the read is here and not in a
+         * draw. In play this is the scan's answer, resolved at the effect boundary.
+         */
+        val SNIFF: SniffGroups = SniffGroups.of(SNIFF_PARAMETERS)
+
+        /**
+         * **Deallocate's columns, as the scan would deal them.**
+         *
+         * Four columns at four, two, five and three — *playtest owns the column count and the dot
+         * distribution* (D-138). The shortest is not on an end and not in the middle, which is the
+         * only property of this fixture that was chosen rather than picked: a level that always
+         * sits at one edge is a Subroutine you can do without looking at the whole screen.
+         */
+        val DEALLOCATE_PARAMETERS: List<Int> = listOf(4, 2, 5, 3)
+
+        /** The columns, read once — [SNIFF]'s arrangement, for [SNIFF]'s reason. */
+        val DEALLOCATE: List<Int> = DotColumns.of(DEALLOCATE_PARAMETERS)
+
+        /**
          * **The fixture: a phone part-way through each of the six.**
          *
          * Every render and every rendering test gets this, for the reason [MeetingModel.sample]
@@ -787,6 +1159,13 @@ class SubroutineModel(
          * The three new ones follow the same rule — mid-gesture, nothing handed over. Short has a
          * hand on the glass and its two seconds still running, Jam has been walked part of the way
          * in, and Signal Trace has a route two nodes long that has not been sent.
+         *
+         * **Sniff is the one that had to be thought about.** Its screen is black until an answer
+         * has been given, so a fixture with nothing chosen would render as a screen with nothing
+         * on it — which is the honest thing for the *untouched* frame and useless as the default
+         * every other render gets. It holds the second group, unsent, so the default frame is the
+         * one with something to look at. Deallocate has one dot off one column, which is the same
+         * mid-gesture rule as the rest.
          */
         fun sample(): SubroutineModel = SubroutineModel().apply {
             handshake.enter(0)
@@ -797,10 +1176,26 @@ class SubroutineModel(
             parity.choose(14)
             short.press(2)
             repeat(4) { jam.step(-1) }
+            sniff.choose(SNIFF_SECOND)
+            deallocate.remove(0)
             val wiring = SignalGraph.of(TRACE_SEED)
             trace.walk(wiring.source)
             wiring.joinedTo(wiring.source).firstOrNull()?.let { trace.walk(it) }
         }
+
+        /**
+         * **Sniff's two answers, as the only two things a tap on that screen can mean.**
+         *
+         * The left half of the panel is the group that buzzed first and the right half is the one
+         * that buzzed second — reading order, which is also the order they arrived in. They are
+         * named here rather than written as 0 and 1 at four call sites, because *the first one*
+         * and *the second one* is what they are, and an index is what they are stored as.
+         *
+         * **Neither of them is the answer.** Which one is bigger is a fact about [SNIFF] and this
+         * is a fact about the screen; nothing in `ui` holds both.
+         */
+        const val SNIFF_FIRST = 0
+        const val SNIFF_SECOND = 1
     }
 }
 
