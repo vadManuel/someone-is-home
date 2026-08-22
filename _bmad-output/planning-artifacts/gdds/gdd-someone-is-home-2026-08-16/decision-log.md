@@ -3088,9 +3088,35 @@ your house's name on it* is the entire joining ceremony. The nearby list still d
 and port and never by name (two households may legitimately both be THE BUNGALOW) — what changes is
 that the *second* one is now told it never went up, instead of finding out from an empty lobby.
 
+**The bug is legible in D3's own log, one line apart, and that is the evidence this ruling turns
+on.** In `host.log` from 2026-08-21, `[lobby] ADVERTISED AS 'THE BUNGALOW'` arrives **three lines
+after** `[lobby-bench] SEATED — 1 JOINED`. The host was standing in its own lobby before the home was
+on the air — so the window in which a refusal could still have been acted on had already closed, on
+every run, whether or not the advertisement was going to fail. Under this ruling the order is
+reversed: the restored evening of 2026-08-22 logs `ADVERTISED AS` **before** the host's own seat, and
+that ordering is the ruling in one line of evidence.
+
 **A refused home also takes the server back down.** A bound port under a home nobody can find is not
 a house, and leaving it up would make the next attempt — under a better name — fail for a second,
 unrelated reason.
+
+### ⚠️ Built under D-173 but **not ruled**: the ten seconds
+
+**The owner ruled two outcomes and the OS has three.** With the Local Network grant gone, iOS
+publishes nothing and reports nothing — no error, no prompt, no callback of any kind (E-D3-4). A
+build that waited on the two ruled callbacks would have made HOST WITH THIS HOME a control that does
+nothing when pressed, which is a worse failure than the one D-173 fixes and would have shipped in the
+name of fixing it. So an unanswered advertisement is refused after **ten seconds**, and exactly one
+of three outcomes always reaches the host.
+
+**Nobody ruled ten.** It is an engineering choice made to keep the ruling honest, not a decision
+handed down, and it is the one number on this page with no authority behind it. Bonjour answers in
+well under a second on a working stack — D3's logs have the publish landing between two lobby lines
+— so it is a bound on a callback that never comes rather than a timeout on a slow network, and no
+rule reads it and it stamps into no recording. **It wants the owner's eye**, on two questions: is ten
+seconds the right wait for a host standing in a lit room with a party in front of them, and is
+`THIS HOME DID NOT GO ON THE AIR` the right thing to say to somebody whose real problem is a
+permission they can still grant.
 
 **E-D3-3 stays open.** There is still no host→client effect push, and nothing here changes that.
 
