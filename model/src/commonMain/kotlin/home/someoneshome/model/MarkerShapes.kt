@@ -151,9 +151,8 @@ object MarkerShapes {
      * a letterform like the T rather than one of the 42 abstract marks, so the two reserved cards
      * read as a pair on a printed sheet and neither reads as an ordinary marker.
      *
-     * **This is a provisional ruling and is written up for ratification.** D-121 reserved a second
-     * shape without naming which; this names it, and naming it decides what is printed on paper,
-     * which cannot be patched.
+     * **Ratified by D-152.** D-121 reserved a second shape without naming which; this names it,
+     * and naming it decides what is printed on paper, which cannot be patched.
      */
     val MEETING: MarkerShape = requireNotNull(byId["u_shape"]) { "the roster lost u_shape" }
 

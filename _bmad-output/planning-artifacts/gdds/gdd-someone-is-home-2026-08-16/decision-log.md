@@ -2405,6 +2405,275 @@ correctness job attached.
 
 ---
 
+## Revision 33 — the house picks the doors, and the meter still says one thing
+
+*Decided 2026-08-22, late evening, with Vadmanuel. The three findings that had outlived the §18.1
+trace are closed — F-001, F-002 and F-003 — the Egress is finished as a system, and the round gets
+an end that leads somewhere. One promotion is reversed. Everything here that touches a written site
+is swept in the same pass, alongside the sweep revision 32 said was owed.*
+
+### D-148 · **The house picks the two nodes when it fires, and a small home still burns — F-001 ratified**
+
+**F-001's proposed resolution is ratified as written.** The two Egress nodes are **two ordinary
+registered markers in non-adjacent rooms, chosen by the house at the moment the Egress fires.**
+There is **no setup step**, the host designates nothing, and the pair is different every time.
+
+That is D-122 and D-123's shape applied to the Egress: the host designates the Terminal and nothing
+else, adjacency is already free from the grid (story 4.9), and a marker is *capacity the house may
+draw on* rather than a thing somebody assigned. A fixed pair would be a fact learned once and kept —
+the same failure D-122 refused for the Array Wipe circuit, and for the same reason. **The circuit
+moves every round; so do the doors.**
+
+**Small homes degrade, and never fail.** If no non-adjacent pair exists, the house takes **the
+farthest available pair** and fires anyway. **An Egress never fails to fire.** A crisis that
+silently declined to happen because the geometry was inconvenient would be the worst possible
+version of rule 1: the absent effect is the leak, and here the absent effect is the whole event.
+Non-adjacency is a *preference with a fallback*, not a precondition — it buys the containment run
+its distance, and where the house cannot supply distance it supplies what it has.
+
+Built in **L5** (`7f2c1c1`).
+
+### D-149 · **Beacon and Tether are a label in v1, drawn at fire time — decided**
+
+**Which of the two an Egress is, is drawn randomly by the house when it fires**, alongside the
+nodes. In v1 the two are **mechanically identical**: same node selection, same timer, same
+containment, same everything. The difference is the name and the flavour text.
+
+**Any "containment beat" difference is deferred**, which retires the last clause of F-001's proposal
+(*"Beacon/Tether then differ in flavour text and the containment beat"*). Two fictions that behave
+identically cost nothing and give the house two things to say; two fictions that behave *differently*
+is a second system, and it has to be designed rather than implied by a pair of nouns. **The label
+ships; the mechanism waits.**
+
+### D-150 · **An Egress node is not on Isolate's list at all — F-002 amended and closed**
+
+F-002 found that Isolating an Egress node during an Egress makes containment impossible and wins the
+game with no counterplay. **The resolution is exclusion, not immunity: for the duration of an
+Egress the two nodes do not appear in Isolate's target list.**
+
+**This supersedes `gdd.md`'s appears-to-succeed proposal**, and the reason is the shared pool. The
+old shape had Isolate fire at a node, play its animation, spend from the **Access pool** and do
+nothing — obeying *abilities never report failure* by charging a **shared** resource for an action
+that could not work. That is not concealment, it is a tax on a teammate's budget, paid in the dark
+by somebody who will never learn why the pool was short later.
+
+**And there is nothing left to conceal, because the house already said it.** The Egress widget
+**names both nodes to the entire house** the instant the Egress fires — that is what makes
+containment a race rather than a search. A target list that omits two rooms everybody was just told
+about leaks exactly nothing. The usual argument for fake success is that the absence of an option
+is information; here the information is already public, published by the house, to everyone.
+
+**Isolate is unbuilt.** This is a constraint recorded for its builder, not a change to shipped code.
+
+### D-151 · **The Egress cooldown is one clock for the whole house; Revoke stays per-Insider — decided**
+
+**The Egress cooldown is shared house-wide across all Insiders — one pool, one clock.** One Insider
+firing puts *every* Insider on cooldown. **The Revoke cooldown remains per-Insider**, untouched.
+
+The panel's own line — *SHARED WITH THE OTHER INSIDER* — is **ratified as built**
+(`PanelModel.kt:463`), and it is the reason the split is right. The Egress is a **house event**: it
+takes the whole building, it is announced to everybody, and two Insiders firing back-to-back would
+be one crisis wearing two hats. The Revoke is a **personal act** — one stalk, one contact, one
+person's exposure — and a shared Revoke clock would make one Insider's botched approach silence the
+other's, which is a coordination failure the two of them cannot talk about.
+
+**Both start the round at half (D-132), unchanged.** The halving is per-clock: the shared Egress
+clock starts half-run, and each Insider's own Revoke clock starts half-run.
+
+The interesting consequence is deliberate: **the Egress is a resource two people who cannot speak
+have to spend between them**, and either of them can spend it without asking. That is the same
+pressure D-146 puts on the work order, applied to the Insiders' side of the board.
+
+### D-152 · **The meeting card is `u_shape` — ratified**
+
+D-121 reserved a second shape without naming it, and the build named it provisionally. **The name
+stands: `u_shape`, the U being a couch seen from above.** It is a letterform like the T rather than
+one of the 42 abstract marks, so the two reserved cards read as a pair on a printed sheet and
+neither reads as an ordinary marker.
+
+Ratified rather than re-decided, because **paper cannot be patched** — the same reason D-120 gave
+for the T. The reserved set is two; the registrable roster is 42; all 44 roster entries stay, since
+ids are never renumbered (D-070, D-085). `MarkerShapes.kt`'s provisional note is updated in this
+pass.
+
+### D-153 · **No screen ever prints a total — the endings included — decided**
+
+**D-103's percentage rule extends to the ending screens, without exception.** The meter is a
+percentage everywhere it is ever shown, and **no screen in this app, at any point, prints an
+absolute System Integrity total.**
+
+The endings looked like the safe place for a real number — the round is over, the reveal has
+happened, nothing can be acted on. It is not safe, and the reason is that the app is played **two to
+three rounds in an evening** (D-157). A denominator printed at the end of round one is a
+denominator carried into round two, where it divides out the thing D-103 spent a whole revision
+hiding: the total is `7 × initial_residents`, and initial Residents is seats minus Insiders. **One
+ending screen would retroactively unhide the Insider count for every round that follows.**
+
+**Two drawn summary rows are therefore defects**: `ScreensOut.kt:515`'s `SYSTEM INTEGRITY 14 / 32`
+and `:590`'s `0 / 32`. They become percentages. *(Client work, queued — this revision records the
+rule, not the fix.)*
+
+Note that `32` is itself a fossil of the count F-005 corrected, so the rows were wrong twice.
+
+### D-154 · **The meter moves on completions only, and never jumps on a Revoke — decided**
+
+**System Integrity moves when a Subroutine is completed. Nothing else moves it, ever.** In
+particular **a Revoke never moves it**, in either direction and by any amount.
+
+This closes the contradiction the 2026-08-18 attrition brainstorm caught between story 7.4 and the
+meeting-freeze paragraph at `gdd.md`, and it is D-146 stated from the meter's side rather than the
+work order's: if nothing auto-satisfies when a holder is Revoked, there is nothing for the meter to
+register at the moment of a Revoke. The two rulings are one rule seen twice.
+
+**Why it has to be said separately anyway:** the out watch the meter live (D-134, D-145). A
+percentage that steps on its own — at the exact moment somebody's lamp goes out across the house —
+is **a removal report delivered as progress**, readable by the one audience that has nothing else to
+do but read it. D-103's argument is that the meter says one thing; a Revoke-driven step would make
+it say two, and the second one loudest.
+
+**Story 7.4 is rewritten in this pass** to carry both halves.
+
+### D-155 · **Ghosts are invisible by state, not by place — decided, and story 4.10 superseded**
+
+**A player who is out never appears in occupancy or presence data anywhere in the house.** The
+filter is **seat state**, applied by the house, at the source — not geometry, and not a room.
+
+**This supersedes story 4.10's couch dead zone, and the *mapping dead zone* row in the marker
+taxonomy. There is no such zone.** The meeting area is **an ordinary mappable room**: it can hold
+markers, it is drawn like any other room, and it produces occupancy data about the living exactly as
+every other room does.
+
+The spatial version was solving the right problem the wrong way, and it broke in three places at
+once. It only hid ghosts **while they sat still** — a ghost walking to the couch, or standing up
+during a meeting, re-entered the data. It **cost the host a room**, in a game whose whole board is
+the host's actual house. And it made the couch **a hole in the map**, which is itself a signal: the
+one room that reports nothing is the room you look at.
+
+**Filtering by state fixes all three and is simpler.** A ghost is invisible on the way to the couch,
+on the couch, and anywhere else they wander, permanently, because being out is a property of the
+seat rather than of where the seat's owner is standing.
+
+**Deliberate card scans remain exactly what they are.** This ruling governs *presence* — the
+ambient, inferred, BLE-sighting layer that feeds the spectator map (D-136). It does not touch what a
+living player does by walking to a card and holding the scan button, and it gives ghosts nothing:
+a ghost's phone is dark and scans nothing at all.
+
+### D-156 · **One notification, one haptic, identical for everyone — F-003 closed**
+
+F-003 found the reveal leaking through haptics: in `Known` mode a Insider's phone buzzed four times
+(blackmail, house line, two partners) and a Resident's buzzed once, **at the exact moment the whole
+party is still standing in a cluster**, where a buzz count is both audible and tactile.
+
+**The opening reveal is delivered as one notification, with one haptic, for every player,
+identical.** Whatever the house has to say to a given player arrives as **one delivery**. **The
+underlying message count never drives the buzz count** — not at the reveal and not anywhere else.
+
+This is D-102's identical-for-every-player rule enforced at the layer the trace found it escaping
+from. The fix is not to give Residents padding buzzes, which would be three fake deliveries wearing
+the shape of real ones; it is to stop letting *how much the house has to say* be a thing the room
+can hear. The content still differs, at whatever length it needs. **The delivery is one, and the
+buzz is one.**
+
+### D-157 · **NEW ROUND — the ending screens lead back to the lobby — decided**
+
+**The ending screens gain a host-only NEW ROUND control.** It returns every player to the lobby, and
+the evening continues. *"Two to three rounds in an evening"* is the design's own expectation, and
+until now the app had no way to have a second one.
+
+**What survives:** the **home** — walked once, ever, and it would be absurd to walk it again at
+midnight — the **seats**, and the **lobby settings** the host tuned.
+
+**What is wiped: the one-lines. Every one of them, at the moment the round ends.** That is D-116's
+deletion promise, and the promise is what makes people write something true. A one-line that
+survived into a second round would be a thing the app kept — and *kept* is exactly the word the
+promise exists to make false. Players write a fresh one for a fresh round, which is also better
+content.
+
+**Roles are redrawn at the next arming**, never carried. The band and the clamps apply again from
+scratch (D-103 amended, D-143), so a second round is a genuinely new draw and last round's Insider
+has exactly last round's odds.
+
+**Host-only**, for the same reason LIGHTS OUT is: it starts a round in front of the whole party.
+Whether it takes the two-second hold is a build-time call under D-141's rule — it is irreversible at
+the moment it completes, so it probably does — but it is pressed in the light with everyone
+watching, which is the one place D-141's *pressed in the dark* argument does not apply.
+
+### D-158 · **Degrading Subroutines go back to v2 — the promotion is reversed**
+
+**`gdd.md`'s promotion of degrading Subroutines from parked-for-v2 to load-bearing v1 is reversed.
+They are deferred to v2**, and **epics story 6.9 is marked deferred** in this pass.
+
+The promotion's argument was that hiding the Egress progress bar from both roles left Residents with
+no way to sense pressure building, making degradation the sole feedback path. **The argument proves
+that something must carry that load, not that this must.** Atmosphere already carries it, which is
+what `gdd.md` says one paragraph earlier and what it said before the promotion.
+
+**What the promotion actually proposed is a difficulty curve bolted to the win meter** — every
+Subroutine in the game changing shape as System Integrity falls, ten interactions each needing a
+degraded variant, all of them harder exactly when the Residents are losing, in a game where the
+Insider's Subroutines write nothing and therefore degrade for free. **That needs a full design
+conversation and a rebalance**, and it is being reversed now rather than discovered mid-build,
+because the roster was only just finished (D-137–D-140) and this would have re-opened all ten.
+
+**Nothing in v1 depends on it.** The reversal removes scope; it adds no gap.
+
+### Swept in this pass
+
+Eleven sites, each carrying an existing ruling into the document that still contradicted it. No
+ruling is made here that is not made above or in an earlier revision — it is a wording pass.
+
+| site | superseded by | what it now says |
+|---|---|---|
+| `gdd.md` — *fire an ability: tap in the panel, then a second deliberate confirm* | D-141, D-142 | springboard page 2 in place, select the tile, two-second hold |
+| `gdd.md` — *Revoke: arm in the panel* | D-142 | arm on page 2 with the hold; Residents' tiles identical at rest and entirely disabled |
+| `gdd.md` — the Insider's loop, *long-press bottom-left ~400ms → Status panel* | D-142 | swipe to page 2, hold a tile, nothing opens |
+| `gdd.md` — Array Wipe stations *3, designated* | D-122 | drawn by the house at arming, never stored with the home |
+| `epics.md` story 4.5 — *designate the Terminal and the three Array Wipe markers* | D-122 | the Terminal and only the Terminal |
+| `epics.md` story 7.4 — *orphaned subroutines silently auto-satisfied* | D-146, D-154 | nothing auto-satisfies; the meter moves on completions only |
+| `gdd.md` + `epics.md` story 6.9 — degrading Subroutines *load-bearing v1* | D-158 | deferred to v2, out of v1 scope |
+| `epics.md` story 7.13 — unlock delay *15–60 s* | F-013 | 20–120 s, with the round-length coupling stated |
+| `gdd.md` — F-002's *appears to succeed* | D-150 | excluded from the target list; no pool spend |
+| `gdd.md` — *every player has a blackmail file, and the Resident's is a fake* | D-116 | all the one-lines are real; the house never uses a Resident's |
+| `MarkerShapes.kt` — the `u_shape` *provisional ruling* note | D-152 | ratified |
+
+### Where the GDD and the epics are still wrong
+
+Sites this revision creates or inherits, left for the next sweep so that the wording pass and the
+ruling pass stay separable:
+
+| site | the superseded phrasing | what replaces it |
+|---|---|---|
+| `epics.md` story 4.10, and the *Couch / meeting area* row of `gdd.md`'s marker taxonomy | the meeting area as a **mapping dead zone** producing no occupancy data | D-155: no such zone; ghosts are filtered by seat state and the room is ordinary |
+| `gdd.md` — the tier layout described as the top and bottom halves of the Status panel | the summoned panel | D-142, the last of its four fossils; the sweep in this pass took the other three |
+| `gdd.md` — the *Open the Status panel* and *Adjust the lamp* control rows | a panel summoned by a corner long-press | **flagged, not ruled.** D-142 moved *arming* to page 2 and said nothing about whether a Status panel survives for the lamp dial. It needs a ruling before it can be swept |
+| `gdd.md` — F-001's proposal, *Beacon/Tether differ in flavour text and the containment beat* | the containment-beat half | D-149: identical in v1; the beat is deferred |
+| `gdd.md` — orphan auto-satisfaction at three further sites, and the F-005 line at the head of this log | *silently auto-satisfied*, chains *collapse gracefully* | D-146, unchanged; three of its four sites are still unswept |
+| `ScreensOut.kt` — the `14 / 32` and `0 / 32` summary rows | an absolute meter total on a screen | D-153: percentages. Client work, queued |
+
+### Open and deferred, added to revision 32's list
+
+**Deferred to v2:** degrading Subroutines (D-158), and the Beacon/Tether containment-beat difference
+(D-149).
+
+**Copy pending at build time:** the NEW ROUND control's label and whether it takes the hold (D-157),
+alongside the ballot's pre-lock hold label and the Resident's page-2 resting sub-line, both still
+open from revision 32.
+
+**Needs a ruling before it can be swept:** whether a Status panel survives at all for the lamp dial
+now that arming has left it (D-142's silence, flagged above).
+
+**F-001, F-002 and F-003 are closed**, and with them the last of the trace's gaps that were about
+what the *house does*. Two remain, both about what a surface *shows*: **F-006** — the Egress widget
+takeover costing a stale number rather than a live one — and **F-007** — room counts decrementing
+unambiguously where dots merely faded. Neither has a ruling. Both were written before revisions 21
+and 30 changed the surfaces they describe, so each wants a re-read against the current map and meter
+before it is answered. *(F-009 was resolved in-trace — the Egress timer is a lobby setting, 120s
+default. F-013 is a standing dependency rather than a gap, and this pass reconciled its two written
+ranges.)*
+
+
+---
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

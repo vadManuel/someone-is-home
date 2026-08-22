@@ -151,7 +151,7 @@
 | 4.2 | Tag a shape as **room or stairs** — those two kinds and no third; name it |
 | 4.3 | **Additive floors** — Floor 0 first, renameable, add more. **No vertical-connection logic** |
 | 4.4 | Drop markers into single cells |
-| 4.5 | Designate the **Terminal** and the three Array Wipe markers (**Spares, Rack, Disposal**) |
+| 4.5 | Designate the **Terminal** — and **only** the Terminal. The three Array Wipe stations (**Spares, Rack, Disposal**) are never designated: the house draws them from the ordinary registered markers at arming, every round, and they are round state that is never stored with the home (**D-122**) |
 | 4.6 | **Editor exclusion:** no marker in a stairs zone |
 | 4.7 | **Walkthrough guidance, not an editor rule.** Insider-only rooms are a *spoken* fact: the host declares them during the setup walk with all players present, and the app never records which they are — so there is nothing for the editor to exclude. Doors are physical house rules the app never enforces (Residents open playable-room doors and never close them; Insiders may close those, and alone may open or close an Insider-only door). **The Terminal's room is playable by definition**, so a closed door can inconvenience but never exclude. The story is the walkthrough copy that tells the host to say it aloud |
 | 4.8 | **Host acknowledgment screen, fired at the moment a staircase is tagged** — not in a ToS |
@@ -205,7 +205,7 @@
 | 6.6 | **Drift**, **Jam** (medium) |
 | 6.7 | **Signal Trace** (medium) with **BFS-generated graphs**; difficulty tunes by decoy count |
 | 6.8 | **Fake versions of every subroutine** — real UI, real progress, real completion animation, writes nothing to the ledger. **Cheap now, awkward to retrofit** |
-| 6.9 | **Degrading subroutines** — glitchier and harder as System Integrity drops. **Load-bearing v1, not v2**: with the doom clock hidden from both roles, this is the only signal that the house is winning |
+| 6.9 | **Degrading subroutines — DEFERRED TO V2, not in v1 scope (D-158).** Glitchier and harder as System Integrity drops. The *load-bearing v1* promotion is **reversed** pending a full design conversation and a rebalance; in v1 the escalating atmosphere carries the house-is-winning signal alone |
 
 **Every subroutine must pass all five constraints:** legible at the dimmest amber step · silent or haptic-only · interruptible with unambiguous progress state · no twitch timing · no precise dragging.
 
@@ -222,7 +222,7 @@
 | 7.1 | Assignment: **7 per Resident — 1 circuit, 1 long, 3 medium, 2 short** |
 | 7.2 | **System Integrity** starts at **`7 × initial_residents`**, decrements by 1 per completion. **F-005 — this replaces the 32 → 0 figure, which does not match the assigned count** |
 | 7.3 | **Denominator frozen at arming.** Recompute internally; never move the displayed total |
-| 7.4 | **Orphaned subroutines silently auto-satisfied** (revoked holder, collapsed chain) so the bar stays winnable |
+| 7.4 | **Nothing auto-satisfies, ever, and the meter never jumps on a Revoke.** A Revoked holder's orphaned blockers **stay blocked** for the round; no per-chain repair runs at any point. **System Integrity moves on completions only** — a percentage that stepped at the moment of a Revoke would be a removal report delivered as progress. Winnability comes from aggregate over-provisioning alone: `K × Residents` of completable work against a meter of `M`, plus slack, and **`slack` is what pays for stranding** (**D-146**, **D-154**) |
 | 7.5 | Updated **only at meetings**, frozen at meeting start. **Exception:** reaching 0 wins immediately |
 | 7.6 | **Memory Dump** — stage 1 and stage 2 at *different* markers; 4–5 elements; all-or-nothing; mismatch reports only "mismatch"; failure returns to source for a fresh pattern |
 | 7.7 | **F-015 — Files must never show the Memory Dump pattern.** Only your head is off-network |
@@ -231,7 +231,7 @@
 | 7.10 | **F-014 — both carries persist across a House Meeting.** Default implementations clear transient state on a phase change; that is wrong here, twice |
 | 7.11 | **Chains:** Resident-only, `L ≤ living_guests + 1`, re-checked at every extension |
 | 7.12 | **Lazy linking, sliding window of two.** Next link chosen at resolution time from living eligible players |
-| 7.13 | **Randomized unlock delay 15–60 s, identical distribution on both paths** (completed *and* revoked). **F-013 — revised down from 20–120 s for the 15-minute round** |
+| 7.13 | **Randomized unlock delay 20–120 s, identical distribution on both paths** (completed *and* revoked). **F-013 — the 15–60 s revision was tuned for a 15-minute round and was reverted when the round returned to ~25 minutes; 20–120 s is proportionate again.** What survives F-013 is the *coupling*: this number must be re-derived whenever the round-length estimate moves, and the two live in different sections |
 | 7.14 | **Upstream notification at assignment only.** Never confirm the downstream unlock happened |
 | 7.15 | **Graceful collapse** when a chain cannot be staffed |
 | 7.16 | Chain seeding — each link's output seeds the next, so a chain reads as a pipeline rather than three numbered errands |

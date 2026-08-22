@@ -530,9 +530,9 @@ The whole game is operated **one-handed, in the dark, without looking.** Every c
 |---|---|---|
 | **Scan a marker** | Press and hold the single scan button, ~0.5s | One button drives both QR and NFC. NFC requires a user-initiated action anyway, so the system sheet appears in response to a deliberate press rather than ambushing the player |
 | **Open the Status panel** | **Long-press bottom-left corner, ~400ms** | Corners are physical landmarks findable by feel without looking. A 400ms hold cannot fire accidentally. No conflict with iOS system gestures. Invisible to bystanders — the thumb is already on the phone |
-| **Fire an ability** | Tap in the panel, **then a second deliberate confirm** | Accidentally firing an Egress in front of someone is a game-ending misclick and it *will* happen in the dark |
+| **Fire an ability** | **Springboard page 2, in place — select the tile, then a two-second hold** | Accidentally firing an Egress in front of someone is a game-ending misclick and it *will* happen in the dark, and two seconds of continued intent is the one thing an accident cannot supply. Nothing opens; the hold *is* the second confirm (D-141, D-142) |
 | **Navigate the springboard** | Horizontal swipe between two pages; tap an icon | Standard, muscle-memory, and identical for both roles |
-| **Revoke a player** (Insider) | Arm in the panel, then **touch your phone to theirs** | Contact *is* the proximity gate. No confirmation step exists on either device |
+| **Revoke a player** (Insider) | **Arm on springboard page 2 with a two-second hold**, then **touch your phone to theirs** | Contact *is* the proximity gate. No confirmation step exists on either device. Both roles' page 2 is identical at rest; a Resident's tiles are **entirely disabled** — no press feedback, no hold that fills and then declines (D-142) |
 | **Report a deactivation** | **Touch your phone to the revoked player's phone** | Same gesture, different outcome by state. No button means no enabled/disabled state to read, so it cannot be used as a proximity radar for revoked players |
 | **Adjust the lamp** | Dial control in the Status panel | The one Settings row with real content |
 
@@ -684,7 +684,7 @@ Legible fiction (your hands are full) that converts the circuit from something d
 
 **Atmosphere carries a mechanical load it must not shed:** with the doom clock fully hidden, **escalating atmosphere is the only channel signalling that the house is winning.**
 
-> **Degrading subroutines are promoted from parked-for-v2 to load-bearing v1.** As System Integrity drops, subroutines get glitchier and harder. This was previously atmosphere-with-teeth; hiding the Egress progress bar from *both* roles made it the sole feedback path. Without it, Residents have no way to sense pressure building.
+> **Degrading subroutines are deferred to v2 (D-158).** As System Integrity drops, subroutines would get glitchier and harder. The promotion to load-bearing v1 recorded here is **reversed**: it is a difficulty curve bolted to the win meter, and it needs a full design conversation and a rebalance before it can be asked to carry a feedback load. **In v1 the escalating atmosphere above carries that load alone**, which is the load it carried before the promotion.
 
 **Ambient flicker is a permanent system behavior, not an ability.** Random lamp flickers occurring on their own make light unreliable as a signal, providing deniability for free and forever, without costing a button.
 
@@ -796,7 +796,7 @@ The scarce resources are **time, light, and attention** — not ammunition.
 |---|---|---|
 | **Task marker** | ~8–12 per house | Never in a stairs zone |
 | **Terminal** (map station) | Exactly 1 | Anywhere a room is drawn. Highly campable by design |
-| **Array Wipe: Spares / Rack / Disposal** | 3, designated | Ideally spread across storeys — the circuit is transit |
+| **Array Wipe: Spares / Rack / Disposal** | 3, **drawn by the house at arming** | Not designated by the host and never stored with the home — the circuit moves every round (D-122). Ordinary registered markers, ideally spread across storeys, because the circuit is transit |
 | **Insider-only rooms** | Host's choice | **Never app data.** Spoken aloud in the setup walkthrough; their doors are Override's business |
 | **Stairs zones** | As drawn | **Transit only.** No markers, no counting, no timed routes |
 | **Couch / meeting area** | 1 | **Mapping dead zone.** Produces no occupancy data |
@@ -869,7 +869,7 @@ The host drops markers into single cells. The editor **refuses** a marker in a s
 
 > **`GAP` F-002 — Isolate can win the game outright.** Isolate takes a marker offline. If a Insider Isolates an Egress node during an active Egress, containment becomes impossible and the Insiders win with no counterplay. Nothing in the roster prevents this.
 >
-> **Proposed resolution:** **Egress nodes are immune to Isolate for the duration of an Egress.** Firing Isolate at one still *appears* to succeed — same animation, same pool spend, no feedback — per the already-established rule that abilities must never report failure. Cheaper and less legible than blocking Tier 2 outright during an Egress, and it reuses a rule that already exists.
+> **Resolution — D-150, closing F-002:** **for the duration of an Egress the two nodes are simply excluded from Isolate's target list. They do not appear.** There is no fake success and no pool spend. The widget names both nodes to the whole house the instant the Egress fires, so a target list without them tells a Insider nothing they were not just told — the exclusion leaks nothing, and the shared Access pool is never silently burned on an action that could not have worked. *(This supersedes the earlier appears-to-succeed proposal: immunity plus fake feedback would charge a shared pool for nothing. Isolate is unbuilt; this is a constraint recorded for its builder.)*
 
 The host sets lobby options: player count, Insider count, **`Known`**, discussion time, voting time, Revoke cooldown, Egress cooldown and timer, Access pool, meeting cooldown.
 
@@ -938,7 +938,7 @@ The steady state, running for every player simultaneously.
 
 **A Resident's cycle.** Move (~25s) → hold to scan → **routing** opens the subroutine, **check-in** logs the presence regardless → the subroutine runs, lighting them up or blacking them out per its light signature → their phone **sweeps every 5s** for nearby devices, making them a stationary sensor → complete → System Integrity decrements silently → move.
 
-**A Insider's cycle.** The same, for cover. Plus: **long-press bottom-left ~400ms** → Status panel → read the roster → **arm Revoke** (silent, invisible, nothing changes on any screen) → close the distance on someone heads-down in a subroutine → **touch phone to phone.**
+**A Insider's cycle.** The same, for cover. Plus: **swipe to springboard page 2** — the same swipe every Resident has — → **hold a tile for two seconds** to **arm Revoke** (silent, invisible, nothing changes on any screen, and nothing opens) → close the distance on someone heads-down in a subroutine → **touch phone to phone.**
 
 The target's lamp dies at the instant of contact. **No confirmation is asked of anyone and neither device gives the Insider any feedback.** Because the target's own screen was the only thing lighting the attacker, it goes out in the same instant — so whether the target resolved a face is genuinely uncertain, which is the point.
 
@@ -1417,7 +1417,7 @@ Those need somewhere to live, and so do several other things currently homeless:
 
 #### Four things to resolve before this could be built
 
-1. **The blackmail purchase is an alignment oracle as sketched, and would be the worst leak in the game.** Story 2.7 makes the blackmail text *the Insider's role reveal* — Residents get a flat administrative work order instead. So buying "what does the house have on X" returns content for an Insider and nothing for a Resident, and **the absence is the answer**. This is exactly rule 1: the absent effect *is* the leak. It is fixable and the fix already exists as a pattern — **every player has a blackmail file, and the Resident's is a fake**, in the same way every subroutine ships with its fake. But it has to be designed that way from the first line, not patched later.
+1. **The blackmail purchase is an alignment oracle as sketched, and would be the worst leak in the game.** Story 2.7 makes the blackmail text *the Insider's role reveal* — Residents get a flat administrative work order instead. So buying "what does the house have on X" returns content for an Insider and nothing for a Resident, and **the absence is the answer**. This is exactly rule 1: the absent effect *is* the leak. It is fixable, and **D-116 already decided how: every player hands over a real one-line in the lobby, all of them real, and the house simply never uses a Resident's.** The cover is the typing, not the content — six people bent over their phones writing something true about themselves is six identical acts, and nobody can be identified by having written one. **Not** *the Resident's file is a fake*: a fake line has to be generated for somebody, and generation is where asymmetries hide. But it has to be designed that way from the first line, not patched later.
 
 2. **Spending is itself an alignment tell.** The Insider's subroutines write nothing. If the currency is subroutine progress, the Insider spends a currency that costs them **nothing real**, while a Resident spends work they must genuinely redo. Free-spending behaviour at meetings, in front of everyone, becomes a read. The currency may need to be something both roles pay for identically, or the Insider's fake progress must be made to cost them something equally visible.
 
