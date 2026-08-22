@@ -7,12 +7,26 @@ package home.someoneshome.model
  * says *every* Insider cooldown starts running at half at arming, and an enum with one entry is
  * how "every" stays a statement about a set instead of a sentence in a comment.
  *
- * **The Egress is deliberately not here.** Its mechanics are unbuilt — no node designation
- * (F-001), no countdown, no completion — and inventing a cooldown for a thing that cannot yet be
- * started would be a second stub pretending to be a rule. When the Egress lands it brings its own
- * duration and this enum gains a member.
+ * **The Egress is still deliberately not here, and the reason changed when it was built.**
+ *
+ * It used to be absent because its mechanics were unbuilt. They are built now, and it stays absent
+ * because **the Egress cooldown is not one seat's cooldown**: it is one clock for the whole house,
+ * shared by every Insider, and [Cooldown] is keyed on a seat. Held as a list of rows it would be
+ * N rows that must all move together, and *shared* would become a convention somebody maintains
+ * rather than a fact the state carries — which is exactly the shape rule 3 spends its length
+ * arguing against, one field over. It lives on `GameState.egressReadyAt`, as one value, so there
+ * is nothing for a bug to de-synchronise.
  */
-enum class InsiderAbility { Revoke }
+enum class InsiderAbility {
+    Revoke,
+
+    /*
+     * ⚠️ **Isolate belongs here when somebody builds it, and it arrives owing one rule** — see
+     * [Egress.isNode], which is where that rule will be written: Egress nodes are excluded from
+     * Isolate's target list while an Egress is running, outright, with no fake success. Isolating a
+     * node mid-Egress otherwise wins the round with no counterplay (F-002).
+     */
+}
 
 /**
  * **When one seat's ability is ready again.**

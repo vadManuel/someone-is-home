@@ -129,6 +129,24 @@ data class PanelState(
      * clock.
      */
     val secondsLeft: Int? = null,
+    /**
+     * **Which Egress the house started, and where it has to be contained — as the house said.**
+     *
+     * Two pushed facts, like every other field here. The house draws two ordinary markers in
+     * non-adjacent rooms at fire time and a Beacon/Tether label to go with them; the device holds
+     * no opinion about either, and there is nothing on the phone that could form one — the pair is
+     * a property of the home the round was armed in.
+     *
+     * **Null means the house has said nothing**, which on a phone with no house attached is always;
+     * the port's drawn pair stands in. Exactly [secondsLeft]'s arrangement, and for the same
+     * reason: the fallback is a fixture, not a second source of truth.
+     *
+     * **One field feeds both surfaces.** The heavy alert and the widget it leaves behind after a
+     * swipe read the same two strings, so they cannot send two people who may not speak to two
+     * different places.
+     */
+    val egressType: String? = null,
+    val egressNodes: List<String>? = null,
     /** Randomises the backlog's *count and mix*, so inbox density can never imply a role. */
     val inboxSeed: Int = 3,
     val noteSeed: Int = 0,
@@ -588,6 +606,26 @@ class PanelVals(val state: PanelState) {
 
     /** The Egress countdown, which replaces the meter in place and takes the only number back. */
     val egressLit: Int = 22
+
+    /**
+     * **The Egress's type and its two nodes, from the house when there is one.**
+     *
+     * The port's drawn pair when there is not — [PanelState.secondsLeft]'s arrangement exactly.
+     * Derived here, in the one place role- and round-dependent values are read side by side, so
+     * that the alert and the widget resolve the *same* fallback rather than each keeping its own.
+     */
+    val egressType: String = state.egressType ?: Notifications.EGRESS_TYPE
+    val egressNodes: List<String> = state.egressNodes ?: Notifications.EGRESS_NODES
+
+    /**
+     * **What is standing over this screen, with the Egress alert naming this round's rooms.**
+     *
+     * The single door onto [Notifications.arrivals] for everything that draws one. A composable
+     * reaching into that table directly would get the port's fixture pair, and the day the house
+     * drew a different one the banner and the widget would disagree — silently, in the dark, to two
+     * people who cannot speak to each other.
+     */
+    val arrival: Arrival? = Notifications.arrivalOn(state.screen, egressType, egressNodes)
 
     /** Both bars, seen only from outside the system. */
     val outsideLit: Int = 21

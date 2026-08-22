@@ -4,6 +4,7 @@ import home.someoneshome.model.Balance
 import home.someoneshome.model.Ballot
 import home.someoneshome.model.Cooldown
 import home.someoneshome.model.Effect
+import home.someoneshome.model.Egress
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
 import home.someoneshome.model.Haptic
@@ -11,6 +12,7 @@ import home.someoneshome.model.InsiderAbility
 import home.someoneshome.model.Meeting
 import home.someoneshome.model.MeetingPhase
 import home.someoneshome.model.Presence
+import home.someoneshome.model.PulseOffer
 import home.someoneshome.model.Role
 import home.someoneshome.model.Seat
 import home.someoneshome.model.SubroutineInstance
@@ -49,7 +51,11 @@ fun reduce(state: GameState, event: Event): Reduction<GameState, Effect> = when 
     is Event.VoteLocked -> voteLocked(state, event)
     is Event.VoteWindowClosed -> withMeeting(state) { readTheBallot(state, it) }
     is Event.TallyHalfwayReached -> withMeeting(state) { takeover(state, it) }
-    is Event.MeetingClosed -> withMeeting(state) { lightsOut(state) }
+    is Event.MeetingClosed -> withMeeting(state) { lightsOut(state, event) }
+
+    is Event.EgressFired -> egressFired(state, event)
+    is Event.SyncPulseReturned -> pulseReturned(state, event)
+    is Event.EgressExpired -> withEgress(state) { egressExpired(state) }
 }
 
 /**
@@ -110,6 +116,9 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
         cooldowns = seats.map {
             Cooldown(it, InsiderAbility.Revoke, event.at + Balance.REVOKE_COOLDOWN / 2)
         },
+        // D-132 again, and it is ONE value rather than a row per seat because the Egress cooldown
+        // is house-wide -- *shared with the other Insider*. See GameState.egressReadyAt.
+        egressReadyAt = event.at + Balance.EGRESS_COOLDOWN / 2,
     )
 
     return Reduction(
@@ -453,9 +462,19 @@ private fun meetingCalled(
             },
         )
     }
+    // **D-133's third rule, and it is the one that matters.** The only meeting that can be called
+    // during an Egress is a reported Revoke -- the card is inert, refused at the gate -- and that
+    // meeting PAUSES the countdown. It never resets it: a reset would make the report a free
+    // Egress cancellation and every Egress would end the same way, where a pause makes it a
+    // decision about spending time.
+    val held = state.egress?.pausedAt(event.at)
+    val stopped = held?.let {
+        listOf(Effect.EgressHeld(it.remainingAt(event.at), running = false, haptic = Haptic.Short))
+    } ?: emptyList()
+
     return Reduction(
-        state.copy(meeting = meeting),
-        listOf(ring) + walkIn + gateCount(state, meeting),
+        state.copy(meeting = meeting, egress = held),
+        listOf(ring) + walkIn + gateCount(state, meeting) + stopped,
     )
 }
 
@@ -692,10 +711,20 @@ private fun takeover(state: GameState, meeting: Meeting): Reduction<GameState, E
  * everybody who walked into this one is on the couch from here, and the next meeting rings them
  * the way it rings the rest of the couch.
  */
-private fun lightsOut(state: GameState): Reduction<GameState, Effect> = Reduction(
-    state.copy(meeting = null, newlyRevoked = emptyList()),
-    listOf(Effect.MeetingEnded(Haptic.Long)),
-)
+private fun lightsOut(state: GameState, event: Event.MeetingClosed): Reduction<GameState, Effect> {
+    // The other half of D-133. The deadline moves forward by the length of the meeting and by
+    // nothing else, so the remaining time across the meeting is EXACTLY what it was when the party
+    // was called in -- see Egress.resumedAt, where that arithmetic lives.
+    val running = state.egress?.resumedAt(event.at)
+    val restarted = running?.let {
+        listOf(Effect.EgressHeld(it.remainingAt(event.at), running = true, haptic = Haptic.Short))
+    } ?: emptyList()
+
+    return Reduction(
+        state.copy(meeting = null, newlyRevoked = emptyList(), egress = running),
+        listOf(Effect.MeetingEnded(Haptic.Long)) + restarted,
+    )
+}
 
 /** How many seated players are standing at the meeting area. Phantom seats count for nobody. */
 private fun present(state: GameState, meeting: Meeting): Int =
@@ -704,6 +733,203 @@ private fun present(state: GameState, meeting: Meeting): Int =
 /** D-104's gate as the two numbers a screen draws it with, and never as a list of names. */
 private fun gateCount(state: GameState, meeting: Meeting): Effect =
     Effect.CheckInProgressed(present(state, meeting), state.seats.size)
+
+// =================================================================================================
+// The Egress.
+//
+// Three events, and the shape of the whole system is the shape of `contact`'s: the actor's effect
+// is constructed ONCE, outside every branch, and only the state transition moves. The house
+// catching fire is world-observable and reaches everybody identically; what the person who fired
+// it gets is a cooldown answer and nothing else (gdd.md:396).
+// =================================================================================================
+
+/**
+ * Run [body] against the Egress in progress.
+ *
+ * **Not a guard, and it must not become one** — see [withMeeting], which this mirrors exactly. By
+ * the time an Egress event reaches [reduce] the admission gate has already refused every case where
+ * there is no Egress or it is paused; that is what [RefusalReason.EgressNotRunning] is for. This
+ * exists because the gate's knowledge cannot be expressed in the type, and the alternative spelling
+ * is rule 1's forbidden shape sitting in the file rule 1 is about.
+ */
+private inline fun withEgress(
+    state: GameState,
+    body: (Egress) -> Reduction<GameState, Effect>,
+): Reduction<GameState, Effect> {
+    val egress = state.egress ?: return Reduction(state, emptyList())
+    return body(egress)
+}
+
+/**
+ * **A Insider fired an Egress** (`gdd.md:349`, D-131, D-132, F-001).
+ *
+ * ### Rule 1's shape, and the branch is on the shared cooldown alone
+ *
+ * Every path through this function emits exactly one [Effect.AbilityFired] with
+ * `cooldownStarted = true`, constructed once, outside the branch — exactly as [contact] does. What
+ * differs is whether the house caught fire, and *that* is world-observable: an Egress is audible,
+ * it dims every panel in the building (D-118), and it puts a countdown on every widget. There is
+ * nothing here for an absence to say that the room is not already saying louder.
+ *
+ * ### The cooldown is one clock for the whole house
+ *
+ * Firing puts **every** Insider on it — the panel's own *SHARED WITH THE OTHER INSIDER* line, as
+ * state — so a second Insider cannot follow the first. It began the round already running at half
+ * (D-132), which is why the opening minutes cannot hold one, and no effect carries it: the actor's
+ * phone knows what it pressed, and every phone in the house learns the shared clock restarted from
+ * [Effect.EgressOpened], which they all receive.
+ *
+ * ### A second Egress cannot start on top of a first
+ *
+ * Not because it is refused — that would be a refusal about a running Egress, which is the gate's
+ * job and is already there for the meeting card — but because the cooldown outlives the timer by
+ * construction. The check is written anyway, and it is on state that is on every widget.
+ *
+ * ### The nodes arrive already chosen
+ *
+ * They ride the event, drawn above the rules by `egressFor` against a home the rules have never
+ * held. What is checked here is the one thing the rules can check without geography: that the pair
+ * is **two distinct markers**. A collapsed pair would be an Egress physically impossible to contain
+ * that looked exactly like one that was not, and the Residents would lose to a shape they could
+ * never see.
+ */
+private fun egressFired(state: GameState, event: Event.EgressFired): Reduction<GameState, Effect> {
+    val ready = event.at >= state.egressReadyAt && state.egress == null
+    val started = if (!ready) {
+        null
+    } else {
+        Egress.fired(event.at, event.type, event.nodes, Balance.EGRESS_TIMER)
+            .takeIf { it.namesTwoNodes }
+    }
+
+    val next = if (started == null) {
+        state
+    } else {
+        state.copy(egress = started, egressReadyAt = event.at + Balance.EGRESS_COOLDOWN)
+    }
+
+    // Constructed once, outside the branch above. Deliberately not inside it: the actor's device
+    // stays inert whatever happened, and what it is told is that the ability fired and the cooldown
+    // is spent -- the same two facts a botched Revoke stalk is told.
+    val answered = Effect.AbilityFired(actor = event.actor, cooldownStarted = true)
+    val alarm = started?.let { egress ->
+        // Per seat, once each, because this is one of D-118's two dimming events and a dim that
+        // reached fewer than everybody would be a beacon (D-076). Grouped as one run rather than
+        // interleaved, exactly as arming's lamps are, so a seat going missing is a gap in a run of
+        // identical lines.
+        state.seats.map {
+            Effect.EgressOpened(
+                seat = it,
+                type = egress.type,
+                nodes = egress.nodes,
+                remaining = egress.remainingAt(event.at),
+                // D-135's first of five. The Egress is named at the head of that closed set.
+                haptic = Haptic.Long,
+            )
+        }
+    } ?: emptyList()
+
+    return Reduction(next, listOf(answered) + alarm)
+}
+
+/**
+ * **One participant's four taps, graded — and the answer has one shape** (`gdd.md:355`, rule 1).
+ *
+ * ### Where the player is, is the house's own fact
+ *
+ * The event carries no node. The house reads it off the presence plane, which is what it recorded
+ * when this seat **scanned** the node's card — *a performer's own scan is knowledge* (D-136). A
+ * phone naming its own node would be the cheapest cheat in the game: sit on the couch, claim the
+ * Landing, contain an Egress from a chair. [returned] reads the place the same way and for the same
+ * reason.
+ *
+ * ### Five ways to fail and one shape for all of them
+ *
+ * Outside the system, not standing at a node, standing at a node but serving a lockout, standing at
+ * a node with a beat that missed, standing at a node with a good beat and nobody at the other one:
+ * every one of them produces [Effect.SyncPulseAnswered] addressed to this seat, with `held` saying
+ * only whether the house is now waiting on their behalf. Written the tempting way — say nothing
+ * unless the beat was good — the absence would be readable, and what it would report is a claim
+ * about the presence plane delivered to a living phone.
+ *
+ * ### Containment says nothing about who contained it
+ *
+ * *Nobody learns anything about anybody* (`gdd.md:987`). [Effect.EgressContained] carries no seats
+ * and no node; the pair that did it get exactly what the rest of the house gets, one tick after
+ * they get their own `held = true`.
+ *
+ * ### A missed beat costs a lockout and a locked seat is not re-graded
+ *
+ * The lockout is `gdd.md:359`'s 2–3 seconds and its whole job is that stalling at a node is
+ * expensive. A seat already serving one is not graded again and its lockout is **not extended** —
+ * an extension would turn a mistimed retry at the moment of expiry into a permanent exclusion, and
+ * the thing being priced is spam, which a lockout that simply does nothing already prices.
+ */
+private fun pulseReturned(
+    state: GameState,
+    event: Event.SyncPulseReturned,
+): Reduction<GameState, Effect> = withEgress(state) { egress ->
+    val standing = state.presenceFor(event.actor)?.at
+    val atNode = !state.isOut(event.actor) &&
+        standing != null &&
+        egress.isNode(standing)
+    val locked = egress.lockedAt(event.actor, event.at)
+    val good = atNode && !locked && onTheBeat(egress.firedAt, event.taps)
+
+    val partner = if (!good || standing == null) {
+        null
+    } else {
+        egress.partnerFor(event.actor, standing, event.at, Balance.SYNC_PULSE_PAIR_WINDOW)
+    }
+
+    val next = when {
+        // Contained. The Egress is over and there is nothing left to hold offers for.
+        partner != null -> state.copy(egress = null)
+        // A good beat with nobody at the other node yet: the house holds it and waits.
+        good && standing != null ->
+            state.copy(
+                egress = egress.holding(
+                    PulseOffer(event.actor, standing, event.at),
+                    Balance.SYNC_PULSE_PAIR_WINDOW,
+                ),
+            )
+        // A beat that missed, from somebody actually standing at a node. That is what a lockout is
+        // for. A seat that was never at a node has attempted nothing and pays nothing.
+        atNode && !locked ->
+            state.copy(
+                egress = egress.lockingOut(event.actor, event.at + Balance.SYNC_PULSE_LOCKOUT),
+            )
+        else -> state
+    }
+
+    // Constructed once, outside the branch above. Deliberately not inside it.
+    val answered = Effect.SyncPulseAnswered(seat = event.actor, held = good && partner == null)
+    val contained = if (partner == null) {
+        emptyList()
+    } else {
+        // No seats, no node, no attribution of any kind. The house says it stopped.
+        listOf(Effect.EgressContained(Haptic.Short))
+    }
+    Reduction(next, listOf(answered) + contained)
+}
+
+/**
+ * **Uncontained: the timer ran out and the Insiders win outright** (`gdd.md:361`, D-131).
+ *
+ * *A running Egress outlives its Insiders and must still be stopped* — so nothing here asks whether
+ * any Insider is left in the round. Restraining the last one during an Egress does not end it: the
+ * house does not stop what it was told to start.
+ *
+ * **The Egress is cleared and the round is NOT ended here**, which is stated rather than hidden.
+ * `GameState.ended`, the win conditions as a set and the screens that follow are the ending unit's;
+ * splitting them across two units would put the round's most consequential transition in two
+ * places. What is guaranteed today is that the fact is emitted, recorded, and replays — and that
+ * the countdown stops being on anybody's widget.
+ */
+private fun egressExpired(state: GameState): Reduction<GameState, Effect> = Reduction(
+    state.copy(egress = null),
+    listOf(Effect.EgressSucceeded(Haptic.Long)),
+)
 
 /**
  * The luminance every phone is set to at arming. Identical for every seat, deliberately.

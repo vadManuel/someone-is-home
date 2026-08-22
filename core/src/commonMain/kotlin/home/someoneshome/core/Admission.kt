@@ -82,6 +82,14 @@ fun admit(state: GameState, event: Event): Admission = when {
     phaseOf(event) != null && state.meeting?.phase != phaseOf(event) ->
         Admission.Refused(RefusalReason.WrongMeetingPhase)
 
+    // The Egress's own three, and both halves are as public as the meeting's. A countdown on every
+    // widget in the building is not something a phone tells you; neither is the whole party
+    // standing in one room, which is what a PAUSED Egress means (D-133). Written here for
+    // `withEgress`'s sake: the rules stay total, never learn the flag exists, and the refusal is
+    // RECORDED, which an early return never is.
+    needsEgress(event) && (state.egress == null || state.egress?.pausedAt != null) ->
+        Admission.Refused(RefusalReason.EgressNotRunning)
+
     else -> Admission.Admitted(reduce(state, event))
 }
 
@@ -97,6 +105,11 @@ private fun phaseOf(event: Event): MeetingPhase? = when (event) {
     is Event.RoundArmed, is Event.MarkerScanned, is Event.SubroutineReturned,
     is Event.RevokeArmed, is Event.ContactMade, is Event.MeetingCalled -> null
 
+    // Not meeting events. The Egress has its own gate below, and it already refuses these while a
+    // meeting is holding the countdown -- which is the same answer by a shorter route, and the one
+    // that stays true if the meeting's phases are ever reshaped.
+    is Event.EgressFired, is Event.SyncPulseReturned, is Event.EgressExpired -> null
+
     // Not a meeting event, and deliberately not refused during one either. A window that was open
     // when the house rang closes wherever the player is standing; a gate that declined the report
     // would leave the presence plane holding a window that never shut, and the one consumer it has
@@ -107,4 +120,27 @@ private fun phaseOf(event: Event): MeetingPhase? = when (event) {
     is Event.ReadyToVoteDeclared, is Event.DiscussionClosed -> MeetingPhase.Discussion
     is Event.VoteSelected, is Event.VoteLocked, is Event.VoteWindowClosed -> MeetingPhase.Vote
     is Event.TallyHalfwayReached, is Event.MeetingClosed -> MeetingPhase.Tally
+}
+
+/**
+ * Whether this event needs a **running, unpaused** Egress to mean anything.
+ *
+ * **Exhaustive over [Event] on purpose**, for [phaseOf]'s reason: a new event does not compile
+ * until somebody decides whether it belongs to an Egress, and the compile error is the prompt. The
+ * alternative is an Egress event that silently belongs to every state of the house.
+ *
+ * [Event.EgressFired] is deliberately **not** one of them. It is the event that *starts* one, and a
+ * gate that required an Egress to fire an Egress would refuse the only thing that can create one —
+ * `RoundArmed` sits outside this file's first check for exactly the same reason.
+ */
+private fun needsEgress(event: Event): Boolean = when (event) {
+    is Event.SyncPulseReturned, is Event.EgressExpired -> true
+
+    is Event.RoundArmed, is Event.MarkerScanned, is Event.SubroutineReturned,
+    is Event.PerformanceEnded, is Event.RevokeArmed, is Event.ContactMade,
+    is Event.MeetingCalled, is Event.MeetingCheckedIn, is Event.ReadyToVoteDeclared,
+    is Event.DiscussionClosed, is Event.VoteSelected, is Event.VoteLocked,
+    is Event.VoteWindowClosed, is Event.TallyHalfwayReached, is Event.MeetingClosed,
+    is Event.EgressFired,
+    -> false
 }

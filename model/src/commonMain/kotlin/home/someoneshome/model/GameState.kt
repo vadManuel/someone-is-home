@@ -116,20 +116,35 @@ class GameState private constructor(
      */
     val meeting: Meeting?,
     /**
-     * **An Egress is running. THE STUB — nothing writes this yet, said plainly.**
+     * **The Egress in progress, or null. The whole lifecycle lives in here** — see [Egress].
      *
-     * The Egress itself is not this unit's and is not built: no node designation (F-001), no
-     * countdown, no completion. The flag exists because D-133 is a rule about *meetings* that
-     * happens to be phrased about the Egress — the meeting card is inert for the duration and the
-     * Revoke report is not — and a meeting engine that could not express that rule would have the
-     * gap hidden inside it rather than named.
+     * This was a `Boolean` stub with no writer, carrying D-133's *the meeting card is inert for the
+     * duration* and nothing else, and it named the two things owed when the Egress landed:
+     * something had to set it, and the pause needed a timer to pause. Both are paid here — the flag
+     * became the state, and [egressRunning] is now derived from it so the rule D-133 wrote against
+     * reads exactly as it did.
      *
-     * Same posture [ended] shipped with: reachable only through [withEgress], whose callers in
-     * this repo are tests. **Two things are owed when the Egress lands:** something must set it,
-     * and D-133's *"a reported Revoke pauses the Egress timer — it never resets it"* needs a timer
-     * to pause. Neither is here.
+     * Never reaches a client as itself: it carries every held Sync Pulse offer, which is who is
+     * standing at which node with a live beat — presence data by another name (D-136).
      */
-    val egressRunning: Boolean,
+    val egress: Egress?,
+    /**
+     * **When the house will accept another Egress. ONE clock, shared by every Insider.**
+     *
+     * The panel's own line reads *SHARED WITH THE OTHER INSIDER*, and this is that sentence as
+     * state: firing puts every Insider on the same cooldown, so a second Insider cannot follow the
+     * first with a fresh one. **Not a list of rows** — see [Cooldown], which explains why a
+     * house-wide clock keyed on a seat would make *shared* a convention somebody maintains.
+     *
+     * It begins the round **already running, at half** its duration (D-132), like every other
+     * Insider cooldown: the round opens with a guaranteed stretch of peace, and the opening-Egress
+     * problem closes structurally rather than by asking players not to.
+     *
+     * Not client-facing and never on the wire. An Insider's phone draws its own Egress tile from
+     * its own input echo and from [Effect.EgressOpened], which the whole house receives — a
+     * cooldown pushed to a subset would be an Insider announced by a timer.
+     */
+    val egressReadyAt: Tick,
     val nextEntity: Long,
     val seed: Long,
 ) {
@@ -155,8 +170,16 @@ class GameState private constructor(
     /** In the building, outside the system. The complement of [livingSeats], in seat order. */
     val outSeats: List<Seat> get() = seats.filter { isRevoked(it) || isRestrained(it) }
 
-    /** The only writer of [egressRunning]. Separate from [copy] so the stub stays greppable. */
-    fun withEgress(running: Boolean): GameState = copy(egressRunning = running)
+    /**
+     * **The house is on fire** — D-133's condition, unchanged in meaning and no longer a flag.
+     *
+     * Derived rather than stored, so there is no second field that could disagree with [egress]
+     * about whether a countdown is on every widget in the building.
+     */
+    val egressRunning: Boolean get() = egress != null
+
+    /** The only writer of [egress]. Separate from [copy] so the transition stays greppable. */
+    fun withEgress(egress: Egress?): GameState = copy(egress = egress)
 
     /** What this seat has open, or null for a seat the house has assigned nothing. */
     fun openSubroutineFor(seat: Seat): OpenSubroutine? =
@@ -257,13 +280,14 @@ class GameState private constructor(
         activeMarkers: List<MarkerId> = this.activeMarkers,
         presence: List<Presence> = this.presence,
         meeting: Meeting? = this.meeting,
-        egressRunning: Boolean = this.egressRunning,
+        egress: Egress? = this.egress,
+        egressReadyAt: Tick = this.egressReadyAt,
         nextEntity: Long = this.nextEntity,
         seed: Long = this.seed,
     ) = GameState(
         armed, ended, seats, insiderSeats, revoked, newlyRevoked, restrained, cooldownArmed,
         cooldowns, systemIntegrity, openSubroutines, workOrders, stations, activeMarkers,
-        presence, meeting, egressRunning, nextEntity, seed,
+        presence, meeting, egress, egressReadyAt, nextEntity, seed,
     )
 
     companion object {
@@ -296,6 +320,18 @@ class GameState private constructor(
             stations: List<MarkerId> = emptyList(),
             activeMarkers: List<MarkerId> = emptyList(),
             cooldowns: List<Cooldown> = emptyList(),
+            /**
+             * D-132's half-cooldown for the house-wide Egress clock, computed by the rules.
+             *
+             * Defaulted to the start of time for the same reason [cooldowns] defaults empty: a
+             * hand-built state that only cares about the meter should not have to arm an Egress
+             * clock. **That default is the permissive direction and is deliberately the only one
+             * in this constructor that is** — an unset clock means *ready*, and a test that arms a
+             * round by hand can fire an Egress without inventing a tick. The fail-closed direction
+             * would be a round nobody could ever hold an Egress in, which is a round that cannot
+             * exercise the rule.
+             */
+            egressReadyAt: Tick = Tick(0),
         ) = GameState(
             armed = true,
             ended = false,
@@ -316,7 +352,8 @@ class GameState private constructor(
             // was read, and D-136's whole dedup rule rests on placement being knowledge.
             presence = emptyList(),
             meeting = null,
-            egressRunning = false,
+            egress = null,
+            egressReadyAt = egressReadyAt,
             nextEntity = 1L,
             seed = seed,
         )
@@ -338,7 +375,8 @@ class GameState private constructor(
             activeMarkers = emptyList(),
             presence = emptyList(),
             meeting = null,
-            egressRunning = false,
+            egress = null,
+            egressReadyAt = Tick(0),
             nextEntity = 1L,
             seed = 0L,
         )

@@ -1,5 +1,6 @@
 package home.someoneshome.harness
 
+import home.someoneshome.model.EgressType
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
 import home.someoneshome.model.MarkerId
@@ -34,6 +35,38 @@ class RecordingTextTest {
         val reparsed = RecordingText.parse(original.toText())
         assertEquals(original.events, reparsed.events)
         assertTrue(original.events.size > 100, "the fixture must exercise every event kind")
+    }
+
+    /**
+     * **Both Egress types survive, and so do the nodes and the taps.**
+     *
+     * The fixture round fires one Egress, so it can only ever prove one label round-trips — and
+     * Beacon and Tether are mechanically identical, so a renderer that wrote a constant would be
+     * invisible to it. This walks both, and it walks them **through a whole recording** rather than
+     * through the renderer alone, because the failure that matters is a recording that replays into
+     * a different evening from the one it was made on.
+     */
+    @Test
+    fun `both Egress types and their nodes survive the round-trip`() {
+        for (type in EgressType.entries) {
+            val events = listOf<Event>(
+                Event.RoundArmed(
+                    Tick(0), seed = 5L, seats = SEATS, insiders = INSIDERS, markers = MARKERS,
+                ),
+                Event.EgressFired(Tick(3600), Seat(1), type, listOf(MARKERS[0], MARKERS[4])),
+                Event.SyncPulseReturned(Tick(3700), Seat(2), listOf(3640L, 3670L, 3700L, 3730L)),
+                Event.EgressExpired(Tick(6100)),
+            )
+            val reparsed = RecordingText.parse(record(GameState.EMPTY, events).second.toText())
+            assertEquals(events, reparsed.events, "a $type Egress did not survive its own recording")
+        }
+    }
+
+    /** A label this build does not know is fatal, never quietly read as the other one. */
+    @Test
+    fun `an unknown Egress type is refused`() {
+        val text = recorded().toText().replace("|type=Beacon|", "|type=Semaphore|")
+        assertFailsWith<MalformedRecording> { RecordingText.parse(text) }
     }
 
     /**

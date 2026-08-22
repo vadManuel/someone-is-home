@@ -6,10 +6,11 @@ package home.someoneshome.model
  * Events are what the recording stores and what replay feeds back. Every one carries the [Tick]
  * it occurred at, sampled at the edge — the rules never ask what time it is.
  *
- * **This set is deliberately partial.** It covers the spine the round trace walks; several
- * systems it names are still blocked on open design decisions (Egress node designation F-001,
- * the SystemIntegrity denominator F-005, carry state across a meeting F-014). Inventing events
- * for those here would encode a guess as a decision.
+ * **This set is deliberately partial.** It covers the spine the round trace walks; the systems it
+ * does not name are still blocked on open design decisions, and inventing events for those here
+ * would encode a guess as a decision. **F-001 is no longer one of them** — Egress node designation
+ * was ratified as *two ordinary markers in non-adjacent rooms, drawn at fire time* — so the Egress
+ * lifecycle is here. Isolate, Surge and the rest of the Access pool are not.
  */
 sealed interface Event {
     val at: Tick
@@ -179,4 +180,79 @@ sealed interface Event {
 
     /** Lights out. The meeting is over and the round resumes. */
     data class MeetingClosed(override val at: Tick) : Event
+
+    // ---- The Egress ---------------------------------------------------------------------------
+
+    /**
+     * **A Insider fired an Egress, and the house has already picked what kind and where**
+     * (`gdd.md:349`, F-001 as ratified).
+     *
+     * ### Both draws ride the event, and neither is re-derived
+     *
+     * [type] is the house's coin toss between Beacon and Tether — *a Insider triggers it; the house
+     * picks which one* — and [nodes] are the two ordinary registered markers containment has to
+     * happen at. Both are chosen **above the rules** by `egressFor`, for the reason `routeScan` and
+     * `insidersFor` sit there: choosing the nodes needs the home's *shape* — which rooms touch
+     * which — and the rules have never held house geography.
+     *
+     * So they arrive as recorded inputs, exactly as `RoundArmed.insiders` does, and a replay
+     * reproduces the same pair and the same label rather than re-rolling them against a home the
+     * recording does not carry.
+     *
+     * ### Nothing here says whether it will land
+     *
+     * The shared cooldown may still be running, in which case the house does nothing with this
+     * beyond spending the actor's answer — see the rules. **The event is a fact about a finger on a
+     * button**, and it is recorded whether or not a house caught fire, because a refusal that left
+     * no trace is the invisible drop D-066 exists to refuse.
+     */
+    data class EgressFired(
+        override val at: Tick,
+        val actor: Seat,
+        val type: EgressType,
+        /** Two ordinary registered markers in non-adjacent rooms, in draw order (F-001). */
+        val nodes: List<MarkerId>,
+    ) : Event
+
+    /**
+     * **One participant's four taps on the Sync Pulse, handed over** (`gdd.md:355`).
+     *
+     * *Both phones pulse haptically in unison off a house-scheduled timestamp; both players tap on
+     * the beat four times.* This is one phone's half of that, and it is named for
+     * [SubroutineReturned]'s reason: **a report of what was entered, never a claim that it was
+     * right.** The device holds the taps; the house holds the schedule and grades them.
+     *
+     * ### It carries no node, and that is the ruling rather than a saving
+     *
+     * Where this player is standing is what the house recorded when they **scanned** the node's
+     * card — *a performer's own scan is knowledge* (D-136) — and a phone naming its own node would
+     * be a client asserting a placement. It would also be the cheapest cheat in the game: sit on
+     * the couch, claim the Landing, and contain an Egress from a chair. [PerformanceEnded] carries
+     * no marker for exactly this reason and this is the same decision.
+     *
+     * ### The taps are ticks, not a verdict
+     *
+     * [taps] is when the finger landed, sampled at the edge like every other timestamp. A boolean
+     * *"I was on the beat"* would be the phone grading its own work, which is the one thing the
+     * whole Subroutine treatment is built to keep off the device.
+     */
+    data class SyncPulseReturned(
+        override val at: Tick,
+        val actor: Seat,
+        /** A List, not a Set. Order is part of what was entered, and this is recorded input. */
+        val taps: List<Long>,
+    ) : Event
+
+    /**
+     * **The countdown reached zero and nobody contained it** (`gdd.md:361`, D-131).
+     *
+     * A house push on the authority's own clock, exactly as [DiscussionClosed] and
+     * [VoteWindowClosed] are: the rules have no clock, so *the timer ran out* arrives as an event
+     * stamped at the edge. The admission gate refuses it when there is no Egress to expire and
+     * while one is paused, so the rules never have to ask whether the house means it.
+     *
+     * **Insiders win outright**, and a running Egress outlives its Insiders (D-131) — Restraining
+     * the last one does not stop this arriving.
+     */
+    data class EgressExpired(override val at: Tick) : Event
 }

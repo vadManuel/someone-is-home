@@ -896,9 +896,13 @@ fun EgressWidgetScreen(vals: PanelVals) {
  *
  * **This is where the Egress notification survives being swiped away** —
  * [NotificationKind.Egress]'s `heldBy` — so it names the same two rooms the banner did, out of
- * [Notifications.EGRESS_NODES] rather than out of a second string. Two copies of that pair would
- * send two people who may not speak to two different places, and the mistake would look like a
- * typo in a diff.
+ * [PanelVals.egressNodes] rather than out of a second string. Two copies of that pair would send
+ * two people who may not speak to two different places, and the mistake would look like a typo in
+ * a diff.
+ *
+ * **The type is the house's too.** Beacon and Tether are mechanically identical in v1 and the
+ * house picks between them at fire time, so a widget that always said BEACON would be the one
+ * surface in the building contradicting the alert that woke everybody up.
  */
 @Composable
 private fun EgressWidget(vals: PanelVals) {
@@ -911,7 +915,10 @@ private fun EgressWidget(vals: PanelVals) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.Bottom,
         ) {
-            Label("EGRESS . BEACON", size = 6.5, color = Amber.Bright, tracking = 0.14)
+            Label(
+                "EGRESS . ${vals.egressType}",
+                size = 6.5, color = Amber.Bright, tracking = 0.14,
+            )
             Readout("1:42", size = 19.0, color = Amber.Bright, lineHeight = 1.0)
         }
         SegmentBar(
@@ -923,7 +930,7 @@ private fun EgressWidget(vals: PanelVals) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Label("CONTAIN AT", size = 6.0, color = Amber.Dim, tracking = 0.1)
             Label(
-                Notifications.EGRESS_NODES.joinToString(" . "),
+                vals.egressNodes.joinToString(" . "),
                 size = 6.0, color = Amber.Bright, tracking = 0.1,
             )
         }
