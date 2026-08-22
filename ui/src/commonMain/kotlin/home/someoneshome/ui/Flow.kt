@@ -104,13 +104,11 @@ object ScreenGraph {
         // it adds no edge of its own — the tile and the banner are two doors to one screen.
         ScreenId.Home, ScreenId.Notify, ScreenId.Quiet, ScreenId.EgressWidget -> SPRINGBOARD
         ScreenId.Banner -> SPRINGBOARD + ScreenId.EgressWidget
-        ScreenId.Page2 -> setOf(
-            ScreenId.Home, ScreenId.Work, ScreenId.Scan, ScreenId.Lock,
-            // The Insider's egress tile. A Resident's tap on the same tile does nothing and does
-            // it silently — same control, same brightness, no new view for either role to be
-            // caught on. This is the only role-asymmetric edge in the graph.
-            ScreenId.Banner,
-        )
+        // The page dots and the dock, and nothing else. **The two ability tiles are holds** (D-141)
+        // and publish no click action, so the Insider's egress edge is not readable off this screen
+        // and lives in [Flow.viaActions] with the other gestures. A Resident's tiles are not
+        // controls at all (D-142) — no pointer input, nothing to fire, nothing to time.
+        ScreenId.Page2 -> setOf(ScreenId.Home, ScreenId.Work, ScreenId.Scan, ScreenId.Lock)
         // The lantern, and the lantern with something under its clock. A notification on a locked
         // phone is READ, not opened: this screen has one control and it is SLIDE TO OPEN, so a
         // card that also navigated would be an unlock nobody performed.
@@ -156,7 +154,10 @@ object ScreenGraph {
         ScreenId.Calling -> emptySet()
         ScreenId.Call, ScreenId.Found -> setOf(ScreenId.Assemble)
         ScreenId.Assemble -> emptySet()
-        ScreenId.Notice -> setOf(ScreenId.Discussion)
+        // A notice is swiped away, not dismissed by a button (D-105, D-119) — so the walk to the
+        // discussion is a drag and lives in [Flow.viaActions]. The house's own nine seconds goes
+        // to the same place, which is what makes swiping *going first* rather than going somewhere.
+        ScreenId.Notice -> emptySet()
         ScreenId.Discussion -> emptySet()
         ScreenId.Vote -> emptySet()
         ScreenId.Tally -> emptySet()
@@ -486,6 +487,14 @@ object Flow {
      *   same shape as opening the room under a finger. Every *built* Subroutine screen is listed
      *   as a place it can land, because any of them can be behind a BEGIN; a Subroutine whose
      *   interaction does not exist yet opens nothing and the phone stays where it is.
+     * - **The two ability tiles on page 2.** Both arm on a two-second hold (D-141), so neither
+     *   publishes a click action; the egress tile is the one of them that walks anywhere. It is
+     *   also the only role-asymmetric edge in the game, and the asymmetry is capability rather
+     *   than appearance — a Resident's tiles are drawn identically and take no pointer input at
+     *   all (D-142), which is why nothing here is reachable by rendering the Resident and firing
+     *   everything on the screen.
+     * - **A house notice, swiped up.** The last button dismissal in the app, retired: the swipe
+     *   is the acknowledgment (D-119) and there is no read state for a control to claim (D-105).
      * - **A banner, swiped up.** D-105's whole gesture vocabulary, and a drag rather than a tap,
      *   so it publishes no click action for `ScreenGraphTest` to fire. Where it lands is the
      *   screen the notification arrived over rather than anything the banner names — the banner
@@ -512,6 +521,13 @@ object Flow {
         // A line that was real, handed over; and the lights going out once every line is in.
         ScreenId.Secret to setOf(ScreenId.Lobby),
         ScreenId.Lobby to setOf(ScreenId.Armed),
+        // The Insider's egress tile, armed by two seconds of a finger (D-141). **The only
+        // role-asymmetric edge in the game**, and it is asymmetric in capability rather than in
+        // appearance: a Resident's tile is drawn identically and takes no pointer input at all
+        // (D-142), so there is no hold to run and no view either role can be caught on.
+        ScreenId.Page2 to setOf(ScreenId.Banner),
+        // A house notice, swiped up off the meeting.
+        ScreenId.Notice to setOf(ScreenId.Discussion),
         // Every notification, swiped away — up on the three banners, left under the clock. The
         // banners arrive over the springboard so all three leave it behind; the lock screen's
         // arrival leaves the lock screen. Each of these is the `under` of an entry in
@@ -702,9 +718,44 @@ class FlowModel(
         state = next
     }
 
+    /**
+     * **Arming a Revoke — two seconds of a finger on page 2** (D-141, D-142).
+     *
+     * Presentation only, and the line it stops at is [lightsOut]'s: it walks this phone's tile
+     * through the states the design drew and tells nobody anything. Real arming is silent and
+     * invisible, spends the cooldown at the moment of arming rather than at the landing, and has
+     * no cancel — all three of which are the house's, because a device that decided any of them
+     * would be a device deciding an outcome.
+     *
+     * **Reached only from an Insider's tile.** Not by a branch inside it: a Resident's tile takes
+     * no pointer input at all, so this is not something a Resident's phone declines to do — it is
+     * something a Resident's phone has no way to ask for.
+     */
     fun stepRevoke() {
         val next = RevokeState.entries[(state.revoke.ordinal + 1) % RevokeState.entries.size]
         state = state.copy(revoke = next)
+    }
+
+    /**
+     * **Arming an Egress — the other two-second hold on page 2** (D-141).
+     *
+     * The misfire the design calls *"a game-ending misclick [that] will happen in the dark"* is
+     * the whole reason for the hold. What it reaches here is the alert every phone in the house
+     * gets; in play the alert is the house's answer to an intent, not this phone's announcement.
+     */
+    fun armEgress() {
+        go(ScreenId.Banner)
+    }
+
+    /**
+     * **A house notice, swiped up** (D-105, D-119).
+     *
+     * The last button dismissal in the game, retired: the swipe is the acknowledgment, and there
+     * is nothing anywhere in this app that records one. A notice is held nowhere afterwards, so
+     * dismissing it is a navigation and no more than that.
+     */
+    fun dismissNotice() {
+        go(ScreenId.Discussion)
     }
 
     fun toggleMarkers() { state = state.copy(markersOn = !state.markersOn) }
@@ -1060,6 +1111,7 @@ class FlowModel(
     fun actions(): PanelActions = PanelActions(
         nav = ::go,
         stepRevoke = ::stepRevoke,
+        armEgress = ::armEgress,
         toggleMarkers = ::toggleMarkers,
         toggleTorch = ::toggleTorch,
         pickRoomType = ::pickRoomType,
@@ -1097,6 +1149,7 @@ class FlowModel(
         tapSubroutine = ::tapSubroutine,
         handOverSubroutine = ::handOverSubroutine,
         dismissNotification = ::dismissNotification,
+        dismissNotice = ::dismissNotice,
         dismissStanding = ::dismissStanding,
     )
 

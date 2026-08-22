@@ -476,14 +476,23 @@ class PanelVals(val state: PanelState) {
     val abilityName: String = if (insider) "REVOKE" else "POWER"
 
     /**
-     * Identical in the armed and cooling states, differing only in the resting verb — TAP TO ARM
-     * against TAP TO TEST. Both are true sentences about the button in front of you, and neither
-     * confirms anything.
+     * Identical in the armed and cooling states, differing only in the resting line.
+     *
+     * **Neither of the two says TAP any more** (D-141, D-142). The Insider's is an instruction and
+     * the instruction changed — arming is a two-second hold — and a false instruction on this
+     * control costs a whole cooldown with no cancel. The Resident's could not stay TAP TO TEST at
+     * all: it invited a press on a tile that now takes no pointer input whatever, and a line
+     * asking for a gesture that produces nothing is the one kind of copy a dark house punishes.
+     *
+     * D-142 asks that the Resident's line be *true, and not shorter, dimmer or otherwise
+     * distinguishable*. Same brightness, same slot, same nineteen characters, and it says nothing
+     * about what the tile does when touched — because for that player it does nothing, and a
+     * sentence about a control is exactly what a Resident is not entitled to.
      */
     val abilitySub: String = when (state.revoke) {
         RevokeState.Armed -> "ARMED . TOUCH THEIR PHONE"
         RevokeState.Cooldown -> "COOLING DOWN"
-        RevokeState.Ready -> if (insider) "READY . TAP TO ARM" else "READY . TAP TO TEST"
+        RevokeState.Ready -> if (insider) "READY . HOLD TO ARM" else "READY . ALL NOMINAL"
     }
 
     val revokeBorder: Color = if (state.revoke == RevokeState.Armed) Amber.Bright else Amber.Dim

@@ -40,6 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -56,7 +57,21 @@ import androidx.compose.ui.unit.sp
  */
 class PanelActions(
     val nav: (ScreenId) -> Unit = {},
+    /**
+     * **The two things page 2 can arm, and both take a two-second hold** (D-141, D-142).
+     *
+     * They are actions rather than a `go(...)` on the tile for the reason [saveHome] and
+     * [lightsOut] are: neither is reachable by a synthetic click, so neither can be read off the
+     * screen by `ScreenGraphTest`, and the edge [armEgress] walks is declared in [Flow.viaActions]
+     * with the rest of them.
+     *
+     * **Neither is attached on a Resident's phone at all.** Not attached-and-ignored — the tile
+     * takes no pointer input whatever, so there is nothing to press and nothing to time (D-142).
+     * What a Resident's page 2 is, is a page that looks exactly like an Insider's and answers
+     * nothing.
+     */
     val stepRevoke: () -> Unit = {},
+    val armEgress: () -> Unit = {},
     val toggleMarkers: () -> Unit = {},
     val toggleTorch: () -> Unit = {},
     val pickRoomType: (RoomKind) -> Unit = {},
@@ -181,6 +196,19 @@ class PanelActions(
      */
     val dismissNotification: () -> Unit = {},
     /**
+     * **The meeting's house notice, swiped up off the screen it arrived on** (D-105, D-119).
+     *
+     * Separate from [dismissNotification] because a notice is not one of the arrivals that map to
+     * a screen they landed over — it *is* a screen, shown once at the top of the meeting and held
+     * nowhere afterwards. Where it goes is the discussion, which is also where the house's own
+     * nine seconds takes it; swiping is going first.
+     *
+     * It is an action rather than a `go(...)` on the notice for the reason the swipes above are:
+     * a drag publishes no click action, so the edge is declared in [Flow.viaActions] and walked by
+     * a test rather than read off the screen.
+     */
+    val dismissNotice: () -> Unit = {},
+    /**
      * **One of the lock screen's stored notifications, swiped off the list.**
      *
      * Separate from [dismissNotification] because it is a different question: that one is *the*
@@ -267,10 +295,15 @@ fun Modifier.tapTarget(onClick: () -> Unit): Modifier = heightIn(min = TAP_TARGE
  * LIGHTS OUT, and a readiness button that has already been pressed. Those have to keep their shape
  * so the layout does not move under a thumb, and must not keep their press.
  *
- * **Three tests hold it true**, each on a control that is deliberately present and inert: the
- * lobby's gated LIGHTS OUT, the meeting's LOCK IN with nothing chosen, and the Jam route with
- * nothing entered. Injection-verified together — making the null branch tap anyway fails all
- * three by name.
+ * **Two tests hold it true**, each on a control that is deliberately present and inert: the Jam
+ * route with nothing entered, and the discussion's READY TO VOTE once it has been pressed.
+ * Injection-verified together — making the null branch tap anyway fails both by name.
+ *
+ * *(It used to be three, and the lobby's gated LIGHTS OUT was the sharpest of them. That control is
+ * a two-second hold now (D-141) and expresses the same refusal by taking no pointer input at all —
+ * see [HoldToConfirm]'s `enabled`. The ballot's LOCK IN went the same way. The argument is
+ * unchanged wherever a tap survives: a control that answers a press by doing nothing is
+ * indistinguishable from one that is broken.)*
  *
  * Note what is *not* guarded and does not need to be: the `null` **default**. Every call site in
  * the app passes `onClick` explicitly, so changing the default back changes no screen. The
@@ -409,28 +442,40 @@ fun ReadoutField(
 }
 
 /**
- * **Hold for two seconds. The bar is the hold, not an animation of one.**
+ * **The two-second hold as a gesture, with nothing drawn** (D-141).
  *
- * The design's own control for the one irreversible thing in host setup. A tap cannot reach it:
- * the progress is driven by frames while the finger is down and resets the moment it lifts, so a
- * mis-tap in a pocket, a fumble in the dark, or a child holding the phone does not delete fifteen
- * minutes of somebody's evening.
+ * *Hold what cannot be taken back.* Five controls in this app take it — the vote lock, arming a
+ * Revoke, arming an Egress, the host's LIGHTS OUT and StairsWarn's UNREGISTER AND CONTINUE — and
+ * they do not all look alike: three are the design's full-width bar-and-note block ([HoldToConfirm])
+ * and two are springboard tiles that must go on looking exactly as they looked. So the *clock* is
+ * here and the furniture is the caller's, which is what stops the five drifting into five slightly
+ * different ideas of two seconds.
+ *
+ * The progress is driven by frames while the finger is down and **resets the moment it lifts** — a
+ * hold is not a total. A mis-tap in a pocket, a fumble in the dark or a phone handed to a child
+ * reaches nothing.
+ *
+ * ### [enabled] is refusal at the surface, not refusal at the end
+ *
+ * With it false there is **no pointer input at all**: no press, no progress that runs and then
+ * declines, nothing from the first millisecond. That is D-142 for a Resident's page 2, and it is
+ * the whole of the ruling — a hold that filled for two seconds and then refused would be a
+ * self-test, and a bar filling in a dark house is world-observable to whoever is behind the
+ * shoulder. The safe control is the one with nothing behind it to probe.
  *
  * ### It publishes no click action, and that is the point
  *
  * `ScreenGraphTest` reads the whole screen graph off click *semantics* actions, which is how every
  * other control in this app is checked. A hold has none — a control that could be fired by one
- * synthetic click would not be a hold — so the edge it walks is declared in [Flow.viaActions] and
- * proved by a test that really holds a finger down for two seconds.
+ * synthetic click would not be a hold — so the edges these walk are declared in [Flow.viaActions]
+ * and proved by tests that really hold a finger down for two seconds.
  */
 @Composable
-fun HoldToConfirm(
-    label: String,
-    restingNote: String,
+fun rememberHold(
     onConfirm: () -> Unit,
-    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     millis: Int = HOLD_MILLIS,
-) {
+): HoldState {
     var holding by remember { mutableStateOf(false) }
     var elapsed by remember { mutableStateOf(0) }
 
@@ -451,34 +496,98 @@ fun HoldToConfirm(
         onConfirm()
     }
 
+    val surface =
+        if (!enabled) Modifier
+        else Modifier.pointerInput(Unit) {
+            detectTapGestures(
+                onPress = {
+                    holding = true
+                    tryAwaitRelease()
+                    holding = false
+                },
+            )
+        }
+    return HoldState(holding, elapsed, millis, surface)
+}
+
+/**
+ * How far a hold has got, and where to put the finger.
+ *
+ * [surface] is the pointer input, handed to the caller rather than wrapped around it: the design's
+ * block puts it on the button and not on the bar above it, and a springboard tile puts it on the
+ * whole tile. **It is [Modifier] and nothing else when the hold is disabled**, which is what makes
+ * an inert control genuinely inert rather than merely unanswered.
+ */
+class HoldState(
+    /** True from the moment the finger lands, which is before there is any progress to draw. */
+    val holding: Boolean,
+    val elapsed: Int,
+    val millis: Int,
+    val surface: Modifier,
+) {
+    /** 0 at rest, 1 the frame it completes. */
+    val fraction: Float get() = elapsed.toFloat() / millis
+}
+
+/**
+ * **Hold for two seconds. The bar is the hold, not an animation of one.**
+ *
+ * The design's own control for the one irreversible thing in host setup, and now for the four
+ * others D-141 named: it is the same block wherever it appears, so a host who has deleted a home
+ * already knows what the ballot and the lobby are asking of them.
+ *
+ * The colours are parameters because three of the five holds sit on a **dark-field** screen and two
+ * on the bone LCD, and the defaults are the bone ones so a light-field caller writes none of them.
+ * Nothing else about the block varies: same bar, same note, same height, same words while the
+ * finger is down.
+ *
+ * **With [enabled] false it is present and inert** rather than absent — a control that materialised
+ * under a thumb about to press it is worse than one that is visibly not ready — and the note is
+ * then the caller's chance to say why.
+ */
+@Composable
+fun HoldToConfirm(
+    label: String,
+    restingNote: String,
+    onConfirm: () -> Unit,
+    modifier: Modifier = Modifier,
+    millis: Int = HOLD_MILLIS,
+    enabled: Boolean = true,
+    spent: Color = Amber.BoneDim,
+    track: Color = Amber.BonePale,
+    border: Color = Amber.BoneFaint,
+    fill: Color = Color.Transparent,
+    ink: Color = Amber.BoneDim,
+    noteInk: Color = Amber.BoneFaint,
+) {
+    val hold = rememberHold(onConfirm, enabled, millis)
+
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(7.u)) {
         // Two blocks rather than a fraction of one: the bar has to read at six units tall on a
         // 300-unit canvas, and a weight of zero is a box that still draws its own hairline.
         Row(Modifier.fillMaxWidth().height(6.u), horizontalArrangement = Arrangement.spacedBy(1.u)) {
-            val done = elapsed.toFloat() / millis
-            if (done > 0f) Box(Modifier.weight(done).fillMaxHeight().background(Amber.BoneDim))
-            if (done < 1f) Box(Modifier.weight(1f - done).fillMaxHeight().background(Amber.BonePale))
+            val done = hold.fraction
+            if (done > 0f) Box(Modifier.weight(done).fillMaxHeight().background(spent))
+            if (done < 1f) Box(Modifier.weight(1f - done).fillMaxHeight().background(track))
         }
         PreNote(
-            if (holding) "KEEP HOLDING . ${seconds(elapsed)}S OF ${seconds(millis)}S"
+            if (hold.holding) "KEEP HOLDING . ${seconds(hold.elapsed)}S OF ${seconds(millis)}S"
             else restingNote,
+            color = noteInk,
             tracking = 0.12, lineHeight = 1.0, align = TextAlign.Center,
         )
+        // [TAP_TARGET] for the same reason every other control has it, and one more: the design's
+        // own padding leaves this block at 34 units, and a hold that cannot be *started* reliably
+        // in the dark is a hold nobody finishes. It is the floor rather than the height, so the
+        // design's padding still decides on any screen where the label wraps.
         Box(
-            Modifier.fillMaxWidth().border(1.u, Amber.BoneFaint)
-                .pointerInput(Unit) {
-                    detectTapGestures(
-                        onPress = {
-                            holding = true
-                            tryAwaitRelease()
-                            holding = false
-                        },
-                    )
-                }
+            Modifier.fillMaxWidth().heightIn(min = TAP_TARGET).testTag(HOLD_BLOCK)
+                .border(1.u, border).background(fill)
+                .then(hold.surface)
                 .padding(vertical = 13.u),
             contentAlignment = Alignment.Center,
         ) {
-            Label(label, size = 8.0, color = Amber.BoneDim, tracking = 0.16, align = TextAlign.Center)
+            Label(label, size = 8.0, color = ink, tracking = 0.16, align = TextAlign.Center)
         }
     }
 }
@@ -488,6 +597,27 @@ private fun seconds(millis: Int): String = "${millis / 1000}.${millis % 1000 / 1
 
 /** Two seconds, the design's number, and the only place it is written down. */
 const val HOLD_MILLIS: Int = 2_000
+
+/**
+ * **The block a finger goes on, findable by a test that cannot look for a click action.**
+ *
+ * The tap-target sweep in `MeetingInputTest` reads every control on every screen off click
+ * semantics, and a hold has none — so retiring the ballot's tap would have quietly taken the
+ * meeting's most important control out of the one measurement that exists to keep it hittable in
+ * the dark. A test that stops checking is worse than one that fails.
+ *
+ * Beside `HOLD_SURFACE`, which is the same idea for the Subroutine that counts fingers.
+ */
+const val HOLD_BLOCK: String = "hold-block"
+
+/**
+ * **The words under every hold in the game, so the gesture is taught once.**
+ *
+ * A player learns what a bar under a button means on the Delete screen with the lights on, and
+ * meets the same sentence four more times in the dark. Five separate wordings would be five
+ * separate things to work out at the moment each of them cannot be taken back.
+ */
+const val HOLD_NOTE: String = "HOLD THE BUTTON FOR TWO SECONDS."
 
 /**
  * The slow pulse on an incoming call.

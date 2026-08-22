@@ -421,6 +421,28 @@ class LobbyModel(
     val insidersLabel: String get() = standing.insiders?.toString() ?: UNKNOWN
 
     /**
+     * **SUBROUTINES EACH — `K`, asked of [Balance] rather than typed on the row** (D-129).
+     *
+     * The design drew a `7` and the port kept it, which was right by coincidence and only at six
+     * seats: `K = ⌈M ÷ worstCasePlainResidents⌉ + slack` moves with the party and with the host's
+     * Insider setting, so a literal is a number that silently stops describing the round the
+     * moment a seventh person walks in. It is the same length for every seat and for both roles by
+     * construction — the Insider's fake order is drawn from this same rule — so there is nothing
+     * role-dependent to hide here.
+     *
+     * **Computed from public lobby facts alone**, which is the part that has to stay true: seats
+     * and the host's *setting*, never the draw. Sizing it against the draw would let order length
+     * divide out the count D-103 spent a revision hiding.
+     *
+     * With nobody seated there is no round to size, and the row says so rather than printing the
+     * `1` the arithmetic floor produces for an empty house.
+     */
+    val orderSizeLabel: String
+        get() =
+            if (standing.joined == 0) "NOT YET"
+            else Balance.orderSize(standing.joined, standing.insiders).toString()
+
+    /**
      * The Insider-count control: **UNKNOWN, then every count in the band, then UNKNOWN again.**
      *
      * A cycle rather than a stepper because UNKNOWN is not below one or above the maximum — it is

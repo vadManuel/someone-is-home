@@ -1,5 +1,7 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.Balance
+
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.hasClickAction
@@ -8,6 +10,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -192,8 +195,12 @@ class LobbyInputTest {
 
     /**
      * **LIGHTS OUT is present and inert until every line is in**, rather than absent and then
-     * appearing: a button that materialised when the last line arrived would move the layout
+     * appearing: a control that materialised when the last line arrived would move the layout
      * under a host's thumb at the moment they are about to press it.
+     *
+     * Inert is now the hold refusing to start (D-141) rather than a button with no handler, so
+     * this holds the closed gate for a full two seconds as well as reading the semantics: a bar
+     * that ran and then declined would be a gate arguing with the sentence underneath it.
      */
     @Test
     fun lightsOutIsInertUntilEveryLineIsIn() = runDesktopComposeUiTest(width = 300, height = 650) {
@@ -203,16 +210,45 @@ class LobbyInputTest {
         val armed = onAllNodes(hasClickAction() and hasText("LIGHTS OUT", substring = true))
         assertEquals(0, armed.fetchSemanticsNodes().size, "the gate was open at four of six")
         onNodeWithText("LIGHTS OUT").assertExists()
-        assertEquals(ScreenId.Lobby, model.state.screen)
+
+        onNodeWithText("LIGHTS OUT").performTouchInput { down(center) }
+        // Half the window, finger still down: a bar that ran and then declined would have reset
+        // itself by the time a check made afterwards looked at it.
+        mainClock.advanceTimeBy(HOLD_MILLIS / 2L)
+        assertNothingSays("KEEP HOLDING", "the bar ran on a gate that was still shut")
+        onNodeWithText("LIGHTS OUT").performTouchInput { up() }
+        mainClock.advanceTimeBy(HOLD_MILLIS + 200L)
+        assertEquals(ScreenId.Lobby, model.state.screen, "a closed gate armed the round on a hold")
     }
 
+    /**
+     * **Two seconds, and the evening starts.** It happens in front of the whole party and there is
+     * no way back to the lobby, which is why D-141 puts it on the hold list.
+     */
     @Test
-    fun lightsOutArmsOnceEveryLineIsIn() = runDesktopComposeUiTest(width = 300, height = 650) {
+    fun lightsOutArmsOnATwoSecondHoldOnceEveryLineIsIn() =
+        runDesktopComposeUiTest(width = 300, height = 650) {
+            val (model, _) = modelOn(ScreenId.Lobby, joined = 6, linesIn = 6)
+            show(model)
+
+            onNodeWithText("LIGHTS OUT").performTouchInput { down(center) }
+            mainClock.advanceTimeBy(HOLD_MILLIS + 200L)
+            assertEquals(ScreenId.Armed, model.state.screen, "the gate was closed with every line in")
+        }
+
+    /** And most of a hold starts nothing — the host's thumb brushing past it must cost nobody. */
+    @Test
+    fun mostOfAHoldDoesNotTurnTheLightsOut() = runDesktopComposeUiTest(width = 300, height = 650) {
         val (model, _) = modelOn(ScreenId.Lobby, joined = 6, linesIn = 6)
         show(model)
 
-        onNodeWithText("LIGHTS OUT").performClick()
-        assertEquals(ScreenId.Armed, model.state.screen, "the gate was closed with every line in")
+        onNodeWithText("LIGHTS OUT").performTouchInput { down(center) }
+        mainClock.advanceTimeBy(HOLD_MILLIS - 100L)
+        assertEquals(ScreenId.Lobby, model.state.screen, "the round armed before two seconds were up")
+
+        onNodeWithText("LIGHTS OUT").performTouchInput { up() }
+        mainClock.advanceTimeBy(HOLD_MILLIS + 200L)
+        assertEquals(ScreenId.Lobby, model.state.screen, "letting go early armed the round anyway")
     }
 
     /** The host turns the lights off. A client is told, and gets no button that would do nothing. */
@@ -265,6 +301,49 @@ class LobbyInputTest {
             )
             assertEquals("UNKNOWN", model.lobby.insidersLabel)
         }
+
+    // ---- SUBROUTINES EACH ------------------------------------------------------------------------
+
+    /**
+     * **The row is `K`, asked of [Balance] for the party actually standing here** (D-129).
+     *
+     * The design drew a `7` and the port kept it, and it was right by coincidence: at six seats the
+     * expression happens to come out at seven. `K = ⌈M ÷ worstCasePlainResidents⌉ + slack` moves
+     * with the party and with the host's Insider setting, so the literal was a number that would
+     * quietly stop describing the round the first time a seventh person walked in.
+     *
+     * **Read off the rendered screen and compared with the rule rather than with a figure typed
+     * here**, which is the whole point: a test asserting `7` at six seats would agree with the bug
+     * it is meant to catch, and one asserting `11` at ten would freeze a balance constant playtest
+     * owns. Moving `ORDER_SLACK` or `METER_PER_SEAT` moves both sides of this at once, and pinning
+     * a literal back on the row fails it at every seat count but six.
+     */
+    @Test
+    fun theSubroutinesEachRowIsAskedOfTheBalanceRules() {
+        // Six is the design's own lobby and the one place the old literal was right; the others
+        // are either side of it, so a row that had been pinned to any single number fails here.
+        for (joined in listOf(5, 6, 8, 10)) {
+            runDesktopComposeUiTest(width = 300, height = 650) {
+                val (model, _) = modelOn(ScreenId.Lobby, joined = joined, linesIn = joined)
+                show(model)
+
+                val expected = Balance.orderSize(joined, model.lobby.standing.insiders).toString()
+                onNodeWithText("SUBROUTINES EACH").assertExists()
+                onNodeWithText(expected)
+                    .assertExists("at $joined seats the work order is $expected and the row says otherwise")
+            }
+        }
+    }
+
+    /** With nobody seated there is no round to size, and the row says that instead of arithmetic. */
+    @Test
+    fun anEmptyLobbySizesNothing() = runDesktopComposeUiTest(width = 300, height = 650) {
+        val (model, _) = modelOn(ScreenId.Lobby, joined = 0, linesIn = 0)
+        show(model)
+
+        assertEquals("NOT YET", model.lobby.orderSizeLabel, "an empty house was given a work order")
+        onNodeWithText("NOT YET").assertExists()
+    }
 
     // ---- The vote window -----------------------------------------------------------------------
 
