@@ -449,6 +449,10 @@ private fun TypeChip(
  *
  * The cards are shown, not counted — the host is about to go and find these specific pieces of
  * paper, so a number would be the wrong thing to give them.
+ *
+ * **UNREGISTER AND CONTINUE is a two-second hold** (D-141): it discards a registration the host
+ * climbed the stairs to make, and there is no way back to it except walking up there again with
+ * the cards in hand.
  */
 @Composable
 fun StairsWarnScreen(vals: PanelVals) {
@@ -491,11 +495,15 @@ fun StairsWarnScreen(vals: PanelVals) {
 
         PushDown()
         Column(verticalArrangement = Arrangement.spacedBy(5.u)) {
+            // The safe control is the tap and the destructive one is the hold, which is the Delete
+            // screen's inversion and the same argument: what is being protected is cards the host
+            // climbed the stairs to register, and the brighter, easier button is the one that
+            // keeps them.
             SlateButton("MOVE THEM FIRST", { go(ScreenId.MarkerSheet) }, verticalPadding = 11.u)
-            PanelButton(
+            HoldToConfirm(
                 "UNREGISTER AND CONTINUE",
-                border = Amber.BonePale, ink = Amber.BoneDim, tracking = 0.14,
-                onClick = { actions.confirmStairs() },
+                restingNote = HOLD_NOTE,
+                onConfirm = actions.confirmStairs,
             )
         }
     }
@@ -1536,14 +1544,17 @@ fun LobbyScreen(vals: PanelVals) {
                 verticalPadding = 5.u,
                 onClick = if (lobby.hosting) actions.cycleInsiders else null,
             )
-            // The rest are the design's own numbers, in the design's own order. Two of them are
+            // The rest are the design's own numbers, in the design's own order. Three of them are
             // live and the others are not yet wired to anything that could change them; playtest
-            // owns those, as it owns the 7.
+            // owns those.
             PreRow(
                 "INSIDERS KNOW EACH OTHER", "ON",
                 border = Amber.BoneDim, labelInk = Amber.BoneInk, verticalPadding = 5.u,
             )
-            PreRow("SUBROUTINES EACH", "7", verticalPadding = 5.u)
+            // **Not a control, and not a literal either** — D-129's `K`, asked of the balance
+            // rules for the party actually standing here. The design's 7 was right at six seats
+            // and nowhere else; see LobbyModel.orderSizeLabel.
+            PreRow("SUBROUTINES EACH", lobby.orderSizeLabel, verticalPadding = 5.u)
             PreRow("DISCUSSION", "90S", verticalPadding = 5.u)
             // The second row a host may touch, and it stays where the design put it rather than
             // moving up beside the other live one. It reads 45S because that is the design's
@@ -1634,10 +1645,15 @@ private fun ResidentStrip(residents: List<String>) {
  * alone.**
  *
  * The host turns the lights off; everything after that is the house answering rather than the
- * host announcing, so a client gets the same fact without a button that would do nothing. Until
- * the gate closes the control is present and inert rather than absent: a button that appeared
+ * host announcing, so a client gets the same fact without a control that would do nothing. Until
+ * the gate closes the control is present and inert rather than absent: a control that appeared
  * when the last line arrived would move the layout under a host's thumb at the exact moment they
  * are about to press it.
+ *
+ * **It is a two-second hold** (D-141). It starts the evening, in front of the whole party, with no
+ * way back to the lobby — and it is pressed by a host holding a phone in a room of people telling
+ * them to get on with it, which is the worst set of conditions a single tap could be asked to
+ * survive.
  *
  * **[waitingFor] says which of the two conditions is open**, and it says it on a client's screen
  * as well as the host's. A phone that has handed its line over and is standing in a lobby of four
@@ -1656,35 +1672,24 @@ private fun LightsOut(
             waitingFor ?: "WAITING FOR THE HOST",
             color = Amber.BoneDim, size = 7.0, lineHeight = 1.0, align = TextAlign.Center,
         )
-        ready -> SlateButton(
-            "LIGHTS OUT", onArm, tracking = 0.2, size = 9.0, verticalPadding = 11.u,
+        // **One block through both states**, open and gated alike, so the thing under the host's
+        // thumb never moves and never changes height. The gate is expressed as the hold refusing
+        // to start — no press, no bar, nothing to time — and the note under it says which of the
+        // two conditions is open, in the same words the clients are given. Without that a host
+        // three people short is looking at a dead control and a lobby that says nothing about why,
+        // on the screen where an evening either starts or does not.
+        else -> HoldToConfirm(
+            "LIGHTS OUT",
+            restingNote = waitingFor ?: HOLD_NOTE,
+            onConfirm = onArm,
+            enabled = ready,
+            // Filled slate once the gate is open: the design's one saturated control, and this is
+            // the screen it was drawn for. It is the last thing anybody presses with the lights
+            // on, so it keeps the commit colour the hold inherited nothing of.
+            spent = if (ready) Amber.Slate else Amber.BoneDim,
+            border = if (ready) Amber.Slate else Amber.BonePale,
+            fill = if (ready) Amber.SlateFill else Color.Transparent,
+            ink = if (ready) Amber.SlateInk else Amber.BoneFaint,
         )
-        // The same block, the same size, no tap target — and it goes through [PanelButton] like
-        // the armed one, which it could not do while that composable published a click action
-        // whether or not it had a handler. It does not any more, so the hand-rolled copy of it
-        // that used to live here is gone: two blocks meant to be indistinguishable were in fact
-        // slightly different heights, because only one of them carried the tap-target minimum.
-        //
-        // One of the three places where that behaviour is load-bearing rather than tidy, and it
-        // is the sharpest of them: a control that answers a press by doing nothing is
-        // indistinguishable from one that is broken, on the exact screen where a host is waiting
-        // to find out why the evening has not started.
-        else -> Column(verticalArrangement = Arrangement.spacedBy(3.u)) {
-            // The host is told which condition is open, in the same words the clients are given.
-            // Without it a host three people short is looking at a dead button and a lobby that
-            // says nothing about why — on the screen where an evening either starts or does not.
-            waitingFor?.let {
-                PreNote(
-                    it,
-                    color = Amber.BoneDim, size = 5.5, lineHeight = 1.0, align = TextAlign.Center,
-                )
-            }
-            PanelButton(
-                "LIGHTS OUT",
-                border = Amber.BonePale, ink = Amber.BoneFaint,
-                size = 9.0, tracking = 0.2, verticalPadding = 11.u,
-                onClick = null,
-            )
-        }
     }
 }

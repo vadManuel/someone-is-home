@@ -2,6 +2,7 @@ package home.someoneshome.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,14 +11,22 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 
 /**
  * The room — where the phones get out of the way.
@@ -42,16 +51,26 @@ import androidx.compose.ui.text.style.TextAlign
  */
 
 /**
- * **The vote button's two faces.** Named, so that settling the copy is one edit and not six.
+ * **The vote control's two faces.** Named, so that settling the copy is one edit and not six.
  *
- * D-117 named READY as the rename candidate for LOCK IN, *for symmetry with the discussion's READY
- * TO VOTE*, and left the final wording as a build-time call. This is that call being taken, and it
- * is the kind that somebody should agree with rather than inherit.
+ * D-117 named READY as the rename candidate for LOCK IN and left the wording as a build-time call;
+ * **D-141 then retired the tap altogether** — *the pre-lock control **is** the hold, and there is no
+ * READY tap on the ballot any more*. READY TO VOTE survives on the discussion screen, where it is a
+ * readiness signal rather than a commitment.
+ *
+ * So the pre-lock face says what the finger has to do, in the same words the Delete screen taught
+ * with the lights on.
  */
-private const val VOTE_READY = "READY"
+private const val VOTE_HOLD = "HOLD TO CAST"
 
 /** The irrevocable half. Not *YOU ARE READY*, which is the discussion's button on another screen. */
 private const val VOTE_CAST = "VOTE CAST"
+
+/** What the note under the bar says once there is nothing left to do to it. */
+private const val VOTE_DONE_NOTE = "THIS PHONE HAS VOTED. IT CANNOT BE TAKEN BACK."
+
+/** And what it says while the ballot is empty, which is a refusal with a reason on it. */
+private const val VOTE_EMPTY_NOTE = "CHOOSE A NAME OR SKIP FIRST."
 
 /** You called it. Every phone in the building rings, and you wait with everyone else. */
 @Composable
@@ -234,28 +253,59 @@ fun CheckIn() {
  * meeting it arrives at, so there is no thread holding it, no list it lands in, and nothing on any
  * other screen that could still be showing it an hour later. `NotificationsTest` renders every
  * screen in the game in both roles and fails the moment a second one has these words on it.
+ *
+ * ### It is swiped away, and there is no DISMISS button anywhere in the game
+ *
+ * **The swipe is the acknowledgment** (D-119), and it is the whole vocabulary: up on a banner, left
+ * under the clock, and up on this — the notice is a banner that arrived on a screen of its own.
+ * A DISMISS button here was the last button dismissal left, and it was the wrong shape twice over.
+ * D-105 deleted read state, so a control that *acknowledged* would be the one place in the app that
+ * claimed to know what a player had looked at; and a second way to put a notification away is a
+ * second thing to learn in the dark, on the screen where nobody is looking at their phone anyway.
+ *
+ * It walks to the discussion because a notice sits between the check-in gate and the talk, and the
+ * house's own nine seconds ([Flow.autoAdvance]) walks there too. Swiping is *going first*, never
+ * going somewhere else.
  */
 @Composable
 fun NoticeScreen() {
-    val go = navigator()
+    val actions = LocalActions.current
+    val threshold = with(LocalDensity.current) { SWIPE_DISMISS.toPx() }
+    // Where the finger has taken it, never below zero — the same tracking the banner does, because
+    // the hand does not know which screen it is on.
+    var lifted by remember { mutableStateOf(0f) }
+
     Column(
         Modifier.fillMaxSize().padding(8.u),
         verticalArrangement = Arrangement.spacedBy(7.u),
     ) {
         Label("HOUSE MEETING . NOTICES", size = 7.0, color = Amber.Dim, tracking = 0.16)
-        InfoBox(border = Amber.Bright, padding = 8.u, gap = 5.u) {
-            Label("NOTICE 1 OF 1", size = 6.0, color = Amber.Dim, tracking = 0.14)
-            Label(
-                Notifications.notice.body,
-                size = Notifications.notice.bodySize, color = Amber.Bright, lineHeight = 1.7,
-            )
+        Column(
+            // Read at draw time rather than at composition: a drag is sixty frames a second and
+            // the whole app has an allocation budget of about 0.5 MB/s.
+            Modifier.offset { IntOffset(0, lifted.toInt()) }
+                .pointerInput(Unit) {
+                    detectVerticalDragGestures(
+                        onDragEnd = { if (-lifted >= threshold) actions.dismissNotice() else lifted = 0f },
+                        onDragCancel = { lifted = 0f },
+                    ) { _, delta -> lifted = (lifted + delta).coerceAtMost(0f) }
+                },
+        ) {
+            InfoBox(border = Amber.Bright, padding = 8.u, gap = 5.u) {
+                Label("NOTICE 1 OF 1", size = 6.0, color = Amber.Dim, tracking = 0.14)
+                Label(
+                    Notifications.notice.body,
+                    size = Notifications.notice.bodySize, color = Amber.Bright, lineHeight = 1.7,
+                )
+            }
         }
         Box(Modifier.weight(1f))
-        PanelButton(
-            "DISMISS",
-            border = Amber.Dim, ink = Amber.Bright,
-            size = 7.5, verticalPadding = 9.u,
-            onClick = { go(ScreenId.Discussion) },
+        // The gesture said in words, once, where the button used to be. Not a control: it has no
+        // border, no tap target and nothing to press.
+        Label(
+            "SWIPE UP TO DISMISS",
+            modifier = Modifier.fillMaxWidth(),
+            size = 6.5, color = Amber.Faint, tracking = 0.14, align = TextAlign.Center,
         )
     }
 }
@@ -321,11 +371,16 @@ fun DiscussionScreen(vals: PanelVals) {
  * ### The rows echo your finger. Nothing on this screen knows the result
  *
  * Tapping a name lights that row and nothing else happens — no count moves, no other phone is
- * consulted, and the row is not a claim that the vote landed. **READY converts the selection into
- * the vote, and after it nothing can be changed** (D-117, superseding *changeable until the clock
- * ends* at `gdd.md:412` and `:1006`): the rows stop echoing, and the house refuses a later tap and
- * re-asserts what it holds. The result arrives when the house reads the ballot and pushes the
- * screen; a READY that walked to it would be this phone announcing a tally it cannot see.
+ * consulted, and the row is not a claim that the vote landed. **Two seconds of a finger converts
+ * the selection into the vote, and after it nothing can be changed** (D-117 for the irrevocability,
+ * D-141 for the gesture, together superseding *changeable until the clock ends* at `gdd.md:412` and
+ * `:1006`): the rows stop echoing, and the house refuses a later tap and re-asserts what it holds.
+ * The result arrives when the house reads the ballot and pushes the screen; a control that walked
+ * to it would be this phone announcing a tally it cannot see.
+ *
+ * **The hold is a lock and not a submit**, which is what keeps the buzzer's auto-lock meaningful: a
+ * player who never completes one has whatever is selected locked for them when the window closes,
+ * and a player who selected nothing at all is a Skip by silence (D-075).
  *
  * The count is of **locked** seats, never of selections — the living see how many have voted, and
  * only a player outside the system sees what anybody chose.
@@ -378,14 +433,23 @@ fun VoteScreen(vals: PanelVals) {
         )
         // Three states, all of them facts about this phone: nothing chosen yet, something chosen
         // and not yet handed over, and a ballot that has been cast and cannot be taken back.
-        // Present and inert in the first and last rather than absent, so the row under the
-        // player's thumb never moves.
-        PanelButton(
-            if (meeting.locked) VOTE_CAST else VOTE_READY,
-            border = if (meeting.choice == null || meeting.locked) Amber.Faint else Amber.Dim,
-            ink = if (meeting.choice == null || meeting.locked) Amber.Dim else Amber.Bright,
-            tracking = 0.18,
-            onClick = if (meeting.choice == null || meeting.locked) null else actions.readyToVote,
+        // **One control through all three**, present and inert in the first and last rather than
+        // absent, so the block under the player's thumb never moves and never changes height.
+        val live = meeting.choice != null && !meeting.locked
+        HoldToConfirm(
+            if (meeting.locked) VOTE_CAST else VOTE_HOLD,
+            restingNote = when {
+                meeting.locked -> VOTE_DONE_NOTE
+                meeting.choice == null -> VOTE_EMPTY_NOTE
+                else -> HOLD_NOTE
+            },
+            onConfirm = actions.readyToVote,
+            enabled = live,
+            spent = Amber.Bright,
+            track = Amber.Edge,
+            border = if (live) Amber.Dim else Amber.Faint,
+            ink = if (live) Amber.Bright else Amber.Dim,
+            noteInk = Amber.Faint,
         )
     }
 }

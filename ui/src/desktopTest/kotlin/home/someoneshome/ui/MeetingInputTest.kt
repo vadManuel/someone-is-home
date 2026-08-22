@@ -6,9 +6,11 @@ import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -111,35 +113,64 @@ class MeetingInputTest {
     }
 
     /**
-     * **LOCK IN hands the vote over and the screen stays exactly where it is.**
+     * **Two seconds of a finger hands the vote over, and the screen stays exactly where it is.**
      *
      * The one that would have been easiest to get wrong and hardest to notice: the result screen
-     * exists, the button is called LOCK IN, and walking to it on a press produces a phone showing
-     * one player a tally the house has not read.
+     * exists, and walking to it on a completed hold produces a phone showing one player a tally
+     * the house has not read.
+     *
+     * The gesture is D-141's, replacing the tap this test used to fire. **A synthetic click cannot
+     * reach it any more**, which is the property, not an inconvenience.
      */
     @Test
-    fun sayingYouAreReadyCastsTheVoteAndGoesNowhere() = runDesktopComposeUiTest(width = 300, height = 650) {
+    fun holdingForTwoSecondsCastsTheVoteAndGoesNowhere() = runDesktopComposeUiTest(width = 300, height = 650) {
         val model = modelOn(ScreenId.Vote)
         show(model)
 
-        onNodeWithText("READY").performClick()
-        mainClock.advanceTimeBy(50)
+        onNodeWithText("HOLD TO CAST").performTouchInput { down(center) }
+        mainClock.advanceTimeBy(HOLD_MILLIS + 200L)
 
         assertTrue(model.meeting.locked, "the ballot was not cast")
         assertEquals(VoteChoice.Named("MARCUS"), model.meeting.choice)
-        assertEquals(ScreenId.Vote, model.state.screen, "one phone's press walked to the result")
+        assertEquals(ScreenId.Vote, model.state.screen, "one phone's hold walked to the result")
         onNodeWithText("VOTE CAST").assertExists()
-        // The house's count is the house's. It did not move because this phone pressed a button.
+        // The house's count is the house's. It did not move because this phone held a button.
         onNodeWithText("4 OF 6 VOTED", substring = true).assertExists()
     }
 
     /**
-     * The button is **present and inert** with nothing chosen, rather than absent and then
-     * appearing — a control that materialised under a thumb about to press it is worse than one
-     * that is visibly not ready.
+     * **Most of a hold casts nothing** — the whole reason the ballot is a hold at all.
+     *
+     * A ballot is cast in an unlit room by a thumb that cannot see what it is over, and it cannot
+     * be taken back (D-117). A brush past the control at 1.9 seconds has to leave the vote exactly
+     * where it was, and the control has to still be offering itself.
      */
     @Test
-    fun readyIsPresentAndInertWithNothingChosen() =
+    fun mostOfAHoldCastsNothing() = runDesktopComposeUiTest(width = 300, height = 650) {
+        val model = modelOn(ScreenId.Vote)
+        show(model)
+
+        onNodeWithText("HOLD TO CAST").performTouchInput { down(center) }
+        mainClock.advanceTimeBy(HOLD_MILLIS - 100L)
+        assertFalse(model.meeting.locked, "the ballot was cast before the two seconds were up")
+
+        onNodeWithText("HOLD TO CAST").performTouchInput { up() }
+        mainClock.advanceTimeBy(HOLD_MILLIS + 200L)
+
+        assertFalse(model.meeting.locked, "letting go early cast the vote anyway")
+        assertFalse(says("VOTE CAST"), "the control says the vote is cast and the ballot says it is not")
+    }
+
+    /**
+     * The control is **present and inert** with nothing chosen, rather than absent and then
+     * appearing — a control that materialised under a thumb about to press it is worse than one
+     * that is visibly not ready.
+     *
+     * Inert here means the hold does not start (D-142's shape, applied to a different refusal):
+     * a bar that filled for two seconds and then declined would be a control arguing with itself.
+     */
+    @Test
+    fun theVoteControlIsPresentAndInertWithNothingChosen() =
         runDesktopComposeUiTest(width = 300, height = 650) {
             val model = FlowModel(PanelState(screen = ScreenId.Home), meeting = MeetingModel.sample())
             // A meeting begins with nothing said, which is the state this asserts against.
@@ -147,42 +178,62 @@ class MeetingInputTest {
             model.push(ScreenId.Vote)
             show(model)
 
-            onNodeWithText("READY").assertExists()
-            assertEquals(
-                0,
-                onAllNodes(hasClickAction() and hasText("READY", substring = true))
-                    .fetchSemanticsNodes().size,
-                "an empty vote could be handed over",
-            )
+            onNodeWithText("HOLD TO CAST").assertExists()
+            onNodeWithText("HOLD TO CAST").performTouchInput { down(center) }
+            // Half the window, finger still down — the only moment a bar that runs and then
+            // declines can be told apart from one that never started.
+            mainClock.advanceTimeBy(HOLD_MILLIS / 2L)
+            assertFalse(says("KEEP HOLDING"), "the bar ran on a ballot with nothing on it")
+            onNodeWithText("HOLD TO CAST").performTouchInput { up() }
+            mainClock.advanceTimeBy(HOLD_MILLIS + 200L)
+            assertFalse(model.meeting.locked, "an empty vote could be handed over")
         }
 
     /**
-     * **A tap after READY changes nothing on screen** (D-117).
+     * **A tap after the vote is cast changes nothing on screen** (D-117).
      *
      * This test asserted the opposite while the design did: it checked that moving the vote after
      * LOCK IN *unlocked* the button again, which was *changeable until the clock ends*. D-117
-     * supersedes that — READY is irrevocable — so the row does not move, the button goes on
+     * supersedes that — the lock is irrevocable — so the row does not move, the control goes on
      * reading VOTE CAST, and the house refuses the same tap and re-asserts what it holds.
+     *
+     * **And the control refuses to be held again**, which is the half a click-driven test could
+     * not see: a second full hold on a cast ballot must reach nothing.
      */
     @Test
-    fun aTapAfterReadyMovesNothingOnTheScreen() =
+    fun aCastBallotRefusesBothTheTapAndASecondHold() =
         runDesktopComposeUiTest(width = 300, height = 650) {
             val model = modelOn(ScreenId.Vote)
             show(model)
 
-            onNodeWithText("READY").performClick()
-            mainClock.advanceTimeBy(50)
+            onNodeWithText("HOLD TO CAST").performTouchInput { down(center) }
+            mainClock.advanceTimeBy(HOLD_MILLIS + 200L)
             assertTrue(says("VOTE CAST"))
 
             onNodeWithText("ROSE").performClick()
             mainClock.advanceTimeBy(50)
             assertTrue(
                 says("VOTE CAST"),
-                "the ballot came unlocked; READY cannot be taken back",
+                "the ballot came unlocked; a cast vote cannot be taken back",
             )
             assertEquals(
                 VoteChoice.Named("MARCUS"), model.meeting.choice,
                 "the phone echoed a tap the house will refuse",
+            )
+
+            // The cast control, held again. It has no pointer input left, so nothing runs — and
+            // the check is made **with the finger still down and half the window spent**, which is
+            // the only moment the difference is visible: a hold that ran and then declined would
+            // have reset itself by the time a check made afterwards looked at it, and would then
+            // be indistinguishable from a hold that never started.
+            onNodeWithText("VOTE CAST").performTouchInput { down(center) }
+            mainClock.advanceTimeBy(HOLD_MILLIS / 2L)
+            assertFalse(says("KEEP HOLDING"), "a cast ballot ran a second hold")
+            onNodeWithText("VOTE CAST").performTouchInput { up() }
+            mainClock.advanceTimeBy(HOLD_MILLIS + 200L)
+            assertEquals(
+                VoteChoice.Named("MARCUS"), model.meeting.choice,
+                "a second hold moved a vote that had already been cast",
             )
         }
 
@@ -304,6 +355,13 @@ class MeetingInputTest {
      * out loud. The rest of the app is measured here too and **reported rather than asserted** —
      * the springboard and the host-setup screens were drawn to a different brief and bringing them
      * up is a design pass, not an overnight edit.
+     *
+     * ### Holds are measured too, and they had to be added by hand
+     *
+     * A hold publishes no click action (D-141), so retiring the ballot's tap would have silently
+     * taken the meeting's most important control out of this sweep — the measurement would have
+     * gone on passing while measuring one control fewer, which is how a check stops being one.
+     * [HOLD_BLOCK] is what makes them findable.
      */
     @Test
     fun everyControlAtAMeetingIsBigEnoughToHitInTheDark() {
@@ -324,7 +382,9 @@ class MeetingInputTest {
                         }
                     }
                     val perUnit = onRoot().fetchSemanticsNode().size.width / DESIGN_WIDTH
-                    for (node in onAllNodes(hasClickAction()).fetchSemanticsNodes()) {
+                    val controls = onAllNodes(hasClickAction()).fetchSemanticsNodes() +
+                        onAllNodesWithTag(HOLD_BLOCK).fetchSemanticsNodes()
+                    for (node in controls) {
                         val units = node.size.height / perUnit
                         if (units >= TAP_TARGET.value) continue
                         val what = node.config.getOrNull(SemanticsProperties.Text)

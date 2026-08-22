@@ -125,8 +125,22 @@ fun HomeScreen(vals: PanelVals, widget: @Composable (PanelVals) -> Unit = { Inte
  *
  * **Both roles see this page lit exactly the same way.** The labels differ — REVOKE against
  * POWER, EGRESS against SUBSYS — but position, size and brightness do not, because a dimmer page
- * 2 would read across a dark room as *"this one has nothing to tap"*. Tapping arms in place; it
- * never opens a new view, so nobody can be caught on a screen only one role has.
+ * 2 would read across a dark room as *"this one has nothing to tap"*. Arming happens in place; it
+ * never opens a new view, so nobody can be caught on a screen only one role has (D-142, ratifying
+ * what was built and superseding the GDD's Status panel summoned by a corner long-press).
+ *
+ * ### Identical at rest, inert under the thumb
+ *
+ * The two halves of D-142, and they are not the same claim. *Identical at rest* is the parity
+ * above. *Inert under the thumb* is that a *Resident's* tiles take *no pointer input at all* — no
+ * press, no hold that runs and then declines, nothing from the first millisecond. A hold that
+ * filled and then refused would be a self-test: press it, watch it, learn your own role. And it
+ * would be worse than useless besides, because a bar filling in a dark house is world-observable
+ * to whoever is standing behind the shoulder. **The resting tell the parity was built against must
+ * not be answered by opening a behavioural one.**
+ *
+ * **Arming is a two-second hold** (D-141) on both tiles, because an accidental arm spends a full
+ * cooldown with no cancel, and because the Egress is the misclick the design calls *game-ending*.
  */
 @Composable
 fun Page2Screen(vals: PanelVals) {
@@ -148,9 +162,10 @@ fun Page2Screen(vals: PanelVals) {
                     subInk = vals.revokeSubInk,
                     bar = vals.revokeBar,
                     barInk = vals.revokeBarInk,
-                    // A Resident's tap does nothing, and does it silently. The button is real,
-                    // the cooldown bar is real, and neither answers the question.
-                    onClick = { if (vals.insider) actions.stepRevoke() },
+                    // A Resident's tile is not a control at all — see the KDoc above. The tile is
+                    // real, the cooldown bar is real, and neither answers the question.
+                    armable = vals.insider,
+                    onArm = actions.stepRevoke,
                 )
                 AbilityTile(
                     modifier = Modifier.weight(1f),
@@ -162,7 +177,8 @@ fun Page2Screen(vals: PanelVals) {
                     subInk = Amber.Dim,
                     bar = vals.secondBar,
                     barInk = vals.secondBarInk,
-                    onClick = { if (vals.insider) go(ScreenId.Banner) },
+                    armable = vals.insider,
+                    onArm = actions.armEgress,
                 )
 
                 Column(verticalArrangement = Arrangement.spacedBy(5.u)) {
@@ -191,6 +207,18 @@ fun Page2Screen(vals: PanelVals) {
     }
 }
 
+/**
+ * One of the two arming tiles.
+ *
+ * **The hold draws nothing until a finger is on it**, which is what keeps the two roles' page 2
+ * identical at rest while only one of them can be held: the progress line is drawn from the first
+ * frame of a real hold and from no other state, so a Resident — whose tile takes no pointer input —
+ * never has one, and neither role has one until somebody puts a thumb down.
+ *
+ * It is a hairline along the foot of the tile rather than the design's six-unit block. The tile
+ * already carries a [FillBar] that means something the house said, and a second bar of the same
+ * weight would be two progress meters arguing.
+ */
 @Composable
 private fun AbilityTile(
     modifier: Modifier,
@@ -202,17 +230,28 @@ private fun AbilityTile(
     subInk: Color,
     bar: Float,
     barInk: Color,
-    onClick: () -> Unit,
+    armable: Boolean,
+    onArm: () -> Unit,
 ) {
-    Column(
-        modifier.fillMaxWidth().border(1.u, border).background(fill).tap(onClick)
-            .padding(horizontal = 10.u, vertical = 8.u),
-        verticalArrangement = Arrangement.spacedBy(6.u, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Label(name, size = 13.0, color = nameInk, tracking = 0.18)
-        Label(sub, size = 6.0, color = subInk, tracking = 0.12)
-        FillBar(bar, barInk)
+    val hold = rememberHold(onArm, enabled = armable)
+    Box(modifier.fillMaxWidth().border(1.u, border).background(fill).then(hold.surface)) {
+        Column(
+            Modifier.fillMaxSize().padding(horizontal = 10.u, vertical = 8.u),
+            verticalArrangement = Arrangement.spacedBy(6.u, Alignment.CenterVertically),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Label(name, size = 13.0, color = nameInk, tracking = 0.18)
+            Label(sub, size = 6.0, color = subInk, tracking = 0.12)
+            FillBar(bar, barInk)
+        }
+        if (hold.holding) {
+            Box(
+                Modifier.align(Alignment.BottomStart)
+                    .fillMaxWidth(hold.fraction)
+                    .height(2.u)
+                    .background(Amber.Bright)
+            )
+        }
     }
 }
 

@@ -536,6 +536,19 @@ class FlowTest {
         arm.lightsOut()
         assertEquals(Flow.viaActions.getValue(ScreenId.Lobby), setOf(arm.state.screen))
 
+        // The Insider's egress tile, armed by two seconds of a finger (D-141). It is the only
+        // role-asymmetric edge in the game and the only one no rendering pass can reach: a
+        // Resident's tile takes no pointer input at all (D-142), so firing everything on a
+        // Resident's page 2 finds nothing, which is the ruling rather than a gap.
+        val egress = FlowModel(PanelState(screen = ScreenId.Page2, role = PanelRole.Insider))
+        egress.armEgress()
+        assertEquals(Flow.viaActions.getValue(ScreenId.Page2), setOf(egress.state.screen))
+
+        // A house notice, swiped up — the last button dismissal in the app, retired (D-105).
+        val notice = FlowModel(PanelState(screen = ScreenId.Notice))
+        notice.dismissNotice()
+        assertEquals(Flow.viaActions.getValue(ScreenId.Notice), setOf(notice.state.screen))
+
         // EVERY notification, swiped away (D-105, D-119). A drag rather than a tap, so no
         // rendering test that fires click actions can reach it, and where it lands is the screen
         // the notification arrived over rather than anything the notification itself names.
@@ -588,6 +601,7 @@ class FlowTest {
                 ScreenId.SaveName, ScreenId.Delete, ScreenId.ScanMarker,
                 ScreenId.Secret, ScreenId.Lobby, ScreenId.ScanCaught,
                 ScreenId.WinInsiders, ScreenId.WinResidents,
+                ScreenId.Page2, ScreenId.Notice,
                 ScreenId.Notify, ScreenId.Banner, ScreenId.Quiet, ScreenId.LockNotify,
             ),
             Flow.viaActions.keys,

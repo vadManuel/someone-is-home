@@ -8,6 +8,7 @@ import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onRoot
@@ -133,6 +134,52 @@ class NotificationInputTest {
             null, Notifications.onScreen(model.state.screen),
             "the screen left behind still has a notification on it",
         )
+    }
+
+    /**
+     * **The house notice goes the same way, and it is the last button dismissal in the app** (D-105,
+     * D-119).
+     *
+     * This one had a DISMISS button until now, which was the wrong shape twice over: D-105 deleted
+     * read state, so a control that *acknowledged* would be the one thing in the game claiming to
+     * know what a player had looked at, and a second way to put a notification away is a second
+     * thing to work out in the dark. **The swipe is the acknowledgment**, on the notice as on
+     * everything else.
+     *
+     * It goes to the discussion — where the house's own nine seconds goes too — so swiping is going
+     * first rather than going somewhere else.
+     */
+    @Test
+    fun theHouseNoticeIsSwipedAwayRatherThanDismissed() =
+        runDesktopComposeUiTest(width = 600, height = 1300) {
+            val model = FlowModel(PanelState(screen = ScreenId.Notice))
+            val at = Distances()
+            show(model, at)
+
+            assertTrue(bannerIsUp(Notifications.notice.body), "the notice was not up to begin with")
+            // No control on it: the words on the screen tell the finger what to do, and nothing
+            // there answers a press.
+            assertEquals(
+                0,
+                onAllNodes(hasClickAction() and hasText("DISMISS", substring = true))
+                    .fetchSemanticsNodes().size,
+                "a notice can still be put away by pressing something",
+            )
+
+            swipeBanner(Notifications.notice.body, -at.decisive)
+            assertEquals(ScreenId.Discussion, model.state.screen, "the notice would not swipe away")
+        }
+
+    /** And a finger that stops short leaves the notice up, the same as every other swipe. */
+    @Test
+    fun aShortDragLeavesTheHouseNoticeUp() = runDesktopComposeUiTest(width = 600, height = 1300) {
+        val model = FlowModel(PanelState(screen = ScreenId.Notice))
+        val at = Distances()
+        show(model, at)
+
+        swipeBanner(Notifications.notice.body, -at.hesitant)
+        assertEquals(ScreenId.Notice, model.state.screen, "a short drag dismissed the notice anyway")
+        assertTrue(bannerIsUp(Notifications.notice.body), "a short drag took the notice away")
     }
 
     /** The Egress alert goes the same way, because there is one gesture and not one per kind. */
