@@ -172,12 +172,31 @@ fun Ghost2Screen() {
 }
 
 /**
- * The meeting, watched from outside. **Every vote and who cast it.**
+ * The meeting, watched from outside. **Every vote and who cast it, live** (D-134, D-117, D-075).
  *
  * The living get a count; someone outside the system gets the whole ballot. That asymmetry is
  * safe only because of when it arrives — the room already knows who is out — and because there is
  * **no channel**: they cannot act, speak, or message each other. Several people watch the same
  * truth side by side, unable to share one thought about it.
+ *
+ * ### What arrives here, and what is drawn from it
+ *
+ * The rows are [PanelVals.ballots], which the house fills one selection at a time
+ * (`Effect.VoteSelectionShown`, permitted to the out classes and to nobody else). A row with no
+ * target yet is a **null**, not the words STILL DECIDING sitting in a fixture — so a row cannot be
+ * styled as decided while reading as undecided, and the count above it cannot be computed off a
+ * string. The port's five stand in while there is no house.
+ *
+ * **The clock is the phase's** ([PanelVals.meetingPhase]). This screen does not move while a
+ * meeting runs four phases underneath it, so it is the one surface in the game that has to be told
+ * which clock it is showing — and it used to say VOTING ENDS IN throughout, counting down a window
+ * that had not opened while the room was still talking.
+ *
+ * ### The one thing this screen does not draw is a readiness control
+ *
+ * A ghost cannot speak in the discussion, so there is nothing of theirs to be ready with (D-147),
+ * and `ReadyProgressed` is denied to the out classes. **Presence is everybody's; readiness is the
+ * living's** — which is why [Ghost2Screen] above draws the check-in gate and this screen does not.
  */
 @Composable
 fun GhostMeetingScreen(vals: PanelVals) {
@@ -196,16 +215,25 @@ fun GhostMeetingScreen(vals: PanelVals) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Bottom,
             ) {
-                Label("VOTING ENDS IN", size = 6.0, color = Amber.Dim, tracking = 0.13)
-                Readout(vals.countdown.text, size = 22.0, color = Amber.Bright, lineHeight = 1.0)
+                Label(vals.meetingClockLabel, size = 6.0, color = Amber.Dim, tracking = 0.13)
+                // **No window, no clock, and the bar goes with it.** The check-in gate closes on
+                // the last player walking in rather than on a timer (D-104), so there is nothing
+                // for a bar to be a fraction of -- and an empty bar under a `0` is worse than no
+                // bar at all: it reads as a clock that has run out, on the one screen whose reader
+                // has nothing to do but read it.
+                if (vals.hasMeetingClock) {
+                    Readout(vals.countdown.text, size = 22.0, color = Amber.Bright, lineHeight = 1.0)
+                }
             }
-            SegmentBar(
-                total = PanelVals.VOTE_SEGMENTS,
-                lit = vals.countdown.litOf(PanelVals.VOTE_SEGMENTS),
-                litColor = Amber.Bright,
-                unlitColor = Amber.Edge,
-                height = 5.u,
-            )
+            if (vals.hasMeetingClock) {
+                SegmentBar(
+                    total = PanelVals.VOTE_SEGMENTS,
+                    lit = vals.countdown.litOf(PanelVals.VOTE_SEGMENTS),
+                    litColor = Amber.Bright,
+                    unlitColor = Amber.Edge,
+                    height = 5.u,
+                )
+            }
             Label(
                 "YOU HAVE NO VOICE AND NO VOTE.",
                 size = 6.0, color = Amber.Faint, tracking = 0.1, lineHeight = 1.8,
@@ -217,7 +245,7 @@ fun GhostMeetingScreen(vals: PanelVals) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Label("VOTES CAST", size = 6.5, color = Amber.Dim, tracking = 0.14)
             Label(
-                "${OutsideView.cast} OF ${OutsideView.ballots.size}",
+                "${vals.votesCast} OF ${vals.ballots.size}",
                 size = 6.5, color = Amber.Faint, tracking = 0.14,
             )
         }
@@ -226,7 +254,7 @@ fun GhostMeetingScreen(vals: PanelVals) {
             // A ballot that has not been cast yet is a null target, not the words STILL DECIDING
             // stored in a fixture — so a row cannot be styled as decided while reading as undecided,
             // and the count above cannot be computed off a string.
-            OutsideView.ballots.forEach { ballot ->
+            vals.ballots.forEach { ballot ->
                 val decided = ballot.forWhom != null
                 Row(
                     Modifier.fillMaxWidth().border(1.u, if (decided) Amber.Faint else Amber.Edge)
@@ -270,6 +298,24 @@ fun GhostMeetingScreen(vals: PanelVals) {
  * which no living player of either role can see, plus occupancy with no injected error and no
  * staleness. **Still counts, never identities, and never alignments** — the tools to deduce,
  * never the answer.
+ *
+ * ### Both numbers are percentages, and both are computed rather than written (D-103, D-153)
+ *
+ * D-153's rule has no exception for the one audience that can act on nothing: the denominator is
+ * `(seats − insiders) × 7`, and printing it hands the reader with nothing else to do all evening
+ * the Insider count by division — for this round and, since an evening is two to three rounds
+ * (D-157), for every round after it.
+ *
+ * Both readouts used to be literals — `66%` over a bar lit to 21 of 32, and `71%` over one lit to
+ * 22 — which is not a rounding disagreement but two hand-maintained facts about one meter, on the
+ * screen where a meter is watched most closely. They come off [PanelVals.outsidePercent] and
+ * [PanelVals.egressPercent] now, which are the same fraction the bars are drawn at.
+ *
+ * ### ⚠️ *Live* is D-134's word and it is not true of the meter yet
+ *
+ * No effect carries System Integrity to any client at all, so the fraction below is still the
+ * port's drawn one. The Egress has a carrier (`Effect.EgressHeld`) but not the duration it is a
+ * fraction of. Escalated; the shape is right and the sender is missing.
  */
 @Composable
 fun Ghost3Screen(vals: PanelVals) {
@@ -287,7 +333,7 @@ fun Ghost3Screen(vals: PanelVals) {
                 verticalAlignment = Alignment.Bottom,
             ) {
                 Label("SYSTEM INTEGRITY", size = 6.5, color = Amber.Dim, tracking = 0.13)
-                Readout("66%", size = 15.0, color = Amber.Bright, lineHeight = 1.0)
+                Readout(vals.outsidePercent, size = 15.0, color = Amber.Bright, lineHeight = 1.0)
             }
             SegmentBar(
                 total = PanelVals.METER_SEGMENTS, lit = vals.outsideLit,
@@ -305,7 +351,7 @@ fun Ghost3Screen(vals: PanelVals) {
                 verticalAlignment = Alignment.Bottom,
             ) {
                 Label("EGRESS . TRUE", size = 6.5, color = Amber.Bright, tracking = 0.13)
-                Readout("71%", size = 15.0, color = Amber.Bright, lineHeight = 1.0)
+                Readout(vals.egressPercent, size = 15.0, color = Amber.Bright, lineHeight = 1.0)
             }
             SegmentBar(
                 total = PanelVals.METER_SEGMENTS, lit = vals.egressLit,

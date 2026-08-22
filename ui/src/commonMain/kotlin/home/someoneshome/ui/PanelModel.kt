@@ -3,6 +3,8 @@ package home.someoneshome.ui
 import home.someoneshome.model.HomeReview
 import home.someoneshome.model.MarkerShape
 import home.someoneshome.model.MarkerShapes
+import home.someoneshome.model.MeetingPhase
+import home.someoneshome.model.OrderLine
 import home.someoneshome.model.RoomKind
 
 import androidx.compose.ui.graphics.Color
@@ -172,6 +174,49 @@ data class PanelState(
      * [PanelVals.integrityPercent], which is what both ending screens draw.
      */
     val revealed: List<RevealedInsider>? = null,
+    /**
+     * **This seat's work order, exactly as `Effect.WorkOrderIssued` carries it** (D-114, D-129).
+     *
+     * A `List<OrderLine>` and never a list of anything richer: a blocked line is a different *type*
+     * with no name on it, so a screen reading this one is **physically incapable** of drawing what
+     * a blocked entry is. The blackout is the type, not a branch somebody has to remember (rule 3).
+     *
+     * **Null means the house has said nothing**, which on a phone with no house attached is always;
+     * the port's drawn seven stand in. Exactly [egressNodes]' and [revealed]'s arrangement, and the
+     * fallback is a fixture rather than a second source of truth.
+     *
+     * **The order is a menu, not a queue** (D-114) — it arrives whole, every line the same length
+     * of order for every seat and both roles, and the player picks. It is re-sent on every return
+     * rather than only when something changed, because presence would otherwise be a second
+     * verdict; nothing here has to know that, but nothing here may assume the opposite either.
+     */
+    val order: List<OrderLine>? = null,
+    /**
+     * **The live ballot, for the couch and nobody else** (D-117, D-134, D-075).
+     *
+     * What `Effect.VoteSelectionShown` builds up, one selection at a time, with seats already
+     * resolved to names by the transport — [RevealedInsider]'s arrangement, and for its reason:
+     * `ui` mapping seats to names would be `ui` keeping a second copy of who is in the house.
+     *
+     * **Ghosts are the only readers who see selections rather than a count.** This field must
+     * never be read by a living screen, and `MeetingDisclosureTest` renders every screen in the
+     * game with it populated to prove that none of them does.
+     *
+     * Null means the house has said nothing; [OutsideView]'s drawn five stand in.
+     */
+    val ballots: List<Ballot>? = null,
+    /**
+     * **Which phase of the meeting the house has opened** (`Effect.MeetingPhaseOpened`).
+     *
+     * A pushed fact, like everything else here. The living walk a screen per phase and never need
+     * to be told which one they are on; the couch watches the whole meeting from **one** screen
+     * (D-134), so it is the only surface that has to be told — and a couch counting down the vote
+     * window while the room is still talking would be the one screen in the game showing a clock
+     * that is not running.
+     *
+     * Null means the house has said nothing, and the port's drawn moment stands in.
+     */
+    val meetingPhase: MeetingPhase? = null,
     /** Randomises the backlog's *count and mix*, so inbox density can never imply a role. */
     val inboxSeed: Int = 3,
     val noteSeed: Int = 0,
@@ -624,6 +669,58 @@ class PanelVals(val state: PanelState) {
      */
     val current: CurrentSubroutine get() = CURRENT
 
+    // ---- The work order --------------------------------------------------------------------
+
+    /**
+     * **The order the house dealt this seat, as rows a screen can draw** (D-114, D-106).
+     *
+     * One mapping, in one place, for the two surfaces that draw the order — the list and the
+     * springboard widget. Written twice they would drift, and the drift would be silent: the
+     * widget naming one Subroutine while the list highlighted another is a player walking to the
+     * wrong room in the dark.
+     *
+     * **The blackout is carried, not applied.** `OrderLine.Blocked` has no kind on it, so
+     * [OrderRow.Blocked] has no name on it, and the branch below is a translation rather than a
+     * decision — there is nothing here that *could* name a blocked entry, which is what makes
+     * D-114's known unknown a property of the types rather than of this function's discipline.
+     *
+     * **The port's seven stand in while the house has said nothing** ([ORDER]), so every screenshot
+     * and every screen review sees the drawn design rather than an empty list.
+     */
+    val order: List<OrderRow> = state.order?.map { line ->
+        when (line) {
+            is OrderLine.Known -> Subroutine.of(line.subroutine).let { roster ->
+                OrderRow.Named(line.index, roster.label, roster.light, line.done)
+            }
+            is OrderLine.Blocked -> OrderRow.Blocked(line.index)
+        }
+    } ?: ORDER
+
+    /**
+     * **The first line of the order this seat can act on** — what the springboard names and what
+     * the list highlights.
+     *
+     * ### ⚠️ Naming one at all is in tension with D-114, and it is flagged rather than resolved
+     *
+     * *The work order is a menu, not a queue.* The house designates nothing; the player chooses
+     * among whatever is actionable, and that choice — which is really a choice about how much
+     * light to make for the next ninety seconds — is the whole point of D-106's always-visible
+     * signature. A widget headed NEXT SUBROUTINE is the queue the ruling replaced, surviving as a
+     * presentation. It is left standing here because changing it is a copy and layout decision
+     * nobody has taken, and because a springboard with nothing in that slot is a worse answer than
+     * a first-actionable one. **Recorded as a flag, not as a reading.**
+     */
+    val nextUp: NextSubroutine = order.let { rows ->
+        val named = rows.filterIsInstance<OrderRow.Named>()
+        val next = named.firstOrNull { !it.done } ?: named.lastOrNull()
+        NextSubroutine(
+            row = next,
+            index = (next?.index ?: 0) + 1,
+            total = rows.size,
+            done = named.count { it.done },
+        )
+    }
+
     // ---- Clocks -------------------------------------------------------------------------------
 
     /**
@@ -635,7 +732,38 @@ class PanelVals(val state: PanelState) {
      * auto-advance that fires when the clock runs out — so the number on screen and the moment
      * the phone moves cannot drift apart.
      */
-    val countdown: Countdown = Countdowns.on(state.screen, state.secondsLeft) ?: Countdown.NONE
+    /**
+     * **Which phase of the meeting the house has opened, as the couch's one screen needs it**
+     * (D-134, `Effect.MeetingPhaseOpened`).
+     *
+     * Null — no house attached — resolves to the vote, which is the phase the design drew the
+     * outside view in (`VOTING ENDS IN 0:24`).
+     *
+     * **It never advances anything.** Like every clock value on this class it is a hand position
+     * the house pushed; what it decides here is which window is being counted and what the row
+     * above it is called.
+     */
+    val meetingPhase: MeetingPhase = state.meetingPhase ?: MeetingPhase.Vote
+
+    val countdown: Countdown = when (state.screen) {
+        // The one screen whose clock changes meaning under it: the couch watches every phase of a
+        // meeting without moving, so its window is the phase's and not the screen's (D-134).
+        ScreenId.GhostMeeting -> Countdowns.onGhostMeeting(meetingPhase, state.secondsLeft)
+        else -> Countdowns.on(state.screen, state.secondsLeft)
+    } ?: Countdown.NONE
+
+    /** What the couch's clock is counting down, in the phase's own words. */
+    val meetingClockLabel: String = Countdowns.ghostClockLabel(meetingPhase)
+
+    /**
+     * **Whether the couch's phase has a clock at all.**
+     *
+     * False through [MeetingPhase.CheckIn] alone: D-104's gate closes when the last player walks
+     * in, and a countdown drawn against no window would be the phone predicting a moment only the
+     * house can see. The label stays — the couch is told what it is waiting for — and the readout
+     * and the bar go, because a `0` over an empty bar reads as a clock that has *run out*.
+     */
+    val hasMeetingClock: Boolean = Countdowns.onGhostMeeting(meetingPhase) != null
 
     // ---- Meters ---------------------------------------------------------------------------
 
@@ -728,6 +856,63 @@ class PanelVals(val state: PanelState) {
     /** Both bars, seen only from outside the system. */
     val outsideLit: Int = 21
 
+    /**
+     * **Resident progress, live, and still only ever a percentage** (D-103, D-134, D-153).
+     *
+     * The couch is the one audience allowed to watch this move while the round runs — and D-153's
+     * rule does not soften for them by one digit. The denominator is `(seats − insiders) × 7`, so
+     * a total printed here hands the one reader with nothing else to do all evening the Insider
+     * count by division, and the app is played two to three rounds in an evening (D-157).
+     *
+     * **Computed from [outsideLit] against [METER_SEGMENTS], never written beside it.** The screen
+     * used to draw a literal `66%` over a bar lit to 21 of 32, which is 65 — two hand-maintained
+     * facts about one meter, disagreeing, in the one place the meter is watched closely. That is
+     * the exact fault [integrityPercent] was extracted to end, one screen further out.
+     *
+     * ### ⚠️ Nothing on the wire moves it, and that is escalated
+     *
+     * No effect carries System Integrity to any client. `SubroutineGraded` carries a boolean about
+     * one entry and says nothing about the meter — deliberately, since an Insider's accepted entry
+     * writes nothing (D-109) — and there is no other candidate. So this is the port's drawn
+     * fraction and *live* is not yet true of it, on the one screen D-134 promises it live.
+     */
+    val outsidePercent: String = "${outsideLit * 100 / METER_SEGMENTS}%"
+
+    /**
+     * **The real Egress number, which no living player of either role may see** (`gdd.md:1014`).
+     *
+     * [egressLit]'s own fraction rather than a second literal beside it — [outsidePercent]'s fault,
+     * caught on the same screen in the same pass: `71%` was drawn over a bar lit to 22 of 32, which
+     * is 68.
+     *
+     * `Effect.EgressHeld` carries `remaining` and `running` to LIVING + OUTSIDE, so unlike the
+     * meter above this one **has** a carrier; what it has no carrier for is the duration it is a
+     * fraction of, which is a lobby setting the wire does not send (F-009, and C1's escalation
+     * about the vote window is the same gap one setting over). Flagged, and the bar stays the
+     * port's until a number arrives.
+     */
+    val egressPercent: String = "${egressLit * 100 / METER_SEGMENTS}%"
+
+    /**
+     * **The live ballot the couch reads, from the house when there is one** (D-117, D-134, D-075).
+     *
+     * [egressNodes]' arrangement exactly: the house's list wins, the port's five stand in, and the
+     * fallback is a fixture rather than a second source of truth.
+     *
+     * **Read by one screen in the game and guarded as such.** `MeetingDisclosureTest` renders every
+     * screen in both roles with this populated and asserts the attribution mark reaches only
+     * `GhostMeeting` — in both directions, so denying the couch fails as loudly as widening it.
+     */
+    val ballots: List<Ballot> = state.ballots ?: OutsideView.ballots
+
+    /**
+     * How many of [ballots] have been cast. **Counted off the rows, never written beside them.**
+     *
+     * It was a literal that happened to agree with the fixture, which is the state two numbers for
+     * one fact always start in.
+     */
+    val votesCast: Int = ballots.count { it.forWhom != null }
+
     companion object {
 
         /**
@@ -757,6 +942,75 @@ class PanelVals(val state: PanelState) {
             total = 7,
             done = 3,
         )
+
+        /**
+         * **The port's drawn work order — five named rows and two known unknowns** (D-114).
+         *
+         * A fixture, for [CURRENT]'s reason: a screen rendered from an empty list is a screen the
+         * app never shows, and a test looking at one proves nothing about the screen that ships.
+         * In play `Effect.WorkOrderIssued` sends the real thing and this is not consulted.
+         *
+         * **The two blocked rows are why the totals here read seven and the light marks read
+         * five.** A blocked step names nothing, so its light is part of nothing — and the length
+         * still says seven, because an order that shortened while work was blocked would make its
+         * own length a tell about what the house had drawn.
+         *
+         * ### ⚠️ ARRAY WIPE is here and the house can never send it
+         *
+         * The circuit is not one of the roster's ten and has no `SubroutineKind`, so no work order
+         * the house issues can contain it — it is drawn by D-122's station draw at arming instead.
+         * Whether it belongs on this list at all is **unruled**: it is real work a Resident is
+         * expected to do, and the list is where a dark route gets planned. Left standing and
+         * flagged. Its BRIGHT is this port's reading (D-113 ratified it as the value; nothing
+         * ruled the row).
+         */
+        val ORDER: List<OrderRow> = listOf(
+            row(0, Subroutine.Replay, "HALL", "diamond", done = true),
+            row(1, Subroutine.Short, "GARAGE", "arrow_right", done = true),
+            row(2, Subroutine.Jam, "BED 2", "cross", done = true),
+            row(3, CURRENT.subroutine, CURRENT.room, CURRENT.marker, done = false),
+            // The design's fixture used a hexagon; the vetted roster has none, because the
+            // legibility pass cut everything reading as "circle with corners". The first
+            // substitution was `trapezoid`, which at 10 units read as the same amber wedge as the
+            // triangle two rows up -- exactly the confusion the roster exists to avoid. A frame is
+            // topologically distinct from every solid shape in this list.
+            OrderRow.Named(
+                4, "ARRAY WIPE", LightSignature.Bright, done = false,
+                room = "STUDY", marker = MarkerShapes["square_frame"],
+            ),
+            OrderRow.Blocked(5),
+            OrderRow.Blocked(6),
+        )
+
+        /** One fixture row, with the name and the light taken off the roster together. */
+        private fun row(
+            index: Int,
+            subroutine: Subroutine,
+            room: String,
+            shape: String,
+            done: Boolean,
+        ): OrderRow.Named = row(index, subroutine, room, MarkerShapes[shape], done)
+
+        private fun row(
+            index: Int,
+            subroutine: Subroutine,
+            room: String?,
+            marker: MarkerShape?,
+            done: Boolean,
+        ): OrderRow.Named =
+            OrderRow.Named(index, subroutine.label, subroutine.light, done, room, marker)
+
+        /**
+         * **What the springboard says when the order holds nothing a player could start.**
+         *
+         * Unreachable by construction today — `OrderEntry.blockedBy` holds earlier indices only,
+         * so the first line of any order is always actionable until it is done — and written down
+         * anyway, because the alternative to a constant is a blank slot on the one screen a player
+         * navigates a dark house by, and a blank slot is indistinguishable from a phone that has
+         * stopped working. **Copy nobody has ruled on**; it is deliberately not D-124's NOTHING
+         * FOR YOU HERE, which is a scan's answer about a card and not an order's about a round.
+         */
+        const val NOTHING_OPEN = "NOTHING OPEN"
 
         /**
          * The screens that arrive unasked, and therefore buzz.
@@ -977,6 +1231,99 @@ data class CurrentSubroutine(
      */
     val name: String get() = subroutine.label
     val light: LightSignature get() = subroutine.light
+}
+
+/**
+ * **One row of the work order as a screen draws it** — [OrderLine]'s two cases, resolved.
+ *
+ * Two cases and no third, because the wire has two and a screen may not invent a state the house
+ * cannot be in. The split is the redaction carried forward rather than re-applied: a [Blocked] row
+ * is a **different type** with no name and no signature on it, so no composable, no `when` branch
+ * and no later refactor can put either on one. A `Named` with its fields blanked out would have
+ * been the same disclosure one careless `copy()` away (rule 3, D-114).
+ *
+ * **The label and the light travel together as a pair**, rather than as a [Subroutine] roster row,
+ * for one reason the fixture makes plain: ARRAY WIPE is a circuit and not one of the roster's ten,
+ * so it has no [SubroutineKind] and the house can never issue it as an order line — but the port's
+ * drawn screen carries it. Anything the house sends is looked up in the roster on the way in
+ * ([PanelVals.order]), so a real row's pair is always the roster's own and never a second copy.
+ */
+sealed interface OrderRow {
+
+    /** Position in the order, and this row's identity within it. Stable for the round. */
+    val index: Int
+
+    /**
+     * Actionable, or already done — the house named it, and the client looked up what it does to
+     * the lamp (D-112: the kind crosses the wire, the signature never does).
+     */
+    data class Named(
+        override val index: Int,
+        val label: String,
+        val light: LightSignature,
+        val done: Boolean,
+        /**
+         * **The port's drawn destination, and null on every row the house actually sent.**
+         *
+         * ### ⚠️ Nothing on the wire carries where an entry is, and this is the escalation
+         *
+         * `OrderLine` — both cases — holds no card and no room, deliberately: *the house answers a
+         * scan and never publishes a map of the round.* So under a house-sent order these are null
+         * on every row at once, and the list draws names and lights with nowhere to take them.
+         *
+         * **Null rather than the port's value, and uniform rather than per-row.** Letting HALL sit
+         * beside a Subroutine the house chose would be a screen that lies in the dark to a player
+         * who has no way to check; leaving it on some rows and not others would be worse still. A
+         * hole that appears on every row the moment a house attaches is a hole somebody fixes.
+         *
+         * It contradicts the drawn design, which puts a room and a marker glyph on every row and
+         * on the springboard widget, and it is a **wire change** to close — a card on
+         * `OrderLine.Known`, plus the room-name resolution the client does not have either.
+         * Escalated, not guessed at.
+         */
+        val room: String? = null,
+        val marker: MarkerShape? = null,
+    ) : OrderRow
+
+    /**
+     * **A known unknown, and the type is the whole of the blackout** (D-114).
+     *
+     * Something is there, and that is all the player learns — not its name, not its signature —
+     * until it unblocks. Not absent, which would shorten the order and make its own length a tell
+     * about what the house had drawn. Not spelled out, which would hand the player a route they
+     * have not earned, and would say something about a **different player's** work: a cross-player
+     * dependency names the person upstream of you as surely as it names the Subroutine (D-146).
+     *
+     * **It has one field and must never gain a second.** `SubroutineRosterTest`'s bijection makes
+     * a kind resolvable to a name in one call, so a `kind` added here for any reason at all —
+     * sorting, telemetry, a nicer placeholder — is the leak, fully formed, the same afternoon.
+     */
+    data class Blocked(override val index: Int) : OrderRow
+}
+
+/**
+ * **What the springboard names and what the work order highlights.**
+ *
+ * One derivation for both surfaces ([PanelVals.nextUp]), because they were two hand-kept fixtures
+ * and hand-kept fixtures drift.
+ */
+data class NextSubroutine(
+    /** The first actionable row, or null if the order holds nothing a player could start. */
+    val row: OrderRow.Named?,
+    /** Human position in the order — `SUBROUTINE 4 OF 7`, so one-based. */
+    val index: Int,
+    val total: Int,
+    val done: Int,
+) {
+    /** The name to draw, or [PanelVals.NOTHING_OPEN] where the order holds nothing startable. */
+    val name: String get() = row?.label ?: PanelVals.NOTHING_OPEN
+
+    /** Null draws no mark: nothing is being named, so nothing is rated. */
+    val light: LightSignature? get() = row?.light
+
+    /** The destination, where the port drew one — see [OrderRow.Named.room]. */
+    val room: String? get() = row?.room
+    val marker: MarkerShape? get() = row?.marker
 }
 
 /** One cell of the plan editor's grid. */

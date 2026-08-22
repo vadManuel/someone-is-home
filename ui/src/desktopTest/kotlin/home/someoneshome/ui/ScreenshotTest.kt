@@ -1,5 +1,9 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.MeetingPhase
+import home.someoneshome.model.OrderLine
+import home.someoneshome.model.SubroutineKind
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -368,6 +372,76 @@ class ScreenshotTest {
             }
         }
         println("wrote $written Subroutine frames to ${out.absolutePath}")
+    }
+
+    /**
+     * **The three screens as the house drives them, beside the port's own fixtures.**
+     *
+     * Every other method here renders a `PanelState` with nothing pushed into it, which is the
+     * drawn design and is exactly what a review wants to see. It is also, now, only half the
+     * picture: the work order, the springboard widget and the couch's meeting view all changed
+     * from *what a composable was holding* to *what the house sent*, and the two look different —
+     * the order is longer or shorter, the destination column is gone, the ballot has other
+     * people's names on it.
+     *
+     * **The differences are the point and they have to be looked at, not asserted.** Whether a
+     * work-order row still reads as a row with its destination removed, and whether a nine-line
+     * order still fits the screen it was drawn for at seven, are questions no test answers.
+     */
+    @OptIn(ExperimentalTestApi::class, ExperimentalComposeUiApi::class)
+    @Test
+    fun renderTheHouseSentOrderAndTheLiveCouch() {
+        val w = 300
+        val h = 400
+        // Longer than the port's seven, with the blocked lines scattered rather than trailing —
+        // the shape D-123's same-card reuse actually produces, and the one the drawn fixture's two
+        // rows at the bottom quietly suggests never happens.
+        val dealt = listOf(
+            OrderLine.Known(0, SubroutineKind.Handshake, done = true),
+            OrderLine.Known(1, SubroutineKind.Deallocate, done = true),
+            OrderLine.Blocked(2),
+            OrderLine.Known(3, SubroutineKind.Sniff, done = false),
+            OrderLine.Known(4, SubroutineKind.ParityCheck, done = false),
+            OrderLine.Blocked(5),
+            OrderLine.Known(6, SubroutineKind.Interrupt, done = false),
+            OrderLine.Blocked(7),
+        )
+        val pushed = listOf(
+            Ballot("HOLLIS", "WREN"),
+            Ballot("WREN", "HOLLIS"),
+            Ballot("NADIA", "WREN"),
+            Ballot("BEA", null),
+            Ballot("OKON", null),
+        )
+        val frames = buildList {
+            add("work-order-dealt" to PanelState(screen = ScreenId.Work, order = dealt))
+            add("springboard-dealt" to PanelState(screen = ScreenId.Home, order = dealt))
+            for (phase in MeetingPhase.entries) {
+                add(
+                    "ghostmeeting-${phase.name.lowercase()}" to PanelState(
+                        screen = ScreenId.GhostMeeting,
+                        outBy = OutBy.Revoked,
+                        ballots = pushed,
+                        meetingPhase = phase,
+                    )
+                )
+            }
+        }
+        for ((name, state) in frames) {
+            runDesktopComposeUiTest(width = w * 2, height = h * 2) {
+                setContent {
+                    Box(Modifier.fillMaxSize().background(Color.Black)) {
+                        Box(Modifier.size((w * 2).dp, (h * 2).dp)) {
+                            DeviceCanvas { Screen(state) }
+                        }
+                    }
+                }
+                ImageIO.write(
+                    onRoot().captureToImage().toAwtImage(), "png", File(out, "$name.png"),
+                )
+            }
+        }
+        println("wrote ${frames.size} house-driven frames to ${out.absolutePath}")
     }
 
     private fun lobbyOf(joined: Int, linesIn: Int, hosting: Boolean): LobbyModel {
