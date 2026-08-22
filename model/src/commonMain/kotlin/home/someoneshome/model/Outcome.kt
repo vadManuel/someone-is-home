@@ -101,4 +101,40 @@ data class OneLineHeld(val seat: Seat, val text: String)
  *
  * *Never shown* (`gdd.md:213`) governs everything up to the reveal. This is the reveal.
  */
-data class InsiderNamed(val seat: Seat, val line: String)
+data class InsiderNamed(
+    val seat: Seat,
+    /**
+     * **What to call them, resolved from the desk** (D-115).
+     *
+     * The reveal is read out loud in a lit room, and *seat 3* is not a person. The names live with
+     * the transport — `LobbyDesk` holds what each phone asked to be called — and they ride the
+     * arming event into the round exactly as the one lines do, which is what lets the rules put a
+     * name on this without the rules ever having held a lobby.
+     *
+     * **It discloses nothing new.** Every phone in the lobby was already sent every name, in
+     * arrival order, on `LobbyBody.Standing`; what this pairs with a name is the alignment, and
+     * that is the disclosure, and it is the one this effect exists to make.
+     *
+     * Blank for a seat that never said what to call it — the fail-closed direction for text, and
+     * the same blank a replayed round produces, because a recording holds seats and no names.
+     */
+    val name: String,
+    val line: String,
+)
+
+/**
+ * **What one seat asked to be called, for the length of one round** (D-115).
+ *
+ * Round-scoped like the one lines and dropped by the same transition: `GameState.endRound` empties
+ * both, and `LobbyDesk.roundEnded` empties the transport's copies. Two copies, two wipes, neither
+ * trusting the other.
+ *
+ * **Not the same promise a one line carries and held to the same standard anyway.** A name is
+ * something six people standing in a hall can already see; a line is not. What they share is that
+ * neither survives the round, so neither is written into a recording — `Transcript` renders seats
+ * and no names, and a replayed reveal publishes blanks.
+ *
+ * Keyed on the seat, never on the name itself: a client names its owner and never its seat, so
+ * attribution is the seat the ledger granted.
+ */
+data class SeatNamed(val seat: Seat, val name: String)

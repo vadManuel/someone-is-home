@@ -1,5 +1,6 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.AssignedWork
 import home.someoneshome.model.HomeReview
 import home.someoneshome.model.MarkerShape
 import home.someoneshome.model.MarkerShapes
@@ -218,6 +219,35 @@ data class PanelState(
      * Null means the house has said nothing, and the port's drawn moment stands in.
      */
     val meetingPhase: MeetingPhase? = null,
+    /**
+     * **How long the ballot runs, as the house said when it opened the vote**
+     * (`Effect.MeetingPhaseOpened.voteWindowSeconds`, D-117).
+     *
+     * The host set it in the lobby and arming locked it. It is the window rather than the moment —
+     * [secondsLeft] is the hand position — and it replaces the design's own forty-five in
+     * [Countdowns] wherever a house has said one, on the living's vote screen and on the couch's
+     * alike, so that the two surfaces cannot count the same ballot down over different windows.
+     *
+     * Null means the house has said nothing, and the design's number stands in.
+     */
+    val voteWindowSeconds: Int? = null,
+    /**
+     * **System Integrity, as a percentage the house pushed** (`Effect.SystemIntegrityLive`,
+     * `Effect.SystemIntegrityBatched`).
+     *
+     * A percentage and never a count, because a count plus the public seat arithmetic is the
+     * Insider number D-103 hides (D-130). There is nothing on this class a total could be put in
+     * and there must never be: [PanelVals.integrityLit] draws the bar **from this**, so the figure
+     * and the segments beside it are one value rather than two that agree by hand — which is the
+     * exact fault revision 21 found in `14 / 32` and C2 found again in Ghost3's `66%`.
+     *
+     * **Whether it moves live or once a meeting is not this field's business.** The two effects
+     * that fill it differ in audience and timing and carry the same shape; a phone draws whatever
+     * it was last told, which is precisely what *batched, then frozen* looks like from here.
+     *
+     * Null means the house has said nothing, and the screen's own drawn fraction stands in.
+     */
+    val integrityPercent: Int? = null,
     /** Randomises the backlog's *count and mix*, so inbox density can never imply a role. */
     val inboxSeed: Int = 3,
     val noteSeed: Int = 0,
@@ -687,11 +717,40 @@ class PanelVals(val state: PanelState) {
      *
      * **The port's seven stand in while the house has said nothing** ([ORDER]), so every screenshot
      * and every screen review sees the drawn design rather than an empty list.
+     *
+     * ### The destination is the house's now, and the row draws the first of them
+     *
+     * A known line carries its [Destination]s — the room and the glyph a player navigates by. A
+     * Subroutine has one; the Array Wipe circuit has three, in D-122's draw order, and the row
+     * draws the **first**, which is where the circuit begins. Naming three rooms on one line of a
+     * list read by lamplight would be worse than naming the one you walk to first, and the widget
+     * that names it has room for one.
+     *
+     * **A line with no destinations draws none.** That is a round armed without a home, and a blank
+     * column is the honest answer: a room name beside work the house chose, invented by the phone,
+     * is a lie a player in the dark has no way to check.
      */
     val order: List<OrderRow> = state.order?.map { line ->
         when (line) {
-            is OrderLine.Known -> Subroutine.of(line.subroutine).let { roster ->
-                OrderRow.Named(line.index, roster.label, roster.light, line.done)
+            is OrderLine.Known -> {
+                val at = line.at.firstOrNull()
+                val room = at?.room
+                val glyph = at?.let { MarkerShapes[it.shape] }
+                when (val work = line.work) {
+                    is AssignedWork.Subroutine -> Subroutine.of(work.kind).let { roster ->
+                        OrderRow.Named(
+                            line.index, roster.label, roster.light, line.done, room, glyph,
+                        )
+                    }
+                    // **The circuit, drawn from real data at last.** Its label and its light are
+                    // this client's — the design rates ten Subroutines and rates the circuit
+                    // nowhere, so BRIGHT is still the port's reading (D-113 ratified the value,
+                    // nothing ruled the row) and it is written down in one place rather than
+                    // hand-typed into a fixture.
+                    AssignedWork.ArrayWipe -> OrderRow.Named(
+                        line.index, ARRAY_WIPE, ARRAY_WIPE_LIGHT, line.done, room, glyph,
+                    )
+                }
             }
             is OrderLine.Blocked -> OrderRow.Blocked(line.index)
         }
@@ -749,8 +808,9 @@ class PanelVals(val state: PanelState) {
     val countdown: Countdown = when (state.screen) {
         // The one screen whose clock changes meaning under it: the couch watches every phase of a
         // meeting without moving, so its window is the phase's and not the screen's (D-134).
-        ScreenId.GhostMeeting -> Countdowns.onGhostMeeting(meetingPhase, state.secondsLeft)
-        else -> Countdowns.on(state.screen, state.secondsLeft)
+        ScreenId.GhostMeeting ->
+            Countdowns.onGhostMeeting(meetingPhase, state.secondsLeft, state.voteWindowSeconds)
+        else -> Countdowns.on(state.screen, state.secondsLeft, state.voteWindowSeconds)
     } ?: Countdown.NONE
 
     /** What the couch's clock is counting down, in the phase's own words. */
@@ -764,7 +824,8 @@ class PanelVals(val state: PanelState) {
      * house can see. The label stays — the couch is told what it is waiting for — and the readout
      * and the bar go, because a `0` over an empty bar reads as a clock that has *run out*.
      */
-    val hasMeetingClock: Boolean = Countdowns.onGhostMeeting(meetingPhase) != null
+    val hasMeetingClock: Boolean =
+        Countdowns.onGhostMeeting(meetingPhase, window = state.voteWindowSeconds) != null
 
     // ---- Meters ---------------------------------------------------------------------------
 
@@ -775,12 +836,17 @@ class PanelVals(val state: PanelState) {
      * **A bar position, not a score.** The cells are display resolution (D-103, revision 21) and
      * the fraction they stand for is the only form the meter reaches a panel in.
      */
-    val integrityLit: Int = when (state.screen) {
-        // **The two endings carry the round's final reading**, and the port's figures are the
-        // design's own: the Residents took it by clearing the meter, and the Insiders took it with
-        // this much still standing. Screen-dependent rather than pushed because nothing pushes the
-        // meter yet — the springboard's bar is a fixture too — and a `PanelState.integrity` added
-        // here would be a field with no sender, which is the shape this class already refuses.
+    val integrityLit: Int = state.integrityPercent?.let { percent ->
+        // **The house's number drives the bar, and the bar drives nothing.** The percentage is
+        // what arrives (D-103 — never a count, never a total), so the segments are computed from
+        // it rather than the other way round, and the figure printed beside the bar is the same
+        // value the bar is drawn at by construction. Rounded, so a meter with any work left on it
+        // cannot light zero cells and a full one cannot light all but one.
+        (percent * METER_SEGMENTS + 50) / 100
+    } ?: when (state.screen) {
+        // **The port's drawn fractions, for a phone with no house attached.** The two endings carry
+        // the round's final reading and the port's figures are the design's own: the Residents took
+        // it by clearing the meter, and the Insiders took it with this much still standing.
         ScreenId.WinResidents -> 0
         ScreenId.WinInsiders -> 14
         else -> 28
@@ -789,10 +855,19 @@ class PanelVals(val state: PanelState) {
     /**
      * **The meter as a percentage, and the only form it may ever be drawn in** (D-103, D-153).
      *
-     * Computed from [integrityLit] against [METER_SEGMENTS] so the bar and the number cannot
-     * disagree — two hand-maintained facts about one meter is how `SYSTEM INTEGRITY 14 / 32` came
-     * to sit under a bar drawn at a different fraction, with a denominator that was a fossil of a
+     * **The house's own number where there is one, and the bar's fraction where there is not.** A
+     * percentage is what crosses the boundary (`Effect.SystemIntegrityLive`), so it is printed as
+     * it arrived rather than round-tripped through the segments — [integrityLit] is a rounding of
+     * *this*, which is what keeps the two from disagreeing while leaving the truth on the side that
+     * has it. Two hand-maintained facts about one meter is how `SYSTEM INTEGRITY 14 / 32` came to
+     * sit under a bar drawn at a different fraction, with a denominator that was a fossil of a
      * count F-005 had already corrected.
+     *
+     * ⚠️ **The springboard drew `88%` as a literal and now draws this**, which moves the design's
+     * own screen to `87%`: the fixture lights 28 of 32 cells, which is 87.5, and the floor is what
+     * every other meter on this class already prints. It is the same correction C2 made to Ghost3's
+     * `66%` over a bar lit to 21 — recorded rather than absorbed, because it is a visible change to
+     * a drawn screen.
      *
      * **The endings are not the safe place for a real number, and that is D-153's whole argument.**
      * The round is over, nothing can be acted on, and it is still not safe: the app is played two
@@ -801,7 +876,8 @@ class PanelVals(val state: PanelState) {
      * that follows. One ending screen would retroactively unhide a number D-103 spent a whole
      * revision hiding.
      */
-    val integrityPercent: String = "${integrityLit * 100 / METER_SEGMENTS}%"
+    val integrityPercent: String = state.integrityPercent?.let { "$it%" }
+        ?: "${integrityLit * 100 / METER_SEGMENTS}%"
 
     /** The Egress countdown, which replaces the meter in place and takes the only number back. */
     val egressLit: Int = 22
@@ -854,8 +930,17 @@ class PanelVals(val state: PanelState) {
         else -> null
     }
 
-    /** Both bars, seen only from outside the system. */
-    val outsideLit: Int = 21
+    /**
+     * **Resident progress as the couch sees it — the same meter [integrityLit] draws, live.**
+     *
+     * Two bars on this screen and only one of them has a sender: this is System Integrity, which
+     * `Effect.SystemIntegrityLive` now carries to the classes outside the system, and it is
+     * therefore [integrityLit]'s own value rather than a second fixture beside it. Written as its
+     * own field only because the screen draws two bars and the other one is the Egress.
+     *
+     * The port's 21 of 32 stands in while no house has spoken.
+     */
+    val outsideLit: Int = state.integrityPercent?.let { integrityLit } ?: 21
 
     /**
      * **Resident progress, live, and still only ever a percentage** (D-103, D-134, D-153).
@@ -870,12 +955,12 @@ class PanelVals(val state: PanelState) {
      * facts about one meter, disagreeing, in the one place the meter is watched closely. That is
      * the exact fault [integrityPercent] was extracted to end, one screen further out.
      *
-     * ### ⚠️ Nothing on the wire moves it, and that is escalated
+     * ### It really is live now, which is what E-C2-2 was open about
      *
-     * No effect carries System Integrity to any client. `SubroutineGraded` carries a boolean about
-     * one entry and says nothing about the meter — deliberately, since an Insider's accepted entry
-     * writes nothing (D-109) — and there is no other candidate. So this is the port's drawn
-     * fraction and *live* is not yet true of it, on the one screen D-134 promises it live.
+     * `Effect.SystemIntegrityLive` carries the meter to the two classes outside the system and to
+     * nobody else, on every movement — so *live* is true of this bar on the one screen D-134
+     * promises it live, and the living are told the same number once a shift instead. What still
+     * has no sender is the bar below it; see [egressPercent].
      */
     val outsidePercent: String = "${outsideLit * 100 / METER_SEGMENTS}%"
 
@@ -934,6 +1019,21 @@ class PanelVals(val state: PanelState) {
          * already show, and is one of the three with an interaction behind it, so BEGIN now
          * reaches the screen it names.
          */
+        /**
+         * **What the Array Wipe circuit is called, and what it does to the lamp.**
+         *
+         * Here rather than on the [Subroutine] roster because the circuit is not one of the ten:
+         * a roster row for it would be this client inventing a light value the design never rated,
+         * under cover of transcribing one. It is written down once, read by the fixture and by the
+         * real mapping alike, so a house-dealt circuit and the drawn design cannot disagree about
+         * either — which is precisely how the two were allowed to drift while one of them was the
+         * only one that existed.
+         *
+         * BRIGHT is this port's reading. D-113 ratified the value; nothing ruled the row.
+         */
+        const val ARRAY_WIPE = "ARRAY WIPE"
+        val ARRAY_WIPE_LIGHT: LightSignature = LightSignature.Bright
+
         val CURRENT: CurrentSubroutine = CurrentSubroutine(
             subroutine = Subroutine.Handshake,
             instruction = "RESYNC THE\nKEEPALIVE",
@@ -956,14 +1056,17 @@ class PanelVals(val state: PanelState) {
          * still says seven, because an order that shortened while work was blocked would make its
          * own length a tell about what the house had drawn.
          *
-         * ### ⚠️ ARRAY WIPE is here and the house can never send it
+         * ### ARRAY WIPE is here and the house can now say it
          *
-         * The circuit is not one of the roster's ten and has no `SubroutineKind`, so no work order
-         * the house issues can contain it — it is drawn by D-122's station draw at arming instead.
-         * Whether it belongs on this list at all is **unruled**: it is real work a Resident is
-         * expected to do, and the list is where a dark route gets planned. Left standing and
-         * flagged. Its BRIGHT is this port's reading (D-113 ratified it as the value; nothing
-         * ruled the row).
+         * The circuit still is not one of the roster's ten and still has no `SubroutineKind` — it
+         * is `AssignedWork.ArrayWipe`, a second case of what a line may be, carrying the three
+         * stations D-122 draws as its destinations. So the row above is reachable from a real
+         * order rather than only from this fixture.
+         *
+         * **What is still unruled is whether the house should ever deal one.** The design's mix is
+         * *1 circuit, 1 long, 3 medium, 2 short* and none of that is built: length is D-129's `K`
+         * and the kinds are drawn flat, so nothing puts a circuit in an order. Its BRIGHT remains
+         * this port's reading (D-113 ratified the value; nothing ruled the row).
          */
         val ORDER: List<OrderRow> = listOf(
             row(0, Subroutine.Replay, "HALL", "diamond", done = true),
@@ -976,7 +1079,7 @@ class PanelVals(val state: PanelState) {
             // triangle two rows up -- exactly the confusion the roster exists to avoid. A frame is
             // topologically distinct from every solid shape in this list.
             OrderRow.Named(
-                4, "ARRAY WIPE", LightSignature.Bright, done = false,
+                4, ARRAY_WIPE, ARRAY_WIPE_LIGHT, done = false,
                 room = "STUDY", marker = MarkerShapes["square_frame"],
             ),
             OrderRow.Blocked(5),
@@ -1264,23 +1367,22 @@ sealed interface OrderRow {
         val light: LightSignature,
         val done: Boolean,
         /**
-         * **The port's drawn destination, and null on every row the house actually sent.**
+         * **Where this line is: the house's own room name and the glyph printed on the card.**
          *
-         * ### ⚠️ Nothing on the wire carries where an entry is, and this is the escalation
+         * Off `OrderLine.Known.at`, which carries a seat's own lines' destinations and nothing else
+         * — knowing where your own next Subroutine is, is the game; knowing where every card in the
+         * house is, is a map the house has never published.
          *
-         * `OrderLine` — both cases — holds no card and no room, deliberately: *the house answers a
-         * scan and never publishes a map of the round.* So under a house-sent order these are null
-         * on every row at once, and the list draws names and lights with nowhere to take them.
+         * The **first** destination, where there is more than one: the Array Wipe circuit names
+         * three stations in draw order (D-122) and a list read by lamplight has room for the one
+         * you walk to first. The glyph is looked up in this client's own roster from the shape id
+         * the house sent, which is D-112's arrangement applied to a marker.
          *
-         * **Null rather than the port's value, and uniform rather than per-row.** Letting HALL sit
-         * beside a Subroutine the house chose would be a screen that lies in the dark to a player
-         * who has no way to check; leaving it on some rows and not others would be worse still. A
-         * hole that appears on every row the moment a house attaches is a hole somebody fixes.
-         *
-         * It contradicts the drawn design, which puts a room and a marker glyph on every row and
-         * on the springboard widget, and it is a **wire change** to close — a card on
-         * `OrderLine.Known`, plus the room-name resolution the client does not have either.
-         * Escalated, not guessed at.
+         * **Null draws nothing, and it is never filled from a fixture.** A round armed without a
+         * home produces lines with no destinations, and the honest column there is an empty one:
+         * a room name beside work the house chose, invented by the phone, is a lie a player in the
+         * dark has no way to check. [PanelVals.ORDER]'s rows carry the port's drawn values, and
+         * that is a fixture standing in for a house rather than a value mixed into one.
          */
         val room: String? = null,
         val marker: MarkerShape? = null,

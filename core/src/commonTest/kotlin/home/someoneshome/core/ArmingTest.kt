@@ -40,7 +40,7 @@ private fun arm(
     at: Tick = Tick(0),
 ): GameState = reduce(
     GameState.EMPTY,
-    Event.RoundArmed(at, seed, seatsOf(seats), insiders, chosen, markers),
+    Event.RoundArmed(at, seed, seatsOf(seats), insiders, chosen, placed(markers)),
 ).state
 
 /** What a scan of [marker] opens for [seat]: the question, the answer, and which line. */
@@ -55,7 +55,7 @@ private fun armEffects(
     seed: Long = 20260821L,
 ): List<Effect> = reduce(
     GameState.EMPTY,
-    Event.RoundArmed(Tick(0), seed, seatsOf(seats), insiders, null, MARKERS),
+    Event.RoundArmed(Tick(0), seed, seatsOf(seats), insiders, null, placed(MARKERS)),
 ).effects
 
 class InsiderDrawTest {
@@ -133,14 +133,14 @@ class InsiderDrawTest {
     fun `arming refuses a party below the minimum before the round exists`() {
         val short = seatsOf(Balance.MINIMUM_SEATS - 1)
         assertFailsWith<IllegalArgumentException> {
-            armingFor(Tick(0), seed = 1L, seats = short, chosenInsiders = null, markers = MARKERS)
+            armingFor(Tick(0), seed = 1L, seats = short, chosenInsiders = null, markers = placed(MARKERS))
         }
         val fine = armingFor(
             Tick(0), seed = 1L, seats = seatsOf(Balance.MINIMUM_SEATS),
-            chosenInsiders = null, markers = MARKERS,
+            chosenInsiders = null, markers = placed(MARKERS),
         )
         assertEquals(1, fine.insiders.size)
-        assertEquals(MARKERS, fine.markers)
+        assertEquals(placed(MARKERS), fine.markers)
     }
 }
 
@@ -305,7 +305,7 @@ class WorkOrderDrawTest {
     @Test
     fun `a blocked line reaches the phone with no name on it`() {
         val state = arm(seats = 5, markers = listOf(MarkerId("only")))
-        val lines = state.workOrderFor(Seat(0))!!.asLines()
+        val lines = state.workOrderFor(Seat(0))!!.asLines(state.destinations)
         assertEquals(
             state.workOrderFor(Seat(0))!!.entries.size, lines.size,
             "the order sent to the phone is shorter than the order the house holds",
@@ -331,7 +331,7 @@ class WorkOrderDrawTest {
         val home = (0 until 30).map { MarkerId("m$it") }
         val state = arm(seats = 5, markers = home)
         val seat = Seat(0)
-        val mine = state.workOrderFor(seat)!!.entries.map { it.marker.value }.toSet()
+        val mine = state.workOrderFor(seat)!!.entries.map { it.anchor!!.value }.toSet()
 
         val dark = home.first { it.value !in state.activeMarkers.map { m -> m.value } }
         val elsewhere = state.activeMarkers.first { it.value !in mine }
@@ -379,13 +379,13 @@ class WorkOrderDrawTest {
         for (seat in seatsOf(8)) {
             val a = none.workOrderFor(seat)!!.entries
             val b = some.workOrderFor(seat)!!.entries
-            assertEquals(a.map { it.marker.value }, b.map { it.marker.value }, "seat ${seat.index}")
-            assertEquals(a.map { it.subroutine }, b.map { it.subroutine }, "seat ${seat.index}")
+            assertEquals(a.map { it.anchor!!.value }, b.map { it.anchor!!.value }, "seat ${seat.index}")
+            assertEquals(a.map { it.work }, b.map { it.work }, "seat ${seat.index}")
             assertEquals(a.map { it.blockedBy }, b.map { it.blockedBy }, "seat ${seat.index}")
             // And the QUESTION does not move with the role either, which is where the answer key
             // lives now: open the same line in both rounds and the house asks the same thing.
             assertEquals(
-                openedBy(none, seat, a.first().marker), openedBy(some, seat, b.first().marker),
+                openedBy(none, seat, a.first().anchor!!), openedBy(some, seat, b.first().anchor!!),
                 "the question the scan drew moved with the role, seat ${seat.index}",
             )
         }
@@ -458,10 +458,15 @@ class ArmingEffectsTest {
         val seat = Seat(0)
         val entry = state.workOrderFor(seat)!!.entries.first()
 
-        val scanned = reduce(state, Event.MarkerScanned(Tick(1), seat, entry.marker)).state
+        val scanned = reduce(state, Event.MarkerScanned(Tick(1), seat, entry.anchor!!)).state
         fun shapeOf(entered: List<Int>): List<String> =
-            reduce(scanned, Event.SubroutineReturned(Tick(2), seat, entry.marker, entered))
-                .effects.filterNot { it is Effect.SubroutineProgressed }
+            reduce(scanned, Event.SubroutineReturned(Tick(2), seat, entry.anchor!!, entered))
+                // The meter's two kinds are subtracted for the same reason: they are emitted only
+                // when the bar actually moved, they reach players outside the system and nobody
+                // living, and the shape being compared here is the shape the ACTOR is answered in.
+                .effects.filterNot {
+                    it is Effect.SubroutineProgressed || it is Effect.SystemIntegrityLive
+                }
                 .map { it::class.simpleName ?: "?" }
         assertEquals(
             shapeOf(scanned.openSubroutineFor(seat)!!.expected), shapeOf(listOf(9, 9, 9)),

@@ -674,7 +674,7 @@ class EmitSchemaTest {
     /** The round, over: every seat classifies [RoundState.Ended] and the three rows can deliver. */
     private fun over() = live().endRound(ROUND_OVER)
 
-    private val REVEAL = Effect.InsidersRevealed(listOf(InsiderNamed(Seat(1), "the spare key")))
+    private val REVEAL = Effect.InsidersRevealed(listOf(InsiderNamed(Seat(1), "DANI", "the spare key")))
 
     /**
      * **THE COMPLETENESS CHECK: no effect in this app states an alignment before the ending.**

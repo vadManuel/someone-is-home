@@ -287,6 +287,12 @@ class FuzzPropertyTest {
     private val OUT_ONLY: List<String> = listOf(
         // The live SystemIntegrity decrement. A continuous rate signal nobody living may read.
         "SubroutineProgressed",
+        // The same movement as a percentage, which is the form a bar is drawn from (D-103, D-134).
+        // Out-only for SubroutineProgressed's reason and not for a new one: the living are told the
+        // meter at a shift boundary and frozen in between, so a live push on a living phone is the
+        // rate signal arriving by the other door. The BATCHED kind is the living's and is
+        // deliberately not in this list.
+        "SystemIntegrityLive",
         // Who voted for whom (D-075). The living get a count and the outcome, never the ballot.
         "MeetingResolved",
         // Every selection tap, live (D-117, D-134). The couch is the only reader of selections,

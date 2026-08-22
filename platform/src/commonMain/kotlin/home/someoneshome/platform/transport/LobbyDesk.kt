@@ -3,6 +3,7 @@ package home.someoneshome.platform.transport
 import home.someoneshome.model.Balance
 import home.someoneshome.model.InsiderBand
 import home.someoneshome.model.Seat
+import home.someoneshome.model.SeatNamed
 import home.someoneshome.model.protocol.LobbyBody
 
 /**
@@ -136,6 +137,28 @@ class LobbyDesk {
     fun lineOf(seat: Seat): String? = lines[seat]
 
     /**
+     * **Every seat's name, in seat order, for the one thing the round needs them for** (D-115).
+     *
+     * The reveal says *who* the house owned, and *seat 3* is not a person — so the names ride the
+     * arming event into the round exactly as the lines do, and this is where they are taken from.
+     * One entry per seat in the lobby, **empty string for a phone that never said**, so the list
+     * cannot quietly under-report a lobby to whatever is counting it. [standing] builds its own
+     * list the same way and for the same reason.
+     *
+     * ### It is not [lineOf] with a wider return type, and the difference is the point
+     *
+     * A line goes to the house and comes back to nobody; a name goes down the wire to every phone
+     * in the lobby already. So this reads [names] and there is nothing in it that could read
+     * [lines] — the two maps stay two maps, and *the arming quoted a line* would take writing
+     * `lines` where `names` is written, in a diff a reader can see.
+     *
+     * Sorted by seat, because the rules hold ordered collections and a hash order here would be an
+     * arming event that replayed differently.
+     */
+    fun namedSeats(): List<SeatNamed> =
+        seats.map { SeatNamed(it, names[it].orEmpty()) }.sortedBy { it.seat.index }
+
+    /**
      * The host's setting, pulled inside D-103's band. Null sets UNKNOWN, and stays UNKNOWN.
      *
      * The band is consulted here rather than trusted to the caller because "clamped where it is
@@ -147,6 +170,30 @@ class LobbyDesk {
 
     /** The band the setting is currently allowed to move in, for a control that has to draw it. */
     fun band(): IntRange = InsiderBand.of(seats.size)
+
+    /**
+     * **The host's ballot length, in seconds** (D-117). The design's forty-five until they move it.
+     *
+     * Held here beside [insiders] because this desk is what a round is armed from, and a setting
+     * the arming cannot read is a control that moves a number nothing follows — which is exactly
+     * what this one was.
+     *
+     * **It does not go down the wire and does not need to.** A client draws the ballot's clock from
+     * `Effect.MeetingPhaseOpened`, which carries the window the house locked at arming; the lobby
+     * row is the host's own screen, on the host's own phone, and `LobbyModel` already refuses the
+     * control to anybody else. So there is no [LobbyBody] case for it and adding one would widen
+     * the wire for a number that is about to travel by a better road.
+     *
+     * Unclamped, unlike [insiders]: D-125's sorting rule clamps what players cannot perceive, and
+     * a ballot's length is a number the whole room watches run out.
+     */
+    var voteWindowSeconds: Int = Balance.VOTE_WINDOW_SECONDS
+        private set
+
+    /** The host moved the VOTING row. Refused from anywhere but the host's own phone, one layer up. */
+    fun setVoteWindow(seconds: Int) {
+        voteWindowSeconds = seconds
+    }
 
     /**
      * **What every phone in the lobby is shown: counts, a setting, and the names.**

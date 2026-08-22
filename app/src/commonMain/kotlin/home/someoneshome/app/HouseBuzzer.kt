@@ -91,6 +91,12 @@ internal fun Effect.haptic(): Haptic? = when (this) {
     // A verdict on work the player is standing over, on a screen they are already looking at.
     is Effect.SubroutineGraded -> null
     is Effect.SubroutineProgressed -> null
+    // **The meter never buzzes, in either form.** The live one moves whenever anybody in the house
+    // banks an entry, so a buzz on it would be a pocket vibrating at the rate the Residents are
+    // working -- audible, in a silent house, to everyone standing near the person outside the
+    // system. The batched one arrives inside a meeting the whole party has already been rung to.
+    is Effect.SystemIntegrityLive -> null
+    is Effect.SystemIntegrityBatched -> null
     // D-156: whatever the house has to say arrives as ONE delivery with ONE buzz, and the buzz is
     // OpeningMessage's. The underlying message count never drives the buzz count — that is the
     // exact leak F-003 found, where an Insider's phone went off four times and a Resident's once.

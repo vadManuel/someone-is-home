@@ -35,7 +35,7 @@ class SystemIntegrityTest {
         reduce(
             GameState.EMPTY,
             Event.RoundArmed(
-                Tick(0), seed = 1L, seats = seats, insiders = insiders, markers = markers,
+                Tick(0), seed = 1L, seats = seats, insiders = insiders, markers = placed(markers),
             ),
         ).state
 
@@ -118,7 +118,7 @@ class SystemIntegrityTest {
                     GameState.EMPTY,
                     Event.RoundArmed(
                         Tick(0), seed = 1L, seats = seats, insiders = seatsOf(drawn),
-                        chosenInsiders = null, markers = markers,
+                        chosenInsiders = null, markers = placed(markers),
                     ),
                 ).state.workOrders.map { it.entries.size }.distinct()
             }.distinct()
@@ -168,11 +168,11 @@ class SystemIntegrityTest {
         // own idea of the draw instead of against the draw.
         fun walk(seat: Seat): GameState {
             val entry = armed.workOrderFor(seat)!!.entries.first()
-            val scanned = reduce(armed, Event.MarkerScanned(Tick(1), seat, entry.marker)).state
+            val scanned = reduce(armed, Event.MarkerScanned(Tick(1), seat, entry.anchor!!)).state
             return reduce(
                 scanned,
                 Event.SubroutineReturned(
-                    Tick(2), seat, entry.marker,
+                    Tick(2), seat, entry.anchor!!,
                     // Read off the instance the scan opened: the question is the scan's now, and
                     // both seats scan from the same state so both are asked the same thing.
                     scanned.openSubroutineFor(seat)!!.expected,

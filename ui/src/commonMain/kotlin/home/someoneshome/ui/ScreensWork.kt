@@ -47,9 +47,9 @@ import androidx.compose.ui.unit.IntOffset
  * glyph, on the work-order list and on the springboard widget alike.
  *
  * One tag across both surfaces because the thing being counted is one fact: *does this build tell
- * a player where their work is?* Today the answer is *only while no house is attached* — nothing on
- * the wire carries a card ([OrderRow.Named.room]) — and `WorkOrderTest` holds that as a guard in
- * both directions, so the day a card does arrive the test that has to change says exactly why.
+ * a player where their work is?* The answer is yes on every **known** line and no on every blocked
+ * one, and `WorkOrderTest` holds both directions — a blocked row that grew a destination fails,
+ * and a known row that lost one fails too.
  */
 const val ORDER_DESTINATION: String = "order-destination"
 
@@ -176,12 +176,13 @@ fun BoxScope.NotificationBanner(notification: Notification) {
  * than on the springboard because this is the screen a player reads while deciding, and the
  * springboard is the one they glance at while walking.
  *
- * ### ⚠️ The rows have no destination, and it is escalated rather than invented
+ * ### The rows carry their destination, and the blocked ones still carry nothing
  *
- * The design draws a room and a marker glyph against every row. `OrderLine` carries neither, in
- * either case, deliberately — *the house answers a scan and never publishes a map of the round* —
- * so under a real order there is nothing here to draw them from, and the port's GARAGE is not
- * allowed to sit beside a Subroutine the house chose. See [NextSubroutine.room].
+ * The design draws a room and a marker glyph against every row, and `OrderLine.Known` carries them
+ * now — the seat's own lines' rooms and no others, which is the whole of what a client is entitled
+ * to know about the home. `OrderLine.Blocked` still carries nothing at all: a room on a blocked row
+ * would name the person upstream of you by where they are standing (D-146), so the blackout covers
+ * the place as well as the name and it does so by there being no field to draw from.
  */
 @Composable
 fun WorkScreen(vals: PanelVals) {
@@ -321,9 +322,10 @@ private fun WorkRow(
             // "faint" is also how a locked row reads.
             decoration = if (done) TextDecoration.LineThrough else null,
         )
-        // **The destination pair, drawn only where there is one.** No effect carries a card, so
-        // under a house-sent order every row loses this column at once and the list becomes names
-        // and lights alone -- see OrderRow.Named.room, which is where that is escalated.
+        // **The destination pair, drawn only where there is one.** A known line carries its room
+        // and its glyph off the wire; a line the house dealt in a round armed with no home carries
+        // neither, and the column is simply absent rather than filled with a room this phone made
+        // up. See OrderRow.Named.room.
         Row(
             horizontalArrangement = Arrangement.spacedBy(4.u),
             verticalAlignment = Alignment.CenterVertically,

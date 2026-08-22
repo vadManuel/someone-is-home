@@ -1,11 +1,14 @@
 package home.someoneshome.core
 
+import home.someoneshome.model.AssignedWork
 import home.someoneshome.model.Balance
+import home.someoneshome.model.Destination
 import home.someoneshome.model.Event
 import home.someoneshome.model.InsiderBand
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.OrderEntry
 import home.someoneshome.model.Seat
+import home.someoneshome.model.SeatNamed
 import home.someoneshome.model.SubroutineKind
 import home.someoneshome.model.Tick
 import home.someoneshome.model.WorkOrder
@@ -53,7 +56,17 @@ fun armingFor(
     seed: Long,
     seats: List<Seat>,
     chosenInsiders: Int?,
-    markers: List<MarkerId>,
+    markers: List<Destination>,
+    /**
+     * The host's ballot length, off the lobby's own settings row (D-117). Defaulted to the
+     * design's forty-five so a caller exercising something else does not have to invent a ballot.
+     */
+    voteWindowSeconds: Int = Balance.VOTE_WINDOW_SECONDS,
+    /**
+     * What each seat asked to be called, off the desk (D-115). Defaulted empty like the lines:
+     * a round armed to exercise a meeting does not have to invent six people to hold it with.
+     */
+    names: List<SeatNamed> = emptyList(),
 ): Event.RoundArmed {
     require(seats.size >= Balance.MINIMUM_SEATS) {
         "a round cannot be armed for ${seats.size} seats: the minimum party is " +
@@ -68,6 +81,8 @@ fun armingFor(
         // never off the draw (D-129). Two fields rather than one is the whole of that guarantee.
         chosenInsiders = InsiderBand.clamp(seats.size, chosenInsiders),
         markers = markers,
+        voteWindowSeconds = voteWindowSeconds,
+        names = names,
     )
 }
 
@@ -177,11 +192,18 @@ internal fun workOrderFor(
         // between DIFFERENT Subroutines is a design nobody has drawn -- D-114 says a blocked entry
         // is a known unknown and D-123 says where the blocking comes from, and neither invents a
         // second source. One is enough to make the order a menu rather than a queue.
-        val chain = entries.lastOrNull { it.marker.value == marker.value }
+        val chain = entries.lastOrNull { it.isAt(marker) }
         entries += OrderEntry(
             index = index,
-            subroutine = SubroutineKind.entries[kinds.next(SubroutineKind.entries.size)],
-            marker = marker,
+            // **Every drawn entry is a Subroutine, and the circuit is not dealt** (see
+            // `AssignedWork.ArrayWipe`). The design's assigned mix -- 1 circuit, 1 long, 3 medium,
+            // 2 short -- is not built at all: length is D-129's K and the kinds are drawn flat. The
+            // format can carry a circuit so that a client can draw one; putting one in an order
+            // needs the carried state it is graded against, which is F-014's and E7's.
+            work = AssignedWork.Subroutine(
+                SubroutineKind.entries[kinds.next(SubroutineKind.entries.size)],
+            ),
+            markers = listOf(marker),
             blockedBy = chain?.let { listOf(it.index) } ?: emptyList(),
             done = false,
         )

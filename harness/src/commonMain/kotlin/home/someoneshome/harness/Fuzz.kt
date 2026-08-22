@@ -2,9 +2,11 @@ package home.someoneshome.harness
 
 import home.someoneshome.core.Admission
 import home.someoneshome.core.admit
+import home.someoneshome.model.Destination
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
 import home.someoneshome.model.MarkerId
+import home.someoneshome.model.MarkerShapes
 import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.OrderEntry
 import home.someoneshome.model.Seat
@@ -69,7 +71,15 @@ fun fuzzRound(
     val seats = (0 until seatCount).map { Seat(it) }
     val insiders = seats.shuffledBy(rng).take(insiderCount).sortedBy { it.index }
     // Eight ordinary markers, which is D-127's floor for a home that may be hosted in.
-    val markers = (0 until 8).map { MarkerId("m$it") }
+    //
+    // Each is a whole destination now — card, glyph and room — because that is what arming takes.
+    // The rooms are deliberately **not** eight distinct names: real homes put more than one card in
+    // a room, and a fuzzer whose geography was one card per room would never once produce two lines
+    // of an order pointing at the same room name.
+    val markers = (0 until 8).map {
+        Destination(MarkerId("m$it"), MarkerShapes.all[it].id, "ROOM ${it / 2}")
+    }
+    val cards = markers.map { it.marker }
 
     // A seat that may not exist. Low probability, deliberately including negatives.
     fun anySeat(): Seat = when {
@@ -146,7 +156,7 @@ fun fuzzRound(
             when (rng.nextInt(9)) {
                 0 -> add(Event.RoundArmed(Tick(tick()), rng.nextLong(), seats, insiders, markers = markers))
                 1 -> {
-                    add(Event.MarkerScanned(Tick(tick()), anySeat(), rng.pick(markers)))
+                    add(Event.MarkerScanned(Tick(tick()), anySeat(), rng.pick(cards)))
                     // And sometimes walk away from it. The seat is drawn independently, so the
                     // report often comes from somebody who never scanned anything -- which is the
                     // absurd player asking whether closing a window nobody opened is quiet.
@@ -159,7 +169,7 @@ fun fuzzRound(
                     // a Subroutine nobody armed, at a card it was not armed at, or simply wrong.
                     val seat = anySeat()
                     val open = if (rng.chance(2)) assigned(seat, this) else null
-                    val marker = open?.marker ?: rng.pick(markers)
+                    val marker = open?.anchor ?: rng.pick(cards)
                     val scanned = rng.chance(2)
                     if (scanned) add(Event.MarkerScanned(Tick(tick()), seat, marker))
                     val asked = if (scanned && rng.chance(2)) askedOf(seat, this) else null

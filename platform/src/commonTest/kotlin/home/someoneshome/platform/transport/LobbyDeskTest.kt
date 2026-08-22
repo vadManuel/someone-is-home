@@ -311,4 +311,95 @@ class LobbyDeskTest {
             "a name survived the round it was given for",
         )
     }
+
+    // ---- What arming takes off the desk ---------------------------------------------------
+
+    /**
+     * **THE INJECTION: what arming takes is the names, and there is nothing in it that could be a
+     * line** (D-115, D-116).
+     *
+     * `namedSeats()` is the one read the arming event makes of this desk's text, and the two maps
+     * it could read from hold two different promises: a name is something six people standing in a
+     * hall can already see, and a line is the thing that must never come back out. The fixture's
+     * two texts are distinguishable on sight, so a desk that reached for `lines` where it reaches
+     * for `names` fails here on the string it handed over rather than on a shape that matches.
+     *
+     * One entry per seat and **blank for a phone that never said**, so the list cannot quietly
+     * under-report a lobby to whatever is counting it, and in seat order, because the rules hold
+     * ordered collections and a hash order here is a round that replays differently.
+     */
+    @Test
+    fun `the seats arming takes are named and carry not one word of any line`() {
+        val desk = deskOfThree()
+        desk.named(priya, "PRIYA")
+        desk.named(elliot, "ELLIOT")
+        desk.handedOver(elliot, "i still have priya's spare key")
+        desk.handedOver(marcus, "i read the group chat i was removed from")
+
+        val named = desk.namedSeats()
+        assertEquals(
+            listOf(0, 1, 2), named.map { it.seat.index },
+            "arming was handed a lobby of a different size, or in a different order, than the desk",
+        )
+        assertEquals(listOf("ELLIOT", "PRIYA", ""), named.map { it.name })
+        assertTrue(
+            named.none { it.name.contains("key") || it.name.contains("group chat") },
+            "a one line left the desk as a name: $named",
+        )
+    }
+
+    /** They go the instant the round does, exactly as the lines do. */
+    @Test
+    fun `the round ending empties what arming would take`() {
+        val desk = deskOfThree()
+        desk.named(elliot, "ELLIOT")
+        desk.roundEnded()
+        assertEquals(
+            listOf("", "", ""), desk.namedSeats().map { it.name },
+            "the round is over and the desk still knows what to call somebody",
+        )
+    }
+
+    /** Somebody who walked out is not in the lobby a round is armed from. */
+    @Test
+    fun `a seat that left is not among the seats arming takes`() {
+        val desk = deskOfThree()
+        desk.named(priya, "PRIYA")
+        desk.left(priya)
+        assertEquals(listOf(0, 2), desk.namedSeats().map { it.seat.index })
+    }
+
+    /**
+     * **The ballot's length is on the desk, because the desk is what a round is armed from**
+     * (D-117).
+     *
+     * The host's VOTING row moved a number nothing read. It lands here now and rides the arming
+     * event into the round — so this is the far end of the control, and the near end is
+     * `LobbyModelTest`'s.
+     */
+    @Test
+    fun `the ballot opens on the design's number and follows the host`() {
+        val desk = deskOfThree()
+        assertEquals(
+            Balance.VOTE_WINDOW_SECONDS, desk.voteWindowSeconds,
+            "a desk nobody has touched holds a ballot length the design did not choose",
+        )
+        desk.setVoteWindow(90)
+        assertEquals(90, desk.voteWindowSeconds)
+    }
+
+    /**
+     * **Unclamped, unlike the Insider count, and that is the difference between the two settings.**
+     *
+     * D-125 clamps what players cannot perceive — the Insider band is arithmetic nobody in the room
+     * can check. A ballot's length is a number the whole room watches run out, so the host owns it
+     * and a desk that quietly pulled it into a range would be a control that lies to the person
+     * holding it.
+     */
+    @Test
+    fun `the ballot's length is the host's and is not pulled into a band`() {
+        val desk = deskOfThree()
+        desk.setVoteWindow(5)
+        assertEquals(5, desk.voteWindowSeconds, "the desk moved the host's ballot for them")
+    }
 }

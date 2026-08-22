@@ -35,6 +35,14 @@ sealed interface Event {
      * [markers] are the home's **ordinary registered markers**, from which the house draws the
      * three stations (D-122) and the round's active set (D-123). The Terminal and the meeting card
      * are not among them: they are reserved shapes with fixed jobs, not slots the round may use.
+     *
+     * ### They carry the room and the glyph now, which is E-L4-1's mechanism taken
+     *
+     * They were bare [MarkerId]s, on the argument that keeping host-authored geography out of
+     * `core` was worth the cost — and the cost turned out to be the whole destination column of
+     * every work order (E-C2-1). A [Destination] is a card, a glyph id and a room name, which is
+     * what a player in a dark house navigates by and is nothing else: no seat, no work, no answer.
+     * The rules hold the table and hand out one seat's rows of it; nothing publishes the map.
      */
     data class RoundArmed(
         override val at: Tick,
@@ -54,7 +62,37 @@ sealed interface Event {
          * defaults nothing** — a field missing from a recorded arming is fatal there, which is
          * where a silent default would actually cost something.
          */
-        val markers: List<MarkerId> = emptyList(),
+        val markers: List<Destination> = emptyList(),
+        /**
+         * **How long the ballot runs, in seconds — the host's lobby setting, locked here** (D-117).
+         *
+         * *45 seconds, host-changeable in lobby settings.* The control has existed on the host's
+         * lobby row since U6 and reached nothing: `LobbyLink` had no arm, `LobbyBody` had no arming
+         * case, and this event had no settings, so the number moved and no clock followed it. This
+         * field is the whole of that gap.
+         *
+         * **Public, like [chosenInsiders] and for the same reason** — the host set it in a lit room
+         * with the party standing there. It is not drawn from anything and it is not re-derived:
+         * balance values lock at arming and stamp into the recording, so a replay runs the ballot
+         * the evening actually ran rather than the default this build happens to carry.
+         *
+         * Defaulted to [Balance.VOTE_WINDOW_SECONDS] so a round armed to exercise something else
+         * gets the design's own number rather than zero — a nought-second ballot is not the
+         * fail-closed direction here, it is a meeting nobody can vote at.
+         */
+        val voteWindowSeconds: Int = Balance.VOTE_WINDOW_SECONDS,
+        /**
+         * **What to call each seat, off the house's desk** (D-115). See [GameState.names].
+         *
+         * A recorded input like [oneLines] and held to the same promise: round-scoped, dropped when
+         * the round ends, and rendered by `Transcript` as **seats and never as names**. The house
+         * takes custody at arming so that the reveal can say who somebody is without the rules ever
+         * having held a lobby.
+         *
+         * Defaulted empty. A round armed without them reveals blank names, which is a visible
+         * nothing rather than an invisible somebody else's.
+         */
+        val names: List<SeatNamed> = emptyList(),
         /**
          * **Every seat's one line, off the house's desk** (D-116). See [GameState.oneLines].
          *

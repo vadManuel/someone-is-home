@@ -280,7 +280,7 @@ class DifferentialTest {
     fun `with the Insider count fixed only the meter depends on who the Insiders are`() {
         fun stream(events: List<Event>) = effectsOf(GameState.EMPTY, events)
             .map { Transcript.render(it) }
-            .filterNot { it.startsWith("SubroutineProgressed") }
+            .withoutTheMeter()
 
         // Both subtractions, and they are different shapes on purpose: the meter is a KIND, dropped
         // from both runs so the surrounding lines stay aligned; the ending is the round STOPPING,
@@ -333,9 +333,24 @@ class DifferentialTest {
         val toggled = stream(withRoleSwapped(round(), Seat(1)))
         assertNotEquals(baseline, toggled, "the meter no longer reads the Insider count")
         assertEquals(
-            baseline.filterNot { it.startsWith("SubroutineProgressed") },
-            toggled.filterNot { it.startsWith("SubroutineProgressed") },
+            baseline.withoutTheMeter(),
+            toggled.withoutTheMeter(),
             "toggling a role changed something other than the meter",
         )
     }
+
+    /**
+     * **The meter subtracted from a raw effect stream, read off the one place it is named.**
+     *
+     * These two tests compare authority-side effect rows rather than client transcripts, so the
+     * subtraction is by rendered prefix rather than by [MessageKind] — but *which* kinds are the
+     * meter is [METER_ASYMMETRY]'s decision, and it was written out here by hand as a single
+     * literal until the meter grew two more kinds and neither of them was added.
+     *
+     * **Reading the set is not the derived-allowlist fault L2 found.** That was a test deriving
+     * its expectation from `EmitSchema`, which is the thing it was testing. Nothing here tests
+     * `METER_ASYMMETRY`; it names a ruled asymmetry, and these tests assert about the rules.
+     */
+    private fun List<String>.withoutTheMeter(): List<String> =
+        filterNot { line -> METER_ASYMMETRY.any { line.startsWith(it.name) } }
 }

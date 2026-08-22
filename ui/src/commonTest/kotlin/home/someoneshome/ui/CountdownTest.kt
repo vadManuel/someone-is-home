@@ -1,5 +1,7 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.Balance
+import home.someoneshome.model.MeetingPhase
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -34,6 +36,74 @@ class CountdownTest {
      * What must never happen either way is a clock counting down to nothing at all: a screen that
      * reaches zero and sits there is the room standing in a dark hallway watching a stopped clock.
      */
+    /**
+     * **THE INJECTION: the ballot's clock follows the host's setting** (D-117).
+     *
+     * The VOTING row moved a number the round could not read. It rides the arming event now and
+     * arrives on the push that opens the ballot, so this asserts the whole of what that buys: move
+     * the setting, and the clock moves — on the living's vote screen **and on the couch's**, which
+     * is the half that matters, because the two carry different drawn defaults and the couch can
+     * see a living player's phone across a lit room.
+     *
+     * Every window in `LobbyModel.VOTE_WINDOWS`, so a build that honoured one number and ignored
+     * the rest fails rather than passing on the default.
+     */
+    @Test
+    fun theVoteClockFollowsTheWindowTheHouseSent() {
+        for (window in LobbyModel.VOTE_WINDOWS) {
+            for (screen in listOf(ScreenId.Vote, ScreenId.GhostMeeting)) {
+                val clock = assertNotNull(Countdowns.on(screen, said = 12, window = window))
+                assertEquals(
+                    window, clock.ofSeconds,
+                    "$screen drew a ${clock.ofSeconds}s ballot while the house said ${window}s",
+                )
+                assertEquals(12, clock.secondsLeft, "$screen lost the moment the house sent")
+            }
+            // The couch reaches its clock by phase rather than by screen, and it has to follow too.
+            val couch = assertNotNull(
+                Countdowns.onGhostMeeting(
+                    MeetingPhase.Vote, said = 12, window = window,
+                ),
+            )
+            assertEquals(window, couch.ofSeconds, "the couch's vote clock ignored the house")
+        }
+    }
+
+    /**
+     * **The two clocks that are not the ballot do not move with it.**
+     *
+     * The discussion's ninety seconds and the tally's fifteen are the design's own and nothing in
+     * the lobby offers a control for either — so a window applied to every meeting screen at once
+     * would be this phone inventing two settings out of one, and the drift would show up as a talk
+     * that ended when its bar was two-thirds full.
+     */
+    @Test
+    fun theHousesBallotWindowMovesNoOtherClock() {
+        for (screen in listOf(ScreenId.Discussion, ScreenId.Tally, ScreenId.Scan)) {
+            assertEquals(
+                Countdowns.windowOf(screen), Countdowns.windowOf(screen, voteWindow = 90),
+                "$screen's window moved with the ballot's setting",
+            )
+        }
+    }
+
+    /**
+     * **With no house attached both ballot clocks keep their drawn numbers.**
+     *
+     * The 45 and the 60 disagree, deliberately and only here: the couch's 60 is what reproduces the
+     * design's `VOTING ENDS IN 0:24` over twelve lit segments of thirty. Reconciling the two drawn
+     * numbers is a visible screen change and still wants a ruling — this holds the fixture where it
+     * is so that the flag stays about a fixture rather than quietly becoming about the game.
+     */
+    @Test
+    fun withNoHouseAttachedTheTwoBallotClocksKeepTheirDrawnWindows() {
+        assertEquals(
+            Balance.VOTE_WINDOW_SECONDS,
+            assertNotNull(Countdowns.on(ScreenId.Vote)).ofSeconds,
+        )
+        assertEquals(60, assertNotNull(Countdowns.on(ScreenId.GhostMeeting)).ofSeconds)
+    }
+
     @Test
     fun everyClockCountsDownToTheThingThatEndsIt() {
         assertTrue(Countdowns.screens.isNotEmpty(), "no screen carries a clock; the table emptied")

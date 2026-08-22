@@ -6,6 +6,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * D-103 (revision 21): SystemIntegrity reaches a panel only as a percentage, because the meter's
@@ -20,10 +21,16 @@ import kotlin.test.assertEquals
 @OptIn(ExperimentalTestApi::class)
 class MeterDisclosureTest {
 
-    private fun assertNoDenominator(screen: ScreenId, outBy: OutBy? = null) = runDesktopComposeUiTest {
+    private fun assertNoDenominator(
+        screen: ScreenId,
+        outBy: OutBy? = null,
+        integrityPercent: Int? = null,
+    ) = runDesktopComposeUiTest {
         setContent {
             DeviceCanvas(insets = PanelInsets()) {
-                Screen(PanelState(screen = screen, outBy = outBy))
+                Screen(
+                    PanelState(screen = screen, outBy = outBy, integrityPercent = integrityPercent),
+                )
             }
         }
         // The design's segment resolutions, and the true denominators for 6-10 players at 7
@@ -42,13 +49,84 @@ class MeterDisclosureTest {
         }
     }
 
+    /**
+     * **The house's own number is drawn, and it is still a percentage** (E-C2-2, closed).
+     *
+     * The meter has a sender now — `SystemIntegrityLive` to the people outside the system,
+     * `SystemIntegrityBatched` to the living at a shift boundary — and both carry a **percentage**,
+     * because a count plus the public seat arithmetic is the Insider number D-103 hides. This is
+     * the client half of that: the pushed value is what the screen prints, the sweep for a
+     * denominator runs over it, and the bar is drawn *from the same number* rather than beside it.
+     *
+     * Swept over every meter-bearing surface at several values, so a screen that quietly kept its
+     * own fixture fails on the figure rather than passing at the one value that happened to match.
+     */
+    @Test
+    fun theMetersDrawTheNumberTheHouseSentAndStillPrintNoTotal() {
+        val surfaces = listOf(
+            ScreenId.Home to null,
+            ScreenId.Ghost3 to OutBy.Revoked,
+            ScreenId.WinResidents to null,
+            ScreenId.WinInsiders to null,
+        )
+        for ((screen, outBy) in surfaces) {
+            for (percent in listOf(0, 37, 100)) {
+                runDesktopComposeUiTest {
+                    setContent {
+                        DeviceCanvas(insets = PanelInsets()) {
+                            Screen(
+                                PanelState(
+                                    screen = screen, outBy = outBy, integrityPercent = percent,
+                                ),
+                            )
+                        }
+                    }
+                    assertTrue(
+                        onAllNodesWithText("$percent%", substring = true)
+                            .fetchSemanticsNodes().isNotEmpty(),
+                        "$screen did not print the $percent% the house sent — the meter on that " +
+                            "screen is still a fixture",
+                    )
+                }
+                assertNoDenominator(screen, outBy, integrityPercent = percent)
+            }
+        }
+    }
+
+    /**
+     * **The bar is drawn from the pushed number, so the figure and the segments cannot disagree.**
+     *
+     * That is the fault revision 21 found as `SYSTEM INTEGRITY 14 / 32` under a bar at a different
+     * fraction, and C2 found again as Ghost3's `66%` over twenty-one lit cells of thirty-two: two
+     * hand-maintained facts about one meter. With a sender there is one value, and the segments are
+     * computed from it rather than the other way round.
+     */
+    @Test
+    fun theBarIsTheSameValueAsTheFigure() {
+        for (percent in listOf(0, 25, 50, 75, 100)) {
+            val vals = PanelVals(
+                PanelState(screen = ScreenId.Home, integrityPercent = percent),
+            )
+            assertEquals("$percent%", vals.integrityPercent)
+            assertEquals(
+                (percent * PanelVals.METER_SEGMENTS + 50) / 100, vals.integrityLit,
+                "the bar is lit at a fraction the printed figure does not describe",
+            )
+        }
+    }
+
     @Test
     fun theSpringboardMeterSpeaksOnlyPercent() {
         runDesktopComposeUiTest {
             setContent {
                 DeviceCanvas(insets = PanelInsets()) { Screen(PanelState(screen = ScreenId.Home)) }
             }
-            onAllNodesWithText("88%").assertCountEquals(1)
+            // **87%, not the 88% that used to be typed here.** The springboard printed a literal
+            // beside a bar computed from `integrityLit`; it prints the computed value now, and the
+            // fixture's 28 of 32 cells is 87.5 floored. A visible change to a drawn screen, made
+            // for the reason C2 changed Ghost3's 66% to 65: the bar is the fact and the figure is
+            // a rendering of it, and two hands maintaining one meter is how they drift.
+            onAllNodesWithText("87%").assertCountEquals(1)
         }
         assertNoDenominator(ScreenId.Home)
     }

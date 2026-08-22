@@ -167,8 +167,27 @@ fun differentialOnRoleExchange(
  *
  * **Never add a kind here to make a test pass.** Every entry is a documented, ruled-on asymmetry;
  * a second one would need its own decision-log number before it needed a line of code.
+ *
+ * ### The three kinds are one asymmetry counted three ways
+ *
+ * They are not three decisions. `SubroutineProgressed` is the ledger's remaining count,
+ * `SystemIntegrityLive` is the same movement as a percentage for the same audience, and
+ * `SystemIntegrityBatched` is that percentage handed to the living once a meeting — and all three
+ * move if and only if a **plain Resident's** entry banked. Subtracting one and leaving the others
+ * would subtract the asymmetry from the harness's arithmetic while leaving it in the transcript,
+ * which is the worst of both: the diff still cascades and the thing it cascades from is invisible.
+ *
+ * `SystemIntegrityBatched` is here even though it reaches the **living**, and that is worth being
+ * explicit about: what it carries is the meter, the meter depends on who the Insiders are, and a
+ * meeting therefore hands the living a number two role-exchanged runs disagree about. It is
+ * lawful — it is the number the design says the living are entitled to at a meeting — and it is
+ * still a role-dependent value, so the diff has to be told about it rather than surprised by it.
  */
-val METER_ASYMMETRY: Set<MessageKind> = setOf(EmitSchema.SUBROUTINE_PROGRESSED)
+val METER_ASYMMETRY: Set<MessageKind> = setOf(
+    EmitSchema.SUBROUTINE_PROGRESSED,
+    EmitSchema.SYSTEM_INTEGRITY_LIVE,
+    EmitSchema.SYSTEM_INTEGRITY_BATCHED,
+)
 
 /**
  * **Refuses to report on two runs that are the same round.**

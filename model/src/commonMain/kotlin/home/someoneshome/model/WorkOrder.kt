@@ -31,8 +31,8 @@ enum class SubroutineKind {
  * **One line of a work order, authority-side: what was assigned, where, and what unblocks it.**
  *
  * Ground truth, with no wire encoding and no `copy()` — the same posture [OpenSubroutine] holds,
- * for the same reason. What a client receives is [OrderLine], which is physically incapable of
- * holding a card or a dependency.
+ * for the same reason. What a client receives is [OrderLine], which carries the destination and is
+ * physically incapable of holding the answer key or the dependency graph.
  *
  * ### The answer is NOT here, and that is E-L3-2's ruling
  *
@@ -53,18 +53,34 @@ enum class SubroutineKind {
 class OrderEntry(
     /** Position in the order, and this entry's identity within it. Stable for the round. */
     val index: Int,
-    val subroutine: SubroutineKind,
     /**
-     * The card this entry is anchored at. **A card is a place, not a container** (D-123): the
-     * house resolves `(seat, card)` to *that player's* current Subroutine, so one card can be a
-     * station and two players' anchors at the same time.
+     * What this entry is: one of the roster's ten, or the Array Wipe circuit. See [AssignedWork],
+     * which carries why a circuit is a second case rather than an eleventh [SubroutineKind].
      */
-    val marker: MarkerId,
+    val work: AssignedWork,
+    /**
+     * **The cards this entry is done at, in draw order** — one for a Subroutine, the circuit's
+     * three stations for an Array Wipe (D-122).
+     *
+     * **A card is a place, not a container** (D-123): the house resolves `(seat, card)` to *that
+     * player's* current Subroutine, so one card can be a station and two players' anchors at the
+     * same time.
+     *
+     * A list rather than a card plus a separate station list, because two collections holding the
+     * same kind of fact are two collections a build can de-synchronise — and the one that went
+     * stale would be the one telling somebody which room to walk to in the dark.
+     */
+    val markers: List<MarkerId>,
     /** Earlier entries that must be done first. Empty for an entry that is actionable at once. */
     val blockedBy: List<Int>,
     val done: Boolean,
 ) {
-    fun completed(): OrderEntry = OrderEntry(index, subroutine, marker, blockedBy, true)
+    /** Where this entry begins. Null only for an entry with nowhere to be, which no draw makes. */
+    val anchor: MarkerId? get() = markers.firstOrNull()
+
+    fun isAt(marker: MarkerId): Boolean = markers.any { it.value == marker.value }
+
+    fun completed(): OrderEntry = OrderEntry(index, work, markers, blockedBy, true)
 }
 
 /**
@@ -92,9 +108,20 @@ class WorkOrder(val seat: Seat, val entries: List<OrderEntry>) {
      * The **first** actionable entry at that card, in order, which is what makes a self-chain walk
      * itself: an order deeper than the home's marker count visits some cards twice, and the second
      * visit is blocked by the first until the first is done (D-123).
+     *
+     * ### A circuit line is stepped over rather than returned, and it is worth saying why
+     *
+     * [AssignedWork.ArrayWipe] has no [AssignedWork.opensAs], because the carried state a circuit
+     * leg is graded against is not built (F-014, E7). Skipping it means a later Subroutine at the
+     * same station still opens, which is the better of the two wrong answers: the alternative is a
+     * circuit line standing in front of real work and turning a card into a blind alley.
+     *
+     * **It is unreachable today** — the draw deals no circuit — and it is the reason the format
+     * being able to carry one is not the same as the round being able to contain one. Recorded
+     * here rather than left for somebody to find at the station.
      */
     fun openAt(marker: MarkerId): OrderEntry? =
-        entries.firstOrNull { it.marker.value == marker.value && isActionable(it) }
+        entries.firstOrNull { it.isAt(marker) && it.work.opensAs != null && isActionable(it) }
 
     fun withCompleted(index: Int): WorkOrder =
         WorkOrder(seat, entries.map { if (it.index == index) it.completed() else it })
@@ -105,10 +132,34 @@ class WorkOrder(val seat: Seat, val entries: List<OrderEntry>) {
      * Same length as the authority order, always: a blocked entry is drawn as a **known unknown**
      * rather than dropped, because an order that shortened while work was blocked would make its
      * own length a tell about what the house had drawn (D-114).
+     *
+     * ### [geography] is the home, and what leaves here is one seat's rows of it
+     *
+     * The whole marker → room table is passed in and **only the cards this order actually names
+     * come out**. That is the narrowing, and it is the one authorised by revision 34: a Resident's
+     * own destinations must be nameable, and the home's full geography on every phone is not.
+     * Doing the selection here rather than at a call site means every producer of a client order —
+     * arming, and every hand-over — narrows by the same rule rather than by two copies of it.
+     *
+     * **A card with no row in [geography] contributes no destination**, so an order drawn in a
+     * home the caller did not describe comes out with nothing in the destination column rather
+     * than with a room name somebody invented. Fail-closed, and visible on every row at once.
+     *
+     * **A blocked line still carries nothing**, geography included. The blackout is structural: an
+     * entry whose *name* is withheld but whose *room* is published names the person upstream of
+     * you by where they are standing (D-146 made dependencies cross-player), so the room would
+     * hand back exactly what the type was split to withhold.
      */
-    fun asLines(): List<OrderLine> = entries.map { entry ->
+    fun asLines(geography: List<Destination>): List<OrderLine> = entries.map { entry ->
         if (isActionable(entry) || entry.done) {
-            OrderLine.Known(entry.index, entry.subroutine, entry.done)
+            OrderLine.Known(
+                index = entry.index,
+                work = entry.work,
+                done = entry.done,
+                at = entry.markers.mapNotNull { m ->
+                    geography.firstOrNull { it.marker.value == m.value }
+                },
+            )
         } else {
             OrderLine.Blocked(entry.index)
         }
@@ -123,8 +174,10 @@ class WorkOrder(val seat: Seat, val entries: List<OrderEntry>) {
  * on it by populating a field: **the type is the field list** (rule 3). A nulled `subroutine`
  * would have been the same disclosure one refactor away.
  *
- * Neither case carries the card, and that is deliberate. Where the work is, is what walking the
- * house in the dark is for; the house answers a scan and never publishes a map of the round.
+ * **A known line carries where it is and a blocked one carries nothing at all**, and the asymmetry
+ * is the whole of the type. A destination on a blocked line would publish the room another
+ * player's work is in — dependencies are cross-player (D-146) — so the blackout has to cover the
+ * place as well as the name, and it does so by there being no field.
  */
 @ClientFacing
 sealed interface OrderLine {
@@ -137,16 +190,35 @@ sealed interface OrderLine {
      */
     data class Known(
         override val index: Int,
-        val subroutine: SubroutineKind,
+        val work: AssignedWork,
         val done: Boolean,
+        /**
+         * **Where this line is: the room and the glyph, which is what a player navigates by.**
+         *
+         * One destination for a Subroutine and three for the Array Wipe circuit, in draw order
+         * (D-122) — so the list is the shape of the work rather than a nullable field that happens
+         * to be filled twice.
+         *
+         * **Empty is lawful and means the house said nothing**, which is what a round armed with
+         * no geography produces. A screen draws no destination there rather than inventing one:
+         * a room name beside work the house chose, in a dark house, is a lie a player has no way
+         * to check.
+         *
+         * Only this seat's own order's rooms are ever in here. See [WorkOrder.asLines].
+         */
+        val at: List<Destination>,
     ) : OrderLine
 
     /**
      * **A known unknown**: something is there, and that is the whole of what the player learns —
-     * not its name, not its signature — until it unblocks (D-114).
+     * not its name, not its signature, **not where it is** — until it unblocks (D-114).
      *
      * Not absent, which would shorten the order and make its length a tell. Not spelled out, which
      * would hand the player a route they have not earned yet.
+     *
+     * **One field, and it must never gain a second.** A room here would be the leak in its most
+     * plausible costume: it names no Subroutine, so it reads as harmless, and it points at the
+     * card the person upstream of you is standing at.
      */
     data class Blocked(override val index: Int) : OrderLine
 }

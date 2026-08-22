@@ -1,5 +1,6 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.Balance
 import home.someoneshome.model.MeetingPhase
 import kotlin.math.roundToInt
 
@@ -124,17 +125,21 @@ object Countdowns {
      * ends when every phone in the house says so or when the house's clock says so, and neither is
      * a thing this table could compute.
      *
-     * **The vote's 45 is host-changeable in lobby settings** (D-117) and the lobby already draws a
-     * control for it (`LobbyModel.cycleVoteWindow`). That control still reaches nothing — the wire
-     * does not carry the setting — so this is the default, and when the setting is really sent the
-     * house's number will arrive with the phase and replace it, exactly as [DRAWN_AT] is replaced.
+     * **The vote's 45 is host-changeable in lobby settings** (D-117) and the lobby draws a control
+     * for it (`LobbyModel.cycleVoteWindow`). That setting reaches the round now: it rides the
+     * arming event, the rules lock it, and it arrives on `Effect.MeetingPhaseOpened` when the
+     * ballot opens — so what is written here is the **default**, replaced by the house's number
+     * wherever there is one, exactly as [DRAWN_AT] is replaced by the house's moment.
+     *
+     * It reads `Balance.VOTE_WINDOW_SECONDS` rather than a literal, because the rules arm rounds
+     * against that same constant and two copies of forty-five is how this table drifted before.
      */
     private val MEETING_WINDOWS: Map<ScreenId, Int> = mapOf(
         // `1:04 REMAINING` on the design's own discussion screen, of ninety.
         ScreenId.Discussion to 90,
         // gdd.md:412 and :1006. Unanimous READY closes it early, which shortens the wait and
         // never the window — a clock that redrew itself shorter would be the phone predicting it.
-        ScreenId.Vote to 45,
+        ScreenId.Vote to Balance.VOTE_WINDOW_SECONDS,
         // LIGHTS OUT IN 9, over a bar with 6 of 15 spent. The Restrained takeover lands at the
         // halfway mark of this one (D-102), which is the house's business and not the bar's.
         ScreenId.Tally to 15,
@@ -150,9 +155,22 @@ object Countdowns {
      *
      * The timer that ends the screen wins where there is one, so the scan's bar and the moment its
      * light goes dark still cannot disagree. Everything else is the house's window.
+     *
+     * [voteWindow] is the ballot's length as the house sent it, and it replaces the default on the
+     * **two** screens that count a ballot down — the living's [ScreenId.Vote] and the couch's
+     * [ScreenId.GhostMeeting]. Both, because they are one clock in one room: the couch can see a
+     * living player's phone, and two surfaces draining the same ballot over different windows is a
+     * defect somebody notices from across a lit room. Where the house has said nothing the two
+     * keep their own drawn numbers, which is what reproduces the design's screens.
      */
-    fun windowOf(screen: ScreenId): Int? =
-        Flow.autoAdvance[screen]?.let { it.afterMillis / 1000 } ?: MEETING_WINDOWS[screen]
+    fun windowOf(screen: ScreenId, voteWindow: Int? = null): Int? {
+        val timed = Flow.autoAdvance[screen]?.let { it.afterMillis / 1000 }
+        if (timed != null) return timed
+        if (voteWindow != null && (screen == ScreenId.Vote || screen == ScreenId.GhostMeeting)) {
+            return voteWindow
+        }
+        return MEETING_WINDOWS[screen]
+    }
 
     /**
      * The clock [screen] is showing, or null where it has none.
@@ -160,12 +178,13 @@ object Countdowns {
      * [said] is the house's number and wins whenever there is one; the fixture's drawn moment
      * stands in while there is not. Either way it is clamped into the window, because a phone
      * showing more time left than the window holds would be promising a delay the house will not
-     * honour.
+     * honour — and the clamp is what makes a shortened ballot honest: a host who moved the setting
+     * to 30 gets a clock that starts at 30 rather than one that starts at 45 and jumps.
      */
-    fun on(screen: ScreenId, said: Int? = null): Countdown? {
+    fun on(screen: ScreenId, said: Int? = null, window: Int? = null): Countdown? {
         val drawn = DRAWN_AT[screen] ?: return null
-        val window = windowOf(screen) ?: return null
-        return Countdown((said ?: drawn).coerceIn(0, window), window)
+        val runs = windowOf(screen, window) ?: return null
+        return Countdown((said ?: drawn).coerceIn(0, runs), runs)
     }
 
     /**
@@ -180,19 +199,28 @@ object Countdowns {
      * Null during [MeetingPhase.CheckIn]: the gate closes when the last player walks in, not when a
      * clock runs out (D-104), so there is no window for a bar to be a fraction of.
      *
-     * ### ⚠️ The vote reads the ghost's own row, and the two rows disagree
+     * ### ⚠️ The two rows still disagree, and only while no house is attached
      *
      * `GhostMeeting` carries a window of 60 while [ScreenId.Vote] carries the design's 45 — two
-     * numbers for one clock, in a lit room where the couch can see a living player's phone. It is
-     * **left alone deliberately**: the ghost's 60 is what reproduces the design's drawn picture,
-     * `VOTING ENDS IN 0:24` over twelve lit segments of thirty, and moving it to 45 redraws that
-     * bar at sixteen. Reconciling them is a visible screen change and wants a ruling; flagged.
+     * numbers for one clock, in a lit room where the couch can see a living player's phone. The
+     * fixtures are **left alone deliberately**: the ghost's 60 is what reproduces the design's
+     * drawn picture, `VOTING ENDS IN 0:24` over twelve lit segments of thirty, and moving it to 45
+     * redraws that bar at sixteen. Reconciling the two *drawn* numbers is a visible screen change
+     * and still wants a ruling.
+     *
+     * **In play they cannot disagree**, which is the half this unit closed: [window] is the ballot
+     * length the house sent, and it replaces both rows at once. The flag is now about a fixture
+     * rather than about the game.
      */
-    fun onGhostMeeting(phase: MeetingPhase, said: Int? = null): Countdown? = when (phase) {
+    fun onGhostMeeting(
+        phase: MeetingPhase,
+        said: Int? = null,
+        window: Int? = null,
+    ): Countdown? = when (phase) {
         MeetingPhase.CheckIn -> null
-        MeetingPhase.Discussion -> on(ScreenId.Discussion, said)
-        MeetingPhase.Vote -> on(ScreenId.GhostMeeting, said)
-        MeetingPhase.Tally -> on(ScreenId.Tally, said)
+        MeetingPhase.Discussion -> on(ScreenId.Discussion, said, window)
+        MeetingPhase.Vote -> on(ScreenId.GhostMeeting, said, window)
+        MeetingPhase.Tally -> on(ScreenId.Tally, said, window)
     }
 
     /** What the couch's clock is counting down, in the phase's own words. */

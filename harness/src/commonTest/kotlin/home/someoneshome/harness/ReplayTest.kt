@@ -1,15 +1,19 @@
 package home.someoneshome.harness
 
+import home.someoneshome.model.AssignedWork
 import home.someoneshome.model.Balance
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MeetingTrigger
+import home.someoneshome.model.OrderEntry
 import home.someoneshome.model.Outcome
 import home.someoneshome.model.Seat
+import home.someoneshome.model.SubroutineKind
 import home.someoneshome.model.Tick
 import home.someoneshome.model.WinRoute
 import home.someoneshome.model.Winner
+import home.someoneshome.model.WorkOrder
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -256,7 +260,7 @@ class RecordingTest {
     @Test
     fun `replay detects a work order that was drawn differently`() {
         val markers = (0 until 8).map { MarkerId("m$it") }
-        val events = listOf(Event.RoundArmed(Tick(0), 1L, SEATS, INSIDERS, null, markers))
+        val events = listOf(Event.RoundArmed(Tick(0), 1L, SEATS, INSIDERS, null, placed(markers)))
         val (state, recording) = record(GameState.EMPTY, events)
         assertTrue(
             state.workOrders.any { it.entries.isNotEmpty() },
@@ -452,5 +456,49 @@ class RecordingTest {
         val skip = Transcript.render(Event.VoteSelected(Tick(1), Seat(0), null))
         val negative = Transcript.render(Event.VoteSelected(Tick(1), Seat(0), Seat(-1)))
         assertTrue(skip != negative, "abstention and a seat must not share a transcript row")
+    }
+
+    /**
+     * **THE INJECTION: the state row can tell a circuit from a Subroutine, and holds all three of
+     * its stations** (D-164, D-122).
+     *
+     * The order format can carry the Array Wipe circuit now, and **nothing deals one yet** — the
+     * draw is flat and the carried state a leg is graded against is F-014's. That combination is
+     * exactly how a format grows a case the recording cannot express and nobody finds out: no
+     * round produces one, so no replay ever renders one, so a `work()` that spelled the circuit as
+     * one of the roster's ten would certify a replayed round with an eleventh Subroutine in it as
+     * byte-identical. The state row is built by hand here for that reason, because the draw cannot
+     * yet build it.
+     *
+     * Two halves, and the second is the one that bites: the circuit must not render as any
+     * `SubroutineKind`, **and** its three stations must all be on the row — an entry rendered at a
+     * single anchor could not be told from the same circuit drawn against two different stations.
+     */
+    @Test
+    fun `a circuit renders as a circuit and carries all three of its stations`() {
+        val stations = listOf(MarkerId("s0"), MarkerId("s1"), MarkerId("s2"))
+        fun stateWith(work: AssignedWork, at: List<MarkerId>) = Transcript.render(
+            GameState.armedRound(
+                seed = 1L, seats = SEATS, insiders = INSIDERS,
+                systemIntegrity = Balance.meterTotal(SEATS.size),
+                workOrders = listOf(
+                    WorkOrder(Seat(0), listOf(OrderEntry(0, work, at, emptyList(), done = false))),
+                ),
+            ),
+        )
+
+        val circuit = stateWith(AssignedWork.ArrayWipe, stations)
+        for (kind in SubroutineKind.entries) {
+            assertNotEquals(
+                stateWith(AssignedWork.Subroutine(kind), stations), circuit,
+                "a circuit and a $kind entry at the same stations render identically, so a replay " +
+                    "cannot tell the two apart",
+            )
+        }
+        assertNotEquals(
+            stateWith(AssignedWork.ArrayWipe, stations.take(1)), circuit,
+            "the row holds one of the circuit's three stations, so a circuit drawn against a " +
+                "different pair replays as the same round",
+        )
     }
 }

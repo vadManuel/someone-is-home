@@ -1,5 +1,7 @@
 package home.someoneshome.harness
 
+import home.someoneshome.model.AssignedWork
+import home.someoneshome.model.Destination
 import home.someoneshome.model.Effect
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
@@ -32,7 +34,19 @@ object Transcript {
                 // `chosen` is the public setting; `insiders` is what was drawn behind it (D-103).
                 "insiders" to event.insiders.joinToString(",") { num(it.index) },
                 "chosen" to (event.chosenInsiders?.let { num(it) } ?: "none"),
-                "markers" to event.markers.joinToString(",") { text(it.value) },
+                // **The cards WITH their glyph and their room**, because the destination on a work
+                // order is computed from them: a row that held bare ids would replay into an order
+                // whose destination column was empty, and the replay would certify it.
+                "markers" to event.markers.joinToString(",") { destination(it) },
+                // The host's ballot length. Balance values lock at arming and stamp into the
+                // recording, so a replay runs the ballot the evening actually ran rather than
+                // whatever this build's default happens to be.
+                "voteWindow" to num(event.voteWindowSeconds),
+                // **The seats that said what to call them, and NOT the names** (D-115). The lines'
+                // argument below, applied to the other round-scoped text on the desk: names are
+                // scoped to the round on purpose, and a recording outlives the evening. The parser
+                // rebuilds blanks and the reveal renders as seats alone, so replay is exact.
+                "names" to event.names.joinToString(",") { num(it.seat.index) },
                 // **The seats that handed a line over, and NOT what any of them said** (D-116).
                 //
                 // The only recorded input this file deliberately refuses to record. A one line is
@@ -102,6 +116,28 @@ object Transcript {
     }
 
     /**
+     * A card, its glyph and its room, as one field.
+     *
+     * `:` between the three and every part escaped, so a room name a host typed with a colon in it
+     * cannot forge a fourth part — the same fault the pipe and the comma each had, and the reason
+     * [escape] now covers the colon as well.
+     */
+    private fun destination(at: Destination): String =
+        "${text(at.marker.value)}:${text(at.shape)}:${text(at.room)}"
+
+    /**
+     * What one line of a work order is, as one token.
+     *
+     * The circuit renders as its own word rather than as a Subroutine name, because it is not one
+     * — a state row that spelled it as a kind would replay into a round with an eleventh Subroutine
+     * in it.
+     */
+    private fun work(work: AssignedWork): String = when (work) {
+        is AssignedWork.Subroutine -> work.kind.toString()
+        AssignedWork.ArrayWipe -> "ArrayWipe"
+    }
+
+    /**
      * How a meeting was called. Two forms, and the reported seat is part of the fact.
      *
      * `card` and `report:3` rather than a bare seat or a bare word: the discriminator is on the
@@ -134,6 +170,13 @@ object Transcript {
             "SubroutineGraded|seat=${effect.seat.index}|accepted=${effect.accepted}"
         is Effect.SubroutineProgressed ->
             "SubroutineProgressed|remaining=${effect.remaining}"
+        // The percentage and never a total, exactly as narrow here as the wire is -- a recording
+        // that helpfully wrote the denominator beside it would be the one artefact of this game in
+        // which the Insider count is divisible out of the meter.
+        is Effect.SystemIntegrityLive ->
+            "SystemIntegrityLive|percent=${num(effect.percent)}"
+        is Effect.SystemIntegrityBatched ->
+            "SystemIntegrityBatched|percent=${num(effect.percent)}"
         is Effect.MessageDelivered ->
             "MessageDelivered|seat=${effect.seat.index}|body=${text(effect.body)}"
         // The lines as the seat receives them, blocked ones as `?`. A blocked line renders with no
@@ -144,8 +187,13 @@ object Transcript {
             "WorkOrderIssued|seat=${effect.seat.index}|lines=" +
                 effect.lines.joinToString(",") { line ->
                     when (line) {
+                        // The destinations too, because they are on the wire and this row is a
+                        // picture of the wire. A blocked line renders as a bare `?` with no
+                        // destination after it -- not because this formatting withholds one, but
+                        // because `OrderLine.Blocked` has none to render.
                         is OrderLine.Known ->
-                            "${line.index}:${line.subroutine}${if (line.done) "!" else ""}"
+                            "${line.index}:${work(line.work)}${if (line.done) "!" else ""}" +
+                                "@" + line.at.joinToString(".") { destination(it) }
                         is OrderLine.Blocked -> "${line.index}:?"
                     }
                 }
@@ -172,8 +220,13 @@ object Transcript {
             "StandAndWalkIn|seat=${effect.seat.index}|haptic=${effect.haptic}"
         is Effect.CheckInProgressed ->
             "CheckInProgressed|present=${effect.present}|expected=${effect.expected}"
+        // The ballot's window is on the row and renders as a token when it is absent, for the
+        // reason a scan's null does: a phase that carries no window and a phase that carries one
+        // must not be separable by the shape of the line rather than by its contents.
         is Effect.MeetingPhaseOpened ->
-            "MeetingPhaseOpened|phase=${effect.phase}|haptic=${effect.haptic}"
+            "MeetingPhaseOpened|phase=${effect.phase}" +
+                "|voteWindow=${effect.voteWindowSeconds?.let { num(it) } ?: "none"}" +
+                "|haptic=${effect.haptic}"
         is Effect.ReadyProgressed ->
             "ReadyProgressed|ready=${effect.ready}|expected=${effect.expected}"
         is Effect.VoteHeld ->
@@ -211,13 +264,14 @@ object Transcript {
         is Effect.RoundEnded ->
             "RoundEnded|seat=${effect.seat.index}|winner=${effect.winner}|by=${effect.by}" +
                 "|haptic=${effect.haptic}"
-        // **The seats, and not one word of what was held over any of them** (D-116).
+        // **The seats, and neither the names nor one word of what was held over any of them**
+        // (D-115, D-116).
         //
-        // The names are the seats and they belong in a recording -- who was drawn is the single
-        // most useful thing an authority-side artefact can tell you about a round that went wrong.
-        // The LINES do not, for the reason the arming row above gives at length: a recording
-        // outlives the evening and the promise printed on the screen where a line was typed does
-        // not survive being written into one.
+        // Which SEATS were drawn belongs in a recording -- it is the single most useful thing an
+        // authority-side artefact can tell you about a round that went wrong. Neither round-scoped
+        // text does, for the reason the arming row above gives at length: a recording outlives the
+        // evening, the promise printed on the screen where a line was typed does not survive being
+        // written into one, and D-115 scoped the names to the round on exactly the same terms.
         //
         // This is also the hinge that keeps replay exact. Rendering seats alone means the row a
         // replayed round produces is identical whether the lines were rebuilt as blanks or never
@@ -267,9 +321,18 @@ object Transcript {
      * **The comma is in here because lists are comma-joined**, and a marker id is external input
      * read off a card in somebody's house. One containing a comma would have forged a second
      * element in the arming event's marker list — the same fault the pipe had, one separator down.
+     *
+     * **The colon is in here now, and it closes E-L4-4.** It has always been a sub-separator inside
+     * `open=` and `presence=`, and a marker id can contain one — the payload alphabet is QR
+     * alphanumeric minus SPACE, which includes `:` — so two different states could render
+     * identically. This unit made it sharper rather than merely latent: a destination is
+     * `card:glyph:room`, and a **room name is text a host typed**, so an unescaped colon there
+     * would forge a fourth part out of a name like `KITCHEN: BACK`. Third member of the family the
+     * pipe and the comma opened, and the last separator this format has.
      */
     private fun escape(s: String): String = s
-        .replace("\\", "\\\\").replace("|", "\\p").replace(",", "\\c").replace("\n", "\\n")
+        .replace("\\", "\\\\").replace("|", "\\p").replace(",", "\\c")
+        .replace(":", "\\o").replace("\n", "\\n")
 
     /**
      * A canonical rendering of authority STATE.
@@ -360,7 +423,11 @@ object Transcript {
         append("|orders=").append(
             state.workOrders.joinToString(",") { order ->
                 "${num(order.seat.index)}:" + order.entries.joinToString(".") { entry ->
-                    "${num(entry.index)}/${entry.subroutine}/${text(entry.marker.value)}" +
+                    // The work and EVERY card it is done at. A circuit is three stations on one
+                    // entry, so a row that held a single anchor could not tell a replayed circuit
+                    // from one drawn against a different pair of stations.
+                    "${num(entry.index)}/${work(entry.work)}" +
+                        "/${entry.markers.joinToString("+") { text(it.value) }}" +
                         "/${entry.blockedBy.joinToString("-") { num(it) }}" +
                         "/${if (entry.done) "done" else "open"}"
                 }
@@ -368,6 +435,10 @@ object Transcript {
         )
         append("|stations=").append(state.stations.joinToString(",") { text(it.value) })
         append("|active=").append(state.activeMarkers.joinToString(",") { text(it.value) })
+        // **The home, because a work order's destination column is computed from it.** Host-
+        // authored room names, and the one piece of geography this file holds -- a state row that
+        // stopped short of it would certify a replay whose orders pointed nowhere.
+        append("|home=").append(state.destinations.joinToString(",") { destination(it) })
         // **The presence plane, in the one place it is allowed to appear.** It reaches no client
         // -- EmitSchema gives PresenceChanged no row at all -- so a state row is the only artifact
         // that holds it, and a replay that stopped short of it would certify a build whose windows
@@ -396,6 +467,13 @@ object Transcript {
         // EMPTY the instant the round ends, so a replay that skipped the deletion stops matching
         // here rather than nowhere.
         append("|lines=").append(state.oneLines.joinToString(",") { num(it.seat.index) })
+        // **The seats that said what to call them, and never the names** (D-115). The lines' field
+        // above, one round-scoped text over — and like it, this is the field that goes to EMPTY the
+        // instant the round ends, so a replay that skipped the deletion stops matching here.
+        append("|names=").append(state.names.joinToString(",") { num(it.seat.index) })
+        // The ballot's length, locked at arming. A state row that omitted it would replay a meeting
+        // whose window came from this build's default rather than from the evening's host.
+        append("|voteWindow=").append(num(state.voteWindowSeconds))
         append("|nextEntity=").append(num(state.nextEntity))
         append("|seed=").append(num(state.seed))
     }

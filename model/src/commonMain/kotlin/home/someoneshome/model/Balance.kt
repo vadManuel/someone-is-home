@@ -214,8 +214,45 @@ object Balance {
      */
     const val SYNC_PULSE_PAIR_WINDOW: Long = SYNC_PULSE_BEATS * SYNC_PULSE_INTERVAL
 
+    /**
+     * **The ballot's window, in seconds — the design's 45, and the host may move it** (D-117,
+     * `gdd.md:412`, `:1006`).
+     *
+     * The one number in this object that is **not** a placeholder: it is the design's own, and it
+     * is here rather than in `ui` because it is now the default a round is armed against
+     * ([Event.RoundArmed.voteWindowSeconds]) and the number a client draws when no house has said
+     * otherwise. Two copies of forty-five, one in the rules and one on a screen, is the drift
+     * `Countdowns` was already caught in once.
+     *
+     * Seconds and not ticks, deliberately, unlike every duration above it. This one is *displayed*
+     * — the host cycles it as `45S` and the couch counts it down — and a screen that had to divide
+     * by [TICKS_PER_SECOND] to draw a clock would be a screen holding an opinion about the rate.
+     */
+    const val VOTE_WINDOW_SECONDS: Int = 45
+
     /** `M`, the whole bar, fixed at arming and never moved again (`gdd.md:1322`). */
     fun meterTotal(seats: Int): Int = seats * METER_PER_SEAT
+
+    /**
+     * **System Integrity as a percentage, and there is nowhere else this arithmetic may live**
+     * (D-103, D-153).
+     *
+     * *Percentage only, never `28/42`.* A total of `seats × METER_PER_SEAT` is public arithmetic,
+     * so an absolute value on any wire or any screen hands back the division D-130 retired the
+     * Resident operand to close. The wire carries the output of this function and never its inputs.
+     *
+     * **[remaining], not completed.** The meter counts down: a round opens at 100% and the
+     * Residents win at 0 (D-131's first route). Integer division, floored, for [InsiderBand]'s
+     * reason — and floored is the right direction for the one value it matters at, since a meter
+     * with work still on it must never round up to a clean 0%.
+     *
+     * A round with no seats has no bar; it reads 0 rather than dividing by nothing.
+     */
+    fun integrityPercent(remaining: Int, seats: Int): Int {
+        val total = meterTotal(seats)
+        if (total <= 0) return 0
+        return (remaining.coerceIn(0, total) * 100) / total
+    }
 
     /**
      * **The fewest plain Residents the lobby's public facts allow** — D-129's denominator.

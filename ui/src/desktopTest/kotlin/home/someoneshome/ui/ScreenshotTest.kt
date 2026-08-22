@@ -16,8 +16,12 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.unit.dp
+import home.someoneshome.model.AssignedWork
+import home.someoneshome.model.Destination
 import home.someoneshome.model.DriftPath
 import home.someoneshome.model.InterruptSweep
+import home.someoneshome.model.MarkerId
+import home.someoneshome.model.MarkerShapes
 import home.someoneshome.model.MeetingPhase
 import home.someoneshome.model.OrderLine
 import home.someoneshome.model.SignalGraph
@@ -430,14 +434,44 @@ class ScreenshotTest {
         // Longer than the port's seven, with the blocked lines scattered rather than trailing —
         // the shape D-123's same-card reuse actually produces, and the one the drawn fixture's two
         // rows at the bottom quietly suggests never happens.
+        //
+        // Every known line carries its destination — the room the host named and the glyph on the
+        // card — and every blocked one carries none, which is what the frame is worth looking at
+        // for: a nine-row list with three rows that have nothing in that column is a shape nobody
+        // has seen drawn. Two lines share BOILER, because a real home puts two cards in a room.
+        //
+        // Line 6 is the Array Wipe circuit, with D-122's three stations on it and the first of
+        // them on the row. It is the only line here whose label and light are this client's rather
+        // than the roster's.
+        fun at(card: String, shape: String, room: String) =
+            listOf(Destination(MarkerId(card), MarkerShapes[shape]!!.id, room))
         val dealt = listOf(
-            OrderLine.Known(0, SubroutineKind.Handshake, done = true),
-            OrderLine.Known(1, SubroutineKind.Deallocate, done = true),
+            OrderLine.Known(
+                0, AssignedWork.Subroutine(SubroutineKind.Handshake), done = true,
+                at = at("c0", "triangle_up", "GARAGE"),
+            ),
+            OrderLine.Known(
+                1, AssignedWork.Subroutine(SubroutineKind.Deallocate), done = true,
+                at = at("c1", "diamond", "HALL"),
+            ),
             OrderLine.Blocked(2),
-            OrderLine.Known(3, SubroutineKind.Sniff, done = false),
-            OrderLine.Known(4, SubroutineKind.ParityCheck, done = false),
+            OrderLine.Known(
+                3, AssignedWork.Subroutine(SubroutineKind.Sniff), done = false,
+                at = at("c3", "cross", "BOILER"),
+            ),
+            OrderLine.Known(
+                4, AssignedWork.Subroutine(SubroutineKind.ParityCheck), done = false,
+                at = at("c4", "star", "BOILER"),
+            ),
             OrderLine.Blocked(5),
-            OrderLine.Known(6, SubroutineKind.Interrupt, done = false),
+            OrderLine.Known(
+                6, AssignedWork.ArrayWipe, done = false,
+                at = listOf(
+                    Destination(MarkerId("s0"), MarkerShapes["square_frame"]!!.id, "STUDY"),
+                    Destination(MarkerId("s1"), MarkerShapes["ring"]!!.id, "LANDING"),
+                    Destination(MarkerId("s2"), MarkerShapes["wide_rect"]!!.id, "PANTRY"),
+                ),
+            ),
             OrderLine.Blocked(7),
         )
         val pushed = listOf(

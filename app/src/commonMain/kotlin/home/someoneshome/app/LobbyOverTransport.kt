@@ -234,6 +234,21 @@ class LobbyHouse(
         publish()
     }
 
+    /**
+     * **The host's ballot length, to the desk — and deliberately not to the standing** (D-117).
+     *
+     * [setInsiders] publishes because the Insider count is part of what every phone in the lobby is
+     * shown: the desk clamps it into D-103's band and the clamped value has to come back, or the
+     * host reads a setting the house is not holding. **The ballot's length is not on that surface at
+     * all.** It reaches the round by the arming event, and it reaches the clients on the push that
+     * opens the vote — so publishing it here would widen the wire for a number already travelling
+     * by a better road, and would put it on six phones a whole round before anybody may act on it.
+     *
+     * The absence of `publish()` is therefore the decision, not an omission, which is why it is
+     * written down beside the one call that has it. See `LobbyDesk.voteWindowSeconds`.
+     */
+    fun setVoteWindow(seconds: Int) = desk.setVoteWindow(seconds)
+
     /** **Deleted when the round ends** — the host's half of the promise. */
     fun roundEnded() {
         desk.roundEnded()
@@ -473,6 +488,9 @@ class LobbyOverTransport(
 
     /** The host's setting. On a phone that is not hosting, [LobbyHouse] was never started. */
     override fun setInsiders(chosen: Int?) = house.setInsiders(chosen)
+
+    /** The host's ballot length, to the desk beside this phone. See [LobbyHouse.setVoteWindow]. */
+    override fun setVoteWindow(seconds: Int) = house.setVoteWindow(seconds)
 
     /**
      * **The round ended: the desk drops every line, and this phone stays in the lobby** (D-116,

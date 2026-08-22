@@ -363,12 +363,48 @@ class LobbyModelTest {
     }
 
     /**
-     * **The setting does not reach the wire, and that is the design of it rather than an omission.**
+     * **THE INJECTION: the host's tap leaves the screen and reaches the link** (D-117).
      *
-     * [LobbyLink] carries the Insider count because the house clamps it. Widening what a client
-     * sends is a protocol decision, not a settings row's, so this proves the row stayed on this
-     * phone — if the vote window is ever really enforced it should arrive the way `insiders` does,
-     * and this test should be the thing that fails.
+     * The row has drawn a control since U6 and moved a number that reached nothing — no `arm` on
+     * [LobbyLink], no arming case on `LobbyBody`, no settings on `Event.RoundArmed` — so *45
+     * seconds, host-changeable* was a sentence with no mechanism under it. This is the first link
+     * of the mechanism: every tap is handed on, in the order it was made, so a build that moved
+     * only this phone's own field fails here rather than passing on a screen that looks right.
+     *
+     * From here it is the desk's (`LobbyDesk.setVoteWindow`), and the desk is what a round is armed
+     * from — which `VoteWindowTest` picks up on the other side of arming.
+     */
+    @Test
+    fun `every move of the vote window is handed to the link`() {
+        val (model, link) = lobbyOf(joined = 6)
+        assertEquals(emptyList(), link.windows, "a lobby that had not been touched set a window")
+        repeat(3) { model.cycleVoteWindow() }
+        assertEquals(
+            LobbyModel.VOTE_WINDOWS.drop(1).take(3), link.windows,
+            "the host moved the VOTING row three times and the link was told ${link.windows}",
+        )
+    }
+
+    /** A client's tap moves nothing, so it hands the link nothing either. */
+    @Test
+    fun `a client's vote window tap never reaches the link`() {
+        val (model, link) = lobbyOf(joined = 6, hosting = false)
+        repeat(5) { model.cycleVoteWindow() }
+        assertEquals(
+            emptyList(), link.windows,
+            "a phone that is not hosting sent the house a ballot length",
+        )
+    }
+
+    /**
+     * **The setting reaches the desk and never the standing, and that is a decision.**
+     *
+     * [LobbyLink] carries the Insider count *back* because the house clamps it, and a host who
+     * could not see the clamped value would be reading a setting the house is not holding. The
+     * ballot's length is clamped by nobody and read by nobody until the vote opens, so it stays off
+     * the surface every phone in the lobby is shown: it rides the arming event into the round and
+     * arrives on `Effect.MeetingPhaseOpened`. A `LobbyBody` case for it would widen the wire for a
+     * number already travelling by a better road — this is what holds that shut.
      */
     @Test
     fun `moving the vote window changes nothing the house published`() {

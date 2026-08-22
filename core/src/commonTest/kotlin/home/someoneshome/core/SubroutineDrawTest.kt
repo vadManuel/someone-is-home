@@ -53,7 +53,9 @@ private val MARKERS = (0 until 8).map { MarkerId("m$it") }
 
 private fun armed(seed: Long = 20260822L): GameState = reduce(
     GameState.EMPTY,
-    Event.RoundArmed(Tick(0), seed = seed, seats = SEATS, insiders = INSIDERS, markers = MARKERS),
+    Event.RoundArmed(
+        Tick(0), seed = seed, seats = SEATS, insiders = INSIDERS, markers = placed(MARKERS),
+    ),
 ).state
 
 /** Every kind, dealt [many] times over from a stream nothing else is drawing from. */
@@ -467,7 +469,7 @@ class ARevokedSeatBanksNothingTest {
     fun `an out seat's correct entry banks nothing and is still answered`() {
         val base = armed()
         val seat = Seat(0)
-        val card = base.workOrderFor(seat)!!.entries.first().marker
+        val card = base.workOrderFor(seat)!!.entries.first().anchor!!
 
         val scanned = reduce(base, Event.MarkerScanned(Tick(1), seat, card)).state
         val answer = scanned.openSubroutineFor(seat)!!.expected
@@ -511,7 +513,7 @@ class ARevokedSeatBanksNothingTest {
     fun `a Restrained seat's correct entry banks nothing either`() {
         val base = armed()
         val seat = Seat(0)
-        val card = base.workOrderFor(seat)!!.entries.first().marker
+        val card = base.workOrderFor(seat)!!.entries.first().anchor!!
         val scanned = reduce(base, Event.MarkerScanned(Tick(1), seat, card)).state
         val answer = scanned.openSubroutineFor(seat)!!.expected
         val out = reduce(

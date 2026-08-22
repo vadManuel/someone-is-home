@@ -44,16 +44,19 @@ private val MARKERS = (0 until 20).map { MarkerId("m$it") }
 
 private fun armed(): GameState = reduce(
     GameState.EMPTY,
-    Event.RoundArmed(Tick(0), seed = 20260821L, seats = SEATS, insiders = INSIDERS, markers = MARKERS),
+    Event.RoundArmed(
+        Tick(0), seed = 20260821L, seats = SEATS, insiders = INSIDERS,
+        markers = placed(MARKERS),
+    ),
 ).state
 
 /** This seat's own first anchor, read off the draw rather than typed in. */
 private fun cardFor(state: GameState, seat: Seat): MarkerId =
-    state.workOrderFor(seat)!!.entries.first().marker
+    state.workOrderFor(seat)!!.entries.first().anchor!!
 
 /** A card in the round that holds nothing for this seat. Registered, and not theirs. */
 private fun emptyCardFor(state: GameState, seat: Seat): MarkerId {
-    val mine = state.workOrderFor(seat)!!.entries.map { it.marker.value }.toSet()
+    val mine = state.workOrderFor(seat)!!.entries.map { it.anchor!!.value }.toSet()
     return state.activeMarkers.first { it.value !in mine }
 }
 
@@ -235,7 +238,7 @@ class InstanceRidesTheScanTest {
     fun `the question the scan draws does not move with the role`() {
         fun round(insiders: List<Seat>) = reduce(
             GameState.EMPTY,
-            Event.RoundArmed(Tick(0), 20260821L, SEATS, insiders, markers = MARKERS),
+            Event.RoundArmed(Tick(0), 20260821L, SEATS, insiders, markers = placed(MARKERS)),
         ).state
 
         val none = round(emptyList())

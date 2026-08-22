@@ -47,9 +47,16 @@ class RecordingTextTest {
         val original = recorded()
         val reparsed = RecordingText.parse(original.toText())
 
+        // **Both round-scoped texts, because the recording refuses both** (D-115, D-116). A
+        // recording holds the seats that handed a line over and the seats that said what to call
+        // them, and neither text: it outlives the evening, and neither promise survives being
+        // written into one.
         fun withoutTheText(events: List<Event>) = events.map { event ->
             if (event !is Event.RoundArmed) event
-            else event.copy(oneLines = event.oneLines.map { it.copy(text = "") })
+            else event.copy(
+                oneLines = event.oneLines.map { it.copy(text = "") },
+                names = event.names.map { it.copy(name = "") },
+            )
         }
 
         assertEquals(withoutTheText(original.events), reparsed.events)
@@ -65,6 +72,14 @@ class RecordingTextTest {
         assertTrue(
             armed.oneLines.all { it.text.isEmpty() },
             "a one line came back out of a recording: ${armed.oneLines}",
+        )
+        assertEquals(
+            SEATS.map { it.index }, armed.names.map { it.seat.index },
+            "the recording forgot who said what to call them, so a replay cannot rebuild the desk",
+        )
+        assertTrue(
+            armed.names.all { it.name.isEmpty() },
+            "a player's name came back out of a recording: ${armed.names}",
         )
     }
 
@@ -82,7 +97,7 @@ class RecordingTextTest {
         for (type in EgressType.entries) {
             val events = listOf<Event>(
                 Event.RoundArmed(
-                    Tick(0), seed = 5L, seats = SEATS, insiders = INSIDERS, markers = MARKERS,
+                    Tick(0), seed = 5L, seats = SEATS, insiders = INSIDERS, markers = placed(MARKERS),
                 ),
                 Event.EgressFired(Tick(3600), Seat(1), type, listOf(MARKERS[0], MARKERS[4])),
                 Event.SyncPulseReturned(Tick(3700), Seat(2), listOf(3640L, 3670L, 3700L, 3730L)),

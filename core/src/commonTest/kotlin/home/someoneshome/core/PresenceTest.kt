@@ -31,12 +31,12 @@ private fun round(): GameState = reduce(
     GameState.EMPTY,
     Event.RoundArmed(
         Tick(0), seed = 20260821L, seats = P_SEATS, insiders = listOf(Seat(1)),
-        markers = P_MARKERS,
+        markers = placed(P_MARKERS),
     ),
 ).state
 
 private fun anchor(state: GameState, seat: Seat): MarkerId =
-    state.workOrderFor(seat)!!.entries.first().marker
+    state.workOrderFor(seat)!!.entries.first().anchor!!
 
 class PerformanceWindowTest {
 
@@ -74,7 +74,7 @@ class PerformanceWindowTest {
     fun `a scan that opens nothing places the seat with the window shut`() {
         val state = round()
         val seat = Seat(0)
-        val mine = state.workOrderFor(seat)!!.entries.map { it.marker.value }.toSet()
+        val mine = state.workOrderFor(seat)!!.entries.map { it.anchor!!.value }.toSet()
         val empty = state.activeMarkers.first { it.value !in mine }
 
         val row = assertNotNull(
@@ -148,7 +148,7 @@ class PerformanceWindowTest {
         val open = reduce(state, Event.MarkerScanned(Tick(1), seat, card)).state
         val asked = open.openSubroutineFor(seat)!!.expected
 
-        val mine = state.workOrderFor(seat)!!.entries.map { it.marker.value }.toSet()
+        val mine = state.workOrderFor(seat)!!.entries.map { it.anchor!!.value }.toSet()
         val elsewhere = state.activeMarkers.first { it.value !in mine }
         val moved = reduce(open, Event.MarkerScanned(Tick(2), seat, elsewhere)).state
 
@@ -277,7 +277,7 @@ class PresenceIsNeverRecitedTest {
         repeat(3) {
             for (seat in P_SEATS) {
                 val order = state.workOrderFor(seat)!!
-                val card = order.entries.first { order.isActionable(it) }.marker
+                val card = order.entries.first { order.isActionable(it) }.anchor!!
                 for (event in listOf(
                     Event.MarkerScanned(Tick(t++), seat, card),
                     Event.SubroutineReturned(

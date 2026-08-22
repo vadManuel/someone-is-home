@@ -50,14 +50,70 @@ sealed interface Effect {
     data class SubroutineGraded(val seat: Seat, val accepted: Boolean) : Effect
 
     data class SubroutineProgressed(val remaining: Int) : Effect
+
+    /**
+     * **The meter, live, for the people outside the system** (D-134, D-145, `gdd.md:1014`).
+     *
+     * *A player outside the system sees the real bars live*, and that privilege is what being out
+     * is made of. This is the bar as a **percentage** and never as a count against a total: an
+     * absolute value hands back `seats × METER_PER_SEAT` and therefore the Insider count D-103
+     * spent a revision hiding (D-130's argument, on the wire rather than on a screen). See
+     * [Balance.integrityPercent], which is the only place that arithmetic exists.
+     *
+     * ### Why this is a second kind beside [SystemIntegrityBatched] and not one kind with two rows
+     *
+     * The two carry the same fact and differ in **when**, which is the one thing an allowlist
+     * cannot express: a single kind permitted to both audiences would deliver every live movement
+     * to the living the moment it happened, and the living are entitled to a number only at a
+     * meeting (`gdd.md:192`, `:1002`). Timing is not a permission, so it has to be a kind — and
+     * this is [EmitSchema]'s own rule arriving from the other direction: two audiences told
+     * different amounts is two kinds, and *how often* is an amount.
+     *
+     * **It says nothing about who moved it.** A percentage of the house's work, to people who
+     * cannot act on it — not whose entry banked, not how many anybody has done. [SubroutineGraded]
+     * is addressed to the one seat that returned something for exactly that reason.
+     */
+    data class SystemIntegrityLive(val percent: Int) : Effect
+
+    /**
+     * **The meter as the living are told it: once, at a shift boundary, then frozen**
+     * (`gdd.md:192`, `:1002`).
+     *
+     * A shift is the work interval between meetings, and a meeting ends the shift it interrupts —
+     * so the boundary is the meeting being called, and that is the one moment this is emitted. In
+     * between, the living see whatever number they were last given and it does not move: continuous
+     * decrements are a rate signal nobody living is entitled to, and *the batch* is what stops the
+     * meter reporting who is working and how fast.
+     *
+     * **The one exception is not here and must not come here.** SystemIntegrity reaching zero ends
+     * the round immediately (D-131's first route, `gdd.md:203`) — that arrives as
+     * [RoundEnded], on every phone at once, and a group that cleared the meter does not wait for a
+     * meeting to be told so. See `Rules.outcomeOf`.
+     *
+     * Percentage only, for [SystemIntegrityLive]'s reason.
+     */
+    data class SystemIntegrityBatched(val percent: Int) : Effect
+
     data class MessageDelivered(val seat: Seat, val body: String) : Effect
 
     /**
      * **A seat's work order, as that seat may see it** (D-114, D-129, D-112).
      *
-     * Carries [OrderLine]s and never [OrderEntry]s: the answer key, the anchors and the dependency
-     * graph all stay on the authority side, and a blocked line is a different *type* rather than
-     * the same type with its name blanked (rule 3).
+     * Carries [OrderLine]s and never [OrderEntry]s: the answer key and the dependency graph stay
+     * on the authority side, and a blocked line is a different *type* rather than the same type
+     * with its name blanked (rule 3).
+     *
+     * ### It carries where the work is, and only for this seat's own lines
+     *
+     * A known line carries its [Destination]s — the room and the glyph, which is what a player
+     * navigates a dark house by. **The narrowing is which rows of the home's table come out**, and
+     * it happens inside [WorkOrder.asLines] so that every producer of a client order narrows by the
+     * same rule. What is *not* authorised is the home's full geography reaching a phone: knowing
+     * where your own next Subroutine is, is the game; knowing where every card in the house is, is
+     * the map of the round the house has never published.
+     *
+     * A blocked line carries no destination either, because a dependency is cross-player (D-146)
+     * and a room without a name still names the person upstream of you.
      *
      * ### Emitted on every return, not only on the ones that changed something
      *
@@ -208,7 +264,30 @@ sealed interface Effect {
      * three reach exactly the same audience. Splitting them would be three rows in the allowlist
      * that could only ever be edited together.
      */
-    data class MeetingPhaseOpened(val phase: MeetingPhase, val haptic: Haptic) : Effect
+    data class MeetingPhaseOpened(
+        val phase: MeetingPhase,
+        /**
+         * **How long the ballot runs, on the push that opens it — and null on every other phase**
+         * (D-117).
+         *
+         * The vote's window is the one meeting clock a host can move, it is locked at arming
+         * ([Event.RoundArmed.voteWindowSeconds]), and it arrives *with the phase* because that is
+         * the moment a phone needs it: the clock is drawn on the screen this push moves everybody
+         * to. `Countdowns` has said since L2 that this is where the number would come from.
+         *
+         * **Named for the vote rather than for "this phase's window", and that is deliberate.** The
+         * discussion's ninety seconds and the tally's fifteen are the design's own constants, the
+         * client already holds them, and nothing in this unit gave them a sender — so a field called
+         * `windowSeconds` would be null on two phases that *do* have windows, and the first client
+         * to read null as *no clock* would take the discussion's countdown off the screen. This one
+         * is null wherever it does not apply and cannot be mistaken for anything else.
+         *
+         * It is the same number for every class, so there is no narrowing hiding in it —
+         * [EgressHeld]'s `running` is the same decision.
+         */
+        val voteWindowSeconds: Int?,
+        val haptic: Haptic,
+    ) : Effect
 
     /** Hands up for READY TO VOTE, counted. Named for the same reason as [CheckInProgressed]. */
     data class ReadyProgressed(val ready: Int, val expected: Int) : Effect
@@ -451,6 +530,17 @@ sealed interface Effect {
      * *Never shown: any confirmation of alignment, at any point, by any path* (`gdd.md:213`) holds
      * everywhere before this and nowhere after it. Not on a Revoke, not at the tally, not on
      * finding a Revoked player — and then, once, when the round is over, all of it at once.
+     *
+     * ### The names are people's names now, and the transport is where they come from
+     *
+     * It carried seats and lines, and `PanelState.revealed` carried names and lines, and nothing
+     * joined them — so the ending screens drew a fixture pair. [InsiderNamed] carries the name,
+     * resolved from the desk and ridden into the round on the arming event (D-115). Nothing new is
+     * disclosed by it: every phone in the lobby was already sent every name. What this pairs a name
+     * with is the alignment, which is this effect's entire job.
+     *
+     * **The recording still holds seats and no names**, exactly as it holds seats and no lines, so
+     * a replayed reveal publishes blanks and the round is reproduced without either.
      *
      * ### The blackmail publishes with the names, in one kind, on purpose
      *

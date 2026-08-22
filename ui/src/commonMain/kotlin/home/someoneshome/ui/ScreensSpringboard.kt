@@ -67,9 +67,10 @@ fun HomeScreen(vals: PanelVals, widget: @Composable (PanelVals) -> Unit = { Inte
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         // The marker is named by its SHAPE, not by a number: the same token
-                        // printed on the card the player is walking towards. Both halves of the
-                        // pair are absent under a house-sent order, because nothing on the wire
-                        // says where an entry is -- see OrderRow.Named.room.
+                        // printed on the card the player is walking towards. Both halves come off
+                        // the wire now -- `OrderLine.Known.at` carries the room the host named and
+                        // the glyph id -- and both are absent together on a line the house dealt
+                        // with no home behind it. See OrderRow.Named.room.
                         vals.nextUp.room?.let {
                             Label(
                                 it, modifier = Modifier.testTag(ORDER_DESTINATION),
@@ -363,7 +364,13 @@ fun IntegrityWidget(vals: PanelVals) {
         ) {
             Label("SYSTEM INTEGRITY", size = 6.5, color = Amber.Dim, tracking = 0.14)
             Row(verticalAlignment = Alignment.Bottom) {
-                Readout("88%", size = 19.0, color = Amber.Bright, lineHeight = 1.0)
+                // **Off [PanelVals.integrityPercent], not a literal.** It was `"88%"` typed here
+                // beside a bar drawn from `integrityLit` -- two hand-maintained facts about one
+                // meter, on the screen a player looks at most, which is the fault revision 21
+                // found as `14 / 32` and C2 found again as Ghost3's `66%`. It survived both passes
+                // because a literal that happens to be right is invisible until something moves
+                // it, and the house pushing the meter is that something.
+                Readout(vals.integrityPercent, size = 19.0, color = Amber.Bright, lineHeight = 1.0)
             }
         }
         SegmentBar(

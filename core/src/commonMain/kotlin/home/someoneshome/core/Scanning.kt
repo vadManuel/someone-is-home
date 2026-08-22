@@ -9,6 +9,7 @@ import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.OpenSubroutine
 import home.someoneshome.model.OrderEntry
 import home.someoneshome.model.Seat
+import home.someoneshome.model.SubroutineKind
 import home.someoneshome.model.Tick
 
 /*
@@ -132,16 +133,25 @@ internal fun instanceFor(
     id: EntityId,
     seat: Seat,
     entry: OrderEntry,
+    /**
+     * What the entry opens as, taken from `AssignedWork.opensAs` by the caller.
+     *
+     * Passed in rather than read off [entry] because not every kind of assigned work opens as a
+     * Subroutine — the Array Wipe circuit does not — and a function that had to answer *what if it
+     * is not one* would answer it by inventing something. `WorkOrder.openAt` returns only entries a
+     * scan opens, so by the time this is called the question has already been settled once.
+     */
+    kind: SubroutineKind,
     marker: MarkerId,
 ): OpenSubroutine {
     val draw = Draw(seed + id.value * INSTANCE_STRIDE, DOMAIN_INSTANCE)
-    val parameters = drawParameters(entry.subroutine, draw)
+    val parameters = drawParameters(kind, draw)
     return OpenSubroutine(
         seat = seat,
         entry = entry.index,
-        subroutine = entry.subroutine,
+        subroutine = kind,
         parameters = parameters,
-        expected = answerTo(entry.subroutine, parameters),
+        expected = answerTo(kind, parameters),
         armedAt = marker,
     )
 }

@@ -105,6 +105,18 @@ interface LobbyLink {
     fun setInsiders(chosen: Int?)
 
     /**
+     * **The host's ballot length, in seconds** (D-117). [setInsiders]' shape and its restriction:
+     * on a phone that is not hosting this does nothing, and the lobby offers the control nowhere
+     * else, so nothing legitimate calls it there.
+     *
+     * It exists because the setting had nowhere to go. The VOTING row moved a number `LobbyModel`
+     * held and the round could not read — and the round is armed off the desk, so the desk is where
+     * it has to land. **Nothing about it goes down the wire**: the clients learn the window when
+     * the ballot opens, on the push that opens it.
+     */
+    fun setVoteWindow(seconds: Int)
+
+    /**
      * **The round ended: the house drops every line it is holding, and the connection stays up**
      * (D-116, D-157).
      *
@@ -209,6 +221,20 @@ class MemoryLobbyLink(
         publish()
     }
 
+    /**
+     * The windows this fixture has been told, so a test can prove the setting left the screen.
+     *
+     * **Nothing is published**, which is the fixture answering the way the real link answers: the
+     * ballot's length is not part of the standing and never goes down the wire — a client learns
+     * it when the ballot opens. A stand-in that echoed it into [LobbyBody.Standing] would let a
+     * screen be written against a field the protocol does not have.
+     */
+    val windows = mutableListOf<Int>()
+
+    override fun setVoteWindow(seconds: Int) {
+        windows += seconds
+    }
+
     override fun leave() {
         listener = {}
     }
@@ -246,6 +272,7 @@ class RefusingLobbyLink(private val why: HostRefusal = HostRefusal.NameAlreadyOn
     override fun join(home: NearbyHome, name: String, onStanding: (LobbyBody.Standing) -> Unit) = Unit
     override fun handOver(line: String) = Unit
     override fun setInsiders(chosen: Int?) = Unit
+    override fun setVoteWindow(seconds: Int) = Unit
     override fun roundEnded() = Unit
     override fun leave() = Unit
 }
@@ -577,6 +604,7 @@ class LobbyModel(
         if (!hosting) return
         val at = VOTE_WINDOWS.indexOf(voteWindowSeconds)
         voteWindowSeconds = VOTE_WINDOWS[(at + 1) % VOTE_WINDOWS.size]
+        link.setVoteWindow(voteWindowSeconds)
     }
 
     /**

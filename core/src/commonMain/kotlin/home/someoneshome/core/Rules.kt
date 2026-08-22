@@ -209,9 +209,18 @@ internal fun outcomeOf(state: GameState, event: Event): Outcome? = when {
  * say and the room feels one of them.
  */
 private fun endingEffects(state: GameState, outcome: Outcome): List<Effect> {
+    // **Both texts are read here and both are dropped one instruction later** (D-115, D-116).
+    // `endRound` empties the lines and the names in the same transition that applies this, so the
+    // last read of either and its deletion are adjacent. A name is blank for a phone that never
+    // said what to call its owner, which is the fail-closed direction for text: a visible nothing
+    // rather than an invisible somebody else's.
     val revealed = Effect.InsidersRevealed(
         state.insiderSeats.sortedBy { it.index }.map {
-            InsiderNamed(seat = it, line = state.lineOf(it).orEmpty())
+            InsiderNamed(
+                seat = it,
+                name = state.nameOf(it).orEmpty(),
+                line = state.lineOf(it).orEmpty(),
+            )
         },
     )
     return state.seats.map {
@@ -277,8 +286,12 @@ private fun signOff(winner: Winner): String = when (winner) {
 private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
     val seats = event.seats.sortedBy { it.index }
     val insiders = seats.filter { s -> event.insiders.any { it.index == s.index } }
-    val stations = stationsFor(event.seed, event.markers)
-    val active = activeFor(event.seed, event.markers, stations, seats.size)
+    // The draws take cards and never rooms. The geography rides along beside them and is consulted
+    // by exactly one thing -- `asLines`, which puts a destination on a client's own order -- so no
+    // draw in this file can come out differently in one house than in another.
+    val cards = event.markers.map { it.marker }
+    val stations = stationsFor(event.seed, cards)
+    val active = activeFor(event.seed, cards, stations, seats.size)
     val size = Balance.orderSize(seats.size, event.chosenInsiders)
     val orders = seats.map { workOrderFor(event.seed, it, size, active) }
 
@@ -294,6 +307,10 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
         workOrders = orders,
         stations = stations,
         activeMarkers = active,
+        // The home's cards, glyphs and rooms, carried across arming rather than drawn -- the rules
+        // have never held geography and still derive nothing from it. It is a lookup table with one
+        // reader, and the reader hands out one seat's rows of it at a time.
+        destinations = event.markers,
         // D-132, and it is drawn for every seat rather than for the Insiders alone: a list whose
         // membership was the Insider list would BE the Insider list.
         cooldowns = seats.map {
@@ -306,12 +323,18 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
         // only the Insiders' (D-116). Carried across arming rather than drawn, because they are
         // the one thing in the round a player wrote themselves.
         oneLines = event.oneLines,
+        // The desk's names, taken into custody beside the lines and dropped by the same transition
+        // (D-115, D-116). The house needs them for one sentence, at the end.
+        names = event.names,
+        // Balance values lock at arming. The ballot's length is the host's and it is public; it is
+        // read once, by `openVote`, and published on the push that opens the vote.
+        voteWindowSeconds = event.voteWindowSeconds,
     )
 
     return Reduction(
         state,
         seats.map { Effect.LampSet(it, LAMP_DIM) } +
-            orders.map { Effect.WorkOrderIssued(it.seat, it.asLines()) } +
+            orders.map { Effect.WorkOrderIssued(it.seat, it.asLines(state.destinations)) } +
             seats.map { Effect.OpeningMessage(it, Haptic.Short) },
     )
 }
@@ -372,7 +395,14 @@ private fun scanned(state: GameState, event: Event.MarkerScanned): Reduction<Gam
     } else {
         state.workOrderFor(event.actor)?.openAt(event.marker)
     }
-    val instance = entry?.let { instanceFor(state.seed, id, event.actor, it, event.marker) }
+    // `openAt` returns only work a scan opens, so this is non-null for every entry it returns --
+    // the circuit is stepped over there rather than arriving here as a kind that does not exist.
+    val kind = entry?.work?.opensAs
+    val instance = if (entry == null || kind == null) {
+        null
+    } else {
+        instanceFor(state.seed, id, event.actor, entry, kind, event.marker)
+    }
 
     val next = if (entry == null || instance == null) {
         spend(minted, event.actor)
@@ -388,7 +418,7 @@ private fun scanned(state: GameState, event: Event.MarkerScanned): Reduction<Gam
     val answered = Effect.ScanAnswered(
         seat = event.actor,
         opened = if (entry != null && instance != null) {
-            SubroutineInstance(entry.index, entry.subroutine, instance.parameters)
+            SubroutineInstance(entry.index, instance.subroutine, instance.parameters)
         } else {
             null
         },
@@ -584,13 +614,26 @@ private fun returned(
     val verdict = Effect.SubroutineGraded(seat = event.actor, accepted = accepted)
     val order = Effect.WorkOrderIssued(
         seat = event.actor,
-        lines = next.workOrderFor(event.actor)?.asLines() ?: emptyList(),
+        lines = next.workOrderFor(event.actor)?.asLines(next.destinations) ?: emptyList(),
     )
     val closed = Effect.PresenceChanged(event.actor, where, open = false)
     return Reduction(
         next,
         if (banks) {
-            listOf(verdict, order, closed, Effect.SubroutineProgressed(remaining))
+            // **Both, and only when the meter really moved.** The count is the ledger's own number
+            // and the percentage is the bar; both reach players outside the system and neither
+            // reaches a living one, because the living are told a number at a meeting and not
+            // between them. Emitting either on a return that banked nothing would say *somebody
+            // returned something that did not score*, which is a per-return count nobody designed.
+            listOf(
+                verdict,
+                order,
+                closed,
+                Effect.SubroutineProgressed(remaining),
+                Effect.SystemIntegrityLive(
+                    Balance.integrityPercent(remaining, state.seats.size),
+                ),
+            )
         } else {
             listOf(verdict, order, closed)
         },
@@ -673,9 +716,23 @@ private fun meetingCalled(
         listOf(Effect.EgressHeld(it.remainingAt(event.at), running = false, haptic = Haptic.Short))
     } ?: emptyList()
 
+    // **The shift boundary, which is the only moment the living are told the meter**
+    // (`gdd.md:192`, `:1002`). A shift runs from lights-out to the first meeting and a meeting ends
+    // the shift it interrupts, so the meeting being called IS the boundary — and it is the moment
+    // rather than the phase because the number belongs to the shift that just finished, not to the
+    // talk that is about to start.
+    //
+    // Emitted unconditionally, whether or not the meter moved during that shift. A batch sent only
+    // when something changed would make its presence the news: a meeting with no meter push on it
+    // would tell the room that nobody banked anything all shift, which is a report on the house's
+    // work nobody asked the app to make. Constructed once, outside every branch above.
+    val batched = Effect.SystemIntegrityBatched(
+        Balance.integrityPercent(state.systemIntegrity, state.seats.size),
+    )
+
     return Reduction(
         state.copy(meeting = meeting, egress = held),
-        listOf(ring) + walkIn + gateCount(state, meeting) + stopped,
+        listOf(ring) + walkIn + gateCount(state, meeting) + batched + stopped,
     )
 }
 
@@ -708,7 +765,14 @@ private fun checkedIn(state: GameState, event: Event.MeetingCheckedIn): Reductio
         val talking = next.copy(phase = MeetingPhase.Discussion)
         Reduction(
             state.copy(meeting = talking),
-            listOf(counted, Effect.MeetingPhaseOpened(MeetingPhase.Discussion, Haptic.Short)),
+            listOf(
+                counted,
+                Effect.MeetingPhaseOpened(
+                    MeetingPhase.Discussion,
+                    voteWindowSeconds = null,
+                    haptic = Haptic.Short,
+                ),
+            ),
         )
     }
 
@@ -758,7 +822,16 @@ private fun openVote(state: GameState, meeting: Meeting): Reduction<GameState, E
     return Reduction(
         state.copy(meeting = voting),
         listOf(
-            Effect.MeetingPhaseOpened(MeetingPhase.Vote, Haptic.Short),
+            // **The ballot's length rides the push that opens it** (D-117). The host set it in the
+            // lobby, arming locked it, and this is the one read of it in the game — so every phone
+            // in the house draws one clock from one number, and a client that ran the design's
+            // default while the house ran the host's would be six phones disagreeing about when
+            // the room stops voting.
+            Effect.MeetingPhaseOpened(
+                MeetingPhase.Vote,
+                voteWindowSeconds = state.voteWindowSeconds,
+                haptic = Haptic.Short,
+            ),
             Effect.VoteProgressed(voting.lockedCount, voting.ballots.size),
         ),
     )
@@ -863,7 +936,11 @@ private fun readTheBallot(state: GameState, meeting: Meeting): Reduction<GameSta
     return Reduction(
         state.copy(meeting = finished),
         listOf(
-            Effect.MeetingPhaseOpened(MeetingPhase.Tally, Haptic.Short),
+            Effect.MeetingPhaseOpened(
+                MeetingPhase.Tally,
+                voteWindowSeconds = null,
+                haptic = Haptic.Short,
+            ),
             Effect.VoteProgressed(finished.lockedCount, finished.ballots.size),
             // The outcome to everyone; the ballot with names against it to the out and nobody
             // else (D-075). Two kinds, because they are two disclosures.

@@ -1,5 +1,9 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.AssignedWork
+import home.someoneshome.model.Destination
+import home.someoneshome.model.MarkerId
+import home.someoneshome.model.MarkerShapes
 import home.someoneshome.model.OrderLine
 import home.someoneshome.model.SubroutineKind
 
@@ -41,12 +45,48 @@ class WorkOrderTest {
      * are not, so a screen still drawing the fixture fails on the names rather than passing by
      * coincidence.
      */
+    private fun at(card: String, shape: String, room: String) =
+        listOf(Destination(MarkerId(card), MarkerShapes[shape]!!.id, room))
+
     private val dealt: List<OrderLine> = listOf(
-        OrderLine.Known(0, SubroutineKind.ParityCheck, done = true),
-        OrderLine.Known(1, SubroutineKind.Drift, done = false),
+        OrderLine.Known(
+            0, AssignedWork.Subroutine(SubroutineKind.ParityCheck), done = true,
+            at = at("c0", "diamond", "LANDING"),
+        ),
+        OrderLine.Known(
+            1, AssignedWork.Subroutine(SubroutineKind.Drift), done = false,
+            at = at("c1", "cross", "BOILER"),
+        ),
         OrderLine.Blocked(2),
-        OrderLine.Known(3, SubroutineKind.SignalTrace, done = false),
+        OrderLine.Known(
+            3, AssignedWork.Subroutine(SubroutineKind.SignalTrace), done = false,
+            at = at("c3", "star", "PANTRY"),
+        ),
         OrderLine.Blocked(4),
+    )
+
+    /**
+     * **The circuit, as a line of a real order** — the mix's *1 circuit*, with D-122's three
+     * stations riding as its destinations.
+     *
+     * Kept apart from [dealt] because it is the one line whose label and light are **this
+     * client's** rather than the roster's: Array Wipe is not one of the design's ten and is rated
+     * for light nowhere, so BRIGHT is the port's reading (D-113 ratified the value; nothing ruled
+     * the row).
+     */
+    private val circuit: List<OrderLine> = listOf(
+        OrderLine.Known(
+            0, AssignedWork.ArrayWipe, done = false,
+            at = listOf(
+                Destination(MarkerId("s0"), MarkerShapes["square_frame"]!!.id, "STUDY"),
+                Destination(MarkerId("s1"), MarkerShapes["ring"]!!.id, "GARAGE"),
+                Destination(MarkerId("s2"), MarkerShapes["star"]!!.id, "HALL"),
+            ),
+        ),
+        OrderLine.Known(
+            1, AssignedWork.Subroutine(SubroutineKind.Replay), done = false,
+            at = at("c9", "triangle_up", "BED 2"),
+        ),
     )
 
     private fun SemanticsNodeInteractionsProvider.marks(): Map<LightSignature, Int> =
@@ -155,21 +195,18 @@ class WorkOrderTest {
         }
 
     /**
-     * **⚠️ THE ESCALATION, HELD AS A GUARD: nothing on the wire says where an entry is.**
+     * **The order the house dealt says where the work is — E-C2-1, closed.**
      *
-     * `OrderLine` carries no card and no room, in either case, deliberately — *the house answers a
-     * scan and never publishes a map of the round.* So the moment a real order arrives, the list's
-     * destination column and the springboard widget's destination line both go, on every row at
-     * once, and the player is told what their work is and how bright it is and nothing about where.
+     * `OrderLine.Known` carries its [Destination]s: the room the host named on their setup walk and
+     * the glyph printed on the card, which are the two things a player in a dark house navigates
+     * by. Before this the column went blank on every row the moment a real order arrived, and the
+     * port's GARAGE was not allowed to stand in for it — a room name beside work the house chose,
+     * invented by the phone, is a lie a player has no way to check.
      *
-     * The design draws a room and a marker glyph on both surfaces. **This test asserts the hole
-     * rather than the design**, which is the honest state of the build: it fails the day somebody
-     * quietly fills the column back in from a fixture — which would be a screen that lies in the
-     * dark, to a player with no way to check — and it fails the day the wire really carries a card,
-     * at which point the test that has to change says exactly why.
+     * Both surfaces, because both draw a destination and they were the two the escalation named.
      */
     @Test
-    fun anOrderFromTheHouseSaysNothingAboutWhereTheWorkIs() {
+    fun anOrderFromTheHouseSaysWhereTheWorkIs() {
         for (screen in listOf(ScreenId.Work, ScreenId.Home)) {
             runDesktopComposeUiTest(width = 600, height = 1300) {
                 setContent {
@@ -177,26 +214,82 @@ class WorkOrderTest {
                         Screen(PanelState(screen = screen, order = dealt))
                     }
                 }
-                assertEquals(
-                    0, destinations(),
-                    "$screen drew a destination for work the house dealt. No effect carries the " +
-                        "card, so anything drawn there came from a fixture and is a lie in the dark",
-                )
-            }
-            // And the port's own seven still carry theirs, so the assertion above is about the
-            // wire rather than about a column somebody deleted.
-            runDesktopComposeUiTest(width = 600, height = 1300) {
-                setContent {
-                    DeviceCanvas(insets = PanelInsets()) { Screen(PanelState(screen = screen)) }
-                }
                 assertTrue(
                     destinations() > 0,
-                    "$screen draws no destination even from the port's fixture — the column was " +
-                        "removed rather than left waiting for a sender",
+                    "$screen drew no destination for work the house dealt — the wire carries the " +
+                        "room and the glyph now, and this is the column they belong in",
                 )
+                // The rooms are the house's, not the port's. A screen still reading the fixture
+                // would draw GARAGE, HALL and STUDY and none of the three below.
+                onNodeWithText("BOILER").assertExists()
+                for (fixture in listOf("BED 2", "GARAGE")) {
+                    onAllNodesWithText(fixture).assertCountEquals(0)
+                }
             }
         }
     }
+
+    /**
+     * **THE INJECTION: a blocked line still carries nothing, the room included** (D-114, D-146).
+     *
+     * The destination is the newest thing a blocked row could leak and the most plausible: it names
+     * no Subroutine, so it reads as harmless — and it points at the card the person **upstream of
+     * you** is standing at, because D-146 made dependencies cross-player. The blackout is
+     * structural on both halves: `OrderLine.Blocked` has one integer on it and [OrderRow.Blocked]
+     * has one integer on it, so there is nothing for a composable to draw even if it wanted to.
+     *
+     * Counted rather than asserted absent, because the screen legitimately draws three of these:
+     * an order with two blocked lines out of five must show **three** destinations and not five.
+     */
+    @Test
+    fun aBlockedLineDrawsNoDestination() =
+        runDesktopComposeUiTest(width = 600, height = 1300) {
+            setContent {
+                DeviceCanvas(insets = PanelInsets()) {
+                    Screen(PanelState(screen = ScreenId.Work, order = dealt))
+                }
+            }
+            val known = dealt.count { it is OrderLine.Known }
+            // Two nodes per named row -- the room and the glyph -- and none at all for a blocked
+            // one. Anything higher is a blocked row that acquired a place in the house.
+            assertEquals(
+                known * 2, destinations(),
+                "the destination column has more entries than the order has KNOWN lines: a " +
+                    "blocked entry has been given a room, which names the player upstream of you " +
+                    "as surely as naming the work would (D-114, D-146)",
+            )
+        }
+
+    /**
+     * **The circuit draws from real data** — the mix's *1 circuit*, dealt rather than drawn.
+     *
+     * ARRAY WIPE was reachable only from the port's fixture: it is not one of the roster's ten, had
+     * no `SubroutineKind`, and no order the house could issue was able to contain it. It is
+     * `AssignedWork.ArrayWipe` now, carrying D-122's three stations as its destinations, so the row
+     * the design drew is a row the house can send.
+     *
+     * **The row draws the FIRST station**, which is where the circuit begins: a list read by
+     * lamplight has room for one room name, and three would be worse than the one you walk to
+     * first. Flagged as a presentation rather than defended.
+     */
+    @Test
+    fun aCircuitLineDrawsAsArrayWipeWithItsFirstStation() =
+        runDesktopComposeUiTest(width = 600, height = 1300) {
+            setContent {
+                DeviceCanvas(insets = PanelInsets()) {
+                    Screen(PanelState(screen = ScreenId.Work, order = circuit))
+                }
+            }
+            onNodeWithText(PanelVals.ARRAY_WIPE).assertExists()
+            onNodeWithText("STUDY").assertExists()
+            // The other two stations are on the line and not on the row.
+            for (later in listOf("GARAGE", "HALL")) {
+                onAllNodesWithText(later).assertCountEquals(0)
+            }
+            // BRIGHT for the circuit, and REPLAY's own BRIGHT beside it: two rows, two marks, and
+            // the circuit's is the value written down in one place rather than typed on a fixture.
+            assertEquals(mapOf(LightSignature.Bright to 2), marks())
+        }
 
     /**
      * **The springboard and the list name the same Subroutine** (D-106, D-114).

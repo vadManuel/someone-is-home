@@ -99,6 +99,23 @@ class GameState private constructor(
      */
     val activeMarkers: List<MarkerId>,
     /**
+     * **The home, as far as the round is concerned: every ordinary card, its glyph and its room.**
+     *
+     * Recorded input, off the arming event, and the first host-authored geography the rules have
+     * ever held (E-L4-1's mechanism, taken). It is here so that a work order can say *where*: a
+     * client is handed the destinations of its own lines and nothing else, which is the narrowing
+     * [WorkOrder.asLines] performs.
+     *
+     * **Nothing derives anything from it.** No draw reads it, no rule branches on it, and no
+     * outcome depends on it — it is a lookup table, and the day something in `core` starts making
+     * decisions about which room is where is the day the rules have acquired an opinion about a
+     * house they have never been in.
+     *
+     * A List in registration order, like everything else here. Empty is lawful and means a round
+     * armed without a home: every order comes out with no destinations, visibly, on every row.
+     */
+    val destinations: List<Destination>,
+    /**
      * **Who has a performance window open, and where** (D-111, D-136). See [Presence].
      *
      * *The house records, never recites.* One row per seat that has ever scanned, in seat order
@@ -163,6 +180,27 @@ class GameState private constructor(
      * armed with no lines publishes blanks, which is the fail-closed direction for text.
      */
     val oneLines: List<OneLineHeld>,
+    /**
+     * **What each seat asked to be called, for the length of one round** (D-115).
+     *
+     * Held for one job — putting a name on the reveal, so that the house says who it owned rather
+     * than which chair they were sitting in — and dropped by [endRound] in the same instruction as
+     * the lines. Two round-scoped texts, one wipe, and the wipe is the transition rather than a
+     * call somebody has to remember.
+     *
+     * **Unlike [oneLines] this is not a secret**, and it is still not allowed to outlive the round:
+     * D-115 scoped names to the round on purpose, the desk drops them, and `Transcript` renders
+     * seats and never names. A List in seat order, like everything else here.
+     */
+    val names: List<SeatNamed>,
+    /**
+     * **How long the ballot runs, in seconds — the host's setting, locked at arming** (D-117).
+     *
+     * Read once, by the transition that opens the vote, and published on that push so every phone
+     * in the house draws one clock from one number. Nothing else reads it and nothing may: a
+     * second reader is a second place the ballot's length could be decided.
+     */
+    val voteWindowSeconds: Int,
     val nextEntity: Long,
     val seed: Long,
 ) {
@@ -215,6 +253,18 @@ class GameState private constructor(
 
     /** This seat's one line, or null for a seat that never handed one over. See [oneLines]. */
     fun lineOf(seat: Seat): String? = oneLines.firstOrNull { it.seat.index == seat.index }?.text
+
+    /** What to call this seat, or null for a phone that never said. See [names]. */
+    fun nameOf(seat: Seat): String? = names.firstOrNull { it.seat.index == seat.index }?.name
+
+    /**
+     * Where this card is, or null for a card this round was not armed with.
+     *
+     * Null is the fail-closed direction and it is visible: a line whose card resolves to nothing
+     * comes out with no destination, so a screen draws a blank rather than a room somebody invented.
+     */
+    fun destinationOf(marker: MarkerId): Destination? =
+        destinations.firstOrNull { it.marker.value == marker.value }
 
     /** In the building, outside the system. The complement of [livingSeats], in seat order. */
     val outSeats: List<Seat> get() = seats.filter { isRevoked(it) || isRestrained(it) }
@@ -310,17 +360,19 @@ class GameState private constructor(
         EntityId(nextEntity) to copy(nextEntity = nextEntity + 1)
 
     /**
-     * **The only writer of [outcome], and the only thing that empties [oneLines].**
+     * **The only writer of [outcome], and the only thing that empties [oneLines] and [names].**
      *
-     * The two happen together on purpose. D-116's promise is *deleted when the round ends*, and
-     * the publish **is** the round ending — so the ending effects are built from the state as it
-     * stands and this is applied to what is left, which puts the deletion exactly one instruction
-     * after the last read. A separate `wipeLines()` would be a second call somebody can forget on
-     * the day a fifth win route is added.
+     * They happen together on purpose. D-116's promise is *deleted when the round ends*, D-115
+     * scopes the names to the round, and the publish **is** the round ending — so the ending
+     * effects are built from the state as it stands and this is applied to what is left, which
+     * puts both deletions exactly one instruction after the last read. A separate `wipeLines()`
+     * would be a second call somebody can forget on the day a fifth win route is added, and a
+     * separate `wipeNames()` would be a third.
      *
      * Separate from [copy] so the transition stays greppable, exactly as [withEgress] is.
      */
-    fun endRound(outcome: Outcome): GameState = copy(outcome = outcome, oneLines = emptyList())
+    fun endRound(outcome: Outcome): GameState =
+        copy(outcome = outcome, oneLines = emptyList(), names = emptyList())
 
     fun copy(
         armed: Boolean = this.armed,
@@ -337,17 +389,21 @@ class GameState private constructor(
         workOrders: List<WorkOrder> = this.workOrders,
         stations: List<MarkerId> = this.stations,
         activeMarkers: List<MarkerId> = this.activeMarkers,
+        destinations: List<Destination> = this.destinations,
         presence: List<Presence> = this.presence,
         meeting: Meeting? = this.meeting,
         egress: Egress? = this.egress,
         egressReadyAt: Tick = this.egressReadyAt,
         oneLines: List<OneLineHeld> = this.oneLines,
+        names: List<SeatNamed> = this.names,
+        voteWindowSeconds: Int = this.voteWindowSeconds,
         nextEntity: Long = this.nextEntity,
         seed: Long = this.seed,
     ) = GameState(
         armed, outcome, seats, insiderSeats, revoked, newlyRevoked, restrained, cooldownArmed,
         cooldowns, systemIntegrity, openSubroutines, workOrders, stations, activeMarkers,
-        presence, meeting, egress, egressReadyAt, oneLines, nextEntity, seed,
+        destinations, presence, meeting, egress, egressReadyAt, oneLines, names,
+        voteWindowSeconds, nextEntity, seed,
     )
 
     companion object {
@@ -379,6 +435,12 @@ class GameState private constructor(
             workOrders: List<WorkOrder> = emptyList(),
             stations: List<MarkerId> = emptyList(),
             activeMarkers: List<MarkerId> = emptyList(),
+            /**
+             * The home's cards, glyphs and rooms. Defaulted empty for [workOrders]' reason, and
+             * empty is the fail-closed direction: no destination resolves, so every work order
+             * comes out with an empty destination column rather than a room somebody invented.
+             */
+            destinations: List<Destination> = emptyList(),
             cooldowns: List<Cooldown> = emptyList(),
             /**
              * D-132's half-cooldown for the house-wide Egress clock, computed by the rules.
@@ -400,6 +462,21 @@ class GameState private constructor(
              * which is a visible nothing rather than an invisible somebody else's.
              */
             oneLines: List<OneLineHeld> = emptyList(),
+            /**
+             * What each seat asked to be called (D-115). Defaulted empty for [oneLines]' reason,
+             * and empty is the same fail-closed direction: a round armed without them reveals
+             * blank names rather than somebody else's.
+             */
+            names: List<SeatNamed> = emptyList(),
+            /**
+             * **The ballot's window, in seconds. The one default here that is the design's own
+             * number rather than an emptiness** (D-117, `gdd.md:412`).
+             *
+             * Empty would be a nought-second ballot, which is not a fail-closed round — it is a
+             * meeting nobody can vote at, arriving in a dark house with the party standing in one
+             * room. Forty-five is what the design says a ballot is when nobody has said otherwise.
+             */
+            voteWindowSeconds: Int = Balance.VOTE_WINDOW_SECONDS,
         ) = GameState(
             armed = true,
             outcome = null,
@@ -415,6 +492,7 @@ class GameState private constructor(
             workOrders = workOrders,
             stations = stations,
             activeMarkers = activeMarkers,
+            destinations = destinations,
             // Nobody is anywhere until somebody scans something. A round that opened with every
             // seat placed would place them where the house had guessed rather than where a card
             // was read, and D-136's whole dedup rule rests on placement being knowledge.
@@ -423,6 +501,8 @@ class GameState private constructor(
             egress = null,
             egressReadyAt = egressReadyAt,
             oneLines = oneLines.sortedBy { it.seat.index },
+            names = names.sortedBy { it.seat.index },
+            voteWindowSeconds = voteWindowSeconds,
             nextEntity = 1L,
             seed = seed,
         )
@@ -442,11 +522,14 @@ class GameState private constructor(
             workOrders = emptyList(),
             stations = emptyList(),
             activeMarkers = emptyList(),
+            destinations = emptyList(),
             presence = emptyList(),
             meeting = null,
             egress = null,
             egressReadyAt = Tick(0),
             oneLines = emptyList(),
+            names = emptyList(),
+            voteWindowSeconds = Balance.VOTE_WINDOW_SECONDS,
             nextEntity = 1L,
             seed = 0L,
         )

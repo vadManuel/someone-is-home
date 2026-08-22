@@ -12,6 +12,7 @@ import home.someoneshome.model.Outcome
 import home.someoneshome.model.RefusalReason
 import home.someoneshome.model.Role
 import home.someoneshome.model.Seat
+import home.someoneshome.model.SeatNamed
 import home.someoneshome.model.Tick
 import home.someoneshome.model.WinRoute
 import home.someoneshome.model.Winner
@@ -49,6 +50,14 @@ private val INSIDERS = listOf(Seat(1), Seat(4))
  */
 private val LINES = SEATS.map { OneLineHeld(it, "line-${it.index}") }
 
+/**
+ * What each seat asked to be called (D-115).
+ *
+ * Distinguishable from the lines on sight — `NAME-1` against `line-1` — so a reveal that put the
+ * wrong text in the wrong field fails on the value rather than on a shape that happens to match.
+ */
+private val NAMES = SEATS.map { SeatNamed(it, "NAME-${it.index}") }
+
 /** Eight ordinary markers, which is D-127's floor and enough for the house to draw work from. */
 private val ENDING_MARKERS = (0 until 8).map { MarkerId("e$it") }
 
@@ -60,9 +69,21 @@ private fun armed(
     GameState.EMPTY,
     Event.RoundArmed(
         Tick(0), seed = 20260822L, seats = seats, insiders = insiders,
-        markers = ENDING_MARKERS, oneLines = lines,
+        markers = placed(ENDING_MARKERS), names = NAMES, oneLines = lines,
     ),
 ).state
+
+/**
+ * Every field of an effect as text, for a sweep that must not be able to miss one.
+ *
+ * **`toString()` on purpose, which is the one place in this project it is the right tool.** The
+ * recording refuses a generated `toString` because it has to outlive the build that wrote it; this
+ * is a search, run in the same process that produced the value, and what it needs is exactly what
+ * a generated `toString` gives — **every** field, including the one somebody adds tomorrow. A
+ * hand-written renderer here would go stale the moment an effect grew a member, and going stale is
+ * the failure mode a completeness check exists to prevent.
+ */
+private fun Effect.textOf(): String = toString()
 
 /** Drive events through the **admission gate**, never through [reduce] — the gate is half of it. */
 private class EndingWalk(start: GameState) {
@@ -152,14 +173,14 @@ class EndingTest {
         val open = start.workOrderFor(worker)?.entries?.first()
         assertTrue(open != null, "the fixture armed no work")
 
-        val walk = EndingWalk(start).feed(Event.MarkerScanned(Tick(10), worker, open.marker))
+        val walk = EndingWalk(start).feed(Event.MarkerScanned(Tick(10), worker, open.anchor!!))
         // The ANSWER, read off authority state. The client-facing instance the scan came back with
         // carries the question and is physically incapable of carrying this — which is the whole
         // Subroutine treatment, and is why a test has to reach past it to hand over a right one.
         val answer = walk.state.openSubroutineFor(worker)?.expected
         assertTrue(!answer.isNullOrEmpty(), "the scan opened nothing; the rest of this test proves nothing")
 
-        walk.feed(Event.SubroutineReturned(Tick(11), worker, open.marker, answer))
+        walk.feed(Event.SubroutineReturned(Tick(11), worker, open.anchor!!, answer))
         assertTrue(
             walk.emitted.any { it is Effect.SubroutineGraded && it.accepted },
             "the entry was rejected; nothing was banked and the rest of this test proves nothing",
@@ -304,6 +325,77 @@ class EndingTest {
     }
 
     /**
+     * **THE COMPLETENESS CHECK: a name crosses the boundary at the ending and nowhere before it.**
+     *
+     * D-115 put names on the wire in the **lobby**, where six people standing in a hall can already
+     * see each other. What the reveal does is pair a name with an **alignment**, and that pairing is
+     * the one disclosure this app makes all evening — so the guarantee worth holding is not *no
+     * effect carries a name* but *nothing carries one until the round is over*.
+     *
+     * Swept over a whole round rather than asserted about one effect: every effect the rules emit
+     * from arming to the ending is rendered and searched for the fixture's own name text. A build
+     * that put a name on a work order, a verdict, a walk-in or a meeting result fails here, and it
+     * fails on the string it leaked.
+     */
+    @Test
+    fun `no effect carries a name until the round ends`() {
+        val walk = EndingWalk(armed())
+        // A shift's worth of ordinary traffic first: scans, a hand-over, and a whole meeting.
+        val seat = Seat(0)
+        val order = walk.state.workOrderFor(seat)!!
+        val entry = order.entries.first { order.isActionable(it) }
+        walk.feed(
+            Event.MarkerScanned(Tick(10), seat, entry.anchor!!),
+            Event.SubroutineReturned(Tick(11), seat, entry.anchor!!, listOf(9, 9, 9)),
+        )
+        walk.restrain(Seat(1), from = 100)
+
+        val before = walk.drain().map { it.textOf() }
+        assertTrue(before.isNotEmpty(), "nothing was emitted, so this sweep looked at nothing")
+        for (named in NAMES) {
+            // The offending line is found FIRST rather than inside the message: `assertTrue`
+            // evaluates its message eagerly, so a `first {}` in there throws on the passing path
+            // and the test reports a NoSuchElementException instead of the leak it is watching for.
+            val leaked = before.firstOrNull { named.name in it }
+            assertTrue(
+                leaked == null,
+                "'${named.name}' reached a client before the round ended, on: $leaked",
+            )
+        }
+
+        // And then the ending, where exactly one effect is allowed to carry them.
+        walk.restrain(Seat(4), from = 200)
+        val after = walk.drain()
+        val reveal = after.filterIsInstance<Effect.InsidersRevealed>().single()
+        assertEquals(
+            listOf("NAME-1", "NAME-4"), reveal.insiders.map { it.name },
+            "the reveal did not name the Insiders it revealed",
+        )
+        assertTrue(
+            after.filterNot { it is Effect.InsidersRevealed }
+                .none { effect -> NAMES.any { it.name in effect.textOf() } },
+            "a second effect at the ending carries a name; the reveal is the one that may",
+        )
+    }
+
+    /**
+     * **The desk is empty of names the instant the round ends** (D-115), exactly as it is of lines.
+     *
+     * Both are round-scoped text and both are dropped by the transition that publishes them, so a
+     * state in which the round is over is physically incapable of saying who anybody was.
+     */
+    @Test
+    fun `the round ending drops every name the house was holding`() {
+        val walk = EndingWalk(armed()).restrain(Seat(1), from = 100).restrain(Seat(4), from = 200)
+        assertTrue(walk.state.ended, "the fixture did not end a round, so nothing was wiped")
+        assertEquals(
+            emptyList(), walk.state.names,
+            "the round is over and the house is still holding what to call everybody",
+        )
+        assertEquals(emptyList(), walk.state.oneLines)
+    }
+
+    /**
      * **The reveal names both Insiders and publishes what was held over them** (`gdd.md:1063`).
      *
      * Every Insider is named, **living or not** — the reveal is about who was working for the
@@ -318,7 +410,10 @@ class EndingTest {
 
         assertEquals(1, revealed.size, "the reveal is one disclosure and must be emitted once")
         assertEquals(
-            listOf(InsiderNamed(Seat(1), "line-1"), InsiderNamed(Seat(4), "line-4")),
+            listOf(
+                InsiderNamed(Seat(1), "NAME-1", "line-1"),
+                InsiderNamed(Seat(4), "NAME-4", "line-4"),
+            ),
             revealed.single().insiders,
             "the reveal did not name both Insiders with their own lines, in seat order",
         )

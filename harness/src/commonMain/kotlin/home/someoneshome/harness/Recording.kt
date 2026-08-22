@@ -50,6 +50,24 @@ class Recording(
     }
 
     companion object {
+        // 11: the wire learned to say where, how long, and who. `RoundArmed.markers` were bare card
+        // ids and are DESTINATIONS now -- card, glyph and room -- because a work order's whole
+        // destination column is computed from them, and a version 10 recording replays into orders
+        // that point nowhere. Beside them the arming row gained the host's ballot length, which
+        // locks at arming like every other balance value, and the seats that said what to call
+        // them. Two effects a version 10 build cannot construct arrive with it (the live meter and
+        // the batched one), `MeetingPhaseOpened` carries the ballot's window, and a work order line
+        // carries its destinations and can be a circuit rather than only one of the ten.
+        //
+        // **The escape covers the colon now**, which changes the bytes of every row holding a
+        // marker id or a room name and is the honest reason this could not have been a tolerant
+        // read of version 10. It closes E-L4-4: `:` has always been a sub-separator inside `open=`
+        // and `presence=`, a marker id may contain one, and a room name is text a host typed.
+        //
+        // **What version 11 does NOT gain is the names** (D-115), exactly as version 10 did not
+        // gain the lines. Both round-scoped texts render as seats, the parser rebuilds blanks, and
+        // a replayed reveal publishes a blank name beside a blank line.
+        //
         // 10: the ending. `ended` was a boolean and is the OUTCOME now -- winner and route -- so a
         // version 9 recording can say a round finished and cannot say who took it or how, which is
         // the only question anybody asks afterwards. Three effects a version 9 build cannot
@@ -91,7 +109,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/10"
+        const val HEADER = "someone-is-home/recording/11"
     }
 }
 

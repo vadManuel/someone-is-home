@@ -1,11 +1,13 @@
 package home.someoneshome.harness
 
+import home.someoneshome.model.Destination
 import home.someoneshome.model.EgressType
 import home.someoneshome.model.Event
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.OneLineHeld
 import home.someoneshome.model.Seat
+import home.someoneshome.model.SeatNamed
 import home.someoneshome.model.Tick
 
 /** A recording that could not be read. Never recovered from — a half-read recording is worse. */
@@ -153,6 +155,41 @@ object RecordingText {
         }
 
         /**
+         * The home: `card:glyph:room`, comma-separated.
+         *
+         * **Three parts, and a row with any other number of them is fatal.** A room name is text a
+         * host typed and a marker id is read off a card, so both escape their colons — which means
+         * a value that splits into four parts is a recording written under different rules, not one
+         * with an unusual room name in it. Guessing which part was which would replay an order that
+         * sent somebody to a room the evening never had.
+         */
+        fun destinations(key: String): List<Destination> {
+            val raw = req(key)
+            if (raw.isEmpty()) return emptyList()
+            return raw.split(',').map { part ->
+                val bits = part.split(':')
+                if (bits.size != 3) {
+                    throw MalformedRecording(line, "'$part' in $key is not card:glyph:room")
+                }
+                Destination(
+                    marker = MarkerId(unescape(bits[0], line)),
+                    shape = unescape(bits[1], line),
+                    room = unescape(bits[2], line),
+                )
+            }
+        }
+
+        /**
+         * **The seats that said what to call them, rebuilt with nothing in them** (D-115).
+         *
+         * [heldLines]' decision, one round-scoped text over, and the same blank for the same
+         * reason: names are scoped to the round, a recording outlives the evening, and nothing a
+         * replay renders reads the text. **A replayed reveal therefore publishes blank names as
+         * well as blank lines** — it reproduces the game, not the people who were in the room.
+         */
+        fun heldNames(key: String): List<SeatNamed> = seats(key).map { SeatNamed(it, "") }
+
+        /**
          * The host's Insider setting: a number, or UNKNOWN.
          *
          * `none` rather than a sentinel integer, and fatal on anything else. UNKNOWN is a real
@@ -181,7 +218,8 @@ object RecordingText {
         val event = when (name) {
             "RoundArmed" -> Event.RoundArmed(
                 at, long("seed"), seats("seats"), seats("insiders"),
-                chosen("chosen"), markers("markers"), heldLines("lines"),
+                chosen("chosen"), destinations("markers"), int("voteWindow"),
+                heldNames("names"), heldLines("lines"),
             )
             "MarkerScanned" -> Event.MarkerScanned(at, seat("actor"), marker("marker"))
             "SubroutineReturned" ->
@@ -219,7 +257,11 @@ object RecordingText {
     }
 
     private fun expectedFields(name: String): Set<String> = when (name) {
-        "RoundArmed" -> setOf("at", "seed", "seats", "insiders", "chosen", "markers", "lines")
+        "RoundArmed" ->
+            setOf(
+                "at", "seed", "seats", "insiders", "chosen", "markers", "voteWindow", "names",
+                "lines",
+            )
         "MarkerScanned" -> setOf("at", "actor", "marker")
         "SubroutineReturned" -> setOf("at", "actor", "marker", "entered")
         "PerformanceEnded" -> setOf("at", "actor")
@@ -289,6 +331,9 @@ object RecordingText {
                 '\\' -> out.append('\\')
                 'p' -> out.append('|')
                 'c' -> out.append(',')
+                // The colon, which is a sub-separator inside `open=`, `presence=` and every
+                // destination. See `Transcript.escape` — E-L4-4, closed.
+                'o' -> out.append(':')
                 'n' -> out.append('\n')
                 else -> throw MalformedRecording(line, "unknown escape '\\$next'")
             }

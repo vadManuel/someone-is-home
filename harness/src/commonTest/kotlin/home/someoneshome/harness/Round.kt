@@ -3,14 +3,17 @@ package home.someoneshome.harness
 import home.someoneshome.core.Admission
 import home.someoneshome.core.admit
 import home.someoneshome.model.Balance
+import home.someoneshome.model.Destination
 import home.someoneshome.model.EgressType
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
 import home.someoneshome.model.InsiderAbility
 import home.someoneshome.model.MarkerId
+import home.someoneshome.model.MarkerShapes
 import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.OneLineHeld
 import home.someoneshome.model.Seat
+import home.someoneshome.model.SeatNamed
 import home.someoneshome.model.Tick
 
 /**
@@ -26,6 +29,18 @@ internal val INSIDERS = listOf(Seat(1), Seat(5))
 internal val MARKERS = (0 until 8).map { MarkerId("m$it") }
 
 /**
+ * **The same home, with a glyph and a room on every card** — what arming actually takes.
+ *
+ * Two cards to a room, because a real home puts them that way and a fixture with one room per card
+ * could never produce two lines of one order pointing at the same room name. The glyphs come off
+ * the real roster in order, so no two cards here share a shape.
+ */
+internal fun placed(cards: List<MarkerId>): List<Destination> =
+    cards.mapIndexed { i, card ->
+        Destination(card, MarkerShapes.all[i % MarkerShapes.all.size].id, "ROOM ${i / 2}")
+    }
+
+/**
  * **Every seat's one line, on the fixture's path** (D-116).
  *
  * On the path rather than only in a unit test, because what is being covered is a *rendering*
@@ -37,6 +52,13 @@ internal val MARKERS = (0 until 8).map { MarkerId("m$it") }
  * a recording is the whole of the report.
  */
 internal val LINES = SEATS.map { OneLineHeld(it, "line-${it.index}") }
+
+/**
+ * **What each seat asked to be called** (D-115), on the fixture's path for [LINES]' reason: the
+ * rendering decision is the thing being covered, and a recording writes these as seats and never
+ * as names. Deliberately distinguishable from a line on sight, so a leak of either is legible.
+ */
+internal val NAMES = SEATS.map { SeatNamed(it, "NAME-${it.index}") }
 
 /**
  * How far the clock moves between passes. Wider than half a Revoke cooldown, deliberately — see
@@ -65,7 +87,7 @@ private const val ROUND_STRIDE = 40L
  */
 internal fun round(insiders: List<Seat> = INSIDERS): List<Event> {
     val arming = Event.RoundArmed(
-        Tick(0), seed = 20260818L, seats = SEATS, insiders = insiders, markers = MARKERS,
+        Tick(0), seed = 20260818L, seats = SEATS, insiders = insiders, markers = placed(MARKERS), names = NAMES,
         oneLines = LINES,
     )
     // **The round is walked forward as it is built.** Each seat's next piece of work depends on
@@ -98,7 +120,7 @@ internal fun round(insiders: List<Seat> = INSIDERS): List<Event> {
             // idea of where the work is, and would keep agreeing after the draw moved.
             val order = state.workOrderFor(seat)
             val entry = order?.entries?.firstOrNull { order.isActionable(it) }
-            val marker = entry?.marker ?: MARKERS[i % MARKERS.size]
+            val marker = entry?.anchor ?: MARKERS[i % MARKERS.size]
             add(walk(Event.MarkerScanned(Tick(t++), seat, marker)))
             // **Read AFTER the scan, because the scan is what draws it** (D-139, D-140). The
             // question and its answer are a property of the instance the scan opened, re-drawn on

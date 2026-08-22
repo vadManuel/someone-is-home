@@ -68,6 +68,8 @@ object EmitSchema {
         is Effect.AbilityFired -> ABILITY_FIRED
         is Effect.SubroutineGraded -> SUBROUTINE_GRADED
         is Effect.SubroutineProgressed -> SUBROUTINE_PROGRESSED
+        is Effect.SystemIntegrityLive -> SYSTEM_INTEGRITY_LIVE
+        is Effect.SystemIntegrityBatched -> SYSTEM_INTEGRITY_BATCHED
         is Effect.MessageDelivered -> MESSAGE_DELIVERED
         is Effect.WorkOrderIssued -> WORK_ORDER_ISSUED
         is Effect.ScanAnswered -> SCAN_ANSWERED
@@ -99,6 +101,8 @@ object EmitSchema {
     val ABILITY_FIRED = MessageKind("AbilityFired")
     val SUBROUTINE_GRADED = MessageKind("SubroutineGraded")
     val SUBROUTINE_PROGRESSED = MessageKind("SubroutineProgressed")
+    val SYSTEM_INTEGRITY_LIVE = MessageKind("SystemIntegrityLive")
+    val SYSTEM_INTEGRITY_BATCHED = MessageKind("SystemIntegrityBatched")
     val MESSAGE_DELIVERED = MessageKind("MessageDelivered")
     val WORK_ORDER_ISSUED = MessageKind("WorkOrderIssued")
     val SCAN_ANSWERED = MessageKind("ScanAnswered")
@@ -189,6 +193,30 @@ object EmitSchema {
         // not exist yet, so living players currently receive no progress at all. That is the
         // fail-closed direction and the correct one to be wrong in.
         SUBROUTINE_PROGRESSED to OUTSIDE,
+
+        // **The meter, live, and the out are the only readers** (D-134, D-145, gdd.md:1014). The
+        // same audience SUBROUTINE_PROGRESSED has and for the same sentence -- a player outside the
+        // system sees the real bars live, and that privilege is what being out is made of.
+        //
+        // **Never widened to a living class.** The living are entitled to a number AT MEETINGS
+        // (gdd.md:192, :1002); a live percentage on a living phone is a rate signal, and a rate
+        // signal is who is working and how fast, which is the per-player read the percentage form
+        // exists to keep out of aggregate.
+        //
+        // The percentage rather than the count, so that no reader anywhere can divide a total out
+        // of it -- see Balance.integrityPercent. That the out ALSO receive the raw count on
+        // SUBROUTINE_PROGRESSED is redundancy this table tolerates rather than a second decision:
+        // the count is the ledger's own number and this is the bar. Recorded, like E-L2-3's pair.
+        SYSTEM_INTEGRITY_LIVE to OUTSIDE,
+
+        // **The batched meter, and the living are the only readers** (gdd.md:192, :1002). Emitted
+        // once, when a meeting is called -- the shift boundary -- and frozen in between.
+        //
+        // Not the out classes: they have SYSTEM_INTEGRITY_LIVE and have had the same number all
+        // along, so a second delivery would be one kind restating another's fact on the round-state
+        // axis. Denying it there carries no role information -- round-state is publicly observable
+        // (D-068) -- and it is the fail-closed direction for a kind whose whole meaning is timing.
+        SYSTEM_INTEGRITY_BATCHED to LIVING,
 
         // A banner buzzes and dims every panel in the house, and a dimming lamp is world-
         // observable, so a notification addressed to fewer than everyone is a beacon (D-076).
@@ -450,6 +478,11 @@ object EmitSchema {
             // quieter message could inherit.
             is Effect.OpeningMessage -> listOf(effect.seat)
             is Effect.SubroutineProgressed -> state.seats
+            // Broadcast, and left to the allowlist to narrow -- the two meter kinds are facts about
+            // the house rather than about the phone they arrive on, and addressing them by
+            // round-state here as well would state the same rule in two places.
+            is Effect.SystemIntegrityLive -> state.seats
+            is Effect.SystemIntegrityBatched -> state.seats
             // Broadcast, and left to the allowlist to narrow. Addressing these by round-state
             // here as well would state the same rule in two places, and the day they disagreed
             // the quieter one would win.

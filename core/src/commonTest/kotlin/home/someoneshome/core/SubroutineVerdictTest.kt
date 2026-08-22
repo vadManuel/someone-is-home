@@ -33,7 +33,8 @@ private val MARKERS = (0 until 8).map { MarkerId("m$it") }
 private fun armed(): GameState = reduce(
     GameState.EMPTY,
     Event.RoundArmed(
-        Tick(0), seed = 20260821L, seats = SEATS, insiders = INSIDERS, markers = MARKERS,
+        Tick(0), seed = 20260821L, seats = SEATS, insiders = INSIDERS,
+        markers = placed(MARKERS),
     ),
 ).state
 
@@ -46,7 +47,7 @@ private fun armed(): GameState = reduce(
  * for that player (D-124) rather than a crash in the fixture.
  */
 private fun cardFor(state: GameState, seat: Seat): MarkerId =
-    state.workOrderFor(seat)?.entries?.firstOrNull()?.marker ?: MARKERS.first()
+    state.workOrderFor(seat)?.entries?.firstOrNull()?.anchor ?: MARKERS.first()
 
 /** Any other card in the round. The one thing it is not is the card above. */
 private fun otherCard(state: GameState, seat: Seat): MarkerId =
