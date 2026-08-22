@@ -2133,6 +2133,278 @@ duration and hit radius (D-140). **Presentation pending at build time:** Sniff's
 
 ---
 
+## Revision 32 — the two-second hold, and the button that was never there
+
+*Decided 2026-08-21, afternoon and evening, with Vadmanuel. One correction to revision 27, one input
+primitive named across five screens, the arming surface ratified against three GDD fossils, and the
+loop run's remaining escalations closed — E-L1-1, E-L3-1 and E-L3-3, the last of them taking F-005's
+other half with it.*
+
+### D-121 (corrected) · **Reporting a Revoked player is the contact handshake, not a button**
+
+Revision 27's D-121 called the report *"F-011's unconditional claim button, unchanged"* and said it
+*"works from anywhere"*. **The first half is wrong, and not cosmetically.** There is no claim
+button. The GDD deleted it, and deleted it for precisely the reason it now has to go from this log
+too: *"no button means no enabled/disabled state to read, so it cannot be used as a proximity radar
+for revoked players"* (`gdd.md:536`). A log entry that reinstates the button reinstates the radar,
+because a button that is enabled only next to a Revoked player is a detector held in the hand.
+
+**The report is the contact primitive** (`gdd.md:543`): one short-range device-to-device handshake,
+two verbs, resolved entirely by the state of the two phones — **armed Insider + live player →
+revocation; any player + Revoked player → report; anything else → nothing at all, silently, with no
+feedback on either device.** The same gesture that Revokes reports, and which of the two happened is
+never a choice either player makes. It is the state of the phones, not a selection.
+
+**What survives unchanged is the exception itself.** *From anywhere* meant, and still means, **not
+at the meeting card**. D-121's rule is that a meeting is called by walking to the card and scanning
+it; the report is the one meeting called somewhere else — kneeling in the dark beside the person
+being reported. D-133's *"reporting a Revoked player still triggers a meeting from anywhere"* reads
+correctly under this correction and needs no amendment of its own.
+
+**The correction tightens D-121 rather than loosening it.** A button would have been pressable from
+a chair, which is exactly what D-121 spent its closing paragraph refusing. Contact is still a walk
+to a place; the place is just a person rather than a card, and it is the most exposed place in the
+house — stationary, both hands occupied, kneeling beside the player you are about to call everyone
+in to look at.
+
+### D-141 · **The two-second hold is the app's deliberateness primitive — decided**
+
+The Delete screen's `HOLD TO DELETE` is not a one-off for a destructive settings action. **The
+two-second hold is the app's single gesture for *I meant this*, and five controls take it:**
+
+| control | what the hold is paying for |
+|---|---|
+| **the vote lock** | select a row, then hold; on completion the vote locks **irrevocably** and the control disables, reading **VOTE CAST** |
+| **arming a Revoke** | an accidental arm spends a full cooldown (D-009, D-142) and there is no cancel |
+| **arming an Egress** | the misfire the GDD calls *"a game-ending misclick [that] **will** happen in the dark"* (`gdd.md:533`) |
+| **the host's LIGHTS OUT** | it starts the evening, in front of the whole party, and there is no way back to the lobby |
+| **StairsWarn's UNREGISTER AND CONTINUE** | it discards a registration the host climbed the stairs to make |
+
+**One rule generates that list: hold what cannot be taken back.** Each of the five is irreversible
+at the moment it completes, and four of the five are pressed in the dark by a thumb that cannot see
+what it is over. The hold is not a confirmation dialogue — it asks for no second screen, no second
+target, and no reading. It asks for two seconds of continued intent, which is the one thing an
+accident cannot supply.
+
+**Reporting a Revoked player takes no hold, and must not.** The deliberateness there is already paid
+in the body: crossing a dark house and putting your phone against someone else's is a slower and far
+more exposed commitment than any progress bar can represent. A hold stacked on top would ask a
+player kneeling in the open to stay there two seconds longer for nothing — and this is the game's
+most vulnerable posture, which is what makes the report a decision at all (`gdd.md:536`'s *report it
+now, or walk away and come back when it suits you*).
+
+**STOP NOW stays an instant tap, deliberately, and this is the one place friction is refused.** It
+is the panic exit from a Subroutine, and D-111 made abandonment free by design: the work plane hears
+nothing, no partial state is held, and the next scan restarts. **Friction on the exit would undo
+that.** A player who hears someone in the doorway has to be able to be looking at nothing in the
+time it takes to lift a thumb, and a two-second bar filling while they wait is both a delay and a
+lit rectangle on the screen of somebody trying to stop being interesting. The abandonment the design
+priced at zero has to cost zero at the fingertip too.
+
+**The vote's copy follows from the first row.** The pre-lock control **is** the hold — there is no
+READY tap on the ballot any more, which retires half of D-117's open rename: READY TO VOTE survives
+in the discussion, where it is a readiness signal rather than a commitment, and the ballot's own
+button is gone. The locked label **VOTE CAST** stands, as built.
+
+**D-117 is otherwise untouched.** Selections still stream live so the out can watch the vote happen
+(D-134), the lock is still irrevocable, `N OF 6 VOTED` still counts locked players rather than
+selections, and **the buzzer still auto-locks whatever is selected** — a player who never completes
+a hold has their selection locked for them, which is what keeps the hold a *lock* and not a
+*submit*. D-075's skip-by-silence still reaches only a player who selected nothing at all.
+
+### D-142 · **Arming is springboard page 2, in place — and a Resident's page 2 does nothing at all**
+
+Two halves: where the ability surface lives, and what it does under the wrong thumb.
+
+**Where — ratified as built.** Arming happens on **page 2 of the springboard, in place.** Nothing
+opens, no view is pushed, no panel is summoned, and the Insider never leaves a screen they were
+already allowed to be on. A swipe they share with every Resident, and a hold.
+
+**Three GDD paragraphs are pre-D-009 fossils and are formally superseded here** — `gdd.md:533`'s
+*"tap in the panel, then a second deliberate confirm"*, `:535`'s *"arm in the panel, then touch your
+phone to theirs"*, and `:941`'s *"long-press bottom-left ~400ms → Status panel → read the roster →
+arm Revoke"*, together with `:304`'s tier layout described as the top and bottom halves of that
+panel. They all describe a Status panel summoned by a corner long-press, with a two-step confirm
+inside it — the shape the design had *before* D-009 made contact the only confirmation that exists.
+**The second confirm is now the hold** (D-141), and it is the only one. A later GDD sweep will
+reword them, as D-108 swept D-098's ten sites; they are listed here so the sweep has its list and so
+nobody reads the fossils as a live specification in the meantime.
+
+**What — the tiles are identical at rest.** Same lighting, same furniture, same brightness on both
+roles' page 2, which is the parity the port already built and for the reason it built it: a dimmer
+page 2 reads across a dark room as *this one has nothing to tap*, and that is the tell the whole
+discipline exists to prevent.
+
+**But a Resident's page-2 controls are ENTIRELY DISABLED — no interaction at all, from the first
+millisecond.** No press feedback, no hold progress that runs and then declines, no animation, no
+delay, nothing. **Capability on page 2 belongs to Insiders alone.**
+
+The distinction is exact and it is the whole ruling: **identical at rest, inert under the thumb.**
+A hold that filled for two seconds and then refused would be a self-test — press it, watch it, learn
+your own role — and it would be worse than useless besides, because a bar filling in a dark house is
+world-observable to whoever is standing behind the shoulder. The tell the parity was built against
+is a *resting* tell; the answer to it must not open a *behavioural* one. Rule 1 again: the safe
+control is the one with nothing behind it to probe.
+
+⚠️ **A copy consequence for the builder, flagged rather than ruled:** `PanelModel`'s resting
+sub-line reads *READY . TAP TO TEST* for Residents, which invites a tap on a control that now does
+nothing whatever. That line has to change. What it becomes is a build-time call under the same
+parity rule — it must be a true sentence about a page that does not respond, and it must not be
+shorter, dimmer or otherwise distinguishable from the Insider's.
+
+**The arming behaviour itself is D-009 reaffirmed, unchanged:** silent and invisible, nothing moving
+on any screen, a **45s window**, the **cooldown spent at the moment of arming** rather than at the
+landing, and **no cancel**. A botched stalk still costs a full cooldown, which is still the entire
+reason the two-step is interesting.
+
+### D-143 · **The band's floor rises at twelve seats — decided**
+
+Closes **E-L3-1**, the overnight run's escalation on the one place revision 29 disagreed with
+itself. **The conservative reading stands** — which is also the reading already built.
+
+**The band's minimum is `max(1, ⌊seats ÷ 6⌋)`**, exactly as revision 21 wrote it. The floor is 1
+through eleven seats, **2 from twelve, and 3 from eighteen.** D-103's amendment changed the band at
+five and six seats and **nowhere else**; *"from 7 seats the band resumes, `1..⌈seats/4⌉`,
+unchanged"* meant the band as revision 21 wrote it, and the leading `1` in that shorthand was the
+floor's value at the seat counts under discussion, never a replacement for the expression.
+
+The reason is D-103's own and it is the reason the minimum edge exists at all: **always enforce a
+relatively balanced game.** One Insider against seventeen Residents is unwinnable for the one, and
+that is a balance fact no host can see and no player can ever check — so it is clamped, on the
+setting as well as on the draw (revision 21, D-125). A host at eighteen seats cannot hand-pick a
+single Insider any more than they can hand-pick five.
+
+Both readings are identical at 6–10 seats, which is the engineering posture, so **nothing built
+changes.** The one line and the one test E-L3-1 asked somebody to say are now said.
+
+### D-144 · **Restrain is plurality-decided, Skip is a candidate, ties resolve to Skip — ratified, and D-131 amended**
+
+The GDD's own rule at `gdd.md:413`, ratified rather than re-invented: **most votes is Restrained;
+ties resolve to Skip.** Skip sits on the ballot as a candidate like any name, and a tie — between
+two names, or between a name and Skip — **Restrains nobody.**
+
+**D-131's phrase *"Restrain is majority-decided"* is amended to read plurality-decided.** The word
+was loose and the mechanism was never a majority: with Skip on the ballot and abstention counting as
+nothing (D-075, as narrowed by D-117), four votes out of nine Restrain if no other candidate reaches
+four.
+
+**The parity veto survives the amendment intact**, which is the only thing the change needed
+checking against. D-131 makes parity the Insiders' win *because* at parity they can always block a
+Restrain, and that holds under plurality without needing a majority at all: **at parity the Insiders
+can always force at least a tie, and a tie resolves to Skip.** Half the room voting as a bloc for
+Skip denies every name a plurality over it. The implication D-131 rests on is unchanged; only the
+word describing the tally was wrong.
+
+### D-145 · **The out watch everything live, and the correlation they can build is theirs to keep — decided**
+
+Closes **E-L1-1** by accepting what it named rather than narrowing it. **Option (a): the out see the
+meter, the map and the vote live, and nothing is taken away.**
+
+The escalation was right about the mechanism, and it is worth writing down plainly so nobody
+rediscovers it as a bug. D-111's presence plane opens and closes *performing at room X*; D-109 makes
+an Insider's success write nothing to SystemIntegrity; and a couch watching both for a whole round
+is watching a correlation whose far end is alignment. **That is real, and it is accepted.**
+
+**Three things make it the ghost's game rather than a leak.** It is inference stacked on inference —
+the spectator map is knowingly imperfect by design (D-136), adjacent-room bleed included, and two
+players can be performing at once. It accrues slowly, across a round, against a meter that is a
+percentage and never a count (D-103). And decisively: **the out can act on none of it.** They cannot
+speak, cannot vote (`gdd.md:415` — voting is a communication channel), and cannot signal. The one
+thing a player who has worked out an Insider would normally do is exactly the thing being out has
+already removed.
+
+**So the slow private suspicion is deliberately theirs.** It is most of what makes the couch worth
+sitting on. D-134 gave the out a screen so that being out is a different game rather than no game,
+and **this is the game it is** — reading the house from outside it, correctly or otherwise, with no
+way to be believed. Closing the correlation would mean taking the meter or the map from the only
+readers permitted to have them, trading a real screen for a theoretical leak against a reader who
+cannot use it.
+
+### D-146 · **Dependencies are cross-player, a Revoke strands them, and over-provisioning is the whole rescue — decided**
+
+Closes **E-L3-3**, and with it **F-005's other half** — open since the very first review pass, and
+the last thing F-005 was still holding.
+
+**Work-order dependencies are cross-player.** That was the original concept and it is the design: a
+Subroutine blocked by a *downstream* Subroutine that somebody else holds, so the work order is
+something the house does together rather than six private lists that happen to be running in the
+same building. **Self-chains came later and for a different reason** — D-123's same-card reuse
+produces blocked-by-your-own-work as a by-product on homes with few markers, discovered as the
+player completes. Both exist; only one of them is the point.
+
+**A Revoke strands work, and nothing rescues it.** When a Revoked player held somebody else's
+blocker, **the orphaned blocks stay blocked. Nothing auto-satisfies, ever, and no per-chain repair
+runs at any point in the round.** The house does not quietly finish a dead player's work.
+
+**This supersedes F-005's *"orphaned subroutines are silently auto-satisfied"* wherever it appears**
+— `gdd.md:274`'s *collapse gracefully*, `gdd.md:917`, `gdd.md:1031`, story 7.4 at `epics.md:225`,
+and the F-005 line at the head of this log.
+
+**What keeps the round winnable is aggregate over-provisioning, and only that.** D-129 already sizes
+every Resident's order at `K = ⌈M ÷ worstCasePlainResidents⌉ + slack`: **`K × Residents` of
+completable work against a meter of `M`, plus slack**, with the ceiling computed against the worst
+case for the Insider count. There is deliberately more work in the house than the meter needs, so
+stranded work comes out of a margin that was sized for it. **`slack` is what pays for the
+stranding** — which is the load the overnight run put on it when it moved `ORDER_SLACK` off zero,
+and the reason it can never go back to zero.
+
+**Why no rescue, stated so it does not get re-invented.** Balance was never the objection — the
+2026-08-18 attrition work showed auto-satisfaction is roughly neutral, because the freed work comes
+out of the departing player's own allocation. Three other things are:
+
+- **It is a second mechanism doing the first one's job.** Slack already absorbs stranding, globally
+  and without knowing why anything stranded. A per-chain repair adds a rule that fires on a
+  condition, and every rule that fires on a condition is a thing somebody can read.
+- **It is the house moving the meter for a reason no player caused.** The out read that meter live
+  (D-134). A percentage that steps on its own, at the moment of a Revoke, is a removal report
+  delivered as progress — and D-103's whole argument is that the meter says one thing only.
+- **A permanently blocked entry is content.** D-114 already makes blocked work visible as a known
+  unknown. An entry that never unblocks is a fact a Resident can carry to the meeting: either the
+  player upstream of me is gone, or they are sitting on it. **That ambiguity is the game**, and
+  auto-satisfaction would resolve it silently and for free.
+
+### D-147 · **Unanimous READY counts the living only — confirmed**
+
+Confirming the meeting unit's reading rather than deciding something new. **The discussion's
+unanimous READY TO VOTE, and the early close it triggers, count living players only** — for the
+plainest possible reason: **the couch has no such control.** A ghost's meeting screen carries the
+two timers and the live vote (D-134) and no readiness button, so there is nothing of theirs to count
+and a gate that waited on them would simply never open.
+
+**This does not soften D-104**, and the two belong next to each other because they look like they
+disagree. D-104 gates the *start* of the discussion on every living player and every out player
+checking in at the meeting area — that is presence, which a ghost has, because a ghost walks in.
+Readiness is an opinion about a conversation, which a ghost cannot hold because a ghost cannot
+speak in it. **Presence is everybody's; readiness is the living's.**
+
+### Where the GDD, the epics and this log are now wrong
+
+| site | the superseded phrasing | what replaces it |
+|---|---|---|
+| `gdd.md:304`, `:533`, `:535`, `:941` | the Status panel summoned by a corner long-press, and *"tap in the panel, then a second deliberate confirm"* | D-142: springboard page 2, in place, nothing opens, and the second confirm is the two-second hold |
+| `gdd.md:274`, `:917`, `:1031` | orphaned Subroutines *"silently auto-satisfied"*; chains *"collapse gracefully"* | D-146: nothing auto-satisfies; `K × Residents` plus slack is the entire answer |
+| `epics.md:225` (story 7.4) | *"Orphaned subroutines silently auto-satisfied (revoked holder, collapsed chain) so the bar stays winnable"* | D-146: the story loses its subject; the sweep decides whether the row goes or is rewritten to record the ruling |
+| `gdd.md:412`'s vote control | the ballot's button (already renamed once by D-117) | D-141: a two-second hold, then **VOTE CAST** |
+| this log, D-121 | *"F-011's unconditional claim button, unchanged"* | D-121 (corrected): the contact handshake, `gdd.md:543` |
+| this log, D-131 | *"Restrain is majority-decided"* | D-144: plurality-decided |
+| this log, F-005 (line 94) | *"with orphans silently auto-satisfied"* | D-146 |
+
+### Open and deferred, added to revision 30's list
+
+**Copy pending at build time:** the ballot's pre-lock hold label (D-141), and the Resident's page-2
+resting sub-line, which can no longer say TAP TO TEST (D-142). D-109's verdict lines are still open
+from revision 23.
+
+**A GDD and epics sweep is owed** — D-142's four sites and D-146's four, on the D-108 pattern. It is
+a wording sweep and it changes no ruling.
+
+**Playtest keeps `slack` (D-129)** and now knows what it is buying: D-146 makes it the only thing
+standing between a stranded chain and an unwinnable meter, so it is a balance number with a
+correctness job attached.
+
+
+---
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).
@@ -2243,6 +2515,19 @@ the Interrupt sweep bounces forever until tapped, with the house sending band, s
 the client rendering them deterministically; D-140 Drift grades a tap against a house-authored
 haptic *now*, reusing D-139's pattern. The roster lines at `gdd.md:566`, `:568`, `:569` and `:570`
 are superseded. All ten are specced; six built as of `14d502d`, these four now buildable.
+
+**Revision 32 named the hold and closed the loop run** — D-121 **corrected**: the report is the
+contact handshake (`gdd.md:543`), never a claim button, and *from anywhere* means only *not at the
+meeting card*. D-141 the two-second hold guards the five irreversible controls — the vote lock,
+Revoke arming, Egress arming, LIGHTS OUT and UNREGISTER AND CONTINUE — while contact needs no hold
+and STOP NOW stays an instant tap. D-142 arming is springboard page 2 in place, tiles identical at
+rest and a Resident's entirely inert, superseding `gdd.md:304`, `:533`, `:535` and `:941`. D-143 the
+band floor is `max(1, ⌊seats/6⌋)`, so 2 Insiders at twelve seats and 3 at eighteen (E-L3-1 closed).
+D-144 Restrain is plurality-decided with Skip a candidate and ties resolving to Skip, amending
+D-131's word while its parity veto survives. D-145 the out watch everything live and the correlation
+is the ghost's game (E-L1-1 closed). D-146 dependencies are cross-player, a Revoke strands them,
+nothing auto-satisfies, and `K × Residents` plus slack is the whole rescue — **F-005 is now fully
+closed.** D-147 unanimous READY counts the living only.
 
 **Carried into E0 as a constraint, not a closed item:** total app allocation ≤ ~0.5 MB/s as the design target, with the measured cliff between 1.5 and 3.0 MB/s — roughly 6× margin, so this is a budget rather than a knife edge. Nobody yet knows what the real app allocates with BLE, 100 Hz motion, effects and recording running at once.
 Action: create `project-context.md`.
