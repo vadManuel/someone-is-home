@@ -28,12 +28,20 @@ enum class SubroutineKind {
 }
 
 /**
- * **One line of a work order, authority-side: what was assigned, where, what unblocks it, and the
- * answer.**
+ * **One line of a work order, authority-side: what was assigned, where, and what unblocks it.**
  *
- * Carries [expected], so it is ground truth of the strongest kind and has no wire encoding and no
- * `copy()` — the same posture [OpenSubroutine] holds, for the same reason. What a client receives
- * is [OrderLine], which is physically incapable of holding an answer key.
+ * Ground truth, with no wire encoding and no `copy()` — the same posture [OpenSubroutine] holds,
+ * for the same reason. What a client receives is [OrderLine], which is physically incapable of
+ * holding a card or a dependency.
+ *
+ * ### The answer is NOT here, and that is E-L3-2's ruling
+ *
+ * An entry is an **assignment**: this Subroutine, at this card, behind this dependency. The
+ * *question* — band position, speed, phase, path, the hidden duration — and the answer it grades
+ * against are drawn by the **scan** and re-drawn by every re-scan (D-139, D-140), and they live
+ * on [OpenSubroutine] for exactly as long as one instance lasts. An answer key stapled to the
+ * assignment would make a retry a second run at a picture the player has already memorised, which
+ * is the thing both rulings exist to prevent.
  *
  * ### [blockedBy] holds earlier indices only, and that is what keeps the bar reachable
  *
@@ -52,13 +60,11 @@ class OrderEntry(
      * station and two players' anchors at the same time.
      */
     val marker: MarkerId,
-    /** What the house will grade against, in [OpenSubroutine]'s one canonical shape. */
-    val expected: List<Int>,
     /** Earlier entries that must be done first. Empty for an entry that is actionable at once. */
     val blockedBy: List<Int>,
     val done: Boolean,
 ) {
-    fun completed(): OrderEntry = OrderEntry(index, subroutine, marker, expected, blockedBy, true)
+    fun completed(): OrderEntry = OrderEntry(index, subroutine, marker, blockedBy, true)
 }
 
 /**

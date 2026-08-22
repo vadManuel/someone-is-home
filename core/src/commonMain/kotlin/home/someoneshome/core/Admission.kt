@@ -97,6 +97,12 @@ private fun phaseOf(event: Event): MeetingPhase? = when (event) {
     is Event.RoundArmed, is Event.MarkerScanned, is Event.SubroutineReturned,
     is Event.RevokeArmed, is Event.ContactMade, is Event.MeetingCalled -> null
 
+    // Not a meeting event, and deliberately not refused during one either. A window that was open
+    // when the house rang closes wherever the player is standing; a gate that declined the report
+    // would leave the presence plane holding a window that never shut, and the one consumer it has
+    // is an expiry (D-136).
+    is Event.PerformanceEnded -> null
+
     is Event.MeetingCheckedIn -> MeetingPhase.CheckIn
     is Event.ReadyToVoteDeclared, is Event.DiscussionClosed -> MeetingPhase.Discussion
     is Event.VoteSelected, is Event.VoteLocked, is Event.VoteWindowClosed -> MeetingPhase.Vote

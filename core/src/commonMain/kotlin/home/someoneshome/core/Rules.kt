@@ -10,9 +10,10 @@ import home.someoneshome.model.Haptic
 import home.someoneshome.model.InsiderAbility
 import home.someoneshome.model.Meeting
 import home.someoneshome.model.MeetingPhase
-import home.someoneshome.model.OpenSubroutine
+import home.someoneshome.model.Presence
 import home.someoneshome.model.Role
 import home.someoneshome.model.Seat
+import home.someoneshome.model.SubroutineInstance
 import home.someoneshome.model.tallyOf
 
 /**
@@ -36,27 +37,10 @@ fun reduce(state: GameState, event: Event): Reduction<GameState, Effect> = when 
 
     is Event.SubroutineReturned -> returned(state, event)
 
-    // A scan resolves (seat, card) to THAT PLAYER'S current Subroutine and arms it, emitting
-    // nothing to anybody (D-110, D-123).
-    //
-    // Deliberately silent in BOTH outcomes. A scan that found work and a scan that found none
-    // must be indistinguishable from outside this branch, because "the house has nothing for you
-    // at this card" is a sentence the client composes from the absence of work rather than a
-    // thing the rules announce -- D-124's NOTHING FOR YOU HERE, held one layer below the copy.
-    //
-    // The first ACTIONABLE entry at that card, which is what walks a self-chain: an order deeper
-    // than the active set visits some cards twice, and the second visit is blocked by the first
-    // until the first is done (D-123's blocked-by-your-own-work).
-    is Event.MarkerScanned -> Reduction(
-        state.workOrderFor(event.actor)?.openAt(event.marker)
-            ?.let {
-                state.withOpenSubroutine(
-                    OpenSubroutine(event.actor, it.index, it.expected, event.marker),
-                )
-            }
-            ?: state,
-        emptyList(),
-    )
+    is Event.MarkerScanned -> scanned(state, event)
+
+    is Event.PerformanceEnded -> performanceEnded(state, event)
+
     is Event.MeetingCalled -> meetingCalled(state, event)
     is Event.MeetingCheckedIn -> checkedIn(state, event)
     is Event.ReadyToVoteDeclared -> readyDeclared(state, event)
@@ -135,6 +119,121 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
             seats.map { Effect.OpeningMessage(it, Haptic.Short) },
     )
 }
+
+/**
+ * **A card was read: the house resolves `(seat, card)` and answers** (D-123, D-124, D-110, D-139).
+ *
+ * ### The answer is an effect now, and both answers are the same effect
+ *
+ * A scan used to emit nothing at all, on the reasoning that *the house has nothing for you here*
+ * was a sentence the client composed from the absence of work. That was rule 1's forbidden shape
+ * with a justification attached: **a scan that opened work would have produced a message and a
+ * scan that did not would have produced silence**, so the absence was the answer, and a phone that
+ * heard nothing could not tell an empty card from a dead radio. Every path through this function
+ * now emits exactly one [Effect.ScanAnswered] and exactly one [Effect.PresenceChanged], both
+ * constructed once, outside every branch — the same discipline [contact] holds for the Revoke.
+ *
+ * D-124's two vocabularies are both real and only one of them is here: NOTHING FOR YOU HERE is
+ * this effect with a null, and **unregistered paper never reaches the rules at all** — see
+ * [ScanRouting], which decides that above the gate and reports it to nobody (D-072).
+ *
+ * ### The first ACTIONABLE entry at that card, which is what walks a self-chain
+ *
+ * An order deeper than the active set visits some cards twice, and the second visit is blocked by
+ * the first until the first is done (D-123's blocked-by-your-own-work, discovered as the player
+ * completes rather than announced in advance).
+ *
+ * ### Every scan draws a fresh instance, and a re-scan therefore re-asks (D-139, D-140)
+ *
+ * The mint happens on **every** scan and not only on the ones that find work. Minting inside the
+ * branch would make the id sequence itself a record of which scans found something — a fact about
+ * other players' work order, sitting in the one piece of state a replay compares byte for byte.
+ * The draw is cheap and the shape is what matters.
+ *
+ * ### The Revoked seat's gate, which is hygiene and is allowed to be
+ *
+ * A seat outside the system opens nothing. This is a branch on state in a client-visible path, so
+ * it is worth being explicit about why it is not rule 1's forbidden shape: **the emitted shape does
+ * not move.** An out seat's scan produces the same two effects with the same fields, and the
+ * allowlist declines to deliver [Effect.ScanAnswered] to an out class anyway — so this is the
+ * second of two independent denials rather than the only one, and neither is visible as an
+ * absence. Round-state is publicly observable (D-068): everybody in the room already knows who is
+ * out.
+ *
+ * ### A scan always relocates the player, and that is why the else branch spends
+ *
+ * *A performer's own scan placement is ground truth* (D-136) — the house knows where somebody is
+ * for exactly one reason, which is that they read a card whose place it knows. So a scan that
+ * finds nothing does not merely fail to open work: it says this player is standing somewhere else
+ * now, which closes the window and spends whatever was armed at the card they walked away from.
+ * You cannot be armed at a card you are not standing at, and D-111 is explicit that there is no
+ * half-finished performance to come back to — *the next scan restarts.*
+ */
+private fun scanned(state: GameState, event: Event.MarkerScanned): Reduction<GameState, Effect> {
+    val (id, minted) = state.mintId()
+    val entry = if (state.isOut(event.actor)) {
+        null
+    } else {
+        state.workOrderFor(event.actor)?.openAt(event.marker)
+    }
+    val instance = entry?.let { instanceFor(state.seed, id, event.actor, it, event.marker) }
+
+    val next = if (entry == null || instance == null) {
+        spend(minted, event.actor)
+    } else {
+        minted.withOpenSubroutine(instance)
+    }.withPresence(Presence(event.actor, event.marker, open = instance != null))
+
+    // Both constructed once, outside the branch above. Deliberately not inside it.
+    //
+    // The instance the client is shown is the NARROWED one: it carries the parameters and cannot
+    // carry the answer, because it is a different type rather than the same type with a field
+    // blanked (rule 3). The answer never leaves `next`.
+    val answered = Effect.ScanAnswered(
+        seat = event.actor,
+        opened = if (entry != null && instance != null) {
+            SubroutineInstance(entry.index, entry.subroutine, instance.parameters)
+        } else {
+            null
+        },
+    )
+    val placed = Effect.PresenceChanged(event.actor, event.marker, open = instance != null)
+    return Reduction(next, listOf(answered, placed))
+}
+
+/**
+ * **The performance window closed without an entry** — STOP NOW, or a step away from the marker
+ * (D-111).
+ *
+ * **The work plane is told nothing and this is the whole of what the presence plane is told.** No
+ * entry is graded, no partial answer is held, and nothing here distinguishes the player who pressed
+ * STOP NOW from the player whose phone noticed they had walked out of the room — because an
+ * abandonment record is the behavioural channel that separates a real Subroutine from a fake, and
+ * D-111 closed it by refusing to keep one.
+ *
+ * **It spends what was armed**, for the reason a scan that finds nothing does: the window and the
+ * arming are one performance, and *the next scan restarts.* An arming that survived the player
+ * walking out of the room would let them hand over an entry from anywhere, which is D-110's cost
+ * — standing at the marker where the house asked you to stand — refunded quietly.
+ *
+ * **The place is the house's own, not the phone's.** The event carries no marker: where this player
+ * was, is what the house recorded when they scanned, and a report that named its own location would
+ * be a phone asserting a placement rather than a window closing (D-136 — inference never overrides
+ * knowledge, and this is not even inference).
+ */
+private fun performanceEnded(
+    state: GameState,
+    event: Event.PerformanceEnded,
+): Reduction<GameState, Effect> {
+    val where = state.presenceFor(event.actor)?.at
+    val next = spend(state, event.actor)
+        .withPresence(Presence(event.actor, where, open = false))
+    return Reduction(next, listOf(Effect.PresenceChanged(event.actor, where, open = false)))
+}
+
+/** D-110's spend, for a seat that may have nothing open. A no-op is the fail-closed direction. */
+private fun spend(state: GameState, seat: Seat): GameState =
+    state.openSubroutineFor(seat)?.let { state.withOpenSubroutine(it.spent()) } ?: state
 
 /**
  * **Armed, not fired — and it is refused while the cooldown is still running** (D-132).
@@ -257,9 +356,16 @@ private fun returned(
             ?.let { spent.withWorkOrder(it.withCompleted(open.entry)) }
             ?: spent
     }
-    val next = if (banks) advanced.copy(systemIntegrity = remaining) else advanced
+    val banked = if (banks) advanced.copy(systemIntegrity = remaining) else advanced
 
-    // Both constructed once, outside every branch above. Deliberately not inside them.
+    // **The hand-over closes the performance window** (D-111). The place is the one the house
+    // recorded when this seat scanned, never the marker on the event: the event's marker is a
+    // client's claim about where it is standing, and `open.accepts` is already the only thing
+    // entitled to an opinion about that.
+    val where = state.presenceFor(event.actor)?.at
+    val next = banked.withPresence(Presence(event.actor, where, open = false))
+
+    // All three constructed once, outside every branch above. Deliberately not inside them.
     //
     // The order goes back on EVERY return, not only on the ones that changed it. Sending it only
     // when something moved would make its presence a second verdict -- one the client could read
@@ -270,12 +376,13 @@ private fun returned(
         seat = event.actor,
         lines = next.workOrderFor(event.actor)?.asLines() ?: emptyList(),
     )
+    val closed = Effect.PresenceChanged(event.actor, where, open = false)
     return Reduction(
         next,
         if (banks) {
-            listOf(verdict, order, Effect.SubroutineProgressed(remaining))
+            listOf(verdict, order, closed, Effect.SubroutineProgressed(remaining))
         } else {
-            listOf(verdict, order)
+            listOf(verdict, order, closed)
         },
     )
 }

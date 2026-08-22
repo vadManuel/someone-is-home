@@ -39,6 +39,11 @@ object Transcript {
             row("SubroutineReturned", event.at, "actor" to num(event.actor.index),
                 "marker" to text(event.marker.value),
                 "entered" to event.entered.joinToString(",") { num(it) })
+        // No reason and no marker, because the event carries neither -- see Event.PerformanceEnded.
+        // A recording that invented either would be the first place an abandonment record could
+        // grow, and it would grow in the artifact kept specifically to find out what happened.
+        is Event.PerformanceEnded ->
+            row("PerformanceEnded", event.at, "actor" to num(event.actor.index))
         is Event.RevokeArmed ->
             row("RevokeArmed", event.at, "actor" to num(event.actor.index))
         is Event.ContactMade ->
@@ -113,6 +118,20 @@ object Transcript {
                         is OrderLine.Blocked -> "${line.index}:?"
                     }
                 }
+        // The answer to a scan, and the null renders as a token rather than as an absent field:
+        // NOTHING FOR YOU HERE and a real opening are one kind and must stay one line shape, or
+        // the recording becomes the one place the two are trivially separable (rule 1).
+        //
+        // `parameters` is on the row and the answer is NOT -- this renders the client-facing
+        // SubroutineInstance, so the transcript is exactly as narrow here as the wire is.
+        is Effect.ScanAnswered ->
+            "ScanAnswered|seat=${effect.seat.index}|opened=" +
+                (effect.opened?.let {
+                    "${it.entry}:${it.subroutine}:${it.parameters.joinToString(".") { p -> num(p) }}"
+                } ?: "none")
+        is Effect.PresenceChanged ->
+            "PresenceChanged|seat=${effect.seat.index}" +
+                "|at=${effect.at?.let { text(it.value) } ?: "none"}|open=${effect.open}"
         is Effect.OpeningMessage ->
             "OpeningMessage|seat=${effect.seat.index}|haptic=${effect.haptic}"
         is Effect.MeetingOpened ->
@@ -232,6 +251,11 @@ object Transcript {
             state.openSubroutines.joinToString(",") { open ->
                 "${num(open.seat.index)}:${num(open.entry)}" +
                     ":${open.armedAt?.let { text(it.value) } ?: "none"}" +
+                    // The QUESTION and the answer, both. A row that held only the answer could not
+                    // tell a round where the house asked something different from one where it
+                    // graded differently -- and the question is re-drawn by every re-scan now, so
+                    // it is the field that moves when D-139's re-draw breaks.
+                    ":${open.parameters.joinToString(".") { num(it) }}" +
                     ":${open.expected.joinToString(".") { num(it) }}"
             }
         )
@@ -244,7 +268,6 @@ object Transcript {
             state.workOrders.joinToString(",") { order ->
                 "${num(order.seat.index)}:" + order.entries.joinToString(".") { entry ->
                     "${num(entry.index)}/${entry.subroutine}/${text(entry.marker.value)}" +
-                        "/${entry.expected.joinToString("-") { num(it) }}" +
                         "/${entry.blockedBy.joinToString("-") { num(it) }}" +
                         "/${if (entry.done) "done" else "open"}"
                 }
@@ -252,6 +275,16 @@ object Transcript {
         )
         append("|stations=").append(state.stations.joinToString(",") { text(it.value) })
         append("|active=").append(state.activeMarkers.joinToString(",") { text(it.value) })
+        // **The presence plane, in the one place it is allowed to appear.** It reaches no client
+        // -- EmitSchema gives PresenceChanged no row at all -- so a state row is the only artifact
+        // that holds it, and a replay that stopped short of it would certify a build whose windows
+        // never closed.
+        append("|presence=").append(
+            state.presence.joinToString(",") {
+                "${num(it.seat.index)}:${it.at?.let { m -> text(m.value) } ?: "none"}" +
+                    ":${if (it.open) "open" else "shut"}"
+            }
+        )
         // **The meeting, ballots and all.** Live selections are the one thing at a meeting that
         // only a player outside the system may read (D-075), which is exactly why they belong in
         // an authority-side state row: a recording that stopped short of them could not tell a

@@ -182,29 +182,11 @@ internal fun workOrderFor(
             index = index,
             subroutine = SubroutineKind.entries[kinds.next(SubroutineKind.entries.size)],
             marker = marker,
-            expected = entryFor(seed, seat, index),
             blockedBy = chain?.let { listOf(it.index) } ?: emptyList(),
             done = false,
         )
     }
     return WorkOrder(seat, entries)
-}
-
-/**
- * **What the house will grade one entry against — still a stand-in, and named as one.**
- *
- * Two integers over four values, derived from the round seed, the seat and the entry's position.
- * The real question is the Subroutine's own: a returned rhythm, a chosen cell, a finger count, a
- * signed offset, a walked route. Those are **drawn at scan time and not here** — D-139 and D-140
- * both put the instance parameters (band position, speed, phase, path, the hidden duration) on the
- * scan that opens the Subroutine, re-drawn on every re-scan so a retry is a fresh judgment rather
- * than a second run at a picture the player has memorised. That is scan work, not arming's.
- *
- * It does not read `Role`, for [workOrderFor]'s reason.
- */
-private fun entryFor(seed: Long, seat: Seat, index: Int): List<Int> {
-    val draw = Draw(seed + seat.index * SEAT_STRIDE + index.toLong() * ENTRY_STRIDE, DOMAIN_ENTRY)
-    return List(ENTRY_LENGTH) { draw.next(ENTRY_VALUES) }
 }
 
 /**
@@ -218,7 +200,7 @@ private fun entryFor(seed: Long, seat: Seat, index: Int): List<Int> {
  * [domain] separates the four draws that share a seed. Without it the station draw and the Insider
  * draw would be reading the same stream, and moving one would silently move the other.
  */
-private class Draw(seed: Long, domain: Long) {
+internal class Draw(seed: Long, domain: Long) {
     private var state: Long = seed * GOLDEN + domain
 
     fun next(bound: Int): Int {
@@ -229,7 +211,7 @@ private class Draw(seed: Long, domain: Long) {
 }
 
 /** Deterministic shuffle. `List.shuffled()` reaches for the platform's default random source. */
-private fun <T> List<T>.shuffledBy(draw: Draw): List<T> {
+internal fun <T> List<T>.shuffledBy(draw: Draw): List<T> {
     val out = toMutableList()
     for (i in out.indices.reversed()) {
         val j = draw.next(i + 1)
@@ -244,12 +226,8 @@ private const val DOMAIN_STATIONS = 3L
 private const val DOMAIN_ACTIVE = 4L
 private const val DOMAIN_ANCHORS = 5L
 private const val DOMAIN_KINDS = 6L
-private const val DOMAIN_ENTRY = 7L
 
-private const val ENTRY_LENGTH = 2
-private const val ENTRY_VALUES = 4
 private const val SEAT_STRIDE = -0x61c8864680b583ebL
-private const val ENTRY_STRIDE = 0x2545F4914F6CDD1DL
 private const val GOLDEN = -0x61c8864680b583ebL
 private const val MULTIPLIER = 6364136223846793005L
 private const val INCREMENT = 1442695040888963407L

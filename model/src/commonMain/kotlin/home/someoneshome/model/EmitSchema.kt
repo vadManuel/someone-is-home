@@ -70,6 +70,8 @@ object EmitSchema {
         is Effect.SubroutineProgressed -> SUBROUTINE_PROGRESSED
         is Effect.MessageDelivered -> MESSAGE_DELIVERED
         is Effect.WorkOrderIssued -> WORK_ORDER_ISSUED
+        is Effect.ScanAnswered -> SCAN_ANSWERED
+        is Effect.PresenceChanged -> PRESENCE_CHANGED
         is Effect.OpeningMessage -> OPENING_MESSAGE
         is Effect.MeetingOpened -> MEETING_OPENED
         is Effect.StandAndWalkIn -> STAND_AND_WALK_IN
@@ -91,6 +93,15 @@ object EmitSchema {
     val SUBROUTINE_PROGRESSED = MessageKind("SubroutineProgressed")
     val MESSAGE_DELIVERED = MessageKind("MessageDelivered")
     val WORK_ORDER_ISSUED = MessageKind("WorkOrderIssued")
+    val SCAN_ANSWERED = MessageKind("ScanAnswered")
+
+    /**
+     * **Named here and permitted nowhere. That is the whole of the presence plane's boundary.**
+     *
+     * [kindOf] must name it — the `when` is exhaustive — and naming it grants it nothing, which is
+     * exactly the distinction [ALLOWED] is built on. See the comment where its row would be.
+     */
+    val PRESENCE_CHANGED = MessageKind("PresenceChanged")
     val OPENING_MESSAGE = MessageKind("OpeningMessage")
     val MEETING_OPENED = MessageKind("MeetingOpened")
     val STAND_AND_WALK_IN = MessageKind("StandAndWalkIn")
@@ -177,6 +188,36 @@ object EmitSchema {
         // round-state axis carries no role information -- round-state is publicly observable
         // (D-068) -- and it is the fail-closed direction for a message carrying assignments.
         WORK_ORDER_ISSUED to LIVING,
+
+        // **Both living classes, and for D-109's reason rather than for a new one.** A scan opens
+        // an Insider's fake by the same rule that opens a Resident's work, so the row that answers
+        // one answers the other identically -- and narrowed to Residents it would be the loudest
+        // oracle in the table: an Insider whose every scan came back NOTHING FOR YOU HERE.
+        //
+        // The null answer and a real opening are ONE kind here, which is what makes that true.
+        // Split into two kinds they would be two rows, and the day somebody narrowed one of them
+        // the difference between "this card holds nothing for you" and "this card opened work"
+        // would be readable from the allowlist without either payload being seen.
+        //
+        // Not the out classes. A player outside the system is not walking the house looking for
+        // work; their screen is D-134's. Denying it on the round-state axis carries no role
+        // information -- round-state is publicly observable (D-068) -- and it is the second of the
+        // two independent denials a Revoked seat's scan meets, the first being the state gate in
+        // the rules.
+        SCAN_ANSWERED to LIVING,
+
+        // **PRESENCE_CHANGED HAS NO ROW, DELIBERATELY, AND THAT IS THE DECISION** (D-111, D-136).
+        //
+        // *The house records, never recites.* The presence plane's one designed consumer is the
+        // spectator map's expiry, which is hardware-dependent, unbuilt and frozen -- and D-111 is
+        // explicit that this data may never reach a notice, a count, or any surface a living
+        // player can read. Until the map exists there is nobody it may go to, so it goes to
+        // nobody, which rule 2 does for free the moment a row is not written.
+        //
+        // **Written down rather than left as an omission**, because an absent row is
+        // indistinguishable from a forgotten one and this one must survive somebody tidying up.
+        // When the spectator map lands the row becomes OUTSIDE and not one class more: presence
+        // reaching a LIVING seat is the leak the work plane was split in two to close.
 
         // **The house's opening text, and it dims every panel in the building** (D-118). One of
         // exactly two events that do. A dimming lamp is world-observable in a dark house, so a
@@ -292,6 +333,16 @@ object EmitSchema {
             // else was assigned, which is a map of the round's work handed to a player who is
             // supposed to be walking a dark house to find their own.
             is Effect.WorkOrderIssued -> listOf(effect.seat)
+            // The seat with the card in its hand, and no other phone. Broadcasting a scan answer
+            // would publish who is standing at which marker finding work, live, to the whole
+            // house -- the per-player read the percentage meter (D-103) exists to keep out of
+            // aggregate, arriving one scan at a time.
+            is Effect.ScanAnswered -> listOf(effect.seat)
+            // **The performing seat, and this is the second of the presence plane's two
+            // independent denials** -- the first being that the kind has no row at all. Neither
+            // subsumes the other: a row written by mistake still could not carry seat 3's window
+            // to seat 5, and an addressing widened by mistake still delivers to nobody.
+            is Effect.PresenceChanged -> listOf(effect.seat)
             // Addressed per seat and emitted once per seat, which is how the opening message
             // reaches everyone (D-076) without the effect growing a broadcast shape that a later,
             // quieter message could inherit.

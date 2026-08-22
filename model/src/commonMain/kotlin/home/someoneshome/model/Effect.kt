@@ -77,6 +77,59 @@ sealed interface Effect {
     data class WorkOrderIssued(val seat: Seat, val lines: List<OrderLine>) : Effect
 
     /**
+     * **The house's answer to a scan — and it is the same answer whether or not there was work
+     * there** (D-124, D-110, rule 1).
+     *
+     * [opened] carries the instance the scan drew, or is null for **NOTHING FOR YOU HERE**.
+     *
+     * ### The null is the ruling, not a saving
+     *
+     * The tempting shapes are two: emit nothing when a card holds no work for this seat, or split
+     * the answer into two kinds. Both are the same bug in different clothes.
+     *
+     * *Emit nothing* is rule 1's forbidden shape at its purest. A scan that opened work would
+     * produce a message and a scan that did not would produce silence, so the **absence** of the
+     * effect is the answer — and the player's phone is left holding a question the house has never
+     * heard of, indistinguishable from a dead radio.
+     *
+     * *Two kinds* is the same leak one layer out. Two kinds mean two rows in the allowlist, two
+     * shapes on the wire, and two different things for anything downstream to count — so a card
+     * that holds nothing for you becomes separable from one that does by a reader who never sees
+     * either payload. **One kind, one row, one message per scan**, and only the content differs.
+     * `VoteHeld` carries a nullable selection for the same reason and it is the same decision.
+     *
+     * ### D-124's two vocabularies are not both here
+     *
+     * A **registered** card the house has nothing for you at is this effect with a null, and it is
+     * deliberately unremarkable. **Unregistered paper never reaches the rules at all** — it is
+     * refused at the scan's routing, reported to nobody (D-072), and answered by the client's own
+     * alert. Collapsing the two would build the detector D-124 refuses: a Resident sweeping cards
+     * could separate *registered but not mine* from *not registered at all*.
+     *
+     * **Addressed to the scanning seat and to nobody else.** Broadcast, it would publish who is
+     * standing where and finding work, which is the whole read the meter is quantised into a
+     * percentage to prevent, arriving one player at a time.
+     */
+    data class ScanAnswered(val seat: Seat, val opened: SubroutineInstance?) : Effect
+
+    /**
+     * **The presence plane's whole output: a window opened, or a window closed** (D-111, D-136).
+     *
+     * See [Presence]. The house **records, never recites** — this effect has no row in the emit
+     * schema, so it ships to nobody, and it is addressed to the performing seat alone so that it
+     * could not reach another player even if somebody wrote one.
+     *
+     * ### It carries no reason, and adding one would rebuild the leak D-111 closed
+     *
+     * A window closes when the entry is handed over, when the player presses STOP NOW, and when
+     * they step away from the marker. **Those three are one fact here and must stay one fact.**
+     * A `reason` field is an abandonment record, and an abandonment record is the behavioural
+     * channel that separates a real Subroutine from a fake — somebody who walks away from work
+     * that was never going to count, at a rate nobody designed and nobody can see.
+     */
+    data class PresenceChanged(val seat: Seat, val at: MarkerId?, val open: Boolean) : Effect
+
+    /**
      * **The house's opening text — one of exactly two events that dim the house** (D-118).
      *
      * The other is the Egress. Every other notification is quiet: no dim, no brightness spike,

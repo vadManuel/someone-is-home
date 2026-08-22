@@ -219,6 +219,99 @@ class RecordingTest {
     }
 
     /**
+     * **THE SAME HOLE, ONE DRAW FURTHER ON AGAIN — the question moved onto the scan, so the
+     * replay guarantee had to move with it** (D-139, D-140).
+     *
+     * The answer key used to sit on the work order, where the test above covers it. It is drawn by
+     * the scan now and re-drawn by every re-scan, and it lives on `open` — so a state row that
+     * stopped at `armedAt` would certify a build asking entirely different questions as replaying
+     * byte-identically, for exactly the reason the orders row exists: the effect stream carries a
+     * boolean per return and looks the same whatever was asked.
+     *
+     * The tamper is the guard, and it is run **twice, on one half each**. Together they would pass
+     * on a row that carried only the answer, because the two are drawn from one stream today and a
+     * build that changed the question changes the answer with it — so the question's coverage would
+     * lapse silently the day somebody split the draws. Separately, each half has to be there.
+     */
+    @Test
+    fun `replay detects an instance that was drawn differently`() {
+        val (state, recording) = record(GameState.EMPTY, round())
+        assertTrue(
+            state.openSubroutines.any { it.parameters.isNotEmpty() && it.expected.isNotEmpty() },
+            "precondition: somebody in the fixture round had a Subroutine open",
+        )
+
+        // `open` is a comma-joined list of `seat:entry:card:parameters:answer`.
+        fun tamper(segment: Int): List<String> = recording.stateTranscript.map { row ->
+            val open = row.substringAfter("|open=").substringBefore("|orders=")
+            if (open.isEmpty()) {
+                row
+            } else {
+                val moved = open.split(',').joinToString(",") { entry ->
+                    entry.split(':').mapIndexed { i, part ->
+                        if (i == segment) part.map { c -> if (c in '0'..'8') c + 1 else c }
+                            .joinToString("") else part
+                    }.joinToString(":")
+                }
+                row.replace("|open=$open", "|open=$moved")
+            }
+        }
+
+        for ((segment, half) in listOf(3 to "question the scan drew", 4 to "answer it grades")) {
+            val tampered = tamper(segment)
+            assertNotEquals(
+                recording.stateTranscript, tampered,
+                "the state row does not carry the $half, so it is outside the replay guarantee",
+            )
+            val result = replay(
+                GameState.EMPTY,
+                Recording(
+                    initialState = recording.initialState,
+                    events = recording.events,
+                    effectTranscript = recording.effectTranscript,
+                    stateTranscript = tampered,
+                    refusalTranscript = recording.refusalTranscript,
+                ),
+            )
+            assertTrue(result is ReplayResult.Diverged, "a moved $half replayed clean")
+            assertEquals(ReplayResult.Diverged.Kind.STATE, result.kind)
+        }
+    }
+
+    /**
+     * **And the presence plane, which nothing else in the build can see** (D-111, D-136).
+     *
+     * Presence reaches no client — the allowlist gives it no row — so the effect stream a client
+     * receives cannot possibly disagree about it, and the per-client transcripts cannot either. A
+     * state row is the **only** artifact that holds it, which makes this the only guard there is:
+     * without it, a build whose windows never closed would replay clean forever.
+     */
+    @Test
+    fun `replay detects a presence window that stayed open`() {
+        val (state, recording) = record(GameState.EMPTY, round())
+        assertTrue(state.presence.isNotEmpty(), "precondition: the round placed somebody")
+
+        val tampered = recording.stateTranscript.map { it.replace(":shut", ":open") }
+        assertNotEquals(
+            recording.stateTranscript, tampered,
+            "the state row does not carry the presence plane, so a build whose windows never " +
+                "closed replays as correct",
+        )
+        val result = replay(
+            GameState.EMPTY,
+            Recording(
+                initialState = recording.initialState,
+                events = recording.events,
+                effectTranscript = recording.effectTranscript,
+                stateTranscript = tampered,
+                refusalTranscript = recording.refusalTranscript,
+            ),
+        )
+        assertTrue(result is ReplayResult.Diverged, "a window that never closed replayed clean")
+        assertEquals(ReplayResult.Diverged.Kind.STATE, result.kind)
+    }
+
+    /**
      * THE HOLE THE REVIEW FOUND.
      *
      * Rule 1 requires the effect stream to be identical whether a revoke lands or not, so for

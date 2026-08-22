@@ -159,6 +159,7 @@ object RecordingText {
             "MarkerScanned" -> Event.MarkerScanned(at, seat("actor"), marker("marker"))
             "SubroutineReturned" ->
                 Event.SubroutineReturned(at, seat("actor"), marker("marker"), ints("entered"))
+            "PerformanceEnded" -> Event.PerformanceEnded(at, seat("actor"))
             "RevokeArmed" -> Event.RevokeArmed(at, seat("actor"))
             "ContactMade" -> Event.ContactMade(at, seat("actor"), seat("target"))
             "MeetingCalled" -> Event.MeetingCalled(at, seat("caller"), trigger(req("trigger"), line))
@@ -189,6 +190,7 @@ object RecordingText {
         "RoundArmed" -> setOf("at", "seed", "seats", "insiders", "chosen", "markers")
         "MarkerScanned" -> setOf("at", "actor", "marker")
         "SubroutineReturned" -> setOf("at", "actor", "marker", "entered")
+        "PerformanceEnded" -> setOf("at", "actor")
         "RevokeArmed" -> setOf("at", "actor")
         "ContactMade" -> setOf("at", "actor", "target")
         "MeetingCalled" -> setOf("at", "caller", "trigger")

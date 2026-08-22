@@ -99,6 +99,16 @@ class GameState private constructor(
      */
     val activeMarkers: List<MarkerId>,
     /**
+     * **Who has a performance window open, and where** (D-111, D-136). See [Presence].
+     *
+     * *The house records, never recites.* One row per seat that has ever scanned, in seat order
+     * like everything else here. Nothing outside the rules reads it, no effect carries another
+     * player's row to any living phone, and the emit schema gives
+     * [Effect.PresenceChanged] no entry at all — so the plane the spectator map will one day be
+     * built on exists, is recorded, replays, and reaches nobody.
+     */
+    val presence: List<Presence>,
+    /**
      * The meeting in progress, or null. **The whole lifecycle lives in here** — see [Meeting].
      *
      * Never reaches a client as itself: it carries every seat's live selection, which is the one
@@ -129,6 +139,15 @@ class GameState private constructor(
     fun isRevoked(seat: Seat): Boolean = revoked.any { it.index == seat.index }
 
     fun isRestrained(seat: Seat): Boolean = restrained.any { it.index == seat.index }
+
+    /**
+     * In the building, outside the system — Revoked or Restrained, said once.
+     *
+     * The two lists stay two lists (rule 9); this is the question that does not care which, and it
+     * is asked by the scan's state gate, where *whether this phone is still in the round* is the
+     * whole of what is being decided.
+     */
+    fun isOut(seat: Seat): Boolean = isRevoked(seat) || isRestrained(seat)
 
     /** In the round: seated, and neither Revoked nor Restrained. Ordered, like everything here. */
     val livingSeats: List<Seat> get() = seats.filterNot { isRevoked(it) || isRestrained(it) }
@@ -189,6 +208,31 @@ class GameState private constructor(
         )
     }
 
+    /** This seat's performance window, or null for a seat the house has never placed. */
+    fun presenceFor(seat: Seat): Presence? = presence.firstOrNull { it.seat.index == seat.index }
+
+    /**
+     * Replace one seat's presence row, leaving every other row and the list's order alone.
+     *
+     * **A seat with no row gets one, appended in seat order** — the same shape
+     * [withOpenSubroutine] has, for a related reason: the round opens with nobody placed anywhere,
+     * and the first thing that places a seat is that seat scanning a card (D-136 — a performer's
+     * own scan is knowledge, and it is the only knowledge the house has).
+     */
+    fun withPresence(replacement: Presence): GameState {
+        val held = presence.any { it.seat.index == replacement.seat.index }
+        return copy(
+            presence =
+                if (held) {
+                    presence.map {
+                        if (it.seat.index == replacement.seat.index) replacement else it
+                    }
+                } else {
+                    (presence + replacement).sortedBy { it.seat.index }
+                },
+        )
+    }
+
     /** Seeded, recorded, monotonic. Never `Uuid.random()` — replay would mint different ids. */
     fun mintId(): Pair<EntityId, GameState> =
         EntityId(nextEntity) to copy(nextEntity = nextEntity + 1)
@@ -211,6 +255,7 @@ class GameState private constructor(
         workOrders: List<WorkOrder> = this.workOrders,
         stations: List<MarkerId> = this.stations,
         activeMarkers: List<MarkerId> = this.activeMarkers,
+        presence: List<Presence> = this.presence,
         meeting: Meeting? = this.meeting,
         egressRunning: Boolean = this.egressRunning,
         nextEntity: Long = this.nextEntity,
@@ -218,7 +263,7 @@ class GameState private constructor(
     ) = GameState(
         armed, ended, seats, insiderSeats, revoked, newlyRevoked, restrained, cooldownArmed,
         cooldowns, systemIntegrity, openSubroutines, workOrders, stations, activeMarkers,
-        meeting, egressRunning, nextEntity, seed,
+        presence, meeting, egressRunning, nextEntity, seed,
     )
 
     companion object {
@@ -266,6 +311,10 @@ class GameState private constructor(
             workOrders = workOrders,
             stations = stations,
             activeMarkers = activeMarkers,
+            // Nobody is anywhere until somebody scans something. A round that opened with every
+            // seat placed would place them where the house had guessed rather than where a card
+            // was read, and D-136's whole dedup rule rests on placement being knowledge.
+            presence = emptyList(),
             meeting = null,
             egressRunning = false,
             nextEntity = 1L,
@@ -287,6 +336,7 @@ class GameState private constructor(
             workOrders = emptyList(),
             stations = emptyList(),
             activeMarkers = emptyList(),
+            presence = emptyList(),
             meeting = null,
             egressRunning = false,
             nextEntity = 1L,
