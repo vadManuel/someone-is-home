@@ -1,5 +1,6 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.HapticStep
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals

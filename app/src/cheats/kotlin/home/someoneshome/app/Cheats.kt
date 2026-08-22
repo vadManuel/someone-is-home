@@ -22,6 +22,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import home.someoneshome.platform.SeededCardScanner
+import home.someoneshome.platform.deviceHaptics
+import home.someoneshome.platform.launchSwitch
 import home.someoneshome.ui.Amber
 import home.someoneshome.ui.FlowHost
 import home.someoneshome.ui.FlowModel
@@ -65,7 +67,7 @@ import home.someoneshome.ui.u
  * makes it lawful against the light discipline: constant light carries no signal, changes with
  * nothing, and is identical on every phone regardless of role.
  */
-private enum class CheatView { Panel, Picker, Transport }
+private enum class CheatView { Panel, Picker, Transport, Haptics }
 
 @Composable
 fun CheatRoot() {
@@ -101,7 +103,17 @@ fun CheatRoot() {
     // that dropping into the picker and back does not deal the deck from the top again.
     val scanner = remember { SeededCardScanner() }
     LaunchedEffect(scanner) { scanner.start(flow::cardScanned) }
-    var view by remember { mutableStateOf(CheatView.Panel) }
+    // The motor, held above the view switch with everything else: CoreHaptics takes tens of
+    // milliseconds to start an engine, and rebuilding one on every trip through the picker would
+    // put that cost in front of the first buzz every time.
+    val bench = remember { HapticCheat(deviceHaptics()) }
+    // The bench, driving itself, when the process was launched with the switch set. It is how a
+    // unit with no hand on the phone gets a device log out of the one output that has no picture:
+    // the app opens on the bench and every row fires once. Absent the switch this is false and
+    // nothing here happens, which is every launch a person makes.
+    val sweeping = remember { launchSwitch(HapticCheat.SWEEP_SWITCH) }
+    var view by remember { mutableStateOf(if (sweeping) CheatView.Haptics else CheatView.Panel) }
+    LaunchedEffect(sweeping) { if (sweeping) bench.sweep() }
     Box(Modifier.fillMaxSize().background(Amber.Black)) {
         when (view) {
             // `standingInForTheHouse` is the bench's stand-in for the authority: nothing here
@@ -112,8 +124,10 @@ fun CheatRoot() {
                 flow.state,
                 onPick = { flow.jump(it); view = CheatView.Panel },
                 onTransport = { view = CheatView.Transport },
+                onHaptics = { view = CheatView.Haptics },
             )
             CheatView.Transport -> TransportCheatScreen(transport)
+            CheatView.Haptics -> HapticCheatScreen(bench)
         }
         MarkerChip { view = if (view == CheatView.Panel) CheatView.Picker else CheatView.Panel }
         // Only where a card could actually be read. A shutter on the springboard would be a
@@ -153,7 +167,12 @@ private fun BoxScope.ShutterChip(next: String, onTap: () -> Unit) {
 
 /** Every screen, as a tappable list, plus the one toggle a screen cannot express: the role. */
 @Composable
-private fun CheatPicker(state: PanelState, onPick: (PanelState) -> Unit, onTransport: () -> Unit) {
+private fun CheatPicker(
+    state: PanelState,
+    onPick: (PanelState) -> Unit,
+    onTransport: () -> Unit,
+    onHaptics: () -> Unit,
+) {
     var draft by remember(state) { mutableStateOf(state) }
     val insets = LocalPanelInsets.current
     Column(
@@ -183,6 +202,14 @@ private fun CheatPicker(state: PanelState, onPick: (PanelState) -> Unit, onTrans
         ) {
             Label("TRANSPORT", size = 6.5, color = Amber.Dim)
             Label("0.8 RIG", size = 6.5, color = Amber.Bright)
+        }
+        Row(
+            Modifier.fillMaxWidth().border(1.u, Amber.Faint).tap(onHaptics)
+                .padding(horizontal = 6.u, vertical = 4.u),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Label("HAPTICS", size = 6.5, color = Amber.Dim)
+            Label("D-135 BENCH", size = 6.5, color = Amber.Bright)
         }
         for (id in ScreenId.entries) {
             val current = id == draft.screen

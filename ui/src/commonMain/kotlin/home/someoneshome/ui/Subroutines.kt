@@ -5,6 +5,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import home.someoneshome.model.HapticStep
+import home.someoneshome.model.HouseBuzz
 import home.someoneshome.model.SubroutineKind
 
 /**
@@ -749,27 +751,6 @@ class MalformedSubroutineParameters(val detail: String) :
     IllegalArgumentException("the house asked something this client cannot draw: $detail")
 
 /**
- * **One step of a haptic pattern — data on this side of the boundary, a vibration on the other.**
- *
- * `ui` has no motor and this build has no phone attached, so a script here is a list, not a buzz.
- * It is shaped for the thing that will play it: alternating durations, no intensities, nothing to
- * interpret — the vocabulary every platform vibration API already has.
- *
- * **Every [Buzz] in a Sniff script is the same length** (D-135 reserves the long haptic for five
- * named events and this is not among them), which is not a detail: a script whose pulses varied
- * would be a rhythm, and D-137 makes Sniff a magnitude judgment precisely so that there is no
- * pattern to hold. What the player counts is *how many*, never *how they went*.
- */
-sealed interface HapticStep {
-
-    /** The motor is on for [millis]. */
-    data class Buzz(val millis: Int) : HapticStep
-
-    /** The motor is off for [millis]. */
-    data class Rest(val millis: Int) : HapticStep
-}
-
-/**
  * **Sniff's question: two groups of buzzes with a pause between them, and one of them is bigger.**
  *
  * D-137 supersedes `gdd.md:568`. The phone buzzes **two haptic groups separated by a pause** and
@@ -795,6 +776,14 @@ sealed interface HapticStep {
  * still produce one** — it draws three numbers out of one range with no idea what they mean
  * (`Scanning.kt`, E-L4-3) — which is exactly why this refusal has work to do rather than being a
  * defensive flourish.
+ *
+ * ### Every buzz in the script is the same length, and the length is not this file's
+ *
+ * A script whose pulses varied would be a rhythm, and D-137 makes Sniff a magnitude judgment
+ * precisely so there is no pattern to hold: what the player counts is *how many*, never *how they
+ * went*. The pulse itself is [HouseBuzz.SHORT_MILLIS] — **there is one short buzz in this app**,
+ * not one per Subroutine, and [HapticStep] now lives beside it in `model` because `platform` sees
+ * `model` and never `ui` (E-S1-2, closed by the device unit exactly as the flag predicted).
  */
 class SniffGroups private constructor(
     /** How many buzzes are in the first group. */
@@ -827,10 +816,15 @@ class SniffGroups private constructor(
     companion object {
 
         /**
-         * **One buzz, and the same one every time.** A presentation fixture in the way
-         * `HANDSHAKE_BEATS` is, and short: D-135 reserves the long haptic for five named events.
+         * **One buzz, and the same one every time — the app's one short buzz, not a copy of it.**
+         *
+         * It was a literal `90` here, beside `HouseBuzz.SHORT_MILLIS`'s `90`, two constants for
+         * one fact agreeing by hand. That is the arrangement D-106 already lost once, and the
+         * failure mode here is the one D-102 is about: a Subroutine pulse that drifted a few
+         * milliseconds from the house's short buzz would make *which kind of buzz was that* a
+         * question a room could start answering.
          */
-        const val PULSE_MILLIS: Int = 90
+        const val PULSE_MILLIS: Int = HouseBuzz.SHORT_MILLIS
 
         /** The silence between two buzzes of the same group. Even, so the group carries no rhythm. */
         const val PULSE_GAP_MILLIS: Int = 220
