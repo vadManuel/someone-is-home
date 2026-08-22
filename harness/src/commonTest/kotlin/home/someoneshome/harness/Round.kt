@@ -2,6 +2,8 @@ package home.someoneshome.harness
 
 import home.someoneshome.core.Admission
 import home.someoneshome.core.admit
+import home.someoneshome.model.Balance
+import home.someoneshome.model.EgressType
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
 import home.someoneshome.model.InsiderAbility
@@ -134,6 +136,52 @@ internal fun round(insiders: List<Seat> = INSIDERS): List<Event> {
                 add(walk(Event.TallyHalfwayReached(Tick(t++))))
                 add(walk(Event.MeetingClosed(Tick(t++))))
             }
+            if (i == EGRESS_PASS) {
+                // **A whole Egress, walked: fired, paused by a report meeting, resumed, and
+                // contained.** On the fixture's path rather than only in a unit test, because the
+                // replay guarantee is what covers the pause arithmetic — a build that reset the
+                // deadline instead of moving it produces the same effect stream and a different
+                // state row, which is the one class of regression state rows exist to catch.
+                //
+                // Expiry is deliberately not here: an Egress ends once, and the pause is the half
+                // whose arithmetic can silently drift.
+                t = maxOf(t, state.egressReadyAt.step)
+                val nodes = state.activeMarkers.distinctBy { it.value }.take(2)
+                val firedAt = Tick(t++)
+                add(walk(Event.EgressFired(firedAt, Seat(1), EgressType.Beacon, nodes)))
+
+                // The two who go. Read off the state, because who is still in the round by this
+                // point is a consequence of the fixture rather than something it can name.
+                val pair = state.livingSeats.take(2)
+                add(walk(Event.MarkerScanned(Tick(t++), pair[0], nodes[0])))
+                add(walk(Event.MarkerScanned(Tick(t++), pair[1], nodes[1])))
+
+                // D-121's one exception, which is the only meeting that can happen now — and it
+                // pauses the countdown rather than resetting it (D-133). Everybody Skips, so the
+                // pair who are about to contain it are still in the round afterwards.
+                val reported = state.revoked.firstOrNull() ?: SEATS.last()
+                add(walk(Event.MeetingCalled(Tick(t++), pair[0], MeetingTrigger.RevokeReported(reported))))
+                SEATS.forEach { v -> add(walk(Event.MeetingCheckedIn(Tick(t++), v))) }
+                add(walk(Event.DiscussionClosed(Tick(t++))))
+                add(walk(Event.VoteWindowClosed(Tick(t++))))
+                add(walk(Event.TallyHalfwayReached(Tick(t++))))
+                add(walk(Event.MeetingClosed(Tick(t++))))
+
+                // Both hit the same four beats off the house schedule, which runs from the moment
+                // the Egress fired and is untouched by the pause.
+                val beats = (0 until Balance.SYNC_PULSE_BEATS).map {
+                    firedAt.step + Balance.SYNC_PULSE_LEAD + it * Balance.SYNC_PULSE_INTERVAL
+                }
+                t = maxOf(t, beats.last() + 1)
+                add(walk(Event.SyncPulseReturned(Tick(t++), pair[0], beats)))
+                add(walk(Event.SyncPulseReturned(Tick(t++), pair[1], beats)))
+            }
         }
     }
 }
+
+/**
+ * Late enough that the shared Egress cooldown has run down on its own, and after the fixture's
+ * meetings so that both halves are exercised in a round that already has people out of it.
+ */
+private const val EGRESS_PASS = 34

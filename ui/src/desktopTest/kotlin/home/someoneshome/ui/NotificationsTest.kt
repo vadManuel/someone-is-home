@@ -181,6 +181,76 @@ class NotificationsTest {
     }
 
     /**
+     * **And they agree on the pair the HOUSE drew, not on the pair the port drew.**
+     *
+     * The nodes stopped being a constant the moment F-001 was ratified: two ordinary markers in
+     * non-adjacent rooms, chosen at fire time, different every Egress. So the test above — which
+     * holds both surfaces to `Notifications.EGRESS_NODES` — now proves only that two fixtures
+     * agree with each other. This is the same property against a pushed pair, which is the one
+     * that can actually be wrong in play.
+     *
+     * A build where the widget still read the constant passes the test above and fails this one,
+     * and it fails it in the way that matters: two silent people sent to two different ends of a
+     * dark house.
+     */
+    @Test
+    fun theEgressSurfacesNameThePairTheHouseSent() {
+        val sent = listOf("CELLAR", "BOX ROOM")
+        for (id in listOf(ScreenId.Banner, NotificationKind.Egress.heldBy!!)) {
+            for (node in sent) {
+                runDesktopComposeUiTest(width = 600, height = 1300) {
+                    setContent {
+                        DeviceCanvas(insets = PanelInsets()) {
+                            Screen(
+                                PanelState(egressType = "TETHER", egressNodes = sent)
+                                    .arrivingAt(id),
+                            )
+                        }
+                    }
+                    assertTrue(
+                        onAllNodes(hasText(node, substring = true)).fetchSemanticsNodes().isNotEmpty(),
+                        "$id did not name $node — it is still reading the port's drawn pair",
+                    )
+                    assertTrue(
+                        onAllNodes(hasText(Notifications.EGRESS_NODES.first(), substring = true))
+                            .fetchSemanticsNodes().isEmpty(),
+                        "$id named the port's fixture room while the house had sent somewhere else",
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * **Beacon or Tether is the house's word too.**
+     *
+     * They are mechanically identical in v1, so the widget hard-coding one of them would look
+     * right in every screenshot and be wrong in half of all Egresses — contradicting, on the one
+     * surface that persists, the alert that woke the whole house up.
+     */
+    @Test
+    fun theWidgetNamesTheTypeTheHouseDrew() {
+        runDesktopComposeUiTest(width = 600, height = 1300) {
+            setContent {
+                DeviceCanvas(insets = PanelInsets()) {
+                    Screen(
+                        PanelState(egressType = "TETHER", egressNodes = listOf("A", "B"))
+                            .arrivingAt(ScreenId.EgressWidget),
+                    )
+                }
+            }
+            assertTrue(
+                onAllNodes(hasText("TETHER", substring = true)).fetchSemanticsNodes().isNotEmpty(),
+                "the containment widget did not name the Egress the house actually started",
+            )
+            assertTrue(
+                onAllNodes(hasText("BEACON", substring = true)).fetchSemanticsNodes().isEmpty(),
+                "the containment widget is hard-coded to one kind of Egress",
+            )
+        }
+    }
+
+    /**
      * **Nothing anywhere counts what has and has not been looked at (D-105).**
      *
      * No badges, no NEW tags, no marks. The concept is deleted rather than merely unused, and the

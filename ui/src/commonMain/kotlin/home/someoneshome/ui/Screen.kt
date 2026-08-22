@@ -87,10 +87,10 @@ fun Screen(
         // field IS the emitted light and the notification has to stay at full intensity while
         // everything around it drops. [LockScreen] implements the same ruling on its own ground.
         // Dimming here as well would darken the one bright thing and dim the house twice.
-        val arrival = Notifications.arrivals[state.screen]
+        val arrival = vals.arrival
         PanelFrame(
             vals,
-            overlay = bannerFor(state.screen),
+            overlay = bannerFor(vals),
             dimmed = Notifications.dims(state.screen) &&
                 arrival?.presentation == Presentation.Banner,
         ) {
@@ -201,8 +201,10 @@ fun Screen(
  * differently from its siblings.
  */
 @Composable
-private fun bannerFor(screen: ScreenId): (@Composable BoxScope.() -> Unit)? {
-    val arrival = Notifications.arrivals[screen] ?: return null
+private fun bannerFor(vals: PanelVals): (@Composable BoxScope.() -> Unit)? {
+    // `vals.arrival` and not `Notifications.arrivals[screen]`: the Egress alert's rooms are round
+    // data, and the widget behind it reads them off the same field. See PanelVals.arrival.
+    val arrival = vals.arrival ?: return null
     if (arrival.presentation != Presentation.Banner) return null
     return { NotificationBanner(arrival.notification) }
 }

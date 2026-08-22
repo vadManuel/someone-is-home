@@ -72,7 +72,13 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/8"
+        // 8: the Egress. Three events a version 8 build cannot construct -- and the first of them,
+        // `EgressFired`, carries the two nodes and the type as INPUTS, drawn above the rules
+        // against a home the recording does not hold. The state row's `egress` was a boolean and
+        // is now the whole lifecycle: deadline, pause mark, held Sync Pulse offers and lockouts,
+        // beside the house-wide shared cooldown. A version 8 recording says only that a house was
+        // on fire, which cannot tell a contained Egress from one that ran out.
+        const val HEADER = "someone-is-home/recording/9"
     }
 }
 

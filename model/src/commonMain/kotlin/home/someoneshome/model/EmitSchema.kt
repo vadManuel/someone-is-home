@@ -85,6 +85,11 @@ object EmitSchema {
         is Effect.MeetingResolved -> MEETING_RESOLVED
         is Effect.RestrainedTakeover -> RESTRAINED_TAKEOVER
         is Effect.MeetingEnded -> MEETING_ENDED
+        is Effect.EgressOpened -> EGRESS_OPENED
+        is Effect.EgressHeld -> EGRESS_HELD
+        is Effect.SyncPulseAnswered -> SYNC_PULSE_ANSWERED
+        is Effect.EgressContained -> EGRESS_CONTAINED
+        is Effect.EgressSucceeded -> EGRESS_SUCCEEDED
     }
 
     val LAMP_SET = MessageKind("LampSet")
@@ -115,6 +120,11 @@ object EmitSchema {
     val MEETING_RESOLVED = MessageKind("MeetingResolved")
     val RESTRAINED_TAKEOVER = MessageKind("RestrainedTakeover")
     val MEETING_ENDED = MessageKind("MeetingEnded")
+    val EGRESS_OPENED = MessageKind("EgressOpened")
+    val EGRESS_HELD = MessageKind("EgressHeld")
+    val SYNC_PULSE_ANSWERED = MessageKind("SyncPulseAnswered")
+    val EGRESS_CONTAINED = MessageKind("EgressContained")
+    val EGRESS_SUCCEEDED = MessageKind("EgressSucceeded")
 
     private val LIVING = setOf(
         ClientClass(Role.Resident, RoundState.Live),
@@ -285,6 +295,46 @@ object EmitSchema {
 
         // Lights out. Everybody, because everybody's screen changes.
         MEETING_ENDED to (LIVING + OUTSIDE),
+
+        // **The house catching fire, and it is as wide as OPENING_MESSAGE's row for the same
+        // reason.** This is the second of D-118's exactly two dimming events, a dimming lamp is
+        // world-observable in a dark house, and a notification that reached fewer than everyone
+        // would be a beacon (D-076). It is also what a player outside the system watches while it
+        // runs -- the real Egress number, live (gdd.md:1014) -- which their class already has the
+        // liveness privilege for, so the same row serves both audiences and needs no split.
+        //
+        // **It reaches the Insider who fired it, identically.** That is required rather than
+        // tolerated: an Insider whose phone did not dim, in a house where every other phone did,
+        // is the single loudest tell available in this design (gdd.md:396).
+        EGRESS_OPENED to (LIVING + OUTSIDE),
+
+        // The countdown stopping and starting again (D-133). The whole party is standing in one
+        // room when it fires, so it is exactly as public as MEETING_PHASE_OPENED and goes to
+        // exactly the same people -- a widget still counting down through a meeting the rest of
+        // the house had stopped for would be the one screen disagreeing with the room.
+        EGRESS_HELD to (LIVING + OUTSIDE),
+
+        // **One participant's own beat, addressed to that participant.** Not a widening: it tells
+        // a player what THEIR tap did and carries nothing about anybody else -- not who is at the
+        // other node, not how many are waiting. Emitted on every return so that its absence can
+        // never be the message (rule 1).
+        //
+        // Not the out classes. A player outside the system is not standing at a node; the effect
+        // is addressed to one seat anyway, and the rules decline them a held offer as well, so
+        // this is the second of two independent denials. Round-state is publicly observable
+        // (D-068).
+        SYNC_PULSE_ANSWERED to LIVING,
+
+        // **It stopped, and nobody learns anything about anybody** (gdd.md:987). To everyone,
+        // because every widget in the building reverts at the same moment. The effect carries no
+        // seats and no node -- see the type -- so widening it costs nothing and narrowing it would
+        // leave somebody counting down toward a loss that is not coming.
+        EGRESS_CONTAINED to (LIVING + OUTSIDE),
+
+        // The terminal fact: uncontained, the Insiders win outright (D-131). Everyone, because a
+        // round ending is the least private thing that can happen -- and because a class denied it
+        // would be a phone still playing a round that is over.
+        EGRESS_SUCCEEDED to (LIVING + OUTSIDE),
     )
 
     /**
@@ -365,6 +415,21 @@ object EmitSchema {
             is Effect.StandAndWalkIn -> listOf(effect.seat)
             is Effect.VoteHeld -> listOf(effect.seat)
             is Effect.RestrainedTakeover -> listOf(effect.seat)
+            // Addressed per seat and emitted once per seat, which is how the Egress alert reaches
+            // everyone (D-076) without the effect growing a broadcast shape. Exactly
+            // OpeningMessage's treatment, and for the same reason: these are D-118's two dimming
+            // events, and a quieter message inheriting a broadcast shape from one of them is the
+            // mistake that would not show up in a diff.
+            is Effect.EgressOpened -> listOf(effect.seat)
+            // The seat whose finger was on the beat, and no other phone. Broadcasting it would
+            // publish who is standing at a node and tapping, live, to the whole house -- which is
+            // the presence read D-111 split the two planes to close, arriving one beat at a time.
+            is Effect.SyncPulseAnswered -> listOf(effect.seat)
+            // Broadcast, and left to the allowlist to narrow. Three facts about the house rather
+            // than about anybody in it: the timer stopped, it was contained, it was not.
+            is Effect.EgressHeld -> state.seats
+            is Effect.EgressContained -> state.seats
+            is Effect.EgressSucceeded -> state.seats
         }
         return state.seats.filter { seated -> addressed.any { it.index == seated.index } }
     }

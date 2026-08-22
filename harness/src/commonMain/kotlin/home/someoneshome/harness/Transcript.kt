@@ -68,6 +68,22 @@ object Transcript {
             row("TallyHalfwayReached", event.at)
         is Event.MeetingClosed ->
             row("MeetingClosed", event.at)
+        // **The type and both nodes are ON the row, because they are inputs and not consequences.**
+        // They are drawn above the rules by `egressFor`, against a home the recording does not
+        // carry -- so a row that held only "an Egress fired" would replay into a different pair of
+        // rooms, or into none at all, and the replay would certify it.
+        is Event.EgressFired ->
+            row("EgressFired", event.at, "actor" to num(event.actor.index),
+                "type" to event.type.toString(),
+                "nodes" to event.nodes.joinToString(",") { text(it.value) })
+        // The taps and NOT the node. The event carries no node -- where this player was standing is
+        // what the house recorded when they scanned -- and a recording that invented one would be
+        // the first place a phone's claim about its own position could grow.
+        is Event.SyncPulseReturned ->
+            row("SyncPulseReturned", event.at, "actor" to num(event.actor.index),
+                "taps" to event.taps.joinToString(",") { num(it) })
+        is Event.EgressExpired ->
+            row("EgressExpired", event.at)
     }
 
     /**
@@ -161,6 +177,22 @@ object Transcript {
             "RestrainedTakeover|seat=${effect.seat.index}|haptic=${effect.haptic}"
         is Effect.MeetingEnded ->
             "MeetingEnded|haptic=${effect.haptic}"
+        is Effect.EgressOpened ->
+            "EgressOpened|seat=${effect.seat.index}|type=${effect.type}" +
+                "|nodes=" + effect.nodes.joinToString(",") { text(it.value) } +
+                "|remaining=${num(effect.remaining)}|haptic=${effect.haptic}"
+        is Effect.EgressHeld ->
+            "EgressHeld|remaining=${num(effect.remaining)}|running=${effect.running}" +
+                "|haptic=${effect.haptic}"
+        is Effect.SyncPulseAnswered ->
+            "SyncPulseAnswered|seat=${effect.seat.index}|held=${effect.held}"
+        // No seats and no node, because the effect has none -- see Effect.EgressContained. The
+        // transcript is exactly as narrow here as the wire is, so an attribution could not hide in
+        // the recording's own formatting.
+        is Effect.EgressContained ->
+            "EgressContained|haptic=${effect.haptic}"
+        is Effect.EgressSucceeded ->
+            "EgressSucceeded|haptic=${effect.haptic}"
     }
 
     /**
@@ -241,7 +273,29 @@ object Transcript {
                 "${num(it.seat.index)}:${it.ability}:${num(it.readyAt.step)}"
             }
         )
-        append("|egress=").append(state.egressRunning)
+        // **The Egress, in full — offers and lockouts included.** It was a boolean, and a boolean
+        // could not tell a replayed Egress from a different one that happened to end the same way.
+        // The offers are who is standing at which node with a live beat, which reaches no client
+        // (they have no schema row and the presence plane they come from has none either), so a
+        // state row is the ONLY artifact that can hold them — and a replay that stopped short of
+        // them would certify a build whose pairs never formed.
+        append("|egress=").append(state.egress?.let { egress ->
+            "${egress.type}:${egress.nodes.joinToString(".") { text(it.value) }}" +
+                ":fired=${num(egress.firedAt.step)}:deadline=${num(egress.deadline.step)}" +
+                // The pause mark, because D-133's arithmetic is the whole of the rule: a recording
+                // that held only the deadline could not tell a paused timer from a moved one.
+                ":paused=${egress.pausedAt?.let { p -> num(p.step) } ?: "none"}" +
+                ":offers=${egress.offers.joinToString(".") {
+                    "${num(it.seat.index)}>${text(it.node.value)}@${num(it.at.step)}"
+                }}" +
+                ":lockouts=${egress.lockouts.joinToString(".") {
+                    "${num(it.seat.index)}>${num(it.until.step)}"
+                }}"
+        } ?: "none")
+        // The house-wide shared clock (D-132), as the tick it is ready at. One value, never a row
+        // per seat -- a state row that held N rows would let a build de-synchronise them and still
+        // replay clean.
+        append("|egressReady=").append(num(state.egressReadyAt.step))
         append("|integrity=").append(num(state.systemIntegrity))
         // The work order, ANSWER KEY INCLUDED. A state row is authority-side debugging and holds
         // complete ground truth by design — recordings are gitignored and never handed to a

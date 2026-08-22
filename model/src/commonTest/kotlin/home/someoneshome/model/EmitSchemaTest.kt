@@ -506,4 +506,123 @@ class EmitSchemaTest {
             EmitSchema.deliveries(Effect.SubroutineProgressed(41), withOut).map { it.seat },
         )
     }
+
+    // ---- The Egress -------------------------------------------------------------------------
+
+    /**
+     * **Every Egress kind has a row, and the list is written out rather than derived.**
+     *
+     * Rule 2 makes a forgotten row ship to nobody, which is the right failure and a *silent* one:
+     * the Egress would fire, the house would not dim, and the countdown would appear on no phone in
+     * the building. Nobody would call that a redaction bug. So the five are named literally, and
+     * the completeness check below is what stops a sixth being added without one.
+     */
+    @Test
+    fun `every Egress kind is permitted to somebody`() {
+        val egress = listOf(
+            EmitSchema.EGRESS_OPENED,
+            EmitSchema.EGRESS_HELD,
+            EmitSchema.SYNC_PULSE_ANSWERED,
+            EmitSchema.EGRESS_CONTAINED,
+            EmitSchema.EGRESS_SUCCEEDED,
+        )
+        for (kind in egress) {
+            assertTrue(
+                EmitSchema.classesFor(kind).isNotEmpty(),
+                "$kind has no row: the Egress would run and reach nobody",
+            )
+        }
+        // Completeness. Every permitted kind belonging to this system is in the list above -- so a
+        // sixth cannot be added, given a row, and left out of these assertions.
+        assertEquals(
+            egress.map { it.name }.sorted(),
+            EmitSchema.knownKinds().map { it.name }
+                .filter { it.startsWith("Egress") || it.startsWith("SyncPulse") }
+                .sorted(),
+            "an Egress kind exists that this test does not name",
+        )
+    }
+
+    /**
+     * **The house catching fire reaches every class in the house** (D-118, D-076).
+     *
+     * The second of D-118's two dimming events, and the row is as wide as the opening message's
+     * for the same reason: a dimming lamp is world-observable, so a notification addressed to fewer
+     * than everyone is a beacon. **Including the Insider who fired it** — a phone that did not dim
+     * in a house where every other phone did is the loudest tell this design has (`gdd.md:396`).
+     */
+    @Test
+    fun `the Egress alert reaches every class in the house`() {
+        assertEquals(
+            listOf(
+                ClientClass(Role.Resident, RoundState.Live),
+                ClientClass(Role.Insider, RoundState.Live),
+                ClientClass(Role.Resident, RoundState.Out),
+                ClientClass(Role.Insider, RoundState.Out),
+            ),
+            EmitSchema.classesFor(EmitSchema.EGRESS_OPENED),
+        )
+        // Neither this nor the pause splits on ROLE. Both roles hear the same Egress; what a player
+        // outside the system gets extra is the meter, and that is a different kind entirely.
+        for (kind in listOf(EmitSchema.EGRESS_OPENED, EmitSchema.EGRESS_HELD)) {
+            val roles = EmitSchema.classesFor(kind).map { it.role }.distinct().sortedBy { it.name }
+            assertEquals(listOf(Role.Insider, Role.Resident), roles, "$kind split on role")
+        }
+    }
+
+    /**
+     * **A beat answer is addressed to the one seat that tapped, and to no player who is out.**
+     *
+     * Both halves. Broadcast it would publish who is standing at a node and tapping, live, to the
+     * whole house — which is the presence read D-111 split the two planes to close, arriving one
+     * beat at a time. Permitted to the out it would put the same read on the couch's screen, where
+     * the spectator map is still not allowed to carry it.
+     */
+    @Test
+    fun `a beat answer is addressed to its own seat and reaches only the living`() {
+        val state = live()
+        assertEquals(
+            listOf(Seat(3)),
+            EmitSchema.audienceOf(Effect.SyncPulseAnswered(Seat(3), held = true), state),
+        )
+        assertEquals(
+            listOf(
+                ClientClass(Role.Resident, RoundState.Live),
+                ClientClass(Role.Insider, RoundState.Live),
+            ),
+            EmitSchema.classesFor(EmitSchema.SYNC_PULSE_ANSWERED),
+        )
+        // A seat that is out gets nothing at all: the row denies the class and the addressing
+        // denies everybody else, and neither denial depends on the other.
+        assertEquals(
+            emptyList(),
+            EmitSchema.deliveries(
+                Effect.SyncPulseAnswered(Seat(3), held = true),
+                state.copy(revoked = listOf(Seat(3))),
+            ),
+        )
+    }
+
+    /**
+     * **Containment carries no attribution, and the type is what guarantees it** (`gdd.md:987`).
+     *
+     * *Nobody learns anything about anybody.* This is not a rule the emit boundary enforces — it is
+     * a rule the effect has no field to break. Asserted here because the tempting edit is to add a
+     * `by: List<Seat>` for the recording's sake, and that field would mint two players an alibi at
+     * the one moment in the round when everybody is moving and nobody may speak.
+     */
+    @Test
+    fun `containment names nobody and still reaches everybody`() {
+        // It goes to every seat in the building, which is only safe because it says nothing. If a
+        // seat list is ever added to this effect, this broadcast becomes the leak -- and it would
+        // arrive looking like an unchanged test.
+        assertEquals(
+            seats,
+            EmitSchema.deliveries(Effect.EgressContained(Haptic.Short), live()).map { it.seat },
+        )
+        assertEquals(
+            seats,
+            EmitSchema.deliveries(Effect.EgressSucceeded(Haptic.Long), live()).map { it.seat },
+        )
+    }
 }

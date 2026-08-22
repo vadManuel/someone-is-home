@@ -214,13 +214,22 @@ data class Arrival(
 object Notifications {
 
     /**
-     * **The two nodes containment needs, written once.**
+     * **The two nodes containment needs, as the port drew them.**
      *
      * Egress needs two people at two separate markers and nobody may speak, so the device saying
-     * *where* is the only coordination available. The banner names them and so does the widget it
-     * leaves behind; a test holds them to the same pair.
+     * *where* is the only coordination available.
+     *
+     * **This is the fallback, not the source.** In play the house sends the pair it drew at fire
+     * time — two ordinary markers in non-adjacent rooms, different every Egress — and it arrives on
+     * `PanelState.egressNodes`. These two rooms are what a phone with no house attached draws, the
+     * same way `PanelState.secondsLeft` falls back to the design's drawn moment. Both surfaces read
+     * the *same* value whichever it is, which is the property that matters: two copies of the pair
+     * would send two people who may not speak to two different places.
      */
     val EGRESS_NODES: List<String> = listOf("UTILITY", "LANDING")
+
+    /** The type the port drew. The house picks Beacon or Tether at fire time; this is the stand-in. */
+    const val EGRESS_TYPE: String = "BEACON"
 
     /**
      * The house's opening text, arriving over page 1. Everyone gets one, at the same moment, and
@@ -237,13 +246,23 @@ object Notifications {
         opens = ScreenId.Reveal,
     )
 
-    /** The Egress alert. Names both nodes, because nobody may speak. */
-    val egress: Notification = Notification(
+    /**
+     * **The Egress alert, built from the pair the house drew.**
+     *
+     * A function rather than a value, because the pair is not a constant any more: it is chosen at
+     * fire time and lands on `PanelState`. This is the *only* place the alert's words are written,
+     * and [EgressWidgetScreen]'s widget draws its rooms from the same `PanelVals` field — so the
+     * banner and the surface that holds it after a swipe cannot name different places.
+     */
+    fun egressFor(type: String, nodes: List<String>): Notification = Notification(
         kind = NotificationKind.Egress,
         body = "EGRESS ATTEMPT IN PROGRESS",
-        detail = "CONTAIN AT ${EGRESS_NODES.joinToString(" AND ")}",
+        detail = "CONTAIN AT ${nodes.joinToString(" AND ")}",
         opens = ScreenId.EgressWidget,
     )
+
+    /** The alert as the port drew it, for [all], [arrivals] and every test that wants one. */
+    val egress: Notification = egressFor(EGRESS_TYPE, EGRESS_NODES)
 
     /**
      * A later text from the house, standing on the lock screen. The design's own second lock
@@ -324,6 +343,23 @@ object Notifications {
 
     /** What is up over [screen], if anything. */
     fun onScreen(screen: ScreenId): Notification? = arrivals[screen]?.notification
+
+    /**
+     * **What is up over [screen], with the Egress alert naming the pair the house actually drew.**
+     *
+     * [arrivals] is a static table and has to be: it is the port's fixture for a push that does not
+     * exist yet. But the Egress alert is the one entry in it whose *words* are round data, so this
+     * rebuilds that one and passes every other through untouched.
+     *
+     * **Every drawing site goes through here rather than through [arrivals] directly**, which is
+     * what makes *the alert and the widget cannot disagree* a property of the code rather than a
+     * habit two composables keep.
+     */
+    fun arrivalOn(screen: ScreenId, type: String, nodes: List<String>): Arrival? {
+        val arrival = arrivals[screen] ?: return null
+        if (arrival.notification.kind != NotificationKind.Egress) return arrival
+        return arrival.copy(notification = egressFor(type, nodes))
+    }
 
     /**
      * **Whether the house is dimmed while [screen] is showing (D-118).**

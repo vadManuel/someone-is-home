@@ -1,10 +1,13 @@
 package home.someoneshome.core
 
 import home.someoneshome.model.Effect
+import home.someoneshome.model.Egress
+import home.someoneshome.model.EgressType
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
 import home.someoneshome.model.Haptic
 import home.someoneshome.model.InsiderAbility
+import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MeetingPhase
 import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.RefusalReason
@@ -171,7 +174,9 @@ class MeetingTest {
      */
     @Test
     fun `an Egress makes the card inert and leaves the report alone`() {
-        val burning = armed().withEgress(true)
+        val burning = armed().withEgress(
+            Egress.fired(t(), EgressType.Beacon, listOf(MarkerId("a"), MarkerId("b")), timer = 120L),
+        )
 
         val card = Walk(burning).feed(Event.MeetingCalled(t(), Seat(0), MeetingTrigger.MeetingCard))
         assertEquals(listOf(RefusalReason.EgressRunning), card.refusals)

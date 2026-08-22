@@ -284,4 +284,120 @@ sealed interface Effect {
 
     /** Lights out. The meeting is over, and D-135's fifth long haptic rides it. */
     data class MeetingEnded(val haptic: Haptic) : Effect
+
+    // ---- The Egress ---------------------------------------------------------------------------
+    //
+    // Four kinds, and the audiences are the reason there are four rather than two. The house
+    // catching fire, the timer stopping, the containment landing and the containment failing are
+    // each one fact, but one of them -- SyncPulseAnswered -- is addressed to a single seat and
+    // carries what that seat's own beat did, while the other three reach the whole building. A
+    // kind is permitted to a class in full or not at all (EmitSchema's rule), so a merge would be
+    // redaction by nulling fields under another name.
+
+    /**
+     * **The house is on fire, and this is where everyone finds out** (`gdd.md:349`, D-118, D-076).
+     *
+     * The heavy notification and the widget takeover both ride this one effect, which is what makes
+     * *the alert and the widget cannot name different rooms* a property of the wire rather than a
+     * discipline two screens have to keep. Two copies of that pair would send two people who may
+     * not speak to two different places, and the mistake would look like a typo in a diff.
+     *
+     * **It reaches every seat, living and out.** This is one of exactly two events that **dim the
+     * house** (D-118) — the other is [OpeningMessage] — and a dimming lamp is world-observable, so
+     * a notification addressed to fewer than everyone is a beacon (D-076). It is also what a player
+     * outside the system watches: their class already carries the liveness privilege that lets them
+     * see the real Egress number while it runs (`gdd.md:1014`).
+     *
+     * **[haptic] is Long, and it is D-135's first.** *The Egress* is named at the head of that
+     * closed set of five, and this is the effect it names.
+     *
+     * **The actor gets exactly this and nothing more** (`gdd.md:396`). No actor-side feedback on
+     * firing any ability: the Insider who pressed the button receives the same dim, the same buzz
+     * and the same two room names as everybody else. Their own phone knows what it pressed and what
+     * its cooldown now says, and that is input echo rather than a game answer.
+     */
+    data class EgressOpened(
+        val seat: Seat,
+        val type: EgressType,
+        /** Both nodes, in draw order. Named to everyone, because coordination is required and
+         *  nobody may speak (`gdd.md:363`). */
+        val nodes: List<MarkerId>,
+        /** Ticks on the clock at the moment it started. The device holds no opinion of its own. */
+        val remaining: Long,
+        val haptic: Haptic,
+    ) : Effect
+
+    /**
+     * **The countdown stopped, or started again** (D-133).
+     *
+     * A meeting called by reporting a Revoked player is the one meeting that can happen during an
+     * Egress, and it **pauses** the timer — never resets it. Both halves are this one kind, because
+     * they are one fact told to one audience: *the number on the widget is moving, or it is not.*
+     * A separate kind for each would be two rows in the allowlist that could only ever be edited
+     * together.
+     *
+     * **[running] is state, not a redaction flag.** It says which of the two happened, both
+     * audiences get the same value, and there is no narrowing hiding inside it — [PresenceChanged]
+     * carries `open` for the same reason and it is the same decision.
+     *
+     * **Everyone, living and out.** The whole party is standing in one room when it fires: a pause
+     * that reached fewer than everybody would leave somebody's widget counting down through a
+     * meeting the rest of the house had stopped for.
+     */
+    data class EgressHeld(val remaining: Long, val running: Boolean, val haptic: Haptic) : Effect
+
+    /**
+     * **The house's answer to one participant's beat — and it is the same answer either way**
+     * (`gdd.md:355`, rule 1).
+     *
+     * [held] says whether the house is now holding this seat's beat, waiting for somebody at the
+     * other node. It is `false` for a beat that missed the schedule, for a seat serving a lockout,
+     * for a seat that is not standing at a node, and for a seat outside the system — **one shape,
+     * one kind, one message per return**, with only the value differing.
+     *
+     * ### Written the tempting way it is a node-detector
+     *
+     * *Emit nothing unless the beat was good* leaves the absence as the answer, and the absence is
+     * readable: a Insider standing anywhere in the house could tap, watch for silence, and learn
+     * that the house does not think they are at a node — which is a claim about the presence plane,
+     * delivered to a living phone, that D-111 split the two planes to prevent. `ScanAnswered`'s
+     * null and `VoteHeld`'s selection are the same decision one system over.
+     *
+     * ### It says nothing about anybody else
+     *
+     * Not who is at the other node, not how many are waiting, not whether a partner is close.
+     * Containment is a fact about the house and arrives as [EgressContained] to everybody at once;
+     * anything finer here would be a live report of who is standing where, addressed to a living
+     * player, which is the leak the whole presence plane is denied a schema row to close.
+     */
+    data class SyncPulseAnswered(val seat: Seat, val held: Boolean) : Effect
+
+    /**
+     * **Contained. The widget reverts and nobody learns anything about anybody** (`gdd.md:987`).
+     *
+     * **It carries no seats and no node, and that is the whole design of it.** Naming the pair that
+     * contained it would publish two players who were demonstrably standing at known places at a
+     * known moment — an alibi, minted by the app, at the one moment in the round when everybody is
+     * moving and nobody can speak. Naming the node would publish where they were. The house says
+     * *it stopped*, and the room works the rest out or does not.
+     *
+     * Everyone, living and out: the widget goes back to being System Integrity on every phone in
+     * the building, and a reversion that reached fewer than everybody would leave somebody
+     * counting down toward a loss that is not coming.
+     */
+    data class EgressContained(val haptic: Haptic) : Effect
+
+    /**
+     * **Uncontained. The terminal fact: the Insiders win outright** (`gdd.md:361`, D-131).
+     *
+     * *A running Egress outlives its Insiders and must still be stopped* — so this can arrive after
+     * the room has Restrained every Insider it had, and it still ends the round in their favour.
+     *
+     * **It ends nothing by itself, deliberately, and that is stated rather than hidden.** This
+     * effect and its event are the *fact*; the win conditions as a set, `GameState.ended`, and the
+     * screens that follow are the ending unit's, and building half of them here would put the
+     * round's most consequential transition in two places. What is guaranteed today is that the
+     * fact is emitted, recorded, and replays.
+     */
+    data class EgressSucceeded(val haptic: Haptic) : Effect
 }

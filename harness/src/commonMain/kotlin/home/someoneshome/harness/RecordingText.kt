@@ -1,5 +1,6 @@
 package home.someoneshome.harness
 
+import home.someoneshome.model.EgressType
 import home.someoneshome.model.Event
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MeetingTrigger
@@ -126,6 +127,15 @@ object RecordingText {
             }
         }
 
+        /** A list of plain longs. Empty value means an empty list, for [ints]' reason. */
+        fun longs(key: String): List<Long> {
+            val raw = req(key)
+            if (raw.isEmpty()) return emptyList()
+            return raw.split(',').map {
+                it.toLongOrNull() ?: throw MalformedRecording(line, "'$it' in $key is not a number")
+            }
+        }
+
         fun seats(key: String): List<Seat> {
             val raw = req(key)
             if (raw.isEmpty()) return emptyList()
@@ -171,6 +181,11 @@ object RecordingText {
             "VoteWindowClosed" -> Event.VoteWindowClosed(at)
             "TallyHalfwayReached" -> Event.TallyHalfwayReached(at)
             "MeetingClosed" -> Event.MeetingClosed(at)
+            "EgressFired" -> Event.EgressFired(
+                at, seat("actor"), egressType(req("type"), line), markers("nodes"),
+            )
+            "SyncPulseReturned" -> Event.SyncPulseReturned(at, seat("actor"), longs("taps"))
+            "EgressExpired" -> Event.EgressExpired(at)
             else -> throw MalformedRecording(
                 line,
                 "unknown event '$name'. This recording was written by a build that had an event " +
@@ -202,8 +217,23 @@ object RecordingText {
         "VoteWindowClosed" -> setOf("at")
         "TallyHalfwayReached" -> setOf("at")
         "MeetingClosed" -> setOf("at")
+        "EgressFired" -> setOf("at", "actor", "type", "nodes")
+        "SyncPulseReturned" -> setOf("at", "actor", "taps")
+        "EgressExpired" -> setOf("at")
         else -> emptySet()
     }
+
+    /**
+     * Beacon or Tether, read back. **An unrecognised label is fatal rather than defaulted.**
+     *
+     * The two are mechanically identical in v1, so a parser that guessed would replay a round that
+     * played the same and *read* differently — the label is on the widget, in the alert, and in
+     * every account anybody gives of the evening afterwards. Guessing it would make the recording
+     * disagree with the one thing it exists to settle.
+     */
+    private fun egressType(raw: String, line: Int): EgressType =
+        EgressType.entries.firstOrNull { it.toString() == raw }
+            ?: throw MalformedRecording(line, "unknown Egress type '$raw'")
 
     /**
      * How a meeting was called, read back.
