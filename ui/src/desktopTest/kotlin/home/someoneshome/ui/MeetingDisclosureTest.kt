@@ -29,6 +29,24 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalTestApi::class)
 class MeetingDisclosureTest {
 
+    /**
+     * **The live ballot as the house pushes it**, rather than the port's fixture.
+     *
+     * The sweep below renders every screen in the game *with this populated*, which is the version
+     * of the guard that matters now that `PanelState.ballots` exists: before the field, a living
+     * screen could only have drawn attribution by reaching into [OutsideView]; with it, a living
+     * screen can draw attribution by reading its own state, which is a much shorter mistake to
+     * make and looks entirely reasonable in a diff.
+     *
+     * The names are deliberately not the fixture's, so a screen reading the fixture and a screen
+     * reading the push are distinguishable rather than both green.
+     */
+    private val pushed: List<Ballot> = listOf(
+        Ballot("HOLLIS", "WREN"),
+        Ballot("WREN", "HOLLIS"),
+        Ballot("NADIA", null),
+    )
+
     /** Every screen in the game, both roles, and the ones on which [words] can be read. */
     private fun screensShowing(words: String): Set<ScreenId> {
         val found = linkedSetOf<ScreenId>()
@@ -37,7 +55,7 @@ class MeetingDisclosureTest {
                 runDesktopComposeUiTest(width = 600, height = 1300) {
                     setContent {
                         DeviceCanvas(insets = PanelInsets()) {
-                            Screen(PanelState(role = role).arrivingAt(id))
+                            Screen(PanelState(role = role, ballots = pushed).arrivingAt(id))
                         }
                     }
                     if (onAllNodes(hasText(words, substring = true)).fetchSemanticsNodes().isNotEmpty()) {
@@ -73,6 +91,44 @@ class MeetingDisclosureTest {
      * no screens on it: the out player really is shown the whole ballot, both halves of every row,
      * and the count above it is the number of rows that have a target.
      */
+    /**
+     * **The other direction, on the live push: the couch really is drawn the selections.**
+     *
+     * D-134 gives the out the live vote and D-117 makes them *the only readers who see selections
+     * rather than a count*. A build that denied them would satisfy every assertion above — the mark
+     * would reach no screen at all — so the widening and the narrowing are both failures and both
+     * are named. This is the half that fails if `VoteSelectionShown` stops reaching the couch.
+     */
+    @Test
+    fun theCouchIsShownTheVoteTheHouseIsPushing() =
+        runDesktopComposeUiTest(width = 300, height = 650) {
+            setContent {
+                DeviceCanvas(insets = PanelInsets()) {
+                    Screen(PanelState(ballots = pushed).arrivingAt(ScreenId.GhostMeeting))
+                }
+            }
+            for (ballot in pushed) {
+                assertTrue(
+                    onAllNodes(hasText(ballot.by)).fetchSemanticsNodes().isNotEmpty(),
+                    "${ballot.by} cast a ballot the house pushed and is not on the outside view",
+                )
+                if (ballot.forWhom != null) {
+                    assertTrue(
+                        onAllNodes(hasText(ballot.forWhom)).fetchSemanticsNodes().isNotEmpty(),
+                        "${ballot.by}'s live selection has no target on screen — the couch's whole " +
+                            "privilege is seeing it happen (D-117, D-134)",
+                    )
+                }
+            }
+            // Counted off the pushed rows, so the count cannot go on agreeing with the fixture.
+            onNodeWithText("2 OF 3").assertExists()
+            // And the port's five are gone, which is what makes this a wiring test.
+            assertEquals(
+                0, onAllNodes(hasText("ELLIOT")).fetchSemanticsNodes().size,
+                "the outside view is still drawing the port's fixture over the house's push",
+            )
+        }
+
     @Test
     fun aPlayerOutsideTheSystemIsShownAllOfIt() =
         runDesktopComposeUiTest(width = 300, height = 650) {

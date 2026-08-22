@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 
@@ -56,20 +57,34 @@ fun HomeScreen(vals: PanelVals, widget: @Composable (PanelVals) -> Unit = { Inte
                         .padding(horizontal = 7.u, vertical = 6.u),
                     verticalArrangement = Arrangement.spacedBy(3.u),
                 ) {
+                    // ⚠️ NEXT is the queue D-114 replaced with a menu, surviving as a heading.
+                    // The house designates nothing; this names the first actionable line so the
+                    // slot is not blank. Flagged at PanelVals.nextUp, not defended.
                     Label("NEXT SUBROUTINE", size = 6.0, color = Amber.Dim, tracking = 0.12)
-                    Label(vals.current.name, size = 9.0, color = Amber.Bright, tracking = 0.06)
+                    Label(vals.nextUp.name, size = 9.0, color = Amber.Bright, tracking = 0.06)
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(4.u),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Label(vals.current.room, size = 6.5, color = Amber.Mid, tracking = 0.08)
-                        // The marker is named by its SHAPE, not by a number. This is the same
-                        // token printed on the card the player is walking towards.
-                        vals.current.marker?.let { MarkerGlyph(it, 11.u, Amber.Mid) }
+                        // The marker is named by its SHAPE, not by a number: the same token
+                        // printed on the card the player is walking towards. Both halves of the
+                        // pair are absent under a house-sent order, because nothing on the wire
+                        // says where an entry is -- see OrderRow.Named.room.
+                        vals.nextUp.room?.let {
+                            Label(
+                                it, modifier = Modifier.testTag(ORDER_DESTINATION),
+                                size = 6.5, color = Amber.Mid, tracking = 0.08,
+                            )
+                        }
+                        vals.nextUp.marker?.let {
+                            MarkerGlyph(it, 11.u, Amber.Mid, Modifier.testTag(ORDER_DESTINATION))
+                        }
                         // D-106's springboard surface, and the slot where a full sentence was
                         // tried and removed. A mark sits inside the line the widget already has,
                         // so the widget does not grow and the glance stays a glance.
-                        LightMark(vals.current.light, Amber.Mid, Modifier.padding(start = 2.u))
+                        vals.nextUp.light?.let {
+                            LightMark(it, Amber.Mid, Modifier.padding(start = 2.u))
+                        }
                     }
                 }
                 Column(
@@ -78,12 +93,15 @@ fun HomeScreen(vals: PanelVals, widget: @Composable (PanelVals) -> Unit = { Inte
                     verticalArrangement = Arrangement.spacedBy(3.u),
                 ) {
                     Label("COMPLETED", size = 6.0, color = Amber.Dim, tracking = 0.12)
+                    // Both numbers counted off the order the house sent. ASSIGNED is its length,
+                    // which is the same for every seat and both roles by construction (D-129) --
+                    // so this tile is not a channel in either direction.
                     Readout(
-                        "${vals.current.done}",
+                        "${vals.nextUp.done}",
                         size = 26.0, color = Amber.Bright, lineHeight = 0.95,
                     )
                     Label(
-                        "OF ${vals.current.total} ASSIGNED",
+                        "OF ${vals.nextUp.total} ASSIGNED",
                         size = 5.5, color = Amber.Dim, tracking = 0.08,
                     )
                 }

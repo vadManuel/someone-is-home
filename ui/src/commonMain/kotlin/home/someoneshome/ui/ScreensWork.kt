@@ -1,8 +1,5 @@
 package home.someoneshome.ui
 
-import home.someoneshome.model.MarkerShape
-import home.someoneshome.model.MarkerShapes
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -31,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.IntOffset
@@ -43,6 +41,17 @@ import androidx.compose.ui.unit.IntOffset
  * That is what makes rule 8's "every subroutine ships with its fake" cheap — there is no separate
  * fake to build or forget.
  */
+
+/**
+ * **Every element that says where a piece of assigned work is** — the room name and the marker
+ * glyph, on the work-order list and on the springboard widget alike.
+ *
+ * One tag across both surfaces because the thing being counted is one fact: *does this build tell
+ * a player where their work is?* Today the answer is *only while no house is attached* — nothing on
+ * the wire carries a card ([OrderRow.Named.room]) — and `WorkOrderTest` holds that as a guard in
+ * both directions, so the day a card does arrive the test that has to change says exactly why.
+ */
+const val ORDER_DESTINATION: String = "order-destination"
 
 /**
  * **A banner, not a takeover — and one of them costs the house its light (D-105, D-118).**
@@ -145,18 +154,34 @@ fun BoxScope.NotificationBanner(notification: Notification) {
 }
 
 /**
- * The work order — seven Subroutines, lazily unlocked.
+ * The work order — **the order the house dealt this seat, drawn** (D-114, D-129).
  *
- * **A Subroutine opens only at its marker**, which is what turns the list into travel. The two
- * locked rows say WAITING UPSTREAM and name nothing: you do not learn which Subroutine is blocked
- * or whose completion would free it, because that would tell you what someone else is doing.
+ * **A menu, not a queue.** Every row the house has named is a row the player may choose, and the
+ * sequencing that emerges comes from the dependency graph rather than from the order they are
+ * printed in. One row is highlighted because the springboard has to name *something* to walk
+ * towards — see [PanelVals.nextUp], where that presentation is flagged against D-114 rather than
+ * defended.
  *
- * **This is where a dark route is planned (D-106).** Every assigned row carries its light
- * signature in a column of its own, so the whole order can be read for concealment in one glance
- * — which is the entire reason the value is knowledge held in advance rather than discovered at
- * the marker. The key at the foot of the screen is the only place the mark is spelled out; it is
- * here rather than on the springboard because this is the screen a player reads while deciding,
- * and the springboard is the one they glance at while walking.
+ * **A Subroutine opens only at its marker**, which is what turns the list into travel.
+ *
+ * **The blocked rows name nothing, and nothing here decides that.** [OrderRow.Blocked] has one
+ * field on it, so this screen has nothing to draw even if it wanted to: not the Subroutine, not
+ * its signature, and not whose completion would free it — which under D-146's cross-player
+ * dependencies would name a *person* as surely as a piece of work.
+ *
+ * **This is where a dark route is planned (D-106).** Every named row carries its light signature
+ * in a column of its own, so the whole order can be read for concealment in one glance — which is
+ * the entire reason the value is knowledge held in advance rather than discovered at the marker.
+ * The key at the foot of the screen is the only place the mark is spelled out; it is here rather
+ * than on the springboard because this is the screen a player reads while deciding, and the
+ * springboard is the one they glance at while walking.
+ *
+ * ### ⚠️ The rows have no destination, and it is escalated rather than invented
+ *
+ * The design draws a room and a marker glyph against every row. `OrderLine` carries neither, in
+ * either case, deliberately — *the house answers a scan and never publishes a map of the round* —
+ * so under a real order there is nothing here to draw them from, and the port's GARAGE is not
+ * allowed to sit beside a Subroutine the house chose. See [NextSubroutine.room].
  */
 @Composable
 fun WorkScreen(vals: PanelVals) {
@@ -168,40 +193,31 @@ fun WorkScreen(vals: PanelVals) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             BackChevron(ScreenId.Home, Amber.Dim)
             Label("SUBROUTINES", size = 7.0, color = Amber.Dim, tracking = 0.16)
+            // Counted off the rows the house sent, both halves. The total is the ORDER's length
+            // and never a settings number: an order that shortened while work was blocked would
+            // make its own length a tell, so the length drawn here has to be the length received.
             Label(
-                "${vals.current.done} OF ${vals.current.total} DONE",
+                "${vals.nextUp.done} OF ${vals.nextUp.total} DONE",
                 modifier = Modifier.weight(1f),
                 size = 7.0, color = Amber.Bright, tracking = 0.16, align = TextAlign.End,
             )
         }
 
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.u)) {
-            // **The name and the light come off the roster together, or not at all.** They used
-            // to be two literals per row agreeing by hand -- REPLAY beside Bright, SHORT beside
-            // Dark -- which is the arrangement D-106 already lost once, and the failure mode is
-            // silent: a row keeps its name and quietly changes what it promises the lamp will do.
-            // ARRAY WIPE is the exception and is reasoned about at its own row.
-            WorkRow(Subroutine.Replay, "HALL", MarkerShapes["diamond"], done = true)
-            WorkRow(Subroutine.Short, "GARAGE", MarkerShapes["arrow_right"], done = true)
-            WorkRow(Subroutine.Jam, "BED 2", MarkerShapes["cross"], done = true)
-            WorkRow(
-                vals.current.subroutine, vals.current.room, vals.current.marker,
-                current = true,
-            ) { go(ScreenId.Scan) }
-            // The design's fixture used a hexagon; the vetted roster has none, because the
-            // legibility pass cut everything reading as "circle with corners". The first
-            // substitution was `trapezoid`, which at 10 units read as the same amber wedge as
-            // SNIFF's triangle two rows up -- exactly the confusion the roster exists to avoid.
-            // A frame is topologically distinct from every solid shape in this list.
-            //
-            // ARRAY WIPE is a circuit rather than one of the roster's ten, so the design gives it
-            // no light signature. BRIGHT is this port's reading, not the design's: the work IS the
-            // scanning -- spares to rack to disposal -- and the scan screen is a full amber field,
-            // one of only three lit screens in the game. Flagged for review; it is the one light
-            // value here that nobody has ruled on.
-            WorkRow("ARRAY WIPE", "STUDY", MarkerShapes["square_frame"], LightSignature.Bright)
-            WorkLocked()
-            WorkLocked()
+            // **The name and the light travel together or not at all.** They used to be two
+            // literals per row agreeing by hand -- REPLAY beside Bright, SHORT beside Dark --
+            // which is the arrangement D-106 already lost once, and the failure mode is silent: a
+            // row keeps its name and quietly changes what it promises the lamp will do. Now the
+            // pair is resolved once, off the roster, on the way in from the wire.
+            vals.order.forEach { row ->
+                when (row) {
+                    is OrderRow.Named -> {
+                        val current = row.index == vals.nextUp.row?.index
+                        WorkRow(row, current, onClick = if (current) ({ go(ScreenId.Scan) }) else null)
+                    }
+                    is OrderRow.Blocked -> WorkLocked()
+                }
+            }
         }
 
         Column(
@@ -254,33 +270,24 @@ private fun LightKey() {
 }
 
 /**
- * A row for one of the design's ten, which is the only kind of row that may carry a light value
- * it did not choose for itself.
+ * **One named row of the order — and the only kind of row that names anything.**
  *
- * The overload below still takes a name and a signature because ARRAY WIPE needs it: the circuit
- * is not on the roster, the design rates it nowhere, and its mark is this port's reading. Making
- * that the awkward path rather than the ordinary one is deliberate.
+ * It takes an [OrderRow.Named] whole rather than a name and a signature separately, which is what
+ * makes the pair impossible to mismatch here: the row arrived with its light already resolved off
+ * the roster, so a screen cannot promise BRIGHT beside a Subroutine the roster rates DARK.
+ *
+ * There is deliberately **no overload taking a [Blocked][OrderRow.Blocked] row**. Blocked work is
+ * drawn by [WorkLocked], which takes nothing at all.
  */
 @Composable
 private fun WorkRow(
-    subroutine: Subroutine,
-    room: String,
-    shape: MarkerShape?,
-    done: Boolean = false,
-    current: Boolean = false,
-    onClick: (() -> Unit)? = null,
-) = WorkRow(subroutine.label, room, shape, subroutine.light, done, current, onClick)
-
-@Composable
-private fun WorkRow(
-    name: String,
-    room: String,
-    shape: MarkerShape?,
-    light: LightSignature,
-    done: Boolean = false,
+    row: OrderRow.Named,
     current: Boolean = false,
     onClick: (() -> Unit)? = null,
 ) {
+    val name = row.label
+    val light = row.light
+    val done = row.done
     val ink = when {
         current -> Amber.Bright
         done -> Amber.Faint
@@ -314,12 +321,19 @@ private fun WorkRow(
             // "faint" is also how a locked row reads.
             decoration = if (done) TextDecoration.LineThrough else null,
         )
+        // **The destination pair, drawn only where there is one.** No effect carries a card, so
+        // under a house-sent order every row loses this column at once and the list becomes names
+        // and lights alone -- see OrderRow.Named.room, which is where that is escalated.
         Row(
             horizontalArrangement = Arrangement.spacedBy(4.u),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Label(room, size = 6.0, color = meta)
-            shape?.let { MarkerGlyph(it, if (current) 11.u else 10.u, meta) }
+            row.room?.let {
+                Label(it, modifier = Modifier.testTag(ORDER_DESTINATION), size = 6.0, color = meta)
+            }
+            row.marker?.let {
+                MarkerGlyph(it, if (current) 11.u else 10.u, meta, Modifier.testTag(ORDER_DESTINATION))
+            }
         }
         // Its own column, past the destination pair, because it is read DOWN the list rather than
         // across a row: choosing a dark route means comparing this row's light with the next

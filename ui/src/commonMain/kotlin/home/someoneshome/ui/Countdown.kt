@@ -1,5 +1,6 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.MeetingPhase
 import kotlin.math.roundToInt
 
 /**
@@ -165,5 +166,40 @@ object Countdowns {
         val drawn = DRAWN_AT[screen] ?: return null
         val window = windowOf(screen) ?: return null
         return Countdown((said ?: drawn).coerceIn(0, window), window)
+    }
+
+    /**
+     * **The couch's clock, looked up by phase rather than by screen** (D-134).
+     *
+     * The living walk a screen per phase and never have to be told which one they are on. A player
+     * who is out watches the **whole meeting from one screen**, so `GhostMeeting` is the only
+     * surface in the game whose clock changes meaning under it — and D-134 puts *the discussion and
+     * vote timers* on the couch, plural. Before this it ran one clock labelled VOTING ENDS IN for
+     * every phase, which during the talk was a countdown to a window that had not opened.
+     *
+     * Null during [MeetingPhase.CheckIn]: the gate closes when the last player walks in, not when a
+     * clock runs out (D-104), so there is no window for a bar to be a fraction of.
+     *
+     * ### ⚠️ The vote reads the ghost's own row, and the two rows disagree
+     *
+     * `GhostMeeting` carries a window of 60 while [ScreenId.Vote] carries the design's 45 — two
+     * numbers for one clock, in a lit room where the couch can see a living player's phone. It is
+     * **left alone deliberately**: the ghost's 60 is what reproduces the design's drawn picture,
+     * `VOTING ENDS IN 0:24` over twelve lit segments of thirty, and moving it to 45 redraws that
+     * bar at sixteen. Reconciling them is a visible screen change and wants a ruling; flagged.
+     */
+    fun onGhostMeeting(phase: MeetingPhase, said: Int? = null): Countdown? = when (phase) {
+        MeetingPhase.CheckIn -> null
+        MeetingPhase.Discussion -> on(ScreenId.Discussion, said)
+        MeetingPhase.Vote -> on(ScreenId.GhostMeeting, said)
+        MeetingPhase.Tally -> on(ScreenId.Tally, said)
+    }
+
+    /** What the couch's clock is counting down, in the phase's own words. */
+    fun ghostClockLabel(phase: MeetingPhase): String = when (phase) {
+        MeetingPhase.CheckIn -> "WAITING FOR THE HOUSE"
+        MeetingPhase.Discussion -> "DISCUSSION ENDS IN"
+        MeetingPhase.Vote -> "VOTING ENDS IN"
+        MeetingPhase.Tally -> "LIGHTS OUT IN"
     }
 }
