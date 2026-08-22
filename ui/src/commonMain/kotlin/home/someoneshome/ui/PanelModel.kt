@@ -50,6 +50,7 @@ enum class ScreenId {
     // Subroutine none of them ever looked at.
     Work, Scan, ScanCaught, ScanBad, ScanUnknown,
     SubHandshake, SubReplay, SubParity, SubShort, SubTrace, SubJam, SubSniff, SubDeallocate,
+    SubInterrupt, SubDrift,
     Files, Notes, TermNo, TermLive, Timelapse,
 
     // The house's hands.

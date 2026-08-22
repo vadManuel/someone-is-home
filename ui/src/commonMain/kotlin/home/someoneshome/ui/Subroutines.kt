@@ -21,21 +21,21 @@ import home.someoneshome.model.SubroutineKind
  * | # | Subroutine | Structure | Mode | What you do | Light |
  * |---|---|---|---|---|---|
  * | 1 | Replay | Short | Sequence memory | 3–5 dots flash in order; tap them back | Bright |
- * | 2 | Interrupt | Short | Timing | A slow bar sweeps; tap inside a generous band | Medium |
+ * | 2 | Interrupt | Short | Timing | A sweep bounces; catch it inside the band (D-139) | Medium |
  * | 3 | Parity Check | Short | Visual search | Grid of filled/empty cells; tap the one breaking the pattern | Bright |
  * | 4 | Sniff | Short | Magnitude | Two buzzed groups; say which was bigger (D-137) | Dark |
  * | 5 | Deallocate | Short | Counting | A tap removes a dot; level is the shortest column (D-138) | Bright |
- * | 6 | Drift | Medium | Tracking under occlusion | A dot drifts behind occluders; tap where it is now | Medium |
+ * | 6 | Drift | Medium | Tracking under occlusion | A buzz asks where the hidden dot is (D-140) | Medium |
  * | 7 | Short | Short | Gross motor | Hold N fingers on the screen for two seconds | Dark |
  * | 8 | Signal Trace | Medium | Pathfinding | Tap node-to-node from source to sink | Medium |
  * | 9 | Jam | Medium | Convergence | Tap +/− until two shapes overlap | Medium |
  * | 10 | Handshake | Medium | Haptic echo | The phone buzzes a pattern; you tap it back | Dark |
  *
- * **Rows 4 and 5 are revision 31's, not the roster's.** `gdd.md:568` and `:569` are superseded by
- * D-137 and D-138 and the table above carries the rulings rather than the lines they replaced —
- * *"the phone buzzes N times; tap N"* was two Subroutines and both were wrong, and *"tap to even
- * them out"* did not say what a tap does. Rows 2 and 6 still quote the GDD because Interrupt and
- * Drift are unbuilt; D-139 and D-140 supersede those two lines as well.
+ * **Rows 2, 4, 5 and 6 are revision 31's, not the roster's.** `gdd.md:566`, `:568`, `:569` and
+ * `:570` are superseded by D-137 to D-140 and the table above carries the rulings rather than the
+ * lines they replaced — *"the phone buzzes N times; tap N"* was two Subroutines and both were
+ * wrong, *"tap to even them out"* did not say what a tap does, *"a slow bar sweeps"* left a static
+ * bar with no moment to tap, and *"tap where it is now"* never said whose *now* it was.
  *
  * ### The ten, and not the two structured ones
  *
@@ -67,11 +67,17 @@ enum class Subroutine(
     val screen: ScreenId? = null,
 ) {
     Replay("REPLAY", SubroutineTier.Short, LightSignature.Bright, SubroutineKind.Replay, ScreenId.SubReplay),
-    Interrupt("INTERRUPT", SubroutineTier.Short, LightSignature.Medium, SubroutineKind.Interrupt),
+    Interrupt(
+        "INTERRUPT", SubroutineTier.Short, LightSignature.Medium, SubroutineKind.Interrupt,
+        ScreenId.SubInterrupt,
+    ),
     ParityCheck("PARITY CHECK", SubroutineTier.Short, LightSignature.Bright, SubroutineKind.ParityCheck, ScreenId.SubParity),
     Sniff("SNIFF", SubroutineTier.Short, LightSignature.Dark, SubroutineKind.Sniff, ScreenId.SubSniff),
     Deallocate("DEALLOCATE", SubroutineTier.Short, LightSignature.Bright, SubroutineKind.Deallocate, ScreenId.SubDeallocate),
-    Drift("DRIFT", SubroutineTier.Medium, LightSignature.Medium, SubroutineKind.Drift),
+    Drift(
+        "DRIFT", SubroutineTier.Medium, LightSignature.Medium, SubroutineKind.Drift,
+        ScreenId.SubDrift,
+    ),
     Short("SHORT", SubroutineTier.Short, LightSignature.Dark, SubroutineKind.Short, ScreenId.SubShort),
     SignalTrace("SIGNAL TRACE", SubroutineTier.Medium, LightSignature.Medium, SubroutineKind.SignalTrace, ScreenId.SubTrace),
     Jam("JAM", SubroutineTier.Medium, LightSignature.Medium, SubroutineKind.Jam, ScreenId.SubJam),
@@ -950,6 +956,323 @@ object DotColumns {
 }
 
 /**
+ * **Interrupt's question: a bar, a band on it, and a sweep that bounces along it forever.**
+ *
+ * D-139 supersedes `gdd.md:566` in both respects. **The sweep ping-pongs** rather than wrapping —
+ * there is no dead return stroke to wait through and no discontinuity at the edge for a player to
+ * time against instead of the band — and **it runs forever until tapped or abandoned.** There is no
+ * timeout anywhere in this class, and the thing that taxes hesitation is the room: the screen is
+ * MEDIUM and lit, the player is standing at the marker where D-110 keeps them, and every extra pass
+ * is another second of being visible to whoever walks in.
+ *
+ * ### [at] is arithmetic, not animation, and that is what makes a replay a replay
+ *
+ * The house sends the parameters at scan time and **the client renders the motion deterministically
+ * from them**: no authored Effect, no motion on the wire, no schema row. So the position is a pure
+ * function of the parameters and the milliseconds since the screen opened — integer arithmetic
+ * throughout, no floating point to round differently on two devices, no easing curve nobody
+ * authored (rule 5). Two phones handed the same instance and the same clock draw the same frame.
+ *
+ * ### It holds the question, and the judgement is the house's
+ *
+ * [bandFrom] and [bandTo] are on this class because the band is drawn, and [at] is on it because
+ * the sweep is drawn. *Was the tap inside the band* is therefore one expression away — and it is
+ * the [SniffGroups] situation exactly: the answer is not secret, it is on the screen and catching it
+ * is the work, and what must never happen on the device is the **judgement**. **Nothing in `ui` is
+ * given both a sweep position and a band to compare it with** — no `caught`, no `inside`, no
+ * `wasRight`, here or anywhere else — and the only place the two meet in one expression is a test
+ * that says so in its own name.
+ *
+ * **Every re-scan re-draws band position and phase** (D-139), which is the plumbing L4 already
+ * built: the instance is minted per scan, so a retry is a fresh judgment rather than a second run at
+ * a picture the player has already memorised.
+ */
+class InterruptSweep private constructor(
+    /** Where the middle of the band sits on the bar, in steps of [SPAN]. */
+    val bandAt: Int,
+    /** How many steps of the bar the sweep covers in a second. */
+    val speed: Int,
+    /** How far into the bounce the sweep already is when the screen opens, in steps of [CYCLE]. */
+    val phase: Int,
+) {
+
+    /**
+     * Where the sweep is [elapsedMillis] after the screen opened, as a step of [SPAN].
+     *
+     * The bounce is a fold: the sweep walks a [CYCLE] twice the length of the bar, and the second
+     * half of it is the first half read backwards. That is ping-pong with no branch on direction
+     * and no state to accumulate — which is what makes the same millisecond always the same step,
+     * however many frames the phone dropped getting there.
+     */
+    fun at(elapsedMillis: Long): Int {
+        val travelled = elapsedMillis * speed / MILLIS_PER_SECOND
+        val step = (phase + travelled).mod(CYCLE.toLong()).toInt()
+        return if (step <= SPAN) step else CYCLE - step
+    }
+
+    /** The near edge of the band, in steps. Drawn; never compared with anything. */
+    val bandFrom: Int get() = bandAt - BAND_HALF
+
+    /** The far edge. */
+    val bandTo: Int get() = bandAt + BAND_HALF
+
+    companion object {
+
+        /** How many steps long the bar is. The unit every position on this screen is in. */
+        const val SPAN: Int = 100
+
+        /** A there-and-back: the sweep's period, in steps. */
+        const val CYCLE: Int = SPAN * 2
+
+        /**
+         * **How far the band reaches either side of its middle — a client fixture, and flagged.**
+         *
+         * D-139 sends *band position, speed, phase* and leaves the **width** to playtest along with
+         * the speed. So the position rides the scan and the width is written here, which is only
+         * honest while nothing grades: **the house has to hold this same number the day the
+         * tolerance grading lands** (E-L4-3), and a client and an authority disagreeing about how
+         * wide the band is would reject taps the player watched land inside it. Recorded in the
+         * worklog rather than solved here.
+         *
+         * Eight either side is sixteen steps of a hundred — *generous*, per `gdd.md:595`, and at
+         * the fixture's speed a little over a second of the sweep being inside it.
+         */
+        const val BAND_HALF: Int = 8
+
+        /** How many numbers an Interrupt instance is: where the band is, how fast, and how far in. */
+        const val LENGTH: Int = 3
+
+        /**
+         * Read a scan's parameters as a sweep, or refuse them by name.
+         *
+         * Three ways to be malformed. A band that runs off the end of the bar is a **different
+         * question from the one the house asked** — the player answers the picture, correctly, and
+         * is graded against a band they were never shown, which is [DotColumns]' clipped column one
+         * Subroutine along. A sweep at no speed is not a timing question at all: it sits where the
+         * phase put it and every tap in the round grades the same. A phase outside the cycle is the
+         * one that would be tempting to wrap silently, and must not be: the house grades a position
+         * this client renders, so a parameter the client quietly reinterprets is the two of them
+         * disagreeing about where the sweep started.
+         */
+        fun of(parameters: List<Int>): InterruptSweep {
+            if (parameters.size != LENGTH) {
+                throw MalformedSubroutineParameters(
+                    "INTERRUPT is $LENGTH numbers — the band's position, the speed and the phase " +
+                        "— and this is ${parameters.size}: $parameters",
+                )
+            }
+            val (bandAt, speed, phase) = parameters
+            if (bandAt - BAND_HALF < 0 || bandAt + BAND_HALF > SPAN) {
+                throw MalformedSubroutineParameters(
+                    "INTERRUPT was given a band at $bandAt reaching $BAND_HALF either side, and " +
+                        "the bar is $SPAN steps long — a band running off the end of the bar is a " +
+                        "different question from the one the house asked",
+                )
+            }
+            if (speed < 1) {
+                throw MalformedSubroutineParameters(
+                    "INTERRUPT was given a speed of $speed, and a sweep that does not move is not " +
+                        "a moment to catch — every tap in the round would land in the same place",
+                )
+            }
+            if (phase !in 0 until CYCLE) {
+                throw MalformedSubroutineParameters(
+                    "INTERRUPT was given a phase of $phase and the bounce is $CYCLE steps long. " +
+                        "It is not wrapped here: the house grades a position this client draws, " +
+                        "and a parameter the client reinterprets is the two of them disagreeing " +
+                        "about where the sweep started",
+                )
+            }
+            return InterruptSweep(bandAt, speed, phase)
+        }
+    }
+}
+
+/**
+ * **Drift's question: a dot crossing behind cover, and a buzz that asks where it is.**
+ *
+ * D-140 supersedes `gdd.md:570`. *A dot drifts at constant velocity along a straight path, passes
+ * behind occluders and hides. At a house-chosen instant a haptic pulse says* **now**, *and the
+ * player taps where the dot is at that moment.* The tap position is the entry and the house grades
+ * it against the true position within a hit radius.
+ *
+ * **The hidden duration is the difficulty and it is invisible** — the player cannot see how far
+ * they will have to carry the dot in their head before being asked, which is the entire test and
+ * the reason the answer cannot be read off the screen.
+ *
+ * ### It is [InterruptSweep]'s pattern with the timing the other way round
+ *
+ * Path, occluder layout and speed are **seeded per scan**, sent at scan time, rendered
+ * deterministically by the client, and re-drawn on every re-scan. Interrupt is the player's timing
+ * against a visible rhythm; this is the house's timing against the player's mental model. One asks
+ * *when*, the other asks *where* — and both are one tap, so `gdd.md:596` holds for both.
+ *
+ * ### The layout is generated and the answer is not stored, exactly as [SignalGraph] does it
+ *
+ * [of] builds the lane and the cover from the seed and returns them. **There is no `answer` on this
+ * class** — the true position at the pulse is [at] of [askAtMillis], which is one expression, and
+ * it is the [InterruptSweep] situation for the third time: the client must render the motion, so
+ * the client can compute the position; what must never happen here is the **judgement**. Nothing in
+ * `ui` holds a `DriftPath` and a tap in the same expression outside a test.
+ */
+class DriftPath private constructor(
+    /** Which of [LANES] heights the straight path runs at. The path, and the whole of it. */
+    val lane: Int,
+    /** What the dot passes behind, in steps of [SPAN], in the order it reaches them. */
+    val cover: List<IntRange>,
+    /** How many steps the dot drifts in a second. Constant — it is a drift, not a curve. */
+    val speed: Int,
+    /** When the phone says *now*, in milliseconds after the screen opened. */
+    val askAtMillis: Int,
+) {
+
+    /**
+     * Where the dot is [elapsedMillis] after the screen opened, or null once it has drifted off
+     * the far end.
+     *
+     * Null rather than a clamp at [SPAN]: a dot parked on the end of the lane is a dot the player
+     * would read as *still there*, and D-125's rule is to clamp only what a player cannot perceive.
+     * It leaves, and what is owed is where it was when the phone buzzed.
+     */
+    fun at(elapsedMillis: Long): Int? {
+        val step = (elapsedMillis * speed / MILLIS_PER_SECOND).toInt()
+        return if (step > SPAN) null else step
+    }
+
+    /** Whether a step of the lane has something drawn in front of it. */
+    fun covered(step: Int): Boolean = cover.any { step in it }
+
+    /**
+     * The pattern, as the device unit will play it: the wait, and then one short buzz.
+     *
+     * **One buzz and a short one.** D-135 reserves the long haptic for five named events and this
+     * is not among them (D-140 says so in as many words), and it is the same short buzz Sniff's
+     * groups are made of, because there is one of them in this app rather than one per Subroutine.
+     */
+    val script: List<HapticStep> = listOf(
+        HapticStep.Rest(askAtMillis),
+        HapticStep.Buzz(SniffGroups.PULSE_MILLIS),
+    )
+
+    companion object {
+
+        /** How many steps long the lane is, end to end. [InterruptSweep.SPAN]'s unit, deliberately. */
+        const val SPAN: Int = 100
+
+        /** How many heights the straight path can run at. */
+        const val LANES: Int = 3
+
+        /** How many pieces of cover the dot passes behind. */
+        const val COVER: Int = 3
+
+        /** How many steps of lane are clear before the first piece of cover can start. */
+        const val RUN_IN: Int = 22
+
+        /** The narrowest and widest a piece of cover may be, in steps. */
+        const val COVER_LEAST: Int = 10
+        const val COVER_MOST: Int = 16
+
+        /** How many clear steps are guaranteed between one piece of cover and the next. */
+        const val CLEAR: Int = 4
+
+        /** How many numbers a Drift instance is: the layout's seed, the speed, and the wait. */
+        const val LENGTH: Int = 3
+
+        /** How wide a slot each piece of cover is placed inside. */
+        private const val SLOT: Int = (SPAN - RUN_IN) / COVER
+
+        /**
+         * **The hidden duration arrives in tenths of a second**, so nothing on the wire is ever
+         * milliseconds — `SniffGroups.GAP_TENTHS`' arrangement, for its reason.
+         */
+        const val HIDDEN_TENTHS: Int = 100
+
+        /**
+         * Read a scan's parameters as a path, or refuse them by name.
+         *
+         * Four ways to be malformed, and the last is D-140's. A dot at no speed never reaches the
+         * cover and never hides. A wait of nothing asks where the dot is at the instant the player
+         * watched it go in, which is not a question about anything hidden. And **a wait longer than
+         * the crossing puts the dot back in sight before the buzz**, which is the whole ruling
+         * inverted: the answer would be on the screen, and the thing the Subroutine tests would not
+         * be tested. The seed is not refused, because there is no seed this cannot draw.
+         */
+        fun of(parameters: List<Int>): DriftPath {
+            if (parameters.size != LENGTH) {
+                throw MalformedSubroutineParameters(
+                    "DRIFT is $LENGTH numbers — the layout's seed, the speed and the wait — and " +
+                        "this is ${parameters.size}: $parameters",
+                )
+            }
+            val (seed, speed, hiddenTenths) = parameters
+            if (speed < 1) {
+                throw MalformedSubroutineParameters(
+                    "DRIFT was given a speed of $speed, and a dot that does not drift never " +
+                        "reaches the cover and never hides",
+                )
+            }
+            if (hiddenTenths < 1) {
+                throw MalformedSubroutineParameters(
+                    "DRIFT was given a wait of $hiddenTenths tenths of a second, and a buzz at " +
+                        "the instant the dot goes in asks where the player just watched it go",
+                )
+            }
+            val cover = coverFrom(seed)
+            val first = cover.first()
+            val enteredAt = first.first * MILLIS_PER_SECOND / speed
+            val leavesAt = (first.last + 1) * MILLIS_PER_SECOND / speed
+            val askAt = enteredAt + hiddenTenths * HIDDEN_TENTHS
+            if (askAt >= leavesAt) {
+                throw MalformedSubroutineParameters(
+                    "DRIFT was given a wait of $hiddenTenths tenths at speed $speed, and the dot " +
+                        "is back in sight ${leavesAt - enteredAt}ms after it hides — a buzz the " +
+                        "player can answer by looking is not the question D-140 asks",
+                )
+            }
+            return DriftPath(
+                lane = seed.mod(LANES),
+                cover = cover,
+                speed = speed,
+                askAtMillis = askAt,
+            )
+        }
+
+        /**
+         * The cover, drawn from the seed: one piece per slot, each somewhere inside its own slot,
+         * with [CLEAR] steps of lane guaranteed before the next.
+         *
+         * A slot apiece rather than three free placements, because two pieces of cover that touched
+         * would be one wider piece — and the dot would then hide for a stretch the layout does not
+         * look like it covers. The player reads the picture; the picture has to be the question.
+         */
+        private fun coverFrom(seed: Int): List<IntRange> {
+            var digits = seed.mod(SEED_SPREAD)
+            return List(COVER) { slot ->
+                val width = COVER_LEAST + digits.mod(COVER_MOST - COVER_LEAST + 1)
+                digits /= COVER_MOST - COVER_LEAST + 1
+                val room = SLOT - width - CLEAR
+                val start = RUN_IN + slot * SLOT + digits.mod(room + 1)
+                digits /= room + 1
+                start until start + width
+            }
+        }
+
+        /**
+         * How much of the seed the layout reads, so that consecutive seeds lay out differently.
+         *
+         * The stand-in draw in `core` hands over small numbers today (E-L4-3), which lay the same
+         * cover out repeatedly — deterministic and dull rather than wrong. It is the same
+         * arrangement [SignalGraph] uses on the same kind of number, and it is the shape the real
+         * per-kind draw will fill.
+         */
+        private const val SEED_SPREAD: Int = 100_000
+    }
+}
+
+/** One second, in milliseconds. Named because two motions divide by it and neither is a duration. */
+private const val MILLIS_PER_SECOND: Int = 1_000
+
+/**
  * **What this phone has entered into the Subroutine it has open.**
  *
  * Sits beside [PanelState] with [HomeEditorModel], [SavedHomesModel], [LobbyModel] and
@@ -996,6 +1319,26 @@ class SubroutineModel(
      */
     val sniff: ChoiceEntry = ChoiceEntry(),
     val deallocate: ColumnEntry = ColumnEntry(DEALLOCATE.size),
+    /**
+     * **Interrupt's entry is a sequence of one, and the one is what makes it right.**
+     *
+     * The entry is the sweep's position at the tap (D-139), and a sweep does not wait: by the time
+     * a thumb has moved to a SUBMIT the moment being confirmed is seconds gone. [SequenceEntry] is
+     * the type whose rule is exactly that — *an entry goes when it can no longer change* — and here
+     * it goes on the first element because there is only one. **The hand-over is the type's and not
+     * the screen's**, which is the point of reusing it: a screen that had to remember to send would
+     * be a screen that could forget.
+     */
+    val interrupt: SequenceEntry = SequenceEntry(length = 1),
+    /**
+     * **Drift's answer is a [ChoiceEntry], for [sniff]'s reason and one of its own.**
+     *
+     * It is one position, held until it goes. What it needs that a sequence cannot give it is a
+     * touched-but-unsent state: **the question is not asked until the phone buzzes**, and a tap
+     * before that is a finger landing on glass rather than an answer. So the mark moves and nothing
+     * goes, and the screen hands it over once the house has asked. See [DriftScreen].
+     */
+    val drift: ChoiceEntry = ChoiceEntry(),
 ) {
 
     /**
@@ -1013,7 +1356,8 @@ class SubroutineModel(
         Subroutine.Jam -> jam
         Subroutine.Sniff -> sniff
         Subroutine.Deallocate -> deallocate
-        Subroutine.Interrupt, Subroutine.Drift -> null
+        Subroutine.Interrupt -> interrupt
+        Subroutine.Drift -> drift
     }
 
     /**
@@ -1022,12 +1366,15 @@ class SubroutineModel(
      * What [at] means is the screen's own vocabulary, because the screens have nothing in common
      * to say: an element for a sequence, a cell for the parity grid, **how many fingers are now on
      * the glass** for Short, a signed step for Jam, a node for Signal Trace, **which of the two
-     * groups was bigger** for Sniff, and a column for Deallocate. None of them is compared with
-     * anything.
+     * groups was bigger** for Sniff, a column for Deallocate, **where the sweep was when the
+     * finger landed** for Interrupt and **where the finger landed** for Drift. None of them is
+     * compared with anything.
      *
-     * A Subroutine with no entry behind it is ignored rather than crashing — a `when` that threw
-     * would turn a routing mistake into a dead phone in a dark home, and rule 6 is that errors are
-     * silent to the player.
+     * **There is no `else` on this `when` any more, because the roster is complete.** It carried
+     * one while Interrupt and Drift were unbuilt, and an `else` on a dispatch is exactly how rule 8
+     * gets broken quietly: an eleventh Subroutine would fall through it, echo nothing, and look
+     * like a screen that had not loaded. Exhaustive, it stops being a runtime silence and becomes
+     * a compiler error in the same change that adds the row.
      */
     fun tap(subroutine: Subroutine, at: Int) {
         when (subroutine) {
@@ -1039,18 +1386,21 @@ class SubroutineModel(
             Subroutine.Jam -> jam.step(at)
             Subroutine.Sniff -> sniff.choose(at)
             Subroutine.Deallocate -> deallocate.remove(at)
-            else -> Unit
+            Subroutine.Interrupt -> interrupt.enter(at)
+            Subroutine.Drift -> drift.choose(at)
         }
     }
 
     /**
      * The entry goes to the house.
      *
-     * SUBMIT on the three whose answer can still change, and **the clock** on Short — a hold that
-     * has run its two seconds has nothing further to say and no button to press, since both hands
-     * are on the glass. The two sequences are absent because they hand themselves over on their
-     * last element, which is what *an entry goes when it can no longer change* comes to when the
-     * player has said everything they were asked for.
+     * SUBMIT on the five whose answer can still change, **the clock** on Short — a hold that has
+     * run its two seconds has nothing further to say and no button to press, since both hands are
+     * on the glass — and **the house's own buzz** on Drift, which is the only one of the eight
+     * whose entry goes on something that is neither a control nor this phone's clock. The three
+     * sequences are absent because they hand themselves over on their last element, which is what
+     * *an entry goes when it can no longer change* comes to when the player has said everything
+     * they were asked for.
      */
     fun handOver(subroutine: Subroutine) {
         when (subroutine) {
@@ -1060,6 +1410,7 @@ class SubroutineModel(
             Subroutine.Jam -> jam.handOver()
             Subroutine.Sniff -> sniff.handOver()
             Subroutine.Deallocate -> deallocate.handOver()
+            Subroutine.Drift -> drift.handOver()
             else -> Unit
         }
     }
@@ -1148,6 +1499,41 @@ class SubroutineModel(
         val DEALLOCATE: List<Int> = DotColumns.of(DEALLOCATE_PARAMETERS)
 
         /**
+         * **Interrupt's band, speed and phase, as the scan would send them.**
+         *
+         * The band sits at 58 of 100 — off centre, because a band in the middle of the bar is one
+         * the sweep meets at the same point of every pass and the Subroutine becomes *tap on the
+         * beat*. Fourteen steps a second is seven seconds end to end, which is *slow* per
+         * `gdd.md:595`, and a little over a second of the sweep being inside the band. The phase
+         * starts it part-way through the first stroke so the opening frame is not the same picture
+         * every time this screen is looked at.
+         *
+         * ***Playtest owns the speed and the band width*** (D-139). Nothing here has been played
+         * with, and the width is [InterruptSweep.BAND_HALF] rather than a number on this line —
+         * see the note there, and the worklog.
+         */
+        val INTERRUPT_PARAMETERS: List<Int> = listOf(58, 14, 30)
+
+        /** The sweep, read once — [SNIFF]'s arrangement, for [SNIFF]'s reason. */
+        val INTERRUPT: InterruptSweep = InterruptSweep.of(INTERRUPT_PARAMETERS)
+
+        /**
+         * **Drift's layout seed, speed and hidden wait, as the scan would send them.**
+         *
+         * Twelve steps a second is eight seconds of lane; six tenths is the dot spending a little
+         * over half a second out of sight before the phone asks, which fits inside the cover this
+         * seed lays down and would not fit inside every one of them — which is the refusal in
+         * [DriftPath.of] having something to refuse rather than being a flourish.
+         *
+         * ***Playtest owns the speed, the hidden duration and the hit radius*** (D-140). The radius
+         * is the house's and is nowhere in this module, which is the shape of it being the house's.
+         */
+        val DRIFT_PARAMETERS: List<Int> = listOf(7, 12, 6)
+
+        /** The path, read once — [SNIFF]'s arrangement, for [SNIFF]'s reason. */
+        val DRIFT: DriftPath = DriftPath.of(DRIFT_PARAMETERS)
+
+        /**
          * **The fixture: a phone part-way through each of the six.**
          *
          * Every render and every rendering test gets this, for the reason [MeetingModel.sample]
@@ -1166,6 +1552,17 @@ class SubroutineModel(
          * every other render gets. It holds the second group, unsent, so the default frame is the
          * one with something to look at. Deallocate has one dot off one column, which is the same
          * mid-gesture rule as the rest.
+         *
+         * **Interrupt is the one that cannot be mid-gesture, and it is caught rather than left
+         * alone.** Its entry goes on the tap that makes it, so there is no state between untouched
+         * and sent — and untouched is not available here, because `openingASubroutineAgainClears
+         * EveryEntry` requires every entry in this fixture to hold something (an entry the fixture
+         * never touched is one whose clearing proves nothing). So the sweep is caught, a third of
+         * the way along, **which is outside the band the fixture draws**: a default frame showing a
+         * catch dead in the middle of the band would read as this phone having marked it correct.
+         *
+         * Drift holds a mark it has not sent, which is the state only that screen can be in: a
+         * finger that landed before the house asked.
          */
         fun sample(): SubroutineModel = SubroutineModel().apply {
             handshake.enter(0)
@@ -1178,6 +1575,8 @@ class SubroutineModel(
             repeat(4) { jam.step(-1) }
             sniff.choose(SNIFF_SECOND)
             deallocate.remove(0)
+            interrupt.enter(InterruptSweep.SPAN / 3)
+            drift.choose(DriftPath.SPAN / 2)
             val wiring = SignalGraph.of(TRACE_SEED)
             trace.walk(wiring.source)
             wiring.joinedTo(wiring.source).firstOrNull()?.let { trace.walk(it) }

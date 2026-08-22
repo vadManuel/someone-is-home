@@ -552,16 +552,18 @@ class SubroutineTest {
     }
 
     /**
-     * **The two fixtures are questions with an answer in them, and the answer is computed HERE.**
+     * **The four fixtures are questions with an answer in them, and the answer is computed HERE.**
      *
-     * The arithmetic below — the shortest column, and what each of the others owes over it — is the
-     * answer key, which is why there is no function in `ui` that does it. `DotColumns` returns the
-     * heights and computes nothing; a `level` or an `owed` helper would be one call away from a
-     * screen that could tell a player when to stop, on a Subroutine whose entire content is
-     * deciding that for yourself.
+     * The arithmetic below — the shortest column, and what each of the others owes over it; whether
+     * a sweep position is inside the band; where a hidden dot is at the instant it is asked about —
+     * is the answer key, which is why there is no function in `ui` that does any of it.
+     * `DotColumns` returns the heights and computes nothing; [InterruptSweep] draws the band and
+     * draws the sweep and never compares them; [DriftPath] renders the motion and holds no answer.
+     * Every one of those helpers would be one call away from a screen that could tell a player how
+     * they had done, on Subroutines whose entire content is working that out for yourself.
      *
-     * This is a test, it never ships, and it is the only place in the module where the two halves
-     * of a Deallocate instance are in the same expression.
+     * This is a test, it never ships, and it is **the only place in the module where the two halves
+     * of any of these instances are in the same expression.**
      */
     @Test
     fun theFixtureQuestionsHaveAnAnswerAndItIsNotOnThePhone() {
@@ -583,6 +585,327 @@ class SubroutineTest {
             "the shortest column is on an end, so the Subroutine can be done without looking at " +
                 "the whole screen",
         )
+
+        // **The band is catchable and is not the whole bar**, which is the Interrupt fixture being
+        // a question: a band the sweep is always inside would grade every tap the same, and one it
+        // never reaches would grade none of them.
+        val sweep = SubroutineModel.INTERRUPT
+        val band = sweep.bandFrom..sweep.bandTo
+        val visited = (0L..20_000L step 25).map { sweep.at(it) }
+        assertTrue(visited.any { it in band }, "the fixture's sweep never enters its own band")
+        assertTrue(visited.any { it !in band }, "the fixture's sweep is never outside its own band")
+
+        // And the fixture frame is a catch that MISSED. A default render marking the middle of the
+        // band would read as this phone having graded it — see `SubroutineModel.sample`.
+        assertTrue(
+            InterruptSweep.SPAN / 3 !in band,
+            "the fixture's caught position sits inside the band, so every default render of " +
+                "INTERRUPT looks like a phone saying well done",
+        )
+        // **The other direction, and it is the one Deallocate taught.** The parity sweeps drive
+        // Interrupt to half way along the bar, and the reason that number is worth anything is
+        // that it is INSIDE the band: a screen tempted to write *well done* somewhere can only be
+        // caught on a frame where it would have. Asserted here rather than assumed there, because
+        // a fixture edited for some other reason would take the coverage with it silently.
+        assertTrue(
+            InterruptSweep.SPAN / 2 in band,
+            "the parity sweeps' caught position is outside the band, so every guard that renders " +
+                "a caught INTERRUPT is walking past the one frame a verdict could be drawn on",
+        )
+
+        // **Drift's answer is where the dot is when the phone buzzes, and it is under cover.** The
+        // one expression in this module that puts the pulse and the position together.
+        val path = SubroutineModel.DRIFT
+        val answer = path.at(path.askAtMillis.toLong())
+        assertNotNull(answer, "the DRIFT fixture buzzes after the dot has left the lane")
+        assertTrue(
+            path.covered(answer),
+            "the DRIFT fixture buzzes with the dot at $answer in plain sight of ${path.cover}",
+        )
+    }
+
+    // ---- Interrupt's sweep -----------------------------------------------------------------------
+
+    /**
+     * **The sweep bounces: it stays on the bar, reaches both ends, and never jumps.**
+     *
+     * D-139 chose ping-pong over a wrap, and the difference between them is exactly one property —
+     * **there is no discontinuity at the edge.** A wrapping sweep leaps the full width of the bar
+     * once a cycle, and a player who cannot reliably time the band can time *that* instead, which
+     * is a different Subroutine with a worse answer. So the step between two consecutive
+     * milliseconds is asserted to be small everywhere, including across both turns.
+     *
+     * Swept over a whole cycle at a fine grain rather than at a few sampled instants, because the
+     * fault would be at one edge and a sampler that stepped over it would report a clean bounce.
+     */
+    @Test
+    fun theSweepStaysOnTheBarAndTurnsRatherThanJumping() {
+        val sweep = InterruptSweep.of(listOf(58, 14, 30))
+        var lowest = InterruptSweep.SPAN
+        var highest = 0
+        var last = sweep.at(0)
+        // Two full cycles at the fixture's speed, in milliseconds.
+        for (millis in 1L..(2L * InterruptSweep.CYCLE * 1000 / sweep.speed)) {
+            val at = sweep.at(millis)
+            assertTrue(at in 0..InterruptSweep.SPAN, "the sweep left the bar at ${millis}ms: $at")
+            assertTrue(
+                kotlin.math.abs(at - last) <= 1,
+                "the sweep jumped from $last to $at at ${millis}ms — a bar that leaps at the edge " +
+                    "is a wrap, and D-139 chose ping-pong so there is nothing to time but the band",
+            )
+            lowest = minOf(lowest, at)
+            highest = maxOf(highest, at)
+            last = at
+        }
+        assertEquals(0, lowest, "the sweep never reached the near end of the bar")
+        assertEquals(InterruptSweep.SPAN, highest, "the sweep never reached the far end")
+    }
+
+    /**
+     * **The same instance draws the same sweep, forever, and a different one draws a different
+     * sweep.**
+     *
+     * The whole of D-139's architecture rests on this: *the house sends the parameters and the
+     * client renders the motion deterministically from them.* If two readings of one instance could
+     * differ, a replay would not be a replay and the house would be grading a tap against a picture
+     * it cannot reconstruct — which is the second promise in `project-context`, broken by a drawing
+     * helper.
+     *
+     * The second half is the one that stops this passing on a constant: **a re-scan re-draws band
+     * position and phase (D-139), so a different phase has to produce a different sweep.**
+     */
+    @Test
+    fun theSameSweepIsDrawnEveryTimeAndADifferentPhaseIsNot() {
+        val instance = listOf(58, 14, 30)
+        val sampled = (0L..20_000L step 37).map { InterruptSweep.of(instance).at(it) }
+        val again = (0L..20_000L step 37).map { InterruptSweep.of(instance).at(it) }
+        assertContentEquals(sampled, again, "one instance drew two different sweeps")
+
+        val rescanned = (0L..20_000L step 37).map { InterruptSweep.of(listOf(58, 14, 31)).at(it) }
+        assertTrue(
+            sampled != rescanned,
+            "a re-drawn phase drew the same sweep, so a retry is a second run at a picture the " +
+                "player has already memorised",
+        )
+    }
+
+    /**
+     * **There is no timeout in the sweep, and an hour in it is still moving.**
+     *
+     * D-139: *the sweep runs forever until tapped or abandoned. Hesitation is taxed by exposure,
+     * not by a clock.* The screen's half of this is `SubroutineMotionTest`; this is the arithmetic's
+     * half, and it is the one that would silently acquire a ceiling — a `coerceAtMost`, an `Int`
+     * that stopped being enough, a modulus that came out negative on the far side of an overflow.
+     */
+    @Test
+    fun theSweepIsStillRunningAnHourIn() {
+        val sweep = InterruptSweep.of(SubroutineModel.INTERRUPT_PARAMETERS)
+        val hour = 60L * 60L * 1000L
+        val moved = (0..40).map { sweep.at(hour + it * 250L) }.toSet()
+        assertTrue(
+            moved.size > 1,
+            "the sweep has stopped an hour in, so something in it is counting down: $moved",
+        )
+        assertTrue(
+            moved.all { it in 0..InterruptSweep.SPAN },
+            "the sweep left the bar an hour in: $moved",
+        )
+    }
+
+    /**
+     * The three ways an Interrupt instance can fail to be a question, each refused by name.
+     *
+     * A band running off the end of the bar is [DotColumns]' clipped column one Subroutine along:
+     * the player answers the picture, correctly, and is graded against a band they were never
+     * shown. A sweep at no speed is not a moment to catch. And a phase outside the cycle is the one
+     * that would be tempting to wrap quietly — the house grades a position this client draws, so a
+     * parameter the client reinterprets is the two of them disagreeing about where the sweep began.
+     *
+     * It is not hypothetical: the stand-in draw in `core` produces three numbers out of one range
+     * with no idea what they mean (E-L4-3), and most of that range is a band hard against the near
+     * end of the bar.
+     */
+    @Test
+    fun interruptRefusesAnInstanceThatIsNotAQuestion() {
+        val malformed = listOf(
+            listOf(58, 14) to "two numbers cannot say where in the bounce the sweep starts",
+            listOf(58, 14, 30, 2) to "a fourth number is a Subroutine this client is not reading",
+            listOf(InterruptSweep.BAND_HALF - 1, 14, 30) to "the band runs off the near end",
+            listOf(InterruptSweep.SPAN, 14, 30) to "and off the far end",
+            listOf(58, 0, 30) to "a sweep that does not move is not a moment to catch",
+            listOf(58, 14, InterruptSweep.CYCLE) to "a phase past the end of the bounce",
+            listOf(58, 14, -1) to "and one before the start of it",
+        )
+        for ((parameters, why) in malformed) {
+            assertFailsWith<MalformedSubroutineParameters>(
+                "INTERRUPT accepted $parameters — $why",
+            ) { InterruptSweep.of(parameters) }
+        }
+
+        // And the edges of what is drawable, so this is a guard rather than a reader that refuses
+        // everything: a band exactly touching each end of the bar is a band the bar can draw.
+        assertEquals(InterruptSweep.BAND_HALF, InterruptSweep.of(listOf(8, 1, 0)).bandAt)
+        assertEquals(
+            InterruptSweep.SPAN - InterruptSweep.BAND_HALF,
+            InterruptSweep.of(listOf(92, 1, InterruptSweep.CYCLE - 1)).bandAt,
+        )
+    }
+
+    // ---- Drift's path ----------------------------------------------------------------------------
+
+    /**
+     * **THE ONE THAT MATTERS: the dot is out of sight at the instant the phone buzzes, or the
+     * instance is refused.**
+     *
+     * D-140's whole content is that the answer *cannot be read off the screen* — the player carries
+     * the dot in their head across a hidden stretch whose length they were never shown. A path
+     * whose buzz landed while the dot was in the clear would still render, still accept a tap, and
+     * still be graded; it would simply be a Subroutine that tests nothing, and nobody would ever
+     * see the difference by looking at it.
+     *
+     * Swept across seeds, speeds and waits rather than checked on the fixture, because the property
+     * has to hold for every instance the house can draw and the fixture is one of them.
+     */
+    @Test
+    fun theDotIsOutOfSightWhenTheHouseAsksOrTheInstanceIsRefused() {
+        var asked = 0
+        var refused = 0
+        for (seed in 0 until 40) {
+            for (speed in 6..18 step 3) {
+                for (wait in 1..12) {
+                    val path = try {
+                        DriftPath.of(listOf(seed, speed, wait))
+                    } catch (refusal: MalformedSubroutineParameters) {
+                        refused++
+                        assertTrue(
+                            refusal.detail.contains("back in sight"),
+                            "an instance was refused for something other than the dot being " +
+                                "visible: ${refusal.detail}",
+                        )
+                        continue
+                    }
+                    val at = path.at(path.askAtMillis.toLong())
+                    assertTrue(
+                        at != null && path.covered(at),
+                        "seed $seed at speed $speed buzzes ${wait} tenths in, and the dot is at " +
+                            "$at with the cover at ${path.cover} — the answer is on the screen",
+                    )
+                    asked++
+                }
+            }
+        }
+        assertTrue(asked > 0, "every instance was refused, so nothing was checked")
+        assertTrue(
+            refused > 0,
+            "no wait was long enough to bring the dot back into sight, so the refusal that " +
+                "matters has nothing to refuse and this sweep is not exercising it",
+        )
+    }
+
+    /**
+     * **The cover is three separate pieces on a lane the dot starts clear of.**
+     *
+     * Two properties, and both are the picture being the question. Pieces that touched would be one
+     * wider piece, and the dot would then be hidden for a stretch the layout does not look like it
+     * covers — so the player reads one question and answers another. And a lane whose cover began
+     * at the start would hide the dot before anybody had seen it move, which is a question with no
+     * observation in front of it.
+     */
+    @Test
+    fun theCoverIsSeparatePiecesAndTheDotIsSeenBeforeItHides() {
+        for (seed in 0 until 60) {
+            val path = DriftPath.of(listOf(seed, 12, 1))
+            assertEquals(DriftPath.COVER, path.cover.size, "seed $seed lost a piece of cover")
+            assertTrue(
+                path.cover.first().first >= DriftPath.RUN_IN,
+                "seed $seed hides the dot ${path.cover.first().first} steps in, before anybody " +
+                    "has watched it move",
+            )
+            assertTrue(
+                path.cover.last().last < DriftPath.SPAN,
+                "seed $seed runs its cover off the end of the lane: ${path.cover}",
+            )
+            for ((before, after) in path.cover.zipWithNext()) {
+                assertTrue(
+                    after.first - before.last > DriftPath.CLEAR,
+                    "seed $seed leaves ${after.first - before.last} steps between two pieces of " +
+                        "cover, which the eye reads as one wider piece: ${path.cover}",
+                )
+            }
+        }
+    }
+
+    /**
+     * **The dot drifts at one speed and then it is gone.**
+     *
+     * *Constant velocity* is the design's word and it is the whole of what a player can rely on:
+     * every equal stretch of time is an equal stretch of lane, or the mental model the Subroutine
+     * tests cannot be built. And it leaves rather than parking on the end — a dot sitting at the
+     * far edge is one a player reads as *still there*, and D-125 clamps only what a player cannot
+     * perceive.
+     */
+    @Test
+    fun theDotDriftsEvenlyAndThenLeaves() {
+        val path = DriftPath.of(SubroutineModel.DRIFT_PARAMETERS)
+        val second = 1_000L
+        val steps = (1..6).map { path.at(it * second)!! - path.at((it - 1) * second)!! }
+        assertEquals(
+            1, steps.toSet().size,
+            "the dot covers a different amount of lane in different seconds: $steps",
+        )
+        assertNull(
+            path.at((DriftPath.SPAN + 5).toLong() * 1_000L / path.speed),
+            "the dot is still on the lane after the end of it",
+        )
+    }
+
+    /**
+     * **The pulse is one short buzz after the wait, and there is nothing else in the script.**
+     *
+     * D-140 says so in as many words: *the pulse is a short one — D-135 reserves the long haptic
+     * for five events and this is not among them.* A script with two buzzes in it would be a rhythm
+     * to read, and a long one would be the phone saying something the house reserves for five other
+     * things.
+     */
+    @Test
+    fun theDriftScriptIsOneShortBuzzAndNothingElse() {
+        val path = DriftPath.of(SubroutineModel.DRIFT_PARAMETERS)
+        val buzzes = path.script.filterIsInstance<HapticStep.Buzz>()
+        assertEquals(1, buzzes.size, "the script does not say *now* exactly once: ${path.script}")
+        assertEquals(
+            SniffGroups.PULSE_MILLIS, buzzes.single().millis,
+            "the buzz that says *now* is not the short one D-135 leaves available",
+        )
+        assertEquals(
+            path.askAtMillis,
+            path.script.filterIsInstance<HapticStep.Rest>().single().millis,
+            "the script buzzes at a different moment from the one the screen is rendering",
+        )
+    }
+
+    /**
+     * The four ways a Drift instance can fail to be a question, each refused by name.
+     *
+     * The last is D-140's and is the one with teeth: **a wait longer than the crossing puts the dot
+     * back in sight before the buzz**, and the player answers by looking rather than by carrying it
+     * — which is the ruling inverted rather than merely relaxed.
+     */
+    @Test
+    fun driftRefusesAnInstanceThatIsNotAQuestion() {
+        val malformed = listOf(
+            listOf(7, 12) to "two numbers cannot say how long the dot stays hidden",
+            listOf(7, 12, 6, 2) to "a fourth number is a Subroutine this client is not reading",
+            listOf(7, 0, 6) to "a dot that does not drift never reaches the cover",
+            listOf(7, 12, 0) to "a buzz as it goes in asks where the player just watched it go",
+            listOf(7, 12, 60) to "six seconds hidden behind a piece of cover it crosses in one",
+        )
+        for ((parameters, why) in malformed) {
+            assertFailsWith<MalformedSubroutineParameters>(
+                "DRIFT accepted $parameters — $why",
+            ) { DriftPath.of(parameters) }
+        }
+        // And one it accepts, so this is a guard rather than a reader that refuses everything.
+        assertEquals(12, DriftPath.of(listOf(7, 12, 6)).speed)
     }
 
     // ---- The signal graph ----------------------------------------------------------------------

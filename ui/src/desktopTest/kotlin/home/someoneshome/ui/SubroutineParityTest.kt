@@ -86,6 +86,18 @@ class SubroutineParityTest {
             // injected `COMPLETE` on a levelled screen passed every test in this file. Reading the
             // model to find the tallest is not the answer key arriving in the test — it is the
             // rule *take from the biggest pile*, and both roles are driven by it identically.
+            // **The two that move take a position on their own span**, not an index into
+            // anything. Interrupt's goes to the entry on the first one and is refused after, which
+            // is the screen's behaviour rather than a limit of this sweep; Drift's moves the mark
+            // every time, which is the state only that screen has — a finger that landed before
+            // the house asked.
+            //
+            // **Interrupt's lands INSIDE the band, deliberately**, and that is Deallocate's lesson
+            // one Subroutine along: the one state a screen would be tempted to grade is the one a
+            // sweep can most easily never render. A catch nowhere near the band would drive these
+            // guards past the only frame on which a *well done* could be written.
+            Subroutine.Interrupt -> InterruptSweep.SPAN / 2 + step
+            Subroutine.Drift -> DriftPath.SPAN / 3 + step
             Subroutine.Deallocate -> {
                 val left = SubroutineModel.DEALLOCATE.indices.map {
                     SubroutineModel.DEALLOCATE[it] - model.deallocate.taken(it)

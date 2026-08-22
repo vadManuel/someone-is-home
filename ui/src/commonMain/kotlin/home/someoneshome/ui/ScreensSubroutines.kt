@@ -1,8 +1,10 @@
 package home.someoneshome.ui
 
+import androidx.compose.animation.core.withInfiniteAnimationFrameMillis
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +28,7 @@ import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.pointer.pointerInput
@@ -34,7 +37,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 
 /**
- * **The Subroutines themselves — eight of the design's ten, with their interaction.**
+ * **The Subroutines themselves — all ten of the design's, with their interaction.**
  *
  * The screens in this file echo input and nothing else. A Subroutine's pattern arrives as an
  * Effect, the screen displays it, captures taps and echoes them locally, and what the player
@@ -68,9 +71,21 @@ import androidx.compose.ui.unit.Dp
  * - **Sniff's two groups are buzzed**, for Handshake's reason and with Handshake's consequence: on
  *   a build with no phone attached the question never arrives, and the screen is black until
  *   somebody taps it. Built: the answer, and the darkness it is given in.
+ * - **Drift's *now* is buzzed**, which is Handshake's gap again — the pulse is a step in
+ *   [DriftPath.script] and nothing on a bench feels it. Built: the motion it interrupts, and the
+ *   answer.
  * - **Parity Check, Jam, Signal Trace and Deallocate have no timed presentation at all**, which is
  *   why those four are whole: the grid, the rings, the wiring and the columns are on the screen,
  *   the work is what you do to them, and the only thing the house owns is the verdict.
+ *
+ * ### Two of them move, and the motion is arithmetic the house authored
+ *
+ * Interrupt's sweep and Drift's dot are the only things in this module that move on their own, and
+ * neither is an animation in the sense rule 5 forbids: **the house sends the parameters at scan
+ * time and the client renders the position from them and the milliseconds since the screen opened**
+ * (D-139, D-140). No tween, no easing, no Effect on the wire, no schema row — and the same instance
+ * on the same clock draws the same frame on every phone and on every replay. See [screenMillis] for
+ * where the milliseconds come from and why they are not a wall clock.
  */
 
 /**
@@ -759,6 +774,169 @@ fun DeallocateScreen(verdict: SubroutineVerdict? = null) {
     }
 }
 
+/**
+ * **Interrupt — a sweep bouncing along a bar, and you tap to catch it inside the band.**
+ *
+ * D-139 supersedes `gdd.md:566` in both respects. **The sweep ping-pongs** rather than wrapping,
+ * because a wrap has a dead return stroke to wait through and a discontinuity at the edge for a
+ * player to time against instead of the band. And **it runs forever**: there is no timeout on this
+ * screen, no clock counting anything down, and nothing that ends the Subroutine but the player's
+ * own tap or STOP NOW.
+ *
+ * ### Hesitation is taxed by the room rather than by a fail window
+ *
+ * The screen is MEDIUM and lit and the player is standing at the marker where D-110 keeps them, so
+ * every extra pass is another second of being visible to whoever walks in. That is what lets the
+ * sweep be slow and the band generous (`gdd.md:595`) without the Subroutine becoming free: the
+ * pressure is in the corridor, not in the phone.
+ *
+ * ### The whole panel is the target, because the eye is on the bar
+ *
+ * A button under the bar would put the finger somewhere the eye is not, on the one Subroutine where
+ * *when* is the entire answer. So the body is the control — a target the size of the screen, pressed
+ * without looking away — and its outline is what says so: [Amber.Dim] while it is live, [Amber.Edge]
+ * once the catch has gone, which is exactly how [PanelButton] draws the difference.
+ *
+ * **The tap is the entry and there is no SUBMIT.** A confirmation step would be asking the player to
+ * ratify a moment that is already seconds in the past, so the entry goes on the tap that makes it
+ * — the sequence's rule, held by the type rather than remembered by this screen. What the frozen
+ * sweep then shows is where it was caught, which is this phone echoing its own input and the only
+ * thing it has to say.
+ *
+ * **Nothing here compares the catch with the band.** Both are on the screen, and reading them is the
+ * player's — the same arrangement Jam's two rings and Deallocate's columns have. See
+ * [InterruptSweep] for why the judgement stays with the house even though the picture cannot.
+ */
+@Composable
+fun InterruptScreen(verdict: SubroutineVerdict? = null) {
+    val entry = LocalSubroutine.current.interrupt
+    val actions = LocalActions.current
+    val sweep = SubroutineModel.INTERRUPT
+    val live = !entry.handedOver
+    val elapsed = screenMillis(running = live)
+    // Where it is, or where it was caught. One expression, because they are the same picture: the
+    // bar carries a mark at a step of the span and what put it there is not the bar's business.
+    val at = entry.entered.firstOrNull() ?: sweep.at(elapsed)
+
+    SubroutineFrame(Subroutine.Interrupt, ink = Amber.Dim, mark = Amber.Mid) {
+        Label(
+            "TAP TO CATCH THE SWEEP\nINSIDE THE BAND",
+            modifier = Modifier.fillMaxWidth(),
+            size = 6.5, color = Amber.Dim, tracking = 0.12, lineHeight = 1.8,
+            align = TextAlign.Center,
+        )
+
+        Box(
+            Modifier.weight(1f).fillMaxWidth()
+                .border(1.u, if (live) Amber.Dim else Amber.Edge)
+                .then(
+                    if (live) {
+                        Modifier.tap {
+                            actions.tapSubroutine(Subroutine.Interrupt, sweep.at(elapsed))
+                        }
+                    } else {
+                        Modifier
+                    }
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            SweepBar(sweep, at, caught = entry.handedOver)
+        }
+
+        ReturnLine(entry.handedOver, verdict, Amber.Dim)
+        MotionBudgetRow(Amber.Dim, Amber.Mid)
+        StopNow(Amber.Faint, Amber.Dim)
+    }
+}
+
+/**
+ * **Drift — a dot crosses behind cover, and the phone buzzes to ask where it is.**
+ *
+ * D-140 supersedes `gdd.md:570`. The dot drifts at constant velocity along a straight path and
+ * hides; **at a house-chosen instant a short haptic pulse says *now***, and the player taps where
+ * the dot is at that moment. The hidden duration is the difficulty and it is invisible — the player
+ * cannot see how far they will have to carry the dot in their head before being asked.
+ *
+ * ### The lane is the target, so there is nothing to aim at but *how far along*
+ *
+ * The path is straight and drawn, so where the dot is *vertically* is not a question anybody is
+ * asking — and a tap taxed for missing a line the screen already shows would be grading a blind
+ * one-handed finger on something the question never contained. So **the strip is the control, the
+ * full height of the body**, and the entry is the step of the lane the finger landed on. That is
+ * this screen's one presentation decision and it is flagged: it makes the hit radius a distance
+ * along the path.
+ *
+ * ### A tap before the buzz is echoed and goes nowhere
+ *
+ * The question has not been asked yet, so there is nothing to send — but a control that swallowed
+ * the tap in silence is indistinguishable, in the dark, from a phone that has died, and this is the
+ * one Subroutine where the player is watching the screen rather than the room. So the mark moves and
+ * the entry stays put; `RETURNED . WAITING` is what says it went, and it says nothing until it has.
+ * **This is not the phone refusing an answer** — it is the phone not inventing a question. Flagged
+ * as a treatment decision.
+ *
+ * ### The motion stops when the entry goes, and it shows exactly what it was showing
+ *
+ * Freezing rather than running on, because a dot that kept drifting after the hand-over would
+ * emerge from cover at a known speed and hand back the position the player was asked for. Frozen,
+ * nothing appears that the player was not already looking at.
+ *
+ * **The buzzing is the house's** — haptics are, and this build has no phone attached to feel them
+ * on — so on a desktop render the pulse is a moment in [DriftPath.script] rather than something that
+ * happens. That is the same gap [HandshakeScreen] and [SniffScreen] have.
+ */
+@Composable
+fun DriftScreen(verdict: SubroutineVerdict? = null) {
+    val entry = LocalSubroutine.current.drift
+    val actions = LocalActions.current
+    val path = SubroutineModel.DRIFT
+    val live = entry.handedOver == null
+    val elapsed = screenMillis(running = live)
+    // Whether the house has said *now*. Not a judgement and not about the entry: it is the clock
+    // reaching the instant the scan named, and the same instant for both roles.
+    val asked = elapsed >= path.askAtMillis
+    // Drawn only where there is nothing in front of it. The cover is drawn over the dot as well,
+    // so the last of it goes behind an edge rather than blinking out of a clear stretch of lane.
+    val dot = path.at(elapsed)?.takeIf { !path.covered(it) }
+
+    SubroutineFrame(Subroutine.Drift, ink = Amber.Dim, mark = Amber.Mid) {
+        Label(
+            "TAP WHERE THE DOT IS\nWHEN THE PHONE BUZZES",
+            modifier = Modifier.fillMaxWidth(),
+            size = 6.5, color = Amber.Dim, tracking = 0.12, lineHeight = 1.8,
+            align = TextAlign.Center,
+        )
+
+        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier.fillMaxWidth().height(LANE_FIELD).border(1.u, Amber.Edge)
+                    .testTag(DRIFT_LANE)
+                    // It publishes no click action, exactly as [HoldSurface] does not: a position
+                    // is where the finger landed, and a synthetic click carries no position. The
+                    // tag is how a test finds it, and `DriftInputTest` drives real pointers at it.
+                    .pointerInput(live, asked) {
+                        if (!live) return@pointerInput
+                        detectTapGestures { offset ->
+                            // The step under the finger. Clamped to the lane it is a tap inside
+                            // of: an edge pixel is not a position a player can tell apart from
+                            // the end of the strip, which is D-125's rule for what may be clamped.
+                            val step = (offset.x * DriftPath.SPAN / size.width)
+                                .toInt().coerceIn(0, DriftPath.SPAN)
+                            actions.tapSubroutine(Subroutine.Drift, step)
+                            if (asked) actions.handOverSubroutine(Subroutine.Drift)
+                        }
+                    },
+            ) {
+                DriftLane(path, dot, entry.choice)
+            }
+        }
+
+        ReturnLine(entry.gone, verdict, Amber.Dim)
+        MotionBudgetRow(Amber.Dim, Amber.Mid)
+        StopNow(Amber.Faint, Amber.Dim)
+    }
+}
+
 // ---- The furniture every Subroutine screen shares ------------------------------------------
 
 /** How big a Replay dot is. Named because it is a decision about a finger, not a layout number. */
@@ -828,8 +1006,156 @@ private fun DrawScope.nodeCentre(node: SignalGraph.Node): Offset = Offset(
     y = (NODE_INSET + ROW_STEP * node.row).toPx(),
 )
 
+/**
+ * **Interrupt's bar, and Drift's lane — the two screens the house draws with a clock.**
+ *
+ * [BAR_FIELD] and [LANE_FIELD] are fixed heights for [DEAL_FIELD]'s reason: a field that stretched
+ * with the panel would draw the same motion across a different amount of nothing on every handset,
+ * and *how far along is it* is the entire question on both screens. They are within twenty units of
+ * one another on purpose — the two moving Subroutines should have the same weight on the glass, or
+ * the roster's light ladder acquires a second axis nobody rated.
+ *
+ * [SWEEP] and [MARK] are wide enough to be a thing rather than a hairline at arm's length in an
+ * unlit room, and narrow enough that where they are is a position rather than a region. [DRIFT_DOT]
+ * is the one round thing on either screen, which is what makes it the thing that moves.
+ */
+private val BAR_FIELD: Dp = 110.u
+private val SWEEP: Dp = 5.u
+private val LANE_FIELD: Dp = 120.u
+private val LANE_INSET: Dp = 24.u
+private val LANE_STEP: Dp = 36.u
+private val COVER_HEIGHT: Dp = 30.u
+private val DRIFT_DOT: Dp = 9.u
+private val MARK: Dp = 5.u
+
 /** What the chosen parity cell tags itself with, so a guard counts marks rather than pixels. */
 const val PARITY_MARK: String = "subroutine-mark"
+
+/**
+ * What Drift's lane tags itself with.
+ *
+ * It publishes no click action, for [HOLD_SURFACE]'s reason turned sideways: a click carries no
+ * position, and the position is the whole of what this control is for.
+ */
+const val DRIFT_LANE: String = "subroutine-lane"
+
+/**
+ * **How long this screen has been open, in milliseconds — the only clock in the module, and it is
+ * the composition's.**
+ *
+ * D-139 and D-140 both put the motion on the client and the parameters on the wire, so both screens
+ * need to know how far into the question they are. Three things about where that number comes from:
+ *
+ * **It is the frame clock and never a wall clock.** `Clock.System.now()` is unreplayable by
+ * construction — the harness cannot put the phone back at 21:47:03 — and a screen that read one
+ * would render a different frame on every replay of the same recording, which is the second
+ * promise in `project-context` broken by a drawing helper.
+ *
+ * **It is [withInfiniteAnimationFrameMillis] rather than `withFrameMillis`**, and that is what
+ * lets D-139's *no timeout* be literal. Compose's own idiom for an animation with no end also
+ * tells a test harness that this composition is never going to go idle: under a test clock that
+ * auto-advances, the frames stop and the screen renders its opening position — deterministic,
+ * identical for both roles, and not a hang. Under `mainClock.autoAdvance = false` the frames arrive
+ * exactly where the test puts them, which is how the sweeps sample an animated screen at the same
+ * instant for both roles. [HoldSurface]'s clock is `withFrameMillis` because a hold *does* end.
+ *
+ * **It accumulates deltas rather than subtracting from a start.** The frame clock's origin is not
+ * this screen's, so the first frame is zero by definition of the thing being measured, and every
+ * frame after it adds what has passed since the last one.
+ *
+ * It freezes when [running] goes false, which is what makes an entry that has gone stop the picture
+ * where it stood. See [DriftScreen] for why that matters more there than a frozen picture usually
+ * would.
+ */
+@Composable
+private fun screenMillis(running: Boolean): Long {
+    var elapsed by remember { mutableStateOf(0L) }
+    LaunchedEffect(running) {
+        if (!running) return@LaunchedEffect
+        var last = withInfiniteAnimationFrameMillis { it }
+        while (true) {
+            val now = withInfiniteAnimationFrameMillis { it }
+            elapsed += now - last
+            last = now
+        }
+    }
+    return elapsed
+}
+
+/**
+ * The bar, the band on it, and the sweep at [at].
+ *
+ * Drawn in one canvas because they are one picture and share one mapping from a step of
+ * [InterruptSweep.SPAN] to a place on the glass. **The band is drawn and the sweep is drawn and
+ * nothing here asks whether one is inside the other** — that is the house's, and there is no
+ * expression in this function that could form the question.
+ *
+ * The caught mark is [Amber.Bright] and the running sweep is [Amber.Mid], which is the same grammar
+ * every other screen in this file uses: what the house drew is dimmer than what the player did.
+ */
+@Composable
+private fun SweepBar(sweep: InterruptSweep, at: Int, caught: Boolean) {
+    Canvas(Modifier.fillMaxWidth().padding(horizontal = 10.u).height(BAR_FIELD)) {
+        fun x(step: Int): Float = size.width * step / InterruptSweep.SPAN
+        // The bar itself: a floor and a ceiling rather than a filled block, so the band inside it
+        // is the only lit area and the extent of the travel is still legible.
+        val rule = 1.u.toPx()
+        drawRect(Amber.Edge, Offset(0f, 0f), Size(size.width, rule))
+        drawRect(Amber.Edge, Offset(0f, size.height - rule), Size(size.width, rule))
+        drawRect(
+            Amber.Faint,
+            Offset(x(sweep.bandFrom), 0f),
+            Size(x(sweep.bandTo) - x(sweep.bandFrom), size.height),
+        )
+        val width = SWEEP.toPx()
+        drawRect(
+            if (caught) Amber.Bright else Amber.Mid,
+            Offset(x(at) - width / 2, 0f),
+            Size(width, size.height),
+        )
+    }
+}
+
+/**
+ * The straight path, what stands in front of it, the dot where it can be seen, and the player's
+ * mark.
+ *
+ * **The cover is drawn after the dot**, so the dot passes behind an edge rather than blinking out
+ * in a clear stretch of lane — and it is drawn at all only where nothing stands in front of it, so
+ * a dot half-way under an edge is not a dot whose position can be read off the part still showing.
+ *
+ * The mark spans the whole field rather than sitting on the lane: it is the one thing here the
+ * player put on the screen, it has to be findable without looking for it, and a tick the height of
+ * the field cannot be mistaken for something that drifted there.
+ */
+@Composable
+private fun DriftLane(path: DriftPath, dot: Int?, mark: Int?) {
+    // **No inset, because the finger and the picture have to be measuring the same rectangle.**
+    // The tap arrives as an offset into the surface this fills, and the step it becomes is that
+    // offset over this width — so a canvas narrower than its own touch surface would put the mark
+    // somewhere other than where the finger landed and send the house the other one. What is drawn
+    // and what is sent stay one fact.
+    Canvas(Modifier.fillMaxSize()) {
+        fun x(step: Int): Float = size.width * step / DriftPath.SPAN
+        val lane = (LANE_INSET + LANE_STEP * path.lane).toPx()
+        val rule = 1.u.toPx()
+        drawRect(Amber.Edge, Offset(0f, lane - rule / 2), Size(size.width, rule))
+        if (dot != null) {
+            drawCircle(Amber.Mid, DRIFT_DOT.toPx() / 2, Offset(x(dot), lane))
+        }
+        for (cover in path.cover) {
+            drawRect(
+                Amber.Faint,
+                Offset(x(cover.first), lane - COVER_HEIGHT.toPx() / 2),
+                Size(x(cover.last + 1) - x(cover.first), COVER_HEIGHT.toPx()),
+            )
+        }
+        if (mark != null) {
+            val width = MARK.toPx()
+            drawRect(Amber.Bright, Offset(x(mark) - width / 2, 0f), Size(width, size.height))
+        }
+    }
+}
 
 /**
  * What Short's hold surface tags itself with.
