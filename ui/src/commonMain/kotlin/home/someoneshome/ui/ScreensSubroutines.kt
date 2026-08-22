@@ -35,6 +35,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import home.someoneshome.model.DotColumns
+import home.someoneshome.model.DriftPath
+import home.someoneshome.model.InterruptSweep
+import home.someoneshome.model.ParityGrid
+import home.someoneshome.model.SignalGraph
 
 /**
  * **The Subroutines themselves — all ten of the design's, with their interaction.**
@@ -245,7 +250,7 @@ fun ReplayScreen(verdict: SubroutineVerdict? = null) {
 fun ParityCheckScreen(verdict: SubroutineVerdict? = null) {
     val entry = LocalSubroutine.current.parity
     val actions = LocalActions.current
-    val cells = ParityGrid.of(SubroutineModel.PARITY_SEED)
+    val cells = SubroutineModel.PARITY
     SubroutineFrame(Subroutine.ParityCheck, ink = Amber.Dim, mark = Amber.Bright) {
         Label(
             "FIND THE BLOCK THAT BREAKS THE PATTERN",
@@ -385,6 +390,10 @@ fun ShortScreen(verdict: SubroutineVerdict? = null) {
 fun JamScreen(verdict: SubroutineVerdict? = null) {
     val entry = LocalSubroutine.current.jam
     val actions = LocalActions.current
+    // Where the house opened the player's ring, in steps. Drawn from the number that will be
+    // graded, so the press that puts one ring exactly on the other is the press the house is
+    // waiting for -- the band's arrangement, one Subroutine along (E-S2-1).
+    val rings = LocalSubroutine.current.rings
     val live = entry.handedOver == null
     SubroutineFrame(Subroutine.Jam, ink = Amber.Dim, mark = Amber.Mid) {
         Label(
@@ -400,7 +409,7 @@ fun JamScreen(verdict: SubroutineVerdict? = null) {
             Box(Modifier.size(JAM_TARGET).border(2.u, Amber.Dim, CircleShape))
             Box(
                 Modifier
-                    .size(JAM_OPENING + JAM_STEP * entry.offset)
+                    .size(JAM_TARGET + JAM_STEP * (rings.opening + entry.offset))
                     .border(1.u, Amber.Mid, CircleShape),
             )
         }
@@ -460,7 +469,7 @@ fun SignalTraceScreen(verdict: SubroutineVerdict? = null) {
     val entry = LocalSubroutine.current.trace
     val actions = LocalActions.current
     val live = entry.handedOver == null
-    val wiring = SignalGraph.of(SubroutineModel.TRACE_SEED)
+    val wiring = SubroutineModel.TRACE
     SubroutineFrame(Subroutine.SignalTrace, ink = Amber.Dim, mark = Amber.Mid) {
         Label(
             "TAP NODE TO NODE\nFROM THE DISC TO THE TARGET",
@@ -811,7 +820,9 @@ fun DeallocateScreen(verdict: SubroutineVerdict? = null) {
 fun InterruptScreen(verdict: SubroutineVerdict? = null) {
     val entry = LocalSubroutine.current.interrupt
     val actions = LocalActions.current
-    val sweep = SubroutineModel.INTERRUPT
+    // The band's width came with its position (E-S2-1): what is drawn here is what the house will
+    // grade against, because they are the same number and it arrived on the same scan.
+    val sweep = LocalSubroutine.current.sweep
     val live = !entry.handedOver
     val elapsed = screenMillis(running = live)
     // Where it is, or where it was caught. One expression, because they are the same picture: the
@@ -889,7 +900,7 @@ fun InterruptScreen(verdict: SubroutineVerdict? = null) {
 fun DriftScreen(verdict: SubroutineVerdict? = null) {
     val entry = LocalSubroutine.current.drift
     val actions = LocalActions.current
-    val path = SubroutineModel.DRIFT
+    val path = LocalSubroutine.current.path
     val live = entry.handedOver == null
     val elapsed = screenMillis(running = live)
     // Whether the house has said *now*. Not a judgement and not about the entry: it is the clock
@@ -966,17 +977,20 @@ private val DEAL_FIELD: Dp =
 /**
  * **Jam's three sizes, and the step is a placeholder.**
  *
- * [JAM_TARGET] is the fixed ring. [JAM_OPENING] is where the house opens the player's ring — well
- * clear of the target, so the Subroutine starts with something visibly to do. [JAM_STEP] is how
- * much one press moves it, and is the **presentation fixture** of this screen in the way
- * `HANDSHAKE_BEATS` is of Handshake's: it decides how many presses the work takes, which is
- * difficulty, which is balance, which nobody has played with. Six units is a step you can see
- * land at arm's length in an unlit room, and the opening is a whole number of them from the
- * target so the rings can be brought exactly together.
+ * [JAM_TARGET] is the fixed ring and [JAM_STEP] is how much one press moves the player's. **Where
+ * the player's ring opens is not here** — it is `JamRings.opening`, drawn by the house with the
+ * rest of the question, and the ring is sized at the target plus that many steps. It was a third
+ * size on this line, which was a second number for a fact the house had already decided: eleven
+ * steps of daylight on the glass while the house asked for nine, and the press that visibly put
+ * one ring on the other would have been refused. The band's fault, one Subroutine along (E-S2-1).
+ *
+ * The step is the **presentation fixture**: it decides how many presses the work takes, which is
+ * difficulty, which is balance, which nobody has played with. Six units is a step you can see land
+ * at arm's length in an unlit room, and it is a whole number of them from the target either way, so
+ * the rings can be brought exactly together.
  */
 private val JAM_TARGET: Dp = 84.u
 private val JAM_STEP: Dp = 6.u
-private val JAM_OPENING: Dp = 150.u
 
 /**
  * **Signal Trace's lattice, in design units.**

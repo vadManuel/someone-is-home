@@ -118,12 +118,11 @@ fun routeScan(at: Tick, actor: Seat, card: MarkerCard, map: HouseMap): ScanRouti
  * question. They are drawn from one stream and stored on one instance because they are one fact:
  * an answer that outlived its parameters would be the house grading a picture it no longer shows.
  *
- * **Both are still stand-ins for the real per-Subroutine draw, and named as such.** Interrupt's
- * band position and phase, Drift's path and hidden duration are numbers with meanings, and the
- * grading D-139 and D-140 describe is a *tolerance* — inside the band, within the hit radius —
- * rather than the equality [OpenSubroutine.accepts] performs. Neither of those Subroutines is
- * built. What is real here is the plumbing: the parameters ride the scan, they re-draw, they reach
- * the client, and the answer stays behind. See the worklog.
+ * **The draw knows what it is dealing** (E-L4-3, closed). It was three numbers out of one range
+ * with no idea what they meant, which could deal a Sniff with two groups of the same size or a
+ * Drift whose dot is in plain sight at the buzz — instances the clients refuse by name. Now
+ * [drawParameters] deals each kind's own shape inside each kind's own bounds and [answerTo] answers
+ * the question it just dealt, so **an instance a client would refuse cannot be dealt.**
  *
  * It does not read `Role`. D-109 grades every entry for real, for both roles, by the same rule, and
  * a question drawn per role would put the game's central secret into the answer key.
@@ -136,20 +135,16 @@ internal fun instanceFor(
     marker: MarkerId,
 ): OpenSubroutine {
     val draw = Draw(seed + id.value * INSTANCE_STRIDE, DOMAIN_INSTANCE)
+    val parameters = drawParameters(entry.subroutine, draw)
     return OpenSubroutine(
         seat = seat,
         entry = entry.index,
-        parameters = List(PARAMETER_LENGTH) { draw.next(PARAMETER_VALUES) },
-        expected = List(ENTRY_LENGTH) { draw.next(ENTRY_VALUES) },
+        subroutine = entry.subroutine,
+        parameters = parameters,
+        expected = answerTo(entry.subroutine, parameters),
         armedAt = marker,
     )
 }
 
 private const val DOMAIN_INSTANCE = 8L
 private const val INSTANCE_STRIDE = 0x2545F4914F6CDD1DL
-
-/** The instance's shape. Playtest owns none of these yet — see the KDoc above. */
-private const val PARAMETER_LENGTH = 3
-private const val PARAMETER_VALUES = 16
-private const val ENTRY_LENGTH = 2
-private const val ENTRY_VALUES = 4

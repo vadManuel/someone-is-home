@@ -5,15 +5,19 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toAwtImage
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
-import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.runDesktopComposeUiTest
+import home.someoneshome.model.DriftPath
+import home.someoneshome.model.InterruptSweep
+import home.someoneshome.model.ParityGrid
+import home.someoneshome.model.SignalGraph
 import java.awt.image.BufferedImage
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -65,7 +69,7 @@ class SubroutineParityTest {
         // Signal Trace's is taken modulo its node count so the route stays inside the graph.
         val at = when (subroutine) {
             Subroutine.SignalTrace ->
-                step.mod(SignalGraph.of(SubroutineModel.TRACE_SEED).nodes.size)
+                step.mod(SubroutineModel.TRACE.nodes.size)
             // Jam's is a signed step, so a plain index would walk it one way only. Alternating
             // presses also exercise the direction the ring shrinks in, which is the one the
             // player uses.
@@ -582,7 +586,7 @@ class SubroutineParityTest {
     @Test
     fun everyNodeStaysTappableEvenWhereTheGraphHasNoEdge() =
         runDesktopComposeUiTest(width = width, height = height) {
-            val wiring = SignalGraph.of(SubroutineModel.TRACE_SEED)
+            val wiring = SubroutineModel.TRACE
             val joined = wiring.joinedTo(wiring.source)
             val stranger = wiring.nodes.indices.first { it != wiring.source && it !in joined }
             val model = SubroutineModel()

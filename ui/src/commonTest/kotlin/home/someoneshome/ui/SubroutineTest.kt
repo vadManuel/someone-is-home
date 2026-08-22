@@ -1,6 +1,13 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.DotColumns
+import home.someoneshome.model.DriftPath
 import home.someoneshome.model.HapticStep
+import home.someoneshome.model.InterruptSweep
+import home.someoneshome.model.MalformedSubroutineParameters
+import home.someoneshome.model.ParityGrid
+import home.someoneshome.model.SignalGraph
+import home.someoneshome.model.SniffGroups
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -331,7 +338,7 @@ class SubroutineTest {
      */
     @Test
     fun aRouteTakesEveryTapWhetherOrNotTheNodesAreJoined() {
-        val wiring = SignalGraph.of(SubroutineModel.TRACE_SEED)
+        val wiring = SubroutineModel.TRACE
         val far = wiring.nodes.indices.first { it !in wiring.joinedTo(wiring.source) && it != wiring.source }
         val entry = PathEntry()
         entry.walk(wiring.source)
@@ -641,7 +648,7 @@ class SubroutineTest {
      */
     @Test
     fun theSweepStaysOnTheBarAndTurnsRatherThanJumping() {
-        val sweep = InterruptSweep.of(listOf(58, 14, 30))
+        val sweep = InterruptSweep.of(listOf(58, 8, 14, 30))
         var lowest = InterruptSweep.SPAN
         var highest = 0
         var last = sweep.at(0)
@@ -677,12 +684,12 @@ class SubroutineTest {
      */
     @Test
     fun theSameSweepIsDrawnEveryTimeAndADifferentPhaseIsNot() {
-        val instance = listOf(58, 14, 30)
+        val instance = listOf(58, 8, 14, 30)
         val sampled = (0L..20_000L step 37).map { InterruptSweep.of(instance).at(it) }
         val again = (0L..20_000L step 37).map { InterruptSweep.of(instance).at(it) }
         assertContentEquals(sampled, again, "one instance drew two different sweeps")
 
-        val rescanned = (0L..20_000L step 37).map { InterruptSweep.of(listOf(58, 14, 31)).at(it) }
+        val rescanned = (0L..20_000L step 37).map { InterruptSweep.of(listOf(58, 8, 14, 31)).at(it) }
         assertTrue(
             sampled != rescanned,
             "a re-drawn phase drew the same sweep, so a retry is a second run at a picture the " +
@@ -729,13 +736,18 @@ class SubroutineTest {
     @Test
     fun interruptRefusesAnInstanceThatIsNotAQuestion() {
         val malformed = listOf(
-            listOf(58, 14) to "two numbers cannot say where in the bounce the sweep starts",
-            listOf(58, 14, 30, 2) to "a fourth number is a Subroutine this client is not reading",
-            listOf(InterruptSweep.BAND_HALF - 1, 14, 30) to "the band runs off the near end",
-            listOf(InterruptSweep.SPAN, 14, 30) to "and off the far end",
-            listOf(58, 0, 30) to "a sweep that does not move is not a moment to catch",
-            listOf(58, 14, InterruptSweep.CYCLE) to "a phase past the end of the bounce",
-            listOf(58, 14, -1) to "and one before the start of it",
+            listOf(58, 8, 14) to "three numbers cannot say both how wide the band is and where " +
+                "in the bounce the sweep starts",
+            listOf(58, 8, 14, 30, 2) to "a fifth number is a Subroutine this client is not reading",
+            listOf(7, 8, 14, 30) to "the band runs off the near end",
+            listOf(InterruptSweep.SPAN - 7, 8, 14, 30) to "and off the far end",
+            listOf(58, InterruptSweep.BAND_LEAST - 1, 14, 30) to
+                "a band no finger can land in is not a generous one",
+            listOf(58, InterruptSweep.BAND_MOST + 1, 14, 30) to
+                "a band the sweep is inside most of the time is not a question",
+            listOf(58, 8, 0, 30) to "a sweep that does not move is not a moment to catch",
+            listOf(58, 8, 14, InterruptSweep.CYCLE) to "a phase past the end of the bounce",
+            listOf(58, 8, 14, -1) to "and one before the start of it",
         )
         for ((parameters, why) in malformed) {
             assertFailsWith<MalformedSubroutineParameters>(
@@ -745,10 +757,10 @@ class SubroutineTest {
 
         // And the edges of what is drawable, so this is a guard rather than a reader that refuses
         // everything: a band exactly touching each end of the bar is a band the bar can draw.
-        assertEquals(InterruptSweep.BAND_HALF, InterruptSweep.of(listOf(8, 1, 0)).bandAt)
+        assertEquals(8, InterruptSweep.of(listOf(8, 8, 1, 0)).bandAt)
         assertEquals(
-            InterruptSweep.SPAN - InterruptSweep.BAND_HALF,
-            InterruptSweep.of(listOf(92, 1, InterruptSweep.CYCLE - 1)).bandAt,
+            InterruptSweep.SPAN - 8,
+            InterruptSweep.of(listOf(InterruptSweep.SPAN - 8, 8, 1, InterruptSweep.CYCLE - 1)).bandAt,
         )
     }
 
@@ -775,7 +787,7 @@ class SubroutineTest {
             for (speed in 6..18 step 3) {
                 for (wait in 1..12) {
                     val path = try {
-                        DriftPath.of(listOf(seed, speed, wait))
+                        DriftPath.of(listOf(seed, speed, wait, DriftPath.RADIUS_LEAST))
                     } catch (refusal: MalformedSubroutineParameters) {
                         refused++
                         assertTrue(
@@ -815,7 +827,7 @@ class SubroutineTest {
     @Test
     fun theCoverIsSeparatePiecesAndTheDotIsSeenBeforeItHides() {
         for (seed in 0 until 60) {
-            val path = DriftPath.of(listOf(seed, 12, 1))
+            val path = DriftPath.of(listOf(seed, 12, 1, DriftPath.RADIUS_LEAST))
             assertEquals(DriftPath.COVER, path.cover.size, "seed $seed lost a piece of cover")
             assertTrue(
                 path.cover.first().first >= DriftPath.RUN_IN,
@@ -894,11 +906,16 @@ class SubroutineTest {
     @Test
     fun driftRefusesAnInstanceThatIsNotAQuestion() {
         val malformed = listOf(
-            listOf(7, 12) to "two numbers cannot say how long the dot stays hidden",
-            listOf(7, 12, 6, 2) to "a fourth number is a Subroutine this client is not reading",
-            listOf(7, 0, 6) to "a dot that does not drift never reaches the cover",
-            listOf(7, 12, 0) to "a buzz as it goes in asks where the player just watched it go",
-            listOf(7, 12, 60) to "six seconds hidden behind a piece of cover it crosses in one",
+            listOf(7, 12, 6) to "three numbers cannot say both how long the dot stays hidden " +
+                "and how close a tap has to land",
+            listOf(7, 12, 6, 6, 2) to "a fifth number is a Subroutine this client is not reading",
+            listOf(7, 0, 6, 6) to "a dot that does not drift never reaches the cover",
+            listOf(7, 12, 0, 6) to "a buzz as it goes in asks where the player just watched it go",
+            listOf(7, 12, 60, 6) to "six seconds hidden behind a piece of cover it crosses in one",
+            listOf(7, 12, 6, DriftPath.RADIUS_LEAST - 1) to
+                "a radius a finger in the dark cannot hit is not a tolerance",
+            listOf(7, 12, 6, DriftPath.RADIUS_MOST + 1) to
+                "a radius where every tap is right is not a question",
         )
         for ((parameters, why) in malformed) {
             assertFailsWith<MalformedSubroutineParameters>(
@@ -906,7 +923,7 @@ class SubroutineTest {
             ) { DriftPath.of(parameters) }
         }
         // And one it accepts, so this is a guard rather than a reader that refuses everything.
-        assertEquals(12, DriftPath.of(listOf(7, 12, 6)).speed)
+        assertEquals(12, DriftPath.of(listOf(7, 12, 6, 6)).speed)
     }
 
     // ---- The signal graph ----------------------------------------------------------------------
@@ -925,7 +942,7 @@ class SubroutineTest {
     @Test
     fun everyGraphHasARouteFromSourceToSink() {
         for (seed in 0 until 120) {
-            val wiring = SignalGraph.of(seed)
+            val wiring = SignalGraph.of(listOf(seed))
             assertTrue(wiring.source >= 0 && wiring.sink >= 0, "seed $seed lost an end of the route")
             assertTrue(
                 hops(wiring) != null,
@@ -941,7 +958,7 @@ class SubroutineTest {
     @Test
     fun noNodeIsDrawnWithoutAnEdge() {
         for (seed in 0 until 120) {
-            val wiring = SignalGraph.of(seed)
+            val wiring = SignalGraph.of(listOf(seed))
             for (at in wiring.nodes.indices) {
                 assertTrue(
                     wiring.joinedTo(at).isNotEmpty(),
@@ -961,7 +978,7 @@ class SubroutineTest {
     @Test
     fun everyGraphCarriesMoreNodesThanItsShortestRoute() {
         for (seed in 0 until 120) {
-            val wiring = SignalGraph.of(seed)
+            val wiring = SignalGraph.of(listOf(seed))
             val shortest = hops(wiring)
             assertNotNull(shortest, "seed $seed has no route at all, so there is none to measure")
             assertTrue(
@@ -1004,7 +1021,7 @@ class SubroutineTest {
     @Test
     fun theParityGridHasExactlyOneCellBreakingThePattern() {
         for (seed in 0 until ParityGrid.SIZE * 3) {
-            val cells = ParityGrid.of(seed)
+            val cells = ParityGrid.of(listOf(seed))
             assertEquals(ParityGrid.SIZE, cells.size, "seed $seed produced the wrong size of grid")
             val breaking = cells.indices.filter { cells[it] != ParityGrid.clean(it) }
             assertEquals(
@@ -1024,7 +1041,7 @@ class SubroutineTest {
     @Test
     fun everyCellCanBeTheOneThatBreaksIt() {
         val reached = (0 until ParityGrid.SIZE).mapTo(mutableSetOf()) { seed ->
-            ParityGrid.of(seed).indices.first { ParityGrid.of(seed)[it] != ParityGrid.clean(it) }
+            ParityGrid.of(listOf(seed)).indices.first { ParityGrid.of(listOf(seed))[it] != ParityGrid.clean(it) }
         }
         assertEquals(ParityGrid.SIZE, reached.size, "some cells can never be the odd one")
     }

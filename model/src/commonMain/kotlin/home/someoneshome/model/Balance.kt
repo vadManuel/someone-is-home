@@ -77,9 +77,15 @@ object Balance {
     /**
      * **How many ticks a second is worth. Every duration in this object is expressed through it.**
      *
-     * ⚠️ **This is `FixedTimestep.SUGGESTED_STEP_NANOS`'s 20 Hz, adopted — and adopting it is a
-     * visible act, which is exactly what that constant is named separately for.** Somebody should
-     * confirm it.
+     * **This is `FixedTimestep.SUGGESTED_STEP_NANOS`'s 20 Hz, adopted — and adopting it is a
+     * visible act, which is exactly what that constant is named separately for. Confirmed by the
+     * owner on 2026-08-22** (E-L5-1, closed), which is what makes [REVOKE_COOLDOWN]'s sixty seconds
+     * sixty seconds rather than an assumption two constants happen to share.
+     *
+     * It is asserted rather than trusted, and asserted where the *other* clocks are: a Subroutine's
+     * parameters carry tenths of a second and its screen counts milliseconds, so three clocks meet
+     * in one system and the failure mode of three clocks is two of them being multiplied together.
+     * See `SubroutineDrawTest` in `core`.
      *
      * ### Why it had to be named now
      *

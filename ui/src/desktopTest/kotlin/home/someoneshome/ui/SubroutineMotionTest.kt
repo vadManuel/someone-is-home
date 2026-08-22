@@ -16,6 +16,9 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.runDesktopComposeUiTest
+import home.someoneshome.model.DotColumns
+import home.someoneshome.model.DriftPath
+import home.someoneshome.model.InterruptSweep
 import java.awt.image.BufferedImage
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -344,6 +347,42 @@ class SubroutineMotionTest {
      * pixels of [Amber.Bright] wherever it landed. Injecting the bug means one `if` on either screen
      * — inside the band, near the dot — and it fails here naming the two counts.
      */
+    /**
+     * **The band on the glass is the band the house sent** (D-139, E-S2-1 closed).
+     *
+     * The width used to be a constant in this module while the position rode the scan, which was
+     * honest only while nothing graded: the day the house started grading *inside the band*, a
+     * client drawing its own width would refuse taps the player watched land inside the one they
+     * could see. It is a parameter now, and this is that stated as something that can fail — two
+     * instances of one Subroutine differing **only** in the band's width, and the picture moving
+     * with it.
+     *
+     * Counted in [Amber.Faint], which is the band's own fill, and asserted as *wider band, more of
+     * it* rather than against a pixel count: the exact number is the layout's business and this
+     * claim is about where the number came from. Injecting the bug is a one-word edit — draw the
+     * band from anything other than `sweep.bandHalf` — and the two counts become the same.
+     */
+    @Test
+    fun theBandIsDrawnFromTheWidthTheHouseSentAndNotFromAFixture() {
+        val rgb = Amber.Faint.toArgb()
+        val middle = InterruptSweep.SPAN / 2
+        // Same position, same speed, same phase. One number differs and it is the graded one.
+        val narrow = InterruptSweep.of(listOf(middle, InterruptSweep.BAND_LEAST, 14, 0))
+        val wide = InterruptSweep.of(listOf(middle, InterruptSweep.BAND_MOST, 14, 0))
+
+        val drawnNarrow =
+            pixels(frames(Subroutine.Interrupt, emptyList(), model = SubroutineModel(sweep = narrow)).single(), rgb)
+        val drawnWide =
+            pixels(frames(Subroutine.Interrupt, emptyList(), model = SubroutineModel(sweep = wide)).single(), rgb)
+
+        assertTrue(
+            drawnWide > drawnNarrow,
+            "a band of ${wide.bandHalf} either side drew $drawnWide lit pixels and one of " +
+                "${narrow.bandHalf} drew $drawnNarrow — the screen is not rendering the width it " +
+                "was sent, so the house is grading a band nobody is looking at",
+        )
+    }
+
     @Test
     fun theEchoIsTheSameMarkWhereverItLanded() {
         // The echo's colour, off the palette rather than typed, so this cannot drift from what the
@@ -353,7 +392,7 @@ class SubroutineMotionTest {
         val sweep = SubroutineModel.INTERRUPT
         val inside = SubroutineModel().apply { interrupt.enter(sweep.bandAt) }
         val outside = SubroutineModel().apply {
-            interrupt.enter(sweep.bandFrom - InterruptSweep.BAND_HALF * 2)
+            interrupt.enter(sweep.bandFrom - sweep.bandHalf * 2)
         }
         val caughtIn = pixels(frames(Subroutine.Interrupt, emptyList(), model = inside).single(), rgb)
         val caughtOut =

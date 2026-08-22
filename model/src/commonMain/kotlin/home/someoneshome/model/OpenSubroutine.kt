@@ -55,6 +55,16 @@ class OpenSubroutine(
      */
     val entry: Int,
     /**
+     * **Which of the ten this is**, carried because the parameters and the answer mean nothing
+     * without it: the same three integers are a sweep, a hold and a rhythm depending on what was
+     * asked. The house's grading reads it (`grades` in `core`) and so does the draw that made it.
+     *
+     * Carried rather than looked up through [entry] on the work order for the reason [entry] is
+     * carried rather than searched for: an instance is a fact about one scan, and a fact that has
+     * to be resolved through two other objects to be read is one that can be resolved wrongly.
+     */
+    val subroutine: SubroutineKind,
+    /**
      * **The question, as the client is allowed to see it** — what [SubroutineInstance] carries.
      *
      * Held here as well so the state row records what was asked, not merely what would be
@@ -66,9 +76,14 @@ class OpenSubroutine(
      * What the house asked for, as the ordered integers the player's own screen deals in — an
      * element sequence, a chosen cell, a finger count, a signed offset, a walked route.
      *
-     * One canonical shape for all six built Subroutines rather than a shape per Subroutine,
-     * because grading is one comparison and the *kind* of work is the client's presentation
-     * problem. A wire type per Subroutine would be six chances to write a seventh that leaks.
+     * One canonical shape for all ten Subroutines rather than a shape per Subroutine, because the
+     * *kind* of work is the client's presentation problem. A wire type per Subroutine would be ten
+     * chances to write an eleventh that leaks.
+     *
+     * **For the two graded by tolerance it is the centre and not the whole of the answer** — the
+     * band's middle, the dot's true position — because *inside the band* and *within the hit
+     * radius* is what D-139 and D-140 rule. How far off a tap may land is in [parameters], drawn
+     * with the question, and the comparison is `grades` in `core`.
      */
     val expected: List<Int>,
     /** The marker this instance was armed at, or null while it is spent. D-110. */
@@ -77,17 +92,23 @@ class OpenSubroutine(
     val armed: Boolean get() = armedAt != null
 
     /** The entry has gone. Spent whatever it said, and whoever sent it. */
-    fun spent(): OpenSubroutine = OpenSubroutine(seat, entry, parameters, expected, null)
+    fun spent(): OpenSubroutine =
+        OpenSubroutine(seat, entry, subroutine, parameters, expected, null)
 
     /**
-     * True when [entered], handed over at [marker], is the entry this Subroutine asked for.
+     * **Armed, and armed at this card** — the half of grading that is a fact about a place.
      *
-     * **Three conditions, and no branch on who is asking.** Armed by a scan, handed over at the
-     * card it was armed at, and equal to [expected]. `Role` does not appear in this file: D-109
-     * grades every entry for real, for both roles, by the same rule.
+     * The other half is whether the entry was right, and **it is deliberately not on this type.**
+     * It was, as `accepts`, while every Subroutine was graded by equality; a tolerance made it a
+     * rule rather than a comparison, and rules live in `core` — which `ui` cannot see. A type in
+     * `model` that could answer *was this tap inside the band* is a type a screen could ask, and
+     * a screen that can adjudicate is an Insider's fake behaving differently from a Resident's
+     * real work, on a lit screen, in a dark room (rule 8, D-109).
+     *
+     * `Role` does not appear in this file. D-109 grades every entry for real, for both roles, by
+     * the same rule.
      */
-    fun accepts(marker: MarkerId, entered: List<Int>): Boolean =
-        armedAt?.value == marker.value && expected == entered
+    fun standingAt(marker: MarkerId): Boolean = armedAt?.value == marker.value
 }
 
 /**

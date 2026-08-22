@@ -1,9 +1,5 @@
 package home.someoneshome.ui
 
-import home.someoneshome.model.MeetingPhase
-import home.someoneshome.model.OrderLine
-import home.someoneshome.model.SubroutineKind
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -12,14 +8,20 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.runDesktopComposeUiTest
-import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.unit.dp
+import home.someoneshome.model.DriftPath
+import home.someoneshome.model.InterruptSweep
+import home.someoneshome.model.MeetingPhase
+import home.someoneshome.model.OrderLine
+import home.someoneshome.model.SignalGraph
+import home.someoneshome.model.SubroutineKind
 import java.io.File
 import javax.imageio.ImageIO
 import kotlin.test.Test
@@ -150,7 +152,7 @@ class ScreenshotTest {
             Subroutine.Jam -> -1
             Subroutine.Short -> SubroutineModel.SHORT_FINGERS
             Subroutine.SignalTrace ->
-                at.mod(SignalGraph.of(SubroutineModel.TRACE_SEED).nodes.size)
+                at.mod(SubroutineModel.TRACE.nodes.size)
             Subroutine.Sniff -> at % 2
             Subroutine.Deallocate -> at.mod(SubroutineModel.DEALLOCATE.size)
             // The two that move are positions rather than indices, and both are put somewhere the

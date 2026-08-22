@@ -118,9 +118,16 @@ class NothingForYouHereTest {
     /**
      * **An Insider's scan is answered exactly as a Resident's is** (D-109, D-129).
      *
-     * The fake is drawn by the same rule at the same length, so the scan that opens it must come
-     * back in the same shape. A build that answered an Insider's scan with a null would be a role
-     * oracle after one card, delivered by the rules rather than by a screen.
+     * The fake is drawn by the same rule, so the scan that opens it must come back in the same
+     * shape. A build that answered an Insider's scan with a null would be a role oracle after one
+     * card, delivered by the rules rather than by a screen.
+     *
+     * **The length is the Subroutine's now and not the build's** (E-L4-3): a Sniff is three numbers
+     * and a Drift is four, so two seats holding different work are handed different amounts of
+     * question and that is the draw working. What the two roles have to share is that each is
+     * handed **a question its own client would read**, which is what this asserts — and the
+     * comparison of like with like is `SubroutineDrawTest`, where the draw is fed every kind for
+     * neither role in particular.
      */
     @Test
     fun `an Insider's scan opens work exactly as a Resident's does`() {
@@ -132,10 +139,9 @@ class NothingForYouHereTest {
         val insider = answerOf(scan(state, Seat(1), cardFor(state, Seat(1))).effects)
         assertNotNull(resident.opened)
         assertNotNull(insider.opened, "an Insider's scan found no work at their own anchor")
-        assertEquals(
-            resident.opened!!.parameters.size, insider.opened!!.parameters.size,
-            "the two roles were handed different amounts of question",
-        )
+        for (opened in listOf(resident.opened!!, insider.opened!!)) {
+            home.someoneshome.model.SubroutineQuestion.read(opened.subroutine, opened.parameters)
+        }
     }
 
     /**

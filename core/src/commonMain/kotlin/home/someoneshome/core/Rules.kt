@@ -530,13 +530,27 @@ private fun contact(state: GameState, event: Event.ContactMade): Reduction<GameS
  * One attempt per scan. The Subroutine re-arms only when the player scans the marker again — the
  * house never re-arms it silently and the phone never re-arms it on a timer. So the spend is
  * outside the branch too, exactly as the cooldown is in [contact].
+ *
+ * ### A seat that is out banks nothing, and that is hygiene rather than a second verdict (E-L1-2)
+ *
+ * A Revoked or Restrained seat holding an instance from before it went out could hand it over and
+ * move the meter. Unreachable in play — an out phone has no Subroutine screen — and reachable by
+ * the fuzzer, which is exactly the kind of hole that is a bug the day a reconnect replays a queued
+ * intent. It is refused here, at the rules, now that per-seat round state exists to ask.
+ *
+ * **It is rule 1's shape and not its forbidden one.** The three effects below are constructed once
+ * and outside every branch: an out seat's return emits the same verdict, the same order and the
+ * same presence as anybody else's, and the allowlist already declines to deliver
+ * [Effect.SubroutineGraded] to an out class — so this is the second of two independent denials and
+ * neither is visible as an absence. Round-state is publicly observable (D-068): the room already
+ * knows who is out.
  */
 private fun returned(
     state: GameState,
     event: Event.SubroutineReturned,
 ): Reduction<GameState, Effect> {
     val open = state.openSubroutineFor(event.actor)
-    val accepted = open != null && open.accepts(event.marker, event.entered)
+    val accepted = open != null && !state.isOut(event.actor) && grades(open, event.marker, event.entered)
 
     // The Insider's fake is graded identically and banks nothing. This is the ONLY place in the
     // rules where a role changes an outcome, and it changes state rather than shape.
