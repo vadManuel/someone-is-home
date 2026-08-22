@@ -1,0 +1,89 @@
+package home.someoneshome.app
+
+import home.someoneshome.model.protocol.LobbyBody
+import home.someoneshome.model.protocol.LobbyWire
+
+/**
+ * **What came down the socket, on a phone, and whether any of it was somebody's line.**
+ *
+ * The lobby's central promise is negative — *the house is the only thing that ever sees your line* —
+ * and negative promises are the ones a green build says nothing about. [LobbyWire] makes this one
+ * structurally: `Standing` has no `String` field to put a line in, so the leak is not a bug that can
+ * be introduced by filling one in. That is the real guarantee and this does not replace it.
+ *
+ * What this adds is the half a Mac cannot see. Two phones on a real network is where a wrong turn in
+ * the host's broadcast would actually show — a `Handover` echoed back, a body from a route nobody
+ * meant to open — and **an absent leak and an absent connection look identical from here**. So every
+ * body arriving at this phone is classified out loud, and a run whose log says nothing was
+ * classified is a run that proved nothing rather than a run that passed.
+ *
+ * ### It prints a verdict and never a body
+ *
+ * The obvious instrument logs the frame and lets somebody read it. That instrument writes the thing
+ * it is guarding onto a Mac the first time it catches anything, which is the leak, arriving through
+ * the leak detector. So what goes to the console is the body's **kind** — the three the wire has,
+ * or `UNDECODABLE` — and one boolean: whether this phone's own line was inside it. The text never
+ * leaves this object.
+ *
+ * ### It is not a redaction test and cannot become one
+ *
+ * `LobbyInputTest` and `OneLineNeverPersistedTest` are the tests; the schema allowlist and the
+ * differential harness are the instruments for what a client may receive once a round exists. This
+ * is a device probe on the one path that has no round behind it yet, and its whole reach is one
+ * evening on one phone.
+ */
+class LineWatch(private val note: (String) -> Unit) {
+
+    /**
+     * What this phone handed over, held so an arrival can be compared against it.
+     *
+     * Held here rather than asked of [LobbyOverTransport], which deliberately keeps no copy of a
+     * line on its way out. The cheat already has the text — it was launched with it — so nothing
+     * durable and nothing new is being kept.
+     */
+    private var mine: String = ""
+
+    /** Every kind seen so far, in arrival order, so the summary is a fact rather than a memory. */
+    private val kinds = mutableListOf<String>()
+
+    /** How many of them contained this phone's line. The number the whole class is about. */
+    private var carriers = 0
+
+    /** Set once, from the switch this process was launched with. */
+    fun mine(line: String) {
+        mine = line
+    }
+
+    /**
+     * One body, off the wire.
+     *
+     * A `Standing` is what should arrive and the count says so; anything else is named the moment it
+     * lands, because *one Handover came back* is a sentence that must not be findable only by
+     * reading a log carefully afterwards.
+     */
+    fun saw(body: String) {
+        val kind = when (LobbyWire.decodeOrNull(body)) {
+            is LobbyBody.Standing -> "STANDING"
+            is LobbyBody.Handover -> "HANDOVER"
+            is LobbyBody.Naming -> "NAMING"
+            null -> "UNDECODABLE"
+        }
+        kinds += kind
+        val carriesMine = mine.isNotBlank() && body.contains(mine)
+        if (carriesMine) carriers++
+        if (kind != "STANDING" || carriesMine) {
+            note("!!! A CLIENT-BOUND FRAME WAS $kind · CARRIED THIS PHONE'S LINE=$carriesMine")
+        }
+    }
+
+    /**
+     * The whole run, in one line: how many arrived, of which kinds, and how many carried a line.
+     *
+     * **The count of frames is as load-bearing as the count of carriers.** Zero carriers out of zero
+     * frames is what a phone that never connected reports, and it is the answer this probe is most
+     * likely to give by accident.
+     */
+    fun verdict(): String =
+        "INBOUND — ${kinds.size} FRAME(S) ${kinds.groupingBy { it }.eachCount()} · " +
+            "$carriers CARRIED THIS PHONE'S LINE"
+}

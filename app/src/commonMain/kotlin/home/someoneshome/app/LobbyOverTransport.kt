@@ -195,6 +195,20 @@ class LobbyHouse(
 class LobbyOverTransport(
     private val scope: CoroutineScope,
     private val onEvent: (String) -> Unit = {},
+    /**
+     * **Every body that arrives at this client, before anything is done with it.**
+     *
+     * Empty by default and empty in every production construction — this exists so that *nothing
+     * carrying a line ever comes down* can be checked on a phone rather than argued from types.
+     * [LobbyWire] makes the claim structurally, and the structural claim is the real guarantee; but
+     * two phones on a real network is where a wrong turn in the host's broadcast would show, and
+     * from a Mac an absent leak and an absent connection look the same.
+     *
+     * It is handed the body and not the decoded shape on purpose: a decoder that dropped an
+     * unrecognised body on the floor would hide exactly the frame worth seeing. **Whoever takes
+     * this must not print it** — the cheat that does takes a verdict off it and prints that.
+     */
+    private val onInbound: (String) -> Unit = {},
 ) : LobbyLink {
 
     private val house = LobbyHouse(scope, onEvent)
@@ -228,7 +242,9 @@ class LobbyOverTransport(
             s, home.address, home.port,
             nowMillis = { monotonicNanos() / 1_000_000 },
             onFrame = { frame ->
-                val body = (frame as? TransportFrame.Carry)?.body?.let(LobbyWire::decodeOrNull)
+                val carried = (frame as? TransportFrame.Carry)?.body
+                carried?.let(onInbound)
+                val body = carried?.let(LobbyWire::decodeOrNull)
                 // Only the standing is acted on. Either upward body arriving at a client would be
                 // the house sending one phone's text to another, which nothing on the host side
                 // does — and if it ever did, ignoring it here is the fail-closed direction.

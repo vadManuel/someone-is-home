@@ -59,8 +59,18 @@ kotlin {
             implementation(project(":model"))
         }
     }
-    sourceSets.commonTest.dependencies {
-        implementation(kotlin("test"))
+    sourceSets.commonTest {
+        // The cheats' own tests, compiled exactly where the cheats are.
+        //
+        // A test for a cheat CANNOT live in `commonTest`: release does not compile the cheat source
+        // set, so the test is an unresolved reference in the one variant that has to build without
+        // them. That is the fail-closed arrangement above working rather than a limitation, and it
+        // is how this directory came to exist — `LineWatchTest` was written into `commonTest`, the
+        // two variants that carry cheats went green, and `variantSweepRelease` refused the build.
+        if (variant != "release") kotlin.srcDir("src/cheatsTest/kotlin")
+        dependencies {
+            implementation(kotlin("test"))
+        }
     }
 }
 

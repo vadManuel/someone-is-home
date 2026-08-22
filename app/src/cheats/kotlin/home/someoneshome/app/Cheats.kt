@@ -23,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import home.someoneshome.platform.SeededCardScanner
+import home.someoneshome.platform.clearSeatToken
 import home.someoneshome.platform.deviceHaptics
 import home.someoneshome.platform.launchSwitch
 import home.someoneshome.ui.Amber
@@ -85,6 +86,26 @@ fun CheatRoot() {
     // up two phones.
     val scope = rememberCoroutineScope()
     val transport = remember { TransportCheat(scope) }
+    // The rig's log AND the device console. On one phone being tapped the screen is enough; across
+    // two phones on a real network it is not — an advertisement that never went out and a browser
+    // that never answered look identical from a Mac, and only a console line separates them. It
+    // carries the radio's own events and nothing a player typed.
+    val radio = remember<(String) -> Unit> {
+        { line -> println("[lobby] $line"); transport.note(line) }
+    }
+    // What comes down the socket, classified and counted. Built before the flow because the link
+    // is built inside it, and the probe has to be attached before the first frame rather than
+    // after — a leak detector that starts late reports a clean run for the frames it missed.
+    // It gets `radio` and not `transport::note`, and the difference is not cosmetic: the first
+    // version handed it the rig's log alone, so the one line in this app that shouts — a
+    // client-bound frame carrying somebody's line — reached the screen of a phone nobody was
+    // holding and never reached the console. The injection that proved the probe works had to be
+    // read off a summary instead of off the alarm.
+    val watch = remember { LineWatch(radio) }
+    // FORGET, before the link below is built — see LobbyCheat.FORGET_SWITCH. The link reads the
+    // stored token in its constructor, so this is the last moment it can happen and still mean
+    // anything, and a `LaunchedEffect` is already too late.
+    remember { if (launchSwitch(LobbyCheat.FORGET_SWITCH)) clearSeatToken() }
     val flow = remember {
         FlowModel(
             PanelState(screen = ScreenId.Boot),
@@ -94,8 +115,8 @@ fun CheatRoot() {
             // failing is otherwise completely silent — which was the whole symptom on the first
             // device run.
             lobby = LobbyModel(
-                finder = NearbyHomes(onEvent = transport::note),
-                link = LobbyOverTransport(scope, onEvent = transport::note),
+                finder = NearbyHomes(onEvent = radio),
+                link = LobbyOverTransport(scope, onEvent = radio, onInbound = watch::saw),
             ),
         )
     }
@@ -120,6 +141,11 @@ fun CheatRoot() {
     // nothing here happens, which is every launch a person makes.
     val sweeping = remember { launchSwitch(HapticCheat.SWEEP_SWITCH) }
     val scanSweeping = remember { launchSwitch(ScanCheat.SWEEP_SWITCH) }
+    // The two-phone evening's finger. It drives the real lobby on the real flow, so it opens on the
+    // panel like any other launch rather than on a bench of its own — what a person watching this
+    // phone sees is the app, not a rig.
+    // The rig's log only: it prints its own console lines, under its own prefix.
+    val evening = remember { LobbyCheat(flow, watch, transport::note) }
     var view by remember {
         mutableStateOf(
             when {
@@ -131,6 +157,7 @@ fun CheatRoot() {
     }
     LaunchedEffect(sweeping) { if (sweeping) bench.sweep() }
     LaunchedEffect(scanSweeping) { if (scanSweeping) scan.sweep() }
+    LaunchedEffect(evening) { if (evening.armed) evening.run() }
     Box(Modifier.fillMaxSize().background(Amber.Black)) {
         when (view) {
             // `standingInForTheHouse` is the bench's stand-in for the authority: nothing here

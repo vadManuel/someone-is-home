@@ -73,6 +73,26 @@ expect fun deviceHaptics(): Haptics
 expect fun launchSwitch(name: String): Boolean
 
 /**
+ * **The same finger, carrying a word: a switch whose value the bench needs, not only its presence.**
+ *
+ * [launchSwitch] is enough for a bench that does the same thing every time. A two-phone evening is
+ * not one of those: the two phones differ only in what they are called, which home they are looking
+ * for and what their owner typed, and a bench that hard-coded those would be one phone's evening
+ * compiled in twice.
+ *
+ * **Everything [launchSwitch]'s warning says applies here and applies harder**, because a value is
+ * so much more obviously configuration than a flag is. It is not configuration. Nothing a round
+ * depends on may arrive this way: what the two callers take from it is a resident's name, a home's
+ * advertised name and the text a player would have typed — three pieces of *input a finger would
+ * have supplied*, none of which is a balance value and none of which the rules ever read. The only
+ * callers are in the cheat source set, which a release build does not compile.
+ *
+ * Absent is null. Set-but-empty is the empty string and is a real answer — a player who typed
+ * nothing joins under a blank, which is a state the lobby has words for.
+ */
+expect fun launchValue(name: String): String?
+
+/**
  * **A motor that writes down what it was asked for instead of doing it.**
  *
  * Ships beside the interface the way [SeededCardScanner] does, and for the same reason: the

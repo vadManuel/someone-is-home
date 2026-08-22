@@ -3,6 +3,7 @@ package home.someoneshome.platform
 import home.someoneshome.model.Haptic
 import home.someoneshome.model.HapticStep
 import home.someoneshome.model.HouseBuzz
+import kotlinx.cinterop.toKString
 import platform.CoreHaptics.CHHapticDynamicParameter
 import platform.CoreHaptics.CHHapticEngine
 import platform.CoreHaptics.CHHapticEvent
@@ -23,6 +24,9 @@ actual fun deviceHaptics(): Haptics = CoreHapticsMotor()
 
 /** Set, at any value including the empty string. Absent is false; there is no parsing here. */
 actual fun launchSwitch(name: String): Boolean = getenv(name) != null
+
+/** Absent is null. What is there arrives as it was set — no trim, no case change, no parsing. */
+actual fun launchValue(name: String): String? = getenv(name)?.toKString()
 
 /**
  * **The real motor: CoreHaptics, one engine, and patterns built out of the script it was given.**

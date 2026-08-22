@@ -110,6 +110,13 @@ class ScreenshotTest {
             // has done everything asked of them and the button is still defunct. What needed a
             // person's eye is whether the line above it reads as an instruction or as a fault.
             "lobby-short" to lobbyOf(joined = 4, linesIn = 4, hosting = true),
+            // **Two phones, both lines in — the state a two-device evening actually reaches**, and
+            // three short of a party. The refusal is the pass, so there has to be a picture of it:
+            // `devicectl` has no screenshot command, and the phones' own logs can say what the
+            // screen was told to draw and never what it drew. Rendered at the count two real phones
+            // produce rather than at four, because *2 JOINED* over *NEEDS 5 RESIDENTS* is the frame
+            // somebody has to be able to read as an instruction and not as a fault.
+            "lobby-two-phones" to lobbyOf(joined = 2, linesIn = 2, hosting = true),
         )
         for ((name, lobby) in states) {
             runDesktopComposeUiTest(width = 600, height = 800) {
