@@ -18,9 +18,11 @@ import home.someoneshome.model.CardPayload
 import home.someoneshome.model.Haptic
 import home.someoneshome.platform.CameraCardScanner
 import home.someoneshome.platform.Haptics
+import home.someoneshome.platform.ScanWindow
 import home.someoneshome.ui.Amber
 import home.someoneshome.ui.Label
 import home.someoneshome.ui.LocalPanelInsets
+import home.someoneshome.ui.PanelVals
 import home.someoneshome.ui.tap
 import home.someoneshome.ui.u
 import kotlinx.coroutines.delay
@@ -49,6 +51,17 @@ import kotlinx.coroutines.delay
  * is that the two pieces of hardware D1 and D2 built meet — a symbol resolved by the camera reaches
  * the motor on the same phone, which is the whole of *you will feel it catch* below the effect
  * boundary. Which effect a real scan produces is `core`'s, and `core` tests it.
+ *
+ * ### Two shapes, because there are two scans in this game
+ *
+ * [scan] is D-159's: **one window, one read**, opened by a tap and closed by the read or by the
+ * ten seconds running out. That is the in-round scan, and it is what [ScanWindow] is.
+ *
+ * [watch] is the host-setup scan, which is a different thing and must not grow into the other one
+ * (E-D2-3): the host walks the house with the viewfinder up, and the screen's own instruction is
+ * KEEP SCANNING TO ADD MORE. It stays continuous. What it does **not** do any more is buzz on
+ * every delivery — a camera cannot tell a new card from the same card still in frame, so the
+ * first version of this bench vibrated at the frame rate for as long as somebody held a card up.
  */
 class ScanCheat(private val haptics: Haptics) {
 
@@ -62,6 +75,14 @@ class ScanCheat(private val haptics: Haptics) {
      */
     val camera = CameraCardScanner(log = ::note, countFrames = true)
 
+    /**
+     * **The in-round scan, as one object**: the lens, the motor and D-159's window.
+     *
+     * Held rather than built per scan, so the bench can ask whether a window is still open — and
+     * so the expiry the screen drives lands on the same window the tap opened.
+     */
+    val window = ScanWindow(camera, haptics)
+
     /** Newest first, and mirrored to stdout so the same line is in the device log. */
     val log = mutableStateListOf<String>()
 
@@ -69,9 +90,38 @@ class ScanCheat(private val haptics: Haptics) {
     class Row(val label: String, val detail: String, val fire: () -> Unit)
 
     val rows: List<Row> = listOf(
-        Row("START", "open the session — front camera, no preview") { watch { } },
+        Row("SCAN", "D-159's window — one read, one buzz, then it closes itself") { scan { } },
+        Row("GIVE UP", "the ten seconds, run out — two buzzes and the lens goes back") { expire() },
+        Row("WATCH", "the HOST-SETUP shape: continuous, one buzz per new card") { watch { } },
         Row("STOP", "close it — the lens is the most expensive thing on the phone") { release() },
     )
+
+    /**
+     * **Tap SCAN.** One window: the first symbol resolved is the read, it buzzes once, and the
+     * window closes itself. Everything after it in the same window is dropped, including the same
+     * card still sitting in the frame.
+     *
+     * The buzz is [ScanWindow]'s, not this file's. That is the point — the bench proves the ruled
+     * shape rather than a re-implementation of it that happens to agree today.
+     */
+    fun scan(onAcquired: (String) -> Unit) {
+        note("SCAN — window open, ${PanelVals.SCAN_WINDOW_MILLIS}ms")
+        window.open { payload ->
+            describe(payload)
+            note("caught — window closed; tap SCAN again for another")
+            onAcquired(payload)
+        }
+    }
+
+    /** The ten seconds ran out. Two vibrates, and the lens goes back. */
+    fun expire() {
+        if (!window.isOpen) {
+            note("nothing to give up on — no window is open")
+            return
+        }
+        window.expire()
+        note("GAVE UP — two buzzes, nothing spent, tap SCAN again")
+    }
 
     /**
      * Point the camera at cards and pass every symbol on, after saying what it was.
@@ -79,21 +129,38 @@ class ScanCheat(private val haptics: Haptics) {
      * The payload is passed **verbatim** to [onPayload] — this method reads it, describes it and
      * changes nothing, because deciding what a card is belongs to `CardPayload` and a bench that
      * tidied a payload would be certifying a scanner that does not exist.
+     *
+     * **It buzzes on a new card and not on a repeat frame.** The seam says the same card arrives
+     * over and over and refuses to guess which repeats mean anything; here the answer is that a
+     * payload identical to the one before it is the card that has not moved, and a host holding
+     * one steady must not feel the phone at the frame rate. A *different* card always buzzes, and
+     * coming back to a card later — with another one in between — buzzes again, because that is
+     * the host correcting themselves and it is a real event.
      */
     fun watch(onPayload: (String) -> Unit) {
         note("watching")
+        last = null
         camera.start { payload ->
+            val repeat = payload == last
+            last = payload
             describe(payload)
-            haptics.buzz(Haptic.Short)
+            if (!repeat) haptics.buzz(Haptic.Short)
             onPayload(payload)
         }
     }
 
     /** Give the lens back. Called when the screen goes away, and by the STOP row. */
     fun release() {
+        // Silent: a lens handed back is not the house refusing a scan, and D-160's double is the
+        // house refusing a scan. `close` is the seam's word for exactly this difference.
+        window.close()
         camera.stop()
+        last = null
         note("released")
     }
+
+    /** The last payload [watch] saw. Only ever compared to the next one — see [watch]. */
+    private var last: String? = null
 
     /**
      * **Open the session, watch it for a while, then leave it armed for whoever arrives.**
@@ -176,8 +243,8 @@ fun ScanCheatScreen(cheat: ScanCheat) {
         Label("${BuildVariant.MARKER} — CAMERA", size = 8.0, color = Amber.Bright, tracking = 0.16)
         Label("ONLY PAPER PROVES A SCAN", size = 6.0, color = Amber.Dim, tracking = 0.2)
         Label(
-            "The front camera is reading. Hold a printed card up to the TOP of the phone — the " +
-                "lens is on the same side as this screen.",
+            "The front camera is reading. Turn the TOP of the phone to a printed card — the " +
+                "lens is on the same side as this screen. SCAN reads once; WATCH keeps reading.",
             size = 5.5,
             color = Amber.Dim,
         )

@@ -266,8 +266,14 @@ object Flow {
         // should be standing in a dark room holding a lit screen at a wall by accident. Derived
         // from the design's own segment count rather than restated, so the bar and the timeout
         // cannot disagree.
+        //
+        // **It is a window, not a held button** (D-159). The player tapped SCAN and turned the
+        // lamp onto the code; the read opens the Subroutine by itself, and this row is what
+        // happens when no read arrives. The phone says so with D-160's double vibrate, which is
+        // the app's to play — `ui` has no motor, and this table has never been where a buzz
+        // lives (D-134).
         ScreenId.Scan to AutoAdvance(
-            ScreenId.Home, PanelVals.SCAN_SEGMENTS * 500, "the scan window, two segments a second",
+            ScreenId.Home, PanelVals.SCAN_WINDOW_MILLIS, "the scan window, two segments a second",
         ),
 
         // **The ring, and it is the last of the meeting's timers.** Answering a call is your own

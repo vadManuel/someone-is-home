@@ -67,7 +67,11 @@ class HapticCheat(private val haptics: Haptics) {
     private val seat = Seat(0)
 
     /**
-     * **D-135's five, then the Short, then the two Subroutine scripts.**
+     * **D-135's five, then D-160's two words, then the two Subroutine scripts.**
+     *
+     * The first five are the ruling's own order, with one of them changed under it: the incoming
+     * call is D-160's repeating pattern now rather than a single Long, and it is the only row here
+     * that has to be stopped.
      *
      * The Egress effect carries two node names because coordination is required and nobody may
      * speak; the ids are the seeded deck's, so a phone showing `SEED001` is a phone somebody
@@ -85,7 +89,10 @@ class HapticCheat(private val haptics: Haptics) {
                 ),
             )
         },
-        Row("INCOMING CALL", "LONG · D-135 #2 · MeetingOpened") {
+        // **The one row that does not stop by itself.** D-160 took the incoming call out of
+        // D-135's set of five single Longs and made it the repeating pattern, so this row rings
+        // until STOP — which is the bench's stand-in for a person answering the phone.
+        Row("INCOMING CALL", "RINGING · D-160 · MeetingOpened · until STOP") {
             heard(Effect.MeetingOpened(seat, MeetingTrigger.MeetingCard, Haptic.Long))
         },
         Row("STAND AND WALK IN", "LONG · D-135 #3 · StandAndWalkIn") {
@@ -99,6 +106,19 @@ class HapticCheat(private val haptics: Haptics) {
         },
         Row("OPENING MESSAGE", "SHORT · the ordinary buzz · OpeningMessage") {
             heard(Effect.OpeningMessage(seat, Haptic.Short))
+        },
+        // **D-160's two words, side by side, which is the only way to check them.** *Yes* and
+        // *no* have to be tellable apart through a pocket by somebody who is not looking, and
+        // that is a comparison rather than a sensation — one row after the other, same motor,
+        // same hand. No effect carries the Double, so this row buzzes the kind directly rather
+        // than through `HouseBuzzer`; it is the one place in the app that does.
+        Row("YES", "SHORT · D-160 · one vibrate — acquired, graded, confirmed") {
+            note("YES")
+            haptics.buzz(Haptic.Short)
+        },
+        Row("NO", "DOUBLE · D-160 · two vibrates — expired, refused, declined") {
+            note("NO")
+            haptics.buzz(Haptic.Double)
         },
         // The couch's walk-in is the same effect at the other kind. Side by side with the row
         // above it, because *the haptic differs by round-state and never by role* is the one

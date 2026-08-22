@@ -64,10 +64,10 @@ class HouseBuzzTest {
     }
 
     /**
-     * **THE INJECTION CATCHER.** An event may buzz the Short or the Long and there is no third
-     * thing it may buzz — not a longer Egress, not a double tap for the ending, not a pattern a
-     * screen thought suited it. A call site that reaches past [HouseBuzz] for a duration of its
-     * own produces a script this test has never seen, and it fails naming the pattern.
+     * **THE INJECTION CATCHER.** An event may buzz one of [HouseBuzz]'s kinds or ring, and there
+     * is no other thing it may do — not a longer Egress, not a double tap for the ending, not a
+     * pattern a screen thought suited it. A call site that reaches past [HouseBuzz] for a duration
+     * of its own produces a script this test has never seen, and it fails naming the pattern.
      */
     @Test
     fun noEventBuzzesWithAPatternOfItsOwn() {
@@ -78,11 +78,88 @@ class HouseBuzzTest {
         val strays = motor.played.filter { it !in HouseBuzz.ALL }
         assertTrue(
             strays.isEmpty(),
-            "an event buzzed with a pattern of its own: ${strays.distinct()} is neither the " +
-                "Short (${HouseBuzz.script(Haptic.Short)}) nor the Long " +
-                "(${HouseBuzz.script(Haptic.Long)}). D-102: same pattern, same duration, for " +
-                "every player.",
+            "an event buzzed with a pattern of its own: ${strays.distinct()} is not one of " +
+                "${HouseBuzz.ALL}. D-102: same pattern, same duration, for every player.",
         )
+    }
+
+    /**
+     * **THE RING, AND THE FACT THAT IT IS THE ONLY ONE.** D-160 makes the incoming call the one
+     * signal in this game that repeats until answered; a second one would be a phone going off
+     * forever in a silent house for a reason nobody in the room can hear the end of.
+     *
+     * The whole effect surface is walked, not a chosen few: **any** effect that grew a repeating
+     * pattern fails here by name. Return `true` from another row of `Effect.ringing` and this is
+     * the test that says which one.
+     */
+    @Test
+    fun theCallIsTheOnlyThingThatKeepsGoing() {
+        val repeating = mutableListOf<String>()
+        for (effect in everyEffect()) {
+            val motor = RecordingHaptics()
+            HouseBuzzer(motor).heard(effect)
+            if (motor.plays.any { it.repeating }) repeating += effect::class.simpleName.orEmpty()
+        }
+        assertEquals(
+            listOf("MeetingOpened"), repeating.distinct(),
+            "the set of effects that vibrate until answered is not exactly the incoming call",
+        )
+    }
+
+    /**
+     * The call rings the ring — LONG–pause–LONG — rather than D-135's single Long.
+     *
+     * **D-135 is amended, not replaced**, so the same test says the other four are untouched: an
+     * Egress, STAND AND WALK IN, the Restrained takeover and LIGHTS OUT are one Long each and stop
+     * on their own.
+     */
+    @Test
+    fun theCallRingsAndTheOtherFourLongsDoNot() {
+        val ringing = RecordingHaptics()
+        HouseBuzzer(ringing).heard(Effect.MeetingOpened(Seat(0), MeetingTrigger.MeetingCard, Haptic.Long))
+        assertEquals(listOf(HouseBuzz.RING), ringing.played, "the call did not ring")
+        assertTrue(ringing.ringing, "the call played once and gave up")
+
+        val long = HouseBuzz.script(Haptic.Long)
+        listOf(
+            Effect.EgressOpened(
+                Seat(0), EgressType.Beacon, listOf(MarkerId("SEED001"), MarkerId("SEED002")), 180, Haptic.Long,
+            ),
+            Effect.StandAndWalkIn(Seat(0), Haptic.Long),
+            Effect.RestrainedTakeover(Seat(0), Haptic.Long),
+            Effect.MeetingEnded(Haptic.Long),
+        ).forEach { effect ->
+            val motor = RecordingHaptics()
+            HouseBuzzer(motor).heard(effect)
+            assertEquals(
+                listOf(long), motor.played,
+                "${effect::class.simpleName} left D-135's set of five single Longs",
+            )
+            assertTrue(!motor.ringing, "${effect::class.simpleName} is still going")
+        }
+    }
+
+    /**
+     * **Answering is what stops it, and nothing else has to.**
+     *
+     * D-160's *until answered* is only half a promise without something that answers. The other
+     * half is that the ring survives everything short of it — the same call arriving twice does
+     * not double it up, because the motor replaces rather than queues.
+     */
+    @Test
+    fun theRingStopsWhenThePhoneIsAnsweredAndNotBefore() {
+        val motor = RecordingHaptics()
+        val buzzer = HouseBuzzer(motor)
+        val call = Effect.MeetingOpened(Seat(0), MeetingTrigger.MeetingCard, Haptic.Long)
+
+        buzzer.heard(call)
+        buzzer.heard(call)
+        assertTrue(motor.ringing, "the phone stopped ringing without anybody answering it")
+        assertEquals(0, motor.stopped)
+
+        buzzer.answered()
+        assertTrue(!motor.ringing, "the phone was answered and it is still ringing")
+        assertEquals(1, motor.stopped)
     }
 
     /**
@@ -106,13 +183,20 @@ class HouseBuzzTest {
         }
     }
 
-    /** The kind is read off the effect and never recomputed. Short stays Short; Long stays Long. */
+    /**
+     * The kind is read off the effect and never recomputed. Short stays Short; Long stays Long.
+     *
+     * **The call is left out and it is the only thing left out**, because D-160 took it out of the
+     * kinds: `MeetingOpened` still carries a `Long` — `Rules.kt` put it there under D-135 and the
+     * amendment did not go back and rewrite the reduction — and what the phone does with it is
+     * ring. `theCallRingsAndTheOtherFourLongsDoNot` is the test that owns that row.
+     */
     @Test
     fun theBuzzIsTheKindTheHousePutOnTheEffect() {
         Haptic.entries.forEach { kind ->
             val motor = RecordingHaptics()
             val buzzer = HouseBuzzer(motor)
-            val effects = buzzing(kind)
+            val effects = buzzing(kind).filterNot { it is Effect.MeetingOpened }
             effects.forEach(buzzer::heard)
             assertEquals(effects.size, motor.count, "$kind: not every buzzing effect buzzed")
             assertEquals(
@@ -154,13 +238,10 @@ class HouseBuzzTest {
         assertEquals(1, resident, "the opening delivery is one buzz, for everyone")
     }
 
-    /** The quiet effects are quiet: counts, progress and content update a screen already lit. */
-    @Test
-    fun theEffectsThatCarryNoKindDoNotBuzz() {
-        val motor = RecordingHaptics()
-        val buzzer = HouseBuzzer(motor)
+    /** Every effect that carries no [Haptic]: counts, progress, content, and their own answers. */
+    private fun quiet(): List<Effect> {
         val seat = Seat(1)
-        listOf(
+        return listOf(
             Effect.LampSet(seat, luminance = 200),
             Effect.AbilityFired(seat, cooldownStarted = true),
             Effect.SubroutineGraded(seat, accepted = true),
@@ -179,7 +260,26 @@ class HouseBuzzTest {
             Effect.SyncPulseAnswered(seat, held = false),
             Effect.InsidersRevealed(emptyList()),
             Effect.HouseSignedOff(seat, "one last thing"),
-        ).forEach(buzzer::heard)
+        )
+    }
+
+    /**
+     * **Everything this file can build, which is every effect it constructs anywhere.**
+     *
+     * It is deliberately the union of the two fixtures rather than a third hand-written list: a
+     * list nobody else uses drifts, and a drifted list of *every effect* is the worst kind, because
+     * the thing it stops covering is exactly the thing somebody just added. The compile-time guard
+     * for an effect nobody has built here is `Effect.ringing`'s exhaustive `when`.
+     */
+    private fun everyEffect(): List<Effect> =
+        buzzing(Haptic.Long) + buzzing(Haptic.Short) + quiet()
+
+    /** The quiet effects are quiet: counts, progress and content update a screen already lit. */
+    @Test
+    fun theEffectsThatCarryNoKindDoNotBuzz() {
+        val motor = RecordingHaptics()
+        val buzzer = HouseBuzzer(motor)
+        quiet().forEach(buzzer::heard)
 
         assertEquals(
             emptyList(), motor.played,

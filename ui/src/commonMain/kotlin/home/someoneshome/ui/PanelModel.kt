@@ -1165,11 +1165,31 @@ class PanelVals(val state: PanelState) {
          * initial seven), then the light goes dark and the phone goes back to where it was: nobody
          * should be standing in a dark room holding a lit screen at a wall by accident.
          *
+         * **What the ten seconds are counting down to changed in revision 34 and the number did
+         * not.** D-159 supersedes press-and-hold-then-release: the window now bounds an
+         * *unattended* read — tap SCAN, turn the lamp onto the code, and the Subroutine opens on
+         * acquire by itself — rather than a held button. The ten seconds were always the design's
+         * final number and are untouched by that correction.
+         *
          * **How many of those segments are lit is not a constant here.** It used to be — a `12`
          * sitting beside a hardcoded `6S LEFT`, two numbers for one fact, agreeing by hand. Both
          * now come off [PanelVals.countdown].
          */
         const val SCAN_SEGMENTS = 20
+
+        /** Two segments a second. The bar's tick, and the only place the rate is written down. */
+        const val SCAN_SEGMENT_MILLIS = 500
+
+        /**
+         * **The scan window, in milliseconds — the ten seconds D-159 rules, derived and not
+         * restated.**
+         *
+         * Everything that has an opinion about when the window ends reads this: the flow's
+         * auto-advance off the scan screen, and the app's `ScanWindow`, which produces D-160's
+         * double vibrate at the same instant. A second literal would be a bar that empties at a
+         * moment the phone does not agree is the moment.
+         */
+        const val SCAN_WINDOW_MILLIS = SCAN_SEGMENTS * SCAN_SEGMENT_MILLIS
 
         /**
          * **The port's reveal: the design's two Insiders, with what the house had on them.**

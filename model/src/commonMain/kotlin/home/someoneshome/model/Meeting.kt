@@ -10,6 +10,12 @@ package home.someoneshome.model
  * STAND AND WALK IN for a newly Revoked player, the Restrained takeover, and the end of the
  * LIGHTS OUT countdown.
  *
+ * **D-160 gave the alphabet a word for *no*.** One vibrate is *yes* — confirm, accept, acquired,
+ * graded. Two is *no* — refuse, reject, expired, declined. That vocabulary is what D-159's scan
+ * needs: the front camera is on the same face as the lamp, so a scan that runs out with the phone
+ * pointed at a wall has to say so through the one channel that reaches a player whose eyes are
+ * somewhere else.
+ *
  * **It rides the effect rather than living in a table in `ui`**, for D-134's reason: a client-side
  * lookup that could say *"…and if it was you, buzz differently"* is the device deciding a game
  * answer. The rules construct the value once, at the same place they construct the push, and the
@@ -18,11 +24,22 @@ package home.someoneshome.model
  * The actual vibration is platform work and is not in this module or the next one.
  */
 enum class Haptic {
-    /** The default. Every screen that arrives unasked. */
+    /** The default, and D-160's *yes*. Every screen that arrives unasked; every read that caught. */
     Short,
 
     /** One of D-135's five. Adding a sixth is a decision, not a parameter. */
     Long,
+
+    /**
+     * **D-160's *no*: two vibrates.** A scan window that ran out, a card the house refused.
+     *
+     * No effect carries it today and that is not an oversight — the refusals it speaks for are
+     * this phone's own (a window expiring with nobody looking at the screen), and the ones the
+     * house owns reach it through the effects the rules already construct. It is a [Haptic]
+     * rather than a script so that the *no* comes out of [HouseBuzz] like every other pattern in
+     * the game: there is no way for a call site to compose two buzzes of its own.
+     */
+    Double,
 }
 
 /**

@@ -376,6 +376,17 @@ private fun WorkLocked() {
  * visual, and it gives up on its own so nobody is left standing in a dark room holding a lit
  * screen at a wall.
  *
+ * ### The gesture is a tap and a turn, and the door opens by itself (D-159)
+ *
+ * Press-and-hold-then-release is superseded. The player taps SCAN — the last thing they see
+ * themselves do — turns the phone so the lamp faces the code, and the Subroutine opens **on
+ * acquire, by itself**. That is not a convenience: the surface that would say *got it* is the
+ * surface doing the reading, so auto-open is the only way a scan can end in the player's favour.
+ *
+ * The window is what happens when it does not. Ten seconds, and then **two vibrates** — D-160's
+ * word for *no* — because a scan that runs out with the phone pointed at a wall has to say so
+ * through the one channel that reaches a player whose eyes are elsewhere. Nothing is spent by it.
+ *
  * A lit field, and one of only three in the game. Here that is the function, not the style.
  */
 @Composable
@@ -402,7 +413,7 @@ fun ScanScreen(vals: PanelVals) {
                 Box(Modifier.size(9.u).background(ink, CircleShape))
             }
             Label(
-                "HOLD THE SCREEN\nUP TO THE MARKER",
+                "TURN THE SCREEN\nTO THE MARKER",
                 size = 12.0, color = ink, tracking = 0.1, lineHeight = 1.5,
                 align = TextAlign.Center,
             )
@@ -435,8 +446,10 @@ fun ScanScreen(vals: PanelVals) {
                 unlitColor = ink.copy(alpha = 0.2f),
                 height = 4.u,
             )
+            // D-160's alphabet, in the two sentences a player needs it in. One buzz is yes and
+            // the Subroutine is already open behind the light; two is no, and nothing was spent.
             Label(
-                "One buzz, then turn the phone over. Gives up on its own and puts you back.",
+                "One buzz and it opens itself. Two buzzes and it gave up — tap SCAN again.",
                 size = 7.0, color = ink.copy(alpha = 0.72f), tracking = 0.02, lineHeight = 1.8,
             )
         }

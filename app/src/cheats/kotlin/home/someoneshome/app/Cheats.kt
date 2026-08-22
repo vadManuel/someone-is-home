@@ -176,6 +176,28 @@ fun CheatRoot() {
             CheatView.Camera -> ScanCheatScreen(scan)
         }
         MarkerChip { view = if (view == CheatView.Panel) CheatView.Picker else CheatView.Panel }
+        // **THE IN-ROUND SCAN (D-159)**, on the screen that draws its own countdown. The player
+        // got here by tapping SCAN; the window is open for the ten seconds the bar is emptying,
+        // and the lens is held for exactly that long.
+        //
+        // What a read produces is `Effect.ScanAnswered` and the house's push to `ScanCaught` —
+        // `Flow.housePushed` says so, and there is no house attached to this build (E-D3-3). A
+        // client that walked itself to `ScanCaught` would be the device deciding which Subroutine
+        // a card holds. So the window ends here where it really ends on this build: **at the
+        // buzz**, which is the half below the effect boundary and the half that is real.
+        if (view == CheatView.Panel && flow.state.screen == ScreenId.Scan) {
+            DisposableEffect(scan) {
+                scan.scan { }
+                onDispose {
+                    // A window still open when this screen goes away produced no read — the
+                    // countdown reached zero, or the player tapped STOP NOW. Both are the same
+                    // fact, and D-160 has one word for it: two vibrates, *no*, nothing spent.
+                    scan.expire()
+                    scan.release()
+                    scanner.start(flow::cardScanned)
+                }
+            }
+        }
         // Only where a card could actually be read. A shutter on the springboard would be a
         // control for an event that cannot happen there.
         if (view == CheatView.Panel && flow.state.screen == ScreenId.ScanMarker) {

@@ -14,10 +14,17 @@ import home.someoneshome.model.HouseBuzz
  *   [HouseBuzz] and a call site has no way to ask for one of its own. *The buzz is identical for
  *   every player, same pattern, same duration, including when an Insider's own Revoke lands, or
  *   it is an audible tell in a silent house.*
- * - [play] is **a Subroutine's question**, and its script is authored by the house and carried in
- *   the scan's parameters — Sniff's two groups, Drift's now-pulse. It is not an event's buzz and
- *   must never be used as one: `HouseBuzzTest` reads the recording and fails on any event pattern
- *   that is neither the Short nor the Long.
+ * - [play] is **a house-authored script**: a Subroutine's question, carried in the scan's
+ *   parameters — Sniff's two groups, Drift's now-pulse — and, since D-160, the incoming call's
+ *   `HouseBuzz.RING`. A call site still cannot compose one of its own that an event will play:
+ *   `HouseBuzzTest` reads the recording and fails on any event pattern that is not in
+ *   `HouseBuzz.ALL`.
+ *
+ * ### One pattern repeats, and it is the call
+ *
+ * [play]'s `repeating` is D-160's *until answered*. It is false everywhere else and there is a
+ * test that walks every effect to say so: a second repeating pattern would be a phone that keeps
+ * going off in a silent house for a reason nobody in the room can hear the end of.
  *
  * ### A phone with no haptic hardware is silent, and says so to the log and to nobody else
  *
@@ -38,8 +45,13 @@ interface Haptics {
     /** The house buzzes this phone. The pattern is [HouseBuzz]'s and never the caller's. */
     fun buzz(haptic: Haptic)
 
-    /** Play a house-authored script — a Subroutine's question, and nothing else. */
-    fun play(script: List<HapticStep>)
+    /**
+     * Play a house-authored script — a Subroutine's question, or the incoming call.
+     *
+     * [repeating] runs the script round again from the top, for as long as it takes, until
+     * [stop]. Exactly one script in the game is allowed to ask for it (D-160).
+     */
+    fun play(script: List<HapticStep>, repeating: Boolean = false)
 
     /** Stop whatever is playing. The screen went away; the phone should not still be talking. */
     fun stop()
@@ -106,26 +118,56 @@ expect fun launchValue(name: String): String?
  */
 class RecordingHaptics : Haptics {
 
-    private val entries = mutableListOf<List<HapticStep>>()
+    /** One thing the motor was asked to do: the pattern, and whether it was to keep going. */
+    data class Play(val script: List<HapticStep>, val repeating: Boolean = false)
+
+    private val entries = mutableListOf<Play>()
+    private var stops = 0
+    private var going = false
+
+    /** Everything asked for, in order, with D-160's *until answered* still attached. */
+    val plays: List<Play> get() = entries.toList()
 
     /** Everything played, in order, as the motor would have played it. */
-    val played: List<List<HapticStep>> get() = entries.toList()
+    val played: List<List<HapticStep>> get() = entries.map { it.script }
 
     /** How many times the phone went off. D-156's channel, as a number a test can read. */
     val count: Int get() = entries.size
 
+    /**
+     * **Is the phone still going.** True from a repeating play until something silences it —
+     * either a [stop] or the next play, because the motor replaces rather than queues.
+     *
+     * This is the property *until answered* actually makes, and it is why the recorder tracks a
+     * state rather than only a list: a test that read the last entry's flag would say the phone
+     * is ringing long after somebody picked it up.
+     */
+    val ringing: Boolean get() = going
+
+    /** How many times somebody asked for silence. The other half of *until answered*. */
+    val stopped: Int get() = stops
+
     override fun buzz(haptic: Haptic) {
-        entries += HouseBuzz.script(haptic)
+        entries += Play(HouseBuzz.script(haptic))
+        going = false
     }
 
-    override fun play(script: List<HapticStep>) {
-        entries += script
+    override fun play(script: List<HapticStep>, repeating: Boolean) {
+        entries += Play(script, repeating)
+        going = repeating
     }
 
     /** A stop is not a play, and does not erase what already happened. */
-    override fun stop() = Unit
+    override fun stop() {
+        stops++
+        going = false
+    }
 
-    fun clear() = entries.clear()
+    fun clear() {
+        entries.clear()
+        stops = 0
+        going = false
+    }
 }
 
 /**
@@ -137,6 +179,6 @@ class RecordingHaptics : Haptics {
  */
 object SilentHaptics : Haptics {
     override fun buzz(haptic: Haptic) = Unit
-    override fun play(script: List<HapticStep>) = Unit
+    override fun play(script: List<HapticStep>, repeating: Boolean) = Unit
     override fun stop() = Unit
 }

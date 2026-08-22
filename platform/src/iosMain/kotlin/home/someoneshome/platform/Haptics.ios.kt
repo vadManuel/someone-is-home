@@ -76,10 +76,11 @@ class CoreHapticsMotor(private val log: (String) -> Unit = { println(it) }) : Ha
     override fun buzz(haptic: Haptic) {
         // The pattern is HouseBuzz's. There is no branch here on role, on seat, on which effect
         // asked, or on anything else a room could feel the difference of (D-102).
-        play(HouseBuzz.script(haptic), what = haptic.name.uppercase())
+        play(HouseBuzz.script(haptic), repeating = false, what = haptic.name.uppercase())
     }
 
-    override fun play(script: List<HapticStep>) = play(script, what = "SCRIPT")
+    override fun play(script: List<HapticStep>, repeating: Boolean) =
+        play(script, repeating, what = if (repeating) "RINGING" else "SCRIPT")
 
     override fun stop() {
         val playing = player ?: return
@@ -88,7 +89,7 @@ class CoreHapticsMotor(private val log: (String) -> Unit = { println(it) }) : Ha
             .onFailure { log("$TAG stop failed: ${it.message}") }
     }
 
-    private fun play(script: List<HapticStep>, what: String) {
+    private fun play(script: List<HapticStep>, repeating: Boolean, what: String) {
         if (!supported) {
             log("$TAG $what silent — no haptic hardware")
             return
@@ -107,7 +108,20 @@ class CoreHapticsMotor(private val log: (String) -> Unit = { println(it) }) : Ha
                 parameters = emptyList<CHHapticDynamicParameter>(),
                 error = null,
             )
-            val next = running.createPlayerWithPattern(pattern, null)
+            // **The advanced player exists for exactly one caller** (D-160's incoming call): the
+            // ordinary player has no loop. Everything else takes the plain one, so a bug in the
+            // looping path cannot reach the four Longs and the Short that a round depends on.
+            val next: CHHapticPatternPlayerProtocol? =
+                if (repeating) running.createAdvancedPlayerWithPattern(pattern, null)?.also {
+                    it.setLoopEnabled(true)
+                    // **Without this the pattern loops at its last BUZZ, not at its end.** A
+                    // CHHapticPattern's duration stops with the last event, so the trailing rest
+                    // that separates one ring from the next would be dropped and the call would
+                    // arrive as an unbroken train of long buzzes.
+                    it.setLoopEnd(script.millis().seconds())
+                } else {
+                    running.createPlayerWithPattern(pattern, null)
+                }
             if (next == null) {
                 log("$TAG $what could not build a player")
                 return
@@ -117,7 +131,10 @@ class CoreHapticsMotor(private val log: (String) -> Unit = { println(it) }) : Ha
             stop()
             player = next
             next.startAtTime(0.0, null)
-            log("$TAG $what played — ${events.size} event(s), ${script.millis()}ms")
+            log(
+                "$TAG $what played — ${events.size} event(s), ${script.millis()}ms" +
+                    if (repeating) ", REPEATING until stopped" else "",
+            )
         } catch (e: Throwable) {
             // Loud to the authority, invisible to the player. A throw that reached the screen
             // would blank it, and a screen that blanks in the dark is a revocation to everyone

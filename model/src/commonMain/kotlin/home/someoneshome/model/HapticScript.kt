@@ -27,13 +27,18 @@ sealed interface HapticStep {
 }
 
 /**
- * **The two buzzes this app has, defined once each, and there is no third.**
+ * **The buzzes this app has, defined once each, and there is no other way to get one.**
  *
  * D-102: *the buzz is identical for every player — same pattern, same duration, including when an
  * Insider's own Revoke lands — or it is an audible tell in a silent house.* D-135 closes which
  * buzz: every event buzzes, and the long one is reserved for five — the Egress, an incoming phone
  * call, STAND AND WALK IN for a newly Revoked player, the Restrained takeover, and the end of the
  * LIGHTS OUT countdown.
+ *
+ * **D-160 adds the other two words.** [Haptic.Double] is *no* — two vibrates, for a refusal — and
+ * [RING] is the incoming call, which leaves D-135's set of five single Longs and becomes a pattern
+ * that repeats until the phone is answered. D-135 is amended by that ruling, not replaced: the
+ * other four stay single Longs.
  *
  * ### The doctrine is enforced by there being nowhere else to get a pattern from
  *
@@ -67,8 +72,49 @@ object HouseBuzz {
      */
     const val LONG_MILLIS: Int = 750
 
+    /**
+     * **The silence in the middle of the *no*.** Wide enough that a pocket counts two rather than
+     * feeling one longer buzz, which is the entire content of D-160's second word — a double a
+     * hand reads as a single is the *yes* delivered slowly.
+     */
+    const val DOUBLE_GAP_MILLIS: Int = 140
+
+    /**
+     * **The silence inside one ring**, and **the silence between two of them** — LONG–pause–LONG,
+     * then a wider wait, then again (D-160).
+     *
+     * The two gaps differ on purpose. Equal ones would make the ring an unbroken train of long
+     * buzzes and lose the pairing that says *telephone*; the wide one is what a player face-down
+     * in another room mid-Subroutine hears as a phone that has not given up.
+     */
+    const val RING_PAUSE_MILLIS: Int = 350
+    const val RING_GAP_MILLIS: Int = 1_400
+
     private val SHORT: List<HapticStep> = listOf(HapticStep.Buzz(SHORT_MILLIS))
     private val LONG: List<HapticStep> = listOf(HapticStep.Buzz(LONG_MILLIS))
+    private val DOUBLE: List<HapticStep> = listOf(
+        HapticStep.Buzz(SHORT_MILLIS), HapticStep.Rest(DOUBLE_GAP_MILLIS), HapticStep.Buzz(SHORT_MILLIS),
+    )
+
+    /**
+     * **The incoming call, and it is the one pattern in the game that repeats.**
+     *
+     * D-160: *a phone call vibrates LONG–pause–LONG, repeating indefinitely until answered.*
+     * Everything else in this game says its thing once; the call is the exception because it is
+     * not a notification, it is a summons — a meeting has been called and the round stops until
+     * everybody has it, and a signal that fires once and gives up is a signal a player in another
+     * room with the phone face-down on a shelf will miss.
+     *
+     * **It ends in a [HapticStep.Rest], and that rest is load-bearing.** A pattern whose last step
+     * is a buzz loops straight from one LONG into the next and the pairing disappears. The player
+     * is what tells the motor to stop.
+     */
+    val RING: List<HapticStep> = listOf(
+        HapticStep.Buzz(LONG_MILLIS),
+        HapticStep.Rest(RING_PAUSE_MILLIS),
+        HapticStep.Buzz(LONG_MILLIS),
+        HapticStep.Rest(RING_GAP_MILLIS),
+    )
 
     /**
      * The pattern for a kind. **The same list every time**, held rather than rebuilt — the whole
@@ -78,8 +124,18 @@ object HouseBuzz {
     fun script(haptic: Haptic): List<HapticStep> = when (haptic) {
         Haptic.Short -> SHORT
         Haptic.Long -> LONG
+        Haptic.Double -> DOUBLE
     }
 
-    /** Every pattern an event is allowed to produce. What a leak test compares against. */
-    val ALL: List<List<HapticStep>> = Haptic.entries.map(::script)
+    /** One pattern per kind, in the order the kinds are declared. */
+    val KINDS: List<List<HapticStep>> = Haptic.entries.map(::script)
+
+    /**
+     * Every pattern an event is allowed to produce. What a leak test compares against.
+     *
+     * [RING] is in here because the incoming call is an event, and after D-160 the pattern it
+     * produces is the repeating one rather than a member of [Haptic]. It is not a kind — no
+     * `buzz` can ask for it — but it is very much something the house says.
+     */
+    val ALL: List<List<HapticStep>> = KINDS + listOf(RING)
 }

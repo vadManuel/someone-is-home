@@ -2,6 +2,7 @@ package home.someoneshome.app
 
 import home.someoneshome.model.Effect
 import home.someoneshome.model.Haptic
+import home.someoneshome.model.HouseBuzz
 import home.someoneshome.platform.Haptics
 
 /**
@@ -37,14 +38,78 @@ import home.someoneshome.platform.Haptics
 class HouseBuzzer(private val haptics: Haptics) {
 
     /**
-     * An effect landed on this phone. Buzz if it carries a kind, and stay silent if it does not.
+     * An effect landed on this phone. Buzz if it carries a kind, ring if it is the call, and stay
+     * silent if it is neither.
      *
-     * **No branch on role, seat, content or which effect it was** — [Effect.haptic] is the only
-     * question asked, and the answer is a two-valued enum the house put there.
+     * **No branch on role, seat or content.** Which *effect* it was is the only question asked,
+     * and it is asked twice — once by [ringing] and once by [haptic] — both of them exhaustive
+     * `when`s over the effect type and nothing else. Two phones receiving the same effect do the
+     * same thing, which is the whole of D-102.
      */
     fun heard(effect: Effect) {
+        if (effect.ringing()) {
+            haptics.play(HouseBuzz.RING, repeating = true)
+            return
+        }
         haptics.buzz(effect.haptic() ?: return)
     }
+
+    /**
+     * **The phone was answered, so it stops ringing** — and this is the only thing that stops it.
+     *
+     * D-160 makes the call the one signal in the game that does not give up: it repeats
+     * indefinitely, because a meeting has been called and the round stops until everybody has it.
+     * Something has to end it, and the something is a person picking the phone up. The screen that
+     * knows they did calls this.
+     *
+     * It is [Haptics.stop] and nothing cleverer on purpose: the motor replaces rather than queues,
+     * so anything the house says next silences the ring anyway, and a second mechanism for
+     * silence would be a second thing to get wrong on the one signal a player must not miss.
+     */
+    fun answered() = haptics.stop()
+}
+
+/**
+ * **Does this effect ring — and exactly one of them does.**
+ *
+ * D-160: *a phone call vibrates LONG–pause–LONG, repeating indefinitely until answered.* The call
+ * is [Effect.MeetingOpened], and the ruling amends D-135 rather than replacing it — the incoming
+ * call leaves the set of five single Longs and becomes the repeating pattern; **the other four
+ * stay single Longs** and are the four `false` rows that would otherwise look like oversights.
+ *
+ * ### The effect still carries `Haptic.Long`, and that is not a contradiction
+ *
+ * `Rules.kt` puts a `Long` on `MeetingOpened` because D-135 said so, and D-160 did not go back and
+ * rewrite the reduction — the kind on the effect is the house saying *this is one of the ones you
+ * must not miss*, and this is the client obeying the amendment about how a phone says it. **It is
+ * a decision about the effect type and nothing else.** Every phone that receives a `MeetingOpened`
+ * rings; none of them consults a seat, a role, or who called the meeting.
+ *
+ * ### Exhaustive, in the same fail-closed direction as [haptic]
+ *
+ * A new `Effect` does not compile until somebody has written down whether it rings, and the
+ * answer they will write is `false`, which is the safe one: the failure mode is *"my effect does
+ * not ring"*, found immediately, never *"a second thing in this game vibrates forever"* — which
+ * in a dark silent house is a phone nobody can explain and everybody can hear.
+ */
+internal fun Effect.ringing(): Boolean = when (this) {
+    // The one summons in the game. A meeting has been called and the round stops until everybody
+    // has it, so this is the one signal that does not fire once and give up.
+    is Effect.MeetingOpened -> true
+
+    // Everything else says its thing once — including D-135's other four Longs, which are loud
+    // but finite.
+    is Effect.OpeningMessage, is Effect.StandAndWalkIn, is Effect.MeetingPhaseOpened,
+    is Effect.MeetingResult, is Effect.RestrainedTakeover, is Effect.MeetingEnded,
+    is Effect.EgressOpened, is Effect.EgressHeld, is Effect.EgressContained,
+    is Effect.EgressSucceeded, is Effect.RoundEnded, is Effect.LampSet, is Effect.AbilityFired,
+    is Effect.SubroutineGraded, is Effect.SubroutineProgressed, is Effect.SystemIntegrityLive,
+    is Effect.SystemIntegrityBatched, is Effect.MessageDelivered, is Effect.HouseSignedOff,
+    is Effect.WorkOrderIssued, is Effect.ScanAnswered, is Effect.PresenceChanged,
+    is Effect.CheckInProgressed, is Effect.ReadyProgressed, is Effect.VoteProgressed,
+    is Effect.VoteHeld, is Effect.VoteSelectionShown, is Effect.MeetingResolved,
+    is Effect.SyncPulseAnswered, is Effect.InsidersRevealed,
+    -> false
 }
 
 /**
