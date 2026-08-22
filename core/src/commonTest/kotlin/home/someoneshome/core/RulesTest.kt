@@ -1,5 +1,6 @@
 package home.someoneshome.core
 
+import home.someoneshome.model.Balance
 import home.someoneshome.model.Effect
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
@@ -14,6 +15,17 @@ private val INSIDERS = listOf(Seat(1), Seat(5))
 
 private fun armed(): GameState =
     reduce(GameState.EMPTY, Event.RoundArmed(Tick(0), seed = 42L, seats = SEATS, insiders = INSIDERS)).state
+
+/**
+ * **The first tick at which an Insider ability is off its opening cooldown** (D-132).
+ *
+ * Every cooldown starts the round already running at half its normal duration, so the round opens
+ * with a guaranteed stretch of peace. Every event below is fed at or after this moment — a test
+ * that armed a Revoke inside the opening stretch would arm nothing, revoke nobody, and go on
+ * passing every assertion about the *shape* of what came back, which is precisely the differential
+ * this file exists to keep honest.
+ */
+private val READY = Balance.REVOKE_COOLDOWN / 2
 
 private fun run(start: GameState, events: List<Event>): Pair<GameState, List<Effect>> {
     var state = start
@@ -31,9 +43,9 @@ class DeterminismTest {
     @Test
     fun `the same events produce identical effects every time`() {
         val events = listOf(
-            Event.RevokeArmed(Tick(1), Seat(1)),
-            Event.ContactMade(Tick(2), Seat(1), Seat(3)),
-            Event.SubroutineReturned(Tick(3), Seat(2), home.someoneshome.model.MarkerId("m1"), listOf(1, 2)),
+            Event.RevokeArmed(Tick(READY + 1), Seat(1)),
+            Event.ContactMade(Tick(READY + 2), Seat(1), Seat(3)),
+            Event.SubroutineReturned(Tick(READY + 3), Seat(2), home.someoneshome.model.MarkerId("m1"), listOf(1, 2)),
         )
         val (s1, e1) = run(armed(), events)
         val (s2, e2) = run(armed(), events)
@@ -77,18 +89,23 @@ class AbsentEffectIsTheLeakTest {
 
         // A live target.
         val (_, live) = run(base, listOf(
-            Event.RevokeArmed(Tick(1), Seat(1)),
-            Event.ContactMade(Tick(2), Seat(1), Seat(3)),
+            Event.RevokeArmed(Tick(READY + 1), Seat(1)),
+            Event.ContactMade(Tick(READY + 2), Seat(1), Seat(3)),
         ))
 
         // A target already revoked. Same actor, same ticks.
         val pre = run(base, listOf(
-            Event.RevokeArmed(Tick(0), Seat(5)),
-            Event.ContactMade(Tick(0), Seat(5), Seat(3)),
+            Event.RevokeArmed(Tick(READY), Seat(5)),
+            Event.ContactMade(Tick(READY), Seat(5), Seat(3)),
         )).first
+        // The positive control, and this file has needed one since D-132 gave the Revoke a
+        // cooldown: without it, an arming that silently did nothing would leave the "already
+        // revoked" case never revoked, and the differential below would compare two identical
+        // live targets and pass for the one reason that means nothing.
+        assertTrue(pre.isRevoked(Seat(3)), "the fixture never actually revoked anybody")
         val (_, dead) = run(pre, listOf(
-            Event.RevokeArmed(Tick(1), Seat(1)),
-            Event.ContactMade(Tick(2), Seat(1), Seat(3)),
+            Event.RevokeArmed(Tick(READY + 1), Seat(1)),
+            Event.ContactMade(Tick(READY + 2), Seat(1), Seat(3)),
         ))
 
         assertEquals(live.toString(), dead.toString(),
@@ -97,7 +114,7 @@ class AbsentEffectIsTheLeakTest {
 
     @Test
     fun `contacting without arming still spends the ability visibly`() {
-        val (_, unarmed) = run(armed(), listOf(Event.ContactMade(Tick(2), Seat(1), Seat(3))))
+        val (_, unarmed) = run(armed(), listOf(Event.ContactMade(Tick(READY + 2), Seat(1), Seat(3))))
         assertEquals(
             listOf(Effect.AbilityFired(Seat(1), cooldownStarted = true)).toString(),
             unarmed.toString(),
@@ -108,12 +125,12 @@ class AbsentEffectIsTheLeakTest {
     fun `a Resident contacting produces the same effect as an Insider contacting`() {
         val base = armed()
         val (_, insider) = run(base, listOf(
-            Event.RevokeArmed(Tick(1), Seat(1)),
-            Event.ContactMade(Tick(2), Seat(1), Seat(3)),
+            Event.RevokeArmed(Tick(READY + 1), Seat(1)),
+            Event.ContactMade(Tick(READY + 2), Seat(1), Seat(3)),
         ))
         val (_, resident) = run(base, listOf(
-            Event.RevokeArmed(Tick(1), Seat(2)),
-            Event.ContactMade(Tick(2), Seat(2), Seat(3)),
+            Event.RevokeArmed(Tick(READY + 1), Seat(2)),
+            Event.ContactMade(Tick(READY + 2), Seat(2), Seat(3)),
         ))
         // Same shape, differing only in the acting seat — never in whether an effect exists.
         assertEquals(insider.size, resident.size)

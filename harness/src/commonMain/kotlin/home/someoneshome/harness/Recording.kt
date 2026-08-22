@@ -50,6 +50,12 @@ class Recording(
     }
 
     companion object {
+        // 7: arming. `RoundArmed` gained the host's public Insider SETTING beside the hidden draw,
+        // and the home's markers -- without which the stations, the active set and every work
+        // order are undrawable, so a version 6 recording replays into a round with no work in it.
+        // The state row gained the round's whole draw (orders with their answer keys, stations,
+        // lit markers) and every Insider cooldown, and `open` gained the order line it came from.
+        //
         // 6: the meeting engine. `VoteCast(voter, target)` became `VoteSelected` plus `VoteLocked`
         // -- the *changeable until the clock ends* model D-117 superseded, split into the live tap
         // and the irrevocable READY -- and six more meeting events arrived with them. The state row
@@ -59,7 +65,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/6"
+        const val HEADER = "someone-is-home/recording/7"
     }
 }
 

@@ -1581,7 +1581,12 @@ fun LobbyScreen(vals: PanelVals) {
                 color = Amber.BoneDim, size = 5.5, lineHeight = 1.0, align = TextAlign.Center,
             )
         }
-        LightsOut(hosting = lobby.hosting, ready = lobby.everyLineIn, onArm = actions.lightsOut)
+        LightsOut(
+            hosting = lobby.hosting,
+            ready = lobby.readyToArm,
+            waitingFor = lobby.waitingFor(),
+            onArm = actions.lightsOut,
+        )
     }
 }
 
@@ -1625,7 +1630,8 @@ private fun ResidentStrip(residents: List<String>) {
 }
 
 /**
- * **LIGHTS OUT, gated on every line being in — and it is the host's control alone.**
+ * **LIGHTS OUT, gated on the party and on every line being in — and it is the host's control
+ * alone.**
  *
  * The host turns the lights off; everything after that is the house answering rather than the
  * host announcing, so a client gets the same fact without a button that would do nothing. Until
@@ -1633,15 +1639,21 @@ private fun ResidentStrip(residents: List<String>) {
  * when the last line arrived would move the layout under a host's thumb at the exact moment they
  * are about to press it.
  *
- * **What this button does is presentation only.** It walks the phone to the ARMED screen; it does
- * not arm a round, lock a ledger, draw an Insider count or start a clock. Real arming is the
- * loop's, and the loop is frozen.
+ * **[waitingFor] says which of the two conditions is open**, and it says it on a client's screen
+ * as well as the host's. A phone that has handed its line over and is standing in a lobby of four
+ * would otherwise be watching a button do nothing for a reason nobody in the room can see — and
+ * the party floor is the one of the two that anybody present can fix.
  */
 @Composable
-private fun LightsOut(hosting: Boolean, ready: Boolean, onArm: () -> Unit) {
+private fun LightsOut(
+    hosting: Boolean,
+    ready: Boolean,
+    waitingFor: String?,
+    onArm: () -> Unit,
+) {
     when {
         !hosting -> PreNote(
-            if (ready) "WAITING FOR THE HOST" else "WAITING FOR EVERYONE'S LINE",
+            waitingFor ?: "WAITING FOR THE HOST",
             color = Amber.BoneDim, size = 7.0, lineHeight = 1.0, align = TextAlign.Center,
         )
         ready -> SlateButton(
@@ -1657,11 +1669,22 @@ private fun LightsOut(hosting: Boolean, ready: Boolean, onArm: () -> Unit) {
         // is the sharpest of them: a control that answers a press by doing nothing is
         // indistinguishable from one that is broken, on the exact screen where a host is waiting
         // to find out why the evening has not started.
-        else -> PanelButton(
-            "LIGHTS OUT",
-            border = Amber.BonePale, ink = Amber.BoneFaint,
-            size = 9.0, tracking = 0.2, verticalPadding = 11.u,
-            onClick = null,
-        )
+        else -> Column(verticalArrangement = Arrangement.spacedBy(3.u)) {
+            // The host is told which condition is open, in the same words the clients are given.
+            // Without it a host three people short is looking at a dead button and a lobby that
+            // says nothing about why — on the screen where an evening either starts or does not.
+            waitingFor?.let {
+                PreNote(
+                    it,
+                    color = Amber.BoneDim, size = 5.5, lineHeight = 1.0, align = TextAlign.Center,
+                )
+            }
+            PanelButton(
+                "LIGHTS OUT",
+                border = Amber.BonePale, ink = Amber.BoneFaint,
+                size = 9.0, tracking = 0.2, verticalPadding = 11.u,
+                onClick = null,
+            )
+        }
     }
 }

@@ -235,7 +235,9 @@ class LobbyInputTest {
     @Test
     fun theInsiderRowWalksTheBandAndNeverLeavesIt() =
         runDesktopComposeUiTest(width = 300, height = 650) {
-            val (model, _) = modelOn(ScreenId.Lobby, joined = 6)
+            // Eight seats, because D-103's amendment pins five and six to a one-member band and a
+            // control with one stop on it is not a control this test can walk.
+            val (model, _) = modelOn(ScreenId.Lobby, joined = 8)
             show(model)
 
             onNodeWithText("UNKNOWN").assertExists()
@@ -246,7 +248,7 @@ class LobbyInputTest {
                 seen += model.lobby.insidersLabel
             }
             assertEquals(listOf("1", "2", "UNKNOWN", "1", "2", "UNKNOWN"), seen)
-            assertFalse("3" in seen, "the control left the band six seats allow")
+            assertFalse("3" in seen, "the control left the band eight seats allow")
         }
 
     /** A client's settings are a reading. Tapping the row moves nothing on anybody's phone. */

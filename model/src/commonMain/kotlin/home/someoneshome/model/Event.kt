@@ -14,13 +14,46 @@ package home.someoneshome.model
 sealed interface Event {
     val at: Tick
 
-    /** Balance values lock here and stamp into the recording. No mid-round edits. */
+    /**
+     * Balance values lock here and stamp into the recording. No mid-round edits.
+     *
+     * ### Two Insider numbers, and the whole of D-103 is in the difference
+     *
+     * [chosenInsiders] is the **host's setting** — a public fact, on every phone's lobby row, and
+     * null for UNKNOWN. [insiders] is **what the house drew**, hidden from everyone until the round
+     * ends. Only the first may size anything a player can measure: D-129 computes the work order's
+     * length from public lobby facts alone, because sizing it against the draw would let order
+     * length divide out the number D-103 spent a whole revision hiding.
+     *
+     * **The draw is recorded rather than re-derived**, which is why it is a field here at all. The
+     * band clamps it before it arrives (`Arming.insidersFor`), balance values stamp into the
+     * recording at arming, and the differential harness's whole method is rewriting this one field
+     * — a draw computed inside the rules could not be exchanged between two seats, and the harness
+     * would lose the only handle it has on role.
+     *
+     * [markers] are the home's **ordinary registered markers**, from which the house draws the
+     * three stations (D-122) and the round's active set (D-123). The Terminal and the meeting card
+     * are not among them: they are reserved shapes with fixed jobs, not slots the round may use.
+     */
     data class RoundArmed(
         override val at: Tick,
         val seed: Long,
         val seats: List<Seat>,
         /** A List, not a Set. Hash order varies, and this is recorded input. */
         val insiders: List<Seat>,
+        /** The host's setting, or null for UNKNOWN. **Public** — see the KDoc above. */
+        val chosenInsiders: Int? = null,
+        /**
+         * The home's ordinary markers, in registration order. A List for [insiders]' reason.
+         *
+         * Defaulted empty so that a round armed to exercise something else — a meeting, the
+         * admission gate — does not have to invent a house to hold it in. An empty home draws no
+         * stations, lights no markers and issues an empty work order, which is the fail-closed
+         * direction: nothing is assigned, so nothing grades true. **The recording's parser
+         * defaults nothing** — a field missing from a recorded arming is fatal there, which is
+         * where a silent default would actually cost something.
+         */
+        val markers: List<MarkerId> = emptyList(),
     ) : Event
 
     /**

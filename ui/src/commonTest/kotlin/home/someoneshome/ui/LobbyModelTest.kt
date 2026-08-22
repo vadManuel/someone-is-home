@@ -1,5 +1,6 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.Balance
 import home.someoneshome.model.protocol.LobbyBody
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -40,7 +41,7 @@ class LobbyModelTest {
         assertEquals(LobbyBody.Standing(joined = 0, linesIn = 0), model.standing)
         assertEquals(emptyList(), model.residents, "a lobby nobody is in listed somebody")
         assertNull(model.attached)
-        assertFalse(model.everyLineIn, "an empty lobby offered LIGHTS OUT")
+        assertFalse(model.readyToArm, "an empty lobby offered LIGHTS OUT")
     }
 
     /**
@@ -233,7 +234,9 @@ class LobbyModelTest {
      */
     @Test
     fun `the control walks the band and comes back to UNKNOWN`() {
-        val (model, _) = lobbyOf(joined = 6)
+        // Eight, not six: D-103's amendment pins five and six seats to exactly one Insider, so a
+        // six-seat lobby has a one-member band and nothing to walk.
+        val (model, _) = lobbyOf(joined = 8)
         assertEquals(1..2, model.band)
         val seen = mutableListOf(model.insidersLabel)
         repeat(3) { model.cycleInsiders(); seen += model.insidersLabel }
@@ -319,10 +322,44 @@ class LobbyModelTest {
     @Test
     fun `the gate closes only when every line is in`() {
         val (four, _) = lobbyOf(joined = 6, linesIn = 4)
-        assertFalse(four.everyLineIn, "four of six was enough")
+        assertFalse(four.readyToArm, "four of six was enough")
         val (six, _) = lobbyOf(joined = 6, linesIn = 6)
-        assertTrue(six.everyLineIn)
+        assertTrue(six.readyToArm)
         val (nobody, _) = lobbyOf(joined = 0, linesIn = 0)
-        assertFalse(nobody.everyLineIn, "an empty lobby counted as ready")
+        assertFalse(nobody.readyToArm, "an empty lobby counted as ready")
+    }
+
+    /**
+     * **D-128 — five seats, and a lobby one short cannot arm however many lines are in.**
+     *
+     * The party floor is a *gate* where D-127's capacity is guidance, and D-125's sorting rule is
+     * why: everybody in the hall can see how many people are standing there, but nobody can see
+     * that the vote is about to stop meaning anything. Written as the constant rather than as `5`
+     * on both sides, because the number is playtest's and the property is not.
+     */
+    @Test
+    fun `a party one short of the minimum cannot arm`() {
+        val short = Balance.MINIMUM_SEATS - 1
+        val (one, _) = lobbyOf(joined = short, linesIn = short)
+        assertFalse(one.readyToArm, "$short seats armed a round with every line in")
+        assertEquals("NEEDS ${Balance.MINIMUM_SEATS} RESIDENTS", one.waitingFor())
+
+        val (enough, _) = lobbyOf(joined = Balance.MINIMUM_SEATS, linesIn = Balance.MINIMUM_SEATS)
+        assertTrue(enough.readyToArm, "the minimum party could not arm")
+        assertNull(enough.waitingFor(), "a lobby that can arm was still told to wait")
+    }
+
+    /**
+     * The two conditions fail in different words, and the party is named first.
+     *
+     * A lobby three people short that said WAITING FOR EVERYONE'S LINE would send the host looking
+     * for a phone that is not the problem, on the screen where an evening either starts or does not.
+     */
+    @Test
+    fun `the gate says which of its two conditions is open`() {
+        val (tooFew, _) = lobbyOf(joined = 2, linesIn = 0)
+        assertEquals("NEEDS ${Balance.MINIMUM_SEATS} RESIDENTS", tooFew.waitingFor())
+        val (missingLines, _) = lobbyOf(joined = 6, linesIn = 4)
+        assertEquals("WAITING FOR EVERYONE'S LINE", missingLines.waitingFor())
     }
 }

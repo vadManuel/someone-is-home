@@ -4,6 +4,7 @@ import home.someoneshome.model.Effect
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
 import home.someoneshome.model.Haptic
+import home.someoneshome.model.InsiderAbility
 import home.someoneshome.model.MeetingPhase
 import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.RefusalReason
@@ -68,6 +69,21 @@ private class Walk(start: GameState) {
 private var tick = 0L
 private fun t() = Tick(tick++)
 
+/**
+ * **A Revoke that actually lands, with D-132's cooldown respected.**
+ *
+ * Every Insider ability starts the round already running at half its normal duration, and arming
+ * one again costs a full one — so a test that fed `RevokeArmed` at whatever tick the shared
+ * counter happened to be at would arm nothing, contact nobody, and go on passing every assertion
+ * about the *shape* of what came back. The tick is pushed to the moment the house says this seat
+ * is ready, which is a fact read off the state rather than a number typed here.
+ */
+private fun Walk.revoke(actor: Seat, target: Seat): Walk {
+    val readyAt = state.cooldownFor(actor, InsiderAbility.Revoke)?.readyAt?.step ?: 0L
+    tick = maxOf(tick, readyAt)
+    return feed(Event.RevokeArmed(t(), actor), Event.ContactMade(t(), actor, target))
+}
+
 /** A meeting called from the card, with everybody walked in: the state the talk starts from. */
 private fun talking(from: GameState = armed(), caller: Seat = Seat(0)): Walk {
     val walk = Walk(from)
@@ -116,20 +132,17 @@ class MeetingTest {
     @Test
     fun `the living are rung and the out are told to stand up`() {
         // Seat 3 revoked at an earlier meeting, seat 5 revoked since it closed.
-        val earlier = Walk(armed()).feed(
-            Event.RevokeArmed(t(), Seat(1)),
-            Event.ContactMade(t(), Seat(1), Seat(3)),
-            Event.MeetingCalled(t(), Seat(0), MeetingTrigger.MeetingCard),
-        )
+        val earlier = Walk(armed())
+            .revoke(Seat(1), Seat(3))
+            .feed(Event.MeetingCalled(t(), Seat(0), MeetingTrigger.MeetingCard))
         SEATS.drop(1).forEach { earlier.feed(Event.MeetingCheckedIn(t(), it)) }
         earlier.feed(
             Event.DiscussionClosed(t()),
             Event.VoteWindowClosed(t()),
             Event.TallyHalfwayReached(t()),
             Event.MeetingClosed(t()),
-            Event.RevokeArmed(t(), Seat(1)),
-            Event.ContactMade(t(), Seat(1), Seat(5)),
         )
+        earlier.revoke(Seat(1), Seat(5))
         earlier.drain()
 
         earlier.feed(Event.MeetingCalled(t(), Seat(0), MeetingTrigger.MeetingCard))
@@ -217,7 +230,7 @@ class MeetingTest {
     @Test
     fun `a player who is out holds the gate open like anybody else`() {
         val start = Walk(armed())
-            .feed(Event.RevokeArmed(t(), Seat(1)), Event.ContactMade(t(), Seat(1), Seat(4)))
+            .revoke(Seat(1), Seat(4))
             .state
 
         val walk = Walk(start)
@@ -278,7 +291,7 @@ class MeetingTest {
     @Test
     fun `readiness is unanimous among the living`() {
         val start = Walk(armed())
-            .feed(Event.RevokeArmed(t(), Seat(1)), Event.ContactMade(t(), Seat(1), Seat(4)))
+            .revoke(Seat(1), Seat(4))
             .state
         val walk = talking(start)
 
@@ -528,7 +541,7 @@ class MeetingTest {
     @Test
     fun `lights out closes the meeting and ages the newly Revoked into the couch`() {
         val start = Walk(armed())
-            .feed(Event.RevokeArmed(t(), Seat(1)), Event.ContactMade(t(), Seat(1), Seat(4)))
+            .revoke(Seat(1), Seat(4))
             .state
         assertEquals(listOf(4), start.newlyRevoked.map { it.index })
 

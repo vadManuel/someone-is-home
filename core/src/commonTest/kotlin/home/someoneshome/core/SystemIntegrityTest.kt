@@ -1,5 +1,6 @@
 package home.someoneshome.core
 
+import home.someoneshome.model.Balance
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
 import home.someoneshome.model.InsiderBand
@@ -26,10 +27,16 @@ import kotlin.test.assertTrue
  */
 class SystemIntegrityTest {
 
-    private fun armedWith(seats: List<Seat>, insiders: List<Seat>): GameState =
+    private fun armedWith(
+        seats: List<Seat>,
+        insiders: List<Seat>,
+        markers: List<MarkerId> = emptyList(),
+    ): GameState =
         reduce(
             GameState.EMPTY,
-            Event.RoundArmed(Tick(0), seed = 1L, seats = seats, insiders = insiders),
+            Event.RoundArmed(
+                Tick(0), seed = 1L, seats = seats, insiders = insiders, markers = markers,
+            ),
         ).state
 
     private fun seatsOf(count: Int) = (0 until count).map { Seat(it) }
@@ -73,21 +80,52 @@ class SystemIntegrityTest {
      * from the hidden draw. So the Residents who actually exist are never fewer than the number the
      * order was sized against, and `residents × K ≥ M` whatever the house drew.
      *
-     * `K` is not built yet (it is drawn at arming, which is L3's), so this asserts the arithmetic
-     * D-129 rests on: the worst case can carry the bar at a whole-number order length.
+     * `K` is drawn at arming now, so this reads [Balance.orderSize] rather than re-deriving it —
+     * a test that recomputed the formula would agree with itself after the formula moved.
      */
     @Test
     fun `the bar is reachable by the fewest Residents the band allows`() {
-        for (count in 5..16) {
+        for (count in Balance.MINIMUM_SEATS..16) {
             val seats = seatsOf(count)
             val bandMax = InsiderBand.of(count).last
             val worstCase = count - bandMax
             val total = armedWith(seats, seatsOf(bandMax)).systemIntegrity
-            val k = (total + worstCase - 1) / worstCase
+            val k = Balance.orderSize(count, chosenInsiders = null)
             assertTrue(worstCase >= 2, "$count seats: the band leaves fewer than two Residents")
             assertTrue(
                 worstCase * k >= total,
                 "$count seats: $worstCase Residents at $k each cannot reach a bar of $total",
+            )
+        }
+    }
+
+    /**
+     * **D-129 — the order is sized off the PUBLIC setting and never off the draw.**
+     *
+     * The sharp form, and the counterpart of the meter test above: hold the seats still, move the
+     * host's visible setting through the whole band, and the length may change with it — that is
+     * public. Then hold the setting at UNKNOWN and move what the house actually drew, and the
+     * length must not move at all. If it did, order length would divide out the count D-103 spent
+     * a whole revision hiding.
+     */
+    @Test
+    fun `the order length reads the setting and never the draw`() {
+        val markers = (0 until 8).map { MarkerId("m$it") }
+        for (count in Balance.MINIMUM_SEATS..16) {
+            val seats = seatsOf(count)
+            val lengths = InsiderBand.of(count).map { drawn ->
+                reduce(
+                    GameState.EMPTY,
+                    Event.RoundArmed(
+                        Tick(0), seed = 1L, seats = seats, insiders = seatsOf(drawn),
+                        chosenInsiders = null, markers = markers,
+                    ),
+                ).state.workOrders.map { it.entries.size }.distinct()
+            }.distinct()
+            assertEquals(
+                listOf(listOf(Balance.orderSize(count, null))), lengths,
+                "$count seats: order length moved with the hidden draw, or differed between " +
+                    "seats — either way the count is recoverable by counting a work order",
             )
         }
     }
@@ -123,13 +161,18 @@ class SystemIntegrityTest {
     @Test
     fun `only a plain Resident's accepted entry moves the meter`() {
         val seats = seatsOf(8)
-        val armed = armedWith(seats, listOf(Seat(1)))
-        val marker = MarkerId("m0")
+        val armed = armedWith(seats, listOf(Seat(1)), (0 until 8).map { MarkerId("m$it") })
 
+        // The card and the answer are read off the draw rather than typed in: the house decides
+        // where a seat's work is, and a fixture that named a card would be asserting against its
+        // own idea of the draw instead of against the draw.
         fun walk(seat: Seat): GameState {
-            val asked = armed.openSubroutineFor(seat)!!.expected
-            val scanned = reduce(armed, Event.MarkerScanned(Tick(1), seat, marker)).state
-            return reduce(scanned, Event.SubroutineReturned(Tick(2), seat, marker, asked)).state
+            val entry = armed.workOrderFor(seat)!!.entries.first()
+            val scanned = reduce(armed, Event.MarkerScanned(Tick(1), seat, entry.marker)).state
+            return reduce(
+                scanned,
+                Event.SubroutineReturned(Tick(2), seat, entry.marker, entry.expected),
+            ).state
         }
 
         val resident = walk(Seat(0))

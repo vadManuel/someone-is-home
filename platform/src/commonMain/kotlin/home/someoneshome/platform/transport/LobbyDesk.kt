@@ -1,5 +1,6 @@
 package home.someoneshome.platform.transport
 
+import home.someoneshome.model.Balance
 import home.someoneshome.model.InsiderBand
 import home.someoneshome.model.Seat
 import home.someoneshome.model.protocol.LobbyBody
@@ -167,12 +168,27 @@ class LobbyDesk {
     )
 
     /**
-     * Whether LIGHTS OUT is allowed to be offered: everybody here, everybody's line in.
+     * Whether every seat here has handed a line over.
      *
      * An empty lobby is not ready. Nobody has handed anything over, and the condition
      * "0 of 0" is true in arithmetic and false in every other sense.
      */
     fun everyLineIn(): Boolean = seats.isNotEmpty() && lines.size == seats.size
+
+    /**
+     * **Whether the house may arm: [MINIMUM_SEATS][Balance.MINIMUM_SEATS] seated, every line in.**
+     *
+     * The second gate in the game that clamps rather than guides, and it is D-125's sorting rule
+     * that says which it should be. A host can see how many people are standing in their hall, so
+     * D-127's capacity guidance never blocks — but *four plain Residents and one Insider is the
+     * smallest party in which a meeting means anything* (D-128) is a balance consequence nobody in
+     * the hall can check, and an unwinnable evening is not something to find out at the end of one.
+     *
+     * The screen draws the same two conditions off the standing. This is the one the house acts
+     * on: a client that decided for itself that the lobby was ready would be a phone arming a
+     * round.
+     */
+    fun readyToArm(): Boolean = seats.size >= Balance.MINIMUM_SEATS && everyLineIn()
 
     /**
      * **Deleted when the round ends** — the second promise made on the screen where the line was

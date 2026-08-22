@@ -113,6 +113,78 @@ class EmitSchemaTest {
     }
 
     /**
+     * **A work order reaches both living roles, in the same class list, and nobody else** (D-129).
+     *
+     * Written out in full for the verdict row's reason. Narrowed to `Resident/Live` this is a role
+     * oracle delivered by the allowlist rather than by a screen: an Insider whose phone showed no
+     * work at all, on the one surface a player navigates a dark house by. Widened to the out
+     * classes it would hand a couch spectator somebody else's assignments.
+     */
+    @Test
+    fun `a work order reaches both living roles and nobody else`() {
+        assertEquals(
+            listOf(
+                ClientClass(Role.Resident, RoundState.Live),
+                ClientClass(Role.Insider, RoundState.Live),
+            ),
+            EmitSchema.classesFor(EmitSchema.WORK_ORDER_ISSUED),
+        )
+    }
+
+    /**
+     * **The opening message reaches everybody in the house** (D-118, D-076).
+     *
+     * It is one of exactly two events that dim every panel, and a dimming lamp is world-observable
+     * in a dark house — so a notification addressed to fewer than everyone is a beacon. This is the
+     * row that would have to be narrowed for that to happen, and it is written out in full so a
+     * narrowing is a visible edit.
+     */
+    @Test
+    fun `the opening message reaches every class in the house`() {
+        assertEquals(
+            listOf(
+                ClientClass(Role.Resident, RoundState.Live),
+                ClientClass(Role.Insider, RoundState.Live),
+                ClientClass(Role.Resident, RoundState.Out),
+                ClientClass(Role.Insider, RoundState.Out),
+            ),
+            EmitSchema.classesFor(EmitSchema.OPENING_MESSAGE),
+        )
+    }
+
+    /**
+     * **An order is addressed to its own seat**, for the verdict's reason one step further on: a
+     * broadcast order would publish where everybody else's work is, which is a map of the round
+     * handed to a player who is supposed to be walking a dark house to find their own.
+     */
+    @Test
+    fun `a work order is addressed to its own seat only`() {
+        val state = live()
+        assertEquals(
+            listOf(Seat(3)),
+            EmitSchema.deliveries(Effect.WorkOrderIssued(Seat(3), emptyList()), state)
+                .map { it.seat },
+        )
+    }
+
+    /**
+     * **A blocked line is a different type and cannot be given a name** (D-114, rule 3).
+     *
+     * The redaction here is structural rather than a field left null, so this reads the type rather
+     * than a value: `OrderLine.Blocked` has one property and it is the index. A `subroutine` that
+     * arrived as `null` would be the same disclosure one refactor away from being populated.
+     */
+    @Test
+    fun `a blocked line has nothing on it but its position`() {
+        val blocked: OrderLine = OrderLine.Blocked(4)
+        assertEquals(4, blocked.index)
+        assertFalse(
+            blocked.toString().contains("subroutine", ignoreCase = true),
+            "a blocked line carries a Subroutine: $blocked",
+        )
+    }
+
+    /**
      * **The verdict is addressed to the seat that returned the entry, and to no other phone.**
      *
      * The allowlist cannot see this: every living Resident is in the same class, so a verdict

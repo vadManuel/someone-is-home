@@ -100,6 +100,10 @@ class ScreenshotTest {
             "lobby-empty" to lobbyOf(joined = 0, linesIn = 0, hosting = true),
             "lobby-client" to lobbyOf(joined = 6, linesIn = 4, hosting = false),
             "lobby-ready" to lobbyOf(joined = 6, linesIn = 6, hosting = true),
+            // Every line in and still short of D-128's party floor: the one state where the host
+            // has done everything asked of them and the button is still dead. What needed a
+            // person's eye is whether the line above it reads as an instruction or as a fault.
+            "lobby-short" to lobbyOf(joined = 4, linesIn = 4, hosting = true),
         )
         for ((name, lobby) in states) {
             runDesktopComposeUiTest(width = 600, height = 800) {

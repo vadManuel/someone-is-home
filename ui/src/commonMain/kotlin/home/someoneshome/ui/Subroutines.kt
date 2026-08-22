@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import home.someoneshome.model.SubroutineKind
 
 /**
  * **The design's roster of ten, as data rather than as ten strings typed onto screens.**
@@ -42,28 +43,49 @@ import androidx.compose.runtime.staticCompositionLocalOf
  * state, not a placeholder to be filled with the nearest screen** — pointing an unbuilt Subroutine
  * at a built one's screen would put a player through the wrong work and look like a routing bug
  * rather than a missing feature.
+ *
+ * ### [kind] is the only thing the house sends, and the rest of this table is the client's (D-112)
+ *
+ * In v1 the light level is **fixed per Subroutine kind** and the client holds the roster, so a
+ * work order arrives as a list of kinds and every screen looks the label and the signature up
+ * here. No field arrives on the wire, no effect grows a member and the redaction schema gains no
+ * row — per-assignment variety is deferred to v2 rather than left ambiguous, because it is the
+ * wire that costs something and nothing in the design needs that wire yet.
  */
 enum class Subroutine(
     val label: String,
     val tier: SubroutineTier,
     val light: LightSignature,
+    /** What the house calls this one. The one field of this table that crosses the boundary. */
+    val kind: SubroutineKind,
     val screen: ScreenId? = null,
 ) {
-    Replay("REPLAY", SubroutineTier.Short, LightSignature.Bright, ScreenId.SubReplay),
-    Interrupt("INTERRUPT", SubroutineTier.Short, LightSignature.Medium),
-    ParityCheck("PARITY CHECK", SubroutineTier.Short, LightSignature.Bright, ScreenId.SubParity),
-    Sniff("SNIFF", SubroutineTier.Short, LightSignature.Dark),
-    Deallocate("DEALLOCATE", SubroutineTier.Short, LightSignature.Bright),
-    Drift("DRIFT", SubroutineTier.Medium, LightSignature.Medium),
-    Short("SHORT", SubroutineTier.Short, LightSignature.Dark, ScreenId.SubShort),
-    SignalTrace("SIGNAL TRACE", SubroutineTier.Medium, LightSignature.Medium, ScreenId.SubTrace),
-    Jam("JAM", SubroutineTier.Medium, LightSignature.Medium, ScreenId.SubJam),
-    Handshake("HANDSHAKE", SubroutineTier.Medium, LightSignature.Dark, ScreenId.SubHandshake);
+    Replay("REPLAY", SubroutineTier.Short, LightSignature.Bright, SubroutineKind.Replay, ScreenId.SubReplay),
+    Interrupt("INTERRUPT", SubroutineTier.Short, LightSignature.Medium, SubroutineKind.Interrupt),
+    ParityCheck("PARITY CHECK", SubroutineTier.Short, LightSignature.Bright, SubroutineKind.ParityCheck, ScreenId.SubParity),
+    Sniff("SNIFF", SubroutineTier.Short, LightSignature.Dark, SubroutineKind.Sniff),
+    Deallocate("DEALLOCATE", SubroutineTier.Short, LightSignature.Bright, SubroutineKind.Deallocate),
+    Drift("DRIFT", SubroutineTier.Medium, LightSignature.Medium, SubroutineKind.Drift),
+    Short("SHORT", SubroutineTier.Short, LightSignature.Dark, SubroutineKind.Short, ScreenId.SubShort),
+    SignalTrace("SIGNAL TRACE", SubroutineTier.Medium, LightSignature.Medium, SubroutineKind.SignalTrace, ScreenId.SubTrace),
+    Jam("JAM", SubroutineTier.Medium, LightSignature.Medium, SubroutineKind.Jam, ScreenId.SubJam),
+    Handshake("HANDSHAKE", SubroutineTier.Medium, LightSignature.Dark, SubroutineKind.Handshake, ScreenId.SubHandshake);
 
     companion object {
 
         /** The Subroutine a screen belongs to, or null where the screen is not one of theirs. */
         fun on(screen: ScreenId): Subroutine? = entries.firstOrNull { it.screen == screen }
+
+        /**
+         * **The roster row the house named.** Total over [SubroutineKind] by construction — every
+         * kind has exactly one row here, which `SubroutineRosterTest` holds in both directions.
+         *
+         * Total rather than nullable on purpose: a work order arriving with a kind this client
+         * could not resolve would leave a blank line on the one screen a player navigates a dark
+         * house by, and a blank line is indistinguishable from the blocked entry that is supposed
+         * to be there (D-114).
+         */
+        fun of(kind: SubroutineKind): Subroutine = entries.first { it.kind == kind }
 
         /** The ones with an interaction behind them, in roster order. */
         val built: List<Subroutine> get() = entries.filter { it.screen != null }

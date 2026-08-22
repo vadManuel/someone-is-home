@@ -52,6 +52,55 @@ sealed interface Effect {
     data class SubroutineProgressed(val remaining: Int) : Effect
     data class MessageDelivered(val seat: Seat, val body: String) : Effect
 
+    /**
+     * **A seat's work order, as that seat may see it** (D-114, D-129, D-112).
+     *
+     * Carries [OrderLine]s and never [OrderEntry]s: the answer key, the anchors and the dependency
+     * graph all stay on the authority side, and a blocked line is a different *type* rather than
+     * the same type with its name blanked (rule 3).
+     *
+     * ### Emitted on every return, not only on the ones that changed something
+     *
+     * Completing an entry unblocks whatever was waiting behind it, so the order has to be re-sent
+     * — but sending it only when something changed would make its **presence** the verdict, one
+     * effect after [SubroutineGraded] has already delivered the real one. Two answers to the same
+     * question is one answer too many, and the second would be the one a client could read without
+     * being told. So it goes out on every return, constructed once outside the branch, exactly as
+     * the cooldown is in the revoke path.
+     *
+     * ### Every order is the same length and that is load-bearing
+     *
+     * [Balance.orderSize] is computed from public lobby facts alone — seats and the host's visible
+     * setting — so an Insider's fake order is exactly as long as everybody else's (D-129). Length
+     * is not a channel, in either direction.
+     */
+    data class WorkOrderIssued(val seat: Seat, val lines: List<OrderLine>) : Effect
+
+    /**
+     * **The house's opening text — one of exactly two events that dim the house** (D-118).
+     *
+     * The other is the Egress. Every other notification is quiet: no dim, no brightness spike,
+     * nothing world-observable at all. A separate kind from [MessageDelivered] rather than a flag
+     * on it, and the reason is the one A2 gave for splitting the presentation: **a second dim on
+     * the second text would spend the first one's meaning**, and a flag is a thing somebody can
+     * pass `true` for by accident.
+     *
+     * **It carries no words**, for [WorkOrderIssued]'s reason and D-112's: the client holds the
+     * copy, the house sends the fact. The words are identical for both roles anyway — what differs
+     * by role is what is *behind* the message, on a thread that has to be opened to read — so
+     * putting them on the wire would buy a drift risk and nothing else.
+     *
+     * **It reaches every seat.** The dim is world-observable, so a notification addressed to fewer
+     * than everyone is a beacon (D-076).
+     *
+     * **[haptic] is Short, and that is a ruling rather than a default.** D-135 closes the long
+     * haptic to five events — the Egress, an incoming phone call, STAND AND WALK IN, the Restrained
+     * takeover, and the end of the LIGHTS OUT IN *n* countdown — and this is not one of them. In a
+     * silent house a long buzz is world-observable through a pocket, and a signal that means five
+     * specific things stops meaning them the moment a sixth is added.
+     */
+    data class OpeningMessage(val seat: Seat, val haptic: Haptic) : Effect
+
     // ---- The meeting -----------------------------------------------------------------------
     //
     // Twelve kinds for one lifecycle looks like a lot until you try to merge two of them. Every

@@ -134,9 +134,28 @@ object RecordingText {
             }
         }
 
+        /** A list of markers. Each element unescaped — the comma is a separator, so it escapes. */
+        fun markers(key: String): List<MarkerId> {
+            val raw = req(key)
+            if (raw.isEmpty()) return emptyList()
+            return raw.split(',').map { MarkerId(unescape(it, line)) }
+        }
+
+        /**
+         * The host's Insider setting: a number, or UNKNOWN.
+         *
+         * `none` rather than a sentinel integer, and fatal on anything else. UNKNOWN is a real
+         * answer — *let the house decide* — and a parser that read it as a zero would replay a
+         * round the host had configured, not the one they left alone.
+         */
+        fun chosen(key: String): Int? = if (req(key) == "none") null else int(key)
+
         val at = Tick(long("at"))
         val event = when (name) {
-            "RoundArmed" -> Event.RoundArmed(at, long("seed"), seats("seats"), seats("insiders"))
+            "RoundArmed" -> Event.RoundArmed(
+                at, long("seed"), seats("seats"), seats("insiders"),
+                chosen("chosen"), markers("markers"),
+            )
             "MarkerScanned" -> Event.MarkerScanned(at, seat("actor"), marker("marker"))
             "SubroutineReturned" ->
                 Event.SubroutineReturned(at, seat("actor"), marker("marker"), ints("entered"))
@@ -167,7 +186,7 @@ object RecordingText {
     }
 
     private fun expectedFields(name: String): Set<String> = when (name) {
-        "RoundArmed" -> setOf("at", "seed", "seats", "insiders")
+        "RoundArmed" -> setOf("at", "seed", "seats", "insiders", "chosen", "markers")
         "MarkerScanned" -> setOf("at", "actor", "marker")
         "SubroutineReturned" -> setOf("at", "actor", "marker", "entered")
         "RevokeArmed" -> setOf("at", "actor")
@@ -220,6 +239,7 @@ object RecordingText {
             when (val next = s[i + 1]) {
                 '\\' -> out.append('\\')
                 'p' -> out.append('|')
+                'c' -> out.append(',')
                 'n' -> out.append('\n')
                 else -> throw MalformedRecording(line, "unknown escape '\\$next'")
             }

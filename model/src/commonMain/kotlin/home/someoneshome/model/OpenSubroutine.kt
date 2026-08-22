@@ -23,16 +23,27 @@ package home.someoneshome.model
  * grades is the one handed over at the card it was armed at (D-123 — the house resolves
  * `(seat, card)` to that player's current Subroutine).
  *
- * ### What is spine and what is L3's
+ * ### It is one line of a work order now, and [entry] is what says which
  *
- * **[expected] is drawn at arming by a placeholder and one Subroutine stays open all round.** The
- * real work order — D-129's `K` per Resident, the dependency graph, D-114's blocked entries, and a
- * fresh instance drawn on every re-scan — is L3's, and every one of those replaces something here.
- * What is *not* provisional is the shape: a seat has one open Subroutine, it is armed by a scan,
- * and it is spent by an entry.
+ * The spine drew one entry per seat and left it open all round, so the same assignment could be
+ * completed over and over and the meter was farmable without moving. It is now **a copy of one
+ * [OrderEntry]**, opened by a scan of the card that entry is anchored at (D-123), and spending it
+ * marks that entry done — which is what advances the order and what unblocks whatever was waiting
+ * behind it (D-114).
+ *
+ * What was never provisional is the shape: a seat has one open Subroutine, a scan arms it, an
+ * entry spends it.
  */
 class OpenSubroutine(
     val seat: Seat,
+    /**
+     * Which line of [WorkOrder] this instance came from.
+     *
+     * Carried rather than looked up by comparing [expected], because two entries in one order may
+     * legitimately ask for the same thing — and a completion filed against the wrong line would
+     * unblock the wrong work while leaving the right line open for a second bank.
+     */
+    val entry: Int,
     /**
      * What the house asked for, as the ordered integers the player's own screen deals in — an
      * element sequence, a chosen cell, a finger count, a signed offset, a walked route.
@@ -48,10 +59,10 @@ class OpenSubroutine(
     val armed: Boolean get() = armedAt != null
 
     /** A scan of [marker]. D-110's only way back to ready. */
-    fun armedAt(marker: MarkerId): OpenSubroutine = OpenSubroutine(seat, expected, marker)
+    fun armedAt(marker: MarkerId): OpenSubroutine = OpenSubroutine(seat, entry, expected, marker)
 
     /** The entry has gone. Spent whatever it said, and whoever sent it. */
-    fun spent(): OpenSubroutine = OpenSubroutine(seat, expected, null)
+    fun spent(): OpenSubroutine = OpenSubroutine(seat, entry, expected, null)
 
     /**
      * True when [entered], handed over at [marker], is the entry this Subroutine asked for.

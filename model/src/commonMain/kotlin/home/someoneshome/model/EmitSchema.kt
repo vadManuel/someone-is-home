@@ -69,6 +69,8 @@ object EmitSchema {
         is Effect.SubroutineGraded -> SUBROUTINE_GRADED
         is Effect.SubroutineProgressed -> SUBROUTINE_PROGRESSED
         is Effect.MessageDelivered -> MESSAGE_DELIVERED
+        is Effect.WorkOrderIssued -> WORK_ORDER_ISSUED
+        is Effect.OpeningMessage -> OPENING_MESSAGE
         is Effect.MeetingOpened -> MEETING_OPENED
         is Effect.StandAndWalkIn -> STAND_AND_WALK_IN
         is Effect.CheckInProgressed -> CHECK_IN_PROGRESSED
@@ -88,6 +90,8 @@ object EmitSchema {
     val SUBROUTINE_GRADED = MessageKind("SubroutineGraded")
     val SUBROUTINE_PROGRESSED = MessageKind("SubroutineProgressed")
     val MESSAGE_DELIVERED = MessageKind("MessageDelivered")
+    val WORK_ORDER_ISSUED = MessageKind("WorkOrderIssued")
+    val OPENING_MESSAGE = MessageKind("OpeningMessage")
     val MEETING_OPENED = MessageKind("MeetingOpened")
     val STAND_AND_WALK_IN = MessageKind("StandAndWalkIn")
     val CHECK_IN_PROGRESSED = MessageKind("CheckInProgressed")
@@ -162,6 +166,24 @@ object EmitSchema {
         // A banner buzzes and dims every panel in the house, and a dimming lamp is world-
         // observable, so a notification addressed to fewer than everyone is a beacon (D-076).
         MESSAGE_DELIVERED to (LIVING + OUTSIDE),
+
+        // **Both living classes, and it must never be narrowed to one of them.** An Insider's fake
+        // order is drawn by the same rule, at the same length (D-129), so the row that serves a
+        // Resident serves an Insider identically -- and a row narrowed to Residents would be a
+        // role oracle delivered by the allowlist: an Insider whose phone showed no work at all.
+        //
+        // Not the out classes. A player outside the system has no work order to be shown, their
+        // screen is D-134's, and the effect is addressed to one seat anyway. Denying it on the
+        // round-state axis carries no role information -- round-state is publicly observable
+        // (D-068) -- and it is the fail-closed direction for a message carrying assignments.
+        WORK_ORDER_ISSUED to LIVING,
+
+        // **The house's opening text, and it dims every panel in the building** (D-118). One of
+        // exactly two events that do. A dimming lamp is world-observable in a dark house, so a
+        // notification that reached fewer than everyone would be a beacon (D-076) -- which is why
+        // this row is as wide as MESSAGE_DELIVERED's rather than as narrow as the round allows.
+        // At arming nobody is out yet; the row is written for the rule, not for the moment.
+        OPENING_MESSAGE to (LIVING + OUTSIDE),
 
         // **The ring, and it is for the living** (D-134). A player who is out gets no phone call
         // -- they get STAND AND WALK IN, which is the row below. This narrows on the ROUND-STATE
@@ -266,6 +288,14 @@ object EmitSchema {
             // into a percentage to prevent (D-103), arriving per player instead of in aggregate.
             is Effect.SubroutineGraded -> listOf(effect.seat)
             is Effect.MessageDelivered -> listOf(effect.seat)
+            // That seat's own order, to that seat. Broadcasting it would publish what everybody
+            // else was assigned, which is a map of the round's work handed to a player who is
+            // supposed to be walking a dark house to find their own.
+            is Effect.WorkOrderIssued -> listOf(effect.seat)
+            // Addressed per seat and emitted once per seat, which is how the opening message
+            // reaches everyone (D-076) without the effect growing a broadcast shape that a later,
+            // quieter message could inherit.
+            is Effect.OpeningMessage -> listOf(effect.seat)
             is Effect.SubroutineProgressed -> state.seats
             // Broadcast, and left to the allowlist to narrow. Addressing these by round-state
             // here as well would state the same rule in two places, and the day they disagreed

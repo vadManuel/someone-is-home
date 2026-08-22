@@ -1,5 +1,6 @@
 package home.someoneshome.harness
 
+import home.someoneshome.model.Balance
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
 import home.someoneshome.model.MarkerId
@@ -10,6 +11,16 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
+
+/**
+ * **The first tick at which an Insider ability is off its opening cooldown** (D-132).
+ *
+ * Every cooldown starts the round already running at half its normal duration. Every Revoke below
+ * is armed after this moment — armed inside the opening stretch of peace it would arm nothing,
+ * revoke nobody, and leave every assertion about the *shape* of the effect stream passing over a
+ * round in which the transition under test never happened.
+ */
+private val READY = Balance.REVOKE_COOLDOWN / 2
 
 class RecordingTest {
 
@@ -140,13 +151,13 @@ class RecordingTest {
     fun `order changes the state but never the visible effect stream`() {
         val armedFirst = listOf(
             Event.RoundArmed(Tick(0), 1L, SEATS, INSIDERS),
-            Event.RevokeArmed(Tick(1), Seat(1)),
-            Event.ContactMade(Tick(2), Seat(1), Seat(3)),
+            Event.RevokeArmed(Tick(READY + 1), Seat(1)),
+            Event.ContactMade(Tick(READY + 2), Seat(1), Seat(3)),
         )
         val armedAfter = listOf(
             Event.RoundArmed(Tick(0), 1L, SEATS, INSIDERS),
-            Event.ContactMade(Tick(1), Seat(1), Seat(3)),
-            Event.RevokeArmed(Tick(2), Seat(1)),
+            Event.ContactMade(Tick(READY + 1), Seat(1), Seat(3)),
+            Event.RevokeArmed(Tick(READY + 2), Seat(1)),
         )
 
         val (stateA, recordingA) = record(GameState.EMPTY, armedFirst)
@@ -160,6 +171,51 @@ class RecordingTest {
             recordingB.effectTranscript,
             "the effect stream reveals whether the contact landed",
         )
+    }
+
+    /**
+     * **THE SAME HOLE, ONE DRAW FURTHER ON — and this one was found by an injection coming back
+     * asleep.**
+     *
+     * Deleting the work orders from the state row failed nothing. That is the `ended` omission in a
+     * new costume: **the answer key is what a verdict is computed from**, so a state row that
+     * stopped short of it would certify a build whose draw had quietly changed — different
+     * Subroutines, different cards, different answers — as replaying byte-identically, because the
+     * effect stream carries only a boolean per return and looks the same either way.
+     *
+     * So the tamper is the guard. Mark every line of every order done in the state rows, change
+     * nothing else, and the replay must refuse it. On a build that does not render the orders there
+     * is nothing to mark, the recording comes back unchanged, and this fails on the assertion below
+     * rather than passing quietly.
+     */
+    @Test
+    fun `replay detects a work order that was drawn differently`() {
+        val markers = (0 until 8).map { MarkerId("m$it") }
+        val events = listOf(Event.RoundArmed(Tick(0), 1L, SEATS, INSIDERS, null, markers))
+        val (state, recording) = record(GameState.EMPTY, events)
+        assertTrue(
+            state.workOrders.any { it.entries.isNotEmpty() },
+            "precondition: the round was armed with work in it",
+        )
+
+        val tampered = recording.stateTranscript.map { it.replace("/open", "/done") }
+        assertNotEquals(
+            recording.stateTranscript, tampered,
+            "the state row does not carry the work orders at all, so the answer key a verdict is " +
+                "computed from is outside the replay guarantee",
+        )
+        val result = replay(
+            GameState.EMPTY,
+            Recording(
+                initialState = recording.initialState,
+                events = recording.events,
+                effectTranscript = recording.effectTranscript,
+                stateTranscript = tampered,
+                refusalTranscript = recording.refusalTranscript,
+            ),
+        )
+        assertTrue(result is ReplayResult.Diverged, "a different draw replayed clean")
+        assertEquals(ReplayResult.Diverged.Kind.STATE, result.kind)
     }
 
     /**
@@ -177,8 +233,8 @@ class RecordingTest {
     fun `replay detects a state-only regression that leaves the effect stream untouched`() {
         val events = listOf(
             Event.RoundArmed(Tick(0), 1L, SEATS, INSIDERS),
-            Event.RevokeArmed(Tick(1), Seat(1)),
-            Event.ContactMade(Tick(2), Seat(1), Seat(3)),
+            Event.RevokeArmed(Tick(READY + 1), Seat(1)),
+            Event.ContactMade(Tick(READY + 2), Seat(1), Seat(3)),
         )
         val (state, recording) = record(GameState.EMPTY, events)
         assertEquals(listOf(3), state.revoked.map { it.index }, "precondition: the revoke landed")
@@ -199,7 +255,7 @@ class RecordingTest {
     /** A recording replayed from a different starting state must not certify as identical. */
     @Test
     fun `replay rejects a recording replayed from the wrong starting state`() {
-        val events = listOf(Event.RevokeArmed(Tick(1), Seat(1)), Event.ContactMade(Tick(2), Seat(1), Seat(3)))
+        val events = listOf(Event.RevokeArmed(Tick(READY + 1), Seat(1)), Event.ContactMade(Tick(READY + 2), Seat(1), Seat(3)))
         val armedStart = record(GameState.EMPTY, listOf(Event.RoundArmed(Tick(0), 1L, SEATS, INSIDERS))).first
         val (_, fromArmed) = record(armedStart, events)
 
@@ -213,12 +269,12 @@ class RecordingTest {
     fun `arming clears any state carried in from before`() {
         val dirty = record(GameState.EMPTY, listOf(
             Event.RoundArmed(Tick(0), 1L, SEATS, INSIDERS),
-            Event.RevokeArmed(Tick(1), Seat(1)),
-            Event.ContactMade(Tick(2), Seat(1), Seat(3)),
+            Event.RevokeArmed(Tick(READY + 1), Seat(1)),
+            Event.ContactMade(Tick(READY + 2), Seat(1), Seat(3)),
         )).first
         assertEquals(listOf(3), dirty.revoked.map { it.index })
 
-        val rearmed = record(dirty, listOf(Event.RoundArmed(Tick(9), 2L, SEATS, INSIDERS))).first
+        val rearmed = record(dirty, listOf(Event.RoundArmed(Tick(READY + 9), 2L, SEATS, INSIDERS))).first
         assertEquals(emptyList(), rearmed.revoked.map { it.index })
         assertEquals(emptyList(), rearmed.cooldownArmed.map { it.index })
     }
