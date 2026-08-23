@@ -76,6 +76,31 @@ enum class Subroutine(
     /** What the house calls this one. The one field of this table that crosses the boundary. */
     val kind: SubroutineKind,
     val screen: ScreenId? = null,
+    /**
+     * **What to do, read at the card, before the work opens** — and only where the work's own
+     * screen cannot say it (E-S1-1).
+     *
+     * ### ⚠️ COPY, DRAFTED HERE AND NOT RULED
+     *
+     * Every other Subroutine writes its instruction across the top of its own screen — *TAP TO
+     * CATCH THE SWEEP INSIDE THE BAND*, *TAP WHERE THE DOT IS WHEN THE PHONE BUZZES*. **Sniff
+     * cannot**, and it is the one that cannot on purpose: D-137 makes it the roster's only *short
+     * dark*, and the treatment takes *fully dark* literally — every colour on the screen is
+     * [Amber.Black] until the player has answered. A sentence drawn there is a sentence in black
+     * ink on black glass, which is not an instruction, it is a layout.
+     *
+     * So the instruction moves one screen earlier, to the last surface that is still lit and still
+     * has the player's eyes: the caught scan, above BEGIN. **The wording below is a build-time
+     * draft in the design's own register** (D-137: *the player answers which group was bigger*),
+     * and it is flagged rather than settled — it is the only line in the game a player reads before
+     * a screen they cannot read.
+     *
+     * **Null for the other nine**, which is a decision and not an omission: a briefing on every
+     * card would be a paragraph between a player and the work on the one screen the design wants
+     * them to leave quickly, and nine of the ten already say it where it is needed. Whether they
+     * should all be briefed here as well is a copy call nobody has made.
+     */
+    val briefing: String? = null,
 ) {
     Replay("REPLAY", SubroutineTier.Short, LightSignature.Bright, SubroutineKind.Replay, ScreenId.SubReplay),
     Interrupt(
@@ -83,7 +108,12 @@ enum class Subroutine(
         ScreenId.SubInterrupt,
     ),
     ParityCheck("PARITY CHECK", SubroutineTier.Short, LightSignature.Bright, SubroutineKind.ParityCheck, ScreenId.SubParity),
-    Sniff("SNIFF", SubroutineTier.Short, LightSignature.Dark, SubroutineKind.Sniff, ScreenId.SubSniff),
+    Sniff(
+        "SNIFF", SubroutineTier.Short, LightSignature.Dark, SubroutineKind.Sniff, ScreenId.SubSniff,
+        // The screen this describes emits nothing, so this is where it has to be read. See
+        // [briefing] — the wording is a draft and it is flagged.
+        briefing = "THE PHONE WILL BUZZ TWICE.\nTAP THE SIDE THAT BUZZED MORE.",
+    ),
     Deallocate("DEALLOCATE", SubroutineTier.Short, LightSignature.Bright, SubroutineKind.Deallocate, ScreenId.SubDeallocate),
     Drift(
         "DRIFT", SubroutineTier.Medium, LightSignature.Medium, SubroutineKind.Drift,
@@ -711,8 +741,38 @@ class SubroutineModel(
         }
     }
 
+    /**
+     * **Which opening this is — the identity a screen keys its clock on** (E-S2-4).
+     *
+     * A number rather than anything descriptive, and it says exactly one thing: *this is not the
+     * instance you were drawing a moment ago.* It changes on every scan that opens work and on
+     * nothing else.
+     *
+     * ### Why a screen cannot use its own composition instead
+     *
+     * The two moving Subroutines run a clock from the moment their screen appears (D-139's sweep,
+     * D-140's drift), and a clock held in a `remember` restarts when the composition is disposed —
+     * which today looks correct, because the only route back to a marker walks through the work
+     * order and disposes the screen on the way. **That is a coincidence of the current flow, not a
+     * rule**: the day a re-scan can re-open a Subroutine the phone is already standing on, a
+     * screen keyed on its own composition keeps counting through a fresh draw, and the band the
+     * player is watching is one the house has already replaced. The clock has to restart because
+     * *the instance changed*, and this is the thing that says it did.
+     *
+     * ### It is this phone's count, and the arriving instance is what replaces it
+     *
+     * `Effect.ScanAnswered` carries a `SubroutineInstance` and nothing in `ui` consumes it yet, so
+     * the identity available here is *how many times this phone has opened work*. It is sufficient
+     * for the claim — it changes exactly when a new instance is dealt — and it is deliberately not
+     * derived from the parameters: two consecutive draws may legitimately be identical, and a
+     * re-scan that happened to redraw the same band would then not restart the clock.
+     */
+    var instance: Int by mutableStateOf(0)
+        private set
+
     /** A marker scanned again opens the same Subroutine with nothing entered. */
     fun beganAgain() {
+        instance++
         Subroutine.entries.forEach { entry(it)?.restart() }
     }
 

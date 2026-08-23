@@ -88,20 +88,24 @@ class CountdownTest {
     }
 
     /**
-     * **With no house attached both ballot clocks keep their drawn numbers.**
+     * **With no house attached both ballot clocks read the same window** (D-163).
      *
-     * The 45 and the 60 disagree, deliberately and only here: the couch's 60 is what reproduces the
-     * design's `VOTING ENDS IN 0:24` over twelve lit segments of thirty. Reconciling the two drawn
-     * numbers is a visible screen change and still wants a ruling — this holds the fixture where it
-     * is so that the flag stays about a fixture rather than quietly becoming about the game.
+     * They disagreed once — the couch's 60 against the living's 45 — and the 60 was kept because it
+     * reproduced the design's `VOTING ENDS IN 0:24` over twelve lit segments of thirty. That 60 was
+     * a drawing artifact, and one clock in a room where the couch can see a living player's phone
+     * is one number. The moment survives; the bar under it is sixteen segments now.
      */
     @Test
-    fun withNoHouseAttachedTheTwoBallotClocksKeepTheirDrawnWindows() {
+    fun withNoHouseAttachedTheTwoBallotClocksReadTheSameWindow() {
         assertEquals(
             Balance.VOTE_WINDOW_SECONDS,
             assertNotNull(Countdowns.on(ScreenId.Vote)).ofSeconds,
         )
-        assertEquals(60, assertNotNull(Countdowns.on(ScreenId.GhostMeeting)).ofSeconds)
+        assertEquals(
+            Balance.VOTE_WINDOW_SECONDS,
+            assertNotNull(Countdowns.on(ScreenId.GhostMeeting)).ofSeconds,
+            "the couch is counting a ballot of its own again",
+        )
     }
 
     @Test
@@ -153,6 +157,11 @@ class CountdownTest {
      * were two constants; the ghost meeting's twelve lit segments and its `0:24` were two more.
      * Deriving both from one value has to land on the same picture the design drew, or the
      * derivation is a redesign wearing a refactor's clothes.
+     *
+     * **The couch's bar is the one place that picture legitimately moved** (D-163). Its moment is
+     * still the design's `0:24`; the window it is a fraction of went from a drawn 60 to the ruled
+     * 45, so the bar draws sixteen. The derivation is what makes that a one-line change instead of
+     * a second number somebody has to remember to move.
      */
     @Test
     fun theDerivedBarsAreTheOnesTheDesignDrew() {
@@ -161,7 +170,7 @@ class CountdownTest {
         assertEquals("6", scan.text)
 
         val ghost = assertNotNull(Countdowns.on(ScreenId.GhostMeeting))
-        assertEquals(12, ghost.litOf(PanelVals.VOTE_SEGMENTS), "the ghost meeting bar moved")
+        assertEquals(16, ghost.litOf(PanelVals.VOTE_SEGMENTS), "the ghost meeting bar moved")
         assertEquals("0:24", ghost.text)
 
         // The result screen's bar is two weights rather than segments: 9 of 15 left, drawn as

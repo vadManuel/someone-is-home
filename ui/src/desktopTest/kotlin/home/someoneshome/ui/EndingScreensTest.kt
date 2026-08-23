@@ -1,8 +1,12 @@
 package home.someoneshome.ui
 
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -20,7 +24,7 @@ import kotlin.test.assertTrue
  * Its companion is `MeterDisclosureTest`, which owns the percentage sweep, and `EndingTest` in
  * `core`, which owns what the house actually emits. This file owns the pixels.
  */
-@OptIn(ExperimentalTestApi::class)
+@OptIn(ExperimentalTestApi::class, ExperimentalComposeUiApi::class)
 class EndingScreensTest {
 
     /**
@@ -212,5 +216,83 @@ class EndingScreensTest {
         }
         assertEquals("0%", PanelVals(PanelState(screen = ScreenId.WinResidents)).integrityPercent)
         assertEquals("43%", PanelVals(PanelState(screen = ScreenId.WinInsiders)).integrityPercent)
+    }
+
+    /**
+     * **The lights-on ending emits no amber, on either phone in the room** — and the phone that
+     * caught it is the one only an Insider is holding.
+     *
+     * `WinResidents` is the one screen that returns to the bone field, and the palette is doing
+     * the work: the perimeter is disarmed, the lights are on, the device is an organiser again.
+     * Every element on it takes bone ink — the summary rows, the named Insiders, NEW ROUND's three
+     * colours — and the house's sign-off card did not, so `Unfortunate.` sat there as the single
+     * amber element on a sage screen.
+     *
+     * **Nothing was ever going to catch that by comparing roles.** The card reaches only an
+     * Insider's phone, so a Resident render did not draw it at all; and a two-role layout sweep
+     * compares geometry, so both roles agreed about a shape one of them was drawing in the wrong
+     * colour. It took a screenshot and an eye. This is that eye, stated as something that fails.
+     *
+     * ### Measured as hue rather than as an exact colour
+     *
+     * The glass attenuates one row in three by 32%, so an exact-match sweep would find amber on
+     * two rows out of every three and miss it on the third — a test that passes or fails on which
+     * scan line a letter landed under. What separates the two palettes is not intensity, it is
+     * **warmth**: every amber in the ladder is far redder than it is blue (`Bright` is 166 apart,
+     * `Dim` 120), and every bone and slate value is within about 30 of neutral. So the assertion
+     * is on the gap, well above anything bone can reach and well below anything amber can hide at.
+     */
+    @Test
+    fun theResidentEndingIsBoneOnBothPhones() {
+        for (role in PanelRole.entries) {
+            val amber = amberPixelsOn(ScreenId.WinResidents, role)
+            assertEquals(
+                0, amber,
+                "$amber amber pixels on the lights-on ending for a $role — something on " +
+                    "WinResidents is drawing in the dark palette",
+            )
+        }
+    }
+
+    /** The same sweep on the Insiders' ending, which is amber and must stay amber. */
+    @Test
+    fun theInsiderEndingIsStillAmber() {
+        assertTrue(
+            amberPixelsOn(ScreenId.WinInsiders, PanelRole.Insider) > 0,
+            "the amber ending went bone; the sweep above would now pass for the wrong reason",
+        )
+    }
+
+    /**
+     * How many pixels on this screen are warm enough that only the amber ladder can have drawn
+     * them. See [theResidentEndingIsBoneOnBothPhones] for why the measure is red-minus-blue.
+     */
+    private fun amberPixelsOn(id: ScreenId, role: PanelRole): Int {
+        var found = 0
+        runDesktopComposeUiTest(width = 600, height = 1300) {
+            setContent {
+                DeviceCanvas(insets = PanelInsets()) {
+                    Screen(PanelState(screen = id, role = role), lobby = clientLobby())
+                }
+            }
+            val img = onRoot().captureToImage().toAwtImage()
+            for (y in 0 until img.height) {
+                for (x in 0 until img.width) {
+                    val rgb = img.getRGB(x, y)
+                    val warmth = ((rgb shr 16) and 0xFF) - (rgb and 0xFF)
+                    if (warmth > AMBER_WARMTH) found++
+                }
+            }
+        }
+        return found
+    }
+
+    private companion object {
+        /**
+         * Above every bone and slate value in the palette (the warmest, `BoneChip`, is 26 apart)
+         * and below every amber the endings use (`Dim` is 120 apart, and 82 after the glass takes
+         * its 32% off a scan line).
+         */
+        const val AMBER_WARMTH = 70
     }
 }

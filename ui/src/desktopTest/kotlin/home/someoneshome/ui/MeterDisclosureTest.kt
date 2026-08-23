@@ -163,7 +163,17 @@ class MeterDisclosureTest {
         runDesktopComposeUiTest {
             setContent {
                 DeviceCanvas(insets = PanelInsets()) {
-                    Screen(PanelState(screen = ScreenId.Ghost3, outBy = OutBy.Revoked))
+                    Screen(
+                        // With an Egress running, because that is the state in which this screen
+                        // prints two numbers. The widget is dim and empty otherwise, and a sweep
+                        // for a denominator that ran against the empty state would pass because
+                        // there was nothing on the screen to read.
+                        PanelState(
+                            screen = ScreenId.Ghost3,
+                            outBy = OutBy.Revoked,
+                            egressRunning = true,
+                        )
+                    )
                 }
             }
             // Read off the screen rather than off the model, because the defect being guarded was

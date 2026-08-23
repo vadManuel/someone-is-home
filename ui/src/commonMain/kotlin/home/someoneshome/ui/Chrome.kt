@@ -126,10 +126,19 @@ fun StatusBar(vals: PanelVals, bandHeight: Dp = STATUS_BAR_HEIGHT, sideInset: Dp
  * last character under the pill's left edge — trading a visible truncation for an invisible one.
  * Measured: the carrier has about 60 design units before the pill and UNREGISTERED wants 60.3.
  *
- * So REVOKED and RESTRAINED — the distinction D-078 exists to keep legible — fit whole with room
- * to spare, and UNREGISTERED ellipsizes. That is the right one to lose: it is the fallback for a
- * missing cause, chosen because it "asserts only that you are out", and `UNREGISTER…` still
- * asserts exactly that. Clipping it under a cutout would not.
+ * So REVOKED and RESTRAINED — the distinction D-078 exists to keep legible — fit whole, and
+ * UNREGISTERED ellipsizes. That is the right one to lose: it is the fallback for a missing cause,
+ * chosen because it "asserts only that you are out", and `UNREGISTER…` still asserts exactly that.
+ * Clipping it under a cutout would not.
+ *
+ * ### ⚠️ It is not *room to spare* — the slot draws exactly ten characters and RESTRAINED is ten
+ *
+ * That sentence used to read *with room to spare* and it was wrong, on the word that matters most:
+ * measured, the zone renders ten characters and truncates the eleventh, so the longer of the two
+ * ways out of a round fits with **zero** margin. `StatusCarrierTest` holds both ends of that — the
+ * two real words drawn to their last character, and UNREGISTERED cut at exactly ten — so a change
+ * to this weight, to the tracking or to the glyphs beside it fails there rather than in a dark
+ * house.
  */
 private const val LEFT_ZONE = 0.30f
 private const val MIDDLE_ZONE = 0.44f

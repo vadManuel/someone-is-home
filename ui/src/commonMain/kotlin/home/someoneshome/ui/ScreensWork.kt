@@ -550,6 +550,23 @@ fun ScanCaughtScreen(vals: PanelVals) {
             Label("THE CARD IN YOUR HAND MATCHES", size = 6.0, color = Amber.Faint, tracking = 0.1)
         }
 
+        // **The last lit surface before a screen that cannot be read** (E-S1-1). Only Sniff has
+        // one: its own screen is black until the answer (D-137), so the sentence telling a player
+        // what to do there would be black ink on black glass. Every other Subroutine writes its
+        // instruction across the top of its own screen and has nothing to say here.
+        //
+        // Above BEGIN rather than beside it, so it is read on the way to the control rather than
+        // discovered under a thumb — and dim, because this screen is lit and the next one is the
+        // darkest in the game.
+        vals.current.subroutine.briefing?.let { briefing ->
+            Label(
+                briefing,
+                modifier = Modifier.fillMaxWidth(),
+                size = 6.5, color = Amber.Dim, tracking = 0.12, lineHeight = 1.8,
+                align = TextAlign.Center,
+            )
+        }
+
         // **BEGIN does not name a screen, and cannot.** Which Subroutine opens is a fact about
         // the card that was just read, so the target is the actions layer's — the same shape as a
         // tap on the plan, which opens whichever room is under the finger. Declared in
@@ -581,14 +598,20 @@ fun ScanCaughtScreen(vals: PanelVals) {
  * same four words, so the refusal cannot be read backwards into a fact about the marker or about
  * anybody else.
  *
- * *"Nothing of yours opens here"* is phrased about **you**, deliberately. The alternatives —
- * "already completed", "belongs to another resident" — would each be a small statement about a
- * player who is not standing there.
+ * **NOTHING FOR YOU HERE is D-124's own vocabulary** and this screen said NOT YOURS until E-L4-2
+ * caught it: the ruling names the words a registered card with no work for *you* answers with, and
+ * a screen that paraphrases a copy ruling is a screen the next ruling has to be re-applied to.
+ *
+ * The phrasing is about **you**, deliberately, in the headline and in the line under it. The
+ * alternatives — "already completed", "belongs to another resident" — would each be a small
+ * statement about a player who is not standing there. D-124's second half is why the *other*
+ * refusal keeps its own words: collapsing the two would let a Resident sweeping cards separate
+ * *registered but not mine* from *not registered at all*, which is a detector.
  */
 @Composable
 fun ScanBadScreen() {
     ScanRefusal(
-        headline = "NOT YOURS",
+        headline = "NOTHING FOR\nYOU HERE",
         detail = "Nothing of yours opens here.",
     )
 }
@@ -631,8 +654,13 @@ fun ScanUnknownScreen() {
  *
  * **The two screens are identical apart from their two lines of text, and that must stay true.**
  * If they had different icons or different shapes, an onlooker could tell which refusal you got
- * from across a room — and one of them (NOT YOURS) is reachable only by a Resident. Sharing the
- * body makes that identity structural instead of a coincidence someone later "improves" away.
+ * from across a room — and one of them (NOTHING FOR YOU HERE) is reachable only by a Resident.
+ * Sharing the body makes that identity structural instead of a coincidence someone later
+ * "improves" away.
+ *
+ * **The words are the one thing that may differ, and D-124 requires that they do**: the host needs
+ * the unregistered case loud during setup and the player needs the other case unremarkable during
+ * a round, so the two must sound different. What may not differ is everything around them.
  */
 @Composable
 private fun ScanRefusal(headline: String, detail: String) {
@@ -652,7 +680,15 @@ private fun ScanRefusal(headline: String, detail: String) {
                 Box(Modifier.fillMaxSize().border(1.3.u, Amber.Bright, CircleShape))
                 Box(Modifier.fillMaxHeight().width(1.3.u).rotate(45f).background(Amber.Bright))
             }
-            Label(headline, size = 13.0, color = Amber.Bright, tracking = 0.1)
+            // Centred and given a line height because one of the two headlines is now two lines
+            // (D-124's NOTHING FOR YOU HERE will not sit on one at this size). Both go through it,
+            // so the frame stays one frame: the single-line headline is unmoved by either.
+            Label(
+                headline,
+                modifier = Modifier.fillMaxWidth(),
+                size = 13.0, color = Amber.Bright, tracking = 0.1, lineHeight = 1.35,
+                align = TextAlign.Center,
+            )
             Label(
                 detail,
                 size = 7.0, color = Amber.Dim, tracking = 0.02, lineHeight = 1.9,

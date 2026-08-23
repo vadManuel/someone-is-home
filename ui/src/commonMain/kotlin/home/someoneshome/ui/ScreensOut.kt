@@ -316,6 +316,12 @@ fun GhostMeetingScreen(vals: PanelVals) {
  * No effect carries System Integrity to any client at all, so the fraction below is still the
  * port's drawn one. The Egress has a carrier (`Effect.EgressHeld`) but not the duration it is a
  * fraction of. Escalated; the shape is right and the sender is missing.
+ *
+ * ### The Egress widget is empty until there is an Egress
+ *
+ * See [GhostEgressWidget]. It is the one block on this screen that is not always saying something,
+ * because it is the one whose subject is not always happening — and a couch that has been reading
+ * `EGRESS . TRUE 68%` since lights-out would be reading it in a house where nothing has happened.
  */
 @Composable
 fun Ghost3Screen(vals: PanelVals) {
@@ -341,23 +347,7 @@ fun Ghost3Screen(vals: PanelVals) {
             )
         }
 
-        Column(
-            Modifier.fillMaxWidth().border(1.u, Amber.Bright).padding(horizontal = 7.u, vertical = 6.u),
-            verticalArrangement = Arrangement.spacedBy(4.u),
-        ) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom,
-            ) {
-                Label("EGRESS . TRUE", size = 6.5, color = Amber.Bright, tracking = 0.13)
-                Readout(vals.egressPercent, size = 15.0, color = Amber.Bright, lineHeight = 1.0)
-            }
-            SegmentBar(
-                total = PanelVals.METER_SEGMENTS, lit = vals.egressLit,
-                litColor = Amber.Bright, unlitColor = Amber.Edge, height = 6.u,
-            )
-        }
+        GhostEgressWidget(vals)
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.u)) {
             Box(
@@ -379,6 +369,70 @@ fun Ghost3Screen(vals: PanelVals) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Label("TRUE OCCUPANCY", size = 5.5, color = Amber.Faint, tracking = 0.08)
             Label("NO CHANNEL AVAILABLE", size = 5.5, color = Amber.Faint, tracking = 0.08)
+        }
+    }
+}
+
+/**
+ * **The real Egress number, and only while there is one** (`gdd.md:1014`).
+ *
+ * The couch is the one audience in the building allowed to watch this move, and it watches from a
+ * single screen for the entire round — so unlike the living's widget, which is a screen the house
+ * pushes and therefore cannot be wrong about whether a crisis is on, this one has to be able to be
+ * **empty**. It says `EGRESS . <type>` and the live percentage while an Egress runs, and it is dim
+ * and blank the rest of the time: no percentage, no type, no word.
+ *
+ * ### `EGRESS . TRUE` is gone, and it was two meanings in one shape
+ *
+ * The literal here read TRUE as an *adjective* — the true Egress number, matching TRUE OCCUPANCY at
+ * the foot of the same screen. But the living's widget draws `"EGRESS . ${type}"`, where the second
+ * half **is** the type: `EGRESS . BEACON`. One screen apart, one shape, two grammars, and the couch
+ * is the reader with the most time to notice. It says the type now, which is the reading the shape
+ * already had everywhere else.
+ *
+ * ### The frame stays, and only the frame
+ *
+ * The box is drawn at its full height either way so the plan below it does not walk up the screen
+ * when an Egress fires — a layout that moved would be a second, silent announcement of the crisis,
+ * arriving before the widget said anything. What changes is the ink and what is inside it.
+ *
+ * **Empty is not zero.** Nothing draws a bar with no lit segments here: a drained bar is a
+ * statement about an Egress that is nearly contained, and *no Egress at all* is not a value on that
+ * scale.
+ */
+@Composable
+private fun GhostEgressWidget(vals: PanelVals) {
+    val running = vals.egressRunning
+    Column(
+        Modifier.fillMaxWidth()
+            .border(1.u, if (running) Amber.Bright else Amber.Edge)
+            .padding(horizontal = 7.u, vertical = 6.u),
+        verticalArrangement = Arrangement.spacedBy(4.u),
+    ) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            // Empty strings rather than an absent row: the height comes off the same type ramp the
+            // populated widget uses, so the two states are the same box without a measurement
+            // written down twice.
+            Label(
+                if (running) "EGRESS . ${vals.egressType}" else "",
+                size = 6.5, color = Amber.Bright, tracking = 0.13,
+            )
+            Readout(
+                if (running) vals.egressPercent else "",
+                size = 15.0, color = Amber.Bright, lineHeight = 1.0,
+            )
+        }
+        if (running) {
+            SegmentBar(
+                total = PanelVals.METER_SEGMENTS, lit = vals.egressLit,
+                litColor = Amber.Bright, unlitColor = Amber.Edge, height = 6.u,
+            )
+        } else {
+            Box(Modifier.fillMaxWidth().height(6.u))
         }
     }
 }
@@ -573,20 +627,35 @@ fun WinInsidersScreen(vals: PanelVals) {
  * would be the two screens disagreeing about its shape.
  *
  * Its number is withheld, as it has been all evening. That is the whole characterisation.
+ *
+ * ### The palette is a parameter, because one of the two endings comes back to the light
+ *
+ * `WinResidents` is a lights-on bone screen and every sibling on it already takes its ink that
+ * way — [BoneSummaryRow], [BoneNamedInsider], [NewRound]'s three colours. This card did not, so
+ * `Unfortunate.` was **the one amber element on a sage screen**, and the reason nothing caught it
+ * is that it reaches only an Insider's phone: a two-role layout sweep compares geometry and this
+ * is a palette, so both roles rendered the same shape and only one of them rendered it in the
+ * wrong colour. Passing the ink in keeps the *shape* shared, which is what the lift was for.
  */
 @Composable
-private fun HouseSignOff(body: String) {
+private fun HouseSignOff(
+    body: String,
+    border: Color = Amber.Dim,
+    label: Color = Amber.Dim,
+    stamp: Color = Amber.Faint,
+    ink: Color = Amber.Bright,
+) {
     Column(
         Modifier.padding(horizontal = 8.u).padding(top = 7.u)
-            .fillMaxWidth().border(1.u, Amber.Dim)
+            .fillMaxWidth().border(1.u, border)
             .padding(horizontal = 7.u, vertical = 6.u),
         verticalArrangement = Arrangement.spacedBy(3.u),
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Label("NUMBER WITHHELD", size = 5.5, color = Amber.Dim, tracking = 0.12)
-            Label("21:38", size = 5.5, color = Amber.Faint, tracking = 0.12)
+            Label("NUMBER WITHHELD", size = 5.5, color = label, tracking = 0.12)
+            Label("21:38", size = 5.5, color = stamp, tracking = 0.12)
         }
-        Label(body, size = 9.0, color = Amber.Bright, lineHeight = 1.5)
+        Label(body, size = 9.0, color = ink, lineHeight = 1.5)
     }
 }
 
@@ -661,8 +730,17 @@ fun WinResidentsScreen(vals: PanelVals) {
         }
 
         // The house speaks last here too, and to the same two people. Nothing about a Resident win
-        // makes it apologetic.
-        vals.signOff?.let { HouseSignOff(it) }
+        // makes it apologetic -- but the lights are on, so it says it in bone, like everything
+        // else on this screen.
+        vals.signOff?.let {
+            HouseSignOff(
+                it,
+                border = Amber.BonePale,
+                label = Amber.BoneDim,
+                stamp = Amber.BoneFaint,
+                ink = Amber.BoneInk,
+            )
+        }
 
         Column(
             Modifier.weight(1f).padding(horizontal = 8.u, vertical = 9.u),

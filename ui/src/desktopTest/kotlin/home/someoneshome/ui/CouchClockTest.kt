@@ -1,5 +1,6 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.Balance
 import home.someoneshome.model.MeetingPhase
 
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -136,27 +137,58 @@ class CouchClockTest {
     }
 
     /**
-     * **The design's drawn picture survives the change**, which is what separates a wiring from a
-     * redesign: with no house attached the couch resolves to the vote and draws `VOTING ENDS IN
-     * 0:24` over twelve lit segments of thirty, exactly as before.
+     * **With no house attached the couch resolves to the vote, and draws the design's own hand at
+     * the ruled window** (D-163).
      *
-     * ### ⚠️ And that `0:24` is a fraction of sixty while the living's vote window is forty-five
-     *
-     * Two numbers for one clock, in a lit room where the couch can see a living player's phone.
-     * Left alone deliberately: the ghost's sixty is what reproduces the drawn bar, and moving it to
-     * the vote's forty-five redraws the same `0:24` at sixteen segments. That is a visible screen
-     * change and it wants a ruling — flagged, not taken.
+     * `VOTING ENDS IN 0:24` is the design's drawn moment and is kept. The bar under it is not a
+     * second number: it is that moment as a fraction of the window, and the window is now forty-
+     * five, so twelve lit segments of thirty became **sixteen**. The picture was redrawn rather
+     * than preserved, which is the ruling — re-cutting `0:24` to `0:18` to hold the old bar would
+     * have moved the artifact into the field beside it.
      */
     @Test
     fun withNoPhasePushedTheCouchDrawsTheDesignsOwnVoteClock() {
         val drawn = assertNotNull(Countdowns.onGhostMeeting(MeetingPhase.Vote))
         assertEquals("0:24", drawn.text)
-        assertEquals(12, drawn.litOf(PanelVals.VOTE_SEGMENTS), "the ghost meeting bar moved")
+        assertEquals(16, drawn.litOf(PanelVals.VOTE_SEGMENTS), "the ghost meeting bar moved")
         assertEquals(
             drawn.text,
             PanelVals(PanelState(screen = ScreenId.GhostMeeting, outBy = OutBy.Revoked))
                 .countdown.text,
             "a couch with no phase pushed resolves somewhere other than the vote",
         )
+    }
+
+    /**
+     * **One clock, one number** — the couch's ballot and the living's are the same window, at rest
+     * and in play alike (D-163, D-145).
+     *
+     * The couch and the living room are twelve feet apart and can see each other, so two bars
+     * draining the same ballot at different rates is a defect somebody reads off another player's
+     * phone. Asserted in both directions — a bench with no house, and a house that sent a window —
+     * because the fixture is where the two numbers drifted apart the first time.
+     *
+     * The living's row is `Balance.VOTE_WINDOW_SECONDS`, so this fails if either row is ever given
+     * a literal of its own again, whichever of the two it is.
+     */
+    @Test
+    fun theCouchAndTheLivingCountTheSameBallot() {
+        assertEquals(
+            Countdowns.windowOf(ScreenId.Vote),
+            Countdowns.windowOf(ScreenId.GhostMeeting),
+            "the couch's ballot window and the living's disagree with no house attached",
+        )
+        assertEquals(
+            Balance.VOTE_WINDOW_SECONDS,
+            Countdowns.windowOf(ScreenId.GhostMeeting),
+            "the couch's ballot is not the window the rules arm a round against",
+        )
+        for (sent in listOf(30, 45, 60)) {
+            assertEquals(
+                Countdowns.windowOf(ScreenId.Vote, sent),
+                Countdowns.windowOf(ScreenId.GhostMeeting, sent),
+                "a host who moved the ballot to ${sent}s moved one of the two bars and not the other",
+            )
+        }
     }
 }

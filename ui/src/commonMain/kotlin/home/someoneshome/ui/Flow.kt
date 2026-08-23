@@ -1396,7 +1396,10 @@ class FlowModel(
             // room names; turning one into the other needs the geography the house holds and does
             // not send with this effect, and a nine-character card id on a screen in a dark house
             // is worse than the fixture it would replace. Escalated, not guessed.
-            is RoundMessage.EgressOpened -> state = state.copy(egressType = message.type.name.uppercase())
+            is RoundMessage.EgressOpened -> state = state.copy(
+                egressType = message.type.name.uppercase(),
+                egressRunning = true,
+            )
 
             // The countdown stopping and starting again. [PanelState.secondsLeft] is seconds and
             // this is ticks; converting one to the other on the device would be `ui` holding an
@@ -1404,7 +1407,12 @@ class FlowModel(
             is RoundMessage.EgressHeld -> Unit
 
             is RoundMessage.SyncPulseAnswered -> Unit
-            is RoundMessage.EgressContained -> Unit
+
+            // **The Egress came down, and the couch's widget goes dim and empty with it.** The type
+            // is deliberately left standing: it says which Egress the house ran, and unsetting it
+            // here would make the widget's two facts one field again. What comes back down is
+            // whether one is on.
+            is RoundMessage.EgressContained -> state = state.copy(egressRunning = false)
 
             // **Permitted to nobody, so it cannot arrive** — its row is gone (D-131, D-156), and
             // what every phone gets instead is the ending carrying `WinRoute.EgressUncontained`.

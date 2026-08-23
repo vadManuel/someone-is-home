@@ -31,8 +31,8 @@ data class Countdown(val secondsLeft: Int, val ofSeconds: Int) {
      * The form reads off the length of the window rather than off the screen, so a screen cannot
      * pick the wrong one. **The threshold is fitted to the design's four drawn clocks**, all of
      * which it has to reproduce: `1:04 REMAINING` on the ninety-second discussion and `VOTING ENDS
-     * IN 0:24` on the sixty-second ghost meeting are `m:ss`; `LIGHTS OUT IN 9` on the fifteen-
-     * second result and `6S LEFT` on the ten-second scan are bare.
+     * IN 0:24` on the ghost meeting are `m:ss`; `LIGHTS OUT IN 9` on the fifteen-second result and
+     * `6S LEFT` on the ten-second scan are bare.
      *
      * **It was 60, and 60 was only ever right by accident.** The vote screen is the fourth clock,
      * drawn `0:38` — and the design's vote window is 45 seconds (`gdd.md:412`). While the flow
@@ -108,6 +108,12 @@ object Countdowns {
      *
      * Every one of these is read off the design's own screen: `6S LEFT` over twelve lit segments
      * of twenty, `1:04 REMAINING`, `0:38`, `LIGHTS OUT IN 9`, `VOTING ENDS IN 0:24`.
+     *
+     * **A moment, never a fraction.** The couch's `0:24` is the design's own hand position and it
+     * is kept; what moved under D-163 is the window it is a fraction *of*, so the bar beneath it
+     * now draws sixteen segments of thirty where it drew twelve. That is the picture being redrawn
+     * honestly rather than a second number being maintained to preserve it — a `0:24` re-cut to
+     * `0:18` to hold the old bar would have been the drawing artifact recreated one field over.
      */
     private val DRAWN_AT: Map<ScreenId, Int> = mapOf(
         ScreenId.Scan to 6,
@@ -143,8 +149,9 @@ object Countdowns {
         // LIGHTS OUT IN 9, over a bar with 6 of 15 spent. The Restrained takeover lands at the
         // halfway mark of this one (D-102), which is the house's business and not the bar's.
         ScreenId.Tally to 15,
-        // VOTING ENDS IN 0:24, from outside the system.
-        ScreenId.GhostMeeting to 60,
+        // VOTING ENDS IN 0:24, from outside the system -- and it is the SAME ballot the row above
+        // counts, so it reads the same constant (D-163). It carried a 60 of its own until then.
+        ScreenId.GhostMeeting to Balance.VOTE_WINDOW_SECONDS,
     )
 
     /** The screens that draw a clock. Nothing else has one, whatever the house sends. */
@@ -199,18 +206,20 @@ object Countdowns {
      * Null during [MeetingPhase.CheckIn]: the gate closes when the last player walks in, not when a
      * clock runs out (D-104), so there is no window for a bar to be a fraction of.
      *
-     * ### ⚠️ The two rows still disagree, and only while no house is attached
+     * ### One clock, one number — the two rows agree at rest as well as in play (D-163)
      *
-     * `GhostMeeting` carries a window of 60 while [ScreenId.Vote] carries the design's 45 — two
-     * numbers for one clock, in a lit room where the couch can see a living player's phone. The
-     * fixtures are **left alone deliberately**: the ghost's 60 is what reproduces the design's
-     * drawn picture, `VOTING ENDS IN 0:24` over twelve lit segments of thirty, and moving it to 45
-     * redraws that bar at sixteen. Reconciling the two *drawn* numbers is a visible screen change
-     * and still wants a ruling.
+     * `GhostMeeting` carried a window of 60 while [ScreenId.Vote] carried the design's 45, and the
+     * ghost's 60 was kept because it reproduced a drawn frame: `VOTING ENDS IN 0:24` over twelve
+     * lit segments of thirty. **The 60 was a drawing artifact and the ruling is to redraw the
+     * picture**, so both rows now read `Balance.VOTE_WINDOW_SECONDS` and the same `0:24` sits over
+     * sixteen segments instead of twelve.
      *
-     * **In play they cannot disagree**, which is the half this unit closed: [window] is the ballot
-     * length the house sent, and it replaces both rows at once. The flag is now about a fixture
-     * rather than about the game.
+     * The argument is D-145's: the out were given a live vote precisely so they watch the event
+     * the living are in, and two windows means the couch's bar empties at a different rate from the
+     * bar in the hallway — twelve feet away, in a lit room, for no reason a player could ever be
+     * told. **In play they could already not disagree**, because [window] is the ballot length the
+     * house sent and it replaces both rows at once; what is gone now is the fixture that disagreed
+     * with itself on a bench.
      */
     fun onGhostMeeting(
         phase: MeetingPhase,

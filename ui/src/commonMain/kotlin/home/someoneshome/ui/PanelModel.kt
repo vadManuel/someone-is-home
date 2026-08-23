@@ -174,6 +174,38 @@ data class PanelState(
     val egressType: String? = null,
     val egressNodes: List<String>? = null,
     /**
+     * **Whether an Egress is running right now** — opened by the house, and not yet contained.
+     *
+     * A separate fact from [egressType], and it has to be: the type is *which* Egress the house
+     * started and it survives being read, while this is *whether one is still going* and it comes
+     * back down. A surface that took a non-null type as "an Egress is on" would keep saying so for
+     * the rest of the round, because nothing ever unsays a label.
+     *
+     * The living do not read it — their Egress is a whole screen the house pushes them to, and the
+     * screen is the state. **The couch reads it**, because the couch watches one screen for the
+     * entire round and the Egress widget on it has to be able to be empty. See [Ghost3Screen].
+     *
+     * False on a phone with no house attached, which is the honest bench: no Egress has been fired
+     * in a round that has not started. Unlike [egressType] this has **no fixture behind it** — a
+     * default that drew a live crisis would be a port reproducing a mockup by asserting something
+     * about the house.
+     */
+    val egressRunning: Boolean = false,
+    /**
+     * **The work the scan opened, as the house answered it.**
+     *
+     * `Effect.ScanAnswered` carries a `SubroutineInstance` and nothing routes it here yet — that is
+     * the scan flow's, and this field is the place it lands rather than a claim that it has. Null
+     * means the house has said nothing, and the port's drawn row stands in: [egressType]'s
+     * arrangement, and for the same reason.
+     *
+     * **It is the seam a screen is tested through.** Three surfaces name the current Subroutine and
+     * one of them — the caught scan — draws something only Sniff has (see [Subroutine.briefing]),
+     * so a bench that could only ever render one Subroutine could only ever render the case where
+     * that something is absent.
+     */
+    val current: CurrentSubroutine? = null,
+    /**
      * **Who was working for the house, and what was held over them — as the house published it.**
      *
      * The only field on this class that carries an alignment, and it is null on every screen but
@@ -805,8 +837,15 @@ class PanelVals(val state: PanelState) {
      * and both are kept.** `HANDSHAKE` is the kind of Subroutine; *resync the keepalive* is what
      * this instance of it asks for. The work order lists kinds, and the scan tells you the
      * specific work once you are standing at the marker.
+     *
+     * **The scan's own answer where there is one, and the port's drawn row where there is not** —
+     * [PanelState.current], and [egressNodes]' arrangement exactly. Nothing in production fills it
+     * yet: `Effect.ScanAnswered` carries the instance and routing it here is the scan flow's, not
+     * this class's. What it buys today is that a screen drawing this can be rendered against a
+     * Subroutine other than the one fixture, which is the difference between a surface that is
+     * tested and one that is looked at.
      */
-    val current: CurrentSubroutine get() = CURRENT
+    val current: CurrentSubroutine get() = state.current ?: CURRENT
 
     // ---- The work order --------------------------------------------------------------------
 
@@ -999,6 +1038,19 @@ class PanelVals(val state: PanelState) {
      */
     val egressType: String = state.egressType ?: Notifications.EGRESS_TYPE
     val egressNodes: List<String> = state.egressNodes ?: Notifications.EGRESS_NODES
+
+    /**
+     * **Whether the couch's Egress widget has anything to say** ([PanelState.egressRunning]).
+     *
+     * Read off the state and **not off the screen**, which is the distinction the carrier had to be
+     * corrected on: `Ghost3` is the one surface a player who is out sits in front of for the whole
+     * round, so the screen cannot say whether a crisis is running — it is the same screen either
+     * way. The living need no equivalent, because their Egress *is* a screen.
+     *
+     * No fixture behind it. Everything else on this class stands in the port's drawn value while no
+     * house has spoken; a widget that defaulted to *running* would be a bench asserting a crisis.
+     */
+    val egressRunning: Boolean = state.egressRunning
 
     /**
      * **What is standing over this screen, with the Egress alert naming this round's rooms.**
