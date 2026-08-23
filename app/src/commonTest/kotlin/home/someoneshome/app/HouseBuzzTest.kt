@@ -1,14 +1,19 @@
 package home.someoneshome.app
 
 import home.someoneshome.model.Effect
+import home.someoneshome.model.EmitSchema
 import home.someoneshome.model.EgressType
 import home.someoneshome.model.Haptic
 import home.someoneshome.model.HapticStep
+import home.someoneshome.model.HomePlanView
 import home.someoneshome.model.HouseBuzz
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MeetingPhase
 import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.Seat
+import home.someoneshome.model.Sound
+import home.someoneshome.model.Tick
+import home.someoneshome.model.protocol.RoundWire
 import home.someoneshome.model.WinRoute
 import home.someoneshome.model.Winner
 import home.someoneshome.platform.RecordingHaptics
@@ -273,6 +278,149 @@ class HouseBuzzTest {
      */
     private fun everyEffect(): List<Effect> =
         buzzing(Haptic.Long) + buzzing(Haptic.Short) + quiet()
+
+    /**
+     * **Every kind in the game, exactly once** — [everyEffect] plus the four it does not build.
+     *
+     * The Tier-2 four are not in the fixtures above because they arrived after them and because
+     * three of them are silent, which is a bad reason to leave one out: *silent* is a claim, and a
+     * claim nothing walks is a comment. This list is what the wire-parity sweep below runs on, and
+     * [everyKindIsHere] is what stops it going stale — the kind name and the effect's own name are
+     * the same string, so a new effect is a missing entry rather than a passing test.
+     */
+    private fun everyKind(): List<Effect> = everyEffect() + listOf(
+        Effect.Surged(Seat(1), peak = 100, black = 0, sound = Sound.Surge, haptic = Haptic.Short),
+        Effect.IsolateTargetsOffered(Seat(1), emptyList()),
+        Effect.HomePlanOffered(Seat(1), HomePlanView.EMPTY),
+        Effect.PhantomPlaced(Seat(1), "KITCHEN", Tick(120)),
+        // The three the quiet fixture leaves out because it is a per-seat list and these are not
+        // addressed to a seat. They are exactly as silent as the rest of it, and now say so.
+        Effect.SystemIntegrityLive(percent = 62),
+        Effect.SystemIntegrityBatched(percent = 62),
+        Effect.WorkOrderIssued(Seat(1), emptyList()),
+    )
+
+    /**
+     * The fixture really is every kind, checked against a hand-written list.
+     *
+     * Hand-written for `RecordingTextTest`'s reason: a list derived from the thing it is checking
+     * agrees with itself. A new effect forces the two exhaustive `when`s in `HouseBuzzer.kt` to be
+     * answered and then forces this line, which is the one that asks whether anybody has ever
+     * actually run one through the motor.
+     */
+    @Test
+    fun everyKindIsHere() {
+        val walked = everyKind().map { EmitSchema.kindOf(it).name }.toSet()
+        assertEquals(
+            emptySet(), EVERY_KIND - walked,
+            "these kinds are in the game and no fixture here has ever built one",
+        )
+        assertEquals(
+            emptySet(), walked - EVERY_KIND,
+            "the fixture builds a kind this list has never heard of",
+        )
+    }
+
+    /**
+     * **The wire buzzes whatever the effect buzzed** — the two lists cannot drift (D-102, D-134).
+     *
+     * A client never holds an `Effect`. The authority resolves each one through `EmitSchema`,
+     * projects it into a `RoundMessage`, and writes *that* down the socket, so the buzzer needs an
+     * answer for the message type as well — and two hand-written exhaustive `when`s over two
+     * parallel sealed hierarchies is exactly the shape that agrees on the day it is written and
+     * disagrees six weeks later, silently, on one branch.
+     *
+     * **So the wire's answer is not trusted, it is compared.** Every kind in the game is projected
+     * the way the house projects it and both questions are asked on both sides. A drift shows up
+     * naming the kind, which is what turns *somebody will notice* into *the build stops*.
+     *
+     * The failure this prevents is not academic: the projection is where a haptic could quietly be
+     * dropped from a message, and a phone that stopped buzzing for one kind on one path would be a
+     * phone that misses exactly one thing the house says — and the player who missed it has no way
+     * to know they did.
+     */
+    @Test
+    fun theWireBuzzesWhateverTheEffectBuzzed() {
+        for (effect in everyKind()) {
+            val message = RoundWire.project(effect)
+            val kind = EmitSchema.kindOf(effect).name
+            assertEquals(
+                effect.haptic(), message.haptic(),
+                "$kind buzzes differently off the wire than it does in process",
+            )
+            assertEquals(
+                effect.ringing(), message.ringing(),
+                "$kind rings on one side of the projection and not the other",
+            )
+        }
+    }
+
+    /**
+     * **F-003, over the wire the phones really use, and it is the wire half that was never run.**
+     *
+     * D-156 closed F-003 at the effect: the opening reveal is one delivery with one haptic, and the
+     * underlying message count never drives the buzz count. The leak it closed is that in `Known`
+     * mode an Insider's phone buzzed four times — blackmail, house line, two partners — and a
+     * Resident's buzzed once, **while the whole party is still standing in a cluster**, where a
+     * buzz count is both audible and tactile.
+     *
+     * The guarantee had been asserted against effects handed straight to the buzzer. That is the
+     * host's own view of what it said; what a player holds is the projection of it, and the reveal
+     * is the one moment where the two roles' streams are legitimately different lengths. So this
+     * runs the reveal through `RoundWire`, at the length each role really gets, and counts what the
+     * motor did with what came out.
+     *
+     * **Different content, identical hand.** That sentence is the whole ruling and it is now
+     * checked on the side the ruling is about.
+     */
+    @Test
+    fun theRevealBuzzesOnceOnEitherRolesPhoneOverTheWire() {
+        val seat = Seat(0)
+
+        fun buzzesFor(bodies: List<String>): List<List<HapticStep>> {
+            val motor = RecordingHaptics()
+            val buzzer = HouseBuzzer(motor)
+            val reveal: List<Effect> = listOf(Effect.OpeningMessage(seat, Haptic.Short)) +
+                bodies.map { Effect.MessageDelivered(seat, it) }
+            reveal.map(RoundWire::project).forEach(buzzer::heard)
+            return motor.played
+        }
+
+        val insider = buzzesFor(
+            listOf("the blackmail", "the house line", "a partner", "another partner"),
+        )
+        val resident = buzzesFor(listOf("the house line"))
+
+        assertEquals(
+            resident, insider,
+            "the reveal buzzed ${insider.size} time(s) for an Insider and ${resident.size} for a " +
+                "Resident once it had been through the wire — F-003 exactly, and the room is " +
+                "standing in a cluster when it lands",
+        )
+        assertEquals(
+            listOf(HouseBuzz.script(Haptic.Short)), resident,
+            "the opening delivery is one Short buzz, for everyone, however much the house had to say",
+        )
+    }
+
+    private companion object {
+
+        /**
+         * Every message kind in the game, by name. The kind's name and the effect's own name are
+         * the same string, which is what lets a list this short be a completeness claim.
+         */
+        val EVERY_KIND: Set<String> = setOf(
+            "LampSet", "AbilityFired", "Surged", "IsolateTargetsOffered", "HomePlanOffered",
+            "PhantomPlaced", "SubroutineGraded", "SubroutineProgressed", "SystemIntegrityLive",
+            "SystemIntegrityBatched", "MessageDelivered", "WorkOrderIssued", "ScanAnswered",
+            "PresenceChanged", "OpeningMessage", "MeetingOpened", "StandAndWalkIn",
+            "CheckInProgressed", "MeetingPhaseOpened", "ReadyProgressed", "VoteHeld",
+            "VoteSelectionShown", "VoteProgressed", "MeetingResult", "MeetingResolved",
+            "RestrainedTakeover", "MeetingEnded", "EgressOpened", "EgressHeld",
+            "SyncPulseAnswered", "EgressContained", "EgressSucceeded", "RoundEnded",
+            "InsidersRevealed", "HouseSignedOff",
+        )
+    }
 
     /** The quiet effects are quiet: counts, progress and content update a screen already lit. */
     @Test

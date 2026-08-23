@@ -397,7 +397,7 @@ Light and sound are perceptible to *bystanders*, unlike a screen. That makes the
 - **No revoke ping.** The Insider's phone produces no sound, no light change, no visible animation when arming or landing a Revoke. Any such cue is unfalsifiable proof of alignment to every bystander — the single worst mistake available in this design.
 - **No actor-side feedback on firing any ability.** The attacker's device stays inert. All observable effect happens on the target.
 - **Audio modulation only on global events.** A cue firing for a subset — a cooldown expiring, an ability recharging — leaks role through a channel every person in the house can hear. Light is safe here because each lamp is private; sound is not.
-- **The meeting ring is the one permitted phone-emitted sound, and it is global by construction.** Every phone rings, simultaneously, on the same trigger, identically for both roles and both trigger types. It leaks nothing because it fires for everyone at once — and it fires at the one moment in the round when concealment has already ended, since every lamp in the house went white in the same instant. **This is not a precedent for audio anywhere else.** Subroutines stay silent or haptic-only; abilities stay silent; nothing that fires for a subset ever makes a sound.
+- **The one permitted phone-emitted sound is the Surge, and the meeting ring is not a sound at all** *(superseded by the owner's 2026-08-22 sound reversal and D-160; this row reserved the slot for the ring)*. The call **vibrates** — LONG–pause–LONG, repeating until answered — and emits nothing anybody can hear. The slot goes to **Surge**, which survives the rule by being **self-inflictable**: an Insider can Surge themselves at the cost of the pool's longest cooldown, so being audibly attacked is not evidence of innocence. **This is not a precedent for audio anywhere else.** Subroutines stay silent or haptic-only; every other ability stays silent; nothing that fires for a subset ever makes a sound.
 - **Self-targeting shares the ability's cooldown.** Otherwise self-sabotage is a free alibi generator. Buying cover must cost offensive capability.
 
 *Accepted residue:* Residents are targeted involuntarily and for free while Insiders must spend a cooldown, so being visibly targeted leans very slightly Resident in expectation. That is a soft statistical lean, not proof, and it is exactly the texture of evidence this game wants.
@@ -408,7 +408,7 @@ Designed under one constraint: **minimal phone interaction for anything social.*
 
 | Phase | Rules | Default |
 |---|---|---|
-| **Trigger** | Rendered as an **incoming call with the caller named, and it rings.** All lamps snap to full white simultaneously off a scheduled timestamp; masking audio cuts to total silence; every phone rings | — |
+| **Trigger** | Rendered as an **incoming call with the caller named, and it rings in the hand and nowhere else** — LONG–pause–LONG, repeating until answered (D-160). All lamps snap to full white simultaneously off a scheduled timestamp; masking audio cuts to total silence; **no phone makes a sound** *(the ringtone is superseded — see the sound corollary above)* | — |
 | **1. Discussion** | Phone shows a timer and one control. **Unanimous "Ready to vote" skips ahead.** Living players only | **90s** (lobby setting) |
 | **2. Vote** | Names plus **Skip**, changeable until the clock ends. You see **how many** have voted, never what. **Not voting is an abstention** | **45s** (lobby setting) |
 | **3. Result** | **Most votes is restrained; ties resolve to Skip.** **Attribution is shown** — who voted for whom. Then nothing: no role, no confirmation, no reveal | ~15s |
@@ -990,9 +990,11 @@ A player calls it. The trigger renders as an **incoming call with the caller nam
 >
 > **With the radio up, the report is verifiable by physical contact, and both meeting triggers survive untouched.** The rule holds unamended. Two rules fall out and are recorded in the body of this document: the revoked phone **advertises but never scans** (or a revoked player becomes an invisible sensor, and a room with fresh counts and nobody scanning in it gives them away), and the contact gate is **hard-limited to contact range** (or the report becomes a through-wall detector for revoked players).
 
-Three things fire on the same scheduled timestamp: the **masking track cuts to total silence**, every lamp **snaps to full white**, and **every phone rings**.
+Three things fire on the same scheduled timestamp: the **masking track cuts to total silence**, every lamp **snaps to full white**, and **every phone starts vibrating** — LONG–pause–LONG, repeating until answered (D-160).
 
-The ordering is the beat — twenty-odd minutes of continuous noise stops cold, and the ring lands in the silence it just created. **The ring is what makes the call unambiguous.** Light only reaches you if you can see a lamp, and in a real house across two storeys you often cannot; sound reaches everyone, through walls, instantly, and says *stop what you are doing and come*.
+The ordering is the beat — twenty-odd minutes of continuous noise stops cold, and the call lands in the silence it just created. **The call is what makes the meeting unambiguous.** Light only reaches you if you can see a lamp, and in a real house across two storeys you often cannot.
+
+**And it is the one signal that does not give up** *(D-160, and the reason the sound was reversed rather than merely removed)*. The rest of the game says its thing once; the call repeats until it is answered, because a summons that fires once is a summons a player face-down in another room mid-Subroutine will miss. **What the sound was solving, persistence solves** — a phone in a hand that keeps buzzing reaches its owner whether or not they were looking at it, and it reaches nobody else at all.
 
 Speech is now permitted, **for living players only**.
 
@@ -1205,17 +1207,20 @@ Everything else in this design — anonymous counts, injected error, staleness b
 - **Swell during an Egress.**
 - **Cut to total silence at a meeting call** — twenty-odd minutes of continuous noise stopping cold at the same instant every lamp snaps to white.
 
-**The meeting ring.** On the same timestamp as the cut and the lights, **every phone rings** — the incoming-call screen with the caller named, and an actual ringtone.
+**The meeting call, and it is silent** *(the owner's 2026-08-22 sound reversal, and D-160)*. On the same timestamp as the cut and the lights, **every phone rings in the hand** — the incoming-call screen with the caller named, and the repeating haptic. **There is no ringtone.**
 
 | Property | Value |
 |---|---|
+| Channel | **Haptic only.** LONG–pause–LONG, then a wider wait, then again — the one pattern in the game that repeats. `HapticScript.RING` is the only place it is defined |
 | Fires on | Both trigger types: House Meeting and Deactivated Person Found |
-| Differentiated by type? | **No.** Identical ring for both; the screen carries the difference. A differentiated ring would tell players in transit something they will learn thirty seconds later anyway, for no gain |
-| Duration | Until the meeting screen is acknowledged, or the lights-up completes — **not indefinitely.** A phone still ringing two minutes later localizes whoever is slow |
-| Silent switch | **Must play regardless of the hardware silent switch.** This needs the right audio session category and is a standard iOS gotcha — a party game where half the phones stay quiet at the meeting call is broken |
-| Volume | Full. This is the one moment the game wants to be loud |
+| Differentiated by type? | **No.** Identical pattern for both; the screen carries the difference. A differentiated call would tell players in transit something they will learn thirty seconds later anyway, for no gain |
+| Duration | **Indefinitely, until answered** (D-160, superseding *not indefinitely*). A summons that gives up is a summons somebody misses — and the reason the old row worried about a phone *still ringing two minutes later* was that it localized whoever was slow. Nothing localizes anybody now: the motor is in one hand |
+| Silent switch | **Not applicable.** The row that lived here demanded the call play regardless of the hardware silent switch, with the audio session category to make it happen; there is no audio session |
+| Volume | **None.** The row that lived here said *full — this is the one moment the game wants to be loud*, and the game no longer wants that |
 
-**Why it earns its place despite the silence rule.** The rule against phone audio exists because a chirping phone is a beacon that localizes its owner. **At a meeting call, localization is already total** — every lamp in the house just went to full white. The ring adds no information that the light did not already broadcast, and it solves a real problem the light does not: in a two-storey house you often cannot see anyone else's lamp, and if you are heads-down in a dark subroutine you may not register your own screen changing. **Sound goes through walls; light does not.**
+**Why the sound was reversed rather than tuned.** The old argument was that at a meeting call localization is already total, so a chirp adds no information the white lamps had not already broadcast. That was true and it was not the whole account: **a sound is heard by the room, and a room contains people who are not in it.** The two things the ring was solving are solved by the two things that replaced it — the summons reaches a player who is not looking at their phone because it **repeats until answered**, and it reaches a player two storeys up because it is **in their hand**, which is where the house rule already requires the phone to be. What is gone is the half nobody needed: a channel the whole building shares, in a game whose discipline is that the only private channel is the one against your palm.
+
+**Which leaves exactly one sound in the game, and it is not this one.** The Surge, and its licence is that it is **self-inflictable** — see the sound corollary in M2.
 
 **Only ever modulate on global events.** A cue firing for a subset of players leaks role through a channel every person in the house can hear. Light is safe here because each lamp is private; sound is not.
 

@@ -1,5 +1,6 @@
 package home.someoneshome.harness
 
+import home.someoneshome.model.Destination
 import home.someoneshome.model.EgressType
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
@@ -171,7 +172,7 @@ class RecordingTextTest {
      */
     @Test
     fun `a marker id containing separators survives intact`() {
-        val nasty = MarkerId("a|b\\c\nd\\pe\\\\f")
+        val nasty = MarkerId("a|b\\c\nd\\pe\\\\f:g\\oh")
         val events = listOf(
             Event.RoundArmed(Tick(0), 1L, listOf(Seat(0)), emptyList()),
             Event.MarkerScanned(Tick(1), Seat(0), nasty),
@@ -179,6 +180,41 @@ class RecordingTextTest {
         val reparsed = RecordingText.parse(record(GameState.EMPTY, events).second.toText())
         assertEquals(nasty, (reparsed.events[1] as Event.MarkerScanned).marker)
         assertEquals(2, reparsed.events.size, "an embedded newline forged a row")
+    }
+
+    /**
+     * **A room name a host typed with a colon in it cannot forge a fourth part** — E-L4-4, and the
+     * third member of the family the pipe and the comma each opened.
+     *
+     * The colon is a sub-separator in three places at once: `card:glyph:room` on a destination,
+     * `seat:entry:armedAt:…` inside `open=`, and the marker inside `isolated=`. Two of the three
+     * carry **external input** — a marker id is read off a piece of paper and the payload alphabet
+     * is QR alphanumeric minus SPACE, which includes `:`, and a room name is text a person typed
+     * on the setup walk. So a name as ordinary as `KITCHEN: BACK` split one field into two, and the
+     * damage is not a crash: the parser rebuilds a *different, well-formed* destination and the
+     * replay certifies it.
+     *
+     * Asserted on all three parts, and on the count. A test that only checked the room would pass
+     * against an escape that had started dropping the marker's colon into the glyph.
+     */
+    @Test
+    fun `a room name containing a colon cannot forge a fourth part`() {
+        val armed = Event.RoundArmed(
+            Tick(0), 1L, listOf(Seat(0)), emptyList(),
+            markers = listOf(
+                Destination(MarkerId("m:1"), "circle", "KITCHEN: BACK"),
+                Destination(MarkerId("m2"), "square", "HALL"),
+            ),
+        )
+        val reparsed = RecordingText.parse(
+            record(GameState.EMPTY, listOf(armed)).second.toText(),
+        )
+        val back = (reparsed.events[0] as Event.RoundArmed).markers
+        assertEquals(2, back.size, "a colon inside a value forged a second destination")
+        assertEquals(MarkerId("m:1"), back[0].marker)
+        assertEquals("circle", back[0].shape)
+        assertEquals("KITCHEN: BACK", back[0].room)
+        assertEquals(Destination(MarkerId("m2"), "square", "HALL"), back[1])
     }
 
     /** A skipped vote and a vote for a real seat must not collapse into each other. */

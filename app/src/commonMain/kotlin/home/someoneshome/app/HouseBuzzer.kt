@@ -3,6 +3,7 @@ package home.someoneshome.app
 import home.someoneshome.model.Effect
 import home.someoneshome.model.Haptic
 import home.someoneshome.model.HouseBuzz
+import home.someoneshome.model.protocol.RoundMessage
 import home.someoneshome.platform.Haptics
 
 /**
@@ -52,6 +53,28 @@ class HouseBuzzer(private val haptics: Haptics) {
             return
         }
         haptics.buzz(effect.haptic() ?: return)
+    }
+
+    /**
+     * **The same arrival, off the wire** — what a phone that is not the host actually receives.
+     *
+     * A client never holds an [Effect]. The authority resolves each one through `EmitSchema`,
+     * projects it into a [RoundMessage], and writes *that* down the socket — so the effect-shaped
+     * overload above is the host's own view of what it said, and this is every phone's view of what
+     * it was told. **The guarantee has to hold on this side**, because this is the side a player is
+     * holding, and until this existed the buzzer had no production caller at all.
+     *
+     * It answers the same two questions in the same order and it decides nothing new: the haptic
+     * was chosen by `Rules.kt`, carried on the effect, and copied onto the message by the
+     * projection. `HouseBuzzTest.theWireBuzzesWhateverTheEffectBuzzed` walks every effect in the
+     * game and asserts the two overloads agree, so the second list cannot drift from the first.
+     */
+    fun heard(message: RoundMessage) {
+        if (message.ringing()) {
+            haptics.play(HouseBuzz.RING, repeating = true)
+            return
+        }
+        haptics.buzz(message.haptic() ?: return)
     }
 
     /**
@@ -221,4 +244,98 @@ internal fun Effect.haptic(): Haptic? = when (this) {
     is Effect.PhantomPlaced -> null
     // The reveal, on the ending screen RoundEnded already buzzed for. One ending, one buzz.
     is Effect.InsidersRevealed -> null
+}
+
+/**
+ * **Does this arrival ring** — the wire's copy of [Effect.ringing], and it must never disagree.
+ *
+ * One `true`, for the same reason and by the same ruling: the call is the one summons in the game
+ * and it repeats until a person answers it (D-160). Everything else says its thing once.
+ *
+ * The list is written out by hand rather than derived, which is the discipline that makes it worth
+ * having — an exhaustive `when` is what stops a new message reaching a motor nobody decided about.
+ * What stops the two lists drifting is not care, it is
+ * `HouseBuzzTest.theWireBuzzesWhateverTheEffectBuzzed`, which projects every effect in the game and
+ * compares the answers.
+ */
+internal fun RoundMessage.ringing(): Boolean = when (this) {
+    is RoundMessage.MeetingOpened -> true
+
+    is RoundMessage.OpeningMessage, is RoundMessage.StandAndWalkIn,
+    is RoundMessage.MeetingPhaseOpened, is RoundMessage.MeetingResult,
+    is RoundMessage.RestrainedTakeover, is RoundMessage.MeetingEnded,
+    is RoundMessage.EgressOpened, is RoundMessage.EgressHeld, is RoundMessage.EgressContained,
+    is RoundMessage.EgressSucceeded, is RoundMessage.RoundEnded, is RoundMessage.LampSet,
+    is RoundMessage.AbilityFired, is RoundMessage.SubroutineGraded,
+    is RoundMessage.SubroutineProgressed, is RoundMessage.SystemIntegrityLive,
+    is RoundMessage.SystemIntegrityBatched, is RoundMessage.MessageDelivered,
+    is RoundMessage.HouseSignedOff, is RoundMessage.WorkOrderIssued,
+    is RoundMessage.ScanAnswered, is RoundMessage.PresenceChanged,
+    is RoundMessage.CheckInProgressed, is RoundMessage.ReadyProgressed,
+    is RoundMessage.VoteProgressed, is RoundMessage.VoteHeld,
+    is RoundMessage.VoteSelectionShown, is RoundMessage.MeetingResolved,
+    is RoundMessage.SyncPulseAnswered, is RoundMessage.InsidersRevealed,
+    is RoundMessage.Surged, is RoundMessage.IsolateTargetsOffered,
+    is RoundMessage.HomePlanOffered, is RoundMessage.PhantomPlaced,
+    -> false
+}
+
+/**
+ * **The kind of buzz an arrival carries** — the wire's copy of [Effect.haptic].
+ *
+ * Every value here is read off the message, and every value on the message was copied from the
+ * effect by the projection, which copied it from the reduction that constructed it. **Nothing on
+ * this path chooses a haptic**; the chain from `Rules.kt` to the motor is one value passed along,
+ * which is what makes D-102's *identical for every player* a structural property rather than a
+ * convention four layers have to keep.
+ *
+ * ### D-156 lives in the `null` branches, and this is the side that matters
+ *
+ * The reveal is one delivery with one buzz: [RoundMessage.OpeningMessage] carries the haptic and
+ * every [RoundMessage.MessageDelivered] behind it is silent, however many of them there are. That
+ * is F-003 — an Insider's phone went off four times and a Resident's once, in a cluster, at the one
+ * moment the whole party is standing together — and it is a claim about **what a phone does with
+ * what it received**, so the effect-side branch alone never closed it.
+ */
+internal fun RoundMessage.haptic(): Haptic? = when (this) {
+    // ---- The thirteen that buzz --------------------------------------------------------------
+    is RoundMessage.OpeningMessage -> haptic
+    is RoundMessage.MeetingOpened -> haptic
+    is RoundMessage.StandAndWalkIn -> haptic
+    is RoundMessage.MeetingPhaseOpened -> haptic
+    is RoundMessage.MeetingResult -> haptic
+    is RoundMessage.RestrainedTakeover -> haptic
+    is RoundMessage.MeetingEnded -> haptic
+    is RoundMessage.EgressOpened -> haptic
+    is RoundMessage.EgressHeld -> haptic
+    is RoundMessage.EgressContained -> haptic
+    is RoundMessage.EgressSucceeded -> haptic
+    is RoundMessage.RoundEnded -> haptic
+    is RoundMessage.Surged -> haptic
+
+    // ---- The rest arrive quietly. Each reason is on the effect-side branch it mirrors ---------
+    is RoundMessage.LampSet -> null
+    is RoundMessage.AbilityFired -> null
+    is RoundMessage.SubroutineGraded -> null
+    is RoundMessage.SubroutineProgressed -> null
+    is RoundMessage.SystemIntegrityLive -> null
+    is RoundMessage.SystemIntegrityBatched -> null
+    // **D-156, on the receiving side.** The count of things the house had to say never becomes a
+    // count of vibrations. See this function's KDoc.
+    is RoundMessage.MessageDelivered -> null
+    is RoundMessage.HouseSignedOff -> null
+    is RoundMessage.WorkOrderIssued -> null
+    is RoundMessage.ScanAnswered -> null
+    is RoundMessage.PresenceChanged -> null
+    is RoundMessage.CheckInProgressed -> null
+    is RoundMessage.ReadyProgressed -> null
+    is RoundMessage.VoteProgressed -> null
+    is RoundMessage.VoteHeld -> null
+    is RoundMessage.VoteSelectionShown -> null
+    is RoundMessage.MeetingResolved -> null
+    is RoundMessage.SyncPulseAnswered -> null
+    is RoundMessage.IsolateTargetsOffered -> null
+    is RoundMessage.HomePlanOffered -> null
+    is RoundMessage.PhantomPlaced -> null
+    is RoundMessage.InsidersRevealed -> null
 }
