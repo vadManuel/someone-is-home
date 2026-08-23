@@ -66,6 +66,8 @@ object EmitSchema {
     fun kindOf(effect: Effect): MessageKind = when (effect) {
         is Effect.LampSet -> LAMP_SET
         is Effect.AbilityFired -> ABILITY_FIRED
+        is Effect.Surged -> SURGED
+        is Effect.IsolateTargetsOffered -> ISOLATE_TARGETS_OFFERED
         is Effect.SubroutineGraded -> SUBROUTINE_GRADED
         is Effect.SubroutineProgressed -> SUBROUTINE_PROGRESSED
         is Effect.SystemIntegrityLive -> SYSTEM_INTEGRITY_LIVE
@@ -99,6 +101,8 @@ object EmitSchema {
 
     val LAMP_SET = MessageKind("LampSet")
     val ABILITY_FIRED = MessageKind("AbilityFired")
+    val SURGED = MessageKind("Surged")
+    val ISOLATE_TARGETS_OFFERED = MessageKind("IsolateTargetsOffered")
     val SUBROUTINE_GRADED = MessageKind("SubroutineGraded")
     val SUBROUTINE_PROGRESSED = MessageKind("SubroutineProgressed")
     val SYSTEM_INTEGRITY_LIVE = MessageKind("SystemIntegrityLive")
@@ -170,6 +174,37 @@ object EmitSchema {
         // revoke landed or not, which is exactly why it must not be widened: shipped to a
         // Resident it would be an unexplained event on a screen with no ability behind it.
         ABILITY_FIRED to setOf(ClientClass(Role.Insider, RoundState.Live)),
+
+        // **The Surge landing, and BOTH living classes — this row must never be narrowed to one of
+        // them** (gdd.md:391, :393). *Every observable effect must be self-inflictable. Insiders can
+        // target themselves with every ability. If only Residents could ever BE targeted, then being
+        // visibly targeted would be evidence of innocence, and every ability would double as an
+        // alignment test.* A row reading `Resident/Live` alone would be that test, delivered by the
+        // allowlist rather than by a screen -- and it would be the loudest one in the game, because
+        // this is the effect the whole house can hear.
+        //
+        // Not the out classes, and that is the second of two independent denials rather than the
+        // only one. The rules construct this identically whichever seat it names (rule 1) and the
+        // actor is told the ability fired and the cooldown is spent either way, which is
+        // gdd.md:344's *appears to succeed on the actor's device* held without any handler ever
+        // asking whether the target was still in the round. A Revoked phone's lamp is defunct; a row
+        // that lit it would be the house resurrecting light on somebody who is out, in a dark room,
+        // in front of everybody. Round-state is publicly observable (D-068).
+        SURGED to LIVING,
+
+        // **The narrowest LIVE row in this table: a Insider, in a round that is running, and
+        // nothing else** (gdd.md:315, D-150, the owner's 2026-08-22 targeting ruling).
+        //
+        // It carries the round's active markers with their rooms, which is the map of the round the
+        // house has never published -- see the effect, where the disclosure is argued and flagged.
+        // Widened by one class it would hand every Resident the geography `WorkOrderIssued` narrows
+        // to one seat's own lines; written as `LIVING - Residents` it would widen the day somebody
+        // added a class, which is ABILITY_FIRED's and HOUSE_SIGNED_OFF's reason for being spelled
+        // out as a one-class set.
+        //
+        // Not the out classes: a player outside the system fires nothing, the effect is addressed to
+        // one seat anyway, and denying it on the round-state axis carries no role information.
+        ISOLATE_TARGETS_OFFERED to setOf(ClientClass(Role.Insider, RoundState.Live)),
 
         // D-109: the house grades every entry for real, for both roles, in identical words. So
         // this row names BOTH living classes and it is the row that must never be narrowed to one
@@ -453,6 +488,19 @@ object EmitSchema {
         val addressed = when (effect) {
             is Effect.LampSet -> listOf(effect.seat)
             is Effect.AbilityFired -> listOf(effect.actor)
+            // **The target, and no other phone.** The actor is not a recipient of this and must not
+            // become one -- *no actor-side feedback on firing any ability; all observable effect
+            // happens on the target* (gdd.md:398). When the actor IS the target this addresses them
+            // exactly once, as the target, which is what makes a self-surge indistinguishable from
+            // being surged (gdd.md:342, :393). Broadcast, it would tell the whole house which phone
+            // had screamed, which is a thing the house learns with its ears and the app must not
+            // put on a screen.
+            is Effect.Surged -> listOf(effect.seat)
+            // One Insider's own picker, to that Insider. Broadcast it would publish the round's
+            // geography to every phone in the building, which is precisely what the one-class row
+            // above exists to prevent -- and addressing is the half of that guarantee the allowlist
+            // cannot see, because two Insiders are the same class.
+            is Effect.IsolateTargetsOffered -> listOf(effect.seat)
             // The one seat that handed the entry over, and nobody else. Addressed rather than
             // broadcast because a verdict reaching the house at large would publish who is
             // completing work and how often -- which is the whole read the meter is quantised

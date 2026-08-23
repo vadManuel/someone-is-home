@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithText
@@ -12,7 +13,12 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.runDesktopComposeUiTest
+import androidx.compose.ui.test.onNodeWithTag
+import home.someoneshome.model.Destination
+import home.someoneshome.model.MarkerId
 import home.someoneshome.model.RoomKind
+import home.someoneshome.model.Seat
+import home.someoneshome.model.protocol.IntentMessage
 import java.awt.image.BufferedImage
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -127,9 +133,18 @@ class HoldInputTest {
      */
     @Test
     fun aResidentsPageTwoAnswersNeitherTileAndDrawsNothingUnderTheThumb() {
-        for (tile in listOf("POWER", "SUBSYS")) {
+        // **All five tiles now**, and the three new ones are the tier-2 row: `BUS`, `THERMAL` and
+        // `CACHE` are what a Resident's phone calls Surge, Spoof and Isolate. The two that are
+        // built open a target list on an Insider's phone, so a Resident's copy of them is the
+        // first control in this game whose Insider version WALKS SOMEWHERE — which makes the
+        // screen assertion below load-bearing rather than incidental.
+        for (tile in listOf("POWER", "SUBSYS", "BUS", "THERMAL", "CACHE")) {
             runDesktopComposeUiTest(width = 300, height = 650) {
-                val model = on(ScreenId.Page2, PanelRole.Resident)
+                val sent = mutableListOf<IntentMessage>()
+                val model = FlowModel(
+                    PanelState(screen = ScreenId.Home, role = PanelRole.Resident),
+                    send = { sent += it },
+                ).also { it.push(ScreenId.Page2) }
                 show(model)
                 val before = model.state
                 val atRest: BufferedImage = onRoot().captureToImage().toAwtImage()
@@ -144,6 +159,13 @@ class HoldInputTest {
 
                 assertEquals(before.revoke, model.state.revoke, "$tile: a Resident armed a Revoke")
                 assertEquals(before.screen, model.state.screen, "$tile: a Resident's page 2 walked somewhere")
+                // **And nothing went up the wire.** The state and the pixels are about this phone;
+                // this is about the house. A tier-2 tile that reached the picker would not show up
+                // as a Revoke and might not show up as a pixel, but it would show up here.
+                assertEquals(
+                    emptyList<IntentMessage>(), sent.toList(),
+                    "$tile: a Resident's page 2 asked the house for something",
+                )
                 val (moved, at) = diff(atRest, held)
                 assertEquals(
                     0, moved,
@@ -152,6 +174,153 @@ class HoldInputTest {
             }
         }
     }
+
+    /**
+     * **The two built tier-2 tiles arm on a full hold and open a list** (D-141, and the owner's
+     * 2026-08-22 targeting ruling).
+     *
+     * *Surge and Isolate pick from a LIST — people, markers respectively.* This is the one place the
+     * design asks a hold to **open a view** rather than to arm in place: D-142 settled arming-in-place
+     * about the Revoke and the Egress, which have no target to pick, and these two do.
+     *
+     * Held short first, for the reason every hold in this file is: a control that fired the moment a
+     * finger landed would pass a test that only ever held the full two seconds, and a picker opening
+     * under a stray thumb is a lit rectangle in a dark house at a moment nobody chose.
+     */
+    @Test
+    fun theTierTwoTilesOpenTheirPickerOnAFullHoldAndNotBefore() {
+        for ((tile, picker) in listOf("SURGE" to ScreenId.SurgeTargets, "ISOLATE" to ScreenId.IsolateTargets)) {
+            runDesktopComposeUiTest(width = 300, height = 650) {
+                val model = on(ScreenId.Page2, PanelRole.Insider)
+                show(model)
+
+                onNodeWithText(tile).performTouchInput { down(center) }
+                mainClock.advanceTimeBy(nearly)
+                onNodeWithText(tile).performTouchInput { up() }
+                mainClock.advanceTimeBy(enough)
+                assertEquals(ScreenId.Page2, model.state.screen, "$tile: most of a hold opened the picker")
+
+                onNodeWithText(tile).performTouchInput { down(center) }
+                mainClock.advanceTimeBy(enough)
+                assertEquals(picker, model.state.screen, "$tile: a full hold reached nothing")
+            }
+        }
+    }
+
+    /**
+     * **SPOOF's tile is inert for an INSIDER too, because nothing is behind it** (T2's work).
+     *
+     * Drawn identically and named on the page, because a page 2 with three tiles for one role and
+     * two for another is the resting tell the whole parity discipline exists to prevent — and an
+     * inert tile is the honest state of an unbuilt ability rather than a hidden one.
+     *
+     * Asserted so that wiring Spoof has to come here and delete a test that says it is not wired.
+     */
+    @Test
+    fun spoofsTileIsInertForAnInsiderBecauseNothingIsBehindIt() =
+        runDesktopComposeUiTest(width = 300, height = 650) {
+            val model = on(ScreenId.Page2, PanelRole.Insider)
+            show(model)
+            onNodeWithText("SPOOF").performTouchInput { down(center) }
+            mainClock.advanceTimeBy(enough)
+            onNodeWithText("SPOOF").performTouchInput { up() }
+            mainClock.advanceTimeBy(enough)
+            assertEquals(ScreenId.Page2, model.state.screen, "SPOOF walked somewhere; it is unbuilt")
+        }
+
+    /**
+     * **A row of the Surge picker asks the house for that seat, and says nothing back**
+     * (`gdd.md:392`, `:398`).
+     *
+     * Three claims in one walk, and each is a different failure:
+     *
+     * 1. **The request names the row's seat by position.** The roster is seat-ordered, and turning a
+     *    row into a seat is a lookup against the same list the house sent — the ballot's move
+     *    (`MeetingRequest.asMessage`), one ability over. A build that sorted the list fires at
+     *    somebody else and this is what says so.
+     * 2. **Your own row is on the list and works.** *Insiders can target themselves with every
+     *    ability* (`gdd.md:393`); a roster that omitted the actor would delete the alibi play and
+     *    make being visibly targeted evidence of innocence.
+     * 3. **Nothing on the actor's phone reports what happened.** The walk back to page 2 is the
+     *    whole of it — no verdict field, no line, nothing that could differ between a shot that
+     *    landed and one that did not.
+     */
+    @Test
+    fun aSurgeRowAsksForThatSeatAndTellsTheActorNothing() =
+        runDesktopComposeUiTest(width = 300, height = 650) {
+            val sent = mutableListOf<IntentMessage>()
+            val model = FlowModel(
+                PanelState(
+                    screen = ScreenId.Home,
+                    role = PanelRole.Insider,
+                    roster = listOf("PRIYA", "MARCUS", "DANI"),
+                ),
+                send = { sent += it },
+            ).also { it.push(ScreenId.SurgeTargets) }
+            show(model)
+
+            val before = model.state
+            // **The row at position 1 has to be seat 1's PERSON**, and that is the assertion an
+            // injection found missing: a picker that sorted its roster still numbered its rows 0,
+            // 1, 2, so a test that only ever clicked "row 1" fired at seat 1 either way and passed
+            // while pointing at somebody else's name. Seat order is the wire here — see
+            // `PanelState.roster` — so the name and the index have to be checked against each
+            // other, not each against itself.
+            onNodeWithTag("${TARGET_ROW}1").assert(hasText("MARCUS"))
+            onNodeWithTag("${TARGET_ROW}0").assert(hasText("PRIYA"))
+
+            onNodeWithTag("${TARGET_ROW}1").performClick()
+            mainClock.advanceTimeBy(enough)
+
+            assertEquals(
+                listOf<IntentMessage>(IntentMessage.FireSurge(Seat(1))), sent.toList(),
+                "the row asked for a different seat",
+            )
+            assertEquals(ScreenId.Page2, model.state.screen, "firing did not walk back to page 2")
+            assertEquals(before.verdict, model.state.verdict, "the actor's phone reported something")
+        }
+
+    /**
+     * **A row of the Isolate picker asks the house for that card**, and the picker filters nothing.
+     *
+     * The Egress-node exclusion is the **house's** (D-150): it arrives as a shorter list, and this
+     * phone draws whatever it was sent. So the second half of this test hands the screen a list with
+     * two of the four cards missing and asserts that what is drawn is the list — a client that
+     * re-derived the exclusion would be a device deciding what an ability may be fired at.
+     */
+    @Test
+    fun anIsolateRowAsksForThatCardAndThePickerFiltersNothing() =
+        runDesktopComposeUiTest(width = 300, height = 650) {
+            val sent = mutableListOf<IntentMessage>()
+            val offered = listOf(
+                Destination(MarkerId("garage-card"), shape = "diamond", room = "GARAGE"),
+                Destination(MarkerId("landing-card"), shape = "cross", room = "LANDING"),
+            )
+            val model = FlowModel(
+                PanelState(
+                    screen = ScreenId.Home,
+                    role = PanelRole.Insider,
+                    isolateTargets = offered,
+                ),
+                send = { sent += it },
+            ).also { it.push(ScreenId.IsolateTargets) }
+            show(model)
+
+            // The two rows the house sent are there; the two it withheld are not, and the screen
+            // did not invent them.
+            onNodeWithTag("${TARGET_ROW}garage-card").assertExists()
+            onNodeWithTag("${TARGET_ROW}landing-card").assertExists()
+            onNodeWithTag("${TARGET_ROW}hall-card").assertDoesNotExist()
+
+            onNodeWithTag("${TARGET_ROW}landing-card").performClick()
+            mainClock.advanceTimeBy(enough)
+            assertEquals(
+                listOf<IntentMessage>(IntentMessage.FireIsolate(MarkerId("landing-card"))),
+                sent.toList(),
+                "the row asked for a different card",
+            )
+            assertEquals(ScreenId.Page2, model.state.screen, "firing did not walk back to page 2")
+        }
 
     /**
      * And the tiles are drawn for both roles, which is what makes the test above mean something.

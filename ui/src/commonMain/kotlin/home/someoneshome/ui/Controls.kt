@@ -72,6 +72,35 @@ class PanelActions(
      */
     val stepRevoke: () -> Unit = {},
     val armEgress: () -> Unit = {},
+    /**
+     * **Tier 2 firing, from a row of a list the house sent** (the 2026-08-22 targeting ruling).
+     *
+     * These are the only two actions in this class that carry a **target**, and both carry it in
+     * the narrowest form the picker can express: a row **position** for the roster, and a card
+     * **id** for the markers.
+     *
+     * ### Neither takes a `Seat`, and that is the same discipline `MeetingRequest` keeps
+     *
+     * *There is no longer any function in `ui` that turns a [Seat] into an `Intent`.* An `Int`
+     * here is an index into the list this phone was drawn with, and turning it into a seat is the
+     * actions layer's lookup against the same roster the house sent — exactly what
+     * `MeetingRequest.asMessage(names)` does for a ballot, and for the same reason. The seat that
+     * ends up on the wire is **content** — who the ability is aimed at — and the actor is still
+     * stamped at the host's desk from the connection the bytes arrived on.
+     *
+     * ### They are actions rather than a target named on the screen, for [openRoomAt]'s reason
+     *
+     * A screen cannot name what it does not know: which seat a row is depends on a list that
+     * arrived from the house, and which card a row is depends on the same. And neither publishes a
+     * navigation for `ScreenGraphTest` to read — firing walks back to page 2, which is declared in
+     * [Flow.viaActions] with the rest of the gestures.
+     *
+     * **Neither is reachable on a Resident's phone.** Not by a check inside them: the tier-2 tiles
+     * take no pointer input at all (D-142), so a Resident never opens a picker and never has a row
+     * to tap. The same shape [stepRevoke] has, one tier down.
+     */
+    val fireSurge: (Int) -> Unit = {},
+    val fireIsolate: (String) -> Unit = {},
     val toggleMarkers: () -> Unit = {},
     val toggleTorch: () -> Unit = {},
     val pickRoomType: (RoomKind) -> Unit = {},

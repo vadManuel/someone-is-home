@@ -2,11 +2,14 @@ package home.someoneshome.ui
 
 import home.someoneshome.model.CardPayload
 import home.someoneshome.model.EmitSchema
+import home.someoneshome.model.MarkerId
+import home.someoneshome.model.Seat
 import home.someoneshome.model.MessageKind
 import home.someoneshome.model.Winner
 import home.someoneshome.model.Cell
 import home.someoneshome.model.RegisterResult
 import home.someoneshome.model.RoomKind
+import home.someoneshome.model.protocol.IntentMessage
 import home.someoneshome.model.protocol.RoundMessage
 
 import androidx.compose.runtime.Composable
@@ -113,6 +116,11 @@ object ScreenGraph {
         // and lives in [Flow.viaActions] with the other gestures. A Resident's tiles are not
         // controls at all (D-142) — no pointer input, nothing to fire, nothing to time.
         ScreenId.Page2 -> setOf(ScreenId.Home, ScreenId.Work, ScreenId.Scan, ScreenId.Lock)
+        // **The two Tier-2 pickers.** BACK is a plain tap and is the only edge either of them
+        // publishes: a row FIRES, which walks back to page 2 without naming it — see
+        // [Flow.viaActions], where firing is declared with the other gestures. A picker that could
+        // only be left by firing would be a control that costs a cooldown to change your mind about.
+        ScreenId.SurgeTargets, ScreenId.IsolateTargets -> setOf(ScreenId.Page2)
         // The lantern, and the lantern with something under its clock. A notification on a locked
         // phone is READ, not opened: this screen has one control and it is SLIDE TO OPEN, so a
         // card that also navigated would be an unlock nobody performed.
@@ -550,7 +558,23 @@ object Flow {
         // role-asymmetric edge in the game**, and it is asymmetric in capability rather than in
         // appearance: a Resident's tile is drawn identically and takes no pointer input at all
         // (D-142), so there is no hold to run and no view either role can be caught on.
-        ScreenId.Page2 to setOf(ScreenId.Banner),
+        ScreenId.Page2 to setOf(
+            ScreenId.Banner,
+            // The two tier-2 tiles, armed by the same two seconds of a finger (D-141) and opening a
+            // list rather than arming in place — the 2026-08-22 targeting ruling, and the one place
+            // the design asks for a view. Asymmetric in capability and never in appearance: a
+            // Resident's three tiles are drawn identically and take no pointer input at all (D-142),
+            // so nothing here is reachable by rendering the Resident and firing everything on
+            // screen. Spoof's tile is inert for both roles and names no edge, because nothing is
+            // behind it yet.
+            ScreenId.SurgeTargets, ScreenId.IsolateTargets,
+        ),
+        // Firing a Tier-2 ability, which walks back to page 2 without the row naming it: what a row
+        // publishes is a target off a list the house sent, and where the phone lands afterwards is
+        // the actions layer's. It is also the shape that keeps `gdd.md:398` — the walk is identical
+        // whether the shot landed, so nothing about the navigation is feedback.
+        ScreenId.SurgeTargets to setOf(ScreenId.Page2),
+        ScreenId.IsolateTargets to setOf(ScreenId.Page2),
         // A house notice, swiped up off the meeting.
         ScreenId.Notice to setOf(ScreenId.Discussion),
         // Every notification, swiped away — up on the three banners, left under the clock. The
@@ -658,6 +682,25 @@ class FlowModel(
      * [NotificationsModel] for the fields it deliberately does not have.
      */
     val notifications: NotificationsModel = NotificationsModel(),
+    /**
+     * **Where a Tier-2 request goes, and it does not carry a seat that says who asked**
+     * (the 2026-08-22 targeting ruling).
+     *
+     * [MeetingModel.send]'s arrangement, one page over, and every line of that KDoc applies. The
+     * meeting's four controls publish a seat-free [MeetingRequest] and this publishes an
+     * [IntentMessage] directly, which is the stronger of the two shapes: `IntentMessage` **cannot**
+     * name an actor at all, so there is no discipline for anything here to keep. The seat is stamped
+     * at the host's desk from the connection the bytes arrived on.
+     *
+     * The seats that do ride up are **content** — who the Surge is aimed at, off a roster the house
+     * drew and published to this phone — which is the same rule `SelectVote` carries a target under.
+     *
+     * Defaulted to nothing, so every render and every screenshot gets a phone whose page 2 is real
+     * and whose requests reach nobody. That is the honest state of a bench: **a control that
+     * predicted an outcome would be worse than one that did nothing**, and nothing on any screen in
+     * this app moves because a Tier-2 ability was fired.
+     */
+    val send: (IntentMessage) -> Unit = {},
 ) {
 
     var state: PanelState by mutableStateOf(initial)
@@ -770,6 +813,49 @@ class FlowModel(
      */
     fun armEgress() {
         go(ScreenId.Banner)
+    }
+
+    /**
+     * **SURGE, fired at the seat whose row was tapped** (`gdd.md:313`, `:342`, `:392`).
+     *
+     * [row] is a position in [PanelState.roster], and turning it into a `Seat` is a lookup against
+     * the same list the house sent — `MeetingRequest.asMessage(names)`'s move exactly, and lawful
+     * for its reason: names are round-scoped and arrive from the house (D-115), so the index a row
+     * sits at *is* the seat. **The list is never sorted or filtered anywhere in this module**, which
+     * is what makes that true and is written down on the field.
+     *
+     * ### It walks back to page 2 and reports nothing
+     *
+     * *No actor-side feedback on firing any ability. The attacker's device stays inert; all
+     * observable effect happens on the target* (`gdd.md:398`). So there is no verdict here, no
+     * confirmation line, nothing set on [PanelState], and — the part that matters — **no branch**:
+     * this method does the same thing whoever was tapped, whether they are already Revoked, and
+     * whether the pool was ready. What the phone's own tile draws afterwards is the house's answer
+     * (`Effect.AbilityFired`), which is input echo about this phone's own clock.
+     *
+     * **Reached only from an Insider's tile**, and not by a check inside it: a Resident's tier-2
+     * tiles take no pointer input, so a Resident never opens the picker (D-142). [stepRevoke]'s
+     * shape, one tier down.
+     */
+    fun fireSurge(row: Int) {
+        send(IntentMessage.FireSurge(target = Seat(row)))
+        go(ScreenId.Page2)
+    }
+
+    /**
+     * **ISOLATE, fired at the card whose row was tapped** (`gdd.md:315`, D-150).
+     *
+     * [card] is a printed marker id off [PanelState.isolateTargets], which is the list the house
+     * offered this phone — so this reports a **choice among what the house sent** rather than a
+     * claim about anything. **Nothing here checks the card against an Egress**: the node exclusion is
+     * the house's, it arrives as a shorter list, and a client that re-derived it would be a device
+     * deciding what an ability may be fired at.
+     *
+     * Walks back to page 2 and reports nothing, for [fireSurge]'s reason.
+     */
+    fun fireIsolate(card: String) {
+        send(IntentMessage.FireIsolate(target = MarkerId(card)))
+        go(ScreenId.Page2)
     }
 
     /**
@@ -1143,8 +1229,29 @@ class FlowModel(
             is RoundMessage.LampSet -> Unit
 
             // Input echo already lit this phone's own tile (D-141); the house's answer confirms the
-            // cooldown, and the cooldown widget has no field here yet. E3's work.
+            // cooldown, and the cooldown widget has no field here yet. E3's work. **It is the only
+            // thing a Tier-2 fire sends back to the actor** (`gdd.md:398`), so a branch that grew a
+            // field here would be the first actor-side feedback in the game.
             is RoundMessage.AbilityFired -> Unit
+
+            // **The Surge landing on THIS phone, and it has no field here on purpose.** The lamp is
+            // `ui/Lamp.kt`'s, drawn from the effect rather than from a copy of it — `LampSet`'s
+            // argument three branches up, and it is sharper for this one: routing a slam through a
+            // state field would put an extra frame between the house's word and the light, on the
+            // one effect whose whole point is that it is instantaneous and loud.
+            //
+            // ⚠️ **The sound has no route either, and it has nothing to route TO**: `Speaker` is a
+            // stub for the device pass and every actual of it is silent. So today a Surge arrives,
+            // is counted, and nothing happens — which is the honest state of an ability whose one
+            // observable half needs a decision taken with two phones in a dark room. Flagged.
+            is RoundMessage.Surged -> Unit
+
+            // **The Isolate picker's list, straight onto the panel.** Copied and never filtered: the
+            // Egress-node exclusion is the house's (D-150) and arrives as a shorter list, and a
+            // client that re-derived it would be two rules about one ability with the quieter one
+            // winning the day they disagreed.
+            is RoundMessage.IsolateTargetsOffered ->
+                state = state.copy(isolateTargets = message.targets)
 
             is RoundMessage.SubroutineGraded -> state = state.copy(
                 verdict = if (message.accepted) SubroutineVerdict.Accepted else SubroutineVerdict.Rejected,
@@ -1326,6 +1433,8 @@ class FlowModel(
         nav = ::go,
         stepRevoke = ::stepRevoke,
         armEgress = ::armEgress,
+        fireSurge = ::fireSurge,
+        fireIsolate = ::fireIsolate,
         toggleMarkers = ::toggleMarkers,
         toggleTorch = ::toggleTorch,
         pickRoomType = ::pickRoomType,

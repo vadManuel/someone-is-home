@@ -481,13 +481,33 @@ class OpeningCooldownTest {
     @Test
     fun `every seat's cooldown starts at half its normal duration`() {
         val state = arm(at = Tick(100))
-        assertEquals(8, state.cooldowns.size, "a seat was armed without a cooldown")
+        // **Two rows per seat, not one** — the Revoke's own clock and the Access pool Tier 2
+        // shares (`gdd.md:306`, `:318`). Asserted as a product of the enum rather than as a
+        // literal, so a third clock cannot be added without this number moving with it.
+        assertEquals(
+            8 * InsiderAbility.entries.size, state.cooldowns.size,
+            "a seat was armed without one row per Insider clock",
+        )
+        // **D-132 says EVERY cooldown, so every member of the enum is walked.** Written this way
+        // rather than as two named assertions for exactly the reason `InsiderAbility` exists: a
+        // clock added without a half-at-arming rule is a clock that opens the round ready, and the
+        // opening-Revoke problem D-132 closed structurally would reopen one ability at a time.
+        val halves = mapOf(
+            InsiderAbility.Revoke to Balance.REVOKE_COOLDOWN / 2,
+            InsiderAbility.Access to Balance.ACCESS_COOLDOWN / 2,
+        )
+        assertEquals(
+            InsiderAbility.entries.toSet(), halves.keys,
+            "a clock exists that this test has no opening duration for",
+        )
         for (seat in seatsOf(8)) {
-            val cooldown = assertNotNull(state.cooldownFor(seat, InsiderAbility.Revoke))
-            assertEquals(
-                Tick(100 + Balance.REVOKE_COOLDOWN / 2), cooldown.readyAt,
-                "seat ${seat.index} did not open the round at half a cooldown",
-            )
+            for ((ability, half) in halves) {
+                val cooldown = assertNotNull(state.cooldownFor(seat, ability))
+                assertEquals(
+                    Tick(100 + half), cooldown.readyAt,
+                    "seat ${seat.index}'s $ability did not open the round at half a cooldown",
+                )
+            }
         }
     }
 

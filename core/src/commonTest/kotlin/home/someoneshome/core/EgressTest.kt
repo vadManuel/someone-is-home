@@ -466,8 +466,16 @@ class EgressTest {
         // Nothing but the two beat answers and the containment. Any third kind here would be the
         // house saying something extra at the one moment it must say nothing -- and the obvious
         // candidate is an attribution somebody added for the recording's sake.
+        //
+        // `IsolateTargetsOffered` is the one third kind that is lawful here and it is named rather
+        // than swept in: D-150 excludes the two nodes from Isolate's list *for the duration of an
+        // Egress*, and this is the duration ending, so the list has to come back. **It says nothing
+        // about who contained it** — it is the round's active markers, addressed to Insiders, and it
+        // would be identical if the Egress had expired instead.
         val unexpected = effects.filterNot {
-            it is Effect.SyncPulseAnswered || it is Effect.EgressContained
+            it is Effect.SyncPulseAnswered ||
+                it is Effect.EgressContained ||
+                it is Effect.IsolateTargetsOffered
         }
         assertEquals(
             emptyList(), unexpected,

@@ -29,6 +29,29 @@ package home.someoneshome.model
  */
 sealed interface Intent {
     data class ArmRevoke(val actor: Seat) : Intent
+
+    /**
+     * **Surge this seat** (`gdd.md:313`, [Event.SurgeFired]).
+     *
+     * [target] is content and never attribution — who the ability is aimed at, picked off a roster
+     * the house drew, exactly as [SelectVote]'s target is. **It may be [actor]**, and the rules
+     * special-case nothing: *Insiders can target themselves with every ability* (`gdd.md:393`).
+     *
+     * Unlike the Revoke's firing, this one qualifies as an Intent: the target is a seat off a list
+     * the house sent rather than an identity resolved from a rotating token, so the event is fully
+     * determined by what the phone did, which connection did it, and when — which is the whole test
+     * this file's header sets.
+     */
+    data class FireSurge(val actor: Seat, val target: Seat) : Intent
+
+    /**
+     * **Isolate this marker** (`gdd.md:315`, [Event.IsolateFired]).
+     *
+     * [target] is a printed card off `Effect.IsolateTargetsOffered`, and it is a card id rather than
+     * a claim about where anybody is standing — [BeginSubroutine]'s marker exactly, and the same
+     * reason (D-136).
+     */
+    data class FireIsolate(val actor: Seat, val target: MarkerId) : Intent
     data class BeginSubroutine(val actor: Seat, val marker: MarkerId) : Intent
     data class CallMeeting(val actor: Seat) : Intent
 

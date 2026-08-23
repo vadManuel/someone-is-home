@@ -109,6 +109,14 @@ internal fun Effect.ringing(): Boolean = when (this) {
     is Effect.CheckInProgressed, is Effect.ReadyProgressed, is Effect.VoteProgressed,
     is Effect.VoteHeld, is Effect.VoteSelectionShown, is Effect.MeetingResolved,
     is Effect.SyncPulseAnswered, is Effect.InsidersRevealed,
+    // **The Surge is the loudest thing in the game and it does NOT ring**, which is worth stating
+    // rather than lumping in. Ringing means *until answered* (D-160), and a Surge has nothing to
+    // answer: it is one moment, and its noise is the speaker's rather than the motor's. A phone
+    // that kept buzzing after one would be the second thing in the game that goes off forever, on
+    // the one player the whole house is already walking towards.
+    is Effect.Surged,
+    // A list arriving on a phone. It buzzes as much as a work order does, which is not at all.
+    is Effect.IsolateTargetsOffered,
     -> false
 }
 
@@ -118,6 +126,7 @@ internal fun Effect.ringing(): Boolean = when (this) {
  * The value is read off the effect and never computed: the house constructed it in the same
  * reduction that constructed the push (D-134), so there is nothing to decide here. Twelve kinds
  * carry one; the rest are counts, progress and content that update a screen already on the phone.
+ * (Thirteen, since the Surge — see its branch, and D-135, which the Surge does *not* join.)
  *
  * ### D-135's five, and where they are
  *
@@ -146,6 +155,12 @@ internal fun Effect.haptic(): Haptic? = when (this) {
     // questions have one owner each and it is not the same owner.
     is Effect.EgressSucceeded -> haptic
     is Effect.RoundEnded -> haptic
+    // **The Surge, and its buzz is Short by ruling rather than by default.** D-135 closes the long
+    // haptic to five events and this is not one of them, however loud the rest of it is — the
+    // sound is what makes a Surge carry across a house, and a sixth long buzz would spend the
+    // meaning of the five that already mean something. The value is `Rules.kt`'s, like every other
+    // one on this list; nothing is decided here.
+    is Effect.Surged -> haptic
 
     // ---- The rest arrive quietly, each for its own reason -------------------------------------
     // The lamp is a pure function of state (rule 5) and a buzz on every luminance change would be
@@ -184,6 +199,10 @@ internal fun Effect.haptic(): Haptic? = when (this) {
     is Effect.MeetingResolved -> null
     // The house's answer to one beat of the Sync Pulse, at a terminal, in a hand.
     is Effect.SyncPulseAnswered -> null
+    // A target list arriving. It buzzes exactly as much as the work order it sits beside, which is
+    // not at all: a phone that went off when the Egress-node exclusion changed its picker would be
+    // announcing an Insider's own tooling to a pocket in a silent house.
+    is Effect.IsolateTargetsOffered -> null
     // The reveal, on the ending screen RoundEnded already buzzed for. One ending, one buzz.
     is Effect.InsidersRevealed -> null
 }

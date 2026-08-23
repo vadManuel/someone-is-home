@@ -1,7 +1,9 @@
 package home.someoneshome.ui
 
 import home.someoneshome.model.AssignedWork
+import home.someoneshome.model.Destination
 import home.someoneshome.model.HomeReview
+import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MarkerShape
 import home.someoneshome.model.MarkerShapes
 import home.someoneshome.model.MeetingPhase
@@ -42,6 +44,22 @@ enum class ScreenId {
     // panel*, and every sweep in this module walks `ScreenId.entries`. A quiet banner hiding
     // behind a flag on `Notify` would be a presentation none of them ever looked at.
     Home, Page2, Lock, Quiet, LockNotify,
+
+    // **Tier 2's two target lists** (the owner's 2026-08-22 targeting ruling). The one place in the
+    // game a control opens a view rather than arming in place — D-142 settled that arming happens on
+    // page 2 *in place*, and it settled it about the Revoke and the Egress, which have no target to
+    // pick: contact is the Revoke's confirmation and the house draws the Egress's nodes. Surge and
+    // Isolate pick from a LIST, and **the glow of reading the list is the deliberate price** of
+    // using them.
+    //
+    // Two ids rather than one screen with a mode, for the reason every sweep in this module walks
+    // `ScreenId.entries`: a picker hiding behind a field on a shared screen is a picker none of them
+    // ever looked at, and these two draw different things — names against shapes-and-rooms.
+    //
+    // **A Resident can never be on either**, and that is capability rather than a route: their
+    // tier-2 tiles take no pointer input at all (D-142), so there is no hold to run and no view to
+    // be caught on.
+    SurgeTargets, IsolateTargets,
 
     // Work. The Subroutine screens are named for the Subroutine and not for how much light it
     // makes: the port's two were `Sub` and `SubBright`, which is the light ladder used as an
@@ -248,6 +266,38 @@ data class PanelState(
      * Null means the house has said nothing, and the screen's own drawn fraction stands in.
      */
     val integrityPercent: Int? = null,
+    /**
+     * **Every seat in the round, by the name its owner asked for, in seat order** (D-115).
+     *
+     * What the Surge picker draws. **Seat order is load-bearing and not a presentation choice**: the
+     * picker turns a tapped row back into a `Seat` by its position in this list, exactly as the
+     * ballot does (`MeetingRequest.asMessage`), so a list that was sorted, filtered or de-duplicated
+     * would fire the ability at somebody else.
+     *
+     * **Every seat, including this one and including the out.** Self-targeting is required
+     * (`gdd.md:393`) so the actor's own row has to be on it; the Revoked stay on it because a roster
+     * that dropped them would be the revoke-detector `gdd.md:344` exists to prevent, delivered by a
+     * list instead of by an animation.
+     *
+     * Null means the house has said nothing, which on a phone with no house attached is always;
+     * [PanelVals.roster] resolves the port's five. [egressNodes]' arrangement exactly.
+     */
+    val roster: List<String>? = null,
+    /**
+     * **The markers this phone may Isolate, as the house last offered them**
+     * (`Effect.IsolateTargetsOffered`, D-150).
+     *
+     * Shape and room per row, which is what a player in a dark house picks by. **Null means the
+     * house has said nothing** and [PanelVals.isolateTargets] resolves the port's drawn set;
+     * [egressNodes]' arrangement, and the fallback is a fixture rather than a second source of
+     * truth.
+     *
+     * **This phone does no filtering of it whatever.** The Egress-node exclusion is the *house's*
+     * (D-150) and arrives as a shorter list; a client that removed rows of its own would be a device
+     * deciding what an ability may be fired at, and the day the two rules disagreed the quieter one
+     * would win.
+     */
+    val isolateTargets: List<Destination>? = null,
     /** Randomises the backlog's *count and mix*, so inbox density can never imply a role. */
     val inboxSeed: Int = 3,
     val noteSeed: Int = 0,
@@ -591,6 +641,37 @@ class PanelVals(val state: PanelState) {
     val tier2BarInk: Color = Amber.Mid
     val tier2Note: String =
         if (insider) "SURGE, SPOOF AND ISOLATE SHARE THIS" else "BUS, THERMAL AND CACHE NOMINAL"
+
+    /**
+     * **The line under the three tier-2 tiles, and it is the same length for both roles.**
+     *
+     * D-142 asks that a Resident's copy be *true, and not shorter, dimmer or otherwise
+     * distinguishable* — and the Insider's is an instruction that has to be right, because a hold
+     * that a player did not know was a hold is a support ability they never fire. Same slot, same
+     * brightness, same word count; the Resident's says nothing about what the tiles do under a
+     * thumb, because for that player they do nothing.
+     */
+    val tier2Sub: String = if (insider) "HOLD TO SELECT A TARGET" else "WITHIN NOMINAL PARAMETERS"
+
+    /**
+     * **The seat roster the Surge picker draws** (`gdd.md:392`, D-115).
+     *
+     * The house's when there is one and the port's five when there is not — [egressNodes]'
+     * arrangement exactly, derived once here so the picker and anything else that reads it resolve
+     * the same list rather than each keeping its own.
+     *
+     * **Order is the wire**, not a presentation: a row's position in this list is the seat the
+     * ability is fired at. See [PanelState.roster].
+     */
+    val roster: List<String> = state.roster ?: ROSTER
+
+    /**
+     * **The markers the Isolate picker draws** (`gdd.md:315`, D-150).
+     *
+     * The house's when there is one, the port's when there is not. **Nothing here filters it** — the
+     * Egress-node exclusion is the house's and arrives as a shorter list.
+     */
+    val isolateTargets: List<Destination> = state.isolateTargets ?: ISOLATE_TARGETS
 
     // ---- Host setup -------------------------------------------------------------------------
 
@@ -1031,6 +1112,32 @@ class PanelVals(val state: PanelState) {
          *
          * BRIGHT is this port's reading. D-113 ratified the value; nothing ruled the row.
          */
+        /**
+         * **The port's five, standing in for a roster the house sends** (D-115).
+         *
+         * A fixture for [CURRENT]'s reason: a picker rendered from an empty list is a screen the app
+         * never shows, and a test looking at one proves nothing about the screen that ships. The
+         * same five the meeting's ballot is drawn with, deliberately — two fixtures naming different
+         * houses would make a screenshot pass read as a house that had changed between screens.
+         *
+         * In play `Effect.IsolateTargetsOffered`'s sibling on the roster wire sends the real thing
+         * and this is not consulted.
+         */
+        val ROSTER: List<String> = listOf("PRIYA", "MARCUS", "DANI", "ROSE", "TOMAS")
+
+        /**
+         * **The port's drawn markers, standing in for the list the house offers** (D-150).
+         *
+         * [ROSTER]'s reason. Rooms and glyphs from the same set the work-order fixture uses, so the
+         * two screens describe one house.
+         */
+        val ISOLATE_TARGETS: List<Destination> = listOf(
+            Destination(MarkerId("card-hall"), "diamond", "HALL"),
+            Destination(MarkerId("card-garage"), "arrow_right", "GARAGE"),
+            Destination(MarkerId("card-bed2"), "cross", "BED 2"),
+            Destination(MarkerId("card-study"), "square_frame", "STUDY"),
+        )
+
         const val ARRAY_WIPE = "ARRAY WIPE"
         val ARRAY_WIPE_LIGHT: LightSignature = LightSignature.Bright
 

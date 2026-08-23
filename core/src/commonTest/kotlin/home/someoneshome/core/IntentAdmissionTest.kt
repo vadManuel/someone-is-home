@@ -176,6 +176,13 @@ class IntentAdmissionTest {
         is Event.MarkerScanned, is Event.SubroutineReturned, is Event.RevokeArmed,
         is Event.MeetingCheckedIn, is Event.ReadyToVoteDeclared, is Event.VoteSelected,
         is Event.VoteLocked,
+        // **The two Tier-2 fires, and they are requestable where `EgressFired` is not.** The
+        // contrast is the whole reason they sit on this row: the house draws nothing for either.
+        // A Surge names a seat off a roster and an Isolate names a card off a list the house
+        // itself published to that phone, so the fact is settled by what the phone did, which
+        // connection did it, and when. Spoof is the third ability on the same pool and has no
+        // event at all yet, so nothing here classifies it.
+        is Event.SurgeFired, is Event.IsolateFired,
         -> Origin.Requestable
 
         // Two ways to call a meeting and only one of them is a card. `MeetingCard` is requestable;
@@ -285,6 +292,8 @@ class IntentAdmissionTest {
     /** The same request from somebody else. The test's own, never the wire's. */
     private fun reattributed(intent: Intent, actor: Seat): Intent = when (intent) {
         is Intent.ArmRevoke -> intent.copy(actor = actor)
+        is Intent.FireSurge -> intent.copy(actor = actor)
+        is Intent.FireIsolate -> intent.copy(actor = actor)
         is Intent.BeginSubroutine -> intent.copy(actor = actor)
         is Intent.CallMeeting -> intent.copy(actor = actor)
         is Intent.CheckIn -> intent.copy(actor = actor)

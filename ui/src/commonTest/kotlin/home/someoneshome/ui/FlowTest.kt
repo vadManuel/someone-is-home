@@ -559,9 +559,31 @@ class FlowTest {
         // role-asymmetric edge in the game and the only one no rendering pass can reach: a
         // Resident's tile takes no pointer input at all (D-142), so firing everything on a
         // Resident's page 2 finds nothing, which is the ruling rather than a gap.
-        val egress = FlowModel(PanelState(screen = ScreenId.Page2, role = PanelRole.Insider))
-        egress.armEgress()
-        assertEquals(Flow.viaActions.getValue(ScreenId.Page2), setOf(egress.state.screen))
+        // **All three of page 2's holds**, walked from the same screen because they are three
+        // gestures on one page and the edge set has three members. The Egress arms in place and
+        // reaches the alert every phone gets; the two tier-2 tiles open a target list, which is the
+        // 2026-08-22 targeting ruling and the one place the design asks a hold to open a view.
+        val page2 = setOf(
+            FlowModel(PanelState(screen = ScreenId.Page2, role = PanelRole.Insider))
+                .apply { armEgress() }.state.screen,
+            FlowModel(PanelState(screen = ScreenId.Page2, role = PanelRole.Insider))
+                .apply { go(ScreenId.SurgeTargets) }.state.screen,
+            FlowModel(PanelState(screen = ScreenId.Page2, role = PanelRole.Insider))
+                .apply { go(ScreenId.IsolateTargets) }.state.screen,
+        )
+        assertEquals(Flow.viaActions.getValue(ScreenId.Page2), page2)
+
+        // Firing, off a row of either picker. **The walk is identical for a shot that landed and a
+        // shot that did not**, which is `gdd.md:398` held by the navigation as well as by the
+        // screen: this phone goes back to page 2 and is told nothing.
+        val surge = FlowModel(PanelState(screen = ScreenId.SurgeTargets, role = PanelRole.Insider))
+        surge.fireSurge(0)
+        assertEquals(Flow.viaActions.getValue(ScreenId.SurgeTargets), setOf(surge.state.screen))
+
+        val isolate =
+            FlowModel(PanelState(screen = ScreenId.IsolateTargets, role = PanelRole.Insider))
+        isolate.fireIsolate("card-hall")
+        assertEquals(Flow.viaActions.getValue(ScreenId.IsolateTargets), setOf(isolate.state.screen))
 
         // A house notice, swiped up — the last button dismissal in the app, retired (D-105).
         val notice = FlowModel(PanelState(screen = ScreenId.Notice))
@@ -620,7 +642,9 @@ class FlowTest {
                 ScreenId.SaveName, ScreenId.Delete, ScreenId.HomeDetail, ScreenId.ScanMarker,
                 ScreenId.Secret, ScreenId.Lobby, ScreenId.ScanCaught,
                 ScreenId.WinInsiders, ScreenId.WinResidents,
-                ScreenId.Page2, ScreenId.Notice,
+                // Page 2's three holds, and the two pickers a row fires off.
+                ScreenId.Page2, ScreenId.SurgeTargets, ScreenId.IsolateTargets,
+                ScreenId.Notice,
                 ScreenId.Notify, ScreenId.Banner, ScreenId.Quiet, ScreenId.LockNotify,
             ),
             Flow.viaActions.keys,

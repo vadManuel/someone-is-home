@@ -10,13 +10,16 @@ import home.someoneshome.model.GameState
 import home.someoneshome.model.Haptic
 import home.someoneshome.model.InsiderAbility
 import home.someoneshome.model.InsiderNamed
+import home.someoneshome.model.Isolation
 import home.someoneshome.model.Meeting
 import home.someoneshome.model.MeetingPhase
 import home.someoneshome.model.Outcome
 import home.someoneshome.model.Presence
 import home.someoneshome.model.PulseOffer
 import home.someoneshome.model.Role
+import home.someoneshome.model.Tick
 import home.someoneshome.model.Seat
+import home.someoneshome.model.Sound
 import home.someoneshome.model.SubroutineInstance
 import home.someoneshome.model.WinRoute
 import home.someoneshome.model.Winner
@@ -41,6 +44,9 @@ private fun dispatch(state: GameState, event: Event): Reduction<GameState, Effec
     is Event.RoundArmed -> armed(event)
 
     is Event.RevokeArmed -> revokeArmed(state, event)
+
+    is Event.SurgeFired -> surgeFired(state, event)
+    is Event.IsolateFired -> isolateFired(state, event)
 
     is Event.ContactMade -> contact(state, event)
 
@@ -313,8 +319,16 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
         destinations = event.markers,
         // D-132, and it is drawn for every seat rather than for the Insiders alone: a list whose
         // membership was the Insider list would BE the Insider list.
-        cooldowns = seats.map {
-            Cooldown(it, InsiderAbility.Revoke, event.at + Balance.REVOKE_COOLDOWN / 2)
+        // D-132, and it is drawn for every seat rather than for the Insiders alone: a list whose
+        // membership was the Insider list would BE the Insider list. **Two rows per seat now** --
+        // the Revoke's own clock and the Access pool Tier 2 shares (`gdd.md:306`, `:318`) -- and
+        // both open at half, so the round's guaranteed stretch of peace covers the support kit as
+        // well as the two time-critical abilities.
+        cooldowns = seats.flatMap {
+            listOf(
+                Cooldown(it, InsiderAbility.Revoke, event.at + Balance.REVOKE_COOLDOWN / 2),
+                Cooldown(it, InsiderAbility.Access, event.at + Balance.ACCESS_COOLDOWN / 2),
+            )
         },
         // D-132 again, and it is ONE value rather than a row per seat because the Egress cooldown
         // is house-wide -- *shared with the other Insider*. See GameState.egressReadyAt.
@@ -335,7 +349,13 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
         state,
         seats.map { Effect.LampSet(it, LAMP_DIM) } +
             orders.map { Effect.WorkOrderIssued(it.seat, it.asLines(state.destinations)) } +
-            seats.map { Effect.OpeningMessage(it, Haptic.Short) },
+            seats.map { Effect.OpeningMessage(it, Haptic.Short) } +
+            // **The Isolate picker, for every seat, narrowed to Insiders by the allowlist and not
+            // by this line.** A phone cannot draw a list it was never sent, and the ruling says
+            // Isolate picks from one. Grouped by kind like the three runs above it, and the same
+            // length as them, which is what keeps the arming burst role-independent — see
+            // [isolateOffers], where the differential harness's finding is written down.
+            isolateOffers(state),
     )
 }
 
@@ -390,7 +410,19 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
  */
 private fun scanned(state: GameState, event: Event.MarkerScanned): Reduction<GameState, Effect> {
     val (id, minted) = state.mintId()
-    val entry = if (state.isOut(event.actor)) {
+    // **An Isolated card opens nothing, for anybody, and it answers exactly as an empty one does**
+    // (`gdd.md:315`, and see [Isolation] for the ruling this is). The branch is on state and the
+    // emitted shape does not move: the two effects below are constructed once, outside it, so a
+    // scan at a dark marker produces the same `ScanAnswered` null and the same `PresenceChanged`
+    // that D-124's NOTHING FOR YOU HERE already produces at a registered card holding no work for
+    // you. **An Isolated marker must not announce itself as attacked**, and the way to keep that is
+    // for there to be nothing in the answer that could.
+    //
+    // It is asked before the work order rather than after, so that an Insider's fake is dark at a
+    // dark card too. A card that went offline for Residents and kept opening fakes for Insiders
+    // would be a role oracle at every Isolated marker in the house.
+    val offline = state.isIsolated(event.marker, event.at)
+    val entry = if (state.isOut(event.actor) || offline) {
         null
     } else {
         state.workOrderFor(event.actor)?.openAt(event.marker)
@@ -487,6 +519,208 @@ private fun revokeArmed(state: GameState, event: Event.RevokeArmed): Reduction<G
             .withCooldown(cooldown.restartedAt(event.at, Balance.REVOKE_COOLDOWN))
     }
     return Reduction(next, emptyList())
+}
+
+// =================================================================================================
+// Tier 2 — the shared Access pool.
+//
+// Two abilities on one clock (`gdd.md:306`), and the shape of both is `egressFired`'s: the actor's
+// answer is constructed ONCE, outside every branch, and only the state transition moves. What
+// differs from the Egress is one field, and it is deliberate — see `spendsPool`.
+//
+// Spoof is the third ability on this pool and is not here. It is T2's.
+// =================================================================================================
+
+/**
+ * **The pool, restarted at one ability's weight** — the one writer of [InsiderAbility.Access].
+ *
+ * A function rather than three call sites, so that *firing any Tier-2 ability restarts the same
+ * clock* is a fact the code states once. A builder wiring Spoof calls this with Spoof's weight and
+ * touches nothing else, which is what the pool being one enum member was for.
+ *
+ * **It writes an absolute deadline off the event's own tick**, like every other cooldown in the
+ * game: a remaining count would be a fact about the moment somebody asked, and a tick replays.
+ */
+private fun spendPool(state: GameState, actor: Seat, at: Tick, weight: Long): GameState =
+    state.withCooldown(Cooldown(actor, InsiderAbility.Access, at + weight))
+
+/**
+ * **The Surge: the target's lamp slams to full, then to black, and their phone makes the one noise
+ * this game has** (`gdd.md:313`, `:342`, `:392`–`:401`).
+ *
+ * ### Rule 1's shape, and the branch is on the pool alone
+ *
+ * Every path emits exactly one [Effect.AbilityFired], constructed once, outside the branch — exactly
+ * as [contact] and [egressFired] do. **Nothing here asks whether the target is Revoked, whether they
+ * are an Insider, or whether they are the actor**, so `gdd.md:344`'s *targeting an already-revoked
+ * player must appear to succeed on the actor's device* is kept by there being no question to answer
+ * rather than by a branch that answers it identically. The panel cannot become a revoke-detector
+ * because the rules never look.
+ *
+ * The target's own delivery is declined one layer out, by the allowlist, which permits
+ * [Effect.Surged] to the two living classes and to no out class. Two independent denials, and the
+ * actor sees neither.
+ *
+ * ### `cooldownStarted` tells the truth, and this differs from `egressFired` on purpose
+ *
+ * [Effect.AbilityFired] carries the flag *because* the answer is sometimes no, and the actor is the
+ * only recipient of it: the row permits the kind to `Insider/Live` and the effect is addressed to
+ * the actor, so nothing about it reaches a phone that did not press the button. What it says is
+ * *your own pool was spent*, which is the actor's own business and is drawn on the actor's own
+ * tile — input echo, not a game answer.
+ *
+ * ⚠️ **`egressFired` hardcodes `true` on the same field and does not**, which is a small
+ * inconsistency this unit inherited and did not touch: an Egress fired into a running cooldown tells
+ * the phone it spent one it did not, and the phone's bar is then wrong for three minutes. Flagged
+ * for the owner rather than changed under a freeze.
+ *
+ * ### Ranged, and there is no range
+ *
+ * ⚠️ *Ranged* is the design's word (`gdd.md:313`) and **the design gives no range mechanism** —
+ * there is no distance, no room adjacency the rules may read, and no proximity hardware behind it.
+ * So a Surge is house-wide valid, and *ranged* is carried by the fiction and by the physical fact
+ * that firing it pulls the whole house to a place you may be standing in. Flagged, not invented: a
+ * range rule guessed here would silently refuse honest shots in a house nobody measured.
+ */
+private fun surgeFired(state: GameState, event: Event.SurgeFired): Reduction<GameState, Effect> {
+    val ready = state.accessReady(event.actor, event.at)
+    val next = if (!ready) {
+        state
+    } else {
+        spendPool(state, event.actor, event.at, Balance.SURGE_COOLDOWN)
+    }
+
+    // Constructed once, outside the branch above. Deliberately not inside it: the actor's device
+    // stays inert whatever happened to anybody, and what it is told is that the ability fired and
+    // what its own clock now says.
+    val answered = Effect.AbilityFired(actor = event.actor, cooldownStarted = ready)
+    val landed = if (!ready) {
+        emptyList()
+    } else {
+        // **Addressed to the target and never to the actor**, which is `gdd.md:398` — and when they
+        // are the same seat this arrives once, as the target's, which is what makes the self-surge
+        // alibi indistinguishable from being attacked (`gdd.md:342`).
+        //
+        // D-135's long haptic is closed at five and this is not one of them, however loud the rest
+        // of it is. A ruling rather than a default.
+        listOf(
+            Effect.Surged(
+                seat = event.target,
+                peak = LAMP_FULL,
+                black = LAMP_BLACK,
+                sound = Sound.Surge,
+                haptic = Haptic.Short,
+            ),
+        )
+    }
+    return Reduction(next, listOf(answered) + landed)
+}
+
+/**
+ * **Isolate: one card goes offline, and nothing anywhere says so** (`gdd.md:315`, `:621`, D-150).
+ *
+ * ### The Egress nodes are refused here and are NOT charged for
+ *
+ * D-150 excludes the two nodes from the target **list** for the duration of an Egress, and the list
+ * is what [Effect.IsolateTargetsOffered] carries. This is the other half of the same rule: the gap
+ * between a list arriving on a phone and a finger landing on it is real — the Egress can fire in
+ * between — so a node can still reach the rules, and when it does **the pool is not spent.**
+ *
+ * That is the ruling's own argument, and it is why this is not the fake success the GDD originally
+ * proposed: *the old shape had Isolate fire at a node, play its animation, spend from the **Access
+ * pool** and do nothing — obeying "abilities never report failure" by charging a **shared** resource
+ * for an action that could not work. That is not concealment, it is a tax on a teammate's budget,
+ * paid in the dark by somebody who will never learn why the pool was short later.*
+ *
+ * **And there is nothing left to conceal**, because the house has already named both nodes to every
+ * phone in the building on [Effect.EgressOpened]. `cooldownStarted = false` here tells the actor
+ * something the whole house was told outright.
+ *
+ * ### Rule 1 still holds, and it holds on the shape
+ *
+ * One [Effect.AbilityFired], constructed once, outside every branch, for every outcome: pool
+ * running, node refused, or a card taken dark. **Nothing is emitted about the marker itself** — no
+ * announcement to the room, nothing to the seats whose work is at that card, and no schema row for
+ * one. What a player learns is that they walked to a card and the house had nothing for them there,
+ * which is [Isolation]'s ruling and is flagged as a build-time call.
+ *
+ * ### The carrier lockout falls out, as far as anything can fall out of a circuit nobody deals
+ *
+ * `gdd.md:621`: *a Insider who Isolates the Disposal marker does not delay one task — they lock that
+ * player out of **every** task until it clears.* The mechanism it rests on is that a scan at an
+ * Isolated card opens nothing, which is [scanned]'s doing and is exercised there for a station
+ * exactly as for any other card. ⚠️ **The other half is unbuildable today**: `AssignedWork.ArrayWipe`
+ * has no `opensAs`, `workOrderFor` deals no circuit, and there is no carried state anywhere in the
+ * app (F-014, E7). So the lockout cannot be *tested* as a lockout — what is tested is that the
+ * station goes dark like anything else, which is the whole of what this layer contributes.
+ *
+ * ⚠️ **The Terminal cannot be Isolated and it is supposed to be able to be** (`gdd.md:315`). The
+ * reserved cards do not ride the arming event — `Event.RoundArmed.markers` is the *ordinary*
+ * registered markers, explicitly excluding the Terminal and the meeting card — so the rules have
+ * never held the Terminal's id and there is nothing here to name. Escalated.
+ */
+private fun isolateFired(state: GameState, event: Event.IsolateFired): Reduction<GameState, Effect> {
+    // D-150. Read off the Egress rather than off a copy of the node list, so the exclusion the list
+    // draws and the refusal the rules make are one fact asked twice rather than two that agree.
+    val offered = state.egress?.isNode(event.target) != true
+    val takes = offered && state.accessReady(event.actor, event.at)
+
+    val next = if (!takes) {
+        state
+    } else {
+        spendPool(state, event.actor, event.at, Balance.ISOLATE_COOLDOWN)
+            .withIsolated(Isolation(event.target, event.at + Balance.ISOLATE_DURATION))
+    }
+
+    // Constructed once, outside the branch above. Deliberately not inside it, and deliberately the
+    // ONLY effect this handler produces: a card going dark is discovered by walking to it.
+    return Reduction(next, listOf(Effect.AbilityFired(event.actor, cooldownStarted = takes)))
+}
+
+/**
+ * **The Isolate picker — built for EVERY seat, and narrowed by the allowlist** (D-150, D-079, the
+ * 2026-08-22 ruling).
+ *
+ * The round's active markers with their rooms, minus the two Egress nodes while an Egress is
+ * running. Built in one place and called from the three transitions that can change the answer —
+ * arming, an Egress starting, an Egress being contained — so that *what the list says* is one rule
+ * rather than three copies of one.
+ *
+ * ### ⚠️ It is emitted for Residents too, and that is the whole point of this function's shape
+ *
+ * The first build of this filtered to Insiders here, which is the obvious thing to write and is
+ * **wrong in a way that only one instrument in this project can see**. `Rules.kt`'s own claim is
+ * that the *only* place a role changes an outcome is a Resident's accepted entry banking against the
+ * meter — and a role-filtered emission would have made the arming burst itself role-dependent. The
+ * differential harness caught exactly that: swap the roles in a seeded round, and the authority's
+ * effect stream came out different in something other than the meter.
+ *
+ * **That is not a leak on the wire and it would still have been a serious loss.** Story 0.6's
+ * differential is one of three independent leak instruments, and its whole method is that a
+ * role-swapped round produces a byte-identical transcript. A rule that branches on role retires the
+ * instrument for every future change as well as for this one.
+ *
+ * So the narrowing happens where narrowing belongs: `ISOLATE_TARGETS_OFFERED` is permitted to
+ * `Insider/Live` and to nothing else, so a Resident's copy is **constructed and delivered to
+ * nobody** — [Effect.PresenceChanged]'s and [Effect.EgressSucceeded]'s posture exactly, and the
+ * architecture's own division of labour: the rules say what happened, the emit boundary says who may
+ * hear it. Rule 2 does the work for free the moment the row is one class wide.
+ *
+ * **Nothing here reads `roleOf`, `isOut`, or any per-seat state**, which is what makes that true.
+ * Every seat gets the same list.
+ *
+ * **The whole list every time, never a diff**, for [Effect.WorkOrderIssued]'s reason: a message that
+ * appeared only when something had changed would make its presence the news.
+ *
+ * **Already-Isolated markers stay on it.** Which cards another Insider has taken dark is not this
+ * Insider's to know, and an omission would report it — an argument the node exclusion does not need,
+ * because the nodes are public and an isolation is not.
+ */
+private fun isolateOffers(state: GameState): List<Effect> {
+    val targets = state.activeMarkers
+        .filterNot { state.egress?.isNode(it) == true }
+        .mapNotNull { state.destinationOf(it) }
+    return state.seats.map { Effect.IsolateTargetsOffered(seat = it, targets = targets) }
 }
 
 /**
@@ -730,8 +964,22 @@ private fun meetingCalled(
         Balance.integrityPercent(state.systemIntegrity, state.seats.size),
     )
 
+    // **The Access pool stops with the shift** (the Shift ruling, `GameState.accessPausedAt`). A
+    // shift is the work interval between meetings and a meeting ends the shift it interrupts
+    // (D-170), so the moment the party is called in is the moment Tier 2 stops recharging — and it
+    // picks up where it stopped when the lights go out, which is `lightsOut`'s half.
+    //
+    // **A second call cannot move the mark**, for `Egress.pausedAt`'s reason: one meeting at a time
+    // (`RefusalReason.MeetingAlreadyRunning`), and a pause that reset its own mark would be the one
+    // shape that could silently lengthen a cooldown.
+    //
+    // **Nothing is emitted about it.** A cooldown reaching the house at large would be an Insider
+    // announced by a timer; the actor's own tile is drawn from the actor's own input echo, and a
+    // phone that walked into a meeting knows it walked into a meeting.
+    val poolHeld = state.accessPausedAt ?: event.at
+
     return Reduction(
-        state.copy(meeting = meeting, egress = held),
+        state.copy(meeting = meeting, egress = held, accessPausedAt = poolHeld),
         listOf(ring) + walkIn + gateCount(state, meeting) + batched + stopped,
     )
 }
@@ -998,8 +1246,34 @@ private fun lightsOut(state: GameState, event: Event.MeetingClosed): Reduction<G
         listOf(Effect.EgressHeld(it.remainingAt(event.at), running = true, haptic = Haptic.Short))
     } ?: emptyList()
 
+    // **The other half of the Shift ruling, and it is the Egress's arithmetic applied to a
+    // cooldown.** Every Access deadline moves forward by exactly the length of the meeting, so the
+    // remaining time across it is what it was when the party was called in — `deadline += (now −
+    // pausedAt)`, where `deadline = now + duration` would hand every Insider a fresh pool for
+    // walking into a room, and dropping the mark without moving the deadlines would let a meeting
+    // recharge the whole support kit for free.
+    //
+    // **Only the Access rows move.** The Revoke's clock and the Egress's are left alone — see
+    // `GameState.accessPausedAt`, where the scope and the flag are written down.
+    val resumedPool = state.accessPausedAt?.let { paused ->
+        val heldFor = event.at.step - paused.step
+        state.cooldowns.map {
+            if (it.ability == InsiderAbility.Access) {
+                Cooldown(it.seat, it.ability, it.readyAt + heldFor)
+            } else {
+                it
+            }
+        }
+    } ?: state.cooldowns
+
     return Reduction(
-        state.copy(meeting = null, newlyRevoked = emptyList(), egress = running),
+        state.copy(
+            meeting = null,
+            newlyRevoked = emptyList(),
+            egress = running,
+            cooldowns = resumedPool,
+            accessPausedAt = null,
+        ),
         listOf(Effect.MeetingEnded(Haptic.Long)) + restarted,
     )
 }
@@ -1107,7 +1381,14 @@ private fun egressFired(state: GameState, event: Event.EgressFired): Reduction<G
         }
     } ?: emptyList()
 
-    return Reduction(next, listOf(answered) + alarm)
+    // **The two nodes leave every Insider's Isolate list at the instant they are named to the
+    // house** (D-150). Built from `next`, so the exclusion is read off the Egress that just started
+    // rather than off the one that was not running a line ago — and emitted only when an Egress
+    // actually started, because a list re-sent on a fire that did nothing would be a message whose
+    // presence reported the state of the shared cooldown to a phone that was told it another way.
+    val relisted = if (started == null) emptyList() else isolateOffers(next)
+
+    return Reduction(next, listOf(answered) + alarm + relisted)
 }
 
 /**
@@ -1186,7 +1467,13 @@ private fun pulseReturned(
         emptyList()
     } else {
         // No seats, no node, no attribution of any kind. The house says it stopped.
-        listOf(Effect.EgressContained(Haptic.Short))
+        //
+        // **And the two nodes come back onto every Insider's Isolate list**, which is the other end
+        // of D-150's exclusion: it lasts *for the duration of an Egress* and this is the duration
+        // ending. Built from `next`, where the Egress has already been cleared, so the list is drawn
+        // against the house as it now is. The other way an Egress ends is expiry, which ends the
+        // round — there is nobody left to offer a list to.
+        listOf(Effect.EgressContained(Haptic.Short)) + isolateOffers(next)
     }
     Reduction(next, listOf(answered) + contained)
 }
@@ -1218,3 +1505,18 @@ private fun egressExpired(state: GameState): Reduction<GameState, Effect> = Redu
  * reachability tests can read the same numbers the rules do.
  */
 private const val LAMP_DIM = 1
+
+/**
+ * **The Surge's two luminances — full, then black** (`gdd.md:313`).
+ *
+ * Here rather than in [Balance] because they are not balance: they are the light the rules author
+ * for one gesture, and [LAMP_DIM] is the only other value in the game that is the same kind of
+ * thing. Rule 5 is why they exist at all — *light is game state, and no local animation the core did
+ * not emit* — so the slam is two numbers this file chose, carried on the effect, and the device
+ * performs those and returns to whatever [Effect.LampSet] it was last sent.
+ *
+ * ⚠️ **How long each half lasts is unruled and is not here**, because `core` has no clock to say it
+ * with. It is the platform's, and it is flagged.
+ */
+private const val LAMP_FULL = 100
+private const val LAMP_BLACK = 0

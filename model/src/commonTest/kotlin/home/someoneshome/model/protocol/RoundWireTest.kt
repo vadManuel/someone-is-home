@@ -12,6 +12,7 @@ import home.someoneshome.model.MeetingPhase
 import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.OrderLine
 import home.someoneshome.model.Seat
+import home.someoneshome.model.Sound
 import home.someoneshome.model.SubroutineInstance
 import home.someoneshome.model.SubroutineKind
 import home.someoneshome.model.WinRoute
@@ -39,6 +40,11 @@ class RoundWireTest {
     private val everyEffect: List<Effect> = listOf(
         Effect.LampSet(Seat(3), luminance = 1),
         Effect.AbilityFired(Seat(3), cooldownStarted = true),
+        Effect.Surged(Seat(3), peak = 100, black = 0, sound = Sound.Surge, haptic = Haptic.Short),
+        Effect.IsolateTargetsOffered(
+            Seat(3),
+            listOf(Destination(MarkerId("M-1"), shape = "diamond", room = "KITCHEN")),
+        ),
         Effect.SubroutineGraded(Seat(3), accepted = true),
         Effect.SubroutineProgressed(remaining = 41),
         Effect.SystemIntegrityLive(percent = 87),

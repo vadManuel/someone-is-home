@@ -10,7 +10,8 @@ package home.someoneshome.model
  * does not name are still blocked on open design decisions, and inventing events for those here
  * would encode a guess as a decision. **F-001 is no longer one of them** — Egress node designation
  * was ratified as *two ordinary markers in non-adjacent rooms, drawn at fire time* — so the Egress
- * lifecycle is here. Isolate, Surge and the rest of the Access pool are not.
+ * lifecycle is here. **Surge and Isolate are here now too**, on the owner's 2026-08-22 targeting
+ * ruling; **Spoof, the third ability on the same Access pool, is still not.**
  */
 sealed interface Event {
     val at: Tick
@@ -164,6 +165,57 @@ sealed interface Event {
 
     /** Armed, not fired. The cooldown starts here — a botched stalk costs a full cooldown. */
     data class RevokeArmed(override val at: Tick, val actor: Seat) : Event
+
+    // ---- Tier 2, on the shared Access pool ------------------------------------------------------
+    //
+    // Both are a finger on a row of a list the house sent, so both are fully determined by what the
+    // phone did, which connection did it, and when it arrived -- which is the line `factOf` holds,
+    // and it is why these two DO have an Intent where `EgressFired` does not. The house makes no
+    // draw here: there is no coin toss and no geography to consult, only the target the player
+    // picked off a roster the house had already narrowed for them.
+    //
+    // Spoof is the third ability on this pool and is deliberately absent. It is T2's.
+
+    /**
+     * **A Insider fired a Surge at a seat** (`gdd.md:313`, `:342`, `:392`).
+     *
+     * [target] is a seat and it is **content, not attribution** — who the ability is aimed at, off a
+     * roster the house drew, exactly as [VoteSelected]'s target is. The actor still comes from the
+     * connection and from nowhere else.
+     *
+     * **[target] may be [actor], and nothing anywhere special-cases it.** *Insiders can target
+     * themselves with every ability* (`gdd.md:393`), because if only Residents could ever be
+     * targeted then being visibly targeted would be evidence of innocence and every ability would
+     * double as an alignment test. Self-targeting shares the pool (`gdd.md:401`): buying cover has
+     * to cost offensive capability, or self-sabotage is a free alibi generator.
+     *
+     * ### Nothing here says whether it will land
+     *
+     * The pool may still be running, in which case the house does nothing with this beyond answering
+     * the actor — see the rules. **The event is a fact about a finger on a row**, and it is recorded
+     * whether or not a phone screamed, because a refusal that left no trace is the invisible drop
+     * D-066 exists to refuse. [EgressFired] carries the same sentence and it is the same decision.
+     */
+    data class SurgeFired(override val at: Tick, val actor: Seat, val target: Seat) : Event
+
+    /**
+     * **A Insider fired an Isolate at a marker** (`gdd.md:315`, `:621`, D-150).
+     *
+     * [target] is a printed card, off the list the house sent that seat
+     * ([Effect.IsolateTargetsOffered]) — so it is content in the same sense
+     * [Event.MarkerScanned]'s marker is: a card id, and no claim about where anybody is standing.
+     * **Range is not checked and there is no mechanism to check it with** — see the rules, where
+     * that is written down as the flag it is.
+     *
+     * ### An Egress node arriving here is a stale list, not a forge
+     *
+     * The nodes are excluded from the list for the duration of an Egress (D-150), and the gap
+     * between a list being drawn and a finger landing on it is real: the Egress can fire in between.
+     * The rules refuse it there — **without charging the pool**, which is the half of D-150 that
+     * matters, because charging a *shared* budget for a shot the house had already decided could not
+     * land is a tax on a teammate paid in the dark by somebody who will never learn why.
+     */
+    data class IsolateFired(override val at: Tick, val actor: Seat, val target: MarkerId) : Event
 
     /** Phone touched to phone. Physical, so it is reported, never requested. */
     data class ContactMade(override val at: Tick, val actor: Seat, val target: Seat) : Event

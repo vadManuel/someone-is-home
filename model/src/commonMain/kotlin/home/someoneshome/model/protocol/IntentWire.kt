@@ -89,6 +89,42 @@ sealed class IntentMessage {
     data class BeginSubroutine(val marker: MarkerId) : IntentMessage()
 
     /**
+     * **Surge that seat** (`gdd.md:313`, the owner's 2026-08-22 targeting ruling).
+     *
+     * [target] is a seat and it stays, for [SelectVote]'s reason exactly: *a seat may ride in a
+     * payload when the seat **is** what the message is about, and never when it is who the message
+     * is from.* This is who the Surge is aimed at, picked off a roster the house drew and published
+     * to this phone.
+     *
+     * **It may be this phone's own seat, and there is nowhere here to say so.** Self-targeting is
+     * required (`gdd.md:393`) and it needs no expression on the wire — the desk stamps the actor
+     * from the connection, and a target equal to it is a self-surge without anything having to
+     * announce itself as one. There is deliberately no `self: Boolean`: a flag would be a second
+     * statement of a fact the payload already carries, settable independently of it.
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("FireSurge")
+    data class FireSurge(val target: Seat) : IntentMessage()
+
+    /**
+     * **Isolate that marker** (`gdd.md:315`, D-150).
+     *
+     * [MarkerId] is the printed card, off the list the house sent this seat
+     * (`RoundMessage.IsolateTargetsOffered`) — so like [BeginSubroutine] this reports a **choice
+     * among what the house offered**, and carries nothing about where the player is standing.
+     *
+     * **A card the list did not offer is refused by the rules and costs nothing**, which is the one
+     * place the two halves of D-150 meet: the exclusion is what the *list* does, and the refusal
+     * without a charge is what the *rules* do about the gap between a list arriving and a finger
+     * landing on it.
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("FireIsolate")
+    data class FireIsolate(val target: MarkerId) : IntentMessage()
+
+    /**
      * The meeting card was scanned.
      *
      * **The trigger is which member of this type was sent, and is not a field.** The house has to
@@ -175,6 +211,8 @@ sealed class IntentMessage {
      */
     fun attributedTo(actor: Seat): Intent = when (this) {
         is ArmRevoke -> Intent.ArmRevoke(actor)
+        is FireSurge -> Intent.FireSurge(actor, target)
+        is FireIsolate -> Intent.FireIsolate(actor, target)
         is BeginSubroutine -> Intent.BeginSubroutine(actor, marker)
         is CallMeeting -> Intent.CallMeeting(actor)
         is CheckIn -> Intent.CheckIn(actor)

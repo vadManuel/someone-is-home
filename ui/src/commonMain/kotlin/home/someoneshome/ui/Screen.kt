@@ -132,6 +132,8 @@ fun Screen(
 
                 ScreenId.Home -> HomeScreen(vals)
                 ScreenId.Page2 -> Page2Screen(vals)
+                ScreenId.SurgeTargets -> SurgeTargetsScreen(vals)
+                ScreenId.IsolateTargets -> IsolateTargetsScreen(vals)
                 ScreenId.Quiet -> HomeScreen(vals)
 
                 ScreenId.Banner -> HomeScreen(vals)

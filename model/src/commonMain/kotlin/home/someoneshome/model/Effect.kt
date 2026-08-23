@@ -49,6 +49,112 @@ sealed interface Effect {
      */
     data class SubroutineGraded(val seat: Seat, val accepted: Boolean) : Effect
 
+    /**
+     * **The Surge, landing on the seat it was fired at — one event, and it is loud**
+     * (`gdd.md:313`, `:342`).
+     *
+     * *Target's lamp slams to full, then to black — **and** their phone emits sound. One event.*
+     * That sentence is this type: one effect carrying both halves, because the design says **one
+     * event** and two effects would be two things a build could deliver separately. Either half
+     * alone was a nudge; together it is the loudest, brightest thing that can happen in a silent
+     * dark house.
+     *
+     * ### The lamp values are on the effect, and rule 5 is why
+     *
+     * *Light is game state. No local animation, tween or easing the rules did not emit — a fade
+     * nobody authored is a signal nobody authored.* So the slam is not a device effect triggered by
+     * a bare `Surged` token: [peak] and [black] are the two luminances the **rules** chose, and the
+     * device performs those and nothing else. **What it returns to afterwards is the last
+     * [LampSet] the house sent**, which the phone is already holding — so the gesture ends where
+     * state says it should rather than at a value this effect invented.
+     *
+     * ⚠️ **How long the two halves last is unruled and is the platform's.** Nothing in the design
+     * gives the slam a duration, and `core` has no clock to give it one. Flagged rather than
+     * invented; see the worklog.
+     *
+     * ### It is addressed to the TARGET and it is not feedback
+     *
+     * *No actor-side feedback on firing any ability. The attacker's device stays inert. All
+     * observable effect happens on the target* (`gdd.md:398`). What the actor's phone gets is
+     * [AbilityFired] and nothing else — and when the actor **is** the target, this arrives on their
+     * phone as the target's effect rather than as a report about their own finger. Self-surge is the
+     * premium alibi play (`gdd.md:342`) and it has to look exactly like being surged, because that
+     * is what it is.
+     *
+     * ### An already-Revoked target receives nothing, and no branch here decides that
+     *
+     * The rules construct this identically whichever seat it names (rule 1); the allowlist permits
+     * the kind to the two **living** classes and to no out class, so a Revoked target's phone is
+     * declined at the boundary. Two independent denials and neither is visible as an absence — the
+     * actor's device is told the ability fired and the cooldown is spent either way, which is
+     * `gdd.md:344`'s *targeting an already-revoked player must appear to succeed on the actor's
+     * device* kept without the rules ever asking whether it landed.
+     *
+     * **The room is a different question and the design has already answered it.** *Surge is
+     * world-observable* — surge someone you can see, watch nothing happen, and you have learned they
+     * are revoked with no panel involved (`gdd.md:346`). Accepted, because a Insider usually does not
+     * know where their target is.
+     *
+     * ### [sound] is the one real sound in the game and [haptic] is Short
+     *
+     * See [Sound], which carries the ruling and the licence. The haptic is a ruling rather than a
+     * default, exactly as [OpeningMessage]'s is: D-135 closes the long buzz to five events and this
+     * is not one of them, however loud the rest of it is.
+     */
+    data class Surged(
+        val seat: Seat,
+        /** Full. The lamp the rules chose, not a value the device picked. */
+        val peak: Int,
+        /** Black. Where the slam lands before the phone returns to its last authorised [LampSet]. */
+        val black: Int,
+        val sound: Sound,
+        val haptic: Haptic,
+    ) : Effect
+
+    /**
+     * **The markers Isolate may be fired at, to one Insider** (`gdd.md:315`, D-150, the owner's
+     * 2026-08-22 targeting ruling).
+     *
+     * *Isolate picks from a LIST — markers, by shape and room — and the glow of reading the list is
+     * the deliberate price.* A phone cannot draw a list it was never sent, so this is the list, and
+     * it is the narrowest thing that can be: the round's **active** markers with their glyph and
+     * room, and nothing about work, seats, occupancy or which of them are already dark.
+     *
+     * ### ⚠️ This is a real disclosure and it is the only one in the table shaped like a map
+     *
+     * `Effect.WorkOrderIssued`'s whole narrowing is that *knowing where your own next Subroutine is,
+     * is the game; knowing where every card in the house is, is the map of the round the house has
+     * never published* — and this publishes it, to Insiders, on purpose. **The ruling requires it**:
+     * a list picker over markers is a list of markers. It is permitted to `Insider/Live` and to no
+     * other class, which is [HouseSignedOff]'s narrowness for a live message, and it must never be
+     * widened by one class — the row that served an Insider would hand every Resident the geography
+     * their own order withholds.
+     *
+     * Flagged rather than defended: the disclosure follows from the ruling, and the *scope* of it —
+     * active markers rather than every registered card — is this build's reading.
+     *
+     * ### The Egress nodes are absent for the duration of an Egress (D-150, F-002 amended)
+     *
+     * *The resolution is exclusion, not immunity: for the duration of an Egress the two nodes do not
+     * appear in Isolate's target list.* Not a flag on a row and not a fake success — they are simply
+     * not in [targets]. **It leaks exactly nothing**, because the house has already named both nodes
+     * to every phone in the building on [EgressOpened]; a list that omits two rooms everybody was
+     * just told about omits something public. And it is the *shared pool* that makes the alternative
+     * unacceptable: a fake success would tax a teammate's budget in the dark for a shot the house
+     * had already decided could not land.
+     *
+     * ### Re-sent whenever the answer changes, never as a diff
+     *
+     * The whole list, every time, exactly as [WorkOrderIssued] is re-sent on every return: a message
+     * that only appeared when something had changed would make its **presence** the news, and what
+     * it would be reporting is that an Egress had started or stopped — which every phone was told
+     * outright.
+     *
+     * **Already-Isolated markers stay on the list.** Which cards another Insider has taken dark is
+     * not this Insider's to know, and an omission would report it.
+     */
+    data class IsolateTargetsOffered(val seat: Seat, val targets: List<Destination>) : Effect
+
     data class SubroutineProgressed(val remaining: Int) : Effect
 
     /**

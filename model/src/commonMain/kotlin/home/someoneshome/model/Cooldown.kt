@@ -3,9 +3,14 @@ package home.someoneshome.model
 /**
  * **An Insider ability that has a cooldown to be on.**
  *
- * One member today, and the enum exists so that the second is a row rather than a rewrite. D-132
- * says *every* Insider cooldown starts running at half at arming, and an enum with one entry is
- * how "every" stays a statement about a set instead of a sentence in a comment.
+ * Two members, and the enum exists so that the third is a row rather than a rewrite. D-132 says
+ * *every* Insider cooldown starts running at half at arming, and an enum is how "every" stays a
+ * statement about a set instead of a sentence in a comment.
+ *
+ * **A member here is a CLOCK and not an ability**, which is what lets [Access] carry three abilities
+ * on one row. The Revoke has its own because it is time-critical and must always be ticking toward
+ * available independently (`gdd.md:318`); Tier 2 shares one because sharing it is the design's only
+ * balance knob for the whole support kit.
  *
  * **The Egress is still deliberately not here, and the reason changed when it was built.**
  *
@@ -20,12 +25,42 @@ package home.someoneshome.model
 enum class InsiderAbility {
     Revoke,
 
-    /*
-     * ⚠️ **Isolate belongs here when somebody builds it, and it arrives owing one rule** — see
-     * [Egress.isNode], which is where that rule will be written: Egress nodes are excluded from
-     * Isolate's target list while an Egress is running, outright, with no fake success. Isolating a
-     * node mid-Egress otherwise wins the round with no counterplay (F-002).
+    /**
+     * **The Access pool — Tier 2's one clock, shared by Surge, Spoof and Isolate** (`gdd.md:306`,
+     * `:318`).
+     *
+     * **Named for the pool and not for an ability, and that is the whole of it.** The design's cost
+     * column for Tier 2 reads *Shared Access pool* for all three, and *one tunable number governs
+     * the entire support kit and self-targeting without touching either win condition*. Three enum
+     * members would be three rows on [GameState.cooldowns], and *shared* would become a convention
+     * somebody maintains rather than a fact the state carries — which is exactly the argument this
+     * file already makes one field over about the Egress's house-wide clock, arriving from the other
+     * direction.
+     *
+     * ### Shared between the abilities, NOT between the Insiders
+     *
+     * A [Cooldown] is keyed on a seat and this one stays keyed on a seat. D-151 draws the
+     * house-wide/per-Insider line and draws it in exactly one place: *the Egress cooldown is shared
+     * house-wide across all Insiders; Revoke stays per-Insider.* The Access pool is not on either
+     * side of that ruling, and *shared* in `gdd.md:306` is a statement about the three abilities in
+     * the row it labels. So one pool per Insider, and a second Insider's kit is their own.
+     *
+     * ### The abilities weigh differently on it
+     *
+     * Firing restarts the pool for **that ability's** duration: `Balance.SURGE_COOLDOWN` is the
+     * longest in the pool (`gdd.md:342` — *Surge is a commitment, not a tool*), `ISOLATE_COOLDOWN`
+     * is shorter, and Spoof's is T2's to write. `Balance.ACCESS_COOLDOWN` is the pool's nominal, and
+     * it exists so that D-132's *half at arming* has one number to be half of rather than three.
+     *
+     * ⚠️ **Spoof is not built and this member is already its cooldown.** A builder wiring Spoof adds
+     * a weight to `Balance` and a handler to the rules; they do not add a row here, and that is the
+     * point of the member being the pool.
+     *
+     * ⚠️ **Isolate arrives owing one rule and it is paid** — see [Egress.isNode]: Egress nodes are
+     * excluded from Isolate's target list while an Egress is running, outright, with no fake success
+     * (F-002 as amended by D-150).
      */
+    Access,
 }
 
 /**

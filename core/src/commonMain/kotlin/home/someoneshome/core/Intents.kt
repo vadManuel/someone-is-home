@@ -42,6 +42,18 @@ import home.someoneshome.model.Tick
  */
 fun factOf(intent: Intent, at: Tick): Event = when (intent) {
     is Intent.ArmRevoke -> Event.RevokeArmed(at, intent.actor)
+
+    // **The two Tier-2 abilities that DO have a request**, and the contrast with `EgressFired` two
+    // paragraphs up is the whole reason they are lawful here: the house makes no draw for either.
+    // A Surge names a seat off a roster and an Isolate names a card off a list the house itself
+    // published to that phone, so both events are fully determined by what the phone did, which
+    // connection did it, and when it arrived. Nothing is composed from a second source.
+    //
+    // Spoof is the third ability on the same pool and has no row here. It is T2's, and whether it
+    // qualifies is T2's question rather than an omission in this table.
+    is Intent.FireSurge -> Event.SurgeFired(at, intent.actor, intent.target)
+    is Intent.FireIsolate -> Event.IsolateFired(at, intent.actor, intent.target)
+
     is Intent.BeginSubroutine -> Event.MarkerScanned(at, intent.actor, intent.marker)
 
     // The trigger is which control was pressed, and the wire has a member per control for exactly

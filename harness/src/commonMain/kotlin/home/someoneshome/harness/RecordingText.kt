@@ -226,6 +226,11 @@ object RecordingText {
                 Event.SubroutineReturned(at, seat("actor"), marker("marker"), ints("entered"))
             "PerformanceEnded" -> Event.PerformanceEnded(at, seat("actor"))
             "RevokeArmed" -> Event.RevokeArmed(at, seat("actor"))
+            // Both targets are required, like every other field here. A missing one cannot be
+            // defaulted: `Seat(0)` is a real seat and a blank card id is a real card id, so a
+            // default would replay a Surge at somebody nobody fired at.
+            "SurgeFired" -> Event.SurgeFired(at, seat("actor"), seat("target"))
+            "IsolateFired" -> Event.IsolateFired(at, seat("actor"), marker("target"))
             "ContactMade" -> Event.ContactMade(at, seat("actor"), seat("target"))
             "MeetingCalled" -> Event.MeetingCalled(at, seat("caller"), trigger(req("trigger"), line))
             "MeetingCheckedIn" -> Event.MeetingCheckedIn(at, seat("seat"))

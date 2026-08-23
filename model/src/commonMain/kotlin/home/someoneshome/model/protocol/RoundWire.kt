@@ -14,6 +14,7 @@ import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.MessageKind
 import home.someoneshome.model.OrderLine
 import home.someoneshome.model.Seat
+import home.someoneshome.model.Sound
 import home.someoneshome.model.SubroutineInstance
 import home.someoneshome.model.WinRoute
 import home.someoneshome.model.Winner
@@ -73,6 +74,43 @@ sealed class RoundMessage {
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("AbilityFired")
     data class AbilityFired(val cooldownStarted: Boolean) : RoundMessage()
+
+    /**
+     * **The Surge, landing on this phone** (`gdd.md:313`, `:342`).
+     *
+     * The seat goes: it was the recipient's, and the socket is the address. What is left is the
+     * gesture the rules authored — two luminances, the one sound this game has, and a buzz.
+     *
+     * **[peak] and [black] are on the wire because the lamp is a pure function of state** (rule 5):
+     * a device handed a bare *you were surged* token would be a device inventing an animation, and a
+     * fade nobody authored is a signal nobody authored. What the phone returns to afterwards is the
+     * last [LampSet] it was sent, which it is already holding.
+     *
+     * **There is nothing here that says who fired it**, and there is nowhere to put it. A self-surge
+     * and a surge from across the house are the same frame, which is what makes the alibi play work
+     * (`gdd.md:342`).
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("Surged")
+    data class Surged(
+        val peak: Int,
+        val black: Int,
+        val sound: Sound,
+        val haptic: Haptic,
+    ) : RoundMessage()
+
+    /**
+     * **The markers this Insider may Isolate** (`gdd.md:315`, D-150).
+     *
+     * The seat goes, like every addressed kind here. The list stays whole and is re-sent rather than
+     * diffed — see [Effect.IsolateTargetsOffered], which carries the disclosure argument, the
+     * Egress-node exclusion, and the flag.
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("IsolateTargetsOffered")
+    data class IsolateTargetsOffered(val targets: List<Destination>) : RoundMessage()
 
     /** The house's answer to a returned entry. One boolean, for [Effect.SubroutineGraded]'s reason. */
     @ClientFacing
@@ -345,6 +383,8 @@ sealed class RoundMessage {
         get() = when (this) {
             is LampSet -> EmitSchema.LAMP_SET
             is AbilityFired -> EmitSchema.ABILITY_FIRED
+            is Surged -> EmitSchema.SURGED
+            is IsolateTargetsOffered -> EmitSchema.ISOLATE_TARGETS_OFFERED
             is SubroutineGraded -> EmitSchema.SUBROUTINE_GRADED
             is SubroutineProgressed -> EmitSchema.SUBROUTINE_PROGRESSED
             is SystemIntegrityLive -> EmitSchema.SYSTEM_INTEGRITY_LIVE
@@ -496,6 +536,9 @@ object RoundWire {
     fun project(effect: Effect): RoundMessage = when (effect) {
         is Effect.LampSet -> RoundMessage.LampSet(effect.luminance)
         is Effect.AbilityFired -> RoundMessage.AbilityFired(effect.cooldownStarted)
+        is Effect.Surged ->
+            RoundMessage.Surged(effect.peak, effect.black, effect.sound, effect.haptic)
+        is Effect.IsolateTargetsOffered -> RoundMessage.IsolateTargetsOffered(effect.targets)
         is Effect.SubroutineGraded -> RoundMessage.SubroutineGraded(effect.accepted)
         is Effect.SubroutineProgressed -> RoundMessage.SubroutineProgressed(effect.remaining)
         is Effect.SystemIntegrityLive -> RoundMessage.SystemIntegrityLive(effect.percent)
@@ -545,6 +588,8 @@ object RoundWire {
 //   Haptic, MeetingPhase,    -- every value of every one of them is a fact the whole house
 //   MeetingTrigger,             watched happen, at the moment it happened.
 //   EgressType, Winner, WinRoute
+//   Sound                    -- one member, and the licence for it is that Surge is
+//                               self-inflictable (gdd.md:393). See the type.
 //   MarkerId, Destination,   -- the client-facing halves the rules already construct, and the
 //   AssignedWork, OrderLine,    narrowing that made them so is D-114's and D-112's rather than
 //   SubroutineInstance          anything this file decided.

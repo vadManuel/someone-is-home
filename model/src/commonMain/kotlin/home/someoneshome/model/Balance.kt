@@ -148,6 +148,71 @@ object Balance {
      */
     const val EGRESS_COOLDOWN: Long = 180L * TICKS_PER_SECOND
 
+    /**
+     * **The Access pool's nominal duration — a placeholder, and it is what D-132 halves**
+     * (`gdd.md:306`, D-132).
+     *
+     * Tier 2 is one clock shared by Surge, Spoof and Isolate ([InsiderAbility.Access]), and each of
+     * them restarts it for its **own** weight below. So the pool has no single duration in play —
+     * which leaves D-132's *every Insider cooldown begins the round at half its normal duration*
+     * with nothing to be half of. This is that number: the pool's nominal, halved at arming, so the
+     * round opens with a guaranteed stretch in which no support ability is available either.
+     *
+     * Between [REVOKE_COOLDOWN]'s sixty and [EGRESS_COOLDOWN]'s hundred and eighty, because Tier 2
+     * is *deliberate, never used while running* and the two Tier 1 abilities are the time-critical
+     * ones. Playtest owns it, and the lobby's settings row will own it after that.
+     */
+    const val ACCESS_COOLDOWN: Long = 90L * TICKS_PER_SECOND
+
+    /**
+     * **Surge's weight on the pool — the longest in it, and a placeholder** (`gdd.md:342`).
+     *
+     * *Surge is a commitment, not a tool. Either half alone was a nudge; together it is the loudest,
+     * brightest thing that can happen in a silent dark house, and everyone converges on that person
+     * immediately.* **Longest cooldown in the Access pool** is the design's own sentence and this is
+     * it as a number — it is also what prices the self-surge alibi (`gdd.md:342`), which buys cover
+     * at the cost of the whole support kit for a long time.
+     *
+     * Longer than [ACCESS_COOLDOWN] and shorter than [EGRESS_COOLDOWN]: the pool's longest is not
+     * the game's longest, because the Egress is a win condition and this is a noise.
+     */
+    const val SURGE_COOLDOWN: Long = 150L * TICKS_PER_SECOND
+
+    /**
+     * **Isolate's weight on the pool — a placeholder** (`gdd.md:315`).
+     *
+     * The pool's nominal, unweighted: Isolate is neither the commitment Surge is nor free. Playtest
+     * owns the relationship between this, [SURGE_COOLDOWN] and Spoof's, which is unbuilt.
+     */
+    const val ISOLATE_COOLDOWN: Long = ACCESS_COOLDOWN
+
+    /**
+     * **How long a marker stays offline — a placeholder** (`gdd.md:315`, `:621`).
+     *
+     * *Temporarily* is the whole of what the design says, and the one place it says more is the
+     * Array Wipe interaction: Isolating the Disposal marker *does not delay one task — it locks that
+     * player out of every task until it clears. **Temporary, so a delay rather than a permanent
+     * lock.*** That sentence is what this number has to keep true, so it is deliberately well under
+     * a shift: long enough that a carrier has to wait somewhere in the dark, short enough that
+     * waiting is the answer.
+     *
+     * Shorter than [ISOLATE_COOLDOWN], which is the shape that matters more than either value: a
+     * duration longer than its own cooldown would let one Insider keep a marker permanently dark,
+     * which is the permanent lock the design ruled out.
+     */
+    const val ISOLATE_DURATION: Long = 45L * TICKS_PER_SECOND
+
+    /**
+     * **Whether an Isolation is really temporary.** See [ISOLATE_DURATION].
+     *
+     * A function rather than a comment, for [syncPulseIsGradeable]'s reason: the numbers above are
+     * playtest's, and the person who lengthens the Isolation to make it bite will not be reading
+     * this file's KDoc when they do it. At or past parity one Insider can hold a marker dark for the
+     * whole round by re-firing, and `gdd.md:621` is explicit that a permanent lock is not the
+     * ability.
+     */
+    fun isolateIsTemporary(): Boolean = ISOLATE_DURATION < ISOLATE_COOLDOWN
+
     /** **Four taps on the beat** (`gdd.md:355`, A-11). The design's number, not a placeholder. */
     const val SYNC_PULSE_BEATS: Int = 4
 

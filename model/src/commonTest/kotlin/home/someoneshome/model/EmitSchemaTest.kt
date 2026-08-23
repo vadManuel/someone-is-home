@@ -307,6 +307,100 @@ class EmitSchemaTest {
     }
 
     /**
+     * **THE SURGE REACHES BOTH LIVING ROLES, AND NARROWED TO EITHER IT BECOMES AN ALIGNMENT TEST**
+     * (`gdd.md:391`, `:393`).
+     *
+     * *Every observable effect must be self-inflictable. Insiders can target themselves with every
+     * ability. If only Residents could ever **be** targeted, then being visibly targeted would be
+     * evidence of innocence, and every ability would double as an alignment test.*
+     *
+     * Both directions, for [`live selections reach the couch and no living class`]'s reason: a row
+     * permitted to nobody satisfies "no Insider sees it" and a row permitted to everybody satisfies
+     * "a Resident sees it", so either assertion alone passes a build that is wrong the other way.
+     * And it is the loudest row in the table to get wrong — this is the effect the whole house can
+     * hear.
+     */
+    @Test
+    fun `the surge reaches both living roles and neither out class`() {
+        assertEquals(
+            listOf(
+                ClientClass(Role.Resident, RoundState.Live),
+                ClientClass(Role.Insider, RoundState.Live),
+            ).sortedBy { it.toString() },
+            EmitSchema.classesFor(EmitSchema.SURGED).sortedBy { it.toString() },
+            "the Surge reaches something other than exactly the two living classes",
+        )
+    }
+
+    /**
+     * **A Surge at an already-Revoked seat is delivered to nobody, and the actor is told nothing
+     * about it** (`gdd.md:344`, rule 1).
+     *
+     * The rules construct the effect identically whichever seat it names — that is `TierTwoTest`'s,
+     * in `core` — and this is the **second, independent** denial: `SURGED` is permitted to the two
+     * living classes and to no out class, so a Revoked target's phone is declined at the boundary.
+     *
+     * Neither denial is visible as an absence. The actor's own device receives `AbilityFired`
+     * either way, addressed to them and permitted to `Insider/Live`, so *targeting an already-revoked
+     * player appears to succeed on the actor's device* holds without any handler asking whether it
+     * landed. A row widened to the out classes would light a flat phone's lamp in a dark room in
+     * front of everybody.
+     */
+    @Test
+    fun `a surge addressed to a seat that is out is denied`() {
+        val out = live().copy(revoked = listOf(Seat(3)))
+        val surge =
+            Effect.Surged(Seat(3), peak = 100, black = 0, sound = Sound.Surge, haptic = Haptic.Short)
+        assertEquals(emptyList(), EmitSchema.deliveries(surge, out))
+
+        // And the actor's answer is delivered regardless, which is the half that makes the denial
+        // above invisible rather than merely correct.
+        assertEquals(
+            listOf(Seat(1).index),
+            EmitSchema.deliveries(Effect.AbilityFired(Seat(1), cooldownStarted = true), out)
+                .map { it.seat.index },
+        )
+    }
+
+    /**
+     * **The Isolate picker is the narrowest LIVE row in the table: one class** (D-150, and the
+     * 2026-08-22 targeting ruling).
+     *
+     * It carries the round's active markers with their rooms — the map of the round the house has
+     * never published, which `Effect.WorkOrderIssued` narrows to one seat's own lines. **Widened by
+     * one class it hands every Resident that map.**
+     *
+     * The rules build one of these for every seat on purpose (see `Rules.isolateOffers`, and the
+     * differential harness's finding recorded there), so **this row is the only thing standing
+     * between a Resident and the geography.** Asserted in both directions, and addressed as well as
+     * permitted: two Insiders are the same class, so the allowlist alone could not stop one reading
+     * the other's.
+     */
+    @Test
+    fun `the isolate picker reaches a living Insider and nobody else`() {
+        assertEquals(
+            listOf(ClientClass(Role.Insider, RoundState.Live)),
+            EmitSchema.classesFor(EmitSchema.ISOLATE_TARGETS_OFFERED),
+            "the Isolate picker reaches something other than exactly a living Insider",
+        )
+
+        val state = live()
+        val geography = listOf(Destination(MarkerId("M-1"), shape = "diamond", room = "KITCHEN"))
+        // Built for a Resident, exactly as the rules build it, and delivered to nobody.
+        assertEquals(
+            emptyList(),
+            EmitSchema.deliveries(Effect.IsolateTargetsOffered(Seat(0), geography), state),
+            "a Resident was handed the round's geography",
+        )
+        // Built for the Insider, and it reaches that seat and no other.
+        assertEquals(
+            listOf(Seat(1).index),
+            EmitSchema.deliveries(Effect.IsolateTargetsOffered(Seat(1), geography), state)
+                .map { it.seat.index },
+        )
+    }
+
+    /**
      * **THE MEETING'S SHARPEST ROW, BOTH DIRECTIONS: the couch sees selections, the living cannot.**
      *
      * D-117: *the living see the count and never the selections; the ghosts see the live

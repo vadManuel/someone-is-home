@@ -39,6 +39,12 @@ class IntentWireTest {
      */
     private val everyMessage: List<IntentMessage> = listOf(
         IntentMessage.ArmRevoke,
+        // Both Tier-2 targets, and the self-surge is a member of this list on purpose: a message
+        // naming the sender's own seat has to survive the wire unchanged, because self-targeting
+        // is required (gdd.md:393) and there is nothing on the frame that marks it as one.
+        IntentMessage.FireSurge(Seat(2)),
+        IntentMessage.FireSurge(Seat(0)),
+        IntentMessage.FireIsolate(marker),
         IntentMessage.BeginSubroutine(marker),
         IntentMessage.CallMeeting,
         IntentMessage.CheckIn,
@@ -59,6 +65,8 @@ class IntentWireTest {
      */
     private fun requestFor(intent: Intent): IntentMessage = when (intent) {
         is Intent.ArmRevoke -> IntentMessage.ArmRevoke
+        is Intent.FireSurge -> IntentMessage.FireSurge(intent.target)
+        is Intent.FireIsolate -> IntentMessage.FireIsolate(intent.target)
         is Intent.BeginSubroutine -> IntentMessage.BeginSubroutine(intent.marker)
         is Intent.CallMeeting -> IntentMessage.CallMeeting
         is Intent.CheckIn -> IntentMessage.CheckIn
@@ -241,6 +249,8 @@ class IntentWireTest {
     /** The attribution, read back out — the test's own accessor, never the wire's. */
     private fun actorOf(intent: Intent): Seat = when (intent) {
         is Intent.ArmRevoke -> intent.actor
+        is Intent.FireSurge -> intent.actor
+        is Intent.FireIsolate -> intent.actor
         is Intent.BeginSubroutine -> intent.actor
         is Intent.CallMeeting -> intent.actor
         is Intent.CheckIn -> intent.actor

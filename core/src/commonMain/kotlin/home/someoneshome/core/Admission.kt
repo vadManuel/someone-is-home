@@ -105,6 +105,14 @@ private fun phaseOf(event: Event): MeetingPhase? = when (event) {
     is Event.RoundArmed, is Event.MarkerScanned, is Event.SubroutineReturned,
     is Event.RevokeArmed, is Event.ContactMade, is Event.MeetingCalled -> null
 
+    // ⚠️ **Not meeting events, and whether Tier 2 may be fired AT a meeting is UNRULED.** The design
+    // blocks the Egress during a meeting (`gdd.md:373`) and says nothing at all about the Access
+    // pool. Left admissible deliberately: the pool PAUSES across a meeting (the Shift ruling), so a
+    // seat that walked in with it ready still has it ready and a seat that did not cannot acquire
+    // it -- which means nothing here turns on the gate. Adding a refusal would be inventing a rule,
+    // and refusing quietly inside the rules would be rule 1's forbidden shape. Flagged, not decided.
+    is Event.SurgeFired, is Event.IsolateFired -> null
+
     // Not meeting events. The Egress has its own gate below, and it already refuses these while a
     // meeting is holding the countdown -- which is the same answer by a shorter route, and the one
     // that stays true if the meeting's phases are ever reshaped.
@@ -142,5 +150,10 @@ private fun needsEgress(event: Event): Boolean = when (event) {
     is Event.DiscussionClosed, is Event.VoteSelected, is Event.VoteLocked,
     is Event.VoteWindowClosed, is Event.TallyHalfwayReached, is Event.MeetingClosed,
     is Event.EgressFired,
+    // **Isolate READS the Egress and does not need one.** D-150's node exclusion is a rule about
+    // what the target list offers and what the rules do with a stale one -- so an Isolate fired
+    // while no Egress is running is the ordinary case, not an event out of place. A gate here would
+    // refuse every Isolate in every quiet round.
+    is Event.SurgeFired, is Event.IsolateFired,
     -> false
 }

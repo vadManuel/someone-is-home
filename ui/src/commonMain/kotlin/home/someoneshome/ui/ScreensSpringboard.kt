@@ -200,18 +200,35 @@ fun Page2Screen(vals: PanelVals) {
                     onArm = actions.armEgress,
                 )
 
+                // **Tier 2, on one shared bar** (`gdd.md:306`). Three tiles, one Access pool, and
+                // the bar under them is the pool rather than any one ability's clock — which is why
+                // it is drawn once, below all three, instead of three times inside them.
+                //
+                // **The two that are built take a two-second hold and then open a list**; the third
+                // is Spoof and is inert here because nothing behind it exists. A Resident's three
+                // are all inert, identically, and take no pointer input at all (D-142) — so the
+                // difference between a built ability and an unbuilt one is invisible to the role
+                // that could not use either.
                 Column(verticalArrangement = Arrangement.spacedBy(5.u)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.u)) {
-                        listOf(vals.tier2A, vals.tier2B, vals.tier2C).forEach { name ->
-                            Box(
-                                Modifier.weight(1f).border(1.u, Amber.Edge).padding(vertical = 13.u),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Label(name, size = 6.5, color = vals.tier2Ink, tracking = 0.1)
-                            }
+                        Tier2Tile(vals.tier2A, vals, Modifier.weight(1f), armable = vals.insider) {
+                            go(ScreenId.SurgeTargets)
+                        }
+                        // ⚠️ Spoof. Named, drawn identically, and reaching nothing — it is T2's, and
+                        // an inert tile is the honest state of an unbuilt ability. Deliberately not
+                        // hidden: a page 2 with two tiles for one role and three for another is the
+                        // resting tell the whole parity discipline exists to prevent.
+                        Tier2Tile(vals.tier2B, vals, Modifier.weight(1f), armable = false) {}
+                        Tier2Tile(vals.tier2C, vals, Modifier.weight(1f), armable = vals.insider) {
+                            go(ScreenId.IsolateTargets)
                         }
                     }
                     FillBar(vals.tier2Bar, vals.tier2BarInk)
+                    Label(
+                        vals.tier2Sub,
+                        modifier = Modifier.fillMaxWidth(),
+                        size = 5.5, color = Amber.Faint, tracking = 0.1, align = TextAlign.Center,
+                    )
                     Label(
                         vals.tier2Note,
                         modifier = Modifier.fillMaxWidth(),
@@ -263,6 +280,51 @@ private fun AbilityTile(
             Label(sub, size = 6.0, color = subInk, tracking = 0.12)
             FillBar(bar, barInk)
         }
+        if (hold.holding) {
+            Box(
+                Modifier.align(Alignment.BottomStart)
+                    .fillMaxWidth(hold.fraction)
+                    .height(2.u)
+                    .background(Amber.Bright)
+            )
+        }
+    }
+}
+
+/**
+ * One of the three tier-2 tiles.
+ *
+ * [AbilityTile]'s discipline at a smaller size, and every line of that KDoc applies: **the hold
+ * draws nothing until a finger is on it**, so both roles' tiles are identical at rest and only one
+ * of them can be held. A Resident's takes no pointer input at all (D-142), so there is no progress
+ * to run and then decline — the self-test that would be.
+ *
+ * ### What completing the hold does is open a list, and that is the ruling
+ *
+ * The two Tier-1 tiles arm in place and nothing opens (D-142). These two open a picker, because
+ * Surge and Isolate have a target and the owner ruled on 2026-08-22 that the target comes off a
+ * **list** — people for one, markers for the other. *The glow of reading the list is the deliberate
+ * price*: Tier 2 is the deliberate tier, it is never used while running, and being harder to reach
+ * is a feature (`gdd.md:306`).
+ *
+ * **The hold is still what pays for the deliberateness the list cannot** (D-141): the picker is
+ * reachable, so a stray thumb that opened it would be a lit rectangle in a dark house at a moment
+ * nobody chose. Two seconds is what an accident cannot supply.
+ */
+@Composable
+private fun Tier2Tile(
+    name: String,
+    vals: PanelVals,
+    modifier: Modifier,
+    armable: Boolean,
+    onArm: () -> Unit,
+) {
+    val hold = rememberHold(onArm, enabled = armable)
+    Box(
+        modifier.border(1.u, Amber.Edge).then(hold.surface).padding(vertical = 13.u),
+        contentAlignment = Alignment.Center,
+    ) {
+        Label(name, size = 6.5, color = vals.tier2Ink, tracking = 0.1)
         if (hold.holding) {
             Box(
                 Modifier.align(Alignment.BottomStart)

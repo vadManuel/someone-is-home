@@ -50,6 +50,16 @@ class Recording(
     }
 
     companion object {
+        // 12: Tier 2 arrived. Two events a version 11 build cannot construct (`SurgeFired`,
+        // `IsolateFired`) and two effects it cannot name (`Surged`, `IsolateTargetsOffered`), and
+        // the state row gained the two fields those need: the Access pool's pause mark and the
+        // isolated markers. Both are load-bearing rather than decorative — `accessReady` reads the
+        // pause, so it decides whether a Tier-2 ability is available at all, and the isolations
+        // reach NO client, so a state row is the only artifact in the game that holds them. A
+        // version 11 recording replays into a round where nothing was ever dark and every pool
+        // recharged through every meeting. The cooldown list also doubled in length: every seat now
+        // carries a Revoke row and an Access row (D-132, `gdd.md:306`).
+        //
         // 11: the wire learned to say where, how long, and who. `RoundArmed.markers` were bare card
         // ids and are DESTINATIONS now -- card, glyph and room -- because a work order's whole
         // destination column is computed from them, and a version 10 recording replays into orders
@@ -109,7 +119,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/11"
+        const val HEADER = "someone-is-home/recording/12"
     }
 }
 

@@ -75,6 +75,16 @@ object Transcript {
             row("PerformanceEnded", event.at, "actor" to num(event.actor.index))
         is Event.RevokeArmed ->
             row("RevokeArmed", event.at, "actor" to num(event.actor.index))
+        // The two Tier-2 fires. Both carry their target, because the target is what was ASKED for
+        // and a recording that held only *somebody fired a Surge* could not replay which phone
+        // screamed. `SurgeFired`'s target may be its own actor -- self-targeting is required
+        // (gdd.md:393) -- and the row renders it the same way either way, because the rules do.
+        is Event.SurgeFired ->
+            row("SurgeFired", event.at, "actor" to num(event.actor.index),
+                "target" to num(event.target.index))
+        is Event.IsolateFired ->
+            row("IsolateFired", event.at, "actor" to num(event.actor.index),
+                "target" to text(event.target.value))
         is Event.ContactMade ->
             row("ContactMade", event.at, "actor" to num(event.actor.index), "target" to num(event.target.index))
         is Event.MeetingCalled ->
@@ -166,6 +176,18 @@ object Transcript {
             "LampSet|seat=${effect.seat.index}|luminance=${effect.luminance}"
         is Effect.AbilityFired ->
             "AbilityFired|actor=${effect.actor.index}|cooldownStarted=${effect.cooldownStarted}"
+        // **The whole gesture, luminances included.** The lamp is a pure function of state (rule 5),
+        // so the two numbers ARE the effect rather than a device's reading of it -- a row that held
+        // only `Surged|seat=` could not tell a replayed slam from one that lit nothing.
+        is Effect.Surged ->
+            "Surged|seat=${effect.seat.index}|peak=${num(effect.peak)}" +
+                "|black=${num(effect.black)}|sound=${effect.sound}|haptic=${effect.haptic}"
+        // The picker, as the seat receives it -- the same destinations, in the same order. The
+        // Egress-node exclusion is therefore VISIBLE in the recording as two fewer cards on the
+        // rows during an Egress, which is the only artifact that can show D-150 holding.
+        is Effect.IsolateTargetsOffered ->
+            "IsolateTargetsOffered|seat=${effect.seat.index}|targets=" +
+                effect.targets.joinToString(",") { destination(it) }
         is Effect.SubroutineGraded ->
             "SubroutineGraded|seat=${effect.seat.index}|accepted=${effect.accepted}"
         is Effect.SubroutineProgressed ->
@@ -374,6 +396,18 @@ object Transcript {
             state.cooldowns.joinToString(",") {
                 "${num(it.seat.index)}:${it.ability}:${num(it.readyAt.step)}"
             }
+        )
+        // **The pause mark for the Access pool** (the Shift ruling). The deadlines above move when
+        // the lights go out, so a row that held only them could not tell a pool frozen by a meeting
+        // in progress from one that had simply not run down -- and `accessReady` reads this, so it
+        // decides whether a Tier-2 ability is available at all.
+        append("|accessPaused=").append(state.accessPausedAt?.let { num(it.step) } ?: "none")
+        // **Which cards are dark, and until when.** It reaches NO client -- there is no effect that
+        // carries it and therefore no schema row -- so a state row is the only artifact that holds
+        // it, exactly as the presence plane's is. A replay that stopped short of it would certify a
+        // build in which Isolate did nothing at all, which is rule 1's own warning about the revoke.
+        append("|isolated=").append(
+            state.isolated.joinToString(",") { "${text(it.marker.value)}:${num(it.until.step)}" }
         )
         // **The Egress, in full — offers and lockouts included.** It was a boolean, and a boolean
         // could not tell a replayed Egress from a different one that happened to end the same way.

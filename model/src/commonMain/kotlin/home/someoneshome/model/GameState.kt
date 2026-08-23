@@ -59,6 +59,39 @@ class GameState private constructor(
      * read once.
      */
     val cooldowns: List<Cooldown>,
+    /**
+     * **The moment the Access pool stopped, or null while it is running** (`gdd.md:373`, the Shift
+     * ruling).
+     *
+     * A shift is the work interval between meetings (D-170), and the pool **runs during a shift and
+     * pauses during a meeting**. Held exactly as [Egress.pausedAt] is, and for the same reason: a
+     * cooldown is an absolute deadline, so pausing one means moving the deadline forward by the
+     * length of the meeting when the lights go out. A recording that held only the deadline could
+     * not tell a paused pool from a moved one.
+     *
+     * **One mark for the whole state rather than a field per [Cooldown]**, because the thing that
+     * paused is not one seat's clock — it is the round. Every Insider walked to the same room at the
+     * same moment.
+     *
+     * ⚠️ **It covers the Access pool and nothing else, and that is a scope rather than a ruling.**
+     * `gdd.md:373` says of the Revoke only *"pauses or resets at meeting end"* and has never chosen
+     * between the two; the Egress's own clock is D-151's and equally unruled across a meeting. Both
+     * are left running here, unchanged, and the question is flagged rather than answered — see the
+     * worklog. Widening this mark to them is a one-line change and a decision somebody has to take.
+     */
+    val accessPausedAt: Tick?,
+    /**
+     * **The markers this round has taken offline, and when each comes back** (`gdd.md:315`).
+     *
+     * See [Isolation], which carries what a scan at one of them answers and why. In marker order as
+     * they were isolated, like every collection here; **it reaches no client at all** — no effect
+     * carries it, so there is no schema row for one, and which cards are dark is something a player
+     * finds out by walking to one.
+     *
+     * A marker with no row is online, which is the fail-closed direction: a round built by hand has
+     * nothing dark rather than everything.
+     */
+    val isolated: List<Isolation>,
     val systemIntegrity: Int,
     /**
      * **What each seat currently has open, and what the house will grade it against** (D-109).
@@ -292,6 +325,46 @@ class GameState private constructor(
     fun cooldownFor(seat: Seat, ability: InsiderAbility): Cooldown? =
         cooldowns.firstOrNull { it.seat.index == seat.index && it.ability == ability }
 
+    /**
+     * **Whether this seat's Access pool is ready — asked against the pause, never against the raw
+     * tick** (the Shift ruling, [accessPausedAt]).
+     *
+     * `accessPausedAt ?: at` is the whole of it, and it is [Egress.remainingAt]'s arithmetic one
+     * system over: while the party is assembled the pool is frozen at the moment they were called
+     * in, and when the lights go out the deadline moves forward by the length of the meeting. Both
+     * halves are needed — the deadline shift alone would let a pool that expired *during* a meeting
+     * read ready to a phone in the room, which is the pause not being a pause for as long as
+     * anybody is looking.
+     *
+     * **The one reader of the pool's readiness**, so the rule lives in one place rather than in
+     * however many Tier-2 handlers exist. A seat with no row has no pool: the fail-closed direction,
+     * exactly as a seat with no Revoke row has no Revoke to arm.
+     */
+    fun accessReady(seat: Seat, at: Tick): Boolean =
+        cooldownFor(seat, InsiderAbility.Access)?.readyBy(accessPausedAt ?: at) == true
+
+    /**
+     * **Whether this card is offline at [at]** (`gdd.md:315`). See [Isolation].
+     *
+     * Strictly before the return tick, so an isolation whose moment has come is over rather than
+     * lasting one step longer — the same edge [Egress.lockedAt] takes, and taken the same way so
+     * that two temporary states in one round cannot disagree about what *until* means.
+     */
+    fun isIsolated(marker: MarkerId, at: Tick): Boolean =
+        isolated.any { it.marker.value == marker.value && at < it.until }
+
+    /**
+     * Take a card offline, replacing any isolation it is already serving.
+     *
+     * **Replaces rather than joins**, exactly as [Egress.lockingOut] does: two rows for one card
+     * would make *is this dark* a question about which row somebody read first, and re-firing at an
+     * already-dark marker is a lawful thing for an Insider to do — it is on the list, because a list
+     * that omitted dark markers would report which cards another Insider had already taken.
+     */
+    fun withIsolated(isolation: Isolation): GameState = copy(
+        isolated = isolated.filterNot { it.marker.value == isolation.marker.value } + isolation,
+    )
+
     /** Replace one seat's work order, leaving every other row and the list's order alone. */
     fun withWorkOrder(replacement: WorkOrder): GameState = copy(
         workOrders = workOrders.map {
@@ -384,6 +457,8 @@ class GameState private constructor(
         restrained: List<Seat> = this.restrained,
         cooldownArmed: List<Seat> = this.cooldownArmed,
         cooldowns: List<Cooldown> = this.cooldowns,
+        accessPausedAt: Tick? = this.accessPausedAt,
+        isolated: List<Isolation> = this.isolated,
         systemIntegrity: Int = this.systemIntegrity,
         openSubroutines: List<OpenSubroutine> = this.openSubroutines,
         workOrders: List<WorkOrder> = this.workOrders,
@@ -401,8 +476,8 @@ class GameState private constructor(
         seed: Long = this.seed,
     ) = GameState(
         armed, outcome, seats, insiderSeats, revoked, newlyRevoked, restrained, cooldownArmed,
-        cooldowns, systemIntegrity, openSubroutines, workOrders, stations, activeMarkers,
-        destinations, presence, meeting, egress, egressReadyAt, oneLines, names,
+        cooldowns, accessPausedAt, isolated, systemIntegrity, openSubroutines, workOrders, stations,
+        activeMarkers, destinations, presence, meeting, egress, egressReadyAt, oneLines, names,
         voteWindowSeconds, nextEntity, seed,
     )
 
@@ -487,6 +562,11 @@ class GameState private constructor(
             restrained = emptyList(),
             cooldownArmed = emptyList(),
             cooldowns = cooldowns,
+            // Nothing is paused and nothing is dark. A round that carried either across an arming
+            // would open with a pool frozen by a meeting that happened in a different evening, or
+            // with a marker offline that nobody had ever fired at -- and neither is announced.
+            accessPausedAt = null,
+            isolated = emptyList(),
             systemIntegrity = systemIntegrity,
             openSubroutines = openSubroutines,
             workOrders = workOrders,
@@ -517,6 +597,8 @@ class GameState private constructor(
             restrained = emptyList(),
             cooldownArmed = emptyList(),
             cooldowns = emptyList(),
+            accessPausedAt = null,
+            isolated = emptyList(),
             systemIntegrity = 0,
             openSubroutines = emptyList(),
             workOrders = emptyList(),
