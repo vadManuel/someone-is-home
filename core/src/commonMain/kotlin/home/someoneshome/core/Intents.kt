@@ -59,6 +59,14 @@ fun factOf(intent: Intent, at: Tick): Event = when (intent) {
 
     is Intent.BeginSubroutine -> Event.MarkerScanned(at, intent.actor, intent.marker)
 
+    // **STOP NOW, and the Sync Pulse handed over.** Both pass this file's test more plainly than
+    // anything above them: the first composes an event out of the actor alone, and the second out of
+    // the actor and the taps the finger made. Neither names a target the house has to resolve and
+    // neither needs a draw -- which is exactly why they could have travelled from the day the
+    // channel existed, and the gap was a missing member rather than a missing argument (E-P2-5).
+    is Intent.StopSubroutine -> Event.PerformanceEnded(at, intent.actor)
+    is Intent.ReturnSyncPulse -> Event.SyncPulseReturned(at, intent.actor, intent.taps)
+
     // The trigger is which control was pressed, and the wire has a member per control for exactly
     // this reason: a trigger field would be a client choosing which admission rule it is judged by,
     // and the card is inert during an Egress while the report is not (D-133). The report has no

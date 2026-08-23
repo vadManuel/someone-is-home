@@ -39,15 +39,19 @@ import home.someoneshome.model.Tick
  * `Intent`s. The rest are stand-ins for hardware and for a clock that do not exist yet, and every
  * caller of them is marked at the call site. See [RoundCheat].
  *
- * ### The clock is advanced by hand, and that is an escalation rather than a design
+ * ### There is a tick driver now, and this object is what it turns — E-P3-3 closed
  *
- * The architecture puts the tick driver in the app roots, *for the reason `core` cannot import
- * coroutines* — and there is no tick driver. So nothing in this app mints `DiscussionClosed`,
- * `VoteWindowClosed`, `TallyHalfwayReached` or `EgressExpired` when their moment arrives, and a
- * meeting left alone stops at whatever phase it reached. [at] is the bench standing where that
- * driver will stand: it moves the house's clock to a named second, and the script mints the
- * transition. A round played this way is deterministic and fast, which is right for a rehearsal
- * and wrong for a house.
+ * The architecture puts the driver in the app roots, *for the reason `core` cannot import
+ * coroutines*, and for two units it did not exist: nothing minted `DiscussionClosed`,
+ * `VoteWindowClosed`, `TallyHalfwayReached`, `MeetingClosed` or `EgressExpired` when its moment
+ * arrived, so a meeting left alone stopped at whatever phase it reached. [tickHouse] is that loop
+ * and this class is its [HouseHandle]: the driver reads [state], calls [advanceTo] with the
+ * simulation clock, and [mint]s whatever fell due — **the same two calls the script below makes,
+ * with real time behind them instead of a number somebody typed.**
+ *
+ * [at] stays, and stays a bench thing: a script that wants to be at a cooldown's expiry without
+ * standing there for three minutes jumps to the second. A round played that way is deterministic
+ * and fast, which is right for a rehearsal and wrong for a house.
  */
 class RoundAuthority(
     /**
@@ -64,10 +68,13 @@ class RoundAuthority(
     /** The authority's only exit to the phones. [LobbyHouse.emit] in production. */
     private val emit: suspend (Effect, GameState) -> Unit,
     private val note: (String) -> Unit,
-) {
+) : HouseHandle {
 
     var state: GameState = GameState.EMPTY
         private set
+
+    /** [HouseHandle.state]. The round as it stands, for the tick driver to read deadlines off. */
+    override fun state(): GameState = state
 
     /** Every effect the rules produced, in order — the authority's own record. */
     val emitted: MutableList<Effect> = mutableListOf()
@@ -95,12 +102,27 @@ class RoundAuthority(
     /**
      * **Move the house's clock to T+[seconds], and never backwards.**
      *
-     * The bench's stand-in for the tick driver the architecture puts in this module and nobody has
-     * built. See the class KDoc.
+     * The bench's shortcut: a named second, for a script that wants to be at a cooldown's expiry
+     * without waiting for it. [advanceTo] is the general form and the one the tick driver uses.
      */
     fun at(seconds: Long) {
-        val want = seconds * Balance.TICKS_PER_SECOND
-        if (want > tick) tick = want
+        advanceTo(Tick(seconds * Balance.TICKS_PER_SECOND))
+    }
+
+    /**
+     * **Move the house's clock to [at], and never backwards** — [HouseHandle.advanceTo].
+     *
+     * This is where the tick driver stands, and the class KDoc's escalation is closed: the clock is
+     * no longer advanced only by hand. What the driver does is exactly this and then [mint], which
+     * is the same two calls [RoundCheat] makes by script — the difference is that one of them is
+     * counting real time and the other is jumping to a number somebody typed.
+     *
+     * **Forward only**, for the reason on [tick]: two events reduced at one tick are two events the
+     * recording cannot order, and a clock that could go back would put a transition before the
+     * request that caused it.
+     */
+    override fun advanceTo(at: Tick) {
+        if (at.step > tick) tick = at.step
     }
 
     /**
@@ -180,7 +202,7 @@ class RoundAuthority(
      * every stand-in is marked where it is called rather than here, because a caller reading this
      * method should not have to come and look.
      */
-    suspend fun mint(event: Event) {
+    override suspend fun mint(event: Event) {
         val before = state
         when (val admission = admit(state, event)) {
             is Admission.Admitted -> {

@@ -243,36 +243,49 @@ class AccessPoolTest {
             walk.state.accessReady(INSIDER, Tick(600)),
             "a pool expired mid-meeting and reported ready to a phone standing in the room",
         )
+        // **And the fire is REFUSED at the gate, which is the owner's 2026-08-23 ruling** (T1·7 /
+        // T2·8, closed). It used to be admitted and answered `cooldownStarted = false`; now it
+        // never reaches a handler, so there are no effects at all. **That is not rule 1's forbidden
+        // silence** — an event refused above the rules is recorded as a refusal (D-066), and what
+        // makes this refusal honest is the most public fact the game has: everybody in the house is
+        // standing in one room looking at a meeting screen.
+        // Drained first, so what is asserted below is the Surge's own answer and not the meeting
+        // call's ring still sitting in the buffer.
+        walk.drain()
         walk.feed(Event.SurgeFired(Tick(600), INSIDER, Seat(3)))
         assertEquals(
-            listOf(false), walk.drain().filterIsInstance<Effect.AbilityFired>()
-                .map { it.cooldownStarted },
-            "a Tier-2 ability fired off a pool the meeting had stopped",
+            emptyList(), walk.drain(),
+            "a Tier-2 ability reached the rules from inside a meeting",
         )
 
-        // Lights out. The deadline has moved forward by exactly the length of the meeting.
+        // **Lights out, and every per-seat clock goes back to the round's opening** (the owner's
+        // 2026-08-23 ruling). This is what SUPERSEDED the resume arithmetic that used to be
+        // asserted here — the deadline moving forward by the length of the meeting, `Tick(500 +
+        // 300)`. A reset to half overwrites that answer outright, so the two cannot both be true
+        // and the resume is gone rather than sitting beside it.
         walk.holding(
             walk.state.copy(meeting = walk.state.meeting?.copy(phase = MeetingPhase.Tally)),
         )
         walk.feed(Event.MeetingClosed(Tick(400)))
         assertNull(walk.state.accessPausedAt, "the pool was still paused after lights out")
         assertEquals(
-            Tick(500 + 300), t2Pool(walk.state, INSIDER),
-            "the meeting recharged the pool, or moved it by something other than its own length",
+            Tick(400 + Balance.ACCESS_COOLDOWN / 2), t2Pool(walk.state, INSIDER),
+            "the pool did not come out of the meeting at half, off the tick the lights went out",
         )
 
-        // ⚠️ **The Revoke's clock is deliberately UNTOUCHED, and that is a scope rather than a
-        // ruling.** `gdd.md:373` says only *"pauses or resets at meeting end"* about the Revoke and
-        // has never chosen between the two; the Egress's own clock is equally unruled across a
-        // meeting. This unit paused the Access pool because the Shift ruling names it, and left the
-        // other two alone rather than deciding for them.
-        //
-        // Asserted rather than left implicit, so that the build which DOES decide has to come here
-        // and change a line that says what it is changing.
+        // **The Revoke's clock resets with it, and `gdd.md:373`'s open question is now answered.**
+        // That line said only *"pauses or resets at meeting end"* and never chose between the two;
+        // the owner chose **resets**, and to half, for every per-Insider clock at once. It is
+        // asserted beside the pool rather than trusted to the same code path, because *both rows
+        // move* is the ruling and a build that moved one is the failure worth catching.
         assertEquals(
-            opensAt, assertNotNull(walk.state.cooldownFor(INSIDER, InsiderAbility.Revoke)).readyAt,
-            "the Revoke's cooldown moved across a meeting — a rule nobody has ruled on",
+            Tick(400 + Balance.REVOKE_COOLDOWN / 2),
+            assertNotNull(walk.state.cooldownFor(INSIDER, InsiderAbility.Revoke)).readyAt,
+            "the Revoke's cooldown did not come out of the meeting at half",
         )
+
+        // The mark is used up: `opensAt` was the fixture's deadline and nothing carries it now.
+        assertTrue(opensAt.step > 0, "the fixture stopped having a deadline to be moved off")
     }
 }
 

@@ -632,6 +632,24 @@ class FlowTest {
             "every built Subroutine opens on its own screen, and no unbuilt one opens at all",
         )
 
+        // **STOP NOW, off every Subroutine screen** — the actions layer's since it stopped being
+        // only a navigation: it reports the performance window closing to the house before it
+        // moves (`Intent.StopSubroutine`, D-111), so the control publishes an action rather than a
+        // target and no rendering pass can read the destination off the screen.
+        //
+        // Every built one is walked rather than one of them, because ten screens sharing one
+        // control is exactly the arrangement in which nine keep working and the tenth is wired to
+        // nothing — and in the dark all ten look identical.
+        for (subroutine in Subroutine.built) {
+            val screen = subroutine.screen ?: continue
+            val stop = FlowModel(PanelState(screen = screen))
+            stop.stopSubroutine()
+            assertEquals(
+                Flow.viaActions.getValue(screen), setOf(stop.state.screen),
+                "STOP NOW on $screen went somewhere the actions table does not name",
+            )
+        }
+
         // NEW ROUND, off both endings, and it is the actions layer's for LIGHTS OUT's reason:
         // whether the screen publishes it as a control depends on whether this phone is running
         // the house. Both are walked, because the control is on both and one that rotted on the
@@ -656,6 +674,14 @@ class FlowTest {
                 ScreenId.Page2, ScreenId.SurgeTargets, ScreenId.IsolateTargets, ScreenId.SpoofRooms,
                 ScreenId.Notice,
                 ScreenId.Notify, ScreenId.Banner, ScreenId.Quiet, ScreenId.LockNotify,
+                // STOP NOW's ten. Named in full rather than derived from the roster, for this
+                // assertion's whole reason: a set computed from the thing it is checking agrees
+                // with itself, and what is being caught here is an edge somebody declared and
+                // nothing walks.
+                ScreenId.SubHandshake, ScreenId.SubReplay, ScreenId.SubParity,
+                ScreenId.SubShort, ScreenId.SubTrace, ScreenId.SubJam,
+                ScreenId.SubSniff, ScreenId.SubDeallocate,
+                ScreenId.SubInterrupt, ScreenId.SubDrift,
             ),
             Flow.viaActions.keys,
             "a new action edge was declared and nothing here walks it",

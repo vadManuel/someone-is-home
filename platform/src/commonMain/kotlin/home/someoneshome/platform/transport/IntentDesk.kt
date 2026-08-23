@@ -83,6 +83,20 @@ class IntentDesk(
          * notices on its own and asks about. Answering the duplicate would answer it twice.
          */
         data object Duplicate : Landing
+
+        /**
+         * **New, and the house has to make a draw before there is anything to put.**
+         *
+         * [RoundBody.Fire]'s answer, and it is a different [Landing] rather than a [Put] carrying a
+         * different intent because the two are different *acts on the authority's part*: a [Put] is
+         * translated and admitted, and this one is composed — the house draws the type and the two
+         * nodes against a home's shape the rules have never held, and only then is there a fact to
+         * admit. Carrying it as a [Put] would need an [Intent] whose `factOf` arm invents a draw,
+         * which is the line `factOf` holds and the reason [RoundBody.Fire] is its own frame.
+         *
+         * [actor] is the connection's seat, arrived at exactly as [Put]'s is.
+         */
+        data class Draw(val actor: Seat) : Landing
     }
 
     private val gate = Mutex()
@@ -97,11 +111,37 @@ class IntentDesk(
      * sentence is the whole point of the file.
      */
     suspend fun arrived(seat: Seat, act: RoundBody.Act): Landing = gate.withLock {
-        val last = heard[seat.index] ?: 0
-        if (act.seq <= last) return@withLock Landing.Duplicate
-        if (act.seq > last + 1) onSkipped(seat, act.seq - last - 1)
-        heard[seat.index] = act.seq
+        val fresh = mark(seat, act.seq) ?: return@withLock Landing.Duplicate
+        check(fresh == act.seq)
         Landing.Put(act.intent.attributedTo(seat))
+    }
+
+    /**
+     * **The Egress tile, off one connection** ([RoundBody.Fire]).
+     *
+     * [arrived] above with one difference and it is the whole of the difference: there is no frame
+     * content to attribute, so what comes back names the seat and nothing else. **The dedup mark is
+     * the same mark** — one counter per connection across both members, because what is being
+     * deduplicated is this phone's requests rather than this phone's requests of one kind, and an
+     * Egress delivered twice spends the house's longest cooldown on one finger.
+     */
+    suspend fun arrived(seat: Seat, fire: RoundBody.Fire): Landing = gate.withLock {
+        mark(seat, fire.seq) ?: return@withLock Landing.Duplicate
+        Landing.Draw(seat)
+    }
+
+    /**
+     * Move this seat's mark to [seq], or null when [seq] has already been heard.
+     *
+     * The one place the dedup arithmetic lives, so the two [arrived] doors cannot come to disagree
+     * about which requests a connection has made. Called under [gate] by both.
+     */
+    private fun mark(seat: Seat, seq: Long): Long? {
+        val last = heard[seat.index] ?: 0
+        if (seq <= last) return null
+        if (seq > last + 1) onSkipped(seat, seq - last - 1)
+        heard[seat.index] = seq
+        return seq
     }
 
     /**
@@ -152,6 +192,15 @@ class IntentOutbox {
 
     /** One control, framed. The seat is not here and cannot be — see [IntentMessage]. */
     fun ask(intent: IntentMessage): RoundBody.Act = RoundBody.Act(seq = ++sent, intent = intent)
+
+    /**
+     * **The Egress tile, framed** ([RoundBody.Fire]).
+     *
+     * Numbered off the same counter [ask] uses, in step with [IntentDesk.mark] at the other end: one
+     * connection makes one sequence of requests, and a second counter would be a second mark a
+     * resend could slip between. There is nothing to pass — the tile is the entire message.
+     */
+    fun fire(): RoundBody.Fire = RoundBody.Fire(seq = ++sent)
 
     /** A new connection: this phone has asked this house for nothing yet. */
     fun reseated() {

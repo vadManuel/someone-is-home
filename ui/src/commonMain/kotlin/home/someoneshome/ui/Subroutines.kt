@@ -10,6 +10,7 @@ import home.someoneshome.model.DriftPath
 import home.someoneshome.model.HandshakeRhythm
 import home.someoneshome.model.InterruptSweep
 import home.someoneshome.model.JamRings
+import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MalformedSubroutineParameters
 import home.someoneshome.model.ParityGrid
 import home.someoneshome.model.ReplayPattern
@@ -17,6 +18,7 @@ import home.someoneshome.model.ShortHold
 import home.someoneshome.model.SignalGraph
 import home.someoneshome.model.SniffGroups
 import home.someoneshome.model.SubroutineKind
+import home.someoneshome.model.protocol.IntentMessage
 
 /**
  * **The design's roster of ten, as data rather than as ten strings typed onto screens.**
@@ -175,6 +177,26 @@ sealed interface SubroutineEntry {
     /** True once what this phone entered has gone to the house. Nothing here answers it. */
     val gone: Boolean
 
+    /**
+     * **What this phone entered, in the one shape the wire has** — `List<Int>`, in the order the
+     * fingers landed (E-P2-1).
+     *
+     * Ten Subroutines have ten vocabularies — an element, a cell, how many fingers are on the
+     * glass, a signed step, a node, which group was bigger, a column, where a sweep was — and the
+     * house asks for one thing from all of them, because `Event.SubroutineReturned.entered` is one
+     * field. **This is that projection, and it lives on the interface so that a Subroutine cannot
+     * be built without one**: an entry with a screen and no way to reach the house is E-P2-1
+     * exactly, and it was found by counting rather than by anybody noticing a control do nothing.
+     *
+     * **A List and not a Set.** Order is the answer in half of the ten, and this is recorded input.
+     *
+     * **Empty until there is something to send, and empty is not a hand-over.** What decides that a
+     * hand-over happened is [gone]; this says what went. A screen that read an empty list as *the
+     * player answered nothing* would be adjudicating, which is the one thing this whole file's
+     * types are shaped to make impossible.
+     */
+    val entered: List<Int>
+
     /** The marker was scanned again: a fresh instance of the same Subroutine. */
     fun restart()
 }
@@ -234,7 +256,7 @@ class SequenceEntry(
      * Kept in full rather than as a count, because the echo is per-element: the dot you touched
      * lights, and which dots you touched is the only thing on screen that is yours.
      */
-    var entered: List<Int> by mutableStateOf(emptyList())
+    override var entered: List<Int> by mutableStateOf(emptyList())
         private set
 
     /** True once the sequence has gone to the house. Nothing on this device answers it. */
@@ -297,6 +319,9 @@ class ChoiceEntry : SubroutineEntry {
 
     override val gone: Boolean get() = handedOver != null
 
+    /** The one cell, as a list of one. [handedOver] and not [choice]: what went, not what is lit. */
+    override val entered: List<Int> get() = listOfNotNull(handedOver)
+
     /** A tap on a cell. Re-tapping the held one changes nothing; a different one moves the mark. */
     fun choose(at: Int) {
         if (handedOver != null) return
@@ -355,6 +380,9 @@ class HoldEntry : SubroutineEntry {
     override val touched: Boolean get() = fingers > 0 || handedOver != null
 
     override val gone: Boolean get() = handedOver != null
+
+    /** How many fingers were down when the hold completed. Never the live count — see [press]. */
+    override val entered: List<Int> get() = listOfNotNull(handedOver)
 
     /** The pointer count changed. Negative counts are impossible and are floored rather than trusted. */
     fun press(count: Int) {
@@ -418,6 +446,9 @@ class ScalarEntry(val reach: Int) : SubroutineEntry {
 
     override val gone: Boolean get() = handedOver != null
 
+    /** The offset that went, signed. **Not [presses]** — how hard somebody worked is not the answer. */
+    override val entered: List<Int> get() = listOfNotNull(handedOver)
+
     /** One press of + or −. [by] is the step, signed, and is the whole vocabulary of this screen. */
     fun step(by: Int) {
         if (handedOver != null || by == 0) return
@@ -475,6 +506,9 @@ class PathEntry : SubroutineEntry {
     override val touched: Boolean get() = walked.isNotEmpty()
 
     override val gone: Boolean get() = handedOver != null
+
+    /** The route that went, in order. [handedOver] and not [walked]: a route can change until SUBMIT. */
+    override val entered: List<Int> get() = handedOver.orEmpty()
 
     /** A tap on node [to]: it extends the route, or steps back to it if the route already holds it. */
     fun walk(to: Int) {
@@ -551,6 +585,9 @@ class ColumnEntry(
     override val touched: Boolean get() = removed.any { it > 0 } || handedOver != null
 
     override val gone: Boolean get() = handedOver != null
+
+    /** What came off each column, in column order — the order IS the answer here. */
+    override val entered: List<Int> get() = handedOver.orEmpty()
 
     /**
      * One dot off column [at].
@@ -665,7 +702,50 @@ class SubroutineModel(
     val path: DriftPath = DRIFT,
     /** Jam's opening gap, for [sweep]'s reason: the screen draws the number the house will grade. */
     val rings: JamRings = JAM,
+    /**
+     * **Where an entry goes when it is handed over — and it does not carry a seat** (E-P2-1).
+     *
+     * `MeetingModel.send`'s arrangement, one system over, and every line of that KDoc applies. The
+     * frame is an `IntentMessage`, which has no field an actor could ride in, so the seat is
+     * stamped at the host's desk from the connection the bytes arrived on.
+     *
+     * **This was the gap E-P2-1 named**: `IntentMessage.HandOverEntry` existed and had no control
+     * to send it, so every Subroutine in the game was a screen that took an answer and posted it
+     * nowhere. Wiring it needed three things — a send seam, a projection from ten entry types to
+     * one `List<Int>`, and **the marker**. All three are here now: the seam is this, the projection
+     * is [SubroutineEntry.entered], and the marker is [standingAt].
+     *
+     * Defaulted to nothing, so every render and every screenshot gets a phone whose Subroutines are
+     * real and whose entries reach nobody. That is the honest state of a bench.
+     */
+    val send: (IntentMessage) -> Unit = {},
 ) {
+
+    /**
+     * **Which card opened the work this phone has in front of it.**
+     *
+     * It rides the hand-over because the house asks for it — *a player may have scanned a second
+     * one since*, and `IntentMessage.HandOverEntry.marker` is which card opened the work rather
+     * than a claim about where the player is standing now (D-136).
+     *
+     * **Null until a scan has said so, and a hand-over with no marker goes nowhere.** That is the
+     * fail-closed direction and it is the one that matters here: a marker guessed from the roster,
+     * or defaulted to whatever was scanned last, would attribute an answer to the wrong piece of
+     * work — and the player would be graded on it without anything on any screen looking wrong.
+     */
+    var standingAt: MarkerId? by mutableStateOf(null)
+        private set
+
+    /**
+     * A card was read and it opened this. Set by the scan flow, before the screen appears.
+     *
+     * **Nullable, and null leaves the phone standing nowhere**, which is what a bench is: the work
+     * opens, the answer is taken, and [posted] refuses to send it because there is no card to
+     * attribute it to. A default marker here would post every bench answer against one card.
+     */
+    fun opened(marker: MarkerId?) {
+        standingAt = marker
+    }
 
     /**
      * The entry behind a Subroutine, or null where the Subroutine has no interaction built.
@@ -715,6 +795,11 @@ class SubroutineModel(
             Subroutine.Interrupt -> interrupt.enter(at)
             Subroutine.Drift -> drift.choose(at)
         }
+        // **The three sequences hand themselves over on their last element**, so for them the tap
+        // IS the hand-over and there is no button to hang the send off. Called unconditionally
+        // because `posted` refuses anything that has not gone — a check here would be the same
+        // question asked in two places, and the second copy is the one that gets it wrong.
+        posted(subroutine)
     }
 
     /**
@@ -737,8 +822,58 @@ class SubroutineModel(
             Subroutine.Sniff -> sniff.handOver()
             Subroutine.Deallocate -> deallocate.handOver()
             Subroutine.Drift -> drift.handOver()
+            // The three sequences hand themselves over on their last element — see this method's
+            // note — so by the time anything calls this they are already gone. [posted] below is
+            // what sends them, and it is called from `tap` for exactly that reason.
             else -> Unit
         }
+        posted(subroutine)
+    }
+
+    /**
+     * **The entry, on its way to the house** (E-P2-1 closed).
+     *
+     * Called wherever an entry becomes final, which is two places rather than one: [handOver] for
+     * the seven that go on a button or a clock, and [tap] for the three sequences that go on their
+     * last element. Both funnel here so that *an entry that went is an entry that was sent* is one
+     * fact rather than two call sites that agree until somebody adds an eleventh Subroutine.
+     *
+     * **Nothing is sent for an entry that has not gone**, which is [SubroutineEntry.gone]'s job and
+     * not this method's guesswork — a sequence one element short is a player still answering, and a
+     * phone that posted it would hand the house a wrong answer the player never finished giving.
+     *
+     * **Nothing is sent without a marker either.** See [standingAt]: an answer attributed to the
+     * wrong card is graded, silently, against work the player never did.
+     *
+     * It reports nothing back and moves no screen. *Whether the work landed is the house's answer*
+     * — `Effect.SubroutineGraded` — and a screen that walked away on the strength of its own last
+     * tap would be this phone announcing a completion it cannot see.
+     */
+    private fun posted(subroutine: Subroutine) {
+        val entry = entry(subroutine) ?: return
+        if (!entry.gone) return
+        val marker = standingAt ?: return
+        send(IntentMessage.HandOverEntry(marker = marker, entered = entry.entered))
+    }
+
+    /**
+     * **STOP NOW — the performance window closed with nothing handed over** (D-110, D-111).
+     *
+     * The one control on every Subroutine screen, and until this unit it had no wire member at all
+     * (E-P2-5). What it reports is that a window this phone opened has shut, which the presence
+     * plane needs in order to expire a placement — *the one consumer it has is an expiry* (D-136).
+     *
+     * **It carries no marker and no reason**, because the event does not: a reason field is an
+     * abandonment record, and how often somebody walks away from work that was never going to count
+     * is a statistic separating a real Subroutine from a fake. See `Event.PerformanceEnded`.
+     *
+     * **Sent even when nothing was entered, and that is the point of it.** A phone that only
+     * reported abandoned work it had made progress on would make the report itself a signal.
+     */
+    fun stopped() {
+        if (standingAt == null) return
+        standingAt = null
+        send(IntentMessage.StopSubroutine)
     }
 
     /**

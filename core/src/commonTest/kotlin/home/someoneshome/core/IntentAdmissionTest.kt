@@ -33,10 +33,28 @@ class IntentAdmissionTest {
         Event.RoundArmed(Tick(0), seed = 1L, seats = seats, insiders = listOf(Seat(1))),
     ).state
 
-    /** Every request there is, once. Closed against [Intent] by [factOf]'s own exhaustiveness. */
+    /**
+     * Every request there is, once. Closed against [Intent] by [factOf]'s own exhaustiveness.
+     *
+     * ⚠️ **This list and [everyEvent] are hand-written, and both had drifted.** The three Tier-2
+     * fires were in neither of them, so the completeness check below — the one that exists to
+     * catch a request that names a seat the authority was supposed to resolve — had silently
+     * stopped covering three abilities. It did not fail while it was blind, because a fact absent
+     * from *both* lists is a fact the loop never reaches from either direction.
+     *
+     * They are written by hand on purpose and that stays right: a list derived from [factOf] would
+     * be [factOf] agreeing with itself (L2's injection-6 finding). What the drift shows is that
+     * hand-written needs the same treatment the emit schema's completeness list gets — checked
+     * against the type, not against memory.
+     */
     private val everyIntent: List<Intent> = listOf(
         Intent.ArmRevoke(Seat(1)),
+        Intent.FireSurge(Seat(1), Seat(2)),
+        Intent.FireIsolate(Seat(1), marker),
+        Intent.FireSpoof(Seat(1), "THE LANDING"),
         Intent.BeginSubroutine(Seat(2), marker),
+        Intent.StopSubroutine(Seat(2)),
+        Intent.ReturnSyncPulse(Seat(2), listOf(1L, 2L)),
         Intent.CallMeeting(Seat(3)),
         Intent.CheckIn(Seat(4)),
         Intent.DeclareReadyToVote(Seat(4)),
@@ -198,11 +216,13 @@ class IntentAdmissionTest {
         is Event.ContactMade -> Origin.ContactResolved
         is Event.EgressFired -> Origin.HouseComposed
 
-        // A phone's, and deliberately not carried yet: STOP NOW and the four taps of a Sync Pulse
-        // are both real controls with no member on the wire. Neither is in this unit's named
-        // scope and both are escalated rather than guessed at, because a request nobody can send
-        // is cheaper to add later than a request that turns out to have been the wrong shape.
-        is Event.PerformanceEnded, is Event.SyncPulseReturned -> Origin.HouseComposed
+        // **STOP NOW and the taps of a Sync Pulse, carried now** (E-P2-5 / E-P3-7, closed). Both
+        // were real controls with no member on the wire, and both belong on this row rather than
+        // beside `EgressFired`: the first composes a fact out of the actor alone, the second out of
+        // the actor and the taps the finger made, and neither needs a draw or a token resolved. The
+        // gap was a missing member, never a missing argument — which is why moving them here costs
+        // nothing but the members themselves.
+        is Event.PerformanceEnded, is Event.SyncPulseReturned -> Origin.Requestable
 
         is Event.RoundArmed, is Event.DiscussionClosed, is Event.VoteWindowClosed,
         is Event.TallyHalfwayReached, is Event.MeetingClosed, is Event.EgressExpired,
@@ -216,6 +236,14 @@ class IntentAdmissionTest {
         Event.SubroutineReturned(at, Seat(2), marker, listOf(1)),
         Event.PerformanceEnded(at, Seat(2)),
         Event.RevokeArmed(at, Seat(1)),
+        // ⚠️ **The three Tier-2 fires were missing from this list**, which is why the assertion
+        // below could classify them as requestable while no request produced them and nothing
+        // failed. See [everyIntent]'s note: a fact absent from both hand-written lists is a fact
+        // the check never reaches from either direction, and an instrument with nothing to look at
+        // reports green forever.
+        Event.SurgeFired(at, Seat(1), Seat(2)),
+        Event.IsolateFired(at, Seat(1), marker),
+        Event.SpoofFired(at, Seat(1), "THE LANDING"),
         Event.ContactMade(at, Seat(1), Seat(2)),
         Event.MeetingCalled(at, Seat(3), MeetingTrigger.MeetingCard),
         Event.MeetingCalled(at, Seat(3), MeetingTrigger.RevokeReported(Seat(2))),
@@ -297,6 +325,8 @@ class IntentAdmissionTest {
         is Intent.FireIsolate -> intent.copy(actor = actor)
         is Intent.FireSpoof -> intent.copy(actor = actor)
         is Intent.BeginSubroutine -> intent.copy(actor = actor)
+        is Intent.StopSubroutine -> intent.copy(actor = actor)
+        is Intent.ReturnSyncPulse -> intent.copy(actor = actor)
         is Intent.CallMeeting -> intent.copy(actor = actor)
         is Intent.CheckIn -> intent.copy(actor = actor)
         is Intent.DeclareReadyToVote -> intent.copy(actor = actor)

@@ -427,6 +427,28 @@ class NotificationsModel(standing: List<Notification> = Notifications.stored) {
     fun dismiss(notification: Notification) {
         standing = standing - notification
     }
+
+    /**
+     * **The house sent something, and it is kept only if its kind is kept** (D-119).
+     *
+     * [NotificationKind.stored] is the whole of the decision and it is the kind's rather than this
+     * method's: a heavy arrival is read while it is arriving and held nowhere afterwards, and a
+     * quiet one has to still be under the clock when the player walks back from a marker. So an
+     * unstored notification passes through here and changes nothing, which is correct rather than a
+     * dropped message — the banner it raised is the whole of it.
+     *
+     * **Newest first**, matching [Notifications.stored], because the lock screen draws the list in
+     * order and a house that appended would put its newest text at the bottom of a list a player
+     * reads the top of in the dark.
+     *
+     * **Nothing is recorded about arrival beyond the notification itself.** No count, no unread
+     * mark, no timestamp of its own — see [Notification], where the absence of a `seen` field is
+     * the argument rather than an omission.
+     */
+    fun houseSent(notification: Notification) {
+        if (!notification.kind.stored) return
+        standing = listOf(notification) + standing
+    }
 }
 
 /**

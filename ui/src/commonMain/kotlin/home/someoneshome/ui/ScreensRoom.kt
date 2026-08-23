@@ -120,9 +120,9 @@ fun CallingScreen() {
  * is one of the few facts the app volunteers, and it is one everybody gets equally.
  */
 @Composable
-fun CallScreen() {
+fun CallScreen(vals: PanelVals) {
     val go = navigator()
-    IncomingCall(caller = "PRIYA", reason = "HOUSE MEETING") { go(ScreenId.Assemble) }
+    IncomingCall(caller = vals.callerOr("PRIYA"), reason = "HOUSE MEETING") { go(ScreenId.Assemble) }
 }
 
 /**
@@ -132,9 +132,9 @@ fun CallScreen() {
  * device behaviour, so nobody can tell from a neighbour's phone which one happened.
  */
 @Composable
-fun FoundScreen() {
+fun FoundScreen(vals: PanelVals) {
     val go = navigator()
-    IncomingCall(caller = "ELLIOT", reason = "REVOKED\nRESIDENT FOUND") { go(ScreenId.Assemble) }
+    IncomingCall(caller = vals.callerOr("ELLIOT"), reason = "REVOKED\nRESIDENT FOUND") { go(ScreenId.Assemble) }
 }
 
 @Composable
@@ -344,7 +344,7 @@ fun DiscussionScreen(vals: PanelVals) {
             }
         }
         Label(
-            "${counts.ofSeats(counts.ready)} READY . UNANIMOUS SKIPS AHEAD",
+            "${counts.ofLiving(counts.ready)} READY . UNANIMOUS SKIPS AHEAD",
             modifier = Modifier.fillMaxWidth(),
             size = 6.5, color = Amber.Faint, tracking = 0.12, align = TextAlign.Center,
         )
@@ -427,7 +427,7 @@ fun VoteScreen(vals: PanelVals) {
 
         // The house's count. It does not move when you lock yours in.
         Label(
-            "${counts.ofSeats(counts.voted)} VOTED . NOT VOTING COUNTS AS A SKIP",
+            "${counts.ofLiving(counts.voted)} VOTED . NOT VOTING COUNTS AS A SKIP",
             modifier = Modifier.fillMaxWidth(),
             size = 6.5, color = Amber.Faint, tracking = 0.1, align = TextAlign.Center,
         )
@@ -502,9 +502,21 @@ fun TallyScreen(vals: PanelVals) {
     ) {
         Label("RESTRAIN . RESULT", size = 7.0, color = Amber.Dim, tracking = 0.16)
 
-        TallyRow("MARCUS", 3, border = Amber.Bright, nameInk = Amber.Bright)
-        TallyRow("SKIP", 2)
-        TallyRow("PRIYA", 1)
+        // **The house's rows where there are any, the port's three where there are not** — see
+        // [PanelVals.tallyRows], which carries the escalation about whose rows these are.
+        //
+        // **The lit row is the restrained one and is found by name**, not by position: the house
+        // counts in the order it read the ballot, and a screen that brightened the first row would
+        // be asserting that the winner sorts first — which it does not have to, and which would put
+        // the highlight on the wrong person at a tie.
+        for (row in vals.tallyRows) {
+            val took = row.name == vals.restrained
+            TallyRow(
+                row.name, row.votes,
+                border = if (took) Amber.Bright else Amber.Edge,
+                nameInk = if (took) Amber.Bright else Amber.Mid,
+            )
+        }
 
         Box(Modifier.weight(1f))
 
@@ -513,7 +525,7 @@ fun TallyScreen(vals: PanelVals) {
             contentAlignment = Alignment.Center,
         ) {
             Label(
-                "MARCUS WAS RESTRAINED",
+                vals.restrainedLine,
                 size = 8.0, color = Amber.Black, tracking = 0.14, align = TextAlign.Center,
             )
         }

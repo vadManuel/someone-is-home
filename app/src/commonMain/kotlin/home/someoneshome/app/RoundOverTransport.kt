@@ -140,6 +140,11 @@ class RoundOverTransport(
             // a client is somebody else's control press being shown to a phone that has no business
             // knowing it happened. Ignored rather than decoded any further.
             is RoundBody.Act -> Unit
+            // The Egress tile, upward only, and it is [RoundBody.Act]'s case exactly: a request
+            // arriving at a client is somebody else's finger being shown to a phone that has no
+            // business knowing it moved — and on this one member that phone would be learning
+            // there is an Insider in the house and which socket they are on.
+            is RoundBody.Fire -> Unit
         }
     }
 
@@ -172,6 +177,18 @@ class RoundOverTransport(
      * must not be acted on twice.
      */
     fun act(intent: IntentMessage) = up(RoundWire.encode(outbox.ask(intent)))
+
+    /**
+     * **The Egress tile, held down** ([RoundBody.Fire], E-P2-5 / E-P3-7 closed).
+     *
+     * [act]'s every sentence applies — fire-and-forget, no ack, no retry, and no screen moved. What
+     * the actor gets back is `Effect.AbilityFired` and its own clock, and what the *house* gets is
+     * an alert on every phone in it; neither is this method's business.
+     *
+     * It is a second method rather than an [IntentMessage] because the frame is a different member:
+     * the house has to make a draw before there is a fact to admit. There is nothing to pass.
+     */
+    fun fireEgress() = up(RoundWire.encode(outbox.fire()))
 
     /** A new round: this phone holds nothing of the last one. */
     fun roundEnded() = inbox.roundEnded()

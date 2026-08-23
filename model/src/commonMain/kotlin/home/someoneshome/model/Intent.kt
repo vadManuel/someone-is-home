@@ -78,6 +78,36 @@ sealed interface Intent {
      */
     data class HandOverEntry(val actor: Seat, val marker: MarkerId, val entered: List<Int>) : Intent
 
+    /**
+     * **STOP NOW — the performance window closed with nothing handed over** ([Event.PerformanceEnded],
+     * D-110, D-111).
+     *
+     * It qualifies for the same reason [CheckIn] does and more plainly than any member above: the
+     * event it becomes carries **nothing but the actor**. There is no target to resolve, no draw to
+     * make, and no second source to compose from — which is why the one control on every Subroutine
+     * screen could always have had a wire member and had none.
+     *
+     * **It carries no marker and no reason**, because the event does not: a reason field is an
+     * abandonment record and an abandonment record is the behavioural channel D-111 split the two
+     * planes to close. See [Event.PerformanceEnded], where both omissions are the ruling.
+     */
+    data class StopSubroutine(val actor: Seat) : Intent
+
+    /**
+     * **One participant's taps on the Sync Pulse, handed over** (`gdd.md:355`,
+     * [Event.SyncPulseReturned]).
+     *
+     * [HandOverEntry]'s shape one system over, and lawful for [HandOverEntry]'s reason: it is a
+     * **report of what was entered, never a claim that it was right.** The house holds the beat
+     * schedule and grades the taps against it; nothing on the phone can compare the two.
+     *
+     * **It carries no node**, because the event does not — where this player is standing is what the
+     * house recorded when they scanned the node's card, and *a performer's own scan is knowledge*
+     * (D-136). A phone naming its own node would be the cheapest cheat in the game: sit on the
+     * couch, claim the Landing, and contain an Egress from a chair.
+     */
+    data class ReturnSyncPulse(val actor: Seat, val taps: List<Long>) : Intent
+
     /** I'M HERE. Reports one phone; the gate that closes on it is the house's (D-104). */
     data class CheckIn(val actor: Seat) : Intent
 

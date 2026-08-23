@@ -198,6 +198,18 @@ class LobbyHouse(
      * one gate, which the in-process source reaches by the same call.
      */
     private val onIntent: (Intent) -> Unit = {},
+    /**
+     * **A phone held its Egress tile down** ([RoundBody.Fire], E-P2-5 / E-P3-7).
+     *
+     * [onIntent]'s sibling and deliberately a second seam rather than a member of it: what this
+     * one owes the caller is a **draw** before there is a fact to admit — the Egress's type and its
+     * two nodes come from the home's shape, which the rules have never held. `RoundAuthority.
+     * fireEgress` is what fills it, and that is the only thing in the app that can.
+     *
+     * [Seat] is the connection's, stamped by [IntentDesk] exactly as an intent's actor is. A client
+     * has no way to name one — see [RoundBody.Fire], which carries nothing but its sequence.
+     */
+    private val onEgressFired: (Seat) -> Unit = {},
 ) {
 
     private val desk = LobbyDesk()
@@ -268,6 +280,17 @@ class LobbyHouse(
 
         /** A control somebody pressed. [seat] is the connection's; see [IntentDesk]. */
         data class Asked(val seat: Seat, val act: RoundBody.Act) : Arrival
+
+        /**
+         * **The Egress tile, held down.** [seat] is the connection's, exactly as [Asked]'s is.
+         *
+         * A separate arrival because it is answered differently and not because it arrives
+         * differently: an [Asked] is translated and admitted, and this one needs the house to make
+         * a draw first. See [RoundBody.Fire], where the whole argument is. It rides the same queue,
+         * so one phone's Egress and one phone's check-in still reach the rules in the order the
+         * player made them.
+         */
+        data class Fired(val seat: Seat, val fire: RoundBody.Fire) : Arrival
     }
 
     private val arriving = Channel<Arrival>(Channel.UNLIMITED)
@@ -469,6 +492,19 @@ class LobbyHouse(
                     // phone still waiting for that answer has a hole in its push sequence, which
                     // its own inbox notices and asks about.
                     is IntentDesk.Landing.Duplicate -> Unit
+                    // A control press cannot ask the house for a draw — the desk answers `Draw` to
+                    // `RoundBody.Fire` and to nothing else, and this branch is what says so rather
+                    // than an `else` that would quietly accept one if the desk ever changed.
+                    is IntentDesk.Landing.Draw -> Unit
+                }
+                // **The Egress tile, through the same desk and the same dedup mark.** What comes
+                // back names the seat and nothing else, and the draw is the authority's: it needs
+                // the home's shape, which the rules have never held.
+                is Arrival.Fired -> when (val landing = intents.arrived(arrival.seat, arrival.fire)) {
+                    is IntentDesk.Landing.Draw -> onEgressFired(landing.actor)
+                    is IntentDesk.Landing.Duplicate -> Unit
+                    // A `Fire` carries no intent, so there is nothing here a `Put` could hold.
+                    is IntentDesk.Landing.Put -> Unit
                 }
             }
         }
@@ -505,6 +541,10 @@ class LobbyHouse(
                 // coroutine, and the desk and the emit boundary both suspend. Two launches from
                 // one phone would reach the rules in the order they FINISHED. See Arrival.
                 is RoundBody.Act -> arriving.trySend(Arrival.Asked(seat, round))
+                // **The Egress tile.** Queued on the same channel as a control press, for the same
+                // reason: two arrivals from one phone must reach the rules in the order the player
+                // made them, and two launches would reach them in the order they finished.
+                is RoundBody.Fire -> arriving.trySend(Arrival.Fired(seat, round))
             }
             return
         }
@@ -595,6 +635,12 @@ class LobbyOverTransport(
      */
     private val onIntent: (Intent) -> Unit = {},
     /**
+     * **What this phone does when another phone holds its Egress tile down**, when this phone is
+     * the host. [LobbyHouse.onEgressFired], threaded through — see there for why it is a seam of
+     * its own rather than another [Intent].
+     */
+    private val onEgressFired: (Seat) -> Unit = {},
+    /**
      * **The round's client half, on this phone's one socket.** Null in every production
      * construction — nothing arms a round yet. See [RoundSeam].
      */
@@ -610,7 +656,7 @@ class LobbyOverTransport(
      * at all. `emit` and `armingInputs` are what it is reached for, and both are the authority's
      * own calls rather than a screen's.
      */
-    internal val house = LobbyHouse(scope, onEvent, onIntent)
+    internal val house = LobbyHouse(scope, onEvent, onIntent, onEgressFired)
     private var session: ClientSession? = null
     private var client: TransportClient? = null
     private var clientJob: Job? = null

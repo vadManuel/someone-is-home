@@ -45,7 +45,13 @@ class IntentWireTest {
         IntentMessage.FireSurge(Seat(2)),
         IntentMessage.FireSurge(Seat(0)),
         IntentMessage.FireIsolate(marker),
+        // ⚠️ **Spoof was missing from this list**, which is the same drift `IntentAdmissionTest`'s
+        // two hand-written lists had: a member absent here is a member the round-trip sweep and the
+        // no-actor-field sweep below both stop covering, silently, from the day it is added.
+        IntentMessage.FireSpoof("THE LANDING"),
         IntentMessage.BeginSubroutine(marker),
+        IntentMessage.StopSubroutine,
+        IntentMessage.ReturnSyncPulse(listOf(1L, 2L, 3L, 4L)),
         IntentMessage.CallMeeting,
         IntentMessage.CheckIn,
         IntentMessage.DeclareReadyToVote,
@@ -69,6 +75,8 @@ class IntentWireTest {
         is Intent.FireIsolate -> IntentMessage.FireIsolate(intent.target)
         is Intent.FireSpoof -> IntentMessage.FireSpoof(intent.room)
         is Intent.BeginSubroutine -> IntentMessage.BeginSubroutine(intent.marker)
+        is Intent.StopSubroutine -> IntentMessage.StopSubroutine
+        is Intent.ReturnSyncPulse -> IntentMessage.ReturnSyncPulse(intent.taps)
         is Intent.CallMeeting -> IntentMessage.CallMeeting
         is Intent.CheckIn -> IntentMessage.CheckIn
         is Intent.DeclareReadyToVote -> IntentMessage.DeclareReadyToVote
@@ -234,11 +242,16 @@ class IntentWireTest {
      * ever collide.
      */
     @Test
-    fun theThreeBodiesAreThreeDifferentThings() {
+    fun theFourBodiesAreFourDifferentThings() {
         val bodies = listOf(
             RoundBody.Push(seq = 1, message = RoundMessage.LampSet(0)),
             RoundBody.Gap(held = 1),
             RoundBody.Act(seq = 1, intent = IntentMessage.CheckIn),
+            // **The fourth, and it is the one most at risk of colliding**: a `Fire` carries a single
+            // `seq` and so does a `Gap` carry a single `held`, so the discriminator is the whole of
+            // what separates two frames that would otherwise render the same shape. A house that
+            // decoded a gap as an Egress would fire one because a phone missed a frame.
+            RoundBody.Fire(seq = 1),
         )
         val encoded = bodies.map(RoundWire::encode)
         assertEquals(encoded.size, encoded.toSet().size, "two upward bodies render the same bytes")
@@ -254,6 +267,8 @@ class IntentWireTest {
         is Intent.FireIsolate -> intent.actor
         is Intent.FireSpoof -> intent.actor
         is Intent.BeginSubroutine -> intent.actor
+        is Intent.StopSubroutine -> intent.actor
+        is Intent.ReturnSyncPulse -> intent.actor
         is Intent.CallMeeting -> intent.actor
         is Intent.CheckIn -> intent.actor
         is Intent.DeclareReadyToVote -> intent.actor

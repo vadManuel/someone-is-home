@@ -457,6 +457,8 @@ sealed class RoundMessage {
  * - [Gap] goes **client → host**. A seat saying which sequence it last held, so the house can
  *   re-assert the rest.
  * - [Act] goes **client → host**. One request, with the sequence number this connection is at.
+ * - [Fire] goes **client → host**. The Egress tile, held down — the one request whose fact the
+ *   house must *compose* rather than translate, which is why it is not an [Act].
  *
  * ### [Gap] is not an Intent, and the distinction is not pedantry
  *
@@ -526,6 +528,47 @@ sealed class RoundBody {
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("act")
     data class Act(val seq: Long, val intent: IntentMessage) : RoundBody()
+
+    /**
+     * **Client → host. "I held the Egress tile down."** And that is the whole message.
+     *
+     * ### Why it is not an [Act], and the reason is `factOf`'s line rather than tidiness
+     *
+     * An [Act] carries an [IntentMessage], and an [IntentMessage] may exist only where the
+     * `Event` it becomes is **fully determined by what the phone did, which connection did it, and
+     * when it arrived.** [home.someoneshome.model.Event.EgressFired] fails that test and always
+     * will: its type and its two nodes are the *house's* draw, made above the rules against a
+     * home's shape the phone has never held.
+     *
+     * Both ways of forcing it into [Act] break something real. A member carrying the type and the
+     * nodes would let a client **choose its own Egress** — pick the shortest pair, name the two
+     * markers in one room — which is the forge [IntentMessage] exists to make unrepresentable. A
+     * member carrying nothing would need a `factOf` arm that composes a fact from a second source,
+     * which is the one thing that function refuses to do and the reason it can stay total.
+     *
+     * So the request gets its own frame and the desk answers it at its own door: *put this to the
+     * rules* and *make the draw, then put THAT to the rules* are two different answers, and two
+     * members is what stops them being reachable by one branch. [Gap] is the precedent for a
+     * client→host body that is not an [Act]; this is the second, and it is the opposite sort — a
+     * gap names no game action and reaches no rule, where this one names the largest action in the
+     * game.
+     *
+     * ### There is nothing in it, and there must not be
+     *
+     * No type, no nodes, no actor, no target. **The tile is the entire message**, and the seat comes
+     * off the connection like every other request's. A field added here is a field a client fills.
+     *
+     * ### [seq] is the connection's, shared with [Act]'s
+     *
+     * One counter per connection across both members, because the thing being deduplicated is *this
+     * phone's requests* and not *this phone's requests of one kind*. An Egress delivered twice would
+     * be the loudest double-press in the game — the house's longest cooldown spent on one finger —
+     * and two counters would be two marks a resend could slip between.
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("fire")
+    data class Fire(val seq: Long) : RoundBody()
 }
 
 /**

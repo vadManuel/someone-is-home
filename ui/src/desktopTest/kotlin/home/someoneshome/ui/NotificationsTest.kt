@@ -350,8 +350,14 @@ class NotificationsTest {
             Notification::class.java.declaredFields.map { it.name }.filterNot { it.contains('$') },
             "a field arrived on Notification — if it can say when or whether, D-105 is gone",
         )
+        // `houseSent` is the third and it is a **writer**, which is the distinction this assertion
+        // is really about: the forbidden thing is a method that can *answer a question* about what
+        // a player has looked at. Something arriving is not that — it is the other end of `dismiss`,
+        // and it is what the round finally pushing text messages needs (`Effect.MessageDelivered`).
+        // It is named here rather than allowed by a count, for the reason above: a rule satisfied by
+        // swapping one member out is satisfied by exactly the swap a read flag arrives as.
         assertEquals(
-            listOf("dismiss", "getStanding"),
+            listOf("dismiss", "getStanding", "houseSent"),
             NotificationsModel::class.java.declaredMethods
                 .filter { Modifier.isPublic(it.modifiers) }
                 .map { it.name }

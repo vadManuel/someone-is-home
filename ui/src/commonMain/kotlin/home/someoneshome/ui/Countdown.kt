@@ -141,14 +141,19 @@ object Countdowns {
      * against that same constant and two copies of forty-five is how this table drifted before.
      */
     private val MEETING_WINDOWS: Map<ScreenId, Int> = mapOf(
-        // `1:04 REMAINING` on the design's own discussion screen, of ninety.
-        ScreenId.Discussion to 90,
+        // `1:04 REMAINING` on the design's own discussion screen, of ninety. **It reads
+        // `Balance.DISCUSSION_SECONDS` rather than a literal now**, for the reason the vote's row
+        // below it already did: the tick driver ends the talk against that constant, so a literal
+        // here would be a bar draining against one number while the transition fired off another.
+        ScreenId.Discussion to Balance.DISCUSSION_SECONDS,
         // gdd.md:412 and :1006. Unanimous READY closes it early, which shortens the wait and
         // never the window — a clock that redrew itself shorter would be the phone predicting it.
         ScreenId.Vote to Balance.VOTE_WINDOW_SECONDS,
         // LIGHTS OUT IN 9, over a bar with 6 of 15 spent. The Restrained takeover lands at the
-        // halfway mark of this one (D-102), which is the house's business and not the bar's.
-        ScreenId.Tally to 15,
+        // halfway mark of this one (D-102), which is the house's business and not the bar's — and
+        // the house now really counts it, so this reads the constant the driver counts against
+        // rather than the literal the drawn screen was measured from.
+        ScreenId.Tally to Balance.TALLY_SECONDS,
         // VOTING ENDS IN 0:24, from outside the system -- and it is the SAME ballot the row above
         // counts, so it reads the same constant (D-163). It carried a 60 of its own until then.
         ScreenId.GhostMeeting to Balance.VOTE_WINDOW_SECONDS,

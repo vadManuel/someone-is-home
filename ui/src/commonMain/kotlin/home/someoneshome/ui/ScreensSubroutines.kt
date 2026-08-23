@@ -1467,16 +1467,24 @@ private fun MotionBudgetRow(
  * It goes to the work order rather than the springboard — you came from the list and the list is
  * where the next decision is — which is where NOT THIS ONE goes from the screen before this one.
  *
- * **It is not a claim about the Subroutine.** Walking away from work is your own phone's business;
- * whether anything was banked is the house's, and this button neither asks nor says.
+ * **It is not a claim about the Subroutine, and it never became one.** It reports to the house now
+ * (`Intent.StopSubroutine`) — the window this phone opened has shut, which the presence plane needs
+ * in order to expire a placement (D-111, D-136) — and what it reports is **the actor and nothing
+ * else**: no marker, no reason, no progress. Walking away from work is still your own phone's
+ * business; whether anything was banked is still the house's, and this button still neither asks
+ * nor says.
+ *
+ * **It reports even when nothing was entered.** A phone that only told the house about abandoned
+ * work it had made progress on would make the report itself a signal, which is the statistic
+ * separating a real Subroutine from a fake.
  */
 @Composable
 private fun StopNow(border: Color, ink: Color) {
-    val go = navigator()
+    val actions = LocalActions.current
     PanelButton(
         "STOP NOW",
         border = border, ink = ink,
         size = 7.0, verticalPadding = 9.u,
-        onClick = { go(ScreenId.Work) },
+        onClick = actions.stopSubroutine,
     )
 }

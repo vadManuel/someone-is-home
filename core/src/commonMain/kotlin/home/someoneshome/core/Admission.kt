@@ -77,6 +77,27 @@ fun admit(state: GameState, event: Event): Admission = when {
     event is Event.MeetingCalled && state.meeting != null ->
         Admission.Refused(RefusalReason.MeetingAlreadyRunning)
 
+    // **Tier 2 is refused at a meeting** (the owner's 2026-08-23 ruling, closing T1·7 / T2·8).
+    //
+    // It clears this file's entry condition without straining it, and more plainly than either of
+    // the meeting refusals above: **everybody in the house is standing in one room looking at a
+    // meeting screen.** A phone that could fire a Surge from the assembly would be firing it at
+    // somebody the whole party can see, at a lamp already up for the meeting, into a room where the
+    // one sound in the game (D-176) would name the shooter as surely as the target.
+    //
+    // **The refusal is the honest answer rather than a quiet one**, which is why it is here and not
+    // in the rules. `phaseOf` left these admissible deliberately and said so at length — the pool
+    // pauses across a meeting, so a seat that walked in with it ready still has it ready and
+    // nothing turned on the gate. The ruling changes what the answer is, not where it is decided:
+    // written inside `reduce` this would be `if (...) return Reduction(state, emptyList())`, which
+    // is rule 1's forbidden shape and the one that looks most like hygiene. Here the branch is
+    // provably outside every client-visible path and the refusal is RECORDED.
+    //
+    // **It costs nothing**, which is the whole of what a refusal at the gate means: the pool is not
+    // spent, because the event never reaches the handler that would spend it.
+    isTierTwo(event) && state.meeting != null ->
+        Admission.Refused(RefusalReason.MeetingAlreadyRunning)
+
     // Everyone in the house is on the same phase of the same meeting, so this tells a client
     // nothing it could not read off the room (D-068).
     phaseOf(event) != null && state.meeting?.phase != phaseOf(event) ->
@@ -105,15 +126,10 @@ private fun phaseOf(event: Event): MeetingPhase? = when (event) {
     is Event.RoundArmed, is Event.MarkerScanned, is Event.SubroutineReturned,
     is Event.RevokeArmed, is Event.ContactMade, is Event.MeetingCalled -> null
 
-    // ⚠️ **Not meeting events, and whether Tier 2 may be fired AT a meeting is UNRULED.** The design
-    // blocks the Egress during a meeting (`gdd.md:373`) and says nothing at all about the Access
-    // pool. Left admissible deliberately: the pool PAUSES across a meeting (the Shift ruling), so a
-    // seat that walked in with it ready still has it ready and a seat that did not cannot acquire
-    // it -- which means nothing here turns on the gate. Adding a refusal would be inventing a rule,
-    // and refusing quietly inside the rules would be rule 1's forbidden shape. Flagged, not decided.
-    // Spoof joins them on the same flag and for the same reason. It is if anything the clearest of
-    // the three: a phantom nobody can read cannot affect a room full of people looking at each
-    // other, so a Spoof fired at a meeting changes nothing anybody at that meeting could observe.
+    // **Not meeting events, and they are refused at a meeting by [isTierTwo] rather than by a phase
+    // here.** T1·7 / T2·8 was unruled and is ruled now: Tier 2 may not be fired at a meeting at all.
+    // The refusal is not expressible as a phase — *no phase* is what it means, and a member of
+    // [MeetingPhase] returned here would say the opposite, that there is one phase these belong to.
     is Event.SurgeFired, is Event.IsolateFired, is Event.SpoofFired -> null
 
     // Not meeting events. The Egress has its own gate below, and it already refuses these while a
@@ -131,6 +147,35 @@ private fun phaseOf(event: Event): MeetingPhase? = when (event) {
     is Event.ReadyToVoteDeclared, is Event.DiscussionClosed -> MeetingPhase.Discussion
     is Event.VoteSelected, is Event.VoteLocked, is Event.VoteWindowClosed -> MeetingPhase.Vote
     is Event.TallyHalfwayReached, is Event.MeetingClosed -> MeetingPhase.Tally
+}
+
+/**
+ * **Whether this event is a Tier-2 firing** — the owner's 2026-08-23 ruling, as a set.
+ *
+ * **Exhaustive over [Event] on purpose**, for [phaseOf]'s reason: a new event does not compile until
+ * somebody decides whether it is Tier 2, and the compile error is the prompt. The alternative is an
+ * ability added later that is quietly firable from the assembly because nobody thought about it.
+ *
+ * It is named for the tier rather than listing three events at the call site because that is what
+ * the ruling is about — *Tier-2 fires are refused during meetings* — and because a fourth Tier-2
+ * ability should join the rule by being added here rather than by somebody remembering to.
+ *
+ * **[Event.RevokeArmed] is deliberately not one of them.** Tier 1 arms in place (D-142) and the
+ * ruling names Tier 2; a Revoke armed at a meeting is a botched stalk that costs its own cooldown,
+ * which is the ordinary case rather than a rule about meetings. [Event.EgressFired] is not one
+ * either, and never needed to be: `gdd.md:373` blocks it during a meeting already, and a meeting
+ * pauses the countdown rather than admitting a second crisis into it.
+ */
+private fun isTierTwo(event: Event): Boolean = when (event) {
+    is Event.SurgeFired, is Event.IsolateFired, is Event.SpoofFired -> true
+
+    is Event.RoundArmed, is Event.MarkerScanned, is Event.SubroutineReturned,
+    is Event.PerformanceEnded, is Event.RevokeArmed, is Event.ContactMade,
+    is Event.MeetingCalled, is Event.MeetingCheckedIn, is Event.ReadyToVoteDeclared,
+    is Event.DiscussionClosed, is Event.VoteSelected, is Event.VoteLocked,
+    is Event.VoteWindowClosed, is Event.TallyHalfwayReached, is Event.MeetingClosed,
+    is Event.EgressFired, is Event.SyncPulseReturned, is Event.EgressExpired,
+    -> false
 }
 
 /**

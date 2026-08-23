@@ -244,6 +244,19 @@ class PanelActions(
      */
     val dismissNotice: () -> Unit = {},
     /**
+     * **STOP NOW — the performance window closing, reported** (D-110, D-111, E-P2-5 closed).
+     *
+     * It is an action rather than the plain `go(Work)` the button used to be, because it is now two
+     * things: a navigation the player asked for, and **a report the house needs**. The presence
+     * plane's one consumer is an expiry (D-136), and a window that never shut leaves a placement
+     * standing in a room the player left.
+     *
+     * **It still says nothing about the work.** No reason, no marker, no progress — see
+     * `Event.PerformanceEnded`, where both omissions are the ruling rather than a saving: an
+     * abandonment record is the behavioural channel D-111 split the two planes to close.
+     */
+    val stopSubroutine: () -> Unit = {},
+    /**
      * **One of the lock screen's stored notifications, swiped off the list.**
      *
      * Separate from [dismissNotification] because it is a different question: that one is *the*

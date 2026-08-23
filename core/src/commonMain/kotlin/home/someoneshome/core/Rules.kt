@@ -326,12 +326,7 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
         // the Revoke's own clock and the Access pool Tier 2 shares (`gdd.md:306`, `:318`) -- and
         // both open at half, so the round's guaranteed stretch of peace covers the support kit as
         // well as the two time-critical abilities.
-        cooldowns = seats.flatMap {
-            listOf(
-                Cooldown(it, InsiderAbility.Revoke, event.at + Balance.REVOKE_COOLDOWN / 2),
-                Cooldown(it, InsiderAbility.Access, event.at + Balance.ACCESS_COOLDOWN / 2),
-            )
-        },
+        cooldowns = openingCooldowns(seats, event.at),
         // D-132 again, and it is ONE value rather than a row per seat because the Egress cooldown
         // is house-wide -- *shared with the other Insider*. See GameState.egressReadyAt.
         egressReadyAt = event.at + Balance.EGRESS_COOLDOWN / 2,
@@ -557,6 +552,35 @@ private fun spendPool(state: GameState, actor: Seat, at: Tick, weight: Long): Ga
     state.withCooldown(Cooldown(actor, InsiderAbility.Access, at + weight))
 
 /**
+ * **Every seat's per-Insider clocks, at half — D-132's opening, written once because it happens
+ * twice** (`gdd.md:318`, and the owner's 2026-08-23 meeting ruling).
+ *
+ * *Every Insider cooldown begins the round at half its normal duration*, which closes the opening-
+ * Revoke problem structurally rather than by asking players not to. The ruling extends that to the
+ * far side of every meeting: **a meeting hands every Insider the round's opening again.** So the
+ * arithmetic is one function rather than two copies of `/ 2` that agree until somebody moves one.
+ *
+ * ### Both rows, for every seat, and the membership is what makes it safe
+ *
+ * Drawn for **every** seat rather than for the Insiders alone, exactly as arming draws it and for
+ * arming's reason: a list whose membership was the Insider list would *be* the Insider list. A
+ * Resident carries two cooldowns they can never spend, and that is the point.
+ *
+ * ### The Egress's clock is deliberately not in here
+ *
+ * It is house-wide rather than per-seat ([GameState.egressReadyAt]), so it is not a row this
+ * function could write — and the ruling treats it differently anyway: while its Egress runs it is
+ * **frozen out of resets until containment**, which is a condition on the caller and is written at
+ * [lightsOut], where the condition can be read.
+ */
+private fun openingCooldowns(seats: List<Seat>, at: Tick): List<Cooldown> = seats.flatMap {
+    listOf(
+        Cooldown(it, InsiderAbility.Revoke, at + Balance.REVOKE_COOLDOWN / 2),
+        Cooldown(it, InsiderAbility.Access, at + Balance.ACCESS_COOLDOWN / 2),
+    )
+}
+
+/**
  * **The Surge: the target's lamp slams to full, then to black, and their phone makes the one noise
  * this game has** (`gdd.md:313`, `:342`, `:392`–`:401`).
  *
@@ -581,10 +605,10 @@ private fun spendPool(state: GameState, actor: Seat, at: Tick, weight: Long): Ga
  * *your own pool was spent*, which is the actor's own business and is drawn on the actor's own
  * tile — input echo, not a game answer.
  *
- * ⚠️ **`egressFired` hardcodes `true` on the same field and does not**, which is a small
- * inconsistency this unit inherited and did not touch: an Egress fired into a running cooldown tells
- * the phone it spent one it did not, and the phone's bar is then wrong for three minutes. Flagged
- * for the owner rather than changed under a freeze.
+ * **`egressFired` hardcoded `true` on the same field and now does not** (T1·8 / T2·7, closed). It
+ * told a phone that fired into a running cooldown that it had spent one it did not, and the bar was
+ * wrong for three minutes. All five handlers of this effect now read the flag off their own state
+ * transition.
  *
  * ### Ranged, and there is no range
  *
@@ -1076,7 +1100,29 @@ private fun meetingCalled(
     val poolHeld = state.accessPausedAt ?: event.at
 
     return Reduction(
-        state.copy(meeting = meeting, egress = held, accessPausedAt = poolHeld),
+        state.copy(
+            meeting = meeting,
+            egress = held,
+            accessPausedAt = poolHeld,
+            // **A meeting ends every running ability effect, at the call** (the owner's 2026-08-23
+            // ruling). An Isolation is a card gone dark in a house nobody is walking, and a phantom
+            // is a false sighting on a map whose subjects are all standing in one room being looked
+            // at — so both spend a meeting affecting nothing, and T1·9's *a meeting can eat one
+            // whole* is answered by not making anybody spend it.
+            //
+            // **Cleared rather than paused, and the Egress is the one exception.** A paused
+            // isolation would come back after the meeting pointed at a house that has moved on;
+            // the Egress survives because it is a win condition with a countdown the whole room is
+            // looking at, and it is paused rather than cleared for D-133's reason — a report that
+            // cancelled an Egress would make every Egress end the same way.
+            //
+            // **Nothing is emitted about either.** A card going dark is discovered by walking to
+            // it (`isolateFired`), and a phantom reaches nobody by construction — so a card coming
+            // back is discovered the same way, and there is no message whose arrival could report
+            // that an ability had been running.
+            isolated = emptyList(),
+            phantoms = emptyList(),
+        ),
         listOf(ring) + walkIn + gateCount(state, meeting) + batched + stopped,
     )
 }
@@ -1343,32 +1389,35 @@ private fun lightsOut(state: GameState, event: Event.MeetingClosed): Reduction<G
         listOf(Effect.EgressHeld(it.remainingAt(event.at), running = true, haptic = Haptic.Short))
     } ?: emptyList()
 
-    // **The other half of the Shift ruling, and it is the Egress's arithmetic applied to a
-    // cooldown.** Every Access deadline moves forward by exactly the length of the meeting, so the
-    // remaining time across it is what it was when the party was called in — `deadline += (now −
-    // pausedAt)`, where `deadline = now + duration` would hand every Insider a fresh pool for
-    // walking into a room, and dropping the mark without moving the deadlines would let a meeting
-    // recharge the whole support kit for free.
+    // **A meeting hands every Insider the round's opening again** (the owner's 2026-08-23 ruling).
+    // Both per-seat clocks go back to half their normal duration off this tick, which is D-132's
+    // arming state arriving a second time -- `openingCooldowns`, so the two are one arithmetic
+    // rather than two that agree until somebody moves one.
     //
-    // **Only the Access rows move.** The Revoke's clock and the Egress's are left alone — see
-    // `GameState.accessPausedAt`, where the scope and the flag are written down.
-    val resumedPool = state.accessPausedAt?.let { paused ->
-        val heldFor = event.at.step - paused.step
-        state.cooldowns.map {
-            if (it.ability == InsiderAbility.Access) {
-                Cooldown(it.seat, it.ability, it.readyAt + heldFor)
-            } else {
-                it
-            }
-        }
-    } ?: state.cooldowns
+    // **This SUPERSEDES the Shift ruling's resume arithmetic and does not sit beside it.** What was
+    // here moved every Access deadline forward by the length of the meeting so the remaining time
+    // across it was unchanged; a reset to half overwrites that answer outright, so keeping both
+    // would be two rules about one clock with the quieter one winning nothing. The **pause** is
+    // untouched and still does its own job -- it is what `accessReady` reads *during* the meeting,
+    // where a pool that carried on charging while the party stood in one room would hand a seat a
+    // Tier-2 ability for walking into a room. What is gone is only the resume.
+    val reopened = openingCooldowns(state.seats, event.at)
+
+    // **The Egress's clock is house-wide and is frozen out of this while its Egress runs**, until
+    // containment. A reset that reached it mid-crisis would hand the Insiders a second Egress to
+    // fire on top of the one the Residents are still crossing the house to contain -- and D-131
+    // already makes a running Egress outlive its Insiders, so the two together would put the round
+    // beyond the Residents on a rule about cooldowns. With no Egress running it resets like the
+    // rest, because then it is an ordinary cooldown and the ruling says every cooldown.
+    val egressReopened = if (running != null) state.egressReadyAt else event.at + Balance.EGRESS_COOLDOWN / 2
 
     return Reduction(
         state.copy(
             meeting = null,
             newlyRevoked = emptyList(),
             egress = running,
-            cooldowns = resumedPool,
+            cooldowns = reopened,
+            egressReadyAt = egressReopened,
             accessPausedAt = null,
         ),
         listOf(Effect.MeetingEnded(Haptic.Long)) + restarted,
@@ -1458,9 +1507,22 @@ private fun egressFired(state: GameState, event: Event.EgressFired): Reduction<G
     }
 
     // Constructed once, outside the branch above. Deliberately not inside it: the actor's device
-    // stays inert whatever happened, and what it is told is that the ability fired and the cooldown
-    // is spent -- the same two facts a botched Revoke stalk is told.
-    val answered = Effect.AbilityFired(actor = event.actor, cooldownStarted = true)
+    // stays inert whatever happened, and what it is told is that the ability fired and what its own
+    // clock now says -- the same two facts a botched Revoke stalk is told.
+    //
+    // **It said `true` unconditionally and that was a lie** (T1·8 / T2·7, flagged twice under the
+    // freeze and fixed now that the freeze is lifted for it). `next` restarts `egressReadyAt` when
+    // and only when `started != null`, so an Egress fired into a running cooldown told that phone it
+    // had spent one it did not -- and the actor's own bar, which is drawn from this flag, was wrong
+    // for three minutes.
+    //
+    // **Reading the flag off the state transition rather than off `ready` is the point.** They are
+    // not the same condition: a pair the house drew collapsed into one room is `ready` and starts
+    // nothing, and a flag that said `ready` would tell the phone about a draw rather than about its
+    // own clock. This is `surgeFired`'s arrangement — the actor is the only recipient, the row
+    // permits the kind to `Insider/Live`, and what it says is *your own clock*, which is input echo
+    // and not a game answer.
+    val answered = Effect.AbilityFired(actor = event.actor, cooldownStarted = started != null)
     val alarm = started?.let { egress ->
         // Per seat, once each, because this is one of D-118's two dimming events and a dim that
         // reached fewer than everybody would be a beacon (D-076). Grouped as one run rather than

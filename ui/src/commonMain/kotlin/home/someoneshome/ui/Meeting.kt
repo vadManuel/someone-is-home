@@ -51,7 +51,7 @@ class MeetingModel(
      * how many are standing at the meeting area, how many have said they are ready, how many have
      * voted. **Nothing on this phone moves them** — see [checkIn].
      */
-    val counts: MeetingCounts = MeetingCounts(),
+    initialCounts: MeetingCounts = MeetingCounts(),
     /**
      * The names this phone may vote for.
      *
@@ -74,6 +74,21 @@ class MeetingModel(
      * would be a phone claiming the gate is one closer to closing on the strength of its own
      * button press, and it would be wrong for as long as the network took to disagree.
      */
+    /**
+     * **The house's counts, and they move when the house says so and at no other moment.**
+     *
+     * Observable state rather than a constructor value, because the round can finally push them:
+     * `CheckInProgressed`, `ReadyProgressed` and `VoteProgressed` were three of E-P1-4's routeless
+     * kinds, so every count on every meeting screen was a fixture — *4 OF 6 CHECKED IN* on a phone
+     * in a house where six people were standing in the hall.
+     *
+     * **Nothing on this phone writes it.** [checkIn] lights this phone's own tick and leaves the
+     * number alone, which is the whole of that method's KDoc and is now a property of the type: the
+     * setter is private and the only caller is [houseCounted].
+     */
+    var counts: MeetingCounts by mutableStateOf(initialCounts)
+        private set
+
     var checkedIn: Boolean by mutableStateOf(false)
         private set
 
@@ -179,6 +194,66 @@ class MeetingModel(
         locked = false
     }
 
+    /**
+     * **The house counted, and this is the one writer of [counts].**
+     *
+     * Four kinds land here — the ring answered, the gate, the hands up, the ballots locked — and
+     * each moves one number and leaves the other three where they were. That is deliberate rather
+     * than convenient: the four are counted at four different moments by four different rules, and
+     * a push that carried all of them would make every count a re-statement of every other, so a
+     * kind that stopped being emitted would go on looking correct.
+     *
+     * [seats] is the total each of those pushes carries with it — `expected` on three of them. It
+     * is the same number every time and is written every time for the same reason the counts are
+     * separate: the house saying *of six* on every push is what keeps a screen from drawing a
+     * fraction whose denominator came from a round that has since lost a player.
+     */
+    fun houseCounted(
+        answered: Int? = null,
+        present: Int? = null,
+        ready: Int? = null,
+        voted: Int? = null,
+        seats: Int? = null,
+        living: Int? = null,
+    ) {
+        counts = counts.copy(
+            seats = seats ?: counts.seats,
+            living = living ?: counts.living,
+            answered = answered ?: counts.answered,
+            present = present ?: counts.present,
+            ready = ready ?: counts.ready,
+            voted = voted ?: counts.voted,
+        )
+    }
+
+    /**
+     * **The house re-asserting this seat's own ballot** (`Effect.VoteHeld`, D-117).
+     *
+     * The lit row is input echo and is already on the screen; what the house adds is **the refusal
+     * after READY**, which needs a field that says *the house holds this one* rather than *your
+     * finger is here*. Emitted on every tap so that its absence can never be the message (rule 1),
+     * which means this arrives constantly and agrees with the screen nearly always — and the one
+     * time it does not is the time that matters.
+     *
+     * [selection] is a seat and [names] is what this phone may vote for, so the index is the row:
+     * `asMessage`'s move in reverse, lawful for its reason — names are round-scoped, arrive from
+     * the house (D-115), and **the list is never sorted or filtered in this module.** A seat the
+     * list does not hold leaves the choice alone rather than blanking it, which is the fail-closed
+     * direction: a phone that cleared a lit row because a roster was short would take a player's
+     * vote off the screen and give them nothing to put back.
+     *
+     * **[locked] is taken from the house outright**, because it is the one half a phone cannot know
+     * better: this is the flag that stops the controls responding, and a phone that kept its own
+     * `false` after the buzzer auto-locked every ballot would go on echoing taps the house refuses.
+     */
+    fun houseHolds(selection: Seat?, locked: Boolean) {
+        choice = when {
+            selection == null -> if (this.locked || choice == VoteChoice.Skip) VoteChoice.Skip else choice
+            else -> names.getOrNull(selection.index)?.let(VoteChoice::Named) ?: choice
+        }
+        this.locked = locked
+    }
+
     companion object {
 
         /**
@@ -203,7 +278,7 @@ class MeetingModel(
          * has not yet been pressed.
          */
         fun sample(): MeetingModel = MeetingModel(
-            counts = MeetingCounts(),
+            initialCounts = MeetingCounts(),
             names = listOf("PRIYA", "MARCUS", "DANI", "ROSE", "TOMAS"),
         ).apply { choose(VoteChoice.Named("MARCUS")) }
     }
@@ -314,6 +389,19 @@ sealed interface VoteChoice {
  */
 data class MeetingCounts(
     val seats: Int = 6,
+    /**
+     * **The living, which is the other denominator and not a second copy of [seats].**
+     *
+     * Three of the four counts below are fractions of different things, and the house says which
+     * every time it sends one: presence is *every living player and every out player* (D-104), and
+     * readiness and the ballot are the living's alone — a ghost has no hand to put up (D-147) and
+     * casts nothing (`gdd.md:417`). Drawn against [seats] they would read `3 OF 6 READY` in a house
+     * where two people are out and four hands are all the hands there are, which is a screen
+     * telling a room it is waiting on somebody who is sitting on the couch.
+     *
+     * It defaults to [seats] so a fixture with nobody out draws what it always drew.
+     */
+    val living: Int = 6,
     /** Phones that answered the ring. */
     val answered: Int = 4,
     /** Phones standing at the meeting area — living and out alike (D-104). */
@@ -323,7 +411,11 @@ data class MeetingCounts(
     /** Players who have voted. Never *what* they voted. */
     val voted: Int = 4,
 ) {
+    /** `4 OF 6` — against every seat in the round. The ring and the check-in gate. */
     fun ofSeats(n: Int): String = "$n OF $seats"
+
+    /** `3 OF 4` — against the living. Readiness and the ballot. See [living]. */
+    fun ofLiving(n: Int): String = "$n OF $living"
 }
 
 /**

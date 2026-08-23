@@ -166,8 +166,8 @@ fun Screen(
                 ScreenId.EgressWidget -> EgressWidgetScreen(vals)
 
                 ScreenId.Calling -> CallingScreen()
-                ScreenId.Call -> CallScreen()
-                ScreenId.Found -> FoundScreen()
+                ScreenId.Call -> CallScreen(vals)
+                ScreenId.Found -> FoundScreen(vals)
                 ScreenId.Assemble -> AssembleScreen()
                 ScreenId.Notice -> NoticeScreen()
                 ScreenId.Discussion -> DiscussionScreen(vals)

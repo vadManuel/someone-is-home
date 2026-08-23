@@ -231,6 +231,20 @@ data class PanelState(
      */
     val revealed: List<RevealedInsider>? = null,
     /**
+     * **The house's last word, on the ending screen** (`Effect.HouseSignedOff`).
+     *
+     * It sits beside [revealed] rather than inside it because they are two different things that
+     * happen to land on one screen: the reveal is who the Insiders were and what they wrote, and
+     * this is the house talking — the administrative voice that has been the app's register all
+     * evening, signing off to the people it owned.
+     *
+     * **Null means the house has said nothing** and the ending draws its own, which is every other
+     * pushed field's arrangement on this type. It stays null on the two pushes that *end* the
+     * round, because an ending is `RoundEnded` then `InsidersRevealed` and this is a third thing
+     * that may or may not follow them (E-P3-6: anything that acts on the first push is wrong).
+     */
+    val signOff: String? = null,
+    /**
      * **This seat's work order, exactly as `Effect.WorkOrderIssued` carries it** (D-114, D-129).
      *
      * A `List<OrderLine>` and never a list of anything richer: a blocked line is a different *type*
@@ -261,6 +275,38 @@ data class PanelState(
      * Null means the house has said nothing; [OutsideView]'s drawn five stand in.
      */
     val ballots: List<Ballot>? = null,
+    /**
+     * **The result, as the house read it** (`Effect.MeetingResult`, `Effect.MeetingResolved`).
+     *
+     * The tally screen drew a fixture — MARCUS 3, SKIP 2, PRIYA 1, and MARCUS WAS RESTRAINED — on
+     * every phone in every round, which was honest while nothing could send it and is not any more.
+     * Both kinds land here because they are one screen's content arriving in two permissions:
+     * everybody gets the outcome (`MeetingResult`), and the couch also gets the ballot with names
+     * against it (`MeetingResolved`, D-075). What a living phone holds is therefore a [restrained]
+     * and an empty [rows]; the couch holds both.
+     *
+     * **The rows are counted by the transport and never here**, for [ballots]' reason: this module
+     * resolving seats to names would be `ui` keeping a second copy of who is in the house. A tally
+     * is a count of an attribution list, and the list is the thing that is permitted or not.
+     *
+     * **Null means the house has said nothing** and the drawn fixture stands in, which is
+     * [egressNodes]' arrangement and every other pushed field's on this type.
+     */
+    val tally: MeetingTally? = null,
+    /**
+     * **Who called this meeting** (`Effect.MeetingOpened`, D-121).
+     *
+     * *Naming the caller is deliberate: the meeting has an author, and the room can ask them why.
+     * It is one of the few facts the app volunteers, and it is one everybody gets equally.* The
+     * ring screens drew PRIYA and ELLIOT on every phone in every round until this field existed.
+     *
+     * A name rather than a seat, resolved against [roster] on the way in — `FlowModel.nameOf`, and
+     * the same lookup `fireSurge` makes in the other direction.
+     *
+     * **Null means the house has said nothing** and the port's names stand in, which is every other
+     * pushed field's arrangement here.
+     */
+    val caller: String? = null,
     /**
      * **Which phase of the meeting the house has opened** (`Effect.MeetingPhaseOpened`).
      *
@@ -362,6 +408,28 @@ data class PanelState(
  * in the house.
  */
 data class RevealedInsider(val name: String, val line: String)
+
+/**
+ * **What the room decided, and — for the couch alone — who decided it** (D-075, D-117).
+ *
+ * Two facts in one type because they are one screen: the living read [restrained] and nothing
+ * else, and a player outside the system reads the same word over a list of names with counts
+ * against them. **A living phone gets this with [rows] empty**, which is the allowlist's doing
+ * rather than this type's — `MeetingResolved` has no row for a living class, so the second half
+ * simply never arrives.
+ *
+ * [restrained] is null when the room restrained nobody: a Skip, a tie, or a vote nobody won. That
+ * is a real outcome and not an absent one, which is why it is a nullable name rather than an empty
+ * string — `NOBODY WAS RESTRAINED` is a sentence the screen has to be able to say.
+ */
+data class MeetingTally(
+    val restrained: String?,
+    /** One row per candidate, in the order the house counted them. Empty for a living phone. */
+    val rows: List<TallyCount> = emptyList(),
+)
+
+/** One row of a tally: a name — or SKIP — and how many ballots landed on it. */
+data class TallyCount(val name: String, val votes: Int)
 
 /**
  * How the status bar reads — a property of where the round is, not of the individual screen.
@@ -1101,6 +1169,51 @@ class PanelVals(val state: PanelState) {
      * The port's 21 of 32 stands in while no house has spoken.
      */
     val outsideLit: Int = state.integrityPercent?.let { integrityLit } ?: 21
+
+    /**
+     * **The tally's rows, and the port's three stand in while the house has sent none.**
+     *
+     * [egressNodes]' arrangement, and every other pushed field's on this type. What fills it is
+     * `Effect.MeetingResolved`'s attribution, counted — which reaches **the out classes only**
+     * (D-075), so a living phone draws the fixture here.
+     *
+     * ⚠️ **The living's rows have no sender, and that is a gap rather than a permission.** This
+     * screen is drawn with names and counts on it — MARCUS 3, SKIP 2, PRIYA 1 — for *everybody*,
+     * and the design is explicit that this is lawful: the living get *a count and nothing else*,
+     * which is a per-candidate tally without attribution. But `Effect.MeetingResult` carries only
+     * `restrained`, so there is nothing on a living phone's wire that could fill these rows.
+     * Either the effect is a field short or the drawn screen shows the living more than it should,
+     * and choosing between those is a disclosure question rather than a wiring one. **Escalated,
+     * not guessed** — the fixture stays, which is the state this screen has been in all along.
+     */
+    val tallyRows: List<TallyCount> = state.tally?.rows?.takeIf { it.isNotEmpty() }
+        ?: listOf(TallyCount("MARCUS", 3), TallyCount("SKIP", 2), TallyCount("PRIYA", 1))
+
+    /**
+     * **Who the room restrained, as the house read the ballot** — or nobody.
+     *
+     * The one half of the result that really does reach every phone (`Effect.MeetingResult`), so
+     * unlike [tallyRows] this is the house's word whenever there has been one.
+     *
+     * **Nobody is an outcome and not an absence.** A Skip, a tie, or a vote nobody won all resolve
+     * to no name, and the screen has a sentence for it — `gdd.md:413`'s *ties resolve to Skip*, and
+     * D-075's *the whole weight of inaction sits behind restraining nobody.* A screen that fell
+     * back to the fixture's MARCUS on that outcome would name a person the room voted not to.
+     */
+    val restrained: String? = state.tally?.restrained ?: "MARCUS".takeIf { state.tally == null }
+
+    /** `MARCUS WAS RESTRAINED`, or the sentence for a room that restrained nobody. */
+    val restrainedLine: String = restrained?.let { "$it WAS RESTRAINED" } ?: "NOBODY WAS RESTRAINED"
+
+    /**
+     * **Who called the meeting, with the port's own name standing in** (D-121).
+     *
+     * [drawn] is the name on the design's frame for whichever ring screen is asking, so the two
+     * keep their separate fixtures — the port drew PRIYA on the call and ELLIOT on the report, and
+     * a single fallback here would silently redraw one of the two frames the screenshots are read
+     * against.
+     */
+    fun callerOr(drawn: String): String = state.caller ?: drawn
 
     /**
      * **Resident progress, live, and still only ever a percentage** (D-103, D-134, D-153).

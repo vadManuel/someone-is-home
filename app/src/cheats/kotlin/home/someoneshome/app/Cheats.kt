@@ -124,6 +124,10 @@ fun CheatRoot() {
             // **The one door a request from another phone comes in by.** It only ever fires on the
             // phone that is hosting, because that is the only phone frames arrive at.
             onIntent = { intent -> scope.launch { rules.value?.heard(intent) } },
+            // **The other door, and the Egress's finger comes in by it** (E-P2-5 / E-P3-7 closed).
+            // `fireEgress` makes the house's draw against the home's shape and then mints, which is
+            // two steps where `heard` is one — the reason the request has a frame of its own.
+            onEgressFired = { actor -> scope.launch { rules.value?.fireEgress(actor) } },
             round = seam,
         )
     }
@@ -225,6 +229,18 @@ fun CheatRoot() {
         launch { round.play() }
         while (flow.state.screen != ScreenId.Armed) delay(250)
         if (flow.lobby.hosting) round.theRound(RoundCheat.seed())
+    }
+    // **The tick driver, on the host and nowhere else** (E-P3-3). The five timed transitions are
+    // the authority's own, so a client running this loop would be a phone deciding when the talk
+    // was over. It is a third coroutine rather than a step inside the script above because it is
+    // not a script: it runs for the whole round, under whatever the players are doing, and the
+    // meeting it ends may be one nobody scripted.
+    LaunchedEffect(authority) {
+        val house = authority ?: return@LaunchedEffect
+        while (flow.state.screen != ScreenId.Armed) delay(250)
+        if (flow.lobby.hosting) {
+            tickHouse(house, note = { line -> println("[house-clock] $line"); transport.note(line) })
+        }
     }
     Box(Modifier.fillMaxSize().background(Amber.Black)) {
         when (view) {

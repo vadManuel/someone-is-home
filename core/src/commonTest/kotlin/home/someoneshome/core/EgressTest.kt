@@ -277,13 +277,30 @@ class EgressTest {
             second.none { it is Effect.EgressOpened },
             "a second Egress opened on top of the first",
         )
-        // Rule 1: the shape does not move. Both Insiders were told the same thing.
+        // **Rule 1: the SHAPE does not move.** One `AbilityFired`, addressed to the actor, and
+        // nothing else — whichever Insider fired and whatever the house did about it. That is the
+        // property, and it is asserted on the shape rather than on the flag.
         assertEquals(
-            first.filterIsInstance<Effect.AbilityFired>().map { it.cooldownStarted },
-            second.filterIsInstance<Effect.AbilityFired>().map { it.cooldownStarted },
+            first.filterIsInstance<Effect.AbilityFired>().map { it.actor }.size,
+            second.filterIsInstance<Effect.AbilityFired>().map { it.actor }.size,
             "the refused fire came back a different shape from the accepted one",
         )
         assertEquals(1, second.filterIsInstance<Effect.AbilityFired>().size)
+
+        // **And the flag tells the truth, which it did not until T1·8 was closed.** It hardcoded
+        // `true`, so this second Insider was told they had spent the house's longest cooldown on a
+        // press that spent nothing, and their own bar was wrong for three minutes. It is not a leak
+        // and never was: the row permits this kind to `Insider/Live`, the effect is addressed to
+        // the actor, and what it says is *your own clock* — input echo, which is exactly why it is
+        // allowed to differ where the shape is not.
+        assertEquals(
+            listOf(true), first.filterIsInstance<Effect.AbilityFired>().map { it.cooldownStarted },
+            "the fire that started the Egress did not report its own cooldown spent",
+        )
+        assertEquals(
+            listOf(false), second.filterIsInstance<Effect.AbilityFired>().map { it.cooldownStarted },
+            "a fire into the shared cooldown told that phone it had spent one it did not (T1·8)",
+        )
     }
 
     /**
@@ -322,8 +339,11 @@ class EgressTest {
             "a second Egress started immediately after the first was contained; the shared " +
                 "cooldown was never spent",
         )
+        // One `AbilityFired` and nothing else — the same shape a fire that caught alight produces.
+        // The flag is `false` because the shared cooldown really was still running: T1·8 closed,
+        // and it is the actor's own clock rather than a report on the house.
         assertEquals(
-            listOf(Effect.AbilityFired(Seat(4), cooldownStarted = true)), walk.drain(),
+            listOf(Effect.AbilityFired(Seat(4), cooldownStarted = false)), walk.drain(),
             "the refused fire came back a different shape from one the house allowed",
         )
     }
@@ -350,7 +370,7 @@ class EgressTest {
         )
         assertNull(early.state.egress, "an Egress fired inside the opening cooldown")
         assertEquals(
-            listOf(Effect.AbilityFired(Seat(1), cooldownStarted = true)),
+            listOf(Effect.AbilityFired(Seat(1), cooldownStarted = false)),
             early.drain(),
             "a fire the cooldown refused came back a different shape from one it allowed",
         )

@@ -65,6 +65,18 @@ import home.someoneshome.model.Seat
  * That is the line this file draws and the line `core`'s `factOf` holds: **an [Intent] may exist
  * only where the [home.someoneshome.model.Event] it becomes is fully determined by what the phone
  * did, which connection did it, and when it arrived.**
+ *
+ * ### The Egress firing now travels, and it is deliberately not one of these
+ *
+ * It reaches the house as [RoundBody.Fire], a body member of its own, **because the line above did
+ * not move.** The tile had to become pressable from a phone — until it was, containment was a
+ * countdown nobody could start and nobody could answer — and the two shapes that would have kept it
+ * here both break something: an [IntentMessage] member would need a `factOf` arm that composes a
+ * draw from a second source, and a member carrying the type and the nodes would let a client choose
+ * its own Egress.
+ *
+ * So the request keeps its own frame and the desk keeps two answers rather than one branch. See
+ * [RoundBody.Fire], where the argument is written at the frame that carries it.
  */
 @ClientFacing
 @kotlinx.serialization.Serializable
@@ -155,6 +167,44 @@ sealed class IntentMessage {
     @kotlinx.serialization.SerialName("CallMeeting")
     data object CallMeeting : IntentMessage()
 
+    /**
+     * **STOP NOW — the one control on every Subroutine screen, which had no wire member** (E-P2-5,
+     * [Intent.StopSubroutine], [home.someoneshome.model.Event.PerformanceEnded]).
+     *
+     * A `data object`, and there is nothing that could be added to it. The event it becomes carries
+     * **the actor and nothing else** — no marker, no reason — so this frame is empty by the same
+     * ruling rather than by an economy: a reason field would be an abandonment record, and how often
+     * somebody walks away from work that was never going to count is a statistic separating a real
+     * Subroutine from a fake (D-111).
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("StopSubroutine")
+    data object StopSubroutine : IntentMessage()
+
+    /**
+     * **The Sync Pulse, handed over — the containment channel, which was not on the wire at all**
+     * (E-P2-5 / E-P3-7, `gdd.md:355`, [Intent.ReturnSyncPulse]).
+     *
+     * Until this member existed containment could not be reached from a phone, so the Egress was a
+     * countdown nobody could answer. [HandOverEntry]'s shape one system over, and its ruling: **a
+     * report of what was entered, never a claim that it was right.** The house holds the beat
+     * schedule and grades [taps] against it; there is nothing on the phone to compare them with, so
+     * this frame could not carry a verdict even if somebody wanted it to.
+     *
+     * **No node**, for [BeginSubroutine]'s reason taken one step further: a phone naming its own
+     * node would be the cheapest cheat in the game — sit on the couch, claim the Landing, and
+     * contain an Egress from a chair. Where the player is standing is what the house recorded when
+     * they scanned the node's card (D-136).
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("ReturnSyncPulse")
+    data class ReturnSyncPulse(
+        /** A List, not a Set. When each finger landed, in the order it landed — recorded input. */
+        val taps: List<Long>,
+    ) : IntentMessage()
+
     /** I'M HERE. One phone at the meeting area; the gate that closes on it is the house's (D-104). */
     @ClientFacing
     @kotlinx.serialization.Serializable
@@ -231,6 +281,8 @@ sealed class IntentMessage {
         is FireIsolate -> Intent.FireIsolate(actor, target)
         is FireSpoof -> Intent.FireSpoof(actor, room)
         is BeginSubroutine -> Intent.BeginSubroutine(actor, marker)
+        is StopSubroutine -> Intent.StopSubroutine(actor)
+        is ReturnSyncPulse -> Intent.ReturnSyncPulse(actor, taps)
         is CallMeeting -> Intent.CallMeeting(actor)
         is CheckIn -> Intent.CheckIn(actor)
         is DeclareReadyToVote -> Intent.DeclareReadyToVote(actor)

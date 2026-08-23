@@ -3,6 +3,7 @@ package home.someoneshome.ui
 import home.someoneshome.model.CardPayload
 import home.someoneshome.model.EmitSchema
 import home.someoneshome.model.MarkerId
+import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.Seat
 import home.someoneshome.model.MessageKind
 import home.someoneshome.model.Winner
@@ -145,6 +146,13 @@ object ScreenGraph {
         // one.** A screen whose exit moved because it is unlit would be a different screen at
         // the moment the player most needs the one they already know; the control keeps its
         // words, its place and its destination, and only its colour changes. See [SniffScreen].
+        //
+        // **The edge itself is the actions layer's now, and the reason is that STOP NOW stopped
+        // being only a navigation** (E-P2-5). It reports the performance window closing to the
+        // house — `Intent.StopSubroutine`, which the presence plane needs in order to expire a
+        // placement (D-111, D-136) — so the control publishes an action rather than a target, and
+        // `ScreenGraphTest` can no longer read the destination off the screen. It is declared in
+        // [Flow.viaActions] with the other edges whose screen hands over rather than names.
         ScreenId.SubHandshake, ScreenId.SubReplay, ScreenId.SubParity,
         ScreenId.SubShort, ScreenId.SubTrace, ScreenId.SubJam,
         ScreenId.SubSniff, ScreenId.SubDeallocate,
@@ -152,7 +160,7 @@ object ScreenGraph {
         // Neither screen ever walks off on its own: D-139's sweep has no timeout to walk off at,
         // and D-140's buzz asks a question rather than ending one. The only way out of either is
         // the player pressing STOP NOW or the house answering what they sent.
-        ScreenId.SubInterrupt, ScreenId.SubDrift -> setOf(ScreenId.Work)
+        ScreenId.SubInterrupt, ScreenId.SubDrift -> emptySet()
         ScreenId.Files -> setOf(ScreenId.Home)
         ScreenId.Notes -> setOf(ScreenId.Home)
         ScreenId.TermNo -> setOf(ScreenId.Home, ScreenId.TermLive)
@@ -321,6 +329,32 @@ object Flow {
         ScreenId.Assemble to HousePush(
             ScreenId.Notice, EmitSchema.MEETING_PHASE_OPENED,
             "4 OF 6 CHECKED IN — the gate closes when the LAST player walks in (D-104)",
+        ),
+
+        // **The three ring screens answer the same push, and they have to** — found by routing
+        // `MeetingOpened` and watching a phone strand itself.
+        //
+        // The ring is a presentation timer (`autoAdvance`, six seconds) and the gate is a count of
+        // phones, so nothing makes them agree: in a house where everybody else is already standing
+        // at the meeting card, the gate can close while one phone is still ringing. Without these
+        // rows that phone missed the phase push, stood on a ring nobody was making, fell through to
+        // `Assemble` on its own timer, and waited there for a gate that had already closed — which
+        // is E-P3-2's *a meeting that can never leave its first phase* arriving from the other end.
+        //
+        // **They go straight to `Notice` rather than through `Assemble`.** Walking a phone to the
+        // assembly screen after the gate has closed would show a player a check-in they no longer
+        // need to make, with a count that is already full.
+        ScreenId.Call to HousePush(
+            ScreenId.Notice, EmitSchema.MEETING_PHASE_OPENED,
+            "the gate closed while this phone was still ringing — the talk has started without it",
+        ),
+        ScreenId.Found to HousePush(
+            ScreenId.Notice, EmitSchema.MEETING_PHASE_OPENED,
+            "the same ring, the same gate, the same catch-up",
+        ),
+        ScreenId.Calling to HousePush(
+            ScreenId.Notice, EmitSchema.MEETING_PHASE_OPENED,
+            "you called it and the room filled before your own ring stopped",
         ),
         ScreenId.Discussion to HousePush(
             ScreenId.Vote, EmitSchema.MEETING_PHASE_OPENED,
@@ -576,6 +610,20 @@ object Flow {
         ScreenId.SurgeTargets to setOf(ScreenId.Page2),
         ScreenId.IsolateTargets to setOf(ScreenId.Page2),
         ScreenId.SpoofRooms to setOf(ScreenId.Page2),
+        // **STOP NOW, off every Subroutine screen.** It is here rather than in the graph because
+        // the control publishes an action rather than a target: it reports the performance window
+        // closing to the house before it navigates (`Intent.StopSubroutine`, D-111), so what a
+        // screen offers is *tell the house I have stopped* and where that lands is this layer's.
+        ScreenId.SubHandshake to setOf(ScreenId.Work),
+        ScreenId.SubReplay to setOf(ScreenId.Work),
+        ScreenId.SubParity to setOf(ScreenId.Work),
+        ScreenId.SubShort to setOf(ScreenId.Work),
+        ScreenId.SubTrace to setOf(ScreenId.Work),
+        ScreenId.SubJam to setOf(ScreenId.Work),
+        ScreenId.SubSniff to setOf(ScreenId.Work),
+        ScreenId.SubDeallocate to setOf(ScreenId.Work),
+        ScreenId.SubInterrupt to setOf(ScreenId.Work),
+        ScreenId.SubDrift to setOf(ScreenId.Work),
         // A house notice, swiped up off the meeting.
         ScreenId.Notice to setOf(ScreenId.Discussion),
         // Every notification, swiped away — up on the three banners, left under the clock. The
@@ -901,6 +949,22 @@ class FlowModel(
         go(ScreenId.Discussion)
     }
 
+    /**
+     * **STOP NOW: the window shuts, the house is told, and the phone goes back to the work order.**
+     *
+     * The report goes first and the navigation second, which is the order that survives a phone
+     * being stopped between them: a window reported shut on a phone that never reached the list is
+     * recoverable, and a phone on the list with a window the house still thinks is open leaves a
+     * placement standing in a room nobody is in (D-136).
+     *
+     * It goes to the work order rather than the springboard — you came from the list and the list
+     * is where the next decision is.
+     */
+    fun stopSubroutine() {
+        subroutines.stopped()
+        go(ScreenId.Work)
+    }
+
     fun toggleMarkers() { state = state.copy(markersOn = !state.markersOn) }
 
     fun toggleTorch() { state = state.copy(torch = !state.torch) }
@@ -1171,9 +1235,26 @@ class FlowModel(
      * off the fixture so that the port's single-marker limitation is visible in the signature
      * instead of being a thing you discover when a second marker exists.
      */
-    fun beginSubroutine(subroutine: Subroutine = PanelVals.CURRENT.subroutine) {
+    fun beginSubroutine(
+        subroutine: Subroutine = PanelVals.CURRENT.subroutine,
+        /**
+         * **Which card opened this**, so the hand-over can say so (E-P2-1).
+         *
+         * **Null by default, because a bench has no card.** The fixture's `CurrentSubroutine`
+         * carries a `MarkerShape` — the printed symbol a player looks for — and not a card id,
+         * which is the right thing for it to carry and the wrong thing to send. So a phone with no
+         * house attached opens the work, takes the answer, and posts it nowhere; see
+         * `SubroutineModel.posted`, which refuses a hand-over with no marker.
+         *
+         * What fills it is the scan: `Effect.ScanAnswered` names the instance the card opened, and
+         * the scanner is what knows which card was read. That is the sender this parameter is
+         * waiting for, and it is named here rather than defaulted around.
+         */
+        marker: MarkerId? = null,
+    ) {
         val screen = subroutine.screen ?: return
         subroutines.beganAgain()
+        subroutines.opened(marker)
         go(screen)
     }
 
@@ -1317,9 +1398,19 @@ class FlowModel(
             is RoundMessage.SystemIntegrityLive -> state = state.copy(integrityPercent = message.percent)
             is RoundMessage.SystemIntegrityBatched -> state = state.copy(integrityPercent = message.percent)
 
-            // The Messages thread is drawn from the client's own inbox fixture; a delivered body has
-            // nowhere to land until that surface takes a pushed list. E1's.
-            is RoundMessage.MessageDelivered -> Unit
+            // **A later text from the house: a quiet banner, and it stands until it is swiped**
+            // (D-105, D-119). Quiet because *the house talking is not the round turning over, and a
+            // second dim would spend the first one's meaning* — so no dim, no buzz, and no
+            // ten-second life. It goes on the lock screen because a player walking back from a
+            // marker has to be able to find the thing again.
+            //
+            // **Stored first, then the banner.** The banner is a screen and the standing list is
+            // where the thing survives; raising the banner first would leave a phone whose player
+            // swiped it in the same frame with nothing anywhere to have swiped.
+            is RoundMessage.MessageDelivered -> {
+                notifications.houseSent(Notification(NotificationKind.Text, body = message.body))
+                arrived(ScreenId.Quiet)
+            }
 
             is RoundMessage.WorkOrderIssued -> state = state.copy(order = message.lines)
 
@@ -1335,24 +1426,85 @@ class FlowModel(
             // nearest.
             is RoundMessage.PresenceChanged -> Unit
 
-            // The opening text arrives as a notification over the springboard, which the
-            // notification model already owns; what it needs from the house is the arrival, and the
-            // arrival's route is `Notifications.arrivals` rather than a screen table. U7's seam.
-            is RoundMessage.OpeningMessage -> Unit
+            // **The house's opening text — the heavy one, and the round starting** (D-118, D-119).
+            // Heavy is the ruling and not the volume: the whole house dims at the same moment, and
+            // *that says exactly what it is.* It is one of exactly two arrivals permitted to do it.
+            //
+            // **It carries no body**, which is why nothing is stored: the opening text is the
+            // house's own and the same on every phone, so `Notifications.arrivals` already holds
+            // what the banner says and the message's job is to say *now*. A body on this kind would
+            // be a second copy of one sentence.
+            is RoundMessage.OpeningMessage -> arrived(ScreenId.Notify)
 
-            // **The ring, and it has no route yet.** `Calling`, `Call` and `Found` are in
-            // `Flow.housePushed` — reachable only by the house — and no table says which of them
-            // this message opens. That is a decision about what a phone shows when a meeting is
-            // called, not a wiring gap this unit may close by choosing.
-            is RoundMessage.MeetingOpened -> Unit
+            // **The ring — and this is the push that makes a round visible at all** (the owner's
+            // routing table, 2026-08-23). It closes the half of E-P3-1 that mattered most: a client
+            // took a hundred pushes across a complete round and stood on the lobby for all of them,
+            // because this branch did nothing.
+            //
+            // **Found when the meeting was triggered by a report, Call otherwise.** Same layout,
+            // different reason, which is what the two screens are: a house meeting cannot be
+            // declined either way, and what the header says is *why the phone is ringing*. Read off
+            // the trigger and off nothing else — the same split the admission gate makes (D-133),
+            // asked here for a header instead of for a refusal.
+            //
+            // **It reaches the living only.** A seat outside the system gets `StandAndWalkIn`
+            // instead (D-134) and never this, which is the allowlist's doing rather than a branch
+            // here: *the ringing call is for the living.*
+            //
+            // ⚠️ **The calling seat is NOT routed to `Calling`, and it cannot be from here.** The
+            // owner's table asks for it and the wire cannot carry it: `caller` is a `Seat`, and
+            // **this phone does not know which seat it is** — `LobbyBody.Standing` carries counts
+            // and names and never *you are seat three*, deliberately. So the comparison that would
+            // decide it has one operand. Escalated rather than guessed: the two shapes that would
+            // close it are a per-seat `MeetingOpened` carrying *you called this* (which is
+            // `EgressOpened`'s existing arrangement) or teaching a phone its own seat, and both are
+            // changes the routing table does not name. The caller lands on `Call` with everybody
+            // else in the meantime, which is one header wrong on one phone and not a leak.
+            is RoundMessage.MeetingOpened -> {
+                // The caller's name before the screen, so the ring is drawn with it on the first
+                // frame rather than one recomposition later. D-121: the meeting has an author.
+                state = state.copy(caller = nameOf(message.caller))
+                push(
+                    when (message.trigger) {
+                        is MeetingTrigger.RevokeReported -> ScreenId.Found
+                        is MeetingTrigger.MeetingCard -> ScreenId.Call
+                    },
+                )
+            }
 
-            // The other half of the same call, and the same gap: STAND AND WALK IN is `Ghost2`,
-            // reached by the house, with no table naming this message as what reaches it.
-            is RoundMessage.StandAndWalkIn -> Unit
+            // **The other half of the same call, and it is what closes E-P3-2** (D-104, D-134).
+            //
+            // The gate counts *every living player and every out player*, and an out seat gets this
+            // instead of a ring. With no route it never reached a screen offering a check-in, so
+            // the gate stopped at 4 of 5 and every transition after it was refused
+            // `WrongMeetingPhase`, on five phones, in silence — a meeting that could never leave its
+            // first phase with nothing anywhere saying why.
+            //
+            // **The control was already there.** `Ghost2Screen` draws the living's own `CheckIn()`
+            // and has since the out screens were ported; what was missing was any way to arrive on
+            // it. That is worth being exact about, because the escalation reads as though a control
+            // needed building and it did not.
+            //
+            // **Every out seat lands here, the newly Revoked and the couch alike**, and the couch
+            // does not stay: `Flow.housePushes` already walks `Ghost2 → GhostMeeting` when the phase
+            // opens. Sending the previously-out straight to the couch instead would be this phone
+            // deciding it need not check in, which is the gate the rules are counting.
+            is RoundMessage.StandAndWalkIn -> push(ScreenId.Ghost2)
 
-            // Anonymous counts, on screens that draw their own. Neither has a field here.
-            is RoundMessage.CheckInProgressed -> Unit
-            is RoundMessage.ReadyProgressed -> Unit
+            // **The gate and the hands, on the screens that were drawing fixtures of them.**
+            // `4 OF 6 CHECKED IN` was a constant on a phone in a house where six people were
+            // standing in the hall. The count is the house's and moves only here — see
+            // `MeetingModel.counts`, whose setter is private for exactly this reason.
+            is RoundMessage.CheckInProgressed ->
+                meeting.houseCounted(present = message.present, seats = message.expected)
+
+            // **`expected` is the LIVING and not the seats**, which is why it is not written to the
+            // same total the gate's is: readiness is the living's and presence is everybody's
+            // (D-147), so a ready count of `3 OF 6` in a house where two players are out would be
+            // counting a hand nobody has. The screen draws its own fraction, so what it needs is
+            // the denominator the rule counted against.
+            is RoundMessage.ReadyProgressed ->
+                meeting.houseCounted(ready = message.ready, living = message.expected)
 
             is RoundMessage.MeetingPhaseOpened -> {
                 state = state.copy(
@@ -1366,10 +1518,13 @@ class FlowModel(
                 housePushed(message)
             }
 
-            // This seat's own ballot, re-asserted on every tap. The lit row is input echo and is
-            // already on the screen; what the house adds is the refusal after READY, which needs a
-            // field that says *the house holds this one* rather than *your finger is here*. E8's.
-            is RoundMessage.VoteHeld -> Unit
+            // **This seat's own ballot, re-asserted on every tap** (D-117). The lit row is input
+            // echo and is already on the screen; what the house adds is the **refusal after
+            // READY** — the VOTE CAST lock, which is the one half of this a phone cannot know
+            // better than the house. See `MeetingModel.houseHolds`, where the seat is resolved
+            // against the roster the house sent and a name the roster does not hold leaves the lit
+            // row alone rather than blanking it.
+            is RoundMessage.VoteHeld -> meeting.houseHolds(message.selection, message.locked)
 
             // **The couch's live ballot, and it cannot land here yet.** [PanelState.ballots] holds
             // names, this message holds seats, and resolving one to the other is the transport's
@@ -1377,9 +1532,42 @@ class FlowModel(
             // in the house. Flagged rather than solved by putting a roster in this module.
             is RoundMessage.VoteSelectionShown -> Unit
 
-            is RoundMessage.VoteProgressed -> Unit
-            is RoundMessage.MeetingResult -> Unit
-            is RoundMessage.MeetingResolved -> Unit
+            // `N OF 4 VOTED` — locked ballots, never selections (D-117), against the living for
+            // `ReadyProgressed`'s reason.
+            is RoundMessage.VoteProgressed ->
+                meeting.houseCounted(voted = message.locked, living = message.expected)
+
+            // **The result, to everybody, and the tally screen stops drawing a fixture.** It had
+            // MARCUS 3, SKIP 2, PRIYA 1 and MARCUS WAS RESTRAINED printed on every phone in every
+            // round. A living phone gets this and nothing else: the outcome, with no rows under it.
+            //
+            // **`restrained = null` is a real outcome and not an absent one** — a Skip, a tie, or a
+            // vote nobody won — so it becomes a tally holding a null name rather than no tally at
+            // all. A null field here would put the fixture's MARCUS back on the screen at the exact
+            // moment the room restrained nobody, which is the worst single frame this screen could
+            // draw.
+            is RoundMessage.MeetingResult -> state = state.copy(
+                tally = MeetingTally(restrained = nameOf(message.restrained)),
+            )
+
+            // **The couch's half: the ballot with names against it** (D-075, D-134). Permitted to
+            // the out classes and to nobody else, so a living phone never reaches this branch — the
+            // rows it would fill are the attribution the living may not read.
+            //
+            // Counted here rather than carried, because the wire sends the attribution and a tally
+            // is what you get by counting it. Counting it on the phone is not the phone deciding
+            // anything: `tallyOf` in `core` decided who was restrained and that answer arrives on
+            // the message; this is the same list drawn as rows.
+            //
+            // **In seat order, into an ordered list.** A `groupingBy` here would tally in hash
+            // order and two candidates on the same count would swap rows between two phones sitting
+            // beside each other on the couch — rule 4 arriving as *the screens disagree*.
+            is RoundMessage.MeetingResolved -> state = state.copy(
+                tally = MeetingTally(
+                    restrained = nameOf(message.restrained),
+                    rows = tallyRows(message.attribution),
+                ),
+            )
 
             // **The takeover, and it is keyed on nothing** (D-102, D-134's E1-1). Like the ending,
             // it can land on whatever screen the player is standing on, so it is not a row in
@@ -1425,10 +1613,15 @@ class FlowModel(
                 revealed = message.insiders.map { RevealedInsider(it.name, it.line) },
             )
 
-            // The house's last word, on the ending screen, to the people it owned. The screen draws
-            // its own; a pushed body needs a field beside [PanelState.revealed] that the ending
-            // does not have yet. E9's.
-            is RoundMessage.HouseSignedOff -> Unit
+            // **The house's last word, to the people it owned.** A field of its own beside
+            // [PanelState.revealed] rather than a line inside it, because they are two things that
+            // share a screen: the reveal is who the Insiders were, and this is the house talking.
+            //
+            // **It moves no screen**, which is E-P3-6's rule pointed at a third push: an ending is
+            // `RoundEnded` then `InsidersRevealed`, and anything that acts on an arrival rather
+            // than on the round being over is wrong. This arrives at a phone already standing on
+            // an ending and changes what is written on it.
+            is RoundMessage.HouseSignedOff -> state = state.copy(signOff = message.body)
         }
     }
 
@@ -1443,6 +1636,71 @@ class FlowModel(
     private fun housePushed(message: RoundMessage) {
         val waiting = Flow.housePushes[state.screen] ?: return
         if (waiting.on == message.kind) push(waiting.to)
+    }
+
+    /**
+     * **Something arrived, and where it lands depends on whether anybody is holding the phone.**
+     *
+     * A notification on a **locked** phone goes under the clock (`LockNotify`) rather than over a
+     * springboard nobody is looking at, which is D-119's own distinction and is why the port draws
+     * both. Everywhere else the banner arrives over what the player was doing.
+     *
+     * **It does not interrupt a meeting or an ending, and that is the fail-closed direction.** A
+     * banner raised over the tally would take the room's result off the screen it is being read
+     * from, and one raised over an ending would put a text message over the last thing the round
+     * has to say. Those screens are the house driving (`Flow.houseDriving`), so a phone standing on
+     * one keeps standing on it and the notification survives wherever its kind survives — under the
+     * clock if it is stored, and nowhere if it is not, which is exactly what a house notice is.
+     *
+     * The dim comes back on its own: `Flow.autoAdvance` walks a heavy banner off after
+     * [HEAVY_HOLD], and the screen it lands on has no heavy notification on it.
+     */
+    private fun arrived(banner: ScreenId) {
+        if (state.screen in Flow.houseDriving) return
+        push(if (state.screen == ScreenId.Lock) ScreenId.LockNotify else banner)
+    }
+
+    /**
+     * **A seat as the name the house sent for it** — a lookup against [PanelState.roster], and it
+     * is [fireSurge]'s move read backwards.
+     *
+     * Lawful for [fireSurge]'s reason exactly: names are round-scoped, arrive from the house
+     * (D-115), and **the roster is never sorted or filtered anywhere in this module**, so the index
+     * a row sits at *is* the seat. That is written on the field and is what makes both directions
+     * safe rather than one of them.
+     *
+     * **This is not `ui` keeping a second copy of who is in the house** — the distinction E-P1-2
+     * turns on. A second copy would be this module *deriving* a roster, from a lobby standing or a
+     * list it assembled; the roster is the house's own list, pushed to this phone, and reading it
+     * is the same act as drawing it.
+     *
+     * **Null in, null out — and that is a Skip, not a failure.** `MeetingResult.restrained` is null
+     * when the room restrained nobody, which is a real outcome the screen has words for. A seat the
+     * roster does not hold also comes back null, and the screen says the same thing about it: the
+     * fail-closed direction is *the house named nobody*, never a name picked from nearby.
+     */
+    private fun nameOf(seat: Seat?): String? =
+        seat?.let { state.roster?.getOrNull(it.index) }
+
+    /**
+     * **An attribution list, counted into rows** (D-075).
+     *
+     * `SKIP` is a candidate and not an abstention — `tallyOf` in `core` counts it as one, and *the
+     * whole weight of inaction sits behind restraining nobody* — so it is a row like any other
+     * rather than a total printed under the list.
+     *
+     * Counted into an **ordered** list in the order the house sent, for `tallyOf`'s reason: a
+     * `groupingBy` would tally in hash order and two candidates on the same count would come out
+     * in a different order on two phones side by side on the couch.
+     */
+    private fun tallyRows(attribution: List<RoundMessage.Cast>): List<TallyCount> {
+        val counted = mutableListOf<TallyCount>()
+        for (cast in attribution) {
+            val name = nameOf(cast.selection) ?: SKIPPED
+            val at = counted.indexOfFirst { it.name == name }
+            if (at < 0) counted += TallyCount(name, 1) else counted[at] = TallyCount(name, counted[at].votes + 1)
+        }
+        return counted
     }
 
     // ---- Notifications -----------------------------------------------------------------------
@@ -1531,6 +1789,7 @@ class FlowModel(
         handOverSubroutine = ::handOverSubroutine,
         dismissNotification = ::dismissNotification,
         dismissNotice = ::dismissNotice,
+        stopSubroutine = ::stopSubroutine,
         dismissStanding = ::dismissStanding,
     )
 
@@ -1541,6 +1800,15 @@ class FlowModel(
 
     private companion object {
         const val TRAIL_DEPTH = 32
+
+        /**
+         * The tally row for a ballot that named nobody.
+         *
+         * A word rather than a blank, because *Skip is a candidate, not an abstention* — it
+         * competes in the count, and a row with no name on it would read as a ballot the screen
+         * could not resolve rather than as a decision several people made.
+         */
+        const val SKIPPED = "SKIP"
     }
 }
 

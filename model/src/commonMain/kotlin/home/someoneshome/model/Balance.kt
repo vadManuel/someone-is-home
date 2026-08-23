@@ -342,6 +342,44 @@ object Balance {
      */
     const val VOTE_WINDOW_SECONDS: Int = 45
 
+    /**
+     * **The talk — 90s, the design's own number and a lobby setting after that** (`gdd.md:412`,
+     * `:1005`, `:1122`, A-10).
+     *
+     * *The phone shows a timer and one control. Unanimous "Ready to vote" skips ahead.* The skip is
+     * a count of phones and ends the talk early; this is the other way it ends, and it is the
+     * house's clock.
+     *
+     * ### It moved here because something finally had to READ it
+     *
+     * It was a literal in `ui/Countdown.kt`, drawn beside `LIGHTS OUT IN` and the vote's window,
+     * and that was honest while nothing anywhere ran a discussion — a screen with a bar on it needs
+     * a denominator whether or not a house is attached. **The tick driver is the first thing that
+     * has to know when the talk is over**, and a number the driver held privately would be a second
+     * copy of ninety: the bar on five phones would drain against one and the transition would fire
+     * off the other, and the two would agree until somebody moved one.
+     *
+     * Seconds and not ticks, for [VOTE_WINDOW_SECONDS]'s reason: it is displayed, and a screen that
+     * had to divide by [TICKS_PER_SECOND] to draw a clock would be a screen holding an opinion
+     * about the rate.
+     */
+    const val DISCUSSION_SECONDS: Int = 90
+
+    /**
+     * **The result, and the LIGHTS OUT countdown under it — 15s** (D-102, D-134's E1-1).
+     *
+     * Read off the design's own drawn screen, which is where it has always lived: `LIGHTS OUT IN 9`
+     * over a bar with six of fifteen spent. [DISCUSSION_SECONDS]' note applies exactly — it was a
+     * literal in `ui/Countdown.kt` until the tick driver needed to know when the meeting was over.
+     *
+     * **Two moments happen inside it and they are not the same one.** At the halfway mark the
+     * Restrained takeover reaches the losing seat (D-102: the screen arrives at halfway *so the
+     * player does not walk away when the countdown ends*), and at zero everybody else goes back to
+     * the round. The halfway mark is derived rather than typed — see the driver — so a change here
+     * moves both together and cannot leave a takeover landing after the lights went out.
+     */
+    const val TALLY_SECONDS: Int = 15
+
     /** `M`, the whole bar, fixed at arming and never moved again (`gdd.md:1322`). */
     fun meterTotal(seats: Int): Int = seats * METER_PER_SEAT
 
