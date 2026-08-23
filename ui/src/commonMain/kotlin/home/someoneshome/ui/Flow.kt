@@ -7,6 +7,7 @@ import home.someoneshome.model.Winner
 import home.someoneshome.model.Cell
 import home.someoneshome.model.RegisterResult
 import home.someoneshome.model.RoomKind
+import home.someoneshome.model.protocol.RoundMessage
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -1101,7 +1102,183 @@ class FlowModel(
      * seam a test drives.
      */
     fun houseGraded(verdict: SubroutineVerdict) {
-        state = state.copy(verdict = verdict)
+        houseSaid(RoundMessage.SubroutineGraded(accepted = verdict == SubroutineVerdict.Accepted))
+    }
+
+    // ---- The house, speaking ---------------------------------------------------------------------
+
+    /**
+     * **The one consumer: everything the house pushes lands here, whichever way it arrived.**
+     *
+     * There is exactly one of these and there must never be a second. A message that came over a
+     * socket and a message handed straight in are the same object by the time they reach this
+     * method — `EffectPushTest` runs one effect sequence both ways and demands the two
+     * [PanelState]s are equal — so *what a push does to a phone* cannot drift between the bench and
+     * a real round. That is the whole reason [houseGraded] now goes through here rather than
+     * setting a field of its own.
+     *
+     * ### It decides nothing
+     *
+     * Every branch below either copies a value the house sent onto [PanelState] or moves the screen
+     * by a rule that was already written down — [Flow.housePushes], keyed on the screen that is
+     * waiting, and [Flow.endings], keyed on the winner the message names. Nothing here asks a game
+     * question, and nothing may: `ui` cannot see `core`, and a consumer that decided what a message
+     * *meant* would be the rules living on the device in their most plausible costume.
+     *
+     * ### The `when` is exhaustive, and most of it does nothing yet
+     *
+     * A kind with no field on [PanelState] and no route in either table is a **named no-op with the
+     * reason at the branch**, never a missing case and never an `else`. The fail-closed direction
+     * for a client is *the screen did not change*, noticed in thirty seconds; the direction a
+     * default branch fails in is *something happened and nobody knows which message did it*. The
+     * branches that do nothing are the honest map of what the surfaces still owe.
+     */
+    fun houseSaid(message: RoundMessage) {
+        when (message) {
+            // **The lamp is not on [PanelState]** — it is `ui/Lamp.kt`'s, drawn from the effect
+            // rather than from a copy of it, so that no field here can be stale at the one moment
+            // the whole anonymity guarantee rests on. Routing it through a state field would put an
+            // extra frame between phone contact and the light going dark, and rule 7 says that frame is
+            // not a dropped frame, it is an un-anonymised revoke.
+            is RoundMessage.LampSet -> Unit
+
+            // Input echo already lit this phone's own tile (D-141); the house's answer confirms the
+            // cooldown, and the cooldown widget has no field here yet. E3's work.
+            is RoundMessage.AbilityFired -> Unit
+
+            is RoundMessage.SubroutineGraded -> state = state.copy(
+                verdict = if (message.accepted) SubroutineVerdict.Accepted else SubroutineVerdict.Rejected,
+            )
+
+            // The ledger's raw count, to the out. **Nothing draws it and nothing should**: the bar
+            // and the figure are both computed from [PanelState.integrityPercent] so that they are
+            // one value rather than two that agree by hand (D-103, and revision 21's `14 / 32`).
+            is RoundMessage.SubroutineProgressed -> Unit
+
+            // One field for both meter kinds, deliberately. *Whether it moves live or once a
+            // meeting is not this field's business* — a phone draws whatever it was last told, and
+            // that is precisely what batched-then-frozen looks like from here.
+            is RoundMessage.SystemIntegrityLive -> state = state.copy(integrityPercent = message.percent)
+            is RoundMessage.SystemIntegrityBatched -> state = state.copy(integrityPercent = message.percent)
+
+            // The Messages thread is drawn from the client's own inbox fixture; a delivered body has
+            // nowhere to land until that surface takes a pushed list. E1's.
+            is RoundMessage.MessageDelivered -> Unit
+
+            is RoundMessage.WorkOrderIssued -> state = state.copy(order = message.lines)
+
+            // The scan's answer opens a Subroutine, and *which* screen that is comes off the
+            // roster — [beginSubroutine]'s job, driven by the scanner. Wiring the house's answer to
+            // it is the scan flow's, not this method's: a push that opened a screen here as well
+            // would be two routes to one Subroutine and one of them untested.
+            is RoundMessage.ScanAnswered -> Unit
+
+            // **Permitted to nobody, so it cannot arrive** — the presence plane has no allowlist row
+            // (D-111). Named here for the reason it is named in `EmitSchema.kindOf`: naming grants
+            // nothing, and a missing branch is a compile error somebody fixes with whatever is
+            // nearest.
+            is RoundMessage.PresenceChanged -> Unit
+
+            // The opening text arrives as a notification over the springboard, which the
+            // notification model already owns; what it needs from the house is the arrival, and the
+            // arrival's route is `Notifications.arrivals` rather than a screen table. U7's seam.
+            is RoundMessage.OpeningMessage -> Unit
+
+            // **The ring, and it has no route yet.** `Calling`, `Call` and `Found` are in
+            // `Flow.housePushed` — reachable only by the house — and no table says which of them
+            // this message opens. That is a decision about what a phone shows when a meeting is
+            // called, not a wiring gap this unit may close by choosing.
+            is RoundMessage.MeetingOpened -> Unit
+
+            // The other half of the same call, and the same gap: STAND AND WALK IN is `Ghost2`,
+            // reached by the house, with no table naming this message as what reaches it.
+            is RoundMessage.StandAndWalkIn -> Unit
+
+            // Anonymous counts, on screens that draw their own. Neither has a field here.
+            is RoundMessage.CheckInProgressed -> Unit
+            is RoundMessage.ReadyProgressed -> Unit
+
+            is RoundMessage.MeetingPhaseOpened -> {
+                state = state.copy(
+                    meetingPhase = message.phase,
+                    // Null on every phase but the ballot's, and null must not overwrite a window
+                    // the house already gave this phone: the couch watches the whole meeting from
+                    // one screen, and a vote window blanked by the tally's push would take the
+                    // ballot's clock off a screen that is still drawing it.
+                    voteWindowSeconds = message.voteWindowSeconds ?: state.voteWindowSeconds,
+                )
+                housePushed(message)
+            }
+
+            // This seat's own ballot, re-asserted on every tap. The lit row is input echo and is
+            // already on the screen; what the house adds is the refusal after READY, which needs a
+            // field that says *the house holds this one* rather than *your finger is here*. E8's.
+            is RoundMessage.VoteHeld -> Unit
+
+            // **The couch's live ballot, and it cannot land here yet.** [PanelState.ballots] holds
+            // names, this message holds seats, and resolving one to the other is the transport's
+            // job — a `ui` that mapped seats to names would be `ui` keeping a second copy of who is
+            // in the house. Flagged rather than solved by putting a roster in this module.
+            is RoundMessage.VoteSelectionShown -> Unit
+
+            is RoundMessage.VoteProgressed -> Unit
+            is RoundMessage.MeetingResult -> Unit
+            is RoundMessage.MeetingResolved -> Unit
+
+            // **The takeover, and it is keyed on nothing** (D-102, D-134's E1-1). Like the ending,
+            // it can land on whatever screen the player is standing on, so it is not a row in
+            // `Flow.housePushes`; unlike the ending it names no winner, because it is addressed to
+            // the one seat the room restrained and needs no answer to know that. Arriving at
+            // `Restrained` is what sets [PanelState.outBy] — see [PanelState.arrivingAt], which is
+            // where the Revoke/Restrain distinction is kept (rule 9).
+            is RoundMessage.RestrainedTakeover -> push(ScreenId.Restrained)
+
+            is RoundMessage.MeetingEnded -> housePushed(message)
+
+            // The alert and the widget read one pair of strings so they cannot name different
+            // rooms. **Only the type lands.** The nodes travel as marker ids and the screen draws
+            // room names; turning one into the other needs the geography the house holds and does
+            // not send with this effect, and a nine-character card id on a screen in a dark house
+            // is worse than the fixture it would replace. Escalated, not guessed.
+            is RoundMessage.EgressOpened -> state = state.copy(egressType = message.type.name.uppercase())
+
+            // The countdown stopping and starting again. [PanelState.secondsLeft] is seconds and
+            // this is ticks; converting one to the other on the device would be `ui` holding an
+            // opinion about the house's clock. E7's, with the tick rate.
+            is RoundMessage.EgressHeld -> Unit
+
+            is RoundMessage.SyncPulseAnswered -> Unit
+            is RoundMessage.EgressContained -> Unit
+
+            // **Permitted to nobody, so it cannot arrive** — its row is gone (D-131, D-156), and
+            // what every phone gets instead is the ending carrying `WinRoute.EgressUncontained`.
+            // Named for `PresenceChanged`'s reason.
+            is RoundMessage.EgressSucceeded -> Unit
+
+            is RoundMessage.RoundEnded -> Flow.endings[message.winner]?.let { push(it.to) }
+
+            is RoundMessage.InsidersRevealed -> state = state.copy(
+                revealed = message.insiders.map { RevealedInsider(it.name, it.line) },
+            )
+
+            // The house's last word, on the ending screen, to the people it owned. The screen draws
+            // its own; a pushed body needs a field beside [PanelState.revealed] that the ending
+            // does not have yet. E9's.
+            is RoundMessage.HouseSignedOff -> Unit
+        }
+    }
+
+    /**
+     * The house's transition for the screen this phone is standing on, if this message is the one
+     * that screen is waiting for.
+     *
+     * Read off [Flow.housePushes] and never decided here. A message that no screen is waiting for
+     * moves nothing, which is the fail-closed direction: a phone that stayed put is noticed, and a
+     * phone that walked somewhere nobody wrote down is not.
+     */
+    private fun housePushed(message: RoundMessage) {
+        val waiting = Flow.housePushes[state.screen] ?: return
+        if (waiting.on == message.kind) push(waiting.to)
     }
 
     // ---- Notifications -----------------------------------------------------------------------

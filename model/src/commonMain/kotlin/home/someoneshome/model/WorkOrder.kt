@@ -14,6 +14,8 @@ package home.someoneshome.model
  * house to assign — the roster is the design's, not the build's — and `ui` is where the two are
  * reconciled.
  */
+@ClientFacing
+@kotlinx.serialization.Serializable
 enum class SubroutineKind {
     Replay,
     Interrupt,
@@ -180,6 +182,7 @@ class WorkOrder(val seat: Seat, val entries: List<OrderEntry>) {
  * place as well as the name, and it does so by there being no field.
  */
 @ClientFacing
+@kotlinx.serialization.Serializable
 sealed interface OrderLine {
     val index: Int
 
@@ -188,6 +191,8 @@ sealed interface OrderLine {
      * the name and the light signature up in its own roster (D-106 — the signature shows on the
      * work-order list, the springboard widget and the Subroutine screen alike).
      */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
     data class Known(
         override val index: Int,
         val work: AssignedWork,
@@ -220,5 +225,7 @@ sealed interface OrderLine {
      * plausible costume: it names no Subroutine, so it reads as harmless, and it points at the
      * card the person upstream of you is standing at.
      */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
     data class Blocked(override val index: Int) : OrderLine
 }

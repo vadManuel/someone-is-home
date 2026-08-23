@@ -22,5 +22,7 @@ enum class Role { Resident, Insider }
  * accepted, and it is the only cheat in this game that is remote, undetectable, and requires no
  * physical act.
  */
+@ClientFacing
+@kotlinx.serialization.Serializable
 @JvmInline
 value class Seat(val index: Int)

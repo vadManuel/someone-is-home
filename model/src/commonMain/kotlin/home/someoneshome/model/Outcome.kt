@@ -9,6 +9,8 @@ package home.someoneshome.model
  * a winner would put the alignment word on a field that is broadcast, one rename away from
  * somebody reading a player's row out of it.
  */
+@ClientFacing
+@kotlinx.serialization.Serializable
 enum class Winner { Residents, Insiders }
 
 /**
@@ -20,6 +22,8 @@ enum class Winner { Residents, Insiders }
  * ending push therefore discloses nothing the reveal on the same screen does not disclose more
  * loudly.
  */
+@ClientFacing
+@kotlinx.serialization.Serializable
 enum class WinRoute {
     /**
      * **SystemIntegrity reached zero, and the Residents win immediately** (`gdd.md:203`, D-131).
@@ -101,6 +105,8 @@ data class OneLineHeld(val seat: Seat, val text: String)
  *
  * *Never shown* (`gdd.md:213`) governs everything up to the reveal. This is the reveal.
  */
+@ClientFacing
+@kotlinx.serialization.Serializable
 data class InsiderNamed(
     val seat: Seat,
     /**

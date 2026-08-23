@@ -23,6 +23,8 @@ package home.someoneshome.model
  *
  * The actual vibration is platform work and is not in this module or the next one.
  */
+@ClientFacing
+@kotlinx.serialization.Serializable
 enum class Haptic {
     /** The default, and D-160's *yes*. Every screen that arrives unasked; every read that caught. */
     Short,
@@ -59,9 +61,13 @@ enum class Haptic {
  * A sealed type rather than a nullable `reported: Seat?`, because a discriminator carried by the
  * absence of a field is the shape rule 3 spends its whole length arguing against.
  */
+@ClientFacing
+@kotlinx.serialization.Serializable
 sealed interface MeetingTrigger {
 
     /** Somebody walked to the meeting card and scanned it. Their scan is their check-in. */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
     data object MeetingCard : MeetingTrigger
 
     /**
@@ -70,6 +76,8 @@ sealed interface MeetingTrigger {
      * [reported] is public by the time it matters — the meeting is where everyone finds out who is
      * out, and a player who has been Revoked walks in and sits down where the room can see them.
      */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
     data class RevokeReported(val reported: Seat) : MeetingTrigger
 }
 
@@ -80,6 +88,8 @@ sealed interface MeetingTrigger {
  * was refused for a phase reason (D-068, and see [RefusalReason.WrongMeetingPhase]): the players
  * are standing in one room looking at one clock.
  */
+@ClientFacing
+@kotlinx.serialization.Serializable
 enum class MeetingPhase {
     /**
      * Walking in. The gate closes when **every living player and every out player** has been

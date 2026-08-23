@@ -3,6 +3,8 @@ package home.someoneshome.model
 import kotlin.jvm.JvmInline
 
 /** A house marker: a scan point, the Terminal, or an Array Wipe station. */
+@ClientFacing
+@kotlinx.serialization.Serializable
 @JvmInline
 value class MarkerId(val value: String)
 

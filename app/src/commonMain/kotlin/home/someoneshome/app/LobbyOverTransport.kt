@@ -1,8 +1,12 @@
 package home.someoneshome.app
 
+import home.someoneshome.model.Effect
+import home.someoneshome.model.GameState
 import home.someoneshome.model.Seat
 import home.someoneshome.model.protocol.LobbyBody
 import home.someoneshome.model.protocol.LobbyWire
+import home.someoneshome.model.protocol.RoundBody
+import home.someoneshome.model.protocol.RoundWire
 import home.someoneshome.model.protocol.SeatToken
 import home.someoneshome.model.protocol.TransportFrame
 import home.someoneshome.model.protocol.TransportRefusal
@@ -13,6 +17,7 @@ import home.someoneshome.platform.saveHostAddress
 import home.someoneshome.platform.saveSeatToken
 import home.someoneshome.platform.transport.AdvertiseFailure
 import home.someoneshome.platform.transport.ClientSession
+import home.someoneshome.platform.transport.EffectWire
 import home.someoneshome.platform.transport.HostAdvertiser
 import home.someoneshome.platform.transport.HostBrowser
 import home.someoneshome.platform.transport.LobbyDesk
@@ -140,6 +145,28 @@ class LobbyHouse(
     private var host: TransportHost? = null
     private var advertiser: HostAdvertiser? = null
 
+    /**
+     * **The round's outbound half, on the same server the lobby is on** (D-171's successor work).
+     *
+     * Here rather than in a class of its own because there is one house: one ledger deciding who is
+     * seated, one socket per seat, and therefore one thing that may write down them. A second
+     * object holding its own sockets would be a second delivery order, and the two would be right
+     * about different rounds.
+     *
+     * Its `send` is the server's, so the host's own phone — which joined its own house over
+     * loopback like everybody else — is reached by the same call as the phone in the next room.
+     */
+    private val effects = EffectWire(
+        send = { seat, frame ->
+            val server = host ?: error("the house is not up — the frame was not sent")
+            server.send(seat, frame)
+        },
+        // Rule 6 the right way up: the player is told nothing and the authority is told at once.
+        // The seat keeps its place in the stream and collects the message when it asks, so this is
+        // a report of a delay rather than of a loss.
+        onUnreachable = { seat -> onEvent("A SEAT COULD NOT BE REACHED — ${seat.index}") },
+    )
+
     /** Whether this attempt at hosting has had its one answer yet. See [ADVERTISE_PATIENCE_MILLIS]. */
     private var answered = false
 
@@ -249,9 +276,27 @@ class LobbyHouse(
      */
     fun setVoteWindow(seconds: Int) = desk.setVoteWindow(seconds)
 
+    /**
+     * **One effect, to every seat the allowlist permits it to and no other** (rule 2, D-079).
+     *
+     * The authority's whole exit to the phones. It takes the state *after* the event, because the
+     * round-state axis moves because of the event being processed — classifying against the state
+     * before it hands a revoked player one last frame of living-client permissions.
+     *
+     * **Nothing in production calls this yet, and that is E-D3-3's remaining half.** The pipeline
+     * below it is real and proven end to end; what is missing above it is a round being armed —
+     * `armingFor` still has no production caller, exactly as W1 left it. The escalation's first
+     * half, *there is no host→client effect push for any effect*, is closed here.
+     */
+    suspend fun emit(effect: Effect, state: GameState) = effects.emit(effect, state)
+
     /** **Deleted when the round ends** — the host's half of the promise. */
     fun roundEnded() {
         desk.roundEnded()
+        // The retained streams are a round's worth of one house's messages and outlive nothing.
+        // Wiped in the same method the lines are, so what the house holds about an evening ends
+        // when the evening does rather than when somebody remembers.
+        scope.launch { effects.roundEnded() }
         publish()
     }
 
@@ -271,7 +316,21 @@ class LobbyHouse(
      * over a message meant for somebody else.
      */
     private fun onFrame(seat: Seat, frame: TransportFrame) {
-        val body = (frame as? TransportFrame.Carry)?.body?.let(LobbyWire::decodeOrNull) ?: return
+        val carried = (frame as? TransportFrame.Carry)?.body ?: return
+        // **A seat saying what it is missing, answered by re-assertion** (D-097). Tried before the
+        // lobby's bodies rather than after, because a phone catching up mid-round is the one
+        // exchange on this socket that is time-critical: it is a screen that has stopped being
+        // right, and every frame it waits is a frame the player is reading something stale.
+        RoundWire.decodeOrNull(carried)?.let { round ->
+            when (round) {
+                is RoundBody.Gap -> scope.launch { effects.reassert(seat, round.held) }
+                // The house's to send, never to receive. A client that pushed one is claiming to be
+                // the authority, and it is told nothing at all.
+                is RoundBody.Push -> Unit
+            }
+            return
+        }
+        val body = LobbyWire.decodeOrNull(carried) ?: return
         when (body) {
             is LobbyBody.Handover -> {
                 desk.handedOver(seat, body.line)

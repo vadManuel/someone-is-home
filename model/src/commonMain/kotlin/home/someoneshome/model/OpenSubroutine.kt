@@ -132,6 +132,7 @@ class OpenSubroutine(
  * the player scanning already has the card in their hand.
  */
 @ClientFacing
+@kotlinx.serialization.Serializable
 data class SubroutineInstance(
     /** Which line of the work order opened, so the client can strike it off its own list. */
     val entry: Int,

@@ -29,6 +29,7 @@ package home.someoneshome.model
  * map of the round the house has never published, arriving as a convenience.
  */
 @ClientFacing
+@kotlinx.serialization.Serializable
 data class Destination(
     val marker: MarkerId,
     /**
@@ -68,6 +69,7 @@ data class Destination(
  * See [WorkOrder.openAt] for the one consequence of that, stated where it bites.
  */
 @ClientFacing
+@kotlinx.serialization.Serializable
 sealed interface AssignedWork {
 
     /**
@@ -82,6 +84,8 @@ sealed interface AssignedWork {
      * One of the roster's ten. The kind is all the wire carries — the label and the light
      * signature are looked up client-side (D-112).
      */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
     data class Subroutine(val kind: SubroutineKind) : AssignedWork {
         override val opensAs: SubroutineKind get() = kind
     }
@@ -96,6 +100,8 @@ sealed interface AssignedWork {
      *
      * `opensAs` is null: the carry-state machine that makes a circuit leg scannable is not built.
      */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
     data object ArrayWipe : AssignedWork {
         override val opensAs: SubroutineKind? get() = null
     }

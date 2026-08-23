@@ -12,6 +12,8 @@ package home.someoneshome.model
  * happens above the rules, rides the event, and lands in the recording as an input. A type
  * re-rolled at display time would be a round that replayed as a different evening.
  */
+@ClientFacing
+@kotlinx.serialization.Serializable
 enum class EgressType { Beacon, Tether }
 
 /**
