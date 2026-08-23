@@ -2,6 +2,7 @@ package home.someoneshome.app
 
 import home.someoneshome.model.Effect
 import home.someoneshome.model.GameState
+import home.someoneshome.model.Intent
 import home.someoneshome.model.Seat
 import home.someoneshome.model.protocol.LobbyBody
 import home.someoneshome.model.protocol.LobbyWire
@@ -20,6 +21,7 @@ import home.someoneshome.platform.transport.ClientSession
 import home.someoneshome.platform.transport.EffectWire
 import home.someoneshome.platform.transport.HostAdvertiser
 import home.someoneshome.platform.transport.HostBrowser
+import home.someoneshome.platform.transport.IntentDesk
 import home.someoneshome.platform.transport.LobbyDesk
 import home.someoneshome.platform.transport.SeatLedger
 import home.someoneshome.platform.transport.TransportClient
@@ -30,6 +32,7 @@ import home.someoneshome.ui.LobbyLink
 import home.someoneshome.ui.NearbyHome
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.random.Random
@@ -139,6 +142,20 @@ class NearbyHomes(private val onEvent: (String) -> Unit = {}) : HomeFinder {
 class LobbyHouse(
     private val scope: CoroutineScope,
     private val onEvent: (String) -> Unit = {},
+    /**
+     * **A request from one phone, attributed, on its way to the rules.**
+     *
+     * [emit]'s mirror and the other half of the same seam: [emit] is the authority's exit to the
+     * phones, and this is the phones' entrance to the authority. The [Intent] handed over here has
+     * already had its seat stamped from the connection the frame arrived on — see [IntentDesk],
+     * which is where that happens and the only place it can.
+     *
+     * **Empty in every production construction today**, exactly as [emit] has no production caller,
+     * and for the same reason: there is no round for a request to change, because nothing arms one
+     * (E-D3-3's remaining half). What is joined here is `core`'s `admit(state, intent, at)` — the
+     * one gate, which the in-process source reaches by the same call.
+     */
+    private val onIntent: (Intent) -> Unit = {},
 ) {
 
     private val desk = LobbyDesk()
@@ -166,6 +183,53 @@ class LobbyHouse(
         // a report of a delay rather than of a loss.
         onUnreachable = { seat -> onEvent("A SEAT COULD NOT BE REACHED — ${seat.index}") },
     )
+
+    /**
+     * **The round's inbound half, on the same server the outbound half is on.**
+     *
+     * Beside [effects] for [effects]'s reason: there is one house, one ledger deciding who is
+     * seated, and one socket per seat — so the thing that reads up those sockets and the thing that
+     * writes down them are two halves of one desk rather than two objects with two opinions about
+     * who seat four is.
+     *
+     * **The seat it stamps is the connection's**, which is the whole security property of the
+     * upward channel and is argued in full at [IntentDesk].
+     */
+    private val intents = IntentDesk(
+        // Rule 6 again: a phone whose frames are being lost on the way up is a player pressing
+        // controls that do nothing, and neither they nor anybody else could tell from a screen.
+        onSkipped = { seat, missed -> onEvent("A SEAT'S REQUESTS SKIPPED $missed — ${seat.index}") },
+    )
+
+    /**
+     * **Everything that arrives from a phone and matters to the round, in one ordered queue.**
+     *
+     * D4 made literal at the host end, and it is not a precaution — the first build of this ran
+     * each arriving request in its own `launch`, and `IntentLoopTest` caught it immediately: the
+     * desk and the emit boundary both suspend, so two requests from **one phone** would interleave
+     * and reach the rules in the order they finished rather than the order the player pressed them.
+     * A `LockVote` overtaking its own `SelectVote` locks a ballot the couch never watched being
+     * made, which is D-117's whole point undone by a scheduler.
+     *
+     * ### A seating rides the same queue, for the same reason
+     *
+     * [IntentDesk.seated] clears that seat's mark, and a seating that raced the frames arriving
+     * behind it would clear the mark *after* the first request of the new connection had already
+     * been judged against the old one — so the phone's first press after a reconnect would be
+     * dropped as a duplicate, in silence. Ordering the two against each other is the fix, and one
+     * queue is what ordering them against each other means.
+     */
+    private sealed interface Arrival {
+
+        /** A phone has a new connection, from [TransportHost.onSeated]. */
+        data class Seated(val seat: Seat) : Arrival
+
+        /** A control somebody pressed. [seat] is the connection's; see [IntentDesk]. */
+        data class Asked(val seat: Seat, val act: RoundBody.Act) : Arrival
+    }
+
+    private val arriving = Channel<Arrival>(Channel.UNLIMITED)
+    private var attending: Job? = null
 
     /** Whether this attempt at hosting has had its one answer yet. See [ADVERTISE_PATIENCE_MILLIS]. */
     private var answered = false
@@ -217,7 +281,14 @@ class LobbyHouse(
             ledger,
             nowMillis = { monotonicNanos() / 1_000_000 },
             onFrame = ::onFrame,
-            onSeated = { desk.seated(it); publish() },
+            // The intent desk's mark is cleared on the same fact, because it is the same fact: a
+            // phone on a new connection begins numbering its requests again, and a desk still
+            // holding the old mark would take every one of them for a duplicate and drop it in
+            // silence. See IntentDesk.seated.
+            // The lobby's desk is served inline because a standing is a broadcast and orders
+            // against nothing. The intent desk's mark rides the ordered queue instead -- see
+            // Arrival, and the silent failure it exists to prevent.
+            onSeated = { seat -> desk.seated(seat); arriving.trySend(Arrival.Seated(seat)); publish() },
             onLost = { desk.left(it); publish() },
             // The authority's record of a connection turned away — the reason and never the
             // token (E-D3-1). A refused resume is the one the host most needs: it means a phone
@@ -225,6 +296,7 @@ class LobbyHouse(
             onRefused = { reason -> onEvent("A CONNECTION WAS REFUSED — $reason") },
         )
         host = server
+        attending = scope.launch { attend() }
         scope.launch {
             val bound = server.start(port = 0)
             port = bound
@@ -301,11 +373,35 @@ class LobbyHouse(
     }
 
     fun stop() {
+        attending?.cancel()
+        attending = null
         advertiser?.stop()
         advertiser = null
         scope.launch { host?.stop() }
         host = null
         port = null
+    }
+
+    /**
+     * **The one consumer of [arriving], and the only place a request reaches the rules.**
+     *
+     * One coroutine, draining in order, forever. Everything it does suspends — the desk takes a
+     * lock, the rules are the caller's — so the whole point is that it does them one at a time.
+     */
+    private suspend fun attend() {
+        for (arrival in arriving) {
+            when (arrival) {
+                is Arrival.Seated -> intents.seated(arrival.seat)
+                is Arrival.Asked -> when (val landing = intents.arrived(arrival.seat, arrival.act)) {
+                    is IntentDesk.Landing.Put -> onIntent(landing.intent)
+                    // Heard once already, which is exactly once. Silent by design: the first copy
+                    // produced whatever it produced and it went down this seat's stream, and a
+                    // phone still waiting for that answer has a hole in its push sequence, which
+                    // its own inbox notices and asks about.
+                    is IntentDesk.Landing.Duplicate -> Unit
+                }
+            }
+        }
     }
 
     /**
@@ -327,6 +423,18 @@ class LobbyHouse(
                 // The house's to send, never to receive. A client that pushed one is claiming to be
                 // the authority, and it is told nothing at all.
                 is RoundBody.Push -> Unit
+                // **A control somebody pressed.** The seat handed to the desk is `seat`, which is
+                // this connection's and came from the ledger; the frame contributes nothing to it
+                // and has nowhere to put a rival claim.
+                //
+                // Launched rather than called inline for the reason the gap above is: `onFrame`
+                // runs on the connection's own read coroutine, and the desk is shared across all
+                // of them. Within one seat the order still holds -- that read loop is single and
+                // submits in order.
+                // Queued rather than launched: `onFrame` runs on this connection's own read
+                // coroutine, and the desk and the emit boundary both suspend. Two launches from
+                // one phone would reach the rules in the order they FINISHED. See Arrival.
+                is RoundBody.Act -> arriving.trySend(Arrival.Asked(seat, round))
             }
             return
         }
@@ -392,9 +500,15 @@ class LobbyOverTransport(
      * one is how the stale-token path is tested without a filesystem underneath it.
      */
     private val seat: SeatStore = DeviceSeat,
+    /**
+     * **What this phone does with a request that arrived from another phone**, when this phone is
+     * the host. See [LobbyHouse.onIntent] — it is empty in every production construction, because
+     * the round it would change does not exist yet.
+     */
+    private val onIntent: (Intent) -> Unit = {},
 ) : LobbyLink {
 
-    private val house = LobbyHouse(scope, onEvent)
+    private val house = LobbyHouse(scope, onEvent, onIntent)
     private var session: ClientSession? = null
     private var client: TransportClient? = null
     private var clientJob: Job? = null

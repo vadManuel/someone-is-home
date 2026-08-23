@@ -2,6 +2,7 @@ package home.someoneshome.ui
 
 import home.someoneshome.model.Intent
 import home.someoneshome.model.Seat
+import home.someoneshome.model.protocol.IntentMessage
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -172,13 +173,26 @@ class MeetingTest {
         )
         assertEquals(
             listOf(
+                IntentMessage.CheckIn,
+                IntentMessage.DeclareReadyToVote,
+                IntentMessage.SelectVote(Seat(2)),
+                IntentMessage.LockVote,
+            ),
+            sent.map { it.asMessage(names) },
+            "a name resolved against the house's own list, and nothing named who was asking",
+        )
+        // The frames these become carry no seat and there is no argument that could put one on
+        // them: `asMessage` has no seat parameter, so this module cannot address a request even by
+        // mistake. What arrives at the desk is stamped from the connection instead.
+        assertEquals(
+            listOf(
                 Intent.CheckIn(Seat(4)),
                 Intent.DeclareReadyToVote(Seat(4)),
                 Intent.SelectVote(Seat(4), Seat(2)),
                 Intent.LockVote(Seat(4)),
             ),
-            sent.map { it.asIntent(Seat(4), names) },
-            "the seat is attached one layer out, and a name resolves against the house's own list",
+            sent.map { it.asMessage(names).attributedTo(Seat(4)) },
+            "the desk's stamp is the only thing that decides whose request this is",
         )
     }
 
@@ -187,12 +201,12 @@ class MeetingTest {
     fun skipAndAnUnknownNameBothResolveToRestrainingNobody() {
         val names = listOf("PRIYA")
         assertEquals(
-            Intent.SelectVote(Seat(0), null),
-            MeetingRequest.Select(VoteChoice.Skip).asIntent(Seat(0), names),
+            IntentMessage.SelectVote(null),
+            MeetingRequest.Select(VoteChoice.Skip).asMessage(names),
         )
         assertEquals(
-            Intent.SelectVote(Seat(0), null),
-            MeetingRequest.Select(VoteChoice.Named("NOBODY")).asIntent(Seat(0), names),
+            IntentMessage.SelectVote(null),
+            MeetingRequest.Select(VoteChoice.Named("NOBODY")).asMessage(names),
             "an unresolvable row cast a vote at somebody",
         )
     }

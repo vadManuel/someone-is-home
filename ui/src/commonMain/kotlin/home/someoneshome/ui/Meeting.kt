@@ -5,8 +5,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
-import home.someoneshome.model.Intent
 import home.someoneshome.model.Seat
+import home.someoneshome.model.protocol.IntentMessage
 
 /**
  * **What this phone said at the meeting — and nothing about what the room decided.**
@@ -36,7 +36,7 @@ class MeetingModel(
      * *Intents are attributed by connection, never by a client naming itself. A client that could
      * name its own seat could claim another player's — the only cheat in this game that is remote,
      * undetectable, and requires no physical act.* So the screen says **what happened**, not **who
-     * it happened to**, and [asIntent] attaches the seat one layer out, where the connection is.
+     * it happened to**, and the host's desk attaches the seat, from the connection it arrived on.
      *
      * These four used to go nowhere at all, which was correct while nothing could receive them:
      * a control that predicted an outcome would have been worse than one that did nothing. They
@@ -219,8 +219,13 @@ class MeetingModel(
  * connection, never by a client naming itself* — a client that could name its own seat could claim
  * another player's, which is the only cheat in this game that is remote, undetectable and requires
  * no physical act. A screen that could construct `Intent.CheckIn(Seat(4))` is a screen that could
- * check somebody else in. So the screen says what happened and [asIntent] attaches the seat one
- * layer out, at the connection that already knows it.
+ * check somebody else in. So the screen says what happened, and the seat goes on at the connection
+ * that already knows it.
+ *
+ * **That is now structural rather than conventional.** [asMessage] hands this to an
+ * `IntentMessage`, which is the wire type and has no field a seat could ride in at all — so the
+ * discipline `ui` was keeping by agreement is kept by the shape of the frame, all the way to the
+ * host's desk. Nothing in this module takes a [Seat] and returns an `Intent` any more.
  */
 sealed interface MeetingRequest {
 
@@ -238,30 +243,40 @@ sealed interface MeetingRequest {
 }
 
 /**
- * The seat goes on here, and nowhere earlier.
+ * **The control, as the frame that carries it — and the seat does not go on here either.**
+ *
+ * This replaced `asIntent(seat, names)`, and losing the parameter is the point rather than a
+ * tidy-up. That function was `ui`'s promise not to name a seat, kept by nobody passing it a wrong
+ * one; this one **cannot** name a seat, because `IntentMessage` has no field for one. The stamp
+ * happens at the host's desk, from the connection the bytes arrived on, and there is no longer any
+ * function in this module that turns a [Seat] into an `Intent`.
  *
  * **Exhaustive on purpose**: a fifth control at a meeting does not compile until somebody decides
  * what it asks the house for, which is the same discipline `EmitSchema.kindOf` and
  * `ScreenGraph.exitsOf` use. A `when` with an `else` here would let a new control quietly become a
  * request nobody named.
  *
- * [names] is the ballot the screen was drawn with, because a vote row carries a name and an
- * `Intent` carries a seat — names are round-scoped and arrive from the house (D-115), so turning
- * one back into a seat is a lookup against the same list the house sent. A name that is not on it
- * resolves to **Skip**, which is the fail-closed direction: not voting counts as a Skip already
- * (D-075), so an unresolvable row can only ever cost a vote and never cast one at somebody.
+ * [names] is the ballot the screen was drawn with, because a vote row carries a name and the wire
+ * carries a seat — names are round-scoped and arrive from the house (D-115), so turning one back
+ * into a seat is a lookup against the same list the house sent. A name that is not on it resolves
+ * to **Skip**, which is the fail-closed direction: not voting counts as a Skip already (D-075), so
+ * an unresolvable row can only ever cost a vote and never cast one at somebody.
+ *
+ * That seat is *content* and not attribution — it is who the vote is for, which the house publishes
+ * live to the couch (D-117) — and the two are kept apart by the wire type having room for the first
+ * and none for the second.
  */
-fun MeetingRequest.asIntent(seat: Seat, names: List<String>): Intent = when (this) {
-    is MeetingRequest.CheckIn -> Intent.CheckIn(seat)
-    is MeetingRequest.ReadyToVote -> Intent.DeclareReadyToVote(seat)
-    is MeetingRequest.LockVote -> Intent.LockVote(seat)
+fun MeetingRequest.asMessage(names: List<String>): IntentMessage = when (this) {
+    is MeetingRequest.CheckIn -> IntentMessage.CheckIn
+    is MeetingRequest.ReadyToVote -> IntentMessage.DeclareReadyToVote
+    is MeetingRequest.LockVote -> IntentMessage.LockVote
     is MeetingRequest.Select -> {
         val picked = choice
         val target = when (picked) {
             is VoteChoice.Skip -> null
             is VoteChoice.Named -> names.indexOf(picked.name).takeIf { it >= 0 }?.let { Seat(it) }
         }
-        Intent.SelectVote(actor = seat, target = target)
+        IntentMessage.SelectVote(target = target)
     }
 }
 

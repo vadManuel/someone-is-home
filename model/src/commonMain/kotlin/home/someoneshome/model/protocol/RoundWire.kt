@@ -380,21 +380,24 @@ sealed class RoundMessage {
 /**
  * **What rides in the round's half of the [TransportFrame.Carry] channel.**
  *
- * Two bodies, each travelling one way only, exactly as [LobbyBody]'s three do:
+ * Three bodies, each travelling one way only, exactly as [LobbyBody]'s three do:
  *
  * - [Push] goes **host → client**. One permitted message, with the sequence number that seat's
  *   stream is at.
  * - [Gap] goes **client → host**. A seat saying which sequence it last held, so the house can
  *   re-assert the rest.
+ * - [Act] goes **client → host**. One request, with the sequence number this connection is at.
  *
  * ### [Gap] is not an Intent, and the distinction is not pedantry
  *
- * An Intent is a request to change the round that the authority may refuse (rule 10), and building
- * those is not this unit's. A gap names no game action, has no refusal, mints no [home.someoneshome.model.Event]
- * and reaches no rule: the house's whole answer is bytes it already sent to that phone, which is
- * why it can exist while the intent channel does not. **It also cannot ask for anything it was not
- * already given** — the house replays its own per-seat outbox, so a client asking for a sequence
- * belonging to somebody else's stream is asking for its own stream at that number.
+ * An Intent is a request to change the round that the authority may refuse (rule 10). A gap names
+ * no game action, has no refusal, mints no [home.someoneshome.model.Event] and reaches no rule: the
+ * house's whole answer is bytes it already sent to that phone. **It also cannot ask for anything it
+ * was not already given** — the house replays its own per-seat outbox, so a client asking for a
+ * sequence belonging to somebody else's stream is asking for its own stream at that number. [Act]
+ * is the other thing entirely, and the two are separate members rather than one *upward* body so
+ * that the desk's two answers — *replay what you missed* and *put this to the rules* — can never be
+ * reached by the same branch.
  */
 @ClientFacing
 @kotlinx.serialization.Serializable
@@ -424,6 +427,35 @@ sealed class RoundBody {
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("gap")
     data class Gap(val held: Long) : RoundBody()
+
+    /**
+     * **Client → host. "I am asking for this, and it is the [seq]th thing I have asked for."**
+     *
+     * ### The frame carries no seat, and that is the whole security property of this channel
+     *
+     * [intent] is an [IntentMessage], which has no field an actor could ride in. The desk stamps
+     * the seat the *connection* was admitted to, so a client is not merely discouraged from naming
+     * another seat — it has nowhere to write one. See [IntentMessage] for the argument and for the
+     * three requests deliberately absent from it.
+     *
+     * ### [seq] is the connection's, and it is a dedup key rather than an order
+     *
+     * It counts requests this connection has made, starting at 1, and the house keeps the highest
+     * it has seen per seat: **a request at or below that mark has already been put to the rules and
+     * is dropped.** D-097 makes intents fire-and-forget — *clients hold no request/response
+     * posture* — so nothing here is an ack and nothing waits for one; the number exists because a
+     * frame delivered twice must not be *acted on* twice, and `ArmRevoke` applied twice is two
+     * cooldowns spent on one press.
+     *
+     * **It resets with the connection at both ends**, because that is the only window in which a
+     * resend can happen: a phone whose process failed and resumed its seat starts counting again from
+     * 1, and a house that kept the old mark would silently swallow every request it ever made
+     * again. See `IntentOutbox` and `IntentDesk.seated`.
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("act")
+    data class Act(val seq: Long, val intent: IntentMessage) : RoundBody()
 }
 
 /**

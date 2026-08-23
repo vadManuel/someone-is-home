@@ -10,11 +10,37 @@ package home.someoneshome.model
  * Intents are attributed **by connection**, never by a client naming itself. A client that could
  * name its own seat could claim another player's — the only cheat in this game that is remote,
  * undetectable, and requires no physical act.
+ *
+ * **[actor] is therefore filled in exactly one place**, and it is not a screen: a request arrives
+ * as a [home.someoneshome.model.protocol.IntentMessage], which has no field for a seat and no way
+ * to acquire one, and the host's desk stamps the seat the connection was admitted to. This type is
+ * deliberately **not** `@Serializable` — it is the authority's shape, and the wire's is constructed
+ * from it rather than annotated onto it, which is the same arrangement [Effect] and
+ * [home.someoneshome.model.protocol.RoundMessage] have on the way down.
+ *
+ * ### An Intent may exist only where the [Event] it becomes needs nothing but the phone
+ *
+ * `core`'s `factOf` turns each member below into exactly one [Event] from three ingredients: what
+ * the phone did, which connection did it, and when it arrived. Three client-originated events have
+ * no member here for failing that test — [Event.ContactMade] and the Revoked report both name a
+ * seat only the authority can resolve from a rotating token (D7), and [Event.EgressFired] carries a
+ * draw the house makes against a home's shape. See `IntentMessage`'s header, which holds the full
+ * argument for all three.
  */
 sealed interface Intent {
     data class ArmRevoke(val actor: Seat) : Intent
     data class BeginSubroutine(val actor: Seat, val marker: MarkerId) : Intent
     data class CallMeeting(val actor: Seat) : Intent
+
+    /**
+     * **An entry handed over at a marker — a report of what was entered, never a claim that it was
+     * right** (D-109, [Event.SubroutineReturned]).
+     *
+     * [marker] is which card opened the work rather than where the player is standing now: a phone
+     * naming its own location would be a client asserting a placement, and *inference never
+     * overrides knowledge* (D-136).
+     */
+    data class HandOverEntry(val actor: Seat, val marker: MarkerId, val entered: List<Int>) : Intent
 
     /** I'M HERE. Reports one phone; the gate that closes on it is the house's (D-104). */
     data class CheckIn(val actor: Seat) : Intent

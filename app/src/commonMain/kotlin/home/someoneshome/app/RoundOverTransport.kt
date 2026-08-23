@@ -1,9 +1,11 @@
 package home.someoneshome.app
 
+import home.someoneshome.model.protocol.IntentMessage
 import home.someoneshome.model.protocol.RoundBody
 import home.someoneshome.model.protocol.RoundMessage
 import home.someoneshome.model.protocol.RoundWire
 import home.someoneshome.model.protocol.TransportFrame
+import home.someoneshome.platform.transport.IntentOutbox
 import home.someoneshome.platform.transport.RoundInbox
 import home.someoneshome.ui.FlowModel
 import kotlinx.coroutines.CoroutineScope
@@ -24,11 +26,19 @@ import kotlinx.coroutines.launch
  * place a push may touch a screen. This class does the two things neither of those can: it decodes,
  * and it asks.
  *
- * ### Asking is not an Intent
+ * ### Two things go up, and they are different in kind
  *
- * The one thing this sends upward is [RoundBody.Gap], which names no game action, can be refused by
- * nothing, and is answered with bytes this phone was already sent. The intent channel — a tap the
- * authority may turn down — does not exist yet and is not built here.
+ * [RoundBody.Gap] names no game action, can be refused by nothing, and is answered with bytes this
+ * phone was already sent. [RoundBody.Act] is the other thing: a control the player pressed, which
+ * the authority may refuse and which may change the round. They are separate members rather than
+ * one upward body so that the house's two answers — *replay what you missed* and *put this to the
+ * rules* — can never be reached by the same branch.
+ *
+ * ### What goes up carries no seat, and cannot
+ *
+ * [act] takes an [IntentMessage], which has no field an actor could ride in. This phone does not
+ * know its own seat here and does not need to: the desk at the other end stamps the seat the
+ * connection was admitted to. See [IntentMessage].
  */
 class RoundOverTransport(
     private val scope: CoroutineScope,
@@ -52,9 +62,23 @@ class RoundOverTransport(
      * **Whoever takes this must not print it.**
      */
     private val onInbound: (String) -> Unit = {},
+    /**
+     * **Every body this client sends up, before it reaches the socket.**
+     *
+     * [onInbound]'s mirror, empty in every production construction, and here because the upward
+     * channel raises the same question in the harder direction: what comes down is the house's own
+     * bytes, but what goes up is composed on a phone that holds a name and a one line in memory.
+     * The types make it structurally impossible — no [IntentMessage] member has a field a line
+     * could sit in — and this is how that claim is checked against real frames on a real socket
+     * rather than argued from the declarations.
+     *
+     * **Whoever takes this must not print it.**
+     */
+    private val onOutbound: (String) -> Unit = {},
 ) {
 
     private val inbox = RoundInbox()
+    private val outbox = IntentOutbox()
 
     /**
      * **Frames waiting to be applied, so that a screen is never written from a socket's thread.**
@@ -112,6 +136,10 @@ class RoundOverTransport(
             // The house's to send, never to receive. A client asking another client for its stream
             // is saying nothing this phone is obliged to hear.
             is RoundBody.Gap -> Unit
+            // Upward only, and this direction is where it would matter most: a request arriving at
+            // a client is somebody else's control press being shown to a phone that has no business
+            // knowing it happened. Ignored rather than decoded any further.
+            is RoundBody.Act -> Unit
         }
     }
 
@@ -122,12 +150,36 @@ class RoundOverTransport(
      * the first — a phone that dropped and resumed is a phone that has missed an unknown amount,
      * and the house's answer costs it a replay of bytes this phone discards.
      */
-    fun reseated() = ask(inbox.askAgain())
+    fun reseated() {
+        // The outbox first, and the order is the decision: this phone has asked this house for
+        // nothing on this connection, and the desk at the other end cleared its mark when the
+        // socket was admitted. A request made just before the drop is deliberately NOT resent --
+        // see IntentOutbox. Asking for the pushes is what corrects the screen instead.
+        outbox.reseated()
+        ask(inbox.askAgain())
+    }
+
+    /**
+     * **A control the player pressed, on its way to the house** (rule 10 — a request, not a fact).
+     *
+     * Fire-and-forget, because D-097 says so: *clients hold no request/response posture*. Nothing
+     * here waits for an answer, nothing here retries, and nothing here moves a screen. What the
+     * player sees is whatever the house pushes back, whenever it arrives — and a request the house
+     * refuses produces a re-assertion that is indistinguishable from ordinary delivery, which is
+     * what keeps the refusal invisible.
+     *
+     * The sequence [IntentOutbox] stamps is a dedup key rather than an ack: a frame delivered twice
+     * must not be acted on twice.
+     */
+    fun act(intent: IntentMessage) = up(RoundWire.encode(outbox.ask(intent)))
 
     /** A new round: this phone holds nothing of the last one. */
     fun roundEnded() = inbox.roundEnded()
 
-    private fun ask(gap: RoundBody.Gap) {
-        scope.launch { send(TransportFrame.Carry(RoundWire.encode(gap))) }
+    private fun ask(gap: RoundBody.Gap) = up(RoundWire.encode(gap))
+
+    private fun up(body: String) {
+        onOutbound(body)
+        scope.launch { send(TransportFrame.Carry(body)) }
     }
 }
