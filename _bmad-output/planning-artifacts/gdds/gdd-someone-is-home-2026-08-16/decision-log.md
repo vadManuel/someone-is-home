@@ -3487,6 +3487,381 @@ applied to the refusal D-173 could not act on.
 
 ---
 
+## Revision 38 — the jam the whole house can see, and the shift that opens half-charged
+
+*Ruled 2026-08-23, with Vadmanuel. **Ten entries, and nine of them close something that was written
+down as owed.** The two Tier-2 units left eighteen escalations between them, the push units left
+five, and the rehearsal left the largest finding this project has had. What follows takes the ones a
+build was right to refuse — the ones where guessing would have been a design decision taken by
+whoever happened to be typing.*
+
+*The tenth is not a closure. **Spoof is gone**, replaced rather than tuned, and the replacement runs
+in the opposite direction: the ability whose whole risk was that nobody would notice it is now the
+one thing in the game the house announces out loud. Five escalations, one enum row, one screen and
+the largest disclosure in the emit table all fall out with it.*
+
+### D-181 · **The routing table is ratified — E-P3-1 closed**
+
+**The per-kind routing the owner walked through with unit R1 is confirmed as ruled, kind by kind.**
+The table itself lives in that unit's worklog section (`_bmad-output/overnight/2026-08-21.md`,
+*Routing — Unit R1*) and is deliberately **not** restated here: it is forty-odd rows of *which
+screen a kind opens*, it will be edited as screens are built, and a second copy in this log would be
+the copy that goes stale while looking authoritative.
+
+**What this log holds instead is that the table is a ruling and not a wiring convenience.** E-P3-1
+was the finding that four phones stood on the lobby screen through a complete, correct round — a
+house running a whole game no player would see any of — and unit P1 had refused to close it by
+choosing, on the grounds that *which* screen a `MeetingOpened` opens is a design question. **That
+refusal was correct and is why this entry exists.** A build that had guessed would have produced the
+same working app and no record that anybody decided anything, and the next person to move a screen
+would have had nothing to weigh their change against.
+
+**E-P3-2 falls to the same table.** The check-in gate could not close whenever anybody was outside
+the system, because `StandAndWalkIn` was one of the routeless kinds and no screen offered that seat
+a control. It is not a missing rule — the wire member existed and the rules accepted it — it was a
+kind with nowhere to go, which is E-P1-4 seen from a phone. **A routed kind is a control a player
+can reach; that is the whole repair.**
+
+### D-182 · **A Surge is the phone malfunctioning for five seconds, and it eats the work in your hands — T1·6 closed**
+
+**Owner-set values, not placeholders:**
+
+| | |
+|---|---|
+| Full-bright | **1.5s** |
+| Dark | **1.0s** |
+| Boot screen | **2.5s** — the cold-start Boot render, unmodified |
+| Total downtime | **5.0s** |
+| Player input | **None.** Fully automatic, start to finish |
+| An open Subroutine instance | **LOST.** Progress wiped, rescan required |
+
+**The fiction is the phone rebooting, and that is why the third phase is the Boot screen rather than
+a Surge screen.** A bespoke *you have been surged* render would be a caption on the event, readable
+by the person it happened to and by anyone glancing over their shoulder — and this game already has
+a screen that means *this device just came back from nothing*. Reusing it costs one asset and buys
+the ambiguity: a surged phone and a phone that genuinely crashed are the same picture. **Nothing new
+is drawn, so there is nothing new to keep in parity.**
+
+**Five seconds is a long time in a dark house, and the length is the ability.** `gdd.md:342` calls
+the Surge a commitment rather than a tool — the loudest, brightest thing that can happen — and the
+half that was never sized was how long the victim stays out of the game. A one-second flare is a
+startle; five seconds is a person standing in the dark holding a dark rectangle while everybody in
+the building walks toward the light they just saw. T1 flagged this as unruled and noted that `core`
+has no clock to say it with, which remains true: **these are the platform's numbers and they belong
+on the platform's side of the line**, minted from one effect the rules already emit.
+
+**The lost Subroutine instance is the interrupt question, answered against the softer reading.**
+`gdd.md:594`'s *interruptible — aborts cleanly with unambiguous progress state* is satisfied: the
+state is unambiguous, and it is **gone**. Preserving progress across a Surge would have made the
+attack survivable by standing still, and it would have needed a resume path that is a second way
+into a Subroutine — **the one thing D-110 spent a ruling closing.** One attempt per scan, and the
+walk back is the cost; a Surge simply buys the attacker that walk. Nothing about this is a new
+rule, which is the argument for it: **the Surge does not need a special case, it needs to not have
+one.**
+
+### D-183 · **Tier 2 is refused during a meeting, and the refusal is honest — T1·7 and T2·8 closed**
+
+**A Tier-2 fire is refused for the duration of a meeting.** Both units left this admissible and both
+were right to: T1's reasoning was that the pool pauses so nothing turns on the gate, and that adding
+a refusal would be inventing a rule while refusing *quietly* inside the rules would be rule 1's
+forbidden shape.
+
+**What settles it is that there is no surface to fire from.** Everyone alive is on the meeting view;
+everyone out is on the ghost view. **Springboard page 2 does not exist during a meeting for any seat
+of any role**, so no honest client can produce the intent, and the refusal at the admission boundary
+is therefore not a client-visible path at all — it is the boundary doing what it is for, against a
+forged client. Rule 1 is about an effect a player should have seen and did not. **Nobody can see an
+effect on a screen nobody is standing on.**
+
+That is a stronger position than *the pool pauses, so it does not matter*. A pause makes the fire
+pointless; it does not make it impossible, and *pointless but permitted* is exactly the shape that
+gets found by whoever builds the next client and wonders why the tile is missing. **Now the answer
+is the same on both sides of the wire: there is no tile, and there is no admission.**
+
+### D-184 · **A meeting hands every cooldown back at half — `gdd.md:373` chosen at last**
+
+**At meeting end, every cooldown resets to HALF its duration.** Not paused, not resumed, not
+cleared: **halved and restarted.** Per-Insider on the Revoke, per-Insider on the Access pool.
+
+`gdd.md:373` has read *"Revoke cooldown pauses or resets at meeting end"* since the design was
+written and has never chosen between them; T1 built neither, asserted in `TierTwoTest` that the
+Revoke row does **not** move, and wrote that the build which decides has to come and change a line
+saying what it is changing. **This is that ruling, and it picks a third thing neither word named.**
+
+**It is D-132's arithmetic, reused rather than invented.** Every Insider clock opens the round at
+half, so that arming is not immediately followed by a Revoke and **every shift begins with a
+guaranteed stretch of peace whose length is known.** A meeting ends a shift and starts the next one
+(D-170), so the shift after a meeting gets the same guarantee the first shift got. One rule, stated
+once, applying at both moments it could apply. **A reset to zero would make a meeting a full
+rearmament and turn calling one into an Insider's move; a plain pause would make the meeting a
+loophole in the other direction, banking a cooldown that was about to expire.** Halving is the only
+answer that gives the same shape to both.
+
+**The Egress is the exception, and it is exempt in both directions.** The crisis survives a meeting
+— paused, per D-133 — and **its shared cooldown is frozen out of the reset until the Egress is
+defused.** Handing the Egress clock back at half while an Egress is still running would let a
+meeting called *during* a crisis fund the next one, which is the single most dangerous thing a reset
+rule can do in a game where an uncontained Egress ends the round outright. The Egress is a win
+condition; every other clock on this list is a noise.
+
+### D-185 · **A meeting call ends every running ability effect — T1·9 and T2·9 closed**
+
+**Calling a meeting terminates every ability effect currently running.** An isolation window fails.
+Any monitoring effect fails. **Only the Egress survives it**, paused per D-133.
+
+Both units flagged the opposite behaviour and neither defended it: T1's item 9 was *an isolation
+does not pause across a meeting, so a meeting can eat one whole*, and T2's item 9 was the same
+sentence one plane over. Both called it *the simpler reading of "offline for N seconds", recorded
+rather than defended.* **The reading is now that the simpler thing is not to survive at all.**
+
+**The moment is the call, not the end.** A meeting call snaps every lamp in the house to full white
+and puts every living player in one room — which is the moment an isolated marker stops being an
+attack and becomes a piece of stale machinery ticking in an empty hallway. An effect whose whole
+function is to shape movement through a dark house has nothing left to do once nobody is moving
+through it, and one that outlived the call would land its remaining seconds on the *next* shift,
+bought at the price of the shift it was fired in. **Nobody would be able to tell that from a fresh
+fire, which is the real objection: an effect that crosses a meeting is an effect with no traceable
+cause.**
+
+**The Egress survives because it is not an effect on anybody.** It is the crisis the round can end
+on, it is already ruled to pause (D-133), and a meeting that could dissolve one would make calling a
+meeting the cheapest possible containment — a Restrain that defuses the Egress by accident.
+
+### D-186 · **STATIC — Spoof is replaced, not tuned. T2·1 through T2·5 close, and the picker fails with it**
+
+**Spoof is gone.** The ability in its slot is **Static**: a **10-second house-wide jam of every
+monitoring surface the living can read.**
+
+| | |
+|---|---|
+| Target | **None.** No picker, no list, no plan |
+| Fired from | Springboard page 2, self-fired in place, under the two-second hold (D-141, D-142) |
+| Duration | **10s** |
+| Scope | **House-wide** |
+| Tracking | **Untouched.** The house records the truth throughout |
+| The living's live view | **Animated noise**, with the real data faintly beneath it — *virtually impossible* to parse |
+| A Timelapse crossing the window | Renders those seconds as static — **~1.7s of noise at 6×** |
+| Ghosts | **Exempt.** Their true occupancy stays clean |
+| Cooldown | **Heavier than old Spoof's.** Constant raised; playtest tunes it |
+| Announcement | **The house shows that it was jammed. It never shows who** |
+
+**The redesign answers `gdd.md:1145` rather than deferring it.** That balance risk says Spoof may be
+too abstract for the dark — slow, indirect, asking an Insider to reason about the map layer while
+standing in a hallway — and `gdd.md:1347` made the watching a number: *fired at least once per three
+rounds; if it is never used, cut it.* **The owner has cut the mechanic and kept the slot.** What
+replaced it needs no map reasoning at all: you fire it because you are about to do something, and it
+costs you nothing to understand.
+
+**It is loud and anonymous by design, and those two words are the whole ability.** Static is
+deliberately **distinguishable from disconnection** — a jammed Terminal does not read as a broken
+one — so the house visibly announces **that** the monitoring was jammed, in the same administrative
+register it announces everything else, and names nobody. That is this project's evidence texture
+exactly: every living player now knows an Insider did something in the last ten seconds and has no
+idea which one, and the reader at the station knows precisely what they were prevented from seeing.
+**Spoof's failure was that its consequence was invisible to everybody including the person who fired
+it** — T2 wrote *looking like it did nothing is the ability working*, which is true and is also the
+reason nobody would ever have reached for it. Static inverts that at no cost to anonymity.
+
+**The Timelapse gap is a forensic trace and is meant to be one.** The live cover is the product; ten
+seconds compressed to under two at 6× is a scar in the playback that says *something was hidden
+here, at this time*, without saying what or by whom. A player who watches it back learns the window
+and nothing inside it. **Watching the past to find out what you were stopped from seeing in the
+present is the Terminal's whole tragedy, and Static gives it a second edge.**
+
+**Ghosts are exempt because ghosts are outside the system.** M12's fiction is that the house erased
+them from the registry and can neither see nor control them; a jam is the house's own monitoring
+degrading, and a ghost's true occupancy is not the house's monitoring. **It is the liveness
+privilege stated once more** — ghosts already get both bars, true counts, no injected error and no
+staleness bands, and D-134's clustering is what makes that safe. A ghost with a clean map during a
+jam cannot tell anybody, and that is why it costs nothing.
+
+**The name was chosen against Jam, and the reason is a rule rather than a preference.** **Jam is
+roster Subroutine #9** (`gdd.md:573`) — tap +/− until two shapes overlap. **One meaning per word**,
+which is the same discipline that keeps Revoke and Restrain apart, and *house* apart from *home*.
+The vocabulary is closed and it is now closed around **Static**; **Spoof leaves it.** The lint's word
+list carries the mechanical half and is the build's to swap, in a diff that says so.
+
+#### The consequences, which are larger than the ability
+
+**D-175's third answer falls.** Revision 37 recorded the targeting model as *Surge picks a person
+from a LIST, Isolate picks a marker from a LIST, Spoof picks a room from the MAP* — **the map answer
+is superseded and Static has no target at all.** The first two stand unchanged, and so does the
+argument under them: the glow of reading is the deliberate price, and nothing on either surviving
+picker may be quicker than reading.
+
+**The home plan returns to crossing to NO client, and T2·4 is rolled back rather than closed.** That
+escalation flagged the plan reaching a living Insider as *the largest disclosure in the emit table*,
+one class wide, never to be widened by one — a row that existed only because a phone cannot draw a
+plan it was never sent. **Static has no plan to draw.** The row goes, and `Destination`'s own warning
+about the whole map reaching every client returns to being a warning about a thing the app does not
+do. **This is the single largest reduction in the emit table since the table was written, and it
+came from deleting a screen.**
+
+**The phantom machinery is superseded outright** — the effect that shipped to nobody, the duration
+constant, and the phantom arm of the placement read. With it go three escalations that were only
+ever questions about a phantom: **T2·1**, whether a scan is knowledge forever (the most consequential
+guess in that unit, and the one most likely to have made Spoof useless in play); **T2·2**, how long a
+phantom lasts; **T2·3**, a room the plan does not hold being representable. **They dissolve rather
+than being answered**, which is worth writing down so nobody hunts for the rulings later. **T2·5**
+— a phantom's recipients being nobody — dissolves the same way.
+
+**D-136 survives untouched and must not be swept with the rest.** *Inference never overrides
+knowledge* is a rule about the spectator map, which is still unbuilt and still needs it; what falls
+is only the phantom's arm of it. The structural separation T2 built — that a lie **cannot** be
+expressed in the same collection as a scan — was the right shape and the reasoning on it should be
+kept for whoever builds that map.
+
+**Static is self-targeting by shape, exactly as Spoof was**, so `gdd.md:393`'s *every observable
+effect must be self-inflictable* is satisfied without a special case: it jams the Insider's own
+monitoring alongside everybody else's, and an Insider standing at the Terminal when their own Static
+lands sees the same noise a Resident does. **`gdd.md:398`'s no-actor-side-feedback rule is satisfied
+by the same fact** — the announcement fires for the whole house, so it is a global event, and the
+firing phone is told nothing a bystander's phone is not.
+
+### D-187 · **A house notice is an anti-cheat report and nothing else — `gdd.md:419-427` narrowed**
+
+**Notices exist solely to report detectable deliberate evasion**: locking the phone, backgrounding
+the app, disabling a permission mid-round. **Genuine radio loss earns no notice.** It shows as
+disconnection on the monitoring surfaces and nowhere else. **Static earns no notice either** — it has
+its own announcement, and it is not evasion.
+
+**This deletes the radio-failure half of the original rationale, which was the half that made the
+notice unsafe.** `gdd.md:424` argued that radio failure and backgrounding degrade advertising
+identically so both should trigger it, and that silent degradation is a real advantage worth
+naming. The first clause is true about the *signal* and false about the *person*: **a phone whose
+radio fails has a defective phone, and a notice naming that player reads to the room exactly like a
+notice naming a cheat.** `gdd.md:426` says so out loud without noticing — *"the system could not see
+you for three minutes" is the worst sentence that can be read aloud about you.* That is the correct
+consequence for somebody who backgrounded the app on purpose and a straightforwardly unjust one for
+somebody whose hardware failed, in a game that then asks the room to vote.
+
+**The anti-exploit argument survives the narrowing and gets stronger.** Backgrounding to manufacture
+an excuse still backfires, still generates no check-ins, and is now the *only* thing a notice can
+report — so the sentence means what it says instead of covering two cases the room cannot tell
+apart. **A permission revoked mid-round stays in scope** and stays for D-161's reason: every
+permission is granted at setup, in the light, before a seat is taken, so one missing during a round
+is something a person did.
+
+**What is lost is the diegetic flourish**, and it is worth naming the loss. `gdd.md:428` liked the
+notice for making the map's unreliability *diegetic in writing* — the system admitting its own
+limitations badly, in a form players could argue about. **The house still admits it**, through
+staleness bands, coverage holes, injected error and now Static; what it stops doing is putting a
+named person's broken phone into the argument.
+
+### D-188 · **Every Subroutine is briefed before it opens, and none of them explains itself inside**
+
+**All ten Subroutines carry their instruction BEFORE the minigame — at the caught scan — and none
+carries one inside it.** A misread costs the attempt and a rescan.
+
+**This inverts the pattern, rather than extending the exception.** E-S1-1 was closed as a *placement*
+for Sniff alone: Sniff's own screen is black until the answer (D-137), so a sentence drawn there is
+black ink on black glass, and the instruction had to move to the card. The other nine were left
+deliberately null with the note that whether they should all be briefed at the card was a copy call
+nobody had made. **The call is made and it goes the other way from the way it was framed:** Sniff is
+not the exception that needs a briefing, it is the one that made the right pattern visible.
+
+**The argument is the light signature.** Every Subroutine is rated bright, medium or dark (D-112,
+D-113) and **the rating is a promise about how much light you are standing in while you work.** An
+in-screen instruction line is lit pixels for the whole duration of the task on a screen whose entire
+design constraint is how little it may glow — it makes a dark Subroutine less dark and a bright one
+longer. **Reading happens at the card, where the scan has already lit you up and the cost is already
+paid**, and then the task itself is as dark as it was rated to be. This is the same accounting D-175
+made about the Tier-2 pickers, in the opposite direction: there, reading is a price worth charging;
+here, it is a price already charged, and charging it twice is the mistake.
+
+**A misread costing the attempt is the intended severity, not an accepted consequence.** D-110
+already rules one attempt per scan with the walk back as the cost. Tying comprehension to the same
+gate means a player who skims in the dark pays what a player who fumbles pays, and there is exactly
+one recovery path in the game rather than two.
+
+> ### ⚠️ NINE LINES ARE OWED, AND THEY ARE COPY
+>
+> The nine in-screen instruction lines are to be **stripped**, and **nine briefing lines drafted in
+> Sniff's register.** A build unit is queued for it. **Sniff's drafted line stands** — *THE PHONE WILL
+> BUZZ TWICE. TAP THE SIDE THAT BUZZED MORE.* — and is the register the other nine are written
+> against: second person, imperative, what the phone will do and what you do about it, no nouns from
+> the fiction. It remains the builder's words inside a ruled shape and still wants the owner's eye.
+
+### D-189 · **The per-seat replay outbox stays uncapped — E-P1-3 closed**
+
+**No cap.** The outbox is round-bounded and wiped at round end, and that is the whole of its bound.
+
+Unit P1 deliberately declined to add one and said why: **a bounded outbox answers a re-assert
+partially, and a silent partial is the failure class this project ranks worst.** The re-assert is
+D-097's mechanism — a refused event is answered by re-asserting the client's authorized view, never
+by a reason-carrying message — and a view re-asserted from a truncated log is a phone confidently
+holding a house that has moved on, with nothing on it saying so. **A cap converts an unbounded
+memory cost into an unbounded correctness cost**, which is a worse trade in a game debugged by
+replaying recordings.
+
+**The number does not want a ruling, which is why this one is short.** At this game's message rate
+the outbox is tens of kilobytes a seat against a whole-app allocation target of ~0.5 MB/s, and
+`roundEnded()` already frees it. **P1 wrote that this wants a ruling and not a constant, and it was
+right; the ruling is that the constant stays absent.**
+
+### D-190 · **A reconnecting phone is re-sent the Isolate target list — T2·6 closed**
+
+**A phone that reconnects mid-round is re-sent the Isolate targets.** The plan half of that
+escalation is **moot**: the plan no longer crosses to any client (D-186), so there is nothing to
+re-send and the Spoof tile that would have opened an empty plan does not exist.
+
+T2 recorded this as *T1's existing gap, inherited rather than created, and now twice as visible.*
+Half of it was solved by deleting an ability. **The other half is real and is not a special case:**
+the list is arming-time state that reaches exactly one class, so a seat that missed the arming burst
+has an ability it cannot aim — a tile that opens an empty column, which is indistinguishable from a
+round armed with no home. **The re-send is the same posture the outbox has**, one message rather
+than a new mechanism.
+
+---
+
+### Swept in this pass
+
+| site | superseded by | what it now says |
+|---|---|---|
+| `gdd.md:306` — Tier 2 is *Surge, Spoof, Isolate* | D-186 | Surge, **Static**, Isolate |
+| `gdd.md:313` — the Surge row, *lamp to full then to black* | D-182 | the five-second sequence, and the Subroutine it costs |
+| `gdd.md:314` — the Spoof row, *false check-in … phantom occupant* | D-186 | **Static** — a ten-second house-wide jam of the living's monitoring |
+| `gdd.md:342` — *Surge is a commitment*, with no duration | D-182 | the same argument, with the five seconds under it |
+| `gdd.md:372-373` — *Revoke cooldown pauses or resets at meeting end* | D-183, D-184, D-185 | every cooldown returns at half; Tier 2 is refused during; running effects end at the call |
+| `gdd.md:419-427` — the notice's radio-failure rationale | D-187 | anti-cheat only; genuine radio loss reads as disconnection and earns no notice |
+| `gdd.md:447-472` — the Terminal's live view | D-186 | plus what a jammed live view looks like, and that ghosts never see one |
+| `gdd.md:474-495` — the Timelapse spec | D-186 | plus the static gap a playback crossing a jam renders |
+| `gdd.md:576` — the rename history | D-186 | plus the ability rename, and why **Jam** was refused as a name |
+| `gdd.md:766`, `:1121`, `:1129` — the Access pool's three rows | D-186 | Static in Spoof's place; the pool is otherwise unchanged |
+| `gdd.md:1145` — balance risk 4, *Spoof may be too abstract for the dark* | D-186 | the risk was taken and the mechanic was replaced; what is watched now is the price |
+| `gdd.md:1310`, `epics.md:285` — E9's contents and story 9.11 | D-186 | Static, self-fired, no picker |
+| `gdd.md:1347` — *Spoof usage*, fired once per three rounds | D-186 | **Static usage**, on the same counting method and a new question |
+| `epics.md:306` — story 10.4, *every phone rings* | D-176, D-160 | haptic only — **carried over**; revision 37's sweep reached `gdd.md` and not `epics.md` |
+| `epics.md:316` — story 10.12, the *pauses or resets* clause | D-183, D-184, D-185 | the three meeting rules, stated apart |
+| `epics.md:315` — story 10.14, the house notice | D-187 | deliberate evasion only |
+
+### Owed to the build, and not by this pass
+
+- **`TierTwoTest`'s assertion that the Revoke row does not move across a meeting** was written so
+  that the build which decides has to come and change a line saying what it is changing. **D-184 is
+  that decision** and the line is now owed a change. Docs do not touch it.
+- **The lint's word list** carries `Spoof` and does not carry `Static`. The swap is code and belongs
+  in a diff that says what it is doing.
+- **Nine briefing lines and nine deletions** (D-188), plus the queued unit that writes them.
+- **The emit table's largest row comes out** (D-186). A disclosure that shrinks deserves the same
+  ceremony as one that grows, and the schema fails closed either way.
+
+### Still open
+
+- **Two copy drafts remain, and a third joins them.** D-180's `CHECK LOCAL NETWORK PERMISSION`, and
+  Sniff's briefing line — both the builder's words inside a ruled shape — are now joined by **the
+  nine briefings D-188 orders.** None is a decision waiting to be made.
+- **The Terminal's noise is specced in words and not in pixels.** *Animated, with the real data
+  faintly beneath, virtually impossible to parse* is the ruling; how faint, how fast, and what it
+  costs to draw against a ~0.5 MB/s allocation target are the build's, and the first two are a
+  dark-room question rather than a paper one.
+- **`egressFired` still lies on `cooldownStarted`.** T1's flag, T2's flag, and now revision 38's:
+  three units have declined to change it under a freeze, and D-184 gives the Egress clock a second
+  reason to be got right.
+- **F-006 is untouched.** The Egress has a carrier and not the duration it is a fraction of.
+
+---
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

@@ -205,6 +205,7 @@
 | 6.6 | **Drift**, **Jam** (medium) |
 | 6.7 | **Signal Trace** (medium) with **BFS-generated graphs**; difficulty tunes by decoy count |
 | 6.8 | **Fake versions of every subroutine** — real UI, real progress, real completion animation, writes nothing to the ledger. **Cheap now, awkward to retrofit** |
+| 6.10 | **D-188 — all ten subroutines are briefed at the caught scan and none carries an instruction inside the minigame.** Strip the nine in-screen instruction lines; draft nine briefing lines in Sniff's register. **Sniff's line stands.** A misread costs the attempt and a rescan (D-110) |
 | 6.9 | **Degrading subroutines — DEFERRED TO V2, not in v1 scope (D-158).** Glitchier and harder as System Integrity drops. The *load-bearing v1* promotion is **reversed** pending a full design conversation and a rebalance; in v1 the escalating atmosphere carries the house-is-winning signal alone |
 
 **Every subroutine must pass all five constraints:** legible at the dimmest amber step · silent or haptic-only · interruptible with unambiguous progress state · no twitch timing · no precise dragging.
@@ -262,6 +263,9 @@
 | 8.15 | Couch area produces no data |
 | 8.16 | **Anonymize server-side.** Resolve identity on the backend; ship only counts |
 | 8.17 | **Log backgrounding as a game event**, or undesigned phantom false negatives will appear |
+| 8.18 | **D-186 — Static jams the live view for 10 s:** animated noise with the real counts faintly beneath, *virtually impossible* to parse. **Distinguishable from a disconnection.** The data underneath is untouched and the view is correct the instant the window closes |
+| 8.19 | **A Timelapse playback crossing a Static window renders those seconds as static** — **~1.7 s of noise at 6×.** The live cover is the product; the playback gap is a forensic trace and says nothing about who |
+| 8.20 | **Ghosts are exempt from Static** — true occupancy on the couch stays clean throughout |
 
 ---
 
@@ -282,7 +286,10 @@
 | 9.8 | **Sync Pulse containment** — both phones pulse in unison off a scheduled timestamp; tap on the beat. Unlimited participants, concurrent pairs, first success contains, 2–3 s failed-attempt lockout |
 | 9.9 | **The System Integrity widget becomes the countdown and names both nodes** |
 | 9.10 | **Surge** — lamp to full, then to black, **and** the target's phone emits sound. One event. **Longest cooldown in the Access pool** |
-| 9.11 | **Spoof** — false check-in in a room you are not in |
+| 9.10b | **D-182 — the malfunction sequence: 1.5 s full-bright, 1.0 s dark, 2.5 s of the cold-start Boot render, 5.0 s total.** Fully automatic, no input at any point. **Any open Subroutine instance is lost** — progress wiped, rescan required. Reuse the real Boot screen; draw no bespoke surge render |
+| 9.11 | **Static (D-186)** — a **10 s house-wide jam of every monitoring surface the living can read.** No target, no picker, self-fired from page 2. **Tracking keeps recording the truth** — house knowledge, verdicts and the emit gates are untouched. **Heavier default cooldown than the ability it replaced**; playtest tunes it |
+| 9.11b | **Static is loud and anonymous.** It must be distinguishable from a disconnection, so the house announces **that** the monitoring was jammed and **never who.** No house notice (D-187) — the announcement is its own |
+| 9.11c | **Ghosts are exempt from Static** — the couch's true occupancy stays clean. **No client is ever sent the home's plan** (D-186 rolls back the map picker's disclosure); the phantom machinery is superseded |
 | 9.12 | **Isolate** — take a marker or the Terminal offline temporarily |
 | 9.13 | **Override** — passive; the doors of rooms the host declared Insider-only aloud at setup. **No UI at all**, no app data, and never tracked |
 | 9.14 | **Access pool** shared by Tier 2 only. Revoke and Egress each have their own |
@@ -303,7 +310,7 @@
 | 10.1 | Trigger rendered as an **incoming call with the caller named** |
 | 10.2 | **Both triggers ship unchanged.** The deactivation report is verified by physical contact, so it is not a fakeable signal and no rule amendment is needed. **Name the caller, never the room** |
 | 10.3 | **All lamps to full white simultaneously**, off a scheduled timestamp |
-| 10.4 | **Masking audio cuts to total silence**, and **every phone rings**, on that same timestamp. The ring lands in the silence the cut just created |
+| 10.4 | **Masking audio cuts to total silence** on that same timestamp. **No phone makes a sound** — the call **vibrates**, LONG–pause–LONG, repeating until answered (D-176, D-160). The one permitted phone-emitted sound is the Surge |
 | 10.5 | System Integrity updates and **freezes** at meeting start |
 | 10.6 | **Discussion, 90 s.** Timer and one control. **Unanimous "Ready to vote" skips ahead.** Living players only |
 | 10.7 | **Vote, 45 s.** Names plus Skip, changeable until the clock ends. **Count of votes cast shown, never their content.** Not voting is an abstention |
@@ -312,8 +319,11 @@
 | 10.9b | **The house deauthorises anyone the group restrains**, moments after the tally. The group holds them; the system finishes the job. **Restrain is a physical act the house cannot prevent — the deauthorisation is the house's response to it, not its cause** |
 | 10.10 | **Meeting end: all lamps drop to dim in unison** — the "go" signal. Masking resumes |
 | 10.11 | **Timelapse floor resets to now** |
-| 10.14 | **The house notice.** Any device unreachable or backgrounded for a meaningful interval is reported to **everyone, at the meeting**, in the house's administrative register. Radio failure and backgrounding trigger it identically. **Needs no anti-exploit — being named off-network is an accusation, not an alibi** |
-| 10.12 | Egress blocked during meetings; Revoke cooldown pauses or resets at meeting end |
+| 10.14 | **The house notice, and it is anti-cheat only (D-187).** It reports **detectable deliberate evasion** — locking the phone, backgrounding the app, disabling a permission mid-round — to **everyone, at the meeting**, in the house's administrative register. **Genuine radio loss earns no notice** and shows as a disconnection on the monitoring surfaces; **Static earns none either.** Still needs no anti-exploit — being named off-network is an accusation, not an alibi |
+| 10.12 | **Egress blocked during meetings**, and a running Egress survives one, paused (D-133) |
+| 10.12b | **D-183 — Tier 2 is refused for the duration of a meeting.** Springboard page 2 does not exist for any seat of any role while a meeting runs, so there is no surface to fire from and the refusal at the admission boundary is honest |
+| 10.12c | **D-185 — a meeting call ends every running ability effect.** An isolation window fails; a Static window fails. **Only the Egress survives**, paused |
+| 10.12d | **D-184 — at meeting end every cooldown resets to HALF its duration**: Revoke per-Insider, Access pool per-Insider. The same halving as arming (D-132), so every shift opens with a guaranteed part-peace. **The Egress cooldown is frozen out of the reset until the Egress is defused** |
 | 10.13 | Revoked players prompted to stand and walk to the couch (ghost phase 2), **phone still defunct** |
 
 ---
