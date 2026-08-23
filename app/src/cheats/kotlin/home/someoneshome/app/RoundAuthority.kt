@@ -1,0 +1,239 @@
+package home.someoneshome.app
+
+import home.someoneshome.core.Admission
+import home.someoneshome.core.admit
+import home.someoneshome.core.armingFor
+import home.someoneshome.core.egressFor
+import home.someoneshome.model.Balance
+import home.someoneshome.model.Effect
+import home.someoneshome.model.Event
+import home.someoneshome.model.GameState
+import home.someoneshome.model.Intent
+import home.someoneshome.model.RefusalReason
+import home.someoneshome.model.Seat
+import home.someoneshome.model.Tick
+
+/**
+ * **The rules, on the host's phone, joined to both wires — E-D3-3's remaining half, as a bench.**
+ *
+ * P1 built the carriage down and P2 built the carriage up, and both units ended with the same
+ * sentence: *both carriages are built and proved; the thing between them is the loop's.* This is
+ * that thing, and it is deliberately here rather than in `commonMain` — **it is a bench, it is
+ * absent from a release build, and it is not the production join.** What it demonstrates is that
+ * the production join is now *possible*, which it was not before this unit: `app` could not see
+ * `core`, so no module that ships in the app could reach `armingFor` at all.
+ *
+ * ### What it is, in three lines
+ *
+ * A [GameState], `admit` between the two wires, and [LobbyHouse.emit] for whatever the rules
+ * produce. Every request that arrives from a phone has already had its seat stamped by
+ * [IntentDesk] from the connection it came in on; every effect that leaves goes through
+ * `EmitSchema` before it is rendered. This object adds no policy to either — **it holds the state
+ * and turns the handle.**
+ *
+ * ### The one thing it does that production must not copy
+ *
+ * [mint] puts an [Event] to the rules that no phone asked for. Three of those are legitimate and
+ * permanent — the arming draw, the Egress draw and the round's timed transitions are all the
+ * *house's*, minted above the rules, and P2's `factOf` explains at length why they can never be
+ * `Intent`s. The rest are stand-ins for hardware and for a clock that do not exist yet, and every
+ * caller of them is marked at the call site. See [RoundCheat].
+ *
+ * ### The clock is advanced by hand, and that is an escalation rather than a design
+ *
+ * The architecture puts the tick driver in the app roots, *for the reason `core` cannot import
+ * coroutines* — and there is no tick driver. So nothing in this app mints `DiscussionClosed`,
+ * `VoteWindowClosed`, `TallyHalfwayReached` or `EgressExpired` when their moment arrives, and a
+ * meeting left alone stops at whatever phase it reached. [at] is the bench standing where that
+ * driver will stand: it moves the house's clock to a named second, and the script mints the
+ * transition. A round played this way is deterministic and fast, which is right for a rehearsal
+ * and wrong for a house.
+ */
+class RoundAuthority(
+    /**
+     * What the lobby is holding, read at the instant it is asked. [LobbyHouse.armingInputs] in
+     * production; a fixture in a test.
+     *
+     * **A function rather than the house itself**, and the reason is E-P2-2: `LobbyHouse.start`
+     * waits on an advertisement no test has a radio for, so a class that took one could only ever
+     * be checked by playing an evening. Both units before this one rebuilt the house's whole
+     * arrangement in a rig for the same reason; taking the two seams instead means this object is
+     * the one thing in the chain that does *not* need mirroring.
+     */
+    private val inputs: () -> ArmingInputs,
+    /** The authority's only exit to the phones. [LobbyHouse.emit] in production. */
+    private val emit: suspend (Effect, GameState) -> Unit,
+    private val note: (String) -> Unit,
+) {
+
+    var state: GameState = GameState.EMPTY
+        private set
+
+    /** Every effect the rules produced, in order — the authority's own record. */
+    val emitted: MutableList<Effect> = mutableListOf()
+
+    /** Every refusal, in order. D-066: an unrecorded refusal is an invisible drop. */
+    val refusals: MutableList<RefusalReason> = mutableListOf()
+
+    /** Every request that reached the rules, attributed. For the log and for the assertions. */
+    val heard: MutableList<Intent> = mutableListOf()
+
+    /**
+     * The house's clock, in ticks, sampled where a request arrives.
+     *
+     * It only ever moves forward: two events reduced at one tick are two events the recording
+     * cannot order, and the recording is the only debugging instrument this game has.
+     */
+    private var tick: Long = 0L
+
+    val armed: Boolean get() = state.armed
+    val ended: Boolean get() = state.ended
+
+    /** Where the clock stands, in whole seconds, for a log line that a person can read. */
+    val second: Long get() = tick / Balance.TICKS_PER_SECOND
+
+    /**
+     * **Move the house's clock to T+[seconds], and never backwards.**
+     *
+     * The bench's stand-in for the tick driver the architecture puts in this module and nobody has
+     * built. See the class KDoc.
+     */
+    fun at(seconds: Long) {
+        val want = seconds * Balance.TICKS_PER_SECOND
+        if (want > tick) tick = want
+    }
+
+    /**
+     * **LIGHTS OUT, for real: the draw, the arming event, and the first pushes of the round.**
+     *
+     * Everything it arms with comes off [LobbyHouse.armingInputs] — the seats the ledger admitted,
+     * what each of them asked to be called, the lines they handed over, the host's Insider setting
+     * and the host's ballot length, all read in one instant because balance values lock here.
+     *
+     * The **markers are the bench's** and the reason is [BenchHome]'s: no phone in this run has
+     * walked a home. Everything else on the event is the real lobby's.
+     *
+     * Returns false and says why when the lobby is not ready, rather than arming anyway. The gate
+     * is `LobbyDesk.readyToArm` — the same one the button reads — and this is pre-arm, on the
+     * host's own phone, in a lit room, which is where `armingFor` says a refusal belongs out loud.
+     */
+    suspend fun arm(seed: Long): Boolean {
+        val inputs = inputs()
+        if (!inputs.readyToArm) {
+            note("WILL NOT ARM — ${inputs.seats.size} SEAT(S), ${inputs.oneLines.size} LINE(S) IN")
+            return false
+        }
+        val arming = armingFor(
+            at = Tick(tick),
+            seed = seed,
+            seats = inputs.seats,
+            chosenInsiders = inputs.chosenInsiders,
+            markers = BenchHome.destinations,
+            voteWindowSeconds = inputs.voteWindowSeconds,
+            names = inputs.names,
+        ).copy(oneLines = inputs.oneLines)
+
+        // The count and never who holds it. Which seats were drawn is the one fact on this event
+        // that must not reach a log on a Mac -- a device console is a file, and a file naming the
+        // Insiders is the whole game given away for every run after it.
+        note(
+            "ARMING — SEED $seed · ${inputs.seats.size} SEAT(S) · " +
+                "INSIDERS ${arming.insiders.size} (SETTING ${inputs.chosenInsiders ?: "UNKNOWN"}) · " +
+                "${BenchHome.destinations.size} MARKER(S) · ${inputs.oneLines.size} LINE(S)"
+        )
+        mint(arming)
+        return armed
+    }
+
+    /**
+     * **A request from a phone, attributed, put to the one gate** — [LobbyHouse.onIntent]'s body.
+     *
+     * The seat on [intent] came off the connection and nothing here may second-guess it. `admit`
+     * with three arguments is `admit(state, factOf(intent, at))` and nothing else, so this door and
+     * the [mint] door below reach the same gate.
+     */
+    suspend fun heard(intent: Intent) {
+        heard += intent
+        val before = state
+        when (val admission = admit(state, intent, Tick(tick++))) {
+            is Admission.Admitted -> {
+                state = admission.reduction.state
+                push(admission.reduction.effects)
+            }
+            is Admission.Refused -> {
+                refusals += admission.reason
+                // Loud to the authority, silent to the player: nothing is pushed, and the phone's
+                // screen is corrected by whatever the house said last. D-066, rule 6.
+                note("REFUSED — ${admission.reason} · ${intent::class.simpleName}")
+            }
+        }
+        if (before.systemIntegrity != state.systemIntegrity) {
+            note("SYSTEM INTEGRITY — ${before.systemIntegrity} -> ${state.systemIntegrity}")
+        }
+    }
+
+    /**
+     * **An event the house itself mints, put to the same gate.**
+     *
+     * Legitimate and permanent for the three draws that are the house's own — arming above, the
+     * Egress below, and the round's timed transitions. A **stand-in** for everything else, and
+     * every stand-in is marked where it is called rather than here, because a caller reading this
+     * method should not have to come and look.
+     */
+    suspend fun mint(event: Event) {
+        val before = state
+        when (val admission = admit(state, event)) {
+            is Admission.Admitted -> {
+                state = admission.reduction.state
+                push(admission.reduction.effects)
+            }
+            is Admission.Refused -> {
+                refusals += admission.reason
+                note("REFUSED — ${admission.reason} · ${event::class.simpleName}")
+            }
+        }
+        if (before.systemIntegrity != state.systemIntegrity) {
+            note("SYSTEM INTEGRITY — ${before.systemIntegrity} -> ${state.systemIntegrity}")
+        }
+        if (!before.ended && state.ended) {
+            note("THE ROUND ENDED — ${state.outcome?.winner} BY ${state.outcome?.by}")
+        }
+    }
+
+    /** The clock, for an event the caller is minting itself. Always the next tick, never a repeat. */
+    fun now(): Tick = Tick(tick++)
+
+    /**
+     * **The Egress draw, which sits above the rules for `routeScan`'s reason.**
+     *
+     * Choosing two markers in non-adjacent rooms needs the home's *shape*, and the rules have
+     * never held house geography. Its answer rides `Event.EgressFired` and lands in the recording
+     * as an input, exactly as the Insider draw does. This is a real house call, not a stand-in —
+     * what is a stand-in is the finger that asked for it.
+     */
+    suspend fun fireEgress(actor: Seat): Boolean {
+        val fired = egressFor(now(), actor, state, BenchHome.map, BenchHome.plan)
+        if (fired == null) {
+            note("NO EGRESS — THE HOUSE DECLINED TO DRAW ONE")
+            return false
+        }
+        note("EGRESS DRAWN — ${fired.type} AT ${fired.nodes.joinToString { it.value }}")
+        mint(fired)
+        return state.egressRunning
+    }
+
+    /**
+     * **Everything the rules produced, out to the phones the schema permits** — one at a time, in
+     * the order the rules produced them.
+     *
+     * `EffectWire.emit` takes the state **after** the event, because the round-state axis moves
+     * because of the event being processed: classifying against the state before it hands a seat
+     * that has just gone out one last frame of living permissions.
+     */
+    private suspend fun push(effects: List<Effect>) {
+        for (effect in effects) {
+            emitted += effect
+            emit(effect, state)
+        }
+    }
+}

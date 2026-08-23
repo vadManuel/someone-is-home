@@ -2,6 +2,7 @@ package home.someoneshome.app
 
 import home.someoneshome.model.protocol.LobbyBody
 import home.someoneshome.model.protocol.LobbyWire
+import home.someoneshome.model.protocol.RoundWire
 
 /**
  * **What came down the socket, on a phone, and whether any of it was somebody's line.**
@@ -66,12 +67,24 @@ class LineWatch(private val note: (String) -> Unit) {
             is LobbyBody.Standing -> "STANDING"
             is LobbyBody.Handover -> "HANDOVER"
             is LobbyBody.Naming -> "NAMING"
-            null -> "UNDECODABLE"
+            // **A round body is not an undecodable one**, and telling them apart is the difference
+            // between a probe and an alarm nobody reads. This class was written when the lobby's
+            // socket carried only the lobby; it carries the round now, and on its first five-seat
+            // run it shouted twice per push for the length of a round — hundreds of lines, every
+            // one of them reporting a frame that is exactly what should have arrived.
+            //
+            // **The line-carrying check below is deliberately unchanged and still runs on every
+            // body**, round bodies included. That is the assertion this class exists for and it is
+            // substring-matched against the raw bytes, so it never depended on decoding anything.
+            // What is fixed here is only which frames are worth shouting about.
+            null -> if (RoundWire.decodeOrNull(body) != null) "ROUND" else "UNDECODABLE"
         }
         kinds += kind
         val carriesMine = mine.isNotBlank() && body.contains(mine)
         if (carriesMine) carriers++
-        if (kind != "STANDING" || carriesMine) {
+        // A STANDING is the lobby doing its job and a ROUND body is the house doing its job.
+        // Everything else, and anything at all carrying this phone's line, is shouted about.
+        if ((kind != "STANDING" && kind != "ROUND") || carriesMine) {
             note("!!! A CLIENT-BOUND FRAME WAS $kind · CARRIED THIS PHONE'S LINE=$carriesMine")
         }
     }

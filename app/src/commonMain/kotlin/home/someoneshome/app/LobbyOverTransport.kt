@@ -3,7 +3,9 @@ package home.someoneshome.app
 import home.someoneshome.model.Effect
 import home.someoneshome.model.GameState
 import home.someoneshome.model.Intent
+import home.someoneshome.model.OneLineHeld
 import home.someoneshome.model.Seat
+import home.someoneshome.model.SeatNamed
 import home.someoneshome.model.protocol.LobbyBody
 import home.someoneshome.model.protocol.LobbyWire
 import home.someoneshome.model.protocol.RoundBody
@@ -102,6 +104,46 @@ object DeviceSeat : SeatStore {
         saveHostAddress(hostAddress)
     }
     override fun forget() = clearSeatToken()
+}
+
+/**
+ * **The round's client half, handed this phone's own socket** — the seam between the lobby's
+ * connection and [RoundOverTransport].
+ *
+ * It exists because there is exactly **one** socket per phone and the lobby owns it. A round that
+ * opened a second connection would be a second seat as far as [SeatLedger] is concerned, and the
+ * phone would be attributed two ways at once; a round that could not reach the first one could not
+ * receive a push at all. So the lobby hands its socket over rather than the round going and
+ * getting one.
+ *
+ * **Null in every production construction**, exactly as [LobbyHouse.onIntent] is empty in every
+ * production construction, and for the same reason: nothing arms a round yet, so there is nothing
+ * for a push to be about. What fills it today is the rehearsal bench, which is the first caller
+ * this seam has ever had — see `RoundCheat`.
+ *
+ * The three methods are the three moments the round's client half cares about and no others:
+ * a connection exists, a frame arrived on it, and this phone has (re-)taken its seat.
+ */
+interface RoundSeam {
+
+    /**
+     * A client is up: here is the way up it. Called again on every reconnect, because the old
+     * `send` closes over a socket that is gone.
+     */
+    fun linked(send: suspend (TransportFrame) -> Unit)
+
+    /**
+     * A frame arrived on this phone's connection. **The whole frame, not the decoded body** — the
+     * round's inbox reads a sequence number off it, and a decoder in between would be a second
+     * opinion about what arrived.
+     */
+    fun arrived(frame: TransportFrame)
+
+    /**
+     * This phone is seated, on this connection. D-097's re-assertion rides this: a phone that
+     * dropped and came back has missed an unknown amount and has to ask.
+     */
+    fun seated()
 }
 
 /**
@@ -362,6 +404,34 @@ class LobbyHouse(
      */
     suspend fun emit(effect: Effect, state: GameState) = effects.emit(effect, state)
 
+    /**
+     * **Everything the lobby holds that a round is armed out of**, in one call rather than as a
+     * set of readers on the desk.
+     *
+     * One method because it is one moment: `Event.RoundArmed` takes the seats, the names, the
+     * lines, the host's Insider setting and the host's ballot length together, and *balance values
+     * lock at arming*. A class offering five separate getters would be offering five chances to
+     * read them at five different instants, which is the one thing the arming event exists to make
+     * impossible.
+     *
+     * **The lines are in it, and this is the only reader of them outside the desk.** [LobbyDesk]'s
+     * own KDoc names the house as the one permitted caller, and this is the house: the lines go
+     * straight onto the arming event, live on `GameState`, and are dropped by the same transition
+     * that publishes them at the reveal (D-116, L6). Nothing between here and there keeps a copy —
+     * in particular this is never logged, and the bench that drives it prints a count.
+     */
+    fun armingInputs(): ArmingInputs {
+        val named = desk.namedSeats()
+        return ArmingInputs(
+            seats = named.map { it.seat }.sortedBy { it.index },
+            names = named,
+            oneLines = named.mapNotNull { n -> desk.lineOf(n.seat)?.let { OneLineHeld(n.seat, it) } },
+            chosenInsiders = desk.insiders,
+            voteWindowSeconds = desk.voteWindowSeconds,
+            readyToArm = desk.readyToArm(),
+        )
+    }
+
     /** **Deleted when the round ends** — the host's half of the promise. */
     fun roundEnded() {
         desk.roundEnded()
@@ -472,6 +542,24 @@ class LobbyHouse(
 }
 
 /**
+ * **What the lobby is holding when the lights go out**, read once so that every field is read at
+ * the same instant. See [LobbyHouse.armingInputs].
+ *
+ * It carries [readyToArm] rather than leaving it to the caller to recompute, because the gate and
+ * the inputs have to be the same reading of the same desk: a caller that asked *may I arm* and
+ * then *what with* has asked two questions of a room somebody may have walked into in between.
+ */
+data class ArmingInputs(
+    val seats: List<Seat>,
+    val names: List<SeatNamed>,
+    /** **Never logged, never printed, never counted per player.** See [LobbyHouse.armingInputs]. */
+    val oneLines: List<OneLineHeld>,
+    val chosenInsiders: Int?,
+    val voteWindowSeconds: Int,
+    val readyToArm: Boolean,
+)
+
+/**
  * `ui`'s [LobbyLink], over the websocket — and over [LobbyHouse] when this phone is the host.
  *
  * One object rather than two, because the lobby screen is one screen: the host's setting goes to
@@ -506,9 +594,23 @@ class LobbyOverTransport(
      * the round it would change does not exist yet.
      */
     private val onIntent: (Intent) -> Unit = {},
+    /**
+     * **The round's client half, on this phone's one socket.** Null in every production
+     * construction — nothing arms a round yet. See [RoundSeam].
+     */
+    private val round: RoundSeam? = null,
 ) : LobbyLink {
 
-    private val house = LobbyHouse(scope, onEvent, onIntent)
+    /**
+     * **Internal rather than private**, so that the thing which arms a round can reach the house
+     * that would carry it.
+     *
+     * It is the same widening [LobbyCheat] already relies on everywhere else: a bench in this
+     * module may reach what a screen may not, and the release variant does not compile the bench
+     * at all. `emit` and `armingInputs` are what it is reached for, and both are the authority's
+     * own calls rather than a screen's.
+     */
+    internal val house = LobbyHouse(scope, onEvent, onIntent)
     private var session: ClientSession? = null
     private var client: TransportClient? = null
     private var clientJob: Job? = null
@@ -570,6 +672,11 @@ class LobbyOverTransport(
             onFrame = { frame ->
                 val carried = (frame as? TransportFrame.Carry)?.body
                 carried?.let(onInbound)
+                // **The round sees the frame, not the body**, and sees it whatever the lobby makes
+                // of it: one socket carries both, and a `Carry` the lobby cannot read is exactly
+                // the case where it is the round's. Handed over before the lobby's own decode so
+                // that a change to what the lobby recognises can never quietly starve the round.
+                round?.arrived(frame)
                 val body = carried?.let(LobbyWire::decodeOrNull)
                 // Only the standing is acted on. Either upward body arriving at a client would be
                 // the house sending one phone's text to another, which nothing on the host side
@@ -595,6 +702,11 @@ class LobbyOverTransport(
                         // persisted — it is re-sent from what this phone still has in memory, or
                         // not at all.
                         client?.let { live -> scope.launch { live.send(naming(name)) } }
+                        // **On every seating, exactly as the name is re-sent on every seating**,
+                        // and for the mirror of that reason: the name is what the house has to be
+                        // told again, and the pushes are what this phone has to ask for again. A
+                        // phone that dropped mid-round has missed an unknown amount (D-097, G3).
+                        round?.seated()
                     }
                     is ClientSession.Phase.Dismissed -> {
                         onEvent("REFUSED BY THE HOUSE — ${phase.reason}")
@@ -607,6 +719,9 @@ class LobbyOverTransport(
             },
         )
         client = c
+        // The way up, handed over on every connect: the previous one closes over a socket that is
+        // gone, and a round still holding it would send every control press into a defunct session.
+        round?.linked { frame -> c.send(frame) }
         clientJob = scope.launch { c.run() }
     }
 

@@ -24,6 +24,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import home.someoneshome.platform.SeededCardScanner
 import home.someoneshome.platform.clearSeatToken
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import home.someoneshome.platform.deviceHaptics
 import home.someoneshome.platform.launchSwitch
 import home.someoneshome.ui.Amber
@@ -106,6 +108,25 @@ fun CheatRoot() {
     // stored token in its constructor, so this is the last moment it can happen and still mean
     // anything, and a `LaunchedEffect` is already too late.
     remember { if (launchSwitch(LobbyCheat.FORGET_SWITCH)) clearSeatToken() }
+    // The round's client half, promised to the lobby before it exists. See DeferredRoundSeam —
+    // the cycle E-P2-3 named is real and this is the bench stepping around it, not a ruling on it.
+    val seam = remember { DeferredRoundSeam() }
+    // The rules, promised to the house before they exist — the same knot the seam above unties,
+    // in the other direction: `LobbyHouse` wants somewhere to put an arriving request, and the
+    // thing that holds the state wants the house to push its answers through.
+    val rules = remember { mutableStateOf<RoundAuthority?>(null) }
+    // Held in a named val because the round is armed off the house behind it: `armingInputs` is
+    // what LIGHTS OUT reads and `emit` is the authority's only exit to the phones. Every other
+    // caller in this file still reaches it as a `LobbyLink` and cannot see either.
+    val link = remember {
+        LobbyOverTransport(
+            scope, onEvent = radio, onInbound = watch::saw,
+            // **The one door a request from another phone comes in by.** It only ever fires on the
+            // phone that is hosting, because that is the only phone frames arrive at.
+            onIntent = { intent -> scope.launch { rules.value?.heard(intent) } },
+            round = seam,
+        )
+    }
     val flow = remember {
         FlowModel(
             PanelState(screen = ScreenId.Boot),
@@ -114,10 +135,7 @@ fun CheatRoot() {
             // line up and the counts down. Discovery failures land in the rig's log, because mDNS
             // failing is otherwise completely silent — which was the whole symptom on the first
             // device run.
-            lobby = LobbyModel(
-                finder = NearbyHomes(onEvent = radio),
-                link = LobbyOverTransport(scope, onEvent = radio, onInbound = watch::saw),
-            ),
+            lobby = LobbyModel(finder = NearbyHomes(onEvent = radio), link = link),
         )
     }
     // The deck that stands in for a camera, kept now that there IS a camera. It is a tour of the
@@ -146,6 +164,44 @@ fun CheatRoot() {
     // phone sees is the app, not a rig.
     // The rig's log only: it prints its own console lines, under its own prefix.
     val evening = remember { LobbyCheat(flow, watch, transport::note) }
+    // **The round, past LIGHTS OUT.** The client half is built here rather than inside the flow
+    // because it needs the flow — `houseSaid` is the one consumer — and handed to the lobby's
+    // socket through the seam that was promised it above.
+    val roundClient = remember {
+        RoundClient(scope, flow, watch) { line -> println("[round] $line"); transport.note(line) }
+            .also { seam.becomes(it) }
+    }
+    // The rules, on this phone. Built on every seat and inert on four of them: `onIntent` above
+    // only fires where frames arrive, which is the phone that is hosting. What decides whether a
+    // round is ever armed is `lobby.hosting`, one screen up, exactly as LIGHTS OUT does.
+    val authority = remember {
+        RoundAuthority(
+            inputs = { link.house.armingInputs() },
+            emit = { effect, state -> link.house.emit(effect, state) },
+        ) { line -> println("[house] $line"); transport.note(line) }.also { rules.value = it }
+    }
+    val round = remember {
+        RoundCheat(roundClient, authority, isHost = { flow.lobby.hosting }) { line ->
+            println("[round-bench] $line"); transport.note(line)
+        }
+    }
+    // Every push, to the reactive half — the only channel five processes in a dark house have.
+    remember { roundClient.onMessage = round::react }
+    // **NEW ROUND, when the house says the round is over.** `flow.newRound` is the control the
+    // ending screen draws: it calls `lobby.roundEnded()` and walks this phone back to the lobby.
+    // Pressed on every seat because the host pressing it moves only the host — see the reaction
+    // in RoundCheat, and the escalation it names.
+    remember {
+        round.onEnding = {
+            flow.newRound()
+            println("[round-bench] NEW ROUND — BACK ON ${flow.state.screen.name.uppercase()}")
+            println(
+                "[round-bench] THE LINES AFTER THE WIPE — " +
+                    "${flow.lobby.standing.linesIn} OF ${flow.lobby.standing.joined} · " +
+                    "THIS PHONE HANDED OVER=${flow.lobby.line.handedOver}"
+            )
+        }
+    }
     var view by remember {
         mutableStateOf(
             when {
@@ -158,12 +214,31 @@ fun CheatRoot() {
     LaunchedEffect(sweeping) { if (sweeping) bench.sweep() }
     LaunchedEffect(scanSweeping) { if (scanSweeping) scan.sweep() }
     LaunchedEffect(evening) { if (evening.armed) evening.run() }
+    // **The round, once the lobby has produced one.**
+    //
+    // Two coroutines and they are not the same job. Every seat walks the house when its own work
+    // order arrives, which is a reaction to a push and runs on all five. The *script* runs on one
+    // phone, and the test for which one is the screen: LIGHTS OUT is what walks the host to ARMED,
+    // so a phone standing there having pressed it is the phone holding the house.
+    LaunchedEffect(round) {
+        if (!round.armed) return@LaunchedEffect
+        launch { round.play() }
+        while (flow.state.screen != ScreenId.Armed) delay(250)
+        if (flow.lobby.hosting) round.theRound(RoundCheat.seed())
+    }
     Box(Modifier.fillMaxSize().background(Amber.Black)) {
         when (view) {
-            // `standingInForTheHouse` is the bench's stand-in for the authority: nothing here
-            // is attached to a round, and without it the meeting stops at the check-in screen and
-            // stays there, which is true and unwalkable.
-            CheatView.Panel -> FlowHost(flow, standingInForTheHouse = true)
+            // `standingInForTheHouse` is the bench's stand-in for the authority: with no round
+            // attached the meeting stops at the check-in screen and stays there, which is true and
+            // unwalkable.
+            //
+            // **It is switched off the moment a real round is being played**, and that is not
+            // tidiness. The stand-in walks this phone's own screen forward on a timer; a house
+            // pushing the same transition would then be the second thing moving it, and the two
+            // would race on every meeting — a screen that advanced before the gate closed would
+            // look exactly like a gate that closed early, on the one surface where D-104's
+            // *no player short* is what a person is reading.
+            CheatView.Panel -> FlowHost(flow, standingInForTheHouse = !round.armed)
             CheatView.Picker -> CheatPicker(
                 flow.state,
                 onPick = { flow.jump(it); view = CheatView.Panel },

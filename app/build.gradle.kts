@@ -57,6 +57,20 @@ kotlin {
             implementation(project(":ui"))
             implementation(project(":platform"))
             implementation(project(":model"))
+            // **`core`, because the authority has to run somewhere and this is the only module
+            // left that may hold it.** The boundary table has always said so — *app roots may
+            // depend on everything* — and names this module as the home of the tick driver, for
+            // the reason `core` cannot import coroutines. The edge was simply never drawn,
+            // because until the effect push and the intent desk existed there was nothing on
+            // this side to join to the rules.
+            //
+            // **It is not a widening of any guarded boundary.** The three edges that make the
+            // modules worth having are `core ↛ coroutines`, `core ↛ platform` and `ui ↛ core`,
+            // and all three are untouched: `:ui:boundaryCheck` and `:core:boundaryCheck` are
+            // what enforce them and neither reads this line. What it does close is E-D3-3's
+            // remaining half at its root — `armingFor` had no production caller because no
+            // module that ships in the app could see it.
+            implementation(project(":core"))
         }
     }
     sourceSets.commonTest {
