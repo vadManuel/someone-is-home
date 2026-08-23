@@ -3279,6 +3279,149 @@ contact radius.
 
 ---
 
+## Revision 37 — the rulings the build was already obeying
+
+*Recorded 2026-08-23. **No new decision is taken here.** Five owner rulings had reached the code —
+argued on types, cited in KDoc, held by tests — and had never reached this log, which is the one
+place a person goes to ask *why is it like that*. A ruling that lives only in the source is a
+ruling the next reader re-litigates, and two of these five had already been re-derived once. What
+follows is the record catching up with the build.*
+
+### D-175 · **Tier 2 targets: a list, a list, and the map — recorded**
+
+**Surge picks a person from a LIST. Isolate picks a marker from a LIST. Spoof picks a room from the
+MAP.** *The glow of reading it is the deliberate price.*
+
+**The price is the ruling, not a consequence of it.** Tier 1 arms in place on a page the player is
+already standing on (D-142), because the Revoke and the Egress have no target to pick. Tier 2 makes
+you stop, open something, and **read** — in a dark house, holding the only light in it. That is why
+`gdd.md:306` says Tier 2 is never used while running and being harder to reach is a feature, and it
+is why the pickers may not be improved: **nothing on any of the three screens may be quicker than
+reading.** No search, no recent-targets shortcut, no repeat-last-target, and no tabs on Spoof's
+floors. Every one of those buys back exactly what is being paid.
+
+**The map is the third answer and it is the one with a cost.** A phone cannot draw a plan it was
+never sent, so the home's plan rides the arming event and reaches a living Insider — the largest
+single disclosure in the emit table, one class wide, and it must never be widened by one. The
+alternative was worse in the direction this project cares about: a plan delivered per-floor or on
+the fire that needs it would make *which pieces arrived* a second channel.
+
+**Two consequences the build had to take and this log should hold.** The lists are **built for every
+seat and narrowed by the allowlist**, never filtered by role — a role branch in the rules makes the
+arming burst itself role-dependent and retires the differential harness for every future change as
+well as the one that introduced it. And **a tap fires with no second confirm**: the deliberateness
+was paid at the tile by two seconds of a finger (D-141), the design has one confirmation primitive
+rather than two, and a row that reported what it did would be `gdd.md:344`'s revoke-detector rebuilt
+as a list.
+
+### D-176 · **The one sound in the game is the Surge, and the call is silent — recorded, and it is a reversal**
+
+`gdd.md:400` reserved the single permitted phone-emitted sound for **the meeting ring**. That slot
+now belongs to **Surge**, and the call makes no sound at all: it **vibrates**, LONG–pause–LONG,
+repeating until answered (D-160).
+
+**Surge's licence is that it is self-inflictable** (`gdd.md:391`, `:393`). An Insider can Surge
+themselves at the cost of the pool's longest cooldown, so being audibly attacked is not evidence of
+innocence — which is the same shape the ring's licence had (*it fires for everyone*) and the reason
+the slot could move rather than simply close. `gdd.md:399` is untouched: **nothing that fires for a
+subset ever makes a sound**, and this is not a precedent for a second member. The `Sound` type has
+one, every `when` over it is exhaustive, and a second is a compile error until somebody has written
+down which subset hears it and why that is not a role oracle.
+
+**The ring's argument was true and was not the whole account.** It earned its place because at a
+meeting call localization is already total — every lamp in the house has just gone to full white, so
+a sound adds nothing the light had not already broadcast. What that reasoning leaves out is that
+**a sound is heard by the room, and a room contains people who are not in it.** The two things the
+ring was for are met by the two things that replaced it: the summons reaches a player who is not
+looking at their phone because it **repeats until answered**, and it reaches a player two storeys up
+because it is **in their hand**, which is where the house rule already requires the phone to be.
+What is gone is the half nobody needed — a channel the whole building shares, in a game whose
+discipline is that the only private channel is the one against your palm.
+
+**Three written rows fall with it**, swept on 2026-08-23 and listed below: *not indefinitely* (the
+old duration row worried about a phone still ringing two minutes later localizing whoever was slow —
+nothing localizes anybody now), *must play regardless of the hardware silent switch*, and *volume:
+full — this is the one moment the game wants to be loud.*
+
+**No code path ever emitted ring audio**, which is worth recording because it is the reason this is a
+sweep rather than a repair: `Effect.MeetingOpened` has only ever carried a `Haptic`, `Sound` has only
+ever had `Surge` in it, and `platform`'s `Speaker` has no production call site at all. The documents
+were the only place the ringtone still existed.
+
+### D-177 · **NEW ROUND is the label — confirmed**
+
+D-157 gave the ending screens a host-only control back to the lobby and left its **label** as copy
+pending at build time. The word is **NEW ROUND**, confirmed as written.
+
+**It takes no two-second hold**, which was the other half D-157 left open and is recorded here as the
+build's reading standing unchallenged rather than as a second ruling. D-141's argument is about a
+control **pressed in the dark**, where a thumb finds a tile by feel and a mis-tap cannot be taken
+back. This is pressed in the light, in front of the whole party, on the one screen in the game where
+nobody is hiding their display.
+
+### D-178 · **The couch's Egress widget is empty until there is an Egress — decided**
+
+**It shows `EGRESS . <type>` and the ghost's live percentage while an Egress runs. Otherwise it is
+dim and empty: no percentage, no type, and not the word.**
+
+The couch is the one audience allowed to watch the real Egress number (`gdd.md:1014`) and it watches
+from **one screen for the whole round** — which is exactly why this widget, alone among the things on
+that screen, has to be able to say nothing. The living need no equivalent: their Egress is a screen
+the house pushes them to, so the screen *is* the state and cannot be wrong about whether a crisis is
+running. A couch reading `68%` from lights-out in a house where nothing has happened is the app
+lying to the one person it has promised the truth to.
+
+**`TRUE` disappears, and it was two grammars in one shape.** The literal read TRUE as an
+*adjective* — the **true** Egress number, matching TRUE OCCUPANCY at the foot of the same screen —
+while the living's widget one screen over draws `"EGRESS . ${type}"`, where the second half **is**
+the type: `EGRESS . BEACON`. Two meanings, one shape, one screen apart, in front of the reader with
+the most time to notice. The type is the reading the shape already had everywhere else.
+
+**The frame stays at its full height either way**, so the plan below it does not walk up the screen
+when an Egress fires — a layout that moved would be a second, silent announcement of the crisis,
+arriving before the widget had said anything. And **empty is not zero**: nothing draws a bar with no
+lit segments here, because a drained bar is a statement about an Egress nearly contained and *no
+Egress at all* is not a value on that scale.
+
+**This is F-006 seen from the other side and does not close it.** F-006 is about the living's
+takeover costing a stale number rather than a live one; this is about the couch's widget claiming a
+number when there is nothing to number. Both are still open on the same missing sender — the Egress
+has a carrier (`Effect.EgressHeld`) but not the duration it is a fraction of.
+
+### Swept in this pass
+
+| site | superseded by | what it now says |
+|---|---|---|
+| `gdd.md:400` — *the meeting ring is the one permitted phone-emitted sound* | D-176 | the Surge is, and the call is haptic-only |
+| `gdd.md:411` — M10's trigger row, *and it rings … every phone rings* | D-176, D-160 | it rings in the hand and nowhere else; no phone makes a sound |
+| `gdd.md:993` — *every phone rings* | D-176, D-160 | every phone starts vibrating, repeating until answered |
+| `gdd.md:995` — *sound reaches everyone, through walls* | D-176 | the call is what makes the meeting unambiguous, and it is the one signal that does not give up |
+| `gdd.md:1208-1217` — *an actual ringtone*, and the four-row property table | D-176, D-160 | haptic only; indefinitely until answered; no audio session; no volume |
+| `Countdown.kt` — `ScreenId.GhostMeeting to 60` and its *left alone deliberately* KDoc | D-163 | both ballot rows read `Balance.VOTE_WINDOW_SECONDS`; the design's `0:24` now sits over sixteen segments of thirty |
+| `ScreensWork.kt` — `NOT YOURS` | D-124 | `NOTHING FOR YOU HERE` (E-L4-2 closed) |
+| `ScreensOut.kt` — `EGRESS . TRUE` and its always-populated widget | D-178 | the type, and only while one runs |
+| `ScreensOut.kt` — the sign-off card in amber on the Residents' ending | — | the bone palette, like every other element on that screen |
+| `Chrome.kt` — *REVOKED and RESTRAINED fit whole with room to spare* | measurement | the carrier draws exactly ten characters and RESTRAINED is ten; there is no margin |
+
+### Still open — and one of them is now smaller
+
+- **E-P1-4 is smaller by one.** The buzz had no route from the wire to the motor: `HouseBuzzer`
+  answered for `Effect`, a client only ever holds a `RoundMessage`, and the class therefore had no
+  production caller at all. It answers for both now, and the two answers are compared against each
+  other across every kind in the game rather than trusted to agree. **The fifteen screen routes are
+  untouched** — which screen a `MeetingOpened` opens is still a decision and not a wiring gap.
+- **The ten-second bound on an unanswered advertisement** (revision 35's ⚠️, *ruled by nobody*) and
+  **what a host is told when the real problem is a permission they can still grant** are awaiting the
+  owner's exact words and are deliberately not written down here. `THIS HOME DID NOT GO ON THE AIR`
+  is what the screen says today.
+- **Sniff's briefing copy is a draft**, flagged on `Subroutine.briefing`. E-S1-1 is closed as a
+  *placement* — the instruction is read at the card, because Sniff's own screen is black until the
+  answer (D-137) and a sentence drawn there is black ink on black glass. The wording is the build's
+  and wants a person's eye. Whether the other nine should be briefed at the card as well is a copy
+  call nobody has made; they are deliberately null.
+
+---
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

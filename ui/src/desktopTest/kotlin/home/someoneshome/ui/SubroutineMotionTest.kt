@@ -260,6 +260,63 @@ class SubroutineMotionTest {
     }
 
     /**
+     * **A re-scan restarts the clock because the INSTANCE changed, not because the screen went**
+     * (E-S2-4, D-139, D-140).
+     *
+     * A marker scanned again is a fresh question: the house re-draws the band's position and phase,
+     * and the drift's path and its wait. The clock those screens measure against therefore has to
+     * start again — and until now it did, **for the wrong reason.** It lived in a `remember`, so it
+     * restarted when the composition was disposed, and the only route back to a marker happens to
+     * walk through the work order and dispose it. That is a property of the current flow, not a
+     * rule about instances, and the day a re-scan can re-open a Subroutine the phone is already
+     * standing on it would have carried the old clock into the new draw — a sweep already halfway
+     * across a band the player has only just been shown.
+     *
+     * **So the screen is deliberately never disposed here.** The composition stays exactly where it
+     * is, the model is handed a fresh instance the way a scan hands it one, and the frame that
+     * comes back has to be the opening frame. A build keyed on the composition renders whatever the
+     * old clock had reached, which is the failure this is written to catch and the one no flow in
+     * the app can currently reach.
+     */
+    @Test
+    fun aRescanRestartsTheClockWithoutTheScreenBeingDisposed() {
+        val model = SubroutineModel()
+        runDesktopComposeUiTest(width = width, height = height) {
+            mainClock.autoAdvance = false
+            setContent {
+                DeviceCanvas(insets = PanelInsets()) {
+                    Screen(
+                        PanelState(screen = ScreenId.SubInterrupt),
+                        PanelActions(tapSubroutine = model::tap),
+                        subroutines = model,
+                    )
+                }
+            }
+            mainClock.advanceTimeByFrame()
+            val opening = onRoot().captureToImage().toAwtImage()
+
+            mainClock.advanceTimeBy(2_000)
+            val moved = onRoot().captureToImage().toAwtImage()
+            assertTrue(
+                diff(opening, moved).first > 0,
+                "the sweep never left its opening position, so this proves nothing about a restart",
+            )
+
+            // The marker was scanned again. Nothing navigates: the phone is standing on this
+            // screen and the house has dealt it a new instance of the same Subroutine.
+            model.beganAgain()
+            mainClock.advanceTimeByFrame()
+            val redrawn = onRoot().captureToImage().toAwtImage()
+
+            val (pixels, where) = diff(opening, redrawn)
+            assertEquals(
+                0, pixels,
+                "a re-scan left the clock where the last instance had run to${where?.let { " ($it)" } ?: ""}",
+            )
+        }
+    }
+
+    /**
      * **D-140 — a tap before the buzz is echoed and sends nothing; the one after it sends.**
      *
      * The question is the house's to ask, and until it has been asked there is nothing to answer.

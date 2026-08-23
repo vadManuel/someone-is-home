@@ -824,7 +824,7 @@ fun InterruptScreen(verdict: SubroutineVerdict? = null) {
     // grade against, because they are the same number and it arrived on the same scan.
     val sweep = LocalSubroutine.current.sweep
     val live = !entry.handedOver
-    val elapsed = screenMillis(running = live)
+    val elapsed = screenMillis(running = live, instance = LocalSubroutine.current.instance)
     // Where it is, or where it was caught. One expression, because they are the same picture: the
     // bar carries a mark at a step of the span and what put it there is not the bar's business.
     val at = entry.entered.firstOrNull() ?: sweep.at(elapsed)
@@ -902,7 +902,7 @@ fun DriftScreen(verdict: SubroutineVerdict? = null) {
     val actions = LocalActions.current
     val path = LocalSubroutine.current.path
     val live = entry.handedOver == null
-    val elapsed = screenMillis(running = live)
+    val elapsed = screenMillis(running = live, instance = LocalSubroutine.current.instance)
     // Whether the house has said *now*. Not a judgement and not about the entry: it is the clock
     // reaching the instant the scan named, and the same instant for both roles.
     val asked = elapsed >= path.askAtMillis
@@ -1080,11 +1080,23 @@ const val DRIFT_LANE: String = "subroutine-lane"
  * It freezes when [running] goes false, which is what makes an entry that has gone stop the picture
  * where it stood. See [DriftScreen] for why that matters more there than a frozen picture usually
  * would.
+ *
+ * ### It restarts on the INSTANCE, not on the composition (E-S2-4)
+ *
+ * [instance] is [SubroutineModel.instance], and it is what the zero is a zero *of*. A re-scan
+ * re-draws the band's position and phase (D-139) and the drift's path and wait (D-140), so the
+ * question on the glass is a new question and the clock measuring it has to be a new clock.
+ *
+ * Keying it on `remember` alone would have made the restart a side effect of the screen being
+ * disposed — which is true today, because the only route back to a marker goes through the work
+ * order — and would have gone silently wrong the first time a re-scan could re-open a Subroutine
+ * the phone was already standing on. **The clock restarts because the instance changed**, which
+ * is the sentence the fix has to be, and now is.
  */
 @Composable
-private fun screenMillis(running: Boolean): Long {
-    var elapsed by remember { mutableStateOf(0L) }
-    LaunchedEffect(running) {
+private fun screenMillis(running: Boolean, instance: Int): Long {
+    var elapsed by remember(instance) { mutableStateOf(0L) }
+    LaunchedEffect(running, instance) {
         if (!running) return@LaunchedEffect
         var last = withInfiniteAnimationFrameMillis { it }
         while (true) {
