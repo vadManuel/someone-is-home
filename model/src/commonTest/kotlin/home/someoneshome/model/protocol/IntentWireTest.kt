@@ -67,6 +67,7 @@ class IntentWireTest {
         is Intent.ArmRevoke -> IntentMessage.ArmRevoke
         is Intent.FireSurge -> IntentMessage.FireSurge(intent.target)
         is Intent.FireIsolate -> IntentMessage.FireIsolate(intent.target)
+        is Intent.FireSpoof -> IntentMessage.FireSpoof(intent.room)
         is Intent.BeginSubroutine -> IntentMessage.BeginSubroutine(intent.marker)
         is Intent.CallMeeting -> IntentMessage.CallMeeting
         is Intent.CheckIn -> IntentMessage.CheckIn
@@ -251,6 +252,7 @@ class IntentWireTest {
         is Intent.ArmRevoke -> intent.actor
         is Intent.FireSurge -> intent.actor
         is Intent.FireIsolate -> intent.actor
+        is Intent.FireSpoof -> intent.actor
         is Intent.BeginSubroutine -> intent.actor
         is Intent.CallMeeting -> intent.actor
         is Intent.CheckIn -> intent.actor

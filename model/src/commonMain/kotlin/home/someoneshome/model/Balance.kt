@@ -213,6 +213,53 @@ object Balance {
      */
     fun isolateIsTemporary(): Boolean = ISOLATE_DURATION < ISOLATE_COOLDOWN
 
+    /**
+     * **Spoof's weight on the pool — the lightest in it, and a placeholder** (`gdd.md:313`).
+     *
+     * The third and last weight on the Access pool, and the cheapest of the three on purpose.
+     * `gdd.md:1143` rates Spoof the roster's **cut risk**: *"Spoof may be too abstract for the dark.
+     * Surge and Revoke have immediate, visceral effects; Spoof is slow, indirect, and asks a Insider
+     * to think about the map layer while standing in a dark hallway. It may simply never get
+     * used."* — and `gdd.md:1342` turns that into a measurement: **fired at least once per three
+     * rounds, or it is cut.**
+     *
+     * Pricing an ability nobody reaches for at the same weight as one everybody does would be the
+     * build putting a thumb on that measurement's scale. It is the lightest weight in the pool so
+     * that *nobody used it* is a finding about the ability rather than about its price.
+     *
+     * ⚠️ **The metric is the point of this number and it is not measurable yet.** See
+     * `Transcript.spoofFires`, which is the counting half.
+     */
+    const val SPOOF_COOLDOWN: Long = 60L * TICKS_PER_SECOND
+
+    /**
+     * **How long a phantom occupant lasts — a placeholder** (`gdd.md:313`).
+     *
+     * The design says nothing at all about this: *false check-in in a room you are not in;
+     * manufactures a phantom occupant* is the whole of it, and a check-in is an instant rather than
+     * a duration. So a number had to be chosen, and what it is choosing between is a lie that
+     * decays like a real sighting and a lie that stands until something contradicts it.
+     *
+     * It decays. A phantom that outlived its round would make the map's oldest data its most
+     * confident, which is the opposite of what a staleness-banded map is for (`gdd.md`'s three
+     * bands) — and D-136's *adjacent-room bleed is accepted* only reads as acceptable because a
+     * sighting is a recent thing.
+     *
+     * Longer than [ISOLATE_DURATION] because a lie has to outlast the walk to the room it names,
+     * and shorter than [SPOOF_COOLDOWN] for [ISOLATE_DURATION]'s exact reason: at or past parity
+     * one Insider could keep a permanent false occupant standing in a room by re-firing, and a
+     * permanent phantom is a fixture rather than a check-in.
+     */
+    const val SPOOF_DURATION: Long = 50L * TICKS_PER_SECOND
+
+    /**
+     * **Whether a phantom is really a check-in rather than a fixture.** See [SPOOF_DURATION].
+     *
+     * [isolateIsTemporary]'s shape and its reason: the numbers above are playtest's, and the person
+     * who lengthens a phantom to make it bite will not be reading this file's KDoc when they do it.
+     */
+    fun phantomIsTemporary(): Boolean = SPOOF_DURATION < SPOOF_COOLDOWN
+
     /** **Four taps on the beat** (`gdd.md:355`, A-11). The design's number, not a placeholder. */
     const val SYNC_PULSE_BEATS: Int = 4
 

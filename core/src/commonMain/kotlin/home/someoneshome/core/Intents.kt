@@ -49,10 +49,13 @@ fun factOf(intent: Intent, at: Tick): Event = when (intent) {
     // published to that phone, so both events are fully determined by what the phone did, which
     // connection did it, and when it arrived. Nothing is composed from a second source.
     //
-    // Spoof is the third ability on the same pool and has no row here. It is T2's, and whether it
-    // qualifies is T2's question rather than an omission in this table.
+    // Spoof is the third and it qualifies for the same reason, with the widest gap between what the
+    // phone sent and what the house could have composed: it names a ROOM off a plan the house
+    // published to that phone, and the house resolves it to nothing at all. There is no draw, no
+    // roster lookup, and no second source -- the string travels from the finger to the state.
     is Intent.FireSurge -> Event.SurgeFired(at, intent.actor, intent.target)
     is Intent.FireIsolate -> Event.IsolateFired(at, intent.actor, intent.target)
+    is Intent.FireSpoof -> Event.SpoofFired(at, intent.actor, intent.room)
 
     is Intent.BeginSubroutine -> Event.MarkerScanned(at, intent.actor, intent.marker)
 

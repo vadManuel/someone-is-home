@@ -60,7 +60,34 @@ class RecordingTextTest {
         }
 
         assertEquals(withoutTheText(original.events), reparsed.events)
-        assertTrue(original.events.size > 100, "the fixture must exercise every event kind")
+
+        // ### ⚠️ The fixture really does carry every event kind, and this used to be a size proxy
+        //
+        // The line here was `assertTrue(original.events.size > 100)`, which says *the fixture is
+        // big* and was read as *the fixture is complete*. It is not the same claim, and the
+        // difference cost something real: `RecordingText.expectedFields` had no row for
+        // `SurgeFired` or `IsolateFired`, so **every recording containing a Tier-2 ability was
+        // unreadable** — the parser built the event, fell through to the unknown-field check, and
+        // threw. This test passed the whole time, because the fixture had a hundred and forty
+        // events in it and not one of them was a Surge.
+        //
+        // The list is written out **by hand**, which is the discipline `expectedFields` itself is
+        // built on and the reason it works: a list derived from the thing it is checking agrees
+        // with itself. A new event forces two compile errors (the parse table and the field table,
+        // both exhaustive by hand) and then this assertion, which is the one that asks whether
+        // anybody has ever actually recorded one.
+        val EVERY_EVENT_KIND = setOf(
+            "RoundArmed", "MarkerScanned", "SubroutineReturned", "PerformanceEnded", "RevokeArmed",
+            "ContactMade", "SurgeFired", "SpoofFired", "IsolateFired", "MeetingCalled",
+            "MeetingCheckedIn", "ReadyToVoteDeclared", "VoteSelected", "VoteLocked",
+            "DiscussionClosed", "VoteWindowClosed", "TallyHalfwayReached", "MeetingClosed",
+            "EgressFired", "SyncPulseReturned",
+        )
+        val walked = original.events.map { Transcript.render(it).substringBefore('|') }.toSet()
+        assertEquals(
+            emptySet(), EVERY_EVENT_KIND - walked,
+            "the fixture never records these, so nothing here has ever round-tripped them",
+        )
 
         // And the seats really are on the row: a recording that dropped the list entirely would
         // pass the comparison above for the wrong reason, because both sides would hold nothing.

@@ -14,6 +14,7 @@ import home.someoneshome.model.Isolation
 import home.someoneshome.model.Meeting
 import home.someoneshome.model.MeetingPhase
 import home.someoneshome.model.Outcome
+import home.someoneshome.model.Phantom
 import home.someoneshome.model.Presence
 import home.someoneshome.model.PulseOffer
 import home.someoneshome.model.Role
@@ -47,6 +48,7 @@ private fun dispatch(state: GameState, event: Event): Reduction<GameState, Effec
 
     is Event.SurgeFired -> surgeFired(state, event)
     is Event.IsolateFired -> isolateFired(state, event)
+    is Event.SpoofFired -> spoofFired(state, event)
 
     is Event.ContactMade -> contact(state, event)
 
@@ -355,7 +357,15 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
             // Isolate picks from one. Grouped by kind like the three runs above it, and the same
             // length as them, which is what keeps the arming burst role-independent — see
             // [isolateOffers], where the differential harness's finding is written down.
-            isolateOffers(state),
+            isolateOffers(state) +
+            // **The home's plan, for every seat, narrowed to Insiders by the allowlist and not by
+            // this line** — [isolateOffers]' sentence and the same shape, for the same reason. The
+            // run is `seats.size` long whichever seats hold which role, so the arming burst stays
+            // byte-identical under a role swap and the differential harness keeps working.
+            //
+            // **Read off the event and stored nowhere.** After this line the rules hold no house
+            // geometry at all; see [Event.RoundArmed.plan], where that is the point of the field.
+            seats.map { Effect.HomePlanOffered(it, event.plan) },
     )
 }
 
@@ -528,7 +538,9 @@ private fun revokeArmed(state: GameState, event: Event.RevokeArmed): Reduction<G
 // answer is constructed ONCE, outside every branch, and only the state transition moves. What
 // differs from the Egress is one field, and it is deliberate — see `spendsPool`.
 //
-// Spoof is the third ability on this pool and is not here. It is T2's.
+// Spoof is the third and is here now. It is the only one of the three with no target seat and
+// no target card: what it moves is the actor's own claimed location, which is why self-targeting
+// needed no expression in it -- see `spoofFired`.
 // =================================================================================================
 
 /**
@@ -675,6 +687,91 @@ private fun isolateFired(state: GameState, event: Event.IsolateFired): Reduction
     // Constructed once, outside the branch above. Deliberately not inside it, and deliberately the
     // ONLY effect this handler produces: a card going dark is discovered by walking to it.
     return Reduction(next, listOf(Effect.AbilityFired(event.actor, cooldownStarted = takes)))
+}
+
+/**
+ * **Spoof: the actor claims a room they are not in, and the claim reaches nobody** (`gdd.md:313`,
+ * `:392`–`:401`, D-136, the owner's targeting ruling).
+ *
+ * *False check-in in a room you are not in. Manufactures a phantom occupant.*
+ *
+ * ### Self-targeting is not handled here because it is not a case — it is the ability
+ *
+ * `gdd.md:393` requires every ability to be self-inflictable, and the other four hold that by having
+ * a target that *may* equal the actor with nothing anywhere special-casing it. **Spoof holds it more
+ * simply than any of them: there is no other seat it could name.** What a Spoof moves is the actor's
+ * own claimed location, so `Event.SpoofFired` carries no target at all and the self-targeting
+ * requirement is satisfied by the ability's shape rather than by a rule about it.
+ *
+ * That reading matters because it is the one ability where somebody could reasonably have built a
+ * `target: Seat` — *manufacture a phantom occupant* does not say whose — and a Spoof that could
+ * plant a phantom of **another** seat would be an Insider fabricating evidence about a named person,
+ * which is a different and much larger ability than the one the design describes.
+ *
+ * ### Rule 1's shape, and the branch is on the pool alone
+ *
+ * One [Effect.AbilityFired], constructed once, outside every branch — [surgeFired]'s and
+ * [egressFired]'s arrangement. Nothing here asks who the actor is, whether the room exists, whether
+ * they are already claiming somewhere else, or whether they are in fact standing in the room they
+ * just named. **A Spoof of the room you are actually in is lawful and produces the same frames as
+ * any other**, which is the shape `gdd.md:344` asks for, kept by there being no question to answer.
+ *
+ * ### The room is not validated, and that is deliberate
+ *
+ * A name the plan does not hold reaches the state as a phantom in a room that does not exist —
+ * visible to nobody, costing an Insider a pool. Refusing it would mean the rules acquiring an
+ * opinion about which rooms are in a house they have never been in ([GameState.destinations]'
+ * standing rule), and would put a refusal on a client-visible path for a case only a forged client
+ * can reach. See [Event.SpoofFired].
+ *
+ * ### The phantom cannot touch the presence plane, and that is structural
+ *
+ * [GameState.withPhantom] writes [GameState.phantoms], a different list of a different type, and
+ * there is no writer anywhere that can put a phantom into [GameState.presence]. D-136's *inference
+ * never overrides knowledge* is therefore not a check this handler makes — it is a thing this
+ * handler could not express if it wanted to. The ordering is [GameState.placementOf]'s, asked at
+ * read time, which is what makes both firing orders come out the same.
+ *
+ * ### ⚠️ Spoof is the roster's CUT-RISK CANDIDATE and this is where the metric lives
+ *
+ * `gdd.md:1143`: *Spoof may be too abstract for the dark. Surge and Revoke have immediate, visceral
+ * effects; Spoof is slow, indirect, and asks a Insider to think about the map layer while standing
+ * in a dark hallway. **It may simply never get used. Watch it in playtest rather than cutting
+ * preemptively.*** `gdd.md:1342` is the watching, as a number: **fired at least once per three
+ * rounds. If it is never used, cut it.**
+ *
+ * The measurement is `Transcript.spoofFires`, which counts [Event.SpoofFired] in a recording — so
+ * the metric is answerable off the artifact every round already produces, rather than off somebody
+ * remembering to watch. [Balance.SPOOF_COOLDOWN] is the pool's lightest weight for the same reason:
+ * *nobody used it* has to be a finding about the ability and not about its price.
+ */
+private fun spoofFired(state: GameState, event: Event.SpoofFired): Reduction<GameState, Effect> {
+    val ready = state.accessReady(event.actor, event.at)
+    val until = event.at + Balance.SPOOF_DURATION
+
+    val next = if (!ready) {
+        state
+    } else {
+        spendPool(state, event.actor, event.at, Balance.SPOOF_COOLDOWN)
+            .withPhantom(Phantom(event.actor, event.room, until))
+    }
+
+    // Constructed once, outside the branch above. Deliberately not inside it: the actor's device
+    // stays inert either way, and what it is told is that the ability fired and what its own clock
+    // now says -- exactly what a Surge into a running pool is told, and exactly what an Egress
+    // stalk that never found anybody is told.
+    val answered = Effect.AbilityFired(actor = event.actor, cooldownStarted = ready)
+
+    // **Recorded, and delivered to nobody.** No schema row, and addressed to the actor who cannot
+    // receive it either -- see Effect.PhantomPlaced. It is emitted so the fact replays, which is
+    // the presence plane's whole arrangement one ability over.
+    val placed = if (!ready) {
+        emptyList()
+    } else {
+        listOf(Effect.PhantomPlaced(seat = event.actor, room = event.room, until = until))
+    }
+
+    return Reduction(next, listOf(answered) + placed)
 }
 
 /**

@@ -559,10 +559,11 @@ class FlowTest {
         // role-asymmetric edge in the game and the only one no rendering pass can reach: a
         // Resident's tile takes no pointer input at all (D-142), so firing everything on a
         // Resident's page 2 finds nothing, which is the ruling rather than a gap.
-        // **All three of page 2's holds**, walked from the same screen because they are three
-        // gestures on one page and the edge set has three members. The Egress arms in place and
-        // reaches the alert every phone gets; the two tier-2 tiles open a target list, which is the
-        // 2026-08-22 targeting ruling and the one place the design asks a hold to open a view.
+        // **All four of page 2's holds**, walked from the same screen because they are four
+        // gestures on one page and the edge set has four members. The Egress arms in place and
+        // reaches the alert every phone gets; the three tier-2 tiles each open a view, which is the
+        // targeting rulings and the one place the design asks a hold to open one. Spoof's is a plan
+        // where the other two are lists, and the edge is the same edge.
         val page2 = setOf(
             FlowModel(PanelState(screen = ScreenId.Page2, role = PanelRole.Insider))
                 .apply { armEgress() }.state.screen,
@@ -570,6 +571,8 @@ class FlowTest {
                 .apply { go(ScreenId.SurgeTargets) }.state.screen,
             FlowModel(PanelState(screen = ScreenId.Page2, role = PanelRole.Insider))
                 .apply { go(ScreenId.IsolateTargets) }.state.screen,
+            FlowModel(PanelState(screen = ScreenId.Page2, role = PanelRole.Insider))
+                .apply { go(ScreenId.SpoofRooms) }.state.screen,
         )
         assertEquals(Flow.viaActions.getValue(ScreenId.Page2), page2)
 
@@ -584,6 +587,13 @@ class FlowTest {
             FlowModel(PanelState(screen = ScreenId.IsolateTargets, role = PanelRole.Insider))
         isolate.fireIsolate("card-hall")
         assertEquals(Flow.viaActions.getValue(ScreenId.IsolateTargets), setOf(isolate.state.screen))
+
+        // And off a room of the plan. The same walk, and it matters most here: a Spoof's whole
+        // consequence is invisible, so the navigation is the only thing the actor's phone does at
+        // all — and it must be the same navigation whether the pool was ready or not.
+        val spoof = FlowModel(PanelState(screen = ScreenId.SpoofRooms, role = PanelRole.Insider))
+        spoof.fireSpoof("KITCHEN")
+        assertEquals(Flow.viaActions.getValue(ScreenId.SpoofRooms), setOf(spoof.state.screen))
 
         // A house notice, swiped up — the last button dismissal in the app, retired (D-105).
         val notice = FlowModel(PanelState(screen = ScreenId.Notice))
@@ -643,7 +653,7 @@ class FlowTest {
                 ScreenId.Secret, ScreenId.Lobby, ScreenId.ScanCaught,
                 ScreenId.WinInsiders, ScreenId.WinResidents,
                 // Page 2's three holds, and the two pickers a row fires off.
-                ScreenId.Page2, ScreenId.SurgeTargets, ScreenId.IsolateTargets,
+                ScreenId.Page2, ScreenId.SurgeTargets, ScreenId.IsolateTargets, ScreenId.SpoofRooms,
                 ScreenId.Notice,
                 ScreenId.Notify, ScreenId.Banner, ScreenId.Quiet, ScreenId.LockNotify,
             ),

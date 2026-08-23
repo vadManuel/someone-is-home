@@ -120,7 +120,7 @@ object ScreenGraph {
         // publishes: a row FIRES, which walks back to page 2 without naming it — see
         // [Flow.viaActions], where firing is declared with the other gestures. A picker that could
         // only be left by firing would be a control that costs a cooldown to change your mind about.
-        ScreenId.SurgeTargets, ScreenId.IsolateTargets -> setOf(ScreenId.Page2)
+        ScreenId.SurgeTargets, ScreenId.IsolateTargets, ScreenId.SpoofRooms -> setOf(ScreenId.Page2)
         // The lantern, and the lantern with something under its clock. A notification on a locked
         // phone is READ, not opened: this screen has one control and it is SLIDE TO OPEN, so a
         // card that also navigated would be an unlock nobody performed.
@@ -560,14 +560,14 @@ object Flow {
         // (D-142), so there is no hold to run and no view either role can be caught on.
         ScreenId.Page2 to setOf(
             ScreenId.Banner,
-            // The two tier-2 tiles, armed by the same two seconds of a finger (D-141) and opening a
-            // list rather than arming in place — the 2026-08-22 targeting ruling, and the one place
-            // the design asks for a view. Asymmetric in capability and never in appearance: a
-            // Resident's three tiles are drawn identically and take no pointer input at all (D-142),
-            // so nothing here is reachable by rendering the Resident and firing everything on
-            // screen. Spoof's tile is inert for both roles and names no edge, because nothing is
-            // behind it yet.
-            ScreenId.SurgeTargets, ScreenId.IsolateTargets,
+            // **All three tier-2 tiles now**, armed by the same two seconds of a finger (D-141)
+            // and opening a view rather than arming in place — the owner's targeting rulings, and
+            // the one place the design asks for one. Two open a list and Spoof opens the home's
+            // plan, which is the same trade priced higher: *the glow of reading the map is the
+            // deliberate price.* Asymmetric in capability and never in appearance: a Resident's
+            // three tiles are drawn identically and take no pointer input at all (D-142), so
+            // nothing here is reachable by rendering the Resident and firing everything on screen.
+            ScreenId.SurgeTargets, ScreenId.IsolateTargets, ScreenId.SpoofRooms,
         ),
         // Firing a Tier-2 ability, which walks back to page 2 without the row naming it: what a row
         // publishes is a target off a list the house sent, and where the phone lands afterwards is
@@ -575,6 +575,7 @@ object Flow {
         // whether the shot landed, so nothing about the navigation is feedback.
         ScreenId.SurgeTargets to setOf(ScreenId.Page2),
         ScreenId.IsolateTargets to setOf(ScreenId.Page2),
+        ScreenId.SpoofRooms to setOf(ScreenId.Page2),
         // A house notice, swiped up off the meeting.
         ScreenId.Notice to setOf(ScreenId.Discussion),
         // Every notification, swiped away — up on the three banners, left under the clock. The
@@ -855,6 +856,37 @@ class FlowModel(
      */
     fun fireIsolate(card: String) {
         send(IntentMessage.FireIsolate(target = MarkerId(card)))
+        go(ScreenId.Page2)
+    }
+
+    /**
+     * **SPOOF, fired at the room that was tapped on the plan** (`gdd.md:313`, the owner's targeting
+     * ruling).
+     *
+     * [room] is a host-authored name off [PanelState.homePlan], which is the plan the house sent
+     * this phone — so like [fireIsolate] this reports a **choice among what the house drew**, and
+     * carries no claim about where anybody actually is. The house resolves the name to nothing; see
+     * `Event.SpoofFired`.
+     *
+     * ### It walks back to page 2 and reports nothing, and here that costs the most
+     *
+     * [fireSurge]'s paragraph, and it bites hardest on this ability: a Surge and an Isolate at least
+     * *do* something a player might later hear about, while a Spoof's entire consequence is invisible
+     * to everybody including the person who fired it. **There is nothing to draw and there must be
+     * nothing to draw** — a phantom-placed line, a room highlighted on the plan afterwards, a tick
+     * beside the room's name, are each `gdd.md:398`'s forbidden actor-side feedback, and each is the
+     * obvious thing to add to a screen that currently looks like it did nothing.
+     *
+     * The screen looking like it did nothing **is the ability working.**
+     *
+     * **No branch of any kind**: this method does the same thing whichever room was tapped, whether
+     * the pool was ready, whether the room exists, and whether the actor is standing in it.
+     *
+     * **Reached only from an Insider's tile**, and not by a check inside it — a Resident's tier-2
+     * tiles take no pointer input at all (D-142), so a Resident never opens the picker.
+     */
+    fun fireSpoof(room: String) {
+        send(IntentMessage.FireSpoof(room = room))
         go(ScreenId.Page2)
     }
 
@@ -1253,6 +1285,23 @@ class FlowModel(
             is RoundMessage.IsolateTargetsOffered ->
                 state = state.copy(isolateTargets = message.targets)
 
+            // **The home's plan, straight onto the panel.** The Isolate list's branch exactly, one
+            // ability over and one narrowing wider: it is copied whole and never trimmed here,
+            // because what a phone may be shown is the allowlist's decision (`HOME_PLAN_OFFERED` is
+            // one class wide) and a client that filtered it would be a second, quieter rule about
+            // the same disclosure.
+            is RoundMessage.HomePlanOffered ->
+                state = state.copy(homePlan = message.plan)
+
+            // **A Spoof landing, and this branch is unreachable in any round that runs.**
+            // `EmitSchema.PHANTOM_PLACED` has no row at all, so no delivery is ever produced for it
+            // — see `Effect.PhantomPlaced`, where the reason is that a phantom names an Insider
+            // outright. Written rather than left to an `else`, because a missing branch is a
+            // compile error somebody fixes with whatever is nearest, and what is nearest here is a
+            // state field. **There must never be a field.** Even on the actor's own phone this is
+            // the one thing `gdd.md:398` forbids: feedback that a fire landed.
+            is RoundMessage.PhantomPlaced -> Unit
+
             is RoundMessage.SubroutineGraded -> state = state.copy(
                 verdict = if (message.accepted) SubroutineVerdict.Accepted else SubroutineVerdict.Rejected,
             )
@@ -1435,6 +1484,7 @@ class FlowModel(
         armEgress = ::armEgress,
         fireSurge = ::fireSurge,
         fireIsolate = ::fireIsolate,
+        fireSpoof = ::fireSpoof,
         toggleMarkers = ::toggleMarkers,
         toggleTorch = ::toggleTorch,
         pickRoomType = ::pickRoomType,

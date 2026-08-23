@@ -3,9 +3,13 @@ package home.someoneshome.harness
 import home.someoneshome.model.Destination
 import home.someoneshome.model.EgressType
 import home.someoneshome.model.Event
+import home.someoneshome.model.FloorView
+import home.someoneshome.model.HomePlanView
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.OneLineHeld
+import home.someoneshome.model.PlanCell
+import home.someoneshome.model.RoomOutline
 import home.someoneshome.model.Seat
 import home.someoneshome.model.SeatNamed
 import home.someoneshome.model.Tick
@@ -190,6 +194,60 @@ object RecordingText {
         fun heldNames(key: String): List<SeatNamed> = seats(key).map { SeatNamed(it, "") }
 
         /**
+         * **The home's plan, rebuilt whole** — `Transcript.plan`'s five separators, read back.
+         *
+         * **Nothing here is defaulted and every malformation is fatal**, which is [destinations]'
+         * discipline and it matters more here than there: a plan that silently dropped a room would
+         * replay into a round whose Spoof picker is missing a place somebody actually claimed, and
+         * the effect rows would then disagree with the events that produced them.
+         *
+         * The names are host-authored text and come back through [unescape]. Unlike the one lines
+         * and the seat names, they are **not** blanked — a room name is not somebody's confession,
+         * it is a label on a house, and a replay needs it because a work order's destination column
+         * already carries the same strings.
+         */
+        fun plan(key: String): HomePlanView {
+            val raw = req(key)
+            if (raw.isEmpty()) return HomePlanView.EMPTY
+            return HomePlanView(
+                raw.split(';').map { floorPart ->
+                    val slash = floorPart.indexOf('/')
+                    if (slash < 0) throw MalformedRecording(line, "'$floorPart' in $key has no floor name")
+                    val rooms = floorPart.substring(slash + 1)
+                    FloorView(
+                        name = unescape(floorPart.substring(0, slash), line),
+                        rooms = if (rooms.isEmpty()) emptyList() else rooms.split(',').map { part ->
+                            val bits = part.split(':')
+                            if (bits.size != 3) {
+                                throw MalformedRecording(line, "'$part' in $key is not room:kind:cells")
+                            }
+                            val kind = bits[1]
+                            if (kind != "r" && kind != "s") {
+                                throw MalformedRecording(line, "'$kind' in $key is not r or s")
+                            }
+                            RoomOutline(
+                                room = unescape(bits[0], line),
+                                stairs = kind == "s",
+                                cells = if (bits[2].isEmpty()) emptyList() else bits[2].split('+').map { cell ->
+                                    val xy = cell.split('.')
+                                    if (xy.size != 2) {
+                                        throw MalformedRecording(line, "'$cell' in $key is not x.y")
+                                    }
+                                    PlanCell(
+                                        x = xy[0].toIntOrNull()
+                                            ?: throw MalformedRecording(line, "'$cell' in $key has no x"),
+                                        y = xy[1].toIntOrNull()
+                                            ?: throw MalformedRecording(line, "'$cell' in $key has no y"),
+                                    )
+                                },
+                            )
+                        },
+                    )
+                }
+            )
+        }
+
+        /**
          * The host's Insider setting: a number, or UNKNOWN.
          *
          * `none` rather than a sentinel integer, and fatal on anything else. UNKNOWN is a real
@@ -219,7 +277,7 @@ object RecordingText {
             "RoundArmed" -> Event.RoundArmed(
                 at, long("seed"), seats("seats"), seats("insiders"),
                 chosen("chosen"), destinations("markers"), int("voteWindow"),
-                heldNames("names"), heldLines("lines"),
+                heldNames("names"), heldLines("lines"), plan("plan"),
             )
             "MarkerScanned" -> Event.MarkerScanned(at, seat("actor"), marker("marker"))
             "SubroutineReturned" ->
@@ -231,6 +289,10 @@ object RecordingText {
             // default would replay a Surge at somebody nobody fired at.
             "SurgeFired" -> Event.SurgeFired(at, seat("actor"), seat("target"))
             "IsolateFired" -> Event.IsolateFired(at, seat("actor"), marker("target"))
+            // The room is required like every other target. It is host-authored text and comes back
+            // unescaped -- a blank room is a real room name as far as the rules are concerned, so a
+            // default here would replay a Spoof at a room nobody named.
+            "SpoofFired" -> Event.SpoofFired(at, seat("actor"), unescape(req("room"), line))
             "ContactMade" -> Event.ContactMade(at, seat("actor"), seat("target"))
             "MeetingCalled" -> Event.MeetingCalled(at, seat("caller"), trigger(req("trigger"), line))
             "MeetingCheckedIn" -> Event.MeetingCheckedIn(at, seat("seat"))
@@ -265,13 +327,26 @@ object RecordingText {
         "RoundArmed" ->
             setOf(
                 "at", "seed", "seats", "insiders", "chosen", "markers", "voteWindow", "names",
-                "lines",
+                "lines", "plan",
             )
         "MarkerScanned" -> setOf("at", "actor", "marker")
         "SubroutineReturned" -> setOf("at", "actor", "marker", "entered")
         "PerformanceEnded" -> setOf("at", "actor")
         "RevokeArmed" -> setOf("at", "actor")
         "ContactMade" -> setOf("at", "actor", "target")
+        // ⚠️ **These three were missing and the two Tier-2 rows above them were unreadable.** T1
+        // added `SurgeFired` and `IsolateFired` to the parse table and not to this one, so
+        // `expectedFields` fell through to the empty set and every field on those rows counted as
+        // unexpected: a recording containing a Surge parsed its way to the last line of this
+        // function and threw. It was invisible because no round-trip test had a Tier-2 event in it.
+        //
+        // The bug is only possible because this list is written out **by hand against the table
+        // above rather than derived from it** — which is the design, and is why the fix is three
+        // lines rather than a refactor: a list derived from the thing it is checking agrees with
+        // itself. `everyEventNameHasItsFieldList` is the guard that would have caught it.
+        "SurgeFired" -> setOf("at", "actor", "target")
+        "IsolateFired" -> setOf("at", "actor", "target")
+        "SpoofFired" -> setOf("at", "actor", "room")
         "MeetingCalled" -> setOf("at", "caller", "trigger")
         "MeetingCheckedIn" -> setOf("at", "seat")
         "ReadyToVoteDeclared" -> setOf("at", "seat")

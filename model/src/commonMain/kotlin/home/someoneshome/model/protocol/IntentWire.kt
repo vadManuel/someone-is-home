@@ -125,6 +125,22 @@ sealed class IntentMessage {
     data class FireIsolate(val target: MarkerId) : IntentMessage()
 
     /**
+     * **Claim to be in this room** (`gdd.md:313`, [Intent.FireSpoof]).
+     *
+     * [room] is a name off the plan the house sent this seat, and it is the only target in the
+     * protocol that is a host-authored string rather than an id. The house does not resolve it —
+     * see the event, where a room the plan does not hold being representable is argued as
+     * deliberate rather than as a hole.
+     *
+     * **No target seat.** A Spoof moves the actor's own claimed location and there is no other
+     * reading of it.
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("FireSpoof")
+    data class FireSpoof(val room: String) : IntentMessage()
+
+    /**
      * The meeting card was scanned.
      *
      * **The trigger is which member of this type was sent, and is not a field.** The house has to
@@ -213,6 +229,7 @@ sealed class IntentMessage {
         is ArmRevoke -> Intent.ArmRevoke(actor)
         is FireSurge -> Intent.FireSurge(actor, target)
         is FireIsolate -> Intent.FireIsolate(actor, target)
+        is FireSpoof -> Intent.FireSpoof(actor, room)
         is BeginSubroutine -> Intent.BeginSubroutine(actor, marker)
         is CallMeeting -> Intent.CallMeeting(actor)
         is CheckIn -> Intent.CheckIn(actor)

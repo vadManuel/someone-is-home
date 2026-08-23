@@ -2,12 +2,16 @@ package home.someoneshome.ui
 
 import home.someoneshome.model.AssignedWork
 import home.someoneshome.model.Destination
+import home.someoneshome.model.FloorView
+import home.someoneshome.model.HomePlanView
 import home.someoneshome.model.HomeReview
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MarkerShape
 import home.someoneshome.model.MarkerShapes
 import home.someoneshome.model.MeetingPhase
 import home.someoneshome.model.OrderLine
+import home.someoneshome.model.PlanCell
+import home.someoneshome.model.RoomOutline
 import home.someoneshome.model.RoomKind
 
 import androidx.compose.ui.graphics.Color
@@ -59,7 +63,7 @@ enum class ScreenId {
     // **A Resident can never be on either**, and that is capability rather than a route: their
     // tier-2 tiles take no pointer input at all (D-142), so there is no hold to run and no view to
     // be caught on.
-    SurgeTargets, IsolateTargets,
+    SurgeTargets, IsolateTargets, SpoofRooms,
 
     // Work. The Subroutine screens are named for the Subroutine and not for how much light it
     // makes: the port's two were `Sub` and `SubBright`, which is the light ladder used as an
@@ -298,6 +302,20 @@ data class PanelState(
      * would win.
      */
     val isolateTargets: List<Destination>? = null,
+    /**
+     * **The home's plan, as the house last offered it** (`Effect.HomePlanOffered`, the owner's
+     * Spoof targeting ruling).
+     *
+     * Rooms, names, stairs and squares — see `HomePlanView` for what it cannot carry, and for why
+     * a whole map crossing to one class is the ruling rather than a convenience. **Null means the
+     * house has said nothing** and [PanelVals.homePlan] resolves the port's own bungalow;
+     * [isolateTargets]' arrangement exactly.
+     *
+     * **This phone does no filtering of it whatever**, for [isolateTargets]' reason: what a phone
+     * may be shown is the allowlist's decision, one class wide, and a client that trimmed the plan
+     * would be a second and quieter rule about the same disclosure.
+     */
+    val homePlan: HomePlanView? = null,
     /** Randomises the backlog's *count and mix*, so inbox density can never imply a role. */
     val inboxSeed: Int = 3,
     val noteSeed: Int = 0,
@@ -672,6 +690,15 @@ class PanelVals(val state: PanelState) {
      * Egress-node exclusion is the house's and arrives as a shorter list.
      */
     val isolateTargets: List<Destination> = state.isolateTargets ?: ISOLATE_TARGETS
+
+    /**
+     * **The plan the Spoof picker draws** (`gdd.md:313`, the owner's targeting ruling).
+     *
+     * The house's when there is one, the port's own bungalow when there is not — [isolateTargets]'
+     * arrangement, and the fixture is the same six rooms every other in-round map screen draws, so
+     * a screenshot of this picker and a screenshot of the terminal are recognisably one house.
+     */
+    val homePlan: HomePlanView = state.homePlan ?: HOME_PLAN
 
     // ---- Host setup -------------------------------------------------------------------------
 
@@ -1136,6 +1163,34 @@ class PanelVals(val state: PanelState) {
             Destination(MarkerId("card-garage"), "arrow_right", "GARAGE"),
             Destination(MarkerId("card-bed2"), "cross", "BED 2"),
             Destination(MarkerId("card-study"), "square_frame", "STUDY"),
+        )
+
+        /**
+         * **The plan the Spoof picker draws with no house attached** — the design's own bungalow,
+         * off [Plan.rooms] rather than typed a second time.
+         *
+         * `HomeEditorModel`'s demo home takes the same list and turns it into strokes for the same
+         * reason: one fixture, drawn two ways, so the editor's picture of the design's house and
+         * every in-round picture of it cannot drift apart.
+         *
+         * One floor, because [Plan] is one floor. A home with two storeys is what the *house* sends
+         * and the picker scrolls to it; the fixture does not have to prove that.
+         */
+        val HOME_PLAN: HomePlanView = HomePlanView(
+            listOf(
+                FloorView(
+                    name = "GROUND",
+                    rooms = Plan.rooms.map { rect ->
+                        RoomOutline(
+                            room = rect.name,
+                            stairs = rect.transit,
+                            cells = (rect.r0..rect.r1).flatMap { row ->
+                                (rect.c0..rect.c1).map { col -> PlanCell(x = col, y = row) }
+                            },
+                        )
+                    },
+                ),
+            ),
         )
 
         const val ARRAY_WIPE = "ARRAY WIPE"

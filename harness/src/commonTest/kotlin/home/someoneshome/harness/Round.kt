@@ -3,6 +3,7 @@ package home.someoneshome.harness
 import home.someoneshome.core.Admission
 import home.someoneshome.core.admit
 import home.someoneshome.model.Balance
+import home.someoneshome.model.Cooldown
 import home.someoneshome.model.Destination
 import home.someoneshome.model.EgressType
 import home.someoneshome.model.Event
@@ -156,6 +157,13 @@ internal fun round(insiders: List<Seat> = INSIDERS): List<Event> {
                 // that quietly stopped exercising the vote.
                 add(walk(Event.MeetingCalled(Tick(t++), seat, MeetingTrigger.MeetingCard)))
                 SEATS.forEach { v -> add(walk(Event.MeetingCheckedIn(Tick(t++), v))) }
+                // **READY TO VOTE, pressed by some of the room** (D-117), which the fixture never
+                // recorded — found by the same assertion that found the Tier-2 gap. Not everybody,
+                // so the discussion still closes on its clock rather than on the unanimous skip:
+                // the point is that the event reaches a recording at all, not that it decides
+                // anything here.
+                SEATS.filter { it.index % 2 == 0 }
+                    .forEach { v -> add(walk(Event.ReadyToVoteDeclared(Tick(t++), v))) }
                 add(walk(Event.DiscussionClosed(Tick(t++))))
                 SEATS.forEach { v ->
                     add(
@@ -172,6 +180,37 @@ internal fun round(insiders: List<Seat> = INSIDERS): List<Event> {
                 add(walk(Event.VoteWindowClosed(Tick(t++))))
                 add(walk(Event.TallyHalfwayReached(Tick(t++))))
                 add(walk(Event.MeetingClosed(Tick(t++))))
+            }
+            if (i == TIER_2_PASS) {
+                // **All three Tier-2 fires, on the fixture's own path** (`gdd.md:306`, `:313`,
+                // `:315`).
+                //
+                // ⚠️ **They were missing, and their absence hid a real bug.** `RecordingText`'s
+                // `expectedFields` had no row for `SurgeFired` or `IsolateFired`, so **any
+                // recording containing either was unreadable** — the parser built the event, fell
+                // through to the unknown-field check, and threw. Nothing said so, because no
+                // round-trip test had ever recorded a Tier-2 ability. Adding Spoof's row without
+                // adding the three fires here would have left the same trap set for the next one.
+                //
+                // The pool is pushed to ready before each, because it is shared: three fires in a
+                // row would otherwise be one fire and two refusals, and a refused fire records a
+                // refusal rather than the event this fixture is here to carry.
+                // **Seat 1, the same Insider the fixture's Egress fires with**, rather than
+                // whichever Insider happens to be alive. `ClientTranscriptTest`'s claim is that
+                // `AbilityFired` reaches the acting Insider **and nobody else**, and it says so by
+                // naming the fixture's one actor — so a fixture with a second actor would loosen
+                // that test into an assertion about a list of seats rather than about addressing.
+                val actor = Seat(1)
+                val victim = state.livingSeats.first { it.index != actor.index }
+                val card = state.activeMarkers.first()
+                for (fire in listOf<(Tick) -> Event>(
+                    { at -> Event.SurgeFired(at, actor, victim) },
+                    { at -> Event.SpoofFired(at, actor, "ROOM 0") },
+                    { at -> Event.IsolateFired(at, actor, card) },
+                )) {
+                    state = state.withCooldown(Cooldown(actor, InsiderAbility.Access, Tick(t)))
+                    add(walk(fire(Tick(t++))))
+                }
             }
             if (i == EGRESS_PASS) {
                 // **A whole Egress, walked: fired, paused by a report meeting, resumed, and
@@ -222,6 +261,13 @@ internal fun round(insiders: List<Seat> = INSIDERS): List<Event> {
  * meetings so that both halves are exercised in a round that already has people out of it.
  */
 private const val EGRESS_PASS = 34
+
+/**
+ * Before the Egress, so that the Isolate's D-150 node exclusion is not what this pass is exercising
+ * — it is here to put the three fires in a recording, and a pass that also happened to be during an
+ * Egress would be two claims in one place.
+ */
+private const val TIER_2_PASS = 30
 
 /**
  * **[round], carried through to an ending** — a second Egress, fired and left to run out (D-131).

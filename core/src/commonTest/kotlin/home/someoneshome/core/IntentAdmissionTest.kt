@@ -180,9 +180,10 @@ class IntentAdmissionTest {
         // contrast is the whole reason they sit on this row: the house draws nothing for either.
         // A Surge names a seat off a roster and an Isolate names a card off a list the house
         // itself published to that phone, so the fact is settled by what the phone did, which
-        // connection did it, and when. Spoof is the third ability on the same pool and has no
-        // event at all yet, so nothing here classifies it.
-        is Event.SurgeFired, is Event.IsolateFired,
+        // connection did it, and when. **Spoof is the third and is here now**, and it is the
+        // clearest case on the row: it names a ROOM off a plan the house published, and the house
+        // resolves that name to nothing at all -- there is no roster lookup to compose from.
+        is Event.SurgeFired, is Event.IsolateFired, is Event.SpoofFired,
         -> Origin.Requestable
 
         // Two ways to call a meeting and only one of them is a card. `MeetingCard` is requestable;
@@ -294,6 +295,7 @@ class IntentAdmissionTest {
         is Intent.ArmRevoke -> intent.copy(actor = actor)
         is Intent.FireSurge -> intent.copy(actor = actor)
         is Intent.FireIsolate -> intent.copy(actor = actor)
+        is Intent.FireSpoof -> intent.copy(actor = actor)
         is Intent.BeginSubroutine -> intent.copy(actor = actor)
         is Intent.CallMeeting -> intent.copy(actor = actor)
         is Intent.CheckIn -> intent.copy(actor = actor)

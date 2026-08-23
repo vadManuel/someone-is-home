@@ -111,7 +111,10 @@ private fun phaseOf(event: Event): MeetingPhase? = when (event) {
     // seat that walked in with it ready still has it ready and a seat that did not cannot acquire
     // it -- which means nothing here turns on the gate. Adding a refusal would be inventing a rule,
     // and refusing quietly inside the rules would be rule 1's forbidden shape. Flagged, not decided.
-    is Event.SurgeFired, is Event.IsolateFired -> null
+    // Spoof joins them on the same flag and for the same reason. It is if anything the clearest of
+    // the three: a phantom nobody can read cannot affect a room full of people looking at each
+    // other, so a Spoof fired at a meeting changes nothing anybody at that meeting could observe.
+    is Event.SurgeFired, is Event.IsolateFired, is Event.SpoofFired -> null
 
     // Not meeting events. The Egress has its own gate below, and it already refuses these while a
     // meeting is holding the countdown -- which is the same answer by a shorter route, and the one
@@ -155,5 +158,9 @@ private fun needsEgress(event: Event): Boolean = when (event) {
     // while no Egress is running is the ordinary case, not an event out of place. A gate here would
     // refuse every Isolate in every quiet round.
     is Event.SurgeFired, is Event.IsolateFired,
+    // **Spoof does not read the Egress at all.** It has no node exclusion to honour -- D-150 is
+    // about a list of markers and a Spoof names no marker -- so there is nothing here for it to
+    // need, and a gate would refuse every Spoof in every quiet round.
+    is Event.SpoofFired,
     -> false
 }

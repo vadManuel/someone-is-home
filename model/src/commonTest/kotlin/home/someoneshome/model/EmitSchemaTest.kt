@@ -401,6 +401,82 @@ class EmitSchemaTest {
     }
 
     /**
+     * **The home's plan reaches a living Insider and nobody else** (`gdd.md:313`, the owner's Spoof
+     * targeting ruling).
+     *
+     * The Isolate picker's row, one ability over and one size larger. `Destination`'s own KDoc names
+     * the thing this row makes possible: *what is NOT authorised is the whole map to **every**
+     * client* — and the ruling authorises it to exactly one class, because Spoof picks from the map
+     * and a map picker cannot be built without a map.
+     *
+     * The rules build one of these for every seat, for `isolateOffers`' reason, so **this row is
+     * the only thing standing between a Resident and the whole home's geometry.** Asserted in both
+     * directions and addressed as well as permitted.
+     */
+    @Test
+    fun `the home plan reaches a living Insider and nobody else`() {
+        assertEquals(
+            listOf(ClientClass(Role.Insider, RoundState.Live)),
+            EmitSchema.classesFor(EmitSchema.HOME_PLAN_OFFERED),
+            "the home's plan reaches something other than exactly a living Insider",
+        )
+
+        val state = live()
+        val plan = HomePlanView(
+            listOf(FloorView("GROUND", listOf(RoomOutline("KITCHEN", cells = listOf(PlanCell(0, 0)))))),
+        )
+        assertEquals(
+            emptyList(),
+            EmitSchema.deliveries(Effect.HomePlanOffered(Seat(0), plan), state),
+            "a Resident was handed the whole home's plan",
+        )
+        assertEquals(
+            listOf(Seat(1).index),
+            EmitSchema.deliveries(Effect.HomePlanOffered(Seat(1), plan), state).map { it.seat.index },
+        )
+    }
+
+    /**
+     * **A PHANTOM REACHES NOBODY, AND THAT IS THE DECISION** (`gdd.md:313`, D-136, D-079).
+     *
+     * The presence plane's arrangement, taken again for a fact that is worse to leak. `PresenceChanged`
+     * describes something that happened; a phantom says *this seat claims to be somewhere it is
+     * not*, and **only an Insider can cause one** — so a living reader of this row would hold the
+     * one fact in the game that names an Insider outright, with no inference required.
+     *
+     * Asserted **for every class there is**, rather than for the two that look dangerous: the claim
+     * is that the row does not exist, and a test that checked only the living classes would pass on
+     * a build that had quietly granted it to the couch.
+     *
+     * The second half is the addressing, which is independent: a row written by mistake still could
+     * not carry seat 3's lie to seat 5.
+     */
+    @Test
+    fun `a phantom is permitted to no class at all and is addressed to the spoofing seat`() {
+        assertEquals(
+            emptyList(),
+            EmitSchema.classesFor(EmitSchema.PHANTOM_PLACED),
+            "a phantom is permitted to somebody",
+        )
+        assertEquals(
+            emptyList(),
+            EmitSchema.deliveries(
+                Effect.PhantomPlaced(Seat(1), room = "KITCHEN", until = Tick(900)),
+                live(),
+            ),
+            "a phantom was delivered to a phone",
+        )
+        assertEquals(
+            listOf(Seat(1)),
+            EmitSchema.audienceOf(
+                Effect.PhantomPlaced(Seat(1), room = "KITCHEN", until = Tick(900)),
+                live(),
+            ),
+            "a phantom is addressed to somebody other than the seat that told the lie",
+        )
+    }
+
+    /**
      * **THE MEETING'S SHARPEST ROW, BOTH DIRECTIONS: the couch sees selections, the living cannot.**
      *
      * D-117: *the living see the count and never the selections; the ghosts see the live

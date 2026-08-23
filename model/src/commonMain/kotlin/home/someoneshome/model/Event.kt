@@ -10,8 +10,9 @@ package home.someoneshome.model
  * does not name are still blocked on open design decisions, and inventing events for those here
  * would encode a guess as a decision. **F-001 is no longer one of them** — Egress node designation
  * was ratified as *two ordinary markers in non-adjacent rooms, drawn at fire time* — so the Egress
- * lifecycle is here. **Surge and Isolate are here now too**, on the owner's 2026-08-22 targeting
- * ruling; **Spoof, the third ability on the same Access pool, is still not.**
+ * lifecycle is here. **Surge, Isolate and Spoof are all here now**, on the owner's targeting
+ * rulings — Spoof last, and it is the only ability in the game whose target is a room rather than a
+ * seat or a card.
  */
 sealed interface Event {
     val at: Tick
@@ -108,6 +109,32 @@ sealed interface Event {
          * kept in the one artefact of this game that outlives the evening.
          */
         val oneLines: List<OneLineHeld> = emptyList(),
+        /**
+         * **The home's shape, as a recorded input — and it PASSES THROUGH the rules rather than
+         * being held by them** (`gdd.md:313`, the owner's Spoof targeting ruling).
+         *
+         * The Spoof picker is a plan the Insider taps a room on, and a phone cannot draw a plan it
+         * was never sent, so the plan has to reach the house before it can reach a phone. It
+         * arrives here for [markers]' reason and [insiders]' — a recorded input, locked at arming,
+         * replayed rather than re-derived against a home the recording does not carry.
+         *
+         * ### ⚠️ Nothing stores it and nothing branches on it, and that is the whole design of this
+         * field
+         *
+         * [GameState] does **not** gain a plan. The rules read this once, at arming, to build
+         * [Effect.HomePlanOffered], and then it is gone — so *the rules have never held house
+         * geography* stays true in the sense that matters: no rule can consult the shape of a home
+         * to decide anything, because after the arming reduction there is nothing left to consult.
+         *
+         * That is a stronger guarantee than [GameState.destinations] has, and it was available here
+         * and not there: a work order needs its destinations at every re-issue, and a plan is
+         * published once.
+         *
+         * Defaulted empty, exactly as [markers] is: a round armed to exercise something else does
+         * not have to invent a house to hold it in, and an empty plan draws an empty picker.
+         */
+        val plan: HomePlanView = HomePlanView.EMPTY,
+
     ) : Event
 
     /**
@@ -174,7 +201,10 @@ sealed interface Event {
     // draw here: there is no coin toss and no geography to consult, only the target the player
     // picked off a roster the house had already narrowed for them.
     //
-    // Spoof is the third ability on this pool and is deliberately absent. It is T2's.
+    // Spoof is the third and is here now, and it is the only one of the three whose target is not a
+    // thing the house handed out an id for: a room name off the plan, which the house sent as a
+    // drawing rather than as a roster. Same test, same answer -- a finger on a picture the house
+    // published is still fully determined by what the phone did and which connection did it.
 
     /**
      * **A Insider fired a Surge at a seat** (`gdd.md:313`, `:342`, `:392`).
@@ -216,6 +246,42 @@ sealed interface Event {
      * land is a tax on a teammate paid in the dark by somebody who will never learn why.
      */
     data class IsolateFired(override val at: Tick, val actor: Seat, val target: MarkerId) : Event
+
+    /**
+     * **A Insider fired a Spoof at a room** (`gdd.md:313`, the owner's targeting ruling).
+     *
+     * *False check-in in a room you are not in. Manufactures a phantom occupant.*
+     *
+     * ### [room] is a NAME, and it is the one target in the game that is not an id
+     *
+     * The Surge names a seat and the Isolate names a card, both off rosters the house drew. This
+     * names a room, off the plan the house drew — the owner's ruling is that **Spoof picks from the
+     * map**, and *the glow of reading the map is the deliberate price*. So the target is the host's
+     * own text for a room, exactly the string [Destination.room] already carries across the
+     * boundary, and the house does not resolve it to anything: nothing in the rules has ever held
+     * house geography and this does not start.
+     *
+     * **A room the plan does not hold is therefore representable here.** That is deliberate and it
+     * is not a hole: the rules record what the phone said and the only consumer of a phantom is a
+     * map that will look the name up and find nothing, which is a phantom in a room that does not
+     * exist — visible to nobody, costing an Insider a pool. Validating it here would mean the rules
+     * acquiring an opinion about which rooms are in a house they have never been in, and would put
+     * a refusal on a client-visible path for the sake of a case only a forged client can reach.
+     *
+     * ### Self-targeting is not a case here, it is the whole ability
+     *
+     * `gdd.md:392` requires that every ability be self-inflictable, and a Spoof has no seat to aim
+     * at: what it moves is the actor's *own* claimed location. So this event carries no target seat
+     * at all — the actor is the target, always, and there is no other reading of the ability. It is
+     * on the shared pool like the other two (`gdd.md:401`), which is the same clock the alibi it
+     * buys is priced against.
+     *
+     * ### Nothing here says whether it will land
+     *
+     * [SurgeFired]'s sentence and the same decision: the pool may still be running, and the event is
+     * a fact about a finger on a plan, recorded either way.
+     */
+    data class SpoofFired(override val at: Tick, val actor: Seat, val room: String) : Event
 
     /** Phone touched to phone. Physical, so it is reported, never requested. */
     data class ContactMade(override val at: Tick, val actor: Seat, val target: Seat) : Event

@@ -7,6 +7,7 @@ import home.someoneshome.model.Effect
 import home.someoneshome.model.EgressType
 import home.someoneshome.model.EmitSchema
 import home.someoneshome.model.Haptic
+import home.someoneshome.model.HomePlanView
 import home.someoneshome.model.InsiderNamed
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MeetingPhase
@@ -112,6 +113,20 @@ sealed class RoundMessage {
     @kotlinx.serialization.SerialName("IsolateTargetsOffered")
     data class IsolateTargetsOffered(val targets: List<Destination>) : RoundMessage()
 
+    /**
+     * **The home's plan, for the Spoof picker** (`gdd.md:313`, the owner's targeting ruling).
+     *
+     * The seat goes, like every addressed kind here. See [Effect.HomePlanOffered] for the
+     * disclosure argument and the flag, and [HomePlanView] for what the type cannot carry.
+     *
+     * **There is no message that reports a Spoof landing**, on this phone or any other. That is not
+     * an omission here — [Effect.PhantomPlaced] has no schema row, so there is no kind to write.
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("HomePlanOffered")
+    data class HomePlanOffered(val plan: HomePlanView) : RoundMessage()
+
     /** The house's answer to a returned entry. One boolean, for [Effect.SubroutineGraded]'s reason. */
     @ClientFacing
     @kotlinx.serialization.Serializable
@@ -180,6 +195,19 @@ sealed class RoundMessage {
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("PresenceChanged")
     data class PresenceChanged(val at: MarkerId?, val open: Boolean) : RoundMessage()
+
+    /**
+     * **Projected and permitted to nobody**, exactly as [PresenceChanged] is (`gdd.md:313`, D-136).
+     *
+     * [EmitSchema.PHANTOM_PLACED] has no allowlist row — see [Effect.PhantomPlaced], where the
+     * reason is argued and where the fact that a phantom names an Insider outright is why this row
+     * is the one that matters most to leave unwritten. This shape exists because the projection is
+     * exhaustive over [Effect], and being named here grants it nothing.
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("PhantomPlaced")
+    data class PhantomPlaced(val room: String, val until: Long) : RoundMessage()
 
     /** The house's opening text. It carries no words — the client holds the copy (D-112). */
     @ClientFacing
@@ -385,6 +413,8 @@ sealed class RoundMessage {
             is AbilityFired -> EmitSchema.ABILITY_FIRED
             is Surged -> EmitSchema.SURGED
             is IsolateTargetsOffered -> EmitSchema.ISOLATE_TARGETS_OFFERED
+            is HomePlanOffered -> EmitSchema.HOME_PLAN_OFFERED
+            is PhantomPlaced -> EmitSchema.PHANTOM_PLACED
             is SubroutineGraded -> EmitSchema.SUBROUTINE_GRADED
             is SubroutineProgressed -> EmitSchema.SUBROUTINE_PROGRESSED
             is SystemIntegrityLive -> EmitSchema.SYSTEM_INTEGRITY_LIVE
@@ -539,6 +569,8 @@ object RoundWire {
         is Effect.Surged ->
             RoundMessage.Surged(effect.peak, effect.black, effect.sound, effect.haptic)
         is Effect.IsolateTargetsOffered -> RoundMessage.IsolateTargetsOffered(effect.targets)
+        is Effect.HomePlanOffered -> RoundMessage.HomePlanOffered(effect.plan)
+        is Effect.PhantomPlaced -> RoundMessage.PhantomPlaced(effect.room, effect.until.step)
         is Effect.SubroutineGraded -> RoundMessage.SubroutineGraded(effect.accepted)
         is Effect.SubroutineProgressed -> RoundMessage.SubroutineProgressed(effect.remaining)
         is Effect.SystemIntegrityLive -> RoundMessage.SystemIntegrityLive(effect.percent)

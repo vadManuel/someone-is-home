@@ -204,21 +204,23 @@ fun Page2Screen(vals: PanelVals) {
                 // the bar under them is the pool rather than any one ability's clock — which is why
                 // it is drawn once, below all three, instead of three times inside them.
                 //
-                // **The two that are built take a two-second hold and then open a list**; the third
-                // is Spoof and is inert here because nothing behind it exists. A Resident's three
-                // are all inert, identically, and take no pointer input at all (D-142) — so the
-                // difference between a built ability and an unbuilt one is invisible to the role
-                // that could not use either.
+                // **All three take a two-second hold and then open a view** — two a list, and Spoof
+                // the home's own plan. A Resident's three are all inert, identically, and take no
+                // pointer input at all (D-142), which is what makes the row's appearance carry no
+                // role: the three tiles are the same three tiles either way, and the only thing
+                // that differs is whether a thumb held on one does anything.
                 Column(verticalArrangement = Arrangement.spacedBy(5.u)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.u)) {
                         Tier2Tile(vals.tier2A, vals, Modifier.weight(1f), armable = vals.insider) {
                             go(ScreenId.SurgeTargets)
                         }
-                        // ⚠️ Spoof. Named, drawn identically, and reaching nothing — it is T2's, and
-                        // an inert tile is the honest state of an unbuilt ability. Deliberately not
-                        // hidden: a page 2 with two tiles for one role and three for another is the
-                        // resting tell the whole parity discipline exists to prevent.
-                        Tier2Tile(vals.tier2B, vals, Modifier.weight(1f), armable = false) {}
+                        // Spoof, and it opens the plan rather than a list — the owner's targeting
+                        // ruling. `armable` is the same expression the other two carry and not a
+                        // narrower one: nothing about this tile may differ from its neighbours
+                        // except which screen the hold opens.
+                        Tier2Tile(vals.tier2B, vals, Modifier.weight(1f), armable = vals.insider) {
+                            go(ScreenId.SpoofRooms)
+                        }
                         Tier2Tile(vals.tier2C, vals, Modifier.weight(1f), armable = vals.insider) {
                             go(ScreenId.IsolateTargets)
                         }

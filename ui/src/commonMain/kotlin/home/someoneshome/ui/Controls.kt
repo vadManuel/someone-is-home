@@ -95,12 +95,18 @@ class PanelActions(
      * navigation for `ScreenGraphTest` to read — firing walks back to page 2, which is declared in
      * [Flow.viaActions] with the rest of the gestures.
      *
-     * **Neither is reachable on a Resident's phone.** Not by a check inside them: the tier-2 tiles
-     * take no pointer input at all (D-142), so a Resident never opens a picker and never has a row
-     * to tap. The same shape [stepRevoke] has, one tier down.
+     * **None of the three is reachable on a Resident's phone.** Not by a check inside them: the
+     * tier-2 tiles take no pointer input at all (D-142), so a Resident never opens a picker and
+     * never has a row to tap. The same shape [stepRevoke] has, one tier down.
+     *
+     * [fireSpoof] is the third and carries a **room name** rather than a row index or a card id,
+     * because what the house drew for it is a plan rather than a list — the owner's targeting
+     * ruling. Same rule: the screen cannot name what it does not know, and the name it sends came
+     * from the house.
      */
     val fireSurge: (Int) -> Unit = {},
     val fireIsolate: (String) -> Unit = {},
+    val fireSpoof: (String) -> Unit = {},
     val toggleMarkers: () -> Unit = {},
     val toggleTorch: () -> Unit = {},
     val pickRoomType: (RoomKind) -> Unit = {},

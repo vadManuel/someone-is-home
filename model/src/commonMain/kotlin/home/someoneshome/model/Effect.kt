@@ -155,6 +155,77 @@ sealed interface Effect {
      */
     data class IsolateTargetsOffered(val seat: Seat, val targets: List<Destination>) : Effect
 
+    /**
+     * **The home's plan, so a Spoof has something to pick from** (`gdd.md:313`, the owner's
+     * targeting ruling).
+     *
+     * *Spoof picks from the MAP — the Insider taps a room on the home's plan to spoof their location
+     * there, and the glow of reading the map is the deliberate price.* A phone cannot draw a plan it
+     * was never sent, so this is the plan. [IsolateTargetsOffered]'s sentence exactly, one ability
+     * over, and the two rows are deliberately the same shape and the same width.
+     *
+     * ### ⚠️ This is the largest disclosure in the table and it is flagged as one
+     *
+     * [Destination]'s own KDoc names it as the thing not to do: *what is NOT authorised is the whole
+     * map to every client.* The word carrying the weight there is **every**. `HOME_PLAN_OFFERED` is
+     * permitted to `Insider/Live` and to nothing else — the narrowest live row in the table, beside
+     * [IsolateTargetsOffered]'s — so a Resident's copy is constructed and delivered to nobody, and a
+     * single class added to that row would hand every phone in the house the geography every work
+     * order narrows to one seat's own lines.
+     *
+     * What is the *ruling's* and what is this **build's reading** are different things and both are
+     * written down. The ruling's: an Insider gets the plan, because a map picker needs a map. This
+     * build's: the plan arrives **whole and at arming**, rather than per-floor or on the fire that
+     * needs it. Whole, because a plan delivered a piece at a time would make which pieces arrived a
+     * second channel; at arming, because that is when the house learns the home and because a
+     * message sent at the moment a Spoof was fired would be a message whose *presence* reported
+     * that one had been.
+     *
+     * ⚠️ **A phone that reconnects mid-round does not get it again**, which is
+     * [IsolateTargetsOffered]'s existing gap rather than a new one, and it is escalated with it.
+     *
+     * ### What it cannot carry
+     *
+     * See [HomePlanView]. Rooms, names, stairs and squares — no markers, no seats, no occupancy, no
+     * Egress nodes, no isolations. The narrowing is the type, not a filter somebody applies here.
+     */
+    data class HomePlanOffered(val seat: Seat, val plan: HomePlanView) : Effect
+
+    /**
+     * **A phantom occupant now stands in a room nobody is in** (`gdd.md:313`).
+     *
+     * The whole of what a Spoof leaves behind. See [Phantom] for the state and the dedup rule that
+     * governs it.
+     *
+     * ### ⚠️ IT HAS NO SCHEMA ROW, AND ITS RECIPIENTS ARE NOBODY. THAT IS THE DECISION
+     *
+     * [PresenceChanged]'s posture, taken for the same reason and one stronger one. The reason:
+     * **the only surface that could ever consume a phantom is the spectator map** (D-136, D-079 —
+     * the out are the one class the design lets read occupancy at all), and that map is
+     * hardware-dependent, unbuilt and frozen. There is nobody to send it to, so it goes to nobody,
+     * which rule 2 does for free the moment a row is not written.
+     *
+     * The stronger one: a phantom row says *seat 3 claims to be in the Kitchen*, and **only an
+     * Insider can put a phantom anywhere.** A living player who could read one would hold the one
+     * fact in this game that names an Insider outright — worse than the presence leak the plane was
+     * split in two to close, because presence at least describes something that happened.
+     *
+     * **This is an effect with no audience and it is not a leak** — it is the fail-closed direction
+     * arrived at honestly rather than by omission. The effect exists so that the fact is *recorded*
+     * and replays: the house records, never recites. Written down here rather than left as a gap in
+     * the table, because an absent row is indistinguishable from a forgotten one, and when the
+     * spectator map lands this row becomes `OUTSIDE` and **not one class more**.
+     *
+     * ### It is addressed to the actor and that is not a contradiction
+     *
+     * `audienceOf` names the spoofing seat, exactly as [PresenceChanged] names the performing one,
+     * so that the day somebody writes a row by accident the effect still could not reach another
+     * player. Two independent denials — and the actor does not receive it either, because the row
+     * that would let them does not exist. **The actor's device stays inert** (`gdd.md:398`): what
+     * their phone is told is [AbilityFired] and nothing else, the same as every other ability.
+     */
+    data class PhantomPlaced(val seat: Seat, val room: String, val until: Tick) : Effect
+
     data class SubroutineProgressed(val remaining: Int) : Effect
 
     /**

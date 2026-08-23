@@ -52,6 +52,19 @@ sealed interface Intent {
      * reason (D-136).
      */
     data class FireIsolate(val actor: Seat, val target: MarkerId) : Intent
+
+    /**
+     * **Claim to be in this room** (`gdd.md:313`, [Event.SpoofFired]).
+     *
+     * [room] is a name off the plan the house published to this seat ([Effect.HomePlanOffered]),
+     * and it is content in the sense the other two targets are: a finger on something the house
+     * drew. The actor still comes from the connection and from nowhere else.
+     *
+     * **There is no target seat and there never can be one.** A Spoof moves the actor's own claimed
+     * location — see the event, where self-targeting being the whole ability rather than a case of
+     * it is argued.
+     */
+    data class FireSpoof(val actor: Seat, val room: String) : Intent
     data class BeginSubroutine(val actor: Seat, val marker: MarkerId) : Intent
     data class CallMeeting(val actor: Seat) : Intent
 
