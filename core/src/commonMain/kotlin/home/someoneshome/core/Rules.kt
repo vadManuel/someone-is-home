@@ -14,7 +14,6 @@ import home.someoneshome.model.Isolation
 import home.someoneshome.model.Meeting
 import home.someoneshome.model.MeetingPhase
 import home.someoneshome.model.Outcome
-import home.someoneshome.model.Phantom
 import home.someoneshome.model.Presence
 import home.someoneshome.model.PulseOffer
 import home.someoneshome.model.Role
@@ -48,7 +47,7 @@ private fun dispatch(state: GameState, event: Event): Reduction<GameState, Effec
 
     is Event.SurgeFired -> surgeFired(state, event)
     is Event.IsolateFired -> isolateFired(state, event)
-    is Event.SpoofFired -> spoofFired(state, event)
+    is Event.StaticFired -> staticFired(state, event)
 
     is Event.ContactMade -> contact(state, event)
 
@@ -352,15 +351,7 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
             // Isolate picks from one. Grouped by kind like the three runs above it, and the same
             // length as them, which is what keeps the arming burst role-independent — see
             // [isolateOffers], where the differential harness's finding is written down.
-            isolateOffers(state) +
-            // **The home's plan, for every seat, narrowed to Insiders by the allowlist and not by
-            // this line** — [isolateOffers]' sentence and the same shape, for the same reason. The
-            // run is `seats.size` long whichever seats hold which role, so the arming burst stays
-            // byte-identical under a role swap and the differential harness keeps working.
-            //
-            // **Read off the event and stored nowhere.** After this line the rules hold no house
-            // geometry at all; see [Event.RoundArmed.plan], where that is the point of the field.
-            seats.map { Effect.HomePlanOffered(it, event.plan) },
+            isolateOffers(state),
     )
 }
 
@@ -529,21 +520,21 @@ private fun revokeArmed(state: GameState, event: Event.RevokeArmed): Reduction<G
 // =================================================================================================
 // Tier 2 — the shared Access pool.
 //
-// Two abilities on one clock (`gdd.md:306`), and the shape of both is `egressFired`'s: the actor's
+// Three abilities on one clock (`gdd.md:306`), and the shape of all of them is `egressFired`'s: the actor's
 // answer is constructed ONCE, outside every branch, and only the state transition moves. What
 // differs from the Egress is one field, and it is deliberate — see `spendsPool`.
 //
-// Spoof is the third and is here now. It is the only one of the three with no target seat and
-// no target card: what it moves is the actor's own claimed location, which is why self-targeting
-// needed no expression in it -- see `spoofFired`.
+// Static is the third. It has no target seat, no target card and no target room -- what it moves
+// is the house's own monitoring, for everybody at once, which is why self-targeting needed no
+// expression in it either. See `staticFired`.
 // =================================================================================================
 
 /**
  * **The pool, restarted at one ability's weight** — the one writer of [InsiderAbility.Access].
  *
  * A function rather than three call sites, so that *firing any Tier-2 ability restarts the same
- * clock* is a fact the code states once. A builder wiring Spoof calls this with Spoof's weight and
- * touches nothing else, which is what the pool being one enum member was for.
+ * clock* is a fact the code states once. Replacing an ability on the pool (D-186) was a weight and
+ * a handler and nothing here, which is what the pool being one enum member was for.
  *
  * **It writes an absolute deadline off the event's own tick**, like every other cooldown in the
  * game: a remaining count would be a fact about the moment somebody asked, and a tick replays.
@@ -714,89 +705,93 @@ private fun isolateFired(state: GameState, event: Event.IsolateFired): Reduction
 }
 
 /**
- * **Spoof: the actor claims a room they are not in, and the claim reaches nobody** (`gdd.md:313`,
- * `:392`–`:401`, D-136, the owner's targeting ruling).
+ * **Static: the house's monitoring goes down for ten seconds, and the house says so** (D-186,
+ * `gdd.md:447-495`).
  *
- * *False check-in in a room you are not in. Manufactures a phantom occupant.*
- *
- * ### Self-targeting is not handled here because it is not a case — it is the ability
- *
- * `gdd.md:393` requires every ability to be self-inflictable, and the other four hold that by having
- * a target that *may* equal the actor with nothing anywhere special-casing it. **Spoof holds it more
- * simply than any of them: there is no other seat it could name.** What a Spoof moves is the actor's
- * own claimed location, so `Event.SpoofFired` carries no target at all and the self-targeting
- * requirement is satisfied by the ability's shape rather than by a rule about it.
- *
- * That reading matters because it is the one ability where somebody could reasonably have built a
- * `target: Seat` — *manufacture a phantom occupant* does not say whose — and a Spoof that could
- * plant a phantom of **another** seat would be an Insider fabricating evidence about a named person,
- * which is a different and much larger ability than the one the design describes.
+ * *A ten-second house-wide jam of every monitoring surface the living can read.* Underneath it
+ * nothing changes: tracking keeps recording the truth, check-ins land, System Integrity moves, and
+ * every surface is correct again the instant the window closes. **What is jammed is the reading, not
+ * the recording**, which is why this handler writes one deadline and touches nothing else.
  *
  * ### Rule 1's shape, and the branch is on the pool alone
  *
  * One [Effect.AbilityFired], constructed once, outside every branch — [surgeFired]'s and
- * [egressFired]'s arrangement. Nothing here asks who the actor is, whether the room exists, whether
- * they are already claiming somewhere else, or whether they are in fact standing in the room they
- * just named. **A Spoof of the room you are actually in is lawful and produces the same frames as
- * any other**, which is the shape `gdd.md:344` asks for, kept by there being no question to answer.
+ * [egressFired]'s arrangement. **Nothing here asks who the actor is**, whether they are an Insider,
+ * where they are standing, or whether the house is already jammed. There is no target to be wrong
+ * about, so the only thing that can make a fire worthless is a clock that has not come back, and
+ * the actor's phone is told the same thing either way.
  *
- * ### The room is not validated, and that is deliberate
+ * ### It is fired in place, and the picker failed with the ability it belonged to
  *
- * A name the plan does not hold reaches the state as a phantom in a room that does not exist —
- * visible to nobody, costing an Insider a pool. Refusing it would mean the rules acquiring an
- * opinion about which rooms are in a house they have never been in ([GameState.destinations]'
- * standing rule), and would put a refusal on a client-visible path for a case only a forged client
- * can reach. See [Event.SpoofFired].
+ * D-186 supersedes D-175's third answer: *the third ability picks a room from the MAP* is gone,
+ * **Static has no target at all**, and the screen that drew the plan went with it. The two
+ * surviving pickers are unchanged and so is the argument under them — *the glow of reading the list
+ * is the deliberate price* — which this ability does not pay because it has nothing to read.
  *
- * ### The phantom cannot touch the presence plane, and that is structural
+ * ### A second fire EXTENDS the window and can never shorten it
  *
- * [GameState.withPhantom] writes [GameState.phantoms], a different list of a different type, and
- * there is no writer anywhere that can put a phantom into [GameState.presence]. D-136's *inference
- * never overrides knowledge* is therefore not a check this handler makes — it is a thing this
- * handler could not express if it wanted to. The ordering is [GameState.placementOf]'s, asked at
- * read time, which is what makes both firing orders come out the same.
+ * [GameState.withStatic] takes the later deadline. The pool is per-Insider, so a second Insider can
+ * fire into a running jam; what they buy is a longer jam, never a shorter one. **A window that could
+ * be cut short would make its length on screen a report of how many Insiders reached for it**, which
+ * is the anonymity going out through the render.
  *
- * ### ⚠️ Spoof is the roster's CUT-RISK CANDIDATE and this is where the metric lives
+ * ### The seed is a fact about WHEN and never about WHO
  *
- * `gdd.md:1143`: *Spoof may be too abstract for the dark. Surge and Revoke have immediate, visceral
- * effects; Spoof is slow, indirect, and asks a Insider to think about the map layer while standing
- * in a dark hallway. **It may simply never get used. Watch it in playtest rather than cutting
- * preemptively.*** `gdd.md:1342` is the watching, as a number: **fired at least once per three
- * rounds. If it is never used, cut it.**
+ * The noise on the client is authored light (rule 5) and has to replay, so the field it is generated
+ * from rides the effect. It is minted from the round's seed and the firing tick, **and from nothing
+ * else** — no actor, no seat index, no Insider count. Two Statics fired at the same tick by
+ * different Insiders would produce identical bytes, which is the property the anonymity rests on and
+ * is asserted directly.
  *
- * The measurement is `Transcript.spoofFires`, which counts [Event.SpoofFired] in a recording — so
- * the metric is answerable off the artifact every round already produces, rather than off somebody
- * remembering to watch. [Balance.SPOOF_COOLDOWN] is the pool's lightest weight for the same reason:
- * *nobody used it* has to be a finding about the ability and not about its price.
+ * ### The announcement is the effect, and there is only one of it
+ *
+ * *The house shows that it was jammed. It never shows who.* [Effect.StaticOpened] carries no seat,
+ * so it is one message to the whole living house — the announcement and the render in one kind. The
+ * out are exempt at the allowlist (D-134's liveness privilege, D-186's ghost exemption), and no
+ * house notice is raised: D-187 narrows notices to detectable deliberate evasion, and **Static earns
+ * none** because it is an ability rather than an evasion.
  */
-private fun spoofFired(state: GameState, event: Event.SpoofFired): Reduction<GameState, Effect> {
+private fun staticFired(state: GameState, event: Event.StaticFired): Reduction<GameState, Effect> {
     val ready = state.accessReady(event.actor, event.at)
-    val until = event.at + Balance.SPOOF_DURATION
+    val until = event.at + Balance.STATIC_DURATION
 
     val next = if (!ready) {
         state
     } else {
-        spendPool(state, event.actor, event.at, Balance.SPOOF_COOLDOWN)
-            .withPhantom(Phantom(event.actor, event.room, until))
+        spendPool(state, event.actor, event.at, Balance.STATIC_COOLDOWN).withStatic(until)
     }
 
-    // Constructed once, outside the branch above. Deliberately not inside it: the actor's device
-    // stays inert either way, and what it is told is that the ability fired and what its own clock
-    // now says -- exactly what a Surge into a running pool is told, and exactly what an Egress
-    // stalk that never found anybody is told.
+    // Constructed once, outside the branch above. Deliberately not inside it: the actor's device is
+    // told the ability fired and what its own clock now says, and nothing else -- exactly what a
+    // Surge into a running pool is told.
     val answered = Effect.AbilityFired(actor = event.actor, cooldownStarted = ready)
 
-    // **Recorded, and delivered to nobody.** No schema row, and addressed to the actor who cannot
-    // receive it either -- see Effect.PhantomPlaced. It is emitted so the fact replays, which is
-    // the presence plane's whole arrangement one ability over.
-    val placed = if (!ready) {
+    // **The house announcing its own blindness, to every living phone in the building.** Not
+    // addressed, not narrowed, and carrying no seat -- see Effect.StaticOpened. The seed is the
+    // round's own, folded with the tick the fire landed on, so a replay draws the same noise and
+    // two Insiders firing at the same tick are indistinguishable.
+    val jammed = if (!ready) {
         emptyList()
     } else {
-        listOf(Effect.PhantomPlaced(seat = event.actor, room = event.room, until = until))
+        listOf(
+            Effect.StaticOpened(
+                seconds = (Balance.STATIC_DURATION / Balance.TICKS_PER_SECOND).toInt(),
+                seed = staticSeed(state.seed, event.at),
+            ),
+        )
     }
 
-    return Reduction(next, listOf(answered) + placed)
+    return Reduction(next, listOf(answered) + jammed)
 }
+
+/**
+ * **The noise field's seed: the round's own, folded with the tick.**
+ *
+ * Deterministic, replayable, and **incapable of naming anybody** — there is no seat argument and
+ * there must never be one. A mix rather than a sum so that two jams a few ticks apart do not draw
+ * two nearly identical fields, which on a ten-second window would read as the same jam continuing.
+ */
+private fun staticSeed(seed: Long, at: Tick): Long = seed * 0x5DEECE66DL + at.step * 0x9E3779B9L
 
 /**
  * **The Isolate picker — built for EVERY seat, and narrowed by the allowlist** (D-150, D-079, the
@@ -1122,11 +1117,14 @@ private fun meetingCalled(
             // cancelled an Egress would make every Egress end the same way.
             //
             // **Nothing is emitted about either.** A card going dark is discovered by walking to
-            // it (`isolateFired`), and a phantom reaches nobody by construction — so a card coming
-            // back is discovered the same way, and there is no message whose arrival could report
-            // that an ability had been running.
+            // it (`isolateFired`), so a card coming back is discovered the same way, and there is no
+            // message whose arrival could report that an ability had been running. **A jam needs no
+            // message either, and that is the call rather than an omission**: page 2 does not exist
+            // during a meeting for any seat of any role (D-183), the Terminal is never readable at
+            // one (`gdd.md:470`), and every living phone is being pushed the meeting in the same
+            // frame — so there is no surface left showing noise for a message to clear.
             isolated = emptyList(),
-            phantoms = emptyList(),
+            staticUntil = null,
         ),
         listOf(ring) + walkIn + gateCount(state, meeting) + batched + stopped,
     )
@@ -1430,7 +1428,7 @@ private fun lightsOut(state: GameState, event: Event.MeetingClosed): Reduction<G
     )
 }
 
-/** How many seated players are standing at the meeting area. Phantom seats count for nobody. */
+/** How many seated players are standing at the meeting area. An empty seat counts for nobody. */
 private fun present(state: GameState, meeting: Meeting): Int =
     state.seats.count { meeting.hasCheckedIn(it) }
 

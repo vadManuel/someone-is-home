@@ -156,75 +156,55 @@ sealed interface Effect {
     data class IsolateTargetsOffered(val seat: Seat, val targets: List<Destination>) : Effect
 
     /**
-     * **The home's plan, so a Spoof has something to pick from** (`gdd.md:313`, the owner's
-     * targeting ruling).
+     * **STATIC: the house's monitoring is jammed, house-wide, for ten seconds** (D-186,
+     * `gdd.md:447-495`).
      *
-     * *Spoof picks from the MAP — the Insider taps a room on the home's plan to spoof their location
-     * there, and the glow of reading the map is the deliberate price.* A phone cannot draw a plan it
-     * was never sent, so this is the plan. [IsolateTargetsOffered]'s sentence exactly, one ability
-     * over, and the two rows are deliberately the same shape and the same width.
+     * *A ten-second house-wide jam of every monitoring surface the living can read.* The living's
+     * live view drowns in animated noise with the real counts faintly beneath it, a Timelapse
+     * crossing the window renders those seconds as static, and **underneath, nothing changes** —
+     * tracking records the truth throughout, check-ins land, the meter moves, and the view is
+     * correct again the instant the window closes.
      *
-     * ### ⚠️ This is the largest disclosure in the table and it is flagged as one
+     * ### ⚠️ It is LOUD and ANONYMOUS, and those two words are the whole ability
      *
-     * [Destination]'s own KDoc names it as the thing not to do: *what is NOT authorised is the whole
-     * map to every client.* The word carrying the weight there is **every**. `HOME_PLAN_OFFERED` is
-     * permitted to `Insider/Live` and to nothing else — the narrowest live row in the table, beside
-     * [IsolateTargetsOffered]'s — so a Resident's copy is constructed and delivered to nobody, and a
-     * single class added to that row would hand every phone in the house the geography every work
-     * order narrows to one seat's own lines.
+     * *The house shows that it was jammed. It never shows who.* So this effect goes to the whole
+     * living house — it is the announcement as well as the render — and **it carries no seat.** It
+     * cannot be addressed to the firing Insider and widened later, because there is no field on it
+     * that could name them: every living phone receives byte-identical bytes, which is what makes
+     * *an Insider did something in the last ten seconds and I have no idea which* the sentence the
+     * ability is built to produce.
      *
-     * What is the *ruling's* and what is this **build's reading** are different things and both are
-     * written down. The ruling's: an Insider gets the plan, because a map picker needs a map. This
-     * build's: the plan arrives **whole and at arming**, rather than per-floor or on the fire that
-     * needs it. Whole, because a plan delivered a piece at a time would make which pieces arrived a
-     * second channel; at arming, because that is when the house learns the home and because a
-     * message sent at the moment a Spoof was fired would be a message whose *presence* reported
-     * that one had been.
+     * That also satisfies `gdd.md:398`'s no-actor-side-feedback rule by construction rather than by
+     * suppression: the firing phone is told exactly what a bystander's phone is told, because they
+     * are the same message. And `gdd.md:393`'s *every observable effect must be self-inflictable*
+     * needs no special case — an Insider standing at the Terminal when their own Static lands sees
+     * the same noise a Resident does.
      *
-     * ⚠️ **A phone that reconnects mid-round does not get it again**, which is
-     * [IsolateTargetsOffered]'s existing gap rather than a new one, and it is escalated with it.
+     * ### The GHOSTS ARE EXEMPT, and it is the liveness privilege stated once more
      *
-     * ### What it cannot carry
+     * M12's fiction is that the house erased the out from the registry and can neither see nor
+     * control them; **a jam is the house's own monitoring degrading, and a ghost's true occupancy is
+     * not the house's monitoring.** The out already get both bars, true counts, no injected error
+     * and no staleness bands (D-134, D-145) — this is the same privilege, and it costs nothing
+     * because a ghost with a clean map during a jam cannot tell anybody. The exemption is the
+     * allowlist's: this kind is permitted to the two **living** classes and to neither out class.
      *
-     * See [HomePlanView]. Rooms, names, stairs and squares — no markers, no seats, no occupancy, no
-     * Egress nodes, no isolations. The narrowing is the type, not a filter somebody applies here.
+     * ### [seconds] is the window, and [seed] is the noise
+     *
+     * A phone has to draw ten seconds of animated noise, and rule 5 says light is game state — no
+     * animation the core did not author. So the field the noise is generated from **rides the
+     * effect**: the same seed on every phone draws the same field, and a replay of the round draws
+     * it again. It is minted off the round's seed and the firing tick and from nothing else, so it
+     * is a fact about *when* and never about *who* — see `staticFired` in the rules.
+     *
+     * ### It has no [Sound] and no [Haptic], and both are rulings rather than omissions
+     *
+     * D-176: **the one sound in the game is the Surge.** D-135 closes the long haptic to five
+     * events and this is not one of them. The announcement is what the surfaces look like, and a
+     * buzz in every pocket the moment an Insider fired would be a timer telling a dark house that
+     * *now* was the moment somebody chose.
      */
-    data class HomePlanOffered(val seat: Seat, val plan: HomePlanView) : Effect
-
-    /**
-     * **A phantom occupant now stands in a room nobody is in** (`gdd.md:313`).
-     *
-     * The whole of what a Spoof leaves behind. See [Phantom] for the state and the dedup rule that
-     * governs it.
-     *
-     * ### ⚠️ IT HAS NO SCHEMA ROW, AND ITS RECIPIENTS ARE NOBODY. THAT IS THE DECISION
-     *
-     * [PresenceChanged]'s posture, taken for the same reason and one stronger one. The reason:
-     * **the only surface that could ever consume a phantom is the spectator map** (D-136, D-079 —
-     * the out are the one class the design lets read occupancy at all), and that map is
-     * hardware-dependent, unbuilt and frozen. There is nobody to send it to, so it goes to nobody,
-     * which rule 2 does for free the moment a row is not written.
-     *
-     * The stronger one: a phantom row says *seat 3 claims to be in the Kitchen*, and **only an
-     * Insider can put a phantom anywhere.** A living player who could read one would hold the one
-     * fact in this game that names an Insider outright — worse than the presence leak the plane was
-     * split in two to close, because presence at least describes something that happened.
-     *
-     * **This is an effect with no audience and it is not a leak** — it is the fail-closed direction
-     * arrived at honestly rather than by omission. The effect exists so that the fact is *recorded*
-     * and replays: the house records, never recites. Written down here rather than left as a gap in
-     * the table, because an absent row is indistinguishable from a forgotten one, and when the
-     * spectator map lands this row becomes `OUTSIDE` and **not one class more**.
-     *
-     * ### It is addressed to the actor and that is not a contradiction
-     *
-     * `audienceOf` names the spoofing seat, exactly as [PresenceChanged] names the performing one,
-     * so that the day somebody writes a row by accident the effect still could not reach another
-     * player. Two independent denials — and the actor does not receive it either, because the row
-     * that would let them does not exist. **The actor's device stays inert** (`gdd.md:398`): what
-     * their phone is told is [AbilityFired] and nothing else, the same as every other ability.
-     */
-    data class PhantomPlaced(val seat: Seat, val room: String, val until: Tick) : Effect
+    data class StaticOpened(val seconds: Int, val seed: Long) : Effect
 
     data class SubroutineProgressed(val remaining: Int) : Effect
 

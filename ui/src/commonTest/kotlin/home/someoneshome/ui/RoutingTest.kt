@@ -328,16 +328,52 @@ class RoutingTest {
         assertEquals(ScreenId.WinResidents, model.state.screen, "the last word moved the phone")
     }
 
+    /**
+     * **STATIC raises the jam on every living phone, and a meeting call throws it away**
+     * (D-186, D-185).
+     *
+     * Two branches, and the second is the one worth being careful about. `StaticOpened` sets the
+     * field on **whichever** phone receives it — there is no seat on the message, so this branch
+     * cannot tell the Insider who fired it from a Resident who did not, and that is the ability.
+     *
+     * **The meeting call drops it in the same assignment that names the caller**, which is not this
+     * phone deciding a rule: the house cleared its own deadline at the call and no message reports
+     * that, because there is no surface left showing noise for a message to clear — page 2 does not
+     * exist during a meeting (D-183) and the Terminal is never readable at one. So the phone throws
+     * its copy away in the frame it is told why.
+     */
+    @Test
+    fun `a static jam is raised on any living phone and dropped at a meeting call`() {
+        val model = living(ScreenId.TermLive)
+        model.houseSaid(RoundMessage.StaticOpened(seconds = 10, seed = 4242L))
+        assertEquals(
+            StaticJam(seconds = 10, seed = 4242L), model.state.staticJam,
+            "the house said the monitoring was jammed and the phone kept nothing",
+        )
+        assertEquals(
+            ScreenId.TermLive, model.state.screen,
+            "a jam moved the phone; it is a render over the surface, not a screen",
+        )
+
+        model.houseSaid(
+            RoundMessage.MeetingOpened(Seat(2), MeetingTrigger.MeetingCard, Haptic.Long),
+        )
+        assertNull(
+            model.state.staticJam,
+            "the jam outlived the meeting call that ended it (D-185)",
+        )
+    }
+
     // ---- 8 · What must still move nothing --------------------------------------------------------
 
     /**
      * **The kinds that stay routeless stay routeless, and each is a decision.**
      *
-     * `PhantomPlaced` is the one `gdd.md:398` forbids outright — feedback that a fire landed, on the
-     * actor's own phone — and the Spoof redesign will replace it, so nothing may be built on it.
      * `PresenceChanged` is permitted to nobody (D-111). `EgressSucceeded` has no row at all
      * (D-131, D-156). `AbilityFired` is the only thing a Tier-2 fire sends back to the actor and
-     * must not grow a screen.
+     * must not grow a screen — which is the rule the deleted fourth member of this list used to
+     * carry: D-186 replaced the ability whose landing was forbidden feedback, and what took its
+     * place is a kind that moves a panel field on **every** living phone rather than none.
      *
      * Asserted as *the panel did not move at all* rather than as *the screen did not change*,
      * because the failure worth catching is a field quietly appearing.
@@ -345,7 +381,6 @@ class RoutingTest {
     @Test
     fun `the routeless kinds move neither screen nor panel`() {
         val quiet = listOf(
-            RoundMessage.PhantomPlaced("THE LANDING", until = 99L),
             RoundMessage.PresenceChanged(at = null, open = false),
             RoundMessage.EgressSucceeded(Haptic.Long),
             RoundMessage.AbilityFired(cooldownStarted = true),

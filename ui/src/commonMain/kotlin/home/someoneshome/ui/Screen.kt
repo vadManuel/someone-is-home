@@ -134,7 +134,6 @@ fun Screen(
                 ScreenId.Page2 -> Page2Screen(vals)
                 ScreenId.SurgeTargets -> SurgeTargetsScreen(vals)
                 ScreenId.IsolateTargets -> IsolateTargetsScreen(vals)
-                ScreenId.SpoofRooms -> SpoofRoomsScreen(vals)
                 ScreenId.Quiet -> HomeScreen(vals)
 
                 ScreenId.Banner -> HomeScreen(vals)
@@ -161,8 +160,8 @@ fun Screen(
                 ScreenId.Files -> FilesScreen()
                 ScreenId.Notes -> NotesScreen(vals)
                 ScreenId.TermNo -> TermNoScreen()
-                ScreenId.TermLive -> TermLiveScreen()
-                ScreenId.Timelapse -> TimelapseScreen()
+                ScreenId.TermLive -> TermLiveScreen(vals)
+                ScreenId.Timelapse -> TimelapseScreen(vals)
                 ScreenId.EgressWidget -> EgressWidgetScreen(vals)
 
                 ScreenId.Calling -> CallingScreen()

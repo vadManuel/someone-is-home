@@ -205,7 +205,7 @@ internal fun round(insiders: List<Seat> = INSIDERS): List<Event> {
                 val card = state.activeMarkers.first()
                 for (fire in listOf<(Tick) -> Event>(
                     { at -> Event.SurgeFired(at, actor, victim) },
-                    { at -> Event.SpoofFired(at, actor, "ROOM 0") },
+                    { at -> Event.StaticFired(at, actor) },
                     { at -> Event.IsolateFired(at, actor, card) },
                 )) {
                     state = state.withCooldown(Cooldown(actor, InsiderAbility.Access, Tick(t)))

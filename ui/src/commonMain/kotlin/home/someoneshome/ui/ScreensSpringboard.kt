@@ -204,22 +204,29 @@ fun Page2Screen(vals: PanelVals) {
                 // the bar under them is the pool rather than any one ability's clock — which is why
                 // it is drawn once, below all three, instead of three times inside them.
                 //
-                // **All three take a two-second hold and then open a view** — two a list, and Spoof
-                // the home's own plan. A Resident's three are all inert, identically, and take no
-                // pointer input at all (D-142), which is what makes the row's appearance carry no
-                // role: the three tiles are the same three tiles either way, and the only thing
-                // that differs is whether a thumb held on one does anything.
+                // **All three take the same two-second hold, and what it does differs** — two open a
+                // list, and STATIC fires in place (D-186). A Resident's three are all inert,
+                // identically, and take no pointer input at all (D-142), which is what makes the
+                // row's appearance carry no role: the three tiles are the same three tiles either
+                // way, and the only thing that differs is whether a thumb held on one does
+                // anything.
                 Column(verticalArrangement = Arrangement.spacedBy(5.u)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.u)) {
                         Tier2Tile(vals.tier2A, vals, Modifier.weight(1f), armable = vals.insider) {
                             go(ScreenId.SurgeTargets)
                         }
-                        // Spoof, and it opens the plan rather than a list — the owner's targeting
-                        // ruling. `armable` is the same expression the other two carry and not a
-                        // narrower one: nothing about this tile may differ from its neighbours
-                        // except which screen the hold opens.
+                        // **STATIC, and the hold FIRES rather than opening anything** (D-186). It
+                        // has no target — no seat, no card, no room — so there is no picker to
+                        // open and nothing on this phone to choose. `armable` is the same
+                        // expression the other two carry and not a narrower one: nothing about
+                        // this tile may differ from its neighbours except what the hold does.
+                        //
+                        // **Nothing is drawn afterwards and nothing may be.** The screen does not
+                        // move, no tile lights, no line appears — the house's answer is the jam
+                        // every living phone in the building gets, and it reaches this one as a
+                        // bystander's rather than as a report about this thumb (`gdd.md:398`).
                         Tier2Tile(vals.tier2B, vals, Modifier.weight(1f), armable = vals.insider) {
-                            go(ScreenId.SpoofRooms)
+                            actions.fireStatic()
                         }
                         Tier2Tile(vals.tier2C, vals, Modifier.weight(1f), armable = vals.insider) {
                             go(ScreenId.IsolateTargets)

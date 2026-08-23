@@ -128,7 +128,7 @@ private fun phaseOf(event: Event): MeetingPhase? = when (event) {
     // here.** T1·7 / T2·8 was unruled and is ruled now: Tier 2 may not be fired at a meeting at all.
     // The refusal is not expressible as a phase — *no phase* is what it means, and a member of
     // [MeetingPhase] returned here would say the opposite, that there is one phase these belong to.
-    is Event.SurgeFired, is Event.IsolateFired, is Event.SpoofFired -> null
+    is Event.SurgeFired, is Event.IsolateFired, is Event.StaticFired -> null
 
     // Not meeting events. The Egress has its own gate below, and it already refuses these while a
     // meeting is holding the countdown -- which is the same answer by a shorter route, and the one
@@ -165,7 +165,7 @@ private fun phaseOf(event: Event): MeetingPhase? = when (event) {
  * pauses the countdown rather than admitting a second crisis into it.
  */
 private fun isTierTwo(event: Event): Boolean = when (event) {
-    is Event.SurgeFired, is Event.IsolateFired, is Event.SpoofFired -> true
+    is Event.SurgeFired, is Event.IsolateFired, is Event.StaticFired -> true
 
     is Event.RoundArmed, is Event.MarkerScanned, is Event.SubroutineReturned,
     is Event.PerformanceEnded, is Event.RevokeArmed, is Event.ContactMade,
@@ -201,9 +201,9 @@ private fun needsEgress(event: Event): Boolean = when (event) {
     // while no Egress is running is the ordinary case, not an event out of place. A gate here would
     // refuse every Isolate in every quiet round.
     is Event.SurgeFired, is Event.IsolateFired,
-    // **Spoof does not read the Egress at all.** It has no node exclusion to honour -- D-150 is
-    // about a list of markers and a Spoof names no marker -- so there is nothing here for it to
-    // need, and a gate would refuse every Spoof in every quiet round.
-    is Event.SpoofFired,
+    // **Static does not read the Egress at all.** It has no node exclusion to honour -- D-150 is
+    // about a list of markers and a Static names no marker, no room and no seat -- so there is
+    // nothing here for it to need, and a gate would refuse every Static in every quiet round.
+    is Event.StaticFired,
     -> false
 }

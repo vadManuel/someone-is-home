@@ -152,7 +152,7 @@ object Balance {
      * **The Access pool's nominal duration — a placeholder, and it is what D-132 halves**
      * (`gdd.md:306`, D-132).
      *
-     * Tier 2 is one clock shared by Surge, Spoof and Isolate ([InsiderAbility.Access]), and each of
+     * Tier 2 is one clock shared by Surge, Static and Isolate ([InsiderAbility.Access]), and each of
      * them restarts it for its **own** weight below. So the pool has no single duration in play —
      * which leaves D-132's *every Insider cooldown begins the round at half its normal duration*
      * with nothing to be half of. This is that number: the pool's nominal, halved at arming, so the
@@ -181,8 +181,9 @@ object Balance {
     /**
      * **Isolate's weight on the pool — a placeholder** (`gdd.md:315`).
      *
-     * The pool's nominal, unweighted: Isolate is neither the commitment Surge is nor free. Playtest
-     * owns the relationship between this, [SURGE_COOLDOWN] and Spoof's, which is unbuilt.
+     * The pool's nominal, unweighted: Isolate is neither the commitment Surge is nor free. It is
+     * also the pool's **lightest** weight, and it did not use to be — see [STATIC_COOLDOWN], which
+     * took the slot the old third ability held. Playtest owns the relationship between the three.
      */
     const val ISOLATE_COOLDOWN: Long = ACCESS_COOLDOWN
 
@@ -214,51 +215,49 @@ object Balance {
     fun isolateIsTemporary(): Boolean = ISOLATE_DURATION < ISOLATE_COOLDOWN
 
     /**
-     * **Spoof's weight on the pool — the lightest in it, and a placeholder** (`gdd.md:313`).
+     * **Static's weight on the pool — heavier than the ability it replaced, and a placeholder**
+     * (D-186).
      *
-     * The third and last weight on the Access pool, and the cheapest of the three on purpose.
-     * `gdd.md:1143` rates Spoof the roster's **cut risk**: *"Spoof may be too abstract for the dark.
-     * Surge and Revoke have immediate, visceral effects; Spoof is slow, indirect, and asks a Insider
-     * to think about the map layer while standing in a dark hallway. It may simply never get
-     * used."* — and `gdd.md:1342` turns that into a measurement: **fired at least once per three
-     * rounds, or it is cut.**
+     * D-186 replaced Spoof rather than tuning it, and it named the direction of this number without
+     * naming the number: *heavier than old Spoof's — constant raised; playtest tunes it.* Spoof's
+     * was the pool's lightest at sixty seconds, priced down so that `gdd.md:1347`'s *nobody used
+     * it* would be a finding about the ability rather than about its price. **Static needs no such
+     * discount**: it costs nothing to understand, it is fired because you are about to do something,
+     * and it announces itself to the whole house.
      *
-     * Pricing an ability nobody reaches for at the same weight as one everybody does would be the
-     * build putting a thumb on that measurement's scale. It is the lightest weight in the pool so
-     * that *nobody used it* is a finding about the ability rather than about its price.
-     *
-     * ⚠️ **The metric is the point of this number and it is not measurable yet.** See
-     * `Transcript.spoofFires`, which is the counting half.
+     * So the pool's three weights are ordered rather than guessed: **Surge, then Static, then
+     * Isolate.** A Surge takes one player out of the game for five seconds and is the loudest thing
+     * that can happen (D-182); a Static blinds every reader in the house for ten and tells the
+     * house it did; an Isolate takes one card dark and nothing anywhere says so. The ordering is
+     * the claim this number is making, and the value is playtest's.
      */
-    const val SPOOF_COOLDOWN: Long = 60L * TICKS_PER_SECOND
+    const val STATIC_COOLDOWN: Long = 120L * TICKS_PER_SECOND
 
     /**
-     * **How long a phantom occupant lasts — a placeholder** (`gdd.md:313`).
+     * **How long the house's monitoring stays jammed — ten seconds, and it is OWNER-SET** (D-186).
      *
-     * The design says nothing at all about this: *false check-in in a room you are not in;
-     * manufactures a phantom occupant* is the whole of it, and a check-in is an instant rather than
-     * a duration. So a number had to be chosen, and what it is choosing between is a lie that
-     * decays like a real sighting and a lie that stands until something contradicts it.
+     * Not a placeholder, unlike almost everything else in this file. The ruling's table gives the
+     * duration as **10s** beside the scope and the exemption, and the length is doing work: it is
+     * long enough that a reader at the station loses the window they were reading and short enough
+     * that they are still standing there when it clears, which is what makes *you know an Insider
+     * did something in the last ten seconds* the sentence the ability is for.
      *
-     * It decays. A phantom that outlived its round would make the map's oldest data its most
-     * confident, which is the opposite of what a staleness-banded map is for (`gdd.md`'s three
-     * bands) — and D-136's *adjacent-room bleed is accepted* only reads as acceptable because a
-     * sighting is a recent thing.
-     *
-     * Longer than [ISOLATE_DURATION] because a lie has to outlast the walk to the room it names,
-     * and shorter than [SPOOF_COOLDOWN] for [ISOLATE_DURATION]'s exact reason: at or past parity
-     * one Insider could keep a permanent false occupant standing in a room by re-firing, and a
-     * permanent phantom is a fixture rather than a check-in.
+     * Well under [STATIC_COOLDOWN] — see [staticIsAWindow]. At or past parity two Insiders could
+     * hold the house's monitoring dark for a whole shift by alternating, and a permanent jam is a
+     * broken Terminal rather than an ability.
      */
-    const val SPOOF_DURATION: Long = 50L * TICKS_PER_SECOND
+    const val STATIC_DURATION: Long = 10L * TICKS_PER_SECOND
 
     /**
-     * **Whether a phantom is really a check-in rather than a fixture.** See [SPOOF_DURATION].
+     * **Whether a jam is really a window rather than a condition.** See [STATIC_DURATION].
      *
-     * [isolateIsTemporary]'s shape and its reason: the numbers above are playtest's, and the person
-     * who lengthens a phantom to make it bite will not be reading this file's KDoc when they do it.
+     * [isolateIsTemporary]'s shape and its reason: [STATIC_COOLDOWN] is playtest's, and the person
+     * who shortens it to make the ability bite will not be reading this file's KDoc when they do
+     * it. **It is deliberately not asked per Insider.** The pool is per-seat and the jam is
+     * house-wide, so what this guards is the single-Insider case; two Insiders alternating is a
+     * balance question and belongs to the playtest, not to an assertion.
      */
-    fun phantomIsTemporary(): Boolean = SPOOF_DURATION < SPOOF_COOLDOWN
+    fun staticIsAWindow(): Boolean = STATIC_DURATION < STATIC_COOLDOWN
 
     /** **Four taps on the beat** (`gdd.md:355`, A-11). The design's number, not a placeholder. */
     const val SYNC_PULSE_BEATS: Int = 4

@@ -121,7 +121,10 @@ object ScreenGraph {
         // publishes: a row FIRES, which walks back to page 2 without naming it — see
         // [Flow.viaActions], where firing is declared with the other gestures. A picker that could
         // only be left by firing would be a control that costs a cooldown to change your mind about.
-        ScreenId.SurgeTargets, ScreenId.IsolateTargets, ScreenId.SpoofRooms -> setOf(ScreenId.Page2)
+        //
+        // **Static is not here because it has no screen** (D-186): its tile fires in place, so the
+        // third tier-2 ability publishes no edge at all.
+        ScreenId.SurgeTargets, ScreenId.IsolateTargets -> setOf(ScreenId.Page2)
         // The lantern, and the lantern with something under its clock. A notification on a locked
         // phone is READ, not opened: this screen has one control and it is SLIDE TO OPEN, so a
         // card that also navigated would be an unlock nobody performed.
@@ -594,14 +597,17 @@ object Flow {
         // (D-142), so there is no hold to run and no view either role can be caught on.
         ScreenId.Page2 to setOf(
             ScreenId.Banner,
-            // **All three tier-2 tiles now**, armed by the same two seconds of a finger (D-141)
-            // and opening a view rather than arming in place — the owner's targeting rulings, and
-            // the one place the design asks for one. Two open a list and Spoof opens the home's
-            // plan, which is the same trade priced higher: *the glow of reading the map is the
-            // deliberate price.* Asymmetric in capability and never in appearance: a Resident's
-            // three tiles are drawn identically and take no pointer input at all (D-142), so
-            // nothing here is reachable by rendering the Resident and firing everything on screen.
-            ScreenId.SurgeTargets, ScreenId.IsolateTargets, ScreenId.SpoofRooms,
+            // **Two of the three tier-2 tiles**, armed by the same two seconds of a finger (D-141)
+            // and opening a list rather than arming in place — the owner's targeting rulings, and
+            // the one place the design asks for a picker. *The glow of reading the list is the
+            // deliberate price.*
+            //
+            // **The third opens nothing** (D-186). Static has no target, so its tile takes the same
+            // hold and then fires, which is `Page2`'s two Tier-1 tiles' behaviour rather than its
+            // two pickers'. Asymmetric in capability and never in appearance: a Resident's three
+            // tiles are drawn identically and take no pointer input at all (D-142), so nothing here
+            // is reachable by rendering the Resident and firing everything on screen.
+            ScreenId.SurgeTargets, ScreenId.IsolateTargets,
         ),
         // Firing a Tier-2 ability, which walks back to page 2 without the row naming it: what a row
         // publishes is a target off a list the house sent, and where the phone lands afterwards is
@@ -609,7 +615,6 @@ object Flow {
         // whether the shot landed, so nothing about the navigation is feedback.
         ScreenId.SurgeTargets to setOf(ScreenId.Page2),
         ScreenId.IsolateTargets to setOf(ScreenId.Page2),
-        ScreenId.SpoofRooms to setOf(ScreenId.Page2),
         // **STOP NOW, off every Subroutine screen.** It is here rather than in the graph because
         // the control publishes an action rather than a target: it reports the performance window
         // closing to the house before it navigates (`Intent.StopSubroutine`, D-111), so what a
@@ -836,6 +841,23 @@ class FlowModel(
     }
 
     /**
+     * **The Static window ran out on this phone** (D-186).
+     *
+     * Called by [FlowHost] after the number of seconds the house sent with the jam, and by nothing
+     * else. **It is not the phone deciding the jam is over** — the house set the deadline when it
+     * opened the window and this is the phone's copy of it expiring; there is no message reporting
+     * the end, because a message whose arrival said *the monitoring is back* would be a second thing
+     * to time and a second thing to miss.
+     *
+     * [jam] is checked against the one currently held rather than assumed, so a Static that arrived
+     * during another's window cannot be ended by the older one's timer. A jam already cleared —
+     * by a meeting call, which is D-185's — leaves this a no-op.
+     */
+    fun staticLapsed(jam: StaticJam) {
+        if (state.staticJam == jam) state = state.copy(staticJam = null)
+    }
+
+    /**
      * **Arming a Revoke — two seconds of a finger on page 2** (D-141, D-142).
      *
      * Presentation only, and the line it stops at is [lightsOut]'s: it walks this phone's tile
@@ -908,34 +930,32 @@ class FlowModel(
     }
 
     /**
-     * **SPOOF, fired at the room that was tapped on the plan** (`gdd.md:313`, the owner's targeting
-     * ruling).
+     * **STATIC, fired in place from the tile that was held** (D-186).
      *
-     * [room] is a host-authored name off [PanelState.homePlan], which is the plan the house sent
-     * this phone — so like [fireIsolate] this reports a **choice among what the house drew**, and
-     * carries no claim about where anybody actually is. The house resolves the name to nothing; see
-     * `Event.SpoofFired`.
+     * **It carries nothing, and there is nothing it could carry.** Static has no target — no seat,
+     * no card, no room — so this method takes no argument, reads no state, and cannot be wrong about
+     * what it asked for. It is the narrowest control in this file.
      *
-     * ### It walks back to page 2 and reports nothing, and here that costs the most
+     * ### It does not navigate, and that is the difference from the two pickers
      *
-     * [fireSurge]'s paragraph, and it bites hardest on this ability: a Surge and an Isolate at least
-     * *do* something a player might later hear about, while a Spoof's entire consequence is invisible
-     * to everybody including the person who fired it. **There is nothing to draw and there must be
-     * nothing to draw** — a phantom-placed line, a room highlighted on the plan afterwards, a tick
-     * beside the room's name, are each `gdd.md:398`'s forbidden actor-side feedback, and each is the
-     * obvious thing to add to a screen that currently looks like it did nothing.
+     * [fireSurge] and [fireIsolate] walk back to page 2 because the finger that fired them was on a
+     * picker. This finger is on page 2 already, so **the screen does not move** — which is the two
+     * Tier-1 tiles' behaviour (D-142) and is what makes the row's three tiles indistinguishable in
+     * capability from across a dark room.
      *
-     * The screen looking like it did nothing **is the ability working.**
+     * ### Nothing is drawn afterwards and there must be nothing to draw
      *
-     * **No branch of any kind**: this method does the same thing whichever room was tapped, whether
-     * the pool was ready, whether the room exists, and whether the actor is standing in it.
+     * [fireSurge]'s paragraph. **No branch of any kind**: this method does the same thing whether
+     * the pool was ready, whether the house is already jammed, and whoever the actor is. The house's
+     * answer is [RoundMessage.StaticOpened], which arrives on *every* living phone in the building
+     * including this one — so what this phone shows is a bystander's view of a jam, and there is
+     * nothing on it that says the thumb that started it was this one (`gdd.md:398`).
      *
      * **Reached only from an Insider's tile**, and not by a check inside it — a Resident's tier-2
-     * tiles take no pointer input at all (D-142), so a Resident never opens the picker.
+     * tiles take no pointer input at all (D-142).
      */
-    fun fireSpoof(room: String) {
-        send(IntentMessage.FireSpoof(room = room))
-        go(ScreenId.Page2)
+    fun fireStatic() {
+        send(IntentMessage.FireStatic)
     }
 
     /**
@@ -1366,22 +1386,17 @@ class FlowModel(
             is RoundMessage.IsolateTargetsOffered ->
                 state = state.copy(isolateTargets = message.targets)
 
-            // **The home's plan, straight onto the panel.** The Isolate list's branch exactly, one
-            // ability over and one narrowing wider: it is copied whole and never trimmed here,
-            // because what a phone may be shown is the allowlist's decision (`HOME_PLAN_OFFERED` is
-            // one class wide) and a client that filtered it would be a second, quieter rule about
-            // the same disclosure.
-            is RoundMessage.HomePlanOffered ->
-                state = state.copy(homePlan = message.plan)
-
-            // **A Spoof landing, and this branch is unreachable in any round that runs.**
-            // `EmitSchema.PHANTOM_PLACED` has no row at all, so no delivery is ever produced for it
-            // — see `Effect.PhantomPlaced`, where the reason is that a phantom names an Insider
-            // outright. Written rather than left to an `else`, because a missing branch is a
-            // compile error somebody fixes with whatever is nearest, and what is nearest here is a
-            // state field. **There must never be a field.** Even on the actor's own phone this is
-            // the one thing `gdd.md:398` forbids: feedback that a fire landed.
-            is RoundMessage.PhantomPlaced -> Unit
+            // **STATIC: the house telling every living phone in the building that it has gone
+            // blind** (D-186). Copied onto the panel whole and never filtered, for the Isolate
+            // list's reason and one sharper: there is nothing on it to filter. It carries no seat,
+            // so this branch cannot tell a jam this phone caused from one it did not, and neither
+            // can the screen underneath it.
+            //
+            // **It lands the same on the firing Insider's phone as on a Resident's**, which is what
+            // `gdd.md:398` asks for and is why the fire itself sets nothing. The window runs itself
+            // off (`FlowHost`), which is the ring's presentation timer one message over.
+            is RoundMessage.StaticOpened ->
+                state = state.copy(staticJam = StaticJam(message.seconds, message.seed))
 
             is RoundMessage.SubroutineGraded -> state = state.copy(
                 verdict = if (message.accepted) SubroutineVerdict.Accepted else SubroutineVerdict.Rejected,
@@ -1463,7 +1478,14 @@ class FlowModel(
             is RoundMessage.MeetingOpened -> {
                 // The caller's name before the screen, so the ring is drawn with it on the first
                 // frame rather than one recomposition later. D-121: the meeting has an author.
-                state = state.copy(caller = nameOf(message.caller))
+                //
+                // **The jam is dropped in the same assignment** (D-185: *a meeting call ends every
+                // running ability effect*). Not this phone deciding a rule — the house has already
+                // cleared its own deadline, and no message reports that because there is no surface
+                // left to clear: page 2 does not exist during a meeting and the Terminal is never
+                // readable at one. This is the phone's copy of a window the house has ended, thrown
+                // away in the frame it is told why.
+                state = state.copy(caller = nameOf(message.caller), staticJam = null)
                 push(
                     when (message.trigger) {
                         is MeetingTrigger.RevokeReported -> ScreenId.Found
@@ -1750,7 +1772,7 @@ class FlowModel(
         armEgress = ::armEgress,
         fireSurge = ::fireSurge,
         fireIsolate = ::fireIsolate,
-        fireSpoof = ::fireSpoof,
+        fireStatic = ::fireStatic,
         toggleMarkers = ::toggleMarkers,
         toggleTorch = ::toggleTorch,
         pickRoomType = ::pickRoomType,
@@ -1842,6 +1864,21 @@ fun FlowHost(
     val pending = model.pending
     val awaiting = if (standingInForTheHouse) model.awaitingPush else null
     val screen = model.state.screen
+
+    // **The jam's own window, and it is a presentation timer rather than a clock** (D-186). The
+    // house owns when the jam ENDS -- it cleared its own deadline the moment it opened one, and it
+    // clears it early at a meeting call (D-185) -- and what this runs off is the length the house
+    // sent with it, which is the ring's six seconds one message over. It is keyed on the jam, so a
+    // second Static arriving mid-window restarts the wait on the new one rather than ending both
+    // early.
+    val jam = model.state.staticJam
+    LaunchedEffect(jam) {
+        if (jam != null) {
+            delay(jam.seconds * 1_000L)
+            model.staticLapsed(jam)
+        }
+    }
+
     LaunchedEffect(screen, pending, awaiting) {
         // Only if nothing else moved first. The keys above already restart this effect on every
         // screen change, so reaching either branch means the screen is still the one that owed it.

@@ -10,9 +10,9 @@ package home.someoneshome.model
  * does not name are still blocked on open design decisions, and inventing events for those here
  * would encode a guess as a decision. **F-001 is no longer one of them** — Egress node designation
  * was ratified as *two ordinary markers in non-adjacent rooms, drawn at fire time* — so the Egress
- * lifecycle is here. **Surge, Isolate and Spoof are all here now**, on the owner's targeting
- * rulings — Spoof last, and it is the only ability in the game whose target is a room rather than a
- * seat or a card.
+ * lifecycle is here. **Surge, Isolate and Static are all here now** — the first two on the owner's
+ * targeting rulings, and Static on D-186, which replaced the third ability outright and left the
+ * only fire in the game that names nothing at all.
  */
 sealed interface Event {
     val at: Tick
@@ -109,32 +109,6 @@ sealed interface Event {
          * kept in the one artefact of this game that outlives the evening.
          */
         val oneLines: List<OneLineHeld> = emptyList(),
-        /**
-         * **The home's shape, as a recorded input — and it PASSES THROUGH the rules rather than
-         * being held by them** (`gdd.md:313`, the owner's Spoof targeting ruling).
-         *
-         * The Spoof picker is a plan the Insider taps a room on, and a phone cannot draw a plan it
-         * was never sent, so the plan has to reach the house before it can reach a phone. It
-         * arrives here for [markers]' reason and [insiders]' — a recorded input, locked at arming,
-         * replayed rather than re-derived against a home the recording does not carry.
-         *
-         * ### ⚠️ Nothing stores it and nothing branches on it, and that is the whole design of this
-         * field
-         *
-         * [GameState] does **not** gain a plan. The rules read this once, at arming, to build
-         * [Effect.HomePlanOffered], and then it is gone — so *the rules have never held house
-         * geography* stays true in the sense that matters: no rule can consult the shape of a home
-         * to decide anything, because after the arming reduction there is nothing left to consult.
-         *
-         * That is a stronger guarantee than [GameState.destinations] has, and it was available here
-         * and not there: a work order needs its destinations at every re-issue, and a plan is
-         * published once.
-         *
-         * Defaulted empty, exactly as [markers] is: a round armed to exercise something else does
-         * not have to invent a house to hold it in, and an empty plan draws an empty picker.
-         */
-        val plan: HomePlanView = HomePlanView.EMPTY,
-
     ) : Event
 
     /**
@@ -201,10 +175,10 @@ sealed interface Event {
     // draw here: there is no coin toss and no geography to consult, only the target the player
     // picked off a roster the house had already narrowed for them.
     //
-    // Spoof is the third and is here now, and it is the only one of the three whose target is not a
-    // thing the house handed out an id for: a room name off the plan, which the house sent as a
-    // drawing rather than as a roster. Same test, same answer -- a finger on a picture the house
-    // published is still fully determined by what the phone did and which connection did it.
+    // Static is the third and it passes the same test by having nothing in it at all: no target
+    // seat, no target card, no room. What the phone did is press a tile, which connection did it is
+    // the actor, and when it arrived is the tick -- there is nothing left for the house to compose
+    // from a second source, which is the narrowest a fire can be (D-186).
 
     /**
      * **A Insider fired a Surge at a seat** (`gdd.md:313`, `:342`, `:392`).
@@ -248,40 +222,37 @@ sealed interface Event {
     data class IsolateFired(override val at: Tick, val actor: Seat, val target: MarkerId) : Event
 
     /**
-     * **A Insider fired a Spoof at a room** (`gdd.md:313`, the owner's targeting ruling).
+     * **A Insider fired a Static: the house's monitoring goes down for ten seconds** (D-186).
      *
-     * *False check-in in a room you are not in. Manufactures a phantom occupant.*
+     * ### It has NO TARGET, and the absence is the ability rather than a field somebody forgot
      *
-     * ### [room] is a NAME, and it is the one target in the game that is not an id
+     * The Surge names a seat off a roster and the Isolate names a card off a list, both drawn by the
+     * house and published to that phone. **Static names nothing.** There is no picker, no list and
+     * no plan: it is fired in place from page 2 under the two-second hold, and its scope is the
+     * whole house. D-186 replaced an ability whose target was a room on a map with one that asks the
+     * Insider to reason about nothing at all — *you fire it because you are about to do something,
+     * and it costs you nothing to understand.*
      *
-     * The Surge names a seat and the Isolate names a card, both off rosters the house drew. This
-     * names a room, off the plan the house drew — the owner's ruling is that **Spoof picks from the
-     * map**, and *the glow of reading the map is the deliberate price*. So the target is the host's
-     * own text for a room, exactly the string [Destination.room] already carries across the
-     * boundary, and the house does not resolve it to anything: nothing in the rules has ever held
-     * house geography and this does not start.
+     * That also supersedes D-175's third answer: *Surge picks a person from a LIST, Isolate picks a
+     * marker from a LIST, Spoof picks a room from the MAP* — **the map answer is gone with the
+     * ability.** The first two stand, and so does the argument under them.
      *
-     * **A room the plan does not hold is therefore representable here.** That is deliberate and it
-     * is not a hole: the rules record what the phone said and the only consumer of a phantom is a
-     * map that will look the name up and find nothing, which is a phantom in a room that does not
-     * exist — visible to nobody, costing an Insider a pool. Validating it here would mean the rules
-     * acquiring an opinion about which rooms are in a house they have never been in, and would put
-     * a refusal on a client-visible path for the sake of a case only a forged client can reach.
+     * ### Self-targeting is not a case here either, and for a wider reason than Spoof's
      *
-     * ### Self-targeting is not a case here, it is the whole ability
-     *
-     * `gdd.md:392` requires that every ability be self-inflictable, and a Spoof has no seat to aim
-     * at: what it moves is the actor's *own* claimed location. So this event carries no target seat
-     * at all — the actor is the target, always, and there is no other reading of the ability. It is
-     * on the shared pool like the other two (`gdd.md:401`), which is the same clock the alibi it
-     * buys is priced against.
+     * `gdd.md:393` requires every ability to be self-inflictable. Static jams the firing Insider's
+     * own monitoring alongside everybody else's, because the jam is house-wide and the house does
+     * not know who fired it — so an Insider standing at the Terminal when their own Static lands
+     * reads the same noise a Resident does. The requirement is satisfied by the ability's shape and
+     * there is nothing here to special-case.
      *
      * ### Nothing here says whether it will land
      *
-     * [SurgeFired]'s sentence and the same decision: the pool may still be running, and the event is
-     * a fact about a finger on a plan, recorded either way.
+     * [SurgeFired]'s sentence and the same decision: the Access pool may still be running, in which
+     * case the house does nothing with this beyond answering the actor. **The event is a fact about
+     * a finger on a tile**, recorded either way, because a refusal that left no trace is the
+     * invisible drop D-066 exists to refuse.
      */
-    data class SpoofFired(override val at: Tick, val actor: Seat, val room: String) : Event
+    data class StaticFired(override val at: Tick, val actor: Seat) : Event
 
     /** Phone touched to phone. Physical, so it is reported, never requested. */
     data class ContactMade(override val at: Tick, val actor: Seat, val target: Seat) : Event

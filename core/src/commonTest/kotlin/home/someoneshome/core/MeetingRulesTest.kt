@@ -81,7 +81,7 @@ class MeetingRulesTest {
         val fires = listOf(
             Event.SurgeFired(Tick(200), insider, Seat(3)),
             Event.IsolateFired(Tick(200), insider, card),
-            Event.SpoofFired(Tick(200), insider, "THE LANDING"),
+            Event.StaticFired(Tick(200), insider),
         )
         for (fire in fires) {
             val admission = admit(meeting, fire)
@@ -119,7 +119,7 @@ class MeetingRulesTest {
         for (fire in listOf(
             Event.SurgeFired(Tick(200), insider, Seat(3)),
             Event.IsolateFired(Tick(200), insider, card),
-            Event.SpoofFired(Tick(200), insider, "THE LANDING"),
+            Event.StaticFired(Tick(200), insider),
         )) {
             assertTrue(
                 admit(quiet, fire) is Admission.Admitted,
@@ -149,28 +149,28 @@ class MeetingRulesTest {
     // ---- 2 · A meeting ends every running ability effect (T1·9) ---------------------------------
 
     /**
-     * **An isolation fails at the call, and so does a phantom.**
+     * **An isolation fails at the call, and so does a Static jam** (D-185, D-186).
      *
-     * An Isolation is a card gone dark in a house nobody is walking and a phantom is a false
-     * sighting on a map whose subjects are all standing in one room being looked at — so both spend
-     * a meeting affecting nothing. T1·9's *a meeting can eat one whole* is answered by not making
-     * anybody spend it.
+     * An Isolation is a card gone dark in a house nobody is walking, and a jam is a monitoring
+     * surface drowned in noise that every living player has this second stopped standing in front
+     * of — so both spend a meeting affecting nothing. T1·9's *a meeting can eat one whole* is
+     * answered by not making anybody spend it.
      *
      * **At the call and not at the end**, which is the half worth asserting: the meeting has four
      * phases and the effects are useless from the first of them.
      */
     @Test
-    fun `an isolation and a phantom fail at the meeting call`() {
+    fun `an isolation and a static jam fail at the meeting call`() {
         val at = Tick(100)
         val running = ready(at)
             .withIsolated(home.someoneshome.model.Isolation(card, Tick(at.step + Balance.ISOLATE_DURATION)))
-            .withPhantom(home.someoneshome.model.Phantom(insider, "THE LANDING", Tick(at.step + Balance.SPOOF_DURATION)))
+            .withStatic(Tick(at.step + Balance.STATIC_DURATION))
         assertTrue(running.isIsolated(card, Tick(at.step + 1)), "the fixture's card was never dark")
-        assertTrue(running.phantoms.isNotEmpty(), "the fixture had no phantom")
+        assertTrue(running.staticRunning(Tick(at.step + 1)), "the fixture was never jammed")
 
         val meeting = calling(running, at)
         assertEquals(emptyList(), meeting.isolated, "an isolation survived the call")
-        assertEquals(emptyList(), meeting.phantoms, "a phantom survived the call")
+        assertNull(meeting.staticUntil, "a Static jam survived the call")
     }
 
     /**

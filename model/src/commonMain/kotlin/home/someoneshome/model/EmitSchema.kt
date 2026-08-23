@@ -68,8 +68,7 @@ object EmitSchema {
         is Effect.AbilityFired -> ABILITY_FIRED
         is Effect.Surged -> SURGED
         is Effect.IsolateTargetsOffered -> ISOLATE_TARGETS_OFFERED
-        is Effect.HomePlanOffered -> HOME_PLAN_OFFERED
-        is Effect.PhantomPlaced -> PHANTOM_PLACED
+        is Effect.StaticOpened -> STATIC_OPENED
         is Effect.SubroutineGraded -> SUBROUTINE_GRADED
         is Effect.SubroutineProgressed -> SUBROUTINE_PROGRESSED
         is Effect.SystemIntegrityLive -> SYSTEM_INTEGRITY_LIVE
@@ -105,14 +104,7 @@ object EmitSchema {
     val ABILITY_FIRED = MessageKind("AbilityFired")
     val SURGED = MessageKind("Surged")
     val ISOLATE_TARGETS_OFFERED = MessageKind("IsolateTargetsOffered")
-    val HOME_PLAN_OFFERED = MessageKind("HomePlanOffered")
-
-    /**
-     * **Named here and permitted nowhere**, exactly as [PRESENCE_CHANGED] is, and for its reason
-     * plus one of its own. See [Effect.PhantomPlaced], where both are argued, and the comment where
-     * its row would be.
-     */
-    val PHANTOM_PLACED = MessageKind("PhantomPlaced")
+    val STATIC_OPENED = MessageKind("StaticOpened")
     val SUBROUTINE_GRADED = MessageKind("SubroutineGraded")
     val SUBROUTINE_PROGRESSED = MessageKind("SubroutineProgressed")
     val SYSTEM_INTEGRITY_LIVE = MessageKind("SystemIntegrityLive")
@@ -216,34 +208,30 @@ object EmitSchema {
         // one seat anyway, and denying it on the round-state axis carries no role information.
         ISOLATE_TARGETS_OFFERED to setOf(ClientClass(Role.Insider, RoundState.Live)),
 
-        // **The other narrowest live row, and the larger disclosure of the two** (gdd.md:313, the
-        // owner's Spoof targeting ruling). See Effect.HomePlanOffered, where it is argued in full.
+        // **STATIC: the jam the whole living house can see, and the ghosts are exempt** (D-186).
         //
-        // It carries the home's whole shape -- every room on every floor -- which is the thing
-        // Destination's own KDoc names as unauthorised *to every client*. The ruling authorises it
-        // to ONE class: an Insider, in a round that is running, because Spoof picks from the map and
-        // a map picker cannot be built without a map. Spelled out as a one-class set rather than as
-        // `LIVING - Residents` for ABILITY_FIRED's and ISOLATE_TARGETS_OFFERED's reason -- the
-        // subtraction form widens itself the day somebody adds a class.
+        // *House-wide to the living. Ghosts exempt -- their true occupancy stays clean.* Both
+        // living classes, and this row must never be narrowed to one of them: a jam that reached
+        // only Residents would make an un-jammed Terminal an alignment test, and one that reached
+        // only Insiders would make the loudest ability in the game invisible to the people it is
+        // being used against. It is `SURGED`'s argument (gdd.md:391, :393) on a house-wide effect
+        // rather than a targeted one -- and here the effect carries no seat at all, so there is
+        // nothing on it a narrowing could key on except the role.
         //
-        // Not the out classes. A player outside the system fires nothing; the map they are owed is
-        // the spectator map (D-079), which is a different thing with different content and will be a
-        // different kind with its own row.
-        HOME_PLAN_OFFERED to setOf(ClientClass(Role.Insider, RoundState.Live)),
-
-        // **PHANTOM_PLACED HAS NO ROW, DELIBERATELY, AND THAT IS THE DECISION** (gdd.md:313, D-136,
-        // D-079).
+        // **Not the out classes, and that is the ruling rather than the usual round-state denial.**
+        // M12's fiction is that the house erased the out from the registry and can neither see nor
+        // control them; a jam is the house's own monitoring degrading, and a ghost's true occupancy
+        // is not the house's monitoring. The out already read true counts, both bars, no injected
+        // error and no staleness bands (D-134, D-145) -- this is the same liveness privilege, and it
+        // costs nothing because a ghost with a clean map during a jam cannot tell anybody.
         //
-        // The presence plane's decision, taken again for a fact that is worse to leak. A phantom's
-        // only possible consumer is the spectator map, which is unbuilt and frozen; and a phantom
-        // row says *this seat claims to be somewhere it is not*, which **only an Insider can cause**.
-        // A living reader of this row would hold the one fact in the game that names an Insider
-        // outright, with no inference required.
-        //
-        // An effect whose recipients are nobody is the honest state of this system today, not an
-        // omission: the fact is recorded, replays, and reaches no phone. **Written down rather than
-        // left as a gap**, because an absent row is indistinguishable from a forgotten one. When the
-        // spectator map lands this row becomes OUTSIDE and not one class more.
+        // Written out as a two-class set rather than as `LIVING` spelled some shorter way, for
+        // ABILITY_FIRED's reason: a form that could widen itself the day somebody adds a class is a
+        // form that will.
+        STATIC_OPENED to setOf(
+            ClientClass(Role.Resident, RoundState.Live),
+            ClientClass(Role.Insider, RoundState.Live),
+        ),
 
         // D-109: the house grades every entry for real, for both roles, in identical words. So
         // this row names BOTH living classes and it is the row that must never be narrowed to one
@@ -540,17 +528,12 @@ object EmitSchema {
             // above exists to prevent -- and addressing is the half of that guarantee the allowlist
             // cannot see, because two Insiders are the same class.
             is Effect.IsolateTargetsOffered -> listOf(effect.seat)
-            // The seat the plan was drawn for, for IsolateTargetsOffered's reason exactly: two
-            // Insiders are the same class, so the allowlist cannot tell them apart and addressing
-            // is the half of the guarantee it cannot see.
-            is Effect.HomePlanOffered -> listOf(effect.seat)
-            // **The spoofing seat, and this is the second of the phantom's two independent
-            // denials** -- the first being that the kind has no row at all. PresenceChanged's
-            // arrangement, and neither denial subsumes the other: a row written by mistake still
-            // could not carry seat 3's lie to seat 5, and an addressing widened by mistake still
-            // delivers to nobody. The actor is named here and receives nothing, because the row
-            // that would let them does not exist -- gdd.md:398, the actor's device stays inert.
-            is Effect.PhantomPlaced -> listOf(effect.seat)
+            // **Every seat in the house, and the firing Insider is one of them exactly the way a
+            // bystander is** (D-186). A jam is house-wide and anonymous: the effect carries no seat,
+            // so there is nothing here to address it by, and that is the point rather than a
+            // limitation. Narrowed to anybody it would become actor-side feedback or an alignment
+            // test; the allowlist takes the out classes off this list and role never enters it.
+            is Effect.StaticOpened -> state.seats
             // The one seat that handed the entry over, and nobody else. Addressed rather than
             // broadcast because a verdict reaching the house at large would publish who is
             // completing work and how often -- which is the whole read the meter is quantised

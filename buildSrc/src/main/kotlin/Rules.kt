@@ -128,6 +128,15 @@ object VocabularyRules {
         "Revoked seat" to "nobody is eliminated — there is no body",
         "victim" to "use target, or revoked player",
         "deactivat" to "use Revoke — the state is REVOKED, on screen as well as in code",
+        // **Spoof left the vocabulary and Static entered it** (D-186). The ability was replaced
+        // rather than tuned, and the word went with the mechanic: what is in the slot now is a
+        // house-wide jam with no target, which nothing about *spoof* describes. Held here for
+        // `deactivat`'s reason exactly — the old word reached code, tests and one screen, and a
+        // rename that is only a sweep is a rename somebody undoes by writing the familiar word.
+        //
+        // ⚠️ **Static is NOT a stem here and must not become one.** These are rejected forms; the
+        // accepted vocabulary is the list in the advice below and in `project-context.md` rule 9.
+        "spoof" to "the ability is Static (D-186) — Spoof left the vocabulary with its mechanic",
     )
 
     /**

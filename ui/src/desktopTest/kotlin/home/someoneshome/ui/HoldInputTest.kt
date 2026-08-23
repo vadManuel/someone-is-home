@@ -16,10 +16,6 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.geometry.Offset
-import home.someoneshome.model.FloorView
-import home.someoneshome.model.HomePlanView
-import home.someoneshome.model.PlanCell
-import home.someoneshome.model.RoomOutline
 import home.someoneshome.model.Destination
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.RoomKind
@@ -138,15 +134,19 @@ class HoldInputTest {
      * line for both. The first fails on the state, the second on the pixels, and both name the tile.
      */
     /**
-     * The three tier-2 tiles and the view each hold opens, so the sweeps below cannot drift apart.
+     * The two tier-2 tiles that OPEN something, and the view each hold opens.
      *
-     * Written as a list rather than repeated per test because what is being asserted about all
-     * three is the *same* claim — a full hold and no less than one opens a view — and three copies
-     * of it is three chances for one of them to be quietly weakened.
+     * Written as a list rather than repeated per test because what is being asserted about both is
+     * the *same* claim — a full hold and no less than one opens a view — and two copies of it is
+     * two chances for one of them to be quietly weakened.
+     *
+     * ⚠️ **STATIC is deliberately not on this list** (D-186). Its hold fires rather than navigating,
+     * so a row here would have nowhere to point; it is swept by
+     * `staticsTileFiresOnAFullHoldAndOpensNothing` instead, which is the same hold with a different
+     * consequence.
      */
     private val TIER_2_TILES = listOf(
         "SURGE" to ScreenId.SurgeTargets,
-        "SPOOF" to ScreenId.SpoofRooms,
         "ISOLATE" to ScreenId.IsolateTargets,
     )
 
@@ -195,18 +195,13 @@ class HoldInputTest {
     }
 
     /**
-     * **All three tier-2 tiles arm on a full hold and open a view** (D-141, the owner's targeting
-     * rulings).
+     * **The two targeted tier-2 tiles arm on a full hold and open a view** (D-141, the owner's
+     * targeting rulings).
      *
-     * *Surge and Isolate pick from a LIST — people, markers respectively; **Spoof picks from the
-     * MAP**.* This is the one place the design asks a hold to **open a view** rather than to arm in
-     * place: D-142 settled arming-in-place about the Revoke and the Egress, which have no target to
-     * pick, and these three do.
-     *
-     * **Spoof was previously asserted the other way** — a test named
-     * `spoofsTileIsInertForAnInsiderBecauseNothingIsBehindIt` said its tile walked nowhere, written
-     * so that wiring it would have to come here and delete a test claiming it was not wired. That is
-     * what happened; the row below is what replaced it.
+     * *Surge and Isolate pick from a LIST — people and markers respectively.* This is the one place
+     * the design asks a hold to **open a view** rather than to arm in place: D-142 settled
+     * arming-in-place about the Revoke and the Egress, which have no target to pick, and these two
+     * do.
      *
      * Held short first, for the reason every hold in this file is: a control that fired the moment a
      * finger landed would pass a test that only ever held the full two seconds, and a picker opening
@@ -328,105 +323,60 @@ class HoldInputTest {
         }
 
     /**
-     * **A tap on the plan asks the house for that ROOM, and the screen says nothing back**
-     * (`gdd.md:313`, `:398`, the owner's targeting ruling).
+     * **STATIC fires on a full hold, opens nothing, and the screen says nothing back** (D-186,
+     * `gdd.md:398`).
      *
-     * The two list pickers' test, for the picker that is a picture. Four claims:
+     * The picker test the plan used to get, for an ability that has no picker. Four claims, and each
+     * is a different failure:
      *
-     * 1. **A tap inside a room asks for that room by name.** The tap resolves a coordinate to a cell
-     *    to a room — one `pointerInput` for the whole grid — so the coordinate and the name have to
-     *    be checked against each other. Two different rooms are tapped, at coordinates chosen off
-     *    the plan handed in, because a build that always answered with the first room would pass a
-     *    test that only ever tapped one.
-     * 2. **A tap on the STAIRS asks for nothing.** *Stairs hold nothing*; nobody checks in at a
-     *    staircase. The refusal is the screen's and is argued in `ScreensSpoof`.
-     * 3. **The plan drawn is the plan the house sent**, whole. The picker filters nothing, for the
-     *    Isolate picker's reason.
-     * 4. **Nothing on the actor's phone reports what happened.** This matters more here than for
-     *    the other two, because a Spoof's whole consequence is invisible — so the walk back to page
-     *    2 is genuinely all there is, and it must stay all there is.
+     * 1. **A full hold sends the fire.** One `IntentMessage.FireStatic` and nothing else — the
+     *    narrowest request in the protocol, carrying no target because there is none.
+     * 2. **Most of a hold sends nothing.** D-141's two seconds is what an accident cannot supply,
+     *    and it matters more here than on either picker: a stray thumb that opened a picker is a lit
+     *    rectangle, and a stray thumb that fired Static blinds the whole house and spends the pool.
+     * 3. **The screen does not move.** The two Tier-1 tiles' behaviour (D-142), not the two
+     *    pickers'. A phone that walked anywhere would be reporting the fire to whoever was looking
+     *    at it over a shoulder.
+     * 4. **Nothing on the actor's phone reports what happened.** The panel is compared with itself:
+     *    no verdict, no jam, no field of any kind set by the fire. The house's answer arrives on
+     *    *every* living phone in the building, so the actor's own has nothing on it a bystander's
+     *    does not.
      */
     @Test
-    fun aSpoofTapAsksForThatRoomAndTellsTheActorNothing() {
-        // A hand-built plan rather than the port's, so the coordinates below are read off something
-        // this test states rather than off a fixture somebody may repaint.
-        val plan = HomePlanView(
-            listOf(
-                FloorView(
-                    "GROUND",
-                    listOf(
-                        RoomOutline("KITCHEN", cells = cells(0..2, 0..2)),
-                        RoomOutline("GARAGE", cells = cells(6..9, 8..11)),
-                        RoomOutline("STAIRS", stairs = true, cells = cells(4..5, 4..7)),
-                    ),
-                ),
-            ),
-        )
+    fun aStaticHoldFiresAndOpensNothingAndTellsTheActorNothing() =
+        runDesktopComposeUiTest(width = 300, height = 650) {
+            val sent = mutableListOf<IntentMessage>()
+            val model = FlowModel(
+                PanelState(screen = ScreenId.Home, role = PanelRole.Insider),
+                send = { sent += it },
+            ).also { it.push(ScreenId.Page2) }
+            show(model)
+            val before = model.state
 
-        // **Two rooms at opposite corners, each in its own walk**, because a tap fires and walks
-        // back to page 2 — so a second tap in the same visit would be a tap on a screen the phone
-        // has left. Two answers rather than one is the point: a build that resolved every tap to
-        // the first room in the list would pass a test that only ever tapped one.
-        for ((cell, room) in listOf((1 to 1) to "KITCHEN", (8 to 10) to "GARAGE")) {
-            runDesktopComposeUiTest(width = 300, height = 650) {
-                val sent = mutableListOf<IntentMessage>()
-                val model = FlowModel(
-                    PanelState(screen = ScreenId.Home, role = PanelRole.Insider, homePlan = plan),
-                    send = { sent += it },
-                ).also { it.push(ScreenId.SpoofRooms) }
-                show(model)
+            onNodeWithText("STATIC").performTouchInput { down(center) }
+            mainClock.advanceTimeBy(nearly)
+            onNodeWithText("STATIC").performTouchInput { up() }
+            mainClock.advanceTimeBy(enough)
+            assertEquals(
+                emptyList<IntentMessage>(), sent.toList(),
+                "most of a hold jammed the house",
+            )
 
-                val before = model.state
-                onNodeWithTag(GROUND).assertExists("the plan the house sent was not drawn")
-                // The room labels prove the whole plan was drawn and none of it filtered — the
-                // Isolate picker's claim, for a picker with no rows to count.
-                onNodeWithText("KITCHEN").assertExists()
-                onNodeWithText("GARAGE").assertExists()
-                onNodeWithText("STAIRS").assertExists()
-
-                // Cell centres resolved off the node's real bounds ONCE, before any gesture:
-                // querying the tree from inside a `performTouchInput` block fails, and the failure
-                // reads as "the plan was not drawn" rather than as "the test asked at the wrong
-                // time".
-                val bounds = onNodeWithTag(GROUND).fetchSemanticsNode().size
-                fun at(x: Int, y: Int) = Offset(
-                    bounds.width * (x + 0.5f) / Plan.COLS,
-                    bounds.height * (y + 0.5f) / Plan.ROWS,
-                )
-
-                // **The stairs first**, so a build that answered every tap with a room is caught
-                // before the sends list has anything real in it to hide behind. *Stairs hold
-                // nothing*; nobody checks in at a staircase, and the refusal is the screen's — see
-                // `ScreensSpoof`, where it is argued that a finger that never became a fire is not
-                // rule 1's forbidden shape.
-                onNodeWithTag(GROUND).performTouchInput { click(at(4, 5)) }
-                mainClock.advanceTimeBy(enough)
-                assertEquals(
-                    emptyList<IntentMessage>(), sent.toList(),
-                    "a tap on the stairs claimed a check-in; stairs hold nothing",
-                )
-                assertEquals(
-                    ScreenId.SpoofRooms, model.state.screen,
-                    "a tap on the stairs walked away as though it had fired",
-                )
-
-                onNodeWithTag(GROUND).performTouchInput { click(at(cell.first, cell.second)) }
-                mainClock.advanceTimeBy(enough)
-                assertEquals(
-                    listOf<IntentMessage>(IntentMessage.FireSpoof(room)), sent.toList(),
-                    "the tap at $cell asked for a room other than $room",
-                )
-                assertEquals(ScreenId.Page2, model.state.screen, "firing did not walk back to page 2")
-                // **Nothing on the actor's phone reports what happened**, and this matters more
-                // here than on either list picker: a Spoof's whole consequence is invisible, so the
-                // walk back to page 2 is genuinely all there is and must stay all there is.
-                assertEquals(
-                    before.verdict, model.state.verdict,
-                    "the actor's phone reported something about a Spoof",
-                )
-            }
+            onNodeWithText("STATIC").performTouchInput { down(center) }
+            mainClock.advanceTimeBy(enough)
+            assertEquals(
+                listOf<IntentMessage>(IntentMessage.FireStatic), sent.toList(),
+                "a full hold on STATIC did not fire, or asked for something",
+            )
+            assertEquals(
+                ScreenId.Page2, model.state.screen,
+                "firing Static walked the phone somewhere, which a shoulder can read",
+            )
+            assertEquals(
+                before, model.state,
+                "the actor's phone reported something about its own Static",
+            )
         }
-    }
 
     /**
      * And the tiles are drawn for both roles, which is what makes the test above mean something.
@@ -567,19 +517,6 @@ class HoldInputTest {
             "a notification can be put away by pressing something: $offenders",
         )
     }
-
-    /**
-     * The cells of a rectangle, so a test plan can be written as two ranges rather than as a list.
-     *
-     * `RoomOutline` holds cells rather than rectangles on purpose — an L-shaped room is a set of
-     * squares and nothing else — and this is the rectangle case spelled out where the fixture is,
-     * not a helper the production type is missing.
-     */
-    private fun cells(xs: IntRange, ys: IntRange): List<PlanCell> =
-        ys.flatMap { y -> xs.map { x -> PlanCell(x, y) } }
-
-    /** The one storey every Spoof fixture in this file paints, tagged. */
-    private val GROUND = "${SPOOF_FLOOR}GROUND"
 
     /** How many pixels differ, and the first place they do. */
     private fun diff(a: BufferedImage, b: BufferedImage): Pair<Int, String?> {

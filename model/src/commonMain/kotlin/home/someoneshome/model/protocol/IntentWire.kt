@@ -137,20 +137,22 @@ sealed class IntentMessage {
     data class FireIsolate(val target: MarkerId) : IntentMessage()
 
     /**
-     * **Claim to be in this room** (`gdd.md:313`, [Intent.FireSpoof]).
+     * **Jam the house's monitoring** (D-186, [Intent.FireStatic]).
      *
-     * [room] is a name off the plan the house sent this seat, and it is the only target in the
-     * protocol that is a host-authored string rather than an id. The house does not resolve it —
-     * see the event, where a room the plan does not hold being representable is argued as
-     * deliberate rather than as a hole.
+     * **A `data object`, because there is nothing to say.** Static has no target of any kind, so the
+     * request is the fact that this control was pressed — [CallMeeting]'s shape, and the same
+     * reasoning arrives from the other direction: what makes a member rather than a field carry the
+     * meaning is that a field is a thing a client can choose, and there is nothing here a client may
+     * choose.
      *
-     * **No target seat.** A Spoof moves the actor's own claimed location and there is no other
-     * reading of it.
+     * **There is no `self: Boolean` and there could not be one.** The jam is house-wide and it jams
+     * the firing Insider's own monitoring with everybody else's, so self-targeting is satisfied by
+     * the ability's shape and has nothing to announce (see the event).
      */
     @ClientFacing
     @kotlinx.serialization.Serializable
-    @kotlinx.serialization.SerialName("FireSpoof")
-    data class FireSpoof(val room: String) : IntentMessage()
+    @kotlinx.serialization.SerialName("FireStatic")
+    data object FireStatic : IntentMessage()
 
     /**
      * The meeting card was scanned.
@@ -279,7 +281,7 @@ sealed class IntentMessage {
         is ArmRevoke -> Intent.ArmRevoke(actor)
         is FireSurge -> Intent.FireSurge(actor, target)
         is FireIsolate -> Intent.FireIsolate(actor, target)
-        is FireSpoof -> Intent.FireSpoof(actor, room)
+        is FireStatic -> Intent.FireStatic(actor)
         is BeginSubroutine -> Intent.BeginSubroutine(actor, marker)
         is StopSubroutine -> Intent.StopSubroutine(actor)
         is ReturnSyncPulse -> Intent.ReturnSyncPulse(actor, taps)

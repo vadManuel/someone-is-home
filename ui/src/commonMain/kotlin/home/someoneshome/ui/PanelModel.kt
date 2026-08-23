@@ -2,16 +2,12 @@ package home.someoneshome.ui
 
 import home.someoneshome.model.AssignedWork
 import home.someoneshome.model.Destination
-import home.someoneshome.model.FloorView
-import home.someoneshome.model.HomePlanView
 import home.someoneshome.model.HomeReview
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MarkerShape
 import home.someoneshome.model.MarkerShapes
 import home.someoneshome.model.MeetingPhase
 import home.someoneshome.model.OrderLine
-import home.someoneshome.model.PlanCell
-import home.someoneshome.model.RoomOutline
 import home.someoneshome.model.RoomKind
 
 import androidx.compose.ui.graphics.Color
@@ -60,10 +56,14 @@ enum class ScreenId {
     // `ScreenId.entries`: a picker hiding behind a field on a shared screen is a picker none of them
     // ever looked at, and these two draw different things — names against shapes-and-rooms.
     //
+    // **There used to be a third and D-186 deleted it.** Static has no target of any kind, so its
+    // tile fires in place under the same hold and opens nothing; the screen that drew the home's
+    // plan went with the ability, and with it the largest disclosure this app ever made.
+    //
     // **A Resident can never be on either**, and that is capability rather than a route: their
     // tier-2 tiles take no pointer input at all (D-142), so there is no hold to run and no view to
     // be caught on.
-    SurgeTargets, IsolateTargets, SpoofRooms,
+    SurgeTargets, IsolateTargets,
 
     // Work. The Subroutine screens are named for the Subroutine and not for how much light it
     // makes: the port's two were `Sub` and `SubBright`, which is the light ladder used as an
@@ -112,6 +112,27 @@ enum class RevokeState { Ready, Armed, Cooldown }
  * own; it is kept by there being no role in the file, and checked in `SubroutineParityTest`.
  */
 enum class SubroutineVerdict { Accepted, Rejected }
+
+/**
+ * **A Static jam, as this phone was told about it** (D-186, `Effect.StaticOpened`).
+ *
+ * ### It cannot say who, and that is the whole of the type
+ *
+ * There is no seat here and there must never be one. The message it is built from carries none —
+ * the house does not keep who jammed it — so a screen that wanted to draw *your* jam differently
+ * from somebody else's would find nothing to branch on. **Every living phone in the building holds
+ * an identical value of this**, including the one whose thumb started it.
+ *
+ * ### [seed] is why the noise is authored rather than invented
+ *
+ * Rule 5: light is game state, and no animation the rules did not emit. So the field the noise is
+ * generated from comes down the wire with the jam, the same on every phone and the same again on
+ * every replay — see `StaticNoise`, where the seed and a frame number are the only two inputs.
+ *
+ * [seconds] is the window, from the house, in the form `EgressOpened`'s `remaining` uses: a tick is
+ * the house's own clock and means nothing here.
+ */
+data class StaticJam(val seconds: Int, val seed: Long)
 
 /**
  * Everything the device needs in order to draw itself.
@@ -381,19 +402,25 @@ data class PanelState(
      */
     val isolateTargets: List<Destination>? = null,
     /**
-     * **The home's plan, as the house last offered it** (`Effect.HomePlanOffered`, the owner's
-     * Spoof targeting ruling).
+     * **The Static jam the house last announced, or null when the monitoring is clear** (D-186,
+     * `Effect.StaticOpened`).
      *
-     * Rooms, names, stairs and squares — see `HomePlanView` for what it cannot carry, and for why
-     * a whole map crossing to one class is the ruling rather than a convenience. **Null means the
-     * house has said nothing** and [PanelVals.homePlan] resolves the port's own bungalow;
-     * [isolateTargets]' arrangement exactly.
+     * **It carries no seat and it never can**, which is the ability: the message that sets it is
+     * house-wide and identical on every living phone, so a screen reading this cannot tell a jam
+     * this phone caused from one it did not. That is what makes the Insider who fired it look
+     * exactly like everybody else.
      *
-     * **This phone does no filtering of it whatever**, for [isolateTargets]' reason: what a phone
-     * may be shown is the allowlist's decision, one class wide, and a client that trimmed the plan
-     * would be a second and quieter rule about the same disclosure.
+     * Null is the resting state and there is no fixture behind it — unlike [isolateTargets], whose
+     * null resolves to the port's drawn set. **A jam has no drawn state to fall back to**: a bench
+     * that showed noise with no house attached would be a screenshot of the exception rather than
+     * of the screen.
+     *
+     * Cleared two ways and neither of them is a rule this phone invented: by its own window running
+     * out (`FlowHost`, the ring's presentation timer one message over) and by a meeting opening,
+     * which is D-185's *a meeting call ends every running ability effect* arriving as the frame that
+     * says so.
      */
-    val homePlan: HomePlanView? = null,
+    val staticJam: StaticJam? = null,
     /** Randomises the backlog's *count and mix*, so inbox density can never imply a role. */
     val inboxSeed: Int = 3,
     val noteSeed: Int = 0,
@@ -753,12 +780,16 @@ class PanelVals(val state: PanelState) {
     val secondBarInk: Color = Amber.Dim
 
     val tier2A: String = if (insider) "SURGE" else "BUS"
-    val tier2B: String = if (insider) "SPOOF" else "THERMAL"
+    // **STATIC took SPOOF's slot and the Resident's cover word did not move** (D-186). THERMAL is
+    // what a Resident's middle tile has always said and there is no reason for it to change: the
+    // cover words describe a phone's subsystems, not the abilities behind them, and a Resident who
+    // had played before would notice the one that did.
+    val tier2B: String = if (insider) "STATIC" else "THERMAL"
     val tier2C: String = if (insider) "ISOLATE" else "CACHE"
     val tier2Bar: Float = 0.82f
     val tier2BarInk: Color = Amber.Mid
     val tier2Note: String =
-        if (insider) "SURGE, SPOOF AND ISOLATE SHARE THIS" else "BUS, THERMAL AND CACHE NOMINAL"
+        if (insider) "SURGE, STATIC AND ISOLATE SHARE THIS" else "BUS, THERMAL AND CACHE NOMINAL"
 
     /**
      * **The line under the three tier-2 tiles, and it is the same length for both roles.**
@@ -768,8 +799,14 @@ class PanelVals(val state: PanelState) {
      * that a player did not know was a hold is a support ability they never fire. Same slot, same
      * brightness, same word count; the Resident's says nothing about what the tiles do under a
      * thumb, because for that player they do nothing.
+     *
+     * **It said HOLD TO SELECT A TARGET until D-186, and that line is now false.** Static has no
+     * target and its tile fires in place, so two of the three select and one does not; a line that
+     * still promised a picker would send an Insider looking for a screen that no longer exists.
+     * What replaced it is the true statement all three share, at the same length the old one was,
+     * so the row's shape against the Resident's copy has not moved.
      */
-    val tier2Sub: String = if (insider) "HOLD TO SELECT A TARGET" else "WITHIN NOMINAL PARAMETERS"
+    val tier2Sub: String = if (insider) "HOLD TO USE THESE THREE" else "WITHIN NOMINAL PARAMETERS"
 
     /**
      * **The seat roster the Surge picker draws** (`gdd.md:392`, D-115).
@@ -792,13 +829,14 @@ class PanelVals(val state: PanelState) {
     val isolateTargets: List<Destination> = state.isolateTargets ?: ISOLATE_TARGETS
 
     /**
-     * **The plan the Spoof picker draws** (`gdd.md:313`, the owner's targeting ruling).
+     * **Whether the house's monitoring is jammed right now, and the field the noise is drawn from**
+     * (D-186).
      *
-     * The house's when there is one, the port's own bungalow when there is not — [isolateTargets]'
-     * arrangement, and the fixture is the same six rooms every other in-round map screen draws, so
-     * a screenshot of this picker and a screenshot of the terminal are recognisably one house.
+     * The house's or nothing — there is no fixture, for [PanelState.staticJam]'s reason. Passed
+     * whole rather than as a boolean and a long, so a surface cannot draw noise without the seed
+     * that makes it deterministic.
      */
-    val homePlan: HomePlanView = state.homePlan ?: HOME_PLAN
+    val staticJam: StaticJam? = state.staticJam
 
     // ---- Host setup -------------------------------------------------------------------------
 
@@ -1328,34 +1366,6 @@ class PanelVals(val state: PanelState) {
             Destination(MarkerId("card-garage"), "arrow_right", "GARAGE"),
             Destination(MarkerId("card-bed2"), "cross", "BED 2"),
             Destination(MarkerId("card-study"), "square_frame", "STUDY"),
-        )
-
-        /**
-         * **The plan the Spoof picker draws with no house attached** — the design's own bungalow,
-         * off [Plan.rooms] rather than typed a second time.
-         *
-         * `HomeEditorModel`'s demo home takes the same list and turns it into strokes for the same
-         * reason: one fixture, drawn two ways, so the editor's picture of the design's house and
-         * every in-round picture of it cannot drift apart.
-         *
-         * One floor, because [Plan] is one floor. A home with two storeys is what the *house* sends
-         * and the picker scrolls to it; the fixture does not have to prove that.
-         */
-        val HOME_PLAN: HomePlanView = HomePlanView(
-            listOf(
-                FloorView(
-                    name = "GROUND",
-                    rooms = Plan.rooms.map { rect ->
-                        RoomOutline(
-                            room = rect.name,
-                            stairs = rect.transit,
-                            cells = (rect.r0..rect.r1).flatMap { row ->
-                                (rect.c0..rect.c1).map { col -> PlanCell(x = col, y = row) }
-                            },
-                        )
-                    },
-                ),
-            ),
         )
 
         const val ARRAY_WIPE = "ARRAY WIPE"

@@ -49,13 +49,12 @@ fun factOf(intent: Intent, at: Tick): Event = when (intent) {
     // published to that phone, so both events are fully determined by what the phone did, which
     // connection did it, and when it arrived. Nothing is composed from a second source.
     //
-    // Spoof is the third and it qualifies for the same reason, with the widest gap between what the
-    // phone sent and what the house could have composed: it names a ROOM off a plan the house
-    // published to that phone, and the house resolves it to nothing at all. There is no draw, no
-    // roster lookup, and no second source -- the string travels from the finger to the state.
+    // Static is the third and it qualifies more plainly than either: it names nothing at all. The
+    // event is composed out of the actor and the tick, so there is no target to resolve, no roster
+    // to look up and no second source anywhere -- which is the narrowest a fire can be (D-186).
     is Intent.FireSurge -> Event.SurgeFired(at, intent.actor, intent.target)
     is Intent.FireIsolate -> Event.IsolateFired(at, intent.actor, intent.target)
-    is Intent.FireSpoof -> Event.SpoofFired(at, intent.actor, intent.room)
+    is Intent.FireStatic -> Event.StaticFired(at, intent.actor)
 
     is Intent.BeginSubroutine -> Event.MarkerScanned(at, intent.actor, intent.marker)
 

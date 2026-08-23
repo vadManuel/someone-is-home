@@ -26,7 +26,7 @@ enum class InsiderAbility {
     Revoke,
 
     /**
-     * **The Access pool — Tier 2's one clock, shared by Surge, Spoof and Isolate** (`gdd.md:306`,
+     * **The Access pool — Tier 2's one clock, shared by Surge, Static and Isolate** (`gdd.md:306`,
      * `:318`).
      *
      * **Named for the pool and not for an ability, and that is the whole of it.** The design's cost
@@ -48,13 +48,14 @@ enum class InsiderAbility {
      * ### The abilities weigh differently on it
      *
      * Firing restarts the pool for **that ability's** duration: `Balance.SURGE_COOLDOWN` is the
-     * longest in the pool (`gdd.md:342` — *Surge is a commitment, not a tool*), `ISOLATE_COOLDOWN`
-     * is shorter, and Spoof's is T2's to write. `Balance.ACCESS_COOLDOWN` is the pool's nominal, and
-     * it exists so that D-132's *half at arming* has one number to be half of rather than three.
+     * longest in the pool (`gdd.md:342` — *Surge is a commitment, not a tool*), `STATIC_COOLDOWN`
+     * is shorter and `ISOLATE_COOLDOWN` shorter again. `Balance.ACCESS_COOLDOWN` is the pool's
+     * nominal, and it exists so that D-132's *half at arming* has one number to be half of rather
+     * than three.
      *
-     * ⚠️ **Spoof is not built and this member is already its cooldown.** A builder wiring Spoof adds
-     * a weight to `Balance` and a handler to the rules; they do not add a row here, and that is the
-     * point of the member being the pool.
+     * **An ability was replaced on this pool without this member moving** (D-186): Spoof left the
+     * game, Static took its slot, and the change was a weight in `Balance` and a handler in the
+     * rules. No row here moved, which is the point of the member being the pool.
      *
      * ⚠️ **Isolate arrives owing one rule and it is paid** — see [Egress.isNode]: Egress nodes are
      * excluded from Isolate's target list while an Egress is running, outright, with no fake success

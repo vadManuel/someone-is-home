@@ -79,7 +79,7 @@ class RecordingTextTest {
         // anybody has ever actually recorded one.
         val EVERY_EVENT_KIND = setOf(
             "RoundArmed", "MarkerScanned", "SubroutineReturned", "PerformanceEnded", "RevokeArmed",
-            "ContactMade", "SurgeFired", "SpoofFired", "IsolateFired", "MeetingCalled",
+            "ContactMade", "SurgeFired", "StaticFired", "IsolateFired", "MeetingCalled",
             "MeetingCheckedIn", "ReadyToVoteDeclared", "VoteSelected", "VoteLocked",
             "DiscussionClosed", "VoteWindowClosed", "TallyHalfwayReached", "MeetingClosed",
             "EgressFired", "SyncPulseReturned",

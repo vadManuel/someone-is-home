@@ -3,7 +3,6 @@ package home.someoneshome.core
 import home.someoneshome.model.AssignedWork
 import home.someoneshome.model.Balance
 import home.someoneshome.model.Destination
-import home.someoneshome.model.HomePlanView
 import home.someoneshome.model.Event
 import home.someoneshome.model.InsiderBand
 import home.someoneshome.model.MarkerId
@@ -68,14 +67,6 @@ fun armingFor(
      * a round armed to exercise a meeting does not have to invent six people to hold it with.
      */
     names: List<SeatNamed> = emptyList(),
-    /**
-     * The home's shape, for the Spoof picker. See [Event.RoundArmed.plan], where the fact that it
-     * passes through the rules rather than being stored by them is the whole point.
-     *
-     * Defaulted empty like [names] and [markers]: a round armed to exercise a meeting does not have
-     * to paint a house first.
-     */
-    plan: HomePlanView = HomePlanView.EMPTY,
 ): Event.RoundArmed {
     require(seats.size >= Balance.MINIMUM_SEATS) {
         "a round cannot be armed for ${seats.size} seats: the minimum party is " +
@@ -92,7 +83,6 @@ fun armingFor(
         markers = markers,
         voteWindowSeconds = voteWindowSeconds,
         names = names,
-        plan = plan,
     )
 }
 

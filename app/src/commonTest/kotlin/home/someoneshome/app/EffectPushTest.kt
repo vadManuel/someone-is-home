@@ -1,6 +1,11 @@
 package home.someoneshome.app
 
+import home.someoneshome.model.AssignedWork
+import home.someoneshome.model.Destination
 import home.someoneshome.model.Effect
+import home.someoneshome.model.MarkerId
+import home.someoneshome.model.OrderLine
+import home.someoneshome.model.SubroutineKind
 import home.someoneshome.model.EmitSchema
 import home.someoneshome.model.GameState
 import home.someoneshome.model.Haptic
@@ -273,6 +278,90 @@ class EffectPushTest {
             "the reveal published a line the house never used — a Resident's",
         )
     }
+
+    /**
+     * **⚠️ NO FRAME CARRIES THE HOME'S GEOGRAPHY, AND ONE CARRIES THIS SEAT'S OWN LINES** (D-186,
+     * D-129).
+     *
+     * The rollback of T2·4, read off real bytes on a real socket. Until D-186 the arming burst put
+     * the whole home's plan — every room on every floor, including rooms with no card in them — on
+     * an Insider's phone, because a picker over rooms cannot be drawn without rooms. **Static has no
+     * picker**, so the plan crosses to nobody, and this is the sweep that says so about frames
+     * rather than about types: a type can be deleted and the disclosure can come back on another
+     * one.
+     *
+     * `noFrameCarriesALineUntilTheRoundEnds`' probe, pointed at geography. The house holds a room
+     * **no work order names** — the conservatory, which is exactly what only a plan could publish —
+     * and the sweep is that no body reaching this phone contains it.
+     *
+     * **Self-verifying, and that is what makes it more than a test of an empty string.** The same
+     * probe has to FIND the room this seat's own order sends it to, in the same frames, in the same
+     * run. A sweep that read no bytes passes for the same reason a sweep that read all of them does
+     * — so the positive control is the assertion that comes first.
+     */
+    @Test
+    fun noFrameCarriesTheHomesGeography() = runBlocking {
+        val state = round()
+        val bodies = bodiesReachingSeatZero(state, aShift(state) + geography())
+        assertTrue(bodies.isNotEmpty(), "the probe read nothing, so it swept nothing")
+
+        // The positive control: this seat's OWN destination is on its OWN order, and the probe can
+        // see it. D-129 — knowing where your own next Subroutine is, is the game.
+        assertTrue(
+            bodies.any { it.contains(MINE) },
+            "the seat's own work order carried no destination, so the sweep below read nothing",
+        )
+        assertEquals(
+            emptyList(), bodies.filter { it.contains(UNPUBLISHED) },
+            "a frame carried a room this seat's own order never names — house geography is " +
+                "crossing to a Resident again",
+        )
+    }
+
+    /** A room this seat's order really does name, so the probe above has something to find. */
+    private val MINE = "KITCHEN"
+
+    /**
+     * **A room this seat is not entitled to know about**, and the whole probe turns on it.
+     *
+     * Seat 0 is a Resident in this fixture. The conservatory is nowhere on seat 0's work order, so
+     * the only messages that could ever put it on this phone are the ones that carry the house's
+     * geography rather than one seat's own lines: the Isolate picker's list, which the allowlist
+     * permits to a living **Insider** and to nobody else, and the home's plan, which no longer
+     * exists at all.
+     */
+    private val UNPUBLISHED = "CONSERVATORY"
+
+    /**
+     * The two effects that carry geography at all, **built for seat 0 exactly as the rules build
+     * them for every seat** — which is `isolateOffers`' recorded posture and the reason the arming
+     * burst stays role-independent.
+     *
+     * So the picker below is constructed for a Resident and is expected to be delivered to nobody.
+     * That is the whole of the narrowing: it is the allowlist's, not this phone's, and a row widened
+     * by one class puts the conservatory on a Resident's socket. The work order is the control — it
+     * names this seat's own destination and it does reach the phone (D-129).
+     */
+    private fun geography(): List<Effect> = listOf(
+        Effect.WorkOrderIssued(
+            Seat(0),
+            listOf(
+                OrderLine.Known(
+                    index = 0,
+                    work = AssignedWork.Subroutine(SubroutineKind.Handshake),
+                    done = false,
+                    at = listOf(Destination(MarkerId("card-kitchen"), "diamond", MINE)),
+                ),
+            ),
+        ),
+        Effect.IsolateTargetsOffered(
+            Seat(0),
+            listOf(
+                Destination(MarkerId("card-kitchen"), "diamond", MINE),
+                Destination(MarkerId("card-cons"), "cross", UNPUBLISHED),
+            ),
+        ),
+    )
 
     /** Every body that really reached [seat], off a real socket, unparsed. */
     private suspend fun CoroutineScope.bodiesReachingSeatZero(

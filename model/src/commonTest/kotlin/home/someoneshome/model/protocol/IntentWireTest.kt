@@ -45,10 +45,11 @@ class IntentWireTest {
         IntentMessage.FireSurge(Seat(2)),
         IntentMessage.FireSurge(Seat(0)),
         IntentMessage.FireIsolate(marker),
-        // ⚠️ **Spoof was missing from this list**, which is the same drift `IntentAdmissionTest`'s
-        // two hand-written lists had: a member absent here is a member the round-trip sweep and the
-        // no-actor-field sweep below both stop covering, silently, from the day it is added.
-        IntentMessage.FireSpoof("THE LANDING"),
+        // ⚠️ **The third Tier-2 fire was missing from this list once**, which is the same drift
+        // `IntentAdmissionTest`'s two hand-written lists had: a member absent here is a member the
+        // round-trip sweep and the no-actor-field sweep below both stop covering, silently, from
+        // the day it is added.
+        IntentMessage.FireStatic,
         IntentMessage.BeginSubroutine(marker),
         IntentMessage.StopSubroutine,
         IntentMessage.ReturnSyncPulse(listOf(1L, 2L, 3L, 4L)),
@@ -73,7 +74,7 @@ class IntentWireTest {
         is Intent.ArmRevoke -> IntentMessage.ArmRevoke
         is Intent.FireSurge -> IntentMessage.FireSurge(intent.target)
         is Intent.FireIsolate -> IntentMessage.FireIsolate(intent.target)
-        is Intent.FireSpoof -> IntentMessage.FireSpoof(intent.room)
+        is Intent.FireStatic -> IntentMessage.FireStatic
         is Intent.BeginSubroutine -> IntentMessage.BeginSubroutine(intent.marker)
         is Intent.StopSubroutine -> IntentMessage.StopSubroutine
         is Intent.ReturnSyncPulse -> IntentMessage.ReturnSyncPulse(intent.taps)
@@ -265,7 +266,7 @@ class IntentWireTest {
         is Intent.ArmRevoke -> intent.actor
         is Intent.FireSurge -> intent.actor
         is Intent.FireIsolate -> intent.actor
-        is Intent.FireSpoof -> intent.actor
+        is Intent.FireStatic -> intent.actor
         is Intent.BeginSubroutine -> intent.actor
         is Intent.StopSubroutine -> intent.actor
         is Intent.ReturnSyncPulse -> intent.actor

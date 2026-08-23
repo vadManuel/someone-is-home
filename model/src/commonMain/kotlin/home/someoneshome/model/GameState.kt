@@ -159,23 +159,30 @@ class GameState private constructor(
      */
     val presence: List<Presence>,
     /**
-     * **The phantom occupants a Spoof has manufactured, and when each lapses** (`gdd.md:313`).
+     * **When the Static jam lapses, or null when the house's monitoring is clear** (D-186).
      *
-     * See [Phantom], which carries the whole argument. In seat order like every collection here,
-     * one row per seat at most — a second Spoof by the same Insider replaces their own phantom
-     * rather than joining it, because two claims by one seat about where it is would make *where
-     * does the house think seat 3 is* a question about which row somebody read first.
+     * ### ONE value, house-wide, and it carries no actor — which is the ability
      *
-     * **It is a different list from [presence] on purpose and that separation is the dedup rule**
-     * (D-136): inference never overrides knowledge, and the way this build keeps that is that the
-     * inference physically cannot reach the collection the knowledge lives in. [placementOf] is
-     * where the two are ordered, and it is the only place that ever needs to be right.
+     * *Loud and anonymous* is D-186's whole description of Static, and the anonymity is structural
+     * here rather than a filter applied on the way out: **there is no seat on this field.** The
+     * house cannot report who jammed it because the house did not keep it. A row per Insider, or a
+     * `firedBy`, would be the one fact in this game that names an Insider outright, sitting in the
+     * state waiting for somebody to render it — which is exactly the shape the presence plane was
+     * split in two to avoid.
      *
-     * **It reaches no client at all** — [Effect.PhantomPlaced] has no schema row, for the presence
-     * plane's reason and one of its own: a living player who could read this would hold the one
-     * fact in the game that names an Insider outright.
+     * It is house-wide for the same reason [egressReadyAt] is one number: the jam is a fact about
+     * the house's monitoring, not about a seat. **The pool that pays for it is still per-seat**
+     * ([cooldowns]), so two Insiders can each fire; what that produces is one window, not two.
+     *
+     * ### A second fire EXTENDS and can never shorten
+     *
+     * [withStatic] takes the later deadline. A jam that a second fire could cut short would make
+     * firing into a running jam an act against your own side, and — worse — would make the length of
+     * the window on screen a report about how many Insiders reached for it.
+     *
+     * **It fails at a meeting call and is not paused** (D-185). See `meetingCalled` in the rules.
      */
-    val phantoms: List<Phantom>,
+    val staticUntil: Tick?,
     /**
      * The meeting in progress, or null. **The whole lifecycle lives in here** — see [Meeting].
      *
@@ -446,32 +453,19 @@ class GameState private constructor(
         )
     }
 
-    /** This seat's unlapsed phantom at [at], or null. See [Phantom]. */
-    fun phantomFor(seat: Seat, at: Tick): Phantom? =
-        phantoms.firstOrNull { it.seat.index == seat.index && at < it.until }
+    /** Whether the house's monitoring is jammed at [at]. See [staticUntil]. */
+    fun staticRunning(at: Tick): Boolean = staticUntil?.let { at < it } == true
 
     /**
-     * Place a phantom, replacing any this seat is already claiming.
+     * Open a jam until [until], **or extend one that is already running past it**.
      *
-     * **Replaces rather than joins**, exactly as [withIsolated] does and for the same reason. A
-     * seat with no row gets one, appended in seat order — [withPresence]'s shape.
-     *
-     * **There is no matching writer that can put a phantom into [presence], and there must never
-     * be one.** See [Phantom]: the separation between the two lists is how D-136's dedup rule is
-     * kept, and a helper that "merged" them would delete it in one line.
+     * The later deadline wins and nothing here can shorten a window — see [staticUntil], where the
+     * reason is that a shortened jam would report how many Insiders reached for it. A jam that has
+     * already lapsed is simply replaced, because a stale deadline is not a jam.
      */
-    fun withPhantom(replacement: Phantom): GameState {
-        val held = phantoms.any { it.seat.index == replacement.seat.index }
-        return copy(
-            phantoms =
-                if (held) {
-                    phantoms.map {
-                        if (it.seat.index == replacement.seat.index) replacement else it
-                    }
-                } else {
-                    (phantoms + replacement).sortedBy { it.seat.index }
-                },
-        )
+    fun withStatic(until: Tick): GameState {
+        val held = staticUntil
+        return copy(staticUntil = if (held != null && until < held) held else until)
     }
 
     /**
@@ -481,41 +475,27 @@ class GameState private constructor(
      * other phone's sighting may relocate them. **Inference never overrides knowledge.*** This
      * function is that sentence, and it is the only place in the game where the two planes meet.
      *
-     * A presence row with a card is [Placement.Known] and wins outright. Only a seat the house has
-     * never placed can be read off a phantom, and only while the phantom is unlapsed.
+     * A presence row with a card is [Placement.Known] and wins outright. **Nothing else can win**,
+     * which is the whole of the ordering: the answer is a scan or it is nothing.
      *
-     * **Both firing orders give the same answer, because nothing here is a write.** A Spoof fired
-     * before a scan and a Spoof fired after one leave state that differs only in which tick is on
-     * which row; the resolution happens when somebody asks, and it asks presence first every time.
-     * That is what makes the guarantee hold for an ordering nobody has thought of yet.
+     * ### ⚠️ The inference arm was DELETED with the ability that produced it, and this is not the
+     * rule being dropped
      *
-     * ### ⚠️ A scan is knowledge FOREVER here, and that is this build's reading of a ruling that
-     * does not cover it
+     * There used to be a second arm here reading a phantom occupant, and D-186 replaced the ability
+     * that manufactured phantoms with one that has no target at all. **The ruling is explicit that
+     * D-136 survives the sweep**: *inference never overrides knowledge is a rule about the spectator
+     * map, which is still unbuilt and still needs it; what falls is only the phantom's arm of it.*
      *
-     * D-136 rules the *direction* — inference never overrides knowledge — and says nothing at all
-     * about **staleness**. Taken at its word, as it is here, a seat that scanned one card at minute
-     * two can never be spoofed anywhere for the rest of the round, because the house still holds
-     * the row. That is very likely not what the design wants from an ability whose entire function
-     * is claiming to be somewhere you are not.
+     * So this function is the ordering with one grade currently constructible, and the day the
+     * spectator map's BLE sightings land they belong **below** the presence row and are read here.
+     * [Placement.Inferred] is kept for them. Writing a sighting into [presence] instead would be one
+     * line of last-write-wins away from an inference erasing the house's own knowledge, and that is
+     * the mistake this function exists to make impossible rather than merely discouraged.
      *
-     * The candidate refinement is [Presence.open]: while the window is open the house genuinely
-     * knows, and a closed window is a place somebody *was*. Ordering `Known(open)` above a phantom
-     * and a phantom above `Known(closed)` would make Spoof work as described and would still never
-     * let a lie displace live knowledge.
-     *
-     * **It is not built that way, because that is a design decision and not a build's to take**,
-     * and because the only consumer is unbuilt so nothing is currently wrong on any screen. It is
-     * escalated in the worklog as the most consequential open question this ability leaves.
-     *
-     * Nothing in `core` calls this today. It exists resolved and tested now because the dedup rule
-     * is the easiest thing in this system to get wrong later, and the map that will need it is
-     * hardware-dependent, frozen, and will not be written by whoever wrote this.
+     * Nothing in `core` calls this today.
      */
-    fun placementOf(seat: Seat, at: Tick): Placement? {
-        val known = presenceFor(seat)?.at
-        if (known != null) return Placement.Known(seat, known)
-        return phantomFor(seat, at)?.let { Placement.Inferred(seat, it.room) }
-    }
+    fun placementOf(seat: Seat): Placement? =
+        presenceFor(seat)?.at?.let { Placement.Known(seat, it) }
 
     /** Seeded, recorded, monotonic. Never `Uuid.random()` — replay would mint different ids. */
     fun mintId(): Pair<EntityId, GameState> =
@@ -555,7 +535,7 @@ class GameState private constructor(
         activeMarkers: List<MarkerId> = this.activeMarkers,
         destinations: List<Destination> = this.destinations,
         presence: List<Presence> = this.presence,
-        phantoms: List<Phantom> = this.phantoms,
+        staticUntil: Tick? = this.staticUntil,
         meeting: Meeting? = this.meeting,
         egress: Egress? = this.egress,
         egressReadyAt: Tick = this.egressReadyAt,
@@ -567,7 +547,7 @@ class GameState private constructor(
     ) = GameState(
         armed, outcome, seats, insiderSeats, revoked, newlyRevoked, restrained, cooldownArmed,
         cooldowns, accessPausedAt, isolated, systemIntegrity, openSubroutines, workOrders, stations,
-        activeMarkers, destinations, presence, phantoms, meeting, egress, egressReadyAt, oneLines,
+        activeMarkers, destinations, presence, staticUntil, meeting, egress, egressReadyAt, oneLines,
         names, voteWindowSeconds, nextEntity, seed,
     )
 
@@ -667,7 +647,8 @@ class GameState private constructor(
             // seat placed would place them where the house had guessed rather than where a card
             // was read, and D-136's whole dedup rule rests on placement being knowledge.
             presence = emptyList(),
-            phantoms = emptyList(),
+            // The house's monitoring is clear until an Insider jams it (D-186).
+            staticUntil = null,
             meeting = null,
             egress = null,
             egressReadyAt = egressReadyAt,
@@ -697,7 +678,7 @@ class GameState private constructor(
             activeMarkers = emptyList(),
             destinations = emptyList(),
             presence = emptyList(),
-            phantoms = emptyList(),
+            staticUntil = null,
             meeting = null,
             egress = null,
             egressReadyAt = Tick(0),

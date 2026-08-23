@@ -140,13 +140,13 @@ internal fun Effect.ringing(): Boolean = when (this) {
     is Effect.Surged,
     // A list arriving on a phone. It buzzes as much as a work order does, which is not at all.
     is Effect.IsolateTargetsOffered,
-    // A plan arriving on a phone, and it is the list's branch for the list's reason.
-    is Effect.HomePlanOffered,
-    // **A phantom, and it reaches no phone at all** -- `PHANTOM_PLACED` has no schema row, so
-    // nothing here is ever asked about one. Written down rather than left to an `else`, because
-    // this is the one effect in the game where a buzz would be feedback the actor is forbidden
-    // (`gdd.md:398`) delivered by the motor instead of by the screen.
-    is Effect.PhantomPlaced,
+    // **STATIC, and it is silent on every phone in the building** (D-186, D-135, D-176). The jam
+    // reaches every living seat at once, so a buzz here would be the only thing in the game that
+    // rings a whole house without the house having called a meeting -- and it would ring it at the
+    // exact moment an Insider chose, which is a timer telling a dark room that *now* was when
+    // somebody moved. D-135 closes the long haptic to five events and this is not one of them; the
+    // announcement is what the surfaces look like.
+    is Effect.StaticOpened,
     -> false
 }
 
@@ -233,15 +233,11 @@ internal fun Effect.haptic(): Haptic? = when (this) {
     // not at all: a phone that went off when the Egress-node exclusion changed its picker would be
     // announcing an Insider's own tooling to a pocket in a silent house.
     is Effect.IsolateTargetsOffered -> null
-    // A plan arriving, and it is silent for the list's reason. **The one place a buzz would be
-    // worst is the branch below.**
-    is Effect.HomePlanOffered -> null
-    // **A phantom placed, and it is silent even though it reaches nobody to be silent at.**
-    // Listed here for `EgressSucceeded`'s stated reason -- this function answers *what does a
-    // delivered effect do*, never *is it delivered* -- and the answer matters more than usual: a
-    // buzz on a Spoof landing would be `gdd.md:398`'s forbidden actor-side feedback arriving
-    // through the motor, in a silent house, on the phone of the person who just lied.
-    is Effect.PhantomPlaced -> null
+    // **The jam, silent, and this is the branch where a buzz would be worst.** It lands on every
+    // living phone including the one that fired it, so a haptic here is `gdd.md:398`'s forbidden
+    // actor-side feedback and a house-wide beacon in the same instant -- and in a silent dark house
+    // the beacon is the more expensive half.
+    is Effect.StaticOpened -> null
     // The reveal, on the ending screen RoundEnded already buzzed for. One ending, one buzz.
     is Effect.InsidersRevealed -> null
 }
@@ -276,7 +272,7 @@ internal fun RoundMessage.ringing(): Boolean = when (this) {
     is RoundMessage.VoteSelectionShown, is RoundMessage.MeetingResolved,
     is RoundMessage.SyncPulseAnswered, is RoundMessage.InsidersRevealed,
     is RoundMessage.Surged, is RoundMessage.IsolateTargetsOffered,
-    is RoundMessage.HomePlanOffered, is RoundMessage.PhantomPlaced,
+    is RoundMessage.StaticOpened,
     -> false
 }
 
@@ -335,7 +331,6 @@ internal fun RoundMessage.haptic(): Haptic? = when (this) {
     is RoundMessage.MeetingResolved -> null
     is RoundMessage.SyncPulseAnswered -> null
     is RoundMessage.IsolateTargetsOffered -> null
-    is RoundMessage.HomePlanOffered -> null
-    is RoundMessage.PhantomPlaced -> null
+    is RoundMessage.StaticOpened -> null
     is RoundMessage.InsidersRevealed -> null
 }

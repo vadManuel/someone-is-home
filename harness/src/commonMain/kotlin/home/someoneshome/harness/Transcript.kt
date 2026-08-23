@@ -3,7 +3,6 @@ package home.someoneshome.harness
 import home.someoneshome.model.AssignedWork
 import home.someoneshome.model.Destination
 import home.someoneshome.model.Effect
-import home.someoneshome.model.HomePlanView
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
 import home.someoneshome.model.MeetingTrigger
@@ -62,17 +61,11 @@ object Transcript {
                 // ever reads one renders as seats alone (see Effect.InsidersRevealed below); so
                 // every row a replay produces is byte-identical to the row it is compared against,
                 // and the round is reproduced without the words.
-                "lines" to event.oneLines.joinToString(",") { num(it.seat.index) },
-                // **The home's shape, whole**, because the Spoof picker is drawn from it and a
-                // replay that rebuilt an empty plan would emit `HomePlanOffered` rows the original
-                // round did not. It is the one recorded input on this row that is neither a draw
-                // nor a setting: it is a picture the host painted weeks ago.
-                //
-                // Rendered rather than summarised -- unlike the effect row, which prints room names
-                // only. The effect row is for a human reading what a seat was handed; this row has
-                // to REBUILD the event, and a plan rebuilt from names alone is a plan with no
-                // squares in it, which draws as nothing on the one screen that needs it.
-                "plan" to plan(event.plan))
+                // **The home's shape is NOT on this row and no longer can be** (D-186). Version 13
+                // carried it because a picker over rooms cannot be drawn without rooms; Static has
+                // no picker, the plan crosses to no client, and `Event.RoundArmed` no longer holds
+                // one. This is the largest thing this format has ever stopped carrying.
+                "lines" to event.oneLines.joinToString(",") { num(it.seat.index) })
         is Event.MarkerScanned ->
             row("MarkerScanned", event.at, "actor" to num(event.actor.index), "marker" to text(event.marker.value))
         is Event.SubroutineReturned ->
@@ -96,14 +89,13 @@ object Transcript {
         is Event.IsolateFired ->
             row("IsolateFired", event.at, "actor" to num(event.actor.index),
                 "target" to text(event.target.value))
-        // **The third fire, and the row the CUT-RISK METRIC is counted off** (`gdd.md:1143`,
-        // `:1342`). It carries the room because the room is what was asked for; there is no target
-        // seat, because a Spoof moves the actor's own claimed location and always has. See
-        // [spoofFires], which is what makes *fired at least once per three rounds* a number
-        // somebody can read off an evening rather than a thing somebody has to remember to watch.
-        is Event.SpoofFired ->
-            row("SpoofFired", event.at, "actor" to num(event.actor.index),
-                "room" to text(event.room))
+        // **The third fire, and the row the CUT-RISK METRIC is counted off** (`gdd.md:1347`).
+        // It carries the actor and the tick and there is nothing else to carry: Static has no
+        // target of any kind (D-186). See [staticFires], which is what makes *fired at least once
+        // per three rounds* a number somebody can read off an evening rather than a thing somebody
+        // has to remember to watch.
+        is Event.StaticFired ->
+            row("StaticFired", event.at, "actor" to num(event.actor.index))
         is Event.ContactMade ->
             row("ContactMade", event.at, "actor" to num(event.actor.index), "target" to num(event.target.index))
         is Event.MeetingCalled ->
@@ -153,26 +145,6 @@ object Transcript {
      */
     private fun destination(at: Destination): String =
         "${text(at.marker.value)}:${text(at.shape)}:${text(at.room)}"
-
-    /**
-     * **The home's plan as one token** — floors by `;`, rooms by `,`, a room's parts by `:`, its
-     * cells by `+` and a cell's pair by `.`.
-     *
-     * Five separators deep, which is one more than anything else in this format and is the honest
-     * cost of putting a picture in a line-oriented file. The alternative — a plan section of its
-     * own, outside the event rows — would put a recorded input somewhere the event that carries it
-     * is not, and the parser's whole discipline is that a row rebuilds its own event.
-     *
-     * Room names and floor names are host-authored text and go through [text], which escapes the
-     * colon (E-L4-4). The stairs flag is a letter rather than `true`/`false` so a plan of any size
-     * stays one screen wide in a diff.
-     */
-    private fun plan(plan: HomePlanView): String = plan.floors.joinToString(";") { floor ->
-        text(floor.name) + "/" + floor.rooms.joinToString(",") { room ->
-            "${text(room.room)}:${if (room.stairs) "s" else "r"}:" +
-                room.cells.joinToString("+") { "${num(it.x)}.${num(it.y)}" }
-        }
-    }
 
     /**
      * What one line of a work order is, as one token.
@@ -227,18 +199,13 @@ object Transcript {
         is Effect.IsolateTargetsOffered ->
             "IsolateTargetsOffered|seat=${effect.seat.index}|targets=" +
                 effect.targets.joinToString(",") { destination(it) }
-        // The plan, as the seat receives it, rendered as its ROOM NAMES and never as its squares.
-        // The geometry is what the phone draws with and it is not what a reader of a transcript is
-        // checking: what they are checking is which seats were handed the map, and a hundred cell
-        // coordinates per row would bury exactly that in the one artifact meant to show it.
-        is Effect.HomePlanOffered ->
-            "HomePlanOffered|seat=${effect.seat.index}|rooms=" +
-                effect.plan.rooms.joinToString(",") { it.room }
-        // **The phantom, recorded, and it reaches no phone** -- see Effect.PhantomPlaced, which has
-        // no schema row at all. The recording is therefore the ONLY artifact in the game that holds
-        // a Spoof's consequence, exactly as it is the only one that holds an isolation.
-        is Effect.PhantomPlaced ->
-            "PhantomPlaced|seat=${effect.seat.index}|room=${effect.room}|until=${effect.until.step}"
+        // **The jam, and there is no seat on it to render** (D-186). Every other ability's rows in
+        // this transcript name somebody -- an actor, a target, a seat the offer was drawn for --
+        // and this one names nobody, because the house never knew. A reader of a recording can see
+        // THAT the house was jammed and when, and cannot see who did it, which is the same thing
+        // every player in the building could see.
+        is Effect.StaticOpened ->
+            "StaticOpened|seconds=${num(effect.seconds)}|seed=${num(effect.seed)}"
         is Effect.SubroutineGraded ->
             "SubroutineGraded|seat=${effect.seat.index}|accepted=${effect.accepted}"
         is Effect.SubroutineProgressed ->
@@ -534,16 +501,12 @@ object Transcript {
                     ":${if (it.open) "open" else "shut"}"
             }
         )
-        // **The phantoms, for the presence plane's reason and one more.** They reach no client
-        // either, so a state row is again the only artifact that holds them -- and because the
-        // phantoms are a SEPARATE list from the presence rows above, this pair of fields is where a
-        // reader can see D-136's dedup holding: a seat that scanned and then spoofed shows a row in
-        // both, and the one that wins is asked at read time by `GameState.placementOf`.
-        append("|phantoms=").append(
-            state.phantoms.joinToString(",") {
-                "${num(it.seat.index)}:${text(it.room)}:${num(it.until.step)}"
-            }
-        )
+        // **The jam's deadline, and never who set it** (D-186). The presence rows above are here
+        // because they reach no client; this is here for the opposite reason -- it reaches every
+        // living phone, as a window that has already started, so a replay that did not hold the
+        // deadline would come out of the jam at the wrong moment. **It carries no seat**, which is
+        // the ability's anonymity kept in the one artifact of this game that outlives the evening.
+        append("|static=").append(state.staticUntil?.let { num(it.step) } ?: "none")
         // **The meeting, ballots and all.** Live selections are the one thing at a meeting that
         // only a player outside the system may read (D-075), which is exactly why they belong in
         // an authority-side state row: a recording that stopped short of them could not tell a
@@ -574,35 +537,34 @@ object Transcript {
     }
 
     /**
-     * **How many Spoofs were fired in this recording — the cut-risk metric, made measurable**
-     * (`gdd.md:1143`, `gdd.md:1342`).
+     * **How many Statics were fired in this recording — the cut-risk metric, made measurable**
+     * (`gdd.md:1347`).
      *
-     * `gdd.md:1342`'s row reads: **Spoof usage — fired at least once per three rounds. If it is
-     * never used, cut it.** `gdd.md:1143` is why: *Spoof may be too abstract for the dark. Surge and
-     * Revoke have immediate, visceral effects; Spoof is slow, indirect, and asks a Insider to think
-     * about the map layer while standing in a dark hallway. **It may simply never get used. Watch it
-     * in playtest rather than cutting preemptively.***
+     * ### The metric survived the ability being replaced, and the question it asks has changed
      *
-     * This function is the watching. It exists so that the metric is answered off **the artifact
-     * every round already produces** rather than off somebody with a clipboard in a dark house — a
-     * playtest measurement that depends on a human remembering to look is a metric that gets
-     * reported as "felt unused", which is not a number and cannot cut an ability.
+     * `gdd.md:1347` used to read *Spoof usage — fired at least once per three rounds. If it is never
+     * used, cut it*, and D-186 is the owner **taking that risk rather than continuing to watch it**:
+     * the mechanic was cut and the slot was kept. So this counter is not asking the same question
+     * any more. Nobody expects Static to go unused — it costs nothing to understand and it is fired
+     * because you are about to do something — and what is worth counting now is the other
+     * direction: *how often does the house go dark, and does a shift start to feel like it.*
      *
-     * ### It counts FIRES, including the ones that did nothing, and that is the right count
+     * The counting method is unchanged and is why the function is kept rather than rewritten: the
+     * metric is answered off **the artifact every round already produces** rather than off somebody
+     * with a clipboard in a dark house. A playtest measurement that depends on a human remembering
+     * to look gets reported as "felt frequent", which is not a number.
      *
-     * A Spoof fired into a running pool leaves an `Event.SpoofFired` and no phantom. It still counts
-     * here, because what is being measured is **whether anybody reached for the ability** — the
-     * question `gdd.md:1143` asks is about a player's attention in a dark hallway, not about a
-     * cooldown. Counting landings would report an ability that people tried and could not use as an
-     * ability nobody wanted.
+     * ### It counts FIRES, including the ones that did nothing
      *
-     * Read off the recorded events rather than off the effects for the same reason, and because
-     * refused fires are recorded too (D-066) — the invisible drop this project refuses.
+     * A Static fired into a running pool leaves an `Event.StaticFired` and no jam. It still counts
+     * here, because what is measured is whether anybody **reached for** the ability. Read off the
+     * recorded events rather than off the effects for that reason, and because refused fires are
+     * recorded too (D-066) — the invisible drop this project refuses.
      *
-     * ⚠️ **Three rounds is the unit and one recording is one round**, so the threshold is a
+     * ⚠️ **Three rounds is the unit and one recording is one round**, so any threshold is a
      * judgement across a session's recordings rather than a property of any single one. That is
-     * deliberately not encoded here: a function that answered *did Spoof pass* would be this build
-     * grading a design decision it does not own.
+     * deliberately not encoded here: a function that graded the number would be this build taking a
+     * design decision it does not own.
      */
-    fun spoofFires(events: List<Event>): Int = events.count { it is Event.SpoofFired }
+    fun staticFires(events: List<Event>): Int = events.count { it is Event.StaticFired }
 }

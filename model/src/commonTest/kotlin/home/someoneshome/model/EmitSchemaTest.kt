@@ -401,78 +401,84 @@ class EmitSchemaTest {
     }
 
     /**
-     * **The home's plan reaches a living Insider and nobody else** (`gdd.md:313`, the owner's Spoof
-     * targeting ruling).
+     * **⚠️ NO KIND IN THIS TABLE CARRIES THE HOME'S PLAN, AND THE ROW THAT DID IS GONE** (D-186).
      *
-     * The Isolate picker's row, one ability over and one size larger. `Destination`'s own KDoc names
-     * the thing this row makes possible: *what is NOT authorised is the whole map to **every**
-     * client* — and the ruling authorises it to exactly one class, because Spoof picks from the map
-     * and a map picker cannot be built without a map.
+     * The rollback of T2·4. The plan's row was *the largest disclosure in the emit table* — the
+     * whole home's geometry, every room on every floor, to one class — and it existed for one
+     * reason: a picker over rooms cannot be drawn without rooms. **Static has no picker.**
      *
-     * The rules build one of these for every seat, for `isolateOffers`' reason, so **this row is
-     * the only thing standing between a Resident and the whole home's geometry.** Asserted in both
-     * directions and addressed as well as permitted.
+     * D-186: *the row goes, and `Destination`'s own warning about the whole map reaching every
+     * client returns to being a warning about a thing the app does not do.* This is that warning
+     * with a test under it. It reads the table's own list of known kinds rather than naming a
+     * constant that no longer exists, so it keeps meaning something the day somebody adds a kind
+     * back: **a disclosure that shrinks deserves the same ceremony as one that grows.**
      */
     @Test
-    fun `the home plan reaches a living Insider and nobody else`() {
+    fun `no kind in the table carries the home's plan`() {
+        val geography = EmitSchema.knownKinds().filter {
+            it.name.contains("Plan") || it.name.contains("Home")
+        }
         assertEquals(
-            listOf(ClientClass(Role.Insider, RoundState.Live)),
-            EmitSchema.classesFor(EmitSchema.HOME_PLAN_OFFERED),
-            "the home's plan reaches something other than exactly a living Insider",
-        )
-
-        val state = live()
-        val plan = HomePlanView(
-            listOf(FloorView("GROUND", listOf(RoomOutline("KITCHEN", cells = listOf(PlanCell(0, 0)))))),
-        )
-        assertEquals(
-            emptyList(),
-            EmitSchema.deliveries(Effect.HomePlanOffered(Seat(0), plan), state),
-            "a Resident was handed the whole home's plan",
-        )
-        assertEquals(
-            listOf(Seat(1).index),
-            EmitSchema.deliveries(Effect.HomePlanOffered(Seat(1), plan), state).map { it.seat.index },
+            emptyList(), geography,
+            "a kind carrying the home's geometry is back in the table (D-186 removed the only one)",
         )
     }
 
     /**
-     * **A PHANTOM REACHES NOBODY, AND THAT IS THE DECISION** (`gdd.md:313`, D-136, D-079).
+     * **⚠️ STATIC REACHES BOTH LIVING CLASSES AND NEITHER OUT CLASS — THE GHOST EXEMPTION, BOTH
+     * DIRECTIONS** (D-186).
      *
-     * The presence plane's arrangement, taken again for a fact that is worse to leak. `PresenceChanged`
-     * describes something that happened; a phantom says *this seat claims to be somewhere it is
-     * not*, and **only an Insider can cause one** — so a living reader of this row would hold the
-     * one fact in the game that names an Insider outright, with no inference required.
+     * *House-wide to the living. Ghosts exempt — their true occupancy stays clean.*
      *
-     * Asserted **for every class there is**, rather than for the two that look dangerous: the claim
-     * is that the row does not exist, and a test that checked only the living classes would pass on
-     * a build that had quietly granted it to the couch.
+     * **Both halves are asserted, because neither alone is the ruling.** A row permitted to nobody
+     * satisfies *the ghosts do not see it*; a row permitted to everybody satisfies *the living see
+     * it*; and a row permitted to one living class satisfies both while being the worst outcome
+     * available — an alignment test delivered by the allowlist, on the loudest ability in the game.
+     * So the living are asserted present in **both** roles and the out absent in both.
      *
-     * The second half is the addressing, which is independent: a row written by mistake still could
-     * not carry seat 3's lie to seat 5.
+     * The ghost half is the ruling rather than the usual round-state denial, and it is worth being
+     * exact about: the out are not denied because they cannot act on it. They are denied because
+     * **their true occupancy is not the house's monitoring** and a jam is the house's own monitoring
+     * degrading (M12, D-134, D-145). A build that widened this row would take the liveness privilege
+     * away from the couch, quietly, and the symptom would be a ghost's map going to noise for ten
+     * seconds with nothing anywhere explaining why.
      */
     @Test
-    fun `a phantom is permitted to no class at all and is addressed to the spoofing seat`() {
+    fun `static reaches both living classes and neither out class`() {
         assertEquals(
-            emptyList(),
-            EmitSchema.classesFor(EmitSchema.PHANTOM_PLACED),
-            "a phantom is permitted to somebody",
-        )
-        assertEquals(
-            emptyList(),
-            EmitSchema.deliveries(
-                Effect.PhantomPlaced(Seat(1), room = "KITCHEN", until = Tick(900)),
-                live(),
+            listOf(
+                ClientClass(Role.Resident, RoundState.Live),
+                ClientClass(Role.Insider, RoundState.Live),
             ),
-            "a phantom was delivered to a phone",
+            EmitSchema.classesFor(EmitSchema.STATIC_OPENED),
+            "the jam reaches something other than exactly the two living classes",
         )
+
+        // Both axes, both directions, asked of the permission rather than of the list — the shape
+        // `vote_attribution_reaches_the_out_and_no_living_player` uses, pointed the other way up.
+        for (role in Role.entries) {
+            assertTrue(
+                EmitSchema.permits(EmitSchema.STATIC_OPENED, ClientClass(role, RoundState.Live)),
+                "living $role stopped seeing the jam",
+            )
+            assertFalse(
+                EmitSchema.permits(EmitSchema.STATIC_OPENED, ClientClass(role, RoundState.Out)),
+                "an out $role was jammed — the ghost exemption is gone",
+            )
+        }
+
+        val jam = Effect.StaticOpened(seconds = 10, seed = 4242L)
+        val house = live()
         assertEquals(
-            listOf(Seat(1)),
-            EmitSchema.audienceOf(
-                Effect.PhantomPlaced(Seat(1), room = "KITCHEN", until = Tick(900)),
-                live(),
-            ),
-            "a phantom is addressed to somebody other than the seat that told the lie",
+            house.seats.map { it.index },
+            EmitSchema.deliveries(jam, house).map { it.seat.index },
+            "the jam did not reach every living seat in the house",
+        )
+        // **And it is addressed to nobody in particular**, which is the anonymity's own half: the
+        // effect carries no seat, so a delivery list is the whole house or it is a bug.
+        assertEquals(
+            house.seats, EmitSchema.audienceOf(jam, house),
+            "the jam acquired an address, so it can now be narrowed to the seat that fired it",
         )
     }
 

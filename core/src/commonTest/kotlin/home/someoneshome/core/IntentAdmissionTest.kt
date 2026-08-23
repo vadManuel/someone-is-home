@@ -51,7 +51,7 @@ class IntentAdmissionTest {
         Intent.ArmRevoke(Seat(1)),
         Intent.FireSurge(Seat(1), Seat(2)),
         Intent.FireIsolate(Seat(1), marker),
-        Intent.FireSpoof(Seat(1), "THE LANDING"),
+        Intent.FireStatic(Seat(1)),
         Intent.BeginSubroutine(Seat(2), marker),
         Intent.StopSubroutine(Seat(2)),
         Intent.ReturnSyncPulse(Seat(2), listOf(1L, 2L)),
@@ -198,10 +198,10 @@ class IntentAdmissionTest {
         // contrast is the whole reason they sit on this row: the house draws nothing for either.
         // A Surge names a seat off a roster and an Isolate names a card off a list the house
         // itself published to that phone, so the fact is settled by what the phone did, which
-        // connection did it, and when. **Spoof is the third and is here now**, and it is the
-        // clearest case on the row: it names a ROOM off a plan the house published, and the house
-        // resolves that name to nothing at all -- there is no roster lookup to compose from.
-        is Event.SurgeFired, is Event.IsolateFired, is Event.SpoofFired,
+        // connection did it, and when. **Static is the third and is here now**, and it is the
+        // clearest case on the row: it names nothing at all, so the fact is the actor and the tick
+        // and there is nothing anywhere for the house to compose from a second source.
+        is Event.SurgeFired, is Event.IsolateFired, is Event.StaticFired,
         -> Origin.Requestable
 
         // Two ways to call a meeting and only one of them is a card. `MeetingCard` is requestable;
@@ -243,7 +243,7 @@ class IntentAdmissionTest {
         // reports green forever.
         Event.SurgeFired(at, Seat(1), Seat(2)),
         Event.IsolateFired(at, Seat(1), marker),
-        Event.SpoofFired(at, Seat(1), "THE LANDING"),
+        Event.StaticFired(at, Seat(1)),
         Event.ContactMade(at, Seat(1), Seat(2)),
         Event.MeetingCalled(at, Seat(3), MeetingTrigger.MeetingCard),
         Event.MeetingCalled(at, Seat(3), MeetingTrigger.RevokeReported(Seat(2))),
@@ -323,7 +323,7 @@ class IntentAdmissionTest {
         is Intent.ArmRevoke -> intent.copy(actor = actor)
         is Intent.FireSurge -> intent.copy(actor = actor)
         is Intent.FireIsolate -> intent.copy(actor = actor)
-        is Intent.FireSpoof -> intent.copy(actor = actor)
+        is Intent.FireStatic -> intent.copy(actor = actor)
         is Intent.BeginSubroutine -> intent.copy(actor = actor)
         is Intent.StopSubroutine -> intent.copy(actor = actor)
         is Intent.ReturnSyncPulse -> intent.copy(actor = actor)

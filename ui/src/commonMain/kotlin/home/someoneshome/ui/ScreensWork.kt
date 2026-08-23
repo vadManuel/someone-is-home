@@ -856,9 +856,19 @@ fun TermNoScreen() {
     }
 }
 
-/** Counts per room, three staleness bands, your own room outlined. Never dots. */
+/**
+ * Counts per room, three staleness bands, your own room outlined. Never dots.
+ *
+ * **STATIC lands here** (D-186). The plan, the labels and the counts are drawn exactly as they
+ * always are and the noise goes over them — see `StaticNoise`, where *the real data faintly
+ * beneath* is argued. Nothing about the surface changes underneath: the counts are still the
+ * house's, still correct, and they are correct on screen again the instant the window closes.
+ *
+ * **The jam is read off the panel and never asked for**, so this screen has no way to be jammed by
+ * anything except the house having said so, and no way to tell whose Static it was.
+ */
 @Composable
-fun TermLiveScreen() {
+fun TermLiveScreen(vals: PanelVals) {
     val go = navigator()
     Column(
         Modifier.fillMaxSize().padding(8.u),
@@ -873,6 +883,7 @@ fun TermLiveScreen() {
             LivePlan(Plan.mapCells(), Modifier.fillMaxSize())
             PlanRoomLabels(Modifier.fillMaxSize())
             PlanCounts(Plan.terminalCounts, Modifier.fillMaxSize())
+            vals.staticJam?.let { StaticNoise(it, Modifier.fillMaxSize()) }
         }
         Label("YOUR ROOM OUTLINED", size = 5.5, color = Amber.Faint, tracking = 0.08)
         PanelButton(
@@ -889,9 +900,22 @@ fun TermLiveScreen() {
  *
  * The gated resource. The live view is free and limited only by the motion budget; this one you
  * spend, which is what makes standing at the terminal a decision rather than a habit.
+ *
+ * ### A playback crossing a jam renders those seconds as static (D-186)
+ *
+ * *~1.7s of noise at 6×* — ten seconds compressed. **It is a forensic trace and it is meant to be
+ * one**: a scar in the playback that says *something was hidden here, at this time*, without saying
+ * what or by whom. A player who watches it back learns the window and nothing inside it.
+ *
+ * ⚠️ **What is drawn here is a jam over a FIXTURE playback**, because that is what this screen is:
+ * E8 is design-complete and build-pending, there is no recorded history behind the numbers, and
+ * nothing on this phone yet knows which second of a playback it is showing. So the noise appears
+ * while the house says the monitoring is jammed, which is the right picture for the wrong reason —
+ * and the seconds-crossing-the-window arithmetic belongs to whoever builds the real playback. It is
+ * `PlanCounts`' own position exactly: the fixture is the screen until the history exists.
  */
 @Composable
-fun TimelapseScreen() {
+fun TimelapseScreen(vals: PanelVals) {
     val go = navigator()
     Column(
         Modifier.fillMaxSize().padding(8.u),
@@ -906,6 +930,7 @@ fun TimelapseScreen() {
             LivePlan(Plan.mapCells(), Modifier.fillMaxSize())
             PlanRoomLabels(Modifier.fillMaxSize())
             PlanCounts(Plan.timelapseCounts, Modifier.fillMaxSize())
+            vals.staticJam?.let { StaticNoise(it, Modifier.fillMaxSize()) }
         }
         Row(Modifier.fillMaxWidth().height(6.u), horizontalArrangement = Arrangement.spacedBy(1.u)) {
             Box(Modifier.weight(44f).fillMaxHeight().background(Amber.Bright))

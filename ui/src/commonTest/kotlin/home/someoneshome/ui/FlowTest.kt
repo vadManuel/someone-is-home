@@ -562,8 +562,8 @@ class FlowTest {
         // **All four of page 2's holds**, walked from the same screen because they are four
         // gestures on one page and the edge set has four members. The Egress arms in place and
         // reaches the alert every phone gets; the three tier-2 tiles each open a view, which is the
-        // targeting rulings and the one place the design asks a hold to open one. Spoof's is a plan
-        // where the other two are lists, and the edge is the same edge.
+        // targeting rulings and the one place the design asks a hold to open one. **The third tile
+        // publishes no edge at all**: Static fires in place (D-186), so its hold navigates nowhere.
         val page2 = setOf(
             FlowModel(PanelState(screen = ScreenId.Page2, role = PanelRole.Insider))
                 .apply { armEgress() }.state.screen,
@@ -571,8 +571,6 @@ class FlowTest {
                 .apply { go(ScreenId.SurgeTargets) }.state.screen,
             FlowModel(PanelState(screen = ScreenId.Page2, role = PanelRole.Insider))
                 .apply { go(ScreenId.IsolateTargets) }.state.screen,
-            FlowModel(PanelState(screen = ScreenId.Page2, role = PanelRole.Insider))
-                .apply { go(ScreenId.SpoofRooms) }.state.screen,
         )
         assertEquals(Flow.viaActions.getValue(ScreenId.Page2), page2)
 
@@ -588,12 +586,17 @@ class FlowTest {
         isolate.fireIsolate("card-hall")
         assertEquals(Flow.viaActions.getValue(ScreenId.IsolateTargets), setOf(isolate.state.screen))
 
-        // And off a room of the plan. The same walk, and it matters most here: a Spoof's whole
-        // consequence is invisible, so the navigation is the only thing the actor's phone does at
-        // all — and it must be the same navigation whether the pool was ready or not.
-        val spoof = FlowModel(PanelState(screen = ScreenId.SpoofRooms, role = PanelRole.Insider))
-        spoof.fireSpoof("KITCHEN")
-        assertEquals(Flow.viaActions.getValue(ScreenId.SpoofRooms), setOf(spoof.state.screen))
+        // **And STATIC, which fires without navigating at all** (D-186). It is on page 2 already
+        // and it stays there — the two Tier-1 tiles' behaviour, not the two pickers'. Asserted as a
+        // screen that did not move, because the failure worth catching is a walk appearing: a phone
+        // that jumped anywhere on a Static would be announcing the fire to whoever was looking at
+        // it.
+        val jam = FlowModel(PanelState(screen = ScreenId.Page2, role = PanelRole.Insider))
+        jam.fireStatic()
+        assertEquals(
+            ScreenId.Page2, jam.state.screen,
+            "firing Static moved the phone, which is a walk a bystander could read",
+        )
 
         // A house notice, swiped up — the last button dismissal in the app, retired (D-105).
         val notice = FlowModel(PanelState(screen = ScreenId.Notice))
@@ -670,8 +673,9 @@ class FlowTest {
                 ScreenId.SaveName, ScreenId.Delete, ScreenId.HomeDetail, ScreenId.ScanMarker,
                 ScreenId.Secret, ScreenId.Lobby, ScreenId.ScanCaught,
                 ScreenId.WinInsiders, ScreenId.WinResidents,
-                // Page 2's three holds, and the two pickers a row fires off.
-                ScreenId.Page2, ScreenId.SurgeTargets, ScreenId.IsolateTargets, ScreenId.SpoofRooms,
+                // Page 2's three holds, and the two pickers a row fires off. The third hold fires
+                // in place and declares no edge (D-186).
+                ScreenId.Page2, ScreenId.SurgeTargets, ScreenId.IsolateTargets,
                 ScreenId.Notice,
                 ScreenId.Notify, ScreenId.Banner, ScreenId.Quiet, ScreenId.LockNotify,
                 // STOP NOW's ten. Named in full rather than derived from the roster, for this

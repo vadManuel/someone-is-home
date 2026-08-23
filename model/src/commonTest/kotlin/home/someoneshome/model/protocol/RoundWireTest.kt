@@ -15,10 +15,6 @@ import home.someoneshome.model.Seat
 import home.someoneshome.model.Sound
 import home.someoneshome.model.SubroutineInstance
 import home.someoneshome.model.SubroutineKind
-import home.someoneshome.model.FloorView
-import home.someoneshome.model.HomePlanView
-import home.someoneshome.model.PlanCell
-import home.someoneshome.model.RoomOutline
 import home.someoneshome.model.Tick
 import home.someoneshome.model.WinRoute
 import home.someoneshome.model.Winner
@@ -50,21 +46,7 @@ class RoundWireTest {
             Seat(3),
             listOf(Destination(MarkerId("M-1"), shape = "diamond", room = "KITCHEN")),
         ),
-        Effect.HomePlanOffered(
-            Seat(3),
-            HomePlanView(
-                listOf(
-                    FloorView(
-                        "GROUND",
-                        listOf(
-                            RoomOutline("KITCHEN", cells = listOf(PlanCell(0, 0), PlanCell(1, 0))),
-                            RoomOutline("STAIRS", stairs = true, cells = listOf(PlanCell(2, 0))),
-                        ),
-                    ),
-                ),
-            ),
-        ),
-        Effect.PhantomPlaced(Seat(3), room = "KITCHEN", until = Tick(900)),
+        Effect.StaticOpened(seconds = 10, seed = 4242L),
         Effect.SubroutineGraded(Seat(3), accepted = true),
         Effect.SubroutineProgressed(remaining = 41),
         Effect.SystemIntegrityLive(percent = 87),

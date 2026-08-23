@@ -24,7 +24,7 @@ import kotlin.test.assertTrue
  * **THE THREE RULES THAT ARE ABOUT THE WHOLE KIT RATHER THAN ABOUT ANY ABILITY** (`gdd.md:392`–
  * `:401`).
  *
- * Revoke, Egress, Surge, Spoof and Isolate are built in three different units by three different
+ * Revoke, Egress, Surge, Static and Isolate are built in three different units by three different
  * hands, and every one of them has its own test file asserting its own behaviour. **None of those
  * files can see the rule that is being broken here**, because the rules in question are properties
  * of the *set*: they are true of the kit or they are not true at all, and an ability added later
@@ -131,7 +131,7 @@ private val EVERY_ABILITY = listOf(
         arm = { at -> listOf(Event.RevokeArmed(at, K_INSIDER)) },
     ) { at, target -> Event.ContactMade(at, K_INSIDER, target) },
     Fire("Surge", InsiderAbility.Access) { at, target -> Event.SurgeFired(at, K_INSIDER, target) },
-    Fire("Spoof", InsiderAbility.Access) { at, _ -> Event.SpoofFired(at, K_INSIDER, "KITCHEN") },
+    Fire("Static", InsiderAbility.Access) { at, _ -> Event.StaticFired(at, K_INSIDER) },
     Fire("Isolate", InsiderAbility.Access) { at, _ -> Event.IsolateFired(at, K_INSIDER, K_HALL) },
 )
 
@@ -160,17 +160,17 @@ class AbilityRulesTest {
      * produces **the same effect shapes** as one aimed at somebody else, and it spends **the same
      * clock by the same amount**.
      *
-     * ### Spoof's reading, written down because it is not obvious
+     * ### Static's reading, written down because it is not obvious
      *
-     * `gdd.md:393` says *every ability*, and Spoof has no target seat at all. Read as a gap, that
-     * would make Spoof the one ability that cannot be self-inflicted — which is exactly the shape
-     * the corollary forbids. Read correctly, **Spoof is self-targeting and nothing else**: what it
-     * moves is the actor's own claimed location, so the requirement is satisfied by the ability's
-     * shape rather than by a rule about it, and there is no *other*-targeted variant to compare
-     * against because there is no other seat it could name.
+     * `gdd.md:393` says *every ability*, and Static has no target of any kind. Read as a gap, that
+     * would make Static the one ability that cannot be self-inflicted — which is exactly the shape
+     * the corollary forbids. Read correctly, **Static is self-inflicted every time it is fired**:
+     * the jam is house-wide, so it covers the firing Insider's own monitoring, and an Insider
+     * standing at the Terminal when their own Static lands reads the same noise a Resident does.
+     * There is no *other*-targeted variant to compare against because there is no target.
      *
      * That is asserted below in the only form available: the fire is walked, the pool is charged,
-     * and the phantom that comes out is the **actor's own**.
+     * and the jam that comes out covers the house the actor is standing in.
      */
     @Test
     fun `self targeting works on every ability and spends the same clock`() {
@@ -196,12 +196,14 @@ class AbilityRulesTest {
             )
         }
 
-        // Spoof's whole function is self-targeting, and the phantom names the actor.
-        val (spoofed, _) = kitWalk(kitArmed(), Event.SpoofFired(Tick(10), K_INSIDER, "KITCHEN"))
-        assertEquals(
-            K_INSIDER.index,
-            assertNotNull(spoofed.phantomFor(K_INSIDER, Tick(11))).seat.index,
-            "Spoof: the phantom is somebody else's",
+        // **Static satisfies self-targeting by jamming the actor's own monitoring with everybody
+        // else's** (D-186). There is no target seat to point at itself and nothing here to
+        // special-case: what is asserted is that the jam the actor bought covers the whole house,
+        // which necessarily includes the phone that fired it.
+        val (jammed, _) = kitWalk(kitArmed(), Event.StaticFired(Tick(10), K_INSIDER))
+        assertTrue(
+            jammed.staticRunning(Tick(11)),
+            "Static: the actor's own fire left the house unjammed",
         )
 
         // And the Egress, on the house-wide clock rather than either per-seat one. There is no
@@ -273,7 +275,8 @@ class AbilityRulesTest {
             // invalid — the absent effect IS the leak.* Walked by firing twice, so the state the
             // second shot meets is one the rules produced rather than one this test hand-set.
             //
-            // ⚠️ **This case was missing and an injection found it.** Making `spoofFired` return
+            // ⚠️ **This case was missing and an injection found it.** Making the third handler
+            // return
             // `Reduction(state, emptyList())` on a running pool failed nothing: the sweep had only
             // ever walked wasteful *targets*, never a wasteful *moment*, so the one shape rule the
             // project puts first was unguarded for every ability on the list.
@@ -433,42 +436,37 @@ class AbilityRulesTest {
     }
 
     /**
-     * **The three tier-2 pickers publish nothing to a Resident, whatever the house builds.**
+     * **The one surviving tier-2 picker publishes nothing to a Resident, whatever the house builds.**
      *
-     * The rules construct the Isolate list and the home's plan **for every seat** — that is
-     * `isolateOffers`' recorded finding, and the arming burst has to stay role-independent or the
-     * differential harness stops working. So the whole of the narrowing is the allowlist, and this
-     * asserts it at the boundary the arming burst actually crosses.
+     * The rules construct the Isolate list **for every seat** — that is `isolateOffers`' recorded
+     * finding, and the arming burst has to stay role-independent or the differential harness stops
+     * working. So the whole of the narrowing is the allowlist, and this asserts it at the boundary
+     * the arming burst actually crosses.
+     *
+     * ### ⚠️ There were two of these and D-186 deleted one
+     *
+     * The home's plan rode the same burst under the same argument and it is **gone**: Static has no
+     * picker, so there is no plan to narrow and no row to widen by mistake. `StaticTest.the arming
+     * burst is four runs and none of them is a plan` is the other end of the same claim — this one
+     * says the surviving picker is still narrowed, that one says nothing took the deleted one's
+     * place.
      *
      * Read off a real arming rather than off hand-built effects, because what is being checked is
      * that **the burst a round produces** reaches a Resident with nothing tier-2 in it.
      */
     @Test
     fun `the arming burst hands a Resident no picker and no plan`() {
-        val plan = home.someoneshome.model.HomePlanView(
-            listOf(
-                home.someoneshome.model.FloorView(
-                    "GROUND",
-                    listOf(
-                        home.someoneshome.model.RoomOutline(
-                            "KITCHEN",
-                            cells = listOf(home.someoneshome.model.PlanCell(0, 0)),
-                        ),
-                    ),
-                ),
-            ),
-        )
         val reduction = reduce(
             GameState.EMPTY,
             armingFor(
                 Tick(1), 20260823L, K_SEATS, chosenInsiders = null,
-                markers = placed(K_ACTIVE), plan = plan,
+                markers = placed(K_ACTIVE),
             ),
         )
         val insiders = reduction.state.insiderSeats.map { it.index }.toSet()
         val residents = K_SEATS.map { it.index }.filterNot { it in insiders }
 
-        val tierTwo = setOf(EmitSchema.ISOLATE_TARGETS_OFFERED, EmitSchema.HOME_PLAN_OFFERED)
+        val tierTwo = setOf(EmitSchema.ISOLATE_TARGETS_OFFERED)
         for (seat in residents) {
             val reached = reduction.effects
                 .flatMap { EmitSchema.deliveries(it, reduction.state) }
@@ -494,9 +492,9 @@ class AbilityRulesTest {
             )
         }
         assertTrue(
-            EmitSchema.classesFor(EmitSchema.HOME_PLAN_OFFERED) ==
+            EmitSchema.classesFor(EmitSchema.ISOLATE_TARGETS_OFFERED) ==
                 listOf(ClientClass(Role.Insider, RoundState.Live)),
-            "the plan's row moved and this sweep would no longer be about the allowlist",
+            "the picker's row moved and this sweep would no longer be about the allowlist",
         )
     }
 }

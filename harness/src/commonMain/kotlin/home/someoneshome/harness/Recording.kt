@@ -50,20 +50,22 @@ class Recording(
     }
 
     companion object {
-        // 13: Spoof, the third Tier-2 ability, and with it the first thing the house ever sent a
-        // phone that is a PICTURE rather than a roster. One event a version 12 build cannot
-        // construct (`SpoofFired`), two effects it cannot name (`HomePlanOffered`, `PhantomPlaced`),
-        // and an arming row that carries the home's plan -- rooms, stairs and squares -- because the
-        // Spoof picker is a plan and a phone cannot draw one it was never sent.
+        // 14: STATIC replaced the third Tier-2 ability outright (D-186), and this is the first
+        // version bump in this format that is mostly a SUBTRACTION. Version 13's `SpoofFired` is
+        // gone and `StaticFired` -- an actor and a tick, and nothing else -- is in its place; two
+        // effects a version 13 build could name are gone with it (`HomePlanOffered`,
+        // `PhantomPlaced`) and one it cannot name is new (`StaticOpened`).
         //
-        // The state row gained the phantoms, and they are load-bearing for the isolations' exact
-        // reason: they reach NO client -- `PHANTOM_PLACED` has no schema row at all -- so a state
-        // row is the only artifact in the game that holds a Spoof's consequence. A version 12
-        // recording replays into a round where nobody ever claimed to be anywhere.
+        // **The arming row lost the home's plan**, which is the largest thing this format has ever
+        // stopped carrying. It existed because a picker over rooms cannot be drawn without rooms;
+        // Static has no picker, so the plan crosses to no client and the rules never see one.
         //
-        // The plan is on the arming EVENT and in no state row, which is the one asymmetry in this
-        // format: nothing stores it (see `Event.RoundArmed.plan`), so a state row that held it
-        // would be the recording asserting a field the rules do not have.
+        // The state row swapped the phantoms for one nullable deadline. It is load-bearing for the
+        // isolations' reason inverted: the jam DOES reach every living phone, but it reaches them as
+        // a window that has already started, so a replay that did not hold the deadline would come
+        // out of the jam at the wrong moment. It carries no seat, which is D-186's anonymity kept in
+        // the one artifact of this game that outlives the evening -- a recording cannot say who
+        // jammed the house, because the house never knew.
         //
         // 12: Tier 2 arrived. Two events a version 11 build cannot construct (`SurgeFired`,
         // `IsolateFired`) and two effects it cannot name (`Surged`, `IsolateTargetsOffered`), and
@@ -134,7 +136,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/13"
+        const val HEADER = "someone-is-home/recording/14"
     }
 }
 
