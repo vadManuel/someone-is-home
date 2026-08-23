@@ -1104,11 +1104,16 @@ private fun meetingCalled(
             meeting = meeting,
             egress = held,
             accessPausedAt = poolHeld,
-            // **A meeting ends every running ability effect, at the call** (the owner's 2026-08-23
-            // ruling). An Isolation is a card gone dark in a house nobody is walking, and a phantom
-            // is a false sighting on a map whose subjects are all standing in one room being looked
-            // at — so both spend a meeting affecting nothing, and T1·9's *a meeting can eat one
-            // whole* is answered by not making anybody spend it.
+            // **A meeting call ends every running ability effect — D-185, closing T1·9 and T2·9.**
+            //
+            // **The moment is the call, not the end.** A call snaps every lamp in the house to full
+            // white and puts every living player in one room, which is the moment an isolated marker
+            // stops being an attack and becomes stale machinery ticking in an empty hallway. An
+            // effect whose whole function is to shape movement through a dark house has nothing left
+            // to do once nobody is moving through it — and one that outlived the call would land its
+            // remaining seconds on the NEXT shift, bought at the price of the shift it was fired in.
+            // **Nobody could tell that from a fresh fire, which is the real objection: an effect
+            // that crosses a meeting is an effect with no traceable cause.**
             //
             // **Cleared rather than paused, and the Egress is the one exception.** A paused
             // isolation would come back after the meeting pointed at a house that has moved on;
@@ -1389,7 +1394,8 @@ private fun lightsOut(state: GameState, event: Event.MeetingClosed): Reduction<G
         listOf(Effect.EgressHeld(it.remainingAt(event.at), running = true, haptic = Haptic.Short))
     } ?: emptyList()
 
-    // **A meeting hands every Insider the round's opening again** (the owner's 2026-08-23 ruling).
+    // **A meeting hands every Insider the round's opening again — D-184**, which chooses at last
+    // between `gdd.md:373`'s *pauses or resets*. It resets, to half.
     // Both per-seat clocks go back to half their normal duration off this tick, which is D-132's
     // arming state arriving a second time -- `openingCooldowns`, so the two are one arithmetic
     // rather than two that agree until somebody moves one.

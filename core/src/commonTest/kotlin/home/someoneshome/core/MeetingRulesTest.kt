@@ -19,8 +19,8 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * **What a meeting does to everything that was running when it was called** — the owner's rulings
- * of 2026-08-23, which close T1·7 / T2·8 and T1·9 and answer `gdd.md:373`'s open *pauses or resets*.
+ * **What a meeting does to everything that was running when it was called** — D-183, D-184 and
+ * D-185, which close T1·7 / T2·8 and T1·9 / T2·9 and answer `gdd.md:373`'s open *pauses or resets*.
  *
  * Three rules, and they are one decision seen from three sides: **a meeting is a hard stop.** Tier 2
  * cannot be fired at one, every running ability effect fails at the call, and every per-Insider clock
@@ -57,12 +57,12 @@ class MeetingRulesTest {
     // ---- 1 · Tier 2 is refused at a meeting (T1·7 / T2·8) ---------------------------------------
 
     /**
-     * **All three Tier-2 fires are refused during a meeting, and the refusal costs nothing.**
+     * **All three Tier-2 fires are refused during a meeting, and the refusal costs nothing** (D-183).
      *
-     * *Everyone is on meeting views* — the most public fact this game has, which is what makes the
-     * refusal honest under D-068's entry condition. A Surge fired from the assembly would be fired
-     * at somebody the whole party can see, at a lamp already up for the meeting, into a room where
-     * the one sound in the game (D-176) would name the shooter as surely as the target.
+     * *There is no surface to fire from*: springboard page 2 does not exist during a meeting for any
+     * seat of any role, so no honest client can produce the intent and the refusal is not a
+     * client-visible path at all. Rule 1 is about an effect a player should have seen and did not,
+     * and nobody can see an effect on a screen nobody is standing on.
      *
      * **Refused at the gate and never inside the rules**, which is what makes it cost nothing: the
      * event does not reach the handler that would spend the pool. Written inside `reduce` it would

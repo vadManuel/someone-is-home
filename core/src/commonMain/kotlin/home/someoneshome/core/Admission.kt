@@ -77,21 +77,19 @@ fun admit(state: GameState, event: Event): Admission = when {
     event is Event.MeetingCalled && state.meeting != null ->
         Admission.Refused(RefusalReason.MeetingAlreadyRunning)
 
-    // **Tier 2 is refused at a meeting** (the owner's 2026-08-23 ruling, closing T1·7 / T2·8).
+    // **Tier 2 is refused for the duration of a meeting — D-183, closing T1·7 / T2·8.**
     //
-    // It clears this file's entry condition without straining it, and more plainly than either of
-    // the meeting refusals above: **everybody in the house is standing in one room looking at a
-    // meeting screen.** A phone that could fire a Surge from the assembly would be firing it at
-    // somebody the whole party can see, at a lamp already up for the meeting, into a room where the
-    // one sound in the game (D-176) would name the shooter as surely as the target.
+    // **What settles it is that there is no surface to fire from.** Everyone alive is on the meeting
+    // view and everyone out is on the ghost view; springboard page 2 does not exist during a meeting
+    // for any seat of any role. So no honest client can produce the intent, and this branch is
+    // **not a client-visible path at all** — it is the boundary doing what it is for, against a
+    // forged client. Rule 1 is about an effect a player should have seen and did not, and nobody can
+    // see an effect on a screen nobody is standing on.
     //
-    // **The refusal is the honest answer rather than a quiet one**, which is why it is here and not
-    // in the rules. `phaseOf` left these admissible deliberately and said so at length — the pool
-    // pauses across a meeting, so a seat that walked in with it ready still has it ready and
-    // nothing turned on the gate. The ruling changes what the answer is, not where it is decided:
-    // written inside `reduce` this would be `if (...) return Reduction(state, emptyList())`, which
-    // is rule 1's forbidden shape and the one that looks most like hygiene. Here the branch is
-    // provably outside every client-visible path and the refusal is RECORDED.
+    // That is stronger than the reading both earlier units left it on — *the pool pauses, so nothing
+    // turns on the gate*. A pause makes the fire pointless; it does not make it impossible, and
+    // *pointless but permitted* is the shape that gets found by whoever builds the next client and
+    // wonders why the tile is missing. **The answer is now the same on both sides of the wire.**
     //
     // **It costs nothing**, which is the whole of what a refusal at the gate means: the pool is not
     // spent, because the event never reaches the handler that would spend it.
