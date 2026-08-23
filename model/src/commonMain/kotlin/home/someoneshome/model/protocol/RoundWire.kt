@@ -216,6 +216,23 @@ sealed class RoundMessage {
         val haptic: Haptic,
     ) : RoundMessage()
 
+    /**
+     * **You are the one calling this meeting** (E-R1-1), and it carries nothing.
+     *
+     * **The empty body is the whole design.** `MeetingOpened.caller` is a `Seat` and no client can
+     * use it, because a phone is never told which seat it is — so the house says *you* by choosing
+     * the socket, and this member has no field for it to say anything else with. Two meetings called
+     * by two different people put identical bytes on two different wires.
+     *
+     * `RestrainedTakeover`'s shape one message over, minus the haptic: the ring is `MeetingOpened`'s
+     * and this phone is already receiving that. One phone in a silent house buzzing differently from
+     * the other five would be the caller announced through a pocket.
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("MeetingCalling")
+    data object MeetingCalling : RoundMessage()
+
     /** What a player outside the system gets instead of a call (D-134). */
     @ClientFacing
     @kotlinx.serialization.Serializable
@@ -415,6 +432,7 @@ sealed class RoundMessage {
             is PresenceChanged -> EmitSchema.PRESENCE_CHANGED
             is OpeningMessage -> EmitSchema.OPENING_MESSAGE
             is MeetingOpened -> EmitSchema.MEETING_OPENED
+            is MeetingCalling -> EmitSchema.MEETING_CALLING
             is StandAndWalkIn -> EmitSchema.STAND_AND_WALK_IN
             is CheckInProgressed -> EmitSchema.CHECK_IN_PROGRESSED
             is MeetingPhaseOpened -> EmitSchema.MEETING_PHASE_OPENED
@@ -614,6 +632,10 @@ object RoundWire {
         is Effect.OpeningMessage -> RoundMessage.OpeningMessage(effect.haptic)
         is Effect.MeetingOpened ->
             RoundMessage.MeetingOpened(effect.caller, effect.trigger, effect.haptic)
+        // **The seat comes off here, and the message is empty afterwards.** What survives the
+        // projection is that the house sent it at all; which phone it means is the socket it goes
+        // down (`EmitSchema.deliveries`), never a field a client could read its own seat out of.
+        is Effect.MeetingCalling -> RoundMessage.MeetingCalling
         is Effect.StandAndWalkIn -> RoundMessage.StandAndWalkIn(effect.haptic)
         is Effect.CheckInProgressed ->
             RoundMessage.CheckInProgressed(effect.present, effect.expected)

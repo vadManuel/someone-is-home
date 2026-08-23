@@ -21,6 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -314,15 +315,31 @@ private fun ReplyUnavailable() {
 fun LockScreen(vals: PanelVals) {
     val go = navigator()
     val actions = LocalActions.current
+    val lamp = LocalLamp.current
     val arrival = Notifications.arrivals[vals.screen]
         ?.takeIf { it.presentation == Presentation.UnderTheClock }
     val heavy = arrival?.notification?.kind?.heavy == true
     val ink = Amber.Black
     Column(
         Modifier.fillMaxSize()
-            // A STEP AND NOT A FADE, on a screen where the fade would be the most tempting: this
-            // is one colour value chosen per composition, with nothing animating between the two.
-            .background(if (heavy) Amber.Bright.copy(alpha = NOTIFIED_DIM) else Amber.Bright)
+            // **THE GROUND IS THE LAMP, AND THE HOUSE SETS ITS LEVEL** (`Effect.LampSet`). Read
+            // inside the draw lambda and never in composition: a level arriving invalidates draw
+            // only, which is the same path a blackout takes, and rule 7 is that an extra frame there
+            // is not a dropped frame but an un-anonymised revoke. `background()` would have made
+            // every luminance change a recomposition of the one screen whose whole job is to emit.
+            //
+            // **`UNSET` means the house has said nothing** and the port's own full amber stands in,
+            // which is [egressType]'s arrangement one surface over: the fallback is a fixture rather
+            // than a second source of truth, and a lock screen that opened black on a bench would be
+            // this module asserting a lamp the rules never set.
+            //
+            // A STEP AND NOT A FADE, on the screen where the fade would be most tempting: one value
+            // per draw, with nothing animating between two of them.
+            .drawBehind {
+                val set = lamp.authorised.intValue
+                val ground = if (set == LampState.UNSET) Amber.Bright else Color(set)
+                drawRect(if (heavy) ground.copy(alpha = NOTIFIED_DIM) else ground)
+            }
             .padding(start = 10.u, end = 10.u, top = 10.u, bottom = 9.u)
     ) {
         Row(

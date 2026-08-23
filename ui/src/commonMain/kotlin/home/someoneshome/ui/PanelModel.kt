@@ -213,17 +213,44 @@ data class PanelState(
      */
     val egressRunning: Boolean = false,
     /**
+     * **Whether the Egress countdown is stopped** (`Effect.EgressHeld`, D-133).
+     *
+     * A second fact beside [egressRunning] rather than a third state on it, because the two answer
+     * different questions: that one is *is there a crisis*, and this is *is its clock moving*. A
+     * meeting called by reporting a Revoked player is the one meeting that can happen during an
+     * Egress and it **pauses** the timer — never resets it — so a widget that could not say HELD
+     * would go on counting down through a meeting the whole house had stopped for, which is one
+     * screen contradicting the room.
+     *
+     * False until the house says otherwise, which is the honest bench: a countdown nobody has
+     * stopped is running.
+     */
+    val egressHeld: Boolean = false,
+    /**
+     * **Whether the house is holding this seat's beat** (`Effect.SyncPulseAnswered`, `gdd.md:355`).
+     *
+     * True when this phone's tap landed and the house is waiting for somebody at the other node.
+     * **Copied and never interpreted**: false is the answer for a missed beat, for a lockout, for a
+     * seat that is not at a node and for a seat outside the system, deliberately — one shape, one
+     * kind, one message per return. A screen that turned false into *you are not at a node* would
+     * have rebuilt the presence detector the single shape exists to prevent.
+     *
+     * Null means this phone has returned no beat the house has answered yet, which is every moment
+     * of the round except the ones inside a containment.
+     */
+    val beatHeld: Boolean? = null,
+    /**
      * **The work the scan opened, as the house answered it.**
      *
-     * `Effect.ScanAnswered` carries a `SubroutineInstance` and nothing routes it here yet — that is
-     * the scan flow's, and this field is the place it lands rather than a claim that it has. Null
-     * means the house has said nothing, and the port's drawn row stands in: [egressType]'s
-     * arrangement, and for the same reason.
+     * `Effect.ScanAnswered` carries a `SubroutineInstance` and **this is where it lands** — the
+     * house names the work its own scan opened, and the roster turns the kind into the row the
+     * caught scan draws. Null means the house has said nothing, and the port's drawn row stands in:
+     * [egressType]'s arrangement, and for the same reason.
      *
      * **It is the seam a screen is tested through.** Three surfaces name the current Subroutine and
-     * one of them — the caught scan — draws something only Sniff has (see [Subroutine.briefing]),
-     * so a bench that could only ever render one Subroutine could only ever render the case where
-     * that something is absent.
+     * one of them — the caught scan — draws that Subroutine's briefing (D-188, [Subroutine.briefing]),
+     * so a bench that could only ever render one Subroutine could only ever render one of the ten
+     * sentences a player reads before the work opens.
      */
     val current: CurrentSubroutine? = null,
     /**
@@ -369,6 +396,29 @@ data class PanelState(
      * Null means the house has said nothing, and the screen's own drawn fraction stands in.
      */
     val integrityPercent: Int? = null,
+    /**
+     * **How many seats the round has, as the house counted them** — and **nothing draws it.**
+     *
+     * The one number on this class that exists to be a *denominator* and never a display. It
+     * arrives on `Effect.CheckInProgressed`, which is the only message in the game that carries the
+     * seat total (`expected`, and D-104's gate counts every living player and every out player), and
+     * the one thing that reads it is the conversion of `Effect.SubroutineProgressed`'s raw count
+     * into the percentage the couch's meter is drawn from — see `FlowModel.houseSaid`.
+     *
+     * ### It is not a copy of `MeetingCounts.seats`, and the difference is the whole point
+     *
+     * That one has a **fixture default of six**, because a meeting screen with no denominator is a
+     * screen that cannot be drawn on a bench. This one is null until the house has spoken, so a
+     * phone that has never been told a seat total cannot compute a percentage against a number
+     * somebody typed into a fixture — it leaves the bar where it is instead, which is the
+     * fail-closed direction. Both are written from the same branch, so they cannot drift.
+     *
+     * **A total may never be printed** (D-103, D-153). `seats × METER_PER_SEAT` is public
+     * arithmetic, so a meter drawn as `28 / 42` hands back the Insider count by division, in a game
+     * played two to three rounds an evening (D-157). `MeterDisclosureTest` reads the panels; this
+     * field is fed to `Balance.integrityPercent` and to nothing else.
+     */
+    val seats: Int? = null,
     /**
      * **Every seat in the round, by the name its owner asked for, in seat order** (D-115).
      *
@@ -1158,6 +1208,12 @@ class PanelVals(val state: PanelState) {
      */
     val egressRunning: Boolean = state.egressRunning
 
+    /** Whether the house has stopped the Egress clock (D-133). See [PanelState.egressHeld]. */
+    val egressHeld: Boolean = state.egressHeld
+
+    /** This phone's own last beat, as the house answered it. See [PanelState.beatHeld]. */
+    val beatHeld: Boolean? = state.beatHeld
+
     /**
      * **What is standing over this screen, with the Egress alert naming this round's rooms.**
      *
@@ -1261,10 +1317,14 @@ class PanelVals(val state: PanelState) {
      * a total printed here hands the one reader with nothing else to do all evening the Insider
      * count by division, and the app is played two to three rounds in an evening (D-157).
      *
-     * **Computed from [outsideLit] against [METER_SEGMENTS], never written beside it.** The screen
-     * used to draw a literal `66%` over a bar lit to 21 of 32, which is 65 — two hand-maintained
-     * facts about one meter, disagreeing, in the one place the meter is watched closely. That is
-     * the exact fault [integrityPercent] was extracted to end, one screen further out.
+     * **The house's own number where there is one, and the bar's fraction where there is not** —
+     * [integrityPercent]'s arrangement exactly, and it took a second correction to get here. The
+     * screen first drew a literal `66%` over a bar lit to 21 of 32, which is 65: two hand-maintained
+     * facts about one meter, disagreeing, in the one place the meter is watched closely. Computing
+     * it from [outsideLit] fixed that and left a quieter version of the same fault — **the figure
+     * was a round trip through thirty-two segments**, so a house that said 70% got a couch printing
+     * 68%, and every value that happened to land on a segment boundary hid it. The number the house
+     * sent is the fact; the bar is a rendering of it, and a rendering may not be the source.
      *
      * ### It really is live now, which is what E-C2-2 was open about
      *
@@ -1273,7 +1333,8 @@ class PanelVals(val state: PanelState) {
      * promises it live, and the living are told the same number once a shift instead. What still
      * has no sender is the bar below it; see [egressPercent].
      */
-    val outsidePercent: String = "${outsideLit * 100 / METER_SEGMENTS}%"
+    val outsidePercent: String = state.integrityPercent?.let { "$it%" }
+        ?: "${outsideLit * 100 / METER_SEGMENTS}%"
 
     /**
      * **The real Egress number, which no living player of either role may see** (`gdd.md:1014`).
@@ -1669,14 +1730,36 @@ enum class LightSignature(val rung: Int) { Dark(1), Medium(2), Bright(3) }
 /**
  * The Subroutine a player is currently sent to.
  *
- * A fixture today. In play it arrives at the effect boundary like everything else.
+ * **Built from `Effect.ScanAnswered` and the work order the house already sent** — see
+ * `FlowModel.houseSaid`, where the scan's answer names a line of that order and the two are joined
+ * by the index the house put on both. The port's own row stands in while no house has spoken.
  */
 data class CurrentSubroutine(
     /** Which of the design's ten. The name and the light signature are both its. */
     val subroutine: Subroutine,
-    /** What this instance asks for, shown once you are at the marker. */
-    val instruction: String,
-    val room: String,
+    /**
+     * What this instance asks for, in the house's own voice — *RESYNC THE KEEPALIVE*.
+     *
+     * ⚠️ **Nullable, because nothing on the wire carries it.** `Effect.ScanAnswered` names the
+     * entry, the kind and the parameters, and `OrderLine.Known` names the work and where it is;
+     * neither carries a sentence. So a real scan draws no headline and the caught scan is one line
+     * shorter, which is the fail-closed direction — an absent sentence is noticed, and the fixture's
+     * sentence printed over somebody else's Subroutine is a lie a player cannot check.
+     *
+     * **What to do is on [Subroutine.briefing] and is never null** (D-188), so nothing a player
+     * needs is missing when this is. Whether the flavour line wants a carrier or belongs on the
+     * client's roster beside the label is a copy call nobody has made. Escalated, not guessed.
+     */
+    val instruction: String?,
+    /**
+     * Which room the card is in, off the order line's own destination.
+     *
+     * Nullable for `OrderLine.Known.at`'s reason, stated one type over: **an empty destination list
+     * is lawful and means the house said nothing**, and a screen draws no room rather than inventing
+     * one — a room name beside work the house chose, in a dark house, is a lie with no way to check
+     * it.
+     */
+    val room: String?,
     val marker: MarkerShape?,
     val index: Int,
     val total: Int,

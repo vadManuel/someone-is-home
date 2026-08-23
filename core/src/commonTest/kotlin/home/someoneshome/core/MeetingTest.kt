@@ -126,6 +126,43 @@ class MeetingTest {
     }
 
     /**
+     * **The caller is told, and told separately** (E-R1-1, ruled 2026-08-23).
+     *
+     * The ring carries `caller` to every living phone and **no client can use it**, because a phone
+     * is never told which seat it is. So the house sends a second message addressed to the calling
+     * seat alone, and the two together are what put one phone on a different screen from the other
+     * five.
+     *
+     * Three claims, and each is a way this can be built wrong: exactly one is emitted, it names the
+     * seat that called it, and **it comes after the ring** — the ring is what carries the caller's
+     * name and clears that phone's jam, and a caller moved to its own screen first would arrive
+     * there with a header the next message was still on its way to fill.
+     */
+    @Test
+    fun `the calling seat is told it is calling - once and after the ring`() {
+        val walk = Walk(armed()).feed(Event.MeetingCalled(t(), Seat(4), MeetingTrigger.MeetingCard))
+        val effects = walk.drain()
+
+        val calling = effects.filterIsInstance<Effect.MeetingCalling>().single()
+        assertEquals(4, calling.seat.index, "the house told the wrong phone it had called the meeting")
+        assertTrue(
+            effects.indexOfFirst { it is Effect.MeetingOpened } <
+                effects.indexOfFirst { it is Effect.MeetingCalling },
+            "the caller is moved to its own screen before the ring names the caller",
+        )
+
+        // The reported Revoke is the other trigger and it is the same fact: whoever reported it
+        // called this meeting, and their phone says so.
+        val reported = Walk(armed()).revoke(Seat(1), Seat(3))
+        reported.drain()
+        reported.feed(Event.MeetingCalled(t(), Seat(2), MeetingTrigger.RevokeReported(Seat(3))))
+        assertEquals(
+            2, reported.drain().filterIsInstance<Effect.MeetingCalling>().single().seat.index,
+            "a meeting called by reporting a Revoke told nobody they had called it",
+        )
+    }
+
+    /**
      * **D-134: the ring is for the living; a player who is out is told to stand and walk in.**
      *
      * And D-135's long haptic is on the round-state axis: reserved for a **newly** Revoked player,

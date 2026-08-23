@@ -83,6 +83,18 @@ import home.someoneshome.model.SignalGraph
  *   why those four are whole: the grid, the rings, the wiring and the columns are on the screen,
  *   the work is what you do to them, and the only thing the house owns is the verdict.
  *
+ * ### None of them says what to do, and that is D-188 rather than an omission
+ *
+ * Every screen in this file used to carry its instruction across the top — *TAP TO CATCH THE SWEEP
+ * INSIDE THE BAND*, *RETURN THE RHYTHM BY FEEL*. **All nine are gone.** The instruction is read once,
+ * at the caught scan, above BEGIN, where the scan has already lit the player up and the cost is
+ * already paid; a line drawn here is lit pixels for the whole duration of a task rated on how little
+ * it may glow, which makes a dark Subroutine less dark and a bright one longer. The words live on
+ * [Subroutine.briefing], which is total over the roster so that a screen cannot be added without one.
+ *
+ * **A misread costs the attempt and a rescan** (D-110). That is the intended severity: there is one
+ * recovery path in this game and skimming in the dark uses it, exactly as fumbling does.
+ *
  * ### Two of them move, and the motion is arithmetic the house authored
  *
  * Interrupt's sweep and Drift's dot are the only things in this module that move on their own, and
@@ -122,11 +134,6 @@ fun HandshakeScreen(verdict: SubroutineVerdict? = null) {
             verticalArrangement = Arrangement.spacedBy(12.u, Alignment.CenterVertically),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Label(
-                "RETURN THE RHYTHM\nBY FEEL",
-                size = 6.5, color = Amber.Faint, tracking = 0.14, lineHeight = 2.0,
-                align = TextAlign.Center,
-            )
             SequenceCells(entry, lit = Amber.Dim, unlit = Amber.Edge)
             ReturnLine(entry.handedOver, verdict, Amber.Faint)
         }
@@ -174,13 +181,6 @@ fun ReplayScreen(verdict: SubroutineVerdict? = null) {
     val entry = LocalSubroutine.current.replay
     val actions = LocalActions.current
     SubroutineFrame(Subroutine.Replay, ink = Amber.Dim, mark = Amber.Bright) {
-        Label(
-            "TAP THE DOTS BACK\nIN THE ORDER THEY FLASHED",
-            modifier = Modifier.fillMaxWidth(),
-            size = 6.5, color = Amber.Dim, tracking = 0.12, lineHeight = 1.8,
-            align = TextAlign.Center,
-        )
-
         Column(
             Modifier.weight(1f).fillMaxWidth().border(1.u, Amber.Edge).padding(10.u),
             verticalArrangement = Arrangement.spacedBy(10.u, Alignment.CenterVertically),
@@ -252,12 +252,6 @@ fun ParityCheckScreen(verdict: SubroutineVerdict? = null) {
     val actions = LocalActions.current
     val cells = SubroutineModel.PARITY
     SubroutineFrame(Subroutine.ParityCheck, ink = Amber.Dim, mark = Amber.Bright) {
-        Label(
-            "FIND THE BLOCK THAT BREAKS THE PATTERN",
-            modifier = Modifier.fillMaxWidth(),
-            size = 6.5, color = Amber.Dim, tracking = 0.12, align = TextAlign.Center,
-        )
-
         Column(
             Modifier.weight(1f).fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(3.u),
@@ -348,11 +342,6 @@ fun ShortScreen(verdict: SubroutineVerdict? = null) {
             onHeld = { actions.handOverSubroutine(Subroutine.Short) },
             modifier = Modifier.weight(1f).fillMaxWidth().border(1.u, Amber.Edge).padding(10.u),
         ) {
-            Label(
-                "HOLD THIS MANY FINGERS\nUNTIL IT RETURNS",
-                size = 6.5, color = Amber.Faint, tracking = 0.14, lineHeight = 2.0,
-                align = TextAlign.Center,
-            )
             CountRow("ASKS", SubroutineModel.SHORT_FINGERS, Amber.Faint, Amber.Dim)
             CountRow("DOWN", entry.handedOver ?: entry.fingers, Amber.Faint, Amber.Dim)
             ReturnLine(entry.handedOver != null, verdict, Amber.Faint)
@@ -396,12 +385,6 @@ fun JamScreen(verdict: SubroutineVerdict? = null) {
     val rings = LocalSubroutine.current.rings
     val live = entry.handedOver == null
     SubroutineFrame(Subroutine.Jam, ink = Amber.Dim, mark = Amber.Mid) {
-        Label(
-            "TAP UNTIL THE RINGS SIT ON ONE ANOTHER",
-            modifier = Modifier.fillMaxWidth(),
-            size = 6.5, color = Amber.Dim, tracking = 0.12, align = TextAlign.Center,
-        )
-
         Box(
             Modifier.weight(1f).fillMaxWidth().border(1.u, Amber.Edge),
             contentAlignment = Alignment.Center,
@@ -471,13 +454,6 @@ fun SignalTraceScreen(verdict: SubroutineVerdict? = null) {
     val live = entry.handedOver == null
     val wiring = SubroutineModel.TRACE
     SubroutineFrame(Subroutine.SignalTrace, ink = Amber.Dim, mark = Amber.Mid) {
-        Label(
-            "TAP NODE TO NODE\nFROM THE DISC TO THE TARGET",
-            modifier = Modifier.fillMaxWidth(),
-            size = 6.5, color = Amber.Dim, tracking = 0.12, lineHeight = 1.8,
-            align = TextAlign.Center,
-        )
-
         Box(
             Modifier.weight(1f).fillMaxWidth().border(1.u, Amber.Edge),
             contentAlignment = Alignment.Center,
@@ -599,8 +575,9 @@ fun SignalTraceScreen(verdict: SubroutineVerdict? = null) {
  * does not have, and it is the same gap [HandshakeScreen] has.
  *
  * **There is no instruction on this screen and there cannot be one.** *Which group was bigger* is a
- * sentence made of light, and the ruling forbids light until the answer. The instruction has to live
- * on the screen before this one, and that is recorded as owed rather than quietly solved here.
+ * sentence made of light, and the ruling forbids light until the answer. The instruction lives on
+ * the screen before this one — and D-188 has since made that true of the other nine as well, so
+ * this screen is no longer the exception, it is the one that showed where the line belonged.
  */
 @Composable
 fun SniffScreen(verdict: SubroutineVerdict? = null) {
@@ -716,13 +693,6 @@ fun DeallocateScreen(verdict: SubroutineVerdict? = null) {
     val columns = SubroutineModel.DEALLOCATE
     val live = entry.handedOver == null
     SubroutineFrame(Subroutine.Deallocate, ink = Amber.Dim, mark = Amber.Bright) {
-        Label(
-            "TAP A COLUMN TO TAKE A DOT OFF IT\nBRING THEM DOWN TO THE SHORTEST",
-            modifier = Modifier.fillMaxWidth(),
-            size = 6.5, color = Amber.Dim, tracking = 0.12, lineHeight = 1.8,
-            align = TextAlign.Center,
-        )
-
         // **The field is a fixed height and the body is not.** A column area that stretched with
         // the panel would draw the same five dots against a different amount of nothing on every
         // handset, and *how tall is that column* is the entire question — so the field is exactly
@@ -830,13 +800,6 @@ fun InterruptScreen(verdict: SubroutineVerdict? = null) {
     val at = entry.entered.firstOrNull() ?: sweep.at(elapsed)
 
     SubroutineFrame(Subroutine.Interrupt, ink = Amber.Dim, mark = Amber.Mid) {
-        Label(
-            "TAP TO CATCH THE SWEEP\nINSIDE THE BAND",
-            modifier = Modifier.fillMaxWidth(),
-            size = 6.5, color = Amber.Dim, tracking = 0.12, lineHeight = 1.8,
-            align = TextAlign.Center,
-        )
-
         Box(
             Modifier.weight(1f).fillMaxWidth()
                 .border(1.u, if (live) Amber.Dim else Amber.Edge)
@@ -911,13 +874,6 @@ fun DriftScreen(verdict: SubroutineVerdict? = null) {
     val dot = path.at(elapsed)?.takeIf { !path.covered(it) }
 
     SubroutineFrame(Subroutine.Drift, ink = Amber.Dim, mark = Amber.Mid) {
-        Label(
-            "TAP WHERE THE DOT IS\nWHEN THE PHONE BUZZES",
-            modifier = Modifier.fillMaxWidth(),
-            size = 6.5, color = Amber.Dim, tracking = 0.12, lineHeight = 1.8,
-            align = TextAlign.Center,
-        )
-
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
             Box(
                 Modifier.fillMaxWidth().height(LANE_FIELD).border(1.u, Amber.Edge)

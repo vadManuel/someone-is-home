@@ -50,6 +50,17 @@ class Recording(
     }
 
     companion object {
+        // 15: one effect a version 14 build cannot name -- `MeetingCalling`, the per-seat message
+        // that tells the calling phone which of the ringing phones it is (E-R1-1, ruled
+        // 2026-08-23). It is the smallest bump this format has had: one row, one field, no state
+        // row change and nothing removed.
+        //
+        // **It is still a bump, and the reason is the effect row rather than the state.** A version
+        // 14 recording replays into a round where every meeting rang six identical phones and
+        // nobody's screen said they had called it; the events are the same and the effect
+        // transcripts are not, so a differential run across the boundary would report a divergence
+        // that is really a format gap.
+        //
         // 14: STATIC replaced the third Tier-2 ability outright (D-186), and this is the first
         // version bump in this format that is mostly a SUBTRACTION. Version 13's `SpoofFired` is
         // gone and `StaticFired` -- an actor and a tick, and nothing else -- is in its place; two
@@ -136,7 +147,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/14"
+        const val HEADER = "someone-is-home/recording/15"
     }
 }
 

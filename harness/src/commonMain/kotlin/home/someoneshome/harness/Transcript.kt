@@ -256,6 +256,13 @@ object Transcript {
         is Effect.MeetingOpened ->
             "MeetingOpened|caller=${effect.caller.index}|trigger=${trigger(effect.trigger)}" +
                 "|haptic=${effect.haptic}"
+        // The seat, because the recording is the authority's artifact and the authority is what
+        // addressed it. The WIRE member has no field -- see Effect.MeetingCalling -- and that is the
+        // one place these two deliberately differ: a client cannot be told which seat it is, and a
+        // recording that could not say which seat called the meeting would be a recording that
+        // could not replay one.
+        is Effect.MeetingCalling ->
+            "MeetingCalling|seat=${effect.seat.index}"
         is Effect.StandAndWalkIn ->
             "StandAndWalkIn|seat=${effect.seat.index}|haptic=${effect.haptic}"
         is Effect.CheckInProgressed ->

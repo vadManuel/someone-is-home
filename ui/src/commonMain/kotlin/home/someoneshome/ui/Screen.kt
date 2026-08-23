@@ -2,8 +2,13 @@ package home.someoneshome.ui
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
 
 /**
  * The device, showing one screen.
@@ -70,9 +75,19 @@ fun Screen(
      * that is *supposed* to have yesterday's news on it.
      */
     notifications: NotificationsModel = remember { NotificationsModel() },
+    /**
+     * **The lamp — the light the house set, and the Surge's slam over the top of it.**
+     *
+     * Defaulted and `remember`ed for the reason the six above are, and it is the one of the seven
+     * that is deliberately **not** part of [PanelState]: a lamp change must invalidate draw and
+     * nothing else (rule 7), so it is two `MutableIntState`s read inside draw lambdas. See
+     * [LampState]. In the app [FlowHost] passes the one the round is writing to.
+     */
+    lamp: LampState = remember { LampState() },
 ) {
     val vals = PanelVals(state)
     CompositionLocalProvider(
+        LocalLamp provides lamp,
         LocalActions provides actions,
         LocalEditor provides editor,
         LocalHomes provides homes,
@@ -88,6 +103,12 @@ fun Screen(
         // everything around it drops. [LockScreen] implements the same ruling on its own ground.
         // Dimming here as well would darken the one bright thing and dim the house twice.
         val arrival = vals.arrival
+        // **THE LAMP IS OVER EVERYTHING AND IS ALWAYS DRAWN** (rule 5, rule 7, D-182). Unset it is
+        // fully transparent, so this costs one `drawRect` of nothing on every screen in the game
+        // and no branch in composition; during a Surge it is the whole screen at the luminance the
+        // rules sent. Being unconditional is the point — a lamp that appeared and disappeared from
+        // the tree would be a recomposition at the one moment there must not be one.
+        Box(Modifier.fillMaxSize()) {
         PanelFrame(
             vals,
             overlay = bannerFor(vals),
@@ -184,8 +205,24 @@ fun Screen(
                 ScreenId.WinResidents -> WinResidentsScreen(vals)
             }
         }
+            Lamp(lamp.slam)
+        }
     }
 }
+
+/**
+ * **The lamp, reachable from a screen without being handed down through every one of them.**
+ *
+ * `static` for the same reason the other seven locals are: it is set once per [Screen] and never
+ * varies within a composition, so nothing that reads it takes a recomposition dependency on the
+ * provider. That matters more here than anywhere else — the whole point of [LampState] is that a
+ * light change costs a draw and nothing above it.
+ *
+ * The default is a fresh one, so a composable rendered outside [Screen] draws at whatever its own
+ * screen decided rather than crashing. A lamp nobody has set is [LampState.UNSET], which the
+ * surfaces read as *the house has said nothing* and never as *the house said dark*.
+ */
+val LocalLamp: ProvidableCompositionLocal<LampState> = staticCompositionLocalOf { LampState() }
 
 /**
  * The thing on top, for the screens that have one.

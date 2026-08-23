@@ -71,6 +71,7 @@ class RoundWireTest {
         Effect.PresenceChanged(Seat(3), at = MarkerId("M-1"), open = true),
         Effect.OpeningMessage(Seat(3), Haptic.Short),
         Effect.MeetingOpened(Seat(3), MeetingTrigger.MeetingCard, Haptic.Long),
+        Effect.MeetingCalling(Seat(3)),
         Effect.StandAndWalkIn(Seat(3), Haptic.Long),
         Effect.CheckInProgressed(present = 4, expected = 6),
         Effect.MeetingPhaseOpened(MeetingPhase.Vote, voteWindowSeconds = 45, haptic = Haptic.Short),
@@ -176,6 +177,10 @@ class RoundWireTest {
         bothWays { Effect.StandAndWalkIn(it, Haptic.Long) }
         bothWays { Effect.VoteHeld(it, selection = Seat(2), locked = true) }
         bothWays { Effect.RestrainedTakeover(it, Haptic.Long) }
+        // **E-R1-1's whole safety.** The house says *you are the one calling* by choosing a socket;
+        // if the seat rode inside the payload as well, the routing that answers the escalation would
+        // have handed every phone the number the wire is built never to hand it.
+        bothWays { Effect.MeetingCalling(it) }
         bothWays { Effect.EgressOpened(it, EgressType.Beacon, emptyList(), 1, Haptic.Long) }
         bothWays { Effect.SyncPulseAnswered(it, held = true) }
         bothWays { Effect.RoundEnded(it, Winner.Insiders, WinRoute.Parity, Haptic.Short) }

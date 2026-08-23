@@ -1,6 +1,8 @@
 package home.someoneshome.ui
 
 import androidx.compose.ui.test.ExperimentalTestApi
+import home.someoneshome.model.Balance
+import home.someoneshome.model.protocol.RoundMessage
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.runDesktopComposeUiTest
@@ -112,6 +114,43 @@ class MeterDisclosureTest {
                 (percent * PanelVals.METER_SEGMENTS + 50) / 100, vals.integrityLit,
                 "the bar is lit at a fraction the printed figure does not describe",
             )
+        }
+    }
+
+    /**
+     * **The ledger's raw count driven all the way to the couch's glass, and no total on it.**
+     *
+     * `Effect.SubroutineProgressed` carries `remaining` — a real count, of a real total, to the one
+     * audience with all evening to divide it (D-134, D-153). Every other test in this file starts
+     * from a percentage already on [PanelState]; this one starts from the count the house actually
+     * sends and goes through `houseSaid`, because the routing is the step where a build would be
+     * tempted to put the number on the screen it arrived for.
+     *
+     * The seat total goes in first, because without it the conversion has no denominator and the
+     * bar does not move — which is asserted in `RoutingTest` and is the reason this test has to
+     * send the gate's count before the ledger's.
+     */
+    @Test
+    fun theCouchsMeterMovesOnTheLedgersCountAndStillPrintsNoTotal() {
+        for ((remaining, seats) in listOf(42 to 6, 21 to 6, 0 to 6, 49 to 7)) {
+            val model = FlowModel(PanelState(screen = ScreenId.Ghost3, outBy = OutBy.Revoked))
+            model.houseSaid(RoundMessage.CheckInProgressed(present = 1, expected = seats))
+            model.houseSaid(RoundMessage.SubroutineProgressed(remaining = remaining))
+            val percent = Balance.integrityPercent(remaining, seats)
+
+            runDesktopComposeUiTest {
+                setContent { DeviceCanvas(insets = PanelInsets()) { Screen(model.state) } }
+                assertTrue(
+                    onAllNodesWithText("$percent%", substring = true)
+                        .fetchSemanticsNodes().isNotEmpty(),
+                    "the couch's meter did not move to $percent% on a ledger count of $remaining",
+                )
+                for (total in listOf(remaining, Balance.meterTotal(seats), 32)) {
+                    for (form in listOf("/$total", "/ $total", " $total ")) {
+                        onAllNodesWithText(form, substring = true).assertCountEquals(0)
+                    }
+                }
+            }
         }
     }
 

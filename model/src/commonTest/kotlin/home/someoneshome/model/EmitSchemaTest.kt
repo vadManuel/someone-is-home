@@ -594,6 +594,41 @@ class EmitSchemaTest {
     }
 
     /**
+     * **The caller's message reaches exactly one phone, and it is the caller's** (E-R1-1).
+     *
+     * The addressing is the whole message — there is nothing on the wire member to read — so this
+     * is the assertion that answers the escalation. A widening would tell every phone in the house
+     * it had called the meeting; a narrowing to nobody would put the caller back on the ring with
+     * everybody else, which is the state the escalation was raised about.
+     *
+     * **And it is refused to a seat outside the system**, which is not a disclosure decision so much
+     * as a statement about who can call a meeting: you walk to a card or you report a Revoke, and
+     * the couch does neither.
+     */
+    @Test
+    fun `the caller's own message reaches exactly the calling seat`() {
+        val state = live()
+        assertEquals(
+            listOf(Seat(3)),
+            EmitSchema.deliveries(Effect.MeetingCalling(Seat(3)), state).map { it.seat },
+            "the house told the wrong number of phones that they had called the meeting",
+        )
+        assertEquals(
+            listOf(Seat(0)),
+            EmitSchema.deliveries(Effect.MeetingCalling(Seat(0)), state).map { it.seat },
+            "the addressing does not follow the seat on the effect",
+        )
+        assertEquals(
+            emptyList(),
+            EmitSchema.deliveries(
+                Effect.MeetingCalling(Seat(3)),
+                state.copy(restrained = listOf(Seat(3))),
+            ),
+            "a seat outside the system was told it had called a meeting",
+        )
+    }
+
+    /**
      * A Restrain puts a seat in the out classes, by its own list.
      *
      * The gap [RoundState.Out] used to document — *nothing in GameState stores a restrained

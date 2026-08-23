@@ -147,6 +147,11 @@ internal fun Effect.ringing(): Boolean = when (this) {
     // somebody moved. D-135 closes the long haptic to five events and this is not one of them; the
     // announcement is what the surfaces look like.
     is Effect.StaticOpened,
+    // **The caller's own screen change, and it must not ring on top of the ring** (E-R1-1). The
+    // ring is `MeetingOpened`'s and this phone already received it; a phone that rang twice for one
+    // meeting would be the caller, audible through a pocket, in a house where five other phones are
+    // ringing once.
+    is Effect.MeetingCalling,
     -> false
 }
 
@@ -240,6 +245,10 @@ internal fun Effect.haptic(): Haptic? = when (this) {
     is Effect.StaticOpened -> null
     // The reveal, on the ending screen RoundEnded already buzzed for. One ending, one buzz.
     is Effect.InsidersRevealed -> null
+    // **Silent, and the effect has no haptic field to be silent with** (E-R1-1). The ring buzzes on
+    // this phone like every other; one phone buzzing differently from the rest is the caller named
+    // by hardware, at the one moment the design already made public by making them walk to the card.
+    is Effect.MeetingCalling -> null
 }
 
 /**
@@ -272,7 +281,7 @@ internal fun RoundMessage.ringing(): Boolean = when (this) {
     is RoundMessage.VoteSelectionShown, is RoundMessage.MeetingResolved,
     is RoundMessage.SyncPulseAnswered, is RoundMessage.InsidersRevealed,
     is RoundMessage.Surged, is RoundMessage.IsolateTargetsOffered,
-    is RoundMessage.StaticOpened,
+    is RoundMessage.StaticOpened, is RoundMessage.MeetingCalling,
     -> false
 }
 
@@ -333,4 +342,5 @@ internal fun RoundMessage.haptic(): Haptic? = when (this) {
     is RoundMessage.IsolateTargetsOffered -> null
     is RoundMessage.StaticOpened -> null
     is RoundMessage.InsidersRevealed -> null
+    is RoundMessage.MeetingCalling -> null
 }

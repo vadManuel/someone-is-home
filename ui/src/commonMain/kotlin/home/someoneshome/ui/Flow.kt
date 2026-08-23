@@ -1,5 +1,9 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.SubroutineInstance
+import home.someoneshome.model.OrderLine
+import home.someoneshome.model.MarkerShapes
+import home.someoneshome.model.Balance
 import home.someoneshome.model.CardPayload
 import home.someoneshome.model.EmitSchema
 import home.someoneshome.model.MarkerId
@@ -242,6 +246,21 @@ data class AutoAdvance(val to: ScreenId, val afterMillis: Int, val why: String)
  * forever. It is the strongest thing this module can say about the authority without importing it.
  */
 data class HousePush(val to: ScreenId, val on: MessageKind, val why: String)
+
+/**
+ * **The Surge this phone is inside — the two luminances the rules sent, and which Surge it is.**
+ *
+ * A key for [FlowHost]'s sequence rather than something a screen reads: [FlowModel.surge] is not
+ * drawn anywhere, and the light itself lives in [LampState] where no recomposition can be between
+ * it and the glass (rule 7).
+ *
+ * **[nth] exists so that two identical Surges are two Surges.** `Effect.Surged` carries the same
+ * peak and the same black every time — they are constants in the rules — so without a counter a
+ * second Surge landing during the first one's five seconds would be an equal value, would not
+ * restart the `LaunchedEffect`, and the phone would come back on the first Surge's clock while
+ * still holding the second one's dark.
+ */
+data class SurgeSlam(val peak: Int, val black: Int, val nth: Int)
 
 object Flow {
 
@@ -761,6 +780,31 @@ class FlowModel(
         private set
 
     /**
+     * **The lamp, and it is deliberately not a field of [state]** (rule 7, D-182).
+     *
+     * `LampSet` and `Surged` both land here rather than on [PanelState], because a `copy` is a
+     * recomposition and the lamp must go dark in the same frame as phone contact. Written straight
+     * through by [houseSaid], read only inside a draw lambda. See [LampState].
+     */
+    val lamp: LampState = LampState()
+
+    /**
+     * **The Surge this phone is inside, or null** (D-182).
+     *
+     * The five seconds have to be *run* — bright, then dark, then the Boot render — and running
+     * them needs a clock, which `ui` has exactly one honest source of: a `LaunchedEffect` in
+     * [FlowHost], keyed on this. So this is the key rather than a copy of the light: the two
+     * luminances are the ones the rules chose and they are on the effect, and [FlowHost] hands each
+     * of them to [lamp] in turn. **Nothing draws this field.**
+     *
+     * A second Surge arriving mid-sequence restarts the sequence on the new one, because it is a
+     * new key — which is the honest picture of a phone surged twice in five seconds, and is
+     * `staticJam`'s arrangement one ability over.
+     */
+    var surge: SurgeSlam? by mutableStateOf(null)
+        private set
+
+    /**
      * Where the player came from, most recent last.
      *
      * **Capped.** A round is twenty-five minutes of tapping around a springboard, and an
@@ -838,6 +882,79 @@ class FlowModel(
     private fun arrive(next: PanelState) {
         if (next.screen != state.screen && next.screen in MeetingModel.STARTS) meeting.meetingBegan()
         state = next
+    }
+
+    // ---- The Surge, five seconds of it (D-182) ---------------------------------------------------
+
+    /**
+     * **A Surge landed on this phone: the light goes to full in this call** (D-182).
+     *
+     * The slam is written straight to [lamp] here rather than after a frame, because the design's
+     * word for it is *instantaneous and loud* and a state field would put a recomposition between
+     * the house's word and the light (rule 7). What [FlowHost] then runs is the rest of the five
+     * seconds — dark, the Boot render, and the phone coming back.
+     *
+     * **Both luminances come off the effect** and neither is chosen here. Rule 5: the rules authored
+     * the light, the device performs it.
+     */
+    fun surged(peak: Int, black: Int) {
+        lamp.slamTo(peak)
+        surge = SurgeSlam(peak = peak, black = black, nth = (surge?.nth ?: 0) + 1)
+    }
+
+    /**
+     * Phase two: **the light goes dark.** A second and a half after the slam, per D-182's table.
+     *
+     * Checked against the Surge currently running rather than assumed, exactly as [staticLapsed]
+     * checks its jam: a second Surge arriving mid-sequence must not have its bright phase cut short
+     * by the first one's timer.
+     */
+    fun surgeDarkened(slam: SurgeSlam) {
+        if (surge == slam) lamp.slamTo(slam.black)
+    }
+
+    /**
+     * Phase three: **the phone comes back up, and the work in your hands is gone** (D-182).
+     *
+     * The lamp is handed back — what is underneath is the Boot screen, drawn at whatever
+     * [LampState.authorised] the house last sent, which is the design's *returns to its last
+     * authorised `LampSet`* rather than to a value this module invented.
+     *
+     * **The open Subroutine instance is lost here**, which is the ruling's second half and not an
+     * accident of navigation. `gdd.md:594`'s *interruptible — aborts cleanly with unambiguous
+     * progress state* is satisfied and the state is **gone**: preserving progress across a Surge
+     * would make the attack survivable by standing still, and it would need a resume path, which is
+     * a second way into a Subroutine and the one thing D-110 spent a ruling closing. One attempt per
+     * scan; the walk back is the cost, and a Surge buys the attacker that walk.
+     *
+     * The Boot render is the **cold-start one, unmodified**. A bespoke *you have been surged* screen
+     * would be a caption on the event, readable by the person it happened to and by anybody glancing
+     * over their shoulder — and a surged phone and a phone that genuinely crashed should be the same
+     * picture. Nothing new is drawn, so there is nothing new to keep in parity.
+     */
+    fun surgeRebooted(slam: SurgeSlam) {
+        if (surge != slam) return
+        lamp.slamTo(null)
+        subroutines.beganAgain()
+        subroutines.opened(null)
+        push(ScreenId.Boot)
+    }
+
+    /**
+     * **Five seconds are up and the phone is a phone again.**
+     *
+     * It lands on the springboard rather than walking the cold-start line the Boot screen normally
+     * falls through to (`Flow.autoAdvance`): a phone that came back from a Surge asking for
+     * permissions would be a phone that lost its round, and the round is still running. **The
+     * springboard is where a rescan starts**, which is what the lost instance now requires.
+     *
+     * ⚠️ The landing screen is the build's and not the ruling's — D-182 sizes the downtime and says
+     * what it costs, and does not say which screen the phone comes back on. Flagged.
+     */
+    fun surgeEnded(slam: SurgeSlam) {
+        if (surge != slam) return
+        surge = null
+        push(ScreenId.Home)
     }
 
     /**
@@ -1354,12 +1471,18 @@ class FlowModel(
      */
     fun houseSaid(message: RoundMessage) {
         when (message) {
-            // **The lamp is not on [PanelState]** — it is `ui/Lamp.kt`'s, drawn from the effect
-            // rather than from a copy of it, so that no field here can be stale at the one moment
+            // **The lamp is not on [PanelState]** — it is `ui/Lamp.kt`'s, written from the effect
+            // rather than copied into a field, so that nothing here can be stale at the one moment
             // the whole anonymity guarantee rests on. Routing it through a state field would put an
             // extra frame between phone contact and the light going dark, and rule 7 says that frame is
             // not a dropped frame, it is an un-anonymised revoke.
-            is RoundMessage.LampSet -> Unit
+            //
+            // **What reads it is the lock screen** (the owner's routing table): *locked IS the
+            // lamp, and the house sets the level, not you.* `LockScreen` draws its amber ground
+            // inside a draw lambda off [LampState.authorised], so a level arriving costs one draw
+            // invalidation and no recomposition — which is the same path a blackout takes, on
+            // purpose, because the blackout is the one that must not miss.
+            is RoundMessage.LampSet -> lamp.houseSet(message.luminance)
 
             // Input echo already lit this phone's own tile (D-141); the house's answer confirms the
             // cooldown, and the cooldown widget has no field here yet. E3's work. **It is the only
@@ -1367,17 +1490,29 @@ class FlowModel(
             // field here would be the first actor-side feedback in the game.
             is RoundMessage.AbilityFired -> Unit
 
-            // **The Surge landing on THIS phone, and it has no field here on purpose.** The lamp is
-            // `ui/Lamp.kt`'s, drawn from the effect rather than from a copy of it — `LampSet`'s
-            // argument three branches up, and it is sharper for this one: routing a slam through a
-            // state field would put an extra frame between the house's word and the light, on the
-            // one effect whose whole point is that it is instantaneous and loud.
+            // **THE SURGE LANDING ON THIS PHONE, and it is five seconds of the phone malfunctioning**
+            // (D-182: 1.5s at full, 1.0s black, 2.5s of the Boot render, no input at any point, and
+            // the open Subroutine instance lost).
             //
-            // ⚠️ **The sound has no route either, and it has nothing to route TO**: `Speaker` is a
-            // stub for the device pass and every actual of it is silent. So today a Surge arrives,
-            // is counted, and nothing happens — which is the honest state of an ability whose one
-            // observable half needs a decision taken with two phones in a dark room. Flagged.
-            is RoundMessage.Surged -> Unit
+            // **The light goes to full in this call and not a frame later.** It has no field on
+            // [PanelState] and must not acquire one — `LampSet`'s argument three branches up, and
+            // sharper here: a state field would put a recomposition between the house's word and
+            // the glass, on the one effect whose whole point is that it is instantaneous and loud
+            // (rule 7). Both luminances are the **rules'** (rule 5); nothing here picks a value and
+            // nothing here fades between two.
+            //
+            // The rest of the sequence needs a clock, which is [FlowHost]'s — see [surged], and
+            // [SurgeSlam] for why two identical Surges have to be two different keys.
+            //
+            // **Five seconds is the ability.** `gdd.md:342` calls the Surge a commitment rather than
+            // a tool; the half that was never sized was how long the victim stays out of the game. A
+            // one-second flare is a startle. Five is a person standing in the dark holding a defunct
+            // rectangle while everybody in the building walks toward the light they just saw.
+            //
+            // ⚠️ **The sound still has no route and nothing to route TO**: `Speaker` is a stub for
+            // the device pass and every actual of it is silent. The loudest half of the loudest
+            // ability in the game is a decision taken with two phones in a dark room. Flagged.
+            is RoundMessage.Surged -> surged(peak = message.peak, black = message.black)
 
             // **The Isolate picker's list, straight onto the panel.** Copied and never filtered: the
             // Egress-node exclusion is the house's (D-150) and arrives as a shorter list, and a
@@ -1402,10 +1537,36 @@ class FlowModel(
                 verdict = if (message.accepted) SubroutineVerdict.Accepted else SubroutineVerdict.Rejected,
             )
 
-            // The ledger's raw count, to the out. **Nothing draws it and nothing should**: the bar
-            // and the figure are both computed from [PanelState.integrityPercent] so that they are
-            // one value rather than two that agree by hand (D-103, and revision 21's `14 / 32`).
-            is RoundMessage.SubroutineProgressed -> Unit
+            // **The ledger's raw count, to the out — turned into a percentage here and drawn as
+            // nothing else** (the owner's routing table; D-103, D-153).
+            //
+            // The count itself never reaches a screen and must not: `seats × METER_PER_SEAT` is
+            // public arithmetic, so a meter drawn as `28 / 42` hands the one reader with nothing
+            // else to do all evening the Insider count by division. What lands is
+            // [PanelState.integrityPercent] — the same field `SystemIntegrityLive` writes, so the
+            // couch's bar and the figure beside it stay one value rather than two agreeing by hand
+            // (revision 21's `14 / 32`, and C2's `66%` over a bar lit to 21).
+            //
+            // **The arithmetic is `Balance.integrityPercent` and there is nowhere else it may
+            // live.** `model` holds it, `ui` may see `model`, and the alternative — dividing here —
+            // would be a second copy of D-103's rule that agreed with the first until somebody
+            // moved one.
+            //
+            // **The denominator is the house's or there is none.** [PanelState.seats] is null until
+            // `CheckInProgressed` has said how many seats the round has, and a phone that has not
+            // been told **leaves the bar where it is**. That is the fail-closed direction: a meter
+            // that moved against a guessed denominator would be a wrong number that looked exactly
+            // like a right one, on the one screen a player who is out watches for a whole round.
+            //
+            // ⚠️ The seat total only arrives at the first meeting, so a phone put outside the system
+            // before one has a bar that does not move until then. It is a carrier gap rather than a
+            // routing one — no message before `CheckInProgressed` carries a seat count — and it is
+            // flagged rather than closed by inventing one.
+            is RoundMessage.SubroutineProgressed -> state.seats?.let { seats ->
+                state = state.copy(
+                    integrityPercent = Balance.integrityPercent(message.remaining, seats),
+                )
+            }
 
             // One field for both meter kinds, deliberately. *Whether it moves live or once a
             // meeting is not this field's business* — a phone draws whatever it was last told, and
@@ -1429,11 +1590,36 @@ class FlowModel(
 
             is RoundMessage.WorkOrderIssued -> state = state.copy(order = message.lines)
 
-            // The scan's answer opens a Subroutine, and *which* screen that is comes off the
-            // roster — [beginSubroutine]'s job, driven by the scanner. Wiring the house's answer to
-            // it is the scan flow's, not this method's: a push that opened a screen here as well
-            // would be two routes to one Subroutine and one of them untested.
-            is RoundMessage.ScanAnswered -> Unit
+            // **THE SCAN'S ANSWER, and it lands on the caught scan rather than in a Subroutine**
+            // (the owner's routing table; D-124, D-188). One flow and one route: scan → caught, with
+            // the briefing on it → BEGIN → the work.
+            //
+            // **It deliberately does not open the Subroutine itself.** Which screen a card holds is
+            // [beginSubroutine]'s answer off the roster, driven by the player's own BEGIN; a push
+            // that opened the work here as well would be two routes to one Subroutine with one of
+            // them untested — and it would take away the last screen a player can still say NOT
+            // THIS ONE on, in a game where a scan can catch the wrong card in the dark.
+            //
+            // **The null is the refusal and it has its own screen** (D-124). A registered card the
+            // house has nothing for *you* at is this message with nothing in it, and it is answered
+            // by NOTHING FOR YOU HERE. Unregistered paper never reaches the rules at all and is
+            // answered by the client's own alert — collapsing the two would let a Resident sweeping
+            // cards separate *registered but not mine* from *not registered at all*.
+            //
+            // **The row is joined here rather than sent twice.** The house names the entry, the kind
+            // and the parameters; the work order it already sent names where that entry is and
+            // whether it is done. Both are this seat's own and both came from the house, and the
+            // index the join is made on is the house's too — so this is a copy of two pushed facts
+            // and not a derivation. An answer naming an entry no order line holds moves nothing,
+            // which is fail-closed: the phone stays on the scan rather than opening a card the
+            // house cannot place.
+            is RoundMessage.ScanAnswered -> when (val opened = message.opened) {
+                null -> push(ScreenId.ScanBad)
+                else -> currentFrom(opened)?.let { current ->
+                    state = state.copy(current = current)
+                    push(ScreenId.ScanCaught)
+                }
+            }
 
             // **Permitted to nobody, so it cannot arrive** — the presence plane has no allowlist row
             // (D-111). Named here for the reason it is named in `EmitSchema.kindOf`: naming grants
@@ -1466,15 +1652,11 @@ class FlowModel(
             // instead (D-134) and never this, which is the allowlist's doing rather than a branch
             // here: *the ringing call is for the living.*
             //
-            // ⚠️ **The calling seat is NOT routed to `Calling`, and it cannot be from here.** The
-            // owner's table asks for it and the wire cannot carry it: `caller` is a `Seat`, and
-            // **this phone does not know which seat it is** — `LobbyBody.Standing` carries counts
-            // and names and never *you are seat three*, deliberately. So the comparison that would
-            // decide it has one operand. Escalated rather than guessed: the two shapes that would
-            // close it are a per-seat `MeetingOpened` carrying *you called this* (which is
-            // `EgressOpened`'s existing arrangement) or teaching a phone its own seat, and both are
-            // changes the routing table does not name. The caller lands on `Call` with everybody
-            // else in the meantime, which is one header wrong on one phone and not a leak.
+            // **The calling seat is routed by `MeetingCalling`, four branches down** (E-R1-1). This
+            // branch deliberately does not try: `caller` is a `Seat` and this phone does not know
+            // which seat it is, so the comparison has one operand and always will. The caller lands
+            // here with everybody else, gets its name and its jam cleared like everybody else, and
+            // is then moved on by a message addressed to it alone.
             is RoundMessage.MeetingOpened -> {
                 // The caller's name before the screen, so the ring is drawn with it on the first
                 // frame rather than one recomposition later. D-121: the meeting has an author.
@@ -1493,6 +1675,22 @@ class FlowModel(
                     },
                 )
             }
+
+            // **You called it — the one phone in the house that gets its own screen** (E-R1-1, the
+            // owner's 2026-08-23 ruling). It arrives immediately after `MeetingOpened`, so this
+            // phone has already been rung, has already been given the caller's name and has already
+            // dropped its jam; what this does is move it off the ring everybody else is on.
+            //
+            // **It is keyed on nothing and carries nothing**, which is `RestrainedTakeover`'s shape
+            // and its argument: the message means *you*, and the way it means *you* is that the
+            // house sent it down this socket and no other. There is nothing on it a phone could
+            // read a seat number out of, so routing it cannot become a phone knowing which seat it
+            // is — the thing the wire is shaped to prevent.
+            //
+            // `Calling` already has its row in `Flow.housePushes` (the room filled before your own
+            // ring stopped) and its six-second fall-through in `autoAdvance`, so nothing else about
+            // the meeting changes for this seat.
+            is RoundMessage.MeetingCalling -> push(ScreenId.Calling)
 
             // **The other half of the same call, and it is what closes E-P3-2** (D-104, D-134).
             //
@@ -1517,8 +1715,17 @@ class FlowModel(
             // `4 OF 6 CHECKED IN` was a constant on a phone in a house where six people were
             // standing in the hall. The count is the house's and moves only here — see
             // `MeetingModel.counts`, whose setter is private for exactly this reason.
-            is RoundMessage.CheckInProgressed ->
+            //
+            // **`expected` is also the round's seat total, and it is written twice on purpose.**
+            // The meeting model gets it as the gate's denominator; [PanelState.seats] gets it as
+            // *the number the house counts against*, which is what turns `SubroutineProgressed`'s
+            // raw count into a percentage. One branch writes both, so they cannot drift — and the
+            // second is nullable where the first has a fixture default, which is the difference
+            // that stops a bench's six becoming a real round's denominator.
+            is RoundMessage.CheckInProgressed -> {
                 meeting.houseCounted(present = message.present, seats = message.expected)
+                state = state.copy(seats = message.expected)
+            }
 
             // **`expected` is the LIVING and not the seats**, which is why it is not written to the
             // same total the gate's is: readiness is the living's and presence is everybody's
@@ -1611,12 +1818,30 @@ class FlowModel(
                 egressRunning = true,
             )
 
-            // The countdown stopping and starting again. [PanelState.secondsLeft] is seconds and
-            // this is ticks; converting one to the other on the device would be `ui` holding an
-            // opinion about the house's clock. E7's, with the tick rate.
-            is RoundMessage.EgressHeld -> Unit
+            // **The countdown stopping and starting again, on the containment screen** (D-133).
+            //
+            // **`running` lands and `remaining` does not**, and the split is where the line already
+            // was. Whether the number is moving is a fact about the house that the widget has to be
+            // able to draw — a meeting called by reporting a Revoke pauses the Egress, and a
+            // countdown that went on falling through a meeting the whole house had stopped for
+            // would be the one screen contradicting the room. The *number* is in ticks, and
+            // [PanelState.secondsLeft] is in seconds: `Balance` says outright that a screen dividing
+            // by the tick rate is a screen holding an opinion about it, so the conversion is not
+            // `ui`'s to make. ⚠️ Flagged, and it is E7's with the tick rate — the same gap
+            // `egressPercent` has, one field over.
+            is RoundMessage.EgressHeld -> state = state.copy(egressHeld = !message.running)
 
-            is RoundMessage.SyncPulseAnswered -> Unit
+            // **The house's answer to one beat, and it is the same answer either way** (`gdd.md:355`,
+            // rule 1). `held` is true when the house is now holding this seat's beat, waiting for
+            // somebody at the other node — and false for a beat that missed, a seat serving a
+            // lockout, a seat not standing at a node and a seat outside the system. One shape, one
+            // kind, one message per return, with only the value differing.
+            //
+            // **It is copied and never interpreted.** A client that read `false` as *you are not at
+            // a node* would have rebuilt the detector the single shape exists to prevent: an Insider
+            // anywhere in the house could tap, read the screen, and learn what the house thinks of
+            // where they are standing.
+            is RoundMessage.SyncPulseAnswered -> state = state.copy(beatHeld = message.held)
 
             // **The Egress came down, and the couch's widget goes dim and empty with it.** The type
             // is deliberately left standing: it says which Egress the house ran, and unsetting it
@@ -1658,6 +1883,48 @@ class FlowModel(
     private fun housePushed(message: RoundMessage) {
         val waiting = Flow.housePushes[state.screen] ?: return
         if (waiting.on == message.kind) push(waiting.to)
+    }
+
+    /**
+     * **The caught scan's row: the scan's answer joined to the order the house already sent.**
+     *
+     * Both operands are pushed facts about this one seat — `Effect.ScanAnswered` names the entry,
+     * the kind and the parameters; `Effect.WorkOrderIssued` names where that entry is, whether it is
+     * done and how long the order is — and the index they are joined on is the house's own. So this
+     * decides nothing: it is two copies read side by side, which is the only kind of derivation
+     * `houseSaid` is allowed to make.
+     *
+     * **Null where the order does not hold the entry**, and the branch above then moves no screen.
+     * That is the fail-closed direction: a phone that stayed on the scan is noticed in seconds, and
+     * a caught scan drawn against an entry the house cannot place would put a player through work
+     * with no room, no glyph and no position in their own list.
+     *
+     * **Blocked lines are not searched and cannot be.** `OrderLine.Blocked` carries an index and
+     * nothing else — no name, no signature and above all no room (D-114) — so a scan answering with
+     * a blocked entry finds nothing here, which is the same refusal the type already is.
+     */
+    private fun currentFrom(opened: SubroutineInstance): CurrentSubroutine? {
+        val lines = state.order ?: return null
+        val line = lines.filterIsInstance<OrderLine.Known>()
+            .firstOrNull { it.index == opened.entry } ?: return null
+        // The FIRST destination, for `PanelVals.order`'s reason: the Array Wipe circuit names three
+        // stations in draw order (D-122) and a screen read by lamplight has room for the one you
+        // are walking to. An empty list is lawful and leaves the room unnamed rather than invented.
+        val at = line.at.firstOrNull()
+        return CurrentSubroutine(
+            subroutine = Subroutine.of(opened.subroutine),
+            // No carrier. See CurrentSubroutine.instruction — escalated, not guessed.
+            instruction = null,
+            room = at?.room,
+            marker = at?.shape?.let { MarkerShapes[it] },
+            // One-based, because it is read aloud off a screen as SUBROUTINE 4 OF 7 and the house's
+            // own index is a position in a list. The total is the order's LENGTH including the
+            // blocked rows: an order that shortened while work was blocked would make its own
+            // length a tell about what the house had drawn (D-114).
+            index = opened.entry + 1,
+            total = lines.size,
+            done = lines.count { it is OrderLine.Known && it.done },
+        )
     }
 
     /**
@@ -1861,9 +2128,33 @@ fun FlowHost(
     model: FlowModel = remember { FlowModel() },
     standingInForTheHouse: Boolean = false,
 ) {
-    val pending = model.pending
-    val awaiting = if (standingInForTheHouse) model.awaitingPush else null
+    // **THE SURGE OWNS THE PHONE FOR FIVE SECONDS** (D-182), and this is the one place in the app
+    // where a screen's own timer is suppressed. The sequence pushes the phone to `Boot`, which
+    // ordinarily falls through to `Perms` after 2.4 seconds — so without this the player would get
+    // a hundred milliseconds of the cold-start permissions walk in the middle of a running round.
+    // A malfunctioning phone is not running its own timers, which is the fiction and is also true.
+    val surge = model.surge
+    val pending = if (surge == null) model.pending else null
+    val awaiting = if (standingInForTheHouse && surge == null) model.awaitingPush else null
     val screen = model.state.screen
+
+    // **The rest of the Surge, on a clock, because `core` has none** (D-182). The bright phase is
+    // already on the glass — `FlowModel.surged` wrote it in the frame the message arrived, which is
+    // rule 7's *same frame* — and what is left is the two waits and the two things that end them.
+    //
+    // Keyed on the whole [SurgeSlam], so a second Surge landing mid-sequence restarts it on the new
+    // one rather than letting the first one's timer end both. Each step re-checks which Surge it
+    // belongs to, which is the same discipline the jam's window keeps.
+    LaunchedEffect(surge) {
+        if (surge != null) {
+            delay(SURGE_PEAK_MS)
+            model.surgeDarkened(surge)
+            delay(SURGE_BLACK_MS)
+            model.surgeRebooted(surge)
+            delay(SURGE_BOOT_MS)
+            model.surgeEnded(surge)
+        }
+    }
 
     // **The jam's own window, and it is a presentation timer rather than a clock** (D-186). The
     // house owns when the jam ENDS -- it cleared its own deadline the moment it opened one, and it
@@ -1892,9 +2183,25 @@ fun FlowHost(
     }
     Screen(
         model.state, model.actions(), model.editor, model.homes, model.lobby, model.meeting,
-        model.subroutines, model.notifications,
+        model.subroutines, model.notifications, model.lamp,
     )
 }
+
+/**
+ * **The Surge's three phases, and they are the owner's numbers rather than placeholders** (D-182).
+ *
+ * Five seconds of downtime: a second and a half at full, one black, two and a half on the
+ * cold-start Boot render. They are here rather than in `Balance` for the reason the ruling gives —
+ * `core` has no clock to say a duration with, so these are the platform's numbers on the platform's
+ * side of the line — and they are minted from one effect the rules already emit.
+ *
+ * **The length IS the ability.** `gdd.md:342` calls the Surge a commitment rather than a tool; a
+ * one-second flare is a startle, and five seconds is a person standing in the dark holding a defunct
+ * rectangle while everybody in the building walks toward the light they just saw.
+ */
+const val SURGE_PEAK_MS: Long = 1_500L
+const val SURGE_BLACK_MS: Long = 1_000L
+const val SURGE_BOOT_MS: Long = 2_500L
 
 /**
  * How long the bench pretends the house takes. **Not a game number and not a design one.**

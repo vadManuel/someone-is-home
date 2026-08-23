@@ -391,6 +391,46 @@ sealed interface Effect {
     ) : Effect
 
     /**
+     * **The caller's own phone, told that it is the one calling** (E-R1-1, ruled 2026-08-23).
+     *
+     * [MeetingOpened] carries `caller: Seat` to everybody, and a client cannot use it: **a phone
+     * does not know which seat it is**, deliberately — *intents are attributed by connection, never
+     * by a client naming itself* — so the comparison that would pick the caller's screen out has
+     * one operand. The routing table asks for *the calling seat → `Calling`*, and until this existed
+     * the caller stood on the ordinary ring screen with everybody else.
+     *
+     * **Two shapes could have closed it and the owner chose this one**: the house sends the caller a
+     * distinct message rather than teaching a phone its own seat. A phone that knew its seat number
+     * would be a phone that could name it, which is the one cheat in this game that is remote,
+     * undetectable and requires no physical act — the whole reason the wire is built the way it is.
+     * A per-seat message costs one row and teaches the client nothing.
+     *
+     * ### It is [RestrainedTakeover]'s shape exactly, and that is the argument for it
+     *
+     * Addressed to one seat, carrying nothing but the fact that it is addressed to that seat, and
+     * **the seat comes off this type at the emit boundary** — the wire member has no field at all.
+     * So a phone learns *you are the one calling* and still cannot say which seat it is, which is
+     * the same trade [OpeningMessage] and [EgressOpened] already make.
+     *
+     * ### No haptic, and that is a ruling rather than an omission
+     *
+     * [MeetingOpened] rings, and the caller's phone receives that too — this is a second message to
+     * a phone that is already ringing, not a second buzz. D-135 closes the long haptic to five
+     * events and this is not a sixth; more sharply, **one phone in a silent house buzzing
+     * differently from the other five is the caller announced through a pocket**, at the one moment
+     * the design already made public by making them walk to the card. Public by walking is not the
+     * same as broadcast by hardware.
+     *
+     * ### It is not a disclosure, because the caller already knows
+     *
+     * The one seat this reaches is the seat that scanned the meeting card or reported a Revoke
+     * (D-121). It tells that phone something its owner did thirty seconds ago with their hands, and
+     * it tells nobody else anything: two meetings called by two different people produce
+     * byte-identical wire members, and the only difference is which socket it went down.
+     */
+    data class MeetingCalling(val seat: Seat) : Effect
+
+    /**
      * **What a player outside the system gets instead of a call** (D-134).
      *
      * *The ringing call is for the living.* A newly Revoked player is told to stand and walk in,

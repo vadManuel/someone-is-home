@@ -79,6 +79,7 @@ object EmitSchema {
         is Effect.PresenceChanged -> PRESENCE_CHANGED
         is Effect.OpeningMessage -> OPENING_MESSAGE
         is Effect.MeetingOpened -> MEETING_OPENED
+        is Effect.MeetingCalling -> MEETING_CALLING
         is Effect.StandAndWalkIn -> STAND_AND_WALK_IN
         is Effect.CheckInProgressed -> CHECK_IN_PROGRESSED
         is Effect.MeetingPhaseOpened -> MEETING_PHASE_OPENED
@@ -122,6 +123,7 @@ object EmitSchema {
     val PRESENCE_CHANGED = MessageKind("PresenceChanged")
     val OPENING_MESSAGE = MessageKind("OpeningMessage")
     val MEETING_OPENED = MessageKind("MeetingOpened")
+    val MEETING_CALLING = MessageKind("MeetingCalling")
     val STAND_AND_WALK_IN = MessageKind("StandAndWalkIn")
     val CHECK_IN_PROGRESSED = MessageKind("CheckInProgressed")
     val MEETING_PHASE_OPENED = MessageKind("MeetingPhaseOpened")
@@ -337,6 +339,17 @@ object EmitSchema {
         // axis and never on role, which is the axis the two-axis taxonomy exists for: both roles
         // hear the same ring, and everyone in the house can already see whether the lights are on.
         MEETING_OPENED to LIVING,
+
+        // **The caller's own phone, and one seat's worth of it** (E-R1-1). The class is LIVING
+        // because a meeting is called by walking to a card or reporting a Revoke and neither is a
+        // thing the couch can do -- but the class is not what narrows this to one phone. The
+        // DELIVERIES do: this kind is addressed to the calling seat, exactly as RESTRAINED_TAKEOVER
+        // is addressed to the restrained one, so a row as wide as the ring still reaches one socket.
+        //
+        // **Widening it to OUTSIDE would grant nothing and is still wrong to write**: the seat it
+        // names is living by construction, and a row that pretended otherwise would be a permission
+        // nobody could point at a rule for.
+        MEETING_CALLING to LIVING,
 
         // The other half of the same call. Two kinds rather than one with a flag, because the two
         // audiences are told different things: the living are told who called it, and the out are
@@ -581,6 +594,13 @@ object EmitSchema {
             is Effect.StandAndWalkIn -> listOf(effect.seat)
             is Effect.VoteHeld -> listOf(effect.seat)
             is Effect.RestrainedTakeover -> listOf(effect.seat)
+            // **The calling seat, and the addressing IS the message** (E-R1-1). The wire member has
+            // no field at all, so what makes this mean *you are the one calling* is which socket it
+            // went down -- RestrainedTakeover's arrangement exactly, and for the reason a phone is
+            // never taught its own seat: a client that could name a seat could claim another one.
+            // A widening here would tell every phone in the house it called the meeting, which is
+            // the fail-visible direction and would be found in one round.
+            is Effect.MeetingCalling -> listOf(effect.seat)
             // Addressed per seat and emitted once per seat, which is how the Egress alert reaches
             // everyone (D-076) without the effect growing a broadcast shape. Exactly
             // OpeningMessage's treatment, and for the same reason: these are D-118's two dimming

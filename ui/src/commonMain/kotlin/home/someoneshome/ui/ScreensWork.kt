@@ -528,17 +528,30 @@ fun ScanCaughtScreen(vals: PanelVals) {
             // The marker you just scanned -- the same shape the work order sent you to, not the
             // host-setup fixture this used to read by mistake.
             vals.current.marker?.let { MarkerGlyph(it, 52.u, Amber.Bright) }
-            Label(
-                vals.current.instruction,
-                size = 13.0, color = Amber.Bright, tracking = 0.06, lineHeight = 1.4,
-                align = TextAlign.Center,
-            )
+            // ⚠️ **Drawn only where the house has said one, and today it never does.** Nothing on
+            // the wire carries this sentence — see [CurrentSubroutine.instruction] — so a real scan
+            // is one line shorter than the port's. That is the fail-closed direction: what to do is
+            // on the briefing below and is never absent, and printing the fixture's line over
+            // somebody else's Subroutine would be a sentence a player has no way to check.
+            vals.current.instruction?.let { instruction ->
+                Label(
+                    instruction,
+                    size = 13.0, color = Amber.Bright, tracking = 0.06, lineHeight = 1.4,
+                    align = TextAlign.Center,
+                )
+            }
             Row(
                 horizontalArrangement = Arrangement.spacedBy(6.u),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                // The room is dropped rather than blanked where the house named none — an empty
+                // destination is lawful (`OrderLine.Known.at`) and a leading separator over an
+                // absent room reads as a rendering fault rather than as a room nobody sent.
                 Label(
-                    "${vals.current.room} . SUBROUTINE ${vals.current.index} OF ${vals.current.total}",
+                    listOfNotNull(
+                        vals.current.room,
+                        "SUBROUTINE ${vals.current.index} OF ${vals.current.total}",
+                    ).joinToString(" . "),
                     size = 7.0, color = Amber.Dim, tracking = 0.12,
                 )
                 // The fourth surface, and the one D-106 does not name. It is here because BEGIN
@@ -550,22 +563,24 @@ fun ScanCaughtScreen(vals: PanelVals) {
             Label("THE CARD IN YOUR HAND MATCHES", size = 6.0, color = Amber.Faint, tracking = 0.1)
         }
 
-        // **The last lit surface before a screen that cannot be read** (E-S1-1). Only Sniff has
-        // one: its own screen is black until the answer (D-137), so the sentence telling a player
-        // what to do there would be black ink on black glass. Every other Subroutine writes its
-        // instruction across the top of its own screen and has nothing to say here.
+        // **The last lit surface before the work, and ALL TEN are read here now** (D-188). It began
+        // as Sniff's exception — its own screen is black until the answer (D-137), so the sentence
+        // telling a player what to do there would be black ink on black glass — and the ruling
+        // inverted it: an in-screen instruction is lit pixels for the whole duration of a task
+        // rated on how little it may glow, and the scan has already paid for this screen's light.
         //
         // Above BEGIN rather than beside it, so it is read on the way to the control rather than
-        // discovered under a thumb — and dim, because this screen is lit and the next one is the
-        // darkest in the game.
-        vals.current.subroutine.briefing?.let { briefing ->
-            Label(
-                briefing,
-                modifier = Modifier.fillMaxWidth(),
-                size = 6.5, color = Amber.Dim, tracking = 0.12, lineHeight = 1.8,
-                align = TextAlign.Center,
-            )
-        }
+        // discovered under a thumb — and dim, because this screen is lit and several of the ten
+        // that follow it are not.
+        //
+        // Not nullable any more, which is the point: [Subroutine.briefing] is total over the
+        // roster, so a Subroutine cannot reach a player with nothing said about it.
+        Label(
+            vals.current.subroutine.briefing,
+            modifier = Modifier.fillMaxWidth(),
+            size = 6.5, color = Amber.Dim, tracking = 0.12, lineHeight = 1.8,
+            align = TextAlign.Center,
+        )
 
         // **BEGIN does not name a screen, and cannot.** Which Subroutine opens is a fact about
         // the card that was just read, so the target is the actions layer's — the same shape as a
@@ -1009,12 +1024,21 @@ private fun EgressWidget(vals: PanelVals) {
                 "EGRESS . ${vals.egressType}",
                 size = 6.5, color = Amber.Bright, tracking = 0.14,
             )
-            Readout("1:42", size = 19.0, color = Amber.Bright, lineHeight = 1.0)
+            // **HELD replaces the clock rather than sitting beside it** (`Effect.EgressHeld`,
+            // D-133). A paused countdown drawn as a still number is indistinguishable from one the
+            // phone has stopped receiving, and the difference between *the house stopped this* and
+            // *your phone went quiet* is the whole of what a player is trying to read here. The
+            // clock is dimmed with it, so the pause is a change in the widget's whole weight.
+            if (vals.egressHeld) {
+                Readout("HELD", size = 19.0, color = Amber.Dim, lineHeight = 1.0)
+            } else {
+                Readout("1:42", size = 19.0, color = Amber.Bright, lineHeight = 1.0)
+            }
         }
         SegmentBar(
             total = PanelVals.METER_SEGMENTS,
             lit = vals.egressLit,
-            litColor = Amber.Bright,
+            litColor = if (vals.egressHeld) Amber.Dim else Amber.Bright,
             unlitColor = Amber.Edge,
         )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -1023,6 +1047,23 @@ private fun EgressWidget(vals: PanelVals) {
                 vals.egressNodes.joinToString(" . "),
                 size = 6.0, color = Amber.Bright, tracking = 0.1,
             )
+        }
+        // **The house's answer to this phone's own beat, and it says nothing about anybody else**
+        // (`Effect.SyncPulseAnswered`, `gdd.md:355`). ON THE BEAT is *the house is holding your
+        // tap*; OFF THE BEAT is every other answer there is — missed, locked out, not at a node, out
+        // of the round — because the effect is one shape with one boolean and a screen that split it
+        // finer would be reporting where the house thinks you are standing.
+        //
+        // Drawn only once this phone has returned a beat. A row that stood there saying OFF THE BEAT
+        // before anybody had tapped would be the widget grading a player for not having started.
+        vals.beatHeld?.let { held ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Label("YOUR BEAT", size = 6.0, color = Amber.Dim, tracking = 0.1)
+                Label(
+                    if (held) "ON THE BEAT" else "OFF THE BEAT",
+                    size = 6.0, color = if (held) Amber.Bright else Amber.Dim, tracking = 0.1,
+                )
+            }
         }
     }
 }

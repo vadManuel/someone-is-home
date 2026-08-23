@@ -1,6 +1,13 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.AssignedWork
+import home.someoneshome.model.Balance
+import home.someoneshome.model.Destination
 import home.someoneshome.model.Haptic
+import home.someoneshome.model.MarkerId
+import home.someoneshome.model.OrderLine
+import home.someoneshome.model.SubroutineInstance
+import home.someoneshome.model.SubroutineKind
 import home.someoneshome.model.MeetingPhase
 import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.Seat
@@ -377,6 +384,11 @@ class RoutingTest {
      *
      * Asserted as *the panel did not move at all* rather than as *the screen did not change*,
      * because the failure worth catching is a field quietly appearing.
+     *
+     * **`LampSet` is still on this list and now does something**, which is the point of leaving it
+     * here: it writes the lamp and it must never write [PanelState]. A level arriving has to cost a
+     * draw invalidation and nothing above it (rule 7), so a field appearing here would be the
+     * regression this row exists to catch. What it *does* do is asserted in `LampRoutingTest`.
      */
     @Test
     fun `the routeless kinds move neither screen nor panel`() {
@@ -396,4 +408,216 @@ class RoutingTest {
             )
         }
     }
+
+    // ---- 9 · The caller, and the five phones that are not (E-R1-1) -------------------------------
+
+    /**
+     * **The one phone that called the meeting ends up somewhere different from the other five.**
+     *
+     * E-R1-1 exactly: the ring reaches everybody, `caller` is a `Seat`, and no phone knows which
+     * seat it is — so until the house started sending a second, per-seat message, the person who
+     * had walked to the card stood on the same CALL screen as the people it woke up.
+     *
+     * **Both phones take the ring first**, because that is the order the rules emit in and the ring
+     * is what carries the caller's name. The caller is then moved off it; nothing else about the
+     * meeting differs, which is the other half of the claim.
+     */
+    @Test
+    fun `the caller lands on its own screen and everybody else stays on the ring`() {
+        val ring = RoundMessage.MeetingOpened(Seat(2), MeetingTrigger.MeetingCard, Haptic.Long)
+
+        val caller = living()
+        caller.houseSaid(ring)
+        caller.houseSaid(RoundMessage.MeetingCalling)
+
+        val bystander = living()
+        bystander.houseSaid(ring)
+
+        assertEquals(
+            ScreenId.Calling, caller.state.screen,
+            "the phone that called the meeting is standing on the ring with everybody else",
+        )
+        assertEquals(
+            ScreenId.Call, bystander.state.screen,
+            "a phone that called nothing was moved to the caller's own screen",
+        )
+        assertEquals(
+            caller.state.caller, bystander.state.caller,
+            "the two phones disagree about who called it — the name is the ring's and reaches all",
+        )
+    }
+
+    /**
+     * **The difference is the message and never the content**, which is what makes it safe.
+     *
+     * There is nothing on `MeetingCalling` to read, so two phones handed the identical object have
+     * to end up on the identical screen. The only thing that separates the caller from anybody else
+     * is that the house chose to send it down one socket — see `EmitSchema.deliveries`, and
+     * `RoundWireTest` for the assertion that the seat cannot ride inside it.
+     */
+    @Test
+    fun `the caller's screen is reached by the message arriving and by nothing on it`() {
+        for (from in listOf(ScreenId.Home, ScreenId.Work, ScreenId.Lock)) {
+            val model = living(from)
+            model.houseSaid(RoundMessage.MeetingCalling)
+            assertEquals(
+                ScreenId.Calling, model.state.screen,
+                "the caller's own message did not reach the caller's own screen from $from",
+            )
+        }
+    }
+
+    // ---- 10 · The routing tail (E-R1-4) ----------------------------------------------------------
+
+    /**
+     * **The ledger's raw count becomes a percentage or it becomes nothing** (D-103, D-153).
+     *
+     * The house sends `remaining` and the couch's meter is a percentage — the count itself may not
+     * reach a screen, because `seats × METER_PER_SEAT` is public arithmetic and a meter drawn as a
+     * fraction hands back the Insider count by division.
+     *
+     * **And the denominator has to be the house's.** A phone that has not been told how many seats
+     * the round has leaves the bar exactly where it was rather than dividing by a guess: a meter
+     * moving against an invented total is a wrong number that looks precisely like a right one, on
+     * the one screen a player who is out watches for a whole round.
+     */
+    @Test
+    fun `the ledger's count reaches the meter as a percentage and never without a denominator`() {
+        val untold = living(ScreenId.Ghost3)
+        untold.houseSaid(RoundMessage.SubroutineProgressed(remaining = 21))
+        assertNull(
+            untold.state.integrityPercent,
+            "the meter moved on a phone that has never been told how many seats the round has",
+        )
+
+        val told = living(ScreenId.Ghost3)
+        told.houseSaid(RoundMessage.CheckInProgressed(present = 1, expected = 6))
+        told.houseSaid(RoundMessage.SubroutineProgressed(remaining = 21))
+        assertEquals(
+            Balance.integrityPercent(21, 6), told.state.integrityPercent,
+            "the count was not converted through the one place that arithmetic lives",
+        )
+        assertEquals(
+            6, told.state.seats,
+            "the seat total the gate carried did not reach the field the conversion reads",
+        )
+    }
+
+    /**
+     * **The scan's answer opens the caught scan and nothing further** (D-124, D-188).
+     *
+     * One flow: scan → caught, with the briefing on it → BEGIN → the work. The push deliberately
+     * stops at the card, because BEGIN is the last moment NOT THIS ONE is still a choice — and a
+     * scan can catch the wrong card in the dark.
+     *
+     * **A null answer is the refusal and has its own screen.** A registered card the house has
+     * nothing for *you* at is this message with nothing in it (D-124); unregistered paper never
+     * reaches the rules at all.
+     */
+    @Test
+    fun `a caught scan opens the card and a null answer opens the refusal`() {
+        val caught = living(ScreenId.Scan)
+        caught.houseSaid(RoundMessage.WorkOrderIssued(order))
+        caught.houseSaid(
+            RoundMessage.ScanAnswered(
+                SubroutineInstance(entry = 1, subroutine = SubroutineKind.Sniff, parameters = listOf(3, 5)),
+            ),
+        )
+        assertEquals(ScreenId.ScanCaught, caught.state.screen, "a caught scan opened nothing")
+        assertEquals(
+            Subroutine.Sniff, caught.state.current?.subroutine,
+            "the caught scan named a different Subroutine than the card the house answered for",
+        )
+        assertEquals("STUDY", caught.state.current?.room, "the room came off neither the order nor the house")
+        assertEquals(2, caught.state.current?.index, "the position in the order is not the entry the house named")
+        assertEquals(order.size, caught.state.current?.total, "the order's length changed on the way to the card")
+        assertNull(
+            caught.state.current?.instruction,
+            "a sentence appeared that nothing on the wire carries",
+        )
+
+        val refused = living(ScreenId.Scan)
+        refused.houseSaid(RoundMessage.ScanAnswered(opened = null))
+        assertEquals(
+            ScreenId.ScanBad, refused.state.screen,
+            "a card with nothing on it for this seat opened work anyway",
+        )
+    }
+
+    /**
+     * **An answer the order cannot place moves nothing**, which is the fail-closed direction.
+     *
+     * A phone that stayed on the scan is noticed in seconds. A caught scan drawn against an entry
+     * this seat's own order does not hold would put a player through work with no room, no glyph and
+     * no position in their own list — and a blocked line is deliberately unplaceable, because
+     * `OrderLine.Blocked` carries an index and nothing else (D-114).
+     */
+    @Test
+    fun `a scan answering for an entry the order does not hold opens nothing`() {
+        for (entry in listOf(9, 2)) {
+            val model = living(ScreenId.Scan)
+            model.houseSaid(RoundMessage.WorkOrderIssued(order))
+            model.houseSaid(
+                RoundMessage.ScanAnswered(
+                    SubroutineInstance(entry = entry, subroutine = SubroutineKind.Jam, parameters = emptyList()),
+                ),
+            )
+            assertEquals(
+                ScreenId.Scan, model.state.screen,
+                "entry $entry is not a placeable line of this order and the phone opened a card anyway",
+            )
+            assertNull(model.state.current, "a row was built for work the order cannot place")
+        }
+    }
+
+    /**
+     * **The Egress clock stopping, and this phone's own beat** (D-133, `gdd.md:355`).
+     *
+     * Two facts on the containment screen and two fields, because they answer different questions:
+     * *is the countdown moving* is the house's, and *did my tap land* is this seat's. `running` is
+     * copied and inverted into a held flag; `held` is copied and never interpreted — false is the
+     * answer for a missed beat, a lockout, a seat that is not at a node and a seat outside the
+     * system alike, and a screen that split it finer would report where the house thinks you are.
+     */
+    @Test
+    fun `the containment screen learns that the clock stopped and what this phone's beat did`() {
+        val model = living(ScreenId.EgressWidget)
+        assertEquals(false, model.state.egressHeld, "a countdown nobody stopped opened held")
+        assertNull(model.state.beatHeld, "a phone that has tapped nothing was graded anyway")
+
+        model.houseSaid(RoundMessage.EgressHeld(remaining = 400, running = false, haptic = Haptic.Short))
+        assertTrue(model.state.egressHeld, "the house stopped the clock and the widget kept counting")
+
+        model.houseSaid(RoundMessage.EgressHeld(remaining = 400, running = true, haptic = Haptic.Short))
+        assertEquals(false, model.state.egressHeld, "the clock started again and the widget stayed held")
+
+        model.houseSaid(RoundMessage.SyncPulseAnswered(held = true))
+        assertEquals(true, model.state.beatHeld, "the house held this phone's beat and the screen did not say so")
+
+        model.houseSaid(RoundMessage.SyncPulseAnswered(held = false))
+        assertEquals(false, model.state.beatHeld, "an unheld beat was read as no answer at all")
+    }
+
+    /** This seat's own order: six lines, one of them blocked, so an unplaceable entry really is one. */
+    private val order: List<OrderLine> = listOf(
+        OrderLine.Known(
+            index = 0,
+            work = AssignedWork.Subroutine(SubroutineKind.Replay),
+            done = true,
+            at = listOf(Destination(MarkerId("card-hall"), shape = "diamond", room = "HALL")),
+        ),
+        OrderLine.Known(
+            index = 1,
+            work = AssignedWork.Subroutine(SubroutineKind.Sniff),
+            done = false,
+            at = listOf(Destination(MarkerId("card-study"), shape = "square_frame", room = "STUDY")),
+        ),
+        OrderLine.Blocked(index = 2),
+        OrderLine.Known(
+            index = 3,
+            work = AssignedWork.Subroutine(SubroutineKind.Jam),
+            done = false,
+            at = emptyList(),
+        ),
+    )
 }

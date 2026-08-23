@@ -208,6 +208,8 @@ class RoundClient(
         is RoundMessage.LampSet -> "LAMP ${m.luminance}"
         is RoundMessage.AbilityFired -> "ABILITY FIRED · COOLDOWN STARTED=${m.cooldownStarted}"
         is RoundMessage.MeetingOpened -> "MEETING CALLED BY SEAT ${m.caller.index} · ${m.trigger}"
+        // No seat, because the message has none: this bench line is as narrow as the wire is.
+        is RoundMessage.MeetingCalling -> "I AM THE ONE CALLING"
         is RoundMessage.StandAndWalkIn -> "STAND AND WALK IN · HAPTIC ${m.haptic}"
         is RoundMessage.CheckInProgressed -> "CHECK-IN GATE ${m.present}/${m.expected}"
         is RoundMessage.MeetingPhaseOpened ->

@@ -1046,6 +1046,16 @@ private fun meetingCalled(
         trigger = event.trigger,
         haptic = Haptic.Long,
     )
+    // **The caller's own phone, told which of the ringing phones it is** (E-R1-1, ruled
+    // 2026-08-23). The ring above carries `caller` to everybody and no client can use it, because a
+    // phone is never told which seat it is; this is the house saying so by addressing one socket.
+    //
+    // **Emitted unconditionally and after the ring**, both of which matter. Unconditionally,
+    // because every meeting has exactly one caller and a message whose presence was conditional
+    // would make its absence a fact somebody could read. After, because the ring is what carries
+    // the caller's NAME and clears the phone's jam -- a caller pushed to its own screen first would
+    // arrive there with a header the next message was still on its way to fill.
+    val calling = Effect.MeetingCalling(event.caller)
     val walkIn = state.outSeats.map { seat ->
         Effect.StandAndWalkIn(
             seat = seat,
@@ -1126,7 +1136,7 @@ private fun meetingCalled(
             isolated = emptyList(),
             staticUntil = null,
         ),
-        listOf(ring) + walkIn + gateCount(state, meeting) + batched + stopped,
+        listOf(ring, calling) + walkIn + gateCount(state, meeting) + batched + stopped,
     )
 }
 

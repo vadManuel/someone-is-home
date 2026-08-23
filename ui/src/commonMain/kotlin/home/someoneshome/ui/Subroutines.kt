@@ -79,52 +79,98 @@ enum class Subroutine(
     val kind: SubroutineKind,
     val screen: ScreenId? = null,
     /**
-     * **What to do, read at the card, before the work opens** — and only where the work's own
-     * screen cannot say it (E-S1-1).
+     * **What to do, read at the card, before the work opens — and it is the only place any of the
+     * ten says it** (D-188).
      *
-     * ### ⚠️ COPY, DRAFTED HERE AND NOT RULED
+     * ### The pattern is inverted, and Sniff is what made the right one visible
      *
-     * Every other Subroutine writes its instruction across the top of its own screen — *TAP TO
-     * CATCH THE SWEEP INSIDE THE BAND*, *TAP WHERE THE DOT IS WHEN THE PHONE BUZZES*. **Sniff
-     * cannot**, and it is the one that cannot on purpose: D-137 makes it the roster's only *short
-     * dark*, and the treatment takes *fully dark* literally — every colour on the screen is
-     * [Amber.Black] until the player has answered. A sentence drawn there is a sentence in black
-     * ink on black glass, which is not an instruction, it is a layout.
+     * E-S1-1 closed this as a *placement* for Sniff alone: D-137 makes Sniff the roster's only
+     * *short dark*, the treatment takes *fully dark* literally — every colour on the screen is
+     * [Amber.Black] until the player has answered — and a sentence drawn there is black ink on
+     * black glass, which is not an instruction, it is a layout. The other nine were left null with
+     * the note that briefing them all at the card was a copy call nobody had made. **D-188 makes
+     * it, the other way from the way it was framed.**
      *
-     * So the instruction moves one screen earlier, to the last surface that is still lit and still
-     * has the player's eyes: the caught scan, above BEGIN. **The wording below is a build-time
-     * draft in the design's own register** (D-137: *the player answers which group was bigger*),
-     * and it is flagged rather than settled — it is the only line in the game a player reads before
-     * a screen they cannot read.
+     * **The argument is the light signature.** Every Subroutine is rated bright, medium or dark
+     * ([light], D-112, D-113) and the rating is a promise about how much light you are standing in
+     * while you work. An in-screen instruction line is lit pixels for the *whole duration* of the
+     * task, on a screen whose entire design constraint is how little it may glow — it makes a dark
+     * Subroutine less dark and a bright one longer. **Reading happens at the card, where the scan
+     * has already lit you up and the cost is already paid**, and then the task is as dark as it was
+     * rated to be. This is D-175's accounting about the Tier-2 pickers in the opposite direction:
+     * there reading is a price worth charging; here it is a price already charged, and charging it
+     * twice is the mistake.
      *
-     * **Null for the other nine**, which is a decision and not an omission: a briefing on every
-     * card would be a paragraph between a player and the work on the one screen the design wants
-     * them to leave quickly, and nine of the ten already say it where it is needed. Whether they
-     * should all be briefed here as well is a copy call nobody has made.
+     * **A misread costs the attempt and a rescan**, which is the intended severity rather than an
+     * accepted consequence. D-110 already rules one attempt per scan with the walk back as the
+     * cost; tying comprehension to the same gate means the player who skims in the dark pays what
+     * the player who fumbles pays, and there is one recovery path in the game rather than two.
+     *
+     * ### ⚠️ COPY. TEN LINES, NINE OF THEM DRAFTED HERE AND NOT RULED
+     *
+     * **Sniff's stands** and is the register the other nine are written against: second person,
+     * imperative, **what the phone will do and then what you do about it**, two lines, no nouns
+     * from the fiction. They are the builder's words inside a ruled shape and they want the owner's
+     * eye — see the worklog, where all nine are listed together.
+     *
+     * **Non-null for all ten, and it must stay that way.** A nullable field here is how nine of
+     * them came to say nothing at the card in the first place; total over the roster means a new
+     * Subroutine cannot be added without somebody writing the sentence a player reads before a
+     * screen they may not be able to read.
      */
-    val briefing: String? = null,
+    val briefing: String,
 ) {
-    Replay("REPLAY", SubroutineTier.Short, LightSignature.Bright, SubroutineKind.Replay, ScreenId.SubReplay),
+    // The ten briefings, in roster order. Each is two lines: what the phone will do, then what you
+    // do about it. Nine are drafts and flagged; Sniff's is the one that was already read at a card.
+    Replay(
+        "REPLAY", SubroutineTier.Short, LightSignature.Bright, SubroutineKind.Replay,
+        ScreenId.SubReplay,
+        briefing = "DOTS WILL FLASH IN ORDER.\nTAP THEM BACK IN THAT ORDER.",
+    ),
     Interrupt(
         "INTERRUPT", SubroutineTier.Short, LightSignature.Medium, SubroutineKind.Interrupt,
         ScreenId.SubInterrupt,
+        briefing = "A SWEEP WILL RUN BACK AND FORTH.\nTAP WHILE IT IS INSIDE THE BAND.",
     ),
-    ParityCheck("PARITY CHECK", SubroutineTier.Short, LightSignature.Bright, SubroutineKind.ParityCheck, ScreenId.SubParity),
+    ParityCheck(
+        "PARITY CHECK", SubroutineTier.Short, LightSignature.Bright, SubroutineKind.ParityCheck,
+        ScreenId.SubParity,
+        briefing = "A GRID WILL FILL IN A PATTERN.\nTAP THE ONE BLOCK THAT BREAKS IT.",
+    ),
     Sniff(
         "SNIFF", SubroutineTier.Short, LightSignature.Dark, SubroutineKind.Sniff, ScreenId.SubSniff,
-        // The screen this describes emits nothing, so this is where it has to be read. See
-        // [briefing] — the wording is a draft and it is flagged.
+        // The line the other nine are written against. Its screen emits nothing, which is how the
+        // card became the place a briefing is read at all — see [briefing].
         briefing = "THE PHONE WILL BUZZ TWICE.\nTAP THE SIDE THAT BUZZED MORE.",
     ),
-    Deallocate("DEALLOCATE", SubroutineTier.Short, LightSignature.Bright, SubroutineKind.Deallocate, ScreenId.SubDeallocate),
+    Deallocate(
+        "DEALLOCATE", SubroutineTier.Short, LightSignature.Bright, SubroutineKind.Deallocate,
+        ScreenId.SubDeallocate,
+        briefing = "THE COLUMNS WILL STAND UNEVEN.\nTAP THEM DOWN TO THE SHORTEST.",
+    ),
     Drift(
         "DRIFT", SubroutineTier.Medium, LightSignature.Medium, SubroutineKind.Drift,
         ScreenId.SubDrift,
+        briefing = "A DOT WILL MOVE, THEN HIDE.\nWHEN THE PHONE BUZZES, TAP WHERE IT IS.",
     ),
-    Short("SHORT", SubroutineTier.Short, LightSignature.Dark, SubroutineKind.Short, ScreenId.SubShort),
-    SignalTrace("SIGNAL TRACE", SubroutineTier.Medium, LightSignature.Medium, SubroutineKind.SignalTrace, ScreenId.SubTrace),
-    Jam("JAM", SubroutineTier.Medium, LightSignature.Medium, SubroutineKind.Jam, ScreenId.SubJam),
-    Handshake("HANDSHAKE", SubroutineTier.Medium, LightSignature.Dark, SubroutineKind.Handshake, ScreenId.SubHandshake);
+    Short(
+        "SHORT", SubroutineTier.Short, LightSignature.Dark, SubroutineKind.Short, ScreenId.SubShort,
+        briefing = "THE PHONE WILL ASK FOR FINGERS.\nHOLD THAT MANY UNTIL IT RETURNS.",
+    ),
+    SignalTrace(
+        "SIGNAL TRACE", SubroutineTier.Medium, LightSignature.Medium, SubroutineKind.SignalTrace,
+        ScreenId.SubTrace,
+        briefing = "TWO ENDS WILL BE MARKED.\nTAP NODE TO NODE FROM ONE TO THE OTHER.",
+    ),
+    Jam(
+        "JAM", SubroutineTier.Medium, LightSignature.Medium, SubroutineKind.Jam, ScreenId.SubJam,
+        briefing = "TWO RINGS WILL SIT APART.\nTAP UNTIL THEY SIT ON ONE ANOTHER.",
+    ),
+    Handshake(
+        "HANDSHAKE", SubroutineTier.Medium, LightSignature.Dark, SubroutineKind.Handshake,
+        ScreenId.SubHandshake,
+        briefing = "THE PHONE WILL BUZZ A RHYTHM.\nTAP IT BACK BY FEEL.",
+    );
 
     companion object {
 
