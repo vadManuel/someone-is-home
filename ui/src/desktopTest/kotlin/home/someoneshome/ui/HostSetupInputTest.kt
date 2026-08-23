@@ -564,6 +564,45 @@ class HostSetupInputTest {
             onNode(hasText("RENAME") and hasClickAction()).assertExists()
         }
 
+    /**
+     * **A home the radio could not put up names the grant the host can still give**, on the screen
+     * they are standing on (D-173, and the owner's 2026-08-22 ruling that the refusal name the
+     * fixable cause rather than only the symptom).
+     *
+     * The sibling above covers the refusal whose fix is on this screen — a duplicate name, one
+     * RENAME away. This one's fix is not on this screen at all: it is two taps away in the OS, and
+     * the host has no way to guess that from *this home did not go on the air*. With the Local
+     * Network grant gone iOS publishes nothing and reports nothing, so the symptom is all this
+     * phone can be certain of and the cause line points rather than asserts.
+     *
+     * **Read off the rendered screen and not off the model**, because the defect this guards is a
+     * second line that exists in a constant and never reaches a Label — and both halves are
+     * asserted, so neither can be dropped in favour of the other.
+     *
+     * ⚠️ The cause line's **wording is builder-drafted** and awaits the owner's eye. See
+     * `LobbyModel.NOT_ON_THE_AIR_CAUSE`.
+     */
+    @Test
+    fun aHomeThatCouldNotGoOnTheAirNamesTheGrantTheHostCanStillGive() =
+        runDesktopComposeUiTest(width = 300, height = 650) {
+            val model = FlowModel(
+                PanelState(screen = ScreenId.HomeDetail),
+                lobby = LobbyModel(link = RefusingLobbyLink(HostRefusal.CouldNotGoOnTheAir)),
+            )
+            model.openSavedHome(HomeEditorModel.BUNGALOW)
+            show(model)
+
+            onNode(hasText("HOST WITH THIS HOME") and hasClickAction()).performClick()
+            mainClock.advanceTimeBy(100)
+
+            assertEquals(
+                ScreenId.HomeDetail, model.state.screen,
+                "the lobby opened over a home the radio never put on the air",
+            )
+            onNode(hasText(LobbyModel.NOT_ON_THE_AIR, substring = true)).assertExists()
+            onNode(hasText(LobbyModel.NOT_ON_THE_AIR_CAUSE, substring = true)).assertExists()
+        }
+
     /** And a home that goes up walks into the lobby, off the same button. */
     @Test
     fun aHomeThatGoesOnTheAirOpensTheLobby() =

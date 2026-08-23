@@ -452,6 +452,12 @@ class LobbyModel(
      * [onAir] is where the navigation goes, and a refusal stays on the screen the host is on with
      * [refusal] naming what happened. The failure a host can fix is named as such: a duplicate
      * home name is one RENAME away, and the rename row is on that same screen.
+     *
+     * ### The other refusal names its fixable cause too, and that is a ruling
+     *
+     * *The refusal should name the fixable cause rather than only the symptom.* The symptom line
+     * is unchanged and stays first — it is true whatever went wrong — and [NOT_ON_THE_AIR_CAUSE]
+     * is added under it. See both constants for the wording, which is **drafted and flagged**.
      */
     fun hostHome(homeName: String, onAir: () -> Unit = {}) {
         refusal = null
@@ -469,7 +475,7 @@ class LobbyModel(
                 hosting = false
                 refusal = when (why) {
                     HostRefusal.NameAlreadyOnTheAir -> "ANOTHER HOME HERE IS ALREADY CALLED $homeName"
-                    HostRefusal.CouldNotGoOnTheAir -> "THIS HOME DID NOT GO ON THE AIR"
+                    HostRefusal.CouldNotGoOnTheAir -> "$NOT_ON_THE_AIR\n$NOT_ON_THE_AIR_CAUSE"
                 }
             },
         )
@@ -659,6 +665,42 @@ class LobbyModel(
 
     companion object {
         const val UNKNOWN: String = "UNKNOWN"
+
+        /**
+         * **The symptom: this home never went up, whatever the reason** (D-173).
+         *
+         * Ruled, and honest in a way the line under it cannot be: the advertisement did not
+         * succeed, and that is the whole of what this phone knows for certain. It stays first and
+         * it stays unchanged.
+         */
+        const val NOT_ON_THE_AIR: String = "THIS HOME DID NOT GO ON THE AIR"
+
+        /**
+         * **The fixable cause, named rather than only the symptom** (the owner's 2026-08-22
+         * ruling).
+         *
+         * ### ⚠️ WORDING IS BUILDER-DRAFTED AND AWAITS THE OWNER'S EYE
+         *
+         * The ruling is the *shape* — symptom, then the cause a person can act on — and it did not
+         * dictate the words. These are drafted within the register and flagged in revision 37 and
+         * in the worklog, not settled.
+         *
+         * ### It points rather than asserts, and that is not hedging
+         *
+         * With the Local Network grant gone, iOS publishes nothing and **reports nothing** — no
+         * error, no prompt, no callback of any kind (E-D3-4). So `CouldNotGoOnTheAir` covers both
+         * a refusal the OS gave a reason for and ten seconds of silence it gave nothing for, and
+         * **this phone genuinely cannot know which happened.** A line asserting the permission was
+         * the cause would be the app stating a fact it does not have, on a screen a host acts on.
+         * *Check* is the strongest verb the evidence supports, and it is enough: the host is
+         * holding the phone in a lit room with the party in front of them, and two taps from a
+         * person cleared exactly this on the night it was first seen.
+         *
+         * **LOCAL NETWORK is the app's own name for the grant** — the setup walk lists it under
+         * that heading — so the host is being sent to a row they have already read once rather
+         * than to a term this screen invented.
+         */
+        const val NOT_ON_THE_AIR_CAUSE: String = "CHECK LOCAL NETWORK PERMISSION"
 
         /**
          * **The windows the host may choose between, first one being the design's default.**

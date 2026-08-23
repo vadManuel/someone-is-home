@@ -3281,11 +3281,15 @@ contact radius.
 
 ## Revision 37 — the rulings the build was already obeying
 
-*Recorded 2026-08-23. **No new decision is taken here.** Five owner rulings had reached the code —
-argued on types, cited in KDoc, held by tests — and had never reached this log, which is the one
-place a person goes to ask *why is it like that*. A ruling that lives only in the source is a
-ruling the next reader re-litigates, and two of these five had already been re-derived once. What
-follows is the record catching up with the build.*
+*Recorded 2026-08-23. **Four of the six take no new decision.** They had reached the code — argued
+on types, cited in KDoc, held by tests — and had never reached this log, which is the one place a
+person goes to ask *why is it like that*. A ruling that lives only in the source is a ruling the
+next reader re-litigates, and two of those four had already been re-derived once.*
+
+*The last two are the ones revision 35 flagged and left open, now answered by the owner: **the ten
+seconds are ratified** and **a refusal names the cause a person can fix**, not only the symptom.
+The second changes a screen, and its wording is the builder's draft rather than the owner's words —
+flagged as such below and on the constants themselves.*
 
 ### D-175 · **Tier 2 targets: a list, a list, and the map — recorded**
 
@@ -3388,6 +3392,65 @@ takeover costing a stale number rather than a live one; this is about the couch'
 number when there is nothing to number. Both are still open on the same missing sender — the Egress
 has a carrier (`Effect.EgressHeld`) but not the duration it is a fraction of.
 
+### D-179 · **The ten seconds are ratified — revision 35's ⚠️ closed**
+
+**An unanswered advertisement is refused after ten seconds, and the owner has adopted the number.**
+
+It was built rather than ruled, and revision 35 said so at length: it is *the one number on that
+page with no authority behind it*. The reason it existed is the reason it is now kept — **the owner
+ruled two outcomes and the OS has three.** With the Local Network grant gone iOS publishes nothing
+and reports nothing: no error, no prompt, no callback of any kind (E-D3-4). A build that waited only
+on the two ruled callbacks would have made HOST WITH THIS HOME a control that does nothing when
+pressed, which is a worse failure than the one D-173 fixes and would have shipped in the name of
+fixing it.
+
+**What the ten seconds bound is a callback that never comes, not a slow network.** Bonjour answers
+in well under a second on a working stack — D3's own logs have the publish landing between two lobby
+lines — so this is a fuse on silence. **No rule reads it and it stamps into no recording**, which is
+what makes ratifying it cheap: nothing downstream has to be re-derived because a number changed
+status from *invented* to *adopted*.
+
+The flag comes off. The value does not change.
+
+### D-180 · **A refusal names the fixable cause, not only the symptom — decided**
+
+**Where a host is refused and the thing that would fix it is not on the screen they are standing on,
+the refusal says what that thing is.** `THIS HOME DID NOT GO ON THE AIR` keeps its place and gains a
+second line naming the **Local Network** grant.
+
+**This is the gap D-173 left, and it is a real one.** That ruling's argument was that a duplicate
+home name is the most actionable refusal in the app — the fix is a rename, the host is holding the
+phone in a lit room, and the RENAME row is on the same screen as the refusal. **The other refusal has
+none of that.** Its fix is two taps away in the OS, on a screen this app does not own, and nothing in
+*this home did not go on the air* points at it. A host reading that sentence learns they have a
+problem and not one thing about solving it — which is the same shape as the silence D-173 replaced,
+one step further in.
+
+**The line points rather than asserts, and that is the honest form rather than a hedge.**
+`CouldNotGoOnTheAir` covers both a refusal the OS gave a reason for and ten seconds of silence it
+gave nothing for (D-179), so **this phone genuinely cannot know which happened.** A line stating the
+permission *was* the cause would be the app asserting a fact it does not have, on a screen somebody
+acts on. *Check* is the strongest verb the evidence carries, and it is enough: two taps from a person
+cleared exactly this on the night it was first seen (E-D3-4), and the whole reason that arrival was
+survivable is that it landed on setup, in the light.
+
+**Rule 6 is not in tension with this.** *Errors are silent to the player, loud to the authority* is
+about a round in a dark house; **hosting happens in the light, before there is a round**, and D-126
+already puts every gate where the host is alone with the setup. This is the same call D-173 made,
+applied to the refusal D-173 could not act on.
+
+> ### ⚠️ THE WORDING IS THE BUILDER'S DRAFT
+>
+> The owner ruled the **shape** — symptom, then the cause a person can act on — and did not dictate
+> the words. `CHECK LOCAL NETWORK PERMISSION` is drafted within the register, under the project's
+> standing copy rule, and **awaits the owner's eye**. Two constants rather than one string, so that
+> the ruled half and the drafted half can be read, tested and rewritten apart:
+> `LobbyModel.NOT_ON_THE_AIR` and `LobbyModel.NOT_ON_THE_AIR_CAUSE`.
+>
+> **LOCAL NETWORK is the app's own name for the grant** — the setup walk lists it under that
+> heading — so the host is sent to a row they have already read once rather than to a term this
+> screen invented.
+
 ### Swept in this pass
 
 | site | superseded by | what it now says |
@@ -3402,6 +3465,8 @@ has a carrier (`Effect.EgressHeld`) but not the duration it is a fraction of.
 | `ScreensOut.kt` — `EGRESS . TRUE` and its always-populated widget | D-178 | the type, and only while one runs |
 | `ScreensOut.kt` — the sign-off card in amber on the Residents' ending | — | the bone palette, like every other element on that screen |
 | `Chrome.kt` — *REVOKED and RESTRAINED fit whole with room to spare* | measurement | the carrier draws exactly ten characters and RESTRAINED is ten; there is no margin |
+| `Lobby.kt` — `THIS HOME DID NOT GO ON THE AIR` as the whole refusal | D-180 | the same line, plus the grant a host can still give — **wording drafted, not ruled** |
+| revision 35's ⚠️ *Built under D-173 but not ruled: the ten seconds* | D-179 | ratified; the value is unchanged and the flag comes off |
 
 ### Still open — and one of them is now smaller
 
@@ -3410,10 +3475,10 @@ has a carrier (`Effect.EgressHeld`) but not the duration it is a fraction of.
   production caller at all. It answers for both now, and the two answers are compared against each
   other across every kind in the game rather than trusted to agree. **The fifteen screen routes are
   untouched** — which screen a `MeetingOpened` opens is still a decision and not a wiring gap.
-- **The ten-second bound on an unanswered advertisement** (revision 35's ⚠️, *ruled by nobody*) and
-  **what a host is told when the real problem is a permission they can still grant** are awaiting the
-  owner's exact words and are deliberately not written down here. `THIS HOME DID NOT GO ON THE AIR`
-  is what the screen says today.
+- **Two copy drafts are open, and they are the only things left standing from this revision.**
+  D-180's cause line (`CHECK LOCAL NETWORK PERMISSION`) and Sniff's briefing are both the builder's
+  words inside a ruled shape, and both want the owner's morning eye. Neither is a decision waiting
+  to be made — the decisions are D-180 and E-S1-1's placement; these are the sentences under them.
 - **Sniff's briefing copy is a draft**, flagged on `Subroutine.briefing`. E-S1-1 is closed as a
   *placement* — the instruction is read at the card, because Sniff's own screen is black until the
   answer (D-137) and a sentence drawn there is black ink on black glass. The wording is the build's

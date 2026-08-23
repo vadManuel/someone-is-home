@@ -117,13 +117,30 @@ class LobbyModelTest {
         assertEquals("ANOTHER HOME HERE IS ALREADY CALLED THE BUNGALOW", model.refusal)
     }
 
-    /** Any other refusal: still honest, still named, still nothing hosted. */
+    /**
+     * **Any other refusal names the symptom AND the cause a person can act on** — still honest,
+     * still nothing hosted (D-173, and the owner's 2026-08-22 ruling that the refusal name the
+     * fixable cause rather than only the symptom).
+     *
+     * The two lines are asserted **separately and in order**, which is the point of their being two
+     * constants: the first is ruled and true whatever went wrong, the second is builder-drafted
+     * copy that points at a grant this phone cannot prove was the problem. A test comparing one
+     * merged string would let either half be rewritten as the other.
+     */
     @Test
-    fun `a home refused for any other reason says that it did not go on the air`() {
+    fun `a home refused for any other reason names the symptom and the fixable cause`() {
         val model = LobbyModel(link = RefusingLobbyLink(HostRefusal.CouldNotGoOnTheAir))
         model.hostHome("THE BUNGALOW") { throw AssertionError("a refused home reported itself up") }
         assertFalse(model.hosting)
-        assertEquals("THIS HOME DID NOT GO ON THE AIR", model.refusal)
+        assertEquals(
+            listOf(LobbyModel.NOT_ON_THE_AIR, LobbyModel.NOT_ON_THE_AIR_CAUSE),
+            model.refusal?.lines(),
+            "the refused host is not told both the symptom and the thing they can go and fix",
+        )
+        assertTrue(
+            LobbyModel.NOT_ON_THE_AIR_CAUSE.contains("LOCAL NETWORK"),
+            "the cause line stopped naming the grant, which is the whole of the ruling",
+        )
     }
 
     /** The refusal is the last thing that happened, not a permanent state of the phone. */
