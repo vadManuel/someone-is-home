@@ -3122,6 +3122,163 @@ permission they can still grant.
 
 ---
 
+## Revision 36 — the phone that is not an iPhone
+
+*Ruled 2026-08-23, with Vadmanuel. One entry, and it is about a platform rather than a mechanic:
+what this design has been quietly assuming about the hardware in every player's hand, and what
+happens to each assumption when one of those hands is holding something else. **No rule of the game
+changes here.** What changes is the list of things a phone has to be able to do before it is allowed
+to play.*
+
+### D-174 · **Android is a calibration problem, not a redesign — and v1 may ship iPhone-only**
+
+**Ruled: rather than support Android broadly, the project may limit v1 to iPhone until specific
+Android phones have been researched and individually whitelisted.** The whitelist is an allowlist of
+*named models*, gated at setup. Broad Android support is not a v1 target, and **the Android milestone
+is conditional on that research rather than scheduled ahead of it.**
+
+**The word carrying the ruling is *calibration*.** Not one of the six risks below asks the game to be
+a different game on Android, and the stack reversal is why: **one rendering engine, so screen parity
+is structural rather than maintained**, and **a server-authoritative core, so every rule that decides
+anything runs on the host in common Kotlin and cannot diverge.** What is left is the thin `:platform`
+`actual` — and **every risk on this page lives inside one of them.** That is the good news and it is
+the reason this ruling is a *may* and not a *never*: **nothing has to be redesigned; six things have
+to be measured on named hardware.**
+
+#### 1 · Haptics is a gameplay channel, and the Android motor zoo is not one instrument
+
+The design's own sentence is that haptics is **"the only fully private channel available, and no game
+in this space uses it"** (`gdd.md:551`). It is load-bearing in four places at once: **Sniff's two
+counted groups** (D-137), **Handshake's rhythm**, **the Sync Pulse beat** at 1.5 s inside a 400 ms
+window (D-167), and now **one vibrate yes, two vibrates no, and a call that rings until answered**
+(D-160). Two of the roster's three *dark* Subroutines are haptic-only, and **Sniff is the only
+*short dark*** — the cell the design most needs filled (`gdd.md:580`). On a motor that cannot render
+two groups as distinguishably unequal, or cannot start and stop cleanly enough for a rhythm to be
+echoed back, **those two cells empty and the light-signature axis loses its cheap end.**
+
+**The worse one is only visible across devices, and D-102 is where it hides.** D-102 rules the buzz
+**identical for every player** — same pattern, same duration, an Insider's own Revoke included —
+because anything else is an audible tell in a silent house. **That rule silently assumes identical
+hardware.** A Taptic Engine and a rotary motor do not sound alike and do not feel alike, and in a
+house under enforced silence **a distinguishable motor turns the buzz into device identification**:
+the pattern still says nothing about *what* happened, and the timbre now says *whose phone it
+happened on*. D-102 was written to stop a buzz from naming an event. **Mixed hardware lets it name a
+person.** A private channel is only private if the hardware is.
+
+#### 2 · The contact handshake is a distance measurement, and RSSI is not a distance
+
+`gdd.md:547` is unusually blunt for this document: **the radius is a hard constraint, not a tuning
+value.** D-008 stopped the through-wall detector by name and D-009 built the contact gate in its
+place. **Per-chipset transmit-power calibration and antenna placement mean a threshold tuned
+iPhone↔iPhone is a different physical distance iPhone↔Android** — and asymmetric between the two
+directions, since each side reads the other's radio.
+
+**Both failure modes are bad and they point opposite ways.** Too tight and **Revoke stops landing,
+silently** — the contact primitive's whole design is that a non-outcome produces *"nothing at all,
+silently, with no feedback on either device"* (`gdd.md:543`), so a mis-tuned gate is
+indistinguishable from an Insider who never tried, on both phones, forever. Too loose and **the
+deactivation report is a through-wall detector for Revoked players again**, which ends *you can walk
+past a Revoked player and never notice* — the sentence D-008 exists to protect. **This is the one
+risk of the six where calibration means a number per model *pair*, not a number per model.**
+
+#### 3 · The dark screens assume OLED, and that assumption is load-bearing
+
+**"On OLED a black pixel emits nothing"** (`gdd.md:722`) is not an art note. It is the entire reason
+*minimise lit pixel **area**, not just brightness* means anything, and it is what makes the dimmest
+step's **≤2-nit full-screen floor** (`gdd.md:1254`) reachable at all. On an LCD a black screen is a
+backlight behind a closed shutter — **it glows**, and the floor may simply be unreachable.
+
+**The concrete failure is a Revoked player's phone on the floor.** A flat phone that emits nothing is
+how a Revoked player stops being a light source in a dark house; on a lit panel they are **a soft
+lamp visible across a dark room**, and the map of who is out draws itself for anybody standing in the
+doorway. The same panel makes every *dark* Subroutine — Handshake's near-black screen most of all — a
+beacon, which deletes concealment from the axis it is half of.
+
+**This is the real Android light question, and it is not the one this log asked.** OI-7 asked about
+the torch and **D-024 closed it correctly**: the torch is not in the light ladder, and *every light
+event in the game is a screen event*. **Precisely because every light event is a screen event, the
+panel — not the LED — is where Android can actually take the light ladder away.** D-024 stands; it
+answered a smaller question than the one that was underneath it.
+
+#### 4 · Discovery is the front door, and NSD is the flakier half of it
+
+mDNS is the discovery mechanism (D-025), and revision 35 has just spent an entire ruling on what a
+host reads when a home **could not go on the air** (D-173). Android's NSD carries a long-documented
+history of registration and resolution flakiness, and OEM handling of Wi-Fi multicast varies by
+device — so the failure D-173 rules on is **more likely** on the hardware this ruling is about, not
+less.
+
+**The front door is the one place a failure costs the evening rather than the round**, which is also
+why it is the most survivable of the six: **D-173 already puts every discovery refusal in front of
+the host, at hosting time, in a lit room, with RENAME on the same screen** — and the ten-second bound
+built under it (ruled by nobody, and flagged as such) already assumes a stack that may answer with
+nothing at all.
+
+#### 5 · OEM process attackers versus a round-long lifetime
+
+A round is ~25 minutes of continuous BLE advertising *and* scanning, a duty-cycled camera session,
+motion at 100 Hz and a screen that must not sleep. **Aggressive OEM battery managers freeze or stop
+processes on exactly that profile.**
+
+**The posture absorbs most of it, and by accident rather than by foresight.** The phone *is* the
+lamp, and the house rule is **don't conceal your phone — held out, screen up** (`gdd.md:677`), so the
+app is foregrounded, screen-on, in a hand, for the whole shift. **That is the least killable state an
+Android app can be in.**
+
+**The residual risk is the pocketed phone**, and the design has exactly one class of player who
+pockets it: **a Revoked player walking to the couch.** An app frozen there stops advertising, and a
+Revoke that was performed reads to the house as a Revoke that never was. **It degrades loudly rather
+than silently**, because D-161's mid-round register already covers it: a device that went unreachable
+surfaces as a **house notice** at the next meeting, in the administrative words the house already
+uses.
+
+#### 6 · Vibrator scheduling jitter versus the coordinated flip
+
+**Largely absorbed before it was raised.** The coordinated flip is scheduled, never commanded —
+*the event begins at T*, broadcast ~2 s ahead, a lead D-167 reclassified as the design's own rather
+than a builder's guess — so what remains is local scheduling accuracy against **±150 ms** for a flip
+that reads as one event and **400 ms** around each Sync Pulse beat. **The 400 ms is wide on purpose**,
+and *no twitch timing* is constraint 4 on every Subroutine in the roster. **Recorded as the smallest
+of the six**, and recorded anyway, because a motor that is late is a different bug from a motor that
+is wrong.
+
+#### The structural mitigations — and why this ruling is a *may*
+
+- **The server-authoritative core keeps all game logic safe.** No rule, no grade, no cooldown and no
+  win condition ports. The redaction schema, the emit boundary and the three leak harnesses are
+  common Kotlin and never see a platform type (the portability discipline: no `Date`, no BLE types,
+  no UI types in the core).
+- **Every risk above lives in a thin `:platform` `actual`** — haptics, BLE, panel, discovery,
+  lifecycle. Six seams, each already declared once in common code, each already written twice.
+- **The capability gate already has a home.** D-161 put a gate at device setup, in the light, before
+  anybody sits down, and ruled that a lobby will not seat a device that cannot do the job. **A
+  CAPABILITY gate belongs beside that permission gate** — amplitude-controlled vibrator, simultaneous
+  BLE advertise and scan, panel type — refusing **ninety seconds from recoverable rather than at the
+  cost of a round**, which is D-161's own arithmetic applied to hardware instead of consent.
+
+**Why a whitelist rather than a capability floor.** Because two of the six cannot be asked about.
+**A phone will not report its motor's timbre and will not report that its RSSI reads two decibels
+hot** — those are measurements, not queries, and a gate can only read what the OS will answer.
+**A researched allowlist of named models is a capability query that has already been run by a
+person, on the hardware, once**, and the setup gate then reads a model name. The capability gate
+covers what the OS *will* answer; the whitelist covers the rest.
+
+### Where this lands in writing
+
+| site | what it now says |
+|---|---|
+| `game-architecture.md` — *Open platform question created by this decision* | corrected: OI-7 is **closed** (D-024), and the section now says why the torch was the smaller question |
+| `game-architecture.md` — new subsection, *Android is a calibration problem* | the six risks, the structural mitigations, and the whitelist |
+| `game-architecture.md` — stack table, the **Android** row | the milestone is conditional (D-174), not merely undated |
+| `game-architecture.md` — Technical Risks table | one row, pointing at the subsection |
+| `game-architecture.md` — *Carried forward, unresolved by design* | Android scope carried as an open item with a research trigger |
+
+**One citation corrected in passing:** the through-wall detector was stopped by **D-008**, and the
+contact gate built by **D-009**. D-069 is the marker-card ruling and has nothing to do with the
+contact radius.
+
+---
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

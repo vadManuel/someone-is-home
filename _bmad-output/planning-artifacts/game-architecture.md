@@ -149,6 +149,7 @@ A revoked phone **advertises** (radio on), **does not scan** (sensor off), and *
 | **QR is photographable** | Mitigations exist; NFC is the real fix and it is the paid tier |
 | **Amber vs. scotopic vision** | The Tier 0 promise rests on a palette chosen for art reasons. Watched in playtest; the palette is four luminance values and cheap to change |
 | **Contact-conceals-attacker** | Unverified. If contact does not conceal, the anonymous revoke is gone and ghost mode's information design needs revisiting |
+| **Android hardware variance across six channels** | Haptic fidelity, RSSI calibration, panel type, NSD, process attackers, vibrator jitter. **A calibration problem, not a redesign** — all six live in thin `:platform` actuals and no game logic ports. **v1 may ship iPhone-only pending a researched model whitelist (D-174)** — see *Android is a calibration problem* under Engine & Framework |
 
 ### Scope tension — recorded unresolved
 
@@ -173,7 +174,7 @@ The assessment above is accurate, and its accuracy is itself the risk. A minimal
 | **Compose Multiplatform** | **1.11.1** — iOS stable since 1.8.0 (May 2025). **Requires Kotlin 2.2+; native targets require 2.3.10+** |
 | **Xcode / Swift** | 26.5 / Swift 6.3.2 — for the iOS shell only |
 | **iOS SDK** | 26 (mandatory for App Store since 28 April 2026). **Deployment target iOS 26** |
-| **Android** | Target TBD at Android milestone |
+| **Android** | Target TBD — and **the milestone itself is conditional** (D-174): v1 may ship iPhone-only until specific models are researched and whitelisted |
 
 ### Why this reverses the original decision
 
@@ -289,11 +290,35 @@ The original tripwire — *"if cross-platform day-one becomes non-negotiable, th
 
 `XcodeBuildMCP` (Sentry, ~82 tools) noted as a fallback if first-party tooling proves thin.
 
-### Open platform question created by this decision
+### The platform question this decision opened — and the smaller one it answered first
 
-**Android's torch is worse, and no framework fixes it.** `setTorchModeOn(level:)` is fine-grained on every iPhone in a decade; Android exposes strength levels only on hardware reporting multiple levels, with binary on/off and unreliable PWM below that. **Graduated light is the core mechanic.**
+**Android's torch is worse, and no framework fixes it.** `setTorchModeOn(level:)` is fine-grained on every iPhone in a decade; Android exposes strength levels only on hardware reporting multiple levels, with binary on/off and unreliable PWM below that.
 
-This is a design decision, not an engineering one: **does the lamp degrade gracefully on weak hardware, or does the game declare a minimum torch capability the way it declares a minimum OS version?** Answer it before the Android milestone, not during. Recorded as **OI-7**.
+**Recorded as OI-7, and OI-7 is closed** — see D-024. The framing above was wrong where it claimed graduated light is the core mechanic: **the torch is not in the light ladder at all.** Tier 0 is the dim amber *screen* lamp, and screen brightness override works identically on both platforms. Where software cannot dim the LED, the Tier 1 paper snoot's end cap does. **Accepted consequence:** on binary-torch hardware the app switches the torch but cannot ramp it, which is fine because **every light event in the game is a screen event.**
+
+**That closure is correct and it answered the smaller question.** Precisely *because* every light event is a screen event, the place Android can take the light ladder away is **the panel, not the LED** — which is one of the six risks in the next section.
+
+### Android is a calibration problem, not a redesign — and v1 may ship iPhone-only
+
+> **Owner ruling, D-174:** rather than support Android broadly, the project **may limit v1 to iPhone** until specific Android phones have been researched and **individually whitelisted** — an allowlist of named models, gated at setup. **The Android milestone is conditional on that research rather than scheduled ahead of it.**
+
+**Nothing below asks the game to be a different game on Android.** The stack reversal already bought that: one rendering engine means screen parity is structural rather than maintained, and the server-authoritative core means every rule that decides anything runs on the host in common Kotlin. **What is left is the thin `:platform` `actual`, and all six risks live inside one.** Nothing is redesigned; six things are measured on named hardware.
+
+| # | Risk | The design assumption it threatens |
+|---|---|---|
+| 1 | **Haptic fidelity across the Android motor zoo** | Haptics is a **gameplay channel**, not feedback — Sniff's two counted groups, Handshake's rhythm, the 1.5 s Sync Pulse beat, one-buzz-yes / two-buzz-no (D-160). Two of three *dark* subroutines are haptic-only, and Sniff is the only *short dark*. **Plus the cross-device tell:** D-102's identical-buzz-for-every-player rule silently assumes identical **hardware** — a Taptic Engine and a rotary motor differ in timbre, so in an enforced-silence house a mixed-hardware party makes the buzz **audible device identification**. D-102 stops a buzz naming an event; mixed hardware lets it name a person |
+| 2 | **Per-chipset RSSI variance and iPhone↔Android asymmetry** | The contact handshake's **tight-RSSI gate**, where the radius is a hard constraint and not a tuning value (`gdd.md:547`). Too tight, **Revoke stops landing silently** — the primitive's non-outcome is *no feedback on either device*, so a mis-tuned gate is indistinguishable from an Insider who never tried. Too loose, the deactivation report is a **through-wall detector for Revoked players** again (D-008, D-009). The only risk here needing a number per model *pair* |
+| 3 | **Panel type — the OLED assumption** | *On OLED a black pixel emits nothing* is load-bearing for every dark screen, and the **≤2-nit dimmest step may be unreachable** on some panels. Concretely: **a Revoked player's flat phone on an LCD glows across a dark room**, drawing the map of who is out; and Handshake's near-black screen becomes a beacon |
+| 4 | **Android NSD / mDNS flakiness** | **Discovery is the front door** (D-025), and D-173 has just ruled what a host reads when a home could not go on the air. That failure is *more* likely here. Survivable because D-173 puts the refusal in front of the host, at hosting time, in the light |
+| 5 | **OEM process attackers vs. round-long lifetime** | 25 minutes of BLE advertise + scan, camera, 100 Hz motion, no sleep. **Mostly absorbed by posture** — the phone *is* the lamp and the house rule is *held out, screen up*, the least killable state there is. **Residual: the pocketed phone**, which in this design is a Revoked player walking to the couch — a performed Revoke reading as one never performed. The house-notice rule (D-161) covers the disclosure |
+| 6 | **Vibrator scheduling jitter** | The coordinated flip and Sync Pulse timing. **Largely absorbed** by scheduling rather than commanding (broadcast *the event begins at T*) and by the ruled **400 ms** tap window. The smallest of the six, recorded anyway |
+
+**Structural mitigations, which are why this is a *may* and not a *never*:**
+
+- **The server-authoritative core keeps all game logic safe.** No rule, grade, cooldown or win condition ports. The redaction schema, the emit boundary and the three leak harnesses are common Kotlin and never see a platform type — the portability discipline above is what guarantees it.
+- **Every risk lives in a thin `:platform` `actual`** — haptics, BLE, panel, discovery, lifecycle. Seams already declared once in common code.
+- **The Perms/setup gate is the natural home for a future CAPABILITY gate.** D-161 already refuses to seat a device that cannot do the job, at setup, in the light. Amplitude-controlled vibrator, simultaneous BLE advertise + scan, and panel type belong beside it — **refusing ninety seconds from recoverable rather than at the cost of a round.**
+- **The whitelist covers what a gate cannot ask.** A phone will not report its motor's timbre or that its RSSI reads hot; those are measurements, not queries. **A researched allowlist is that measurement already taken, by a person, once** — and the setup gate then reads a model name.
 
 
 ## Architectural Decisions
@@ -1079,5 +1104,6 @@ Buy `someoneishome.game` / `.app` (~$20, availability not yet checked post-renam
 | **OI-6** Ghost idle time at ~25 minutes | Playtest; meeting frequency is the only lever |
 | **13 indexed assumptions** | Every one needs a number from a real round |
 | **The scope amber** | Has a trigger (E0–E5 complete) and a cut list. **Resolves at a checkpoint, not in a document** |
+| **Android scope (D-174)** | Owner-ruled open: **v1 may ship iPhone-only.** Trigger is research, not a date — six hardware channels measured on named models, then a whitelist read at the setup gate |
 
 **Gating before implementation:** ~~story 1.7a/1.7b~~ — **CLEARED 2026-08-17.** Both halves pass. 1.7a's pre-warm mitigation proved unnecessary and should not be built; 1.7b's mitigation was aimed one layer too low and is replaced by a whole-app allocation budget (story 1.7c, D-063).
