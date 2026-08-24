@@ -349,7 +349,13 @@ fun CheatRoot() {
             // would race on every meeting — a screen that advanced before the gate closed would
             // look exactly like a gate that closed early, on the one surface where D-104's
             // *no player short* is what a person is reading.
-            CheatView.Panel -> FlowHost(flow, standingInForTheHouse = !round.armed)
+            CheatView.Panel -> FlowHost(
+                flow,
+                standingInForTheHouse = standsInForTheHouse(
+                    playsAScriptedRound = round.armed,
+                    armsTheHouse = round.armsTheHouse,
+                ),
+            )
             CheatView.Picker -> CheatPicker(
                 flow.state,
                 onPick = { flow.jump(it); view = CheatView.Panel },
@@ -488,6 +494,44 @@ fun CheatRoot() {
  * **A production build should send one raw read and let the house route it** — one wire member,
  * the house's judgment, no shape test on a phone. Returns null for paper this game did not print.
  */
+/**
+ * **Whether the bench's fake house may drive this phone's screens** — `FlowHost`'s
+ * `standingInForTheHouse`, decided here rather than inside the composable.
+ *
+ * The stand-in fires whatever push the current screen is waiting for after `HOUSE_STAND_IN_MS`, so
+ * that a ported flow with no house attached is walkable instead of stopping at the check-in screen
+ * forever. Its own KDoc states the rule this function exists to keep: **it must never be true in a
+ * real round.** Two things moving one screen race on every meeting, and a screen that advanced
+ * before the gate closed looks exactly like a gate that closed early — on the one surface where
+ * D-104's *no player short* is what a person is reading.
+ *
+ * ### ⚠️ It read one switch and there are two ways to be in a real round
+ *
+ * The expression was `!round.armed`, and `armed` is [RoundCheat.ROUND_SWITCH] — *this process is
+ * playing the scripted evening*. The payoff run then added a **second** way to have a real round,
+ * [RoundCheat.ARM_SWITCH], for a host phone that arms and then leaves the evening to the people in
+ * it; this line was never taught about it. So the owner's two phones ran a real house all evening
+ * with the fake one also driving their screens, and the vote beat records what that looked like:
+ * **ASSEMBLE to NOTICE in 4.0 seconds** — `HOUSE_STAND_IN_MS` exactly, on a screen with no
+ * `autoAdvance` entry — a check-in gate that never closed because nobody was left on the screen
+ * long enough to press I AM HERE, and three meetings that were fiction.
+ *
+ * ### It is a function so that it can be tested and injected against
+ *
+ * `inRoundScan` below was pulled out of the composable for this reason and the reason holds here:
+ * inside a `@Composable`, a rule about when the fake house may drive is a rule nothing can check,
+ * and this one has already been wrong once in production with no test able to see it.
+ *
+ * ⚠️ **It is still switch-shaped, and that is a real residual gap.** Both inputs are launch
+ * switches, so a phone launched with neither — one a person taps through the lobby and joins to a
+ * real house with their finger — still gets the stand-in. Closing that properly needs the phone to
+ * key on *the house has spoken to me* rather than on how the process was started, which belongs
+ * with the production arming path (E-PAY-1) and is not this unit's to invent. Flagged rather than
+ * guessed at.
+ */
+internal fun standsInForTheHouse(playsAScriptedRound: Boolean, armsTheHouse: Boolean): Boolean =
+    !playsAScriptedRound && !armsTheHouse
+
 internal fun inRoundScan(payload: String): IntentMessage? =
     when (val read = CardPayload.decode(payload)) {
         is CardPayload.Result.Rejected -> null
