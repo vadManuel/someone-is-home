@@ -83,6 +83,16 @@ class RoundCheat(
     val armed: Boolean = launchSwitch(ROUND_SWITCH)
 
     /**
+     * True when this phone should arm a real round at LIGHTS OUT and then leave the evening to the
+     * people in it. See [ARM_SWITCH] — it is the trigger half of E-D3-3, standing in for a
+     * production path that does not exist.
+     *
+     * [armed] implies it: a bench that plays a round has always armed one, and a host carrying both
+     * switches must not arm twice. The app root reads this first for that reason.
+     */
+    val armsTheHouse: Boolean = launchSwitch(ARM_SWITCH)
+
+    /**
      * **How far ahead of real time the house's clock is being run, in nanoseconds.**
      *
      * Read by the driver's `clockNanos` in the app root and written only by [skipTo]. It is the
@@ -431,6 +441,24 @@ class RoundCheat(
      * send, push the house's clock past the cooldowns a rehearsal should not stand and wait for, and
      * then wait for five phones to answer on their own.
      */
+    /**
+     * **LIGHTS OUT, armed for real, with nobody scripted afterwards** — [ARM_SWITCH]'s whole body.
+     *
+     * The one line of [theRound] that starts a round, and none of the five acts that follow it. What
+     * happens after this is whatever the people holding the phones do; the tick driver in the app
+     * root mints the timed transitions off real time, because [skipTo] is never called here and
+     * [skewNanos] therefore stays 0.
+     *
+     * A refusal is [RoundAuthority.arm]'s own and is already spoken on the host's phone in a lit
+     * room, which is where `armingFor` says a refusal belongs out loud.
+     */
+    suspend fun armTheHouse(seed: Long) {
+        val house = authority ?: return
+        note("=== THE LIGHTS GO OUT — ARMING FOR A ROOM FULL OF PEOPLE, NO SCRIPT ===")
+        if (!house.arm(seed)) return
+        note("ARMED — ${house.state.seats.size} SEAT(S) IN THE ROUND · THE EVENING IS THEIRS")
+    }
+
     suspend fun theRound(seed: Long) {
         val house = authority ?: return
         note("=== THE ROUND — ACT 1, THE LIGHTS GO OUT ===")
@@ -802,6 +830,35 @@ class RoundCheat(
 
         /** Play a round after the lobby is ready. Set on every seat that is taking part. */
         const val ROUND_SWITCH = "SOMEONES_HOME_ROUND"
+
+        /**
+         * **Arm a real round when the host presses LIGHTS OUT, and then get out of the way.**
+         *
+         * ⚠️ **TEST ENABLEMENT STANDING IN FOR A PRODUCTION PATH THAT DOES NOT EXIST.** This is
+         * E-D3-3's *trigger* half, which fell off the tracked list at revision ~34 when P3 closed
+         * the *push* half and the escalation was retired with it. `FlowModel.lightsOut` is
+         * presentation only — its whole body is `push(ScreenId.Armed)`, and its KDoc says so — and
+         * [RoundAuthority.arm] has exactly one other caller in the tree, [theRound], which is the
+         * bench script. So on a phone a person launches, holding LIGHTS OUT walks the host's own
+         * screen to ARMED and arms nothing: every other seat stands in the lobby forever. Proved on
+         * five seats before this switch was written.
+         *
+         * **Why it cannot be [ROUND_SWITCH].** That switch starts [theRound], which plays the whole
+         * scripted evening on named delays and pushes the house's clock forward through [skewNanos].
+         * On a phone somebody is holding, that is the bench driving the player — and a script racing
+         * a person is neither a rehearsal nor a playtest.
+         *
+         * So this arms and stops. No script, no acts, no skew: [skewNanos] stays 0, so the tick
+         * driver runs against real time, which is what an evening paced by people wants. The five
+         * timed transitions are unaffected — the driver in the app root already runs on the host
+         * independently of [armed].
+         *
+         * **The production path is still missing and this does not supply it.** What a real build
+         * needs is for the host's own LIGHTS OUT to arm the house, which is an engineering item
+         * (E5's) rather than a switch on a bench. Set on the HOST only; inert everywhere else,
+         * because arming reads `flow.lobby.hosting` exactly as the button does.
+         */
+        const val ARM_SWITCH = "SOMEONES_HOME_ROUND_HOUSE"
 
         /** The arming seed, so a rehearsal can be replayed. Defaulted, never random. */
         const val SEED_SWITCH = "SOMEONES_HOME_ROUND_SEED"

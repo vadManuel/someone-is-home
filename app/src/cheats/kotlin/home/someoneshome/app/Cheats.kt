@@ -22,6 +22,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import home.someoneshome.model.CardPayload
+import home.someoneshome.model.MarkerShapes
+import home.someoneshome.model.protocol.IntentMessage
 import home.someoneshome.platform.SeededCardScanner
 import home.someoneshome.platform.clearSeatToken
 import kotlinx.coroutines.delay
@@ -293,6 +296,16 @@ fun CheatRoot() {
     // phone, and the test for which one is the screen: LIGHTS OUT is what walks the host to ARMED,
     // so a phone standing there having pressed it is the phone holding the house.
     LaunchedEffect(round) {
+        // **The evening a person plays, and it is the first branch on purpose** (RoundCheat.ARM_SWITCH).
+        // A host carrying both switches must arm exactly once, and the scripted round below already
+        // arms its own — so this arm-and-stop path is checked first and returns rather than falling
+        // through. What follows it is nobody's script: the tick driver one effect down mints the
+        // timed transitions off real time, and every act is a thumb on a real phone.
+        if (round.armsTheHouse && !round.armed) {
+            while (flow.state.screen != ScreenId.Armed) delay(250)
+            if (flow.lobby.hosting) round.armTheHouse(RoundCheat.seed())
+            return@LaunchedEffect
+        }
         if (!round.armed) return@LaunchedEffect
         launch { round.play() }
         while (flow.state.screen != ScreenId.Armed) delay(250)
@@ -354,13 +367,45 @@ fun CheatRoot() {
         // and the lens is held for exactly that long.
         //
         // What a read produces is `Effect.ScanAnswered` and the house's push to `ScanCaught` —
-        // `Flow.housePushed` says so, and there is no house attached to this build (E-D3-3). A
-        // client that walked itself to `ScanCaught` would be the device deciding which Subroutine
-        // a card holds. So the window ends here where it really ends on this build: **at the
-        // buzz**, which is the half below the effect boundary and the half that is real.
+        // `Flow.housePushed` says so. A client that walked itself to `ScanCaught` would be the
+        // device deciding which Subroutine a card holds, so nothing here moves a screen: the read
+        // goes UP as an intent and the house answers it.
+        //
+        // ⚠️ **THIS CALLBACK WAS EMPTY UNTIL THE PAYOFF RUN, AND THE COMMENT SAID WHY.** It was
+        // written when no house was attached (E-D3-3), so a read in a round had nowhere to go and
+        // the window ended at the buzz. Everything downstream has been built since — C3 routed
+        // `ScanAnswered` (`Flow.kt:1624`), R1 minted the wire members — and the one missing link
+        // was the finger. This is that link, and it is enablement of behaviour already ruled three
+        // times: revision 34's scan flow (tap SCAN, the window, AUTO-OPEN on acquire — the
+        // auto-open IS the read becoming the intent), D-124's resolution ((seat, card) → that
+        // seat's Subroutine, NOTHING FOR YOU HERE otherwise), and D-121 (a meeting is called ONLY
+        // by physically scanning the meeting card).
+        //
+        // ⚠️ **THE INTENT SPLIT IS CLIENT-SIDE AND THAT IS THE SEAM TO REPLACE.** `CallMeeting` and
+        // `BeginSubroutine` are two wire members, so somebody has to decide which a card is. The
+        // HOUSE is the one that should: `routeScan` (`core/Scanning.kt:87`) decides it against the
+        // home's map, and a client has no map — Static deleted `Effect.HomePlanOffered` and the
+        // plan now reaches nobody. So this trusts **the paper over the map**, reading the shape
+        // printed on the card, which is strictly weaker than the house's answer and **fails in the
+        // harmless direction**: an unregistered meeting-shaped card produces a `MeetingCalled` the
+        // rules refuse, and a real client cannot construct a wrong seat in any case because
+        // `IntentDesk` stamps the seat off the connection. **A production build should send ONE raw
+        // read and let the house route it** — one wire member, the house's judgment. That is E5's,
+        // and this split is the seam it replaces.
         if (view == CheatView.Panel && flow.state.screen == ScreenId.Scan) {
             DisposableEffect(scan) {
-                scan.scan { }
+                scan.scan { payload ->
+                    val intent = inRoundScan(payload)
+                    if (intent == null) {
+                        // Paper this game did not print. Nothing goes up: D-071 makes an unreadable
+                        // card a fact about a piece of paper rather than a statement about a
+                        // player, and the house is not asked about paper. The lens already buzzed.
+                        println("[round] SCAN — NOT THIS GAME'S PAPER")
+                    } else {
+                        println("[round] SCAN — ${nameOfScan(intent)} · ASKING THE HOUSE")
+                        press.value?.act(intent)
+                    }
+                }
                 onDispose {
                     // A window still open when this screen goes away produced no read — the
                     // countdown reached zero, or the player tapped STOP NOW. Both are the same
@@ -389,6 +434,56 @@ fun CheatRoot() {
             ShutterChip(scanner.peek?.id?.value.orEmpty()) { scanner.present() }
         }
     }
+}
+
+/**
+ * **A card read in a round, turned into the request it is** — and the seam a real build replaces.
+ *
+ * Pulled out of the callback that calls it so that it can be tested and injected against. The
+ * callback is inside a `@Composable`, where a rule about what a scan means would be a rule nothing
+ * could check; here it is a pure function from a payload to an intent, and
+ * [ScanIntentTest] sweeps the whole shape roster through it.
+ *
+ * ### It is ruled behaviour, not a decision taken here
+ *
+ * Decision-log revision 34's scan flow (tap SCAN, the ten-second window, **auto-open on acquire** —
+ * the auto-open *is* the read becoming the request), D-124's resolution (a `(seat, card)` pair
+ * resolves to that seat's Subroutine, and to NOTHING FOR YOU HERE otherwise), and **D-121**: a
+ * meeting is called only by physically scanning the meeting card.
+ *
+ * ### ⚠️ The split is client-side, and that is exactly what E5 should delete
+ *
+ * `CallMeeting` and `BeginSubroutine` are two wire members, so something must decide which a card
+ * is. **The house is what should decide it** — `routeScan` (`core/Scanning.kt`) answers it against
+ * the home's map, and a client has no map: Static deleted `Effect.HomePlanOffered` and the plan
+ * now reaches nobody. So this reads **the shape printed on the paper** instead, which is strictly
+ * weaker than the map's answer.
+ *
+ * **It fails in the harmless direction, and that is the whole argument for it standing in.** A
+ * meeting-shaped card the home never registered produces a `MeetingCalled` the rules refuse; a
+ * marker this seat has no work at produces the `ScanAnswered` that opens nothing, which is D-124
+ * working. Nothing here can name a seat: `IntentDesk` stamps that off the connection, so the worst
+ * a wrong answer costs is one refused frame.
+ *
+ * **A production build should send one raw read and let the house route it** — one wire member,
+ * the house's judgment, no shape test on a phone. Returns null for paper this game did not print.
+ */
+internal fun inRoundScan(payload: String): IntentMessage? =
+    when (val read = CardPayload.decode(payload)) {
+        is CardPayload.Result.Rejected -> null
+        // The reserved `u_shape` and nothing else. The Terminal's `t_shape` is deliberately NOT a
+        // second case: `routeScan` calls the Terminal **work** — it is a place you scan to work at
+        // — so it travels as an ordinary marker exactly like the ten.
+        is CardPayload.Result.Read ->
+            if (read.card.shape == MarkerShapes.MEETING) IntentMessage.CallMeeting
+            else IntentMessage.BeginSubroutine(read.card.id)
+    }
+
+/** What to call a scan in the log. The marker, or the one card that is not a marker at all. */
+private fun nameOfScan(intent: IntentMessage): String = when (intent) {
+    is IntentMessage.BeginSubroutine -> intent.marker.value
+    IntentMessage.CallMeeting -> "THE MEETING CARD"
+    else -> "A SCAN"
 }
 
 /**
