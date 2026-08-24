@@ -312,13 +312,19 @@ class StaticTest {
      * geography beyond the destinations a work order already narrows to one seat's own lines.**
      *
      * **The burst is asserted as a whole rather than by the absence of one type**, because an
-     * absence proves nothing about a run somebody adds tomorrow: what arming emits is four runs of
-     * one-per-seat and there is no fifth. `EffectPushTest.noFrameCarriesTheHomesGeography` is the
+     * absence proves nothing about a run somebody adds tomorrow: what arming emits is five runs of
+     * one-per-seat and there is no sixth. `EffectPushTest.noFrameCarriesTheHomesGeography` is the
      * same claim read off real frames on a real socket, where a room only a plan could name is
      * planted in the house and swept for.
+     *
+     * **The fifth run is the role reveal** (E-R2-2), and it is the one run whose *payload* differs
+     * by seat. It is on this list rather than exempted from it because the claim this test makes is
+     * about the burst's SHAPE: one effect per seat per run, so nothing about the size or the order
+     * of what a phone receives at arming says which role it holds. What is inside the reveal is
+     * addressed to the one phone it is about — see `EmitSchema.audienceOf`.
      */
     @Test
-    fun `the arming burst is four runs and none of them is a plan`() {
+    fun `the arming burst is five runs and none of them is a plan`() {
         val reduction = reduce(
             GameState.EMPTY,
             armingFor(Tick(1), 20260823L, ST_SEATS, null, placed(ST_ACTIVE)),
@@ -326,7 +332,10 @@ class StaticTest {
         val runs = reduction.effects.map { it::class.simpleName }.distinct()
 
         assertEquals(
-            listOf("LampSet", "WorkOrderIssued", "OpeningMessage", "IsolateTargetsOffered"),
+            listOf(
+                "LampSet", "WorkOrderIssued", "OpeningMessage", "RoleRevealed",
+                "IsolateTargetsOffered",
+            ),
             runs,
             "the arming burst gained or lost a run",
         )

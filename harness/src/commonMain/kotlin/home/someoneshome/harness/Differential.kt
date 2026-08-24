@@ -84,15 +84,80 @@ fun withRoleSwapped(events: List<Event>, seat: Seat): List<Event> = events.map {
  * Exchanging two seats of the same role is a no-op by definition, and [differentialOnRoleExchange]
  * refuses to report on it rather than measuring a round against itself.
  */
-fun withRolesExchanged(events: List<Event>, a: Seat, b: Seat): List<Event> = events.map { event ->
-    if (event !is Event.RoundArmed) event else {
-        val aWas = event.insiders.any { it.index == a.index }
-        val bWas = event.insiders.any { it.index == b.index }
-        if (aWas == bWas) event else {
+fun withRolesExchanged(events: List<Event>, a: Seat, b: Seat): List<Event> {
+    val arming = events.filterIsInstance<Event.RoundArmed>().firstOrNull()
+    val aWas = arming?.insiders?.any { it.index == a.index } == true
+    val bWas = arming?.insiders?.any { it.index == b.index } == true
+    // **Nothing moves unless a role moved**, which is what keeps *exchanging two seats of the same
+    // role is a no-op* true now that this function rewrites fires as well as the arming. Read off
+    // the arming once, above the walk, so the fires cannot be rewritten by a round whose roles were
+    // not.
+    if (aWas == bWas) return events
+
+    return events.map { event ->
+        if (event !is Event.RoundArmed) firedBy(event, a, b) else {
             val rest = event.insiders.filterNot { it.index == a.index || it.index == b.index }
             val moved = buildList { if (bWas) add(a); if (aWas) add(b) }
             event.copy(insiders = (rest + moved).sortedBy { it.index })
         }
+    }
+}
+
+/**
+ * **The two seats trade their FIRES as well as their roles** — and since E-R2-1 this is what makes
+ * the variant a round at all.
+ *
+ * ### Why rewriting the arming event stopped being enough
+ *
+ * The admission gate now refuses an ability fired by a seat that is not a living Insider. A
+ * variant that moved the role from `a` to `b` and left the script's fires on `a` is therefore not
+ * *the same round with the roles traded* — it is a round in which the Insider's kit is refused
+ * every time it is pressed, whose Revokes never land, whose Egress never starts, and whose every
+ * later line diverges from the baseline for a reason that has nothing to do with redaction. The
+ * diff would be several hundred unexplained lines long and every one of them would be the harness
+ * measuring its own rewrite.
+ *
+ * **So the fire follows the role, and only between the two seats being exchanged.** A fire by
+ * anybody else is untouched, which is what keeps the rewrite honest: this moves what the exchange
+ * moved and nothing more.
+ *
+ * ### The five the gate names, and the sixth the gate does not
+ *
+ * The Revoke's arming and the four fires are the same set `Admission.firedBy` gates, which is not a
+ * coincidence and must not become one: an ability the gate refuses and this does not rewrite is an
+ * ability whose exchange produces a refused round.
+ *
+ * **[Event.ContactMade] is rewritten too, and it is not gated anywhere.** It is the physical half
+ * of a two-step: a contact revokes only from a seat holding an armed Revoke, so an exchange that
+ * moved the arming and left the touch behind would produce a variant in which **nobody is ever
+ * revoked** — which is not a subtle divergence, it is a different round, and it read as three
+ * hundred unexplained lines before this was written. The arm and the touch are one act by one
+ * person and they move together.
+ *
+ * **The TARGET is never rewritten, on any of them.** Who somebody reached in the dark, or aimed a
+ * Surge at, is not a property of their role; moving it would be the rewrite inventing a different
+ * round rather than the same one played by other people.
+ *
+ * ⚠️ **[withRoleSwapped] does NOT do this and cannot.** A toggle has no partner to hand the kit
+ * to: a seat toggled out of the Insider list leaves its fires with nobody, and a seat toggled in
+ * has no fires of its own to gain. Where the toggled seat is the round's actor the variant is a
+ * round nobody can fire in, and the harness reports that as divergence rather than hiding it. The
+ * count-preserving exchange is the stronger instrument for exactly this reason.
+ */
+private fun firedBy(event: Event, a: Seat, b: Seat): Event {
+    fun swap(seat: Seat) = when (seat.index) {
+        a.index -> b
+        b.index -> a
+        else -> seat
+    }
+    return when (event) {
+        is Event.RevokeArmed -> event.copy(actor = swap(event.actor))
+        is Event.ContactMade -> event.copy(actor = swap(event.actor))
+        is Event.SurgeFired -> event.copy(actor = swap(event.actor))
+        is Event.IsolateFired -> event.copy(actor = swap(event.actor))
+        is Event.StaticFired -> event.copy(actor = swap(event.actor))
+        is Event.EgressFired -> event.copy(actor = swap(event.actor))
+        else -> event
     }
 }
 
@@ -120,11 +185,15 @@ fun withRolesExchanged(events: List<Event>, a: Seat, b: Seat): List<Event> = eve
  * here. The output is a report to be explained, not a verdict. What it rules out is a divergence
  * nobody can explain.
  *
- * ### A limitation that is true today
+ * ### The limitation that WAS true here is gone, and this is now load-bearing
  *
- * `reduce` does not read [GameState.roleOf] at all yet, so role is inert in the rules and this
- * harness currently has nothing to find. It passes for that reason and not because redaction was
- * checked. Its value starts the day a rule branches on role, which is why it is built now.
+ * This paragraph used to read *`reduce` does not read `roleOf` at all yet, so role is inert in the
+ * rules and this harness currently has nothing to find; its value starts the day a rule branches on
+ * role.* That day arrived three times: D-109 made a plain Resident's entry bank and an Insider's
+ * not, E-R2-2 gave every phone a message whose content is its own role, and E-R2-1 put the whole
+ * Insider kit behind a gate that reads it. **Two of the three are subtractable by kind and named
+ * ([METER_ASYMMETRY], [THE_ROLE_REVEAL]); the third is why [withRolesExchanged] moves a fire's
+ * actor with the role it exchanged.**
  */
 fun differentialOnRoleSwap(
     initial: GameState,
@@ -188,6 +257,34 @@ val METER_ASYMMETRY: Set<MessageKind> = setOf(
     EmitSchema.SYSTEM_INTEGRITY_LIVE,
     EmitSchema.SYSTEM_INTEGRITY_BATCHED,
 )
+
+/**
+ * **The second ruled asymmetry that can be subtracted by kind: the house telling one phone what it
+ * is** (`gdd.md:923`, E-R2-2).
+ *
+ * A role-swapped round moves this message's payload by definition — it *is* the role — so two runs
+ * disagree about it on the seats whose role changed and nowhere else.
+ *
+ * ### It is needed in one place only, and that place is not the per-client diff
+ *
+ * [Effect.RoleRevealed] is addressed to the seat it is about, so in a per-client transcript the
+ * divergence lands on the swapped seats, which [DifferentialResult.unexplained] already excludes.
+ * **Nothing in this file's ordinary path needs this set.** What needs it is the pair of tests that
+ * compare the *authority's own effect stream*, where every seat's reveal is on one list and the two
+ * that traded are in it.
+ *
+ * ### Subtracting it is not softening the instrument, and here is the line
+ *
+ * [METER_ASYMMETRY]'s argument, one kind further: a diff of two runs is a report to be explained,
+ * and an asymmetry that is ruled, addressed and measured on its own is explained rather than
+ * hidden. `DifferentialTest.the role reveal moves with the role and reaches one seat` is the
+ * complementary assertion — that the divergence is really there, and that it reaches exactly the
+ * phone it names — so this can never quietly become a filter over a leak.
+ *
+ * **Never add a kind here to make a test pass.** One entry, one ruling. A second kind claiming to
+ * be *the same asymmetry* would need a decision-log number before it needed a line of code.
+ */
+val THE_ROLE_REVEAL: Set<MessageKind> = setOf(EmitSchema.ROLE_REVEALED)
 
 /**
  * **Refuses to report on two runs that are the same round.**

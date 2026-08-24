@@ -367,6 +367,54 @@ sealed interface Effect {
      */
     data class OpeningMessage(val seat: Seat, val haptic: Haptic) : Effect
 
+    /**
+     * **What this phone is, said once, at arming, to the one phone it is about** (`gdd.md:923`,
+     * E-R2-2).
+     *
+     * The design's role reveal: *Insiders receive a petty, mundane blackmail text, then a house line
+     * in a customer-service register; Residents receive a flat administrative work order.* That is
+     * [OpeningMessage] on the surface — one dim, one buzz, the same fact to everybody — and this is
+     * the thing that message is a doorway to. *What differs by role is what is behind the message*,
+     * and this is the wire carrying it.
+     *
+     * ### It was missing and the Insider's whole half of the game was unreachable
+     *
+     * Read off five ledgers of a five-seat rehearsal, every line of both rounds: `ROLE RESIDENT`,
+     * including on the seat holding the round's only Insider role. Nothing on the wire set a role,
+     * so page 2 drew the Resident's tiles on every phone in the house — and the Isolate picker is
+     * reachable only from the Insider's page 2, so the one list the house *did* send that seat was
+     * drawn by nothing. **In a real evening no Insider could have fired any ability at all.**
+     *
+     * ### One seat's own role and nothing else — the shape is the guarantee
+     *
+     * [MeetingCalling]'s idiom, with the one field that cannot be dropped. This is emitted **once
+     * per seat, for every seat**, carrying that seat's own [role]; it is addressed to that seat and
+     * to no other phone. **There is no list here and there must never be one.** A field naming the
+     * other Insiders would be the reveal the endgame's [InsidersRevealed] exists to make once, at
+     * the end, to everybody — arriving instead at arming, on one phone, about somebody else.
+     *
+     * **Known mode is not widened here.** `gdd.md:923` gives an Insider *a message from each fellow
+     * Insider* — which rides the opening text thread, diegetically, and is the reason no roster
+     * screen needs to exist. This carries self-knowledge only.
+     *
+     * ### The burst stays role-independent in SHAPE, which is what the differential measures
+     *
+     * [IsolateTargetsOffered]'s finding, one step further. That one is constructed identically for
+     * every seat and narrowed by the allowlist; this one cannot be — its whole content is the role —
+     * so what is held constant is the **run**: one of these per seat, every round, grouped with the
+     * other arming runs. Every phone receives exactly one, at the same point in the same burst, and
+     * a role-swapped round moves the payload on the swapped seat's own wire and nowhere else. That
+     * is the divergence the differential harness is built to expect and it is named as such
+     * (`Differential.THE_ROLE_REVEAL`).
+     *
+     * ### Why the row is both living classes rather than one
+     *
+     * A row of `Insider/Live` alone would deliver this to Insiders and to nobody else, and the
+     * absence would then *be* the answer — rule 1's forbidden shape moved into the allowlist. The
+     * message reaches every living phone; what differs is what it says.
+     */
+    data class RoleRevealed(val seat: Seat, val role: Role) : Effect
+
     // ---- The meeting -----------------------------------------------------------------------
     //
     // Twelve kinds for one lifecycle looks like a lot until you try to merge two of them. Every

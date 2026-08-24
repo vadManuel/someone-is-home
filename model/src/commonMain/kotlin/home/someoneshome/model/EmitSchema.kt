@@ -78,6 +78,7 @@ object EmitSchema {
         is Effect.ScanAnswered -> SCAN_ANSWERED
         is Effect.PresenceChanged -> PRESENCE_CHANGED
         is Effect.OpeningMessage -> OPENING_MESSAGE
+        is Effect.RoleRevealed -> ROLE_REVEALED
         is Effect.MeetingOpened -> MEETING_OPENED
         is Effect.MeetingCalling -> MEETING_CALLING
         is Effect.StandAndWalkIn -> STAND_AND_WALK_IN
@@ -122,6 +123,7 @@ object EmitSchema {
      */
     val PRESENCE_CHANGED = MessageKind("PresenceChanged")
     val OPENING_MESSAGE = MessageKind("OpeningMessage")
+    val ROLE_REVEALED = MessageKind("RoleRevealed")
     val MEETING_OPENED = MessageKind("MeetingOpened")
     val MEETING_CALLING = MessageKind("MeetingCalling")
     val STAND_AND_WALK_IN = MessageKind("StandAndWalkIn")
@@ -333,6 +335,26 @@ object EmitSchema {
         // this row is as wide as MESSAGE_DELIVERED's rather than as narrow as the round allows.
         // At arming nobody is out yet; the row is written for the rule, not for the moment.
         OPENING_MESSAGE to (LIVING + OUTSIDE),
+
+        // **What is behind that message, per phone: this seat's own role** (`gdd.md:923`, E-R2-2).
+        //
+        // **Both living classes, and this row must never be narrowed to one of them.** A row of
+        // `Insider/Live` would deliver the reveal to Insiders and silence to everybody else, and
+        // the silence would then be the answer -- rule 1's forbidden shape, written into the
+        // allowlist instead of into a handler, where it would look like good hygiene. Every living
+        // phone receives exactly one of these; what differs is what it says.
+        //
+        // **What keeps one seat's role off another seat's phone is the ADDRESSING**, which the
+        // allowlist cannot see because two living Insiders are the same class -- `IsolateTargetsOffered`'s
+        // division of labour exactly, and the half that matters more here. See [audienceOf].
+        //
+        // Not the out classes and not AFTER. Roles are drawn at arming, when nobody is out yet, and
+        // a seat that goes out has already been told; a row that could deliver it later is a row
+        // that could re-answer the question on a couch, or a second time on the ending screen where
+        // `INSIDERS_REVEALED` answers it for the room at once. Narrow to the moment the reveal
+        // belongs to, which is the fail-closed direction for the most alignment-revealing kind in
+        // the table.
+        ROLE_REVEALED to LIVING,
 
         // **The ring, and it is for the living** (D-134). A player who is out gets no phone call
         // -- they get STAND AND WALK IN, which is the row below. This narrows on the ROUND-STATE
@@ -571,6 +593,12 @@ object EmitSchema {
             // reaches everyone (D-076) without the effect growing a broadcast shape that a later,
             // quieter message could inherit.
             is Effect.OpeningMessage -> listOf(effect.seat)
+            // **One seat's own role, to that seat, and this addressing is half of the guarantee.**
+            // The allowlist permits the kind to both living classes and therefore cannot stop seat
+            // 5 receiving seat 3's role -- two living Insiders are one class, and so are two living
+            // Residents. A widening here would publish the round's alignment to the house at
+            // arming, which is the one disclosure this whole application exists to prevent.
+            is Effect.RoleRevealed -> listOf(effect.seat)
             is Effect.SubroutineProgressed -> state.seats
             // Broadcast, and left to the allowlist to narrow -- the two meter kinds are facts about
             // the house rather than about the phone they arrive on, and addressing them by

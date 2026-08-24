@@ -12,6 +12,12 @@ package home.someoneshome.model
  * your cooldown is running — the identical code becomes an alignment leak, written by someone
  * tidying up error handling. A reason belongs in this enum only if a player standing in the dark
  * could have worked it out without their phone.
+ *
+ * **[AbilityNotTheirs] is the one exception and it is argued at the member, not waved past here.**
+ * It is admissible because no honest client can produce the intent it refuses, and because D-097
+ * deleted the refusal message the paragraph above is a warning about. The entry condition is
+ * unchanged for every reason that *can* meet a player: a refusal about a seat still needs to be a
+ * fact the room is already standing in.
  */
 enum class RefusalReason {
     /** No round exists yet. D-067: nothing in-game runs in the lobby, including the contact radio. */
@@ -62,6 +68,36 @@ enum class RefusalReason {
      * at — and the fuzzer calls meetings inside meetings on purpose.
      */
     MeetingAlreadyRunning,
+
+    /**
+     * **The seat that asked to fire does not hold the ability** — it is not an Insider, or it is
+     * no longer in the round (E-R2-1).
+     *
+     * ### It is the one reason here a player could not have read off the room, and that is lawful
+     *
+     * Every other member of this enum clears the entry condition above by being publicly
+     * observable. This one does the opposite: *who is an Insider* is the single fact the whole app
+     * exists to keep off every screen. It is admissible for the reason the Tier-2-at-a-meeting
+     * branch is — **no honest client can produce the intent, so this is not a client-visible path
+     * at all.** A Resident's page-2 controls take no pointer input from the first millisecond
+     * (D-142) and an out seat has no springboard, so the only thing that reaches this gate is a
+     * forged or bench-built frame, and a forged frame has no player behind it to leak to.
+     *
+     * ### And the channel that would have carried it does not exist
+     *
+     * D-068's warning — *the identical code reporting a mid-round refusal is an alignment leak
+     * written by someone tidying up error handling* — was a warning about a **refusal message**.
+     * D-097 deleted that message: a refused event is answered by re-pushing that seat's own
+     * authorized view, and no [Effect] and no wire kind can carry a reason down. So this enum is
+     * read by the authority and by the recording, and by nothing that has a socket.
+     *
+     * **The two halves are one reason on purpose.** *Not an Insider* and *out of the round* are
+     * both *this ability is not yours to fire*, and splitting them would put the difference between
+     * a Resident and a Revoked Insider into the recording as two distinct rows — a distinction the
+     * transcript has no reason to hold and the one a reader of a leaked recording would look for
+     * first.
+     */
+    AbilityNotTheirs,
 
     /**
      * The event belongs to a phase the meeting is not at — including there being no meeting.

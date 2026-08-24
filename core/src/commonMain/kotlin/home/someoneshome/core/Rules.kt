@@ -285,10 +285,13 @@ private fun signOff(winner: Winner): String = when (winner) {
  * property of the round rather than of the seat list — and so that a kind going missing for one
  * seat is a gap in a run of identical lines rather than a subtle reordering.
  *
- * **Nothing here reads `Role`**, apart from recording who was drawn. The lamps are identical, the
- * orders are drawn by a rule that never sees a role, and the opening message is the same fact sent
- * to everybody — any per-role difference at arming would be a tell delivered at the exact moment
- * the whole party is still standing together in the light.
+ * **Nothing here reads `Role`**, apart from recording who was drawn — **and the one line that
+ * tells each phone what it is** (E-R2-2). The lamps are identical, the orders are drawn by a rule
+ * that never sees a role, and the opening message is the same fact sent to everybody; any per-role
+ * difference at arming that reached a phone it was not about would be a tell delivered at the exact
+ * moment the whole party is still standing together in the light. The reveal is not that, and it is
+ * the design's (`gdd.md:923`): one message per seat, addressed to that seat, carrying that seat's
+ * own role and nothing else.
  */
 private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
     val seats = event.seats.sortedBy { it.index }
@@ -346,6 +349,19 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
         seats.map { Effect.LampSet(it, LAMP_DIM) } +
             orders.map { Effect.WorkOrderIssued(it.seat, it.asLines(state.destinations)) } +
             seats.map { Effect.OpeningMessage(it, Haptic.Short) } +
+            // **The reveal, one per seat, behind the message above** (`gdd.md:923`, E-R2-2). The
+            // opening text is the same fact sent to everybody and this is what it is a doorway to:
+            // *what differs by role is what is behind the message.*
+            //
+            // **This is the one line in this function that reads a role**, and it is the exception
+            // the header's *nothing here reads Role* is written against rather than a hole in it: a
+            // per-role difference at arming is a tell only if it reaches a phone that is not the
+            // one it is about, and this is addressed to that phone alone. The run itself is
+            // role-independent — one for every seat, in seat order, grouped like the three above —
+            // so the *shape* of the burst still says nothing, which is what the differential
+            // harness reads. Read off `state` rather than off `insiders`, so there is one answer to
+            // this question in the round and the recording agrees with the phone.
+            seats.map { Effect.RoleRevealed(it, state.roleOf(it)) } +
             // **The Isolate picker, for every seat, narrowed to Insiders by the allowlist and not
             // by this line.** A phone cannot draw a list it was never sent, and the ruling says
             // Isolate picks from one. Grouped by kind like the three runs above it, and the same

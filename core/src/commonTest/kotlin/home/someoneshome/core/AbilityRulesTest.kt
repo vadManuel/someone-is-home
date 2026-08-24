@@ -11,6 +11,7 @@ import home.someoneshome.model.GameState
 import home.someoneshome.model.InsiderAbility
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MessageKind
+import home.someoneshome.model.RefusalReason
 import home.someoneshome.model.Role
 import home.someoneshome.model.RoundState
 import home.someoneshome.model.Seat
@@ -37,6 +38,7 @@ import kotlin.test.assertTrue
  * 1. **Self-targeting works on every ability and shares its clock** (`gdd.md:393`, `:401`).
  * 2. **A wasted fire appears to succeed on the actor's device** (`gdd.md:344`, rule 1).
  * 3. **No actor-side feedback on firing any ability** (`gdd.md:398`).
+ * 4. **Only a living Insider may fire any of them** (E-R2-1) — the one that was found by playing.
  *
  * ### Why these are worth a file rather than three more cases in `TierTwoTest`
  *
@@ -497,7 +499,111 @@ class AbilityRulesTest {
             "the picker's row moved and this sweep would no longer be about the allowlist",
         )
     }
+
+    /**
+     * **RULE 4: THE HOUSE CHECKS WHO IS FIRING** (E-R2-1).
+     *
+     * The fourth rule about the whole kit, and the only one that was found by playing rather than
+     * by reading. In a five-seat rehearsal every seat's bench pressed every tile, because nothing
+     * on the wire tells a phone what it is — and **the house answered all of them.** Seat 0 was a
+     * plain Resident, had been Revoked mid-shift, was sitting on the ghost screen, pressed the
+     * Egress tile, and the house drew a Tether and lit the building. Across one round five seats
+     * pressed it thirty-nine times and the house made thirty-nine draws.
+     *
+     * **It is not a leak and it is worse than most leaks.** Nothing came back — `ABILITY_FIRED` is
+     * refused to a Resident by the allowlist — so the firing phone learned nothing at all. What it
+     * could do was **act**: spend the house's shared Egress cooldown, or, from outside the round,
+     * end it for everybody by starting a crisis nobody knew to contain. A round could be decided by
+     * somebody who was not in it.
+     *
+     * ### The reproduction is the test
+     *
+     * The three refusals below are the three seats the rehearsal actually had: a living plain
+     * Resident, a Revoked plain Resident on the couch, and an Insider the house has taken out of
+     * the round. Each of the five requests, from each of them, and the claim is the strong one —
+     * **the round is byte-identical afterwards**: no cooldown spent, no pool charged, no draw made,
+     * no effect emitted. That is what refusing above the rules buys and what a branch inside a
+     * handler could not (D-066).
+     *
+     * ### And the control, because a gate that refuses everything passes every assertion here
+     *
+     * A living Insider's five still land. Without that half this test would be green on a build
+     * that had deleted the Insider's kit from the game.
+     */
+    @Test
+    fun `only a living Insider can fire and nobody elses press moves the round`() {
+        val quiet = kitArmed()
+
+        // Walked rather than hand-set: the couch this fires from is one the rules produced.
+        val onTheCouch = kitWalk(
+            quiet,
+            Event.RevokeArmed(Tick(1), K_INSIDER),
+            Event.ContactMade(Tick(2), K_INSIDER, K_RESIDENT),
+        ).first
+        // The Insider the room held. Restraining walks a whole meeting, and what is under test is
+        // the gate rather than the ballot, so the seat is put out directly and said so.
+        val heldByTheRoom = quiet.copy(restrained = listOf(K_SECOND_INSIDER))
+
+        for ((who, state, actor) in listOf(
+            Triple("a plain Resident", quiet, K_RESIDENT),
+            Triple("a Revoked plain Resident", onTheCouch, K_RESIDENT),
+            Triple("a Restrained Insider", heldByTheRoom, K_SECOND_INSIDER),
+        )) {
+            for ((what, request) in everyRequestFrom(actor, Tick(10))) {
+                val admission = admit(state, request)
+                assertTrue(
+                    admission is Admission.Refused,
+                    "$what from $who reached the rules — the house does not check who is firing",
+                )
+                assertEquals(
+                    RefusalReason.AbilityNotTheirs, admission.reason,
+                    "$what from $who was refused for a reason that is not about whose ability it is",
+                )
+                assertEquals(
+                    state, kitWalk(state, request).first,
+                    "$what from $who moved the round: the refusal cost something, which means it " +
+                        "happened inside a handler rather than above the rules",
+                )
+            }
+        }
+
+        // **The rehearsal's own line, as an assertion.** `EGRESS DRAWN — Tether AT BENCH-J,
+        // BENCH-B`, from a seat that was not in the round.
+        assertTrue(
+            kitWalk(onTheCouch, everyRequestFrom(K_RESIDENT, Tick(10)).last().second).first
+                .egress == null,
+            "a Revoked plain Resident set the house on fire from the couch",
+        )
+
+        // The control. Five requests from the seat they belong to, all admitted.
+        for ((what, request) in everyRequestFrom(K_INSIDER, Tick(10))) {
+            assertTrue(
+                admit(quiet, request) is Admission.Admitted,
+                "$what was refused to a living Insider — the gate took the kit with it",
+            )
+        }
+    }
 }
+
+/**
+ * **Every ability as the REQUEST that asks for it**, from whichever seat is doing the asking.
+ *
+ * Deliberately not [EVERY_ABILITY], which walks each ability's *firing* and hard-codes the actor.
+ * The gate is about who may ask, so the Revoke appears here as `RevokeArmed` — the intent a thumb
+ * produces — rather than as the `ContactMade` that lands it. **`ContactMade` is on no list here on
+ * purpose:** it is a physical act reported by hardware, and it can no longer do anything to a seat
+ * that cannot arm.
+ *
+ * The Egress is on this list, unlike in [EVERY_ABILITY], because the gate does not care that it
+ * has no per-seat clock — and because it is the one the rehearsal caught.
+ */
+private fun everyRequestFrom(actor: Seat, at: Tick): List<Pair<String, Event>> = listOf(
+    "arming a Revoke" to Event.RevokeArmed(at, actor),
+    "a Surge" to Event.SurgeFired(at, actor, K_RESIDENT),
+    "a Static" to Event.StaticFired(at, actor),
+    "an Isolate" to Event.IsolateFired(at, actor, K_HALL),
+    "an Egress" to Event.EgressFired(at, actor, EgressType.Tether, listOf(K_GARAGE, K_STUDY)),
+)
 
 /**
  * **THE KINDS THAT REACHED THE FIRING PHONE AND NO OTHER PHONE.**

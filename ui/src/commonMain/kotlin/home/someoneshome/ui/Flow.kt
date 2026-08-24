@@ -1637,6 +1637,29 @@ class FlowModel(
             // be a second copy of one sentence.
             is RoundMessage.OpeningMessage -> arrived(ScreenId.Notify)
 
+            // **What this phone is, from the house** (`gdd.md:923`, E-R2-2). One field copied onto
+            // [PanelState], which is all this branch may do and all it needs to.
+            //
+            // **Before this, `role` was set by the cheat picker and by nothing else in the app**,
+            // so every phone in a real round drew the Resident's page 2 — including the Insider's.
+            // Page 2's tiles are drawn on `role` and the Isolate picker is reachable only from the
+            // Insider's, so the one Insider-only list the house really did send arrived on a phone
+            // with no way to open it. A whole half of the game was unreachable behind a field
+            // nothing wrote.
+            //
+            // **It decides nothing**, like every branch here. Whether this seat is an Insider is
+            // the house's to know and the house's to say; `ui` cannot see `core` and could not work
+            // it out. What the field then does — identical tiles at rest, capability under the
+            // thumb — is D-142's, written where the page is drawn.
+            //
+            // **No screen moves.** The reveal is text on a thread the player opens (`gdd.md:923`),
+            // and the opening banner one branch up is what says *now*. A navigation here would be
+            // this phone doing something the Resident's phone does not, in the light, with the
+            // whole party standing together — which is the tell the parity discipline exists for.
+            is RoundMessage.RoleRevealed -> state = state.copy(
+                role = if (message.insider) PanelRole.Insider else PanelRole.Resident,
+            )
+
             // **The ring — and this is the push that makes a round visible at all** (the owner's
             // routing table, 2026-08-23). It closes the half of E-P3-1 that mattered most: a client
             // took a hundred pushes across a complete round and stood on the lobby for all of them,

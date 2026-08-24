@@ -44,9 +44,14 @@ class ResumeTest {
         val result = resumeFromText(crashed().second.toText())
         assertIs<ResumeResult.Resumed>(result)
 
+        // **From a living Insider, which is now the only kind the house takes a fire from**
+        // (E-R2-1). Seat 1 is the Insider the room restrained at this round's first meeting, so
+        // arming from it is refused and nothing downstream of it happens — which is what this
+        // assertion would then be reporting instead of the resume.
+        val actor = INSIDERS.last()
         val more = listOf(
-            Event.RevokeArmed(Tick(9_000), Seat(1)),
-            Event.ContactMade(Tick(9_001), Seat(1), Seat(4)),
+            Event.RevokeArmed(Tick(9_000), actor),
+            Event.ContactMade(Tick(9_001), actor, Seat(4)),
         )
         val (after, continued) = record(result.state, more)
         assertEquals(ReplayResult.Identical, replay(result.state, continued))
@@ -69,9 +74,13 @@ class ResumeTest {
      */
     @Test
     fun `a recording whose effects were tampered with is refused`() {
-        val recording = crashed().second
-        val text = recording.toText().replaceFirst("F AbilityFired|actor=1|cooldownStarted=true",
-            "F AbilityFired|actor=1|cooldownStarted=false")
+        val (live, recording) = crashed()
+        // Read off the round rather than typed in. A literal that stopped matching would tamper
+        // with nothing, the resume would succeed, and this test would report a broken guard when
+        // what had actually moved was the fixture's actor.
+        val row = "F AbilityFired|actor=${INSIDERS.last().index}|cooldownStarted=true"
+        assertTrue(row in recording.toText(), "no such row to tamper with: $row")
+        val text = recording.toText().replaceFirst(row, row.replace("=true", "=false"))
         val result = resumeFromText(text)
         assertIs<ResumeResult.Refused>(result)
         assertEquals(ReplayResult.Diverged.Kind.EFFECT, result.because.kind)
@@ -83,8 +92,12 @@ class ResumeTest {
      */
     @Test
     fun `a recording whose state rows were tampered with is refused`() {
-        val recording = crashed().second
-        val text = recording.toText().replace("|revoked=0,2,7|", "|revoked=|")
+        val (live, recording) = crashed()
+        // The round's own revoked list, for the row above's reason.
+        val row = "|revoked=${live.revoked.joinToString(",") { it.index.toString() }}|"
+        assertTrue(live.revoked.isNotEmpty(), "nobody was revoked, so there is nothing to tamper with")
+        assertTrue(row in recording.toText(), "no such row to tamper with: $row")
+        val text = recording.toText().replace(row, "|revoked=|")
         val result = resumeFromText(text)
         assertIs<ResumeResult.Refused>(result)
         assertEquals(ReplayResult.Diverged.Kind.STATE, result.because.kind)

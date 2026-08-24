@@ -164,18 +164,27 @@ class ClientTranscriptTest {
      * Rule 1's effect is the one that must never widen. It reaches the actor, who is an Insider,
      * and nobody else — a Resident receiving it would be an event on a screen with no ability
      * behind it.
+     *
+     * **One receiver, and it is seat 5 rather than seat 1 since E-R2-1.** The room restrains seat 1
+     * at the fixture's first meeting and every fire in this round happens afterwards, so the
+     * fixture used to be firing the whole kit from the couch and the house used to answer. It is
+     * refused now, and the fixture fires from the Insider it keeps in the round — see `Round.actor`.
+     * The claim here is unchanged and is about **addressing**: exactly one seat, and it is an
+     * Insider.
      */
     @Test
     fun `ability fired reaches only the acting Insider`() {
         val transcripts = run()
+        val actor = INSIDERS.last()
         val receivers = transcripts.perClient
             .filter { c -> c.lines.any { it.startsWith("AbilityFired") } }
             .map { it.seat.index }
-        assertEquals(listOf(1), receivers)
-        assertTrue(Seat(1) in INSIDERS)
-        assertTrue(
-            transcripts.perClient.first { it.seat.index == 1 }
-                .lines.all { !it.startsWith("AbilityFired") || it.endsWith("|cooldownStarted=true") },
+        assertEquals(listOf(actor.index), receivers)
+        assertTrue(actor in INSIDERS)
+        val notStarted = transcripts.perClient.first { it.seat.index == actor.index }
+            .lines.filter { it.startsWith("AbilityFired") && !it.endsWith("|cooldownStarted=true") }
+        assertEquals(
+            emptyList(), notStarted,
             "rule 1: the effect must be identical whether the revoke landed",
         )
     }

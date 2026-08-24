@@ -143,9 +143,21 @@ class DifferentialTest {
         assertTrue(result.divergences.all { it.seat.index == 1 || it.seat.index == 3 })
     }
 
-    /** Two seats that take no ability action all round. Guards against only ever diffing the busy ones. */
+    /**
+     * **The exchange that moves the round's actor with it.**
+     *
+     * Seat 5 is the Insider this fixture fires everything from and seat 6 is an ordinary Resident,
+     * so exchanging them hands the whole kit to a different phone — and `withRolesExchanged` moves
+     * the fires along with the role, because since E-R2-1 a variant that left them behind would be
+     * a round in which nothing can be fired rather than the same round played by other people.
+     * Every one of those moved lines lands on one of the two swapped seats.
+     *
+     * Its opposite number is the exchange above: with the actor at seat 5, seats 1 and 3 are the
+     * pair that take no ability action all round, so the two tests together diff the busy seats and
+     * the quiet ones.
+     */
     @Test
-    fun `exchanging two passive seats leaks nothing but the meter`() {
+    fun `exchanging the acting seat leaks nothing but the meter`() {
         val result = differentialOnRoleExchange(
             GameState.EMPTY, round(), Seat(5), Seat(6), ignoring = METER_ASYMMETRY,
         )
@@ -280,12 +292,17 @@ class DifferentialTest {
     fun `with the Insider count fixed only the meter depends on who the Insiders are`() {
         fun stream(events: List<Event>) = effectsOf(GameState.EMPTY, events)
             .map { Transcript.render(it) }
-            .withoutTheMeter()
+            .withoutTheRuledAsymmetries()
 
-        // Both subtractions, and they are different shapes on purpose: the meter is a KIND, dropped
-        // from both runs so the surrounding lines stay aligned; the ending is the round STOPPING,
-        // so what is compared is everything that happened while both were still running. See
-        // `untilTheRoundEnds` for why the second cannot be expressed as the first.
+        // Three subtractions, and they are two shapes on purpose: the meter and the role reveal are
+        // KINDS, dropped from both runs so the surrounding lines stay aligned; the ending is the
+        // round STOPPING, so what is compared is everything that happened while both were still
+        // running. See `untilTheRoundEnds` for why the third cannot be expressed as the first.
+        //
+        // **The role reveal is subtracted HERE and nowhere else in this file.** It is addressed to
+        // the seat it is about, so in a per-client transcript it lands on a swapped seat and is
+        // already explained; this comparison is the authority's own stream, where every seat's
+        // reveal is on one list. The test below measures it on its own.
         val a = stream(round())
         val b = stream(withRolesExchanged(round(), Seat(1), Seat(3)))
         assertEquals(
@@ -333,9 +350,9 @@ class DifferentialTest {
         val toggled = stream(withRoleSwapped(round(), Seat(1)))
         assertNotEquals(baseline, toggled, "the meter no longer reads the Insider count")
         assertEquals(
-            baseline.withoutTheMeter(),
-            toggled.withoutTheMeter(),
-            "toggling a role changed something other than the meter",
+            baseline.withoutTheRuledAsymmetries(),
+            toggled.withoutTheRuledAsymmetries(),
+            "toggling a role changed something other than the meter and the reveal",
         )
     }
 
@@ -351,6 +368,46 @@ class DifferentialTest {
      * its expectation from `EmitSchema`, which is the thing it was testing. Nothing here tests
      * `METER_ASYMMETRY`; it names a ruled asymmetry, and these tests assert about the rules.
      */
-    private fun List<String>.withoutTheMeter(): List<String> =
-        filterNot { line -> METER_ASYMMETRY.any { line.startsWith(it.name) } }
+    /**
+     * **[THE_ROLE_REVEAL] is subtracted above, so it is measured here** (E-R2-2).
+     *
+     * The pattern [METER_ASYMMETRY] set: a subtraction has to be paired with the assertion that the
+     * thing subtracted is really there, or it becomes a filter over a leak that nobody would ever
+     * see again.
+     *
+     * Two halves, and the second is the one that matters. **It moves** — the reveal really does
+     * differ between two runs whose roles were exchanged, so the subtraction is subtracting
+     * something. **And it moves on the two seats that traded and on no other phone** — read off the
+     * per-client transcripts rather than off the authority's stream, because the claim is about
+     * what arrived somewhere, and a reveal reaching a third seat would be the round's alignment
+     * published at arming.
+     */
+    @Test
+    fun `the role reveal moves with the role and reaches one seat`() {
+        val baseline = round()
+        val exchanged = withRolesExchanged(baseline, Seat(1), Seat(3))
+
+        fun reveals(events: List<Event>) = effectsOf(GameState.EMPTY, events)
+            .map { Transcript.render(it) }
+            .filter { line -> THE_ROLE_REVEAL.any { line.startsWith(it.name) } }
+
+        assertTrue(reveals(baseline).isNotEmpty(), "no phone was told what it was")
+        assertNotEquals(
+            reveals(baseline), reveals(exchanged),
+            "the reveal no longer moves when two seats trade roles, so subtracting it subtracts " +
+                "nothing and the tests that subtract it have gone vacuous",
+        )
+
+        val perClient = diff(GameState.EMPTY, baseline, exchanged, listOf(Seat(1), Seat(3)))
+        val elsewhere = perClient.divergences
+            .filter { d -> THE_ROLE_REVEAL.any { d.baseline?.startsWith(it.name) == true } }
+            .filterNot { it.seat.index == 1 || it.seat.index == 3 }
+        assertEquals(
+            emptyList(), elsewhere,
+            "a seat that traded nothing was sent a different role: ${elsewhere.take(3)}",
+        )
+    }
+
+    private fun List<String>.withoutTheRuledAsymmetries(): List<String> =
+        filterNot { line -> (METER_ASYMMETRY + THE_ROLE_REVEAL).any { line.startsWith(it.name) } }
 }

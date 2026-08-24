@@ -11,6 +11,7 @@ import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MeetingPhase
 import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.OrderLine
+import home.someoneshome.model.Role
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Sound
 import home.someoneshome.model.SubroutineInstance
@@ -70,6 +71,9 @@ class RoundWireTest {
         ),
         Effect.PresenceChanged(Seat(3), at = MarkerId("M-1"), open = true),
         Effect.OpeningMessage(Seat(3), Haptic.Short),
+        // The Insider's copy, because the projection's one decision on this kind is the
+        // narrowing of `Role` to a bit and `Role.Resident` would project `false` either way.
+        Effect.RoleRevealed(Seat(3), Role.Insider),
         Effect.MeetingOpened(Seat(3), MeetingTrigger.MeetingCard, Haptic.Long),
         Effect.MeetingCalling(Seat(3)),
         Effect.StandAndWalkIn(Seat(3), Haptic.Long),

@@ -253,6 +253,14 @@ object Transcript {
                 "|at=${effect.at?.let { text(it.value) } ?: "none"}|open=${effect.open}"
         is Effect.OpeningMessage ->
             "OpeningMessage|seat=${effect.seat.index}|haptic=${effect.haptic}"
+        // **The seat and the role, both written out, and this row is why a recording is a secret.**
+        // The transcript is the authority's own ledger and it holds ground truth everywhere -- who
+        // was revoked, who was drawn -- so writing the role here adds no channel that
+        // `Recording`'s state rows did not already carry. What it buys is that a replay compares
+        // the reveal each phone was actually sent rather than re-deriving it, which is the whole
+        // reason the transcript never renders anything it can look up.
+        is Effect.RoleRevealed ->
+            "RoleRevealed|seat=${effect.seat.index}|role=${effect.role}"
         is Effect.MeetingOpened ->
             "MeetingOpened|caller=${effect.caller.index}|trigger=${trigger(effect.trigger)}" +
                 "|haptic=${effect.haptic}"

@@ -6,6 +6,8 @@ import home.someoneshome.model.GameState
 import home.someoneshome.model.MeetingPhase
 import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.RefusalReason
+import home.someoneshome.model.Role
+import home.someoneshome.model.Seat
 
 /**
  * What the admission gate decided about one event.
@@ -61,11 +63,47 @@ sealed interface Admission {
  * *you already locked your vote*, *that target is already out* — those are alignment leaks in
  * refusal clothing, and they live in the rules as an effect with the same shape as a success. See
  * [RefusalReason] itself, which draws the line and says where it is.
+ *
+ * ### The one branch that DOES ask who the actor is, and why it is not the exception it looks like
+ *
+ * *This ability is not yours to fire* names a seat and names the most alignment-revealing fact in
+ * the game. It is here rather than in the rules because **no honest client can produce the intent**
+ * — the same argument the Tier-2-at-a-meeting branch makes and the same one that makes it safe.
+ * The three refusals above that were kept out of this file are all reachable by a real thumb on a
+ * real screen; this one is reachable only by a frame nobody's phone would send. See [firedBy].
  */
 fun admit(state: GameState, event: Event): Admission = when {
     event is Event.RoundArmed -> Admission.Admitted(reduce(state, event))
     state.ended -> Admission.Refused(RefusalReason.RoundAlreadyEnded)
     !state.armed -> Admission.Refused(RefusalReason.RoundNotArmed)
+
+    // **The house checks who is firing — E-R2-1, and it is checked here for D-066's reason.**
+    //
+    // Nothing in `reduce` asked. `roleOf` and `isOut` appear in `Rules.kt` three times — the scan,
+    // the entry grading and the Sync Pulse — and **no ability handler read either one**, so a plain
+    // Resident on the couch could press the Egress tile and the house would draw one. It did, twice,
+    // in a five-seat rehearsal: thirty-nine presses from five seats, thirty-nine draws. Not a leak
+    // and worse than most leaks — nothing came back to the firing seat, and what they could do was
+    // spend the house's cooldown or end a round they were not in.
+    //
+    // **Third in the chain on purpose.** After the round exists and before every reason about the
+    // shape of the moment: *this ability is not yours* is true whatever phase the house is at, and a
+    // forged fire during a meeting should be recorded as the forgery it is rather than as a meeting
+    // being busy.
+    //
+    // **Above the rules rather than inside them.** Written in the handler it would be
+    // `if (!insider) return Reduction(state, emptyList())` — rule 1's forbidden shape, in the file
+    // rule 1 is about, on the one branch whose absence would be the loudest signal in the game. Here
+    // the refusal costs nothing (no cooldown, no pool, no draw) and it is **recorded**, which an
+    // early return never is (D-066).
+    //
+    // **It is not a client-visible path.** D-142 gives a Resident's page-2 controls no pointer input
+    // at all and an out seat has no springboard to swipe, so no honest client can produce any of
+    // these five intents — which is the Tier-2-at-a-meeting branch's argument below, arriving at the
+    // one gate that needed it more. What this refuses is a forged or bench-built frame, and it is
+    // refused, recorded, and surfaced to nobody.
+    firedBy(event)?.let { actor -> state.roleOf(actor) != Role.Insider || state.isOut(actor) }
+        == true -> Admission.Refused(RefusalReason.AbilityNotTheirs)
 
     // D-133. The meeting card is inert while the house is on fire; the Revoke report is NOT --
     // D-121's one exception, unchanged. Split on the trigger and on nothing else.
@@ -110,6 +148,52 @@ fun admit(state: GameState, event: Event): Admission = when {
         Admission.Refused(RefusalReason.EgressNotRunning)
 
     else -> Admission.Admitted(reduce(state, event))
+}
+
+/**
+ * **The seat firing an ability, or null for an event that is not one being fired** (E-R2-1).
+ *
+ * **Exhaustive over [Event] on purpose**, for [phaseOf]'s reason and more sharply: a new event does
+ * not compile until somebody decides whether it is an ability being fired, and the compile error is
+ * the prompt. The alternative is a sixth ability added later that any socket in the house can fire,
+ * discovered the way the first five were — by watching a Revoked Resident set the building alight.
+ *
+ * ### The five, and they are the whole of the Insider's kit
+ *
+ * The Revoke's arming (Tier 1) and the four Tier-2-and-up fires. Named by the seat that asked
+ * rather than by the tier, because what is being checked is *whose ability this is* and the tiers
+ * differ in cooldown rather than in ownership.
+ *
+ * ### [Event.ContactMade] is deliberately not one of them
+ *
+ * It is a physical act reported by hardware — `factOf` has no intent that makes one, and a phone
+ * touched to a phone is a fact the house is told rather than a request it may refuse. It needs no
+ * gate here because it can no longer do anything: a contact revokes only from a seat holding an
+ * armed Revoke, and the only way into `cooldownArmed` is [Event.RevokeArmed], which this function
+ * names. **Gating it would also be the wrong shape** — a report refused above the rules is a report
+ * the recording never holds, and D-066's whole reason for recording refusals is that an unrecorded
+ * drop is an invisible one.
+ *
+ * ### The Sync Pulse is not one either, and that is the same distinction
+ *
+ * [Event.SyncPulseReturned] is a Resident's four taps at a node during someone else's crisis — the
+ * containment loop, not an ability. It is already gated on there being a running Egress, and its
+ * every failure comes back as one shape for all five ways to miss.
+ */
+private fun firedBy(event: Event): Seat? = when (event) {
+    is Event.RevokeArmed -> event.actor
+    is Event.SurgeFired -> event.actor
+    is Event.IsolateFired -> event.actor
+    is Event.StaticFired -> event.actor
+    is Event.EgressFired -> event.actor
+
+    is Event.RoundArmed, is Event.MarkerScanned, is Event.SubroutineReturned,
+    is Event.PerformanceEnded, is Event.ContactMade, is Event.MeetingCalled,
+    is Event.MeetingCheckedIn, is Event.ReadyToVoteDeclared, is Event.DiscussionClosed,
+    is Event.VoteSelected, is Event.VoteLocked, is Event.VoteWindowClosed,
+    is Event.TallyHalfwayReached, is Event.MeetingClosed,
+    is Event.SyncPulseReturned, is Event.EgressExpired,
+    -> null
 }
 
 /**

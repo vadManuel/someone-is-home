@@ -131,7 +131,7 @@ internal fun Effect.ringing(): Boolean = when (this) {
     is Effect.WorkOrderIssued, is Effect.ScanAnswered, is Effect.PresenceChanged,
     is Effect.CheckInProgressed, is Effect.ReadyProgressed, is Effect.VoteProgressed,
     is Effect.VoteHeld, is Effect.VoteSelectionShown, is Effect.MeetingResolved,
-    is Effect.SyncPulseAnswered, is Effect.InsidersRevealed,
+    is Effect.SyncPulseAnswered, is Effect.InsidersRevealed, is Effect.RoleRevealed,
     // **The Surge is the loudest thing in the game and it does NOT ring**, which is worth stating
     // rather than lumping in. Ringing means *until answered* (D-160), and a Surge has nothing to
     // answer: it is one moment, and its noise is the speaker's rather than the motor's. A phone
@@ -204,6 +204,12 @@ internal fun Effect.haptic(): Haptic? = when (this) {
     // Input echo. The phone that fired it is the phone in the hand that pressed the control.
     is Effect.AbilityFired -> null
     // A verdict on work the player is standing over, on a screen they are already looking at.
+    // **SILENT, and F-003 is the whole reason** (`gdd.md:930`). The reveal leaking through the
+    // haptic count is the gap the design named itself: in a silent dark house, standing in a
+    // group, the NUMBER of buzzes is an audible tell, and it fires at the exact moment nobody
+    // has dispersed. The role arrives on a silent message behind one banner that buzzed for
+    // everybody -- D-156's arrangement, and the reason a `haptic` field was never put on it.
+    is Effect.RoleRevealed -> null
     is Effect.SubroutineGraded -> null
     is Effect.SubroutineProgressed -> null
     // **The meter never buzzes, in either form.** The live one moves whenever anybody in the house
@@ -280,6 +286,7 @@ internal fun RoundMessage.ringing(): Boolean = when (this) {
     is RoundMessage.VoteProgressed, is RoundMessage.VoteHeld,
     is RoundMessage.VoteSelectionShown, is RoundMessage.MeetingResolved,
     is RoundMessage.SyncPulseAnswered, is RoundMessage.InsidersRevealed,
+    is RoundMessage.RoleRevealed,
     is RoundMessage.Surged, is RoundMessage.IsolateTargetsOffered,
     is RoundMessage.StaticOpened, is RoundMessage.MeetingCalling,
     -> false
@@ -321,6 +328,8 @@ internal fun RoundMessage.haptic(): Haptic? = when (this) {
     // ---- The rest arrive quietly. Each reason is on the effect-side branch it mirrors ---------
     is RoundMessage.LampSet -> null
     is RoundMessage.AbilityFired -> null
+    // F-003, on the receiving side. See the effect-side branch.
+    is RoundMessage.RoleRevealed -> null
     is RoundMessage.SubroutineGraded -> null
     is RoundMessage.SubroutineProgressed -> null
     is RoundMessage.SystemIntegrityLive -> null

@@ -3,7 +3,6 @@ package home.someoneshome.harness
 import home.someoneshome.core.Admission
 import home.someoneshome.core.admit
 import home.someoneshome.model.Balance
-import home.someoneshome.model.Cooldown
 import home.someoneshome.model.Destination
 import home.someoneshome.model.EgressType
 import home.someoneshome.model.Event
@@ -66,6 +65,34 @@ internal val NAMES = SEATS.map { SeatNamed(it, "NAME-${it.index}") }
  * where it is used.
  */
 private const val ROUND_STRIDE = 40L
+
+/**
+ * **The one seat every ability in this fixture is fired from: an Insider who is still in the
+ * round.**
+ *
+ * ⚠️ **It used to be `Seat(1)` outright, and that was a fixture firing from the couch.** The room
+ * restrains seat 1 at the fixture's first meeting, and every Revoke, every Tier-2 fire and the
+ * whole Egress happen after it — so from the moment the tally landed, this round was the exact
+ * thing E-R2-1 is about: a seat outside the round pressing the Insider's kit and the house
+ * answering. Nothing said so, because nothing checked. It says so now, as nine refusals, which is
+ * how this line came to be written.
+ *
+ * **Read off the walked state rather than named**, exactly as the fixture reads its cards and its
+ * entries: who is still in the round by pass thirty is a consequence of this fixture rather than
+ * something it can assert in advance.
+ *
+ * **The LAST living Insider rather than the first, and that is the differential's requirement.**
+ * `first()` would be seat 1 until the room holds it and somebody else afterwards — an actor that
+ * moves mid-round, which puts an `AbilityFired` on a different phone in each of two runs and
+ * reports it as an unexplained divergence on a seat that never traded anything. The last one is
+ * the Insider this fixture never puts out, in every draw the differential tests exchange.
+ *
+ * The fallback is only reachable if a caller arms a round whose Insiders are all out, which no
+ * fixture here does; it keeps the shape of the events rather than dropping them, so a caller that
+ * managed it would see refusals rather than a shorter round.
+ */
+private fun actor(state: GameState, insiders: List<Seat>): Seat =
+    state.livingInsiders.lastOrNull() ?: insiders.last()
 
 /**
  * A round with every event kind in it, long enough that ordering mistakes have room to show.
@@ -143,12 +170,19 @@ internal fun round(insiders: List<Seat> = INSIDERS): List<Event> {
             if (i % 9 == 0) {
                 // Pushed to the moment the house says this seat is ready, so the fixture's Revokes
                 // land instead of being refused inside the opening stretch of peace.
-                val ready = state.cooldownFor(Seat(1), InsiderAbility.Revoke)?.readyAt?.step ?: 0L
+                val ready = state.cooldownFor(actor(state, insiders), InsiderAbility.Revoke)
+                    ?.readyAt?.step ?: 0L
                 t = maxOf(t, ready)
-                add(walk(Event.RevokeArmed(Tick(t++), Seat(1))))
+                add(walk(Event.RevokeArmed(Tick(t++), actor(state, insiders))))
             }
             if (i % 9 == 4) {
-                add(walk(Event.ContactMade(Tick(t++), Seat(1), SEATS[(i + 3) % SEATS.size])))
+                add(
+                    walk(
+                        Event.ContactMade(
+                            Tick(t++), actor(state, insiders), SEATS[(i + 3) % SEATS.size],
+                        )
+                    )
+                )
             }
             if (i % 17 == 16) {
                 // A whole meeting, walked. It has to be whole: D-104's gate does not close a
@@ -192,15 +226,25 @@ internal fun round(insiders: List<Seat> = INSIDERS): List<Event> {
                 // round-trip test had ever recorded a Tier-2 ability. Adding Spoof's row without
                 // adding the three fires here would have left the same trap set for the next one.
                 //
-                // The pool is pushed to ready before each, because it is shared: three fires in a
-                // row would otherwise be one fire and two refusals, and a refused fire records a
-                // refusal rather than the event this fixture is here to carry.
-                // **Seat 1, the same Insider the fixture's Egress fires with**, rather than
-                // whichever Insider happens to be alive. `ClientTranscriptTest`'s claim is that
-                // `AbilityFired` reaches the acting Insider **and nobody else**, and it says so by
-                // naming the fixture's one actor — so a fixture with a second actor would loosen
-                // that test into an assertion about a list of seats rather than about addressing.
-                val actor = Seat(1)
+                // **The CLOCK is pushed to the pool's deadline before each, because the pool is
+                // shared**: three fires in a row would otherwise be one fire and two that spent
+                // nothing, and a fire that spent nothing carries none of what this fixture is here
+                // to carry.
+                //
+                // ⚠️ **It used to push the cooldown instead of the clock, and that push was a lie
+                // this fixture told itself.** `state.withCooldown(...)` writes the fixture's own
+                // walked state and is not an event, so a replay of the list never applies it: the
+                // Surge and the Static were fired into a running pool every time, came back
+                // `cooldownStarted=false`, and nobody saw it because the actor was Restrained and
+                // the allowlist declined the delivery. Reading the deadline and moving the clock to
+                // it is the same intent expressed in the one currency the event list carries.
+                // **The same Insider the fixture's Egress and Revokes fire with** — one actor for
+                // the whole round, which is [actor]'s doing rather than this line's.
+                // `ClientTranscriptTest`'s claim is that `AbilityFired` reaches the acting Insider
+                // **and nobody else**, and it says so by naming the fixture's one actor — so a
+                // fixture with a second actor would loosen that test into an assertion about a
+                // list of seats rather than about addressing.
+                val actor = actor(state, insiders)
                 val victim = state.livingSeats.first { it.index != actor.index }
                 val card = state.activeMarkers.first()
                 for (fire in listOf<(Tick) -> Event>(
@@ -208,7 +252,7 @@ internal fun round(insiders: List<Seat> = INSIDERS): List<Event> {
                     { at -> Event.StaticFired(at, actor) },
                     { at -> Event.IsolateFired(at, actor, card) },
                 )) {
-                    state = state.withCooldown(Cooldown(actor, InsiderAbility.Access, Tick(t)))
+                    t = maxOf(t, state.cooldownFor(actor, InsiderAbility.Access)?.readyAt?.step ?: t)
                     add(walk(fire(Tick(t++))))
                 }
             }
@@ -224,7 +268,7 @@ internal fun round(insiders: List<Seat> = INSIDERS): List<Event> {
                 t = maxOf(t, state.egressReadyAt.step)
                 val nodes = state.activeMarkers.distinctBy { it.value }.take(2)
                 val firedAt = Tick(t++)
-                add(walk(Event.EgressFired(firedAt, Seat(1), EgressType.Beacon, nodes)))
+                add(walk(Event.EgressFired(firedAt, actor(state, insiders), EgressType.Beacon, nodes)))
 
                 // The two who go. Read off the state, because who is still in the round by this
                 // point is a consequence of the fixture rather than something it can name.

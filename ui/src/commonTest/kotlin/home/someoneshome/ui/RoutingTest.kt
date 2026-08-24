@@ -14,6 +14,7 @@ import home.someoneshome.model.Seat
 import home.someoneshome.model.protocol.RoundMessage
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -407,6 +408,83 @@ class RoutingTest {
                 "${message::class.simpleName} moved a phone, and it is routeless on purpose",
             )
         }
+    }
+
+    // ---- 8b · What this phone is (E-R2-2) --------------------------------------------------------
+
+    /**
+     * **THE PUSH THAT TELLS A PHONE WHAT IT IS, and the whole of the Insider's game behind it**
+     * (`gdd.md:923`, E-R2-2).
+     *
+     * Read off five ledgers of a five-seat rehearsal, every line of both rounds: `ROLE RESIDENT`,
+     * including on the seat holding the round's only Insider. `PanelState.role` was written by the
+     * cheat picker and by nothing else in the app, so every phone in a real round drew the
+     * Resident's page 2 — and since the Isolate picker is reachable only from the Insider's, the one
+     * Insider-only list the house really did send arrived on a phone with no way to open it. **In a
+     * real evening no Insider could have fired anything at all.**
+     *
+     * ### Three claims, and the second is the one that closes the escalation
+     *
+     * The field follows the wire; the **capability** follows the field, so page 2 answers a thumb
+     * on the phone the house told and on no other (D-142); and the labels follow it too, which is
+     * the parity discipline reading its role from the house rather than from a fixture.
+     *
+     * ### It moves no screen, deliberately
+     *
+     * The reveal is text on a thread the player opens, and the opening banner is what says *now*.
+     * A navigation here would be one phone in a lit room doing something the Resident's phone does
+     * not, at the moment the whole party is still standing together — the tell the parity
+     * discipline exists to prevent.
+     */
+    @Test
+    fun `the house tells this phone what it is and page 2 answers only that phone's thumb`() {
+        val insider = living(ScreenId.Page2)
+        val resident = living(ScreenId.Page2)
+
+        insider.houseSaid(RoundMessage.RoleRevealed(insider = true))
+        resident.houseSaid(RoundMessage.RoleRevealed(insider = false))
+
+        assertEquals(PanelRole.Insider, insider.state.role, "the house said Insider and the phone did not")
+        assertEquals(PanelRole.Resident, resident.state.role, "a Resident's phone took an Insider's role")
+
+        // **Capability, which is what the escalation was about.** `armable` on every page-2 tile is
+        // this flag, so a phone whose role never arrived is a phone whose tiles take no input at all
+        // (D-142) — which is exactly what an Insider's phone was doing all round.
+        assertTrue(PanelVals(insider.state).insider, "the Insider's page 2 would take no input")
+        assertFalse(PanelVals(resident.state).insider, "a Resident's page 2 became armable")
+
+        // And the labels, from the same field: identical furniture, different words (D-142).
+        assertEquals("REVOKE", PanelVals(insider.state).abilityName)
+        assertEquals("POWER", PanelVals(resident.state).abilityName)
+
+        // The screen does not move, on either phone.
+        assertEquals(ScreenId.Page2, insider.state.screen, "the reveal moved a phone")
+        assertEquals(ScreenId.Page2, resident.state.screen, "the reveal moved a phone")
+    }
+
+    /**
+     * **The role is the house's and the phone never re-derives it.**
+     *
+     * The Isolate picker's list is the one message only an Insider may receive, so a client could
+     * "helpfully" infer its role from the list arriving — and that inference is the leak with the
+     * shortest fuse in the app: it makes a *delivery* into an *alignment*, on a phone, in a way no
+     * schema row could see. `ui` cannot ask `core` anything; this asserts it does not ask itself
+     * either. The list lands on the panel and the role stays where the house left it.
+     */
+    @Test
+    fun `the picker's list arriving does not make a phone an Insider`() {
+        val model = living(ScreenId.Page2)
+        model.houseSaid(
+            RoundMessage.IsolateTargetsOffered(
+                listOf(Destination(MarkerId("m1"), shape = "ring", room = "KITCHEN")),
+            ),
+        )
+        assertEquals(
+            PanelRole.Resident, model.state.role,
+            "a phone worked out its own role from a message it received, which is the rules " +
+                "living on the device in their most plausible costume",
+        )
+        assertEquals(1, model.state.isolateTargets?.size, "the list did not land, so this proves nothing")
     }
 
     // ---- 9 · The caller, and the five phones that are not (E-R1-1) -------------------------------

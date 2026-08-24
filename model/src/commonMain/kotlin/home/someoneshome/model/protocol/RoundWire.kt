@@ -13,6 +13,7 @@ import home.someoneshome.model.MeetingPhase
 import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.MessageKind
 import home.someoneshome.model.OrderLine
+import home.someoneshome.model.Role
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Sound
 import home.someoneshome.model.SubroutineInstance
@@ -205,6 +206,33 @@ sealed class RoundMessage {
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("OpeningMessage")
     data class OpeningMessage(val haptic: Haptic) : RoundMessage()
+
+    /**
+     * **What this phone is** (`gdd.md:923`, E-R2-2).
+     *
+     * ### A Boolean, because [Role] is not allowed on a wire and must never become allowed
+     *
+     * `Role` carries no `@Serializable` and no `@ClientFacing`, and that is a decision rather than
+     * an omission — `redactionLint`'s own KDoc records the day the guard default-permitted *the
+     * most alignment-revealing type in the game*. So the projection narrows it the way rule 3 says:
+     * a **new, narrower type** rather than the authority's own shape with an annotation added. What
+     * survives is one bit about the recipient.
+     *
+     * ### The seat goes, like every addressed kind here
+     *
+     * The socket is the address. A seat riding inside would be a second, quieter statement of whose
+     * role this is — and this is the one message in the protocol where the two disagreeing would
+     * hand a phone somebody else's alignment.
+     *
+     * **There is nothing here that could name anybody else, and there must never be.** Known mode's
+     * *a message from each fellow Insider* is text on a thread (`gdd.md:923`), diegetic and
+     * deliberately not a roster; a list on this member would be the endgame reveal arriving at
+     * arming.
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("RoleRevealed")
+    data class RoleRevealed(val insider: Boolean) : RoundMessage()
 
     /** The ring, to the living. Carries who called it, who is public by construction (D-121). */
     @ClientFacing
@@ -431,6 +459,7 @@ sealed class RoundMessage {
             is ScanAnswered -> EmitSchema.SCAN_ANSWERED
             is PresenceChanged -> EmitSchema.PRESENCE_CHANGED
             is OpeningMessage -> EmitSchema.OPENING_MESSAGE
+            is RoleRevealed -> EmitSchema.ROLE_REVEALED
             is MeetingOpened -> EmitSchema.MEETING_OPENED
             is MeetingCalling -> EmitSchema.MEETING_CALLING
             is StandAndWalkIn -> EmitSchema.STAND_AND_WALK_IN
@@ -630,6 +659,12 @@ object RoundWire {
         is Effect.ScanAnswered -> RoundMessage.ScanAnswered(effect.opened)
         is Effect.PresenceChanged -> RoundMessage.PresenceChanged(effect.at, effect.open)
         is Effect.OpeningMessage -> RoundMessage.OpeningMessage(effect.haptic)
+        // **The seat comes off and the role narrows to one bit about the recipient.**
+        // `Role` is deliberately neither `@Serializable` nor `@ClientFacing`, so there is
+        // no way to put the authority's own type on a socket and no reason to want one:
+        // what a phone needs is whether page 2 answers its thumb, and rule 3 says redact
+        // by constructing a narrower type rather than by carrying the wide one.
+        is Effect.RoleRevealed -> RoundMessage.RoleRevealed(effect.role == Role.Insider)
         is Effect.MeetingOpened ->
             RoundMessage.MeetingOpened(effect.caller, effect.trigger, effect.haptic)
         // **The seat comes off here, and the message is empty afterwards.** What survives the

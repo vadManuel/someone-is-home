@@ -212,6 +212,11 @@ class RoundClient(
      */
     private fun describe(m: RoundMessage): String = when (m) {
         is RoundMessage.OpeningMessage -> "OPENING MESSAGE · HAPTIC ${m.haptic}"
+        // **This phone's own role, which is this phone's own business** (E-R2-2). Printed for
+        // the same reason the caller's header is: the log is one seat's, and a rehearsal that
+        // could not see the reveal arrive could not tell a phone that was never told from one
+        // that was told Resident.
+        is RoundMessage.RoleRevealed -> "WHAT THIS PHONE IS — ${if (m.insider) "INSIDER" else "RESIDENT"}"
         is RoundMessage.WorkOrderIssued ->
             "WORK ORDER · ${m.lines.size} LINE(S) · " +
                 "${m.lines.count { it is OrderLine.Blocked }} BLOCKED"

@@ -629,6 +629,69 @@ class EmitSchemaTest {
     }
 
     /**
+     * **THE REVEAL AT ARMING: one phone, its own role, and nothing anywhere else** (`gdd.md:923`,
+     * E-R2-2).
+     *
+     * The most alignment-revealing kind in the table, and the two denials that make it lawful are
+     * independent — either alone would ship a leak, and neither can see what the other is doing.
+     *
+     * **The row** permits it to both living classes and to neither out class nor the ending, so an
+     * Insider's reveal and a Resident's cross the boundary identically and nothing about the class
+     * list can become the answer: a row of `Insider/Live` would deliver the reveal to Insiders and
+     * silence to everybody else, which is rule 1's forbidden shape written into the allowlist.
+     *
+     * **The addressing** is what stops seat 5 learning seat 3's role, and the allowlist cannot help
+     * with it — two living Insiders are one class, and so are two living Residents. Asserted by
+     * building the leak: the same effect for two different seats reaching two different single
+     * phones, and a sweep over every seat in the house showing each is told exactly once and only
+     * about itself.
+     */
+    @Test
+    fun `a seat is told its own role and no other seat's`() {
+        val state = live()
+
+        assertEquals(
+            listOf(
+                ClientClass(Role.Resident, RoundState.Live),
+                ClientClass(Role.Insider, RoundState.Live),
+            ),
+            EmitSchema.classesFor(EmitSchema.ROLE_REVEALED),
+            "the reveal's row moved: narrowed to one role its ABSENCE becomes the answer, and " +
+                "widened past Live it re-answers the question on a couch or on the ending screen",
+        )
+
+        // Every seat, told once, about itself. Built the way arming builds it — one per seat,
+        // carrying that seat's own role — so what is swept is the burst rather than one effect.
+        for (seat in seats) {
+            val effect = Effect.RoleRevealed(seat, state.roleOf(seat))
+            assertEquals(
+                listOf(seat), EmitSchema.deliveries(effect, state).map { it.seat },
+                "seat ${seat.index}'s role did not go to exactly one phone",
+            )
+        }
+
+        // The leak, built: an Insider's reveal addressed to a Resident's seat reaches that seat and
+        // nobody else — the addressing follows the seat on the effect and never the role in it, so
+        // a rule that composed the pair wrongly is a rule that lied to one phone rather than one
+        // that published to the house. That is the fail-closed direction and it is why the rules
+        // read `state.roleOf(seat)` for the seat they are addressing.
+        assertEquals(
+            listOf(Seat(3)),
+            EmitSchema.deliveries(Effect.RoleRevealed(Seat(3), Role.Insider), state).map { it.seat },
+            "a reveal addressed to one seat reached another phone",
+        )
+        assertEquals(
+            emptyList(),
+            EmitSchema.deliveries(
+                Effect.RoleRevealed(Seat(3), Role.Insider),
+                state.copy(revoked = listOf(Seat(3))),
+            ),
+            "a seat outside the system was told a role: roles are drawn at arming, when nobody " +
+                "is out, and the ending is where an alignment is said again",
+        )
+    }
+
+    /**
      * A Restrain puts a seat in the out classes, by its own list.
      *
      * The gap [RoundState.Out] used to document — *nothing in GameState stores a restrained
@@ -922,6 +985,23 @@ class EmitSchemaTest {
                 .filter { it in setOf("RoundEnded", "InsidersRevealed", "HouseSignedOff") }
                 .sorted(),
             "an ending kind exists that this test does not name",
+        )
+
+        // **The one kind that states an alignment while the round is running, and it is the
+        // design's** (`gdd.md:923`, E-R2-2). It is not an exemption from the rule above so much as
+        // a different rule: those three name somebody TO THE HOUSE, and this one names a phone to
+        // itself. What makes it lawful is the addressing rather than the row, so that is what is
+        // asserted here — the same claim `a seat is told its own role and no other seat's` makes
+        // in full, restated at the invariant it is the exception to, so that a reader of this test
+        // cannot come away believing no live kind carries a role.
+        assertTrue(
+            EmitSchema.classesFor(EmitSchema.ROLE_REVEALED).all { it.roundState == RoundState.Live },
+            "the role reveal reaches a class outside the moment it belongs to",
+        )
+        assertEquals(
+            listOf(Seat(2)),
+            EmitSchema.deliveries(Effect.RoleRevealed(Seat(2), Role.Insider), live()).map { it.seat },
+            "the reveal that names a role to a living phone reached more than that one phone",
         )
     }
 
