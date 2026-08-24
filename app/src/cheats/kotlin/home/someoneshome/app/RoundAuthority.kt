@@ -100,6 +100,16 @@ class RoundAuthority(
     val second: Long get() = tick / Balance.TICKS_PER_SECOND
 
     /**
+     * Where the clock stands, in ticks — readable, and writable only through [advanceTo].
+     *
+     * A script that wants to be past a cooldown compares against this and pushes the **driver**
+     * until the house arrives, rather than setting the counter itself. See [RoundCheat.skipTo]: a
+     * clock the bench sets and a clock the driver runs are two clocks, and the deadline the driver
+     * evaluates is its own.
+     */
+    val clock: Long get() = tick
+
+    /**
      * **Move the house's clock to T+[seconds], and never backwards.**
      *
      * The bench's shortcut: a named second, for a script that wants to be at a cooldown's expiry

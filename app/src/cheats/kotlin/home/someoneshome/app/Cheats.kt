@@ -28,6 +28,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import home.someoneshome.platform.deviceHaptics
 import home.someoneshome.platform.launchSwitch
+import home.someoneshome.platform.monotonicNanos
 import home.someoneshome.ui.Amber
 import home.someoneshome.ui.FlowHost
 import home.someoneshome.ui.FlowModel
@@ -184,8 +185,14 @@ fun CheatRoot() {
             emit = { effect, state -> link.house.emit(effect, state) },
         ) { line -> println("[house] $line"); transport.note(line) }.also { rules.value = it }
     }
+    // **What this seat's screen says, at every beat** — the instrument P3 did not have. It reads
+    // the same model the composition draws from and is handed to the bench so the script's own
+    // beats and the screen's own changes land in one stream in one order.
+    val ledger = remember {
+        ScreenLedger(flow) { line -> println("[screen] $line"); transport.note(line) }
+    }
     val round = remember {
-        RoundCheat(roundClient, authority, isHost = { flow.lobby.hosting }) { line ->
+        RoundCheat(roundClient, authority, isHost = { flow.lobby.hosting }, ledger = ledger) { line ->
             println("[round-bench] $line"); transport.note(line)
         }
     }
@@ -239,9 +246,23 @@ fun CheatRoot() {
         val house = authority ?: return@LaunchedEffect
         while (flow.state.screen != ScreenId.Armed) delay(250)
         if (flow.lobby.hosting) {
-            tickHouse(house, note = { line -> println("[house-clock] $line"); transport.note(line) })
+            tickHouse(
+                house,
+                note = { line -> println("[house-clock] $line"); transport.note(line) },
+                // **The bench's one remaining hand on the clock, and it is on the clock rather than
+                // on the counter.** P3's script set the authority's tick directly to jump a
+                // cooldown; with a driver running, that leaves the driver's own timestep behind and
+                // every deadline is then evaluated against a clock it can never reach. So the bench
+                // tells the driver that more real time has passed than really has, and the driver
+                // does everything else it always does — measures, converts to whole steps, abandons
+                // a backlog too large to chase, and says so out loud. See RoundCheat.skipTo.
+                clockNanos = { monotonicNanos() + round.skewNanos },
+            )
         }
     }
+    // The screen, sampled for as long as the phone is up. On the composition's scope because
+    // `PanelState` is Compose state and the main thread is the only place it may be read from.
+    LaunchedEffect(ledger) { ledger.watch() }
     Box(Modifier.fillMaxSize().background(Amber.Black)) {
         when (view) {
             // `standingInForTheHouse` is the bench's stand-in for the authority: with no round

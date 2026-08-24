@@ -150,6 +150,45 @@ class RoundClientTest {
         assertEquals(1, sent.size, "the buffered send did not reach the socket the lobby opened")
     }
 
+    /**
+     * **The Egress tile goes up as its own frame, and it is empty.**
+     *
+     * R1 made the finger a fourth body member rather than an [home.someoneshome.model.protocol.IntentMessage],
+     * and the argument is `factOf`'s: a request carrying the type and the nodes would let a client
+     * **choose its own Egress**, and one carrying nothing would need an arm of `factOf` that
+     * composes a fact from a second source. So it keeps its own frame and the desk answers it at
+     * its own door.
+     *
+     * Both halves are asserted. The frame has to *be* a [RoundBody.Fire] — a press that went up as
+     * an `Act` would be answered by the wrong door — and it has to carry **nothing but its dedup
+     * sequence**, because a member with a field is a member somebody can put a target on later.
+     */
+    @Test
+    fun theEgressTileGoesUpAsItsOwnEmptyFrame() = bench { b ->
+        val sent = mutableListOf<TransportFrame>()
+        b.client.linked { frame -> sent += frame }
+        b.client.fireEgress()
+        delay(SETTLE)
+
+        val carried = sent.filterIsInstance<TransportFrame.Carry>().map { it.body }
+        val bodies = carried.mapNotNull { RoundWire.decodeOrNull(it) }
+        assertTrue(
+            bodies.any { it is RoundBody.Fire },
+            "the Egress tile press never reached the socket: $bodies",
+        )
+        assertTrue(
+            bodies.none { it is RoundBody.Act },
+            "the press went up as a request as well: the house would answer it at two doors",
+        )
+        // A `data class Fire(val seq: Long)` and nothing else. Read off the ENCODING rather than
+        // off the declaration, because what a client can put on the wire is the encoding.
+        val encoded = carried.first { RoundWire.decodeOrNull(it) is RoundBody.Fire }
+        assertFalse(
+            encoded.contains("node") || encoded.contains("egress") || encoded.contains("Tether"),
+            "the finger carried a draw the house is supposed to make: $encoded",
+        )
+    }
+
     private companion object {
         /** Long enough for the queue to drain on the caller's dispatcher. */
         const val SETTLE = 300L

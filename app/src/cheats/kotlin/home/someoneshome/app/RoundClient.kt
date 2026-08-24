@@ -145,6 +145,23 @@ class RoundClient(
     }
 
     /**
+     * **The Egress tile, held down** ([RoundBody.Fire]).
+     *
+     * A second method rather than an [IntentMessage] because the frame is a different member — the
+     * house has to make a draw before there is a fact to admit, so the request carries nothing but
+     * its dedup sequence. See [RoundOverTransport.fireEgress].
+     *
+     * **It is pressed on every living seat and admitted on one.** Nothing in this build tells a
+     * phone its role, so a bench that pressed only where it would work would be a bench that knew
+     * something no phone knows. Four of the five presses are refused in silence, cost nothing, and
+     * are the guarantee working — see [RoundCheat.pressing].
+     */
+    fun fireEgress() {
+        note("PRESSED — THE EGRESS TILE")
+        round.fireEgress()
+    }
+
+    /**
      * **What this phone has been told, as a tally of kinds** — never as content.
      *
      * Printed beside every change rather than once at the end, for [LobbyCheat]'s reason: this
