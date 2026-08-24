@@ -1363,6 +1363,30 @@ class FlowModel(
     // ---- Subroutines ---------------------------------------------------------------------------
 
     /**
+     * **A card was just read, and this is the phone remembering which one** ([PanelState.scannedAt]).
+     *
+     * Called by the scan flow at the moment the read goes **up**, not when the answer comes back
+     * down: the house's answer names the entry, the kind and the parameters and carries no marker
+     * at all — `SubroutineInstance` says so on its own type, and the effect that does carry one is
+     * permitted to nobody (D-111). So the only moment this fact exists on a phone is the moment the
+     * lens resolves the symbol, and this is where it lands.
+     *
+     * **It records and nothing else.** No screen moves, because which Subroutine a card holds is
+     * the house's answer and not the reader's — a client that walked itself to the caught scan on
+     * its own read would be the device deciding what a card is. The read still goes up as an intent
+     * and the house still answers it; this is the half of that act the phone keeps.
+     *
+     * **A second read replaces the first**, which is the physical fact: a player who scanned again
+     * is standing at a different card, and D-136 is explicit that a hand-over names *which card
+     * opened the work* rather than where anybody is now. What keeps those two in step is that BEGIN
+     * reads this and [PanelState.current] together, in one act, one tap after the read that wrote
+     * both.
+     */
+    fun scanning(marker: MarkerId) {
+        state = state.copy(scannedAt = marker)
+    }
+
+    /**
      * **BEGIN: open whichever Subroutine the marker you just scanned holds.**
      *
      * Here rather than on the screen because the screen cannot name the target — the same reason

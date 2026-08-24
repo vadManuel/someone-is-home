@@ -254,6 +254,40 @@ data class PanelState(
      */
     val current: CurrentSubroutine? = null,
     /**
+     * **Which card this phone last read — the id, beside the row the read produced.**
+     *
+     * ### Why it is here and not on [CurrentSubroutine]
+     *
+     * [current] is what a screen draws, and its `marker` is a [MarkerShape] — the printed symbol a
+     * player looks for in the dark. That is the right thing for a drawn row to carry and the wrong
+     * thing to send: `IntentMessage.HandOverEntry` wants the card's **id**. Putting an id on the
+     * drawn row would give one field two jobs and put a wire value in front of a composable; a
+     * sibling here keeps the drawing type drawable and the sending value sendable.
+     *
+     * ### Why the client holds it at all, when everything else on this class came from the house
+     *
+     * Because the house does not send it and deliberately cannot. `SubroutineInstance` carries no
+     * marker — *where the work is, is what walking the house in the dark is for* — and
+     * `Effect.PresenceChanged`, which does carry one, is permitted to nobody (D-111). **The scanner
+     * is what knows which card was read**, and the scanner is on this phone. So this is not `ui`
+     * deriving a fact about the house; it is this phone remembering its own act, which is the one
+     * category of state a client is allowed to keep.
+     *
+     * ### Lineage
+     *
+     * F1·1 added [current] as a field with no sender; C3 routed `Effect.ScanAnswered` into it. This
+     * is the third step of that same seam and the one the payoff run found missing: the row arrived
+     * and the id did not, so BEGIN had nothing to hand `SubroutineModel.posted` and every entry in
+     * the game was refused at the last line before the send. The bench had been carrying its own
+     * copy — `RoundClient.standingAt`, written by `RoundClient.scanning` — which is how a rehearsal
+     * could hand entries over all evening while no phone a person held could.
+     *
+     * **Null means this phone has read no card**, which on a phone with no house attached is
+     * always. A hand-over then goes nowhere, which is the honest state of a bench and is asserted
+     * as such — see `HandOverSeamTest`.
+     */
+    val scannedAt: MarkerId? = null,
+    /**
      * **Who was working for the house, and what was held over them — as the house published it.**
      *
      * The only field on this class that carries an alignment, and it is null on every screen but
