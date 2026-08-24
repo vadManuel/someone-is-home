@@ -144,6 +144,16 @@ interface RoundSeam {
      * dropped and came back has missed an unknown amount and has to ask.
      */
     fun seated()
+
+    /**
+     * **A new round: this phone holds nothing of the last one** (D-157).
+     *
+     * The sequence a client is at belongs to one round. Carried into the next it would make that
+     * round's opening pushes look like frames this phone already held, and the screen would sit on
+     * the lobby while the house talked past it. The host's own half of this already existed
+     * (`LobbyHouse.roundEnded`); this is the client's, reached when the host's push arrives.
+     */
+    fun roundEnded()
 }
 
 /**
@@ -458,6 +468,12 @@ class LobbyHouse(
     /** **Deleted when the round ends** — the host's half of the promise. */
     fun roundEnded() {
         desk.roundEnded()
+        // **And every other phone is told**, which is what E-R2-10 / E-P3-5 was: the wipe below is
+        // this desk's, the walk back to the lobby is each phone's, and nothing joined them. Sent
+        // BEFORE `publish`, so a client acts on the moment and then receives the standing that
+        // moment produced — the other order would hand it a lobby of zero lines it had no reason
+        // to expect yet.
+        announce(TransportFrame.Carry(LobbyWire.encode(LobbyBody.RoundEnded)))
         // The retained streams are a round's worth of one house's messages and outlive nothing.
         // Wiped in the same method the lines are, so what the house holds about an evening ends
         // when the evening does rather than when somebody remembers.
@@ -565,12 +581,26 @@ class LobbyHouse(
             // The standing is the host's to send, never to receive. A client that sent one is
             // saying nothing this house is obliged to hear.
             is LobbyBody.Standing -> Unit
+            // **Downward only, and this direction is where it would bite**: a client that could
+            // end the round would be one phone wiping the desk's lines and returning five other
+            // people to the lobby, mid-round, with no control anywhere that asked for it. NEW ROUND
+            // is the host's (D-157) and reaches the rest as the push below.
+            is LobbyBody.RoundEnded -> Unit
         }
     }
 
-    private fun publish() {
+    private fun publish() = announce(TransportFrame.Carry(LobbyWire.encode(desk.standing())))
+
+    /**
+     * One frame, to every phone attached to this house.
+     *
+     * Shared by the standing and by the round's ending so there is one loop over the seats rather
+     * than two that could come to differ about what *every phone* means. On a phone that is not
+     * hosting there is no server and this does nothing, which is every caller's precondition
+     * already.
+     */
+    private fun announce(body: TransportFrame) {
         val server = host ?: return
-        val body = TransportFrame.Carry(LobbyWire.encode(desk.standing()))
         scope.launch {
             for (seat in server.connectedSeats()) {
                 // A phone that failed between the seat list and the send is not an error worth
@@ -645,6 +675,20 @@ class LobbyOverTransport(
      * construction — nothing arms a round yet. See [RoundSeam].
      */
     private val round: RoundSeam? = null,
+    /**
+     * **What this phone does when the HOST says the round is over** (D-157, E-R2-10 / E-P3-5).
+     *
+     * It is a seam for [onIntent]'s reason exactly, in the other direction: what a phone does when
+     * the evening turns over is a **screen** answer — walk back to the lobby, drop the line this
+     * phone typed — and neither this class nor `platform` may reach a screen. So the transport
+     * reports the arrival and the app root, which holds both halves, decides. Empty in a
+     * construction with no panel behind it, which is every test that only wants the wire.
+     *
+     * **The round's own inbox is reset here rather than in the callback**, because that half is not
+     * a screen answer and is not optional: a phone that kept last round's sequence would refuse the
+     * next round's first push as already held.
+     */
+    private val onRoundEnded: () -> Unit = {},
 ) : LobbyLink {
 
     /**
@@ -724,10 +768,22 @@ class LobbyOverTransport(
                 // that a change to what the lobby recognises can never quietly starve the round.
                 round?.arrived(frame)
                 val body = carried?.let(LobbyWire::decodeOrNull)
-                // Only the standing is acted on. Either upward body arriving at a client would be
-                // the house sending one phone's text to another, which nothing on the host side
-                // does — and if it ever did, ignoring it here is the fail-closed direction.
-                if (body is LobbyBody.Standing) onStanding(body)
+                when (body) {
+                    is LobbyBody.Standing -> onStanding(body)
+                    // **The evening turned over** (D-157). The round's inbox goes first and
+                    // unconditionally — it holds a sequence for a round that no longer exists, and
+                    // a phone carrying it into the next one would refuse that round's opening
+                    // pushes as frames it already had. Then the panel is told, which is the half
+                    // this class cannot do itself.
+                    is LobbyBody.RoundEnded -> {
+                        round?.roundEnded()
+                        onRoundEnded()
+                    }
+                    // Either upward body arriving at a client would be the house sending one
+                    // phone's text to another, which nothing on the host side does — and if it ever
+                    // did, ignoring it here is the fail-closed direction.
+                    is LobbyBody.Handover, is LobbyBody.Naming, null -> Unit
+                }
             },
             onPhase = { phase ->
                 when (phase) {

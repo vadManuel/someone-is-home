@@ -312,9 +312,15 @@ data class PanelState(
     /**
      * **The live ballot, for the couch and nobody else** (D-117, D-134, D-075).
      *
-     * What `Effect.VoteSelectionShown` builds up, one selection at a time, with seats already
-     * resolved to names by the transport — [RevealedInsider]'s arrangement, and for its reason:
-     * `ui` mapping seats to names would be `ui` keeping a second copy of who is in the house.
+     * What `Effect.VoteSelectionShown` builds up, one selection at a time, with seats resolved
+     * against [roster] on the way in — `FlowModel.nameOf`, the same lookup [caller] and [tally]
+     * make, and the same one `fireSurge` makes in the other direction.
+     *
+     * **That is not `ui` keeping a second copy of who is in the house**, which is the distinction
+     * this KDoc used to draw on the wrong side of. A second copy would be this module *deriving* a
+     * roster — out of a lobby standing, or by sorting names it happens to hold. [roster] is the
+     * house's own list, in the house's own order, pushed to this phone by `Effect.RosterIssued`;
+     * reading it is the same act as drawing it.
      *
      * **Ghosts are the only readers who see selections rather than a count.** This field must
      * never be read by a living screen, and `MeetingDisclosureTest` renders every screen in the
@@ -333,9 +339,10 @@ data class PanelState(
      * against it (`MeetingResolved`, D-075). What a living phone holds is therefore a [restrained]
      * and an empty [rows]; the couch holds both.
      *
-     * **The rows are counted by the transport and never here**, for [ballots]' reason: this module
-     * resolving seats to names would be `ui` keeping a second copy of who is in the house. A tally
-     * is a count of an attribution list, and the list is the thing that is permitted or not.
+     * **The rows are counted on the way in from the wire**, for [ballots]' reason and against the
+     * same pushed [roster]. A tally is a count of an attribution list, and the list is the thing
+     * that is permitted or not; counting one the house sent decides nothing, because `tallyOf` in
+     * `core` decided who was restrained and that answer arrives on the message beside it.
      *
      * **Null means the house has said nothing** and the drawn fixture stands in, which is
      * [egressNodes]' arrangement and every other pushed field's on this type.
@@ -431,6 +438,11 @@ data class PanelState(
      * (`gdd.md:393`) so the actor's own row has to be on it; the Revoked stay on it because a roster
      * that dropped them would be the revoke-detector `gdd.md:344` exists to prevent, delivered by a
      * list instead of by an animation.
+     *
+     * **It arrives at arming, on `Effect.RosterIssued`, and everything that names anybody reads
+     * it** (D-115). It had no writer at all until then: the ring's caller, the tally's rows, the
+     * couch's live ballot and this picker all resolve a seat through it, so in a real round all
+     * four drew the port's five names at a meeting of six real people.
      *
      * Null means the house has said nothing, which on a phone with no house attached is always;
      * [PanelVals.roster] resolves the port's five. [egressNodes]' arrangement exactly.

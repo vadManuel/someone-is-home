@@ -74,6 +74,7 @@ class RoundWireTest {
         // The Insider's copy, because the projection's one decision on this kind is the
         // narrowing of `Role` to a bit and `Role.Resident` would project `false` either way.
         Effect.RoleRevealed(Seat(3), Role.Insider),
+        Effect.RosterIssued(Seat(3), listOf("PRIYA", "MARCUS", "", "ROSE")),
         Effect.MeetingOpened(Seat(3), MeetingTrigger.MeetingCard, Haptic.Long),
         Effect.MeetingCalling(Seat(3)),
         Effect.StandAndWalkIn(Seat(3), Haptic.Long),
@@ -86,9 +87,16 @@ class RoundWireTest {
         Effect.MeetingResult(restrained = Seat(2), haptic = Haptic.Short),
         Effect.MeetingResolved(restrained = Seat(2), attribution = listOf(Seat(3) to Seat(2), Seat(4) to null)),
         Effect.RestrainedTakeover(Seat(3), Haptic.Long),
+        Effect.RevokeLanded(Seat(4)),
         Effect.MeetingEnded(Haptic.Long),
         Effect.EgressOpened(
-            Seat(3), EgressType.Tether, listOf(MarkerId("M-1"), MarkerId("M-2")),
+            Seat(3), EgressType.Tether,
+            // Destinations, because the widget NAMES the two nodes. The room is host-authored text
+            // and rides the same round trip every other string on this wire does.
+            listOf(
+                Destination(MarkerId("M-1"), "circle", "UTILITY"),
+                Destination(MarkerId("M-2"), "square", "LANDING"),
+            ),
             remaining = 900, haptic = Haptic.Long,
         ),
         Effect.EgressHeld(remaining = 400, running = false, haptic = Haptic.Short),

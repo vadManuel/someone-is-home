@@ -3,6 +3,7 @@ package home.someoneshome.ui
 import home.someoneshome.model.AssignedWork
 import home.someoneshome.model.Balance
 import home.someoneshome.model.Destination
+import home.someoneshome.model.EgressType
 import home.someoneshome.model.Haptic
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.OrderLine
@@ -194,7 +195,7 @@ class RoutingTest {
     fun `the house's ballot re-assertion locks this phone`() {
         val model = FlowModel(
             PanelState(screen = ScreenId.Vote, roster = roster),
-            meeting = MeetingModel(names = roster),
+            meeting = MeetingModel(initialNames = roster),
         )
         model.chooseVote(VoteChoice.Named("MARCUS"))
         assertTrue(!model.meeting.locked, "the fixture started locked")
@@ -675,6 +676,184 @@ class RoutingTest {
         model.houseSaid(RoundMessage.SyncPulseAnswered(held = false))
         assertEquals(false, model.state.beatHeld, "an unheld beat was read as no answer at all")
     }
+
+    // ---- 8 · The unit E1 routes ------------------------------------------------------------------
+
+    /**
+     * **THE HOUSE CATCHES FIRE AND EVERY PHONE FINDS OUT — E-R2-3** (`gdd.md:370-378`, D-076,
+     * D-118).
+     *
+     * The effect reached every seat and moved nothing on any of them. Three separate claims here
+     * and the middle one is the escalation's actual subject:
+     *
+     * 1. **A dismissable alert, not a navigation.** `Banner` is the springboard with the heavy
+     *    notification over it, so the player keeps whatever they were doing underneath — *you
+     *    cannot scan a marker through a modal.*
+     * 2. **The two nodes are named as ROOMS**, which is what the widget takeover is for. This is
+     *    what a nine-character card id could never do and is why the wire carries destinations.
+     * 3. **The type stands and `egressRunning` comes up**, because the widget draws both.
+     */
+    @Test
+    fun `the Egress alert reaches this phone and names two rooms`() {
+        val model = living(ScreenId.Work)
+        model.houseSaid(
+            RoundMessage.EgressOpened(
+                type = EgressType.Tether,
+                nodes = listOf(
+                    Destination(MarkerId("west-card"), "circle", "UTILITY"),
+                    Destination(MarkerId("east-card"), "square", "LANDING"),
+                ),
+                remaining = 2_400,
+                haptic = Haptic.Long,
+            ),
+        )
+        assertEquals(
+            ScreenId.Banner, model.state.screen,
+            "the house caught fire and this phone went on drawing the work screen",
+        )
+        assertEquals(
+            listOf("UTILITY", "LANDING"), model.state.egressNodes,
+            "the alert reached the phone and named nowhere to go",
+        )
+        assertEquals("TETHER", model.state.egressType)
+        assertTrue(model.state.egressRunning, "the widget has no crisis to draw")
+    }
+
+    /**
+     * **A locked phone gets it under the clock and a phone on a house screen keeps that screen.**
+     *
+     * The alert goes through `arrived`, so it inherits D-119's two cases rather than restating
+     * them — which is the whole reason it is not a `push`. A banner raised over the tally would
+     * take the room's result off the screen it is being read off.
+     */
+    @Test
+    fun `the Egress alert respects the lock screen and never interrupts a house screen`() {
+        val locked = living(ScreenId.Lock)
+        locked.houseSaid(egressOpened())
+        assertEquals(ScreenId.LockNotify, locked.state.screen, "a phone nobody picked up lost its clock")
+
+        val tally = living(ScreenId.Tally)
+        tally.houseSaid(egressOpened())
+        assertEquals(ScreenId.Tally, tally.state.screen, "an alert took the room's result off the screen")
+        // The pair still lands, because the widget behind it has to be right whenever it is reached.
+        assertEquals(listOf("UTILITY", "LANDING"), tally.state.egressNodes)
+    }
+
+    /**
+     * **THE ROSTER, AND IT IS THE FIELD FOUR SCREENS READ AND NOBODY WROTE** (D-115, E-R2-6, C3·4).
+     *
+     * `PanelState.roster` had no writer anywhere in the app, so `nameOf` returned null on every
+     * lookup in every real round. This asserts all three consumers off one push, because they were
+     * never three gaps — they were one missing carrier read three ways. **The seat total is the
+     * fourth**: it is the roster's length, it is a public lobby fact, and until now it arrived only
+     * at the first meeting (C3·4).
+     */
+    @Test
+    fun `the roster arrives once and every surface that names anybody can`() {
+        // **A list the fixtures cannot supply**, and that is the point rather than flavour: the
+        // default `MeetingModel.sample()` carries the port's own five, so a roster equal to them
+        // makes *the house wrote the ballot* and *nobody wrote the ballot* the same observation.
+        // An injection that dropped `houseNamed` passed against the port's names.
+        val tonight = listOf("ADA", "BRUNO", "", "DELPHINE", "EMEKA", "FINN")
+        val model = FlowModel(PanelState(screen = ScreenId.Home))
+        assertNull(model.state.roster, "the fixture started with a roster the house had not sent")
+        assertNotEquals(tonight, model.meeting.names, "the fixture already held tonight's ballot")
+
+        model.houseSaid(RoundMessage.RosterIssued(tonight))
+        assertEquals(tonight, model.state.roster)
+        assertEquals(tonight, model.meeting.names, "the ballot is drawn from a different list")
+        assertEquals(
+            6, model.state.seats,
+            "the seat total still waits for the first meeting, so an out phone's meter cannot move",
+        )
+
+        // And the lookup it exists for: the ring's caller resolves to a name rather than to null.
+        model.houseSaid(RoundMessage.MeetingOpened(Seat(3), MeetingTrigger.MeetingCard, Haptic.Long))
+        assertEquals("DELPHINE", model.state.caller, "the roster arrived and the ring still named nobody")
+
+        // **The blank seat stays a slot.** A phone that never said what to call its owner holds a
+        // position, or every seat after it resolves to somebody else — which the Surge picker fires
+        // at and the ballot restrains.
+        model.houseSaid(RoundMessage.MeetingOpened(Seat(2), MeetingTrigger.MeetingCard, Haptic.Long))
+        assertEquals("", model.state.caller, "an unnamed seat was skipped and the list shifted")
+    }
+
+    /**
+     * **THE REVOKE LANDING — E-R2-5.** The two ways out of the round were asymmetric on the client:
+     * the room holding you pushed a screen, and the house withdrawing your lamp pushed nothing.
+     *
+     * **Arriving is what sets `outBy`**, which is where the Revoke/Restrain distinction is kept
+     * (rule 9) — so this asserts the cause and not only the screen. A build that routed this to
+     * `Restrained` would put the room's word on a screen the room had nothing to do with.
+     */
+    @Test
+    fun `the Revoke landing reaches the Revoked screen with the cause on it`() {
+        val model = living(ScreenId.Page2)
+        model.houseSaid(RoundMessage.RevokeLanded)
+        assertEquals(ScreenId.Revoked, model.state.screen, "the house took this player out and said nothing")
+        assertEquals(OutBy.Revoked, model.state.outBy, "the screen blamed the room for the house's act")
+
+        val held = living(ScreenId.Page2)
+        held.houseSaid(RoundMessage.RestrainedTakeover(Haptic.Long))
+        assertEquals(OutBy.Restrained, held.state.outBy, "the two ways out stopped being distinguishable")
+    }
+
+    /**
+     * **THE COUCH'S LIVE BALLOT — E-R2-6** (D-117, D-134, D-075). *Ghosts are the only readers who
+     * see selections rather than a count*, and the branch was `Unit`.
+     *
+     * Four claims: the names resolve off the house's roster, a Skip says SKIP rather than STILL
+     * DECIDING (D-075 — *not voting counts as a Skip*, so the two must stay distinguishable), a
+     * seat that changes its mind moves its own row instead of growing a second, and the rows come
+     * out in **seat order** however they arrived (rule 4 — two people on one couch must be reading
+     * the same list).
+     */
+    @Test
+    fun `the couch watches the ballot fill in and the rows come out in seat order`() {
+        val couch = FlowModel(PanelState(screen = ScreenId.GhostMeeting))
+        couch.houseSaid(RoundMessage.RosterIssued(roster))
+
+        couch.houseSaid(RoundMessage.VoteSelectionShown(voter = Seat(3), selection = Seat(1)))
+        couch.houseSaid(RoundMessage.VoteSelectionShown(voter = Seat(0), selection = null))
+        assertEquals(
+            listOf(Ballot("PRIYA", "SKIP"), Ballot("ROSE", "MARCUS")),
+            couch.state.ballots,
+            "the rows are in arrival order, so two phones on one couch disagree",
+        )
+
+        couch.houseSaid(RoundMessage.VoteSelectionShown(voter = Seat(3), selection = Seat(4)))
+        assertEquals(
+            listOf(Ballot("PRIYA", "SKIP"), Ballot("ROSE", "TOMAS")),
+            couch.state.ballots,
+            "a voter who changed their mind was counted twice",
+        )
+    }
+
+    /** A new meeting starts with nothing said, the couch's ballot included. */
+    @Test
+    fun `the couch's ballot does not survive into the next meeting`() {
+        val couch = FlowModel(PanelState(screen = ScreenId.GhostMeeting))
+        couch.houseSaid(RoundMessage.RosterIssued(roster))
+        couch.houseSaid(RoundMessage.VoteSelectionShown(voter = Seat(3), selection = Seat(1)))
+        assertEquals(1, couch.state.ballots?.size)
+
+        couch.houseSaid(RoundMessage.StandAndWalkIn(Haptic.Short))
+        assertEquals(ScreenId.Ghost2, couch.state.screen, "the walk-in never arrived")
+        assertNull(
+            couch.state.ballots,
+            "the couch opened the next meeting looking at the last one's completed vote",
+        )
+    }
+
+    private fun egressOpened(): RoundMessage.EgressOpened = RoundMessage.EgressOpened(
+        type = EgressType.Beacon,
+        nodes = listOf(
+            Destination(MarkerId("west-card"), "circle", "UTILITY"),
+            Destination(MarkerId("east-card"), "square", "LANDING"),
+        ),
+        remaining = 2_400,
+        haptic = Haptic.Long,
+    )
 
     /** This seat's own order: six lines, one of them blocked, so an unplaceable entry really is one. */
     private val order: List<OrderLine> = listOf(

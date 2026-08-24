@@ -79,6 +79,7 @@ object EmitSchema {
         is Effect.PresenceChanged -> PRESENCE_CHANGED
         is Effect.OpeningMessage -> OPENING_MESSAGE
         is Effect.RoleRevealed -> ROLE_REVEALED
+        is Effect.RosterIssued -> ROSTER_ISSUED
         is Effect.MeetingOpened -> MEETING_OPENED
         is Effect.MeetingCalling -> MEETING_CALLING
         is Effect.StandAndWalkIn -> STAND_AND_WALK_IN
@@ -91,6 +92,7 @@ object EmitSchema {
         is Effect.MeetingResult -> MEETING_RESULT
         is Effect.MeetingResolved -> MEETING_RESOLVED
         is Effect.RestrainedTakeover -> RESTRAINED_TAKEOVER
+        is Effect.RevokeLanded -> REVOKE_LANDED
         is Effect.MeetingEnded -> MEETING_ENDED
         is Effect.EgressOpened -> EGRESS_OPENED
         is Effect.EgressHeld -> EGRESS_HELD
@@ -124,6 +126,7 @@ object EmitSchema {
     val PRESENCE_CHANGED = MessageKind("PresenceChanged")
     val OPENING_MESSAGE = MessageKind("OpeningMessage")
     val ROLE_REVEALED = MessageKind("RoleRevealed")
+    val ROSTER_ISSUED = MessageKind("RosterIssued")
     val MEETING_OPENED = MessageKind("MeetingOpened")
     val MEETING_CALLING = MessageKind("MeetingCalling")
     val STAND_AND_WALK_IN = MessageKind("StandAndWalkIn")
@@ -136,6 +139,7 @@ object EmitSchema {
     val MEETING_RESULT = MessageKind("MeetingResult")
     val MEETING_RESOLVED = MessageKind("MeetingResolved")
     val RESTRAINED_TAKEOVER = MessageKind("RestrainedTakeover")
+    val REVOKE_LANDED = MessageKind("RevokeLanded")
     val MEETING_ENDED = MessageKind("MeetingEnded")
     val EGRESS_OPENED = MessageKind("EgressOpened")
     val EGRESS_HELD = MessageKind("EgressHeld")
@@ -356,6 +360,23 @@ object EmitSchema {
         // the table.
         ROLE_REVEALED to LIVING,
 
+        // **Who is in the round, in seat order** (D-115). The widest-looking row in this table and
+        // the one that discloses least: every phone in the lobby was already sent every name, so
+        // what crosses here is a REORDERING of a list the client is already holding. The order is
+        // the part it cannot derive -- `LobbyBody.Standing.names` is arrival order and its own KDoc
+        // forbids pairing it positionally with anything -- and the part four screens need, because
+        // they resolve a seat to a name by index in both directions.
+        //
+        // **Both living classes, never one.** It carries no role and cannot: the list is
+        // byte-identical on every phone in the house, which is what makes it safe to send at all.
+        // Narrowed to one class it would become the shape rule 1 forbids, for a message whose whole
+        // content is public.
+        //
+        // Not the out classes and not AFTER, for ROLE_REVEALED's reason exactly: it is emitted once,
+        // in the arming burst, when every seat is Live. A row that could deliver it later would be a
+        // permission with no moment behind it.
+        ROSTER_ISSUED to LIVING,
+
         // **The ring, and it is for the living** (D-134). A player who is out gets no phone call
         // -- they get STAND AND WALK IN, which is the row below. This narrows on the ROUND-STATE
         // axis and never on role, which is the axis the two-axis taxonomy exists for: both roles
@@ -423,6 +444,17 @@ object EmitSchema {
         // the rest. Permitted to no living class: a takeover reaching a living phone would be the
         // house telling somebody else's device that the vote went against them.
         RESTRAINED_TAKEOVER to OUTSIDE,
+
+        // **The Revoke landing, and it is RESTRAINED_TAKEOVER's row for RESTRAINED_TAKEOVER's
+        // reason** (D-134, E-R2-5). By the time it is emitted the seat it names is Revoked, so it
+        // classifies Out and the addressing does the rest.
+        //
+        // Permitted to no living class, and here that denial is doing real work rather than
+        // following a pattern: a row that reached a living phone would be the house telling a
+        // player that somebody ELSE had just been Revoked -- which is the single fact the whole
+        // presence plane, the lamp's rule 7 path and `gdd.md:344`'s appears-to-succeed clause are
+        // built to keep off every screen but the victim's own.
+        REVOKE_LANDED to OUTSIDE,
 
         // Lights out. Everybody, because everybody's screen changes.
         MEETING_ENDED to (LIVING + OUTSIDE),
@@ -599,6 +631,12 @@ object EmitSchema {
             // Residents. A widening here would publish the round's alignment to the house at
             // arming, which is the one disclosure this whole application exists to prevent.
             is Effect.RoleRevealed -> listOf(effect.seat)
+            // **Addressed per seat and emitted once per seat**, which is how a list that is
+            // byte-identical on every phone reaches everyone without the effect growing a
+            // broadcast shape -- `OpeningMessage`'s arrangement, three branches up, and for its
+            // reason. Nothing is narrowed by the addressing here and nothing could be: every
+            // recipient is sent the same list, and the seat on the effect is the recipient's.
+            is Effect.RosterIssued -> listOf(effect.seat)
             is Effect.SubroutineProgressed -> state.seats
             // Broadcast, and left to the allowlist to narrow -- the two meter kinds are facts about
             // the house rather than about the phone they arrive on, and addressing them by
@@ -622,6 +660,13 @@ object EmitSchema {
             is Effect.StandAndWalkIn -> listOf(effect.seat)
             is Effect.VoteHeld -> listOf(effect.seat)
             is Effect.RestrainedTakeover -> listOf(effect.seat)
+            // **The seat the Revoke landed on, and no other phone in the house.** The one
+            // addressing in this function whose widening would be a game-ending leak rather than a
+            // visible fault: a broadcast here announces to five phones that a sixth has just gone
+            // dark, which is the revoke-detector `gdd.md:344` and the whole presence plane exist to
+            // prevent. The actor is not on this list and must never be -- what the phone that fired
+            // gets is `AbilityFired` and its own cooldown (`gdd.md:398`).
+            is Effect.RevokeLanded -> listOf(effect.seat)
             // **The calling seat, and the addressing IS the message** (E-R1-1). The wire member has
             // no field at all, so what makes this mean *you are the one calling* is which socket it
             // went down -- RestrainedTakeover's arrangement exactly, and for the reason a phone is

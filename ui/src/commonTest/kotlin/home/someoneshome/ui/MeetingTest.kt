@@ -116,7 +116,7 @@ class MeetingTest {
     @Test
     fun aTapAfterReadyIsNotEvenSent() {
         val sent = mutableListOf<MeetingRequest>()
-        val meeting = MeetingModel(send = { sent += it }, names = listOf("PRIYA", "MARCUS"))
+        val meeting = MeetingModel(send = { sent += it }, initialNames = listOf("PRIYA", "MARCUS"))
 
         meeting.choose(VoteChoice.Named("PRIYA"))
         meeting.readyToVote()
@@ -138,7 +138,7 @@ class MeetingTest {
     @Test
     fun anEmptyVoteIsNotHandedOver() {
         val sent = mutableListOf<MeetingRequest>()
-        val meeting = MeetingModel(send = { sent += it }, names = listOf("PRIYA"))
+        val meeting = MeetingModel(send = { sent += it }, initialNames = listOf("PRIYA"))
         meeting.readyToVote()
         assertEquals(emptyList(), sent)
         assertFalse(meeting.locked, "an empty vote read as cast")
@@ -155,7 +155,7 @@ class MeetingTest {
     fun everyControlPublishesASeatlessRequestThatTheConnectionAddresses() {
         val sent = mutableListOf<MeetingRequest>()
         val names = listOf("PRIYA", "MARCUS", "DANI")
-        val meeting = MeetingModel(send = { sent += it }, names = names)
+        val meeting = MeetingModel(send = { sent += it }, initialNames = names)
 
         meeting.checkIn()
         meeting.sayReady()

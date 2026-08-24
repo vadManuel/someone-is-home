@@ -259,7 +259,9 @@ class RoundCheat(
             // pressing while one is running, and the seat the launch named walks to its node.
             is RoundMessage.EgressOpened -> {
                 egressRunning = true
-                node?.let { walkTo = message.nodes.getOrNull(it) }
+                // The card, off the destination the house named it with -- the bench walks to a
+                // marker, and the room beside it is what a player would read.
+                node?.let { walkTo = message.nodes.getOrNull(it)?.marker }
             }
 
             is RoundMessage.EgressContained -> {

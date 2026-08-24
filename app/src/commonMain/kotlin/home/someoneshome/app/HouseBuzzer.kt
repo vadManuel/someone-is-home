@@ -128,6 +128,9 @@ internal fun Effect.ringing(): Boolean = when (this) {
     is Effect.EgressSucceeded, is Effect.RoundEnded, is Effect.LampSet, is Effect.AbilityFired,
     is Effect.SubroutineGraded, is Effect.SubroutineProgressed, is Effect.SystemIntegrityLive,
     is Effect.SystemIntegrityBatched, is Effect.MessageDelivered, is Effect.HouseSignedOff,
+    // The Revoke landing says its thing once, like the takeover it mirrors; the roster is silent
+    // entirely and is one of the `null` rows in [haptic] below.
+    is Effect.RevokeLanded, is Effect.RosterIssued,
     is Effect.WorkOrderIssued, is Effect.ScanAnswered, is Effect.PresenceChanged,
     is Effect.CheckInProgressed, is Effect.ReadyProgressed, is Effect.VoteProgressed,
     is Effect.VoteHeld, is Effect.VoteSelectionShown, is Effect.MeetingResolved,
@@ -210,6 +213,16 @@ internal fun Effect.haptic(): Haptic? = when (this) {
     // has dispersed. The role arrives on a silent message behind one banner that buzzed for
     // everybody -- D-156's arrangement, and the reason a `haptic` field was never put on it.
     is Effect.RoleRevealed -> null
+    // **Silent, and for the reason immediately above rather than a weaker one.** It rides the same
+    // arming burst, so a buzz here would put a second vibration on every phone in the house at the
+    // one moment nobody has dispersed -- and a list of names is not an event, it is the thing four
+    // later screens are drawn from.
+    is Effect.RosterIssued -> null
+    // **Silent, and D-156 is why rather than taste** (see the effect). It is constructed on every
+    // contact so the authority's stream cannot report whether one landed, which means a buzz here
+    // would go off in the pocket of somebody already sitting out every time an Insider fired at
+    // them again. The signal the player actually gets is their lamp going dark in their hand (rule 7).
+    is Effect.RevokeLanded -> null
     is Effect.SubroutineGraded -> null
     is Effect.SubroutineProgressed -> null
     // **The meter never buzzes, in either form.** The live one moves whenever anybody in the house
@@ -286,7 +299,7 @@ internal fun RoundMessage.ringing(): Boolean = when (this) {
     is RoundMessage.VoteProgressed, is RoundMessage.VoteHeld,
     is RoundMessage.VoteSelectionShown, is RoundMessage.MeetingResolved,
     is RoundMessage.SyncPulseAnswered, is RoundMessage.InsidersRevealed,
-    is RoundMessage.RoleRevealed,
+    is RoundMessage.RoleRevealed, is RoundMessage.RevokeLanded, is RoundMessage.RosterIssued,
     is RoundMessage.Surged, is RoundMessage.IsolateTargetsOffered,
     is RoundMessage.StaticOpened, is RoundMessage.MeetingCalling,
     -> false
@@ -330,6 +343,8 @@ internal fun RoundMessage.haptic(): Haptic? = when (this) {
     is RoundMessage.AbilityFired -> null
     // F-003, on the receiving side. See the effect-side branch.
     is RoundMessage.RoleRevealed -> null
+    is RoundMessage.RosterIssued -> null
+    is RoundMessage.RevokeLanded -> null
     is RoundMessage.SubroutineGraded -> null
     is RoundMessage.SubroutineProgressed -> null
     is RoundMessage.SystemIntegrityLive -> null

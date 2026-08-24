@@ -3,6 +3,7 @@ package home.someoneshome.core
 import home.someoneshome.model.Balance
 import home.someoneshome.model.CardPayload
 import home.someoneshome.model.CellRect
+import home.someoneshome.model.Destination
 import home.someoneshome.model.Effect
 import home.someoneshome.model.Egress
 import home.someoneshome.model.EgressType
@@ -86,6 +87,18 @@ private fun map(): HouseMap = HouseMap.of(
 )
 
 /**
+ * **Where the four cards are** — the same rows `Rules.armed` carries across from the home.
+ *
+ * The fixture built rounds with active markers and no destinations, which was invisible while the
+ * Egress alert carried bare card ids and is not any more: the alert **names** the two nodes, so a
+ * round whose cards resolve to no room sends the whole house to two places with no names on them.
+ * Read off [map] rather than typed, so the rooms here and the registrations above cannot disagree.
+ */
+private fun where(): List<Destination> = map().registrations.map {
+    Destination(it.card.id, it.card.shape.id, it.room.name)
+}
+
+/**
  * A round armed in that house, with the four cards active and the shared Egress clock already run
  * down.
  *
@@ -99,6 +112,7 @@ private fun armed(): GameState = GameState.armedRound(
     insiders = INSIDERS,
     systemIntegrity = 30,
     activeMarkers = listOf(WEST, MIDDLE, EAST, LANDING),
+    destinations = where(),
     egressReadyAt = Tick(50),
 )
 
@@ -410,7 +424,10 @@ class EgressTest {
 
         assertEquals(SEATS, opened.map { it.seat }, "the Egress alert missed a phone")
         assertEquals(
-            listOf(listOf(WEST, EAST)), opened.map { it.nodes }.distinct(),
+            // **The CARDS are compared and the rooms ride with them.** The effect carries
+            // destinations now, so the pair is asserted through the ids the draw actually made —
+            // and `distinct()` is still what proves every phone was sent the same two.
+            listOf(listOf(WEST, EAST)), opened.map { it.nodes.map { node -> node.marker } }.distinct(),
             "two phones were sent to different places",
         )
         assertEquals(listOf(EgressType.Tether), opened.map { it.type }.distinct())
@@ -418,6 +435,15 @@ class EgressTest {
         assertEquals(
             listOf(Haptic.Long), opened.map { it.haptic }.distinct(),
             "D-135 names the Egress at the head of the long haptic's closed set of five",
+        )
+        // **The rooms are on it, which is what NAMES the two nodes** (`gdd.md:374`, E-R2-3). The
+        // widget takeover says where to stand and a nine-character card id says nothing to a person
+        // in a dark house — so a pair that resolved to no destination would be an alert that reached
+        // every phone and told none of them anything. `mapNotNull` makes that failure a SHORT pair
+        // rather than a blank one, so this asserts the length as well as the words.
+        assertEquals(
+            listOf(listOf("WEST", "EAST")), opened.map { it.nodes.map { node -> node.room } }.distinct(),
+            "the alert reached every phone and named nowhere",
         )
     }
 

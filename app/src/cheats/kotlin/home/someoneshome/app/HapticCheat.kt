@@ -13,6 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.Modifier
+import home.someoneshome.model.Destination
 import home.someoneshome.model.Effect
 import home.someoneshome.model.EgressType
 import home.someoneshome.model.Haptic
@@ -83,7 +84,12 @@ class HapticCheat(private val haptics: Haptics) {
                 Effect.EgressOpened(
                     seat = seat,
                     type = EgressType.Beacon,
-                    nodes = listOf(MarkerId("SEED001"), MarkerId("SEED002")),
+                    // Card, glyph and room, because the alert and the widget NAME the two nodes. The
+                    // bench draws a pair the way the house does; nothing here reads the rooms.
+                    nodes = listOf(
+                        Destination(MarkerId("SEED001"), "circle", "UTILITY"),
+                        Destination(MarkerId("SEED002"), "square", "LANDING"),
+                    ),
                     remaining = 180,
                     haptic = Haptic.Long,
                 ),

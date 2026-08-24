@@ -234,6 +234,25 @@ sealed class RoundMessage {
     @kotlinx.serialization.SerialName("RoleRevealed")
     data class RoleRevealed(val insider: Boolean) : RoundMessage()
 
+    /**
+     * **Who is in the round, in seat order** (D-115, E-R2-6, C3·4).
+     *
+     * The seat comes off like every addressed kind here; the list does not, because the list is
+     * the message. It is **byte-identical on every phone in the house**, which is what makes it the
+     * one named collection in this protocol that can be sent to everybody: there is nothing in it
+     * that varies by recipient, so a phone still cannot read its own seat out of a frame.
+     *
+     * **One entry per seat, in seat order, blank where a phone never said what to call its owner.**
+     * The client reads it by index in both directions -- a `Seat` to a name for the tally and the
+     * ring, and a tapped row back to a `Seat` for the Surge picker and the ballot -- so a list that
+     * omitted the unnamed would shift every index after the gap and fire an ability at the wrong
+     * person. `LobbyBody.Standing.names` keeps the same rule for the same reason one channel over.
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("RosterIssued")
+    data class RosterIssued(val roster: List<String>) : RoundMessage()
+
     /** The ring, to the living. Carries who called it, who is public by construction (D-121). */
     @ClientFacing
     @kotlinx.serialization.Serializable
@@ -345,6 +364,29 @@ sealed class RoundMessage {
     @kotlinx.serialization.SerialName("RestrainedTakeover")
     data class RestrainedTakeover(val haptic: Haptic) : RoundMessage()
 
+    /**
+     * **The Revoke landed on this phone** (D-134, E-R2-5).
+     *
+     * [MeetingCalling]'s member exactly: the seat goes because it was the recipient's, and **the
+     * message is empty afterwards.** What survives the projection is that the house sent it at all;
+     * which phone it means is the socket it goes down. The two ways out of the round are symmetric
+     * on the wire now, which is what the two screens behind them always claimed — `ScreenId.Revoked`
+     * and `ScreenId.Restrained` are one screen with a different cause on it, and the cause is which
+     * of these two messages arrived.
+     *
+     * **There is nothing here that says who fired it, and there is nowhere to put it.** A field
+     * naming the Insider would be the alignment reveal, delivered to the one player with the
+     * strongest possible motive to say it out loud and no rule left stopping them.
+     *
+     * **No haptic**, unlike [RestrainedTakeover] — see [Effect.RevokeLanded], where D-156 carries
+     * it: the effect is constructed on every contact, so a buzz would fire again each time somebody
+     * touched a player who was already out.
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("RevokeLanded")
+    data object RevokeLanded : RoundMessage()
+
     /** Lights out. */
     @ClientFacing
     @kotlinx.serialization.Serializable
@@ -369,7 +411,9 @@ sealed class RoundMessage {
          */
         @kotlinx.serialization.SerialName("egress")
         val type: EgressType,
-        val nodes: List<MarkerId>,
+        /** Card, glyph and room, for the reason [Effect.EgressOpened.nodes] gives: the widget
+         *  NAMES the two nodes, and a card id is not a name. */
+        val nodes: List<Destination>,
         val remaining: Long,
         val haptic: Haptic,
     ) : RoundMessage()
@@ -460,6 +504,7 @@ sealed class RoundMessage {
             is PresenceChanged -> EmitSchema.PRESENCE_CHANGED
             is OpeningMessage -> EmitSchema.OPENING_MESSAGE
             is RoleRevealed -> EmitSchema.ROLE_REVEALED
+            is RosterIssued -> EmitSchema.ROSTER_ISSUED
             is MeetingOpened -> EmitSchema.MEETING_OPENED
             is MeetingCalling -> EmitSchema.MEETING_CALLING
             is StandAndWalkIn -> EmitSchema.STAND_AND_WALK_IN
@@ -472,6 +517,7 @@ sealed class RoundMessage {
             is MeetingResult -> EmitSchema.MEETING_RESULT
             is MeetingResolved -> EmitSchema.MEETING_RESOLVED
             is RestrainedTakeover -> EmitSchema.RESTRAINED_TAKEOVER
+            is RevokeLanded -> EmitSchema.REVOKE_LANDED
             is MeetingEnded -> EmitSchema.MEETING_ENDED
             is EgressOpened -> EmitSchema.EGRESS_OPENED
             is EgressHeld -> EmitSchema.EGRESS_HELD
@@ -665,6 +711,8 @@ object RoundWire {
         // what a phone needs is whether page 2 answers its thumb, and rule 3 says redact
         // by constructing a narrower type rather than by carrying the wide one.
         is Effect.RoleRevealed -> RoundMessage.RoleRevealed(effect.role == Role.Insider)
+        // The seat comes off; the list is the same list on every wire it goes down.
+        is Effect.RosterIssued -> RoundMessage.RosterIssued(effect.roster)
         is Effect.MeetingOpened ->
             RoundMessage.MeetingOpened(effect.caller, effect.trigger, effect.haptic)
         // **The seat comes off here, and the message is empty afterwards.** What survives the
@@ -687,6 +735,8 @@ object RoundWire {
             effect.attribution.map { (voter, selection) -> RoundMessage.Cast(voter, selection) },
         )
         is Effect.RestrainedTakeover -> RoundMessage.RestrainedTakeover(effect.haptic)
+        // The seat comes off and nothing is left, which is `MeetingCalling`'s projection.
+        is Effect.RevokeLanded -> RoundMessage.RevokeLanded
         is Effect.MeetingEnded -> RoundMessage.MeetingEnded(effect.haptic)
         is Effect.EgressOpened ->
             RoundMessage.EgressOpened(effect.type, effect.nodes, effect.remaining, effect.haptic)

@@ -415,6 +415,48 @@ sealed interface Effect {
      */
     data class RoleRevealed(val seat: Seat, val role: Role) : Effect
 
+    /**
+     * **Who is in the round, in SEAT ORDER — the arming push that makes every name on every screen
+     * possible** (D-115).
+     *
+     * *The host learns names, and clients receive them wherever the interaction needs them.* Four
+     * surfaces need them and not one of them worked: the ring's caller, the tally's outcome, the
+     * couch's live ballot and the Surge picker all resolve a `Seat` against `PanelState.roster`,
+     * and **nothing anywhere wrote that field.** It was null in every real round, so `FlowModel.nameOf`
+     * returned null on every lookup and four screens drew the port's fixture names at a meeting
+     * where six real people were standing in a hall.
+     *
+     * ### It discloses nothing, and that is provable rather than argued
+     *
+     * **Every phone in the lobby was already sent every name** — `LobbyBody.Standing.names`, D-115's
+     * own widening, in arrival order. What this adds is the **order**, which is the one thing a
+     * client cannot derive and must never guess: `Standing.names` is the order seats were taken and
+     * its own KDoc forbids pairing it positionally with anything. So the disclosure is a permutation
+     * of a list the phone is already holding, and the alternative — a client sorting the lobby's
+     * names into what it hopes is seat order — is `ui` deciding who a Surge is fired at.
+     *
+     * ### One entry per seat, blank where a phone never said
+     *
+     * [LobbyBody.Standing.names]' rule, and here it is load-bearing rather than tidy: the client
+     * reads this list **by index**, `roster[seat.index]`, in both directions — a seat to a name for
+     * the tally, and a tapped row back to a seat for the Surge picker and the ballot. A list that
+     * held only the seats that happened to have said a name would shift every index after the gap
+     * and **fire an ability at somebody else**. A blank is a seat that said nothing; there is no
+     * shorter list.
+     *
+     * ### It says nothing about which seat is reading it
+     *
+     * Byte-identical on all six phones, which is the property that keeps it safe: a phone still
+     * cannot say which seat it is, and there is nothing here it could work that out from. It is
+     * [StaticOpened]'s anonymity arriving at the one message that names everybody — the list is the
+     * same list, and who is holding it is the socket's business.
+     *
+     * **The recording holds seats and no names**, exactly as `Event.RoundArmed.names` and
+     * [InsidersRevealed] do (D-115: names are round-scoped and do not survive into the one artefact
+     * of this game that outlives the evening). A replayed round rebuilds blanks of the same length.
+     */
+    data class RosterIssued(val seat: Seat, val roster: List<String>) : Effect
+
     // ---- The meeting -----------------------------------------------------------------------
     //
     // Twelve kinds for one lifecycle looks like a lot until you try to merge two of them. Every
@@ -606,6 +648,63 @@ sealed interface Effect {
      */
     data class RestrainedTakeover(val seat: Seat, val haptic: Haptic) : Effect
 
+    /**
+     * **The Revoke landing, on the phone it landed on** (D-134, E-R2-5).
+     *
+     * *Newly Revoked: a screen tells them they are Revoked and to sit silently where it happened.*
+     * That screen exists — `ScreenId.Revoked`, ported, drawn, with `PanelState.outBy` set on arrival
+     * so it says REVOKED rather than RESTRAINED (rule 9) — and **nothing reached it.** The two ways
+     * out of the game were asymmetric on the client: the room holding you pushed
+     * [RestrainedTakeover], and the house withdrawing your lamp pushed nothing at all, so the
+     * revoked player's phone kept drawing the round it was no longer in until a meeting was called.
+     *
+     * ### It is [RestrainedTakeover]'s shape, and that symmetry is the argument
+     *
+     * A house push per seat, addressed to the one seat it is about, carrying nothing but the fact
+     * that it is addressed to them. The rejected alternative is the same one D-134's E1-1 rejected:
+     * a client that noticed its own lamp go dark and drew a conclusion would be *the device deciding
+     * a game answer* — and the answer it would be deciding is whether the player is still playing.
+     *
+     * ### It reaches the target and nobody else, least of all the actor
+     *
+     * *No actor-side feedback on firing any ability* (`gdd.md:398`). The Insider who armed the
+     * Revoke is told [AbilityFired] and their own cooldown, identically whether the contact landed
+     * on a live player, an already-Revoked one, a fellow Insider or themselves — `Rules.contact`
+     * constructs that one effect outside every branch and this one changes nothing about it.
+     *
+     * ### It is constructed on EVERY contact, and the allowlist is what decides who gets one
+     *
+     * **This is the one thing about it that had to be got right, and the first attempt got it
+     * wrong.** Emitted only when the contact landed, the authority's stream differs between a
+     * Revoke that took and one that hit an already-Revoked seat — which is precisely the difference
+     * `AbsentEffectIsTheLeakTest` exists to refuse, and it refused it.
+     *
+     * So it is built outside every branch in `Rules.contact`, exactly as [AbilityFired] is, and
+     * **the narrowing happens at the emit boundary instead**: the row permits the kind to the two
+     * OUT classes and to neither living one, so a contact that revoked nobody constructs this for a
+     * seat that is still Live and the delivery is declined. [Surged]'s arrangement, inverted — *the
+     * rules construct this identically whichever seat it names; the allowlist declines it at the
+     * boundary; two independent denials and neither is visible as an absence.*
+     *
+     * Four cases and one shape. A contact that lands reaches a seat that is now Out. A contact on
+     * an already-Revoked seat reaches a phone already standing on this screen and changes nothing
+     * on it. A self-contact and an unarmed one both name a seat that is still Live and reach
+     * nobody. **No client's stream differs between any two of them.**
+     *
+     * ### It carries no haptic, and that is the half that makes the re-assertion safe (D-156)
+     *
+     * *The underlying message count never drives the buzz count.* A buzz here would fire again
+     * every time an Insider touched a player who was already out — a phone going off in the hand of
+     * somebody sitting silently on a couch, in a dark room, reporting that an Insider is nearby and
+     * has just fired. [HouseSignedOff] carries no haptic for this reason and this is the same one.
+     *
+     * **The player is not left unaware**: their lamp is already defunct in their hand. Rule 7 puts
+     * that on the device's own contact path rather than on a pushed field, so the light is out
+     * before this frame arrives — which is the loudest signal this game has and the only one the
+     * design ever asked for here.
+     */
+    data class RevokeLanded(val seat: Seat) : Effect
+
     /** Lights out. The meeting is over, and D-135's fifth long haptic rides it. */
     data class MeetingEnded(val haptic: Haptic) : Effect
 
@@ -643,9 +742,28 @@ sealed interface Effect {
     data class EgressOpened(
         val seat: Seat,
         val type: EgressType,
-        /** Both nodes, in draw order. Named to everyone, because coordination is required and
-         *  nobody may speak (`gdd.md:363`). */
-        val nodes: List<MarkerId>,
+        /**
+         * **Both nodes, in draw order, as places rather than as card ids** (`gdd.md:363`, `:374`).
+         *
+         * *The System Integrity widget becomes the Egress countdown, and names the two nodes* —
+         * **names**, and a nine-character card id is not a name. It carried [MarkerId] and the client
+         * had nothing to turn one into a room with, so the alert and the widget drew the port's
+         * UTILITY and LANDING in a house where the house had drawn two other rooms.
+         *
+         * [Destination] is the type that already answers *where is this card* — card, glyph and the
+         * host's own name for the room — and it is what a work order's lines and an Isolate list
+         * already carry. **Nothing about these two markers is narrowed by sending less**: D-150's
+         * amendment to F-002 turns on the fact that *the two nodes are already named to every phone
+         * in the house*, which is why the exclusion from Isolate's list leaks nothing. The glyph
+         * rides with the room for the reason it rides on a work order — two people who may not speak
+         * have to find one specific card in a dark house — and it is a property of two cards
+         * everybody has already been told about.
+         *
+         * **This is not the home's geography.** A client receives these two rows and its own order's
+         * rows and nothing else; the whole map on every phone remains the thing [Destination]'s KDoc
+         * refuses.
+         */
+        val nodes: List<Destination>,
         /** Ticks on the clock at the moment it started. The device holds no opinion of its own. */
         val remaining: Long,
         val haptic: Haptic,

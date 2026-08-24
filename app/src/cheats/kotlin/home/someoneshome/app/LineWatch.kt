@@ -67,6 +67,11 @@ class LineWatch(private val note: (String) -> Unit) {
             is LobbyBody.Standing -> "STANDING"
             is LobbyBody.Handover -> "HANDOVER"
             is LobbyBody.Naming -> "NAMING"
+            // The host saying the evening turned over. It travels downward by design and carries
+            // nothing, so it belongs with STANDING among the frames a client should see rather
+            // than among the ones worth shouting about -- see the exemption below, where it is
+            // named beside it.
+            is LobbyBody.RoundEnded -> "ROUND ENDED"
             // **A round body is not an undecodable one**, and telling them apart is the difference
             // between a probe and an alarm nobody reads. This class was written when the lobby's
             // socket carried only the lobby; it carries the round now, and on its first five-seat
@@ -82,9 +87,10 @@ class LineWatch(private val note: (String) -> Unit) {
         kinds += kind
         val carriesMine = mine.isNotBlank() && body.contains(mine)
         if (carriesMine) carriers++
-        // A STANDING is the lobby doing its job and a ROUND body is the house doing its job.
-        // Everything else, and anything at all carrying this phone's line, is shouted about.
-        if ((kind != "STANDING" && kind != "ROUND") || carriesMine) {
+        // A STANDING is the lobby doing its job, a ROUND body is the house doing its job, and a
+        // ROUND ENDED is the host handing every phone back to the lobby. Everything else, and
+        // anything at all carrying this phone's line, is shouted about.
+        if (kind !in QUIET || carriesMine) {
             note("!!! A CLIENT-BOUND FRAME WAS $kind · CARRIED THIS PHONE'S LINE=$carriesMine")
         }
     }
@@ -99,4 +105,13 @@ class LineWatch(private val note: (String) -> Unit) {
     fun verdict(): String =
         "INBOUND — ${kinds.size} FRAME(S) ${kinds.groupingBy { it }.eachCount()} · " +
             "$carriers CARRIED THIS PHONE'S LINE"
+
+    private companion object {
+        /**
+         * **The three kinds a client is supposed to receive**, named in one place so the alarm's
+         * condition reads as a membership test rather than as a chain of inequalities somebody has
+         * to add a clause to. Everything outside this set is shouted about on arrival.
+         */
+        val QUIET: Set<String> = setOf("STANDING", "ROUND", "ROUND ENDED")
+    }
 }

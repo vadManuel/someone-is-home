@@ -53,13 +53,30 @@ class MeetingModel(
      */
     initialCounts: MeetingCounts = MeetingCounts(),
     /**
-     * The names this phone may vote for.
+     * The names this phone may vote for, before the house has said any.
      *
-     * A fixture today, and in play it is what the house sent: the living, minus you. It is a list
-     * of who *can* be restrained and says nothing about who should be.
+     * A fixture for a phone with no house attached, exactly as [initialCounts] is. In play it is
+     * replaced by the round's roster — see [names] and [houseNamed].
      */
-    val names: List<String> = emptyList(),
+    initialNames: List<String> = emptyList(),
 ) {
+
+    /**
+     * **The ballot, in SEAT ORDER, as the house issued it** (`Effect.RosterIssued`, D-115).
+     *
+     * It is a list of who *can* be restrained and says nothing about who should be — and its order
+     * is load-bearing rather than presentational: [houseHolds] turns a seat back into a row by
+     * index and `MeetingRequest.asMessage` turns a row back into a seat the same way, so **this
+     * list is never sorted, filtered or de-duplicated anywhere in this module.** A shortened list
+     * would move every seat after the gap and restrain the wrong person.
+     *
+     * **Nothing on this phone writes it**, which is [counts]' arrangement and its reason: the
+     * setter is private and the only caller is [houseNamed]. It was a constructor fixture with no
+     * writer at all, so in a real round the vote screen offered the port's five names to a house
+     * with five other people standing in it.
+     */
+    var names: List<String> = initialNames
+        private set
 
     /**
      * **This phone's own check-in, and it moves nothing else.**
@@ -246,6 +263,17 @@ class MeetingModel(
      * better: this is the flag that stops the controls responding, and a phone that kept its own
      * `false` after the buzzer auto-locked every ballot would go on echoing taps the house refuses.
      */
+    /**
+     * **The round's roster, from the house** (`Effect.RosterIssued`, D-115).
+     *
+     * One entry per seat, in seat order, blank where a phone never said what to call its owner —
+     * the shape [names] indexes into in both directions. Written by the one branch in `FlowModel`
+     * that receives it, so the ballot and `PanelState.roster` cannot come to hold different lists.
+     */
+    fun houseNamed(roster: List<String>) {
+        names = roster
+    }
+
     fun houseHolds(selection: Seat?, locked: Boolean) {
         choice = when {
             selection == null -> if (this.locked || choice == VoteChoice.Skip) VoteChoice.Skip else choice
@@ -279,7 +307,7 @@ class MeetingModel(
          */
         fun sample(): MeetingModel = MeetingModel(
             initialCounts = MeetingCounts(),
-            names = listOf("PRIYA", "MARCUS", "DANI", "ROSE", "TOMAS"),
+            initialNames = listOf("PRIYA", "MARCUS", "DANI", "ROSE", "TOMAS"),
         ).apply { choose(VoteChoice.Named("MARCUS")) }
     }
 }

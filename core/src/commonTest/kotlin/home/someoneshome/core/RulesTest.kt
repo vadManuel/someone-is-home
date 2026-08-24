@@ -1,6 +1,7 @@
 package home.someoneshome.core
 
 import home.someoneshome.model.Balance
+import home.someoneshome.model.EmitSchema
 import home.someoneshome.model.Effect
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
@@ -8,6 +9,7 @@ import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 private val SEATS = (0 until 8).map { Seat(it) }
@@ -114,10 +116,49 @@ class AbsentEffectIsTheLeakTest {
 
     @Test
     fun `contacting without arming still spends the ability visibly`() {
-        val (_, unarmed) = run(armed(), listOf(Event.ContactMade(Tick(READY + 2), Seat(1), Seat(3))))
+        val start = armed()
+        val (after, unarmed) = run(start, listOf(Event.ContactMade(Tick(READY + 2), Seat(1), Seat(3))))
         assertEquals(
-            listOf(Effect.AbilityFired(Seat(1), cooldownStarted = true)).toString(),
+            listOf(
+                Effect.AbilityFired(Seat(1), cooldownStarted = true),
+                // **Constructed for a seat this contact did not revoke** (E-R2-5). That is what
+                // keeps the test above true: the stream is the same two effects whether the Revoke
+                // landed, hit somebody already out, was fired at the actor, or was never armed.
+                Effect.RevokeLanded(Seat(3)),
+            ).toString(),
             unarmed.toString(),
+        )
+        // **And it reaches nobody, which is the other half and the half a stream cannot show.**
+        // Seat 3 is still Live, the row permits the kind to the two OUT classes only, so the
+        // delivery is declined at the boundary — `Surged`'s two independent denials, inverted. A
+        // widening of that row would push a living player to the Revoked screen for a Revoke that
+        // never happened, and nothing in the rules would have changed.
+        assertFalse(after.isRevoked(Seat(3)), "the fixture revoked somebody it should not have")
+        assertEquals(
+            emptyList(),
+            EmitSchema.deliveries(Effect.RevokeLanded(Seat(3)), after),
+            "a Revoke that landed on nobody was delivered to somebody",
+        )
+    }
+
+    /**
+     * **The other side of the same row: a Revoke that DID land reaches the seat it landed on, and
+     * that seat only** (D-134, E-R2-5).
+     *
+     * Without this the test above passes on a build where the row permits the kind to nobody at
+     * all, which would be the screen never arriving — the thing E-R2-5 was raised about.
+     */
+    @Test
+    fun `a Revoke that landed reaches the revoked seat and nobody else`() {
+        val (after, _) = run(armed(), listOf(
+            Event.RevokeArmed(Tick(READY + 1), Seat(1)),
+            Event.ContactMade(Tick(READY + 2), Seat(1), Seat(3)),
+        ))
+        assertTrue(after.isRevoked(Seat(3)), "the fixture never actually revoked anybody")
+        assertEquals(
+            listOf(Seat(3)),
+            EmitSchema.deliveries(Effect.RevokeLanded(Seat(3)), after).map { it.seat },
+            "the Revoke landing reached the wrong phones",
         )
     }
 

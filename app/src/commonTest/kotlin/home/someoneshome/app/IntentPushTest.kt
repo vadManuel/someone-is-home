@@ -331,7 +331,7 @@ class IntentPushTest {
             // socket, seat-free, exactly as the app root will wire them.
             val meeting = MeetingModel(
                 send = { request -> round.act(request.asMessage(names)) },
-                names = names,
+                initialNames = names,
             )
             val jobs = listOf(scope.launch { client.run() }, scope.launch { round.run() })
             val seat = withTimeout(30_000) { seated.receive() }

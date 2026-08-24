@@ -880,8 +880,16 @@ class FlowModel(
      * because a meeting has four ways in and no screen knows which of them ended.
      */
     private fun arrive(next: PanelState) {
-        if (next.screen != state.screen && next.screen in MeetingModel.STARTS) meeting.meetingBegan()
-        state = next
+        val beginning = next.screen != state.screen && next.screen in MeetingModel.STARTS
+        if (beginning) {
+            meeting.meetingBegan()
+            // **The couch's ballot is a meeting's, like everything else the model above clears.**
+            // Both the accumulator and the drawn rows go, or the couch would open the second
+            // meeting of a round looking at the first one's completed vote — which is worse than a
+            // fixture, because it is a real vote that really happened to these people.
+            selections.clear()
+        }
+        state = if (beginning) next.copy(ballots = null) else next
     }
 
     // ---- The Surge, five seconds of it (D-182) ---------------------------------------------------
@@ -1660,6 +1668,37 @@ class FlowModel(
                 role = if (message.insider) PanelRole.Insider else PanelRole.Resident,
             )
 
+            // **Who is in the round, in seat order — and it is the field four screens were reading
+            // and nobody was writing** (D-115, E-R2-6, C3·4).
+            //
+            // [PanelState.roster] had no writer anywhere in the app. `nameOf` is a lookup against
+            // it, so in a real round every lookup returned null: the ring drew the port's PRIYA,
+            // the tally drew the port's MARCUS, and the Surge picker offered the port's five names
+            // to a phone in a house with five other people in it. **One branch closes all of them**,
+            // because they were never four gaps — they were one missing carrier read four ways.
+            //
+            // **The seat total rides the same list** (C3·4). `PanelState.seats` is the denominator
+            // `SubroutineProgressed` turns a raw count into a percentage against, and it arrived
+            // only at the first meeting on `CheckInProgressed` — so a player put outside the system
+            // before one had a bar that did not move. The roster is one entry per seat, so its
+            // LENGTH is that number, it is a public lobby fact, and it now arrives at arming. Written
+            // in the same assignment as the roster for `CheckInProgressed`'s reason exactly: one
+            // branch writes both, so they cannot drift.
+            //
+            // **It decides nothing and derives nothing.** The house sent this list in this order;
+            // reading it is the same act as drawing it. What `ui` may not do is *assemble* one —
+            // out of a lobby standing, or by sorting names it happens to hold — and nothing here
+            // does. See [nameOf], where that distinction is written down.
+            is RoundMessage.RosterIssued -> {
+                // **The ballot is written from the same list in the same branch**, which is
+                // `CheckInProgressed`'s arrangement and its reason: one writer, so the vote screen
+                // and [PanelState.roster] cannot come to hold two different orderings of the room.
+                // `MeetingModel.houseHolds` resolves a seat through it by index, so a second copy
+                // that drifted would light a row against somebody else's ballot.
+                meeting.houseNamed(message.roster)
+                state = state.copy(roster = message.roster, seats = message.roster.size)
+            }
+
             // **The ring — and this is the push that makes a round visible at all** (the owner's
             // routing table, 2026-08-23). It closes the half of E-P3-1 that mattered most: a client
             // took a hundred pushes across a complete round and stood on the lobby for all of them,
@@ -1778,11 +1817,40 @@ class FlowModel(
             // row alone rather than blanking it.
             is RoundMessage.VoteHeld -> meeting.houseHolds(message.selection, message.locked)
 
-            // **The couch's live ballot, and it cannot land here yet.** [PanelState.ballots] holds
-            // names, this message holds seats, and resolving one to the other is the transport's
-            // job — a `ui` that mapped seats to names would be `ui` keeping a second copy of who is
-            // in the house. Flagged rather than solved by putting a roster in this module.
-            is RoundMessage.VoteSelectionShown -> Unit
+            // **The couch's live ballot, one selection at a time** (D-117, D-134, D-075, E-R2-6).
+            // *Ghosts are the only readers who see selections rather than a count*, and this is the
+            // branch that lets them: it was `Unit`, so the one screen that makes being out an
+            // information privilege rather than a preview drew five fixture names all round.
+            //
+            // **The seats resolve against the roster the house sent**, which is D-115's second-site
+            // clause arriving where the interaction needs it — *the vote ballot being the obvious
+            // second site.* This is [nameOf], the same lookup the ring's caller and the tally's rows
+            // already make, and it is not `ui` keeping a second copy of who is in the house: the
+            // roster is the house's own list, pushed to this phone, and reading it is the same act
+            // as drawing it. See [nameOf], where that distinction is written out.
+            //
+            // **A Skip renders as SKIPPED and never as STILL DECIDING**, which is `tallyRows`' move
+            // and D-075's requirement: *not voting counts as a Skip*, so the two must stay
+            // distinguishable on the screen somebody is reading them off. `Ballot.forWhom` is null
+            // for a row nobody has spoken for, and every row here has been spoken for — the house
+            // emits this on every tap, so an arrival is always an expression.
+            //
+            // **In seat order, replacing rather than appending.** Every tap transmits, so a seat
+            // that changes its mind must move its own row instead of growing a second one; and two
+            // phones on the same couch must list the room in the same order, which a list in
+            // arrival order would not be (rule 4). The roster's index is the seat, so ordering by it
+            // is ordering by the house's own list.
+            //
+            // ⚠️ **The denominator is still short and it is flagged rather than guessed.** The
+            // screen reads `votesCast OF ballots.size`, and this list holds the seats the house has
+            // shown rather than every living seat — a phone that has not touched a row yet has no
+            // message and therefore no line to be STILL DECIDING on. Seeding it wants the living
+            // seats at ballot-open, which nothing on the couch's side of the allowlist carries.
+            // Escalated; what is closed here is the rows.
+            is RoundMessage.VoteSelectionShown -> {
+                selections[message.voter.index] = message.selection
+                state = state.copy(ballots = ballotRows())
+            }
 
             // `N OF 4 VOTED` — locked ballots, never selections (D-117), against the living for
             // `ReadyProgressed`'s reason.
@@ -1829,17 +1897,66 @@ class FlowModel(
             // where the Revoke/Restrain distinction is kept (rule 9).
             is RoundMessage.RestrainedTakeover -> push(ScreenId.Restrained)
 
+            // **The Revoke landing, and the two ways out of the round are symmetric at last**
+            // (D-134, E-R2-5). The branch above has existed since the meeting was routed; this one
+            // did not, so a player the house had just Revoked went on being shown the round they
+            // were no longer in — springboard, work order, page 2 — until somebody called a meeting.
+            //
+            // **Arriving at `Revoked` is what sets [PanelState.outBy]**, exactly as arriving at
+            // `Restrained` does — see [PanelState.arrivingAt], which is where the Revoke/Restrain
+            // distinction is kept (rule 9). That is why this is a `push` to a screen rather than a
+            // field written here: the cause follows the arrival, and one place decides it.
+            //
+            // **Keyed on nothing, like the takeover.** It can land on whatever screen the player is
+            // standing on, so it is not a row in `Flow.housePushes`; what makes it mean *you* is the
+            // socket it came down, and there is nothing on the member a phone could read a seat out
+            // of.
+            is RoundMessage.RevokeLanded -> push(ScreenId.Revoked)
+
             is RoundMessage.MeetingEnded -> housePushed(message)
 
-            // The alert and the widget read one pair of strings so they cannot name different
-            // rooms. **Only the type lands.** The nodes travel as marker ids and the screen draws
-            // room names; turning one into the other needs the geography the house holds and does
-            // not send with this effect, and a nine-character card id on a screen in a dark house
-            // is worse than the fixture it would replace. Escalated, not guessed.
-            is RoundMessage.EgressOpened -> state = state.copy(
-                egressType = message.type.name.uppercase(),
-                egressRunning = true,
-            )
+            // **THE HOUSE IS ON FIRE, AND THIS IS WHERE EVERY PHONE IN IT FINDS OUT** (E-R2-3;
+            // `gdd.md:370-378`, D-118, D-076). The effect reached every seat and moved nothing on
+            // any of them: the alert had no route and the nodes were dropped, so the loudest event
+            // in the game arrived as a silently-updated field on a screen nobody was pushed to.
+            //
+            // **It is a DISMISSABLE alert and it is not a navigation**, which is the half the
+            // escalation could not find a ruling for and the design's own table states outright:
+            // *Alert: must be dismissable. You cannot scan a marker through a modal.* So nobody is
+            // moved off what they were doing — `ScreenId.Banner` is the springboard with the heavy
+            // notification over it, it clears itself after [HEAVY_HOLD] (`Flow.autoAdvance`) or the
+            // moment it is swiped, and what it leaves behind is the widget. A push to a whole
+            // Egress screen would be the app taking the camera away from a player standing at a
+            // card, in the dark, during the one crisis that has to be walked to.
+            //
+            // **[arrived] and not [push], for the two cases it already knows about**: a phone
+            // nobody has picked up gets it under the clock (`LockNotify`, D-119), and a phone
+            // already on a house-driving screen keeps it — a banner raised over the tally would
+            // take the room's result off the screen it is being read from.
+            //
+            // **The nodes land as rooms and the pair is stored before the banner.** *The widget
+            // takes over and names the two nodes*, and the alert and the widget read the same two
+            // strings out of [PanelState] (`Notifications.arrivalOn`) so they cannot send two people
+            // who may not speak to two different places. Storing them first is `MessageDelivered`'s
+            // ordering and its reason: the banner is drawn from the pair, so a banner raised before
+            // the pair was written would draw the port's UTILITY and LANDING for one frame.
+            //
+            // ⚠️ **The countdown on the widget is still the fixture's** (E-R2-7). `remaining` is in
+            // ticks, [PanelState.secondsLeft] is in seconds, and the conversion is not `ui`'s to
+            // make — see the branch below and the escalation in the worklog. What this closes is
+            // the alert and the two names; the number is the missing carrier's.
+            is RoundMessage.EgressOpened -> {
+                state = state.copy(
+                    egressType = message.type.name.uppercase(),
+                    // The room, which is what a player navigates a dark house by and what the
+                    // design says the widget names. Copied in the house's own draw order — the pair
+                    // is read positionally by nothing, but two phones listing it differently would
+                    // be rule 4 arriving as *the screens disagree*.
+                    egressNodes = message.nodes.map { it.room },
+                    egressRunning = true,
+                )
+                arrived(ScreenId.Banner)
+            }
 
             // **The countdown stopping and starting again, on the containment screen** (D-133).
             //
@@ -1995,6 +2112,50 @@ class FlowModel(
         seat?.let { state.roster?.getOrNull(it.index) }
 
     /**
+     * **The couch's live ballot, keyed by the seat that cast it** (D-117, D-134).
+     *
+     * Beside [PanelState] rather than in it, which is [trail]'s and [surge]'s arrangement and the
+     * reason for it: [PanelState] is flat, inert and the thing a recording captures, and this is
+     * bookkeeping — *what the house has said so far* — that only exists so the rows can be rebuilt
+     * whole. Keyed on the **seat** and not on the name, because two players may type the same name
+     * and a phone that never typed one has none at all; a map keyed on what a row happens to read
+     * would silently merge two people's ballots into one.
+     *
+     * **Cleared when a meeting begins**, exactly as [MeetingModel]'s own state is and for its
+     * reason: a round holds several meetings, and last meeting's selections standing on this one's
+     * screen would be the couch watching a vote that has already happened.
+     */
+    private val selections = mutableMapOf<Int, Seat?>()
+
+    /**
+     * **The rows, rebuilt whole, in seat order** (rule 4).
+     *
+     * Rebuilt rather than edited in place so the order is a property of the house's roster rather
+     * than of arrival: two people sitting beside each other on the couch must be looking at the
+     * same list in the same order, and a list that grew as taps landed would be two different
+     * lists on two phones within a second of each other.
+     *
+     * **A Skip is SKIPPED and never STILL DECIDING.** `Ballot.forWhom` is null for a row nobody has
+     * spoken for, and every row in here has been spoken for — the house emits a selection on every
+     * tap, so an arrival is always an expression. D-075 is why the two must not collapse: *not
+     * voting counts as a Skip*, and the whole weight of inaction sits behind restraining nobody.
+     *
+     * A seat the roster cannot name still gets a row, because a ballot was cast; it says [UNNAMED]
+     * rather than nothing, which is [nameOf]'s fail-closed direction one screen over.
+     */
+    private fun ballotRows(): List<Ballot> = selections.entries
+        .sortedBy { it.key }
+        .map { (voter, selection) ->
+            Ballot(
+                by = nameOf(Seat(voter))?.ifBlank { UNNAMED } ?: UNNAMED,
+                forWhom = when (selection) {
+                    null -> SKIPPED
+                    else -> nameOf(selection)?.ifBlank { UNNAMED } ?: SKIPPED
+                },
+            )
+        }
+
+    /**
      * **An attribution list, counted into rows** (D-075).
      *
      * `SKIP` is a candidate and not an abstention — `tallyOf` in `core` counts it as one, and *the
@@ -2121,6 +2282,17 @@ class FlowModel(
          * could not resolve rather than as a decision several people made.
          */
         const val SKIPPED = "SKIP"
+
+        /**
+         * A voter the roster cannot name.
+         *
+         * The same word `LobbyScreen` draws for a phone that never said what to call its owner, and
+         * it is here for the same reason [SKIPPED] is: a row with an empty left-hand side would
+         * read as a rendering fault rather than as somebody who joined without typing a name. It is
+         * also the fail-closed answer for a seat the roster does not hold at all — the row still
+         * says a ballot was cast, and it names nobody rather than naming somebody nearby.
+         */
+        const val UNNAMED = "UNNAMED"
     }
 }
 

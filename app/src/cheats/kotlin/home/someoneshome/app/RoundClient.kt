@@ -52,6 +52,10 @@ class DeferredRoundSeam : RoundSeam {
     override fun seated() {
         target?.seated()
     }
+
+    override fun roundEnded() {
+        target?.roundEnded()
+    }
 }
 
 /**
@@ -138,6 +142,15 @@ class RoundClient(
         round.reseated()
     }
 
+    override fun roundEnded() {
+        note("THE HOUSE ENDED THE ROUND — THIS PHONE HOLDS NOTHING OF IT")
+        round.roundEnded()
+        kinds.clear()
+        order = emptyList()
+        open = null
+        standingAt = null
+    }
+
     /** A control the player pressed. No seat rides with it and none can. */
     fun act(intent: IntentMessage) {
         note("PRESSED — ${intent::class.simpleName}")
@@ -217,6 +230,14 @@ class RoundClient(
         // could not see the reveal arrive could not tell a phone that was never told from one
         // that was told Resident.
         is RoundMessage.RoleRevealed -> "WHAT THIS PHONE IS — ${if (m.insider) "INSIDER" else "RESIDENT"}"
+        // **Counted, never quoted** — `InsidersRevealed`'s rule, and it applies here for the same
+        // reason one message earlier in the round: a device log is a file on a Mac, and D-115
+        // scopes a name to the round. What a rehearsal needs is that the list arrived and how long
+        // it was, which is what makes *this phone can name a seat* checkable at all.
+        is RoundMessage.RosterIssued ->
+            "THE ROSTER — ${m.roster.size} SEAT(S) · " +
+                "${m.roster.count { it.isNotBlank() }} NAMED · NONE PRINTED HERE"
+        is RoundMessage.RevokeLanded -> "THE HOUSE WITHDREW MY LAMP"
         is RoundMessage.WorkOrderIssued ->
             "WORK ORDER · ${m.lines.size} LINE(S) · " +
                 "${m.lines.count { it is OrderLine.Blocked }} BLOCKED"
@@ -248,7 +269,7 @@ class RoundClient(
         is RoundMessage.RestrainedTakeover -> "THE ROOM HELD ME · HAPTIC ${m.haptic}"
         is RoundMessage.MeetingEnded -> "MEETING ENDED · HAPTIC ${m.haptic}"
         is RoundMessage.EgressOpened ->
-            "EGRESS ${m.type} · NODES ${m.nodes.joinToString { it.value }} · ${m.remaining} TICK(S)"
+            "EGRESS ${m.type} · NODES ${m.nodes.joinToString { it.room }} · ${m.remaining} TICK(S)"
         is RoundMessage.EgressHeld -> "EGRESS ${if (m.running) "RESUMED" else "HELD"} · ${m.remaining}"
         is RoundMessage.SyncPulseAnswered -> "SYNC PULSE — HELD=${m.held}"
         is RoundMessage.EgressContained -> "EGRESS CONTAINED"

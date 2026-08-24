@@ -50,6 +50,23 @@ class Recording(
     }
 
     companion object {
+        // 16: three effects a version 15 build cannot name and one row that changed shape.
+        // `RoleRevealed` was version 15's own arrival and never got its bump (found by the routing
+        // day's closing sweep); `RosterIssued` and `RevokeLanded` are this unit's. A version 15
+        // build cannot render any of the three, so a differential run across the boundary would
+        // report a divergence that is really a format gap -- which is the condition version 15's
+        // own note states in as many words for a smaller change.
+        //
+        // **`EgressOpened|nodes=` changed shape**, and that is the half that could not have been a
+        // tolerant read: the nodes were card ids and are DESTINATIONS now -- card, glyph and room --
+        // because the widget names the two nodes and a card id is not a name. Every Egress row in
+        // every version 15 recording holds two bare ids where this build writes six escaped fields.
+        //
+        // **What version 16 does NOT gain is the names**, exactly as versions 10 and 11 did not gain
+        // the lines and the names (D-115, D-116). `RosterIssued` renders its seat and the list's
+        // LENGTH; a replayed round rebuilds blanks of the same length and the row comes out
+        // byte-identical, so the game is reproduced without the words a third time.
+        //
         // 15: one effect a version 14 build cannot name -- `MeetingCalling`, the per-seat message
         // that tells the calling phone which of the ringing phones it is (E-R1-1, ruled
         // 2026-08-23). It is the smallest bump this format has had: one row, one field, no state
@@ -147,7 +164,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/15"
+        const val HEADER = "someone-is-home/recording/16"
     }
 }
 

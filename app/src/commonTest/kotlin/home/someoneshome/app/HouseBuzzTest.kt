@@ -1,5 +1,6 @@
 package home.someoneshome.app
 
+import home.someoneshome.model.Destination
 import home.someoneshome.model.Effect
 import home.someoneshome.model.EmitSchema
 import home.someoneshome.model.EgressType
@@ -9,6 +10,7 @@ import home.someoneshome.model.HouseBuzz
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MeetingPhase
 import home.someoneshome.model.MeetingTrigger
+import home.someoneshome.model.Role
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Sound
 import home.someoneshome.model.Tick
@@ -53,10 +55,10 @@ class HouseBuzzTest {
             Effect.RestrainedTakeover(seat, haptic),
             Effect.MeetingEnded(haptic),
             Effect.EgressOpened(
-                seat, EgressType.Beacon, listOf(MarkerId("SEED001"), MarkerId("SEED002")), 180, haptic,
+                seat, EgressType.Beacon, NODES, 180, haptic,
             ),
             Effect.EgressOpened(
-                seat, EgressType.Tether, listOf(MarkerId("SEED003"), MarkerId("SEED004")), 180, haptic,
+                seat, EgressType.Tether, OTHER_NODES, 180, haptic,
             ),
             Effect.EgressHeld(90, running = true, haptic = haptic),
             Effect.EgressHeld(90, running = false, haptic = haptic),
@@ -127,7 +129,7 @@ class HouseBuzzTest {
         val long = HouseBuzz.script(Haptic.Long)
         listOf(
             Effect.EgressOpened(
-                Seat(0), EgressType.Beacon, listOf(MarkerId("SEED001"), MarkerId("SEED002")), 180, Haptic.Long,
+                Seat(0), EgressType.Beacon, NODES, 180, Haptic.Long,
             ),
             Effect.StandAndWalkIn(Seat(0), Haptic.Long),
             Effect.RestrainedTakeover(Seat(0), Haptic.Long),
@@ -296,6 +298,14 @@ class HouseBuzzTest {
         Effect.SystemIntegrityLive(percent = 62),
         Effect.SystemIntegrityBatched(percent = 62),
         Effect.WorkOrderIssued(Seat(1), emptyList()),
+        // **The four this list had silently stopped covering.** Two of them are not this unit's:
+        // `RoleRevealed` and `MeetingCalling` arrived on the routing day and neither was ever run
+        // through the motor, because the two hand-written lists in this file only ever checked each
+        // other. The anchor below is what stops it recurring.
+        Effect.RoleRevealed(Seat(1), Role.Resident),
+        Effect.MeetingCalling(Seat(1)),
+        Effect.RosterIssued(Seat(1), emptyList()),
+        Effect.RevokeLanded(Seat(1)),
     )
 
     /**
@@ -316,6 +326,24 @@ class HouseBuzzTest {
         assertEquals(
             emptySet(), walked - EVERY_KIND,
             "the fixture builds a kind this list has never heard of",
+        )
+        // **The anchor, and it is the whole reason this test is worth having.** The two assertions
+        // above compare two hand-written lists in one file, which is a pair that agrees with itself
+        // — and it did, for three kinds, through two units and a rehearsal: `RoleRevealed` and
+        // `MeetingCalling` were in the game and had never been run through the motor by anything
+        // here. `RoundWireTest.theFixtureCarriesOneOfEveryEffect` uses this anchor and did not have
+        // the gap. The two row-less kinds are named the way it names them: they are permitted to
+        // nobody, so they are not in `knownKinds`, and a fixture that skipped them would leave two
+        // branches of both exhaustive `when`s in `HouseBuzzer.kt` unrun.
+        val known = EmitSchema.knownKinds().map { it.name }.toSet() +
+            EmitSchema.PRESENCE_CHANGED.name + EmitSchema.EGRESS_SUCCEEDED.name
+        assertEquals(
+            emptySet(), known - walked,
+            "the emit schema knows a kind this file's fixtures have never built",
+        )
+        assertEquals(
+            emptySet(), walked - known,
+            "this file builds a kind the emit schema has never heard of",
         )
     }
 
@@ -417,6 +445,18 @@ class HouseBuzzTest {
             "RestrainedTakeover", "MeetingEnded", "EgressOpened", "EgressHeld",
             "SyncPulseAnswered", "EgressContained", "EgressSucceeded", "RoundEnded",
             "InsidersRevealed", "HouseSignedOff",
+            "RoleRevealed", "MeetingCalling", "RosterIssued", "RevokeLanded",
+        )
+
+        /** The two nodes, as places. The rooms are never read here; the pair is what buzzes. */
+        val NODES: List<Destination> = listOf(
+            Destination(MarkerId("SEED001"), "circle", "UTILITY"),
+            Destination(MarkerId("SEED002"), "square", "LANDING"),
+        )
+
+        val OTHER_NODES: List<Destination> = listOf(
+            Destination(MarkerId("SEED003"), "triangle", "PORCH"),
+            Destination(MarkerId("SEED004"), "cross", "STUDY"),
         )
     }
 

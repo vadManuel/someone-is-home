@@ -20,6 +20,7 @@ class LobbyWireTest {
         "standing" to LobbyBody.Standing(
             joined = 6, linesIn = 4, names = listOf("ROSE", "TOMAS"), insiders = 2,
         ),
+        "roundEnded" to LobbyBody.RoundEnded,
     )
 
     @Test
@@ -49,9 +50,10 @@ class LobbyWireTest {
             is LobbyBody.Handover -> "handover"
             is LobbyBody.Naming -> "naming"
             is LobbyBody.Standing -> "standing"
+            is LobbyBody.RoundEnded -> "roundEnded"
         }
         for ((wireName, body) in everyBody) assertEquals(wireName, wireNameOf(body))
-        assertEquals(everyBody.size, 3, "a lobby body was added without pinning its discriminator")
+        assertEquals(everyBody.size, 4, "a lobby body was added without pinning its discriminator")
     }
 
     /**

@@ -646,6 +646,49 @@ class EmitSchemaTest {
      * phones, and a sweep over every seat in the house showing each is told exactly once and only
      * about itself.
      */
+    /**
+     * **The roster reaches both living classes, and a row that narrowed it would be a role oracle**
+     * (D-115, E-R2-6).
+     *
+     * It looks like the safest row in the table — the list is byte-identical on every phone, so
+     * there is nothing in it to leak. **The leak is in what its absence would say.** Narrowed to
+     * `Insider/Live`, every screen that names anybody is populated on an Insider's phone and blank
+     * on a Resident's: the ring names its caller, the tally names who was restrained, the Surge
+     * picker offers five names — and one role sees all of it while the other sees nothing. That is
+     * `ROLE_REVEALED`'s own argument arriving at a message with no role in it, and it is rule 1's
+     * forbidden shape written into the allowlist, where it would look like a tightening.
+     *
+     * **Written because an injection found nothing.** Narrowing this row broke no test in the
+     * build; the addressing tests passed, the fuzz property passed, and every screen went on
+     * drawing its fixture names because no test had ever put a real roster on one.
+     */
+    @Test
+    fun `the roster reaches both living roles and says nothing about which is reading it`() {
+        val state = live()
+
+        assertEquals(
+            listOf(
+                ClientClass(Role.Resident, RoundState.Live),
+                ClientClass(Role.Insider, RoundState.Live),
+            ),
+            EmitSchema.classesFor(EmitSchema.ROSTER_ISSUED),
+            "the roster's row moved: narrowed to one role its ABSENCE is the answer, because " +
+                "every screen that names anybody would be blank for the other one",
+        )
+
+        // Every seat, told once, and told the SAME list — which is the property that makes a
+        // message naming the whole house safe to send to the whole house. Built the way arming
+        // builds it: one list, one effect per seat.
+        val roster = state.seats.map { state.nameOf(it) ?: "" }
+        for (seat in state.seats) {
+            val effect = Effect.RosterIssued(seat, roster)
+            assertEquals(
+                listOf(seat), EmitSchema.deliveries(effect, state).map { it.seat },
+                "seat ${seat.index}'s roster did not go to exactly one phone",
+            )
+        }
+    }
+
     @Test
     fun `a seat is told its own role and no other seat's`() {
         val state = live()

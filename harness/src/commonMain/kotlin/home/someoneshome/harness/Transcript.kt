@@ -261,6 +261,14 @@ object Transcript {
         // reason the transcript never renders anything it can look up.
         is Effect.RoleRevealed ->
             "RoleRevealed|seat=${effect.seat.index}|role=${effect.role}"
+        // **The seat and the SIZE, and never one of the names** (D-115). The lines' rule and the
+        // arming row's, applied to the third round-scoped text: names arrive for the round and are
+        // gone when it ends, and a recording outlives the evening. What a replay needs is that the
+        // list was this long and reached this seat -- a rebuilt roster of blanks of the same length
+        // renders this row byte-identically, which is what keeps a differential run across a
+        // recording honest without the transcript holding anybody's name.
+        is Effect.RosterIssued ->
+            "RosterIssued|seat=${effect.seat.index}|seats=${num(effect.roster.size)}"
         is Effect.MeetingOpened ->
             "MeetingOpened|caller=${effect.caller.index}|trigger=${trigger(effect.trigger)}" +
                 "|haptic=${effect.haptic}"
@@ -298,11 +306,21 @@ object Transcript {
                 effect.attribution.joinToString(",") { "${it.first.index}>${seatOrNone(it.second)}" }
         is Effect.RestrainedTakeover ->
             "RestrainedTakeover|seat=${effect.seat.index}|haptic=${effect.haptic}"
+        // The seat, because the recording is the authority's artifact and the authority is what
+        // addressed it — `MeetingCalling`'s row, and the same one place these two deliberately
+        // differ from their wire members.
+        is Effect.RevokeLanded ->
+            "RevokeLanded|seat=${effect.seat.index}"
         is Effect.MeetingEnded ->
             "MeetingEnded|haptic=${effect.haptic}"
         is Effect.EgressOpened ->
             "EgressOpened|seat=${effect.seat.index}|type=${effect.type}" +
-                "|nodes=" + effect.nodes.joinToString(",") { text(it.value) } +
+                // Card AND room, because the effect carries both now and the transcript renders
+                // what crossed rather than what it can look up. The room is host-authored text and
+                // goes through `text` for the escape the marker id already needed (E-L4-4).
+                "|nodes=" + effect.nodes.joinToString(",") {
+                    "${text(it.marker.value)}:${text(it.shape)}:${text(it.room)}"
+                } +
                 "|remaining=${num(effect.remaining)}|haptic=${effect.haptic}"
         is Effect.EgressHeld ->
             "EgressHeld|remaining=${num(effect.remaining)}|running=${effect.running}" +

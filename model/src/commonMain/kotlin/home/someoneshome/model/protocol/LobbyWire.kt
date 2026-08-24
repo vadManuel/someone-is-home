@@ -116,6 +116,37 @@ sealed class LobbyBody {
         val names: List<String> = emptyList(),
         val insiders: Int? = null,
     ) : LobbyBody()
+
+    /**
+     * **Host → client. The round is over; come back to the lobby** (D-157, D-116, E-R2-10 /
+     * E-P3-5).
+     *
+     * NEW ROUND was a control the host's phone drew and a call into the desk sitting beside it, and
+     * on a client the desk is not there — so the host walked back to the lobby and **four phones
+     * stayed on the ending until somebody handed them back.** *What is missing is a push, not a
+     * button*, and this is the push.
+     *
+     * ### It carries nothing, and there is nothing it could carry
+     *
+     * The whole message is that it arrived. Everything a second round is built from survives it —
+     * D-157 keeps the home, the seats and the settings, so an evening does not end after one round
+     * with five people re-typing a lobby code in the dark — and everything that does not survive it
+     * is dropped on **both** sides independently rather than sent: the desk drops the lines and the
+     * names, and each phone drops the line it typed. A body carrying either would be the one text
+     * in this game that is promised never to come back down travelling in the direction it is
+     * promised never to travel.
+     *
+     * ### It is the standing's sibling and not a variant of it
+     *
+     * [Standing] is sent constantly and says how the lobby *is*; this is sent once and says the
+     * evening turned over. A flag on the standing would be a moment expressed as a field, arriving
+     * on every publish, and the first client to read it twice would wipe a round that had already
+     * begun. Two members for two facts, which is this file's rule from the top.
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("roundEnded")
+    data object RoundEnded : LobbyBody()
 }
 
 /**

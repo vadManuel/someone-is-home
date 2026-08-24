@@ -66,8 +66,8 @@ class LobbyLoopbackTest {
                         desk.named(seat, body.name)
                         namedSeats.trySend(seat)
                     }
-                    // The standing is the host's to send, never to receive.
-                    is LobbyBody.Standing, null -> Unit
+                    // Both downward bodies are the host's to send, never to receive.
+                    is LobbyBody.Standing, is LobbyBody.RoundEnded, null -> Unit
                 }
             },
             onSeated = { desk.seated(it); seatedSeats.trySend(it) },

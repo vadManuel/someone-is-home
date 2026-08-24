@@ -141,6 +141,7 @@ class RoundClientTest {
             override fun linked(send: suspend (TransportFrame) -> Unit) { up = send }
             override fun arrived(frame: TransportFrame) = Unit
             override fun seated() = Unit
+            override fun roundEnded() = Unit
         }
         seam.becomes(late)
 

@@ -344,11 +344,31 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
         voteWindowSeconds = event.voteWindowSeconds,
     )
 
+    // **The round's names, in seat order, one slot per seat** (D-115). A seat whose phone never
+    // said what to call its owner is a **blank** rather than a missing row: the client reads this
+    // by index, so a shorter list would move every seat after the gap and the Surge picker would
+    // fire at the wrong person. `nameOf` returns null for exactly that seat and the blank is what
+    // a screen draws for it.
+    val roster = seats.map { state.nameOf(it) ?: "" }
+
     return Reduction(
         state,
         seats.map { Effect.LampSet(it, LAMP_DIM) } +
             orders.map { Effect.WorkOrderIssued(it.seat, it.asLines(state.destinations)) } +
             seats.map { Effect.OpeningMessage(it, Haptic.Short) } +
+            // **The roster, one per seat, and every copy of it is the same list** (D-115).
+            //
+            // Built once, outside the run, because there is only one of them: what varies between
+            // these effects is the seat they are addressed to and nothing else. Constructing it per
+            // seat would be six chances for six phones to be handed six different orderings of the
+            // people standing in the room, which is the one way this message could ever say
+            // something — and rule 4 is what would break first.
+            //
+            // **`state.nameOf` and never `event.names` directly**, so the blank for a phone that
+            // never said what to call its owner comes out of the same lookup the ending's reveal
+            // uses. The list is `seats`-long by construction, in seat order, which is the property
+            // the client indexes into in both directions.
+            roster.let { list -> seats.map { Effect.RosterIssued(it, list) } } +
             // **The reveal, one per seat, behind the message above** (`gdd.md:923`, E-R2-2). The
             // opening text is the same fact sent to everybody and this is what it is a doorway to:
             // *what differs by role is what is behind the message.*
@@ -888,8 +908,25 @@ private fun contact(state: GameState, event: Event.ContactMade): Reduction<GameS
         )
     }
 
-    // Identical in every case. Deliberately not inside the branch above.
-    return Reduction(next, listOf(Effect.AbilityFired(actor = event.actor, cooldownStarted = true)))
+    // **Both identical in every case. Deliberately not inside the branch above** (D-134, E-R2-5).
+    //
+    // The second one is the target's screen (`ScreenId.Revoked`), and the first version of it was
+    // emitted only when the contact landed. `AbsentEffectIsTheLeakTest` refused that immediately and
+    // was right to: the authority's stream then differs between a Revoke that took and one that hit
+    // a seat already out, which is this file's own header rule with a new effect written into it.
+    //
+    // So it is built here, unconditionally, and **the emit boundary is what narrows it**: the row
+    // permits `REVOKE_LANDED` to the two OUT classes only, so a contact that revoked nobody
+    // constructs one for a seat that is still Live and the delivery is declined. `surgeFired`'s
+    // arrangement inverted, and the same two independent denials — neither of which is visible as
+    // an absence, because the shape here does not have one.
+    return Reduction(
+        next,
+        listOf(
+            Effect.AbilityFired(actor = event.actor, cooldownStarted = true),
+            Effect.RevokeLanded(seat = event.target),
+        ),
+    )
 }
 
 /**
@@ -1562,7 +1599,13 @@ private fun egressFired(state: GameState, event: Event.EgressFired): Reduction<G
             Effect.EgressOpened(
                 seat = it,
                 type = egress.type,
-                nodes = egress.nodes,
+                // **The two cards, resolved to places on the way out** (`gdd.md:374`). The rules
+                // hold the nodes as card ids because that is what the draw made them; the widget
+                // NAMES them, and a card id is not a name. `destinationOf` is the same lookup a work
+                // order's lines are built with and it fails the same visible way — a card the round
+                // was not armed with resolves to nothing and the pair comes out short, which
+                // `namesTwoNodes` has already refused upstream.
+                nodes = egress.nodes.mapNotNull { node -> state.destinationOf(node) },
                 remaining = egress.remainingAt(event.at),
                 // D-135's first of five. The Egress is named at the head of that closed set.
                 haptic = Haptic.Long,

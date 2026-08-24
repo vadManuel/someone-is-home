@@ -34,12 +34,15 @@ import home.someoneshome.ui.FlowHost
 import home.someoneshome.ui.FlowModel
 import home.someoneshome.ui.Label
 import home.someoneshome.ui.LobbyModel
+import home.someoneshome.ui.MeetingModel
 import home.someoneshome.ui.LocalPanelInsets
 import home.someoneshome.ui.PanelRole
 import home.someoneshome.ui.PanelState
 import home.someoneshome.ui.SavedHomesModel
+import home.someoneshome.ui.SubroutineModel
 import home.someoneshome.ui.ScreenId
 import home.someoneshome.ui.arrivingAt
+import home.someoneshome.ui.asMessage
 import home.someoneshome.ui.tap
 import home.someoneshome.ui.u
 
@@ -116,6 +119,25 @@ fun CheatRoot() {
     // in the other direction: `LobbyHouse` wants somewhere to put an arriving request, and the
     // thing that holds the state wants the house to push its answers through.
     val rules = remember { mutableStateOf<RoundAuthority?>(null) }
+    // **The round's way UP, promised to the panel before it exists — E-P2-3's cycle, untied the way
+    // the two holders above already untie theirs.**
+    //
+    // `MeetingModel(send = …)` and `SubroutineModel(send = …)` want the round transport; the
+    // transport wants a `FlowModel`; the `FlowModel` wants the models. Something has to be built
+    // before the thing it needs, and this is the smallest something: the models are handed a
+    // lambda that reads this holder, and the holder is filled the line the round client is built.
+    // It is `rules`' idiom exactly and it is an **ordering fix and nothing else** — no seat is
+    // named here, no request is composed here, and nothing here decides what any of them means.
+    //
+    // **Null until the round client exists**, which is every moment before LIGHTS OUT. A control
+    // pressed then reaches nobody, which is the honest state of a phone with no round attached and
+    // is what these two seams did on every phone in every round until now.
+    val press = remember { mutableStateOf<RoundClient?>(null) }
+    // **And the panel, promised to the link before it exists**, which is the same knot in the
+    // third direction: the link is built first because the lobby needs it, and the two things the
+    // link has to reach when the house ends a round are a screen and a typed line, both of which
+    // live on the panel. Filled on the line below the panel is built.
+    val panel = remember { mutableStateOf<FlowModel?>(null) }
     // Held in a named val because the round is armed off the house behind it: `armingInputs` is
     // what LIGHTS OUT reads and `emit` is the authority's only exit to the phones. Every other
     // caller in this file still reaches it as a `LobbyLink` and cannot see either.
@@ -130,6 +152,12 @@ fun CheatRoot() {
             // two steps where `heard` is one — the reason the request has a frame of its own.
             onEgressFired = { actor -> scope.launch { rules.value?.fireEgress(actor) } },
             round = seam,
+            // **The host said the round is over** (D-157, E-R2-10). The transport has already reset
+            // this phone's inbox by the time this runs; what is left is the screen answer, which is
+            // the panel's. `newRound` walks this phone back to the lobby and wipes the line it
+            // typed — the same two things the host's own NEW ROUND does, reached by a push instead
+            // of by a button that only one phone in the house draws.
+            onRoundEnded = { panel.value?.newRound() },
         )
     }
     val flow = remember {
@@ -141,7 +169,28 @@ fun CheatRoot() {
             // failing is otherwise completely silent — which was the whole symptom on the first
             // device run.
             lobby = LobbyModel(finder = NearbyHomes(onEvent = radio), link = link),
-        )
+            // **The four meeting controls, finally reaching the house** (E-P2-3). I AM HERE, READY
+            // TO VOTE, a row under a thumb and READY were built, drawn and pressed for two whole
+            // rehearsals with `send` defaulted to `{}` — so the check-in gate was closed by the
+            // bench pressing intents directly and never by the control a player actually touches.
+            //
+            // **`asMessage` and the ballot the screen was drawn with**, which is where a name
+            // becomes a seat (D-115). It reads `meeting.names` rather than a list assembled here,
+            // so the seat a vote resolves to is a position in the list the house sent — and an
+            // unresolvable row is a Skip, never a vote cast at somebody nearby.
+            meeting = MeetingModel(send = { request ->
+                // The ballot the screen was drawn with, read live off the model this lambda is
+                // being handed to — the house writes it on `RosterIssued` and nothing else does.
+                press.value?.act(request.asMessage(panel.value?.meeting?.names.orEmpty()))
+            }),
+            // The Subroutine's own upward seam, the same shape and the same holder. It publishes an
+            // `IntentMessage` directly, which cannot name an actor at all.
+            subroutines = SubroutineModel(send = { intent -> press.value?.act(intent) }),
+            // Page 2's two Tier-2 fires. `IntentMessage` again, and the seats that ride it are
+            // CONTENT — who the Surge is aimed at, off the roster the house drew and published to
+            // this phone — which is the same rule the ballot's target travels under.
+            send = { intent -> press.value?.act(intent) },
+        ).also { panel.value = it }
     }
     // The deck that stands in for a camera, kept now that there IS a camera. It is a tour of the
     // refusals in a fixed order — two cards that share a shape, two cards marked T, two meeting
@@ -174,7 +223,10 @@ fun CheatRoot() {
     // socket through the seam that was promised it above.
     val roundClient = remember {
         RoundClient(scope, flow, watch) { line -> println("[round] $line"); transport.note(line) }
-            .also { seam.becomes(it) }
+            // Both knots tied in one place: the lobby gets the seam it was promised, and the four
+            // meeting controls, the Subroutine's hand-over and page 2's two fires get the way up
+            // they were promised (E-P2-3). Before this line every one of them reached nobody.
+            .also { seam.becomes(it); press.value = it }
     }
     // The rules, on this phone. Built on every seat and inert on four of them: `onIntent` above
     // only fires where frames arrive, which is the phone that is hosting. What decides whether a

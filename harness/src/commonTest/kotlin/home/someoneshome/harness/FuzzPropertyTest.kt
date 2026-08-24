@@ -308,6 +308,13 @@ class FuzzPropertyTest {
         "StandAndWalkIn",
         // The Restrained takeover, at the halfway mark, to the losing seat (D-102, D-134's E1-1).
         "RestrainedTakeover",
+        // **The Revoke landing, and it is the third one this check has caught** (D-134, E-R2-5).
+        // Its row is the takeover's for the takeover's reason, and the denial to the living classes
+        // is doing more work here than on any other line of this list: a row that reached a living
+        // phone would be the house telling a player that somebody ELSE had just been Revoked. The
+        // effect is constructed on every contact, so the row is the only thing standing between a
+        // seat that is still Live and a message saying it is not.
+        "RevokeLanded",
     )
 
     /**

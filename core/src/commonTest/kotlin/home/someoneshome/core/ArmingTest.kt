@@ -523,9 +523,17 @@ class OpeningCooldownTest {
         assertEquals(emptyList(), early.cooldownArmed, "a Revoke armed during the opening peace")
         val contact = reduce(early, Event.ContactMade(Tick(2), Seat(1), Seat(3)))
         assertFalse(contact.state.isRevoked(Seat(3)), "somebody was Revoked in the opening minute")
-        // Rule 1: refused or not, the ability reports firing in exactly the same words.
+        // Rule 1: refused or not, the ability reports firing in exactly the same words — and it is
+        // TWO effects now (E-R2-5). `RevokeLanded` names a seat this contact did not revoke, which
+        // is the shape rather than an oversight: it is constructed on every contact so that the
+        // stream cannot report whether one landed, and the emit boundary declines it because that
+        // seat is still Live. See `Rules.contact` and `AbsentEffectIsTheLeakTest`.
         assertEquals(
-            listOf(Effect.AbilityFired(Seat(1), cooldownStarted = true)), contact.effects,
+            listOf(
+                Effect.AbilityFired(Seat(1), cooldownStarted = true),
+                Effect.RevokeLanded(Seat(3)),
+            ),
+            contact.effects,
             "an ability that fired on a spent cooldown said something different",
         )
     }
