@@ -256,7 +256,7 @@ fun CheatRoot() {
         ScreenLedger(flow) { line -> println("[screen] $line"); transport.note(line) }
     }
     val round = remember {
-        RoundCheat(roundClient, authority, isHost = { flow.lobby.hosting }, ledger = ledger) { line ->
+        RoundCheat(roundClient, flow, authority, isHost = { flow.lobby.hosting }, ledger = ledger) { line ->
             println("[round-bench] $line"); transport.note(line)
         }
     }

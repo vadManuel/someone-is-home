@@ -11,6 +11,9 @@ import home.someoneshome.model.protocol.RoundMessage
 import home.someoneshome.platform.launchSwitch
 import home.someoneshome.platform.monotonicNanos
 import home.someoneshome.platform.launchValue
+import home.someoneshome.ui.FlowModel
+import home.someoneshome.ui.ScreenId
+import home.someoneshome.ui.Subroutine
 import kotlin.concurrent.Volatile
 import kotlinx.coroutines.delay
 
@@ -62,6 +65,21 @@ import kotlinx.coroutines.delay
  */
 class RoundCheat(
     private val client: RoundClient,
+    /**
+     * **This seat's own screens, so the bench presses controls instead of composing frames.**
+     *
+     * ⚠️ **Its absence is why every rehearsal in this project's history missed the hand-over
+     * outage.** On a caught scan this script used to publish `IntentMessage.HandOverEntry` straight
+     * out of [RoundClient.act], with the marker off its own [RoundClient.standingAt] and the
+     * house's own parameters as the answer — a perfect frame, assembled by the instrument, that no
+     * finger could ever have produced. So the wire looked healthy on five seats all evening while
+     * BEGIN opened the wrong Subroutine and posted nothing, and the bug reached a person's hands.
+     *
+     * A bench that builds the request it is checking for is a bench that agrees with itself. The
+     * scan reaction now walks the controls a player has — BEGIN, the taps, the hand-over — through
+     * [FlowModel.actions], and what goes up is whatever those produce. See [react].
+     */
+    private val flow: FlowModel,
     /** The rules, on this phone. */
     private val authority: RoundAuthority?,
     /**
@@ -172,6 +190,18 @@ class RoundCheat(
     private var stopped = false
 
     /**
+     * **A card has been caught and the work has not been begun yet** — set by [react], cleared by
+     * the thumb in [pressing].
+     *
+     * A flag rather than a direct call for the reason written at the reaction: the push that raises
+     * it is read off the socket before the screen has processed it, so a BEGIN pressed in the same
+     * breath would open whatever the *previous* scan left standing. Waiting for the phone to be on
+     * `ScanCaught` is the bench doing what a person does — looking at the screen before pressing
+     * the button on it.
+     */
+    private var caughtScan = false
+
+    /**
      * **The reactive half, on every seat including the host's own.**
      *
      * A phone in this game acts on what the house pushed it and on nothing else — there is no
@@ -191,18 +221,27 @@ class RoundCheat(
 
             // A scan that opened work. **STOP NOW first, and only once**: the control is on every
             // Subroutine screen, it had no wire member until R1, and the one thing that proves a
-            // member is a phone pressing it on work that was really open. Everything after that is
-            // handed over — it will be refused, and that is the point (stand-in 3).
+            // member is a phone pressing it on work that was really open.
+            //
+            // ⚠️ **Everything else is now pressed rather than composed, and that is N1's finding
+            // about this bench.** See the [flow] parameter: the old line published a `HandOverEntry`
+            // from here, so the rehearsal exercised the wire and never the button, and the button
+            // was the broken thing. The presses cannot happen in this method though — `read` runs
+            // before `RoundOverTransport` has queued anything, so at this instant the screen has
+            // not caught up and `PanelState.current` is still the previous card's. The flag is
+            // raised here and the thumb lands in [pressing], once the phone is really standing on
+            // the caught scan. A bench that pressed BEGIN before the row arrived would be a bench
+            // racing the thing it is measuring.
             is RoundMessage.ScanAnswered -> message.opened?.let { instance ->
-                val marker = client.standingAt ?: return@let
+                if (client.standingAt == null) return@let
                 if (stops && !stopped) {
                     stopped = true
                     note("STOP NOW — WALKING AWAY FROM ${instance.subroutine} WITH IT OPEN")
                     client.act(IntentMessage.StopSubroutine)
                     return@let
                 }
-                note("HANDING OVER — ${instance.subroutine}, AN ANSWER THIS PHONE CANNOT KNOW")
-                client.act(IntentMessage.HandOverEntry(marker, instance.parameters))
+                note("CAUGHT A SCAN — ${instance.subroutine}, AND THE THUMB GOES TO BEGIN")
+                caughtScan = true
             }
 
             // The ring. Everybody walks in, and the gate does not close a player short (D-104).
@@ -375,6 +414,10 @@ class RoundCheat(
                     reachNodeAndPulse(destination)
                 }
             }
+            if (caughtScan && flow.state.screen == ScreenId.ScanCaught) {
+                caughtScan = false
+                workTheCaughtScan()
+            }
             ringingSince?.let { rang ->
                 if (monotonicNanos() - rang > RING_NANOS) {
                     ringingSince = null
@@ -405,6 +448,42 @@ class RoundCheat(
             }
             delay(PRESS_MILLIS)
         }
+    }
+
+    /**
+     * **BEGIN, the work, and the hand-over — pressed on the real screens** (N1).
+     *
+     * The three controls a player touches between catching a card and standing on
+     * `RETURNED . WAITING`, driven through [FlowModel.actions] because that is where the outage
+     * was: `beginSubroutine` is a lambda the button holds, and every test and every bench that
+     * called the model method behind it stayed green while the button opened Handshake and posted
+     * nothing.
+     *
+     * **Which Subroutine is not decided here.** It is read back off the screen after BEGIN, which
+     * is the only honest way for an instrument to name it — a bench that picked the kind off the
+     * house's push and then pressed the matching screen would be routing the round itself, and
+     * would agree with itself about the one thing under test.
+     *
+     * **The taps are noise on purpose.** The entry a player makes is graded by the house and this
+     * process has no idea what the answer is (D-042); what a rehearsal proves is that a finger's
+     * input becomes an entry, reaches the wire against the right card, and is answered. A refusal
+     * is the expected outcome and is not a failure of anything here.
+     */
+    private fun workTheCaughtScan() {
+        val actions = flow.actions()
+        actions.beginSubroutine()
+        val opened = Subroutine.entries.firstOrNull { it.screen == flow.state.screen }
+        if (opened == null) {
+            // BEGIN moved this phone somewhere that is not a Subroutine at all. Reported rather
+            // than retried: it is exactly the shape of the defect N1 closed, and a bench that
+            // quietly pressed again would turn it back into a silence.
+            note("BEGIN OPENED NO SUBROUTINE — STILL ON ${flow.state.screen}")
+            return
+        }
+        note("BEGAN ${opened.label} — WORKING IT ON THE REAL SCREEN")
+        repeat(ENTRY_TAPS) { actions.tapSubroutine(opened, it) }
+        actions.handOverSubroutine(opened)
+        note("HANDED OVER ${opened.label} — AN ANSWER THIS PHONE CANNOT KNOW")
     }
 
     /**
@@ -906,6 +985,16 @@ class RoundCheat(
         private const val PATIENCE_MILLIS = 60_000L
 
         /** A bound on the banking loop, so a rule that never moves the meter cannot hang a phone. */
+        /**
+         * How many taps the bench puts into a Subroutine before handing it over.
+         *
+         * Comfortably more than the longest entry on the roster, so every one of the ten reaches
+         * `SubroutineEntry.gone` — the three sequences hand themselves over on their last element
+         * and the rest need something under the control. A number tuned to one Subroutine would
+         * make nine of them post nothing, which is the outage this bench failed to see.
+         */
+        private const val ENTRY_TAPS = 8
+
         private const val ENTRY_CEILING = 200
     }
 }

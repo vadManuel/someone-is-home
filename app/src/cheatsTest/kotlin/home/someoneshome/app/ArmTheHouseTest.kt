@@ -58,8 +58,9 @@ class ArmTheHouseTest {
             emit = { effect: Effect, _: GameState -> pushed += effect },
             note = { said += it },
         )
-        val client = RoundClient(scope, FlowModel(), LineWatch {}) { said += it }
-        val round = RoundCheat(client, house, isHost = { true }, ledger = null) { said += it }
+        val flow = FlowModel()
+        val client = RoundClient(scope, flow, LineWatch {}) { said += it }
+        val round = RoundCheat(client, flow, house, isHost = { true }, ledger = null) { said += it }
     }
 
     /**
