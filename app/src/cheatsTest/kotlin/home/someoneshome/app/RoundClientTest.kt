@@ -40,7 +40,8 @@ class RoundClientTest {
     private class Bench(val scope: CoroutineScope) {
         val said = mutableListOf<String>()
         val watch = LineWatch { said += it }
-        val client = RoundClient(scope, FlowModel(), watch) { said += it }
+        val flow = FlowModel()
+        val client = RoundClient(scope, flow, watch) { said += it }
 
         /** One push, as it would really arrive: encoded, wrapped, and off a socket. */
         fun push(seq: Long, message: RoundMessage) = client.round.frameArrived(
@@ -187,6 +188,40 @@ class RoundClientTest {
         assertFalse(
             encoded.contains("node") || encoded.contains("egress") || encoded.contains("Tether"),
             "the finger carried a draw the house is supposed to make: $encoded",
+        )
+    }
+
+    /**
+     * **Being linked is what *a house is attached* means, and the panel has to be told.**
+     *
+     * The seam under the whole fiction purge, and it had no test because nothing before N2 read the
+     * fact. `LobbyOverTransport` calls `linked` on every connect — on the **host over loopback**, it
+     * runs the house and then joins it like everybody else, and on **every client** over the
+     * network — so this is the one moment a phone acquires a house, and the one place the answer
+     * can be published from.
+     *
+     * Until it was published, whether the app was allowed to invent things was decided by launch
+     * switches instead: the bench's fake house, the presentation timers and every screen fixture
+     * each asked *how was this process started* and none of them asked *is there a house*. The
+     * owner played three meetings that were not happening.
+     *
+     * **Both directions.** A phone that has never been linked must report no house, or the port's
+     * fixtures and the bench's stand-in are gone from every desktop render and every unattended
+     * walk of the flow.
+     */
+    @Test
+    fun beingLinkedToAHouseTellsThePanelSo() = bench { it ->
+        assertFalse(
+            it.flow.state.houseAttached,
+            "a phone that has never been linked claimed a house, so the port lost its fixtures",
+        )
+
+        it.client.linked { }
+
+        assertTrue(
+            it.flow.state.houseAttached,
+            "this phone has a way up to a house and the panel was never told — " +
+                "every stand-in in the app is still switched on",
         )
     }
 

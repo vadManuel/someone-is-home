@@ -274,6 +274,20 @@ object Flow {
      *
      * A screen with no row simply waits, which is the fail-closed direction — a new screen that
      * nobody wrote a rule for sits still, and "it never advanced" is noticed in thirty seconds.
+     *
+     * ### ⚠️ THIS TABLE IS THE UNHOUSED PORT'S, AND ONLY THE UNHOUSED PORT'S
+     *
+     * Every number in it is a presentation placeholder, which this file has said from the first
+     * day — and for just as long, nothing stopped the placeholders running on a phone with a real
+     * house attached. They did, all evening, in front of the owner: `Notice → Discussion` after
+     * nine seconds walked two phones into a discussion the house had not opened, and a player sat
+     * through a talk, a ballot and a tally that were not happening.
+     *
+     * **[FlowHost] is where the cordon is**, because that is the one place these rows are ever
+     * fired from: with [PanelState.houseAttached] the table is not consulted at all. What is left
+     * here is what it always claimed to be — the thing that makes a ported flow walkable on a
+     * desktop and on a phone with no round attached, and nothing a player in a dark house will
+     * ever meet.
      */
     val autoAdvance: Map<ScreenId, AutoAdvance> = mapOf(
         ScreenId.Boot to AutoAdvance(ScreenId.Perms, 2_400, "the self-test says STARTING and falls through on its own"),
@@ -862,10 +876,21 @@ class FlowModel(
      *
      * Takes a [PanelState] rather than a [ScreenId] because the picker also sets the role, which
      * no tap can.
+     *
+     * ⚠️ **[PanelState.houseAttached] is the one field it may not replace**, and the reason is the
+     * evening this was found in. The picker builds a fresh [PanelState] to jump to, which carries
+     * the field's default — so a jump from a phone with a real house attached landed on a screen
+     * that believed it had none, and the stand-ins came straight back on for exactly the screen the
+     * player had just chosen to look at. **The owner's jump to the check-in screen is how all three
+     * fictional meetings started.**
+     *
+     * Whether a house is attached is a fact about the socket, not about the panel, so no debug
+     * control may set it either way: a picker that could switch it on would be a bench claiming a
+     * house, and one that could switch it off is what this was.
      */
     fun jump(to: PanelState) {
         trail.clear()
-        arrive(to)
+        arrive(to.copy(houseAttached = state.houseAttached))
     }
 
     /**
@@ -1360,6 +1385,29 @@ class FlowModel(
 
     fun readyToVote() = meeting.readyToVote()
 
+    // ---- Is there a house ----------------------------------------------------------------------
+
+    /**
+     * **A house is attached to this phone, or is not** ([PanelState.houseAttached]).
+     *
+     * The one honest question, asked once and answered from real state, that decides every
+     * stand-in behaviour in the app at the same time: the presentation timers in [Flow.autoAdvance],
+     * the bench's fake house in [FlowHost], and every fixture [PanelVals] falls back to. **They were
+     * three independent decisions and that is why the fiction survived three separate attempts to
+     * remove it** — each one switched off the stand-in it knew about and left the other two running.
+     *
+     * Called by `app` on the seam that actually knows: `RoundSeam.linked`, which fires on the host
+     * over loopback and on every client over the network, and on nothing that is not in a round.
+     *
+     * **It moves no screen and clears no field.** A phone that has just acquired a house is standing
+     * exactly where it was; what changes is only that from this moment the phone will not invent
+     * anything, and will wait for the house instead. That is the whole of it, and it is deliberately
+     * not a reset: a reset here would wipe a round in progress every time a socket reconnected.
+     */
+    fun houseAttached(attached: Boolean) {
+        state = state.copy(houseAttached = attached)
+    }
+
     // ---- Subroutines ---------------------------------------------------------------------------
 
     /**
@@ -1417,7 +1465,19 @@ class FlowModel(
      * impossible, and it is why the marker is not looked up from anywhere else.
      */
     fun beginSubroutine(
-        subroutine: Subroutine = state.current?.subroutine ?: PanelVals.CURRENT.subroutine,
+        /**
+         * ⚠️ **The fixture is the unhoused port's alone.** N1 pointed this default at the house's
+         * own answer and left `PanelVals.CURRENT` behind it for the port, which is right — and on a
+         * housed phone whose house has not answered, that fallback is the same fiction one layer
+         * down from the screen. `PanelVals.current` is null in exactly that case and the caught-scan
+         * screen draws no BEGIN over it; this is the same rule where the call is made, so a press
+         * arriving from anywhere else cannot open a Subroutine the house never dealt.
+         *
+         * **A housed phone with nothing open begins nothing**, and the body below already knows how
+         * to do that: an unresolvable target returns without moving the screen.
+         */
+        subroutine: Subroutine? = state.current?.subroutine
+            ?: PanelVals.CURRENT.subroutine.takeUnless { state.houseAttached },
         /**
          * **Which card opened this**, so the hand-over can say so (E-P2-1).
          *
@@ -1433,7 +1493,7 @@ class FlowModel(
          */
         marker: MarkerId? = state.scannedAt,
     ) {
-        val screen = subroutine.screen ?: return
+        val screen = subroutine?.screen ?: return
         subroutines.beganAgain()
         subroutines.opened(marker)
         go(screen)
@@ -2336,6 +2396,22 @@ class FlowModel(
  * [HOUSE_STAND_IN_MS] it fires whatever push the current screen is waiting on. It is deliberately
  * one flat number for every push rather than a schedule — a schedule would be a table of meeting
  * timings living in `ui`, which is the thing that was just deleted, and it would be believed.
+ *
+ * ### ⚠️ And that paragraph was a rule nothing enforced, so [PanelState.houseAttached] enforces it
+ *
+ * *Must never be true in a real round* was written here from the first day and was true of nobody:
+ * the flag was set from a launch switch, a second way to have a real round was added later, and
+ * two of the owner's phones then ran a fake house beside a real one for an entire evening. **A
+ * caveat in a KDoc is not a guard.**
+ *
+ * So the caller no longer decides this alone. [PanelState.houseAttached] is asked first and
+ * overrules both drivers: with a house attached, neither the stand-in **nor** the presentation
+ * timers in [Flow.autoAdvance] may fire, whatever [standingInForTheHouse] says. The two were
+ * separately gated before — one behind this parameter and one behind nothing at all — which is why
+ * the fiction survived being switched off.
+ *
+ * **A phone with a house attached moves on exactly two things: a push, and the player's thumb.**
+ * Everything else it does is waiting, and waiting is honest.
  */
 @Composable
 fun FlowHost(
@@ -2348,8 +2424,21 @@ fun FlowHost(
     // a hundred milliseconds of the cold-start permissions walk in the middle of a running round.
     // A malfunctioning phone is not running its own timers, which is the fiction and is also true.
     val surge = model.surge
-    val pending = if (surge == null) model.pending else null
-    val awaiting = if (standingInForTheHouse && surge == null) model.awaitingPush else null
+    // **THE ONE QUESTION, ASKED ONCE, ABOVE BOTH DRIVERS** ([PanelState.houseAttached]).
+    //
+    // With a house attached this composable moves nothing. Both locals below go null, so neither
+    // branch of the effect can be reached, and the only things left that can change the screen are
+    // the two that are entitled to: a push from the house, and the player's own thumb.
+    //
+    // ⚠️ **It has to sit above BOTH of them, and that is the whole finding.** `standingInForTheHouse`
+    // gated the stand-in alone, so switching it off left `pending` — the production
+    // [Flow.autoAdvance] table — still walking a housed phone from the notice into a discussion the
+    // house had not opened. Two stand-ins, gated in two places, one of them not gated at all: the
+    // owner's meeting ran `ASSEMBLE → NOTICE` on the bench's four seconds and `NOTICE → DISCUSSION`
+    // on production's nine, and no single switch could ever have stopped both.
+    val housed = model.state.houseAttached
+    val pending = if (surge == null && !housed) model.pending else null
+    val awaiting = if (standingInForTheHouse && surge == null && !housed) model.awaitingPush else null
     val screen = model.state.screen
 
     // **The rest of the Surge, on a clock, because `core` has none** (D-182). The bright phase is

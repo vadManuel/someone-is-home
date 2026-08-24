@@ -514,6 +514,12 @@ fun InvertedStatusRow(carrier: String) {
 fun ScanCaughtScreen(vals: PanelVals) {
     val go = navigator()
     val actions = LocalActions.current
+    // ⚠️ **Null on a housed phone the house has not answered**, and every read of it below is
+    // guarded rather than defaulted. It used to resolve to the port's fixture — HANDSHAKE, room
+    // GARAGE — so this screen showed the owner a Subroutine and a room in a house that had dealt
+    // them neither, and did it with exactly the confidence it shows a real one. What an unanswered
+    // scan draws now is the shape of nothing: no glyph, no room, no briefing, and no BEGIN.
+    val current = vals.current
     Column(
         Modifier.fillMaxSize().padding(8.u),
         verticalArrangement = Arrangement.spacedBy(7.u),
@@ -527,7 +533,7 @@ fun ScanCaughtScreen(vals: PanelVals) {
         ) {
             // The marker you just scanned -- the same shape the work order sent you to, not the
             // host-setup fixture this used to read by mistake.
-            vals.current.marker?.let { MarkerGlyph(it, 52.u, Amber.Bright) }
+            current?.marker?.let { MarkerGlyph(it, 52.u, Amber.Bright) }
             // **The flavour line that used to sit here is gone** (the owner's 2026-08-24 ruling).
             // It was a fake-technical sentence — RESYNC THE KEEPALIVE — that nothing on the wire
             // ever carried, so it was the port's own words printed over whatever Subroutine a real
@@ -543,8 +549,9 @@ fun ScanCaughtScreen(vals: PanelVals) {
                 // absent room reads as a rendering fault rather than as a room nobody sent.
                 Label(
                     listOfNotNull(
-                        vals.current.room,
-                        "SUBROUTINE ${vals.current.index} OF ${vals.current.total}",
+                        current?.room,
+                        current?.let { "SUBROUTINE ${it.index} OF ${it.total}" }
+                            ?: PanelVals.NOTHING_OPEN,
                     ).joinToString(" . "),
                     size = 7.0, color = Amber.Dim, tracking = 0.12,
                 )
@@ -552,9 +559,16 @@ fun ScanCaughtScreen(vals: PanelVals) {
                 // and NOT THIS ONE are both live below: this is the last moment the choice is
                 // still a choice, and a route planned on the work order is re-decided here by
                 // anyone who walked past someone on the way. Flagged for review.
-                LightMark(vals.current.light, Amber.Dim)
+                //
+                // A light signature is a promise about how much a screen will glow for the next
+                // ninety seconds, which is the one thing a player plans a walk around. Absent where
+                // there is no Subroutine to make it about.
+                current?.let { LightMark(it.light, Amber.Dim) }
             }
-            Label("THE CARD IN YOUR HAND MATCHES", size = 6.0, color = Amber.Faint, tracking = 0.1)
+            Label(
+                if (current != null) "THE CARD IN YOUR HAND MATCHES" else "WAITING FOR THE HOUSE",
+                size = 6.0, color = Amber.Faint, tracking = 0.1,
+            )
         }
 
         // **The last lit surface before the work, and ALL TEN are read here now** (D-188). It began
@@ -569,12 +583,14 @@ fun ScanCaughtScreen(vals: PanelVals) {
         //
         // Not nullable any more, which is the point: [Subroutine.briefing] is total over the
         // roster, so a Subroutine cannot reach a player with nothing said about it.
-        Label(
-            vals.current.subroutine.briefing,
-            modifier = Modifier.fillMaxWidth(),
-            size = 6.5, color = Amber.Dim, tracking = 0.12, lineHeight = 1.8,
-            align = TextAlign.Center,
-        )
+        current?.let {
+            Label(
+                it.subroutine.briefing,
+                modifier = Modifier.fillMaxWidth(),
+                size = 6.5, color = Amber.Dim, tracking = 0.12, lineHeight = 1.8,
+                align = TextAlign.Center,
+            )
+        }
 
         // **BEGIN does not name a screen, and cannot.** Which Subroutine opens is a fact about
         // the card that was just read, so the target is the actions layer's — the same shape as a
@@ -585,12 +601,19 @@ fun ScanCaughtScreen(vals: PanelVals) {
         // which is the fail-closed direction: routing an unbuilt Subroutine to the nearest built
         // one would put a player through the wrong work and read as a routing bug rather than as
         // a missing screen.
-        PanelButton(
-            "BEGIN",
-            border = Amber.Bright, ink = Amber.Bright,
-            size = 9.0, tracking = 0.18, verticalPadding = 13.u,
-            onClick = actions.beginSubroutine,
-        )
+        // ⚠️ **Absent where there is no Subroutine to begin**, rather than present and refusing.
+        // A BEGIN that could be pressed with nothing behind it is how nine of the ten Subroutines
+        // became unreachable: the press defaulted to the port's fixture and opened a Handshake over
+        // whatever the house had actually dealt. A control that is not drawn cannot do that, and
+        // this screen's other button still goes back — the player is never stuck here.
+        if (current != null) {
+            PanelButton(
+                "BEGIN",
+                border = Amber.Bright, ink = Amber.Bright,
+                size = 9.0, tracking = 0.18, verticalPadding = 13.u,
+                onClick = actions.beginSubroutine,
+            )
+        }
         PanelButton(
             "NOT THIS ONE",
             border = Amber.Faint, ink = Amber.Dim,

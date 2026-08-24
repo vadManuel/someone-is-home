@@ -143,6 +143,39 @@ data class StaticJam(val seconds: Int, val seed: Long)
  */
 data class PanelState(
     val screen: ScreenId = ScreenId.Home,
+    /**
+     * **Whether a real house is attached to this phone. When it is, NOTHING FAKE MAY RENDER OR
+     * FIRE** — no stand-in push, no presentation timer, no fixture.
+     *
+     * ### It is the one field on this class the house does not push, and it has to be
+     *
+     * Every other field here is a fact the house sent. This is the fact that decides whether the
+     * *absence* of those facts may be papered over, so it cannot itself arrive down the wire: a
+     * phone learns it has a house by having one, not by being told. `app` writes it — see
+     * [FlowModel.houseAttached] — because `app` is the one module that can see both a socket and a
+     * screen.
+     *
+     * ### What it is derived from, and why not from a switch
+     *
+     * **A live way up to a house**, which host and client reach identically: the host runs the
+     * house and then joins it over loopback like everybody else (`LobbyOverTransport`), so
+     * `RoundSeam.linked` is called on every phone in the round and on no phone outside one.
+     *
+     * It was two launch switches before, ORed, and the pair is why the owner's evening was
+     * unreadable: the arming switch added during the payoff run was a **second** way to have a real
+     * round and the line that turned the bench's fake house off had only ever been taught the
+     * first. So a real house and a fake one drove the same two phones all evening. **A question
+     * about how the process was started can always acquire a third answer nobody teaches it; a
+     * question about whether a house is actually there cannot.**
+     *
+     * ### False is the port, and the port must keep working
+     *
+     * With no house attached the ported flows walk themselves off [Flow.autoAdvance] and the
+     * fixtures render, which is what makes a screen reviewable on a desktop and a bench walkable
+     * past the check-in gate. That is a standalone mode and it is legitimate — it is only a lie
+     * when a house is standing right there. See [FlowHost] and [PanelVals].
+     */
+    val houseAttached: Boolean = false,
     val role: PanelRole = PanelRole.Resident,
     val revoke: RevokeState = RevokeState.Ready,
     val markersOn: Boolean = false,
@@ -585,6 +618,30 @@ class PanelVals(val state: PanelState) {
     val insider: Boolean get() = state.role == PanelRole.Insider
     val resident: Boolean get() = !insider
 
+    /**
+     * **The house's value, the port's fixture, or honest emptiness — and never the middle one with
+     * a house attached** ([PanelState.houseAttached]).
+     *
+     * Every fallback on this class was written as `pushed ?: FIXTURE` and every one of them was
+     * right about the bench and wrong about a round. The fixtures exist so that a screen rendered
+     * with nothing behind it shows the drawn design rather than an empty rectangle — that is what
+     * makes a desktop render harness and a screenshot review worth anything, and it stays.
+     *
+     * **What it may not do is stand in front of a player.** The owner met this: their caught-scan
+     * screen said `HANDSHAKE . GARAGE` in a house with no garage, in a round where the house had
+     * dealt them a Jam, because [CURRENT] filled a silence that was real. A fixture rendered on a
+     * housed phone is not a placeholder, it is the app asserting something about the house — and it
+     * is indistinguishable, on the glass, from the house having said it.
+     *
+     * So each call site names three things instead of two: what the house sent, what the port draws,
+     * and **what nothing looks like**. The third is the new one and it is the honest one: an empty
+     * list, an absent row, a `NOTHING`-shaped line. A player who is shown nothing has been told the
+     * truth and can act on it; a player who is shown a fixture cannot tell and has no way to find
+     * out.
+     */
+    private fun <T> housed(pushed: T?, fixture: T, nothing: T): T =
+        pushed ?: if (state.houseAttached) nothing else fixture
+
     // ---- Status bar ---------------------------------------------------------------------
 
     val mode: PanelMode = when (state.screen) {
@@ -912,7 +969,7 @@ class PanelVals(val state: PanelState) {
      * **Order is the wire**, not a presentation: a row's position in this list is the seat the
      * ability is fired at. See [PanelState.roster].
      */
-    val roster: List<String> = state.roster ?: ROSTER
+    val roster: List<String> = housed(state.roster, ROSTER, nothing = emptyList())
 
     /**
      * **The markers the Isolate picker draws** (`gdd.md:315`, D-150).
@@ -920,7 +977,8 @@ class PanelVals(val state: PanelState) {
      * The house's when there is one, the port's when there is not. **Nothing here filters it** — the
      * Egress-node exclusion is the house's and arrives as a shorter list.
      */
-    val isolateTargets: List<Destination> = state.isolateTargets ?: ISOLATE_TARGETS
+    val isolateTargets: List<Destination> =
+        housed(state.isolateTargets, ISOLATE_TARGETS, nothing = emptyList())
 
     /**
      * **Whether the house's monitoring is jammed right now, and the field the noise is drawn from**
@@ -1038,13 +1096,24 @@ class PanelVals(val state: PanelState) {
      * it on the caught scan is deleted, and what a player does is [Subroutine.briefing] (D-188).
      *
      * **The scan's own answer where there is one, and the port's drawn row where there is not** —
-     * [PanelState.current], and [egressNodes]' arrangement exactly. Nothing in production fills it
-     * yet: `Effect.ScanAnswered` carries the instance and routing it here is the scan flow's, not
-     * this class's. What it buys today is that a screen drawing this can be rendered against a
-     * Subroutine other than the one fixture, which is the difference between a surface that is
-     * tested and one that is looked at.
+     * [PanelState.current], and [egressNodes]' arrangement exactly. What the fixture buys is that a
+     * screen drawing this can be rendered against a Subroutine other than the one fixture, which is
+     * the difference between a surface that is tested and one that is looked at.
+     *
+     * ### ⚠️ NULL WITH A HOUSE ATTACHED, AND THE OWNER IS WHY
+     *
+     * This was a flat `?: CURRENT`, and [CURRENT] is `HANDSHAKE`, room `GARAGE`. On a housed phone
+     * that is not a placeholder — it is the app telling a player, in a dark house, that the house
+     * dealt them work it did not deal them, in a room they may not have. The owner read
+     * `WORK JAM` on one screen and opened a Handshake on the next, and the two biggest bugs of that
+     * evening were both this fixture standing in front of a real round.
+     *
+     * So with a house attached an unanswered scan resolves to **null**, and null is drawn as
+     * nothing — the same treatment [room] and [marker] already get one type down, for the same
+     * stated reason: *a screen draws no room rather than inventing one.* The port keeps the fixture
+     * and keeps its screenshots.
      */
-    val current: CurrentSubroutine get() = state.current ?: CURRENT
+    val current: CurrentSubroutine? get() = housed(state.current, CURRENT, nothing = null)
 
     // ---- The work order --------------------------------------------------------------------
 
@@ -1063,6 +1132,12 @@ class PanelVals(val state: PanelState) {
      *
      * **The port's seven stand in while the house has said nothing** ([ORDER]), so every screenshot
      * and every screen review sees the drawn design rather than an empty list.
+     *
+     * ⚠️ **And not once a house is attached**, where an unissued order draws no rows at all and
+     * [nextUp] says `NOTHING OPEN`. A work order is the list of places a player walks to in the
+     * dark; seven fictional rows would send them to five rooms the house never named. An empty
+     * order is a phone that has not been dealt one yet, which is a true thing to say and a thing a
+     * player can wait out.
      *
      * ### The destination is the house's now, and the row draws the first of them
      *
@@ -1100,7 +1175,7 @@ class PanelVals(val state: PanelState) {
             }
             is OrderLine.Blocked -> OrderRow.Blocked(line.index)
         }
-    } ?: ORDER
+    }.let { housed(it, ORDER, nothing = emptyList()) }
 
     /**
      * **The first line of the order this seat can act on** — what the springboard names and what
@@ -1142,14 +1217,28 @@ class PanelVals(val state: PanelState) {
      * **Which phase of the meeting the house has opened, as the couch's one screen needs it**
      * (D-134, `Effect.MeetingPhaseOpened`).
      *
-     * Null — no house attached — resolves to the vote, which is the phase the design drew the
+     * Null with **no** house attached resolves to the vote, which is the phase the design drew the
      * outside view in (`VOTING ENDS IN 0:24`).
+     *
+     * ⚠️ **Null WITH a house attached resolves to [MeetingPhase.CheckIn]**, and that is not a
+     * fixture — it is the truth, and the truth already draws itself. The house opens every phase by
+     * pushing it; a phone that has been pushed none is at the gate, whatever screen it is standing
+     * on. [Countdowns.onGhostMeeting] gives `CheckIn` **no clock at all** (D-104: the gate closes on
+     * a count of phones, not on a timer) and [Countdowns.ghostClockLabel] calls it
+     * `WAITING FOR THE HOUSE`, which is the honest-empty form written out in the couch's own words
+     * long before anybody needed it here.
+     *
+     * The evening this fixes: `PHASE -` on every logged line on both phones, all night, while both
+     * of them drew a vote clock counting down. **The couch was watching a ballot that did not
+     * exist**, and the one screen a player who is out looks at for a whole round was the screen
+     * lying hardest.
      *
      * **It never advances anything.** Like every clock value on this class it is a hand position
      * the house pushed; what it decides here is which window is being counted and what the row
      * above it is called.
      */
-    val meetingPhase: MeetingPhase = state.meetingPhase ?: MeetingPhase.Vote
+    val meetingPhase: MeetingPhase =
+        housed(state.meetingPhase, MeetingPhase.Vote, nothing = MeetingPhase.CheckIn)
 
     val countdown: Countdown = when (state.screen) {
         // The one screen whose clock changes meaning under it: the couch watches every phase of a
@@ -1189,12 +1278,18 @@ class PanelVals(val state: PanelState) {
         // value the bar is drawn at by construction. Rounded, so a meter with any work left on it
         // cannot light zero cells and a full one cannot light all but one.
         (percent * METER_SEGMENTS + 50) / 100
-    } ?: when (state.screen) {
+    } ?: when {
+        // ⚠️ **An unlit bar where a house is attached and has not said.** System Integrity is how
+        // close the Residents are to winning, and it is the one number the whole room plans around.
+        // A phone drawing 28 of 32 off a fixture tells five people the job is nearly done; drawing
+        // it at an ending tells them how the evening went. Neither is something this phone knows.
+        // Empty, and the readout beside it says NOTHING rather than a percentage of a fiction.
+        state.houseAttached -> 0
         // **The port's drawn fractions, for a phone with no house attached.** The two endings carry
         // the round's final reading and the port's figures are the design's own: the Residents took
         // it by clearing the meter, and the Insiders took it with this much still standing.
-        ScreenId.WinResidents -> 0
-        ScreenId.WinInsiders -> 14
+        state.screen == ScreenId.WinResidents -> 0
+        state.screen == ScreenId.WinInsiders -> 14
         else -> 28
     }
 
@@ -1222,8 +1317,13 @@ class PanelVals(val state: PanelState) {
      * that follows. One ending screen would retroactively unhide a number D-103 spent a whole
      * revision hiding.
      */
-    val integrityPercent: String = state.integrityPercent?.let { "$it%" }
-        ?: "${integrityLit * 100 / METER_SEGMENTS}%"
+    val integrityPercent: String = housed(
+        state.integrityPercent?.let { "$it%" },
+        fixture = "${integrityLit * 100 / METER_SEGMENTS}%",
+        // `0%` would be a reading — the Residents have done nothing — and this is the absence of
+        // one. The difference is the whole of D-103's care about this number.
+        nothing = NO_READING,
+    )
 
     /** The Egress countdown, which replaces the meter in place and takes the only number back. */
     val egressLit: Int = 22
@@ -1235,8 +1335,12 @@ class PanelVals(val state: PanelState) {
      * Derived here, in the one place role- and round-dependent values are read side by side, so
      * that the alert and the widget resolve the *same* fallback rather than each keeping its own.
      */
-    val egressType: String = state.egressType ?: Notifications.EGRESS_TYPE
-    val egressNodes: List<String> = state.egressNodes ?: Notifications.EGRESS_NODES
+    // ⚠️ The nodes are two rooms the house drew in the home the round was armed in, and the alert
+    // sends people to them. On a housed phone that has been told neither, the port's pair would
+    // send two players who cannot speak to each other to two rooms nobody chose.
+    val egressType: String = housed(state.egressType, Notifications.EGRESS_TYPE, nothing = "")
+    val egressNodes: List<String> =
+        housed(state.egressNodes, Notifications.EGRESS_NODES, nothing = emptyList())
 
     /**
      * **Whether the couch's Egress widget has anything to say** ([PanelState.egressRunning]).
@@ -1276,7 +1380,14 @@ class PanelVals(val state: PanelState) {
      * Residents' ending and the Insiders' ending name the same people, and a fixture reached
      * directly by one of them would agree with itself and with nothing else.
      */
-    val revealed: List<RevealedInsider> = state.revealed ?: REVEALED
+    val revealed: List<RevealedInsider> = housed(
+        state.revealed, REVEALED,
+        // ⚠️ The most consequential empty on this class. The reveal is the only moment a name and a
+        // one line are lawfully together on a phone (D-116), so a fixture here does not merely
+        // invent a fact — it accuses two named people of having been Insiders, on the screen the
+        // whole room reads at the end of the evening. Nothing is the only safe nothing.
+        nothing = emptyList(),
+    )
 
     /**
      * **The house's last words, and it says them only to the people it owned** (`gdd.md:1051`).
@@ -1305,7 +1416,7 @@ class PanelVals(val state: PanelState) {
      *
      * The port's 21 of 32 stands in while no house has spoken.
      */
-    val outsideLit: Int = state.integrityPercent?.let { integrityLit } ?: 21
+    val outsideLit: Int = housed(state.integrityPercent?.let { integrityLit }, fixture = 21, nothing = 0)
 
     /**
      * **`6 OF 6 VOTED` — the living's whole result besides the name** (the owner's 2026-08-24
@@ -1324,9 +1435,14 @@ class PanelVals(val state: PanelState) {
      * [egressNodes]' arrangement, and the fixture is the design's own six-seat house so the drawn
      * screen and a real round read the same sentence.
      */
-    val votedLine: String = state.tally
-        ?.let { "${it.voted} OF ${it.living} VOTED" }
-        ?: "6 OF 6 VOTED"
+    val votedLine: String = housed(
+        state.tally?.let { "${it.voted} OF ${it.living} VOTED" },
+        fixture = "6 OF 6 VOTED",
+        // A count of ballots nobody cast, in a round whose seats the phone does not know. The
+        // owner's tally screen read `VOTED 4/6` in a FIVE-seat round, off this fixture, while the
+        // house was running no vote at all.
+        nothing = NO_RESULT,
+    )
 
     /**
      * **Who the room restrained, as the house read the ballot** — or nobody.
@@ -1339,10 +1455,25 @@ class PanelVals(val state: PanelState) {
      * D-075's *the whole weight of inaction sits behind restraining nobody.* A screen that fell
      * back to the fixture's MARCUS on that outcome would name a person the room voted not to.
      */
-    val restrained: String? = state.tally?.restrained ?: "MARCUS".takeIf { state.tally == null }
+    val restrained: String? =
+        if (state.tally != null) state.tally.restrained
+        else "MARCUS".takeUnless { state.houseAttached }
 
-    /** `MARCUS WAS RESTRAINED`, or the sentence for a room that restrained nobody. */
-    val restrainedLine: String = restrained?.let { "$it WAS RESTRAINED" } ?: "NOBODY WAS RESTRAINED"
+    /**
+     * `MARCUS WAS RESTRAINED`, or the sentence for a room that restrained nobody.
+     *
+     * ⚠️ **Those two are not the only cases and the difference matters more here than anywhere else
+     * on this class.** `NOBODY WAS RESTRAINED` is a *result* — a Skip, a tie, a vote nobody won —
+     * and it is the house's answer to a meeting that happened. A housed phone with no tally has not
+     * had that answer; it has had no meeting result at all, and saying `NOBODY WAS RESTRAINED`
+     * would publish a verdict on a vote the house never counted, to a room that would then act on
+     * it. So the third case says [NO_RESULT] and says nothing about anybody.
+     */
+    val restrainedLine: String = when {
+        restrained != null -> "$restrained WAS RESTRAINED"
+        state.tally != null || !state.houseAttached -> "NOBODY WAS RESTRAINED"
+        else -> NO_RESULT
+    }
 
     /**
      * **Who called the meeting, with the port's own name standing in** (D-121).
@@ -1378,8 +1509,11 @@ class PanelVals(val state: PanelState) {
      * promises it live, and the living are told the same number once a shift instead. What still
      * has no sender is the bar below it; see [egressPercent].
      */
-    val outsidePercent: String = state.integrityPercent?.let { "$it%" }
-        ?: "${outsideLit * 100 / METER_SEGMENTS}%"
+    val outsidePercent: String = housed(
+        state.integrityPercent?.let { "$it%" },
+        fixture = "${outsideLit * 100 / METER_SEGMENTS}%",
+        nothing = NO_READING,
+    )
 
     /**
      * **The real Egress number, which no living player of either role may see** (`gdd.md:1014`).
@@ -1406,7 +1540,7 @@ class PanelVals(val state: PanelState) {
      * screen in both roles with this populated and asserts the attribution mark reaches only
      * `GhostMeeting` — in both directions, so denying the couch fails as loudly as widening it.
      */
-    val ballots: List<Ballot> = state.ballots ?: OutsideView.ballots
+    val ballots: List<Ballot> = housed(state.ballots, OutsideView.ballots, nothing = emptyList())
 
     /**
      * How many of [ballots] have been cast. **Counted off the rows, never written beside them.**
@@ -1587,6 +1721,31 @@ class PanelVals(val state: PanelState) {
             ScreenId.ScanUnknown, ScreenId.GhostMeeting, ScreenId.WinInsiders,
             ScreenId.WinResidents,
         )
+
+        /**
+         * **What a housed phone prints where a number would be a fiction** — the honest-empty form
+         * for every meter and clock on this class.
+         *
+         * A dash and not a zero, and the distinction is the whole reason it exists: `0%` is a
+         * reading the house could have sent and did not, and a player has no way to tell one from
+         * the other on a lit rectangle in a dark room. This is the same word the device consoles
+         * printed all through the payoff run — `METER -`, `PHASE -`, `TALLY -` — where the ledger
+         * was being honest about the absence the screens beside it were papering over.
+         *
+         * Only ever reached with a house attached. The unhoused port keeps its fixtures and its
+         * screenshots; see [PanelVals.housed].
+         */
+        const val NO_READING = "-"
+
+        /**
+         * **What a housed phone says where a meeting result would be** — [NO_READING]'s sibling,
+         * in a sentence rather than a figure, because the rows it replaces are sentences.
+         *
+         * `NOBODY WAS RESTRAINED` is a **result** and it is not this: the room voted and restrained
+         * nobody. This is the house not having answered, and the two must never render alike — the
+         * first is something the room may act on and the second is something it must wait out.
+         */
+        const val NO_RESULT = "NO RESULT YET"
 
         /**
          * The meter bar's DISPLAY RESOLUTION — how many cells the percentage is quantised into,

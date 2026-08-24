@@ -131,8 +131,28 @@ class RoundClient(
         scope.launch { round.run() }
     }
 
+    /**
+     * **This phone has a way up to a house — which is the whole of what *a house is attached* means.**
+     *
+     * The one place in the app that fact exists, and therefore the one place it may be published
+     * from. `LobbyOverTransport` calls this on every connect, on the **host over loopback** (it runs
+     * the house and then joins it like everybody else) and on **every client** over the network —
+     * and on nothing that is not in a round.
+     *
+     * ⚠️ **Telling the panel is not bookkeeping.** Until this line, whether the app was allowed to
+     * invent things was decided by launch switches: the fake house, the presentation timers and
+     * every screen fixture each asked *how was this process started* and none of them asked *is
+     * there a house*. So the owner played three meetings that were not happening, opened a
+     * Subroutine the house had not dealt, and read a meter nobody had sent. See
+     * [FlowModel.houseAttached] and [PanelState.houseAttached] for what the answer switches off.
+     *
+     * Written on the main thread, which is where a connect is asked for: a lobby row under a thumb,
+     * or the host's own LIGHTS OUT.
+     */
     override fun linked(send: suspend (TransportFrame) -> Unit) {
         up = send
+        note("A HOUSE IS ATTACHED — NOTHING ON THIS PHONE STANDS IN FOR IT FROM HERE")
+        flow.houseAttached(true)
     }
 
     override fun arrived(frame: TransportFrame) = round.frameArrived(frame)

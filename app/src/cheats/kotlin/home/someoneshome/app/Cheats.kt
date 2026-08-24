@@ -349,12 +349,13 @@ fun CheatRoot() {
             // would race on every meeting — a screen that advanced before the gate closed would
             // look exactly like a gate that closed early, on the one surface where D-104's
             // *no player short* is what a person is reading.
+            //
+            // **Read off the panel's own state rather than off how this process was launched.**
+            // `RoundClient.linked` writes it the moment this phone has a way up to a house, which
+            // is the only thing that ever made the sentence above true or false.
             CheatView.Panel -> FlowHost(
                 flow,
-                standingInForTheHouse = standsInForTheHouse(
-                    playsAScriptedRound = round.armed,
-                    armsTheHouse = round.armsTheHouse,
-                ),
+                standingInForTheHouse = standsInForTheHouse(flow.state.houseAttached),
             )
             CheatView.Picker -> CheatPicker(
                 flow.state,
@@ -522,15 +523,28 @@ fun CheatRoot() {
  * inside a `@Composable`, a rule about when the fake house may drive is a rule nothing can check,
  * and this one has already been wrong once in production with no test able to see it.
  *
- * ⚠️ **It is still switch-shaped, and that is a real residual gap.** Both inputs are launch
- * switches, so a phone launched with neither — one a person taps through the lobby and joins to a
- * real house with their finger — still gets the stand-in. Closing that properly needs the phone to
- * key on *the house has spoken to me* rather than on how the process was started, which belongs
- * with the production arming path (E-PAY-1) and is not this unit's to invent. Flagged rather than
- * guessed at.
+ * ### ⚠️ AND THE TWO SWITCHES ARE GONE, WHICH IS THE GAP THE ORed VERSION FLAGGED ON ITSELF
+ *
+ * That version took `playsAScriptedRound` and `armsTheHouse` and answered `neither`. It fixed the
+ * owner's evening and it wrote down its own residual: *both inputs are launch switches, so a phone
+ * launched with neither — one a person taps through the lobby and joins to a real house with their
+ * finger — still gets the stand-in.* **That phone is the product.** Every phone in every real
+ * evening after the benches are gone is launched with no switches at all, so the ORed answer was
+ * right about two rehearsal arrangements and wrong about the game.
+ *
+ * The parameter is now the question itself: **is a house attached** — [PanelState.houseAttached],
+ * written by `RoundClient.linked`, which is the seam a phone actually acquires a house through and
+ * is called on the host over loopback and on every client over the network. A third way into a
+ * round arrives already answered, because it will arrive through the same seam; there is nothing
+ * left here for anyone to forget to teach.
+ *
+ * **It is now the second of two guards rather than the only one**, and deliberately. `FlowHost`
+ * asks the same question itself and overrules both of its drivers with it, so a caller that got
+ * this wrong could no longer produce the owner's meeting. This one stays because a bench asserting
+ * a house it does not have should be wrong here too, and because one honest expression at the call
+ * site is worth more than a comment saying the composable will catch it.
  */
-internal fun standsInForTheHouse(playsAScriptedRound: Boolean, armsTheHouse: Boolean): Boolean =
-    !playsAScriptedRound && !armsTheHouse
+internal fun standsInForTheHouse(houseAttached: Boolean): Boolean = !houseAttached
 
 internal fun inRoundScan(payload: String): IntentMessage? =
     when (val read = CardPayload.decode(payload)) {
