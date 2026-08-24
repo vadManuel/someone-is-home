@@ -19,6 +19,12 @@ import kotlin.test.assertTrue
  */
 class LobbyModelTest {
 
+    /**
+     * The home every case here hosts. A `SavedHome` rather than a name, because that is what goes
+     * on the air now — see [LobbyLink.host], and E-PAY-3 for what a name alone cost.
+     */
+    private val bungalow = HomeEditorModel.bungalow().asSavedHome()
+
     private val secret = "i still have priya's spare key"
 
     private fun lobbyOf(
@@ -87,7 +93,7 @@ class LobbyModelTest {
     fun `a home that goes on the air is hosted and the caller is told once`() {
         val model = LobbyModel(link = MemoryLobbyLink(joined = 2, linesIn = 0))
         var toldTimes = 0
-        model.hostHome("THE BUNGALOW") { toldTimes++ }
+        model.hostHome(bungalow) { toldTimes++ }
         assertEquals(1, toldTimes, "the caller was told the home was up $toldTimes times")
         assertTrue(model.hosting, "the home is on the air and this phone is not hosting it")
         assertEquals("THE BUNGALOW", model.attached?.name, "the host did not join its own house")
@@ -110,7 +116,7 @@ class LobbyModelTest {
     fun `a home refused for its name hosts nothing and says which name`() {
         val model = LobbyModel(link = RefusingLobbyLink(HostRefusal.NameAlreadyOnTheAir))
         var toldTimes = 0
-        model.hostHome("THE BUNGALOW") { toldTimes++ }
+        model.hostHome(bungalow) { toldTimes++ }
         assertEquals(0, toldTimes, "a home that never went on the air opened a lobby anyway")
         assertFalse(model.hosting, "this phone is hosting a home no other phone can find")
         assertNull(model.attached, "it joined a house that is not on the air")
@@ -130,7 +136,7 @@ class LobbyModelTest {
     @Test
     fun `a home refused for any other reason names the symptom and the fixable cause`() {
         val model = LobbyModel(link = RefusingLobbyLink(HostRefusal.CouldNotGoOnTheAir))
-        model.hostHome("THE BUNGALOW") { throw AssertionError("a refused home reported itself up") }
+        model.hostHome(bungalow) { throw AssertionError("a refused home reported itself up") }
         assertFalse(model.hosting)
         assertEquals(
             listOf(LobbyModel.NOT_ON_THE_AIR, LobbyModel.NOT_ON_THE_AIR_CAUSE),
@@ -147,7 +153,7 @@ class LobbyModelTest {
     @Test
     fun `hosting again clears the refusal the last attempt left`() {
         val model = LobbyModel(link = RefusingLobbyLink())
-        model.hostHome("THE BUNGALOW")
+        model.hostHome(bungalow)
         assertNotNull(model.refusal)
         model.nameResident("ELLIOT")
         assertNull(model.refusal, "the refusal outlived the next thing the host did")

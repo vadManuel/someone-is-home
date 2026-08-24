@@ -12,9 +12,12 @@ plugins {
 // Assert the named modules exist so the failure is a build error, not a missing rule.
 val vocabularyModules = setOf("model", "core", "ui", "app", "cards")
 val redactionModules = setOf("model")
+// The arming cordon covers `app`, which is the only module that holds the house. Its production
+// source sets are what a release build compiles; the benches beside them are not.
+val cordonModules = setOf("app")
 gradle.projectsEvaluated {
     val present = subprojects.map { it.name }.toSet()
-    val missing = (vocabularyModules + redactionModules) - present
+    val missing = (vocabularyModules + redactionModules + cordonModules) - present
     require(missing.isEmpty()) {
         "Guards are registered by module name and these do not exist: $missing. " +
             "Renaming a module must not silently remove its guard."
@@ -37,6 +40,26 @@ subprojects {
             sources.from(layout.projectDirectory.dir("src"))
         }
         tasks.matching { it.name == "check" }.configureEach { dependsOn(vocabulary) }
+    }
+
+    // The arming cordon covers app's PRODUCTION source only — `src/commonMain`, `src/iosMain` and
+    // the three variant roots. `src/cheats/` is deliberately outside it: the benches are where the
+    // launch switches belong, and a release build does not compile that directory at all.
+    //
+    // The directories are named rather than excluded from `src`, because an exclusion that stopped
+    // matching after a layout change would silently widen what is allowed, and `SourceGuardTask`
+    // can only refuse an EMPTY scan — not a scan that quietly grew a hole in the middle.
+    if (name in cordonModules) {
+        val cordon = tasks.register<ArmingCordonTask>("armingCordon") {
+            group = "verification"
+            description = "Fails if anything that ships reads the launch environment."
+            sources.from(
+                layout.projectDirectory.dir("src/commonMain"),
+                layout.projectDirectory.dir("src/iosMain"),
+                layout.projectDirectory.dir("src/variant"),
+            )
+        }
+        tasks.matching { it.name == "check" }.configureEach { dependsOn(cordon) }
     }
 
     // Redaction lint covers model, which is where the schema and every wire type live.

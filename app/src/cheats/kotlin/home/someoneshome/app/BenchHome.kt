@@ -11,9 +11,17 @@ import home.someoneshome.model.MarkerShapes
 import home.someoneshome.model.PlanRoom
 import home.someoneshome.model.Registration
 import home.someoneshome.model.Room
+import home.someoneshome.model.SavedHome
 
 /**
- * **A home for the rehearsal to run in, drawn in code because no phone in this run has walked one.**
+ * **A home for a TEST to run in, drawn in code because no phone in a test has walked one.**
+ *
+ * ⚠️ **It is not what any round is armed in any more, and that is N3.** For three units this
+ * object was the round's home on every phone, hardcoded into the arming draw, because
+ * `ArmingInputs` had no home field for the host's own to arrive through (E-PAY-3). It does now.
+ * What is left here is a fixture: a lawful home for the tests in this source set to host, and the
+ * **wrong answer** a test can name — a `BENCH-*` id on a work order in a round armed with somebody
+ * else's home is the defect coming back, by name.
  *
  * ### It is a stand-in, and it is named as one
  *
@@ -104,16 +112,22 @@ object BenchHome {
     )
 
     /**
+     * **The whole thing, as a home somebody could have walked** — what a test hosts.
+     *
+     * A [SavedHome] is what `HOST WITH THIS HOME` puts on the air and therefore what a round is
+     * armed in (`ArmingInputs.home`), so a fixture that stopped at a map and a plan could not be
+     * hosted at all. The name is the one every earlier device run used.
+     */
+    val home: SavedHome = SavedHome(name = NAME, plan = plan, map = map)
+
+    /**
      * What the arming event takes: a marker, the shape printed on it, and the room it is in.
      *
-     * Built off [map] rather than written out again, so a card that moved room in one place cannot
-     * still be in the old one here. The reserved two are **not** in it — `Event.RoundArmed.markers`
-     * is the ordinary set the work orders are drawn from, and the Terminal and the meeting card are
-     * places rather than work.
+     * `HouseMap.destinations`' answer rather than a second assembly of the same rows — which is
+     * how this object came to be the *only* home any round was ever played in. The reserved two
+     * are not in it and that rule is stated where the derivation is.
      */
-    val destinations: List<Destination> = ordinary.map {
-        Destination(marker = it.card.id, shape = it.card.shape.id, room = it.room.name)
-    }
+    val destinations: List<Destination> get() = map.destinations
 
     /** The card a seat should scan to call a meeting. A place, not a line of anybody's order. */
     val meetingCard: MarkerCard = requireNotNull(map.meeting).card

@@ -133,3 +133,48 @@ class VocabularyRulesTest {
         assertEquals(emptyList(), VocabularyRules.violations(src))
     }
 }
+
+/**
+ * The arming cordon, checked the way its two siblings are: every case is something the rule has to
+ * catch or has to leave alone, and a guard nobody can test is a guard nobody knows is working.
+ */
+class ArmingCordonRulesTest {
+
+    private fun caught(source: String) = ArmingCordonRules.violations(source).isNotEmpty()
+
+    @Test
+    fun `a launch switch read in production is caught`() {
+        assertTrue(caught("""val armed = launchSwitch("SOMEONES_HOME_ROUND_HOUSE")"""))
+        assertTrue(caught("""val seed = launchValue("SOMEONES_HOME_ROUND_SEED")?.toLongOrNull()"""))
+    }
+
+    /** Whitespace before the paren is still a call, and is the spelling a formatter can produce. */
+    @Test
+    fun `a read with space before the paren is still a read`() {
+        assertTrue(caught("val armed = launchSwitch (NAME)"))
+    }
+
+    /**
+     * ⚠️ **Comments and KDoc are blanked first**, which is the lesson both other guards learned
+     * the same way: a rule that trips on the paragraph explaining it is a rule somebody deletes.
+     */
+    @Test
+    fun `the rule does not trip on documentation about itself`() {
+        assertTrue(!caught("// nothing here may call launchSwitch(NAME)\nval x = 1"))
+        assertTrue(!caught("/**\n * See [launchSwitch] — the benches own it.\n */\nval x = 1"))
+    }
+
+    /** A name that merely starts the same way is not a read. */
+    @Test
+    fun `a longer identifier is not a read`() {
+        assertTrue(!caught("val launchSwitchName = SEED_SWITCH"))
+        assertTrue(!caught("""const val ARM_SWITCH = "SOMEONES_HOME_ROUND_HOUSE""""))
+    }
+
+    @Test
+    fun `it reports the line the read is on`() {
+        val v = ArmingCordonRules.violations("val a = 1\nval b = 2\nval c = launchSwitch(NAME)")
+        assertEquals(3, v.single().line)
+        assertEquals("launchSwitch", v.single().text)
+    }
+}

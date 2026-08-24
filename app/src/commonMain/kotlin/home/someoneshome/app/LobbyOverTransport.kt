@@ -4,6 +4,7 @@ import home.someoneshome.model.Effect
 import home.someoneshome.model.GameState
 import home.someoneshome.model.Intent
 import home.someoneshome.model.OneLineHeld
+import home.someoneshome.model.SavedHome
 import home.someoneshome.model.Seat
 import home.someoneshome.model.SeatNamed
 import home.someoneshome.model.protocol.LobbyBody
@@ -227,6 +228,17 @@ class LobbyHouse(
     private var advertiser: HostAdvertiser? = null
 
     /**
+     * **The home this house came up under, or none because this phone is not hosting.**
+     *
+     * Written by [start] and cleared by [stop], so it is true exactly while there is a house — and
+     * it is the whole of [ArmingInputs.home]. Held beside the server rather than passed to arming
+     * separately, because *the hosted home is the round's home by definition*: two ways to say
+     * which house this is would be two answers that could differ, and the one that differed would
+     * be the one the work orders were drawn from.
+     */
+    private var hosted: SavedHome? = null
+
+    /**
      * **The round's outbound half, on the same server the lobby is on** (D-171's successor work).
      *
      * Here rather than in a class of its own because there is one house: one ledger deciding who is
@@ -314,11 +326,21 @@ class LobbyHouse(
         private set
 
     /**
-     * Bring the house up under [homeName] and call [onUp] with where it landed — **or [onRefused]
-     * when the home could not go on the air at all.**
+     * Bring the house up under [home]'s name and call [onUp] with where it landed — **or
+     * [onRefused] when the home could not go on the air at all.**
      *
      * The name goes on the air for the whole network before any permission this app controls, so
      * it carries the home's name and nothing a round produced — no roles, no seats, no state.
+     * **Nothing else about [home] leaves this phone**: the map and the plan are what the arming
+     * draw and the Egress draw are made of, and both of those run here.
+     *
+     * ### It takes the home and not its name, and that is the seam E-PAY-3 was missing
+     *
+     * A house that knew only what it was *called* could not tell the round which house it was in,
+     * so the round was played in a fixture — five rooms nobody owns, ten cards nobody printed. The
+     * home arrives here because this is the one call that means *this phone is now hosting that
+     * house*, and binding the two together is what makes [ArmingInputs.home] impossible to
+     * disagree with.
      *
      * ### The server binding is not the house being up (E-D3-2)
      *
@@ -340,12 +362,14 @@ class LobbyHouse(
      * refused as one — exactly one of the three outcomes reaches the host, always.
      */
     fun start(
-        homeName: String,
+        home: SavedHome,
         onUp: (NearbyHome) -> Unit,
         onRefused: (AdvertiseFailure) -> Unit = {},
     ) {
         if (host != null) return
         answered = false
+        val homeName = home.name
+        hosted = home
         val ledger = SeatLedger(
             List(LOBBY_SEATS) { Seat(it) },
             // The app root is where real randomness belongs (the ledger's own KDoc): tokens never
@@ -462,6 +486,10 @@ class LobbyHouse(
             chosenInsiders = desk.insiders,
             voteWindowSeconds = desk.voteWindowSeconds,
             readyToArm = desk.readyToArm(),
+            // Read in the same instant as the seats and the lines, which is this method's whole
+            // reason: the home is what the work orders are drawn from, and a home read a moment
+            // later would be a house that could have been taken down in between.
+            home = hosted,
         )
     }
 
@@ -489,6 +517,9 @@ class LobbyHouse(
         scope.launch { host?.stop() }
         host = null
         port = null
+        // The house is down, so this phone is hosting nothing — and a stale home here would let a
+        // later arming draw from a house that is no longer on the air.
+        hosted = null
     }
 
     /**
@@ -627,6 +658,27 @@ data class ArmingInputs(
     val chosenInsiders: Int?,
     val voteWindowSeconds: Int,
     val readyToArm: Boolean,
+    /**
+     * **The home this house is hosting, which IS the round's home** (E-PAY-3, the owner's ruling).
+     *
+     * There was no field here at all until N3, and that absence is what made a round unplayable in
+     * anybody's actual house: the arming draw reached for the bench's fixture because nothing on
+     * this type could have handed it the host's own. The host picked a home at HOST WITH THIS
+     * HOME, the house went on the air under its name, and the map and plan behind that name are
+     * this. **There is no second choice to make** — a house is hosting one home, and the round it
+     * arms is played in it.
+     *
+     * **Null on a phone that is not hosting**, which is four phones in five and every phone before
+     * a home goes on the air. [RoundAuthority.arm] refuses on null rather than substituting
+     * anything: a round armed in a home nobody chose is the defect this field closes, and a
+     * fallback here would be that defect with a shorter name.
+     *
+     * **Nothing on it crosses to a client.** The map and the plan stay host-side — Static deleted
+     * `Effect.HomePlanOffered` and the ruling stands — and what reaches a phone is the
+     * [home.someoneshome.model.Destination] rows of its own order's lines, which is W1/E1's
+     * arrangement and carries a card, a glyph and a room name.
+     */
+    val home: SavedHome?,
 )
 
 /**
@@ -721,8 +773,8 @@ class LobbyOverTransport(
         seat.stored()?.let { session = ClientSession(SeatToken(it)) }
     }
 
-    override fun host(homeName: String, onUp: (NearbyHome) -> Unit, onRefused: (HostRefusal) -> Unit) =
-        house.start(homeName, onUp) { why ->
+    override fun host(home: SavedHome, onUp: (NearbyHome) -> Unit, onRefused: (HostRefusal) -> Unit) =
+        house.start(home, onUp) { why ->
             // `app` is the one module that sees both sides, so the translation from what the
             // radio said to what a host can act on happens here — `ui` never learns that Bonjour
             // exists, and `platform` never learns that there is a screen.

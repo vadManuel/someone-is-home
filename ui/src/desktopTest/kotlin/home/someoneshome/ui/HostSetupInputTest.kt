@@ -738,7 +738,9 @@ class HostSetupInputTest {
             lobby = LobbyModel(link = MemoryLobbyLink(joined = joined, linesIn = joined)),
         )
         model.openSavedHome(HomeEditorModel.BUNGALOW)
-        model.lobby.hostHome(HomeEditorModel.BUNGALOW)
+        // Through the model's own action, which is what resolves the name the row carries into the
+        // home behind it — the same call the button makes.
+        model.hostHome(HomeEditorModel.BUNGALOW)
         return model
     }
 

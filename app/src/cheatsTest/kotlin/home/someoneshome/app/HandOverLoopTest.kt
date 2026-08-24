@@ -62,6 +62,8 @@ class HandOverLoopTest {
         chosenInsiders = 1,
         voteWindowSeconds = 45,
         readyToArm = true,
+        // The bench's fixture, hosted as a home would be — see BenchHome.
+        home = BenchHome.home,
     )
 
     /**

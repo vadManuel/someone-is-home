@@ -788,6 +788,29 @@ class FlowModel(
      * this app moves because a Tier-2 ability was fired.
      */
     val send: (IntentMessage) -> Unit = {},
+    /**
+     * **The host held LIGHTS OUT down for two seconds and the gate was open** (E-PAY-1 / E-D3-3's
+     * trigger half).
+     *
+     * The one act in this game that starts a round, as a seam, because the thing it starts is not
+     * `ui`'s: arming draws the Insider count, the stations, the active set and every seat's work
+     * order, and `ui` may not see `core` at all. So what this layer owes the app is the *fact that
+     * the host did it*, and the app root is where that becomes a round.
+     *
+     * ### It is the ACT and deliberately not the screen
+     *
+     * An app that armed when the host's phone arrived on [ScreenId.Armed] would arm on a route
+     * that never consulted the gate — the cheat picker walks every `ScreenId` and `Armed` is one
+     * of them, which the payoff run recorded as *a jump to ARMED is indistinguishable from a gate
+     * that failed*. This fires from [lightsOut] and nowhere else, so it is reachable only the way
+     * a person reaches it: a live button, held. `HoldToConfirm(enabled = false)` takes no pointer
+     * input at all (D-141), so a short lobby cannot even begin the hold.
+     *
+     * **Defaulted to nothing**, which is every render, every screenshot and every phone that is
+     * not hosting — a client's lobby draws no such button, and a host with no house behind it
+     * arms nobody. `FlowModel` decides none of that: it reports the press.
+     */
+    private val onLightsOut: () -> Unit = {},
 ) {
 
     var state: PanelState by mutableStateOf(initial)
@@ -1305,7 +1328,20 @@ class FlowModel(
      * get.
      */
     fun hostHome(homeName: String) {
-        lobby.hostHome(homeName) { go(ScreenId.Lobby) }
+        // **The home itself and not its name from here down** (E-PAY-3). The row that publishes
+        // this action holds a `SavedHome` and hands over its name, so the lookup is here rather
+        // than at the button: what the screens address a home by is what a host reads on it, and
+        // the list this resolves against is the same one the row was drawn from.
+        val home = homes.homes.firstOrNull { it.name == homeName }
+        if (home == null) {
+            // A name with no home behind it is not a house that failed to go on the air, so it is
+            // not `lobby.refusal`'s: nothing was advertised and nothing was refused. It is the
+            // list disagreeing with the row, which is the host's own screen and the host's own
+            // words — SAVE HOME's refusal path exactly.
+            homes.refuse("THERE IS NO HOME CALLED $homeName ON THIS PHONE")
+            return
+        }
+        lobby.hostHome(home) { go(ScreenId.Lobby) }
     }
 
     /** A tap on a network row: attach to that home, and go into its lobby. */
@@ -1326,17 +1362,28 @@ class FlowModel(
     }
 
     /**
-     * **LIGHTS OUT — presentation only, and this is the line it stops at.**
+     * **LIGHTS OUT — the transition, and the one report this layer owes the house.**
      *
-     * It walks this phone to the ARMED screen and does nothing else. It does not lock the seat
-     * ledger, draw the Insider count, stamp the balance values into a recording, start a clock or
-     * tell another phone anything. Every one of those is arming, arming belongs to the loop, and
-     * the loop is frozen — so what exists here is the transition, and the round behind it does
-     * not exist yet. In play this button becomes an intent the house answers by pushing a screen
-     * to everybody at once, which is why nothing about it may be decided on a device.
+     * ⚠️ **Its entire body used to be `push(ScreenId.Armed)`, and that was E-PAY-1.** Presentation
+     * only was the right shape while there was no loop to tell: it did not lock the seat ledger,
+     * draw the Insider count, stamp the balance values into a recording or tell another phone
+     * anything, because every one of those is arming and nothing in the app could arm. It stayed
+     * that shape after the loop arrived, and the cost was measured on five seats — a full lobby, a
+     * press that landed, and no round anywhere in the house. Every other phone stood in the lobby
+     * forever.
+     *
+     * So the screen still moves and [onLightsOut] is now told, and the division is unchanged:
+     * **nothing about the round is decided here.** What the host did is a fact; what it means is
+     * the house's, one module up, where `core` can be seen.
+     *
+     * The gate is not here either and never was. `LightsOut(ready = lobby.readyToArm)` draws a
+     * `HoldToConfirm(enabled = ready)`, and a disabled one takes no pointer input at all (D-141) —
+     * so a short lobby cannot begin the hold, let alone finish it. The house checks the same gate
+     * again on arrival, in a lit room, out loud.
      */
     fun lightsOut() {
         push(ScreenId.Armed)
+        onLightsOut()
     }
 
     /**

@@ -5,6 +5,7 @@ import home.someoneshome.model.Event
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MeetingPhase
 import home.someoneshome.model.MeetingTrigger
+import home.someoneshome.model.OrderLine
 import home.someoneshome.model.Seat
 import home.someoneshome.model.protocol.IntentMessage
 import home.someoneshome.model.protocol.RoundMessage
@@ -15,6 +16,7 @@ import home.someoneshome.ui.FlowModel
 import home.someoneshome.ui.ScreenId
 import home.someoneshome.ui.Subroutine
 import kotlin.concurrent.Volatile
+import kotlin.random.Random
 import kotlinx.coroutines.delay
 
 /**
@@ -101,16 +103,6 @@ class RoundCheat(
     val armed: Boolean = launchSwitch(ROUND_SWITCH)
 
     /**
-     * True when this phone should arm a real round at LIGHTS OUT and then leave the evening to the
-     * people in it. See [ARM_SWITCH] — it is the trigger half of E-D3-3, standing in for a
-     * production path that does not exist.
-     *
-     * [armed] implies it: a bench that plays a round has always armed one, and a host carrying both
-     * switches must not arm twice. The app root reads this first for that reason.
-     */
-    val armsTheHouse: Boolean = launchSwitch(ARM_SWITCH)
-
-    /**
      * **How far ahead of real time the house's clock is being run, in nanoseconds.**
      *
      * Read by the driver's `clockNanos` in the app root and written only by [skipTo]. It is the
@@ -129,7 +121,7 @@ class RoundCheat(
     private var votedThisMeeting = false
     private var scanning = false
 
-    /** Which of [BenchHome]'s cards this phone has tried. A player walks; this walks the list. */
+    /** How far along its own order's destinations this phone has walked. See [shift]. */
     private var walked = 0
 
     /**
@@ -381,16 +373,27 @@ class RoundCheat(
     }
 
     /**
-     * **The walk: try cards until one of them is work this seat was given.**
+     * **The walk: the cards this seat's own order sent it to.**
      *
-     * A work order names ten Subroutines and no rooms, and the active set is a subset of the
-     * house's markers (D-123), so a player walking in the dark scans what they find and most of it
-     * opens nothing. That is what this does, one card at a time, and the `SCAN OPENED NOTHING`
-     * lines in the log are the shape of the real thing rather than a fault.
+     * ⚠️ **It used to walk `BenchHome`'s ten ids**, which was the bench knowing the house's
+     * geography — a fact no phone in this game has. That was harmless while the round was armed in
+     * the same fixture and became a lie the moment it was not: a bench walking a home the round is
+     * not in scans ten cards that open nothing, forever, and reports a healthy wire the whole time.
+     *
+     * What a phone really holds is the destinations on its **own** order lines, which the house
+     * sent it and narrowed to that seat (`WorkOrder.asLines`). So the walk is now what a player
+     * with a work order in the dark actually does: go to the places the order names. Cards this
+     * seat has no work at are still reachable and still open nothing — that is D-124 and the
+     * `SCAN OPENED NOTHING` lines are still the shape of the real thing — but they are no longer
+     * the only thing this bench can find.
      */
     suspend fun shift() {
-        while (scanning && walked < BenchHome.destinations.size) {
-            val marker = BenchHome.destinations[walked++].marker
+        val mine = client.order.filterIsInstance<OrderLine.Known>()
+            .flatMap { it.at }
+            .map { it.marker }
+            .distinctBy { it.value }
+        while (scanning && walked < mine.size) {
+            val marker = mine[walked++]
             client.scanning(marker)
             client.act(IntentMessage.BeginSubroutine(marker))
             delay(STEP_MILLIS)
@@ -521,27 +524,24 @@ class RoundCheat(
      * then wait for five phones to answer on their own.
      */
     /**
-     * **LIGHTS OUT, armed for real, with nobody scripted afterwards** — [ARM_SWITCH]'s whole body.
+     * **The scripted evening, which no longer starts itself.**
      *
-     * The one line of [theRound] that starts a round, and none of the five acts that follow it. What
-     * happens after this is whatever the people holding the phones do; the tick driver in the app
-     * root mints the timed transitions off real time, because [skipTo] is never called here and
-     * [skewNanos] therefore stays 0.
+     * ⚠️ **Act 1 used to be `house.arm(seed)` and it is gone.** Arming is production's now
+     * ([armAtLightsOut]) and is reached the way a person reaches it — a live LIGHTS OUT, held. A
+     * bench that armed its own round would be the second thing in the app that can start one, and
+     * the two would draw different rounds from different seeds on the same press.
      *
-     * A refusal is [RoundAuthority.arm]'s own and is already spoken on the host's phone in a lit
-     * room, which is where `armingFor` says a refusal belongs out loud.
+     * So this **waits for the house the host's own thumb armed** and then plays the acts against
+     * it. That is the same demotion [react] took when it stopped composing its own hand-over
+     * frames: the instrument stops doing the thing under test.
      */
-    suspend fun armTheHouse(seed: Long) {
-        val house = authority ?: return
-        note("=== THE LIGHTS GO OUT — ARMING FOR A ROOM FULL OF PEOPLE, NO SCRIPT ===")
-        if (!house.arm(seed)) return
-        note("ARMED — ${house.state.seats.size} SEAT(S) IN THE ROUND · THE EVENING IS THEIRS")
-    }
-
     suspend fun theRound(seed: Long) {
         val house = authority ?: return
-        note("=== THE ROUND — ACT 1, THE LIGHTS GO OUT ===")
-        if (!house.arm(seed)) return
+        note("=== THE ROUND — ACT 1, WAITING FOR THE HOST'S OWN LIGHTS OUT ===")
+        if (!awaitArmed(house)) {
+            note("NO ROUND WAS EVER ARMED ON THIS PHONE — THE SCRIPT HAS NOTHING TO PLAY")
+            return
+        }
         note("ARMED — ${house.state.seats.size} SEAT(S) IN THE ROUND")
         beat("ARMED")
         delay(SETTLE_MILLIS)
@@ -897,6 +897,22 @@ class RoundCheat(
         return house.state.staticUntil != null
     }
 
+    /**
+     * Wait for the host's own press to have armed the house — the script's new act 1.
+     *
+     * Bounded like every other wait in this class, and for the same reason: a bench that waits
+     * forever on something a person has to do is a phone that reports nothing about why the
+     * evening never started.
+     */
+    private suspend fun awaitArmed(house: RoundAuthority): Boolean {
+        var waited = 0L
+        while (!house.armed && waited < GATE_MILLIS) {
+            delay(STEP_MILLIS)
+            waited += STEP_MILLIS
+        }
+        return house.armed
+    }
+
     private suspend fun awaitEnded(house: RoundAuthority) {
         var waited = 0L
         while (!house.ended && waited < GATE_MILLIS) {
@@ -911,35 +927,13 @@ class RoundCheat(
         const val ROUND_SWITCH = "SOMEONES_HOME_ROUND"
 
         /**
-         * **Arm a real round when the host presses LIGHTS OUT, and then get out of the way.**
+         * The arming seed, so a rehearsal can be replayed. Defaulted, never random.
          *
-         * ⚠️ **TEST ENABLEMENT STANDING IN FOR A PRODUCTION PATH THAT DOES NOT EXIST.** This is
-         * E-D3-3's *trigger* half, which fell off the tracked list at revision ~34 when P3 closed
-         * the *push* half and the escalation was retired with it. `FlowModel.lightsOut` is
-         * presentation only — its whole body is `push(ScreenId.Armed)`, and its KDoc says so — and
-         * [RoundAuthority.arm] has exactly one other caller in the tree, [theRound], which is the
-         * bench script. So on a phone a person launches, holding LIGHTS OUT walks the host's own
-         * screen to ARMED and arms nothing: every other seat stands in the lobby forever. Proved on
-         * five seats before this switch was written.
-         *
-         * **Why it cannot be [ROUND_SWITCH].** That switch starts [theRound], which plays the whole
-         * scripted evening on named delays and pushes the house's clock forward through [skewNanos].
-         * On a phone somebody is holding, that is the bench driving the player — and a script racing
-         * a person is neither a rehearsal nor a playtest.
-         *
-         * So this arms and stops. No script, no acts, no skew: [skewNanos] stays 0, so the tick
-         * driver runs against real time, which is what an evening paced by people wants. The five
-         * timed transitions are unaffected — the driver in the app root already runs on the host
-         * independently of [armed].
-         *
-         * **The production path is still missing and this does not supply it.** What a real build
-         * needs is for the host's own LIGHTS OUT to arm the house, which is an engineering item
-         * (E5's) rather than a switch on a bench. Set on the HOST only; inert everywhere else,
-         * because arming reads `flow.lobby.hosting` exactly as the button does.
+         * ⚠️ **It reaches the round through the app root and never through this class.** Arming is
+         * production's, and the production path may read no launch environment at all — so a
+         * process launched with nothing draws a real seed, and a rehearsal that wants a repeatable
+         * evening names one here for the root to hand over. See `armingCordon`.
          */
-        const val ARM_SWITCH = "SOMEONES_HOME_ROUND_HOUSE"
-
-        /** The arming seed, so a rehearsal can be replayed. Defaulted, never random. */
         const val SEED_SWITCH = "SOMEONES_HOME_ROUND_SEED"
 
         /** Which published Egress node this bench walks to. Absent means this seat does not go. */
@@ -951,7 +945,21 @@ class RoundCheat(
         /** The default seed. Written down rather than drawn: a rehearsal that cannot be repeated. */
         const val SEED: Long = 20260822L
 
-        fun seed(): Long = launchValue(SEED_SWITCH)?.toLongOrNull() ?: SEED
+        /**
+         * **The seed a rehearsal named, or a real draw** — and the default is the draw.
+         *
+         * It used to fall back to [SEED], which was right while the only thing that ever armed a
+         * round was a script somebody launched with switches. Arming is production's now, so the
+         * fallback is what an *evening* gets: a phone launched from the springboard with no
+         * environment at all would otherwise deal the same Insider seat and the same ten orders
+         * every night it was ever played on.
+         *
+         * Real randomness in the app root is where the seat ledger's own token mint already is,
+         * and for the same reason: tokens and seeds never enter a recording as anything but the
+         * value that was used, and the determinism rules are about what *does* — the draw from a
+         * seed, which is `armingFor`'s and is unchanged.
+         */
+        fun seed(): Long = launchValue(SEED_SWITCH)?.toLongOrNull() ?: Random.nextLong()
 
         private const val STEP_MILLIS = 400L
         private const val SETTLE_MILLIS = 1_500L

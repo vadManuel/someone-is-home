@@ -152,6 +152,26 @@ class HouseMap private constructor(
         registrations.map { it.room } + listOfNotNull(terminal?.room, meeting?.room)
         ).distinct()
 
+    /**
+     * **What the arming event takes: every ordinary card, as a place** ([Destination]).
+     *
+     * `Event.RoundArmed.markers` is the set the work orders are drawn from, and the two reserved
+     * cards are not in it: the Terminal and the meeting card are **places rather than work**, so a
+     * draw that could anchor an order line at either would send somebody to do a Subroutine at the
+     * card the whole party meets on.
+     *
+     * Derived here rather than assembled at each arming site, because it was assembled at one
+     * before this — in the bench's own fixture — and that is how a round came to be armed with a
+     * home nobody lived in for three units running (E-PAY-3). One derivation means the hosted
+     * home's cards and the round's markers cannot come to differ.
+     *
+     * The shape travels as its roster id, which is [Destination]'s own arrangement and argued
+     * there: the client holds all 44 glyphs and looks the id up.
+     */
+    val destinations: List<Destination> get() = registrations.map {
+        Destination(marker = it.card.id, shape = it.card.shape.id, room = it.room.name)
+    }
+
     fun registrationOf(id: MarkerId): Registration? =
         registrations.firstOrNull { it.card.id == id }
 

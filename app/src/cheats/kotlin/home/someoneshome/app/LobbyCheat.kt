@@ -72,6 +72,7 @@ class LobbyCheat(
         lobby.look()
 
         if (hosting != null) {
+            if (!seedTheHome(hosting)) return
             // HOST WITH THIS HOME, through the action the button calls — which now walks to the
             // lobby only once the home is really on the air, and stays put with a reason when it
             // is not (E-D3-2). The bench reports whichever happened rather than deciding: a run
@@ -94,6 +95,48 @@ class LobbyCheat(
         handOverLine()
         cycleInsiders()
         watch(armed = lightsOut())
+    }
+
+    /**
+     * **The fourth thing a finger would have supplied: a home on this phone's disk.**
+     *
+     * A round is armed in the home the host is hosting (E-PAY-3), so a phone with nothing stored
+     * has nothing to host and there is no evening. On a real phone the host walked their house
+     * with a camera weeks ago; a simulator has no lens and no person, so the walk is what is stood
+     * in for — and **only the walk**. What this calls is `SavedHomesModel.save`, which is SAVE
+     * HOME's own call, which writes through the real document to the real file. A run that faked
+     * the store instead would prove nothing about the path the host's home actually travels.
+     *
+     * ### A home already on this phone is never overwritten
+     *
+     * This fires only when the list has nothing under that name. On the 13 Pro that matters: the
+     * owner's own MP RESIDENCE was walked on hardware with real cards, and a bench that wrote over
+     * it would delete fifteen minutes of somebody's evening to make room for a fixture. Where a
+     * home is already there, the run hosts **theirs**, which is the better evidence anyway.
+     *
+     * A refused save ends the evening here, on the screen a person would be looking at, rather
+     * than falling through to a hosting attempt that can only be refused for a second reason.
+     */
+    private fun seedTheHome(name: String): Boolean {
+        flow.homes.homes.firstOrNull { it.name == name }?.let {
+            note(
+                "'$name' IS ALREADY ON THIS PHONE — ${it.roomCount} ROOM(S), " +
+                    "${it.markerCount} MARKER(S) · HOSTING WHAT IS STORED"
+            )
+            return true
+        }
+        // MAP A NEW HOME first, so the save adds rather than replacing whatever was last open.
+        flow.homes.closeHome()
+        val home = SeededHome.named(name)
+        if (!flow.homes.save(home)) {
+            note("THE WALK WAS NOT SAVED — ${flow.homes.refusal}")
+            return false
+        }
+        note(
+            "SEEDED '$name' ONTO THIS PHONE — ${home.roomCount} ROOM(S), " +
+                "${home.markerCount} MARKER(S) · THE CAMERA WALK, WHICH A SIMULATOR CANNOT DO"
+        )
+        return true
     }
 
     /**

@@ -2,6 +2,7 @@ package home.someoneshome.ui
 
 import home.someoneshome.model.Balance
 import home.someoneshome.model.InsiderBand
+import home.someoneshome.model.SavedHome
 import home.someoneshome.model.protocol.LobbyBody
 
 import androidx.compose.runtime.ProvidableCompositionLocal
@@ -67,7 +68,7 @@ enum class HostRefusal {
 interface LobbyLink {
 
     /**
-     * Run the house on this phone, under this home's name, and report where it came up.
+     * Run the house on this phone, under this home, and report where it came up.
      *
      * The caller then [join]s it like any other phone. That is not ceremony: the host is a player
      * too, and a host that talked to its own lobby through a side door would be a second code
@@ -78,8 +79,17 @@ interface LobbyLink {
      * Exactly one of them, and neither at the call — a house is up when the rest of the network
      * can find it, not when a socket has bound. The alternative is what shipped and what E-D3-2
      * is: a lobby that opens, fills with nobody and never explains itself.
+     *
+     * ### It takes the [SavedHome] and not its name (E-PAY-3)
+     *
+     * Only the name goes on the air, and `ui` still learns nothing about what is done with the
+     * rest: what crosses here is *which house this phone is hosting*, and the house on the other
+     * side of this seam is the one that arms the round in it. It used to take a name, and the
+     * consequence was a round played in a fixture — five rooms the host does not have, ten cards
+     * they never printed — on every phone, every time. **A home is not a label**, and this is the
+     * one call where that distinction was being thrown away.
      */
-    fun host(homeName: String, onUp: (NearbyHome) -> Unit, onRefused: (HostRefusal) -> Unit = {})
+    fun host(home: SavedHome, onUp: (NearbyHome) -> Unit, onRefused: (HostRefusal) -> Unit = {})
 
     /**
      * Attach to a home under [name]. [onStanding] fires every time the house says how the lobby
@@ -176,12 +186,16 @@ class MemoryLobbyLink(
     /** The names it has been told, for the same reason. */
     val named = mutableListOf<String>()
 
-    override fun host(homeName: String, onUp: (NearbyHome) -> Unit, onRefused: (HostRefusal) -> Unit) {
+    /** The homes this fixture has been asked to host, so a test can prove which one crossed. */
+    val hosted = mutableListOf<SavedHome>()
+
+    override fun host(home: SavedHome, onUp: (NearbyHome) -> Unit, onRefused: (HostRefusal) -> Unit) {
         // Loopback, because that is what the real one does: the house runs here and this phone
         // joins it over the local interface like everybody else. The fixture always gets on the
         // air; the refusal has its own stand-in ([RefusingLobbyLink]) rather than a flag here,
         // because every render and every screen test wants a home that went up.
-        onUp(NearbyHome(homeName, "127.0.0.1", 0))
+        hosted += home
+        onUp(NearbyHome(home.name, "127.0.0.1", 0))
     }
 
     override fun join(home: NearbyHome, name: String, onStanding: (LobbyBody.Standing) -> Unit) {
@@ -267,7 +281,7 @@ class MemoryLobbyLink(
  * lobby behind it, which is the whole of the ruling.
  */
 class RefusingLobbyLink(private val why: HostRefusal = HostRefusal.NameAlreadyOnTheAir) : LobbyLink {
-    override fun host(homeName: String, onUp: (NearbyHome) -> Unit, onRefused: (HostRefusal) -> Unit) =
+    override fun host(home: SavedHome, onUp: (NearbyHome) -> Unit, onRefused: (HostRefusal) -> Unit) =
         onRefused(why)
     override fun join(home: NearbyHome, name: String, onStanding: (LobbyBody.Standing) -> Unit) = Unit
     override fun handOver(line: String) = Unit
@@ -499,10 +513,10 @@ class LobbyModel(
      * refusal now carries a control that opens the page the second one names — see
      * [openSystemSettings].
      */
-    fun hostHome(homeName: String, onAir: () -> Unit = {}) {
+    fun hostHome(home: SavedHome, onAir: () -> Unit = {}) {
         refusal = null
         link.host(
-            homeName,
+            home,
             onUp = {
                 hosting = true
                 attachTo(it)
@@ -514,7 +528,9 @@ class LobbyModel(
                 // for a lobby nobody can join.
                 hosting = false
                 refusal = when (why) {
-                    HostRefusal.NameAlreadyOnTheAir -> "ANOTHER HOME HERE IS ALREADY CALLED $homeName"
+                    HostRefusal.NameAlreadyOnTheAir ->
+                        "ANOTHER HOME HERE IS ALREADY CALLED ${home.name}"
+
                     HostRefusal.CouldNotGoOnTheAir -> "$NOT_ON_THE_AIR\n$NOT_ON_THE_AIR_CAUSE"
                 }
             },

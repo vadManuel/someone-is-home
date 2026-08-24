@@ -202,6 +202,41 @@ fun CheatRoot() {
             // CONTENT — who the Surge is aimed at, off the roster the house drew and published to
             // this phone — which is the same rule the ballot's target travels under.
             send = { intent -> press.value?.act(intent) },
+            // **THE HOST'S THUMB, ARMING A REAL ROUND — E-PAY-1 / E-D3-3's trigger half, closed.**
+            //
+            // This is the line the game did not have. `FlowModel.lightsOut` walked the host's own
+            // screen to ARMED and told nobody; `RoundAuthority.arm` had one caller in the tree and
+            // it was a bench script behind `SOMEONES_HOME_ROUND_HOUSE`. So a phone a person
+            // launched from the springboard armed nothing, with no symptom until the hold did
+            // nothing — which is exactly how the owner lost an evening after force-quitting the
+            // app to fix their name and losing the switch with it (E-PAY-7).
+            //
+            // **No launch switch is read on this path.** `armingCordon` scans `app/commonMain` and
+            // fails the build on one, and the seed below draws for real when nobody named one.
+            //
+            // `rules.value` is filled the line the authority is built, a few lines down — this
+            // lambda is not called until a thumb reaches a live button, which is a whole lobby
+            // later. The two guards are `hosting` and the desk's own `readyToArm`, and neither is
+            // this file's opinion: the first is the lobby's answer and the second is the gate the
+            // button itself is drawn from.
+            onLightsOut = {
+                val house = rules.value
+                scope.launch {
+                    if (house == null) {
+                        println("[house] LIGHTS OUT — NO RULES ON THIS PHONE YET")
+                        return@launch
+                    }
+                    armAtLightsOut(
+                        house = house,
+                        // Read off the panel holder for `meeting.names`' reason one field up: this
+                        // lambda is handed to the model being built on this line, so it cannot
+                        // name it directly. `hosting` is the lobby's own answer, asked at the
+                        // instant of the press.
+                        hosting = panel.value?.lobby?.hosting == true,
+                        seed = RoundCheat.seed(),
+                    ) { line -> println("[house] $line"); transport.note(line) }
+                }
+            },
         ).also { panel.value = it }
     }
     // The deck that stands in for a camera, kept now that there IS a camera. It is a tour of the
@@ -296,16 +331,10 @@ fun CheatRoot() {
     // phone, and the test for which one is the screen: LIGHTS OUT is what walks the host to ARMED,
     // so a phone standing there having pressed it is the phone holding the house.
     LaunchedEffect(round) {
-        // **The evening a person plays, and it is the first branch on purpose** (RoundCheat.ARM_SWITCH).
-        // A host carrying both switches must arm exactly once, and the scripted round below already
-        // arms its own — so this arm-and-stop path is checked first and returns rather than falling
-        // through. What follows it is nobody's script: the tick driver one effect down mints the
-        // timed transitions off real time, and every act is a thumb on a real phone.
-        if (round.armsTheHouse && !round.armed) {
-            while (flow.state.screen != ScreenId.Armed) delay(250)
-            if (flow.lobby.hosting) round.armTheHouse(RoundCheat.seed())
-            return@LaunchedEffect
-        }
+        // **Nothing here arms anything any more, and that is the unit.** Arming is production's —
+        // it hangs off `onLightsOut` where the `FlowModel` is built, reached by a thumb on a live
+        // button and by nothing else. What is left is the script, which now waits for the house
+        // the host's own press armed rather than starting one of its own.
         if (!round.armed) return@LaunchedEffect
         launch { round.play() }
         while (flow.state.screen != ScreenId.Armed) delay(250)

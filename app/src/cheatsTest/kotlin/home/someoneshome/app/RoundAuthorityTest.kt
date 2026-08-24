@@ -45,6 +45,8 @@ class RoundAuthorityTest {
         chosenInsiders = 1,
         voteWindowSeconds = 45,
         readyToArm = ready,
+        // The bench's fixture, hosted as a home would be — see BenchHome.
+        home = BenchHome.home,
     )
 
     /** The authority, with the two seams as recorders. */

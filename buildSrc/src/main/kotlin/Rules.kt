@@ -205,3 +205,53 @@ object RedactionRules {
         return found
     }
 }
+
+/**
+ * **The arming cordon: production reads no launch environment** (E-PAY-1, E-PAY-7).
+ *
+ * For three units the only thing in this application that could arm a round was a bench script
+ * behind `SOMEONES_HOME_ROUND_HOUSE`. A phone a person launched from the springboard armed
+ * nothing, and the failure had no symptom until the host held LIGHTS OUT and the house did not
+ * move — which is precisely what happened to the owner on the one evening they tried to play: they
+ * force-quit the app to fix their name, relaunched it by hand, lost the switch with the process,
+ * and their thumb reached a bare build.
+ *
+ * The fix is that arming is ordinary production code. **This is what stops it quietly becoming a
+ * switch again.** A `launchSwitch` or `launchValue` read anywhere in the scanned source set fails
+ * the build, so the only way to make the round depend on a launch environment is to move the code
+ * out of production — which is a thing a reviewer can see.
+ *
+ * ### It is a whole-source-set rule rather than a rule about one function
+ *
+ * A guard that named `armAtLightsOut` would be satisfied by a switch read one call up. What is
+ * cordoned is the module's production source: the authority, the house, the transport and the
+ * clock. The benches keep their switches and keep them where a release build cannot compile them.
+ *
+ * The names are matched as calls, so a `const val` holding a switch's *name* is not a violation —
+ * the cheats' constants are theirs to declare and a production file that merely mentioned one
+ * would be caught by the read, which is the thing that changes behaviour.
+ */
+object ArmingCordonRules {
+
+    /**
+     * The two readers, as calls.
+     *
+     * `\b` and the open paren together, so `launchSwitchName` is not a match and neither is a
+     * KDoc's `[launchSwitch]` — comments are blanked before this runs in any case, for the reason
+     * the other two guards blank them: a rule that trips on its own documentation gets switched
+     * off.
+     */
+    private val READS = Regex("""\b(launchSwitch|launchValue)\s*\(""")
+
+    fun violations(source: String): List<Violation> {
+        val code = SourceText.blankComments(source)
+        return READS.findAll(code).map { m ->
+            Violation(
+                line = code.take(m.range.first).count { it == '\n' } + 1,
+                text = m.groupValues[1],
+                reason = "production must not read the launch environment — a round that depends " +
+                    "on one is a round a person cannot start",
+            )
+        }.toList()
+    }
+}

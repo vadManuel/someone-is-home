@@ -91,3 +91,28 @@ abstract class RedactionLintTask : SourceGuardTask() {
         },
     )
 }
+
+/**
+ * Arming cordon (E-PAY-1).
+ *
+ * *"A round is started by a person's thumb and by nothing else."* Scans a module's **production**
+ * source set for a launch-environment read and fails the build on one. The benches keep their
+ * switches; what this protects is the source set a release build compiles.
+ */
+abstract class ArmingCordonTask : SourceGuardTask() {
+    @TaskAction
+    fun check() = scan(
+        name = "armingCordon",
+        rule = ArmingCordonRules::violations,
+        advice = buildString {
+            appendLine("Nothing that ships may read `launchSwitch` or `launchValue`. A round that")
+            appendLine("needs a launch environment is a round nobody can start from the")
+            appendLine("springboard — and it fails silently, which is how an evening was lost:")
+            appendLine("the host relaunched the app by hand, the switch went with the process,")
+            appendLine("and LIGHTS OUT reached a build that could not arm.")
+            appendLine()
+            appendLine("If a bench needs the switch, the bench belongs in src/cheats/, which a")
+            appendLine("release build does not compile.")
+        },
+    )
+}
