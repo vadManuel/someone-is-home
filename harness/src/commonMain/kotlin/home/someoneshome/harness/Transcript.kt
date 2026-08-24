@@ -300,7 +300,8 @@ object Transcript {
         is Effect.VoteProgressed ->
             "VoteProgressed|locked=${effect.locked}|expected=${effect.expected}"
         is Effect.MeetingResult ->
-            "MeetingResult|restrained=${seatOrNone(effect.restrained)}|haptic=${effect.haptic}"
+            "MeetingResult|restrained=${seatOrNone(effect.restrained)}" +
+                "|voted=${effect.voted}|living=${effect.living}|haptic=${effect.haptic}"
         is Effect.MeetingResolved ->
             "MeetingResolved|restrained=${seatOrNone(effect.restrained)}|attribution=" +
                 effect.attribution.joinToString(",") { "${it.first.index}>${seatOrNone(it.second)}" }
@@ -448,11 +449,11 @@ object Transcript {
                 "${num(it.seat.index)}:${it.ability}:${num(it.readyAt.step)}"
             }
         )
-        // **The pause mark for the Access pool** (the Shift ruling). The deadlines above move when
-        // the lights go out, so a row that held only them could not tell a pool frozen by a meeting
-        // in progress from one that had simply not run down -- and `accessReady` reads this, so it
-        // decides whether a Tier-2 ability is available at all.
-        append("|accessPaused=").append(state.accessPausedAt?.let { num(it.step) } ?: "none")
+        // **The pause mark for the Access pool used to be written here** and is gone with the state
+        // (the owner's 2026-08-24 ruling). D-183 and D-184 between them made it unobservable, so
+        // every recording since has carried a column that could not change a replay's answer. This
+        // is the shape change version 17 exists for: a version 16 state row holds `accessPaused=`
+        // where this build writes nothing, so the two cannot be compared row by row.
         // **Which cards are dark, and until when.** It reaches NO client -- there is no effect that
         // carries it and therefore no schema row -- so a state row is the only artifact that holds
         // it, exactly as the presence plane's is. A replay that stopped short of it would certify a

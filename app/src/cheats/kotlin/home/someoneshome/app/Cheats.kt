@@ -27,6 +27,7 @@ import home.someoneshome.platform.clearSeatToken
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import home.someoneshome.platform.deviceHaptics
+import home.someoneshome.platform.deviceSystemSettings
 import home.someoneshome.platform.launchSwitch
 import home.someoneshome.platform.monotonicNanos
 import home.someoneshome.ui.Amber
@@ -168,7 +169,15 @@ fun CheatRoot() {
             // line up and the counts down. Discovery failures land in the rig's log, because mDNS
             // failing is otherwise completely silent — which was the whole symptom on the first
             // device run.
-            lobby = LobbyModel(finder = NearbyHomes(onEvent = radio), link = link),
+            // **And the way out to the OS's own settings page** (the owner's 2026-08-24 ruling).
+            // The refusal that names the Local Network grant now carries a control that opens it,
+            // and this is the one line where that control reaches an OS: `ui` cannot see
+            // `platform`, so the app hands the seam down the same way it hands down the radio.
+            lobby = LobbyModel(
+                finder = NearbyHomes(onEvent = radio),
+                link = link,
+                settings = deviceSystemSettings()::open,
+            ),
             // **The four meeting controls, finally reaching the house** (E-P2-3). I AM HERE, READY
             // TO VOTE, a row under a thumb and READY were built, drawn and pressed for two whole
             // rehearsals with `send` defaulted to `{}` — so the check-in gate was closed by the

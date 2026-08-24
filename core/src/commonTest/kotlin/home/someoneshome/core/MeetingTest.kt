@@ -508,6 +508,46 @@ class MeetingTest {
     }
 
     /**
+     * **The living's result is a count and an outcome, and the count is the row beside it** (the
+     * owner's 2026-08-24 ruling, closing E-R2-9).
+     *
+     * `Effect.MeetingResult` carried `restrained` alone, so the screen drawn from it computed its
+     * numbers off a fixture — three per-candidate rows on every phone in every round. It carries
+     * the participation pair now, and **the pair's whole licence is that it is the pair
+     * `VoteProgressed` publishes in the same reduction**: same numerator, same denominator, same
+     * permission, so nothing on a living phone's wire is new. Asserted as *the two agree* rather
+     * than against literals, because a build whose result row disagreed with the row above it would
+     * be a screen contradicting the screen the player just left.
+     *
+     * **Read after the auto-lock, which is the half worth naming.** Every ballot is banked at the
+     * buzzer including the silences D-117 counts as Skips, so the honest denominator is every
+     * living seat and the numerator is all of them — a build that read the moment *before* the
+     * buzzer would report the people who never pressed as having stayed out of a vote they were
+     * counted in.
+     */
+    @Test
+    fun `the result carries the same participation count as the row beside it`() {
+        val walk = voting()
+        listOf(Seat(0), Seat(2)).forEach { walk.feed(Event.VoteSelected(t(), it, Seat(3))) }
+        listOf(Seat(0), Seat(2)).forEach { walk.feed(Event.VoteLocked(t(), it)) }
+        walk.drain()
+        walk.feed(Event.VoteWindowClosed(t()))
+
+        val effects = walk.drain()
+        val result = effects.filterIsInstance<Effect.MeetingResult>().single()
+        val progressed = effects.filterIsInstance<Effect.VoteProgressed>().single()
+        assertEquals(
+            progressed.locked to progressed.expected, result.voted to result.living,
+            "the result's count and the count published beside it disagree",
+        )
+        assertEquals(
+            6 to 6, result.voted to result.living,
+            "the buzzer banks every living seat, so four people who never pressed are still " +
+                "counted in the vote they were part of (D-117)",
+        )
+    }
+
+    /**
      * **Ties resolve to Skip, and so does a Skip that leads** (`gdd.md:413`, `:1007`, D-075).
      *
      * *The whole weight of inaction sits behind restraining nobody.* Both ways of getting there

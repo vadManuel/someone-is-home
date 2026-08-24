@@ -330,19 +330,15 @@ data class PanelState(
      */
     val ballots: List<Ballot>? = null,
     /**
-     * **The result, as the house read it** (`Effect.MeetingResult`, `Effect.MeetingResolved`).
+     * **The result, as the house read it** (`Effect.MeetingResult`, and the owner's 2026-08-24
+     * ruling).
      *
      * The tally screen drew a fixture — MARCUS 3, SKIP 2, PRIYA 1, and MARCUS WAS RESTRAINED — on
      * every phone in every round, which was honest while nothing could send it and is not any more.
-     * Both kinds land here because they are one screen's content arriving in two permissions:
-     * everybody gets the outcome (`MeetingResult`), and the couch also gets the ballot with names
-     * against it (`MeetingResolved`, D-075). What a living phone holds is therefore a [restrained]
-     * and an empty [rows]; the couch holds both.
-     *
-     * **The rows are counted on the way in from the wire**, for [ballots]' reason and against the
-     * same pushed [roster]. A tally is a count of an attribution list, and the list is the thing
-     * that is permitted or not; counting one the house sent decides nothing, because `tallyOf` in
-     * `core` decided who was restrained and that answer arrives on the message beside it.
+     * **One kind lands here now**: the count and the outcome, which every phone in the house gets
+     * equally. The couch's extra is not a wider version of this field, it is a different field —
+     * `MeetingResolved`'s attribution completes [ballots], where the one screen permitted to draw
+     * it already reads it (D-075).
      *
      * **Null means the house has said nothing** and the drawn fixture stands in, which is
      * [egressNodes]' arrangement and every other pushed field's on this type.
@@ -499,26 +495,28 @@ data class PanelState(
 data class RevealedInsider(val name: String, val line: String)
 
 /**
- * **What the room decided, and — for the couch alone — who decided it** (D-075, D-117).
+ * **What the room decided, and how many of it voted — the whole of a living player's result**
+ * (D-075, D-117, and the owner's 2026-08-24 ruling that the living's result is count-only).
  *
- * Two facts in one type because they are one screen: the living read [restrained] and nothing
- * else, and a player outside the system reads the same word over a list of names with counts
- * against them. **A living phone gets this with [rows] empty**, which is the allowlist's doing
- * rather than this type's — `MeetingResolved` has no row for a living class, so the second half
- * simply never arrives.
+ * `6 OF 6 VOTED . MARCUS WAS RESTRAINED`, and nothing finer. **This type cannot carry a
+ * per-candidate total** and that is the redaction rather than a rule the screen keeps: the rows it
+ * used to hold are gone, so no composable, no `when` branch and no later refactor can put a count
+ * beside a candidate's name on a screen a living player stands on (rule 3). What the couch gets
+ * instead is strictly more and arrives elsewhere — the ballot itself, with names against it, on
+ * [PanelState.ballots].
  *
  * [restrained] is null when the room restrained nobody: a Skip, a tie, or a vote nobody won. That
  * is a real outcome and not an absent one, which is why it is a nullable name rather than an empty
  * string — `NOBODY WAS RESTRAINED` is a sentence the screen has to be able to say.
+ *
+ * [voted] and [living] are the house's own pair off `Effect.MeetingResult` — the same two numbers
+ * the vote screen counted up to, never recomputed here from anything this phone holds.
  */
 data class MeetingTally(
     val restrained: String?,
-    /** One row per candidate, in the order the house counted them. Empty for a living phone. */
-    val rows: List<TallyCount> = emptyList(),
+    val voted: Int,
+    val living: Int,
 )
-
-/** One row of a tally: a name — or SKIP — and how many ballots landed on it. */
-data class TallyCount(val name: String, val votes: Int)
 
 /**
  * How the status bar reads — a property of where the round is, not of the individual screen.
@@ -1001,10 +999,9 @@ class PanelVals(val state: PanelState) {
      * two screens showed a triangle and the third a ring, for the same marker, because the third
      * was reading the host-setup fixture by mistake.
      *
-     * **[CurrentSubroutine.subroutine] and [CurrentSubroutine.instruction] are different things
-     * and both are kept.** `HANDSHAKE` is the kind of Subroutine; *resync the keepalive* is what
-     * this instance of it asks for. The work order lists kinds, and the scan tells you the
-     * specific work once you are standing at the marker.
+     * **One name and no second sentence** (the owner's 2026-08-24 ruling). `HANDSHAKE` is the kind
+     * of Subroutine and it is what all three surfaces say; the flavour line that used to sit under
+     * it on the caught scan is deleted, and what a player does is [Subroutine.briefing] (D-188).
      *
      * **The scan's own answer where there is one, and the port's drawn row where there is not** —
      * [PanelState.current], and [egressNodes]' arrangement exactly. Nothing in production fills it
@@ -1277,29 +1274,31 @@ class PanelVals(val state: PanelState) {
     val outsideLit: Int = state.integrityPercent?.let { integrityLit } ?: 21
 
     /**
-     * **The tally's rows, and the port's three stand in while the house has sent none.**
+     * **`6 OF 6 VOTED` — the living's whole result besides the name** (the owner's 2026-08-24
+     * ruling, which closed E-R2-9 / E-R1-2).
      *
-     * [egressNodes]' arrangement, and every other pushed field's on this type. What fills it is
-     * `Effect.MeetingResolved`'s attribution, counted — which reaches **the out classes only**
-     * (D-075), so a living phone draws the fixture here.
+     * The escalation this replaces was real and it was a leak in the drawn direction: the result
+     * screen carried three rows with names and counts against them — MARCUS 3, SKIP 2, PRIYA 1 —
+     * on **every phone in every round**, from a fixture, because `Effect.MeetingResult` had nothing
+     * that could fill them. Either the effect was a field short or the screen showed the living
+     * more than it should, and the owner ruled the second: **a per-candidate tally is the shape of
+     * the room's thinking published to the people still in it.** The rows are gone from the type,
+     * from the screen and from the wire's client half; what is here is the participation count the
+     * vote screen was already counting up to.
      *
-     * ⚠️ **The living's rows have no sender, and that is a gap rather than a permission.** This
-     * screen is drawn with names and counts on it — MARCUS 3, SKIP 2, PRIYA 1 — for *everybody*,
-     * and the design is explicit that this is lawful: the living get *a count and nothing else*,
-     * which is a per-candidate tally without attribution. But `Effect.MeetingResult` carries only
-     * `restrained`, so there is nothing on a living phone's wire that could fill these rows.
-     * Either the effect is a field short or the drawn screen shows the living more than it should,
-     * and choosing between those is a disclosure question rather than a wiring one. **Escalated,
-     * not guessed** — the fixture stays, which is the state this screen has been in all along.
+     * **The house's pair where there is one, and the port's six where there is not** —
+     * [egressNodes]' arrangement, and the fixture is the design's own six-seat house so the drawn
+     * screen and a real round read the same sentence.
      */
-    val tallyRows: List<TallyCount> = state.tally?.rows?.takeIf { it.isNotEmpty() }
-        ?: listOf(TallyCount("MARCUS", 3), TallyCount("SKIP", 2), TallyCount("PRIYA", 1))
+    val votedLine: String = state.tally
+        ?.let { "${it.voted} OF ${it.living} VOTED" }
+        ?: "6 OF 6 VOTED"
 
     /**
      * **Who the room restrained, as the house read the ballot** — or nobody.
      *
-     * The one half of the result that really does reach every phone (`Effect.MeetingResult`), so
-     * unlike [tallyRows] this is the house's word whenever there has been one.
+     * On the same message as [votedLine]'s pair (`Effect.MeetingResult`), and the house's word
+     * whenever there has been one.
      *
      * **Nobody is an outcome and not an absence.** A Skip, a tie, or a vote nobody won all resolve
      * to no name, and the screen has a sentence for it — `gdd.md:413`'s *ties resolve to Skip*, and
@@ -1446,7 +1445,6 @@ class PanelVals(val state: PanelState) {
 
         val CURRENT: CurrentSubroutine = CurrentSubroutine(
             subroutine = Subroutine.Handshake,
-            instruction = "RESYNC THE\nKEEPALIVE",
             room = "GARAGE",
             marker = MarkerShapes["triangle_up"],
             index = 4,
@@ -1745,24 +1743,20 @@ enum class LightSignature(val rung: Int) { Dark(1), Medium(2), Bright(3) }
  * **Built from `Effect.ScanAnswered` and the work order the house already sent** — see
  * `FlowModel.houseSaid`, where the scan's answer names a line of that order and the two are joined
  * by the index the house put on both. The port's own row stands in while no house has spoken.
+ *
+ * ### The flavour line is gone (the owner's 2026-08-24 ruling)
+ *
+ * There used to be an `instruction` here — *RESYNC THE KEEPALIVE*, a fake-technical sentence naming
+ * what this instance of the kind asked for. Nothing on the wire ever carried it, so it was the
+ * port's own words on every phone in every round or it was absent, and the owner deleted the slot
+ * rather than commission a carrier for it: **what a player has to do is [Subroutine.briefing] and
+ * is never null** (D-188), and a second sentence above it competes with the one that is true.
+ * Marked in the log as a **v2 revisit** — the register is worth having and it is not worth a wire
+ * field and ten strings before the game is played.
  */
 data class CurrentSubroutine(
     /** Which of the design's ten. The name and the light signature are both its. */
     val subroutine: Subroutine,
-    /**
-     * What this instance asks for, in the house's own voice — *RESYNC THE KEEPALIVE*.
-     *
-     * ⚠️ **Nullable, because nothing on the wire carries it.** `Effect.ScanAnswered` names the
-     * entry, the kind and the parameters, and `OrderLine.Known` names the work and where it is;
-     * neither carries a sentence. So a real scan draws no headline and the caught scan is one line
-     * shorter, which is the fail-closed direction — an absent sentence is noticed, and the fixture's
-     * sentence printed over somebody else's Subroutine is a lie a player cannot check.
-     *
-     * **What to do is on [Subroutine.briefing] and is never null** (D-188), so nothing a player
-     * needs is missing when this is. Whether the flavour line wants a carrier or belongs on the
-     * client's roster beside the label is a copy call nobody has made. Escalated, not guessed.
-     */
-    val instruction: String?,
     /**
      * Which room the card is in, off the order line's own destination.
      *

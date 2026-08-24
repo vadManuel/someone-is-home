@@ -50,6 +50,24 @@ class Recording(
     }
 
     companion object {
+        // 17: two rows changed shape, in opposite directions, and neither could have been a
+        // tolerant read.
+        //
+        // **`MeetingResult` gained the participation pair** -- `voted=` and `living=` beside the
+        // outcome, because the owner ruled the living's result count-only (2026-08-24) and the
+        // screen that used to compute those numbers off a fixture now reads them off the message.
+        // Every version 16 result row holds two fields where this build writes four.
+        //
+        // **The state row LOST `accessPaused=`.** `GameState.accessPausedAt` is deleted: D-183
+        // refuses a Tier-2 fire at the gate for the whole of a meeting and D-184 resets every
+        // per-Insider clock at lights out, so between them nothing could observe the pause the mark
+        // recorded. A version 16 state row carries a column this build does not write, and a
+        // differential run across the boundary would report every state row as divergent -- which
+        // is the condition this format's own note states for a smaller change.
+        //
+        // **Nothing about the round changes.** The pool behaves exactly as version 16's did,
+        // because the mark was already unobservable; what is gone is the record of it.
+        //
         // 16: three effects a version 15 build cannot name and one row that changed shape.
         // `RoleRevealed` was version 15's own arrival and never got its bump (found by the routing
         // day's closing sweep); `RosterIssued` and `RevokeLanded` are this unit's. A version 15
@@ -164,7 +182,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/16"
+        const val HEADER = "someone-is-home/recording/17"
     }
 }
 

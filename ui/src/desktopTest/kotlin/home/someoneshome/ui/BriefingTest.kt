@@ -39,7 +39,6 @@ class BriefingTest {
         screen = ScreenId.ScanCaught,
         current = CurrentSubroutine(
             subroutine = of,
-            instruction = "READ THE\nCOUNTER",
             room = "STUDY",
             marker = MarkerShapes["triangle_up"],
             index = 2,
@@ -134,6 +133,39 @@ class BriefingTest {
                         }
                     }
                     onAllNodesWithText(subroutine.briefing).assertCountEquals(0)
+                }
+            }
+        }
+    }
+
+    /**
+     * **The flavour line is gone from every screen in the game** (the owner's 2026-08-24 ruling).
+     *
+     * `CurrentSubroutine.instruction` carried a fake-technical sentence — *RESYNC THE KEEPALIVE* —
+     * naming what one instance of a kind asked for. **Nothing on the wire ever carried it**, so it
+     * was the port's own words printed over whatever Subroutine a real scan had opened, or it was
+     * absent; the owner deleted the slot rather than commission a carrier, and noted the register
+     * as a v2 revisit.
+     *
+     * The field's deletion is the compiler's half. This is the half that catches it coming back as
+     * a literal in a fixture — which is exactly how it got onto four screens the first time — and
+     * it sweeps **every screen in the game in both roles**, because the caught scan was where it
+     * was drawn and not where a helpful reinstatement would necessarily put it.
+     */
+    @Test
+    fun theDeletedFlavourLineIsOnNoScreenInTheGame() {
+        for (id in ScreenId.entries) {
+            for (role in PanelRole.entries) {
+                runDesktopComposeUiTest(width = 600, height = 1300) {
+                    setContent {
+                        DeviceCanvas(insets = PanelInsets()) {
+                            Screen(PanelState(role = role).arrivingAt(id))
+                        }
+                    }
+                    // Substring, and on the half of the phrase no other copy in the game uses: the
+                    // line was drawn across two rendered lines, so the whole sentence is not one
+                    // node and a search for it would pass on a screen still drawing it.
+                    onAllNodesWithText("KEEPALIVE", substring = true).assertCountEquals(0)
                 }
             }
         }

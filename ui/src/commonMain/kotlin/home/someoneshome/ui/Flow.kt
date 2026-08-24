@@ -1859,7 +1859,8 @@ class FlowModel(
 
             // **The result, to everybody, and the tally screen stops drawing a fixture.** It had
             // MARCUS 3, SKIP 2, PRIYA 1 and MARCUS WAS RESTRAINED printed on every phone in every
-            // round. A living phone gets this and nothing else: the outcome, with no rows under it.
+            // round. A living phone gets this and nothing else: a count and an outcome (the owner's
+            // 2026-08-24 ruling — see `PanelVals.votedLine`).
             //
             // **`restrained = null` is a real outcome and not an absent one** — a Skip, a tie, or a
             // vote nobody won — so it becomes a tally holding a null name rather than no tally at
@@ -1867,27 +1868,31 @@ class FlowModel(
             // moment the room restrained nobody, which is the worst single frame this screen could
             // draw.
             is RoundMessage.MeetingResult -> state = state.copy(
-                tally = MeetingTally(restrained = nameOf(message.restrained)),
+                tally = MeetingTally(
+                    restrained = nameOf(message.restrained),
+                    voted = message.voted,
+                    living = message.living,
+                ),
             )
 
             // **The couch's half: the ballot with names against it** (D-075, D-134). Permitted to
-            // the out classes and to nobody else, so a living phone never reaches this branch — the
-            // rows it would fill are the attribution the living may not read.
+            // the out classes and to nobody else, so a living phone never reaches this branch.
             //
-            // Counted here rather than carried, because the wire sends the attribution and a tally
-            // is what you get by counting it. Counting it on the phone is not the phone deciding
-            // anything: `tallyOf` in `core` decided who was restrained and that answer arrives on
-            // the message; this is the same list drawn as rows.
+            // **It completes the ballot rather than counting it.** The couch has been watching this
+            // list fill one selection at a time (`VoteSelectionShown`), and what the house sends
+            // here is the same list finished — including the seats that never touched a row, whose
+            // silence D-117 banks as a Skip and which therefore never produced a selection message
+            // of their own. A player revoked mid-vote has seen only the selections shown since they
+            // walked in, and this is the moment their screen holds the whole ballot.
             //
-            // **In seat order, into an ordered list.** A `groupingBy` here would tally in hash
-            // order and two candidates on the same count would swap rows between two phones sitting
-            // beside each other on the couch — rule 4 arriving as *the screens disagree*.
-            is RoundMessage.MeetingResolved -> state = state.copy(
-                tally = MeetingTally(
-                    restrained = nameOf(message.restrained),
-                    rows = tallyRows(message.attribution),
-                ),
-            )
+            // It replaces the map wholesale rather than merging, for `ballotRows`' own reason: the
+            // house's list is authoritative and a merge would let a stale local entry outlive the
+            // vote it belonged to.
+            is RoundMessage.MeetingResolved -> {
+                selections.clear()
+                message.attribution.forEach { selections[it.voter.index] = it.selection }
+                state = state.copy(ballots = ballotRows())
+            }
 
             // **The takeover, and it is keyed on nothing** (D-102, D-134's E1-1). Like the ending,
             // it can land on whatever screen the player is standing on, so it is not a row in
@@ -2053,8 +2058,6 @@ class FlowModel(
         val at = line.at.firstOrNull()
         return CurrentSubroutine(
             subroutine = Subroutine.of(opened.subroutine),
-            // No carrier. See CurrentSubroutine.instruction — escalated, not guessed.
-            instruction = null,
             room = at?.room,
             marker = at?.shape?.let { MarkerShapes[it] },
             // One-based, because it is read aloud off a screen as SUBROUTINE 4 OF 7 and the house's
@@ -2155,27 +2158,6 @@ class FlowModel(
             )
         }
 
-    /**
-     * **An attribution list, counted into rows** (D-075).
-     *
-     * `SKIP` is a candidate and not an abstention — `tallyOf` in `core` counts it as one, and *the
-     * whole weight of inaction sits behind restraining nobody* — so it is a row like any other
-     * rather than a total printed under the list.
-     *
-     * Counted into an **ordered** list in the order the house sent, for `tallyOf`'s reason: a
-     * `groupingBy` would tally in hash order and two candidates on the same count would come out
-     * in a different order on two phones side by side on the couch.
-     */
-    private fun tallyRows(attribution: List<RoundMessage.Cast>): List<TallyCount> {
-        val counted = mutableListOf<TallyCount>()
-        for (cast in attribution) {
-            val name = nameOf(cast.selection) ?: SKIPPED
-            val at = counted.indexOfFirst { it.name == name }
-            if (at < 0) counted += TallyCount(name, 1) else counted[at] = TallyCount(name, counted[at].votes + 1)
-        }
-        return counted
-    }
-
     // ---- Notifications -----------------------------------------------------------------------
 
     /**
@@ -2246,6 +2228,7 @@ class FlowModel(
         deleteHome = ::deleteHome,
         nameResident = lobby::nameResident,
         hostHome = ::hostHome,
+        openSystemSettings = lobby::openSystemSettings,
         attachToHome = ::attachToHome,
         typeLine = lobby::typeLine,
         handOverLine = ::handOverLine,

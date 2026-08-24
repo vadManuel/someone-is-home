@@ -4011,6 +4011,169 @@ field short or the screen shows the living more than it should.
 
 ---
 
+## Revision 40 — the count the living get, and the sentence that had nothing behind it
+
+*The owner's final Q&A batch, ruled 2026-08-24. **Five entries and they are all the owner's**, which
+is unusual for this log and worth saying at the top: revision 39 mixed one ruling with two pieces of
+doctrine the build applied itself, and none of that is here. Every entry below answers a question
+that was put to the owner and had been sitting open — three of them since the routing day, one since
+C3, one since D-184 made it defunct. **Two are subtractions**, which is the shape a batch of answers
+takes when the honest answer to *what should this carry?* is *nothing*.*
+
+### D-194 · **The nine briefings are canon, as written**
+
+The last of D-188's business. D-188 ruled that all ten Subroutines are briefed at the card and none
+of them explains itself inside; **Sniff's line already existed** and the other nine were drafted by
+the build in Sniff's register — second person, imperative, what the phone will do and then what you
+do about it, two lines, no nouns from the fiction — and carried a flag through two revisions.
+
+**The owner read all nine and confirmed them unchanged.** They are the game's words now:
+
+| Subroutine | the sentence a player reads at the card |
+|---|---|
+| REPLAY | DOTS WILL FLASH IN ORDER. / TAP THEM BACK IN THAT ORDER. |
+| INTERRUPT | A SWEEP WILL RUN BACK AND FORTH. / TAP WHILE IT IS INSIDE THE BAND. |
+| PARITY CHECK | A GRID WILL FILL IN A PATTERN. / TAP THE ONE BLOCK THAT BREAKS IT. |
+| SNIFF | THE PHONE WILL BUZZ TWICE. / TAP THE SIDE THAT BUZZED MORE. |
+| DEALLOCATE | THE COLUMNS WILL STAND UNEVEN. / TAP THEM DOWN TO THE SHORTEST. |
+| DRIFT | A DOT WILL MOVE, THEN HIDE. / WHEN THE PHONE BUZZES, TAP WHERE IT IS. |
+| SHORT | THE PHONE WILL ASK FOR FINGERS. / HOLD THAT MANY UNTIL IT RETURNS. |
+| SIGNAL TRACE | TWO ENDS WILL BE MARKED. / TAP NODE TO NODE FROM ONE TO THE OTHER. |
+| JAM | TWO RINGS WILL SIT APART. / TAP UNTIL THEY SIT ON ONE ANOTHER. |
+| HANDSHAKE | THE PHONE WILL BUZZ A RHYTHM. / TAP IT BACK BY FEEL. |
+
+**What changes in the build is the flags and nothing else** — the ⚠️ on `Subroutine.briefing` and in
+`BriefingTest` come off. A confirmed line and a drafted line render identically, which is exactly why
+the flag had to be cleared explicitly: nothing in a green build would ever have said these were still
+waiting on somebody. `CHECK LOCAL NETWORK PERMISSION` is confirmed on the same terms at D-197.
+
+### D-195 · **The living's result is COUNT-ONLY — E-R2-9 / E-R1-2 closed**
+
+**The escalation was a leak in the drawn direction and had been for as long as the screen existed.**
+The result screen carried three rows with names and counts against them — MARCUS 3, SKIP 2, PRIYA 1 —
+**on every phone in every round, from a fixture**, because `Effect.MeetingResult` carried `restrained`
+alone and there was nothing on a living phone's wire that could fill them. Both readings were put up:
+either the effect was a field short, or the drawn screen showed the living more than it should.
+
+**The owner ruled the second.** A living seat sees the participation count and who was Restrained —
+`6 OF 6 VOTED . MARCUS WAS RESTRAINED` — and **never a per-candidate total.**
+
+**The argument is what the two disclosures survive as.** A count is a fact about the room that the
+room watched happen, and it is gone the moment the meeting is. A per-candidate tally is *the shape of
+the room's thinking, published to the people still in it*: who drew suspicion and how much, in a form
+that outlives the meeting in six people's memories and is argued from at the next one. D-075 already
+reversed the GDD's *attribution shown*; this is the same reversal one step finer.
+
+**Ghosts are unaffected and keep strictly more**, which is what makes the asymmetry an actual
+privilege rather than a preview: the couch reads the ballot itself, with names against it, live
+(D-117, D-134), and can act on none of it.
+
+**Three consequences, each decided rather than fallen into:**
+
+- **`Effect.MeetingResult` gains `voted` and `living`, and the pair discloses nothing.** That is
+  provable rather than argued: it is byte-identical to the `VoteProgressed` emitted in the same
+  reduction one effect earlier — same numerator, same denominator, same permission. The screen was
+  computing those two numbers off a fixture; it reads them off the message now.
+- **Read AFTER the auto-lock.** Every ballot is banked at the buzzer including the silences D-117
+  counts as Skips, so the denominator is every living seat and the numerator is all of them. A build
+  that read the moment *before* the buzzer would report the people who never pressed as having stayed
+  out of a vote they were counted in.
+- **The counted rows are deleted, not hidden.** `MeetingTally` no longer has a field for them, so
+  rule 3 does the work instead of a screen keeping a rule: the living's result type is *physically
+  incapable* of carrying a candidate's total. `Effect.MeetingResolved` is untouched on the wire and
+  its attribution now **completes the couch's ballot** — the same list the couch has been watching
+  fill, finished, including the seats whose silence never produced a selection message of their own.
+
+### D-196 · **The flavour slot fails, and it is a v2 revisit rather than a rejection**
+
+`CurrentSubroutine.instruction` held a fake-technical sentence naming what one instance of a kind
+asked for — *RESYNC THE KEEPALIVE* under HANDSHAKE on the caught scan. **Nothing on the wire ever
+carried it.** So in a real round it was either absent, or it was the port's own words printed over
+whatever Subroutine the house had actually opened; C3 recorded it as *a copy call nobody has made*.
+
+**The owner deleted the slot** — field, fixture and render slot in one change, rather than
+commissioning a carrier for it.
+
+**What makes the deletion cheap is D-188 landing first.** What a player has to *do* is
+`Subroutine.briefing`, which is total over the roster and cannot be absent; the flavour line was a
+second, larger sentence above the one that is true, competing with it on the last lit screen before
+the work. Two sentences where one is authoritative is worse than one.
+
+**Noted for v2 and not thrown away.** The register — the house talking about itself in its own
+technical voice — is worth having and would want a carrier, a line per instance and ten more strings.
+It is not worth those before the game has been played.
+
+### D-197 · **The hosting refusal gains a control that opens the OS settings page**
+
+D-180 ruled that this refusal name the fixable cause rather than only the symptom, and the build drew
+`THIS HOME DID NOT GO ON THE AIR` with `CHECK LOCAL NETWORK PERMISSION` under it. **Both lines are
+confirmed as written**, and the ruling adds the half that was missing: **the fix is not on that screen
+and cannot be.** A host who read the cause line still had to find their way around iOS Settings with
+the party standing in front of them.
+
+**OPEN SETTINGS, under the sentence it acts on**, going to this app's own page via
+`UIApplicationOpenSettingsURLString` — the only page an app may open. The host grants, comes back, and
+presses HOST WITH THIS HOME again.
+
+**Four things about it are decisions:**
+
+- **It is host setup, in a lit room, before any round exists.** That is the whole licence for a
+  control that leaves the app; nothing on this seam may ever be reachable once a round is armed.
+- **It opens a page and cannot read one.** No `isGranted`, no callback, no result. Whether the grant
+  was given is answered by advertising again — a seam that could report the permission would be a
+  second source of truth about a fact the radio already answers, and the two would disagree on the
+  phone where it mattered.
+- **The other refusal is not offered it.** A duplicate home name is fixed by RENAME, one row up on
+  the same screen; a control offering to open the OS settings for it would send a host looking for a
+  permission that was never the problem.
+- **It is drawn off the cause line rather than off a flag beside it**, so the control and the
+  sentence cannot come apart in either direction — a host told to check a permission with nothing to
+  press, or a control on a refusal it does nothing about.
+
+### D-198 · **`GameState.accessPausedAt` is deleted — unused machinery, confirmed defunct**
+
+Three revisions carried it as *unused machinery, kept and flagged rather than deleted, because removing
+state is a recording-shape decision*. **The owner confirmed the pool no longer pauses — it resets at
+meetings — and the state is gone.**
+
+**Two earlier rulings had already closed it from both ends.** D-183 refuses every Tier-2 fire at the
+gate for the whole of a meeting, so **nothing can ask whether the pool is ready while it would be
+paused**; D-184 resets every per-Insider clock at lights out, so the deadline a resume would have
+moved is overwritten a moment later. Between them the mark could not change any answer.
+
+**The reason to delete rather than leave it is not tidiness.** State that cannot change an answer is
+state a later reader will one day believe — and this one had a KDoc arguing for it, a transcript
+column carrying it, and a test asserting it, all of which read as a live rule to anybody who had not
+followed D-183 and D-184.
+
+**The recording format bumps 16 → 17**, per the format's own condition, and it is the second bump
+that is mostly a subtraction: the state row loses `accessPaused=` and `MeetingResult` gains the
+participation pair from D-195. Nothing about a round changes — the pool behaves exactly as version
+16's did, because the mark was already unobservable. What is gone is the record of it.
+
+### Still open — carried forward, minus what this batch closed
+
+- **Four of the twelve copy strings that waited on the owner are settled here** (D-194's nine plus
+  D-197's cause line, counted as revision 39 counted them). **Sniff's line and the Terminal's noise
+  are unchanged**, and no copy string in the build is flagged as awaiting an eye any more.
+- **`CurrentSubroutine.instruction` is off this list**, deleted at D-196 with a v2 revisit against it.
+- **`GameState.accessPausedAt` is off this list**, deleted at D-198.
+- **`Balance.STATIC_COOLDOWN` is 120s and the figure is still the build's.** D-186 ruled the
+  direction and named no number; what is built is an ordering — Surge 150 > Static 120 > Isolate 90.
+- **The Terminal's noise is still pixels.** How faint and how fast remain a dark-room question rather
+  than a paper one.
+- **F-006 is untouched, and it is now the largest thing open.** The Egress has a carrier and not the
+  duration it is a fraction of; **E-R2-4 and E-R2-7 are the same missing carrier arriving from two
+  more directions**, E1 escalated the shape of it rather than guessing, and the closing sweep's
+  reading stands: one field turns three escalations into screens a player reads, and it is the
+  shortest path to a fourth rehearsal being worth running.
+- **The couch's ballot denominator is still short.** The rows are the house's; the list holds the
+  seats the house has shown rather than every living seat, so a phone that has never touched a row
+  has no line to be STILL DECIDING on. D-195's completion of the ballot at the result narrows the
+  window rather than closing it — what is still wanted is the living seats at ballot-open.
+
+---
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

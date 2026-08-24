@@ -71,12 +71,16 @@ class ScreenLedger(
             append(" · GATE ${counts.present}/${counts.seats}")
             append(" · READY ${counts.ready}/${counts.living}")
             append(" · VOTED ${counts.voted}/${counts.living}")
-            // The couch's live ballot and the tally rows are counts here for a different reason
-            // from the reveal's: they are lawful on the screen that draws them and this line is
-            // drawn on all five, so a ledger that printed them would publish the ghosts' view into
-            // every seat's log and the differential below would read a leak that never happened.
+            // The couch's live ballot is a count here for a different reason from the reveal's: it
+            // is lawful on the screen that draws it and this line is drawn on all five, so a ledger
+            // that printed it would publish the ghosts' view into every seat's log and the
+            // differential below would read a leak that never happened.
             append(" · BALLOTS ${s.ballots?.size ?: "-"}")
-            append(" · TALLY ${s.tally?.rows?.size ?: "-"}")
+            // The result, as the living get it: the participation count and whether a name came
+            // with it. **Both halves reach every phone**, so unlike the row above there is nothing
+            // here a differential could mistake for a leak — and a ledger that printed only
+            // *arrived* could not tell a result of 6 OF 6 from one the screen invented.
+            append(" · TALLY ${s.tally?.let { "${it.voted}/${it.living}" } ?: "-"}")
             append(" · EGRESS ${s.egressType ?: "-"}")
             append(" · NODES ${s.egressNodes?.size ?: "-"}")
             append(" · RUNNING ${s.egressRunning}")

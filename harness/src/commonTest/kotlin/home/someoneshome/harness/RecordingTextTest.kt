@@ -30,6 +30,44 @@ class RecordingTextTest {
     }
 
     /**
+     * **The two rows version 17 changed shape, asserted on a real recording** (the owner's
+     * 2026-08-24 rulings).
+     *
+     * The state row **lost** `accessPaused=` with `GameState.accessPausedAt`, and the result row
+     * **gained** the participation pair. Both are read off the rendered text of a round rather than
+     * off the renderer, because the failure worth catching is a column that survives its own state:
+     * a `Transcript` line left behind after the field is deleted writes `none` into every recording
+     * for ever, and it reparses cleanly, and nothing else in this file would notice.
+     *
+     * The round-trip above is what makes this more than a rendering check — the text these
+     * assertions read is the text a replay is fed.
+     */
+    @Test
+    fun `version 17's two rows have their new shape and their old column is gone`() {
+        val text = RecordingText.parse(recorded().toText()).toText()
+        val rows = text.lines()
+
+        val state = rows.filter { it.startsWith("S ") }
+        assertTrue(state.isNotEmpty(), "the recording has no state rows; this proves nothing")
+        assertTrue(
+            state.none { it.contains("accessPaused=") },
+            "the state row still carries the Access pool's pause mark, which no longer exists",
+        )
+
+        val result = rows.filter { it.contains("MeetingResult|") }
+        assertTrue(result.isNotEmpty(), "the round never reached a result; this proves nothing")
+        assertTrue(
+            result.all { it.contains("|voted=") && it.contains("|living=") },
+            "a result row was written without the participation count the living now read: $result",
+        )
+
+        assertTrue(
+            text.startsWith("someone-is-home/recording/17"),
+            "the format changed shape twice and the version did not move with it",
+        )
+    }
+
+    /**
      * Every event comes back as the same event, not merely as the same rendering — **with one
      * field deliberately excepted, and the exception is D-116.**
      *

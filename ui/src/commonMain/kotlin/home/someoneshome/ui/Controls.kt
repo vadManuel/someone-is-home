@@ -166,6 +166,15 @@ class PanelActions(
      */
     val nameResident: (String) -> Unit = {},
     val hostHome: (String) -> Unit = {},
+    /**
+     * **OPEN SETTINGS, under the refusal a host can still fix** (the owner's 2026-08-24 ruling).
+     *
+     * It navigates nowhere in this app and is therefore in neither [ScreenGraph] nor
+     * [Flow.viaActions]: it leaves for the OS entirely, and the screen the host comes back to is
+     * the one they left. Drawn only where [LobbyModel.offersTheGrant] — a duplicate home name has
+     * its fix on the same screen and is not offered this.
+     */
+    val openSystemSettings: () -> Unit = {},
     val attachToHome: (NearbyHome) -> Unit = {},
     val typeLine: (String) -> Unit = {},
     val handOverLine: () -> Unit = {},

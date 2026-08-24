@@ -488,11 +488,23 @@ private fun VoteRow(
 }
 
 /**
- * The result. **Attribution shown, alignment never.**
+ * The result, as a living player reads it. **A count and an outcome, and nothing finer.**
  *
- * Who voted for whom is public, because the app supplies constraints and the players supply the
- * accusations. What the restrained player *was* is not shown, and never will be — a correct
- * Restrain and a catastrophic one look exactly alike.
+ * *`6 OF 6 VOTED . MARCUS WAS RESTRAINED`* is the whole of it (the owner's 2026-08-24 ruling). The
+ * screen used to carry a per-candidate tally — three rows with names and counts against them,
+ * drawn from a fixture on every phone in every round, because nothing on a living phone's wire
+ * could fill them. That is gone in both halves: no sender, and nothing to send to.
+ *
+ * ### Why a count and not a tally, when neither one attributes
+ *
+ * Because a per-candidate tally is *the shape of the room's thinking, published to the people still
+ * in it* — who drew suspicion and how much, in a form that outlives the meeting in six people's
+ * memories. The count says how much of the room took part, which everybody watched happen. **What
+ * the restrained player was is not shown and never will be**: a correct Restrain and a catastrophic
+ * one look exactly alike.
+ *
+ * A player outside the system reads something wider on their own screen — the ballot itself, with
+ * names against it (D-075, `GhostMeetingScreen`) — and can act on none of it.
  */
 @Composable
 fun TallyScreen(vals: PanelVals) {
@@ -502,23 +514,23 @@ fun TallyScreen(vals: PanelVals) {
     ) {
         Label("RESTRAIN . RESULT", size = 7.0, color = Amber.Dim, tracking = 0.16)
 
-        // **The house's rows where there are any, the port's three where there are not** — see
-        // [PanelVals.tallyRows], which carries the escalation about whose rows these are.
-        //
-        // **The lit row is the restrained one and is found by name**, not by position: the house
-        // counts in the order it read the ballot, and a screen that brightened the first row would
-        // be asserting that the winner sorts first — which it does not have to, and which would put
-        // the highlight on the wrong person at a tie.
-        for (row in vals.tallyRows) {
-            val took = row.name == vals.restrained
-            TallyRow(
-                row.name, row.votes,
-                border = if (took) Amber.Bright else Amber.Edge,
-                nameInk = if (took) Amber.Bright else Amber.Mid,
-            )
-        }
-
+        // **The empty middle is the result** (the owner's 2026-08-24 ruling). Three rows of names
+        // and counts used to sit here and there is nothing to put in their place: what the living
+        // are told is two facts, and a screen that filled the gap would be filling it with
+        // something nobody ruled. The room is looking up from their phones by now.
         Box(Modifier.weight(1f))
+
+        // **The two facts as one block, and the order is the sentence.** `6 OF 6 VOTED` then
+        // `MARCUS WAS RESTRAINED` — how much of the room took part, then what it decided — drawn
+        // adjacent because they are read as one statement and separated by half the panel they
+        // would be read as two. The count is dim and outlined, the outcome is the design's inverted
+        // amber block, so which of the two the eye lands on first is not left to the layout.
+        Box(
+            Modifier.fillMaxWidth().border(1.u, Amber.Edge).padding(7.u),
+            contentAlignment = Alignment.Center,
+        ) {
+            Readout(vals.votedLine, size = 15.0, color = Amber.Mid, lineHeight = 1.0)
+        }
 
         Box(
             Modifier.fillMaxWidth().background(Amber.Bright).padding(8.u),
@@ -548,26 +560,3 @@ fun TallyScreen(vals: PanelVals) {
     }
 }
 
-/**
- * A count and nothing else.
- *
- * **The living never learn who cast what.** Attribution used to publish here; it does not, and
- * that is what makes the outside-the-system view an actual privilege rather than a preview. It
- * also means your own vote stays yours, which is a different game from one where it does not.
- */
-@Composable
-private fun TallyRow(
-    name: String,
-    count: Int,
-    border: Color = Amber.Edge,
-    nameInk: Color = Amber.Mid,
-) {
-    Row(
-        Modifier.fillMaxWidth().border(1.u, border).padding(7.u),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Bottom,
-    ) {
-        Label(name, size = 9.0, color = nameInk)
-        Readout("$count", size = 17.0, color = nameInk, lineHeight = 1.0)
-    }
-}

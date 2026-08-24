@@ -579,8 +579,8 @@ class HostSetupInputTest {
      * second line that exists in a constant and never reaches a Label — and both halves are
      * asserted, so neither can be dropped in favour of the other.
      *
-     * ⚠️ The cause line's **wording is builder-drafted** and awaits the owner's eye. See
-     * `LobbyModel.NOT_ON_THE_AIR_CAUSE`.
+     * Both lines are the owner's as written (confirmed 2026-08-24), and the control that acts on
+     * the second one is asserted in the test below.
      */
     @Test
     fun aHomeThatCouldNotGoOnTheAirNamesTheGrantTheHostCanStillGive() =
@@ -601,6 +601,75 @@ class HostSetupInputTest {
             )
             onNode(hasText(LobbyModel.NOT_ON_THE_AIR, substring = true)).assertExists()
             onNode(hasText(LobbyModel.NOT_ON_THE_AIR_CAUSE, substring = true)).assertExists()
+        }
+
+    /**
+     * **And the grant is one tap away: the control opens the OS's own settings page** (the owner's
+     * 2026-08-24 ruling).
+     *
+     * Naming the fixable cause was the 2026-08-22 half. This is the other one — the fix is not on
+     * this screen and cannot be, so a host who read CHECK LOCAL NETWORK PERMISSION still had to
+     * find their way around iOS Settings with the party in front of them.
+     *
+     * **The seam is what is asserted, not the OS.** `ui` cannot see `platform`, so the lobby takes
+     * the door as a lambda and the app hands it `deviceSystemSettings()::open`; a counter standing
+     * in for that lambda is the whole of what a rendering test can prove, and it is the half that
+     * breaks — the control existed and reached nobody is exactly the shape E-P2-3 found on six
+     * other controls.
+     */
+    @Test
+    fun theRefusalsControlOpensTheSystemSettingsPage() =
+        runDesktopComposeUiTest(width = 300, height = 650) {
+            var opened = 0
+            val model = FlowModel(
+                PanelState(screen = ScreenId.HomeDetail),
+                lobby = LobbyModel(
+                    link = RefusingLobbyLink(HostRefusal.CouldNotGoOnTheAir),
+                    settings = { opened++ },
+                ),
+            )
+            model.openSavedHome(HomeEditorModel.BUNGALOW)
+            show(model)
+
+            onNode(hasText("HOST WITH THIS HOME") and hasClickAction()).performClick()
+            mainClock.advanceTimeBy(100)
+            assertEquals(0, opened, "the settings page opened before anybody pressed anything")
+
+            onNode(hasText("OPEN SETTINGS") and hasClickAction()).performClick()
+            mainClock.advanceTimeBy(100)
+            assertEquals(
+                1, opened,
+                "OPEN SETTINGS is drawn under the refusal and reaches nothing — the host presses " +
+                    "it, nothing happens, and the home still will not go up",
+            )
+        }
+
+    /**
+     * **The other refusal is not offered it, and that is the ruling rather than tidiness.**
+     *
+     * A duplicate home name is fixed by RENAME, one row up on the same screen. A control offering
+     * to open the OS settings for it would send a host out of the app to look for a permission that
+     * was never the problem — and they would come back to the same refusal, having learnt that the
+     * control means nothing.
+     */
+    @Test
+    fun aDuplicateHomeNameIsNotOfferedTheSettingsPage() =
+        runDesktopComposeUiTest(width = 300, height = 650) {
+            val model = FlowModel(
+                PanelState(screen = ScreenId.HomeDetail),
+                lobby = LobbyModel(link = RefusingLobbyLink(HostRefusal.NameAlreadyOnTheAir)),
+            )
+            model.openSavedHome(HomeEditorModel.BUNGALOW)
+            show(model)
+
+            onNode(hasText("HOST WITH THIS HOME") and hasClickAction()).performClick()
+            mainClock.advanceTimeBy(100)
+
+            onNode(hasText("ALREADY CALLED", substring = true)).assertExists()
+            assertEquals(
+                0, onAllNodes(hasText("OPEN SETTINGS")).fetchSemanticsNodes().size,
+                "a refusal whose fix is one RENAME away on this screen offered to leave the app",
+            )
         }
 
     /** And a home that goes up walks into the lobby, off the same button. */

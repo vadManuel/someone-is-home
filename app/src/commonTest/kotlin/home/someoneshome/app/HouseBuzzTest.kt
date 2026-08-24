@@ -50,8 +50,8 @@ class HouseBuzzTest {
             Effect.MeetingPhaseOpened(MeetingPhase.Discussion, null, haptic),
             Effect.MeetingPhaseOpened(MeetingPhase.Vote, 45, haptic),
             Effect.MeetingPhaseOpened(MeetingPhase.Tally, null, haptic),
-            Effect.MeetingResult(seat, haptic),
-            Effect.MeetingResult(null, haptic),
+            Effect.MeetingResult(seat, voted = 6, living = 6, haptic = haptic),
+            Effect.MeetingResult(null, voted = 6, living = 6, haptic = haptic),
             Effect.RestrainedTakeover(seat, haptic),
             Effect.MeetingEnded(haptic),
             Effect.EgressOpened(
@@ -496,8 +496,8 @@ class HouseBuzzTest {
             "firing an ability buzzes differently depending on whether it took",
         )
         assertEquals(
-            recordOf(Effect.MeetingResult(Seat(4), Haptic.Short)),
-            recordOf(Effect.MeetingResult(null, Haptic.Short)),
+            recordOf(Effect.MeetingResult(Seat(4), voted = 6, living = 6, haptic = Haptic.Short)),
+            recordOf(Effect.MeetingResult(null, voted = 6, living = 6, haptic = Haptic.Short)),
             "the tally buzzes differently depending on whether the room Restrained anybody",
         )
     }

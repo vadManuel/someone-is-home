@@ -202,22 +202,26 @@ class AccessPoolTest {
     }
 
     /**
-     * **The pool runs during a shift and PAUSES during a meeting** (the Shift ruling, D-170).
+     * **A meeting does not touch the pool on the way in, and resets it on the way out** (D-183,
+     * D-184, and the owner's 2026-08-24 ruling deleting `GameState.accessPausedAt`).
      *
-     * A meeting that recharged the whole support kit for free would make calling one an Insider
-     * play; a pause makes it neutral. The arithmetic is the Egress's (D-133): the deadline moves
-     * forward by exactly the length of the meeting, so the remaining time across it is what it was
-     * when the party was called in.
+     * This test used to assert a pause: the pool stopped when the party was called in and its
+     * deadline moved forward by the length of the meeting at lights out. **Two rulings took that
+     * apart from both ends** and this file recorded them one at a time — D-183 refuses a Tier-2
+     * fire at the gate for the whole of a meeting, so nothing can observe the pool's readiness
+     * while it would be paused, and D-184 resets every per-Insider clock at lights out, so the
+     * deadline the resume would have moved is overwritten a moment later. What was left was a mark
+     * nothing could read, and it is gone.
      *
-     * ### The two halves are separate failures and both are asserted
+     * ### What is asserted instead, and why it is the same protection
      *
-     * A build that drops the pause mark without moving the deadlines recharges through the meeting.
-     * A build that moves the deadlines but lets `readyBy` be asked against the raw tick reports
-     * *ready* to a phone standing in the room, which is the pause not being a pause for as long as
-     * anybody is looking.
+     * That **a meeting is not a free recharge**, which is what the pause was for: the fire is
+     * refused at the gate throughout, and the clocks that come out the other side are lights-out's
+     * own reset and not a shift the meeting bought. Both rows are checked, because *both clocks
+     * move* is D-184's ruling and a build that moved one is the failure worth catching.
      */
     @Test
-    fun `the access pool pauses across a meeting`() {
+    fun `a meeting refuses the pool and lights out resets it`() {
         val opensAt = Tick(500)
         // **Both clocks on every seat**, because the assertion at the end of this test is that only
         // one of them moved. A fixture with the Access row alone could not tell a build that paused
@@ -235,13 +239,9 @@ class AccessPoolTest {
 
         // Called at 100, closed at 400: three hundred ticks of meeting.
         walk.feed(Event.MeetingCalled(Tick(100), Seat(0), MeetingTrigger.MeetingCard))
-        assertEquals(Tick(100), walk.state.accessPausedAt, "the pool did not stop with the shift")
-
-        // Mid-meeting, past the deadline it was carrying. **Still not ready**, because readiness is
-        // asked against the pause.
-        assertFalse(
-            walk.state.accessReady(INSIDER, Tick(600)),
-            "a pool expired mid-meeting and reported ready to a phone standing in the room",
+        assertEquals(
+            opensAt, assertNotNull(walk.state.cooldownFor(INSIDER, InsiderAbility.Access)).readyAt,
+            "the meeting moved a deadline on the way in — a call is not a clock event any more",
         )
         // **And the fire is REFUSED at the gate, which is the owner's 2026-08-23 ruling** (T1·7 /
         // T2·8, closed). It used to be admitted and answered `cooldownStarted = false`; now it
@@ -267,7 +267,6 @@ class AccessPoolTest {
             walk.state.copy(meeting = walk.state.meeting?.copy(phase = MeetingPhase.Tally)),
         )
         walk.feed(Event.MeetingClosed(Tick(400)))
-        assertNull(walk.state.accessPausedAt, "the pool was still paused after lights out")
         assertEquals(
             Tick(400 + Balance.ACCESS_COOLDOWN / 2), t2Pool(walk.state, INSIDER),
             "the pool did not come out of the meeting at half, off the tick the lights went out",
@@ -284,8 +283,14 @@ class AccessPoolTest {
             "the Revoke's cooldown did not come out of the meeting at half",
         )
 
-        // The mark is used up: `opensAt` was the fixture's deadline and nothing carries it now.
-        assertTrue(opensAt.step > 0, "the fixture stopped having a deadline to be moved off")
+        // The fixture's own deadline is neither of the two the reset produces, so what is asserted
+        // above is a clock that moved and not one that happened to be there already.
+        assertTrue(
+            opensAt.step != 400 + Balance.ACCESS_COOLDOWN / 2 &&
+                opensAt.step != 400 + Balance.REVOKE_COOLDOWN / 2,
+            "the fixture's deadline drifted onto the reset's own answer, so neither assertion " +
+                "above can tell a build that resets from one that never moved anything",
+        )
     }
 }
 

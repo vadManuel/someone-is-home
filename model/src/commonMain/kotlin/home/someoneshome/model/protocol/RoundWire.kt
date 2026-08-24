@@ -333,11 +333,20 @@ sealed class RoundMessage {
     @kotlinx.serialization.SerialName("VoteProgressed")
     data class VoteProgressed(val locked: Int, val expected: Int) : RoundMessage()
 
-    /** The result, to everyone. No role, no confirmation, no reveal (`gdd.md:1007`). */
+    /**
+     * The result, to everyone: **a count and an outcome**. No role, no confirmation, no reveal
+     * (`gdd.md:1007`), and no per-candidate field — see [Effect.MeetingResult], which holds the
+     * ruling and the argument that the pair discloses nothing [VoteProgressed] did not.
+     */
     @ClientFacing
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("MeetingResult")
-    data class MeetingResult(val restrained: Seat?, val haptic: Haptic) : RoundMessage()
+    data class MeetingResult(
+        val restrained: Seat?,
+        val voted: Int,
+        val living: Int,
+        val haptic: Haptic,
+    ) : RoundMessage()
 
     /** The ballot with names against it. The out, and nobody else (D-075). */
     @ClientFacing
@@ -729,7 +738,8 @@ object RoundWire {
         is Effect.VoteSelectionShown ->
             RoundMessage.VoteSelectionShown(effect.voter, effect.selection)
         is Effect.VoteProgressed -> RoundMessage.VoteProgressed(effect.locked, effect.expected)
-        is Effect.MeetingResult -> RoundMessage.MeetingResult(effect.restrained, effect.haptic)
+        is Effect.MeetingResult ->
+            RoundMessage.MeetingResult(effect.restrained, effect.voted, effect.living, effect.haptic)
         is Effect.MeetingResolved -> RoundMessage.MeetingResolved(
             effect.restrained,
             effect.attribution.map { (voter, selection) -> RoundMessage.Cast(voter, selection) },

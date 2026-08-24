@@ -84,7 +84,7 @@ class RoundWireTest {
         Effect.VoteHeld(Seat(3), selection = Seat(2), locked = true),
         Effect.VoteSelectionShown(voter = Seat(3), selection = Seat(2)),
         Effect.VoteProgressed(locked = 3, expected = 6),
-        Effect.MeetingResult(restrained = Seat(2), haptic = Haptic.Short),
+        Effect.MeetingResult(restrained = Seat(2), voted = 6, living = 6, haptic = Haptic.Short),
         Effect.MeetingResolved(restrained = Seat(2), attribution = listOf(Seat(3) to Seat(2), Seat(4) to null)),
         Effect.RestrainedTakeover(Seat(3), Haptic.Long),
         Effect.RevokeLanded(Seat(4)),

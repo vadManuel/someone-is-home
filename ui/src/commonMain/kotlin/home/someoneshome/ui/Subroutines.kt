@@ -106,12 +106,13 @@ enum class Subroutine(
      * cost; tying comprehension to the same gate means the player who skims in the dark pays what
      * the player who fumbles pays, and there is one recovery path in the game rather than two.
      *
-     * ### ⚠️ COPY. TEN LINES, NINE OF THEM DRAFTED HERE AND NOT RULED
+     * ### COPY: all ten are canon (the owner's 2026-08-24 ruling)
      *
-     * **Sniff's stands** and is the register the other nine are written against: second person,
-     * imperative, **what the phone will do and then what you do about it**, two lines, no nouns
-     * from the fiction. They are the builder's words inside a ruled shape and they want the owner's
-     * eye — see the worklog, where all nine are listed together.
+     * **Sniff's always stood** and is the register the other nine were written against: second
+     * person, imperative, **what the phone will do and then what you do about it**, two lines, no
+     * nouns from the fiction. The nine were drafted here and carried a flag for two revisions; the
+     * owner read them and **confirmed all nine as written**, so they are the game's words now and
+     * changing one is a copy decision like any other rather than filling in a blank.
      *
      * **Non-null for all ten, and it must stay that way.** A nullable field here is how nine of
      * them came to say nothing at the card in the first place; total over the roster means a new
@@ -121,7 +122,8 @@ enum class Subroutine(
     val briefing: String,
 ) {
     // The ten briefings, in roster order. Each is two lines: what the phone will do, then what you
-    // do about it. Nine are drafts and flagged; Sniff's is the one that was already read at a card.
+    // do about it. All ten are canon (the owner's 2026-08-24 ruling); Sniff's is the one that was
+    // already read at a card before the other nine were written.
     Replay(
         "REPLAY", SubroutineTier.Short, LightSignature.Bright, SubroutineKind.Replay,
         ScreenId.SubReplay,

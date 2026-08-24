@@ -215,23 +215,33 @@ class RoutingTest {
     // ---- 5 · The tally --------------------------------------------------------------------------
 
     /**
-     * **The result reaches every phone; the ballot with names against it reaches the couch.**
+     * **The result reaches every phone as a count; the ballot with names against it reaches the
+     * couch** (D-075, and the owner's 2026-08-24 ruling that the living's result is count-only).
      *
-     * Two kinds, one screen, two permissions (D-075). What a living phone holds is a name and no
-     * rows; the couch holds both — and the rows are counted here rather than carried, because a
-     * tally is what you get by counting an attribution list.
+     * Two kinds, two screens, two permissions. A living phone holds a name and a participation
+     * pair, and **the type it holds them in has no room for a candidate's total** — so the half of
+     * this test that used to assert *the rows are empty* is now asserting something the compiler
+     * does: what is checked here instead is that the pair is the house's own and not a fixture's.
+     *
+     * The couch's half **completes the ballot rather than counting it**: the attribution arrives as
+     * the finished list, including the seats whose silence was banked as a Skip and which therefore
+     * never sent a selection of their own.
      */
     @Test
     fun `the result lands for everybody and the attribution only for the couch`() {
         val everyone = living(ScreenId.Tally)
-        everyone.houseSaid(RoundMessage.MeetingResult(restrained = Seat(1), haptic = Haptic.Short))
+        everyone.houseSaid(
+            RoundMessage.MeetingResult(
+                restrained = Seat(1), voted = 4, living = 5, haptic = Haptic.Short,
+            ),
+        )
         assertEquals("MARCUS", everyone.state.tally?.restrained, "the result never reached the screen")
         assertEquals(
-            emptyList(), everyone.state.tally?.rows,
-            "a living phone was handed the attribution list",
+            "4 OF 5 VOTED", PanelVals(everyone.state).votedLine,
+            "the result screen is still counting the room off a fixture",
         )
 
-        val couch = living(ScreenId.Ghost3)
+        val couch = living(ScreenId.GhostMeeting)
         couch.houseSaid(
             RoundMessage.MeetingResolved(
                 restrained = Seat(1),
@@ -244,9 +254,14 @@ class RoutingTest {
             ),
         )
         assertEquals(
-            listOf(TallyCount("MARCUS", 2), TallyCount("SKIP", 1), TallyCount("PRIYA", 1)),
-            couch.state.tally?.rows,
-            "the couch's rows were not counted in the order the house read the ballot",
+            listOf(
+                Ballot("PRIYA", "MARCUS"),
+                Ballot("DANI", "MARCUS"),
+                Ballot("ROSE", "SKIP"),
+                Ballot("TOMAS", "PRIYA"),
+            ),
+            couch.state.ballots,
+            "the couch's ballot was not completed off the house's own attribution, in seat order",
         )
     }
 
@@ -260,7 +275,11 @@ class RoutingTest {
     @Test
     fun `a room that restrained nobody does not fall back to the fixture`() {
         val model = living(ScreenId.Tally)
-        model.houseSaid(RoundMessage.MeetingResult(restrained = null, haptic = Haptic.Short))
+        model.houseSaid(
+            RoundMessage.MeetingResult(
+                restrained = null, voted = 5, living = 5, haptic = Haptic.Short,
+            ),
+        )
         assertNull(model.state.tally?.restrained, "nobody was restrained and the screen named somebody")
         assertEquals(
             "NOBODY WAS RESTRAINED", PanelVals(model.state).restrainedLine,
@@ -610,10 +629,6 @@ class RoutingTest {
         assertEquals("STUDY", caught.state.current?.room, "the room came off neither the order nor the house")
         assertEquals(2, caught.state.current?.index, "the position in the order is not the entry the house named")
         assertEquals(order.size, caught.state.current?.total, "the order's length changed on the way to the card")
-        assertNull(
-            caught.state.current?.instruction,
-            "a sentence appeared that nothing on the wire carries",
-        )
 
         val refused = living(ScreenId.Scan)
         refused.houseSaid(RoundMessage.ScanAnswered(opened = null))

@@ -180,18 +180,33 @@ class MeetingDisclosureTest {
         }
 
     /**
-     * **And the result screen shows a tally, not a ballot.**
+     * **And the result screen shows a count, not a ballot and not a tally** (the owner's 2026-08-24
+     * ruling, which closed E-R2-9).
      *
      * The design's own note: *attribution shown, alignment never* was the GDD's line and D-075
-     * reversed the first half of it. What the result screen carries is three counts and the name
-     * of whoever the room restrained — every one of which the room can already see happening.
+     * reversed the first half of it. The screen then spent every round drawing the second half —
+     * three rows with names and counts against them, from a fixture, because nothing on a living
+     * phone's wire could fill them — and the owner ruled that out too: **a per-candidate tally is
+     * the shape of the room's thinking published to the people still in it.** What is left is how
+     * many of the room voted and who the room restrained, both of which everybody watched happen.
+     *
+     * The rows are gone from the type as well as from the screen, so this is the half of the guard
+     * that survives somebody adding a field back: it renders the result **with a house-pushed
+     * outcome and a roster to draw from**, and asserts that the only name on it is the one the room
+     * restrained.
      */
     @Test
-    fun theResultScreenShowsATallyAndNotABallot() =
+    fun theResultScreenShowsACountAndNeitherABallotNorATally() =
         runDesktopComposeUiTest(width = 300, height = 650) {
+            val roster = listOf("HOLLIS", "WREN", "NADIA", "MARCUS")
             setContent {
                 DeviceCanvas(insets = PanelInsets()) {
-                    Screen(PanelState().arrivingAt(ScreenId.Tally))
+                    Screen(
+                        PanelState(
+                            roster = roster,
+                            tally = MeetingTally(restrained = "WREN", voted = 4, living = 6),
+                        ).arrivingAt(ScreenId.Tally),
+                    )
                 }
             }
             assertEquals(
@@ -199,6 +214,24 @@ class MeetingDisclosureTest {
                 onAllNodes(hasText(OutsideView.CAST_FOR, substring = true)).fetchSemanticsNodes().size,
                 "the result screen drew who voted for whom",
             )
-            onNodeWithText("MARCUS WAS RESTRAINED").assertExists()
+            onNodeWithText("4 OF 6 VOTED").assertExists()
+            onNodeWithText("WREN WAS RESTRAINED").assertExists()
+            // **Nobody else is named, which is what count-only means on a rendered screen.** A
+            // per-candidate row cannot be drawn without naming a candidate, so a build that brought
+            // the rows back — off the wire or off a fixture — fails here whatever it counts.
+            for (name in roster - "WREN") {
+                assertEquals(
+                    0, onAllNodes(hasText(name, substring = true)).fetchSemanticsNodes().size,
+                    "$name is on the living's result screen, and the only name that may be is the " +
+                        "one the room restrained (the owner's 2026-08-24 ruling)",
+                )
+            }
+            // And the port's own three, which is what the screen used to draw on every phone.
+            for (drawn in listOf("MARCUS 3", "SKIP", "PRIYA")) {
+                assertEquals(
+                    0, onAllNodes(hasText(drawn, substring = true)).fetchSemanticsNodes().size,
+                    "the result screen is still drawing the port's per-candidate fixture",
+                )
+            }
         }
 }

@@ -60,27 +60,6 @@ class GameState private constructor(
      */
     val cooldowns: List<Cooldown>,
     /**
-     * **The moment the Access pool stopped, or null while it is running** (`gdd.md:373`, the Shift
-     * ruling).
-     *
-     * A shift is the work interval between meetings (D-170), and the pool **runs during a shift and
-     * pauses during a meeting**. Held exactly as [Egress.pausedAt] is, and for the same reason: a
-     * cooldown is an absolute deadline, so pausing one means moving the deadline forward by the
-     * length of the meeting when the lights go out. A recording that held only the deadline could
-     * not tell a paused pool from a moved one.
-     *
-     * **One mark for the whole state rather than a field per [Cooldown]**, because the thing that
-     * paused is not one seat's clock — it is the round. Every Insider walked to the same room at the
-     * same moment.
-     *
-     * ⚠️ **It covers the Access pool and nothing else, and that is a scope rather than a ruling.**
-     * `gdd.md:373` says of the Revoke only *"pauses or resets at meeting end"* and has never chosen
-     * between the two; the Egress's own clock is D-151's and equally unruled across a meeting. Both
-     * are left running here, unchanged, and the question is flagged rather than answered — see the
-     * worklog. Widening this mark to them is a one-line change and a decision somebody has to take.
-     */
-    val accessPausedAt: Tick?,
-    /**
      * **The markers this round has taken offline, and when each comes back** (`gdd.md:315`).
      *
      * See [Isolation], which carries what a scan at one of them answers and why. In marker order as
@@ -351,22 +330,24 @@ class GameState private constructor(
         cooldowns.firstOrNull { it.seat.index == seat.index && it.ability == ability }
 
     /**
-     * **Whether this seat's Access pool is ready — asked against the pause, never against the raw
-     * tick** (the Shift ruling, [accessPausedAt]).
+     * **Whether this seat's Access pool is ready — asked against the tick, and against nothing
+     * else** (the owner's 2026-08-23 and 2026-08-24 rulings).
      *
-     * `accessPausedAt ?: at` is the whole of it, and it is [Egress.remainingAt]'s arithmetic one
-     * system over: while the party is assembled the pool is frozen at the moment they were called
-     * in, and when the lights go out the deadline moves forward by the length of the meeting. Both
-     * halves are needed — the deadline shift alone would let a pool that expired *during* a meeting
-     * read ready to a phone in the room, which is the pause not being a pause for as long as
-     * anybody is looking.
+     * There used to be a pause mark here: the pool stopped when the party was called in and its
+     * deadline moved forward by the length of the meeting when the lights went out. **Two later
+     * rulings between them left that machinery unobservable** — a Tier-2 fire is refused at the
+     * gate for the whole of a meeting (D-183), so nothing can ask this question while the pause
+     * would have changed the answer, and every per-Insider clock **resets** at lights out (D-184),
+     * so the deadline it would have moved is overwritten a moment later. The owner confirmed it and
+     * `GameState.accessPausedAt` is gone: state that cannot change any answer is state a later
+     * reader will one day believe.
      *
      * **The one reader of the pool's readiness**, so the rule lives in one place rather than in
      * however many Tier-2 handlers exist. A seat with no row has no pool: the fail-closed direction,
      * exactly as a seat with no Revoke row has no Revoke to arm.
      */
     fun accessReady(seat: Seat, at: Tick): Boolean =
-        cooldownFor(seat, InsiderAbility.Access)?.readyBy(accessPausedAt ?: at) == true
+        cooldownFor(seat, InsiderAbility.Access)?.readyBy(at) == true
 
     /**
      * **Whether this card is offline at [at]** (`gdd.md:315`). See [Isolation].
@@ -526,7 +507,6 @@ class GameState private constructor(
         restrained: List<Seat> = this.restrained,
         cooldownArmed: List<Seat> = this.cooldownArmed,
         cooldowns: List<Cooldown> = this.cooldowns,
-        accessPausedAt: Tick? = this.accessPausedAt,
         isolated: List<Isolation> = this.isolated,
         systemIntegrity: Int = this.systemIntegrity,
         openSubroutines: List<OpenSubroutine> = this.openSubroutines,
@@ -546,7 +526,7 @@ class GameState private constructor(
         seed: Long = this.seed,
     ) = GameState(
         armed, outcome, seats, insiderSeats, revoked, newlyRevoked, restrained, cooldownArmed,
-        cooldowns, accessPausedAt, isolated, systemIntegrity, openSubroutines, workOrders, stations,
+        cooldowns, isolated, systemIntegrity, openSubroutines, workOrders, stations,
         activeMarkers, destinations, presence, staticUntil, meeting, egress, egressReadyAt, oneLines,
         names, voteWindowSeconds, nextEntity, seed,
     )
@@ -632,10 +612,8 @@ class GameState private constructor(
             restrained = emptyList(),
             cooldownArmed = emptyList(),
             cooldowns = cooldowns,
-            // Nothing is paused and nothing is dark. A round that carried either across an arming
-            // would open with a pool frozen by a meeting that happened in a different evening, or
-            // with a marker offline that nobody had ever fired at -- and neither is announced.
-            accessPausedAt = null,
+            // Nothing is dark. A round that carried an isolation across an arming would open with a
+            // marker offline that nobody had ever fired at, and that is not announced.
             isolated = emptyList(),
             systemIntegrity = systemIntegrity,
             openSubroutines = openSubroutines,
@@ -669,7 +647,6 @@ class GameState private constructor(
             restrained = emptyList(),
             cooldownArmed = emptyList(),
             cooldowns = emptyList(),
-            accessPausedAt = null,
             isolated = emptyList(),
             systemIntegrity = 0,
             openSubroutines = emptyList(),

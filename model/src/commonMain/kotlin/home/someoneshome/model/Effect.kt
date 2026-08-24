@@ -615,14 +615,35 @@ sealed interface Effect {
     data class VoteProgressed(val locked: Int, val expected: Int) : Effect
 
     /**
-     * **The result, to everyone.** Most votes is Restrained; ties resolve to Skip
-     * (`gdd.md:413`, `:1007`, D-075).
+     * **The result, to everyone — a participation count and an outcome, and nothing finer**
+     * (`gdd.md:413`, `:1007`, D-075, and the owner's 2026-08-24 ruling that the living's result is
+     * count-only).
      *
-     * Null means the room Restrained nobody. **No role, no confirmation, no reveal** — *a correct
-     * restraint and a catastrophic one look identical* (`gdd.md:1007`), and nothing here has a
-     * field that could tell them apart.
+     * [restrained] null means the room Restrained nobody. **No role, no confirmation, no reveal** —
+     * *a correct restraint and a catastrophic one look identical* (`gdd.md:1007`), and nothing here
+     * has a field that could tell them apart.
+     *
+     * ### [voted] and [living] are the count, and they are the ONLY numbers the living get
+     *
+     * `6 OF 6 VOTED . MARCUS WAS RESTRAINED` is the whole of a living player's result. **There is
+     * no per-candidate field here and there must never be one**: a per-candidate tally is the shape
+     * of the room's thinking, published to the people still in it, and it survives the evening in
+     * everybody's memory the way a count does not. The out get the ballot itself
+     * ([MeetingResolved]) because they cannot act on it.
+     *
+     * **The pair discloses nothing new, and that is provable rather than argued.** It is
+     * byte-identical to the [VoteProgressed] emitted in the same reduction one effect earlier —
+     * same numerator, same denominator, same permission — so the living's wire carried both figures
+     * already and this carries them again on the message the result screen is drawn from. The
+     * screen used to compute them from a fixture, which is the state two numbers for one fact
+     * always start in.
      */
-    data class MeetingResult(val restrained: Seat?, val haptic: Haptic) : Effect
+    data class MeetingResult(
+        val restrained: Seat?,
+        val voted: Int,
+        val living: Int,
+        val haptic: Haptic,
+    ) : Effect
 
     /**
      * The ballot with names against it. **The out, and nobody else** (D-075).

@@ -1143,25 +1143,18 @@ private fun meetingCalled(
         Balance.integrityPercent(state.systemIntegrity, state.seats.size),
     )
 
-    // **The Access pool stops with the shift** (the Shift ruling, `GameState.accessPausedAt`). A
-    // shift is the work interval between meetings and a meeting ends the shift it interrupts
-    // (D-170), so the moment the party is called in is the moment Tier 2 stops recharging — and it
-    // picks up where it stopped when the lights go out, which is `lightsOut`'s half.
-    //
-    // **A second call cannot move the mark**, for `Egress.pausedAt`'s reason: one meeting at a time
-    // (`RefusalReason.MeetingAlreadyRunning`), and a pause that reset its own mark would be the one
-    // shape that could silently lengthen a cooldown.
-    //
-    // **Nothing is emitted about it.** A cooldown reaching the house at large would be an Insider
-    // announced by a timer; the actor's own tile is drawn from the actor's own input echo, and a
-    // phone that walked into a meeting knows it walked into a meeting.
-    val poolHeld = state.accessPausedAt ?: event.at
-
+    // **The Access pool's pause mark is gone, and this is where it used to be set** (the owner's
+    // 2026-08-24 ruling). The pool stopped with the shift and picked up where it stopped at lights
+    // out — machinery two later rulings made unobservable between them: page 2 does not exist for
+    // any seat of any role during a meeting and a Tier-2 fire is refused at the gate (D-183), so
+    // nothing can ask whether the pool is ready while it would be paused, and every per-Insider
+    // clock resets at lights out (D-184), so the deadline the resume would have moved is
+    // overwritten a moment later. Nothing here replaces it: the meeting simply does not touch the
+    // cooldowns, and `lightsOut` reopens them all.
     return Reduction(
         state.copy(
             meeting = meeting,
             egress = held,
-            accessPausedAt = poolHeld,
             // **A meeting call ends every running ability effect — D-185, closing T1·9 and T2·9.**
             //
             // **The moment is the call, not the end.** A call snaps every lamp in the house to full
@@ -1401,7 +1394,20 @@ private fun readTheBallot(state: GameState, meeting: Meeting): Reduction<GameSta
             Effect.VoteProgressed(finished.lockedCount, finished.ballots.size),
             // The outcome to everyone; the ballot with names against it to the out and nobody
             // else (D-075). Two kinds, because they are two disclosures.
-            Effect.MeetingResult(restrained, Haptic.Short),
+            //
+            // **The count rides the outcome, off the same two numbers as the row above** (the
+            // owner's 2026-08-24 ruling: the living's result is count-only). Read off `finished`
+            // rather than off `meeting`, so it is the participation the auto-lock produced and not
+            // the figure that stood a moment before the buzzer — the two differ by exactly the
+            // seats D-117 banks as Skips, and the result screen must not report a player who
+            // selected nothing as having stayed out of the vote. It is the same pair
+            // `VoteProgressed` publishes one effect earlier, to the same classes.
+            Effect.MeetingResult(
+                restrained,
+                voted = finished.lockedCount,
+                living = finished.ballots.size,
+                haptic = Haptic.Short,
+            ),
             Effect.MeetingResolved(
                 restrained = restrained,
                 attribution = finished.ballots.map { it.voter to it.selection },
@@ -1461,13 +1467,14 @@ private fun lightsOut(state: GameState, event: Event.MeetingClosed): Reduction<G
     // arming state arriving a second time -- `openingCooldowns`, so the two are one arithmetic
     // rather than two that agree until somebody moves one.
     //
-    // **This SUPERSEDES the Shift ruling's resume arithmetic and does not sit beside it.** What was
-    // here moved every Access deadline forward by the length of the meeting so the remaining time
-    // across it was unchanged; a reset to half overwrites that answer outright, so keeping both
-    // would be two rules about one clock with the quieter one winning nothing. The **pause** is
-    // untouched and still does its own job -- it is what `accessReady` reads *during* the meeting,
-    // where a pool that carried on charging while the party stood in one room would hand a seat a
-    // Tier-2 ability for walking into a room. What is gone is only the resume.
+    // **This SUPERSEDED the Shift ruling's resume arithmetic and has now taken the pause with it**
+    // (the owner's 2026-08-24 ruling). What was here moved every Access deadline forward by the
+    // length of the meeting so the remaining time across it was unchanged; a reset to half
+    // overwrites that answer outright. The pause mark outlived the resume by one revision on the
+    // argument that `accessReady` still read it *during* a meeting -- and D-183 had already closed
+    // that door from the other side: a Tier-2 fire is refused at the gate for the whole of a
+    // meeting, so nothing could ask. `GameState.accessPausedAt` is gone; this reset is the whole of
+    // what a meeting does to a clock.
     val reopened = openingCooldowns(state.seats, event.at)
 
     // **The Egress's clock is house-wide and is frozen out of this while its Egress runs**, until
@@ -1485,7 +1492,6 @@ private fun lightsOut(state: GameState, event: Event.MeetingClosed): Reduction<G
             egress = running,
             cooldowns = reopened,
             egressReadyAt = egressReopened,
-            accessPausedAt = null,
         ),
         listOf(Effect.MeetingEnded(Haptic.Long)) + restarted,
     )

@@ -102,7 +102,7 @@ class EffectPushTest {
         Effect.MeetingPhaseOpened(MeetingPhase.Discussion, voteWindowSeconds = null, haptic = Haptic.Short),
         Effect.MeetingPhaseOpened(MeetingPhase.Vote, voteWindowSeconds = 30, haptic = Haptic.Short),
         Effect.VoteProgressed(locked = 2, expected = 3),
-        Effect.MeetingResult(restrained = null, haptic = Haptic.Short),
+        Effect.MeetingResult(restrained = null, voted = 3, living = 3, haptic = Haptic.Short),
         Effect.MeetingEnded(Haptic.Long),
         Effect.SubroutineGraded(Seat(0), accepted = false),
     ).also { require(it.isNotEmpty() && state.armed) }

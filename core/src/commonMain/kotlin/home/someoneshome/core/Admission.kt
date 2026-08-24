@@ -129,6 +129,11 @@ fun admit(state: GameState, event: Event): Admission = when {
     // *pointless but permitted* is the shape that gets found by whoever builds the next client and
     // wonders why the tile is missing. **The answer is now the same on both sides of the wire.**
     //
+    // **The pause is gone and this branch is why it could go** (the owner's 2026-08-24 ruling). With
+    // no fire admitted for the whole of a meeting, nothing can ask whether the pool is ready while
+    // it would have been frozen — so `GameState.accessPausedAt` could not change any answer, and
+    // state that cannot change an answer is state a later reader will one day believe.
+    //
     // **It costs nothing**, which is the whole of what a refusal at the gate means: the pool is not
     // spent, because the event never reaches the handler that would spend it.
     isTierTwo(event) && state.meeting != null ->

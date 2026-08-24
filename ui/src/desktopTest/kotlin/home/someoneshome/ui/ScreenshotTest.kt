@@ -142,6 +142,54 @@ class ScreenshotTest {
     }
 
     /**
+     * **The two hosting refusals, which the sweep above cannot reach either** — and one of them now
+     * carries a control (D-197).
+     *
+     * A refusal is a fact about the [LobbyModel] and not about the screen id, exactly as the lobby's
+     * four states are, so `homedetail-*.png` is a picture of a home nobody has tried to host yet.
+     * Both are rendered because **the pair is the design**: the duplicate name is fixed by RENAME one
+     * row up, and the Local Network grant is fixed two taps away in the OS — so one of these screens
+     * has OPEN SETTINGS on it and the other must not, and that is a thing to look at rather than only
+     * to assert. `HostSetupInputTest` holds both directions as assertions.
+     *
+     * A viewer, not an assertion, exactly as above.
+     */
+    @OptIn(ExperimentalTestApi::class, ExperimentalComposeUiApi::class)
+    @Test
+    fun renderTheHostingRefusals() {
+        val refusals = listOf(
+            "homedetail-refused-name" to HostRefusal.NameAlreadyOnTheAir,
+            "homedetail-refused-air" to HostRefusal.CouldNotGoOnTheAir,
+        )
+        for ((name, why) in refusals) {
+            runDesktopComposeUiTest(width = 600, height = 800) {
+                val model = FlowModel(
+                    PanelState(screen = ScreenId.HomeDetail),
+                    lobby = LobbyModel(link = RefusingLobbyLink(why)),
+                )
+                model.openSavedHome(HomeEditorModel.BUNGALOW)
+                model.hostHome(HomeEditorModel.BUNGALOW)
+                setContent {
+                    Box(Modifier.fillMaxSize().background(Color.Black)) {
+                        Box(Modifier.size(600.dp, 800.dp)) {
+                            DeviceCanvas {
+                                Screen(
+                                    model.state, model.actions(), model.editor,
+                                    model.homes, model.lobby,
+                                )
+                            }
+                        }
+                    }
+                }
+                ImageIO.write(
+                    onRoot().captureToImage().toAwtImage(), "png", File(out, "$name.png"),
+                )
+            }
+        }
+        println("wrote ${refusals.size} hosting refusals to ${out.absolutePath}")
+    }
+
+    /**
      * **One step of input, in the screen's own vocabulary — and there is one of these, not two.**
      *
      * What a number means is different on every Subroutine: an element, a cell, a count of

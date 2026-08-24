@@ -22,10 +22,11 @@ package home.someoneshome.model
  * refusal vocabulary builds the detector D-124 refuses (*registered but not mine* becomes separable
  * from *offline*), and emitting nothing is rule 1's forbidden shape outright.
  *
- * ⚠️ **Also unruled: an isolation does not pause across a meeting.** The Access pool does (see
- * [GameState.accessPausedAt]); this runs on the round's own clock, so a meeting called during one
- * can eat it. That is the simpler reading of *offline for N seconds* and it is recorded rather than
- * defended.
+ * **An isolation does not survive a meeting at all** (D-185). It is cleared outright when the party
+ * is called in, rather than paused: an effect whose whole function is to shape movement through a
+ * dark house has nothing left to do once nobody is moving through it. The pause this note used to
+ * contrast it with is gone from the other side too — no clock in the game pauses across a meeting
+ * now; the per-Insider ones reset (D-184) and the Egress's is the one exception (D-133).
  *
  * **[until] is a tick, never a remaining count** — [Cooldown]'s argument exactly: the rules have no
  * clock, so *back at step 900* replays and *forty seconds left* is a fact about the moment somebody

@@ -1353,6 +1353,22 @@ fun HomeDetailScreen() {
         lobby.refusal?.let {
             Label(it, size = 6.5, color = Amber.BoneInk, tracking = 0.1, lineHeight = 1.6)
         }
+        // **The grant, one tap away** (the owner's 2026-08-24 ruling). Naming the fixable cause was
+        // half of it: the other half is that the fix is not on this screen and cannot be, so a host
+        // reading CHECK LOCAL NETWORK PERMISSION had to know their way around iOS Settings in the
+        // middle of a party. This opens the app's own page there, they grant, they come back and
+        // press HOST WITH THIS HOME again.
+        //
+        // **Drawn under the sentence it acts on and only with it** — see
+        // [LobbyModel.offersTheGrant]. It is the last control on this screen rather than beside
+        // HOST WITH THIS HOME, because it is not a way to host: it appears when hosting has already
+        // failed, in the place the host is already reading.
+        if (lobby.offersTheGrant) {
+            RowButton(border = Amber.BoneFaint, onClick = actions.openSystemSettings) {
+                Label("OPEN SETTINGS", size = 8.0, color = Amber.BoneDeep)
+                Label(">", size = 8.0, color = Amber.BoneFaint)
+            }
+        }
         // The middle used to be a PushDown() — about sixty percent of a 6.9" panel holding
         // nothing, with the destructive control pinned alone at the bottom of it. The plan goes
         // there instead, which is not filler: **a host picks their house out of a list by its

@@ -354,6 +354,18 @@ class LobbyModel(
     private val finder: HomeFinder = MemoryHomeFinder(),
     private val link: LobbyLink = MemoryLobbyLink(),
     hosting: Boolean = false,
+    /**
+     * **The way out to the OS's own settings page for this app** (the owner's 2026-08-24 ruling).
+     *
+     * A lambda for `MeetingModel(send = …)`'s reason — this module cannot see `platform`, and what
+     * goes up is not a request with content in it but a verb with none. The app hands it
+     * `deviceSystemSettings()::open`; **defaulted to nothing, so a bench, a screenshot and a
+     * rendering test all draw the control and none of them leaves the app.**
+     *
+     * It is reachable from exactly one place — see [openSystemSettings] — and that place is host
+     * setup, in a lit room, before any round exists.
+     */
+    private val settings: () -> Unit = {},
 ) {
 
     /**
@@ -417,6 +429,32 @@ class LobbyModel(
     var refusal: String? by mutableStateOf(null)
         private set
 
+    /**
+     * **Whether the refusal on screen is the one a host can still fix from here** (D-173, and the
+     * owner's 2026-08-24 ruling that this refusal gain a control opening the settings page).
+     *
+     * Read off the refusal's own cause line rather than off a second field set beside it, and that
+     * is the point: **the control and the sentence it acts on cannot come apart.** A boolean would
+     * have to be cleared everywhere `refusal` is, and the failure of that is silent in both
+     * directions — a host told to CHECK LOCAL NETWORK PERMISSION with nothing to press, or a
+     * duplicate home name offering to open the OS settings for a problem that is one RENAME away on
+     * the same screen.
+     *
+     * The other refusal is deliberately not offered it. Its fix is on this screen.
+     */
+    val offersTheGrant: Boolean get() = refusal?.contains(NOT_ON_THE_AIR_CAUSE) == true
+
+    /**
+     * **Send the host to this app's page in the OS settings, so they can grant and try again.**
+     *
+     * The one caller is the control under the hosting refusal. It answers nothing and reports
+     * nothing back: whether the grant was given is a question the radio answers on the next HOST
+     * WITH THIS HOME, and a second way of knowing would be a second thing to be wrong.
+     */
+    fun openSystemSettings() {
+        settings()
+    }
+
     fun nameResident(next: String) {
         residentName = next.take(NAME_LIMIT)
         refusal = null
@@ -457,7 +495,9 @@ class LobbyModel(
      *
      * *The refusal should name the fixable cause rather than only the symptom.* The symptom line
      * is unchanged and stays first — it is true whatever went wrong — and [NOT_ON_THE_AIR_CAUSE]
-     * is added under it. See both constants for the wording, which is **drafted and flagged**.
+     * is added under it. Both lines are the owner's as written (confirmed 2026-08-24), and the
+     * refusal now carries a control that opens the page the second one names — see
+     * [openSystemSettings].
      */
     fun hostHome(homeName: String, onAir: () -> Unit = {}) {
         refusal = null
@@ -679,11 +719,12 @@ class LobbyModel(
          * **The fixable cause, named rather than only the symptom** (the owner's 2026-08-22
          * ruling).
          *
-         * ### ⚠️ WORDING IS BUILDER-DRAFTED AND AWAITS THE OWNER'S EYE
+         * ### The wording is confirmed (the owner's 2026-08-24 ruling)
          *
-         * The ruling is the *shape* — symptom, then the cause a person can act on — and it did not
-         * dictate the words. These are drafted within the register and flagged in revision 37 and
-         * in the worklog, not settled.
+         * The 2026-08-22 ruling was the *shape* — symptom, then the cause a person can act on — and
+         * it did not dictate the words; these were drafted within the register and carried a flag
+         * through two revisions. The owner kept both lines as written and added the control that
+         * opens the page this one names, so what was a draft is the refusal.
          *
          * ### It points rather than asserts, and that is not hedging
          *

@@ -123,7 +123,7 @@ class LobbyModelTest {
      * fixable cause rather than only the symptom).
      *
      * The two lines are asserted **separately and in order**, which is the point of their being two
-     * constants: the first is ruled and true whatever went wrong, the second is builder-drafted
+     * constants: the first is ruled and true whatever went wrong, the second is the cause a host can act on
      * copy that points at a grant this phone cannot prove was the problem. A test comparing one
      * merged string would let either half be rewritten as the other.
      */

@@ -528,18 +528,12 @@ fun ScanCaughtScreen(vals: PanelVals) {
             // The marker you just scanned -- the same shape the work order sent you to, not the
             // host-setup fixture this used to read by mistake.
             vals.current.marker?.let { MarkerGlyph(it, 52.u, Amber.Bright) }
-            // ⚠️ **Drawn only where the house has said one, and today it never does.** Nothing on
-            // the wire carries this sentence — see [CurrentSubroutine.instruction] — so a real scan
-            // is one line shorter than the port's. That is the fail-closed direction: what to do is
-            // on the briefing below and is never absent, and printing the fixture's line over
-            // somebody else's Subroutine would be a sentence a player has no way to check.
-            vals.current.instruction?.let { instruction ->
-                Label(
-                    instruction,
-                    size = 13.0, color = Amber.Bright, tracking = 0.06, lineHeight = 1.4,
-                    align = TextAlign.Center,
-                )
-            }
+            // **The flavour line that used to sit here is gone** (the owner's 2026-08-24 ruling).
+            // It was a fake-technical sentence — RESYNC THE KEEPALIVE — that nothing on the wire
+            // ever carried, so it was the port's own words printed over whatever Subroutine a real
+            // scan had actually opened. What a player has to do is the briefing at the foot of this
+            // screen (D-188), which is total over the roster and cannot be absent; a second, larger
+            // sentence above it competed with the one that is true.
             Row(
                 horizontalArrangement = Arrangement.spacedBy(6.u),
                 verticalAlignment = Alignment.CenterVertically,
