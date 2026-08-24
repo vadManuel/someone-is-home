@@ -1398,28 +1398,40 @@ class FlowModel(
      * stop because somebody walked in, you come back — and an entry left standing would hand a
      * player a sequence they part-returned ten minutes ago as though it were still live.
      *
-     * **The parameter is the card's answer, and the default is the fixture's.** In play the
-     * scanned marker says which Subroutine opens; on a phone with no house attached there is one
-     * Subroutine and it is [PanelVals.CURRENT]. Written as a parameter rather than read straight
-     * off the fixture so that the port's single-marker limitation is visible in the signature
-     * instead of being a thing you discover when a second marker exists.
+     * **Both parameters default to what the last scan left on [state], and the fixture stands in
+     * where no scan has happened.** In play the scanned card says which Subroutine opens and which
+     * id the entry is filed against; on a phone with no house attached there is one Subroutine, it
+     * is [PanelVals.CURRENT], and there is no card at all.
+     *
+     * ⚠️ **The defaults are the fix, and their absence was the outage.** They were the fixture and
+     * `null`, and `viaActions` wired the button as `beginSubroutine = { beginSubroutine() }` — so
+     * every BEGIN in every round opened Handshake whatever the house had dealt, and every entry was
+     * refused by `SubroutineModel.posted` for want of a marker. Nine of the ten Subroutines were
+     * unreachable and the return half of the core loop had never run. The parameters stay
+     * parameters — `SubroutineTest` and the render harness both drive them explicitly — but what
+     * they fall back to is now **this seat's own last read** rather than the port's furniture.
+     *
+     * The pair is read in one act, from two fields written by one scan: [PanelState.current] by the
+     * house's answer and [PanelState.scannedAt] by the read that asked for it. Reading them apart —
+     * a kind off one scan and an id off another — is the failure this method is positioned to make
+     * impossible, and it is why the marker is not looked up from anywhere else.
      */
     fun beginSubroutine(
-        subroutine: Subroutine = PanelVals.CURRENT.subroutine,
+        subroutine: Subroutine = state.current?.subroutine ?: PanelVals.CURRENT.subroutine,
         /**
          * **Which card opened this**, so the hand-over can say so (E-P2-1).
          *
-         * **Null by default, because a bench has no card.** The fixture's `CurrentSubroutine`
-         * carries a `MarkerShape` — the printed symbol a player looks for — and not a card id,
-         * which is the right thing for it to carry and the wrong thing to send. So a phone with no
-         * house attached opens the work, takes the answer, and posts it nowhere; see
-         * `SubroutineModel.posted`, which refuses a hand-over with no marker.
+         * **The last card this phone read, and null where it has read none.** The fixture's
+         * `CurrentSubroutine` carries a `MarkerShape` — the printed symbol a player looks for — and
+         * not a card id, which is the right thing for it to carry and the wrong thing to send, so
+         * the id lives beside the row instead: see [PanelState.scannedAt] and [scanning].
          *
-         * What fills it is the scan: `Effect.ScanAnswered` names the instance the card opened, and
-         * the scanner is what knows which card was read. That is the sender this parameter is
-         * waiting for, and it is named here rather than defaulted around.
+         * **A phone with no house attached still opens the work, takes the answer, and posts it
+         * nowhere**, because it has scanned nothing and this is null; see `SubroutineModel.posted`,
+         * which refuses a hand-over with no marker. That is the bench's honest state and it is
+         * pinned by a test — it was also, for one whole build, the *product's* state.
          */
-        marker: MarkerId? = null,
+        marker: MarkerId? = state.scannedAt,
     ) {
         val screen = subroutine.screen ?: return
         subroutines.beganAgain()

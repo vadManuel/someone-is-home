@@ -211,7 +211,7 @@ class HandOverSeamTest {
      * the way the whole roster hung.
      */
     @Test
-    fun `every kind the house can deal can be handed over, against its own card`() {
+    fun `every kind the house can deal can be handed over against its own card`() {
         for (kind in SubroutineKind.entries) {
             val wire = Wire()
             val phone = phone(wire)
@@ -253,21 +253,34 @@ class HandOverSeamTest {
      * product behaviour* were the same behaviour and nothing could tell them apart. Pinning it here
      * is what makes the difference a thing a build can check: **no scan, no marker, no send** —
      * and, one test up, **a scan, a marker, a send.**
+     *
+     * ⚠️ **The work is finished before the silence is asserted, and the first version of this test
+     * did not finish it.** It tapped the fixture's Subroutine once, which for a sequence is a player
+     * still mid-answer — so `posted` refused the send for want of a *completed entry* and the
+     * missing marker was never the thing under test. It stayed green through an injection that
+     * defaulted the marker to a card nobody had read, which is the exact leak it exists to catch.
+     * The entry has to be **gone** for the absent card to be the only thing left standing between
+     * it and the wire, so that is asserted first and separately.
      */
     @Test
     fun aPhoneWithNoHouseOpensTheFixtureAndPostsNowhere() {
         val wire = Wire()
         val bench = phone(wire)
+        val fixture = PanelVals.CURRENT.subroutine
 
         val actions = bench.actions()
         actions.beginSubroutine()
         assertEquals(
-            PanelVals.CURRENT.subroutine.screen, bench.state.screen,
+            fixture.screen, bench.state.screen,
             "the port's own BEGIN stopped opening the fixture's Subroutine",
         )
 
-        actions.tapSubroutine(PanelVals.CURRENT.subroutine, 0)
-        actions.handOverSubroutine(PanelVals.CURRENT.subroutine)
+        repeat(8) { actions.tapSubroutine(fixture, it) }
+        actions.handOverSubroutine(fixture)
+        assertTrue(
+            bench.subroutines.entry(fixture)?.gone == true,
+            "the fixture's entry never finished, so the assertion below would pass for free",
+        )
         assertTrue(
             wire.handOvers.isEmpty(),
             "a phone that has scanned nothing filed an entry against a card it never read",

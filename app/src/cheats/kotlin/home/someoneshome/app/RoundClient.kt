@@ -81,7 +81,7 @@ class DeferredRoundSeam : RoundSeam {
  */
 class RoundClient(
     private val scope: CoroutineScope,
-    flow: FlowModel,
+    private val flow: FlowModel,
     private val watch: LineWatch,
     private val note: (String) -> Unit,
 ) : RoundSeam {
@@ -210,9 +210,23 @@ class RoundClient(
         onMessage(message)
     }
 
-    /** The card this phone is about to scan, remembered so an entry can be filed against it. */
+    /**
+     * The card this phone is about to scan, remembered so an entry can be filed against it.
+     *
+     * ⚠️ **It tells the phone's own model as well now, and until N1 it did not** — which is how a
+     * rehearsal handed entries over all evening while no phone a person held could. This class kept
+     * [standingAt] for the script's benefit, `FlowModel` kept nothing, and BEGIN therefore had no
+     * card to give `SubroutineModel.posted`. The bench's copy was the only one in the tree, so the
+     * bench proved the seam and the product never reached it.
+     *
+     * [standingAt] stays, because it answers a different question: it is what the *script* knows it
+     * scanned, and a rehearsal that read the phone's own state to decide what the phone should do
+     * would be an instrument agreeing with itself. `FlowModel.scanning` is the one the player's
+     * finger drives, through the scan bridge in `Cheats`.
+     */
     fun scanning(marker: MarkerId) {
         standingAt = marker
+        flow.scanning(marker)
     }
 
     /**

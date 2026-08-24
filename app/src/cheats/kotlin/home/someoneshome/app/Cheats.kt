@@ -395,15 +395,35 @@ fun CheatRoot() {
         if (view == CheatView.Panel && flow.state.screen == ScreenId.Scan) {
             DisposableEffect(scan) {
                 scan.scan { payload ->
-                    val intent = inRoundScan(payload)
-                    if (intent == null) {
+                    when (val intent = inRoundScan(payload)) {
                         // Paper this game did not print. Nothing goes up: D-071 makes an unreadable
                         // card a fact about a piece of paper rather than a statement about a
                         // player, and the house is not asked about paper. The lens already buzzed.
-                        println("[round] SCAN — NOT THIS GAME'S PAPER")
-                    } else {
-                        println("[round] SCAN — ${nameOfScan(intent)} · ASKING THE HOUSE")
-                        press.value?.act(intent)
+                        null -> println("[round] SCAN — NOT THIS GAME'S PAPER")
+
+                        // ⚠️ **THE PHONE REMEMBERS ITS OWN READ, AND N1 IS WHERE IT STARTED TO.**
+                        // The house's answer names the entry, the kind and the parameters and
+                        // carries no card — `SubroutineInstance` says so on its own type — so if
+                        // the reader does not keep the id, nothing on this phone ever has it, and
+                        // BEGIN hands `SubroutineModel.posted` a null marker that refuses the send.
+                        // That was the whole of the hand-over outage: a scan went up from here, a
+                        // row came down, and the id in between was dropped on the floor.
+                        //
+                        // Written beside the send rather than inside `inRoundScan` deliberately.
+                        // That function is a pure decode and the shape test E5 deletes; this is the
+                        // client keeping a fact about its own act, and it has to outlive the split.
+                        is IntentMessage.BeginSubroutine -> {
+                            println("[round] SCAN — ${nameOfScan(intent)} · ASKING THE HOUSE")
+                            flow.scanning(intent.marker)
+                            press.value?.act(intent)
+                        }
+
+                        // The meeting card opens no work and files no entry, so there is nothing
+                        // here for a hand-over to be attributed to (D-121).
+                        else -> {
+                            println("[round] SCAN — ${nameOfScan(intent)} · ASKING THE HOUSE")
+                            press.value?.act(intent)
+                        }
                     }
                 }
                 onDispose {
