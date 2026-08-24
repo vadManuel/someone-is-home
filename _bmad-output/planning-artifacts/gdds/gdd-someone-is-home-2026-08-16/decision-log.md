@@ -3862,6 +3862,155 @@ than a new mechanism.
 
 ---
 
+## Revision 39 — the phone that knows it called, and the house that asks who is firing
+
+*Written by the routing day's closing sweep, which built nothing and measured everything. **Three
+entries, and they are not all the same kind of thing** — the first is the owner's, chosen from two
+options put to them while unit C3 was running; the second and third are the build applying doctrine
+already in this log to two holes a rehearsal found by playing. That difference is written at each
+entry rather than smoothed over, because a reader deciding whether they may move one of these needs
+to know whose it is.*
+
+*Revision 38 was committed at 16:08 while unit R1 was still running, so **D-181 through D-190 are
+already recorded and are not restated here.** What follows is only what the day ruled after that
+commit.*
+
+### D-191 · **The calling phone is told it is calling, and the message carries no field — E-R1-1 closed, OPTION 1**
+
+**The owner's ruling, 2026-08-23**, on an escalation R1 raised and refused to guess: the routing
+table asks for *the calling seat → `Calling`*, `Effect.MeetingOpened` carries `caller: Seat`, and a
+phone in this game **does not know its own seat**, so the comparison that would pick the caller out
+of five ringing phones has one operand. Two shapes were put up — a per-seat message, or teaching a
+phone its seat — and **the per-seat message was chosen.**
+
+**The second option was the expensive one and that is the argument.** *Teaching a phone its own
+seat* sounds like plumbing and is not: a seat index on a client is a comparison operand for
+everything else that carries a seat, and every future disclosure decision would then have to be made
+against a client that can ask *is this me?* about any of them. The per-seat message answers exactly
+one question and can answer no others.
+
+**`Effect.MeetingCalling(seat)` on the authority's side, and `RoundMessage.MeetingCalling` with no
+field at all on the wire** — `RestrainedTakeover`'s existing arrangement, reused rather than
+invented. Two meetings called by two different people put **byte-identical bytes** on two different
+sockets; the class is `LIVING` and it is `deliveries` that narrows it to the one seat, so the row
+grants nothing wider even if somebody widens it later.
+
+**Three consequences, each decided rather than fallen into:**
+
+- **No haptic.** The ring is `MeetingOpened`'s and the caller receives it like everybody else. One
+  phone in a silent house buzzing differently from the other five is the caller named by hardware,
+  at the one moment the design has already made public by making them walk to the card. **D-135's
+  five stay five.**
+- **Emitted after the ring**, because the ring is what carries the caller's name onto the panel; a
+  caller pushed to `Calling` first would arrive holding a header the next message was still on its
+  way to fill.
+- **The recording says the seat and the wire does not.** This is the one place the two artifacts
+  deliberately disagree: a client may not be told which seat it is, and a recording that could not
+  say which seat called the meeting could not replay one.
+
+### D-192 · **The house asks who is firing — E-R2-1 closed, and it is doctrine applied rather than a new rule**
+
+**Not an owner ruling. This is D-066 and rule 1 applied to a hole Rehearsal 2 found by playing**,
+and it is recorded here because it added a permanent branch to the admission gate and a member to an
+enum whose KDoc forbids members of that shape.
+
+**The finding first, because it was observed and not reasoned to.** Across one rehearsal round five
+seats pressed the Egress tile 39 times between them and **the house made 39 draws.** One of them was
+a plain Resident who had been Revoked mid-shift and was sitting on the couch. `roleOf` and `isOut`
+appear in `Rules.kt` exactly three times — the scan, the entry grading and the Sync Pulse — and **no
+ability handler in the game read either one.** A round could be decided by somebody who was not in
+it.
+
+**The gate is `admit`'s and not the handler's, which is the whole of D-066's argument.** In the
+handler it would be `if (!insider) return Reduction(state, emptyList())` — rule 1's forbidden shape,
+in the file rule 1 is about. At the gate the refusal **costs nothing** (no cooldown, no pool, no
+draw) and is **recorded**, and an early return is never either.
+
+**`RefusalReason.AbilityNotTheirs` is admitted against that enum's own entry condition, and the
+exception is argued at the member rather than waved past.** The condition was D-068's — *only
+reasons a player standing in the dark could have worked out without their phone* — and **D-097
+deleted the channel it was written to protect**: a refused event is answered by re-pushing that
+seat's own authorized view, and no effect and no wire kind can carry a reason down at all. What is
+left is a reason the authority and the recording read and nobody else. The entry condition is
+**unchanged for every reason that can still meet a player.**
+
+**`ContactMade` is deliberately not gated.** `factOf` rules it *reported, never requested*, and a
+contact revokes only from a seat holding an armed Revoke — which now nobody but a living Insider can
+be. Gating a report above the rules would put an invisible drop in the recording, which is the exact
+thing D-066 records refusals to prevent.
+
+### D-193 · **Every phone is told what it is — E-R2-2 closed, on the arming push**
+
+**Also doctrine applied rather than owner-ruled**, and the same rehearsal found it: every ledger
+line of every seat of both rounds read `ROLE RESIDENT`, including the seat holding the round's only
+Insider. `PanelState.role` was written by the cheat picker and by nothing else in the app, so **in a
+real evening no Insider could have fired any ability at all** — everything under it worked and
+nobody would ever have seen it.
+
+**`Effect.RoleRevealed(seat, role)`, once per seat, for every seat, as a run of the arming burst.**
+Four things about its shape are decisions:
+
+- **Permitted to both living classes, never to one.** A row of `Insider/Live` would deliver the
+  reveal to Insiders and silence to everybody else, **and the silence would be the answer** — rule
+  1's forbidden shape written into the allowlist, where it would have looked like a tightening.
+  What stops seat 5 learning seat 3's role is the addressing, which the allowlist cannot see.
+- **A `Boolean` on the wire.** `Role` carries no `@ClientFacing` and no `@Serializable` and **must
+  never acquire one** — `redactionLint`'s own KDoc records the day that guard default-permitted the
+  most alignment-revealing type in the game. Rule 3's *construct a narrower type*, applied at the
+  transport.
+- **Silent**, and that is F-003 (`gdd.md:930`): the reveal leaking through the *number* of buzzes,
+  at the one moment of the evening when nobody has dispersed.
+- **No screen moves.** The reveal is text on a thread the player opens and the opening banner is
+  what says *now*. A navigation here would be one phone doing something a Resident's phone does not,
+  in the light, with the party still standing together.
+
+**Known mode is not widened.** `gdd.md:923` gives an Insider a message from each fellow Insider,
+riding the opening text thread diegetically. This carries **self-knowledge only**, and there is
+nowhere on the member to put anything else.
+
+### What this revision does NOT close
+
+**Nine escalations from Rehearsal 2 and four from R1 and C3 are open and unruled**, and R2F looked
+at every one of them under the instruction *implement only if the worklog shows it is already
+ruled*. **None of them qualified**, and two look ruled until the file is opened:
+
+- **E-R2-3** — where a living player is pushed when the house catches fire is a **routing decision
+  this log rules nowhere**; D-118 and D-076 rule the dim and the buzz, not a navigation. Its second
+  half, the two containment markers never reaching a phone, is the same escalation and was left with
+  it: a phone holding two markers on a panel nobody is looking at closes nothing on its own.
+- **E-R2-6** — the couch's live ballot cites D-117 and is still blocked one layer down. The wire
+  member carries **seats** and `PanelState.ballots` wants **names**, so the open question is not the
+  routing but **where the resolution happens**, and that is a protocol decision.
+
+**E-R2-9 / E-R1-2 is a disclosure question and belongs to whoever rules it**: the drawn tally screen
+shows per-candidate counts to everybody, `Effect.MeetingResult` carries only `restrained`, and on a
+real round the living's tally is therefore a header with nothing under it. Either the effect is a
+field short or the screen shows the living more than it should.
+
+### Still open — carried forward from revision 38, plus what the day added
+
+- **Twelve copy strings now wait on the owner, not three.** D-180's `CHECK LOCAL NETWORK
+  PERMISSION`, Sniff's briefing line, and **the nine briefings D-188 ordered are now drafted** and
+  listed in full in the routing day's worklog. None is a decision waiting to be made; all are the
+  builder's words inside a ruled shape.
+- **`CurrentSubroutine.instruction` has no carrier and is always null in play**, and whether the
+  flavour line wants one or belongs on the client's roster beside the label is **a copy call nobody
+  has made.** New with C3.
+- **`Balance.STATIC_COOLDOWN` is 120s and the figure is the build's.** D-186 ruled the direction and
+  named no number; what is built is an ordering — Surge 150 > Static 120 > Isolate 90.
+- **`GameState.accessPausedAt` is unused machinery** — D-183 and D-184 between them made it
+  unobservable. Kept and flagged rather than deleted, because removing state is a recording-shape
+  decision.
+- **`egressFired`'s `cooldownStarted` lie was fixed by R1.** Three revisions carried it; it is off
+  this list.
+- **The Terminal's noise is now pixels** — D-186's *animated, real data faintly beneath* is built,
+  about one cell in six transparent and moving every step. How faint and how fast remain a dark-room
+  question rather than a paper one.
+- **F-006 is untouched.** The Egress has a carrier and not the duration it is a fraction of, and
+  E-R2-4 and E-R2-7 are the same missing carrier arriving from two more directions.
+
+---
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).
