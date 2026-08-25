@@ -1623,9 +1623,18 @@ class FlowModel(
      * It reads [PermsModel] rather than an OS, and that is the boundary working: what a grant *is*
      * comes from `platform` through the seam the app wired, and what it *means for a seat* is
      * ruled here, where the lobby can see it.
+     *
+     * ⚠️ **[PermsModel.gateRefusalNow] and not `gateRefusal`, and the difference is a night's
+     * worth of unplayable builds** (N6). `gateRefusal` reads the Perms screen's display map, which
+     * opens empty and is filled by exactly one `LaunchedEffect` — so this asked *what did that
+     * screen last draw* on every path, including the two benches that never compose it, and
+     * answered a fully granted 13 Pro with all five rows. **A gate whose input is another screen's
+     * side effect is a gate that is silent about phones that took a different road.** The ruling
+     * is that the gate reads the OS at decision time; the sentence is unchanged and so is the
+     * boundary.
      */
     private fun setupIsComplete(): Boolean {
-        val why = perms.gateRefusal() ?: return true
+        val why = perms.gateRefusalNow() ?: return true
         lobby.refuse(why)
         return false
     }

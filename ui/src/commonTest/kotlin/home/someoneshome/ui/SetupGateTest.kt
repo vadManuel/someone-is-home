@@ -122,6 +122,84 @@ class SetupGateTest {
     }
 
     /**
+     * ⚠️ **THE FALSE REFUSAL — a granted phone that never opened the Perms screen** (N6).
+     *
+     * This is the sweep's negative control written down as a test, and against the build it was
+     * found on it fails. `PermsModel.states` opens at `emptyMap()` and `refresh()` had exactly one
+     * caller in the whole app — the Perms screen's own `LaunchedEffect`. Anything that reaches a
+     * lobby without composing that screen therefore asked the gate a question about a map nobody
+     * had filled, and got back **the whole five-row sentence on a phone where every row is
+     * granted**. Both benches do exactly that: `flow.go(ScreenId.Join)` at launch, early enough to
+     * pre-empt Boot's first frame. No round could be armed on hardware or on a simulator.
+     *
+     * So the fixture here is deliberately **not** [phone] — no `refresh()`, because a refresh is
+     * the thing the real path did not get. What it is instead is the honest arrangement of the 13
+     * Pro: an OS that answers GRANTED to every question it is asked, and a screen that never asked.
+     *
+     * The ruling this asserts is **the gate reads the OS at decision time** (D-161, D-180's
+     * family): a refusal must be true and must name a real cause, and one assembled out of a
+     * display map that nobody filled is neither.
+     */
+    @Test
+    fun aGrantedPhoneThatNeverOpenedThePermsScreenIsAdmitted() {
+        val model = FlowModel(
+            // Every row granted at the OS, and `refresh()` deliberately never called.
+            perms = PermsModel(read = { Grant.Granted }),
+            homes = SavedHomesModel.sample(),
+            lobby = LobbyModel(),
+        )
+        model.lobby.nameResident("ELLIOT")
+        // What both benches do at launch, and what makes the Perms screen never compose.
+        model.go(ScreenId.Join)
+
+        model.hostHome(model.homes.homes.first().name)
+
+        assertNull(
+            model.lobby.refusal,
+            "a phone the OS grants everything was refused for rows it does not have: " +
+                "${model.lobby.refusal}",
+        )
+        assertTrue(model.lobby.hosting, "a granted phone could not put its home on the air")
+        assertEquals(ScreenId.Lobby, model.state.screen, "the host did not reach the lobby")
+    }
+
+    /**
+     * **And the refusal it does give names the one row that is really missing, and only it.**
+     *
+     * The other half of the test above, and the half that stops the fix being *open the gate*. A
+     * fresh read that reported an empty `missing` for everything would pass the assertion above
+     * and ship a gate with nothing behind it. Same arrangement — no `refresh()` — with one row the
+     * OS says no to.
+     */
+    @Test
+    fun theFreshReadStillRefusesTheRowTheOsRefuses() {
+        val model = FlowModel(
+            perms = PermsModel(
+                read = { if (it == DevicePermission.Camera) Grant.Refused else Grant.Granted },
+            ),
+            homes = SavedHomesModel.sample(),
+            lobby = LobbyModel(),
+        )
+        model.lobby.nameResident("ELLIOT")
+        model.go(ScreenId.Join)
+
+        model.hostHome(model.homes.homes.first().name)
+
+        assertTrue(!model.lobby.hosting, "a phone whose camera is refused went on the air")
+        val refusal = assertNotNull(model.lobby.refusal, "the host was refused with no reason given")
+        assertTrue(
+            DevicePermission.Camera.label in refusal,
+            "the refusal does not name the row the OS actually refused: '$refusal'",
+        )
+        val alsoNamed = DevicePermission.entries
+            .filter { it != DevicePermission.Camera && it.label in refusal }
+        assertEquals(
+            emptyList(), alsoNamed,
+            "the refusal names rows this phone was granted — the false refusal, one row narrower",
+        )
+    }
+
+    /**
      * **A phone nobody has asked anything is refused**, which is what a cold launch is.
      *
      * The tempting default here is the permissive one — an unread row reading as fine — and it is

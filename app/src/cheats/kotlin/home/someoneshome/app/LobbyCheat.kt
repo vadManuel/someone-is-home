@@ -71,6 +71,9 @@ class LobbyCheat(
         // must not depend on a composition having happened — and it is idempotent on both sides.
         lobby.look()
 
+        // The fifth thing a finger would have supplied. See [walkSetup].
+        walkSetup()
+
         if (hosting != null) {
             if (!seedTheHome(hosting)) return
             // HOST WITH THIS HOME, through the action the button calls — which now walks to the
@@ -95,6 +98,56 @@ class LobbyCheat(
         handOverLine()
         cycleInsiders()
         watch(armed = lightsOut())
+    }
+
+    /**
+     * **The fifth thing a finger would have supplied: a host tapping through setup, in the light.**
+     *
+     * [seedTheHome]'s shape exactly, and for the same reason. A round is played on a phone whose
+     * owner stood on the permissions screen weeks ago and answered five system modals; a process
+     * launched by `simctl` has nobody to answer them. So the tap is what is stood in for — **and
+     * only the tap.** What this calls is `PermsModel.requestMissing`, which is REQUEST WHAT IS
+     * MISSING's own call, which reaches the real seam and raises the OS's real prompts. A bench
+     * that arranged the rows directly would prove nothing about the path a grant actually travels,
+     * and would put the gate back where only one caller can see it.
+     *
+     * ### It reports and it does not decide
+     *
+     * No refusal is raised here and the evening is not ended here. `hostHome` and `attachToHome`
+     * each ask the gate themselves a moment later, off a fresh OS read, and whatever they say is
+     * the result. Two gates in one path would be two opinions about one phone.
+     *
+     * ### What it waits for, and why the wait is bounded
+     *
+     * Three of the five answer through a callback and two of those can be a modal standing on the
+     * glass with nobody in the room — a simulator has no thumb for `Would Like to Send You
+     * Notifications`. So the wait ends on the clock as well as on the answer, and what is printed
+     * is the OS's own reading either way. **A row still missing here is a row the log names**, and
+     * the refusal that follows will name it again.
+     */
+    private suspend fun walkSetup() {
+        val perms = flow.perms
+        if (perms.missingNow().isEmpty()) {
+            note("SETUP IS ALREADY DONE ON THIS PHONE — EVERY GRANT THE EVENING NEEDS IS GIVEN")
+            return
+        }
+        note(
+            "SETUP — TAPPING REQUEST WHAT IS MISSING FOR " +
+                perms.missingNow().joinToString(" · ") { it.label } +
+                " · THE MODALS A HOST WOULD HAVE ANSWERED"
+        )
+        perms.requestMissing()
+        var waited = 0L
+        while (waited < SETUP_MILLIS && perms.missingNow().isNotEmpty()) {
+            delay(STEP_MILLIS)
+            waited += STEP_MILLIS
+        }
+        val short = perms.missingNow()
+        note(
+            if (short.isEmpty()) "SETUP DONE — THE OS ANSWERED EVERY ROW · ${waited / 1000}S"
+            else "SETUP INCOMPLETE AFTER ${waited / 1000}S — STILL MISSING " +
+                short.joinToString(" · ") { it.label }
+        )
     }
 
     /**
@@ -374,6 +427,16 @@ class LobbyCheat(
 
         /** How long a wait goes before it says out loud that it is still waiting. */
         private const val PATIENCE_MILLIS = 5_000L
+
+        /**
+         * How long setup is given before the evening goes on without it.
+         *
+         * Long enough for five serial modals to be raised and answered by an OS that is going to
+         * answer them, short enough that a modal nobody can dismiss does not hold the whole run —
+         * the honest failure there is a named row in the log and a refusal at the gate, not a
+         * process that never gets to either.
+         */
+        private const val SETUP_MILLIS = 15_000L
 
         /** Long enough for an answer to come back around the socket before it is read. */
         private const val SETTLE_MILLIS = 750L

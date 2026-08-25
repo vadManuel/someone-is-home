@@ -13,6 +13,10 @@ import platform.AVFoundation.authorizationStatusForMediaType
 import platform.AVFoundation.requestAccessForMediaType
 import platform.CoreBluetooth.CBCentralManager
 import platform.CoreBluetooth.CBCentralManagerDelegateProtocol
+import platform.CoreBluetooth.CBManagerAuthorizationAllowedAlways
+import platform.CoreBluetooth.CBManagerAuthorizationDenied
+import platform.CoreBluetooth.CBManagerAuthorizationNotDetermined
+import platform.CoreBluetooth.CBManagerAuthorizationRestricted
 import platform.CoreBluetooth.CBManagerStatePoweredOff
 import platform.CoreBluetooth.CBManagerStatePoweredOn
 import platform.CoreBluetooth.CBManagerStateResetting
@@ -31,6 +35,7 @@ import platform.Foundation.NSNetServiceBrowserDelegateProtocol
 import platform.Foundation.NSOperationQueue
 import platform.Foundation.NSRunLoop
 import platform.Foundation.NSRunLoopCommonModes
+import platform.Foundation.NSUserDefaults
 import platform.Foundation.dateWithTimeIntervalSinceNow
 import platform.UserNotifications.UNAuthorizationOptionAlert
 import platform.UserNotifications.UNAuthorizationOptionBadge
@@ -144,13 +149,22 @@ private class IosPermissions(
      * here is five lines per frame — a log that drowns the transitions [answer] writes, which are
      * the only lines a device run has as evidence. Reading a status is not an event; being told a
      * new answer is, and that is where the seam speaks.
+     *
+     * ⚠️ **Since N6 this is also what a GATE reads**, at the moment a phone asks to host or to take
+     * a seat — see `PermsModel.missingNow`. That raised the standard: a row answered out of a cache
+     * nothing filled is a refusal about which screens happened to compose rather than about this
+     * phone. So the three below now answer out of the OS wherever the OS has an answer to give.
      */
     override fun grant(of: DevicePermission): Grant = when (of) {
         DevicePermission.Camera -> cameraGrant()
         DevicePermission.Motion -> motionGrant()
-        // Both answer through a callback and neither may be guessed at. See the class KDoc.
-        DevicePermission.Notifications, DevicePermission.Bluetooth, DevicePermission.LocalNetwork ->
-            remembered[of] ?: Grant.Unasked
+        DevicePermission.Bluetooth -> bluetoothGrant()
+        DevicePermission.LocalNetwork -> remembered[of] ?: localNetworkStanding()
+        // The one that is genuinely callback-only: there is no synchronous notification status on
+        // this platform. What is held is the last answer [refresh] heard, and [refresh] now has a
+        // caller at the app root as well as on the Perms screen, so a phone that never opened that
+        // screen still has a real answer here rather than a hole.
+        DevicePermission.Notifications -> remembered[of] ?: Grant.Unasked
     }
 
     override fun refresh(then: () -> Unit) {
@@ -286,6 +300,34 @@ private class IosPermissions(
 
     // ---- Bluetooth ----------------------------------------------------------------------------
 
+    /**
+     * **Bluetooth, read synchronously and without raising anything** (N6).
+     *
+     * `CBManager.authorization` is a class property: it answers what the *user* has said about this
+     * app's use of the radio, now, with no manager built and no prompt raised. That is the honest
+     * synchronous affordance the gate needed — before this, the only way this seam knew anything
+     * about Bluetooth was a delegate callback on a manager that only [requestBluetooth] ever built,
+     * so a phone which granted Bluetooth weeks ago read `Unasked` on every launch that did not walk
+     * the Perms screen, **and was refused a seat for a grant it had already given.**
+     *
+     * [remembered] is still consulted first, and it has to be: authorization cannot distinguish *no
+     * Bluetooth on this device* from *nobody has answered yet*, and a simulator is the first case.
+     * The delegate writes [Grant.Unavailable] there once a manager exists, which opens the gate for
+     * the reason [Grant.opensTheGate] gives — a missing radio is hardware, not consent.
+     */
+    private fun bluetoothGrant(): Grant {
+        remembered[DevicePermission.Bluetooth]?.let { return it }
+        return when (val status = CBCentralManager.authorization) {
+            CBManagerAuthorizationAllowedAlways -> Grant.Granted
+            CBManagerAuthorizationNotDetermined -> Grant.Unasked
+            CBManagerAuthorizationDenied, CBManagerAuthorizationRestricted -> Grant.Refused
+            else -> {
+                log("$TAG BLUETOOTH unknown authorization $status")
+                Grant.Unasked
+            }
+        }
+    }
+
     private fun bluetoothGrantOf(state: Long): Grant = when (state) {
         // Powered on, off and resetting all mean the same thing about the GRANT: the app is
         // allowed to use the radio. Whether the radio is switched on is a different question, and
@@ -329,6 +371,10 @@ private class IosPermissions(
             started.searchForServicesOfType(DISCOVERY_SERVICE_TYPE, inDomain = "local.")
             browser = started
         }
+        // **Written down before the answer is given, and it is the raising that is recorded** —
+        // see [localNetworkStanding]. The prompt has now been put on the glass on this install, and
+        // that is a fact about the install rather than about this process.
+        defaults.setBool(true, LOCAL_NETWORK_RAISED)
         val standing = remembered[DevicePermission.LocalNetwork]
         answer(
             DevicePermission.LocalNetwork,
@@ -336,6 +382,33 @@ private class IosPermissions(
             then,
         )
     }
+
+    /**
+     * ⚠️ **The one answer that has to outlive the process, because iOS will never give it again.**
+     *
+     * Every other row is re-read from its framework on demand. Local Network cannot be: there is no
+     * status call, there never has been, and [Grant.Asked] exists precisely because *the prompt was
+     * raised and the OS will not say what came back* is the strongest thing this app can ever know.
+     *
+     * **Held only in memory, that knowledge failed with the process** — so a host who granted Local
+     * Network at setup last week launched the app, went to host, and was refused a seat naming a
+     * grant they had already given. That is a false refusal, and D-180's family rules that a
+     * refusal name a cause a person can act on; naming one that is already done is worse than
+     * silence, because the only thing it offers them to do is the one thing that cannot help.
+     *
+     * So the *raising* is recorded, and nothing else is. It is deliberately **not** a stored
+     * `Granted`: this seam never reports a grant it did not hear (see the class KDoc), and a phone
+     * whose owner switched the permission off in Settings afterwards would be a phone the app told
+     * a comfortable lie about. `Asked` stays exactly as honest a year later as it was that evening
+     * — and the real answer still arrives where D-179 and D-180 put it, at hosting, where the home
+     * either goes on the air or it does not and the refusal names the grant and opens Settings.
+     *
+     * ⚠️ **Flagged for the owner's morning review.** It is the smallest honest way to stop the gate
+     * refusing on a row the OS refuses to answer, and it is a ruling somebody should make on
+     * purpose rather than inherit from this file.
+     */
+    private fun localNetworkStanding(): Grant =
+        if (defaults.boolForKey(LOCAL_NETWORK_RAISED)) Grant.Asked else Grant.Unasked
 
     // ---- Shared -------------------------------------------------------------------------------
 
@@ -353,10 +426,16 @@ private class IosPermissions(
         then(grant)
     }
 
+    /** Where the one unrepeatable answer is kept. See [localNetworkStanding]. */
+    private val defaults = NSUserDefaults.standardUserDefaults
+
     private companion object {
 
         /** What the device log is grepped for. */
         const val TAG = "[perms]"
+
+        /** *The Local Network prompt has been put on this install's glass.* Nothing more. */
+        const val LOCAL_NETWORK_RAISED = "home.someoneshome.perms.localNetworkRaised"
 
         /** One second of activity history, read by nothing. The query is the prompt. */
         const val MOTION_HISTORY_SECONDS = 1.0

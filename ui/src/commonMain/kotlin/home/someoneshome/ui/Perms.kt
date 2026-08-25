@@ -73,11 +73,57 @@ class PermsModel(
     /** One row's answer. [Grant.Unasked] for a row nobody has asked about. */
     fun grant(of: DevicePermission): Grant = states[of] ?: Grant.Unasked
 
-    /** What is still standing between this phone and a seat, in row order. */
+    /**
+     * What is still standing between this phone and a seat, in row order — **as the screen has it.**
+     *
+     * [states] and therefore empty until something refreshed it. That is right for the rows, which
+     * must not assert a fact nobody read, and it is wrong for a gate; see [missingNow].
+     */
     val missing: List<DevicePermission> get() = grantsMissing(states)
 
-    /** **D-161's gate.** True when this phone may host or join. */
+    /** **D-161's gate, as the screen has it.** True when the rows this screen drew are all open. */
     val complete: Boolean get() = missing.isEmpty()
+
+    /**
+     * ⚠️ **What the OS says right now** — [missing]'s sibling, and the one a gate is allowed to ask.
+     *
+     * ### The false refusal this exists to stop
+     *
+     * [states] opens empty on purpose and `refresh()`'s one caller is the Perms screen's own
+     * `LaunchedEffect`. So every path into a lobby that did not *compose that screen* asked the
+     * gate about a map nobody had filled — and on the 13 Pro, with three of five rows granted at
+     * the OS, the answer was the whole five-row sentence:
+     *
+     * ```
+     * [lobby-bench] NOT HOSTING — THIS PHONE CANNOT TAKE A SEAT YET
+     *               LOCAL NETWORK · CAMERA · BLUETOOTH · MOTION & FITNESS · NOTIFICATIONS
+     * ```
+     *
+     * **That refusal was false, and a false refusal is worse than an open gate**: it names rows
+     * the host has already granted, so the one thing it offers them to do is the one thing that
+     * cannot help. Both benches take that path — `go(ScreenId.Join)` at launch, early enough to
+     * pre-empt Boot's first frame — and no round could be armed on hardware or on a simulator for
+     * three commits.
+     *
+     * ### The ruling: the gate reads the OS at decision time
+     *
+     * A fresh read, through the same [read] seam the rows use, taken when `hostHome` and
+     * `attachToHome` ask the question — **never a screen's cached map**. The OS answers these
+     * queries synchronously (`Permissions.grant` is documented as safe to call while drawing), so
+     * there is no cost to asking at the moment it matters, and asking then is the only way to be
+     * sure the answer is about this phone rather than about which screens happen to have composed.
+     *
+     * **It deliberately does not write [states].** The KDoc on that field argues that a row must
+     * not open on a guess, and that argument governs what a *screen asserts* — it says nothing
+     * about what a gate may know. Keeping the two apart means this can be honest without the Perms
+     * screen becoming a screen that reports facts nobody asked it to read.
+     *
+     * ⚠️ Flagged for the owner's morning review: the placement was a design call with three
+     * answers — the app root, a read at gate time, or seeding at construction — and this is the
+     * second.
+     */
+    fun missingNow(): List<DevicePermission> =
+        grantsMissing(DevicePermission.entries.associateWith(read))
 
     /**
      * Read every row off the OS. Called when the screen opens and when the app comes back to it.
@@ -126,8 +172,19 @@ class PermsModel(
      * have to go back and tap are the whole of what makes the refusal recoverable in ninety
      * seconds rather than at arming.
      */
-    fun gateRefusal(): String? {
-        val short = missing
+    fun gateRefusal(): String? = refusalOver(missing)
+
+    /**
+     * **The same sentence, over the rows the OS is refusing right now** — the lobby's gate.
+     *
+     * [gateRefusal]'s sibling and the only difference is [missingNow] in place of [missing]. The
+     * words are shared rather than written twice on purpose: a host who is refused at the lobby
+     * and then walks back to the Perms screen has to read the same sentence in both places, or
+     * the two surfaces are two opinions about one phone.
+     */
+    fun gateRefusalNow(): String? = refusalOver(missingNow())
+
+    private fun refusalOver(short: List<DevicePermission>): String? {
         if (short.isEmpty()) return null
         return "THIS PHONE CANNOT TAKE A SEAT YET\n" + short.joinToString(" · ") { it.label }
     }

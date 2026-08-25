@@ -91,6 +91,18 @@ APP="$DERIVED/Build/Products/$CONFIG-iphonesimulator/SomeonesHome.app"
 find "$APP" -name 'Silkscreen-Regular.ttf' | grep -q . || {
     echo "the pixel fonts are not in the bundle; the app will fail on its first frame" >&2; exit 1; }
 
+# THE GRANTS A HOST WOULD HAVE GIVEN, given out of band — see sim-grants.py for the whole argument.
+# D-161's gate refuses a seat to a phone the OS has not answered for, and a simulator has no thumb
+# for a SpringBoard alert. This is `seedTheHome`'s sibling: the walk is stood in for and only the
+# walk, and the app still asks the OS itself and still prints what it hears.
+#
+# The notification half goes FIRST and while the devices are shut down, because SpringBoard reads
+# its bulletin store at boot; the `simctl privacy` half goes after the install, because it needs a
+# booted device with the app on it.
+say "=== THE GRANTS A HOST WOULD HAVE GIVEN ==="
+for u in "${UDIDS[@]}"; do xcrun simctl shutdown "$u" 2>/dev/null || true; done
+python3 "$PWD/sim-grants.py" notifications "${UDIDS[@]}" | tee -a "$OUT/driver.log"
+
 say "=== BOOTING AND INSTALLING ON ${#UDIDS[@]} SEATS ==="
 for u in "${UDIDS[@]}"; do
     xcrun simctl boot "$u" 2>/dev/null || true
@@ -100,6 +112,7 @@ for u in "${UDIDS[@]}"; do
     xcrun simctl terminate "$u" "$BUNDLE_ID" 2>/dev/null || true
     xcrun simctl install "$u" "$APP"
 done
+python3 "$PWD/sim-grants.py" privacy "${UDIDS[@]}" | tee -a "$OUT/driver.log"
 
 launch_seat() {
     local i="$1"

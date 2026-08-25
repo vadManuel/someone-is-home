@@ -387,6 +387,20 @@ fun CheatRoot() {
             }
         )
     }
+    // ⚠️ **THE PHONE LEARNS WHAT IT HAS BEEN GRANTED HERE, AND NOT ONLY ON ONE SCREEN** (N6).
+    //
+    // `Permissions.refresh` had exactly one caller in the whole app — the Perms screen's own
+    // `LaunchedEffect` — so the two rows the OS will only answer through a callback were answered
+    // out of an empty cache on every path that did not compose that screen. Both benches take such
+    // a path, and so does any launch that walks straight past setup: the gate then refused a fully
+    // granted phone, naming rows it had already been given, and no round could be armed for three
+    // commits.
+    //
+    // It is a **read and never a prompt** — that is `refresh`'s contract and it is unchanged — so
+    // putting it at the app root costs nothing and asks nobody anything. The Perms screen keeps its
+    // own call: a host who walks out to Settings comes back to that screen, and this one fired long
+    // before they left.
+    LaunchedEffect(permissions) { permissions.refresh() }
     LaunchedEffect(sweeping) { if (sweeping) bench.sweep() }
     LaunchedEffect(scanSweeping) { if (scanSweeping) scan.sweep() }
     LaunchedEffect(setupSweeping) {
