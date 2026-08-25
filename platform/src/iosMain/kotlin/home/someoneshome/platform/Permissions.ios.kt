@@ -127,9 +127,30 @@ private class IosPermissions(
      * `HostDiscovery` learned the hard way is the difference between a refusal and a silence.
      */
     private val browseDelegate = object : NSObject(), NSNetServiceBrowserDelegateProtocol {
+
+        /**
+         * ⚠️ **A failed browse is NOT a refusal, and reading it as one is what blocked the owner.**
+         *
+         * This wrote [Grant.Refused] here. But iOS fails the browse that *raises* the Local Network
+         * prompt — the operation cannot proceed while a person is still looking at the modal — so
+         * `didNotSearch` arrives seconds **before** the answer, and on a phone whose owner then
+         * taps Allow the seam had already written down a refusal nothing would ever correct. The
+         * report was exact: the row still said the prompt had been raised, because that is what the
+         * screen's own map held, while the gate read this cache and refused naming LOCAL NETWORK.
+         *
+         * So the standing answer stays at [Grant.Asked] — the most this platform can ever know
+         * (see [localNetworkStanding]) — and the error dictionary is logged rather than believed.
+         * A grant that really is switched off is caught where D-179 and D-180 put it: the advertise
+         * fails, and that refusal names the grant and opens Settings.
+         *
+         * [Grant.Granted] is never walked back: a browse that found a home is proof, and a later
+         * failure is not evidence against it.
+         */
         override fun netServiceBrowser(browser: NSNetServiceBrowser, didNotSearch: Map<Any?, *>) {
-            remembered[DevicePermission.LocalNetwork] = Grant.Refused
-            log("$TAG LOCAL NETWORK refused the browse $didNotSearch")
+            if (remembered[DevicePermission.LocalNetwork] != Grant.Granted) {
+                remembered[DevicePermission.LocalNetwork] = Grant.Asked
+            }
+            log("$TAG LOCAL NETWORK browse did not start $didNotSearch — the prompt may still be up")
         }
 
         override fun netServiceBrowser(

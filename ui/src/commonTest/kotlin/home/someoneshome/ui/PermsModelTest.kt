@@ -126,6 +126,64 @@ class PermsModelTest {
     }
 
     /**
+     * ⚠️ **The owner's exact sentence, as a test** (2026-08-25).
+     *
+     * Two phones with Local Network switched on in Settings, the row reading that the prompt had
+     * been raised, and: *I tap the button and it says this phone cannot take a seat yet, local
+     * network.* The gate was reading a [Grant.Refused] the seam wrote when the browse that raises
+     * the prompt failed — which it does while the modal is still on the glass, before anyone has
+     * answered. **A row the OS will never confirm cannot be gated on a confirmation**, so anything
+     * but [Grant.Unasked] seats the phone and the real test is the advertise.
+     */
+    @Test
+    fun theRowIosWillNeverConfirmDoesNotStandBetweenAGrantedPhoneAndASeat() {
+        for (unconfirmed in listOf(Grant.Asked, Grant.Refused)) {
+            val (model, _) = seam(
+                answers = DevicePermission.entries.associateWith { Grant.Granted } +
+                    mapOf(DevicePermission.LocalNetwork to unconfirmed),
+            )
+            model.refresh()
+
+            assertNull(
+                model.gateRefusalNow(),
+                "a phone that granted everything is refused a seat over LOCAL NETWORK reading " +
+                    "$unconfirmed — the one row iOS has no call to confirm, so this gate never opens",
+            )
+            assertTrue(model.complete, "the screen and the gate disagree about the same phone")
+        }
+    }
+
+    /**
+     * **And the exemption is one row wide.** The half that stops the fix being *open the gate*.
+     *
+     * Every other row is answered for real by its framework, so a refusal there is a fact and still
+     * closes the gate — and the unconfirmable row still closes it when nobody has raised the prompt
+     * at all, because tapping it is an action the host can actually take.
+     */
+    @Test
+    fun everyOtherRowStillClosesIt() {
+        for (short in DevicePermission.entries) {
+            val standing = if (short.confirmable) Grant.Refused else Grant.Unasked
+            val (model, _) = seam(
+                answers = DevicePermission.entries.associateWith { Grant.Granted } +
+                    mapOf(short to standing),
+            )
+            model.refresh()
+
+            val why = assertNotNull(
+                model.gateRefusalNow(),
+                "${short.label} reads $standing and the phone was seated anyway",
+            )
+            assertTrue(short.label in why, "the refusal does not name ${short.label}: '$why'")
+            assertEquals(
+                emptyList(),
+                DevicePermission.entries.filter { it != short && it.label in why },
+                "the refusal names rows this phone was granted: '$why'",
+            )
+        }
+    }
+
+    /**
      * **Coming back from Settings moves the rows**, which is the one thing a walk out of the app
      * has to be followed by. Nothing else would move them: iOS reports no change to a running app.
      */

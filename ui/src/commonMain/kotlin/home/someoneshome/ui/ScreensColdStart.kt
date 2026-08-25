@@ -16,6 +16,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import home.someoneshome.model.DevicePermission
 import home.someoneshome.model.Grant
+import home.someoneshome.model.opensTheGate
 
 /**
  * Cold start: the three screens before anyone has joined anything.
@@ -125,11 +126,15 @@ fun PermsScreen() {
         Column(verticalArrangement = Arrangement.spacedBy(4.u)) {
             DevicePermission.entries.forEach { permission ->
                 val grant = perms.grant(permission)
+                // **The row's own rule, not [Grant]'s** — a row iOS will never confirm is done at
+                // ASKED, and drawing it dim beside four bright ones is the screen agreeing with the
+                // gate that something is still outstanding when nothing is.
+                val open = permission.opensTheGate(grant)
                 PreRow(
                     permission.label,
                     grant.label,
-                    border = if (grant.opensTheGate) Amber.BonePale else Amber.BoneDim,
-                    labelInk = if (grant.opensTheGate) Amber.BoneDeep else Amber.BoneInk,
+                    border = if (open) Amber.BonePale else Amber.BoneDim,
+                    labelInk = if (open) Amber.BoneDeep else Amber.BoneInk,
                     valueInk = if (grant == Grant.Refused) Amber.Caution else Amber.BoneInk,
                     size = 7.5,
                     onClick = { actions.requestGrant(permission) },
@@ -149,6 +154,17 @@ fun PermsScreen() {
                 PreNote(it, color = Amber.BoneInk, align = TextAlign.Center)
             }
             PreNote("A SYSTEM PROMPT WILL APPEAR.\nIT IS NOT PART OF THE HOUSE.")
+            // **The sentence the value column cannot hold** (the owner's 2026-08-25 report). ASKED
+            // is the end state of that row and iOS has no call that will ever move it — so without
+            // this line a host who has granted the permission is reading a word that looks like a
+            // countdown to an answer that is not coming. It appears only on the phone that is
+            // really in that state. ⚠️ Proposed copy.
+            if (DevicePermission.entries.any { !it.confirmable && perms.grant(it) == Grant.Asked }) {
+                PreNote(
+                    "IOS NEVER REPORTS THE LOCAL NETWORK GRANT.\n" +
+                        "ASKED IS ALL THIS PHONE CAN KNOW — THE HOUSE\nFINDS OUT WHEN IT GOES ON THE AIR.",
+                )
+            }
             // **A refused row cannot be un-refused from in here** — iOS asks once, ever, and the
             // second ask raises nothing. So the control appears exactly where its fix is outside
             // the app, which is [LobbyModel.offersTheGrant]'s rule read on this screen: a row
