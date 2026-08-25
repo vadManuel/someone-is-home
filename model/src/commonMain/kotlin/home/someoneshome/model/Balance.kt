@@ -32,8 +32,31 @@ object Balance {
      * from D-127's HOSTS UP TO N — a host can see how many people are standing in their hall, but
      * D-125's sorting rule turns on what players cannot perceive, and *this party cannot produce
      * a meeting worth holding* is not visible from the hall.
+     *
+     * ---
+     *
+     * ## ⚠️ TEMPORARILY LOWERED TO 3 — OWNER-ORDERED 2026-08-25 — MUST RETURN TO 5
+     *
+     * **This is not a balance decision and it does not ship.** The owner has three iPhones
+     * physically in hand and wants a round that arms on three phones; the ruled minimum is still
+     * **five** (D-128, revision 29's D-158 family). **Put this back to 5 before release**, and when
+     * you do, delete `minimumSeatsIsTemporarilyLoweredForDeviceTesting` in `BalanceTest` — that
+     * test exists only to make this line impossible to forget.
+     *
+     * The instruction was *only* the minimum and nothing else, so these consequences are
+     * **verified, not adjusted**:
+     *
+     * - **The review gate stays at eight markers.** It is not derived from this constant and was
+     *   explicitly left alone.
+     * - **A three-seat party draws exactly one Insider**, by the existing formula and with no edit:
+     *   [InsiderBand]'s amendment pins `MINIMUM_SEATS..6` to `1..1`, so lowering the floor extends
+     *   the pin down to three rather than opening a band there. Two Insiders in three seats would
+     *   be parity at arming; the pin is what stops it.
+     * - **The vote at three seats is the thing D-128 refuses**, and that is the known cost of the
+     *   evening: one wrong Restrain reaches parity. The round is for exercising three phones, not
+     *   for reading balance off.
      */
-    const val MINIMUM_SEATS: Int = 5
+    const val MINIMUM_SEATS: Int = 3
 
     /**
      * **D-130 — SystemIntegrity scales with seats, and this coefficient is playtest's.**

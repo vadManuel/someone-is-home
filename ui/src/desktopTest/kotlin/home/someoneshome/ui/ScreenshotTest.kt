@@ -17,6 +17,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.unit.dp
 import home.someoneshome.model.AssignedWork
+import home.someoneshome.model.Balance
 import home.someoneshome.model.Destination
 import home.someoneshome.model.DriftPath
 import home.someoneshome.model.InterruptSweep
@@ -113,13 +114,19 @@ class ScreenshotTest {
             // Every line in and still short of D-128's party floor: the one state where the host
             // has done everything asked of them and the button is still defunct. What needed a
             // person's eye is whether the line above it reads as an instruction or as a fault.
-            "lobby-short" to lobbyOf(joined = 4, linesIn = 4, hosting = true),
+            // One below the floor rather than a literal four, so the frame stays the refusal it was
+            // drawn to be while MINIMUM_SEATS is temporarily lowered for three-phone testing.
+            "lobby-short" to lobbyOf(
+                joined = Balance.MINIMUM_SEATS - 1, linesIn = Balance.MINIMUM_SEATS - 1,
+                hosting = true,
+            ),
             // **Two phones, both lines in — the state a two-device evening actually reaches**, and
-            // three short of a party. The refusal is the pass, so there has to be a picture of it:
+            // short of a party. The refusal is the pass, so there has to be a picture of it:
             // `devicectl` has no screenshot command, and the phones' own logs can say what the
             // screen was told to draw and never what it drew. Rendered at the count two real phones
-            // produce rather than at four, because *2 JOINED* over *NEEDS 5 RESIDENTS* is the frame
-            // somebody has to be able to read as an instruction and not as a fault.
+            // produce, because *2 JOINED* over *NEEDS n RESIDENTS* is the frame somebody has to be
+            // able to read as an instruction and not as a fault. Two is below the floor at the
+            // ruled five and at the temporary three alike, so this frame is a refusal either way.
             "lobby-two-phones" to lobbyOf(joined = 2, linesIn = 2, hosting = true),
         )
         for ((name, lobby) in states) {
