@@ -83,6 +83,15 @@ class RoundClient(
     private val scope: CoroutineScope,
     private val flow: FlowModel,
     private val watch: LineWatch,
+    /**
+     * **The motor this seat's pushes reach**, handed straight down to [RoundOverTransport].
+     *
+     * Taken rather than built, because there is one Taptic Engine on a phone and one session's worth
+     * of it: `Cheats` builds the motor once and lends it to the haptic bench, the camera's scan
+     * window and this. Two engines on one phone is two engines competing for one motor, and an
+     * engine costs tens of milliseconds to start — which is spent at the moment of D-135's five.
+     */
+    private val buzzer: HouseBuzzer,
     private val note: (String) -> Unit,
 ) : RoundSeam {
 
@@ -110,6 +119,7 @@ class RoundClient(
     val round: RoundOverTransport = RoundOverTransport(
         scope = scope,
         flow = flow,
+        buzzer = buzzer,
         // The transport holds no socket of its own: there is one connection per phone and the
         // lobby owns it. A round that opened a second one would be a second seat.
         send = { frame -> up?.invoke(frame) },

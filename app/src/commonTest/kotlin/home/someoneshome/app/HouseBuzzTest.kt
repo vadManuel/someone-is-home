@@ -1,25 +1,45 @@
 package home.someoneshome.app
 
+import home.someoneshome.model.AssignedWork
 import home.someoneshome.model.Destination
+import home.someoneshome.model.DriftPath
 import home.someoneshome.model.Effect
 import home.someoneshome.model.EmitSchema
 import home.someoneshome.model.EgressType
+import home.someoneshome.model.HandshakeRhythm
 import home.someoneshome.model.Haptic
 import home.someoneshome.model.HapticStep
 import home.someoneshome.model.HouseBuzz
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MeetingPhase
 import home.someoneshome.model.MeetingTrigger
+import home.someoneshome.model.OrderLine
 import home.someoneshome.model.Role
 import home.someoneshome.model.Seat
+import home.someoneshome.model.SniffGroups
 import home.someoneshome.model.Sound
+import home.someoneshome.model.SubroutineInstance
+import home.someoneshome.model.SubroutineKind
 import home.someoneshome.model.Tick
+import home.someoneshome.model.protocol.RoundBody
+import home.someoneshome.model.protocol.RoundMessage
 import home.someoneshome.model.protocol.RoundWire
+import home.someoneshome.model.protocol.TransportFrame
 import home.someoneshome.model.WinRoute
 import home.someoneshome.model.Winner
 import home.someoneshome.platform.RecordingHaptics
+import home.someoneshome.ui.FlowModel
+import home.someoneshome.ui.PanelState
+import home.someoneshome.ui.ScreenId
+import home.someoneshome.ui.Subroutine
+import home.someoneshome.ui.SubroutineModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
@@ -500,5 +520,351 @@ class HouseBuzzTest {
             recordOf(Effect.MeetingResult(null, voted = 6, living = 6, haptic = Haptic.Short)),
             "the tally buzzes differently depending on whether the room Restrained anybody",
         )
+    }
+
+    // ---- The app root, and whether anything down there is actually playing ------------------------
+
+    /**
+     * **EVERY KIND THAT BUZZES HAS A PLAYER IN THE APP ROOT — E-D1-1, MADE IMPOSSIBLE.**
+     *
+     * This is the test the last four units were missing, and its absence is the whole reason there
+     * is an N4. `HouseBuzzer` was real, exhaustive, and covered by nine tests above; every one of
+     * them handed it an effect **by hand**. Nothing asked the only question that mattered — *does
+     * anything in the shipping app ever call it* — and the answer was no, for weeks, while five
+     * phones in a dark house were pushed thirty-eight kinds of message and none of them vibrated.
+     *
+     * So this drives the **production funnel** instead of the class: every kind in the game, encoded
+     * as the house encodes it, arriving at a real [RoundOverTransport] the way a real socket delivers
+     * it, with a recording motor at the far end. A kind that carries a `Haptic` or rings and whose
+     * arrival produced nothing **fails here by name**, and so does the entire disease: delete the
+     * buzzer's call in `apply` and thirteen kinds fail at once.
+     *
+     * The silent kinds are asserted too, in the same sweep and for the same money. *Silent* is a
+     * claim about what a room can feel, and a claim nothing walks is a comment.
+     */
+    @Test
+    fun everyKindThatBuzzesHasAPlayerInTheAppRoot() = runBlocking {
+        val motor = RecordingHaptics()
+        val kinds = everyKind()
+        // The panel is real, because the funnel writes to it and a stub would be testing the stub.
+        // Parked on the assembly gate: the meeting kinds in the fixture have a screen waiting there,
+        // and a phone on the springboard would take a different route through `houseSaid`.
+        val flow = FlowModel(PanelState(screen = ScreenId.Assemble))
+        val round = RoundOverTransport(
+            this, flow, buzzer = HouseBuzzer(motor), send = { },
+        )
+        val draining = launch { round.run() }
+
+        val played = mutableMapOf<String, Int>()
+        kinds.forEachIndexed { index, effect ->
+            val before = motor.count
+            val push = RoundBody.Push(seq = index + 1L, message = RoundWire.project(effect))
+            round.frameArrived(TransportFrame.Carry(RoundWire.encode(push)))
+            withTimeout(5_000) { while (round.held < index + 1L) delay(1) }
+            played[EmitSchema.kindOf(effect).name] = motor.count - before
+        }
+        draining.cancel()
+
+        val owed = kinds.filter { it.haptic() != null || it.ringing() }
+            .map { EmitSchema.kindOf(it).name }.toSet()
+        val silent = kinds.map { EmitSchema.kindOf(it).name }.toSet() - owed
+
+        assertEquals(
+            emptySet(), owed.filter { played[it] == 0 }.toSet(),
+            "these kinds carry a haptic and the app root played nothing when one arrived — " +
+                "E-D1-1 exactly: a buzz nobody has a caller for is a buzz no player ever feels",
+        )
+        assertEquals(
+            emptySet(), silent.filter { (played[it] ?: 0) > 0 }.toSet(),
+            "these kinds carry no haptic and the phone went off anyway",
+        )
+        // And the sweep really did reach the motor, so a rig that silently delivered nothing
+        // cannot pass by having asserted two empty sets against each other.
+        assertTrue(owed.isNotEmpty() && motor.count >= owed.size, "no kind reached the motor at all")
+    }
+
+    /**
+     * **The three Subroutines that ARE a haptic play the pattern the house dealt** (D-137, D-140,
+     * Handshake's rhythm) — and they play the *instance*, never the port's fixture.
+     *
+     * The parameters are drawn per scan, ride the `ScanAnswered`, and are read by the same `of` the
+     * screens read them with. A phone that fell back to `SubroutineModel.HANDSHAKE` would buzz a
+     * rhythm the house never asked for and then be graded on the answer to the one it did — a defect
+     * with nothing wrong on any screen, which is why the fixture is asserted **against** here rather
+     * than merely not used.
+     */
+    @Test
+    fun aSubroutinePlaysTheQuestionTheHouseDealtAndNotTheFixture() {
+        // Deliberately not `SubroutineModel.HANDSHAKE_PARAMETERS` (3, 3, 6, 2): four beats at gaps
+        // no fixture in this app uses, so a fallback is a failure rather than a coincidence.
+        val dealt = listOf(4, 7, 2, 9)
+        val motor = RecordingHaptics()
+        val buzzer = HouseBuzzer(motor)
+
+        buzzer.heard(
+            RoundWire.project(
+                Effect.ScanAnswered(
+                    Seat(0),
+                    SubroutineInstance(entry = 2, subroutine = SubroutineKind.Handshake, parameters = dealt),
+                ),
+            ),
+        )
+        assertEquals(emptyList(), motor.played, "the scan's answer buzzed the question at the briefing")
+
+        buzzer.showing(ScreenId.SubHandshake)
+        assertEquals(
+            listOf(HandshakeRhythm.of(dealt).script), motor.played,
+            "the Handshake did not play the rhythm the house dealt",
+        )
+        assertTrue(
+            motor.played.single() != SubroutineModel.HANDSHAKE.script,
+            "the Handshake played the port's fixture — a rhythm no house ever asked for",
+        )
+    }
+
+    /**
+     * The other two of the three, and the seven that are silent because their question is light.
+     *
+     * Sniff's two groups and Drift's *now* are each asserted against `model`'s own reading of the
+     * same parameters, so a script composed on this side rather than read off the instance fails.
+     */
+    @Test
+    fun sniffAndDriftBuzzTheirQuestionAndTheOtherSevenDoNot() {
+        val sniff = listOf(2, 6, 9)
+        val drift = SubroutineModel.DRIFT_PARAMETERS
+        assertEquals(
+            listOf(SniffGroups.of(sniff).script), scriptFor(SubroutineKind.Sniff, sniff),
+            "Sniff did not buzz its two groups",
+        )
+        assertEquals(
+            listOf(DriftPath.of(drift).script), scriptFor(SubroutineKind.Drift, drift),
+            "Drift did not buzz its now-pulse",
+        )
+
+        val quiet = SubroutineKind.entries -
+            setOf(SubroutineKind.Handshake, SubroutineKind.Sniff, SubroutineKind.Drift)
+        val noisy = quiet.filter { kind ->
+            // Their parameters are their own shapes; what is asserted is that nothing is played
+            // whatever they carry, so an empty list is the honest input.
+            scriptFor(kind, emptyList()).isNotEmpty()
+        }
+        assertEquals(
+            emptyList(), noisy,
+            "these Subroutines ask their question with light and buzzed one as well",
+        )
+    }
+
+    /**
+     * **The ring stops when the player walks off it, and stops on nothing else** (D-160).
+     *
+     * *Until answered* needed something that answers, and until now nothing did: `HouseBuzzer.answered`
+     * had no caller in the app at all, so a phone rung by a meeting would have rung until the round
+     * ended. Answering a house call is walking off the ring — the six seconds running out to the
+     * assembly gate, or `MeetingCalling` moving the caller to their own screen.
+     *
+     * **The other half is what a screen change may NOT do.** D-135's four remaining Longs push screens
+     * of their own, so a stop on every arrival would cut the Egress alert's long buzz in the frame it
+     * started — the loudest thing the house says, silenced by the screen it opened.
+     */
+    @Test
+    fun theRingStopsWhenThePhoneWalksOffItAndTheLongsSurviveTheScreenTheyOpen() {
+        val motor = RecordingHaptics()
+        val buzzer = HouseBuzzer(motor)
+
+        buzzer.heard(Effect.MeetingOpened(Seat(0), MeetingTrigger.MeetingCard, Haptic.Long))
+        buzzer.showing(ScreenId.Call)
+        assertTrue(motor.ringing, "the phone stopped ringing on the ring's own screen")
+        assertEquals(0, motor.stopped)
+
+        buzzer.showing(ScreenId.Assemble)
+        assertTrue(!motor.ringing, "the phone was answered and it is still ringing")
+        assertEquals(1, motor.stopped)
+
+        // And the caller's own route off the ring (E-R1-1), which is the other way it is answered.
+        motor.clear()
+        buzzer.heard(Effect.MeetingOpened(Seat(0), MeetingTrigger.MeetingCard, Haptic.Long))
+        buzzer.showing(ScreenId.Calling)
+        assertTrue(!motor.ringing, "the caller's phone rang on past the screen that says they called")
+
+        // The Egress: one Long, then the alert it opens. The Long must still be the last thing said.
+        motor.clear()
+        buzzer.heard(
+            Effect.EgressOpened(Seat(0), EgressType.Beacon, NODES, 180, Haptic.Long),
+        )
+        buzzer.showing(ScreenId.Banner)
+        assertEquals(0, motor.stopped, "the screen the Egress opened cut the Egress's own long buzz")
+        assertEquals(listOf(HouseBuzz.script(Haptic.Long)), motor.played)
+    }
+
+    /**
+     * **The call is the only thing that repeats, and the scripts are included in *only*.**
+     *
+     * `theCallIsTheOnlyThingThatKeepsGoing` walks the effects; this walks the other channel. A
+     * Subroutine's question that looped would be a phone buzzing a rhythm at somebody until they
+     * left the screen — in a silent house, on the darkest Subroutine on the roster.
+     */
+    @Test
+    fun theCallIsTheOnlyScriptThatRepeats() {
+        val repeating = SubroutineKind.entries.filter { kind ->
+            val motor = RecordingHaptics()
+            playOn(motor, kind, parametersFor(kind))
+            motor.plays.any { it.repeating }
+        }
+        assertEquals(emptyList(), repeating, "a Subroutine's question repeats until something stops it")
+
+        val ringing = RecordingHaptics()
+        HouseBuzzer(ringing).heard(
+            Effect.MeetingOpened(Seat(0), MeetingTrigger.MeetingCard, Haptic.Long),
+        )
+        assertTrue(
+            ringing.plays.single().repeating,
+            "the one thing in this game that must repeat has stopped repeating",
+        )
+    }
+
+    /**
+     * Walking off a Subroutine stops its question. The screen went away; the phone should not still
+     * be asking — a rhythm buzzing in a pocket in another room is the player's own position, audible.
+     */
+    @Test
+    fun leavingASubroutineStopsItsQuestion() {
+        val motor = RecordingHaptics()
+        val buzzer = HouseBuzzer(motor)
+        openOn(buzzer, SubroutineKind.Sniff, parametersFor(SubroutineKind.Sniff))
+        buzzer.showing(ScreenId.SubSniff)
+        assertEquals(1, motor.count)
+        buzzer.showing(ScreenId.Work)
+        assertEquals(1, motor.stopped, "the phone kept asking a question the player had walked away from")
+    }
+
+    /**
+     * **A phone standing on one Subroutine with another one open buzzes nothing.**
+     *
+     * The fail-closed direction, and it is not hypothetical: BEGIN opened the port's fixture for a
+     * whole build (the payoff run), so *the screen and the open instance disagree* is a state this
+     * app has really been in. The other direction is a player tapping a rhythm back against an
+     * answer key for a different piece of work.
+     */
+    @Test
+    fun aScreenThatIsNotTheOpenSubroutinesBuzzesNothing() {
+        val motor = RecordingHaptics()
+        val buzzer = HouseBuzzer(motor)
+        openOn(buzzer, SubroutineKind.Handshake, parametersFor(SubroutineKind.Handshake))
+        buzzer.showing(ScreenId.SubSniff)
+        assertEquals(emptyList(), motor.played, "a Sniff screen buzzed the Handshake the house dealt")
+    }
+
+    /**
+     * A phone that has scanned nothing buzzes nothing, which is every phone with no house attached.
+     *
+     * The fixture is right there in `ui` and is what a nullable open instance would be defaulted to
+     * by anybody tidying this up. [assertNotNull] on the fixture keeps that sentence honest.
+     */
+    @Test
+    fun aPhoneThatHasScannedNothingBuzzesNothing() {
+        assertNotNull(SubroutineModel.HANDSHAKE.script.firstOrNull())
+        val motor = RecordingHaptics()
+        HouseBuzzer(motor).showing(ScreenId.SubHandshake)
+        assertEquals(emptyList(), motor.played, "a phone with nothing open buzzed a question anyway")
+    }
+
+    /**
+     * **THE HANDSHAKE, PLAYABLE — the whole way, from the house's push to the motor.**
+     *
+     * The owner's report on the payoff run was *"the handshake minigame does not vibrate at all"*,
+     * and the reason had two halves that never met: BEGIN opened the port's fixture, and nothing in
+     * the app called `HouseBuzzer` outside a bench. Every other test in this file drives one half.
+     * This drives the join — **and it is the only one that does**, which is exactly the gap that let
+     * a Subroutine be unplayable through four green units.
+     *
+     * A real work order, a real `ScanAnswered` off the wire, the real `beginSubroutine` with no
+     * arguments (the call the button makes), a real [FlowModel] reporting its own arrivals. What is
+     * asserted at the end is the rhythm the house dealt, in milliseconds, as a hand would feel it.
+     */
+    @Test
+    fun theHandshakeIsPlayableFromThePushAllTheWayToTheMotor() {
+        val dealt = listOf(5, 2, 8)
+        val motor = RecordingHaptics()
+        val buzzer = HouseBuzzer(motor)
+        // The seam under test: `ui` reporting where this phone is, and nothing else joining them.
+        val flow = FlowModel(PanelState(screen = ScreenId.Work), onScreen = buzzer::showing)
+
+        fun said(message: RoundMessage) {
+            buzzer.heard(message)
+            flow.houseSaid(message)
+        }
+
+        // The work order first, because the caught scan is a join of two pushed facts and an answer
+        // naming an entry no line holds moves nothing.
+        said(
+            RoundWire.project(
+                Effect.WorkOrderIssued(
+                    Seat(0),
+                    listOf(
+                        OrderLine.Known(
+                            index = 0,
+                            work = AssignedWork.Subroutine(SubroutineKind.Handshake),
+                            done = false,
+                            at = listOf(Destination(MarkerId("SEED001"), "circle", "UTILITY")),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        said(
+            RoundWire.project(
+                Effect.ScanAnswered(
+                    Seat(0),
+                    SubroutineInstance(0, SubroutineKind.Handshake, dealt),
+                ),
+            ),
+        )
+        assertEquals(ScreenId.ScanCaught, flow.state.screen, "the scan's answer did not reach the briefing")
+        assertEquals(emptyList(), motor.played, "the phone buzzed the question at the briefing")
+
+        // BEGIN, called the way the button calls it: no arguments, off this phone's own last read.
+        flow.beginSubroutine()
+
+        assertEquals(ScreenId.SubHandshake, flow.state.screen, "BEGIN opened no Handshake")
+        assertEquals(
+            listOf(HandshakeRhythm.of(dealt).script), motor.played,
+            "the Handshake still does not vibrate — the owner's payoff-run report, unchanged",
+        )
+    }
+
+    /** The house's own answer, opened on this phone, without going near a screen id by hand. */
+    private fun openOn(buzzer: HouseBuzzer, kind: SubroutineKind, parameters: List<Int>) =
+        buzzer.heard(
+            RoundWire.project(
+                Effect.ScanAnswered(
+                    Seat(0), SubroutineInstance(entry = 0, subroutine = kind, parameters = parameters),
+                ),
+            ),
+        )
+
+    /** Open one and stand on its own screen — the two acts BEGIN is, in order. */
+    private fun playOn(motor: RecordingHaptics, kind: SubroutineKind, parameters: List<Int>) {
+        val buzzer = HouseBuzzer(motor)
+        openOn(buzzer, kind, parameters)
+        // Named rather than skipped: a Subroutine with no screen would make every assertion below
+        // it vacuously true, which is the shape of pass this project keeps writing down.
+        buzzer.showing(assertNotNull(Subroutine.of(kind).screen, "$kind has no screen to stand on"))
+    }
+
+    private fun scriptFor(kind: SubroutineKind, parameters: List<Int>): List<List<HapticStep>> {
+        val motor = RecordingHaptics()
+        playOn(motor, kind, parameters)
+        return motor.played
+    }
+
+    /**
+     * Lawful parameters for the three that buzz, and an empty list for the seven that do not —
+     * whose scripts are `null` before anything reads a number, so there is none to supply.
+     */
+    private fun parametersFor(kind: SubroutineKind): List<Int> = when (kind) {
+        SubroutineKind.Handshake -> SubroutineModel.HANDSHAKE_PARAMETERS
+        SubroutineKind.Sniff -> SubroutineModel.SNIFF_PARAMETERS
+        SubroutineKind.Drift -> SubroutineModel.DRIFT_PARAMETERS
+        else -> emptyList()
     }
 }

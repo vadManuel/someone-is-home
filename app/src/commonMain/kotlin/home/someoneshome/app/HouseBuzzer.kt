@@ -1,10 +1,19 @@
 package home.someoneshome.app
 
+import home.someoneshome.model.DriftPath
 import home.someoneshome.model.Effect
+import home.someoneshome.model.HandshakeRhythm
 import home.someoneshome.model.Haptic
+import home.someoneshome.model.HapticStep
 import home.someoneshome.model.HouseBuzz
+import home.someoneshome.model.MalformedSubroutineParameters
+import home.someoneshome.model.SniffGroups
+import home.someoneshome.model.SubroutineInstance
+import home.someoneshome.model.SubroutineKind
 import home.someoneshome.model.protocol.RoundMessage
 import home.someoneshome.platform.Haptics
+import home.someoneshome.ui.ScreenId
+import home.someoneshome.ui.Subroutine
 
 /**
  * **Every buzz in the game goes through here, and there is nowhere else to get one.**
@@ -12,6 +21,24 @@ import home.someoneshome.platform.Haptics
  * An effect arrives on this phone; if it carries a [Haptic], the motor plays that kind. That is
  * the whole class, and its shortness is the point — D-102's *identical for every player* survives
  * exactly as long as there is one place that turns an arrival into a vibration.
+ *
+ * ### It is built by [RoundOverTransport], which is what closes E-D1-1
+ *
+ * For weeks the only construction of this class was `HapticCheat`'s, in the cheat source set — so a
+ * release build had **no haptic wiring at all** and a real round buzzed on nobody's phone. The
+ * pushes named their haptic in the log and the motor never heard about it; the Handshake, whose
+ * whole question is a rhythm, was the one Subroutine a person could reach and the one they could
+ * not perform. The recorded prescription was *the day the push pipeline lands, `HouseBuzzer` moves
+ * to the app root beside it*, and this is that: the round's client half **takes one and cannot be
+ * built without one**, so a root that forgets to wire the motor is a root that does not compile.
+ * The bench keeps its own, on the same session's motor.
+ *
+ * ### Two channels, and the second one is the house's questions
+ *
+ * [heard] is the house saying a thing: a [Haptic] off the push, or D-160's ring. [showing] is the
+ * other half of what a motor is for in this game — three of the ten Subroutines put their entire
+ * question in it, and the numbers are the house's, drawn per scan. See that method for why a screen
+ * may settle *when* a script plays and may never settle *which buzz* an arrival makes.
  *
  * ### It is not `PanelVals.buzzes`, and the two must never be joined
  *
@@ -36,7 +63,37 @@ import home.someoneshome.platform.Haptics
  * same fail-closed direction as the schema: the failure is *"my effect doesn't buzz"*, found the
  * first time anyone runs it, never *"my effect buzzes on one role's phone"*, found never.
  */
-class HouseBuzzer(private val haptics: Haptics) {
+class HouseBuzzer(
+    private val haptics: Haptics,
+    /**
+     * Where a refusal goes. **Rule 6**: errors are silent to the player and loud to the authority,
+     * so the one thing that can go wrong down here — a Subroutine instance whose parameters are not
+     * a question — is written to a console and to nothing a player can see.
+     */
+    private val note: (String) -> Unit = {},
+) {
+
+    /**
+     * **The question this phone's last scan opened, or null.**
+     *
+     * Three of the ten Subroutines *are* a haptic pattern — Handshake's rhythm, Sniff's two groups,
+     * Drift's *now* — and the pattern is the house's, drawn per scan and carried on the instance in
+     * [SubroutineInstance.parameters]. It is remembered here because the arrival and the playing are
+     * two different moments: the house answers the scan, the player reads the briefing on the caught
+     * scan, and *then* presses BEGIN. A script played on arrival would buzz the question at somebody
+     * reading the sentence that explains it.
+     *
+     * **Null is silence and never a fixture.** `SubroutineModel.HANDSHAKE` and its two neighbours are
+     * the unhoused port's furniture; a phone that fell back to one would buzz a rhythm the house
+     * never dealt and then grade the player's answer against the one it did.
+     */
+    private var open: SubroutineInstance? = null
+
+    /** True from a ring until anything silences it. What [showing] needs to not cut a Long short. */
+    private var ringing: Boolean = false
+
+    /** The Subroutine screen whose script is playing, or null. Cleared by anything the house says. */
+    private var scripting: ScreenId? = null
 
     /**
      * An effect landed on this phone. Buzz if it carries a kind, ring if it is the call, and stay
@@ -48,11 +105,9 @@ class HouseBuzzer(private val haptics: Haptics) {
      * same thing, which is the whole of D-102.
      */
     fun heard(effect: Effect) {
-        if (effect.ringing()) {
-            haptics.play(HouseBuzz.RING, repeating = true)
-            return
-        }
-        haptics.buzz(effect.haptic() ?: return)
+        if (effect is Effect.ScanAnswered) open = effect.opened
+        if (effect.ringing()) return ring()
+        buzz(effect.haptic() ?: return)
     }
 
     /**
@@ -70,11 +125,9 @@ class HouseBuzzer(private val haptics: Haptics) {
      * game and asserts the two overloads agree, so the second list cannot drift from the first.
      */
     fun heard(message: RoundMessage) {
-        if (message.ringing()) {
-            haptics.play(HouseBuzz.RING, repeating = true)
-            return
-        }
-        haptics.buzz(message.haptic() ?: return)
+        if (message is RoundMessage.ScanAnswered) open = message.opened
+        if (message.ringing()) return ring()
+        buzz(message.haptic() ?: return)
     }
 
     /**
@@ -83,13 +136,121 @@ class HouseBuzzer(private val haptics: Haptics) {
      * D-160 makes the call the one signal in the game that does not give up: it repeats
      * indefinitely, because a meeting has been called and the round stops until everybody has it.
      * Something has to end it, and the something is a person picking the phone up. The screen that
-     * knows they did calls this.
+     * knows they did calls this, through [showing].
      *
      * It is [Haptics.stop] and nothing cleverer on purpose: the motor replaces rather than queues,
      * so anything the house says next silences the ring anyway, and a second mechanism for
      * silence would be a second thing to get wrong on the one signal a player must not miss.
      */
-    fun answered() = haptics.stop()
+    fun answered() {
+        ringing = false
+        haptics.stop()
+    }
+
+    /**
+     * **This phone moved to a screen** — and there are exactly two things the motor does about it.
+     *
+     * ### ⚠️ It is not `PanelVals.BUZZING` and it must never grow into it
+     *
+     * The class KDoc spends its length on why a screen may not decide a *buzz*, and nothing here
+     * touches one: no [Haptic] is chosen on this path, no branch reads a role or a seat, and the
+     * only kind-bearing arrival is still the house's own push through [heard]. What a screen is
+     * allowed to settle is the two questions that are genuinely about *where the player's attention
+     * is*, neither of which any push can answer:
+     *
+     * - **The ring stops when this phone stops ringing.** D-160's *until answered* needs something
+     *   that answers, and answering a phone is walking off the ring — the six seconds running out,
+     *   or `MeetingCalling` moving the caller to their own screen. It fires only while [ringing], so
+     *   a screen change during one of D-135's four remaining Longs cannot cut it short.
+     * - **A Subroutine's own question is buzzed when its work opens.** Handshake's rhythm, Sniff's
+     *   two groups and Drift's *now* are the house's [open] instance played back, and the moment a
+     *   player is owed them is the moment they are standing on the screen that takes the answer.
+     *
+     * ### It plays the instance and never a fixture, and the mismatch is silence
+     *
+     * The screen is resolved to a [SubroutineKind] through the roster and compared with the kind the
+     * house actually dealt. **A phone standing on a Handshake with a Sniff open buzzes nothing** —
+     * which is the fail-closed direction, because the other one is a player tapping back a rhythm
+     * against an answer key for a different piece of work.
+     */
+    fun showing(screen: ScreenId) {
+        if (ringing && screen !in RINGS) answered()
+        val playing = scripting
+        if (playing != null && playing != screen) {
+            // The work went away and the phone is still talking about it. `stop` rather than
+            // letting it run out: a Sniff left mid-question is a phone buzzing a question at a
+            // player who is somewhere else in a dark house.
+            scripting = null
+            haptics.stop()
+        }
+        val instance = open ?: return
+        if (Subroutine.on(screen)?.kind != instance.subroutine) return
+        val script = instance.script(note) ?: return
+        scripting = screen
+        haptics.play(script)
+    }
+
+    private fun ring() {
+        ringing = true
+        scripting = null
+        haptics.play(HouseBuzz.RING, repeating = true)
+    }
+
+    private fun buzz(haptic: Haptic) {
+        ringing = false
+        scripting = null
+        haptics.buzz(haptic)
+    }
+
+    private companion object {
+
+        /**
+         * **The screens this phone is ringing on, and there are two.** `Call` and `Found` are the
+         * same summons with a different header; `Calling` is deliberately absent, because the caller
+         * arriving there is the caller having been answered (E-R1-1).
+         */
+        val RINGS: Set<ScreenId> = setOf(ScreenId.Call, ScreenId.Found)
+    }
+}
+
+/**
+ * **The pattern a Subroutine instance IS, or null for the seven that are looked at instead.**
+ *
+ * Three of the design's ten put their whole question in the motor, and the numbers that make each
+ * one are the house's: drawn per scan in `core/Subroutines.kt`, carried on
+ * [SubroutineInstance.parameters], read here by the same `of` the screens read them with. **Nothing
+ * is composed on this side** — the app root plays a list `model` built.
+ *
+ * ### Exhaustive, in [Effect.haptic]'s direction
+ *
+ * An eleventh [SubroutineKind] does not compile until somebody has written down whether it buzzes,
+ * and the answer they will write is `null`, which is the safe one: the failure is *my Subroutine is
+ * silent*, found the first time anyone opens it, never *my Subroutine buzzes somebody else's
+ * question*.
+ *
+ * ### A malformed instance is silence and a console line (rule 6)
+ *
+ * `of` refuses parameters that are not a question — equal Sniff groups, a Handshake gap the wrong
+ * side of a second — by throwing, and it throws at the *read*, which is here. A throw that reached
+ * the composition would blank the screen, and a blank phone in a dark house reads as a revocation
+ * (rule 5). So it is caught, the phone stays quiet, and the authority's log says which instance.
+ */
+internal fun SubroutineInstance.script(note: (String) -> Unit = {}): List<HapticStep>? = try {
+    when (subroutine) {
+        // ---- The three the house asks with the motor ------------------------------------------
+        SubroutineKind.Handshake -> HandshakeRhythm.of(parameters).script
+        SubroutineKind.Sniff -> SniffGroups.of(parameters).script
+        SubroutineKind.Drift -> DriftPath.of(parameters).script
+
+        // ---- The seven asked with light. Their questions are on the glass ---------------------
+        SubroutineKind.Replay, SubroutineKind.Interrupt, SubroutineKind.ParityCheck,
+        SubroutineKind.Deallocate, SubroutineKind.Short, SubroutineKind.SignalTrace,
+        SubroutineKind.Jam,
+        -> null
+    }
+} catch (refused: MalformedSubroutineParameters) {
+    note("A SUBROUTINE ARRIVED THAT IS NOT A QUESTION — $subroutine · ${refused.detail}")
+    null
 }
 
 /**

@@ -142,6 +142,21 @@ fun CheatRoot() {
     // link has to reach when the house ends a round are a screen and a typed line, both of which
     // live on the panel. Filled on the line below the panel is built.
     val panel = remember { mutableStateOf<FlowModel?>(null) }
+    // ONE motor for the whole session, lent to the round, both benches and the scan window:
+    // CoreHaptics takes tens of milliseconds to start an engine, and two of them on one phone is
+    // two engines competing for one Taptic Engine.
+    //
+    // **It is built up here, above the panel, because the round needs it and so does the panel.**
+    // It used to be built two hundred lines down beside the benches, which is precisely how long
+    // the game went without a buzz in it: the only things that could see it were benches.
+    val haptics = remember { deviceHaptics() }
+    // **THE MOTOR, JOINED TO THE ROUND — E-D1-1 CLOSED.** Every push this seat is sent goes through
+    // `RoundOverTransport`, which now cannot be built without one of these; the panel reports its
+    // own arrivals to it so the ring can be answered and a Subroutine's question can be buzzed at
+    // the moment its work opens. Before this line, `HouseBuzzer` had no caller outside the bench
+    // and no push in a real round reached the Taptic Engine — which is why the owner's Handshake
+    // "does not vibrate at all".
+    val buzzer = remember { HouseBuzzer(haptics) { line -> println("[haptic] $line") } }
     // Held in a named val because the round is armed off the house behind it: `armingInputs` is
     // what LIGHTS OUT reads and `emit` is the authority's only exit to the phones. Every other
     // caller in this file still reaches it as a `LobbyLink` and cannot see either.
@@ -237,6 +252,12 @@ fun CheatRoot() {
                     ) { line -> println("[house] $line"); transport.note(line) }
                 }
             },
+            // **WHERE THIS PHONE IS, TOLD TO THE MOTOR.** `ui` cannot see `platform`, so the two
+            // things a screen legitimately settles about a vibration are reported out to here: a
+            // ring stops when the player walks off it (D-160's *until answered*), and Handshake's
+            // rhythm, Sniff's groups and Drift's *now* are buzzed when their work opens. No haptic
+            // is chosen on this line and none may be — see `HouseBuzzer.showing`.
+            onScreen = buzzer::showing,
         ).also { panel.value = it }
     }
     // The deck that stands in for a camera, kept now that there IS a camera. It is a tour of the
@@ -245,10 +266,6 @@ fun CheatRoot() {
     // the view switch so dropping into the picker and back does not deal from the top again.
     val scanner = remember { SeededCardScanner() }
     LaunchedEffect(scanner) { scanner.start(flow::cardScanned) }
-    // ONE motor for the whole session, lent to both benches: CoreHaptics takes tens of
-    // milliseconds to start an engine, and two of them on one phone is two engines competing for
-    // one Taptic Engine.
-    val haptics = remember { deviceHaptics() }
     val bench = remember { HapticCheat(haptics) }
     // And one camera, held here for the same reason and released far more carefully: a capture
     // session holds the lens, the ISP and the battery, so it is started where a card could be read
@@ -269,7 +286,7 @@ fun CheatRoot() {
     // because it needs the flow — `houseSaid` is the one consumer — and handed to the lobby's
     // socket through the seam that was promised it above.
     val roundClient = remember {
-        RoundClient(scope, flow, watch) { line -> println("[round] $line"); transport.note(line) }
+        RoundClient(scope, flow, watch, buzzer) { line -> println("[round] $line"); transport.note(line) }
             // Both knots tied in one place: the lobby gets the seam it was promised, and the four
             // meeting controls, the Subroutine's hand-over and page 2's two fires get the way up
             // they were promised (E-P2-3). Before this line every one of them reached nobody.

@@ -811,6 +811,36 @@ class FlowModel(
      * arms nobody. `FlowModel` decides none of that: it reports the press.
      */
     private val onLightsOut: () -> Unit = {},
+    /**
+     * **This phone landed on a screen** — reported, never interpreted.
+     *
+     * [onLightsOut]'s shape and its argument, for the other output `ui` cannot reach: the motor is
+     * `platform`'s and `ui` may not see `platform`, so the two things a *screen* legitimately
+     * settles about a vibration have to be reported outward and settled in the app root.
+     *
+     * They are exactly two, and both are about where a player's attention is rather than about what
+     * the house said. **A ringing phone stops ringing when it is answered** (D-160), and answering
+     * is walking off the ring — the six seconds running out, or `MeetingCalling` moving the caller
+     * to their own screen; nothing else in the app knows that happened. **A Subroutine whose whole
+     * question is a rhythm buzzes it when its work opens** — Handshake, Sniff and Drift — and the
+     * moment they are owed it is the moment they arrive on the screen that takes the answer.
+     *
+     * ### ⚠️ It is not a buzzing table and this layer must never make it one
+     *
+     * D-134: *the buzz rides the effect rather than living in a table in `ui`*, because a client-side
+     * lookup that could say *"…and if it was you, buzz differently"* is the device deciding a game
+     * answer. Nothing here chooses a [home.someoneshome.model.Haptic], and nothing here may: what
+     * goes out of this line is a [ScreenId] and nothing else, and `PanelVals.BUZZING` — the set of
+     * screens that arrive unasked — stays what it has always been, a description of the design that
+     * [houseDriving] is derived from and that no motor reads.
+     *
+     * **Fired on a change of screen and not on every arrival**, so that a `copy` which lands on the
+     * screen the phone is already on cannot re-buzz a question the player is halfway through.
+     *
+     * Defaulted to nothing: every render, every screenshot and every test gets a phone with no
+     * motor behind it, which is what a desktop harness is.
+     */
+    private val onScreen: (ScreenId) -> Unit = {},
 ) {
 
     var state: PanelState by mutableStateOf(initial)
@@ -928,7 +958,8 @@ class FlowModel(
      * because a meeting has four ways in and no screen knows which of them ended.
      */
     private fun arrive(next: PanelState) {
-        val beginning = next.screen != state.screen && next.screen in MeetingModel.STARTS
+        val moved = next.screen != state.screen
+        val beginning = moved && next.screen in MeetingModel.STARTS
         if (beginning) {
             meeting.meetingBegan()
             // **The couch's ballot is a meeting's, like everything else the model above clears.**
@@ -938,6 +969,11 @@ class FlowModel(
             selections.clear()
         }
         state = if (beginning) next.copy(ballots = null) else next
+        // **After the state, so that whatever the app root does about it reads the screen this
+        // phone is actually on.** The two things it does — stopping a ring, buzzing a Subroutine's
+        // question — are both answers to *where the player is now*, and a report made before the
+        // move would be answering about where they were.
+        if (moved) onScreen(next.screen)
     }
 
     // ---- The Surge, five seconds of it (D-182) ---------------------------------------------------

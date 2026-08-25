@@ -22,6 +22,7 @@ import home.someoneshome.model.protocol.RoundBody
 import home.someoneshome.model.protocol.RoundWire
 import home.someoneshome.model.protocol.SeatToken
 import home.someoneshome.model.protocol.TransportFrame
+import home.someoneshome.platform.SilentHaptics
 import home.someoneshome.platform.monotonicNanos
 import home.someoneshome.platform.transport.ClientSession
 import home.someoneshome.platform.transport.EffectWire
@@ -444,6 +445,10 @@ class EffectPushTest {
             )
             round = RoundOverTransport(
                 scope, flow,
+                // This rig's subject is what a phone is TOLD, and it compares two [PanelState]s.
+                // A silent motor says so rather than being defaulted into: the constructor has no
+                // default, so nothing that carries pushes can be built having forgotten the motor.
+                buzzer = HouseBuzzer(SilentHaptics),
                 send = { frame -> client.send(frame) },
                 onEvent = onEvent,
                 onInbound = onInbound,

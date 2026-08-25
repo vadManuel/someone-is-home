@@ -9,6 +9,7 @@ import home.someoneshome.model.protocol.RoundBody
 import home.someoneshome.model.protocol.RoundMessage
 import home.someoneshome.model.protocol.RoundWire
 import home.someoneshome.model.protocol.TransportFrame
+import home.someoneshome.platform.RecordingHaptics
 import home.someoneshome.ui.FlowModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -41,7 +42,9 @@ class RoundClientTest {
         val said = mutableListOf<String>()
         val watch = LineWatch { said += it }
         val flow = FlowModel()
-        val client = RoundClient(scope, flow, watch) { said += it }
+        /** The session's motor, recorded — what this seat's pushes actually did to the hand. */
+        val motor = RecordingHaptics()
+        val client = RoundClient(scope, flow, watch, HouseBuzzer(motor)) { said += it }
 
         /** One push, as it would really arrive: encoded, wrapped, and off a socket. */
         fun push(seq: Long, message: RoundMessage) = client.round.frameArrived(

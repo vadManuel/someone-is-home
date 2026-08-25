@@ -47,6 +47,22 @@ class RoundOverTransport(
      * other; the in-process source hands the same [RoundMessage] to the same method.
      */
     private val flow: FlowModel,
+    /**
+     * **The motor, and it is not optional** (E-D1-1, closed here).
+     *
+     * Every push that reaches a screen reaches it through [apply], so this is the one place a
+     * delivered message can be turned into a vibration — and it is a **required** constructor
+     * parameter rather than a defaulted one on purpose. A default would be exactly the arrangement
+     * that made this unit necessary: for weeks `HouseBuzzer` was real, tested, and constructed
+     * nowhere but a bench, so five phones in a dark house were pushed thirty-eight kinds of message
+     * and not one of them buzzed. With no default, a root that has not decided what the motor is
+     * does not compile, and a target with no motor says so out loud by passing
+     * [home.someoneshome.platform.SilentHaptics].
+     *
+     * It is here rather than beside `flow.houseSaid` in `ui` because `ui` cannot see `platform`, and
+     * D-134 wants it here anyway: **the buzz rides the effect**, not a table keyed on screens.
+     */
+    private val buzzer: HouseBuzzer,
     /** Client → host, up this phone's own socket. */
     private val send: suspend (TransportFrame) -> Unit,
     private val onEvent: (String) -> Unit = {},
@@ -122,7 +138,21 @@ class RoundOverTransport(
         val body = RoundWire.decodeOrNull(carried) ?: return
         when (body) {
             is RoundBody.Push -> when (val landing = inbox.arrived(body)) {
-                is RoundInbox.Landing.Apply -> flow.houseSaid(landing.message)
+                // **The motor first, then the screen, and the order is load-bearing.** A message
+                // that moves this phone (`MeetingOpened` to the ring, `ScanAnswered` to the caught
+                // scan) reaches `showing` through the panel's own arrival, and `showing` reads what
+                // the motor is already doing to decide whether the ring needs stopping. Buzzing
+                // second would put the screen change *before* the ring it belongs to, and the phone
+                // would answer a call that had not started.
+                //
+                // Both take the same object. A duplicate is dropped above and a gap is not applied
+                // at all, so **a buzz happens exactly where a screen change happens** — the count
+                // of times a phone goes off cannot drift from the count of things it was told,
+                // which is the channel D-156 closed.
+                is RoundInbox.Landing.Apply -> {
+                    buzzer.heard(landing.message)
+                    flow.houseSaid(landing.message)
+                }
                 // The re-assertion arriving over what this phone already holds. Silent by design:
                 // there is nothing for a player to do about it and nothing for them to see.
                 is RoundInbox.Landing.Duplicate -> Unit

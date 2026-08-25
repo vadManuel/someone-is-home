@@ -8,6 +8,7 @@ import home.someoneshome.model.protocol.RoundBody
 import home.someoneshome.model.protocol.RoundWire
 import home.someoneshome.model.protocol.SeatToken
 import home.someoneshome.model.protocol.TransportFrame
+import home.someoneshome.platform.SilentHaptics
 import home.someoneshome.platform.monotonicNanos
 import home.someoneshome.platform.transport.ClientSession
 import home.someoneshome.platform.transport.IntentDesk
@@ -324,6 +325,10 @@ class IntentPushTest {
             )
             round = RoundOverTransport(
                 scope, FlowModel(PanelState(screen = ScreenId.Assemble)),
+                // What goes UP is this file's subject and the motor is not part of it. Silent
+                // rather than defaulted: a phone in a test has no Taptic Engine, and saying so is
+                // what keeps the constructor unable to be forgotten by an app root.
+                buzzer = HouseBuzzer(SilentHaptics),
                 send = { frame -> client.send(frame) },
                 onOutbound = { outbound += it },
             )
