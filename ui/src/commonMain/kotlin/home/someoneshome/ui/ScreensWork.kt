@@ -432,6 +432,13 @@ fun ScanScreen(vals: PanelVals) {
             // The figure and the bar are one value: ten seconds, twenty segments, two a second.
             // They were a hardcoded `6S LEFT` beside a `SCAN_LIT = 12` — the same fact written
             // twice, agreeing by hand, on the one countdown here that is a safety device.
+            //
+            // **And then the one value never moved**, which is the owner's *the scanning timeout
+            // doesn't countdown nor does its countdown bar move*: `vals.countdown` resolved to
+            // [Countdowns]' drawn moment of six and stayed there, so the safety window ran out
+            // behind a readout still promising six seconds. It is [PanelVals.window] now — this
+            // phone's own clock over the same ten seconds the fall-through counts — so the segments
+            // really do go two a second and reach nothing in the frame the light goes dark.
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Label("YOU WILL FEEL IT CATCH", size = 6.0, color = ink, tracking = 0.14)
                 Label(
@@ -444,6 +451,7 @@ fun ScanScreen(vals: PanelVals) {
                 lit = vals.countdown.litOf(PanelVals.SCAN_SEGMENTS),
                 litColor = ink,
                 unlitColor = ink.copy(alpha = 0.2f),
+                modifier = Modifier.testTag(SCAN_BAR),
                 height = 4.u,
             )
             // D-160's alphabet, in the two sentences a player needs it in. One buzz is yes and

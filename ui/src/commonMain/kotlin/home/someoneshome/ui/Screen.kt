@@ -94,7 +94,11 @@ fun Screen(
      */
     lamp: LampState = remember { LampState() },
 ) {
-    val vals = PanelVals(state)
+    // **The one clock this device is entitled to run, started here because this is where a screen
+    // arrives.** [localWindow] returns null on all but the two screens [LocalWindows] names, so on
+    // every other screen in the game this is the same `PanelVals(state)` it has always been — and
+    // no meeting clock can acquire a local tick by accident.
+    val vals = PanelVals(state, localWindow(state.screen))
     CompositionLocalProvider(
         LocalLamp provides lamp,
         LocalActions provides actions,
@@ -134,7 +138,7 @@ fun Screen(
                 arrival?.presentation == Presentation.Banner,
         ) {
             when (state.screen) {
-                ScreenId.Boot -> BootScreen()
+                ScreenId.Boot -> BootScreen(vals)
                 ScreenId.Perms -> PermsScreen()
                 ScreenId.Join -> JoinScreen()
 

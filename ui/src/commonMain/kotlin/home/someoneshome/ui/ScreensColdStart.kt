@@ -1,19 +1,16 @@
 package home.someoneshome.ui
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -32,9 +29,22 @@ import home.someoneshome.model.Grant
  * It reports `PERIMETER . . . IDLE` and `UPLINK . . . CONNECTED` — both true at this moment, and
  * both about to stop being true. The screen does exposition the player will only understand in
  * retrospect, which is the correct amount of exposition for this game.
+ *
+ * ### The bar is the self-test, not a picture of one
+ *
+ * It was two `weight`s, 7 against 3, so it stood at seventy percent for the whole 2.4 seconds and
+ * then the screen went — which is the owner's *the loading screen's bar literally doesn't move*.
+ * The first screen in the game was a still photograph of a phone starting up, on the one surface
+ * whose entire job is to say *something is happening, wait*.
+ *
+ * It now draws [PanelVals.window], which is the same 2.4 seconds the fall-through in
+ * [Flow.autoAdvance] is counting — one number, two readers — so the bar arrives full in the frame
+ * the screen is replaced and cannot promise a wait that is already over. A phone with no window at
+ * all draws an empty track rather than a fixture: nothing has happened yet, and that is what nothing
+ * looks like.
  */
 @Composable
-fun BootScreen() {
+fun BootScreen(vals: PanelVals) {
     Column(
         Modifier.fillMaxSize().padding(horizontal = 10.u, vertical = 12.u),
         verticalArrangement = Arrangement.spacedBy(3.u),
@@ -55,13 +65,13 @@ fun BootScreen() {
         Box(Modifier.weight(1f))
 
         Label("UPTIME 4331D 02:14", size = 7.5, color = Amber.BoneFaint, lineHeight = 1.9)
-        Row(
-            Modifier.fillMaxWidth().padding(top = 7.u).height(5.u),
-            horizontalArrangement = Arrangement.spacedBy(1.u),
-        ) {
-            Box(Modifier.weight(7f).fillMaxHeight().background(Amber.BoneDim))
-            Box(Modifier.weight(3f).fillMaxHeight().background(Amber.BonePale))
-        }
+        FillBar(
+            fraction = vals.window?.fraction ?: 0f,
+            color = Amber.BoneDim,
+            modifier = Modifier.padding(top = 7.u).testTag(BOOT_BAR),
+            track = Amber.BonePale,
+            height = 5.u,
+        )
         PreNote(
             "STARTING",
             modifier = Modifier.padding(top = 5.u),

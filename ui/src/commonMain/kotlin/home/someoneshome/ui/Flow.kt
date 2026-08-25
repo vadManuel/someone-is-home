@@ -358,6 +358,53 @@ object Flow {
     )
 
     /**
+     * **The rows in [autoAdvance] that are this phone's own, and therefore run with a house
+     * attached.**
+     *
+     * ### Why a subset, and not the whole table or none of it
+     *
+     * [FlowHost] switches the whole of [autoAdvance] off the moment a house is attached, and for
+     * most of it that is exactly right: the ring's six seconds and the notice's nine describe
+     * moments the **house** decides, and a phone running them locally is the fictional meeting
+     * `HousedPhoneTest` reproduces. But the table also holds windows nothing outside this rectangle
+     * can see, and switching those off did not make the phone honest — it made it **stop**.
+     *
+     * Three of them, each found by rendering rather than by reading:
+     *
+     * - **[ScreenId.Scan] — D-159's safety window.** Ten seconds, then two vibrates and the light
+     *   fails, *so nobody is left standing in a dark room holding a lit screen at a wall.* With a
+     *   house attached it never fired, which removed the safety device in the only situation it was
+     *   written for: a real round, in a real dark house. The house cannot supply it — nothing
+     *   outside the phone knows the camera is open.
+     * - **[ScreenId.Notify], [ScreenId.Banner], [ScreenId.LockNotify] — D-119's ten seconds.** A
+     *   heavy notification dims the house and this transition is the undim. There is no
+     *   [housePushes] row for any of the three, so on a housed phone the banner stood over the
+     *   springboard and the panel stayed dimmed **for the rest of the round**.
+     * - **[ScreenId.Boot] — the self-test.** Mostly moot, because the one way a housed phone renders
+     *   it is inside a Surge, where [FlowHost] suppresses every timer anyway (D-182). It is named
+     *   for completeness: if the cold start ever runs with a house attached it must still fall
+     *   through, and the alternative is a phone parked on a self-test forever.
+     *
+     * ### It is a list rather than a rule
+     *
+     * There is no property of an [AutoAdvance] that says *this one is the phone's own* — the honest
+     * version of that question is a person deciding, per row, whether anything outside the phone
+     * could ever push it. So this is written out, and a row added to [autoAdvance] is **house-owned
+     * by default**: the failure mode is a screen that waits for a push, which somebody notices, and
+     * never a housed phone quietly telling itself a story, which is what the owner's evening was.
+     *
+     * [LocalWindows] names the two of these that also draw a clock. The sets are deliberately not
+     * the same one: a window can be the phone's own without anything on screen counting it.
+     */
+    val ownTimers: Set<ScreenId> = setOf(
+        ScreenId.Boot,
+        ScreenId.Scan,
+        ScreenId.Notify,
+        ScreenId.Banner,
+        ScreenId.LockNotify,
+    )
+
+    /**
      * **The meeting's own transitions, every one of them a push.**
      *
      * These were rows in [autoAdvance] with delays on them, which was the honest thing to do while
@@ -2728,9 +2775,14 @@ fun FlowHost(
     // owner's meeting ran `ASSEMBLE → NOTICE` on the bench's four seconds and `NOTICE → DISCUSSION`
     // on production's nine, and no single switch could ever have stopped both.
     val housed = model.state.houseAttached
-    val pending = if (surge == null && !housed) model.pending else null
-    val awaiting = if (standingInForTheHouse && surge == null && !housed) model.awaitingPush else null
     val screen = model.state.screen
+    // **Except for the windows that are the phone's own** ([Flow.ownTimers]). Switching the table
+    // off wholesale did not only stop the fiction, it stopped the scan's safety window and the
+    // ten seconds a heavy notification lasts — neither of which any house can push, and both of
+    // which left a housed phone stuck rather than honest. The Surge still suppresses everything.
+    val runsItsOwn = !housed || screen in Flow.ownTimers
+    val pending = if (surge == null && runsItsOwn) model.pending else null
+    val awaiting = if (standingInForTheHouse && surge == null && !housed) model.awaitingPush else null
 
     // **The rest of the Surge, on a clock, because `core` has none** (D-182). The bright phase is
     // already on the glass — `FlowModel.surged` wrote it in the frame the message arrived, which is

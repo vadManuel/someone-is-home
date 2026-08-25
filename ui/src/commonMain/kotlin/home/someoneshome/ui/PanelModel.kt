@@ -612,7 +612,21 @@ enum class PanelMode {
  * hand is a rule that holds twenty-nine times. Role-dependent values in particular live *here*,
  * where they can be read side by side and checked against one another.
  */
-class PanelVals(val state: PanelState) {
+class PanelVals(
+    val state: PanelState,
+    /**
+     * **How far into its own window this screen is, or null on the screens that have none.**
+     *
+     * The one value on this class that the *device* produces rather than the house, and it is
+     * allowed to because there is nothing outside the phone that could produce it: a self-test
+     * running and a camera being open are facts about this rectangle and no other. [LocalWindows]
+     * is the closed list, [localWindow] is the clock, and [Screen] is the only caller.
+     *
+     * Null everywhere else, including on every meeting screen — those windows are the house's and
+     * are drawn from [PanelState.secondsLeft], which nothing on the device advances.
+     */
+    val window: LocalWindow? = null,
+) {
 
     val screen: ScreenId get() = state.screen
     val insider: Boolean get() = state.role == PanelRole.Insider
@@ -1239,7 +1253,19 @@ class PanelVals(val state: PanelState) {
         // meeting without moving, so its window is the phase's and not the screen's (D-134).
         ScreenId.GhostMeeting ->
             Countdowns.onGhostMeeting(meetingPhase, state.secondsLeft, state.voteWindowSeconds)
-        else -> Countdowns.on(state.screen, state.secondsLeft, state.voteWindowSeconds)
+        // **A window this phone opened is counted by this phone, and it wins here** ([window]).
+        //
+        // The scan is the only clock in the game of that kind, and it is the one the owner found
+        // frozen: `6S LEFT` over twelve lit segments, forever, because the fixture moment was the
+        // only number that ever reached this line. The house never sends a `secondsLeft` for it and
+        // could not — nothing outside the phone knows the camera is open — so a stale figure left
+        // over from a meeting screen is the only thing `state.secondsLeft` could contribute, which
+        // is exactly why the local reading is asked for first rather than as a fallback.
+        else -> Countdowns.on(
+            state.screen,
+            window?.secondsLeft ?: state.secondsLeft,
+            state.voteWindowSeconds,
+        )
     } ?: Countdown.NONE
 
     /** What the couch's clock is counting down, in the phase's own words. */
