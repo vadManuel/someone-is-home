@@ -23,6 +23,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import home.someoneshome.model.CardPayload
 import home.someoneshome.model.MarkerShapes
 import home.someoneshome.model.protocol.IntentMessage
@@ -763,7 +764,14 @@ private fun CheatPicker(
                 // `arrivingAt` rather than a bare copy: the carrier on the two out screens reads
                 // the CAUSE, not the screen, so a picker that landed there with none would render
                 // the UNREGISTERED fallback and look like a bug in the chrome.
-                Modifier.fillMaxWidth().tap { onPick(draft.arrivingAt(id)) }.padding(vertical = 1.5.u),
+                //
+                // **Tagged by the screen it opens, not by where it sits in the list.** These rows
+                // are 20 points tall in a list thirty-six screens long, so picking one by text or
+                // by position is picking it by its neighbours; a tag survives a screen being added
+                // above it. What the tag does NOT fix is the frame the row reports — see
+                // `HumanMock.swift`, which corrects it by a measured constant.
+                Modifier.fillMaxWidth().testTag(screenPickTag(id))
+                    .tap { onPick(draft.arrivingAt(id)) }.padding(vertical = 1.5.u),
                 size = 7.0,
                 color = if (current) Amber.Bright else Amber.Dim,
                 tracking = 0.08,
@@ -771,6 +779,18 @@ private fun CheatPicker(
         }
     }
 }
+
+/**
+ * **The debug chip's handle, and the one door past a gate the Simulator cannot open.**
+ *
+ * A phone with no Bluetooth can never satisfy the permissions walk, so on a simulator this chip is
+ * the only route to any screen behind it. The human-mock uses it for exactly that and for nothing
+ * else — everything after the jump is real navigation on real controls.
+ */
+const val VARIANT_MARKER: String = "variant-marker"
+
+/** What a picker row answers to: the screen it opens, kebab-cased. */
+fun screenPickTag(id: ScreenId): String = "screen-pick-${id.name.lowercase()}"
 
 /**
  * The permanent variant marker: a black chip in the panel's own ink, above the home indicator.
@@ -804,6 +824,7 @@ private fun BoxScope.MarkerChip(onTap: () -> Unit) {
             .padding(bottom = 2.u, start = insets.side + 2.u)
             .background(Amber.Black)
             .border(1.u, Amber.Dim)
+            .testTag(VARIANT_MARKER)
             .tap(onTap)
             .padding(horizontal = 5.u, vertical = 1.5.u),
     ) {

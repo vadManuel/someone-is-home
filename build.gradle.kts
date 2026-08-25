@@ -24,6 +24,22 @@ gradle.projectsEvaluated {
     }
 }
 
+// **The human-mock, from Gradle — and deliberately NOT a dependency of `check`.**
+//
+// `check` is the suite that runs constantly and finishes in seconds; this one builds an app, boots
+// a simulator, installs and drives it, and takes minutes. Wiring the slow suite into the fast one
+// makes the fast one stop being run, which costs more than it buys. It is the release gate and it
+// is invoked on purpose: `./gradlew e2e`, or `./e2e.sh --repeat 5` for the flakiness number.
+//
+// It shells out to the script rather than reimplementing it, so there is exactly one definition of
+// how this app is driven and both doors open onto it.
+tasks.register<Exec>("e2e") {
+    group = "verification"
+    description = "Drives the real app on a simulator with a mock of the human using it (slow; not in check)."
+    workingDir = rootDir
+    commandLine("./e2e.sh")
+}
+
 subprojects {
     // Vocabulary lint covers model, core, ui, app and cards — the modules where a wrong word
     // reaches a player. `app` holds no copy today and is meant to stay that way; it is listed

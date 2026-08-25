@@ -13,6 +13,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 
@@ -90,6 +94,16 @@ fun BackChevron(fallback: ScreenId? = null, ink: Color = Amber.BoneDim) {
     Box(
         Modifier
             .testTag(BACK_CHEVRON)
+            // **The glyph is not the name.** `‹` is one character in a pixel font, and anything
+            // that cannot see it — a screen reader, the human-mock — was being handed the
+            // character itself as the button's whole identity. The drawn arrow is unchanged; what
+            // is added is the word for it, which is the only form of this control a non-visual
+            // reader ever had. Merged onto the tappable box rather than the Label so the name and
+            // the click action arrive as one element.
+            .semantics(mergeDescendants = true) {
+                contentDescription = BACK_NAME
+                role = Role.Button
+            }
             // A [TAP_TARGET] square with the glyph centred in it, and **no padding on top of that**
             // — the design's 9-unit gap before the title is already inside the square, so the title
             // sits where the eye expects and the finger gets the whole 36 units.
@@ -110,6 +124,15 @@ fun BackChevron(fallback: ScreenId? = null, ink: Color = Amber.BoneDim) {
  * the game twice — once with a trail behind it and once without — and reads this.
  */
 const val BACK_CHEVRON: String = "back-chevron"
+
+/**
+ * **The word for the arrow, for every reader that never receives the glyph.**
+ *
+ * Deliberately not drawn anywhere: the panel's back control is a chevron and stays one. This is
+ * the name underneath it, and it is the only thing a screen reader has ever been able to say about
+ * the control other than reading `‹` aloud as punctuation.
+ */
+const val BACK_NAME: String = "BACK"
 
 /**
  * A section heading, with the back arrow beside the page name and a value pushed to the far right.

@@ -173,6 +173,16 @@ fun PermsScreen() {
 }
 
 /**
+ * **What the RESIDENT field answers to, from inside a Compose test and from outside the process.**
+ *
+ * Compose Multiplatform publishes a `testTag` as the iOS `accessibilityIdentifier`, so this one
+ * constant is the handle at both altitudes of bench — the in-process one that presses the lambdas,
+ * and the human-mock that presses the glass. Kebab-case, unique on its screen; the convention is
+ * written out in `iosApp/SomeonesHomeUITests/HumanMock.swift`.
+ */
+const val RESIDENT_NAME: String = "resident-name"
+
+/**
  * Your name, then the homes nearby.
  *
  * **Discovery is local only. No account, no internet** — a design promise and a technical one at
@@ -223,6 +233,8 @@ fun JoinScreen() {
                 modifier = Modifier.fillMaxWidth(),
                 size = 19.0, color = Amber.BoneInk, tracking = 0.08,
                 hint = "YOUR NAME",
+                label = "RESIDENT",
+                tag = RESIDENT_NAME,
             )
         }
 

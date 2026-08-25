@@ -46,6 +46,8 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -625,6 +627,18 @@ fun ReadoutField(
     color: Color = Amber.BoneInk,
     tracking: Double = 0.06,
     hint: String = "",
+    /**
+     * **What the field is called, for anything that cannot see the label printed above it.**
+     *
+     * The panel draws the field's name as a separate `Label` in the row above — which the eye
+     * reads as one thing and every non-visual reader receives as two, the second of them nameless.
+     * Naming it here is the honest fix and not a test hook: a text field whose only identity is
+     * its position on the page is unusable by a screen reader, and was equally unreachable to the
+     * human-mock, which is how the gap was found.
+     */
+    label: String = "",
+    /** The field's handle, for the human-mock. Kebab-case, unique on its screen. */
+    tag: String = "",
     transform: (String) -> String = { it.uppercase() },
 ) {
     val focus = remember { FocusRequester() }
@@ -635,7 +649,12 @@ fun ReadoutField(
         BasicTextField(
             value = value,
             onValueChange = { onValueChange(transform(it)) },
-            modifier = Modifier.fillMaxWidth().focusRequester(focus),
+            modifier = Modifier.fillMaxWidth().focusRequester(focus)
+                .then(if (tag.isEmpty()) Modifier else Modifier.testTag(tag))
+                .then(
+                    if (label.isEmpty()) Modifier
+                    else Modifier.semantics { contentDescription = label }
+                ),
             textStyle = TextStyle(
                 fontFamily = PanelType.readout,
                 fontSize = size.sp,
