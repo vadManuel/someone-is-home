@@ -469,6 +469,23 @@ class LobbyModel(
         settings()
     }
 
+    /**
+     * **Refused before the radio was ever asked** — D-161's setup gate, said here.
+     *
+     * The one caller is [FlowModel.setupIsComplete]. It writes the same field the hosting refusal
+     * writes, because to a host standing on this screen there is one place refusals appear and
+     * this is a refusal: they pressed a control and the party did not happen. What differs is the
+     * cause, and the sentence names it.
+     *
+     * It is deliberately **not** offered [openSystemSettings]. The rows this refusal names are
+     * fixed on the Perms screen, which is one back and has a control per row — [offersTheGrant] is
+     * for the refusal whose fix is genuinely outside the app, and widening it here would send a
+     * host to iOS Settings for a prompt they have simply not been shown yet.
+     */
+    fun refuse(why: String) {
+        refusal = why
+    }
+
     fun nameResident(next: String) {
         residentName = next.take(NAME_LIMIT)
         refusal = null

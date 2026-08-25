@@ -73,6 +73,16 @@ kotlin {
             implementation(project(":core"))
         }
     }
+    // The viewfinder puts a `UIView` holding an `AVCaptureVideoPreviewLayer` inside the Compose
+    // tree, which is C interop and Compose's own iOS interop — both opt-in. Declared here rather
+    // than as file annotations because `platform` already declares its interop opt-in this way and
+    // two conventions for the same thing is one convention nobody follows.
+    compilerOptions {
+        optIn.addAll(
+            "kotlinx.cinterop.ExperimentalForeignApi",
+            "androidx.compose.ui.ExperimentalComposeUiApi",
+        )
+    }
     sourceSets.commonTest {
         // The cheats' own tests, compiled exactly where the cheats are.
         //

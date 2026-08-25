@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -27,6 +28,7 @@ import home.someoneshome.model.MarkerShapes
 import home.someoneshome.model.protocol.IntentMessage
 import home.someoneshome.platform.SeededCardScanner
 import home.someoneshome.platform.clearSeatToken
+import home.someoneshome.platform.devicePermissions
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import home.someoneshome.platform.deviceHaptics
@@ -40,6 +42,8 @@ import home.someoneshome.ui.Label
 import home.someoneshome.ui.LobbyModel
 import home.someoneshome.ui.MeetingModel
 import home.someoneshome.ui.LocalPanelInsets
+import home.someoneshome.ui.LocalViewfinder
+import home.someoneshome.ui.PermsModel
 import home.someoneshome.ui.PanelRole
 import home.someoneshome.ui.PanelState
 import home.someoneshome.ui.SavedHomesModel
@@ -157,6 +161,15 @@ fun CheatRoot() {
     // and no push in a real round reached the Taptic Engine — which is why the owner's Handshake
     // "does not vibrate at all".
     val buzzer = remember { HouseBuzzer(haptics) { line -> println("[haptic] $line") } }
+    // **THE OS'S OWN PROMPTS.** Held for the life of the app rather than for the life of the Perms
+    // screen: two of the five answer through a callback and remember what they last heard, and a
+    // seam rebuilt on every visit to that screen would forget the answers between visits — the row
+    // would go back to TAP TO GRANT on a phone that had already granted.
+    val permissions = remember { devicePermissions() }
+    // **THE REGISTRATION CAMERA: back lens, live picture, torch.** Held here because the *screen*
+    // owns the session's lifetime — see the DisposableEffect further down — while the object that
+    // knows which lens registration uses has to outlive any one visit to it.
+    val registration = remember { MarkerRegistration(haptics) }
     // Held in a named val because the round is armed off the house behind it: `armingInputs` is
     // what LIGHTS OUT reads and `emit` is the authority's only exit to the phones. Every other
     // caller in this file still reaches it as a `LobbyLink` and cannot see either.
@@ -196,6 +209,25 @@ fun CheatRoot() {
                 link = link,
                 settings = deviceSystemSettings()::open,
             ),
+            // **THE PERMS SCREEN, REACHING AN OS AT LAST** (E-PAY-5, D-161). Every row on that
+            // screen was a drawing: three said GRANTED, two said PENDING, none of them had ever
+            // asked anybody anything, and the app's page in Settings had no toggles under it
+            // because there was nothing to toggle. This is the one line where those rows become
+            // real requests — `ui` cannot see `platform`, so the OS comes down the same way the
+            // radio and the settings page do.
+            //
+            // The lobby's gate hangs off the same object: `hostHome` and `attachToHome` both ask
+            // it, so a phone that cannot scan cannot be seated and cannot seat anybody else.
+            perms = PermsModel(
+                read = permissions::grant,
+                ask = permissions::request,
+                reread = permissions::refresh,
+            ),
+            // **THE TORCH, REACHING THE LED** (E-PAY-5). `toggleTorch` moved a colour value in
+            // `Amber` and nothing else; the owner's finding was a button that reaches no hardware.
+            // The seam refuses on any scanner whose configuration says no torch, so this line
+            // cannot light one in a dark house even if something one day calls it there.
+            onTorch = registration::torch,
             // **The four meeting controls, finally reaching the house** (E-P2-3). I AM HERE, READY
             // TO VOTE, a row under a thumb and READY were built, drawn and pressed for two whole
             // rehearsals with `send` defaulted to `{}` — so the check-in gate was closed by the
@@ -277,6 +309,11 @@ fun CheatRoot() {
     // nothing here happens, which is every launch a person makes.
     val sweeping = remember { launchSwitch(HapticCheat.SWEEP_SWITCH) }
     val scanSweeping = remember { launchSwitch(ScanCheat.SWEEP_SWITCH) }
+    // **The setup surface, driving itself**, for the two outputs a screenshot cannot show: an OS
+    // permission modal is the OS's own window, and a capture session's lens is invisible in a log
+    // unless something says which one it opened. Absent the switch this is false, which is every
+    // launch a person makes.
+    val setupSweeping = remember { launchSwitch(SetupSweep.SWEEP_SWITCH) }
     // The two-phone evening's finger. It drives the real lobby on the real flow, so it opens on the
     // panel like any other launch rather than on a bench of its own — what a person watching this
     // phone sees is the app, not a rig.
@@ -340,6 +377,9 @@ fun CheatRoot() {
     }
     LaunchedEffect(sweeping) { if (sweeping) bench.sweep() }
     LaunchedEffect(scanSweeping) { if (scanSweeping) scan.sweep() }
+    LaunchedEffect(setupSweeping) {
+        if (setupSweeping) SetupSweep(permissions) { line -> println("[setup-sweep] $line") }.run()
+    }
     LaunchedEffect(evening) { if (evening.armed) evening.run() }
     // **The round, once the lobby has produced one.**
     //
@@ -399,10 +439,18 @@ fun CheatRoot() {
             // **Read off the panel's own state rather than off how this process was launched.**
             // `RoundClient.linked` writes it the moment this phone has a way up to a house, which
             // is the only thing that ever made the sentence above true or false.
-            CheatView.Panel -> FlowHost(
-                flow,
-                standingInForTheHouse = standsInForTheHouse(flow.state.houseAttached),
-            )
+            // **The registration viewfinder is provided here and nowhere else.** `ui` leaves a
+            // hole the shape of a picture (`LocalViewfinder`) because a preview layer is
+            // AVFoundation's and that module may not see it; this is the app filling it, which is
+            // the same seam the settings page and the motor come down.
+            CheatView.Panel -> CompositionLocalProvider(
+                LocalViewfinder provides registration.viewfinder,
+            ) {
+                FlowHost(
+                    flow,
+                    standingInForTheHouse = standsInForTheHouse(flow.state.houseAttached),
+                )
+            }
             CheatView.Picker -> CheatPicker(
                 flow.state,
                 onPick = { flow.jump(it); view = CheatView.Panel },
@@ -492,13 +540,18 @@ fun CheatRoot() {
         // Only where a card could actually be read. A shutter on the springboard would be a
         // control for an event that cannot happen there.
         if (view == CheatView.Panel && flow.state.screen == ScreenId.ScanMarker) {
-            // THE REAL CAMERA, on the real scan screen, and only while it is on screen. This is the
-            // doctrine as wiring: the lit screen IS the scanner, so the session is bound to the
-            // screen's own lifetime rather than to the app's — walk off it and the lens comes back.
-            DisposableEffect(scan) {
-                scan.watch(flow::cardScanned)
+            // THE REGISTRATION CAMERA, on the registration screen, and only while it is on screen.
+            // This is the doctrine as wiring: a capture session holds the lens, the ISP and the
+            // battery, so it is bound to the screen's own lifetime — walk off it and it comes back.
+            //
+            // ⚠️ **IT USED TO BE `scan`, WHICH IS THE IN-ROUND BENCH**, and that was E-PAY-5's
+            // camera half: front lens, no picture, under a label reading BACK CAMERA. The two
+            // scans are now two objects with two configurations, and neither can be handed the
+            // other's — `ScanUse` is fixed at construction and `ScanUseTest` refuses a swap.
+            DisposableEffect(registration) {
+                registration.watch(flow::cardScanned)
                 onDispose {
-                    scan.release()
+                    registration.release()
                     // The deck gets its listener back, or the shutter below would silently stop
                     // working after the first trip through the scan screen.
                     scanner.start(flow::cardScanned)

@@ -23,6 +23,12 @@ class ScanWindowTest {
         var starts = 0
         var stops = 0
 
+        /** The in-round scan, because that is the only scan a [ScanWindow] is ever opened for. */
+        override val use: ScanUse = ScanUse.InRound
+
+        /** Recorded rather than ignored: a window that lit a torch in a dark house is rule 5. */
+        var torchAsks = 0
+
         override fun start(onPayload: (String) -> Unit) {
             starts++
             listener = onPayload
@@ -31,6 +37,10 @@ class ScanWindowTest {
         override fun stop() {
             stops++
             listener = null
+        }
+
+        override fun torch(lit: Boolean) {
+            torchAsks++
         }
 
         /** A symbol came into frame. Dropped when nobody is reading, exactly as a real one is. */

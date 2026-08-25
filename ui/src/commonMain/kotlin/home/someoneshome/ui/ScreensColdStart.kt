@@ -17,6 +17,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import home.someoneshome.model.DevicePermission
+import home.someoneshome.model.Grant
 
 /**
  * Cold start: the three screens before anyone has joined anything.
@@ -69,15 +71,38 @@ fun BootScreen() {
 }
 
 /**
- * Permissions, asked **at startup, in the light — never at arming**.
+ * Permissions, asked **at startup, in the light — never at arming** (D-161).
  *
- * Every input this game has is a permission: camera, Bluetooth, motion. A system prompt appearing
- * mid-round would be an unauthored screen state at the exact moment screen state is evidence, so
- * the whole set is collected while nothing is at stake and nothing is asked for again.
+ * Every input this game has is a permission: camera, local network, Bluetooth, motion,
+ * notifications. A system prompt appearing mid-round would be an unauthored screen state at the
+ * exact moment screen state is evidence, so the whole set is collected while nothing is at stake
+ * and nothing is asked for again.
+ *
+ * ### Every row on this screen used to be a drawing, and that is what shipped
+ *
+ * Three rows said GRANTED and two said PENDING, and **not one of them had ever reached an OS**. The
+ * app's page in Settings had no toggles under it because nothing had ever been requested; the
+ * camera prompt then appeared in the one place the ruling forbids, mid-scan, in a dark corridor.
+ * And the button under it — `REQUEST MOTION ACCESS` — requested nothing and navigated to the join
+ * screen unconditionally, which the owner reported as *request motion access just sends me to the
+ * main screen.* **That fall-through is gone**: the primary control asks for what is missing, and
+ * only becomes a way forward once the phone can really do the job.
+ *
+ * ### Tapping a row is asking for that one thing
+ *
+ * Rows are controls rather than readings, which [PreRow] distinguishes by whether it is given an
+ * `onClick` at all. A row that has been refused keeps its tap — asking again raises no prompt (iOS
+ * asks once, ever) but re-reads the answer, which is what a host who has just come back from
+ * Settings needs to happen.
  */
 @Composable
 fun PermsScreen() {
     val go = navigator()
+    val actions = LocalActions.current
+    val perms = LocalPerms.current
+    // Read the OS when the screen arrives, and again on every return to it. A host who walked out
+    // to Settings comes back here, and nothing else would move the rows.
+    LaunchedEffect(perms) { perms.refresh() }
     PrePage {
         PreHeading("PERMISSIONS")
         InfoBox(border = Amber.BoneDim) {
@@ -88,23 +113,46 @@ fun PermsScreen() {
             )
         }
         Column(verticalArrangement = Arrangement.spacedBy(4.u)) {
-            PreRow("LOCAL NETWORK", "GRANTED", size = 7.5)
-            PreRow("CAMERA", "GRANTED", size = 7.5)
-            PreRow("BLUETOOTH", "GRANTED", size = 7.5)
-            PreRow(
-                "MOTION & FITNESS", "PENDING",
-                border = Amber.BoneDim, labelInk = Amber.BoneInk, valueInk = Amber.BoneDim,
-                size = 7.5,
-            )
-            PreRow(
-                "NOTIFICATIONS", "PENDING",
-                labelInk = Amber.BoneFaint, valueInk = Amber.BoneFaint, size = 7.5,
-            )
+            DevicePermission.entries.forEach { permission ->
+                val grant = perms.grant(permission)
+                PreRow(
+                    permission.label,
+                    grant.label,
+                    border = if (grant.opensTheGate) Amber.BonePale else Amber.BoneDim,
+                    labelInk = if (grant.opensTheGate) Amber.BoneDeep else Amber.BoneInk,
+                    valueInk = if (grant == Grant.Refused) Amber.Caution else Amber.BoneInk,
+                    size = 7.5,
+                    onClick = { actions.requestGrant(permission) },
+                )
+            }
         }
         PushDown()
         Column(verticalArrangement = Arrangement.spacedBy(6.u)) {
+            // What the last tap was refused with, or what the gate is still waiting for. Never
+            // both, and never an invented sentence: a complete phone has nothing here at all.
+            (perms.refusal ?: perms.gateRefusal())?.let {
+                PreNote(it, color = Amber.Caution, align = TextAlign.Center)
+            }
             PreNote("A SYSTEM PROMPT WILL APPEAR.\nIT IS NOT PART OF THE HOUSE.")
-            SlateButton("REQUEST MOTION ACCESS", { go(ScreenId.Join) })
+            // **A refused row cannot be un-refused from in here** — iOS asks once, ever, and the
+            // second ask raises nothing. So the control appears exactly where its fix is outside
+            // the app, which is [LobbyModel.offersTheGrant]'s rule read on this screen: a row
+            // nobody has been asked for yet has its fix right here and is offered nothing.
+            if (perms.states.values.any { it == Grant.Refused }) {
+                PanelButton(
+                    "OPEN SETTINGS",
+                    border = Amber.BoneFaint, ink = Amber.BoneDim,
+                    size = 7.5, verticalPadding = 9.u,
+                    onClick = actions.openSystemSettings,
+                )
+            }
+            if (perms.complete) {
+                SlateButton("CONTINUE", { go(ScreenId.Join) })
+            } else {
+                // It asks, and it stays here. The one screen where a control that navigated
+                // without doing anything cost an evening.
+                SlateButton("REQUEST WHAT IS MISSING", actions.requestMissingGrants)
+            }
         }
     }
 }

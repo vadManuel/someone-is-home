@@ -8,6 +8,8 @@ import platform.AVFoundation.AVAuthorizationStatusRestricted
 import platform.AVFoundation.AVCaptureConnection
 import platform.AVFoundation.AVCaptureDevice
 import platform.AVFoundation.AVCaptureDeviceInput
+import platform.AVFoundation.AVCaptureDevicePosition
+import platform.AVFoundation.AVCaptureDevicePositionBack
 import platform.AVFoundation.AVCaptureDevicePositionFront
 import platform.AVFoundation.AVCaptureDeviceTypeBuiltInWideAngleCamera
 import platform.AVFoundation.AVCaptureMetadataOutput
@@ -15,14 +17,21 @@ import platform.AVFoundation.AVCaptureMetadataOutputObjectsDelegateProtocol
 import platform.AVFoundation.AVCaptureOutput
 import platform.AVFoundation.AVCaptureSession
 import platform.AVFoundation.AVCaptureSessionPresetHigh
+import platform.AVFoundation.AVCaptureTorchModeOff
+import platform.AVFoundation.AVCaptureTorchModeOn
 import platform.AVFoundation.AVCaptureVideoDataOutput
 import platform.AVFoundation.AVCaptureVideoDataOutputSampleBufferDelegateProtocol
+import platform.AVFoundation.AVCaptureVideoPreviewLayer
+import platform.AVFoundation.AVLayerVideoGravityResizeAspectFill
 import platform.AVFoundation.AVMediaTypeVideo
 import platform.AVFoundation.AVMetadataMachineReadableCodeObject
 import platform.AVFoundation.AVMetadataObjectTypeQRCode
 import platform.AVFoundation.authorizationStatusForMediaType
 import platform.AVFoundation.defaultDeviceWithDeviceType
+import platform.AVFoundation.hasTorch
+import platform.AVFoundation.isTorchModeSupported
 import platform.AVFoundation.requestAccessForMediaType
+import platform.AVFoundation.torchMode
 import platform.CoreMedia.CMSampleBufferRef
 import platform.darwin.NSObject
 import platform.darwin.dispatch_async
@@ -35,18 +44,28 @@ import platform.darwin.dispatch_queue_create
  * There is no build flag choosing between two implementations: [CameraCardScanner] discovers that
  * it has no lens the way it discovers that permission was refused, and both go quiet.
  */
-actual fun deviceCardScanner(): CardScanner = CameraCardScanner()
+actual fun deviceCardScanner(use: ScanUse): CardScanner = CameraCardScanner(use)
 
 /**
- * **The front camera, no preview, nine characters out.**
+ * **One capture session, configured by the scan it is for** — see [ScanUse].
  *
- * ### There is no preview layer, and its absence is the design rather than an omission
+ * ### In a round there is no preview layer, and its absence is the design rather than an omission
  *
  * The lit screen *is* the light the card is read by (gdd M1, and `ScanScreen` in `ui`): the player
  * holds the panel up to the marker, which puts the front camera on the paper and the screen out of
  * their own sight. A preview would be a picture nobody can look at, drawn at the cost of the frame
- * budget, on the one screen whose brightness is a game value. So the session carries a metadata
- * output and nothing else — no `AVCaptureVideoPreviewLayer` is created here, and none may be.
+ * budget, on the one screen whose brightness is a game value. So an in-round session carries a
+ * metadata output and nothing else — [ScanUse.InRound] sets `preview = false` and no
+ * `AVCaptureVideoPreviewLayer` is built, and none may be.
+ *
+ * ### At registration there is one, and its absence was a bug the owner found on a phone
+ *
+ * Host setup is the opposite screen in every way: the lights are on, the card is on the far side of
+ * the phone, and the host is aiming. The screen said BACK CAMERA . POINT AT THE CODE over a session
+ * that was hard-coded to the front lens with no picture in it — so the instruction was wrong, the
+ * aiming was blind, and the torch button beside it reached no hardware at all. The configuration is
+ * now read from [use] on every line that could get it wrong, which is what makes `ScanUseTest`'s
+ * injection meaningful rather than decorative.
  *
  * ### It hands over what the camera saw, and asks nothing about it
  *
@@ -77,6 +96,12 @@ actual fun deviceCardScanner(): CardScanner = CameraCardScanner()
  */
 @OptIn(ExperimentalForeignApi::class)
 class CameraCardScanner(
+    /**
+     * Which scan this session is. **Every hardware decision below reads it** — the lens, whether a
+     * preview layer is built, whether the torch answers — so there is one place a configuration can
+     * be wrong and one test that has to be satisfied to change it.
+     */
+    override val use: ScanUse = ScanUse.InRound,
     private val log: (String) -> Unit = { println(it) },
     /**
      * A frame counter, off by default and switched on only by a bench.
@@ -112,6 +137,74 @@ class CameraCardScanner(
     private var frames: FrameCounter? = null
     private var configured = false
 
+    /**
+     * The capture device the session opened, kept because **the torch belongs to the lens**.
+     *
+     * `AVCaptureDevice.torchMode` is a property of the camera rather than of the session, and it is
+     * only settable between `lockForConfiguration` and `unlockForConfiguration`. Holding the device
+     * is the whole of what makes [torch] able to reach hardware — the toggle it sits behind spent
+     * this project's whole life so far reaching a colour value in `Amber` and nothing else.
+     */
+    private var device: AVCaptureDevice? = null
+
+    /**
+     * **What the host is aiming with**, on a registration scanner, and null on an in-round one.
+     *
+     * Built inside [configure] rather than lazily on first read, because a layer attached to a
+     * session that was never configured shows a black rectangle indistinguishable from a camera
+     * that is refusing — and this is the one screen in the game where the player is meant to be
+     * looking at the picture.
+     */
+    private var preview: AVCaptureVideoPreviewLayer? = null
+
+    /**
+     * The live picture, for whoever draws it, or null where there is none.
+     *
+     * `app` puts it inside a `UIView`; nothing in `ui` can see this type and nothing should — see
+     * `Viewfinder.ios.kt`. **Reading it does not create it**: a scanner whose [ScanUse.preview] is
+     * false answers null forever, which is the in-round session saying it has no picture rather
+     * than being asked not to draw one.
+     */
+    val previewLayer: AVCaptureVideoPreviewLayer? get() = preview
+
+    /** Whether the torch is currently lit, as last set. Read by a bench and by the log. */
+    var torchLit: Boolean = false
+        private set
+
+    /**
+     * **The LED, reached at last** — and refused by name on the scan that may not have one.
+     *
+     * The refusal is first and is not a guard clause standing in front of working code: the
+     * in-round session is a phone in a dark house, and rule 5 makes an unauthored light a signal
+     * nobody authored. `ScanUseTest` fails if this branch is removed.
+     */
+    override fun torch(lit: Boolean) {
+        if (!use.torch) {
+            log("$TAG a $use scan may not light the torch — nothing was switched")
+            return
+        }
+        val camera = device
+        if (camera == null) {
+            log("$TAG no session yet, so there is no torch to switch")
+            return
+        }
+        if (!camera.hasTorch || !camera.isTorchModeSupported(if (lit) AVCaptureTorchModeOn else AVCaptureTorchModeOff)) {
+            log("$TAG '${camera.localizedName}' has no torch — nothing was switched")
+            return
+        }
+        // The lock is not optional and its failure is not fatal. Another process holding the
+        // configuration means the LED does not move; the host taps again, and the screen has
+        // already told them which state it believes it is in.
+        if (!camera.lockForConfiguration(null)) {
+            log("$TAG the camera would not lock for configuration — torch unchanged")
+            return
+        }
+        camera.torchMode = if (lit) AVCaptureTorchModeOn else AVCaptureTorchModeOff
+        camera.unlockForConfiguration()
+        torchLit = lit
+        log("$TAG torch ${if (lit) "ON" else "OFF"}")
+    }
+
     override fun start(onPayload: (String) -> Unit) {
         // Replaces rather than adds, exactly as the seam says: a scan screen opened, left and
         // opened again must not register every card twice.
@@ -145,6 +238,10 @@ class CameraCardScanner(
     override fun stop() {
         listener = null
         wanted = false
+        // **The LED goes out with the screen.** A session torn down with the torch still lit leaves
+        // a phone burning a light in the host's pocket, on the battery an evening runs on — and on
+        // the walk from host setup to the lobby, which is the walk to the dark.
+        if (torchLit) torch(false)
         dispatch_async(queue) {
             if (session.isRunning()) {
                 session.stopRunning()
@@ -172,19 +269,22 @@ class CameraCardScanner(
 
     /** Build the session. False, with a reason in the log, if this phone cannot. */
     private fun configure(): Boolean {
+        // **The lens comes off the configuration and is decided nowhere else.** A literal here is
+        // the bug the owner found: BACK CAMERA on the screen, front camera in the session.
+        val facing = positionOf(use.facing)
         val camera = AVCaptureDevice.defaultDeviceWithDeviceType(
             deviceType = AVCaptureDeviceTypeBuiltInWideAngleCamera,
             mediaType = AVMediaTypeVideo,
-            // FRONT. The screen faces the card, so the camera that faces the card is this one.
-            position = AVCaptureDevicePositionFront,
+            position = facing,
         )
         if (camera == null) {
-            log("$TAG this target has no front camera — every scan will be a silent no-op")
+            log("$TAG this target has no ${use.facing} camera — every scan will be a silent no-op")
             return false
         }
+        device = camera
         val input = AVCaptureDeviceInput.deviceInputWithDevice(camera, null)
         if (input == null) {
-            log("$TAG the front camera would not open as an input")
+            log("$TAG the ${use.facing} camera would not open as an input")
             return false
         }
 
@@ -217,13 +317,32 @@ class CameraCardScanner(
             if (counter.attachTo(session)) frames = counter
         }
 
+        // **The picture, built only where the configuration says there is one.** `ResizeAspectFill`
+        // because the viewfinder brackets on the screen mark the area the host is aiming with, and
+        // a letterboxed picture inside them would put bars where the design draws the frame.
+        if (use.preview) {
+            preview = AVCaptureVideoPreviewLayer(session = session).apply {
+                videoGravity = AVLayerVideoGravityResizeAspectFill
+            }
+        }
+
         session.commitConfiguration()
         configured = true
         log(
-            "$TAG configured — front camera '${camera.localizedName}', " +
+            "$TAG configured — ${use.facing} camera '${camera.localizedName}', use=$use, " +
+                "preview=${preview != null}, torch=${camera.hasTorch}, " +
                 "types=${output.metadataObjectTypes.size}, frameCounter=${frames != null}"
         )
         return true
+    }
+
+    /**
+     * The configuration's lens, as AVFoundation spells it. **The only place the two vocabularies
+     * meet** — a second translation somewhere else would be a second chance to get it backwards.
+     */
+    private fun positionOf(facing: CameraFacing): AVCaptureDevicePosition = when (facing) {
+        CameraFacing.Front -> AVCaptureDevicePositionFront
+        CameraFacing.Back -> AVCaptureDevicePositionBack
     }
 
     /**

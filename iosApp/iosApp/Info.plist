@@ -77,6 +77,21 @@
 	<key>NSCameraUsageDescription</key>
 	<string>The house reads the printed cards through the camera. No picture is taken, kept or sent anywhere.</string>
 
+	<!-- The house reads whether a phone is being carried, which is the motion budget the
+	     architecture accumulates client-side. iOS STOPS an app that raises this prompt with no
+	     string rather than refusing the request -- so the absence of this key is not a permission
+	     bug, it is the app failing in the host's hand in front of the whole party.
+
+	     D-161: this is asked at the Perms screen, in the light, with everything else. -->
+	<key>NSMotionUsageDescription</key>
+	<string>The house notices when a phone is being carried from room to room. Nothing about you leaves this house.</string>
+
+	<!-- The proximity channel: which phones are near each other, so the house can place people
+	     without a camera in every room. Same fatal-if-absent rule as the motion string above, and
+	     the ALWAYS spelling is the one iOS reads on every version this project targets. -->
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>The house senses which phones are near each other in the rooms. No connection leaves this house.</string>
+
 	<!-- Without this list, browsing for the host's service silently finds NOTHING on iOS 14+ --
 	     no error, no prompt, an empty result forever. A fail-closed OS behaviour worth a comment
 	     precisely because the failure has no symptom. -->

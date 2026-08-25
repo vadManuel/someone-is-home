@@ -770,6 +770,32 @@ class FlowModel(
      */
     val notifications: NotificationsModel = NotificationsModel(),
     /**
+     * **What the OS has said about this phone** (D-161), and the gate the lobby stands behind.
+     *
+     * Held here rather than in the Perms screen's own `remember` for [notifications]' reason and a
+     * harder one: the answer has to outlive the screen. `hostHome` and `attachToHome` both consult
+     * it, and neither of them is anywhere near the screen that asked.
+     *
+     * Defaulted to a phone that has been asked nothing, which is what a cold launch is — and which
+     * closes the gate. A default that opened it would mean every test, every screenshot and every
+     * bench walked into a lobby through a gate that was never shut, and the one thing this gate has
+     * to survive is exactly that: it is a gate a build is tempted to have open.
+     */
+    val perms: PermsModel = PermsModel(),
+    /**
+     * **The torch beside the back lens, reached at last** (E-PAY-5).
+     *
+     * [onScreen]'s shape and its boundary: the LED is `platform`'s and `ui` may not see `platform`,
+     * so what goes out of this line is *the host asked for the torch* and the app root is where
+     * that becomes an `AVCaptureDevice`. Until this existed, `toggleTorch` moved a colour value in
+     * `Amber` and nothing else — the owner's finding was that the button reaches no hardware.
+     *
+     * Defaulted to nothing, which is every render and every screenshot: the wash over the
+     * viewfinder still appears, because that wash is the screen saying what it believes, and the
+     * belief is true on a phone and harmless on a Mac.
+     */
+    private val onTorch: (Boolean) -> Unit = {},
+    /**
      * **Where a Tier-2 request goes, and it does not carry a seat that says who asked**
      * (the 2026-08-22 targeting ruling).
      *
@@ -1196,7 +1222,23 @@ class FlowModel(
 
     fun toggleMarkers() { state = state.copy(markersOn = !state.markersOn) }
 
-    fun toggleTorch() { state = state.copy(torch = !state.torch) }
+    /**
+     * **The torch, on the registration scan** — the screen's belief and the LED, in that order.
+     *
+     * The state moves first so the wash and the label are what the host pressed, and the seam is
+     * told second. That order is deliberate: [onTorch] reaches a capture device that may be locked
+     * by something else for a moment, and a control that waited for hardware before drawing itself
+     * would be a button that feels broken in a lit room. **The screen says what was asked for; the
+     * log says what the lens did** (rule 6).
+     *
+     * Nothing on the in-round scan calls this. `ScanUse.InRound` sets `torch = false`, so the seam
+     * refuses by name even if something one day did — see [home.someoneshome.model] and the
+     * scanner seam's own KDoc for why a light nobody authored is the thing being guarded against.
+     */
+    fun toggleTorch() {
+        state = state.copy(torch = !state.torch)
+        onTorch(state.torch)
+    }
 
     /**
      * A tap on the plan: open the room under the finger.
@@ -1364,6 +1406,10 @@ class FlowModel(
      * get.
      */
     fun hostHome(homeName: String) {
+        // **D-161's gate, and it is checked before the radio rather than after it.** A home that
+        // went on the air from a phone that cannot scan is a party already assembled around a
+        // device that will fail in the dark, and the host would find out at the first marker.
+        if (!setupIsComplete()) return
         // **The home itself and not its name from here down** (E-PAY-3). The row that publishes
         // this action holds a `SavedHome` and hands over its name, so the lookup is here rather
         // than at the button: what the screens address a home by is what a host reads on it, and
@@ -1380,9 +1426,31 @@ class FlowModel(
         lobby.hostHome(home) { go(ScreenId.Lobby) }
     }
 
-    /** A tap on a network row: attach to that home, and go into its lobby. */
+    /** A tap on a network row: attach to that home, and go into its lobby — if this phone may. */
     fun attachToHome(home: NearbyHome) {
+        // The same gate the host stands behind, on the other side of the party. D-161 is about a
+        // seat rather than about hosting: *the lobby will not seat a device that cannot do the
+        // job, and the host is never handed a party that will fail in the dark.*
+        if (!setupIsComplete()) return
         lobby.attachTo(home)
+    }
+
+    /**
+     * **D-161's gate, asked once and answered in the host's own words** (E-PAY-5).
+     *
+     * False leaves a refusal on the lobby, naming the rows — *the whole Perms set, camera
+     * included*, and which rows are missing is the only part a person can act on. The screen does
+     * not move: a refusal that walked forward would be the fall-through this unit exists to stop,
+     * one screen along.
+     *
+     * It reads [PermsModel] rather than an OS, and that is the boundary working: what a grant *is*
+     * comes from `platform` through the seam the app wired, and what it *means for a seat* is
+     * ruled here, where the lobby can see it.
+     */
+    private fun setupIsComplete(): Boolean {
+        val why = perms.gateRefusal() ?: return true
+        lobby.refuse(why)
+        return false
     }
 
     /**
@@ -2408,6 +2476,8 @@ class FlowModel(
         nameResident = lobby::nameResident,
         hostHome = ::hostHome,
         openSystemSettings = lobby::openSystemSettings,
+        requestGrant = perms::request,
+        requestMissingGrants = perms::requestMissing,
         attachToHome = ::attachToHome,
         typeLine = lobby::typeLine,
         handOverLine = ::handOverLine,
@@ -2569,7 +2639,12 @@ fun FlowHost(
     }
     Screen(
         model.state, model.actions(), model.editor, model.homes, model.lobby, model.meeting,
-        model.subroutines, model.notifications, model.lamp,
+        model.subroutines, model.notifications,
+        // Named from here on, because the two after the notifications are not in the order a
+        // reader would guess and a positional argument that lands one slot over is a screen drawn
+        // with the wrong model and no compile error to say so.
+        perms = model.perms,
+        lamp = model.lamp,
     )
 }
 

@@ -76,6 +76,15 @@ fun Screen(
      */
     notifications: NotificationsModel = remember { NotificationsModel() },
     /**
+     * **What the OS has said about this phone** (D-161).
+     *
+     * Defaulted to a phone whose setup is done, for the reason the six above are defaulted to a
+     * furnished state: every screen after this one is a screen a host reaches *through* the gate,
+     * so a fixture that failed it would draw the rest of the app in a state no player ever sees. In
+     * the app [FlowHost] passes the one wired to `devicePermissions()`.
+     */
+    perms: PermsModel = remember { PermsModel.sample() },
+    /**
      * **The lamp — the light the house set, and the Surge's slam over the top of it.**
      *
      * Defaulted and `remember`ed for the reason the six above are, and it is the one of the seven
@@ -95,6 +104,7 @@ fun Screen(
         LocalMeeting provides meeting,
         LocalSubroutine provides subroutines,
         LocalNotifications provides notifications,
+        LocalPerms provides perms,
     ) {
         // THE FRAME DIMS FOR A HEAVY BANNER AND FOR NOTHING ELSE. `dims` is the house-wide
         // question — is one of D-118's two events on this screen — and the answer is yes on the

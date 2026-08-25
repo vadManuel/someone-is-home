@@ -1,6 +1,7 @@
 package home.someoneshome.ui
 
 import home.someoneshome.model.Cell
+import home.someoneshome.model.DevicePermission
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.RoomKind
 
@@ -164,6 +165,18 @@ class PanelActions(
      * [LobbyModel.cycleVoteWindow]). [lightsOut] is **presentation only** — see
      * [FlowModel.lightsOut].
      */
+    /**
+     * **The Perms screen, asking the OS for real** (D-161).
+     *
+     * [requestGrant] is one row tapped; [requestMissingGrants] is the primary control, which walks
+     * the rows still standing between this phone and a seat. Neither navigates, and that is the
+     * whole correction: the button they replace called nothing and went to the join screen anyway.
+     *
+     * They are not in [ScreenGraph] and not in [Flow.viaActions] because they walk no edge —
+     * CONTINUE is a separate control and appears only once the gate is open.
+     */
+    val requestGrant: (DevicePermission) -> Unit = {},
+    val requestMissingGrants: () -> Unit = {},
     val nameResident: (String) -> Unit = {},
     val hostHome: (String) -> Unit = {},
     /**

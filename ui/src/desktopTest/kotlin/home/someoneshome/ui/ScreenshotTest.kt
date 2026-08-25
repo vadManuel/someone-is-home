@@ -166,6 +166,9 @@ class ScreenshotTest {
                 val model = FlowModel(
                     PanelState(screen = ScreenId.HomeDetail),
                     lobby = LobbyModel(link = RefusingLobbyLink(why)),
+                    // A phone whose setup is done: the shot being taken is of the RADIO's refusal,
+                    // and D-161's gate stands one step in front of it.
+                    perms = PermsModel.sample(),
                 )
                 model.openSavedHome(HomeEditorModel.BUNGALOW)
                 model.hostHome(HomeEditorModel.BUNGALOW)

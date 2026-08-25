@@ -6,12 +6,54 @@ import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MarkerShapes
 
 /**
+ * **Which of the two scans a session is**, and everything that follows from it.
+ *
+ * There are two scans in this game and they are opposites. Registration happens at host setup **in
+ * a lit room with the party standing in front of the host**: back camera, a live picture so the
+ * host can aim, a torch when the hall light is poor. The in-round scan happens in a dark house with
+ * the panel held up to the marker: **front camera, no picture at all**, because the lit screen *is*
+ * the light the card is read by and it is facing the paper (D-159, gdd M1).
+ *
+ * ### The three fields are the whole difference, and they are declared once
+ *
+ * A camera that read its facing off one constant and its preview off another would be two rules
+ * about the same scan, and the pair would drift the first time somebody fixed half of a bug. So the
+ * configuration is a table with two rows, everything downstream reads it rather than deciding for
+ * itself, and `ScanUseTest` refuses a row whose facing or preview has been swapped. **That test is
+ * the point of this type existing** — the bug it stands against shipped: the registration screen
+ * said BACK CAMERA . POINT AT THE CODE over a session hard-coded to the front lens.
+ *
+ * ### It is not a settings bag and must not become one
+ *
+ * Nothing may be added here that a caller could want *sometimes*. Two scans, two rows, and a third
+ * row would mean a third scan exists — which is a design question, not a parameter.
+ */
+enum class ScanUse(
+    /** Which lens. The paper is on the far side of the phone at setup and on the near side in play. */
+    val facing: CameraFacing,
+    /** Whether a live picture is drawn. False in play, and its absence there is the design. */
+    val preview: Boolean,
+    /** Whether the torch may be lit. The house is dark in play and the lamp is the game's. */
+    val torch: Boolean,
+) {
+
+    /** Host setup: **back camera, live viewfinder, torch available.** In the light. */
+    Registration(CameraFacing.Back, preview = true, torch = true),
+
+    /** In a round: **front camera, no preview, no torch.** D-159, and it may never gain either. */
+    InRound(CameraFacing.Front, preview = false, torch = false),
+}
+
+/** Which lens. Two of them, named rather than numbered, so a swap is readable in a diff. */
+enum class CameraFacing { Front, Back }
+
+/**
  * **A camera pointed at a printed card, as far as anything above it is allowed to know.**
  *
- * The host-setup scan is the one scan in this game that is allowed to be easy: back camera, lights
- * on, torch available, a card held still in a lit room. The in-round scan is the front camera in
- * the dark by lamplight and is a different thing entirely (E5) — this interface is not it and must
- * not grow into it.
+ * One interface, two configurations — see [ScanUse], which is where the split is named. A scanner
+ * carries the [use] it was built for and cannot be talked out of it: there is no method here that
+ * changes a lens, because a session that could be reconfigured mid-evening is a session that ends
+ * up on the wrong lens on the one screen where nobody can see the screen.
  *
  * ### It hands over the payload, not a card
  *
@@ -37,6 +79,9 @@ import home.someoneshome.model.MarkerShapes
  */
 interface CardScanner {
 
+    /** Which of the two scans this session is. Fixed when it was built; nothing may change it. */
+    val use: ScanUse
+
     /**
      * Point at cards. Every symbol resolved arrives at [onPayload] until [stop].
      *
@@ -47,6 +92,20 @@ interface CardScanner {
 
     /** Stop reading. Safe to call when nothing was started; the screen is gone either way. */
     fun stop()
+
+    /**
+     * **The LED beside the back lens, on or off** — the host's control at registration.
+     *
+     * Refused, in the log and nowhere else, on a scanner whose [ScanUse.torch] is false. That
+     * refusal is not defensive tidiness: the in-round scan happens in a dark house where **light is
+     * game state** (rule 5), and a torch lit behind a screen nobody is looking at would be a light
+     * nobody authored, visible from three rooms away, on a phone whose owner is trying not to be
+     * found. It is silent to the player and loud to the log, rule 6 exactly.
+     *
+     * Safe before [start] and after [stop]; a scanner with no session yet has nothing to light and
+     * says so.
+     */
+    fun torch(lit: Boolean)
 }
 
 /**
@@ -62,7 +121,7 @@ interface CardScanner {
  * behind it: a screen that blanked because the camera threw is a screen that went dark in a room
  * where dark means something.
  */
-expect fun deviceCardScanner(): CardScanner
+expect fun deviceCardScanner(use: ScanUse): CardScanner
 
 /**
  * **The playtest scanner: a deck of cards that arrive when something says one did.**
@@ -78,11 +137,22 @@ expect fun deviceCardScanner(): CardScanner
  *
  * The deck itself is a tour of the refusals rather than a list of pleasant cards — see [DECK].
  */
-class SeededCardScanner(cards: List<MarkerCard> = DECK) : CardScanner {
+class SeededCardScanner(
+    cards: List<MarkerCard> = DECK,
+    /**
+     * Registration by default, because that is the walk this deck exists for: the tour of the
+     * refusals below is a host's stack of paper, not a player's single marker in the dark.
+     */
+    override val use: ScanUse = ScanUse.Registration,
+) : CardScanner {
 
     private val payloads: List<String> = cards.map { CardPayload.encode(it) }
     private var listener: ((String) -> Unit)? = null
     private var next = 0
+
+    /** Whether the deck's imaginary torch is lit. Nothing draws it; a test reads it. */
+    var torchLit: Boolean = false
+        private set
 
     override fun start(onPayload: (String) -> Unit) {
         listener = onPayload
@@ -90,6 +160,12 @@ class SeededCardScanner(cards: List<MarkerCard> = DECK) : CardScanner {
 
     override fun stop() {
         listener = null
+    }
+
+    /** The same refusal the camera makes, on a deck: a scan with no torch may not light one. */
+    override fun torch(lit: Boolean) {
+        if (!use.torch) return
+        torchLit = lit
     }
 
     /**

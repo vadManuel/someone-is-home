@@ -18,6 +18,7 @@ import home.someoneshome.model.CardPayload
 import home.someoneshome.model.Haptic
 import home.someoneshome.platform.CameraCardScanner
 import home.someoneshome.platform.Haptics
+import home.someoneshome.platform.ScanUse
 import home.someoneshome.platform.ScanWindow
 import home.someoneshome.ui.Amber
 import home.someoneshome.ui.Label
@@ -73,7 +74,7 @@ class ScanCheat(private val haptics: Haptics) {
      * has quietly stopped. The counter is what makes those two distinguishable in a room where
      * nobody is holding a card.
      */
-    val camera = CameraCardScanner(log = ::note, countFrames = true)
+    val camera = CameraCardScanner(use = ScanUse.InRound, log = ::note, countFrames = true)
 
     /**
      * **The in-round scan, as one object**: the lens, the motor and D-159's window.

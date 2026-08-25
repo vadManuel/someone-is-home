@@ -513,13 +513,16 @@ class FlowTest {
         // — the reason this edge is the actions layer's rather than the button's (E-D3-2) — and
         // that half is walked immediately below, because an edge that is only ever proved in the
         // direction it moves is an edge nobody has checked can refuse.
-        val onAir = FlowModel(PanelState(screen = ScreenId.HomeDetail))
+        // A phone whose setup is done: what is walked here is the RADIO's edge, and D-161's gate
+        // stands one step in front of it — see SetupGateTest, which walks the gate itself.
+        val onAir = FlowModel(PanelState(screen = ScreenId.HomeDetail), perms = PermsModel.sample())
         onAir.hostHome("THE BUNGALOW")
         assertEquals(Flow.viaActions.getValue(ScreenId.HomeDetail), setOf(onAir.state.screen))
 
         val offAir = FlowModel(
             PanelState(screen = ScreenId.HomeDetail),
             lobby = LobbyModel(link = RefusingLobbyLink()),
+            perms = PermsModel.sample(),
         )
         offAir.hostHome("THE BUNGALOW")
         assertEquals(

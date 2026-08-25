@@ -371,7 +371,14 @@ class HostSetupInputTest {
 
             onNodeWithText("MEETING CARD . KITCHEN").assertExists()
             onNodeWithText("SEEDU01").assertExists()
-            onNodeWithText("U").assertExists()
+            // TWO of them, and the second one is E-PAY-5's fix: the readout in the middle of the
+            // viewfinder, and the THIS ROOM row underneath it. That row listed ordinary markers
+            // only, so a host who had just placed the meeting card looked down at the line whose
+            // whole job is *what is in here now* and saw nothing.
+            assertEquals(
+                2, onAllNodes(hasText("U")).fetchSemanticsNodes().size,
+                "the meeting card is on the viewfinder but not in THIS ROOM",
+            )
         }
 
     /**
@@ -394,7 +401,11 @@ class HostSetupInputTest {
             mainClock.advanceTimeBy(100)
 
             onNodeWithText("TERMINAL . KITCHEN").assertExists()
-            onNodeWithText("T").assertExists()
+            // The readout and the THIS ROOM row, for the reason above.
+            assertEquals(
+                2, onAllNodes(hasText("T")).fetchSemanticsNodes().size,
+                "the terminal is on the viewfinder but not in THIS ROOM",
+            )
         }
 
     @Test
@@ -549,6 +560,9 @@ class HostSetupInputTest {
             val model = FlowModel(
                 PanelState(screen = ScreenId.HomeDetail),
                 lobby = LobbyModel(link = RefusingLobbyLink(HostRefusal.NameAlreadyOnTheAir)),
+                // A phone whose setup is done. These tests are about the RADIO — D-161's gate
+                // stands one step earlier and would otherwise refuse every press below it.
+                perms = PermsModel.sample(),
             )
             model.openSavedHome(HomeEditorModel.BUNGALOW)
             show(model)
@@ -588,6 +602,9 @@ class HostSetupInputTest {
             val model = FlowModel(
                 PanelState(screen = ScreenId.HomeDetail),
                 lobby = LobbyModel(link = RefusingLobbyLink(HostRefusal.CouldNotGoOnTheAir)),
+                // A phone whose setup is done. These tests are about the RADIO — D-161's gate
+                // stands one step earlier and would otherwise refuse every press below it.
+                perms = PermsModel.sample(),
             )
             model.openSavedHome(HomeEditorModel.BUNGALOW)
             show(model)
@@ -627,6 +644,9 @@ class HostSetupInputTest {
                     link = RefusingLobbyLink(HostRefusal.CouldNotGoOnTheAir),
                     settings = { opened++ },
                 ),
+                // A phone whose setup is done. These tests are about the RADIO — D-161's gate
+                // stands one step earlier and would otherwise refuse every press below it.
+                perms = PermsModel.sample(),
             )
             model.openSavedHome(HomeEditorModel.BUNGALOW)
             show(model)
@@ -658,6 +678,9 @@ class HostSetupInputTest {
             val model = FlowModel(
                 PanelState(screen = ScreenId.HomeDetail),
                 lobby = LobbyModel(link = RefusingLobbyLink(HostRefusal.NameAlreadyOnTheAir)),
+                // A phone whose setup is done. These tests are about the RADIO — D-161's gate
+                // stands one step earlier and would otherwise refuse every press below it.
+                perms = PermsModel.sample(),
             )
             model.openSavedHome(HomeEditorModel.BUNGALOW)
             show(model)
@@ -676,7 +699,7 @@ class HostSetupInputTest {
     @Test
     fun aHomeThatGoesOnTheAirOpensTheLobby() =
         runDesktopComposeUiTest(width = 300, height = 650) {
-            val model = FlowModel(PanelState(screen = ScreenId.HomeDetail))
+            val model = FlowModel(PanelState(screen = ScreenId.HomeDetail), perms = PermsModel.sample())
             model.openSavedHome(HomeEditorModel.BUNGALOW)
             show(model)
 
@@ -736,6 +759,8 @@ class HostSetupInputTest {
         val model = FlowModel(
             PanelState(screen = ScreenId.Lobby),
             lobby = LobbyModel(link = MemoryLobbyLink(joined = joined, linesIn = joined)),
+            // The gate is D-161's and stands before the radio; this fixture is about capacity.
+            perms = PermsModel.sample(),
         )
         model.openSavedHome(HomeEditorModel.BUNGALOW)
         // Through the model's own action, which is what resolves the name the row carries into the

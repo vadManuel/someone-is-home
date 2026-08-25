@@ -634,6 +634,12 @@ fun ScanMarkerScreen(vals: PanelVals) {
         )
 
         Box(Modifier.fillMaxWidth().weight(1f).background(Amber.SlateDefunct)) {
+            // **THE PICTURE, UNDER EVERYTHING ELSE IN THIS BOX.** The brackets, the label, the
+            // torch wash and the readout all sit on top of it; the slate field behind stays,
+            // because on a surface with no camera it is the whole of what there is. See
+            // [LocalViewfinder] — the app fills it and nothing here can.
+            LocalViewfinder.current(Modifier.fillMaxSize())
+
             ViewfinderCorners()
 
             Label(
@@ -670,6 +676,16 @@ fun ScanMarkerScreen(vals: PanelVals) {
         ) {
             Label("THIS ROOM", size = 6.0, color = Amber.BoneFaint, tracking = 0.12)
             editor.heldMarkers.forEach { MarkerGlyph(it, 12.u, Amber.BoneInk) }
+            // **The two reserved cards, in the room they are actually in** (E-PAY-5: the missing
+            // T and meeting icons in THIS ROOM). They were absent, and their absence was a host
+            // scanning the T card, seeing the readout confirm it, and then reading a row that did
+            // not list it — the one row on the screen whose whole job is *what is in here now*.
+            //
+            // Drawn with the tokens the rest of host setup uses for them and never as a marker
+            // glyph. Neither reserved card is ever an ordinary marker (D-120, D-121), and a letter
+            // rendered inside a shape outline is exactly what a host would read as one.
+            if (editor.terminal == editor.heldName) TerminalToken(12.u, Amber.BoneInk, textSize = 6.0)
+            if (editor.meeting == editor.heldName) MeetingToken(12.u, Amber.BoneInk, textSize = 6.0)
         }
 
         PreNote("KEEP SCANNING TO ADD MORE. THE CODE CARRIES\nTHE SHAPE PRINTED ON IT.")

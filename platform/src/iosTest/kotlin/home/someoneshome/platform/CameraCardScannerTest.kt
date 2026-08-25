@@ -186,7 +186,16 @@ class CameraCardScannerTest {
         val scanner = CameraCardScanner(log = log::add)
         scanner.start { seen += it }
         scanner.stop()
-        assertTrue(deviceCardScanner() is CameraCardScanner, "the iOS actual stopped being the camera")
+        assertTrue(
+            deviceCardScanner(ScanUse.InRound) is CameraCardScanner,
+            "the iOS actual stopped being the camera",
+        )
+        // Both configurations come back as the same class carrying different settings — one
+        // scanner, two configurations, which is what `ScanUse` exists to keep true.
+        assertEquals(
+            ScanUse.Registration, deviceCardScanner(ScanUse.Registration).use,
+            "the registration seam handed back a scanner configured for a different scan",
+        )
         assertEquals(emptyList(), seen, "a target with no lens delivered a card")
         assertTrue(
             log.isNotEmpty() && log.all { it.startsWith("[scan]") },
