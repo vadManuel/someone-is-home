@@ -333,7 +333,12 @@ fun PanelFrame(
         // LAST, AND OVER EVERYTHING INCLUDING THE BANNER. The design puts it on the screen
         // element rather than inside the luminous layer, so it is not dimmed by a notification
         // and does not move with an overlay -- see [ScanLines].
-        ScanLines()
+        //
+        // THE FIELD, AND NOTHING ELSE, CHOOSES THE STRENGTH -- `isPre` is a function of
+        // `state.screen` alone, so two phones on the same screen carry identical glass whatever
+        // their roles and whatever the round is doing. See [ScanLines] for why the bone field
+        // needs its own number.
+        ScanLines(light = vals.isPre)
     }
 }
 
@@ -362,11 +367,35 @@ fun PanelFrame(
  * two inverted screens get it like everything else. It is the surface, not the content, which is
  * how a real panel behaves and why there is exactly one of these in the app.
  *
+ * ### The one thing the transcription got wrong: it was drawn over one field and shipped over two
+ *
+ * The mockup's screen is amber on black. Over black the band takes 32% of nothing and is
+ * *invisible*; what you see of it there is the texture it lays over lit content, which is the
+ * effect it was chosen for. The port then drew the same brush over the **bone** field — the
+ * pre-arming setup surfaces and the Residents' ending, dark ink on a mid-tone ground — where there
+ * is no unlit ground for it to spare. It attenuates the ink and the ground together, and because
+ * contrast is not scale-invariant near the dark end, the pair comes out closer than it went in:
+ * `BoneInk` on `Bone` measures **6.73:1 on a clear row and 3.57:1 on a band**, which is under the
+ * 4.5:1 floor for small text, one row in three, over every word on the screen. The owner's report
+ * was *"the scan lines make the text barely legible on light mode"*, and this is that, in numbers.
+ *
+ * So the strength is a function of the field: [SCAN_LINE_INK] over the dark field, unrounded and
+ * untouched, and [SCAN_LINE_INK_LIGHT] over bone. Same brush, same period, same phase, same
+ * black — one constant differs, and it is the one the two fields disagree about.
+ *
+ * **The lantern was measured and left alone.** `Lock`, `LockNotify` and `Scan` fill with amber and
+ * are the other light ground in the app, so they were the obvious second suspect; black on
+ * `Amber.Bright` goes 13.57:1 → 6.34:1 under the full band, which is comfortable at both ends.
+ * They are also in-round screens held up in a dark house, and their glass is the design's.
+ *
  * ### The three rules it has to not break
  *
- * - **Rule 5, the lamp is a pure function of state.** This never varies: same alpha, same period,
- *   every screen, every frame, every role. It is a constant attenuation of about 11% of emitted
- *   light, and a constant cannot carry a signal.
+ * - **Rule 5, the lamp is a pure function of state.** The strength varies with the *field* and
+ *   with nothing else: [PanelVals.isPre] is derived from [PanelState.screen] alone, never from the
+ *   role, the round or the moment. Two phones showing the same screen therefore carry identical
+ *   glass, which is the whole of what the rule protects — a difference a player could read off
+ *   somebody else's phone. Two phones showing *different* screens already look different, and the
+ *   bone field announces itself long before its banding does.
  * - **Rule 7, the allocation budget.** One rectangle with a repeating shader, and the brush is
  *   remembered against the period rather than rebuilt per frame. The obvious version — a loop of
  *   a hundred and thirty `drawRect`s — costs a hundred and thirty draw calls a frame to say the
@@ -384,12 +413,13 @@ fun PanelFrame(
  * one brush away if somebody rules for it.
  */
 @Composable
-private fun ScanLines() {
+private fun ScanLines(light: Boolean) {
     val periodPx = with(LocalDensity.current) { SCAN_LINE_PERIOD.toPx() }
-    val glass = remember(periodPx) {
+    val ink = scanLineInk(light)
+    val glass = remember(periodPx, ink) {
         Brush.verticalGradient(
-            0f to SCAN_LINE_INK,
-            SCAN_LINE_DUTY to SCAN_LINE_INK,
+            0f to ink,
+            SCAN_LINE_DUTY to ink,
             SCAN_LINE_DUTY to Color.Transparent,
             1f to Color.Transparent,
             startY = 0f,
@@ -400,14 +430,49 @@ private fun ScanLines() {
     Box(Modifier.fillMaxSize().background(glass))
 }
 
+/**
+ * The band's colour for a field. **The only thing the two fields disagree about** — same black,
+ * same period, same phase, same duty; one alpha.
+ *
+ * Internal rather than private because `ScanLinesTest` asserts on both numbers, and a guard that
+ * re-declared them would be a second copy that agrees on the day it is written.
+ */
+internal fun scanLineInk(light: Boolean): Color =
+    if (light) SCAN_LINE_INK_LIGHT else SCAN_LINE_INK
+
 /** One dark unit in every three — `0 1px, transparent 1px 3px` in the design's own CSS. */
 private val SCAN_LINE_PERIOD: Dp = 3.u
 
 /** Where the dark part ends inside one period. One unit of three. */
 private const val SCAN_LINE_DUTY: Float = 1f / 3f
 
-/** `rgba(0,0,0,.32)`. Black, because the banding is an absence of light rather than a colour. */
+/**
+ * `rgba(0,0,0,.32)`. Black, because the banding is an absence of light rather than a colour.
+ *
+ * The mockup's own number, and it stays the mockup's own number: this is the field it was drawn
+ * over, and over black the band takes nothing at all.
+ */
 private val SCAN_LINE_INK: Color = Color.Black.copy(alpha = 0.32f)
+
+/**
+ * The same black over the **bone** field, at the strength that ground can afford.
+ *
+ * Not tuned by eye and not a round number chosen for looking like one. The band multiplies ink and
+ * ground alike, so the contrast a pair of colours has left after it is a function of this alpha,
+ * and the alpha was solved for and then looked at: at 0.10 the primary pair (`BoneInk` on `Bone`)
+ * measures **5.56:1** off a render against 6.73:1 clear — above the 4.5:1 small-text floor the full
+ * band broke — and every light-field pair, the marginal `BoneDim` included, keeps at least 82% of
+ * the contrast it has on a clear row. `ScanLinesTest` holds both of those as the floor.
+ *
+ * The candidates either side were rendered and compared at 600×1300 rather than reasoned about:
+ * 0.16 still chews the two-line footers on `Perms` and `Join`, and 0.08 is not visibly cleaner than
+ * 0.10 while having less band left to see.
+ *
+ * It is still a band and still visible: sixteen levels of step on bone, which is about what the row
+ * structure of a real reflective panel looks like from arm's length, rather than the fifty-two the
+ * dark field's number was putting there.
+ */
+private val SCAN_LINE_INK_LIGHT: Color = Color.Black.copy(alpha = 0.10f)
 
 /**
  * The status row's height, which the overlay and the content inset both measure against.
