@@ -676,6 +676,29 @@ class PanelVals(
     val isPre: Boolean get() = mode == PanelMode.Pre
 
     /**
+     * **Whether this screen puts text on a ground that emits.**
+     *
+     * The question the scan-line glass asks, and the only thing it varies on — see [ScanLines].
+     * The band is a *multiply*: over black it takes 32% of nothing and is invisible, which is the
+     * field the design's mockup was drawn over. Over a ground that is already lit it takes 32% of
+     * everything, ink and ground alike, and the pair it leaves behind is closer together than the
+     * pair it found. That is the owner's *"barely legible"*, and it happens on three kinds of
+     * ground rather than one:
+     *
+     * - **bone** — every pre-arming setup surface and the Residents' ending ([isPre]);
+     * - **the lantern's amber** — the two full amber fields, black glyphs on `Amber.Bright`
+     *   ([PanelMode.Inverted]);
+     * - **an amber block on an otherwise dark screen** — [AMBER_BLOCKS] below, where the block is
+     *   the one sentence on the screen that matters.
+     *
+     * **A function of [PanelState.screen] and nothing else** — not the role, not the round, not the
+     * cause a player is out by. That is what keeps the varying strength inside rule 5: two phones
+     * showing the same screen carry the same glass, and a difference nobody can produce is a
+     * difference nobody can read off somebody else's phone.
+     */
+    val litGround: Boolean get() = isPre || mode == PanelMode.Inverted || screen in AMBER_BLOCKS
+
+    /**
      * Whether the *shared* status bar is drawn.
      *
      * False only for [PanelMode.Inverted], where the screen draws its own. It is never false
@@ -1756,6 +1779,40 @@ class PanelVals(
             ScreenId.TermRemove, ScreenId.MeetTaken, ScreenId.MeetRemove,
             ScreenId.Floors, ScreenId.ReviewNeeds, ScreenId.Perms,
             ScreenId.Lobby, ScreenId.WinResidents,
+        )
+
+        /**
+         * **The dark screens that carry an amber block with black text in it**, which is a lit
+         * ground on a panel that is otherwise black.
+         *
+         * `Tally` prints `MARCUS WAS RESTRAINED` in the design's inverted block and `WinInsiders`
+         * puts its whole ROUND OVER / INSIDERS WIN header in one. `Notify` and `Banner` are the
+         * springboard with a **heavy notification** on it — D-118's two kinds, the Egress and the
+         * house's opening text — and that banner is an amber card with black type, three lines of
+         * it. None of the four is `Pre` and none is `Inverted`, so none is caught by the two
+         * questions above; all four put their single most important sentence on exactly the ground
+         * the full band is worst over.
+         *
+         * **`Notify` and `Banner` were found by the guard rather than by the mining**, which is the
+         * argument for the guard being what it is: `ScanLinesTest` asks the *render* whether a
+         * screen has words standing on a ground that emits, and it named two the sweep of the
+         * palette had missed. A banner is also not a per-player difference — the two heavy kinds
+         * arrive on every phone at once — so a softer band while one is up is not something one
+         * player can have and another cannot.
+         *
+         * ⚠️ **The strength is per screen, so these two get the softer band over their dark parts
+         * as well**, where its only visible effect is the texture it lays over amber-on-black
+         * content. That is a real cost and it is the one paid on purpose: the glass is one brush
+         * over the whole panel (rule 7, and the reason it is the *surface* rather than any screen's
+         * decoration), so the alternative is a second brush per lit region and a glass that knows
+         * what is under it. A slightly finer texture on two screens is the cheaper of the two.
+         *
+         * Written down here rather than left as a `when` branch for [BUZZING]'s reason exactly: it
+         * is the kind of set a new screen joins, and a new amber block on a screen that is not in
+         * here ships with the band that made the owner file the report.
+         */
+        val AMBER_BLOCKS: Set<ScreenId> = setOf(
+            ScreenId.Tally, ScreenId.WinInsiders, ScreenId.Notify, ScreenId.Banner,
         )
 
         val BUZZING: Set<ScreenId> = setOf(
