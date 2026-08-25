@@ -147,6 +147,36 @@ sealed class LobbyBody {
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("roundEnded")
     data object RoundEnded : LobbyBody()
+
+    /**
+     * **Host → client. The host closed the house; there is no lobby to stand in any more.**
+     *
+     * [RoundEnded]'s sibling and emphatically not the same fact. That one says *the evening turned
+     * over* and everything a second round is built from survives it — the home, the seats, the
+     * settings, the connection. This one says the house is going down: the server stops, the
+     * advertisement comes off the air, and a phone that kept sitting on the lobby screen would be
+     * drawing a count from a desk that no longer exists. **The only honest destination is the join
+     * screen.**
+     *
+     * ### It carries nothing, for [RoundEnded]'s reason and one of its own
+     *
+     * The whole message is that it arrived. There is also nothing it *could* carry that a client
+     * should act on: a reason would be the host's words on five other people's screens, and the
+     * host is standing in the room with them.
+     *
+     * ### Downward only, and that direction is the guard
+     *
+     * A client able to send this would be one phone closing everybody else's house. The host's own
+     * end ignores it on arrival for exactly the reason it ignores [RoundEnded] there.
+     *
+     * ⚠️ **The line the clients are shown is PROPOSED, not ratified** — see
+     * `LobbyModel.HOUSE_CLOSED`. This body carries no words, so a change of wording is a change to
+     * one constant in `ui` and never a protocol change.
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("houseClosed")
+    data object HouseClosed : LobbyBody()
 }
 
 /**

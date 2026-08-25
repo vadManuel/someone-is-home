@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -51,9 +52,23 @@ fun HomeScreen(vals: PanelVals, widget: @Composable (PanelVals) -> Unit = { Inte
             // The one slot the house can take away. Everything below it is unchanged.
             widget(vals)
 
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.u)) {
+            // **THE TWO WIDGETS ARE ONE HEIGHT** (E-PAY-6, the owner's *the NEXT SUBROUTINE and
+            // COMPLETED widgets are differing heights*). Each column used to take whatever its own
+            // content wanted, and the contents genuinely differ — a heading, a name and a row of
+            // marks against a heading, a 26-unit numeral and a line — so the two bordered boxes came
+            // out ragged against each other at the top of the screen a player looks at most.
+            //
+            // `IntrinsicSize.Min` on the row and `fillMaxHeight` on both columns, rather than a
+            // height typed on each: a fixed number would be wrong the first time a Subroutine name
+            // wraps to two lines, and it would be wrong silently — the taller box would clip. This
+            // asks both what they need and gives both the larger answer, so the pair stays level
+            // whatever the house deals.
+            Row(
+                Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                horizontalArrangement = Arrangement.spacedBy(6.u),
+            ) {
                 Column(
-                    Modifier.weight(1f).border(1.u, Amber.Faint).tap { go(ScreenId.Work) }
+                    Modifier.weight(1f).fillMaxHeight().border(1.u, Amber.Faint).tap { go(ScreenId.Work) }
                         .padding(horizontal = 7.u, vertical = 6.u),
                     verticalArrangement = Arrangement.spacedBy(3.u),
                 ) {
@@ -89,7 +104,7 @@ fun HomeScreen(vals: PanelVals, widget: @Composable (PanelVals) -> Unit = { Inte
                     }
                 }
                 Column(
-                    Modifier.width(78.u).border(1.u, Amber.Faint).tap { go(ScreenId.Work) }
+                    Modifier.width(78.u).fillMaxHeight().border(1.u, Amber.Faint).tap { go(ScreenId.Work) }
                         .padding(horizontal = 7.u, vertical = 6.u),
                     verticalArrangement = Arrangement.spacedBy(3.u),
                 ) {
@@ -112,11 +127,27 @@ fun HomeScreen(vals: PanelVals, widget: @Composable (PanelVals) -> Unit = { Inte
                 Modifier.weight(1f).fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(5.u),
             ) {
+                // **THE PHONE TILE IS GONE, AND IT IS A DELETION RATHER THAN A REWIRING** (D-121).
+                //
+                // It went to `Calling` — the caller's own ring — so tapping it *called a house
+                // meeting*, from wherever the player happened to be standing. That is the exact
+                // thing D-121 refuses: **meetings are called only by physically scanning the meeting
+                // card. No remote calls, ever.** Its closing paragraph is about this tile without
+                // knowing it existed — *a remote call is a button that summons the whole house from
+                // a chair. Making it a walk to a known place puts the caller somewhere everyone can
+                // see them, at the moment they would most like to be unseen.*
+                //
+                // **There was nothing to wire it to instead.** A tile that opened a call log or a
+                // dialler would be furniture pretending at a feature, and a tile that refused would
+                // teach the rule by punishing somebody for pressing it in the dark. What calls a
+                // meeting now is a card and a scan, and this is the fourth slot standing empty
+                // exactly as the CAMERA row's does — the grid keeps its shape, and the shape is part
+                // of the parity every phone on this screen is holding.
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.u)) {
                     SpringTile("FILES", PanelIcons.Files, Modifier.weight(1f)) { go(ScreenId.Files) }
                     SpringTile("NOTES", PanelIcons.Notes, Modifier.weight(1f)) { go(ScreenId.Notes) }
-                    SpringTile("PHONE", PanelIcons.Phone, Modifier.weight(1f)) { go(ScreenId.Calling) }
                     SpringTile("MESSAGES", PanelIcons.Messages, Modifier.weight(1f)) { go(ScreenId.Reveal) }
+                    Box(Modifier.weight(1f))
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.u)) {
                     SpringTile(

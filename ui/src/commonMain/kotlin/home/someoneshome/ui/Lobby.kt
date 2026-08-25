@@ -36,6 +36,47 @@ interface HomeFinder {
 }
 
 /**
+ * **Where this phone's own resident name is kept between launches** (the owner's E-PAY-6 ruling:
+ * *it should be saved*).
+ *
+ * `ui` cannot see `platform`, so the phone's filesystem arrives here as two functions and no
+ * detail — [HomeStore]'s shape exactly, and a separate type rather than a second use of that one so
+ * that no caller can hand the homes file to the name and find out later.
+ *
+ * ### It reverses a written rule, and the reversal is narrower than the rule was
+ *
+ * *The name is never persisted — it is re-sent from what this phone still has in memory, or not at
+ * all* was true of `LobbyOverTransport` and of `LobbyDesk`, and it stays true of both. **What the
+ * host holds about other people is still round-scoped and still written nowhere**: the desk drops
+ * every name when the round ends (D-115), and nothing on the wire has changed. What is stored here
+ * is one string — *what the owner of this phone calls themselves* — on that phone, by that person,
+ * about themselves. It is not somebody else's name, it is not a seat, and it is not a line.
+ *
+ * The cost of not having it was an evening: the owner force-quit the app to fix their own name and
+ * lost the round with it (E-PAY-7). Re-typing a name in a dark hallway is the failure this closes.
+ *
+ * **A failed write does not throw and must not.** A phone that could not save its name still plays
+ * perfectly; the whole consequence is that it asks again next time. That is the opposite of the
+ * seat token, where a silent failure is a phone that cannot resume — see `saveSeatToken`, whose
+ * KDoc argues the other side of the same question.
+ */
+interface NameStore {
+    fun read(): String?
+    fun write(text: String)
+}
+
+/**
+ * The store the screens get when nobody wired a real one: this session, and nothing after it.
+ *
+ * Deliberately not a no-op, for [MemoryHomeStore]'s reason — a store that dropped writes would let
+ * a test claim a name survived while proving nothing about surviving.
+ */
+class MemoryNameStore(private var text: String? = null) : NameStore {
+    override fun read(): String? = text
+    override fun write(text: String) { this.text = text }
+}
+
+/**
  * **Why HOST WITH THIS HOME was refused: the home never went on the air.**
  *
  * `ui` cannot see the radio and has no business knowing what Bonjour returned, so what crosses
@@ -137,7 +178,33 @@ interface LobbyLink {
      */
     fun roundEnded()
 
+    /**
+     * **This phone stands up and walks out.** The connection goes down; the house recounts.
+     *
+     * The seat and the line drop because the *desk* drops them — `LobbyDesk.left` has always done
+     * exactly that on a lost connection, and it publishes a new standing to everybody still in the
+     * room. Nothing here predicts the new counts and nothing may: a client that decremented its own
+     * `joined` would be a phone asserting a lobby.
+     *
+     * On the host's phone it takes the house down with it, because a host who has left is not still
+     * running a party.
+     */
     fun leave()
+
+    /**
+     * **The host closes the house on everybody** (E-PAY-6). [leave]'s sibling, and a different act.
+     *
+     * [leave] is one person standing up and the other five carry on. This is the party being over:
+     * the server stops, the advertisement comes off the air, and every other phone is *told*
+     * (`LobbyBody.HouseClosed`) rather than left to notice that its counts stopped moving. Before
+     * this existed a client in a lobby had no exit of any kind and a host had no way to end one —
+     * the trap the owner reported.
+     *
+     * **On a phone that is not hosting this does nothing**, the shape [setInsiders] and
+     * [setVoteWindow] already have, and the lobby offers the control nowhere else — so nothing
+     * legitimate calls it there.
+     */
+    fun terminate()
 }
 
 /**
@@ -249,7 +316,42 @@ class MemoryLobbyLink(
         windows += seconds
     }
 
+    /**
+     * **This phone left: the seat and the line go with it, and the desk republishes.**
+     *
+     * The fixture answers the way the real desk answers rather than only dropping the listener —
+     * the same reason it clamps the Insider band. A stand-in that kept the counts would let the
+     * leave control be built against a lobby that never recounted, and the screen would look right
+     * the whole time.
+     *
+     * `linesIn` falls only if this phone had handed one over, which the fixture knows because it is
+     * holding the receipts. It cannot fall below zero and `joined` cannot fall below zero either: a
+     * second leave from a phone that has already left is a no-op, not a negative lobby.
+     */
     override fun leave() {
+        if (mine.isBlank() && standing.joined == 0) return
+        val hadHandedOver = received.isNotEmpty()
+        val joined = maxOf(0, standing.joined - 1)
+        mine = ""
+        standing = standing.copy(
+            joined = joined,
+            linesIn = minOf(joined, if (hadHandedOver) standing.linesIn - 1 else standing.linesIn),
+            names = seatNames(joined),
+        )
+        publish()
+        listener = {}
+    }
+
+    /**
+     * **The host closed the house.** There is no lobby left, so there is no standing to publish.
+     *
+     * It does not fall through to [leave]. A leave is one seat going and a desk recounting for the
+     * people still there; this is the desk itself going away, and a fixture that published a lobby
+     * of five after the house came down would be modelling something that cannot happen.
+     */
+    override fun terminate() {
+        mine = ""
+        standing = standing.copy(joined = 0, linesIn = 0, names = emptyList())
         listener = {}
     }
 
@@ -289,6 +391,7 @@ class RefusingLobbyLink(private val why: HostRefusal = HostRefusal.NameAlreadyOn
     override fun setVoteWindow(seconds: Int) = Unit
     override fun roundEnded() = Unit
     override fun leave() = Unit
+    override fun terminate() = Unit
 }
 
 /**
@@ -380,6 +483,15 @@ class LobbyModel(
      * setup, in a lit room, before any round exists.
      */
     private val settings: () -> Unit = {},
+    /**
+     * **Where this phone's own name lives between launches** (the owner's E-PAY-6 ruling). See
+     * [NameStore], which argues why storing this one string does not reopen anything D-115 closed.
+     *
+     * Defaulted to memory for [HomeStore]'s reason: every test, every render and the desktop
+     * preview get a store that really holds a value for the session and nothing after it, so a test
+     * about persistence is testing a store rather than a stub.
+     */
+    private val names: NameStore = MemoryNameStore(),
 ) {
 
     /**
@@ -396,18 +508,66 @@ class LobbyModel(
         private set
 
     /**
-     * This phone's own resident name, typed on the way in.
+     * This phone's own resident name, typed on the way in — **and read back off this phone at the
+     * next launch** (the owner's E-PAY-6 ruling: *it should be saved*).
      *
      * **It leaves the device at [attachTo], and only there** (D-115). The host learns it because a
      * house that cannot say who is being Restrained cannot hold a meeting, and every other phone
-     * learns it because the design's lobby lists the people in it. It is round-scoped on both
-     * sides and written to no store on either.
+     * learns it because the design's lobby lists the people in it. It is round-scoped on the
+     * *house's* side and dropped there when the round ends; what is new is that the phone whose
+     * owner typed it does not forget it.
+     *
+     * The KDoc here used to end *written to no store on either*, and the half of that sentence
+     * about the host is unchanged. See [NameStore] for why the other half moved.
      *
      * Typed before attaching, so a change afterwards moves nothing: there is one screen with this
      * field on it and it is the one before the lobby.
      */
-    var residentName: String by mutableStateOf("")
+    var residentName: String by mutableStateOf(names.read()?.take(NAME_LIMIT).orEmpty())
         private set
+
+    /**
+     * **Whether this phone has said what to call its owner** — the gate on hosting and on joining
+     * (E-PAY-6: *name not persisted and not required before host/join*).
+     *
+     * It used to be neither. `attachTo`'s own KDoc said so out loud — *a player who typed nothing
+     * joins under a blank, which the house lists as an unnamed seat rather than refusing: the lobby
+     * is a lit room and the fix is to say something, not a dialog* — and that argument is still
+     * right about **dialogs** and was wrong about **controls**. A seat with no name on it is a
+     * person the room cannot Restrain by name, at a meeting where naming somebody is the entire
+     * mechanic; and the phone that has to fix it is the one that already walked away from the field.
+     *
+     * ### The refusal is the control being inert, not a sentence somebody has to dismiss
+     *
+     * Both gated controls are drawn, in place, unpressable, with the reason on the row — the shape
+     * LIGHTS OUT already has while a lobby is short (D-141: no pointer input at all, so there is
+     * nothing to press and nothing to time). Nothing pops up and nothing has to be acknowledged.
+     */
+    val named: Boolean get() = residentName.isNotBlank()
+
+    /**
+     * **Which rows in the lobby are this phone's owner** (the owner's E-PAY-6 ruling: *my name
+     * should be highlighted*).
+     *
+     * A client-side string match against what this phone typed, and **that is the whole of the
+     * mechanism** — the house is not asked and could not be. `Effect.MeetingCalling` carries no
+     * field for exactly this reason (D-191): *a phone in this game does not know its own seat*, and
+     * teaching it one would make *is this me?* answerable about every seat-carrying disclosure in
+     * the game, for one highlight. The boundary stays where E-R1-1 put it.
+     *
+     * ### Two ROSEs are both lit, and that is the honest answer rather than a limitation
+     *
+     * `ResidentStrip`'s KDoc used to refuse the highlight outright, on the argument that *two people
+     * in a house may well both be a ROSE, and a screen that pointed at the wrong one would be worse
+     * than a screen that points at none.* That argument holds against picking **one** row and is
+     * what this avoids: every row matching the typed name is marked, so the screen says *one of
+     * these is you* and never *that one is you*. It cannot point at the wrong person, because it
+     * does not point at a person — it points at a name, which is the only thing this phone knows.
+     *
+     * Blank is never a match. An unnamed seat is somebody who has not typed, and marking every one
+     * of them as *you* would be the highlight saying nothing on the screen it is most needed.
+     */
+    fun isMine(name: String): Boolean = named && name == residentName
 
     /** The homes on the air, in the order they answered. */
     var nearby: List<NearbyHome> by mutableStateOf(emptyList())
@@ -486,8 +646,23 @@ class LobbyModel(
         refusal = why
     }
 
+    /**
+     * Typing in the RESIDENT field — **and the keystroke is what persists it**.
+     *
+     * Written through on every character rather than at some commit point, because there is no
+     * commit: the field has no button under it, and the next thing the player does is tap a network
+     * row. A name saved at *join* would be lost by the phone that never got that far, which is the
+     * phone this was asked for (E-PAY-7 — the app force-quit to fix a name).
+     *
+     * **A failed write is swallowed here and only here.** [NameStore] says why: a phone that could
+     * not save its name plays the round perfectly and asks again next time, so surfacing it would
+     * be a refusal on a screen where nothing was refused. That is not the homes store's bargain and
+     * must not be confused with it — a save that did not happen is loud there (D-087) because a
+     * house that vanished is a house somebody walked for fifteen minutes.
+     */
     fun nameResident(next: String) {
         residentName = next.take(NAME_LIMIT)
+        runCatching { names.write(residentName) }
         refusal = null
     }
 
@@ -531,6 +706,14 @@ class LobbyModel(
      * [openSystemSettings].
      */
     fun hostHome(home: SavedHome, onAir: () -> Unit = {}) {
+        // **A nameless host is refused before the radio is asked** (E-PAY-6), which is where D-161's
+        // setup gate already stands and for the same reason: a house that goes on the air under a
+        // host the room cannot name is a party assembled around a phone that will have to be fixed
+        // later. The refusal stays on this screen, which is the shape every other refusal here has.
+        if (!named) {
+            refusal = NEEDS_A_NAME
+            return
+        }
         refusal = null
         link.host(
             home,
@@ -558,11 +741,28 @@ class LobbyModel(
      * A tap on a row: attach to that home under this phone's name, and start hearing how the lobby
      * stands.
      *
-     * **This is where the name leaves the phone** (D-115), and it is the only place it does. A
-     * player who typed nothing joins under a blank, which the house lists as an unnamed seat
-     * rather than refusing: the lobby is a lit room and the fix is to say something, not a dialog.
+     * **This is where the name leaves the phone** (D-115), and it is the only place it does.
+     *
+     * ### A player who typed nothing is refused, which reverses half of what this KDoc said
+     *
+     * It read: *a player who typed nothing joins under a blank, which the house lists as an unnamed
+     * seat rather than refusing: the lobby is a lit room and the fix is to say something, not a
+     * dialog.* **The clause about dialogs stands and nothing here is one** — the refusal is the row
+     * going inert with a reason on it, in place, on the screen the field is on. What was wrong is
+     * the rest: the fix being *to say something* requires the player to still be looking at the
+     * field, and this call is the moment they stop. An unnamed seat is a person the room cannot
+     * Restrain by name at a meeting whose whole mechanic is naming somebody, and the phone that
+     * has to fix it has already walked into the lobby (E-PAY-6).
+     *
+     * The desk still tolerates a blank on its side and must go on doing so — `LobbyBody.Standing`
+     * documents *empty for a phone that has not said what to call its owner*, and a host is not
+     * entitled to assume every client enforces anything.
      */
     fun attachTo(home: NearbyHome) {
+        if (!named) {
+            refusal = NEEDS_A_NAME
+            return
+        }
         attached = home
         refusal = null
         link.join(home, residentName) { standing = it }
@@ -736,8 +936,100 @@ class LobbyModel(
         link.roundEnded()
     }
 
+    // ---- The ways out of a lobby ---------------------------------------------------------
+
+    /**
+     * **LEAVE — this phone stands up and walks out** (E-PAY-6: *no one is ever trapped in a lobby
+     * again*).
+     *
+     * Everything this phone was holding about the lobby goes, and none of it is guessed at: the
+     * counts are wiped rather than decremented, because a lobby this phone is no longer in has no
+     * standing for it to hold a stale copy of. The house does its own arithmetic and publishes it
+     * to the people still there.
+     *
+     * **The line goes too.** It was typed on the strength of *deleted when the round ends*, and
+     * leaving before the round starts is a stronger version of the same promise — the desk drops it
+     * on the lost connection (`LobbyDesk.left`) and this drops this phone's copy, independently, the
+     * way `roundEnded` already drops both ends separately.
+     *
+     * **The name does not.** It is this phone's own and it is now stored (see [NameStore]); a
+     * player who left the wrong house should not have to type themselves in again.
+     */
+    fun leaveLobby() {
+        link.leave()
+        line.roundEnded()
+        attached = null
+        hosting = false
+        standing = LobbyBody.Standing(joined = 0, linesIn = 0)
+        refusal = null
+    }
+
+    /**
+     * **TERMINATE — the host closes the house on everybody** (E-PAY-6).
+     *
+     * Refused on a phone that is not hosting, the shape [cycleInsiders] and [cycleVoteWindow]
+     * already have, and the screen does not draw the control there either — so this is the second
+     * lock on a door that has one.
+     *
+     * It ends with this phone in the same place a leaver is: nothing attached, nothing hosted, no
+     * counts. The other phones are told by the house (`LobbyBody.HouseClosed`) and answer it at
+     * [houseClosed] below, which is the same landing reached by a different road.
+     */
+    fun terminateHouse() {
+        if (!hosting) return
+        link.terminate()
+        line.roundEnded()
+        attached = null
+        hosting = false
+        standing = LobbyBody.Standing(joined = 0, linesIn = 0)
+        refusal = null
+    }
+
+    /**
+     * **The house closed under this phone: the client's half of a TERMINATE.**
+     *
+     * Reached by a push and never by a control on this screen — there is no control, because the
+     * host is the one who closed it. What a client owes the player is *an honest line*, and the
+     * line is [HOUSE_CLOSED].
+     *
+     * It lands the same state [leaveLobby] does and then puts the reason on it, which is the one
+     * difference between walking out and being shown out. The caller navigates — see
+     * `FlowModel.houseClosed` — because where a phone goes is the flow's business and what it is
+     * holding is this class's.
+     */
+    fun houseClosed() {
+        leaveLobby()
+        refusal = HOUSE_CLOSED
+    }
+
     companion object {
         const val UNKNOWN: String = "UNKNOWN"
+
+        /**
+         * ⚠️ **PROPOSED COPY, NOT RATIFIED.** The owner asked for *an honest line* and did not write
+         * one; this is the draft, flagged here rather than shipped quietly, in the register the rest
+         * of the refusals on this screen are written in.
+         *
+         * It says what happened and does not editorialise about why. The host is standing in the
+         * room — a client's screen is the wrong place to explain a decision the person who made it
+         * can explain out loud, and a sentence guessing at their reason would be the app inventing
+         * one. *Closed* rather than *ended*: the round-ending line is `LobbyBody.RoundEnded`'s and
+         * means something else entirely, and the two must not read alike.
+         *
+         * Nothing about the wire depends on these words — `LobbyBody.HouseClosed` carries no
+         * field — so ratifying different ones is an edit to this constant and to nothing else.
+         */
+        const val HOUSE_CLOSED: String = "THE HOST CLOSED THE HOUSE"
+
+        /**
+         * **What the two gated controls say while this phone has no name** (E-PAY-6).
+         *
+         * On the row rather than in a dialog, and the same sentence on both, because it is the same
+         * missing fact: see [named]. It names the field the player has to go and fill rather than
+         * only the refusal, for the reason `NOT_ON_THE_AIR_CAUSE` names a permission — a refusal a
+         * person can act on is worth more than one that is merely true.
+         */
+        const val NEEDS_A_NAME: String = "TYPE YOUR NAME FIRST"
 
         /**
          * **The symptom: this home never went up, whatever the reason** (D-173).

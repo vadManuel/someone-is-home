@@ -493,6 +493,32 @@ class LobbyHouse(
         )
     }
 
+    /**
+     * **CLOSE THE HOUSE — the host ends the party, and every phone is told before it goes** (N5b,
+     * E-PAY-6).
+     *
+     * [roundEnded]'s sibling in shape and its opposite in consequence. That one wipes the desk and
+     * **keeps the house up**, because D-157 plays a second round in the same lobby. This one takes
+     * the house down: the server stops, the advertisement comes off the air, and the desk goes with
+     * the object.
+     *
+     * ### The announcement goes first, and the ordering is the whole of it
+     *
+     * [stop] closes every socket. A `HouseClosed` sent afterwards would be a frame written to
+     * connections that no longer exist, and five phones would learn the house was gone by noticing
+     * their counts had stopped — which is the trap this closes, arriving by a different road. So the
+     * broadcast is queued while the server is still up, and the teardown follows it.
+     *
+     * **The lines are dropped on the way out.** They were typed on the strength of *deleted when the
+     * round ends*, and a house being closed before any round started is a stronger case of the same
+     * promise, not a weaker one.
+     */
+    fun houseClosed() {
+        announce(TransportFrame.Carry(LobbyWire.encode(LobbyBody.HouseClosed)))
+        desk.roundEnded()
+        stop()
+    }
+
     /** **Deleted when the round ends** — the host's half of the promise. */
     fun roundEnded() {
         desk.roundEnded()
@@ -617,6 +643,11 @@ class LobbyHouse(
             // people to the lobby, mid-round, with no control anywhere that asked for it. NEW ROUND
             // is the host's (D-157) and reaches the rest as the push below.
             is LobbyBody.RoundEnded -> Unit
+            // **Downward only, exactly as above, and this one would bite harder**: a client able to
+            // send it would be one guest closing everybody else's house from a lobby they had just
+            // walked into. CLOSE THE HOUSE is the host's control and reaches the rest as the
+            // broadcast in [houseClosed].
+            is LobbyBody.HouseClosed -> Unit
         }
     }
 
@@ -741,6 +772,17 @@ class LobbyOverTransport(
      * next round's first push as already held.
      */
     private val onRoundEnded: () -> Unit = {},
+    /**
+     * **What this phone does when the HOST closes the house** (E-PAY-6).
+     *
+     * [onRoundEnded]'s sibling and wired identically, for the identical reason: what a phone does
+     * about it is a **screen** answer — walk back to the join screen, drop the line, say why — and
+     * neither this class nor `platform` may reach a screen. What differs is everything downstream.
+     * `RoundEnded` keeps the home, the seats, the settings and the socket; this one has no house
+     * left on the other end of the socket, which is why the hang-up happens here rather than being
+     * left to the panel.
+     */
+    private val onHouseClosed: () -> Unit = {},
 ) : LobbyLink {
 
     /**
@@ -830,6 +872,17 @@ class LobbyOverTransport(
                     is LobbyBody.RoundEnded -> {
                         round?.roundEnded()
                         onRoundEnded()
+                    }
+                    // **The host closed the house** (E-PAY-6). The round's inbox goes first and
+                    // unconditionally for `RoundEnded`'s reason, and then this phone hangs up: the
+                    // socket on the other end is about to close anyway, and a client still trying to
+                    // reconnect to a house that has come off the air would spend the rest of the
+                    // evening dialling a number nobody is at. The screen answer is the app root's —
+                    // this class cannot reach one.
+                    is LobbyBody.HouseClosed -> {
+                        round?.roundEnded()
+                        hangUp()
+                        onHouseClosed()
                     }
                     // Either upward body arriving at a client would be the house sending one
                     // phone's text to another, which nothing on the host side does — and if it ever
@@ -954,11 +1007,50 @@ class LobbyOverTransport(
         scope.launch { c.send(naming(residentName)) }
     }
 
+    /**
+     * **This phone stands up and walks out.**
+     *
+     * The socket goes down and the *host's* desk does the arithmetic: `TransportHost.onLost` calls
+     * `LobbyDesk.left`, which drops this seat, this seat's line and this seat's name and publishes a
+     * new standing to everybody still in the room. **Nothing here tells the house anything** — a
+     * connection closing is the message, and it is the one message that cannot be lost.
+     *
+     * On the host's own phone it takes the house down as well, because the house runs here: a host
+     * who has left is not still running a party. Which makes this and [terminate] the same act from
+     * a host's phone, and they are still two methods — see [terminate] for what the *other five*
+     * phones get, which is the entire difference and is not visible from this one.
+     */
     override fun leave() {
+        hangUp()
+        house.roundEnded()
+        house.stop()
+    }
+
+    /**
+     * **CLOSE THE HOUSE — and every other phone is told before the sockets go** (E-PAY-6).
+     *
+     * [leave] and this do the same three things to *this* phone. What this adds is the broadcast,
+     * and the broadcast is the requirement: *no one is ever trapped in a lobby again* is a promise
+     * about the five phones that did not press anything, and a host tearing the server down in
+     * silence leaves them exactly where they were — on a lobby screen with counts that have simply
+     * stopped moving, which is indistinguishable from a network that got slow.
+     *
+     * **On a phone that is not hosting [LobbyHouse] was never started**, so this reduces to a
+     * hang-up. That is the same shape [setInsiders] and [setVoteWindow] already have, and the lobby
+     * screen does not draw the control there either.
+     */
+    override fun terminate() {
+        // The announcement is the house's and goes out while its sockets are still up; the order
+        // matters and is argued at [LobbyHouse.houseClosed]. Then this phone's own client, which
+        // joined over loopback like everybody else.
+        house.houseClosed()
+        hangUp()
+    }
+
+    /** This phone's own end of the socket, dropped. Shared by the two exits so they cannot drift. */
+    private fun hangUp() {
         clientJob?.cancel()
         clientJob = null
         client = null
-        house.roundEnded()
-        house.stop()
     }
 }

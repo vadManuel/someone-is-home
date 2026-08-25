@@ -564,6 +564,7 @@ class HostSetupInputTest {
                 // stands one step earlier and would otherwise refuse every press below it.
                 perms = PermsModel.sample(),
             )
+            model.lobby.nameResident("ELLIOT")
             model.openSavedHome(HomeEditorModel.BUNGALOW)
             show(model)
 
@@ -606,6 +607,7 @@ class HostSetupInputTest {
                 // stands one step earlier and would otherwise refuse every press below it.
                 perms = PermsModel.sample(),
             )
+            model.lobby.nameResident("ELLIOT")
             model.openSavedHome(HomeEditorModel.BUNGALOW)
             show(model)
 
@@ -648,6 +650,7 @@ class HostSetupInputTest {
                 // stands one step earlier and would otherwise refuse every press below it.
                 perms = PermsModel.sample(),
             )
+            model.lobby.nameResident("ELLIOT")
             model.openSavedHome(HomeEditorModel.BUNGALOW)
             show(model)
 
@@ -682,6 +685,7 @@ class HostSetupInputTest {
                 // stands one step earlier and would otherwise refuse every press below it.
                 perms = PermsModel.sample(),
             )
+            model.lobby.nameResident("ELLIOT")
             model.openSavedHome(HomeEditorModel.BUNGALOW)
             show(model)
 
@@ -700,6 +704,7 @@ class HostSetupInputTest {
     fun aHomeThatGoesOnTheAirOpensTheLobby() =
         runDesktopComposeUiTest(width = 300, height = 650) {
             val model = FlowModel(PanelState(screen = ScreenId.HomeDetail), perms = PermsModel.sample())
+            model.lobby.nameResident("ELLIOT")
             model.openSavedHome(HomeEditorModel.BUNGALOW)
             show(model)
 
@@ -762,6 +767,7 @@ class HostSetupInputTest {
             // The gate is D-161's and stands before the radio; this fixture is about capacity.
             perms = PermsModel.sample(),
         )
+        model.lobby.nameResident("ELLIOT")
         model.openSavedHome(HomeEditorModel.BUNGALOW)
         // Through the model's own action, which is what resolves the name the row carries into the
         // home behind it — the same call the button makes.

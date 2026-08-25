@@ -51,7 +51,12 @@ fun SecretScreen() {
     val actions = LocalActions.current
     val lobby = LocalLobby.current
     PrePage(gap = 7) {
-        Label("BEFORE THE LIGHTS GO OUT", size = 7.0, color = Amber.BoneDim, tracking = 0.16)
+        // **The page name, with the way back beside it** (E-PAY-6). It was a bare `Label` drawing
+        // the same thing [PreHeading] draws, which is how this screen came to be the one trap in
+        // setup: `ScreenGraph.exitsOf(Secret)` is empty, HAND IT OVER refuses a blank line and stays
+        // put, and a player who opened it with nothing to say had no control on the screen at all.
+        // `Lobby` is the fallback rather than the destination — see [BackChevron].
+        PreHeading("BEFORE THE LIGHTS GO OUT", back = ScreenId.Lobby)
 
         InfoBox(border = Amber.BoneInk, gap = 4.u) {
             Label(
@@ -74,10 +79,15 @@ fun SecretScreen() {
             // Real typing, in lower case. `transform` is identity here rather than the field's
             // usual shout: a house name is a label and a confession is a sentence, and the one
             // screen that asks somebody for something true must not restyle it as they type.
+            // **The field fills the panel it is drawn in** (E-PAY-6). It was one line pinned to the
+            // top of a box four fifths of a screen tall, and a tap anywhere in the rest of it hit
+            // nothing — on the one screen in this game where somebody is being asked for something
+            // they would rather not say. The glyphs still sit at the top; what changed is what the
+            // finger may aim at. See [ReadoutField].
             ReadoutField(
                 value = lobby.line.text,
                 onValueChange = actions.typeLine,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().weight(1f),
                 size = 17.0, color = Amber.BoneInk,
                 hint = "one line",
                 transform = { it },

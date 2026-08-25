@@ -32,10 +32,21 @@ class LobbyModelTest {
         linesIn: Int = 0,
         hosting: Boolean = true,
         nearby: List<NearbyHome> = listOf(NearbyHome("THE BUNGALOW", "192.168.1.24", 47747)),
+        /**
+         * Who else the house has seated. Shortening it leaves the standing padded with a blank,
+         * which is how a seat nobody has named is arranged now that this phone cannot be one.
+         */
+        others: List<String> = listOf("PRIYA", "MARCUS", "DANI", "ROSE", "TOMAS"),
     ): Pair<LobbyModel, MemoryLobbyLink> {
-        val link = MemoryLobbyLink(joined = joined, linesIn = linesIn)
+        val link = MemoryLobbyLink(joined = joined, linesIn = linesIn, others = others)
         val model = LobbyModel(MemoryHomeFinder(nearby), link, hosting = hosting)
         model.look()
+        // **Named before attaching, because a nameless phone is now refused a seat** (E-PAY-6). It
+        // is the fixture catching up with the gate rather than working around it: there is no moment
+        // in this game where a phone is in a lobby and has not said what to call its owner, and
+        // until N5b that sentence was in the KDoc and enforced by nothing. `LobbyExitTest` walks the
+        // refusal itself.
+        model.nameResident("ELLIOT")
         model.nearby.firstOrNull()?.let(model::attachTo)
         return model to link
     }
@@ -92,6 +103,10 @@ class LobbyModelTest {
     @Test
     fun `a home that goes on the air is hosted and the caller is told once`() {
         val model = LobbyModel(link = MemoryLobbyLink(joined = 2, linesIn = 0))
+        // Named first, because a nameless phone is now refused before the radio is asked
+        // (E-PAY-6). What this test is about is the RADIO's answer, and the name gate stands
+        // one step in front of it — `LobbyExitTest` walks that gate itself.
+        model.nameResident("ELLIOT")
         var toldTimes = 0
         model.hostHome(bungalow) { toldTimes++ }
         assertEquals(1, toldTimes, "the caller was told the home was up $toldTimes times")
@@ -115,6 +130,10 @@ class LobbyModelTest {
     @Test
     fun `a home refused for its name hosts nothing and says which name`() {
         val model = LobbyModel(link = RefusingLobbyLink(HostRefusal.NameAlreadyOnTheAir))
+        // Named first, because a nameless phone is now refused before the radio is asked
+        // (E-PAY-6). What this test is about is the RADIO's answer, and the name gate stands
+        // one step in front of it — `LobbyExitTest` walks that gate itself.
+        model.nameResident("ELLIOT")
         var toldTimes = 0
         model.hostHome(bungalow) { toldTimes++ }
         assertEquals(0, toldTimes, "a home that never went on the air opened a lobby anyway")
@@ -136,6 +155,10 @@ class LobbyModelTest {
     @Test
     fun `a home refused for any other reason names the symptom and the fixable cause`() {
         val model = LobbyModel(link = RefusingLobbyLink(HostRefusal.CouldNotGoOnTheAir))
+        // Named first, because a nameless phone is now refused before the radio is asked
+        // (E-PAY-6). What this test is about is the RADIO's answer, and the name gate stands
+        // one step in front of it — `LobbyExitTest` walks that gate itself.
+        model.nameResident("ELLIOT")
         model.hostHome(bungalow) { throw AssertionError("a refused home reported itself up") }
         assertFalse(model.hosting)
         assertEquals(
@@ -153,6 +176,7 @@ class LobbyModelTest {
     @Test
     fun `hosting again clears the refusal the last attempt left`() {
         val model = LobbyModel(link = RefusingLobbyLink())
+        model.nameResident("ELLIOT")
         model.hostHome(bungalow)
         assertNotNull(model.refusal)
         model.nameResident("ELLIOT")
@@ -188,9 +212,13 @@ class LobbyModelTest {
     /** The house's list, drawn as the house sent it: one entry per seat, blanks and all. */
     @Test
     fun `the residents are the house's list and not this phone's arithmetic`() {
-        val (model, _) = lobbyOf(joined = 6)
+        // Six seats and five names between the fixture's others and this phone, so the sixth is
+        // the blank a real desk publishes for somebody who has not said what to call themselves.
+        // Arranged on the HOUSE's side: since E-PAY-6 this phone cannot take a seat unnamed, so a
+        // fixture that left its own name empty would be testing the gate instead of the list.
+        val (model, _) = lobbyOf(joined = 6, others = listOf("PRIYA", "MARCUS", "DANI", "ROSE"))
         assertEquals(6, model.residents.size, "the list is not as long as the count beside it")
-        assertEquals(listOf("PRIYA", "MARCUS", "DANI", "ROSE", "TOMAS"), model.residents.take(5))
+        assertEquals(listOf("PRIYA", "MARCUS", "DANI", "ROSE", "ELLIOT"), model.residents.take(5))
         assertEquals("", model.residents.last(), "an unnamed seat was dropped or invented for")
     }
 

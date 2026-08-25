@@ -190,6 +190,11 @@ fun CheatRoot() {
             // typed — the same two things the host's own NEW ROUND does, reached by a push instead
             // of by a button that only one phone in the house draws.
             onRoundEnded = { panel.value?.newRound() },
+            // **The host closed the house** (E-PAY-6). `onRoundEnded`'s sibling and the same one
+            // line of wiring — the transport reports the arrival, the panel answers it. What differs
+            // is where it lands: `newRound` walks back to the lobby, and `houseClosed` walks to the
+            // join screen with an honest line on it, because there is no lobby left to walk to.
+            onHouseClosed = { panel.value?.houseClosed() },
         )
     }
     val flow = remember {
@@ -204,10 +209,16 @@ fun CheatRoot() {
             // The refusal that names the Local Network grant now carries a control that opens it,
             // and this is the one line where that control reaches an OS: `ui` cannot see
             // `platform`, so the app hands the seam down the same way it hands down the radio.
+            // **And the phone's memory of its owner's own name** (E-PAY-6, the owner's *it should
+            // be saved*). One more seam of the same shape as the three above it, and the smallest:
+            // `ui` cannot see `platform`, so one file's worth of text comes down the same way the
+            // radio, the settings page and the homes file do. The cost of not having it was an
+            // evening — the app was force-quit to fix a name and the round went with it (E-PAY-7).
             lobby = LobbyModel(
                 finder = NearbyHomes(onEvent = radio),
                 link = link,
                 settings = deviceSystemSettings()::open,
+                names = ResidentNameDocument(),
             ),
             // **THE PERMS SCREEN, REACHING AN OS AT LAST** (E-PAY-5, D-161). Every row on that
             // screen was a drawing: three said GRANTED, two said PENDING, none of them had ever

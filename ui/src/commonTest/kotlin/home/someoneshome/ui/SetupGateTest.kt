@@ -39,8 +39,17 @@ class SetupGateTest {
     }
 
     /** Every row granted. The phone a host is meant to be standing behind. */
+    /**
+     * A phone that is ready in **every** sense — every grant given, and named.
+     *
+     * The name is here rather than in each positive test because it is the same fact as the grants:
+     * *the lobby will not seat a device that cannot do the job*, and since E-PAY-6 a device with no
+     * name on it is one of them (`LobbyModel.named`). These tests are about D-161's gate, so the
+     * fixture has to clear every other gate or the refusal they read would be the wrong one.
+     */
     private fun readyPhone(): FlowModel =
         phone(*DevicePermission.entries.map { it to Grant.Granted }.toTypedArray())
+            .also { it.lobby.nameResident("ELLIOT") }
 
     /**
      * **A host with no grants advertises nothing**, and is told which rows, on the screen they are

@@ -141,12 +141,14 @@ class RoundEndedPushTest {
             ledger,
             nowMillis = ::nowMillis,
             // The host half of `LobbyHouse.onFrame`, in the shape that class has it: the two
-            // upward bodies are served and both downward ones are declined.
+            // upward bodies are served and every downward one is declined.
             onFrame = { seat, frame ->
                 when ((frame as? TransportFrame.Carry)?.body?.let(LobbyWire::decodeOrNull)) {
                     is LobbyBody.Naming -> acted.trySend("naming")
                     is LobbyBody.Handover -> acted.trySend("handover")
-                    is LobbyBody.Standing, is LobbyBody.RoundEnded, null -> Unit
+                    is LobbyBody.Standing, is LobbyBody.RoundEnded, is LobbyBody.HouseClosed,
+                    null,
+                    -> Unit
                 }
                 if (seat.index < 0) error("unreachable")
             },

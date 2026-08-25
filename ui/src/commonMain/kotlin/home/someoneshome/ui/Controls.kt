@@ -14,6 +14,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -38,9 +39,12 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
@@ -58,6 +62,54 @@ import androidx.compose.ui.unit.sp
  */
 class PanelActions(
     val nav: (ScreenId) -> Unit = {},
+    /**
+     * **Step back — the back arrow and the left-edge swipe, which are one action with two
+     * surfaces** (the owner's E-PAY-6 batch).
+     *
+     * It is an action rather than a `goes(...)` because **a back arrow cannot name where it goes**.
+     * The editor is reached from the maps list and from a saved home's detail; the marker sheet from
+     * a room and from a scan. Every chevron in this app used to name one parent apiece, so half of
+     * them walked a host somewhere they had not been. What back means is *the screen before this
+     * one*, which is a fact about the trail and not about the screen — [FlowModel.back] is the only
+     * thing that holds it.
+     *
+     * ### It publishes no edge, and [BackChevron] carries a fallback so that stays true
+     *
+     * `ScreenGraphTest` reads the graph off `nav` calls, and a trail-driven back makes none — so
+     * every screen that had a chevron would have quietly lost its declared edge from [ScreenGraph],
+     * and the graph would have shrunk to agree with itself. The chevron therefore falls back to the
+     * screen's declared parent when [canGoBack] is false, which is exactly the state a fresh render
+     * is in: the transcription is unchanged, the test still fails on a retargeted control, and on a
+     * real phone the trail wins every time.
+     *
+     * ### [canGoBack] is asked, not assumed, because a control that does nothing is broken
+     *
+     * The three screens with no parent to name — the maps list, the join screen, the permissions
+     * walk — draw **no chevron at all** until something is behind them. `PanelButton` and `RowButton`
+     * already refuse to publish a press they cannot answer, and this is the same rule one layer up.
+     */
+    val canGoBack: () -> Boolean = { false },
+    val back: () -> Unit = {},
+    /**
+     * **The two ways out of a lobby, and they are different acts by different people** (E-PAY-6:
+     * *no lobby exit/terminate*; nobody is ever trapped in a lobby again).
+     *
+     * [leaveLobby] is one phone standing up: the socket goes down, the desk drops that seat, and
+     * the counts on five other screens fall by one because the house recounted — not because
+     * anything predicted it. It is every phone's, the host's included, and on the host's it also
+     * takes the house down, because a host who walks out is not still running a party.
+     *
+     * [terminateHouse] is the host closing the house on everybody. It is **host-only and the screen
+     * draws it nowhere else**, the same restriction the two settings rows carry: a client's copy of
+     * it would be one guest ending the evening for the room. Every other phone learns by a push
+     * (`LobbyBody.HouseClosed`), never by noticing its counts stopped moving.
+     *
+     * Both are two-second holds (D-141) rather than taps. Neither can be taken back — a leave costs
+     * the seat and the line, and a terminate costs everybody's — and both are pressed by somebody
+     * holding a phone in a room of people talking at them.
+     */
+    val leaveLobby: () -> Unit = {},
+    val terminateHouse: () -> Unit = {},
     /**
      * **The two things page 2 can arm, and both take a two-second hold** (D-141, D-142).
      *
@@ -327,6 +379,78 @@ fun Modifier.goes(id: ScreenId): Modifier {
 }
 
 /**
+ * **The left-edge swipe — the other surface of [PanelActions.back], on the frame rather than on a
+ * screen.**
+ *
+ * The owner asked for both idioms and this is the half that cannot live on a screen: the gesture
+ * starts in whatever happens to be drawn at the left edge — a room panel, a list row, a map cell —
+ * and thirty screens each catching their own drag would be thirty chances to disagree about what a
+ * swipe is. So it goes on [Screen]'s root box, once, and every browsing surface inherits it.
+ *
+ * ### Absent, not disabled, on the house's screens
+ *
+ * With [enabled] false this returns the modifier untouched: **no pointer input node at all**, which
+ * is the same discipline [rememberHold] keeps for a Resident's page 2. A gesture recogniser that
+ * ran and then declined would be a drag that eats a frame's worth of input on the screens where a
+ * dropped tap is a vote, and it would put a thing on the pointer path of every screen in the dark.
+ * [Flow.backable] is what decides, and it is a set of screens rather than a runtime question.
+ *
+ * ### Why a start zone and a distance, and why both are units rather than points
+ *
+ * [EDGE_SWIPE_ZONE] is where the finger has to land — iOS's own interactive-pop gesture is an edge
+ * gesture, and a swipe that worked from the middle of the screen would fire on every horizontal
+ * drag anybody ever makes across a list. [EDGE_SWIPE_TRAVEL] is how far it has to go, so that a
+ * fumble in a lit hallway is not a navigation. Both are design units, so they scale with the panel
+ * the way [TAP_TARGET] does rather than being a point count that is right on one phone.
+ *
+ * **It cannot steal a tap.** `detectHorizontalDragGestures` consumes nothing until touch slop is
+ * exceeded, so a press that never moves reaches whatever is under it — and a child that has already
+ * consumed the drag (a slider, a plan being painted) cancels this before it starts.
+ */
+@Composable
+fun Modifier.edgeSwipeBack(enabled: Boolean, onBack: () -> Unit): Modifier {
+    if (!enabled) return this
+    val zone = with(LocalDensity.current) { EDGE_SWIPE_ZONE.toPx() }
+    val travel = with(LocalDensity.current) { EDGE_SWIPE_TRAVEL.toPx() }
+    return pointerInput(enabled) {
+        var startedAtTheEdge = false
+        var travelled = 0f
+        detectHorizontalDragGestures(
+            onDragStart = { at ->
+                startedAtTheEdge = at.x <= zone
+                travelled = 0f
+            },
+            onDragEnd = {
+                // Read once and reset before calling out: `onBack` navigates, and a gesture that
+                // left its own state set would fire again on the next drag that went nowhere.
+                val go = startedAtTheEdge && travelled >= travel
+                startedAtTheEdge = false
+                travelled = 0f
+                if (go) onBack()
+            },
+            onDragCancel = {
+                startedAtTheEdge = false
+                travelled = 0f
+            },
+            onHorizontalDrag = { _, delta -> travelled += delta },
+        )
+    }
+}
+
+/**
+ * How near the left edge a back swipe has to start. Twelve units is about 15pt on the narrowest
+ * phone in range — wide enough to catch a thumb reaching round the side of a case, narrow enough
+ * that it is not simply *the left third of every screen*.
+ */
+val EDGE_SWIPE_ZONE: Dp = 12.u
+
+/**
+ * How far right it has to travel. A quarter of the canvas: far enough that it is unmistakably a
+ * gesture rather than a slipped finger, short enough to complete one-handed in the dark.
+ */
+val EDGE_SWIPE_TRAVEL: Dp = 75.u
+
+/**
  * **The smallest a control may be: 36 design units.**
  *
  * The canvas is [DESIGN_WIDTH] units wide and [DeviceCanvas] scales it to the panel, so a design
@@ -479,6 +603,18 @@ fun Caret(color: Color, size: Double = 17.0) {
  * its caret only once it is focused, so an empty one with nothing in it reads as a box rather than
  * as somewhere to type. That is a fair mistake to make on the two screens in this game where
  * somebody is being asked for something.
+ *
+ * ### The whole box takes the tap, not the one line of glyphs inside it (E-PAY-6)
+ *
+ * The owner's finding was on the one-line screen: a bordered panel most of a screen tall, with a
+ * text field one line high pinned at the top of it, and a tap anywhere in the remaining four fifths
+ * hit nothing. It reads as a broken field rather than as a miss, because the thing being aimed at
+ * *is* the box — nobody aims at a caret.
+ *
+ * So the outer [Box] carries a tap that focuses the field, and the fix is here rather than at the
+ * two call sites: a screen that had to remember to wire its own focus requester is a screen that
+ * will forget. A caller wanting the larger target gives this a taller [modifier]; one that does not
+ * is unchanged, because the box is the field's own height and the tap lands where it always did.
  */
 @Composable
 fun ReadoutField(
@@ -491,14 +627,15 @@ fun ReadoutField(
     hint: String = "",
     transform: (String) -> String = { it.uppercase() },
 ) {
-    Box(modifier) {
+    val focus = remember { FocusRequester() }
+    Box(modifier.tap { focus.requestFocus() }) {
         if (value.isEmpty() && hint.isNotEmpty()) {
             Readout(hint, size = size, color = Amber.BoneFaint, tracking = tracking)
         }
         BasicTextField(
             value = value,
             onValueChange = { onValueChange(transform(it)) },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().focusRequester(focus),
             textStyle = TextStyle(
                 fontFamily = PanelType.readout,
                 fontSize = size.sp,

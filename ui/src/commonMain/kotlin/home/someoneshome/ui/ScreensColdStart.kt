@@ -131,7 +131,12 @@ fun PermsScreen() {
             // What the last tap was refused with, or what the gate is still waiting for. Never
             // both, and never an invented sentence: a complete phone has nothing here at all.
             (perms.refusal ?: perms.gateRefusal())?.let {
-                PreNote(it, color = Amber.Caution, align = TextAlign.Center)
+                // Full ink for the join screen's reason exactly (N5b): `Amber.Caution` is a mid
+                // amber and this is a bone field, so the two are nearly the same value and the one
+                // sentence standing between a phone and a seat was the least legible thing on the
+                // screen. The row values keep Caution — there it marks one word in a line the eye
+                // is already reading, which is a different job.
+                PreNote(it, color = Amber.BoneInk, align = TextAlign.Center)
             }
             PreNote("A SYSTEM PROMPT WILL APPEAR.\nIT IS NOT PART OF THE HOUSE.")
             // **A refused row cannot be un-refused from in here** — iOS asks once, ever, and the
@@ -187,6 +192,12 @@ fun JoinScreen() {
     // the radio on: permissions are granted one screen back, in the light.
     LaunchedEffect(lobby) { lobby.look() }
     PrePage {
+        // **The page name, and the way back to the permissions walk beside it** (E-PAY-6). This
+        // screen had no page name at all — it opened on the RESIDENT field — so there was nowhere
+        // for the arrow to live, and a player who wanted to look at their grants again had no route
+        // to them. CONTINUE is a real `go` from `Perms`, so the trail is genuinely there; no
+        // fallback is named because with nothing behind it there is nothing to fall back to.
+        PreHeading("JOIN A HOME", tracking = 0.18)
         Column(
             Modifier.fillMaxWidth().border(1.u, Amber.BoneFaint)
                 .padding(horizontal = 7.u, vertical = 5.u)
@@ -224,15 +235,36 @@ fun JoinScreen() {
                     if (strongest) Amber.BoneFaint else Amber.BonePale,
                     if (strongest) Amber.BoneInk else Amber.BoneDeep,
                     if (strongest) Amber.BoneDim else Amber.BoneFaint,
-                ) {
-                    actions.attachToHome(home)
-                    go(ScreenId.Lobby)
-                }
+                    // **The row no longer navigates beside the action** (E-PAY-6). It used to do
+                    // both on the same tap, so a refused attach — a phone short a permission, and
+                    // now a phone with no name on it — walked into a lobby it was not in. Where
+                    // this lands is `FlowModel.attachToHome`'s, declared in [Flow.viaActions].
+                    onClick = { actions.attachToHome(home) },
+                )
             }
         }
 
         PushDown()
         Column(verticalArrangement = Arrangement.spacedBy(6.u)) {
+            // **What the last tap was refused with** — a permission still missing, or no name typed
+            // (E-PAY-6). Under the list because that is where the tap was, and in the register the
+            // rest of this walk's refusals are written in: a sentence on the screen, never a dialog.
+            lobby.refusal?.let {
+                // **Full ink, and bigger than a footnote, because it is neither** — both found by
+                // rendering this screen at panel size rather than at the sweep's 600x800 (N5b).
+                //
+                // `Amber.Caution` is `#C9A227`, a mid amber, and the bone field it is drawn on is
+                // `#A29A86`. On the dark screens that pair is a warning; here the two are almost
+                // the same value and the sentence all but disappeared. The light-field idiom for
+                // *there is a refusal* is already full ink — `EditorScreen` switches to
+                // `Amber.BoneInk` on exactly this condition — so this follows it.
+                //
+                // And the size, because this is often the reason the screen changed **under** the
+                // player rather than an answer to something they pressed: a house that closed
+                // arrives by a push (`LobbyModel.HOUSE_CLOSED`). A sentence somebody has to be told
+                // is not the same kind of thing as a note under a button they are looking at.
+                PreNote(it, color = Amber.BoneInk, size = 7.5, align = TextAlign.Center)
+            }
             PanelButton(
                 "HOST A HOME INSTEAD",
                 border = Amber.BoneFaint, ink = Amber.BoneDim,

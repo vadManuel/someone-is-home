@@ -118,7 +118,15 @@ fun Screen(
         // and no branch in composition; during a Surge it is the whole screen at the luminance the
         // rules sent. Being unconditional is the point — a lamp that appeared and disappeared from
         // the tree would be a recomposition at the one moment there must not be one.
-        Box(Modifier.fillMaxSize()) {
+        // **THE LEFT-EDGE SWIPE IS THE FRAME'S, AND IT IS ABSENT ON THE HOUSE'S SCREENS** (E-PAY-6).
+        // One recogniser on one box, so thirty screens cannot come to disagree about what a swipe
+        // is — and `enabled` is a set membership rather than a runtime question, so on every screen
+        // the perimeter armed over there is no pointer input node here at all. See
+        // [Modifier.edgeSwipeBack] and [Flow.backable].
+        Box(
+            Modifier.fillMaxSize()
+                .edgeSwipeBack(state.screen in Flow.backable, actions.back)
+        ) {
         PanelFrame(
             vals,
             overlay = bannerFor(vals),

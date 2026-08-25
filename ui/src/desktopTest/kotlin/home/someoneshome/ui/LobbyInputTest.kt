@@ -41,18 +41,33 @@ class LobbyInputTest {
         linesIn: Int = 4,
         hosting: Boolean = true,
         name: String = "ELLIOT",
+        /**
+         * Who else the house has seated. Shortening it is how a **seat with no name on it** is
+         * arranged: the fixture pads the standing out to [joined] with blanks, which is what a real
+         * desk publishes for a phone that has not said what to call its owner.
+         *
+         * It is arranged on the *house's* side now and not by leaving this phone's own name blank,
+         * because a phone with no name is refused a seat entirely since E-PAY-6 — so a fixture built
+         * that way would be testing the gate rather than the strip.
+         */
+        others: List<String> = listOf("PRIYA", "MARCUS", "DANI", "ROSE", "TOMAS"),
     ): Pair<FlowModel, MemoryLobbyLink> {
-        val link = MemoryLobbyLink(joined = joined, linesIn = linesIn)
+        val link = MemoryLobbyLink(joined = joined, linesIn = linesIn, others = others)
         val lobby = LobbyModel(
             MemoryHomeFinder(listOf(NearbyHome("THE BUNGALOW", "192.168.1.24", 47747))),
             link,
             hosting = hosting,
         )
         lobby.look()
-        // Named before attaching, because attaching is what carries the name up.
+        // Named before attaching, because attaching is what carries the name up — and, since
+        // E-PAY-6, because a nameless phone is refused the seat outright.
         lobby.nameResident(name)
         lobby.attachTo(lobby.nearby.first())
-        return FlowModel(PanelState(screen = screen), lobby = lobby) to link
+        // A phone whose setup is done: D-161's gate stands in front of `attachToHome`, and these
+        // tests are about the lobby's own controls rather than about that gate (see SetupGateTest).
+        return FlowModel(
+            PanelState(screen = screen), lobby = lobby, perms = PermsModel.sample(),
+        ) to link
     }
 
     private fun DesktopComposeUiTest.show(model: FlowModel) {
@@ -95,7 +110,12 @@ class LobbyInputTest {
     @Test
     fun aResidentWhoTypedNoNameIsStillInTheRoom() =
         runDesktopComposeUiTest(width = 300, height = 650) {
-            val (model, _) = modelOn(ScreenId.Lobby, name = "")
+            // Five seats spoken for out of six: this phone plus four others, and the house pads
+            // the sixth out with a blank. That blank is the seat nobody has named.
+            val (model, _) = modelOn(
+                ScreenId.Lobby,
+                others = listOf("PRIYA", "MARCUS", "DANI", "ROSE"),
+            )
             show(model)
 
             onNodeWithText("UNNAMED").assertExists("an unnamed seat was dropped from the lobby")

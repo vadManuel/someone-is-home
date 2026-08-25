@@ -246,10 +246,17 @@ private fun HeldPlanPage(
             Modifier.fillMaxWidth().weight(1f).padding(8.u),
             verticalArrangement = Arrangement.spacedBy(6.u),
         ) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Label(title, size = 7.0, color = Amber.BoneDim, tracking = 0.14)
-                Label(trailing, size = 7.0, color = Amber.BoneFaint, tracking = 0.14)
-            }
+            // **[PreHeading] rather than a hand-rolled row, which is what made these two screens
+            // blind alleys** (E-PAY-6). It drew the same title and the same trailing value and, being
+            // a bare `Label`, could not carry the back arrow — so the room panel and the marker
+            // sheet were browsing surfaces with no way off them but the controls at the bottom.
+            // `BackNavigationTest` fails on exactly this shape now.
+            //
+            // No fallback is named: both are reached from more than one place (the plan, a scan, a
+            // warning) and the trail is the only thing that knows which. See [BackChevron] — a
+            // screen with no declared parent draws the arrow once there is something behind it and
+            // draws nothing before that.
+            PreHeading(title, trailing = trailing, tracking = 0.14)
             Box(
                 Modifier.weight(1f)
                     .aspectRatio(HomeEditorModel.COLS.toFloat() / HomeEditorModel.ROWS)
@@ -1565,7 +1572,7 @@ fun LobbyScreen(vals: PanelVals) {
                     size = 7.0, color = Amber.BoneInk, tracking = 0.12,
                 )
             }
-            ResidentStrip(lobby.residents)
+            ResidentStrip(lobby.residents, lobby::isMine)
             // Capacity guidance, and it is guidance (D-127) — LIGHTS OUT below is not conditioned
             // on it and nothing here refuses anybody a seat. Absent entirely when the party fits,
             // because a line that appeared only to say "this is fine" is a line a host learns to
@@ -1587,13 +1594,38 @@ fun LobbyScreen(vals: PanelVals) {
                 verticalPadding = 5.u,
                 onClick = if (lobby.hosting) actions.cycleInsiders else null,
             )
-            // The rest are the design's own numbers, in the design's own order. Three of them are
-            // live and the others are not yet wired to anything that could change them; playtest
-            // owns those.
-            PreRow(
-                "INSIDERS KNOW EACH OTHER", "ON",
-                border = Amber.BoneDim, labelInk = Amber.BoneInk, verticalPadding = 5.u,
-            )
+            // ⚠️ **THE FOUR ROWS BELOW ARE READINGS, AND THE GDD SAYS THEY SHOULD BE CONTROLS.**
+            //
+            // `gdd.md:911` is explicit — *the host sets lobby options: player count, Insider count,
+            // Known, discussion time, voting time, Revoke cooldown, Egress cooldown and timer,
+            // Access pool, meeting cooldown* — and `gdd.md:692` calls the lobby settings *the only
+            // balance surface, and they are the host's to set*. So this is a **known gap, mined and
+            // flagged**, not a design position.
+            //
+            // **They were not wired in N5b, and the reason is D-117 rather than time.** Every one of
+            // these is a `Balance` constant that `core` reads directly — `Balance.DISCUSSION_SECONDS`,
+            // `Balance.EGRESS_TIMER`, `Balance.REVOKE_COOLDOWN`, and Known mode has no field
+            // anywhere at all. A row cycling a number that `Rules` never consults is *exactly* the
+            // fault D-117 closed for VOTING: **a settings row that moved a number nothing read**,
+            // which looked correct on the screen for two whole revisions.
+            //
+            // **What wiring them actually costs**, so the next unit does not rediscover it: each has
+            // to leave `Balance` for the arming event, ride `ArmingInputs` and `Event.RoundArmed`
+            // into `GameState`, and be read from there by `Rules` — because *balance values lock at
+            // arming and stamp into the recording*, and a value the recording does not carry is a
+            // round that cannot be replayed. That is a `core`/`model` change and it is one seam, not
+            // four: `voteWindowSeconds` already made the trip and is the shape to copy.
+            //
+            // Until then they read as readings — no tap, no border promise — which is the honest
+            // state and is what `PreRow` distinguishes. See LobbyModel.cycleVoteWindow.
+            // ⚠️ **It was drawn at full weight, which made the deadest row on the screen the
+            // loudest** — found by rendering the client's lobby at panel size (N5b). `BoneDim` and
+            // `BoneInk` are what a row the host may *touch* is drawn in, and this row carries a
+            // hardcoded ON that nothing can change: on a client's screen it stood out against
+            // INSIDERS and VOTING, which are the two that really are live and are correctly drawn
+            // pale there. The weight now tracks the one fact it should — is this a control — so it
+            // is a reading like its four neighbours until somebody wires it.
+            PreRow("INSIDERS KNOW EACH OTHER", "ON", verticalPadding = 5.u)
             // **Not a control, and not a literal either** — D-129's `K`, asked of the balance
             // rules for the party actually standing here. The design's 7 was right at six seats
             // and nowhere else; see LobbyModel.orderSizeLabel.
@@ -1641,7 +1673,51 @@ fun LobbyScreen(vals: PanelVals) {
             waitingFor = lobby.waitingFor(),
             onArm = actions.lightsOut,
         )
+        LobbyExit(hosting = lobby.hosting, actions = actions)
     }
+}
+
+/**
+ * **The way out of a lobby — one control, two acts, and before N5b there was neither** (E-PAY-6).
+ *
+ * The owner's finding was that a lobby had no exit of any kind: a client who joined the wrong house
+ * was in it until the app was force-quit, and a host who wanted to stop had nothing to press. *No
+ * one is ever trapped in a lobby again* is the requirement, and this is the whole of it.
+ *
+ * ### One control rather than two, because a host has one honest exit
+ *
+ * A client leaves and the party carries on without them. A host cannot: the house runs on their
+ * phone, so a host who walks out takes the server and the advertisement with them whatever the
+ * button is called. Offering a host both LEAVE and CLOSE would be two controls that do the same
+ * thing to five other people, one of them without saying so. So the label says which act this is,
+ * and there is exactly one of them on any phone.
+ *
+ * ### A two-second hold (D-141), for the reason the other four are
+ *
+ * *Hold what cannot be taken back.* A leave costs this phone's seat and the line typed into it; a
+ * close costs everybody's, in a lit room, with the party watching. And it sits at the bottom of the
+ * screen a host is holding while people talk at them — a tap there is a tap somebody will make by
+ * accident. It publishes no click action, so the edge it walks is declared in [Flow.viaActions]
+ * with the other holds.
+ *
+ * **The note under it names the consequence rather than the gesture.** Every other hold in the app
+ * says [HOLD_NOTE], because the gesture is what needs teaching; here the gesture is already known by
+ * this point in the evening and the thing worth reading is *how many people this is about*.
+ */
+@Composable
+private fun LobbyExit(hosting: Boolean, actions: PanelActions) {
+    HoldToConfirm(
+        if (hosting) "CLOSE THE HOUSE" else "LEAVE THIS LOBBY",
+        restingNote =
+            if (hosting) "EVERY PHONE GOES BACK TO THE START."
+            else "YOUR SEAT AND YOUR LINE ARE DROPPED.",
+        onConfirm = if (hosting) actions.terminateHouse else actions.leaveLobby,
+        // Outlined, never the filled slate. The commit colour belongs to LIGHTS OUT — the thing the
+        // evening is *for* — and a second saturated block under it would argue with it at the moment
+        // the host is deciding which to press.
+        border = Amber.BonePale,
+        ink = Amber.BoneDim,
+    )
 }
 
 /**
@@ -1652,15 +1728,30 @@ fun LobbyScreen(vals: PanelVals) {
  * say about a person is something the house did not send. The one difference drawn is between a
  * name and no name, and the chip that has no name says so in words rather than by being dimmer.
  *
- * **This phone's own chip is not marked**, though it could be guessed at: two people in a house
- * may well both be a ROSE, and a screen that pointed at the wrong one would be worse than a screen
- * that points at none.
+ * ### This phone's own chip IS marked now, and the old argument against it still holds
+ *
+ * This KDoc used to read *this phone's own chip is not marked, though it could be guessed at: two
+ * people in a house may well both be a ROSE, and a screen that pointed at the wrong one would be
+ * worse than a screen that points at none.* The owner ruled otherwise — *my name should be
+ * highlighted* — and the sentence was right about the wrong thing: it argues against picking **one**
+ * chip, which is not what this does.
+ *
+ * **Every chip matching the name this phone typed is marked.** With one ROSE that is you. With two
+ * it says *one of these is you*, which is true, and it never says *that one is you*, which would be
+ * a guess. There is no seat here to be wrong about — see [LobbyModel.isMine], and D-191 for why a
+ * phone in this game is not told which seat it is.
+ *
+ * The mark is the chip's **hairline coming up to full ink** — `BonePale` to `BoneInk`, which on the
+ * bone field is a faint rule becoming a black one — and the name itself is untouched. Not a fill and
+ * not a badge: it is the same chip read louder, so the strip's argument survives it. A filled chip
+ * would be a second visual weight on a row whose whole point is that the chips are alike, and a
+ * badge would be a thing to explain in a room where nobody may speak.
  *
  * All of them are drawn, never a truncated row — the count above says six, and a row that stopped
  * at four would turn that count into a contradiction on the one screen whose job is who is here.
  */
 @Composable
-private fun ResidentStrip(residents: List<String>) {
+private fun ResidentStrip(residents: List<String>, isMine: (String) -> Boolean) {
     if (residents.isEmpty()) {
         PreNote("NOBODY HAS JOINED YET", color = Amber.BoneFaint, size = 6.0, lineHeight = 1.0)
         return
@@ -1671,7 +1762,11 @@ private fun ResidentStrip(residents: List<String>) {
         verticalArrangement = Arrangement.spacedBy(3.u),
     ) {
         for (name in residents) {
-            Box(Modifier.border(1.u, Amber.BonePale).padding(horizontal = 4.u, vertical = 2.u)) {
+            val mine = isMine(name)
+            Box(
+                Modifier.border(1.u, if (mine) Amber.BoneInk else Amber.BonePale)
+                    .padding(horizontal = 4.u, vertical = 2.u)
+            ) {
                 Label(
                     name.ifBlank { "UNNAMED" },
                     size = 6.5,

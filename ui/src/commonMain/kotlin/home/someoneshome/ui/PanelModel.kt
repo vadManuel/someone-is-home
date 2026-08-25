@@ -651,13 +651,7 @@ class PanelVals(val state: PanelState) {
         // the lantern, and still drawing its own row.
         ScreenId.Lock, ScreenId.LockNotify, ScreenId.Scan -> PanelMode.Inverted
 
-        ScreenId.Boot, ScreenId.Join, ScreenId.Maps, ScreenId.Editor, ScreenId.SaveName,
-        ScreenId.HomeDetail, ScreenId.Delete, ScreenId.Secret, ScreenId.RoomEdit,
-        ScreenId.MarkerSheet, ScreenId.ScanMarker, ScreenId.StairsWarn, ScreenId.TermTaken,
-        ScreenId.TermRemove, ScreenId.MeetTaken, ScreenId.MeetRemove,
-        ScreenId.Floors, ScreenId.ReviewNeeds, ScreenId.Perms,
-        ScreenId.Lobby, ScreenId.WinResidents,
-        -> PanelMode.Pre
+        in PRE -> PanelMode.Pre
 
         ScreenId.WinInsiders -> PanelMode.End
         ScreenId.Revoked, ScreenId.Restrained, ScreenId.Ghost3, ScreenId.GhostMeeting ->
@@ -1713,6 +1707,31 @@ class PanelVals(val state: PanelState) {
          * banner (`Notify`, `Banner`) and under the clock (`LockNotify`) alike, and a quiet one
          * waits to be found.
          */
+        /**
+         * **The light-field screens: everything drawn while the house lights are still on**, plus
+         * the one ending that turns them back on.
+         *
+         * Written down here rather than left as a `when` branch for [BUZZING]'s reason exactly —
+         * it is now read by two things instead of one, and two hand-kept copies of a set of screens
+         * are two copies that agree on the day they are written. [mode] answers *how does this
+         * screen look* from it, and [Flow.backable] answers *may a finger step back off it*, which
+         * is the same question about the same fact: **before arming, nothing behind you has stopped
+         * being true.**
+         *
+         * `WinResidents` is in it because the perimeter disarms and the lights come up, which is
+         * what `Pre` means on this class. It is emphatically **not** backable, and it is not
+         * excluded here — [Flow.backable] subtracts it along with everything else the house pushed,
+         * so the exclusion is stated once, where the reason for it lives.
+         */
+        val PRE: Set<ScreenId> = setOf(
+            ScreenId.Boot, ScreenId.Join, ScreenId.Maps, ScreenId.Editor, ScreenId.SaveName,
+            ScreenId.HomeDetail, ScreenId.Delete, ScreenId.Secret, ScreenId.RoomEdit,
+            ScreenId.MarkerSheet, ScreenId.ScanMarker, ScreenId.StairsWarn, ScreenId.TermTaken,
+            ScreenId.TermRemove, ScreenId.MeetTaken, ScreenId.MeetRemove,
+            ScreenId.Floors, ScreenId.ReviewNeeds, ScreenId.Perms,
+            ScreenId.Lobby, ScreenId.WinResidents,
+        )
+
         val BUZZING: Set<ScreenId> = setOf(
             ScreenId.Armed, ScreenId.Notify, ScreenId.Banner, ScreenId.LockNotify,
             ScreenId.Call, ScreenId.Found,

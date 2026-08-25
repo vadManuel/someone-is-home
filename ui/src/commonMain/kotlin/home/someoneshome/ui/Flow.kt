@@ -67,7 +67,12 @@ object ScreenGraph {
         // Cold start. Boot publishes no control at all — it falls through (see Flow.autoAdvance).
         ScreenId.Boot -> emptySet()
         ScreenId.Perms -> setOf(ScreenId.Join)
-        ScreenId.Join -> setOf(ScreenId.Lobby, ScreenId.Maps)
+        // **Tapping a network row is not in here** (E-PAY-6). Attaching can be refused — D-161's
+        // setup gate, and now a phone that has not said what to call its owner — and a refusal stays
+        // on this screen with the reason on it. The row used to navigate unconditionally beside the
+        // action, so a refused attach walked into a lobby this phone was not in and the counts sat
+        // at nothing. Same shape as HOST WITH THIS HOME; see [Flow.viaActions].
+        ScreenId.Join -> setOf(ScreenId.Maps)
 
         // Host setup, in the light.
         ScreenId.Maps -> setOf(ScreenId.HomeDetail, ScreenId.Editor)
@@ -108,7 +113,13 @@ object ScreenGraph {
 
         // Arming. HAND IT OVER is not in here either — a blank line is refused and the refusal
         // stays on this screen, same shape as SAVE HOME.
-        ScreenId.Secret -> emptySet()
+        //
+        // **The back arrow is, and it is the whole edge this screen has** (E-PAY-6). Until N5b the
+        // set was empty and HAND IT OVER refused a blank line in place, so a player who opened the
+        // one-line screen with nothing to say was on a screen with no control that moved them. The
+        // arrow's target here is the *fallback* the graph transcribes — on a phone the trail decides
+        // — but the lobby is the only screen this one is ever reached from, so the two agree.
+        ScreenId.Secret -> setOf(ScreenId.Lobby)
         ScreenId.Armed -> setOf(ScreenId.Home)
 
         // The springboard, and the screens that ARE the springboard with something on top.
@@ -217,7 +228,11 @@ object ScreenGraph {
 
     /** The springboard's ten tiles and dock buttons, shared by the three screens that draw it. */
     private val SPRINGBOARD = setOf(
-        ScreenId.Work, ScreenId.Files, ScreenId.Notes, ScreenId.Calling, ScreenId.Reveal,
+        // **`Calling` is not in here, and its absence is D-121** (N5b). The PHONE tile went straight
+        // to the caller's ring, which made a house meeting callable from a chair — the one thing
+        // that ruling forbids outright. The tile is deleted rather than retargeted and `Calling`
+        // has moved to [Flow.housePushed], where `MeetingCalling` is the only thing that reaches it.
+        ScreenId.Work, ScreenId.Files, ScreenId.Notes, ScreenId.Reveal,
         ScreenId.Settings, ScreenId.TermNo, ScreenId.Page2, ScreenId.Scan, ScreenId.Lock,
     )
 
@@ -516,6 +531,13 @@ object Flow {
         // game.
         ScreenId.Notify, ScreenId.LockNotify, ScreenId.Quiet,
         ScreenId.Call, ScreenId.Found,
+        // **The caller's own ring, and it is here because D-121 says a meeting is a WALK** (N5b).
+        // The springboard drew a PHONE tile that went straight to this screen, which is the remote
+        // call D-121 spent its closing paragraph refusing — *a button that summons the whole house
+        // from a chair*. The tile is deleted; what reaches this screen now is
+        // `RoundMessage.MeetingCalling`, sent to the one seat that scanned the meeting card
+        // (D-191), and nothing on any phone can walk here.
+        ScreenId.Calling,
         ScreenId.ScanCaught, ScreenId.ScanBad, ScreenId.ScanUnknown,
         ScreenId.Revoked, ScreenId.Restrained, ScreenId.Ghost2,
         // **The meeting, past the ring.** Each of these was reachable by a timer and is now
@@ -547,6 +569,45 @@ object Flow {
      * without anyone saying so: a screen nothing reaches is a screen drawn for nobody.
      */
     val unrouted: Set<ScreenId> = emptySet()
+
+    /**
+     * **The browsing surfaces: the screens a finger may step backwards off.**
+     *
+     * The owner's finding, in their own words: *no back navigation anywhere — swipe right from the
+     * left edge, or tap the back arrow next to the page name.* Both existed as ideas and neither
+     * reached a thumb. [FlowModel.back] had exactly one caller in the repository and it was a test;
+     * the chevrons that were drawn were per-screen `goes(...)` targets that named one parent each,
+     * so a host who reached the editor from a saved home stepped back into the maps list.
+     *
+     * ### It is derived and not typed out, which is the whole safety of it
+     *
+     * [PanelVals.PRE] minus [houseDriving] minus [housePushed] minus the lobby. **Every subtraction
+     * is a rule rather than an exception**, so a screen added to any of those three tables leaves
+     * this set on its own, and nobody has to remember a fourth place:
+     *
+     * - **[houseDriving]** is D-102's haptic doctrine read backwards — a screen that arrived unasked
+     *   is one the house put you on. `Boot` is in it because nothing is behind a self-test.
+     * - **[housePushed]** is the set nothing walks to, and it carries `WinResidents`: the perimeter
+     *   disarming turns the lights back on, so the ending is a light-field screen, and stepping back
+     *   off it would be a phone re-entering a round that is over.
+     * - **The lobby is subtracted by name, and it is the only named exclusion in this file.** Not
+     *   because the house is driving — the lights are on and nothing has been decided — but because
+     *   a back arrow there would be a control that *appears* to leave and does not: the socket stays
+     *   up, the seat stays held, and five other phones go on counting a person who is looking at the
+     *   join screen. Leaving a lobby is a thing that has to be **said to the house**, so it is a
+     *   control that says it (`LobbyModel.leaveLobby`) and never a gesture that walks away from one.
+     *
+     * ### What it is NOT, and must never become
+     *
+     * **A way onto the house's screens.** Everything the perimeter arms over is absent from
+     * [PanelVals.PRE] by construction, and `FlowTest` asserts the emptiness of the intersection
+     * directly rather than trusting the derivation to stay this shape. On every one of those
+     * screens *nothing behind you is still true* — the round armed, a meeting was called, the vote
+     * happened, your access was revoked — and a device asserting a state the house has already
+     * replaced is the fault this whole table exists to make impossible.
+     */
+    val backable: Set<ScreenId> =
+        PanelVals.PRE - houseDriving - housePushed - ScreenId.Lobby
 
     /**
      * **The edges the actions layer owns**, because the screen hands over a decision instead of
@@ -604,6 +665,11 @@ object Flow {
      * where they would be claims about controls that do not exist.
      */
     val viaActions: Map<ScreenId, Set<ScreenId>> = mapOf(
+        // A tap on a network row, once this phone may really take a seat. Refusable on two counts —
+        // D-161's setup gate, and a phone that has not named its owner (E-PAY-6) — and both
+        // refusals stay on the join screen with the reason on it, exactly as a refused
+        // advertisement stays on the detail screen.
+        ScreenId.Join to setOf(ScreenId.Lobby),
         // A tap on the plan, landing on a room.
         ScreenId.Editor to setOf(ScreenId.RoomEdit),
         // The STAIRS chip on an occupied room, and the confirmation that answers it.
@@ -623,7 +689,11 @@ object Flow {
         ScreenId.ScanCaught to Subroutine.built.mapNotNullTo(mutableSetOf()) { it.screen },
         // A line that was real, handed over; and the lights going out once every line is in.
         ScreenId.Secret to setOf(ScreenId.Lobby),
-        ScreenId.Lobby to setOf(ScreenId.Armed),
+        // LIGHTS OUT, and **the way out of the lobby** (E-PAY-6). Both are two-second holds and
+        // neither publishes a click action, so both are declared here. `Join` is where a client who
+        // left and a host who closed the house both land — see `FlowModel.leaveLobby` and
+        // `FlowModel.terminateHouse`, and `FlowModel.houseClosed` for the phones that were told.
+        ScreenId.Lobby to setOf(ScreenId.Armed, ScreenId.Join),
         // The Insider's egress tile, armed by two seconds of a finger (D-141). **The only
         // role-asymmetric edge in the game**, and it is asymmetric in capability rather than in
         // appearance: a Resident's tile is drawn identically and takes no pointer input at all
@@ -1426,13 +1496,73 @@ class FlowModel(
         lobby.hostHome(home) { go(ScreenId.Lobby) }
     }
 
-    /** A tap on a network row: attach to that home, and go into its lobby — if this phone may. */
+    /**
+     * A tap on a network row: attach to that home, and go into its lobby — **if this phone may.**
+     *
+     * ⚠️ **The navigation is here now, and that is the fix rather than a tidy-up** (E-PAY-6). The
+     * join screen used to call this and then `go(Lobby)` on the next line, unconditionally — so
+     * every refusal below walked the player into a lobby they had not joined, with the reason
+     * printed on the screen they had just left and a count of nothing on the screen they arrived
+     * at. It is `hostHome`'s shape now: **the refusable action owns the navigation, and a refusal
+     * stays put.**
+     */
     fun attachToHome(home: NearbyHome) {
         // The same gate the host stands behind, on the other side of the party. D-161 is about a
         // seat rather than about hosting: *the lobby will not seat a device that cannot do the
         // job, and the host is never handed a party that will fail in the dark.*
         if (!setupIsComplete()) return
+        // And the name, which is the second thing a seat needs and the one the room will need at a
+        // meeting. `attachTo` writes its own refusal; this only reads whether it went.
         lobby.attachTo(home)
+        if (lobby.attached == home) go(ScreenId.Lobby)
+    }
+
+    /**
+     * **LEAVE THIS LOBBY — and the phone goes back to the join screen** (E-PAY-6).
+     *
+     * A push rather than a `go`, and that is the whole of the navigation decision: the trail behind
+     * this phone runs back through a lobby it is no longer in, and a back arrow that walked into it
+     * would draw a house that is not listening. `push` clears the trail, which is what it is for.
+     *
+     * Everything else is [LobbyModel.leaveLobby]'s — the socket, the line, the counts. Nothing here
+     * predicts what the house will publish to the people still in the room.
+     */
+    fun leaveLobby() {
+        lobby.leaveLobby()
+        push(ScreenId.Join)
+    }
+
+    /**
+     * **TERMINATE — the host closes the house, and lands where a leaver lands** (E-PAY-6).
+     *
+     * The host's own phone gets no different treatment from the clients', which is the point: what
+     * a terminate produces is a network with no house on it and six phones on the join screen. The
+     * host reaches that by pressing the control and everybody else by [houseClosed] below, and the
+     * two roads end in the same room.
+     *
+     * Refused on a phone that is not hosting one layer down, and the control is not drawn there.
+     */
+    fun terminateHouse() {
+        lobby.terminateHouse()
+        push(ScreenId.Join)
+    }
+
+    /**
+     * **The host closed the house: the client's half, reached by a push** (E-PAY-6).
+     *
+     * `newRound`'s sibling and wired the same way — the transport reports the arrival, the app root
+     * calls this, and neither `platform` nor the transport ever reaches a screen. What differs is
+     * everything after: `RoundEnded` keeps the home, the seats, the settings and the socket and
+     * walks this phone to the *lobby*, and this one has no lobby to walk to.
+     *
+     * The honest line is [LobbyModel.HOUSE_CLOSED] and it is **flagged as proposed copy**, at the
+     * constant. It is put on the join screen rather than on a dialog for rule 6's reason read in a
+     * lit room: nothing pops up, nothing has to be dismissed, and what the player sees is the screen
+     * they would have been on with a sentence saying why they are on it.
+     */
+    fun houseClosed() {
+        lobby.houseClosed()
+        push(ScreenId.Join)
     }
 
     /**
@@ -2448,6 +2578,14 @@ class FlowModel(
     /** Every action a screen can take, wired to this model. */
     fun actions(): PanelActions = PanelActions(
         nav = ::go,
+        // **The back arrow and the left-edge swipe, at last reaching the thing that was built for
+        // them** (E-PAY-6). `back` and `canGoBack` have existed on this class since the flow was
+        // ported and had exactly one caller between them, in a test — the owner's *no back
+        // navigation anywhere* is that gap, seen from the glass.
+        canGoBack = { canGoBack },
+        back = { back() },
+        leaveLobby = ::leaveLobby,
+        terminateHouse = ::terminateHouse,
         stepRevoke = ::stepRevoke,
         armEgress = ::armEgress,
         fireSurge = ::fireSurge,

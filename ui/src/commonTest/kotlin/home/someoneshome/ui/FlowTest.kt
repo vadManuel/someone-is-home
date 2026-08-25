@@ -349,6 +349,67 @@ class FlowTest {
         }
     }
 
+    /**
+     * **The browsing surfaces and the house's screens do not overlap, at all** (E-PAY-6).
+     *
+     * [Flow.backable] is derived from three tables and the derivation is the guard — but a
+     * derivation is a claim about how three sets interact, and this asserts the consequence
+     * directly. Somebody rewriting `backable` as a typed-out list (which is the obvious "clearer"
+     * refactor) has to keep this true, and a list with one meeting screen in it fails here by name.
+     *
+     * The failure this catches is not subtle in its effect and is completely invisible on the
+     * screen: a phone able to step backwards off `Vote` is a phone asserting a ballot that has
+     * already been read.
+     */
+    @Test
+    fun noBrowsingSurfaceIsAScreenTheHouseIsDriving() {
+        assertEquals(
+            emptySet(), Flow.backable intersect (Flow.houseDriving + Flow.housePushed),
+            "a screen the house puts you on is offering a way backwards off it",
+        )
+    }
+
+    /**
+     * **The lobby is not a browsing surface, and the exclusion is deliberate** (E-PAY-6).
+     *
+     * The one screen subtracted by name rather than by rule. Nothing about the lobby is
+     * house-driven — the lights are on and nothing has been decided — so every derivation in
+     * `backable` would include it and a back arrow there would look entirely reasonable. It would
+     * also be a lie: the socket stays up, the seat stays held, and five other phones go on counting
+     * somebody who is looking at the join screen. **Leaving a lobby is said to the house**, by
+     * `LobbyModel.leaveLobby`, and never walked away from.
+     */
+    @Test
+    fun theLobbyIsLeftByASayingSoAndNeverByWalkingBack() {
+        assertFalse(
+            ScreenId.Lobby in Flow.backable,
+            "the lobby gained a back arrow. A phone that walks off it is still seated, still " +
+                "counted, and still holding a line the house has — see LobbyModel.leaveLobby",
+        )
+    }
+
+    /**
+     * **Nothing on any phone walks to the caller's ring** (D-121, E-PAY-6).
+     *
+     * The springboard drew a PHONE tile straight to `Calling`, which made a house meeting callable
+     * from a chair — *no remote calls, ever*. The tile is deleted and the screen is now in
+     * [Flow.housePushed], so `nothingWalksToAScreenOnlyTheHouseCanPush` covers it as well; this
+     * states the rule in the words the ruling is written in, so that re-adding a tile fails with
+     * D-121 in the message rather than with a set difference.
+     */
+    @Test
+    fun aMeetingIsCalledByAWalkAndNeverByATile() {
+        val reaches = ScreenId.entries.filter {
+            ScreenId.Calling in ScreenGraph.exitsOf(it) + Flow.viaActions[it].orEmpty()
+        }
+        assertEquals(
+            emptyList(), reaches,
+            "$reaches can call a meeting without walking to the meeting card. D-121: meetings are " +
+                "called only by physically scanning it — a remote call is a button that summons " +
+                "the whole house from a chair",
+        )
+    }
+
     @Test
     fun backReturnsYouWhereYouCameFrom() {
         val model = FlowModel(PanelState(screen = ScreenId.Home))
@@ -552,11 +613,29 @@ class FlowTest {
         hand.handOverLine()
         assertEquals(Flow.viaActions.getValue(ScreenId.Secret), setOf(hand.state.screen))
 
-        // The lights going out, once every line is in. With the gate open this is a button; with
-        // it closed the screen publishes no control at all.
-        val arm = FlowModel(PanelState(screen = ScreenId.Lobby))
-        arm.lightsOut()
-        assertEquals(Flow.viaActions.getValue(ScreenId.Lobby), setOf(arm.state.screen))
+        // A tap on a network row, on a phone that may really take a seat. Refusable twice over —
+        // D-161's setup gate and, since E-PAY-6, a phone that has not said what to call its owner —
+        // and both refusals stay on the join screen, which is why the edge is here rather than on
+        // the row. The refused half is walked in `LobbyClosedFlowTest`.
+        val joinRow = FlowModel(PanelState(screen = ScreenId.Join), perms = PermsModel.sample())
+        joinRow.lobby.nameResident("ROSE")
+        joinRow.lobby.look()
+        joinRow.attachToHome(joinRow.lobby.nearby.first())
+        assertEquals(Flow.viaActions.getValue(ScreenId.Join), setOf(joinRow.state.screen))
+
+        // **The lobby's two holds, and they are two members of one edge set** (D-141): the lights
+        // going out, and the way out of the lobby (E-PAY-6). Neither publishes a click action.
+        //
+        // LEAVE and CLOSE THE HOUSE land on the same screen by construction — see
+        // `FlowModel.leaveLobby` and `FlowModel.terminateHouse` — so one of them is walked here and
+        // the pair of them, plus the push a client gets, is walked in `LobbyClosedFlowTest`.
+        val lobbyExits = setOf(
+            FlowModel(PanelState(screen = ScreenId.Lobby))
+                .apply { lightsOut() }.state.screen,
+            FlowModel(PanelState(screen = ScreenId.Lobby))
+                .apply { leaveLobby() }.state.screen,
+        )
+        assertEquals(Flow.viaActions.getValue(ScreenId.Lobby), lobbyExits)
 
         // The Insider's egress tile, armed by two seconds of a finger (D-141). It is the only
         // role-asymmetric edge in the game and the only one no rendering pass can reach: a
@@ -672,6 +751,9 @@ class FlowTest {
 
         assertEquals(
             setOf(
+                // The join screen's network row, which is refusable twice over and therefore the
+                // actions layer's rather than the row's (E-PAY-6).
+                ScreenId.Join,
                 ScreenId.Editor, ScreenId.RoomEdit, ScreenId.StairsWarn,
                 ScreenId.SaveName, ScreenId.Delete, ScreenId.HomeDetail, ScreenId.ScanMarker,
                 ScreenId.Secret, ScreenId.Lobby, ScreenId.ScanCaught,

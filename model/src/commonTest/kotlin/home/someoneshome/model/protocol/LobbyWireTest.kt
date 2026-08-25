@@ -6,7 +6,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * The lobby's three bodies, and the one property that matters about the set.
+ * The lobby's five bodies, and the one property that matters about the set.
  *
  * Round-tripping and pinned discriminators for the reason [TransportFrameTest] pins the frames'.
  * The third test is the real one: **what the host sends down carries names and nothing else that
@@ -21,6 +21,11 @@ class LobbyWireTest {
             joined = 6, linesIn = 4, names = listOf("ROSE", "TOMAS"), insiders = 2,
         ),
         "roundEnded" to LobbyBody.RoundEnded,
+        // **The host closing the house** (E-PAY-6). Its own discriminator rather than a flag on
+        // `roundEnded`, and pinned here for the reason every other one is: the two mean opposite
+        // things about whether there is still a house on the other end of the socket, and a client
+        // that read them as one kind could not tell a second round from a party that ended.
+        "houseClosed" to LobbyBody.HouseClosed,
     )
 
     @Test
@@ -51,9 +56,10 @@ class LobbyWireTest {
             is LobbyBody.Naming -> "naming"
             is LobbyBody.Standing -> "standing"
             is LobbyBody.RoundEnded -> "roundEnded"
+            is LobbyBody.HouseClosed -> "houseClosed"
         }
         for ((wireName, body) in everyBody) assertEquals(wireName, wireNameOf(body))
-        assertEquals(everyBody.size, 4, "a lobby body was added without pinning its discriminator")
+        assertEquals(everyBody.size, 5, "a lobby body was added without pinning its discriminator")
     }
 
     /**
