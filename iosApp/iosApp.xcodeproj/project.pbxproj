@@ -9,12 +9,14 @@
 /* Begin PBXBuildFile section */
 		B1000000000000000000001 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000010 /* AppDelegate.swift */; };
 		B1000000000000000000203 /* HumanMock.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000202 /* HumanMock.swift */; };
+		B1000000000000000000002 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B1000000000000000000012 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		B1000000000000000000020 /* SomeonesHome.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SomeonesHome.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B1000000000000000000010 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		B1000000000000000000011 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		B1000000000000000000012 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B1000000000000000000201 /* SomeonesHomeUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SomeonesHomeUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B1000000000000000000202 /* HumanMock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HumanMock.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -59,6 +61,7 @@
 			children = (
 				B1000000000000000000010 /* AppDelegate.swift */,
 				B1000000000000000000011 /* Info.plist */,
+				B1000000000000000000012 /* Assets.xcassets */,
 			);
 			path = iosApp;
 			sourceTree = "<group>";
@@ -172,6 +175,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B1000000000000000000002 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -281,7 +285,7 @@
 		B1000000000000000000120 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "$(SOMEONES_HOME_DEVELOPMENT_TEAM)";
@@ -347,7 +351,7 @@
 		B1000000000000000000121 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "$(SOMEONES_HOME_DEVELOPMENT_TEAM)";
@@ -413,7 +417,7 @@
 		B1000000000000000000122 /* Playtest */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = "";
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "$(SOMEONES_HOME_DEVELOPMENT_TEAM)";
