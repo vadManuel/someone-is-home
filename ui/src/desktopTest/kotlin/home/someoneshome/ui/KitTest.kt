@@ -3,7 +3,12 @@ package home.someoneshome.ui
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toAwtImage
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.getBoundsInRoot
@@ -23,7 +28,7 @@ import kotlin.test.assertTrue
  * its units wide, so a mockup pixel is a unit; every control the kit draws is a 56-unit target or
  * taller; and a caption cannot be set under the 18px floor.
  */
-@OptIn(ExperimentalTestApi::class)
+@OptIn(ExperimentalTestApi::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
 class KitTest {
 
     @Test
@@ -107,6 +112,35 @@ class KitTest {
             runDesktopComposeUiTest {
                 setContent { KitCaption("TOO SMALL", Palette.DARK, size = 17) }
             }
+        }
+    }
+
+    /**
+     * **The hatch lies the way the mockup's CSS lays it** (D-202): `45deg` runs towards the
+     * top-right, so the stripes run top-left to bottom-right, `band` is measured across a stripe,
+     * and the first stripe starts at the bottom-left corner. The first port drew them the other way
+     * up, and nothing but a side-by-side render noticed.
+     *
+     * Read off the pixels: a step down-right stays on the same stripe; a step of one band
+     * up-right crosses onto the other colour most of the time.
+     */
+    @Test
+    fun `the hatch runs top-left to bottom-right, as the mockup's 45deg does`() {
+        runDesktopComposeUiTest(width = 240, height = 120) {
+            setContent { Box(Modifier.size(240.dp, 120.dp).hatch(Color.White, Color.Black, band = 12.dp)) }
+            val img = onRoot().captureToImage().toAwtImage()
+            fun lit(x: Int, y: Int) = (img.getRGB(x, y) and 0xFF) > 128
+            var along = 0
+            var across = 0
+            var n = 0
+            for (y in 20 until 90 step 3) for (x in 20 until 200 step 3) {
+                n++
+                if (lit(x, y) != lit(x + 9, y + 9)) along++
+                if (lit(x, y) != lit(x + 9, y - 9)) across++
+            }
+            assertTrue(along < n / 10, "a step down-right left its stripe at $along of $n points: the hatch runs the wrong way")
+            assertTrue(across > n / 2, "a band's step up-right stayed on one colour at ${n - across} of $n points")
+            assertTrue(lit(1, 118), "the first stripe does not start at the bottom-left corner, as CSS's does")
         }
     }
 }

@@ -36,6 +36,8 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.layout.layout
+import kotlin.math.roundToInt
 
 /**
  * Plans and marker glyphs, drawn rather than composed.
@@ -171,6 +173,82 @@ fun LivePlan(cells: List<MapCell>, modifier: Modifier = Modifier) {
             cell.bottom?.let { drawRect(it, Offset(b.x, b.y + b.h - t), Size(b.w, t)) }
             cell.start?.let { drawRect(it, Offset(b.x, b.y), Size(t, b.h)) }
             cell.end?.let { drawRect(it, Offset(b.x + b.w - t, b.y), Size(t, b.h)) }
+        }
+    }
+}
+
+/**
+ * **The live plan as the mockup draws it** (D-202, `kit.py`'s `plan` with the live map's cells):
+ * the cells, the room names and the counts, in one place, all from [Ramp].
+ *
+ * Only room cells are drawn. A room's edge falls where its neighbour is another room or none, in
+ * [Ramp.Line] at one unit, and **your own room is outlined in full ink at two units over the
+ * [Ramp.Fill] ground** -- the one anchor a count-based map can offer. The stairs are the hard
+ * stripe, a [Ramp.Faint] hairline every six units, because nobody can be *in* them.
+ *
+ * Counts sit at the room's centre for [PlanCounts]' reason: anywhere else would read as a
+ * position. **The ink of each count is the caller's** -- it is what carries staleness, and this
+ * draws whatever it is handed.
+ *
+ * It is a sibling of [LivePlan] and its label and count helpers rather than a change to them,
+ * because the ghost map still draws through those until its own family is restyled.
+ */
+@Composable
+fun KitLivePlan(counts: List<Plan.RoomCount>, modifier: Modifier = Modifier) {
+    BoxWithConstraints(modifier) {
+        val w = maxWidth
+        val h = maxHeight
+        Canvas(Modifier.matchParentSize()) {
+            val hair = 1.dp.toPx()
+            val bold = 2.dp.toPx()
+            // The CSS stripe: 45 degrees, one unit of line in every six measured across it.
+            val period = 6.dp.toPx() * kotlin.math.sqrt(2f)
+            for (row in 0 until Plan.ROWS) for (col in 0 until Plan.COLS) {
+                val room = Plan.roomAt(row, col) ?: continue
+                val mine = room.name == Plan.HERE
+                val b = cellBounds(col, row, size.width, size.height)
+                if (room.transit) {
+                    clipRect(b.x, b.y, b.x + b.w, b.y + b.h) {
+                        var d = -b.h
+                        while (d < b.w) {
+                            drawLine(
+                                Ramp.Faint, Offset(b.x + d, b.y), Offset(b.x + d + b.h, b.y + b.h),
+                                strokeWidth = hair,
+                            )
+                            d += period
+                        }
+                    }
+                } else if (mine) {
+                    drawRect(Ramp.Fill, Offset(b.x, b.y), Size(b.w, b.h))
+                }
+                val ink = if (mine) Ramp.Ink else Ramp.Line
+                val t = if (mine) bold else hair
+                if (Plan.roomAt(row - 1, col) !== room) drawRect(ink, Offset(b.x, b.y), Size(b.w, t))
+                if (Plan.roomAt(row + 1, col) !== room) drawRect(ink, Offset(b.x, b.y + b.h - t), Size(b.w, t))
+                if (Plan.roomAt(row, col - 1) !== room) drawRect(ink, Offset(b.x, b.y), Size(t, b.h))
+                if (Plan.roomAt(row, col + 1) !== room) drawRect(ink, Offset(b.x + b.w - t, b.y), Size(t, b.h))
+            }
+        }
+        Plan.rooms.forEach { room ->
+            Words(
+                room.name,
+                Modifier.offset(x = w * (room.c0.toFloat() / Plan.COLS), y = h * (room.r0.toFloat() / Plan.ROWS))
+                    .padding(horizontal = 7.dp, vertical = 5.dp),
+                size = 18, color = if (room.name == Plan.HERE) Ramp.Ink else Ramp.Dim, lineHeight = 1.0,
+            )
+        }
+        counts.forEach { rc ->
+            val cx = (rc.room.c0 + rc.room.c1 + 1) / 2f / Plan.COLS
+            val cy = (rc.room.r0 + rc.room.r1 + 1) / 2f / Plan.ROWS
+            Words(
+                rc.count.toString(),
+                // The mockup's translate(-50%, -40%): centred across, a little below centre down.
+                Modifier.offset(x = w * cx, y = h * cy).layout { measurable, constraints ->
+                    val p = measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
+                    layout(p.width, p.height) { p.place(-p.width / 2, -(p.height * 0.4f).roundToInt()) }
+                },
+                size = 44, color = rc.ink, lineHeight = 1.0,
+            )
         }
     }
 }

@@ -39,6 +39,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
@@ -165,6 +166,7 @@ fun Words(
     align: TextAlign? = null,
     maxLines: Int = Int.MAX_VALUE,
     overflow: TextOverflow = TextOverflow.Clip,
+    decoration: TextDecoration? = null,
 ) {
     BasicText(
         text = text,
@@ -177,6 +179,7 @@ fun Words(
             lineHeight = (size * lineHeight).sp,
             textAlign = align ?: TextAlign.Unspecified,
             lineHeightStyle = CSS_LINE,
+            textDecoration = decoration,
         ),
         maxLines = maxLines,
         overflow = overflow,
@@ -561,20 +564,28 @@ fun KitLegendBox(
 /**
  * **The stairs hatch, and the inert tile's: two flat values in a hard 45-degree stripe** (D-202).
  * A pattern, not a gradient: [stripe] and [ground] alternate every [band], with no blend between.
+ *
+ * **It is the mockup's `repeating-linear-gradient(45deg, stripe 0 6px, ground 6px 12px)`, read
+ * the way CSS reads it.** A 45deg gradient runs towards the top-right, so its bands lie across
+ * that, top-left to bottom-right, and [band] is measured *across* a stripe rather than along the
+ * edge; the first stripe starts at the bottom-left corner. The first port drew them the other way
+ * up and a root-two too narrow, which the side-by-side render of the locked rows showed.
  */
 fun Modifier.hatch(stripe: Color, ground: Color = Amber.Black, band: Dp = 6.dp): Modifier = drawBehind {
     drawRect(ground)
-    val b = band.toPx()
+    // A band across the stripe is root two wider along the edge.
+    val b = band.toPx() * kotlin.math.sqrt(2f)
+    val h = size.height
     clipRect {
-        // Stripes run at 45 degrees: a parallelogram band per period, across the whole box.
-        var x = -size.height
-        while (x < size.width) {
+        // A stripe is the run where `x - y + h` falls in [k*2b, k*2b + b), zero at bottom-left.
+        var d = -h
+        while (d < size.width) {
             val path = Path().apply {
-                moveTo(x, size.height); lineTo(x + b, size.height)
-                lineTo(x + b + size.height, 0f); lineTo(x + size.height, 0f); close()
+                moveTo(d, 0f); lineTo(d + b, 0f)
+                lineTo(d + b + h, h); lineTo(d + h, h); close()
             }
             drawPath(path, stripe)
-            x += 2 * b
+            d += 2 * b
         }
     }
 }

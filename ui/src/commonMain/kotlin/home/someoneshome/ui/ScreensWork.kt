@@ -6,6 +6,7 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -196,26 +197,19 @@ fun BoxScope.NotificationBanner(notification: Notification) {
  * the place as well as the name and it does so by there being no field to draw from.
  */
 @Composable
-fun WorkScreen(vals: PanelVals) {
+fun WorkScreen(vals: PanelVals) = Mockup {
     val go = navigator()
-    Column(
-        Modifier.fillMaxSize().padding(8.u),
-        verticalArrangement = Arrangement.spacedBy(5.u),
-    ) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            BackChevron(ScreenId.Home, Amber.Dim)
-            Label("SUBROUTINES", size = 7.0, color = Amber.Dim, tracking = 0.16)
-            // Counted off the rows the house sent, both halves. The total is the ORDER's length
-            // and never a settings number: an order that shortened while work was blocked would
-            // make its own length a tell, so the length drawn here has to be the length received.
-            Label(
-                "${vals.nextUp.done} OF ${vals.nextUp.total} DONE",
-                modifier = Modifier.weight(1f),
-                size = 7.0, color = Amber.Bright, tracking = 0.16, align = TextAlign.End,
-            )
-        }
+    val p = Palette.DARK
+    KitScreen {
+        // Counted off the rows the house sent, both halves. The total is the ORDER's length and
+        // never a settings number: an order that shortened while work was blocked would make its
+        // own length a tell, so the length drawn here has to be the length received.
+        KitHeader(
+            "SUBROUTINES", p, back = ScreenId.Home,
+            meta = "${vals.nextUp.done} OF ${vals.nextUp.total} DONE",
+        )
 
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.u)) {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             // **The name and the light travel together or not at all.** They used to be two
             // literals per row agreeing by hand -- REPLAY beside Bright, SHORT beside Dark --
             // which is the arrangement D-106 already lost once, and the failure mode is silent: a
@@ -232,16 +226,11 @@ fun WorkScreen(vals: PanelVals) {
             }
         }
 
-        Column(
-            Modifier.fillMaxWidth().border(1.u, Amber.Edge).padding(horizontal = 7.u, vertical = 6.u),
-            verticalArrangement = Arrangement.spacedBy(5.u),
-        ) {
-            Label(
-                "A SUBROUTINE OPENS ONLY AT ITS MARKER.\nSCAN TO BEGIN.",
-                size = 6.0, color = Amber.Faint, tracking = 0.1, lineHeight = 1.9,
-            )
-            LightKey()
-        }
+        // The sentence that sat above the key -- A SUBROUTINE OPENS ONLY AT ITS MARKER. SCAN TO
+        // BEGIN. -- went with the mockup's copy cut: only the next row is a target, and it opens
+        // the scan, which says the same thing by doing it.
+        KitSpacer()
+        LightKey()
     }
 }
 
@@ -258,28 +247,26 @@ fun WorkScreen(vals: PanelVals) {
 @Composable
 private fun LightKey() {
     // **The word comes before its mark, and that is not a preference.** A mark keeps a constant
-    // width while only its lit cells are drawn, so with the mark first the space after it varies
-    // with the value: BRIGHT ends up welded to its own word while DARK floats free of one, and the
-    // eye starts binding each mark to the word on its RIGHT -- reading the row as LIGHT = one
-    // cell. Word first puts the constant gap where the binding is and the varying gap between
-    // pairs, where extra space costs nothing.
+    // width while only its lit cells are filled, so with the mark first the space after it varies
+    // with the value and the eye binds each mark to the word on its RIGHT. Word first puts the
+    // constant gap where the binding is.
     Row(
         Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(9.u),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Label("LIGHT", size = 6.0, color = Amber.Dim, tracking = 0.14)
+        Tag("LIGHT", Ramp.Dim, Modifier.weight(1f))
         LightSignature.entries.forEach { signature ->
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(3.u),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Label(signature.name.uppercase(), size = 6.0, color = Amber.Faint, tracking = 0.1)
-                LightMark(signature, Amber.Mid, sample = true)
-            }
+            Words(signature.name.uppercase(), size = 18, color = Ramp.Dim, lineHeight = 1.0)
+            WorkMark(signature, Ramp.Dim, sample = true)
         }
     }
 }
+
+/** The mockup's light mark: three 7 by 14 cells, the unlit ones outlined (`kit.py`'s `lightmark`). */
+@Composable
+private fun WorkMark(signature: LightSignature, ink: Color, sample: Boolean = false) =
+    LightMark(signature, ink, sample = sample, cell = 7.dp, height = 14.dp, gap = 2.dp, outline = true)
 
 /**
  * **One named row of the order — and the only kind of row that names anything.**
@@ -290,6 +277,10 @@ private fun LightKey() {
  *
  * There is deliberately **no overload taking a [Blocked][OrderRow.Blocked] row**. Blocked work is
  * drawn by [WorkLocked], which takes nothing at all.
+ *
+ * **The current row is the screen's one solid block** (D-202): black on amber, and the only row
+ * that is a target. Done rows are struck through and dimmed, with their box filled; open rows are
+ * an outline in full ink.
  */
 @Composable
 private fun WorkRow(
@@ -297,63 +288,61 @@ private fun WorkRow(
     current: Boolean = false,
     onClick: (() -> Unit)? = null,
 ) {
-    val name = row.label
-    val light = row.light
     val done = row.done
     val ink = when {
-        current -> Amber.Bright
-        done -> Amber.Faint
-        else -> Amber.Mid
+        current -> Amber.Black
+        done -> Ramp.Dim
+        else -> Ramp.Ink
     }
-    val meta = if (current) Amber.Bright else if (done) Amber.Faint else Amber.Dim
-
+    // The destination and the mark, a step below the name on an open row.
+    val meta = when {
+        current -> Amber.Black
+        done -> Ramp.Dim
+        else -> Ramp.Mid
+    }
     Row(
-        Modifier.fillMaxWidth()
-            .border(1.u, if (current) Amber.Bright else Amber.Edge)
-            .background(if (current) Amber.Edge else Color.Transparent)
+        Modifier.fillMaxWidth().heightIn(min = 60.dp)
+            .then(
+                if (current) Modifier.background(Ramp.Ink)
+                else Modifier.border(1.dp, if (done) Ramp.Faint else Ramp.Line)
+            )
             .then(if (onClick != null) Modifier.tap(onClick) else Modifier)
-            .padding(horizontal = 7.u, vertical = if (current) 7.u else 6.u),
-        horizontalArrangement = Arrangement.spacedBy(6.u),
+            .padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Done is a filled box, current is an outlined one at full intensity, pending is outlined
-        // and dim. Three states in one glyph rather than three different marks.
-        if (done) {
-            Box(Modifier.size(9.u).background(Amber.Bright))
-        } else {
-            Box(Modifier.size(9.u).border(1.u, if (current) Amber.Bright else Amber.Dim))
-        }
-        Label(
-            name,
-            modifier = Modifier.weight(1f),
-            size = if (current) 8.5 else 7.5,
-            color = ink,
-            tracking = if (current) 0.06 else 0.0,
-            // Struck through as well as dimmed. Dim alone is ambiguous on this screen, where
-            // "faint" is also how a locked row reads.
+        // Done is a filled box, current an outline in black on the block, open an outline in ink.
+        Box(
+            Modifier.size(22.dp).then(
+                when {
+                    current -> Modifier.border(2.dp, Amber.Black)
+                    done -> Modifier.background(Ramp.Dim)
+                    else -> Modifier.border(1.dp, Ramp.Ink)
+                }
+            )
+        )
+        Words(
+            row.label, Modifier.weight(1f), size = 28, color = ink, lineHeight = 1.0,
+            // Struck through as well as dimmed: dim alone is how a locked row reads too.
             decoration = if (done) TextDecoration.LineThrough else null,
         )
         // **The destination pair, drawn only where there is one.** A known line carries its room
         // and its glyph off the wire; a line the house dealt in a round armed with no home carries
-        // neither, and the column is simply absent rather than filled with a room this phone made
+        // neither, and the pair is simply absent rather than filled with a room this phone made
         // up. See OrderRow.Named.room.
         Row(
-            horizontalArrangement = Arrangement.spacedBy(4.u),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             row.room?.let {
-                Label(it, modifier = Modifier.testTag(ORDER_DESTINATION), size = 6.0, color = meta)
+                Words(it, Modifier.testTag(ORDER_DESTINATION), size = 22, color = meta, lineHeight = 1.0)
             }
-            row.marker?.let {
-                MarkerGlyph(it, if (current) 11.u else 10.u, meta, Modifier.testTag(ORDER_DESTINATION))
-            }
+            // The mockup's 16 box, at the 10/16 its shapes fill.
+            row.marker?.let { MarkerGlyph(it, 10.dp, meta, Modifier.testTag(ORDER_DESTINATION)) }
+            // Last, because it is read DOWN the list rather than across a row: choosing a dark
+            // route means comparing this row's light with the next one's.
+            WorkMark(row.light, meta)
         }
-        // Its own column, past the destination pair, because it is read DOWN the list rather than
-        // across a row: choosing a dark route means comparing this row's light with the next
-        // one's, and the only column that stays aligned when the names differ in length is the
-        // last one. It takes the row's own intensity, so a completed row's light fades with the
-        // rest of it rather than staying at full step and shouting about work already done.
-        LightMark(light, meta)
     }
 }
 
@@ -364,17 +353,21 @@ private fun WorkRow(
  * so drawing one here would describe the very thing this row exists not to describe. Nothing on
  * the ladder is zero cells, so the empty column reads as *nothing is claimed* rather than as a
  * dark Subroutine.
+ *
+ * Dashed and hatched, the mockup's "not yet" (D-202), so it reads as a different kind of row
+ * before a word on it is.
  */
 @Composable
 private fun WorkLocked() {
     Row(
-        Modifier.fillMaxWidth().border(1.u, Amber.Edge).padding(horizontal = 7.u, vertical = 6.u),
-        horizontalArrangement = Arrangement.spacedBy(6.u),
+        Modifier.fillMaxWidth().heightIn(min = 60.dp).hatch(Ramp.Fill).dashedBorder(Ramp.Line, 1.dp)
+            .padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(9.u).border(1.u, Amber.Faint))
-        Label("LOCKED", modifier = Modifier.weight(1f), size = 7.5, color = Amber.Faint)
-        Label("WAITING UPSTREAM", size = 6.0, color = Amber.Faint)
+        Box(Modifier.size(22.dp).dashedBorder(Ramp.Faint, 1.dp))
+        Words("LOCKED", Modifier.weight(1f), size = 28, color = Ramp.Dim, lineHeight = 1.0)
+        Words("WAITING UPSTREAM", size = 22, color = Ramp.Dim, lineHeight = 1.0)
     }
 }
 
@@ -459,115 +452,90 @@ fun ScanScreen(vals: PanelVals) = Mockup {
  * THIS ONE exists because a scan can catch the wrong card in the dark.
  */
 @Composable
-fun ScanCaughtScreen(vals: PanelVals) {
+fun ScanCaughtScreen(vals: PanelVals) = Mockup {
     val go = navigator()
     val actions = LocalActions.current
+    val p = Palette.DARK
     // ⚠️ **Null on a housed phone the house has not answered**, and every read of it below is
     // guarded rather than defaulted. It used to resolve to the port's fixture — HANDSHAKE, room
     // GARAGE — so this screen showed the owner a Subroutine and a room in a house that had dealt
     // them neither, and did it with exactly the confidence it shows a real one. What an unanswered
     // scan draws now is the shape of nothing: no glyph, no room, no briefing, and no BEGIN.
     val current = vals.current
-    Column(
-        Modifier.fillMaxSize().padding(8.u),
-        verticalArrangement = Arrangement.spacedBy(7.u),
-    ) {
-        Label("CAUGHT", size = 7.0, color = Amber.Dim, tracking = 0.16)
+    KitScreen {
+        KitHeader("CAUGHT", p)
 
-        Column(
-            Modifier.weight(1f).fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.u, Alignment.CenterVertically),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            // The marker you just scanned -- the same shape the work order sent you to, not the
-            // host-setup fixture this used to read by mistake.
-            current?.marker?.let { MarkerGlyph(it, 52.u, Amber.Bright) }
-            // **The flavour line that used to sit here is gone** (the owner's 2026-08-24 ruling).
-            // It was a fake-technical sentence — RESYNC THE KEEPALIVE — that nothing on the wire
-            // ever carried, so it was the port's own words printed over whatever Subroutine a real
-            // scan had actually opened. What a player has to do is the briefing at the foot of this
-            // screen (D-188), which is total over the roster and cannot be absent; a second, larger
-            // sentence above it competed with the one that is true.
+        KitMiddle {
+            // The marker you just scanned -- the same shape the work order sent you to. Filled, as
+            // every marker in the app is (see [MarkerGlyph]): the mockup's 88 box, holding the
+            // shape at the 10/16 of it the mockup's shapes fill.
+            current?.marker?.let {
+                Box(Modifier.size(88.dp), contentAlignment = Alignment.Center) {
+                    MarkerGlyph(it, 55.dp, Ramp.Ink)
+                }
+            }
+            // **The flavour line that used to sit here is gone** (the owner's 2026-08-24 ruling,
+            // D-196). What a player has to do is the briefing at the foot of this screen (D-188).
             Row(
-                horizontalArrangement = Arrangement.spacedBy(6.u),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 // The room is dropped rather than blanked where the house named none — an empty
                 // destination is lawful (`OrderLine.Known.at`) and a leading separator over an
                 // absent room reads as a rendering fault rather than as a room nobody sent.
-                Label(
+                Words(
                     listOfNotNull(
                         current?.room,
                         current?.let { "SUBROUTINE ${it.index} OF ${it.total}" }
                             ?: PanelVals.NOTHING_OPEN,
                     ).joinToString(" . "),
-                    size = 7.0, color = Amber.Dim, tracking = 0.12,
+                    size = 26, color = Ramp.Mid, lineHeight = 1.0, align = TextAlign.Center,
                 )
                 // The fourth surface, and the one D-106 does not name. It is here because BEGIN
                 // and NOT THIS ONE are both live below: this is the last moment the choice is
-                // still a choice, and a route planned on the work order is re-decided here by
-                // anyone who walked past someone on the way. Flagged for review.
-                //
-                // A light signature is a promise about how much a screen will glow for the next
-                // ninety seconds, which is the one thing a player plans a walk around. Absent where
-                // there is no Subroutine to make it about.
-                current?.let { LightMark(it.light, Amber.Dim) }
+                // still a choice. Flagged for review. Absent where there is no Subroutine.
+                current?.let { WorkMark(it.light, Ramp.Mid) }
             }
-            Label(
-                if (current != null) "THE CARD IN YOUR HAND MATCHES" else "WAITING FOR THE HOUSE",
-                size = 6.0, color = Amber.Faint, tracking = 0.1,
-            )
+            // The line under it -- THE CARD IN YOUR HAND MATCHES, or WAITING FOR THE HOUSE -- went
+            // with the mockup's copy cut: the glyph is the comparison, and saying so is a second
+            // lit line at a card.
         }
 
-        // **The last lit surface before the work, and ALL TEN are read here now** (D-188). It began
-        // as Sniff's exception — its own screen is black until the answer (D-137), so the sentence
-        // telling a player what to do there would be black ink on black glass — and the ruling
-        // inverted it: an in-screen instruction is lit pixels for the whole duration of a task
-        // rated on how little it may glow, and the scan has already paid for this screen's light.
+        // **The last lit surface before the work, and ALL TEN are read here now** (D-188). An
+        // in-screen instruction is lit pixels for the whole duration of a task rated on how little
+        // it may glow, and the scan has already paid for this screen's light.
         //
         // Above BEGIN rather than beside it, so it is read on the way to the control rather than
-        // discovered under a thumb — and dim, because this screen is lit and several of the ten
-        // that follow it are not.
-        //
-        // Not nullable any more, which is the point: [Subroutine.briefing] is total over the
-        // roster, so a Subroutine cannot reach a player with nothing said about it.
+        // discovered under a thumb. Not nullable: [Subroutine.briefing] is total over the roster,
+        // so a Subroutine cannot reach a player with nothing said about it.
         current?.let {
-            Label(
-                it.subroutine.briefing,
-                modifier = Modifier.fillMaxWidth(),
-                size = 6.5, color = Amber.Dim, tracking = 0.12, lineHeight = 1.8,
-                align = TextAlign.Center,
-            )
+            Box(
+                Modifier.fillMaxWidth()
+                    .edgeLine(PanelSide.Top, Ramp.Faint, 1.dp)
+                    .edgeLine(PanelSide.Bottom, Ramp.Faint, 1.dp)
+                    .padding(vertical = 16.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Words(
+                    it.subroutine.briefing, Modifier.fillMaxWidth(),
+                    size = 24, color = p.ink, lineHeight = 1.15, align = TextAlign.Center,
+                )
+            }
         }
 
         // **BEGIN does not name a screen, and cannot.** Which Subroutine opens is a fact about
-        // the card that was just read, so the target is the actions layer's — the same shape as a
-        // tap on the plan, which opens whichever room is under the finger. Declared in
+        // the card that was just read, so the target is the actions layer's. Declared in
         // Flow.viaActions, where every built Subroutine screen is listed as a place this can land.
         //
-        // A Subroutine with no interaction built yet opens nothing and the phone stays here,
-        // which is the fail-closed direction: routing an unbuilt Subroutine to the nearest built
-        // one would put a player through the wrong work and read as a routing bug rather than as
-        // a missing screen.
         // ⚠️ **Absent where there is no Subroutine to begin**, rather than present and refusing.
         // A BEGIN that could be pressed with nothing behind it is how nine of the ten Subroutines
         // became unreachable: the press defaulted to the port's fixture and opened a Handshake over
-        // whatever the house had actually dealt. A control that is not drawn cannot do that, and
-        // this screen's other button still goes back — the player is never stuck here.
+        // whatever the house had actually dealt. This screen's other button still goes back — the
+        // player is never stuck here.
         if (current != null) {
-            PanelButton(
-                "BEGIN",
-                border = Amber.Bright, ink = Amber.Bright,
-                size = 9.0, tracking = 0.18, verticalPadding = 13.u,
-                onClick = actions.beginSubroutine,
-            )
+            KitPrimary("BEGIN", p, size = 32, onClick = actions.beginSubroutine)
         }
-        PanelButton(
-            "NOT THIS ONE",
-            border = Amber.Faint, ink = Amber.Dim,
-            size = 7.0, verticalPadding = 9.u,
-            onClick = { go(ScreenId.Work) },
-        )
+        KitQuiet("NOT THIS ONE", p) { go(ScreenId.Work) }
     }
 }
 
@@ -687,59 +655,26 @@ private val REFUSED = listOf("M14 50L50 14")
 /**
  * Files: **one item, and every other app refuses.**
  *
- * Carrying is a device state rather than a rule the player has to remember. The refusals are
- * listed as standing conditions — UNAVAILABLE, on screen, before you try — which is the safe way
- * to say no.
+ * Carrying is a device state rather than a rule the player has to remember: the padlock in the
+ * strip (D-204) and the one line under the item say it, in the words the carrying widget uses.
+ * The list of UNAVAILABLE apps and the STORAGE IN USE box went with the mockup's copy cut: a list
+ * of refusals is lit rows saying what the line already says.
+ *
+ * ⚠️ **NOTHING ELSE OPENS UNTIL IT IS DELIVERED is new copy and awaits the owner's eye** (D-200).
  */
 @Composable
-fun FilesScreen() {
-    Column(
-        Modifier.fillMaxSize().padding(8.u),
-        verticalArrangement = Arrangement.spacedBy(7.u),
-    ) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            BackChevron(ScreenId.Home, Amber.Dim)
-            Label("FILES", size = 7.0, color = Amber.Dim, tracking = 0.16)
-            Label(
-                "1 ITEM",
-                modifier = Modifier.weight(1f),
-                size = 7.0, color = Amber.Bright, tracking = 0.16, align = TextAlign.End,
-            )
-        }
-
-        InfoBox(border = Amber.Bright, gap = 4.u) {
-            Label("DISK 01", size = 9.0, color = Amber.Bright, tracking = 0.06)
-            Label(
-                "DEGRADED . IN HAND\nDESTINATION . RACK",
-                size = 6.5, color = Amber.Dim, tracking = 0.1, lineHeight = 1.8,
-            )
-        }
-
-        Column(verticalArrangement = Arrangement.spacedBy(3.u)) {
-            listOf("SUBROUTINES", "NOTES", "ARCHIVE").forEach { name ->
-                Row(
-                    Modifier.fillMaxWidth().border(1.u, Amber.Edge)
-                        .padding(horizontal = 7.u, vertical = 6.u),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Label(name, size = 7.0, color = Amber.Faint)
-                    Label("UNAVAILABLE", size = 7.0, color = Amber.Faint)
-                }
-            }
-        }
-
-        Box(Modifier.weight(1f))
-
-        Box(
-            Modifier.fillMaxWidth().border(1.u, Amber.Dim).padding(7.u),
-            contentAlignment = Alignment.Center,
+fun FilesScreen() = Mockup {
+    val p = Palette.DARK
+    KitScreen(gap = 14.dp) {
+        KitHeader("FILES", p, back = ScreenId.Home, meta = "1 ITEM")
+        Column(
+            Modifier.fillMaxWidth().border(2.dp, p.ink).padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Label(
-                "STORAGE IN USE\nHANDS FULL UNTIL DELIVERED",
-                size = 6.5, color = Amber.Mid, tracking = 0.1, lineHeight = 1.9,
-                align = TextAlign.Center,
-            )
+            Words("DISK 01", size = 40, color = p.ink, lineHeight = 0.85)
+            Words("DEGRADED . IN HAND\nDESTINATION . RACK", size = 22, color = p.mid, lineHeight = 1.1)
         }
+        KitCaption("NOTHING ELSE OPENS UNTIL IT IS DELIVERED", p, size = 24)
     }
 }
 
@@ -748,38 +683,19 @@ fun FilesScreen() {
  *
  * The line is plausible, unverifiable and deliberately not context aware. *These are not your
  * notes* is the whole joke and the whole mechanic: the device hands you an accusation you did not
- * make and cannot check.
+ * make and cannot check. READ ONLY . NO INPUT PERMITTED went with the mockup's copy cut: there is
+ * nothing on the screen to type into, which says it.
  */
 @Composable
-fun NotesScreen(vals: PanelVals) {
-    Column(
-        Modifier.fillMaxSize().padding(8.u),
-        verticalArrangement = Arrangement.spacedBy(7.u),
-    ) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            BackChevron(ScreenId.Home, Amber.Dim)
-            Label("NOTES", size = 7.0, color = Amber.Dim, tracking = 0.16)
-            Label(
-                "UNTITLED",
-                modifier = Modifier.weight(1f),
-                size = 7.0, color = Amber.Faint, tracking = 0.16, align = TextAlign.End,
-            )
+fun NotesScreen(vals: PanelVals) = Mockup {
+    val p = Palette.DARK
+    KitScreen(gap = 14.dp) {
+        KitHeader("NOTES", p, back = ScreenId.Home, meta = "UNTITLED")
+        Box(Modifier.fillMaxWidth().edgeLine(PanelSide.Top, p.faint, 1.dp).padding(top = 18.dp)) {
+            Words(vals.noteLine, size = 34, color = p.ink, lineHeight = 1.1)
         }
-
-        Box(Modifier.weight(1f).fillMaxWidth().border(1.u, Amber.Edge).padding(9.u)) {
-            Readout(vals.noteLine, size = 18.0, color = Amber.Bright, lineHeight = 1.45)
-        }
-
-        Box(
-            Modifier.fillMaxWidth().border(1.u, Amber.Edge).padding(horizontal = 7.u, vertical = 6.u),
-            contentAlignment = Alignment.Center,
-        ) {
-            Label(
-                "READ ONLY . NO INPUT PERMITTED\nTHESE ARE NOT YOUR NOTES",
-                size = 6.0, color = Amber.Faint, tracking = 0.1, lineHeight = 1.9,
-                align = TextAlign.Center,
-            )
-        }
+        KitSpacer()
+        KitCaption("THESE ARE NOT YOUR NOTES", p, Modifier.fillMaxWidth(), center = true)
     }
 }
 
@@ -793,36 +709,19 @@ fun NotesScreen(vals: PanelVals) {
  *
  * **The jam is read off the panel and never asked for**, so this screen has no way to be jammed by
  * anything except the house having said so, and no way to tell whose Static it was.
+ *
+ * YOUR ROOM OUTLINED went with the mockup's copy cut: the outline is the only two-unit edge on
+ * the plan and the only room name in full ink, which says it.
  */
 @Composable
 fun TermLiveScreen(vals: PanelVals) {
     val go = navigator()
-    Column(
-        Modifier.fillMaxSize().padding(8.u),
-        verticalArrangement = Arrangement.spacedBy(6.u),
-    ) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            BackChevron(ScreenId.Home, Amber.Dim)
-            Label("TERMINAL . LIVE", size = 7.0, color = Amber.Dim, tracking = 0.14)
-        }
-        FloorStrip()
-        Box(Modifier.weight(1f).fillMaxWidth().border(1.u, Amber.Edge)) {
-            LivePlan(Plan.mapCells(), Modifier.fillMaxSize())
-            PlanRoomLabels(Modifier.fillMaxSize())
-            PlanCounts(Plan.terminalCounts, Modifier.fillMaxSize())
-            vals.staticJam?.let { StaticNoise(it, Modifier.fillMaxSize()) }
-        }
-        Label("YOUR ROOM OUTLINED", size = 5.5, color = Amber.Faint, tracking = 0.08)
+    TerminalView("TERMINAL . LIVE", ScreenId.Home, Plan.terminalCounts, vals) {
         // **Reading is an uncompletable task, so the motion budget applies** (`gdd.md:476`, D-199).
         // Standing still, glowing, at a place everybody knows: move too much and the view closes,
         // and *the exposure is the limit* rather than a timer.
-        MotionBudgetRow(Amber.Dim, Amber.Bright)
-        PanelButton(
-            "TIMELAPSE . 2:00 AT 6X",
-            border = Amber.Dim, ink = Amber.Bright,
-            size = 7.5, tracking = 0.14, verticalPadding = 8.u,
-            onClick = { go(ScreenId.Timelapse) },
-        )
+        KitBudgetRow()
+        KitSecondary("TIMELAPSE . 2:00 AT 6X", Palette.DARK) { go(ScreenId.Timelapse) }
     }
 }
 
@@ -848,50 +747,77 @@ fun TermLiveScreen(vals: PanelVals) {
 @Composable
 fun TimelapseScreen(vals: PanelVals) {
     val go = navigator()
-    Column(
-        Modifier.fillMaxSize().padding(8.u),
-        verticalArrangement = Arrangement.spacedBy(6.u),
-    ) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            BackChevron(ScreenId.TermLive, Amber.Dim)
-            Label("TERMINAL . -1:12", size = 7.0, color = Amber.Dim, tracking = 0.14)
-        }
-        FloorStrip()
-        Box(Modifier.weight(1f).fillMaxWidth().border(1.u, Amber.Edge)) {
-            LivePlan(Plan.mapCells(), Modifier.fillMaxSize())
-            PlanRoomLabels(Modifier.fillMaxSize())
-            PlanCounts(Plan.timelapseCounts, Modifier.fillMaxSize())
-            vals.staticJam?.let { StaticNoise(it, Modifier.fillMaxSize()) }
-        }
-        Row(Modifier.fillMaxWidth().height(6.u), horizontalArrangement = Arrangement.spacedBy(1.u)) {
-            Box(Modifier.weight(44f).fillMaxHeight().background(Amber.Bright))
-            Box(Modifier.weight(56f).fillMaxHeight().background(Amber.Edge))
+    TerminalView("TERMINAL . -1:12", ScreenId.TermLive, Plan.timelapseCounts, vals) {
+        // How far through the two minutes the playback is. A fixture, like the counts.
+        Box(Modifier.fillMaxWidth().height(8.dp).border(1.dp, Ramp.Faint)) {
+            Box(Modifier.fillMaxWidth(0.44f).fillMaxHeight().background(Ramp.Mid))
         }
         // The same budget as the live view: watching the playback is still standing at the
         // station reading (D-199).
-        MotionBudgetRow(Amber.Dim, Amber.Bright)
+        KitBudgetRow()
         // Playback can be abandoned. It plays once either way, so stopping early is a real
         // decision rather than a convenience.
-        PanelButton(
-            "STOP THE PLAYBACK",
-            border = Amber.Edge, ink = Amber.Dim,
-            size = 7.0, tracking = 0.14, verticalPadding = 8.u,
-            onClick = { go(ScreenId.TermLive) },
-        )
+        KitSecondary("STOP THE PLAYBACK", Palette.DARK) { go(ScreenId.TermLive) }
     }
 }
 
+/**
+ * **The live view and the playback share one layout** (D-202, variants of one screen): the
+ * header, the floor strip, the plan, and a foot that differs. Only the words and the foot change,
+ * so across a room the two cannot be told apart.
+ */
 @Composable
-private fun FloorStrip() {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.u)) {
+private fun TerminalView(
+    title: String,
+    back: ScreenId,
+    counts: List<Plan.RoomCount>,
+    vals: PanelVals,
+    foot: @Composable ColumnScope.() -> Unit,
+) = Mockup {
+    val p = Palette.DARK
+    KitScreen(gap = 10.dp) {
+        KitHeader(title, p, back = back)
+        FloorStrip(p)
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            KitLivePlan(counts, Modifier.fillMaxSize())
+            vals.staticJam?.let { StaticNoise(it, Modifier.fillMaxSize()) }
+        }
+        foot()
+    }
+}
+
+/**
+ * GROUND / UPPER: **a reading, not a control** (`kit.py`'s `floor_strip`). The floor you are on
+ * sits on the room fill; the shipped strip takes no taps.
+ */
+@Composable
+private fun FloorStrip(p: Palette) {
+    Row(Modifier.fillMaxWidth().height(44.dp).border(1.dp, p.line)) {
         Box(
-            Modifier.weight(1f).border(1.u, Amber.Dim).padding(vertical = 4.u),
+            Modifier.weight(1f).fillMaxHeight().background(Ramp.Fill)
+                .edgeLine(PanelSide.End, p.line, 1.dp),
             contentAlignment = Alignment.Center,
-        ) { Label("GROUND", size = 6.5, color = Amber.Bright, tracking = 0.1) }
-        Box(
-            Modifier.weight(1f).border(1.u, Amber.Edge).padding(vertical = 4.u),
-            contentAlignment = Alignment.Center,
-        ) { Label("UPPER", size = 6.5, color = Amber.Dim, tracking = 0.1) }
+        ) { Words("GROUND", size = 24, color = p.ink, lineHeight = 1.0) }
+        Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+            Words("UPPER", size = 24, color = p.dim, lineHeight = 1.0)
+        }
+    }
+}
+
+/**
+ * The motion budget as the mockup draws it: a reading between two hairlines, not a bar. See
+ * [MotionBudgetRow] for why nothing here drains -- a bar that moved on a desktop would be moving
+ * on nothing.
+ */
+@Composable
+internal fun KitBudgetRow(p: Palette = Palette.DARK) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 40.dp)
+            .edgeLine(PanelSide.Top, p.faint, 1.dp).edgeLine(PanelSide.Bottom, p.faint, 1.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Words("MOTION BUDGET", Modifier.weight(1f), size = 22, color = p.dim, lineHeight = 1.0)
+        Words("HOLDING", size = 22, color = p.dim, lineHeight = 1.0)
     }
 }
 

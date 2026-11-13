@@ -1867,12 +1867,17 @@ class PanelVals(
          * decoration), so the alternative is a second brush per lit region and a glass that knows
          * what is under it. A slightly finer texture on two screens is the cheaper of the two.
          *
+         * **`Work` and `ScanCaught` joined with the restyle** (D-202): the work order's current
+         * row and the caught scan's BEGIN are each the screen's one solid block, full width, with
+         * black words on it, and the guard named both the moment they were drawn.
+         *
          * Written down here rather than left as a `when` branch for [BUZZING]'s reason exactly: it
          * is the kind of set a new screen joins, and a new amber block on a screen that is not in
          * here ships with the band that made the owner file the report.
          */
         val AMBER_BLOCKS: Set<ScreenId> = setOf(
             ScreenId.Tally, ScreenId.WinInsiders, ScreenId.Notify, ScreenId.Banner,
+            ScreenId.Work, ScreenId.ScanCaught,
         )
 
         val BUZZING: Set<ScreenId> = setOf(
@@ -2050,11 +2055,11 @@ object Plan {
      */
     val timelapseCounts = counts(
         mapOf(
-            "KITCHEN" to (3 to Amber.Dim),
-            "LIVING" to (1 to Amber.Dim),
-            "HALL" to (2 to Amber.Dim),
-            "STUDY" to (0 to Amber.Dim),
-            "GARAGE" to (0 to Amber.Dim),
+            "KITCHEN" to (3 to Ramp.Dim),
+            "LIVING" to (1 to Ramp.Dim),
+            "HALL" to (2 to Ramp.Dim),
+            "STUDY" to (0 to Ramp.Dim),
+            "GARAGE" to (0 to Ramp.Dim),
         )
     )
 
