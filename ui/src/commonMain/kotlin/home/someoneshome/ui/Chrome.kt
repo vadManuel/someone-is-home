@@ -410,9 +410,9 @@ internal fun scanLineInk(lit: Boolean): Color =
  * One dark row in every three — `0 1px, transparent 1px 3px` in the design's own CSS — at the
  * size the old 300-unit canvas drew it: 3 old units, 3.6 of the 360 canvas.
  *
- * OPEN for the owner: D-202's mockup draws this 3px on its 360 canvas, a sixth finer. Taking that
- * moves every screen's glass, and `ScanLinesTest`'s lit-ground check then misreads the
- * springboard's meter and dock, so it is a ruling, not a tidy-up.
+ * D-207 keeps this pitch rather than the mockup's 3px, which is a sixth finer. Taking the mockup's
+ * value would move every screen's glass, and `ScanLinesTest`'s lit-ground check would then misread
+ * the springboard's meter and dock.
  */
 private val SCAN_LINE_PERIOD: Dp = 3.6.u
 
