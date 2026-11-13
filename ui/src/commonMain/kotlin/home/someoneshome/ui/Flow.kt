@@ -131,7 +131,8 @@ object ScreenGraph {
         // and publish no click action, so the Insider's egress edge is not readable off this screen
         // and lives in [Flow.viaActions] with the other gestures. A Resident's tiles are not
         // controls at all (D-142) — no pointer input, nothing to fire, nothing to time.
-        ScreenId.Page2 -> setOf(ScreenId.Home, ScreenId.Work, ScreenId.Scan, ScreenId.Lock)
+        // The dock, and nothing else: page 1 is a swipe away and lives in [Flow.viaActions].
+        ScreenId.Page2 -> setOf(ScreenId.Work, ScreenId.Scan, ScreenId.Lock)
         // **The two Tier-2 pickers.** BACK is a plain tap and is the only edge either of them
         // publishes: a row FIRES, which walks back to page 2 without naming it — see
         // [Flow.viaActions], where firing is declared with the other gestures. A picker that could
@@ -236,7 +237,9 @@ object ScreenGraph {
         // has moved to [Flow.housePushed], where `MeetingCalling` is the only thing that reaches it.
         ScreenId.Work, ScreenId.Files, ScreenId.Notes, ScreenId.Reveal,
         // No TERMINAL tile (D-199). The map opens by scanning the T card, so it is not here.
-        ScreenId.Settings, ScreenId.Page2, ScreenId.Scan, ScreenId.Lock,
+        // **No Page2 either**: the page bar is not a control (D-202), and page 2 is a swipe away,
+        // declared in [Flow.viaActions].
+        ScreenId.Settings, ScreenId.Scan, ScreenId.Lock,
     )
 
     /** The whole graph, for the walks that need it all at once. */
@@ -776,6 +779,9 @@ object Flow {
         // appearance: a Resident's tile is drawn identically and takes no pointer input at all
         // (D-142), so there is no hold to run and no view either role can be caught on.
         ScreenId.Page2 to setOf(
+            // **The swipe back to page 1** (`gdd.md:561`), the same for both roles. A gesture
+            // publishes no click action, so the edge is declared here.
+            ScreenId.Home,
             ScreenId.Banner,
             // **Two of the three tier-2 tiles**, armed by the same two seconds of a finger (D-141)
             // and opening a list rather than arming in place — the owner's targeting rulings, and
@@ -816,9 +822,15 @@ object Flow {
         // arrival leaves the lock screen. Each of these is the `under` of an entry in
         // `Notifications.arrivals`, and `FlowTest` walks the gesture on every one of them rather
         // than trusting the two lists to agree.
-        ScreenId.Notify to setOf(ScreenId.Home),
-        ScreenId.Banner to setOf(ScreenId.Home),
-        ScreenId.Quiet to setOf(ScreenId.Home),
+        //
+        // **And the page swipe to page 2** (`gdd.md:561`) off every screen that draws page 1. The
+        // banners sit over page 1, so its body is still under the thumb. `SpringboardSwipeTest`
+        // performs the swipe on each of them.
+        ScreenId.Home to setOf(ScreenId.Page2),
+        ScreenId.EgressWidget to setOf(ScreenId.Page2),
+        ScreenId.Notify to setOf(ScreenId.Home, ScreenId.Page2),
+        ScreenId.Banner to setOf(ScreenId.Home, ScreenId.Page2),
+        ScreenId.Quiet to setOf(ScreenId.Home, ScreenId.Page2),
         ScreenId.LockNotify to setOf(ScreenId.Lock),
         // **NEW ROUND, off both endings, and it is here rather than in the graph for LIGHTS OUT's
         // reason** (D-157). Whether either ending publishes it as a control at all depends on

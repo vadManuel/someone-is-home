@@ -2,15 +2,16 @@ package home.someoneshome.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -18,9 +19,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 
 /**
  * The springboard — **identical for both roles.**
@@ -46,7 +50,9 @@ fun HomeScreen(vals: PanelVals, widget: @Composable (PanelVals) -> Unit = { Inte
     val go = navigator()
     Column(Modifier.fillMaxSize()) {
         Column(
-            Modifier.fillMaxWidth().weight(1f).padding(horizontal = 7.u).padding(top = 7.u),
+            Modifier.fillMaxWidth().weight(1f)
+                .pageSwipe(PageTurn.Forward) { go(ScreenId.Page2) }
+                .padding(horizontal = 7.u).padding(top = 7.u),
             verticalArrangement = Arrangement.spacedBy(6.u),
         ) {
             // The one slot the house can take away. Everything below it is unchanged.
@@ -176,7 +182,7 @@ fun HomeScreen(vals: PanelVals, widget: @Composable (PanelVals) -> Unit = { Inte
                 }
             }
 
-            PageDots(onPage = 0) { go(ScreenId.Page2) }
+            PageBar(onPage = 0)
         }
         Dock()
     }
@@ -210,7 +216,9 @@ fun Page2Screen(vals: PanelVals) {
     val actions = LocalActions.current
     Column(Modifier.fillMaxSize()) {
         Column(
-            Modifier.fillMaxWidth().weight(1f).padding(horizontal = 7.u).padding(top = 7.u),
+            Modifier.fillMaxWidth().weight(1f)
+                .pageSwipe(PageTurn.Back) { go(ScreenId.Home) }
+                .padding(horizontal = 7.u).padding(top = 7.u),
             verticalArrangement = Arrangement.spacedBy(7.u),
         ) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.u)) {
@@ -289,7 +297,7 @@ fun Page2Screen(vals: PanelVals) {
                 }
             }
 
-            PageDots(onPage = 1) { go(ScreenId.Home) }
+            PageBar(onPage = 1)
         }
         Dock()
     }
@@ -389,24 +397,75 @@ private fun Tier2Tile(
 }
 
 /**
- * Two dots, always. The count is part of the parity: an extra page for one role would be visible
- * from across a room without anyone reading a word.
+ * **Which page is showing: a two-segment bar, and not a control** (D-202, `gdd.md:561`).
+ *
+ * Two segments, always. The count is part of the parity: an extra page for one role would be
+ * visible from across a room without anyone reading a word.
+ *
+ * **It takes no input.** It used to be two dots, the unlit one a tap target five units square,
+ * which is a control nobody can find in the dark. Paging is the horizontal swipe the GDD's action
+ * table names ([pageSwipe]), and the bar only says where you are.
  */
 @Composable
-private fun ColumnScope.PageDots(onPage: Int, onOther: () -> Unit) {
+private fun ColumnScope.PageBar(onPage: Int) {
     Row(
-        Modifier.fillMaxWidth().padding(top = 6.u, bottom = 5.u),
-        horizontalArrangement = Arrangement.spacedBy(5.u, Alignment.CenterHorizontally),
+        Modifier.align(Alignment.CenterHorizontally).padding(top = 7.u, bottom = 6.u)
+            .size(width = 46.u, height = 3.u).background(Amber.Faint),
     ) {
         repeat(2) { i ->
             Box(
-                Modifier.size(5.u)
+                Modifier.weight(1f).fillMaxHeight()
                     .background(if (i == onPage) Amber.Bright else Amber.Faint)
-                    .then(if (i == onPage) Modifier else Modifier.tap(onOther))
             )
         }
     }
 }
+
+/** Which way a page swipe turns: towards page 2, or back to page 1. */
+private enum class PageTurn { Forward, Back }
+
+/**
+ * **The horizontal swipe between the two pages** (`gdd.md:561`): *standard, muscle-memory, and
+ * identical for both roles.*
+ *
+ * Right to left turns [PageTurn.Forward] to page 2; left to right turns [PageTurn.Back] to page 1.
+ * It goes on the page body above the dock, so a swipe across the dock is not a page turn.
+ *
+ * **It cannot steal a tap**, for [edgeSwipeBack]'s reason: `detectHorizontalDragGestures` consumes
+ * nothing until touch slop is exceeded, so a press on a tile that never moves still reaches it. A
+ * swipe that starts on an Insider's arming tile is the hold's to keep, which is the right way round
+ * for the one control in the game that must not misfire.
+ *
+ * It is not the edge swipe the GDD rejects (`gdd.md:566`): it starts anywhere on the page, and
+ * [edgeSwipeBack] is absent on every in-round screen.
+ */
+@Composable
+private fun Modifier.pageSwipe(turn: PageTurn, onTurn: () -> Unit): Modifier {
+    val travel = with(LocalDensity.current) { PAGE_SWIPE_TRAVEL.toPx() }
+    return pointerInput(turn) {
+        var travelled = 0f
+        detectHorizontalDragGestures(
+            onDragStart = { travelled = 0f },
+            onDragEnd = {
+                // Read once and reset before calling out, for edgeSwipeBack's reason.
+                val go = when (turn) {
+                    PageTurn.Forward -> travelled <= -travel
+                    PageTurn.Back -> travelled >= travel
+                }
+                travelled = 0f
+                if (go) onTurn()
+            },
+            onDragCancel = { travelled = 0f },
+            onHorizontalDrag = { _, delta -> travelled += delta },
+        )
+    }
+}
+
+/**
+ * How far a page swipe has to travel: forty units, the mockup's 48px at its 360 width. Far enough
+ * to be a gesture rather than a slipped finger, short enough for a thumb in the dark.
+ */
+private val PAGE_SWIPE_TRAVEL: Dp = 40.u
 
 /**
  * The dock: work, scan, lantern. Present on both pages, identical for both roles.

@@ -677,6 +677,10 @@ class FlowTest {
         // targeting rulings and the one place the design asks a hold to open one. **The third tile
         // publishes no edge at all**: Static fires in place (D-186), so its hold navigates nowhere.
         val page2 = setOf(
+            // The swipe back to page 1, which both roles have (`gdd.md:561`). The gesture itself
+            // is performed in `SpringboardSwipeTest`; this is where it lands.
+            FlowModel(PanelState(screen = ScreenId.Page2, role = PanelRole.Resident))
+                .apply { go(ScreenId.Home) }.state.screen,
             FlowModel(PanelState(screen = ScreenId.Page2, role = PanelRole.Insider))
                 .apply { armEgress() }.state.screen,
             FlowModel(PanelState(screen = ScreenId.Page2, role = PanelRole.Insider))
@@ -720,11 +724,26 @@ class FlowTest {
         // the notification arrived over rather than anything the notification itself names.
         // Walked off the arrivals map rather than off two fixtures, so a kind given a screen and
         // no gesture off it fails here.
+        //
+        // **The page swipe is walked beside it** (`gdd.md:561`): every screen that draws page 1
+        // turns to page 2, the banners' screens included, because the page is still under the thumb.
+        val drawsPageOne = setOf(
+            ScreenId.Home, ScreenId.Notify, ScreenId.Quiet, ScreenId.Banner, ScreenId.EgressWidget,
+        )
+        fun turned(from: ScreenId): Set<ScreenId> =
+            if (from in drawsPageOne) {
+                setOf(FlowModel(PanelState(screen = from)).apply { go(ScreenId.Page2) }.state.screen)
+            } else {
+                emptySet()
+            }
+        for (from in drawsPageOne - Notifications.arrivals.keys) {
+            assertEquals(Flow.viaActions.getValue(from), turned(from), "$from does not turn the page")
+        }
         for ((from, arrival) in Notifications.arrivals) {
             val model = FlowModel(PanelState(screen = from))
             model.dismissNotification()
             assertEquals(
-                Flow.viaActions.getValue(from), setOf(model.state.screen),
+                Flow.viaActions.getValue(from), setOf(model.state.screen) + turned(from),
                 "swiping the ${arrival.notification.kind} notification away left the phone on " +
                     "${model.state.screen}; it arrived over ${arrival.under}",
             )
@@ -793,6 +812,8 @@ class FlowTest {
                 ScreenId.Page2, ScreenId.SurgeTargets, ScreenId.IsolateTargets,
                 ScreenId.Notice,
                 ScreenId.Notify, ScreenId.Banner, ScreenId.Quiet, ScreenId.LockNotify,
+                // The page swipe off the two page-1 screens that carry no banner (`gdd.md:561`).
+                ScreenId.Home, ScreenId.EgressWidget,
                 // STOP NOW's ten. Named in full rather than derived from the roster, for this
                 // assertion's whole reason: a set computed from the thing it is checking agrees
                 // with itself, and what is being caught here is an edge somebody declared and
