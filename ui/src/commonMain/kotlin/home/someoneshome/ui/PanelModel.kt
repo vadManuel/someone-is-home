@@ -2040,13 +2040,13 @@ object Plan {
 
     /** Live view: three staleness bands, error injected both ways, your own room outlined. */
     val terminalCounts = counts(
-        // OPEN for the owner: HALL and STUDY keep the retired Faint/Edge until their colour is ruled.
+        // Fresh, stale and cold are Ink, Mid and Dim (D-209): the three values text may use.
         mapOf(
-            "KITCHEN" to (2 to Amber.Bright),
-            "LIVING" to (4 to Amber.Dim),
-            "HALL" to (1 to Amber.Faint),
-            "STUDY" to (0 to Amber.Edge),
-            "GARAGE" to (1 to Amber.Bright),
+            "KITCHEN" to (2 to Ramp.Ink),
+            "LIVING" to (4 to Ramp.Mid),
+            "HALL" to (1 to Ramp.Dim),
+            "STUDY" to (0 to Ramp.Dim),
+            "GARAGE" to (1 to Ramp.Ink),
         )
     )
 

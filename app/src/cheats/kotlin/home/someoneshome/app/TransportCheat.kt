@@ -283,51 +283,56 @@ fun TransportCheatScreen(cheat: TransportCheat) {
     val insets = LocalPanelInsets.current
     Column(
         Modifier.fillMaxSize().background(Amber.Black)
-            .padding(top = insets.top + 6.u, bottom = insets.bottom + 18.u)
-            .padding(horizontal = 14.u)
+            .padding(top = insets.top + 7.2.u, bottom = insets.bottom + 21.6.u)
+            .padding(horizontal = 16.8.u)
             .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(4.u),
+        verticalArrangement = Arrangement.spacedBy(4.8.u),
     ) {
-        Label("${BuildVariant.MARKER} — TRANSPORT", size = 8.0, color = Amber.Bright, tracking = 0.16)
+        Label("${BuildVariant.MARKER} — TRANSPORT", size = 9.6, color = Amber.Bright, tracking = 0.16)
 
-        Label("HOST", size = 6.5, color = Amber.Dim, tracking = 0.2)
+        Label("HOST", size = 7.8, color = Amber.Dim, tracking = 0.2)
         Label(
             cheat.hostingPort?.let { "HOSTING ON :$it${if (cheat.locked) " · LOCKED" else ""}" } ?: "NOT HOSTING",
-            size = 7.0, color = Amber.Mid,
+            size = 8.4, color = Amber.Mid,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(4.u)) {
-            Box(Modifier.weight(1f)) { PanelButton("HOST", ink = Amber.Bright, onClick = cheat::startHost) }
-            Box(Modifier.weight(1f)) { PanelButton("LOCK", ink = Amber.Bright, onClick = cheat::lockRound) }
+        Row(horizontalArrangement = Arrangement.spacedBy(4.8.u)) {
+            Box(Modifier.weight(1f)) { RigButton("HOST", cheat::startHost) }
+            Box(Modifier.weight(1f)) { RigButton("LOCK", cheat::lockRound) }
         }
 
-        Label("CLIENT", size = 6.5, color = Amber.Dim, tracking = 0.2)
+        Label("CLIENT", size = 7.8, color = Amber.Dim, tracking = 0.2)
         Row(
-            Modifier.fillMaxWidth().border(1.u, Ramp.Faint).padding(horizontal = 6.u, vertical = 4.u),
-            horizontalArrangement = Arrangement.spacedBy(6.u),
+            Modifier.fillMaxWidth().border(1.u, Ramp.Faint).padding(horizontal = 7.2.u, vertical = 4.8.u),
+            horizontalArrangement = Arrangement.spacedBy(7.2.u),
         ) {
-            Label("IP", size = 6.5, color = Amber.Dim)
+            Label("IP", size = 7.8, color = Amber.Dim)
             BasicTextField(
                 value = cheat.address,
                 onValueChange = { cheat.address = it },
                 modifier = Modifier.weight(1f),
-                textStyle = TextStyle(color = Amber.Bright, fontSize = 8.sp),
+                textStyle = TextStyle(color = Amber.Bright, fontSize = 9.6.sp),
                 cursorBrush = SolidColor(Amber.Bright),
                 singleLine = true,
             )
-            Label("FIND", Modifier.tap(cheat::find), size = 6.5, color = Amber.Bright)
+            Label("FIND", Modifier.tap(cheat::find), size = 7.8, color = Amber.Bright)
         }
-        Label(cheat.clientPhase, size = 7.0, color = Amber.Mid)
-        Label("CLOCK ${cheat.clock}", size = 6.5, color = Amber.Dim)
-        Row(horizontalArrangement = Arrangement.spacedBy(4.u)) {
-            Box(Modifier.weight(1f)) { PanelButton("JOIN", ink = Amber.Bright, onClick = cheat::join) }
-            Box(Modifier.weight(1f)) { PanelButton("PING", ink = Amber.Bright, onClick = cheat::ping) }
-            Box(Modifier.weight(1f)) { PanelButton("DROP", ink = Amber.Bright, onClick = cheat::drop) }
-            Box(Modifier.weight(1f)) { PanelButton("FORGET", ink = Amber.Bright, onClick = cheat::forget) }
+        Label(cheat.clientPhase, size = 8.4, color = Amber.Mid)
+        Label("CLOCK ${cheat.clock}", size = 7.8, color = Amber.Dim)
+        Row(horizontalArrangement = Arrangement.spacedBy(4.8.u)) {
+            Box(Modifier.weight(1f)) { RigButton("JOIN", cheat::join) }
+            Box(Modifier.weight(1f)) { RigButton("PING", cheat::ping) }
+            Box(Modifier.weight(1f)) { RigButton("DROP", cheat::drop) }
+            Box(Modifier.weight(1f)) { RigButton("FORGET", cheat::forget) }
         }
 
-        Label("LOG", size = 6.5, color = Amber.Dim, tracking = 0.2)
+        Label("LOG", size = 7.8, color = Amber.Dim, tracking = 0.2)
         for (line in cheat.log) {
-            Label(line, size = 6.5, color = Amber.Dim)
+            Label(line, size = 7.8, color = Amber.Dim)
         }
     }
 }
+
+/** The rig's buttons, drawn at their old size on the 360 canvas: the 300 canvas's 8 and 10, × 1.2. */
+@Composable
+private fun RigButton(text: String, onClick: () -> Unit) =
+    PanelButton(text, size = 9.6, verticalPadding = 12.u, ink = Amber.Bright, onClick = onClick)

@@ -4425,6 +4425,91 @@ without the clock, which the lantern draws large.
 | `StatusCarrierTest` | UNREGISTERED cut at ten characters | every carrier drawn whole |
 | D-091 | the middle is empty on every device | retired |
 
+---
+
+## Revision 45 — what the 360 canvas left open
+
+*Ruled by the owner 2026-11-13, when Step 3 of the mockup port finished at `b9c9e0b`. Moving the
+canvas from 300 to 360 units kept every restyled screen pixel for pixel, and left six values that
+were either written in the old units or that D-202 had sent back to the owner. Each was settled on
+the recommendation put to the owner.*
+
+### D-205 · **The smallest control is 44pt on the narrowest phone — decided**
+
+`TAP_TARGET` was 36 units, written for the 300 canvas, where it cleared Apple's 44pt on the
+narrowest phone in range (375 points across). On the 360 canvas the same 36 units is about 37.5pt.
+**It rises to 44pt there: `44 × 360 / 375`, 42.24 units**, computed in the code from the canvas and
+the phone width rather than typed as a number. Every wider phone makes it larger.
+
+It is a floor, not a size. D-202 draws the kit's own targets at 56 and they are unchanged; what
+the floor catches is a control whose drawing would leave it shorter. `MeetingInputTest` measures
+the meeting's controls against **the constant itself**, so the floor the controls are built to and
+the floor they are measured against cannot drift apart. That test had held 43.2 units, which is the
+old 36 carried across unchanged (45pt); it now holds 44pt exactly, measured in whole pixels as
+layout rounds them. No render moved.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `Controls.kt` `TAP_TARGET` | 36 units, about 37.5pt | `44 × 360 / 375` units, 44pt on a 375-point phone |
+| `MeetingInputTest` `FLOOR` | 43.2, typed | `TAP_TARGET`, compared in whole pixels |
+
+### D-206 · **The cheat screens are drawn on the 360 canvas — decided**
+
+The screen picker, the variant marker, the shutter chip and the haptic, camera and transport
+benches were never restyled and were still written in 300-canvas units, so the flip drew them about
+a sixth smaller. **Every length and type size in them is its old value × 1.2**, which puts them
+back at the size they had; borders stay one unit, a hairline on either canvas. They are debug
+surfaces, compiled out of release, and nothing about them is restyled beyond the scale.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `app/src/cheats` `Cheats.kt`, `HapticCheat.kt`, `ScanCheat.kt`, `TransportCheat.kt` | 300-canvas sizes | the same sizes × 1.2 |
+
+### D-207 · **The glass keeps its 3.6 pitch — decided**
+
+The mockup draws the scan lines at 3px on its 360 canvas. The port draws them at 3.6, the 3 old
+units carried across unchanged in size. **The 3.6 stands.** Taking the mockup's 3 moves the glass on
+every screen, and `ScanLinesTest`'s lit-ground check then reads the springboard's meter as text.
+No code changes.
+
+### D-208 · **The jam veil keeps its exact floor, under its own name — decided**
+
+The veil's dimmest lit level was `Amber.Edge`, `#241806`, one of the values D-202 retired from the
+panel's ramp. **It is not an ink there, it is a light level**: the dimmest step of what a jammed
+surface throws into a dark room, and rule 5 makes light game state. So **it keeps its exact value**,
+moved out of `Amber` into `JAM_VEIL_FLOOR` in `Static.kt`, where nothing else draws with it. The
+veil was rendered before and after at four frames and the PNGs are byte-identical; a test pins the
+value, so a later tidy toward the ramp has to come back through this log.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `Static.kt` `ink` | `lerp(Amber.Edge, …)` | `lerp(JAM_VEIL_FLOOR, …)`, the same `#241806` |
+| `StaticRenderTest` | (new) | the floor is pinned to `#241806` |
+
+### D-209 · **The live terminal's counts are Ink, Mid and Dim — decided**
+
+TermLive's counts dim through three staleness bands. The port drew HALL and STUDY in the retired
+`#46300B` and `#241806`, and LIVING in `#8A5C12`; the mockup draws HALL and STUDY in `#8A5C12`, which
+D-202 says is never text. **Fresh, stale and cold are `#FFC759`, `#E39A22` and `#C08A2E`**, the three
+values text may use: KITCHEN and GARAGE fresh, LIVING stale, HALL and STUDY cold. The bands still
+read as a step down, and every count now clears 4.5:1.
+
+With D-208 that leaves `Amber.Faint` and `Amber.Edge` with no reader, and **both are deleted**, as
+D-202 said they would be. The rest of `Amber`'s old dark ramp still has readers and stays.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `PanelModel.kt` `Plan.terminalCounts` | Bright, `Amber.Dim`, Faint, Edge | `Ramp.Ink`, `Ramp.Mid`, `Ramp.Dim` |
+| `Design.kt` `Amber.Faint`, `Amber.Edge` | kept for two readers | deleted |
+
+### D-210 · **The Interrupt and Drift player marks stay `#FFC759` — decided**
+
+D-202 makes `#E39A22` the whole ink of a medium screen, and Interrupt and Drift are medium screens.
+Their player marks (the caught sweep and the tapped place) are drawn in `#FFC759`, and they stay
+there: what the player did is brighter than what the house drew, the grammar every Subroutine
+screen uses, and the tests pin it. **This is the one exception to a medium screen's single ink.**
+No code changes.
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

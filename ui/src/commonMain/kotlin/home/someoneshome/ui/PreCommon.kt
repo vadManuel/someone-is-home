@@ -74,8 +74,8 @@ fun ColumnScope.PushDown() {
  *
  * ### It is a [TAP_TARGET], and that was found by breaking it
  *
- * The chevron's own box is 24 units — the glyph plus the design's padding — which is under the
- * 36-unit floor by a third. It went unnoticed because the sweep that measures controls
+ * The chevron's own box is 24 units — the glyph plus the design's padding — which was under the
+ * floor (then 36 units) by a third. It went unnoticed because the sweep that measures controls
  * (`MeetingInputTest`) only walks the meeting's screens, and until N5b no arrow was drawn on one.
  * Injecting a chevron onto the ballot to check `BackNavigationTest` made that sweep report it, on a
  * screen where a missed press is a vote: *Vote/Resident — "‹" is 24u, under 36u*.
@@ -106,7 +106,7 @@ fun BackChevron(fallback: ScreenId? = null, ink: Color = Amber.BoneDim) {
             }
             // A [TAP_TARGET] square with the glyph centred in it, and **no padding on top of that**
             // — the design's 9-unit gap before the title is already inside the square, so the title
-            // sits where the eye expects and the finger gets the whole 36 units.
+            // sits where the eye expects and the finger gets the whole square.
             .size(TAP_TARGET)
             .tap { if (trailed) actions.back() else fallback?.let(actions.nav) },
         contentAlignment = Alignment.Center,

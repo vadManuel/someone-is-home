@@ -452,13 +452,14 @@ val EDGE_SWIPE_ZONE: Dp = 14.4.u
 val EDGE_SWIPE_TRAVEL: Dp = 90.u
 
 /**
- * **The smallest a control may be: 36 design units.**
+ * **The smallest a control may be: Apple's 44pt, on the narrowest phone in range** (D-205).
  *
- * **Written for the old 300-unit canvas**, where a unit was `panelWidth / 300` points: Apple's
- * minimum is 44pt square, the narrowest phone this app targets is 375 points across, and 36 units
- * cleared 44pt on every phone in range. On D-202's 360 canvas the same 36 units is 37.5pt there.
- * D-202 draws the kit's targets at 56, and `MeetingInputTest` still holds a meeting's controls to
- * the 44pt floor (43.2 units); whether this value rises to match is the owner's call.
+ * A unit is `panelWidth / 360` points, and the narrowest phone this app targets is
+ * [NARROWEST_PHONE_POINTS] across, so 44pt there is `44 × 360 / 375` = 42.24 units; every wider
+ * phone makes it larger. It was 36, written for the old 300-unit canvas, where it cleared 44pt;
+ * D-202's 360 canvas left it at 37.5pt until the owner raised it. D-202 draws the kit's own
+ * targets at 56, so this is the floor under them, not their size. `MeetingInputTest` holds a
+ * meeting's controls to this same value.
  *
  * This is not a general accessibility uplift and the type sizes are untouched — the reference
  * device is a 2001 organiser and its 6-unit labels are the design (see [Label]). It is about the
@@ -467,7 +468,10 @@ val EDGE_SWIPE_TRAVEL: Dp = 90.u
  * cast on the wrong resident because a 22-unit row was a 27pt target is a game outcome decided by
  * a touch target.
  */
-val TAP_TARGET: Dp = 36.u
+val TAP_TARGET: Dp = (44.0 * DESIGN_WIDTH / NARROWEST_PHONE_POINTS).u
+
+/** The narrowest phone in range, in points: the width [TAP_TARGET]'s 44pt is measured on. */
+const val NARROWEST_PHONE_POINTS: Float = 375f
 
 /**
  * A tap target that is never shorter than [TAP_TARGET], whatever is drawn inside it.

@@ -707,17 +707,23 @@ private fun BoxScope.ShutterChip(next: String, onTap: () -> Unit) {
     val insets = LocalPanelInsets.current
     Box(
         Modifier.align(Alignment.BottomStart)
-            .padding(start = 6.u, bottom = insets.bottom + 2.u)
+            .padding(start = 7.2.u, bottom = insets.bottom + 2.4.u)
             .background(Amber.Black)
             .border(1.u, Amber.Dim)
             .tap(onTap)
-            .padding(horizontal = 5.u, vertical = 1.5.u),
+            .padding(horizontal = 6.u, vertical = 1.8.u),
     ) {
-        Label("SCAN $next", size = 5.5, color = Amber.Dim, tracking = 0.18)
+        Label("SCAN $next", size = 6.6, color = Amber.Dim, tracking = 0.18)
     }
 }
 
-/** Every screen, as a tappable list, plus the one toggle a screen cannot express: the role. */
+/**
+ * Every screen, as a tappable list, plus the one toggle a screen cannot express: the role.
+ *
+ * **Drawn on the 360 canvas at the size it always had** (D-206): every length and type size here,
+ * and on the haptic, camera and transport benches, is its old 300-canvas value × 1.2. Borders stay
+ * one unit, a hairline on either canvas.
+ */
 @Composable
 private fun CheatPicker(
     state: PanelState,
@@ -730,47 +736,47 @@ private fun CheatPicker(
     val insets = LocalPanelInsets.current
     Column(
         Modifier.fillMaxSize().background(Amber.Black)
-            .padding(top = insets.top + 6.u, bottom = insets.bottom + 18.u)
-            .padding(horizontal = 14.u)
+            .padding(top = insets.top + 7.2.u, bottom = insets.bottom + 21.6.u)
+            .padding(horizontal = 16.8.u)
             .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(3.u),
+        verticalArrangement = Arrangement.spacedBy(3.6.u),
     ) {
-        Label("${BuildVariant.MARKER} — PICK A SCREEN", size = 8.0, color = Amber.Bright, tracking = 0.16)
+        Label("${BuildVariant.MARKER} — PICK A SCREEN", size = 9.6, color = Amber.Bright, tracking = 0.16)
         Row(
             Modifier.fillMaxWidth().border(1.u, Ramp.Faint)
                 .tap {
                     val other = if (draft.role == PanelRole.Resident) PanelRole.Insider else PanelRole.Resident
                     draft = draft.copy(role = other)
                 }
-                .padding(horizontal = 6.u, vertical = 4.u),
+                .padding(horizontal = 7.2.u, vertical = 4.8.u),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Label("ROLE", size = 6.5, color = Amber.Dim)
-            Label(draft.role.name.uppercase(), size = 6.5, color = Amber.Bright)
+            Label("ROLE", size = 7.8, color = Amber.Dim)
+            Label(draft.role.name.uppercase(), size = 7.8, color = Amber.Bright)
         }
         Row(
             Modifier.fillMaxWidth().border(1.u, Ramp.Faint).tap(onTransport)
-                .padding(horizontal = 6.u, vertical = 4.u),
+                .padding(horizontal = 7.2.u, vertical = 4.8.u),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Label("TRANSPORT", size = 6.5, color = Amber.Dim)
-            Label("0.8 RIG", size = 6.5, color = Amber.Bright)
+            Label("TRANSPORT", size = 7.8, color = Amber.Dim)
+            Label("0.8 RIG", size = 7.8, color = Amber.Bright)
         }
         Row(
             Modifier.fillMaxWidth().border(1.u, Ramp.Faint).tap(onHaptics)
-                .padding(horizontal = 6.u, vertical = 4.u),
+                .padding(horizontal = 7.2.u, vertical = 4.8.u),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Label("HAPTICS", size = 6.5, color = Amber.Dim)
-            Label("D-135 BENCH", size = 6.5, color = Amber.Bright)
+            Label("HAPTICS", size = 7.8, color = Amber.Dim)
+            Label("D-135 BENCH", size = 7.8, color = Amber.Bright)
         }
         Row(
             Modifier.fillMaxWidth().border(1.u, Ramp.Faint).tap(onCamera)
-                .padding(horizontal = 6.u, vertical = 4.u),
+                .padding(horizontal = 7.2.u, vertical = 4.8.u),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Label("CAMERA", size = 6.5, color = Amber.Dim)
-            Label("FRONT, NO PREVIEW", size = 6.5, color = Amber.Bright)
+            Label("CAMERA", size = 7.8, color = Amber.Dim)
+            Label("FRONT, NO PREVIEW", size = 7.8, color = Amber.Bright)
         }
         for (id in ScreenId.entries) {
             val current = id == draft.screen
@@ -786,8 +792,8 @@ private fun CheatPicker(
                 // above it. What the tag does NOT fix is the frame the row reports — see
                 // `HumanMock.swift`, which corrects it by a measured constant.
                 Modifier.fillMaxWidth().testTag(screenPickTag(id))
-                    .tap { onPick(draft.arrivingAt(id)) }.padding(vertical = 1.5.u),
-                size = 7.0,
+                    .tap { onPick(draft.arrivingAt(id)) }.padding(vertical = 1.8.u),
+                size = 8.4,
                 color = if (current) Amber.Bright else Amber.Dim,
                 tracking = 0.08,
             )
@@ -836,13 +842,13 @@ private fun BoxScope.MarkerChip(onTap: () -> Unit) {
     val insets = LocalPanelInsets.current
     Box(
         Modifier.align(Alignment.BottomStart)
-            .padding(bottom = 2.u, start = insets.side + 2.u)
+            .padding(bottom = 2.4.u, start = insets.side + 2.4.u)
             .background(Amber.Black)
             .border(1.u, Amber.Dim)
             .testTag(VARIANT_MARKER)
             .tap(onTap)
-            .padding(horizontal = 5.u, vertical = 1.5.u),
+            .padding(horizontal = 6.u, vertical = 1.8.u),
     ) {
-        Label(BuildVariant.MARKER, size = 5.5, color = Amber.Dim, tracking = 0.24)
+        Label(BuildVariant.MARKER, size = 6.6, color = Amber.Dim, tracking = 0.24)
     }
 }

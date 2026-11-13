@@ -237,34 +237,34 @@ fun ScanCheatScreen(cheat: ScanCheat) {
     }
     Column(
         Modifier.fillMaxSize().background(Amber.Black)
-            .padding(top = insets.top + 6.u, bottom = insets.bottom + 18.u)
-            .padding(horizontal = 14.u)
+            .padding(top = insets.top + 7.2.u, bottom = insets.bottom + 21.6.u)
+            .padding(horizontal = 16.8.u)
             .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(3.u),
+        verticalArrangement = Arrangement.spacedBy(3.6.u),
     ) {
-        Label("${BuildVariant.MARKER} — CAMERA", size = 8.0, color = Amber.Bright, tracking = 0.16)
-        Label("ONLY PAPER PROVES A SCAN", size = 6.0, color = Amber.Dim, tracking = 0.2)
+        Label("${BuildVariant.MARKER} — CAMERA", size = 9.6, color = Amber.Bright, tracking = 0.16)
+        Label("ONLY PAPER PROVES A SCAN", size = 7.2, color = Amber.Dim, tracking = 0.2)
         Label(
             "The front camera is reading. Turn the TOP of the phone to a printed card — the " +
                 "lens is on the same side as this screen. SCAN reads once; WATCH keeps reading.",
-            size = 5.5,
+            size = 6.6,
             color = Amber.Dim,
         )
         for (row in cheat.rows) {
             Column(
                 Modifier.fillMaxWidth().border(1.u, Ramp.Faint).tap(row.fire)
-                    .padding(horizontal = 6.u, vertical = 3.u),
-                verticalArrangement = Arrangement.spacedBy(1.u),
+                    .padding(horizontal = 7.2.u, vertical = 3.6.u),
+                verticalArrangement = Arrangement.spacedBy(1.2.u),
             ) {
-                Label(row.label, size = 7.0, color = Amber.Bright, tracking = 0.08)
-                Label(row.detail, size = 5.5, color = Amber.Dim)
+                Label(row.label, size = 8.4, color = Amber.Bright, tracking = 0.08)
+                Label(row.detail, size = 6.6, color = Amber.Dim)
             }
         }
-        Row(Modifier.fillMaxWidth().padding(top = 3.u)) {
-            Label("LOG", size = 6.5, color = Amber.Dim, tracking = 0.2)
+        Row(Modifier.fillMaxWidth().padding(top = 3.6.u)) {
+            Label("LOG", size = 7.8, color = Amber.Dim, tracking = 0.2)
         }
         for (line in cheat.log) {
-            Label(line, size = 6.0, color = Amber.Dim)
+            Label(line, size = 7.2, color = Amber.Dim)
         }
     }
 }

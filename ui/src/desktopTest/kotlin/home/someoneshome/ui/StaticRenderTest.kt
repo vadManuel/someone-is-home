@@ -2,6 +2,7 @@ package home.someoneshome.ui
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertCountEquals
@@ -182,6 +183,21 @@ class StaticRenderTest {
 
         assertEquals(0, differing(shot(7), shot(7)), "the same frame drew two different veils")
         assertTrue(differing(shot(7), shot(8)) > 0, "two frames drew the same veil")
+    }
+
+    /**
+     * **The veil's floor is the light it always emitted, to the bit** (D-208).
+     *
+     * `#241806` left the panel's ramp with D-202, and the obvious tidy is to move the veil onto a
+     * ramp value too. That would change the light a jammed surface throws into a dark room, which
+     * the owner ruled it must not. Pinned here so the tidy has to come back through the log.
+     */
+    @Test
+    fun theVeilsFloorIsTheLightItAlwaysEmitted() {
+        assertEquals(
+            Color(0xFF241806), JAM_VEIL_FLOOR,
+            "the jam veil's lowest level changed value, so the veil emits a different light",
+        )
     }
 
     /** How many pixels differ between two shots of the same size. */

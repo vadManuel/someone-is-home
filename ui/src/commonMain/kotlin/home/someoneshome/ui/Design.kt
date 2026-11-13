@@ -31,8 +31,9 @@ import org.jetbrains.compose.resources.Font
  * **Text uses the top three only**, which all clear 4.5:1 on black and 6.3:1 on [Fill]. The one
  * exception D-202 names is the ACCESS REVOKED headline, in [Line] at 56px.
  *
- * Every screen draws from this, through a [Palette]. [Amber]'s older `#46300B` and `#241806` are
- * retired by D-202 and survive only where [Amber.Faint] says why; `#0B0703` is gone.
+ * Every screen draws from this, through a [Palette]. [Amber]'s older `#46300B`, `#241806` and
+ * `#0B0703` are retired by D-202 and gone from it; `#241806` survives only as the jam veil's floor,
+ * a light level rather than an ink (D-208, `JAM_VEIL_FLOOR`).
  */
 object Ramp {
     val Ink = Color(0xFFFFC759)
@@ -68,16 +69,6 @@ object Amber {
 
     /** Step 2 — body text and inactive controls. */
     val Dim = Color(0xFF8A5C12)
-
-    /**
-     * Retired by D-202, and kept for two readers only, which D-202 sends back to the owner: the
-     * live terminal's staleness bands ([Plan.terminalCounts], whose colour is an open question) and
-     * the jam veil's floor ([StaticNoise], where moving it would change the light the veil emits).
-     */
-    val Faint = Color(0xFF46300B)
-
-    /** Retired by D-202, and kept for the same two readers as [Faint]. */
-    val Edge = Color(0xFF241806)
 
     /** True black. Not "very dark grey" — the pixel is off. */
     val Black = Color(0xFF000000)

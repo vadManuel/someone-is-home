@@ -140,9 +140,18 @@ private fun ink(level: Int): Color =
     if (level == 0) {
         Color.Transparent
     } else {
-        // OPEN for the owner: the floor is D-202's retired #241806; moving it changes the veil's light.
-        lerp(Amber.Edge, Amber.Bright, (level - 1).toFloat() / (Static.LEVELS - 2))
+        lerp(JAM_VEIL_FLOOR, Amber.Bright, (level - 1).toFloat() / (Static.LEVELS - 2))
     }
+
+/**
+ * **The veil's lowest lit level, and it is a light level rather than an ink** (D-208).
+ *
+ * `#241806` is the value D-202 retired from the panel's ramp as a line that barely reached the eye.
+ * Here it is not a line: it is the dimmest step of the light a jammed surface emits, and the owner
+ * ruled that the light does not change by a single bit. So it keeps its exact value under its own
+ * name, outside the ramp, and nothing else draws with it.
+ */
+internal val JAM_VEIL_FLOOR: Color = Color(0xFF241806)
 
 /** How long one field stands before the next is drawn. A look, and the house did not send it. */
 private const val STEP_MILLIS: Long = 90L

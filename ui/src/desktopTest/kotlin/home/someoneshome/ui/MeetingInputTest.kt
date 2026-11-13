@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.runDesktopComposeUiTest
+import kotlin.math.roundToInt
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -355,16 +356,16 @@ class MeetingInputTest {
 
     // ---- Tap targets ------------------------------------------------------------------------------
 
-    /** 44pt on a 375pt-wide phone, in units of the 360 canvas: the old canvas's 36, unchanged in size. */
-    private val FLOOR = 43.2f
+    /** 44pt on the narrowest phone in range, in units of the 360 canvas: [TAP_TARGET] itself (D-205). */
+    private val FLOOR = TAP_TARGET.value
 
     /**
      * **Every control at a meeting is big enough to hit in the dark.**
      *
      * The measurement is real pixels off the rendered tree, converted back to design units, so it
-     * cannot pass by agreeing with a constant. The floor is 43.2 units, which is Apple's 44pt on the
-     * narrowest phone this app targets: the 36 units of the old 300-wide canvas, carried to D-202's
-     * 360 unchanged in size. [TAP_TARGET] was written on the old canvas and is 36 units still.
+     * cannot pass by agreeing with a constant. The floor is [TAP_TARGET], which is Apple's 44pt on
+     * the narrowest phone this app targets (D-205): read from the constant, so the floor the controls
+     * are built to and the floor they are measured against cannot drift apart.
      *
      * This is the screen where it matters most and the reason is not comfort: a finger landing one
      * row off restrains the wrong resident, in an unlit room, under a rule that forbids saying so
@@ -400,9 +401,12 @@ class MeetingInputTest {
                     val perUnit = onRoot().fetchSemanticsNode().size.width / DESIGN_WIDTH
                     val controls = onAllNodes(hasClickAction()).fetchSemanticsNodes() +
                         onAllNodesWithTag(HOLD_BLOCK).fetchSemanticsNodes()
+                    // In whole pixels, rounded the way layout rounds a Dp: a control laid out at
+                    // exactly the floor is this many pixels tall, and must not fail by a fraction.
+                    val floorPx = (FLOOR * perUnit).roundToInt()
                     for (node in controls) {
                         val units = node.size.height / perUnit
-                        if (units >= FLOOR) continue
+                        if (node.size.height >= floorPx) continue
                         val what = node.config.getOrNull(SemanticsProperties.Text)
                             ?.joinToString(" ") { it.text }?.take(28) ?: "(unlabelled)"
                         val line = "$id/${role.name} — \"$what\" is ${units.toInt()}u, " +
