@@ -444,11 +444,11 @@ object DotColumns {
     /**
      * **The panel's capacity, not a difficulty setting.**
      *
-     * A column strip has to stay wider than `TAP_TARGET` — it is pressed one-handed, in the dark,
-     * by somebody watching a doorway — and six strips with their gaps is where a 300-unit panel
-     * runs out of room. [MOST_DOTS] is the same question vertically: seven dots and their gaps is
-     * 130 units, against roughly 195 of body once the instruction, the return line, the motion row
-     * and the two buttons have taken theirs.
+     * A column strip has to be at least `TAP_TARGET` wide (D-205: 44pt on the narrowest phone,
+     * 42.24 units of the 360 canvas) — it is pressed one-handed, in the dark, by somebody watching
+     * a doorway — and six strips with the gaps between them stand 312.24 units wide in a 320-unit
+     * body, where a seventh would not fit. [MOST_DOTS] is the same question vertically: seven
+     * blocks and their gaps stand 246 units tall in the screen's 260-unit field.
      */
     const val LEAST_COLUMNS: Int = 2
     const val MOST_COLUMNS: Int = 6

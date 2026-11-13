@@ -655,14 +655,16 @@ fun DeallocateScreen(verdict: SubroutineVerdict? = null) {
         // the panel would draw the same blocks against a different amount of nothing on every
         // handset, and *how tall is that column* is the entire question. The columns stand on its
         // foot, so they are heights off one line.
-        Row(Modifier.height(DEAL_FIELD), horizontalArrangement = Arrangement.spacedBy(DEAL_COLUMN_GAP)) {
+        Row(Modifier.height(DEAL_FIELD), horizontalArrangement = Arrangement.spacedBy(DEAL_STRIP_GAP)) {
             for (at in columns.indices) {
                 // What is left of this column: what it was dealt, less what this phone has taken
                 // off it. Floored at nothing in the same expression that decides whether it is a
                 // target -- see the note above about the two staying one fact.
                 val height = (columns[at] - entry.taken(at)).coerceAtLeast(0)
                 Box(
-                    Modifier.width(DEAL_BLOCK_WIDTH).fillMaxHeight()
+                    // The strip is the target and the block is drawn centred in it, so the press
+                    // meets D-205's floor while the picture stays the mockup's 40 × 30.
+                    Modifier.width(DEAL_COLUMN_WIDTH).fillMaxHeight().testTag(DEAL_COLUMN)
                         .then(
                             if (live && height > 0) {
                                 Modifier.tap { actions.tapSubroutine(Subroutine.Deallocate, at) }
@@ -839,8 +841,26 @@ internal val DEAL_BLOCK_HEIGHT: Dp = 30.dp
 internal val DEAL_GAP: Dp = 6.dp
 internal val DEAL_FIELD: Dp = 260.dp
 
-/** The space between Deallocate's columns. */
+/** The space between Deallocate's drawn blocks, as the mockup draws it. */
 internal val DEAL_COLUMN_GAP: Dp = 14.dp
+
+/**
+ * **The column a finger presses: [TAP_TARGET] wide, with the block centred in it** (D-205).
+ *
+ * The block stays the mockup's 40 and the strip it stands in is the target, so the floor is met
+ * without moving a pixel of the picture. It is the constant itself rather than a copy of it, so the
+ * strip and the floor cannot drift apart again (they had: the strip was the 40-unit block).
+ */
+internal val DEAL_COLUMN_WIDTH: Dp = TAP_TARGET
+
+/**
+ * The space between the strips: the drawn gap, less what each strip adds to its block. That keeps
+ * the blocks [DEAL_COLUMN_GAP] apart on the glass, and it is what lets six strips fit the body.
+ */
+internal val DEAL_STRIP_GAP: Dp = DEAL_COLUMN_GAP - (DEAL_COLUMN_WIDTH - DEAL_BLOCK_WIDTH)
+
+/** Each Deallocate strip, so `SubroutineFitTest` can measure the press rather than the constant. */
+const val DEAL_COLUMN: String = "deallocate-column"
 
 /**
  * **Jam's two rings, and the step is a placeholder** (the mockup's 140 rings, 3 units of line).

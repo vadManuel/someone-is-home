@@ -7,9 +7,12 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import home.someoneshome.model.DotColumns
+import kotlin.math.roundToInt
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -81,8 +84,8 @@ class SubroutineFitTest {
      * inside the mockup's 320-unit body, or a column is clipped -- and a clipped column is a
      * distribution the player was never shown, graded as if they had been.
      *
-     * Injecting the bug: shrink the field below seven blocks, or widen the block, and this names the
-     * overrun.
+     * Injecting the bug: shrink the field below seven blocks, or widen the strip without taking the
+     * difference out of [DEAL_STRIP_GAP], and this names the overrun.
      */
     @Test
     fun theTallestAndWidestDistributionTheReaderAcceptsFitTheScreen() {
@@ -91,11 +94,50 @@ class SubroutineFitTest {
             tallest <= DEAL_FIELD,
             "a column of ${DotColumns.MOST_DOTS} stands $tallest tall in a field of $DEAL_FIELD",
         )
-        val widest = DEAL_BLOCK_WIDTH * DotColumns.MOST_COLUMNS + DEAL_COLUMN_GAP * (DotColumns.MOST_COLUMNS - 1)
+        // The strips, not the blocks: the strip is what the finger presses, and it is the wider.
+        val widest = DEAL_COLUMN_WIDTH * DotColumns.MOST_COLUMNS + DEAL_STRIP_GAP * (DotColumns.MOST_COLUMNS - 1)
         val body = (DESIGN_WIDTH - 40f)
         assertTrue(
             widest.value <= body,
             "${DotColumns.MOST_COLUMNS} columns stand $widest wide in a body of $body",
         )
+    }
+
+    /**
+     * **Every Deallocate column is a press of at least [TAP_TARGET], measured off the glass** (D-205).
+     *
+     * The column is pressed one-handed, in the dark, by somebody watching a doorway, and it is the
+     * whole control on this screen. Real pixels off the rendered tree, compared in whole pixels the
+     * way layout rounds a Dp, so it cannot pass by agreeing with a constant. Every column is counted
+     * as well, so a strip that lost its tag is a failure rather than one column fewer measured.
+     *
+     * Injecting the bug: draw the strip at [DEAL_BLOCK_WIDTH], which is what it was until the owner
+     * ruled, and this names each column at 40 units.
+     */
+    @Test
+    fun everyDeallocateColumnIsAtLeastATapTargetWide() {
+        val columns = SubroutineModel.DEALLOCATE
+        val narrow = mutableListOf<String>()
+        var measured = 0
+        runDesktopComposeUiTest(width = 300, height = 650) {
+            setContent {
+                Box(Modifier.fillMaxSize()) {
+                    DeviceCanvas(insets = PanelInsets()) {
+                        Screen(PanelState(screen = ScreenId.SubDeallocate), subroutines = SubroutineModel())
+                    }
+                }
+            }
+            val perUnit = onRoot().fetchSemanticsNode().size.width / DESIGN_WIDTH
+            val floorPx = (TAP_TARGET.value * perUnit).roundToInt()
+            val strips = onAllNodesWithTag(DEAL_COLUMN).fetchSemanticsNodes()
+            measured = strips.size
+            strips.forEachIndexed { at, node ->
+                if (node.size.width < floorPx) {
+                    narrow += "column $at is ${node.size.width / perUnit}u wide, under ${TAP_TARGET.value}u"
+                }
+            }
+        }
+        assertEquals(columns.size, measured, "the screen drew $measured strips for ${columns.size} columns")
+        assertTrue(narrow.isEmpty(), narrow.joinToString("\n"))
     }
 }

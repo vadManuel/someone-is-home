@@ -4452,6 +4452,7 @@ layout rounds them. No render moved.
 |---|---|---|
 | `Controls.kt` `TAP_TARGET` | 36 units, about 37.5pt | `44 × 360 / 375` units, 44pt on a 375-point phone |
 | `MeetingInputTest` `FLOOR` | 43.2, typed | `TAP_TARGET`, compared in whole pixels |
+| Deallocate's column strip | 40 units, the block's width, about 41.7pt | `TAP_TARGET` with the block centred; strips sit `14 − (TAP_TARGET − 40)` apart, so no render moved (owner, 2026-11-13) |
 
 ### D-206 · **The cheat screens are drawn on the 360 canvas — decided**
 
