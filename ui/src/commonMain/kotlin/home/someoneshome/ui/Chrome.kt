@@ -50,7 +50,7 @@ import androidx.compose.ui.unit.dp
  * that is the bug, not the feature.
  */
 @Composable
-fun StatusBar(vals: PanelVals) = Mockup {
+fun StatusBar(vals: PanelVals) {
     StatusStrip(
         ink = vals.stripInk, dim = vals.stripDim, edge = vals.stripEdge,
         signal = vals.signalOn, signalOff = vals.signalOff,
@@ -70,7 +70,7 @@ fun StatusBar(vals: PanelVals) = Mockup {
 enum class Perimeter { Armed, Disarmed }
 
 /**
- * **The mockup's status strip, in its own pixels** (D-204). Draw it inside [Mockup].
+ * **The mockup's status strip, in its own pixels** (D-204).
  *
  * 34 tall with a hairline beneath: three signal bars, the carrier taking what room is left, then
  * the perimeter chip, the padlock and the clock. Every colour is passed in, because the same row is
@@ -160,7 +160,7 @@ private fun Padlock(ink: Color) {
  * large.
  */
 @Composable
-fun InvertedStatusRow(carrier: String) = Mockup {
+fun InvertedStatusRow(carrier: String) {
     StatusStrip(
         ink = Amber.Black, dim = Amber.Black, edge = Amber.Black,
         signal = Ramp.Faint, signalOff = Ramp.Faint,
@@ -310,8 +310,9 @@ fun PanelFrame(
  *
  * — one unit of 32% black in every three, black-on-transparent, over the whole panel. Those are
  * the numbers below and they are not rounded, adjusted or "tuned for the phone": the mockup's
- * screen is about 312 CSS pixels wide against this canvas's 300 units, so a CSS pixel there and a
- * design unit here are the same thing to within four percent. That correspondence is the entire
+ * screen was about 312 CSS pixels wide against the old 300-unit canvas, so a CSS pixel there and an
+ * old unit were the same thing to within four percent. The period is that 3 old units, carried to
+ * D-202's 360 canvas unchanged in size (see [SCAN_LINE_PERIOD]). That correspondence is the entire
  * reason the port is written in design units, and it is what makes this a copy rather than an
  * impression of one.
  *
@@ -405,8 +406,15 @@ private fun ScanLines(lit: Boolean) {
 internal fun scanLineInk(lit: Boolean): Color =
     if (lit) SCAN_LINE_INK_LIT else SCAN_LINE_INK
 
-/** One dark unit in every three — `0 1px, transparent 1px 3px` in the design's own CSS. */
-private val SCAN_LINE_PERIOD: Dp = 3.u
+/**
+ * One dark row in every three — `0 1px, transparent 1px 3px` in the design's own CSS — at the
+ * size the old 300-unit canvas drew it: 3 old units, 3.6 of the 360 canvas.
+ *
+ * OPEN for the owner: D-202's mockup draws this 3px on its 360 canvas, a sixth finer. Taking that
+ * moves every screen's glass, and `ScanLinesTest`'s lit-ground check then misreads the
+ * springboard's meter and dock, so it is a ruling, not a tidy-up.
+ */
+private val SCAN_LINE_PERIOD: Dp = 3.6.u
 
 /** Where the dark part ends inside one period. One unit of three. */
 private const val SCAN_LINE_DUTY: Float = 1f / 3f
@@ -454,12 +462,12 @@ private val SCAN_LINE_INK_LIT: Color = Color.Black.copy(alpha = 0.08f)
 
 /**
  * The strip's height in the panel's units, which the overlay and the content inset both measure
- * against: [STRIP_HEIGHT] mockup pixels, carried across the [Mockup] bridge.
+ * against: [STRIP_HEIGHT] mockup pixels.
  *
  * Named rather than repeated: the two are required to agree or a banner lands on top of the one row
  * that must never move.
  */
-val STATUS_BAR_HEIGHT: Dp = (STRIP_HEIGHT * DESIGN_WIDTH / MOCKUP_WIDTH).dp
+val STATUS_BAR_HEIGHT: Dp = STRIP_HEIGHT.dp
 
 /**
  * How far the panel drops for the two notifications that dim the house (D-118).

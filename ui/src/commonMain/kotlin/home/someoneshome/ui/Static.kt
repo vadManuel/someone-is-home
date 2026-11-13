@@ -140,6 +140,7 @@ private fun ink(level: Int): Color =
     if (level == 0) {
         Color.Transparent
     } else {
+        // OPEN for the owner: the floor is D-202's retired #241806; moving it changes the veil's light.
         lerp(Amber.Edge, Amber.Bright, (level - 1).toFloat() / (Static.LEVELS - 2))
     }
 

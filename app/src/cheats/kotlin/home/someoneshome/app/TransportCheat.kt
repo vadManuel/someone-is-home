@@ -38,6 +38,7 @@ import home.someoneshome.platform.transport.SeatLedger
 import home.someoneshome.platform.transport.TransportClient
 import home.someoneshome.platform.transport.TransportHost
 import home.someoneshome.ui.Amber
+import home.someoneshome.ui.Ramp
 import home.someoneshome.ui.Label
 import home.someoneshome.ui.LocalPanelInsets
 import home.someoneshome.ui.PanelButton
@@ -301,7 +302,7 @@ fun TransportCheatScreen(cheat: TransportCheat) {
 
         Label("CLIENT", size = 6.5, color = Amber.Dim, tracking = 0.2)
         Row(
-            Modifier.fillMaxWidth().border(1.u, Amber.Faint).padding(horizontal = 6.u, vertical = 4.u),
+            Modifier.fillMaxWidth().border(1.u, Ramp.Faint).padding(horizontal = 6.u, vertical = 4.u),
             horizontalArrangement = Arrangement.spacedBy(6.u),
         ) {
             Label("IP", size = 6.5, color = Amber.Dim)

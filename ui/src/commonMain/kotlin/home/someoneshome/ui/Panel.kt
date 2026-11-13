@@ -178,7 +178,7 @@ fun Readout(
 
 /** A one-unit horizontal hairline. The design's only divider. */
 @Composable
-fun Hairline(color: Color = Amber.Edge, modifier: Modifier = Modifier) {
+fun Hairline(color: Color = Ramp.Faint, modifier: Modifier = Modifier) {
     Box(modifier.fillMaxWidth().height(1.u).background(color))
 }
 
@@ -251,7 +251,7 @@ fun FillBar(
     fraction: Float,
     color: Color,
     modifier: Modifier = Modifier,
-    track: Color = Amber.Edge,
+    track: Color = Ramp.Faint,
     height: Dp = 3.u,
 ) {
     Box(modifier.fillMaxWidth().height(height).background(track)) {
@@ -336,7 +336,7 @@ fun sampleTag(signature: LightSignature): String = "light-key-${signature.name.l
 @Composable
 fun InfoBox(
     modifier: Modifier = Modifier,
-    border: Color = Amber.Edge,
+    border: Color = Ramp.Faint,
     fill: Color = Color.Transparent,
     padding: Dp = 7.u,
     gap: Dp = 0.u,

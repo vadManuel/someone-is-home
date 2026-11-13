@@ -109,60 +109,55 @@ const val NOTIFICATION_BANNER: String = "notification-banner"
 fun BoxScope.NotificationBanner(notification: Notification) {
     val actions = LocalActions.current
     val heavy = notification.kind.heavy
-    val box = this
-    Mockup {
-        val threshold = with(LocalDensity.current) { SWIPE_DISMISS.toPx() }
-        // Where the finger has taken it, in pixels, never below zero. Keyed on the notification so a
-        // second one arriving does not inherit half a swipe made at the first.
-        var lifted by remember(notification) { mutableStateOf(0f) }
-        with(box) {
-            Column(
-                Modifier.align(Alignment.TopCenter).testTag(NOTIFICATION_BANNER)
-                    // The lambda form: it reads `lifted` at draw time rather than at composition,
-                    // so a finger moving up the screen does not recompose the banner every frame.
-                    .offset { IntOffset(0, lifted.toInt()) }
-                    .padding(start = 20.dp, end = 20.dp, top = 12.dp)
-                    .fillMaxWidth()
-                    // THE QUIET BANNER EMITS NOTHING THE PANEL WAS NOT ALREADY EMITTING: black
-                    // ground, one line, and the same ink every other panel is written in.
-                    .background(if (heavy) Ramp.Ink else Amber.Black)
-                    .then(if (heavy) Modifier else Modifier.border(1.dp, Ramp.Line))
-                    // The quiet banner covers the whole System Integrity widget rather than slicing
-                    // it: it arrives over a page that has not dimmed, so a half-covered meter
-                    // would read as a fault rather than as something behind.
-                    .then(if (heavy) Modifier else Modifier.heightIn(min = 156.dp))
-                    .pointerInput(notification) {
-                        detectVerticalDragGestures(
-                            onDragEnd = { if (-lifted >= threshold) actions.dismissNotification() else lifted = 0f },
-                            onDragCancel = { lifted = 0f },
-                        ) { _, delta -> lifted = (lifted + delta).coerceAtMost(0f) }
-                    }
-                    .then(
-                        if (notification.opens != null) {
-                            Modifier.tap { actions.nav(notification.opens) }
-                        } else {
-                            Modifier
-                        }
-                    )
-                    .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                val ink = if (heavy) Amber.Black else Ramp.Ink
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Tag(notification.from, if (heavy) ink else Ramp.Mid)
-                    Tag(notification.at, if (heavy) ink else Ramp.Dim)
-                }
-                // The mockup's three sizes: the Egress alert's headline, the house text, and a
-                // player's quiet line.
-                val egress = notification.detail != null
-                Words(
-                    notification.body, color = ink,
-                    size = if (!heavy) 26 else if (egress) 32 else 28,
-                    lineHeight = if (egress) 0.95 else 1.05,
-                )
-                notification.detail?.let { Words(it, size = 22, color = ink, lineHeight = 1.0) }
+    val threshold = with(LocalDensity.current) { SWIPE_DISMISS.toPx() }
+    // Where the finger has taken it, in pixels, never below zero. Keyed on the notification so a
+    // second one arriving does not inherit half a swipe made at the first.
+    var lifted by remember(notification) { mutableStateOf(0f) }
+    Column(
+        Modifier.align(Alignment.TopCenter).testTag(NOTIFICATION_BANNER)
+            // The lambda form: it reads `lifted` at draw time rather than at composition,
+            // so a finger moving up the screen does not recompose the banner every frame.
+            .offset { IntOffset(0, lifted.toInt()) }
+            .padding(start = 20.dp, end = 20.dp, top = 12.dp)
+            .fillMaxWidth()
+            // THE QUIET BANNER EMITS NOTHING THE PANEL WAS NOT ALREADY EMITTING: black
+            // ground, one line, and the same ink every other panel is written in.
+            .background(if (heavy) Ramp.Ink else Amber.Black)
+            .then(if (heavy) Modifier else Modifier.border(1.dp, Ramp.Line))
+            // The quiet banner covers the whole System Integrity widget rather than slicing
+            // it: it arrives over a page that has not dimmed, so a half-covered meter
+            // would read as a fault rather than as something behind.
+            .then(if (heavy) Modifier else Modifier.heightIn(min = 156.dp))
+            .pointerInput(notification) {
+                detectVerticalDragGestures(
+                    onDragEnd = { if (-lifted >= threshold) actions.dismissNotification() else lifted = 0f },
+                    onDragCancel = { lifted = 0f },
+                ) { _, delta -> lifted = (lifted + delta).coerceAtMost(0f) }
             }
+            .then(
+                if (notification.opens != null) {
+                    Modifier.tap { actions.nav(notification.opens) }
+                } else {
+                    Modifier
+                }
+            )
+            .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        val ink = if (heavy) Amber.Black else Ramp.Ink
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Tag(notification.from, if (heavy) ink else Ramp.Mid)
+            Tag(notification.at, if (heavy) ink else Ramp.Dim)
         }
+        // The mockup's three sizes: the Egress alert's headline, the house text, and a
+        // player's quiet line.
+        val egress = notification.detail != null
+        Words(
+            notification.body, color = ink,
+            size = if (!heavy) 26 else if (egress) 32 else 28,
+            lineHeight = if (egress) 0.95 else 1.05,
+        )
+        notification.detail?.let { Words(it, size = 22, color = ink, lineHeight = 1.0) }
     }
 }
 
@@ -198,7 +193,7 @@ fun BoxScope.NotificationBanner(notification: Notification) {
  * the place as well as the name and it does so by there being no field to draw from.
  */
 @Composable
-fun WorkScreen(vals: PanelVals) = Mockup {
+fun WorkScreen(vals: PanelVals) {
     val go = navigator()
     val p = Palette.DARK
     KitScreen {
@@ -395,7 +390,7 @@ private fun WorkLocked() {
  * A lit field, and one of only three in the game. Here that is the function, not the style.
  */
 @Composable
-fun ScanScreen(vals: PanelVals) = Mockup {
+fun ScanScreen(vals: PanelVals) {
     val go = navigator()
     val ink = Amber.Black
     Column(
@@ -453,7 +448,7 @@ fun ScanScreen(vals: PanelVals) = Mockup {
  * THIS ONE exists because a scan can catch the wrong card in the dark.
  */
 @Composable
-fun ScanCaughtScreen(vals: PanelVals) = Mockup {
+fun ScanCaughtScreen(vals: PanelVals) {
     val go = navigator()
     val actions = LocalActions.current
     val p = Palette.DARK
@@ -624,7 +619,7 @@ fun TermBusyScreen() {
  * a round, so the two must sound different. What may not differ is everything around them.
  */
 @Composable
-private fun ScanRefusal(headline: String) = Mockup {
+private fun ScanRefusal(headline: String) {
     val go = navigator()
     val p = Palette.DARK
     // **The headline and the two ways out, and nothing else** (Step 3, screens say little). The
@@ -664,7 +659,7 @@ private val REFUSED = listOf("M14 50L50 14")
  * ⚠️ **NOTHING ELSE OPENS UNTIL IT IS DELIVERED is new copy and awaits the owner's eye** (D-200).
  */
 @Composable
-fun FilesScreen() = Mockup {
+fun FilesScreen() {
     val p = Palette.DARK
     KitScreen(gap = 14.dp) {
         KitHeader("FILES", p, back = ScreenId.Home, meta = "1 ITEM")
@@ -688,7 +683,7 @@ fun FilesScreen() = Mockup {
  * nothing on the screen to type into, which says it.
  */
 @Composable
-fun NotesScreen(vals: PanelVals) = Mockup {
+fun NotesScreen(vals: PanelVals) {
     val p = Palette.DARK
     KitScreen(gap = 14.dp) {
         KitHeader("NOTES", p, back = ScreenId.Home, meta = "UNTITLED")
@@ -774,7 +769,7 @@ private fun TerminalView(
     counts: List<Plan.RoomCount>,
     vals: PanelVals,
     foot: @Composable ColumnScope.() -> Unit,
-) = Mockup {
+) {
     val p = Palette.DARK
     KitScreen(gap = 10.dp) {
         KitHeader(title, p, back = back)

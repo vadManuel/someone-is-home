@@ -1,14 +1,9 @@
 package home.someoneshome.ui
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -84,37 +79,5 @@ fun PanelIcon(
                 drawCircle(color, radius = r, center = Offset(cx, cy), style = stroke)
             }
         }
-    }
-}
-
-/**
- * A springboard tile: a bordered square with an icon in it, and a caption beneath.
- *
- * **The dimmed tile is not a disabled tile that happens to look dim.** Camera is drawn at edge
- * intensity with no tap target at all, because an app that responded and then refused would be a
- * channel — the refusal itself carries information about what the device thinks you may do.
- */
-@Composable
-fun SpringTile(
-    label: String,
-    paths: List<String>,
-    modifier: Modifier = Modifier,
-    circles: List<Triple<Float, Float, Float>> = emptyList(),
-    enabled: Boolean = true,
-    onClick: () -> Unit = {},
-) {
-    val border = if (enabled) Amber.Dim else Amber.Edge
-    val ink = if (enabled) Amber.Bright else Amber.Faint
-    val caption = if (enabled) Amber.Mid else Amber.Faint
-
-    Column(
-        modifier.then(if (enabled) Modifier.tap(onClick) else Modifier),
-        verticalArrangement = Arrangement.spacedBy(4.u),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Box(Modifier.size(30.u).border(1.u, border), contentAlignment = Alignment.Center) {
-            PanelIcon(paths, color = ink, circles = circles)
-        }
-        Label(label, size = 5.5, color = caption, tracking = 0.08)
     }
 }

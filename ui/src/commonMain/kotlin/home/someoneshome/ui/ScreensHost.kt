@@ -51,8 +51,8 @@ import androidx.compose.ui.unit.dp
  * Once per house, in the light. Roughly fifteen minutes of walking, which is why story 0.7 makes
  * the result survive a reinstall — losing it costs an evening.
  *
- * **Drawn as the mockup draws it** (D-202): every screen here is `s_setup.py`'s, in mockup pixels
- * inside [Mockup], on the bone palette. The plan, the room panel's chips and the marker shapes are
+ * **Drawn as the mockup draws it** (D-202): every screen here is `s_setup.py`'s, in mockup pixels,
+ * on the bone palette. The plan, the room panel's chips and the marker shapes are
  * this file's own; the rest is the kit.
  */
 
@@ -72,7 +72,7 @@ private val P = Palette.BONE
  * the list makes; every row is drawn alike, as the mockup draws them.
  */
 @Composable
-fun MapsScreen() = Mockup {
+fun MapsScreen() {
     val go = navigator()
     val actions = LocalActions.current
     val homes = LocalHomes.current
@@ -146,7 +146,7 @@ private fun counted(n: Int, one: String, many: String = one + "S"): String =
  * than written down. What was a picture of one bungalow is now a picture of any house.
  */
 @Composable
-fun EditorScreen(vals: PanelVals) = Mockup {
+fun EditorScreen(vals: PanelVals) {
     val go = navigator()
     val actions = LocalActions.current
     val editor = LocalEditor.current
@@ -261,7 +261,7 @@ private fun HeldPlanPage(
  * other room already has that name.
  */
 @Composable
-fun RoomEditScreen(vals: PanelVals) = Mockup {
+fun RoomEditScreen(vals: PanelVals) {
     val go = navigator()
     val actions = LocalActions.current
     val editor = LocalEditor.current
@@ -391,7 +391,7 @@ private fun deleteRoomLabel(markers: Int, terminal: Boolean, meeting: Boolean): 
  * inversion and the same argument.
  */
 @Composable
-fun StairsWarnScreen(vals: PanelVals) = Mockup {
+fun StairsWarnScreen(vals: PanelVals) {
     val go = navigator()
     val actions = LocalActions.current
     val editor = LocalEditor.current
@@ -439,7 +439,7 @@ private fun TokenBox(letter: String) {
  * dark.
  */
 @Composable
-fun MarkerSheetScreen(vals: PanelVals) = Mockup {
+fun MarkerSheetScreen(vals: PanelVals) {
     val go = navigator()
     val actions = LocalActions.current
     val editor = LocalEditor.current
@@ -525,7 +525,7 @@ private fun ReservedRow(letter: String, name: String, at: String?, remove: Scree
  * lit, which is why the two screens look nothing alike.
  */
 @Composable
-fun ScanMarkerScreen(vals: PanelVals) = Mockup {
+fun ScanMarkerScreen(vals: PanelVals) {
     val go = navigator()
     val actions = LocalActions.current
     val editor = LocalEditor.current
@@ -727,7 +727,7 @@ private fun ViewfinderCorners() {
  * house two places to be found, which is the whole reason the map costs a Resident time.
  */
 @Composable
-fun TermTakenScreen() = Mockup {
+fun TermTakenScreen() {
     val actions = LocalActions.current
     val editor = LocalEditor.current
     Taken(
@@ -747,7 +747,7 @@ fun TermTakenScreen() = Mockup {
  * to the wrong one in the dark.
  */
 @Composable
-fun MeetTakenScreen() = Mockup {
+fun MeetTakenScreen() {
     val actions = LocalActions.current
     val editor = LocalEditor.current
     Taken(
@@ -804,7 +804,7 @@ private fun Taken(
 
 /** Demoting the terminal, and saying what it costs. */
 @Composable
-fun TermRemoveScreen() = Mockup {
+fun TermRemoveScreen() {
     val actions = LocalActions.current
     val editor = LocalEditor.current
     Remove(
@@ -816,7 +816,7 @@ fun TermRemoveScreen() = Mockup {
 
 /** Demoting the meeting card, and saying what it costs. */
 @Composable
-fun MeetRemoveScreen() = Mockup {
+fun MeetRemoveScreen() {
     val actions = LocalActions.current
     val editor = LocalEditor.current
     Remove(
@@ -866,7 +866,7 @@ private fun Remove(title: String, letter: String, at: String?, text: String, onR
  * opinion about how big a home is, how many rooms it has or what shape it is.
  */
 @Composable
-fun ReviewNeedsScreen(vals: PanelVals) = Mockup {
+fun ReviewNeedsScreen(vals: PanelVals) {
     val go = navigator()
     val editor = LocalEditor.current
     val review = editor.review
@@ -954,7 +954,7 @@ private fun Requirement(title: String, body: String, first: Boolean, token: @Com
  * counts-not-dots map never cashes in. The open floor is outlined.
  */
 @Composable
-fun FloorsScreen() = Mockup {
+fun FloorsScreen() {
     val go = navigator()
     val actions = LocalActions.current
     val editor = LocalEditor.current
@@ -1032,7 +1032,7 @@ private fun InertRow(text: String) {
  * than leaving a second copy behind under the old one.
  */
 @Composable
-fun SaveNameScreen() = Mockup {
+fun SaveNameScreen() {
     val actions = LocalActions.current
     val editor = LocalEditor.current
     val homes = LocalHomes.current
@@ -1076,7 +1076,7 @@ fun SaveNameScreen() = Mockup {
  * every storey is drawn. The counts stay, because they are what the plan cannot say.
  */
 @Composable
-fun HomeDetailScreen() = Mockup {
+fun HomeDetailScreen() {
     val go = navigator()
     val actions = LocalActions.current
     val homes = LocalHomes.current
@@ -1173,7 +1173,7 @@ private fun StoreyPlans(plan: HousePlan, modifier: Modifier = Modifier, named: B
  * they walked while their finger is on a control that will take them away.
  */
 @Composable
-fun DeleteScreen() = Mockup {
+fun DeleteScreen() {
     val go = navigator()
     val actions = LocalActions.current
     val home = LocalHomes.current.open
@@ -1224,7 +1224,7 @@ fun DeleteScreen() = Mockup {
  * `Event.RoundArmed` into `GameState`, the shape `voteWindowSeconds` already took.
  */
 @Composable
-fun LobbyScreen(vals: PanelVals) = Mockup {
+fun LobbyScreen(vals: PanelVals) {
     val actions = LocalActions.current
     val lobby = LocalLobby.current
     val standing = lobby.standing

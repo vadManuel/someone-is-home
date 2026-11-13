@@ -159,7 +159,7 @@ fun IsolateTargetsScreen(vals: PanelVals) {
  * sentence about the house's state on a screen that has no business holding an opinion about one.
  */
 @Composable
-private fun TargetList(title: String, note: String, rows: @Composable () -> Unit) = Mockup {
+private fun TargetList(title: String, note: String, rows: @Composable () -> Unit) {
     KitScreen {
         // The way out is the header's arrow, a plain tap back to page 2. A picker that could only
         // be left by firing would be a control that costs a cooldown to change your mind about.

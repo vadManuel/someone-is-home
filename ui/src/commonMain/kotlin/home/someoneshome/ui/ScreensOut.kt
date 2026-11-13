@@ -86,7 +86,7 @@ private fun OutNotice(
     headingSize: Int,
     headingInk: Color,
     rule: Dp,
-) = Mockup {
+) {
     KitScreen {
         Column(
             Modifier.weight(1f).fillMaxWidth().padding(bottom = 48.dp),
@@ -141,7 +141,7 @@ fun Ghost2Screen() = WalkIn("STAND\nAND WALK IN", "DO NOT SPEAK.")
  * living's** — which is why [Ghost2Screen] above draws the check-in gate and this screen does not.
  */
 @Composable
-fun GhostMeetingScreen(vals: PanelVals) = Mockup {
+fun GhostMeetingScreen(vals: PanelVals) {
     KitScreen {
         KitHeader("MEETING IN PROGRESS", Palette.DARK)
 
@@ -224,7 +224,7 @@ fun GhostMeetingScreen(vals: PanelVals) = Mockup {
  * because it is the one whose subject is not always happening.
  */
 @Composable
-fun Ghost3Screen(vals: PanelVals) = Mockup {
+fun Ghost3Screen(vals: PanelVals) {
     KitScreen(
         padding = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 20.dp),
         gap = 10.dp,
@@ -327,7 +327,7 @@ private fun GhostEgressWidget(vals: PanelVals, modifier: Modifier) {
  * exists to prevent. The status strip dims with it — see `PanelVals.concealed`.
  */
 @Composable
-fun DisconnectScreen() = Mockup {
+fun DisconnectScreen() {
     val p = Palette.CONCEAL
     KitScreen {
         KitHeader("CONNECTION", p)
@@ -357,7 +357,7 @@ fun DisconnectScreen() = Mockup {
  * boxed thing, END SESSION, at the foot.
  */
 @Composable
-fun SettingsScreen() = Mockup {
+fun SettingsScreen() {
     val p = Palette.DARK
     KitScreen {
         KitHeader("SETTINGS", p, back = ScreenId.Home)
@@ -433,7 +433,7 @@ fun SettingsScreen() = Mockup {
  * palette and the order of the middle differ, which is how the mockup draws them.
  */
 @Composable
-fun WinInsidersScreen(vals: PanelVals) = Mockup {
+fun WinInsidersScreen(vals: PanelVals) {
     val p = Palette.DARK
     KitScreen(padding = ENDING_PADDING, gap = 10.dp) {
         EndingBanner("INSIDERS WIN", "THE HOUSE REACHED THE INTERNET", p, lineSize = 24)
@@ -467,7 +467,7 @@ fun WinInsidersScreen(vals: PanelVals) = Mockup {
  * headline — the disclosure is identical, because it is one disclosure to one room.
  */
 @Composable
-fun WinResidentsScreen(vals: PanelVals) = Mockup {
+fun WinResidentsScreen(vals: PanelVals) {
     val p = Palette.BONE
     KitScreen(padding = ENDING_PADDING, gap = 8.dp) {
         EndingBanner("RESIDENTS WIN", "PERIMETER DISARMED . YOU CAN LEAVE", p, lineSize = 20)

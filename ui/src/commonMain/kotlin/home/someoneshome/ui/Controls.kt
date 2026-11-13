@@ -438,25 +438,27 @@ fun Modifier.edgeSwipeBack(enabled: Boolean, onBack: () -> Unit): Modifier {
 }
 
 /**
- * How near the left edge a back swipe has to start. Twelve units is about 15pt on the narrowest
+ * How near the left edge a back swipe has to start. 14.4 units is about 15pt on the narrowest
  * phone in range — wide enough to catch a thumb reaching round the side of a case, narrow enough
- * that it is not simply *the left third of every screen*.
+ * that it is not simply *the left third of every screen*. (Twelve units of the old 300-wide canvas,
+ * carried to 360 unchanged in size.)
  */
-val EDGE_SWIPE_ZONE: Dp = 12.u
+val EDGE_SWIPE_ZONE: Dp = 14.4.u
 
 /**
  * How far right it has to travel. A quarter of the canvas: far enough that it is unmistakably a
  * gesture rather than a slipped finger, short enough to complete one-handed in the dark.
  */
-val EDGE_SWIPE_TRAVEL: Dp = 75.u
+val EDGE_SWIPE_TRAVEL: Dp = 90.u
 
 /**
  * **The smallest a control may be: 36 design units.**
  *
- * The canvas is [DESIGN_WIDTH] units wide and [DeviceCanvas] scales it to the panel, so a design
- * unit is `panelWidth / 300` points. Apple's minimum is 44pt square, and the narrowest phone this
- * app targets is 375 points across — a scale of 1.25, at which 44pt is 35.2 units. Rounded up:
- * **36 units clears 44pt on every phone in range, and clears it by more on the wider ones.**
+ * **Written for the old 300-unit canvas**, where a unit was `panelWidth / 300` points: Apple's
+ * minimum is 44pt square, the narrowest phone this app targets is 375 points across, and 36 units
+ * cleared 44pt on every phone in range. On D-202's 360 canvas the same 36 units is 37.5pt there.
+ * D-202 draws the kit's targets at 56, and `MeetingInputTest` still holds a meeting's controls to
+ * the 44pt floor (43.2 units); whether this value rises to match is the owner's call.
  *
  * This is not a general accessibility uplift and the type sizes are untouched — the reference
  * device is a 2001 organiser and its 6-unit labels are the design (see [Label]). It is about the
@@ -540,7 +542,7 @@ fun PanelButton(
 @Composable
 fun RowButton(
     modifier: Modifier = Modifier,
-    border: Color = Amber.Edge,
+    border: Color = Ramp.Faint,
     fill: Color = Color.Transparent,
     horizontalPadding: Dp = 7.u,
     verticalPadding: Dp = 8.u,

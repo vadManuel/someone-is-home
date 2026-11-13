@@ -21,6 +21,7 @@ import home.someoneshome.platform.Haptics
 import home.someoneshome.platform.ScanUse
 import home.someoneshome.platform.ScanWindow
 import home.someoneshome.ui.Amber
+import home.someoneshome.ui.Ramp
 import home.someoneshome.ui.Label
 import home.someoneshome.ui.LocalPanelInsets
 import home.someoneshome.ui.PanelVals
@@ -251,7 +252,7 @@ fun ScanCheatScreen(cheat: ScanCheat) {
         )
         for (row in cheat.rows) {
             Column(
-                Modifier.fillMaxWidth().border(1.u, Amber.Faint).tap(row.fire)
+                Modifier.fillMaxWidth().border(1.u, Ramp.Faint).tap(row.fire)
                     .padding(horizontal = 6.u, vertical = 3.u),
                 verticalArrangement = Arrangement.spacedBy(1.u),
             ) {

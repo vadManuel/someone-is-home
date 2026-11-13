@@ -23,6 +23,7 @@ import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.Seat
 import home.someoneshome.platform.Haptics
 import home.someoneshome.ui.Amber
+import home.someoneshome.ui.Ramp
 import home.someoneshome.ui.Label
 import home.someoneshome.ui.LocalPanelInsets
 import home.someoneshome.ui.SubroutineModel
@@ -211,7 +212,7 @@ fun HapticCheatScreen(cheat: HapticCheat) {
         Label("ONLY A HAND PROVES A BUZZ", size = 6.0, color = Amber.Dim, tracking = 0.2)
         for (row in cheat.rows) {
             Column(
-                Modifier.fillMaxWidth().border(1.u, Amber.Faint).tap(row.fire)
+                Modifier.fillMaxWidth().border(1.u, Ramp.Faint).tap(row.fire)
                     .padding(horizontal = 6.u, vertical = 3.u),
                 verticalArrangement = Arrangement.spacedBy(1.u),
             ) {

@@ -49,7 +49,7 @@ import androidx.compose.ui.unit.IntOffset
  * Insider's blackmail text later quotes this line back; that is the entire mechanism.
  */
 @Composable
-fun SecretScreen() = Mockup {
+fun SecretScreen() {
     val actions = LocalActions.current
     val lobby = LocalLobby.current
     val p = Palette.BONE
@@ -105,7 +105,7 @@ fun SecretScreen() = Mockup {
  * that differs by device.
  */
 @Composable
-fun ArmedScreen() = Mockup {
+fun ArmedScreen() {
     val go = navigator()
     KitScreen {
         Column(
@@ -136,7 +136,7 @@ fun ArmedScreen() = Mockup {
  * identical sender, time and preview for both roles — the thread has to be *opened* to read.
  */
 @Composable
-fun RevealScreen(vals: PanelVals) = Mockup {
+fun RevealScreen(vals: PanelVals) {
     val go = navigator()
     KitScreen(gap = 8.dp) {
         KitHeader("MESSAGES", Palette.DARK, back = ScreenId.Home, meta = "${vals.inboxCount} MESSAGES")
@@ -177,7 +177,7 @@ fun RevealScreen(vals: PanelVals) = Mockup {
  * The house never addresses a Resident directly. It is intimate only with the people it owns.
  */
 @Composable
-fun RevealThreadScreen(vals: PanelVals) = Mockup {
+fun RevealThreadScreen(vals: PanelVals) {
     KitScreen {
         KitHeader("HOUSE", Palette.DARK, back = ScreenId.Reveal, meta = "${vals.houseThread.size} MESSAGES")
         // Every text drawn alike, oldest first (D-202). THE NEWEST WAS ONCE STAMPED "NEW" AND THE
@@ -274,7 +274,7 @@ fun LockScreen(vals: PanelVals) {
                 drawRect(if (heavy) ground.copy(alpha = NOTIFIED_DIM) else ground)
             }
     ) {
-        Mockup { LanternFace(arrival, heavy, ink, go, actions) }
+        LanternFace(arrival, heavy, ink, go, actions)
     }
 }
 

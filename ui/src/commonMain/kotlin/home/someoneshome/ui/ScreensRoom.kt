@@ -80,7 +80,7 @@ private fun MeetingBand(title: String) {
 
 /** You called it. Every phone in the building rings, and you wait with everyone else. */
 @Composable
-fun CallingScreen() = Mockup {
+fun CallingScreen() {
     val counts = LocalMeeting.current.counts
     KitScreen {
         Column(
@@ -135,7 +135,7 @@ fun FoundScreen(vals: PanelVals) {
  * ANSWER as the one solid block at the foot. Only the words change.
  */
 @Composable
-private fun IncomingCall(caller: String, reason: String, onAnswer: () -> Unit) = Mockup {
+private fun IncomingCall(caller: String, reason: String, onAnswer: () -> Unit) {
     KitScreen {
         Column(
             Modifier.weight(1f).fillMaxWidth().padding(top = 80.dp),
@@ -167,7 +167,7 @@ fun AssembleScreen() = WalkIn("WALK TO THE\nMEETING AREA", "DO NOT SPEAK YET.")
  * [CheckIn] at the foot. Only the words change, so across a room the two cannot be told apart.
  */
 @Composable
-internal fun WalkIn(headline: String, instruction: String) = Mockup {
+internal fun WalkIn(headline: String, instruction: String) {
     KitScreen {
         Column(
             Modifier.weight(1f).fillMaxWidth().padding(top = 60.dp),
@@ -255,9 +255,9 @@ fun CheckIn() {
  * say little): the same swipe has already put a banner away, and the house clears this one anyway.
  */
 @Composable
-fun NoticeScreen() = Mockup {
+fun NoticeScreen() {
     val actions = LocalActions.current
-    // The banner's distance, measured inside the bridge exactly as the banner measures it, because
+    // The banner's distance, measured exactly as the banner measures it, because
     // the hand does not know which screen it is on.
     val threshold = with(LocalDensity.current) { SWIPE_DISMISS.toPx() }
     // Where the finger has taken it, never below zero — the same tracking the banner does.
@@ -297,7 +297,7 @@ private val MEETING_PADDING = PaddingValues(start = 20.dp, end = 20.dp, top = 16
  * from the same number rather than from the time.
  */
 @Composable
-fun DiscussionScreen(vals: PanelVals) = Mockup {
+fun DiscussionScreen(vals: PanelVals) {
     val meeting = LocalMeeting.current
     val counts = meeting.counts
     KitScreen(padding = MEETING_PADDING, gap = 16.dp) {
@@ -361,7 +361,7 @@ fun DiscussionScreen(vals: PanelVals) = Mockup {
  * only a player outside the system sees what anybody chose.
  */
 @Composable
-fun VoteScreen(vals: PanelVals) = Mockup {
+fun VoteScreen(vals: PanelVals) {
     val actions = LocalActions.current
     val meeting = LocalMeeting.current
     val counts = meeting.counts
@@ -479,7 +479,7 @@ private fun VoteRow(
  * names against it (D-075, `GhostMeetingScreen`) — and can act on none of it.
  */
 @Composable
-fun TallyScreen(vals: PanelVals) = Mockup {
+fun TallyScreen(vals: PanelVals) {
     KitScreen {
         KitHeader("RESTRAIN . RESULT", Palette.DARK)
 

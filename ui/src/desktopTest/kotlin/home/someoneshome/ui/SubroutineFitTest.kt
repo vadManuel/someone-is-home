@@ -92,7 +92,7 @@ class SubroutineFitTest {
             "a column of ${DotColumns.MOST_DOTS} stands $tallest tall in a field of $DEAL_FIELD",
         )
         val widest = DEAL_BLOCK_WIDTH * DotColumns.MOST_COLUMNS + DEAL_COLUMN_GAP * (DotColumns.MOST_COLUMNS - 1)
-        val body = (MOCKUP_WIDTH - 40f)
+        val body = (DESIGN_WIDTH - 40f)
         assertTrue(
             widest.value <= body,
             "${DotColumns.MOST_COLUMNS} columns stand $widest wide in a body of $body",

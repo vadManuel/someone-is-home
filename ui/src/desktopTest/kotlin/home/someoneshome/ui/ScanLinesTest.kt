@@ -75,10 +75,10 @@ import kotlin.test.assertTrue
 class ScanLinesTest {
 
     /**
-     * Rendered exactly [DESIGN_WIDTH] wide, so one design unit is one image pixel and the period
-     * is three rows with nothing to round.
+     * Rendered 300 wide, the old canvas's width, so the glass's 3.6-unit period is three rows with
+     * nothing to round and every render here is the one this file was calibrated on.
      */
-    private val width = DESIGN_WIDTH.toInt()
+    private val width = 300
     private val height = 200
 
     /**

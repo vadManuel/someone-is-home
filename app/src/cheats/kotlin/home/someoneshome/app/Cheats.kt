@@ -37,6 +37,7 @@ import home.someoneshome.platform.deviceSystemSettings
 import home.someoneshome.platform.launchSwitch
 import home.someoneshome.platform.monotonicNanos
 import home.someoneshome.ui.Amber
+import home.someoneshome.ui.Ramp
 import home.someoneshome.ui.FlowHost
 import home.someoneshome.ui.FlowModel
 import home.someoneshome.ui.Label
@@ -736,7 +737,7 @@ private fun CheatPicker(
     ) {
         Label("${BuildVariant.MARKER} — PICK A SCREEN", size = 8.0, color = Amber.Bright, tracking = 0.16)
         Row(
-            Modifier.fillMaxWidth().border(1.u, Amber.Faint)
+            Modifier.fillMaxWidth().border(1.u, Ramp.Faint)
                 .tap {
                     val other = if (draft.role == PanelRole.Resident) PanelRole.Insider else PanelRole.Resident
                     draft = draft.copy(role = other)
@@ -748,7 +749,7 @@ private fun CheatPicker(
             Label(draft.role.name.uppercase(), size = 6.5, color = Amber.Bright)
         }
         Row(
-            Modifier.fillMaxWidth().border(1.u, Amber.Faint).tap(onTransport)
+            Modifier.fillMaxWidth().border(1.u, Ramp.Faint).tap(onTransport)
                 .padding(horizontal = 6.u, vertical = 4.u),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
@@ -756,7 +757,7 @@ private fun CheatPicker(
             Label("0.8 RIG", size = 6.5, color = Amber.Bright)
         }
         Row(
-            Modifier.fillMaxWidth().border(1.u, Amber.Faint).tap(onHaptics)
+            Modifier.fillMaxWidth().border(1.u, Ramp.Faint).tap(onHaptics)
                 .padding(horizontal = 6.u, vertical = 4.u),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
@@ -764,7 +765,7 @@ private fun CheatPicker(
             Label("D-135 BENCH", size = 6.5, color = Amber.Bright)
         }
         Row(
-            Modifier.fillMaxWidth().border(1.u, Amber.Faint).tap(onCamera)
+            Modifier.fillMaxWidth().border(1.u, Ramp.Faint).tap(onCamera)
                 .padding(horizontal = 6.u, vertical = 4.u),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {

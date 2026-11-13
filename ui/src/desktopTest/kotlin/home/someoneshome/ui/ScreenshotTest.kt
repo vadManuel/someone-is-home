@@ -106,7 +106,7 @@ class ScreenshotTest {
     @OptIn(ExperimentalTestApi::class, ExperimentalComposeUiApi::class)
     @Test
     fun renderEveryScreenAtMockupSize() {
-        val cameraBand = PanelInsets(top = (36f * DESIGN_WIDTH / MOCKUP_WIDTH).dp)
+        val cameraBand = PanelInsets(top = 36.dp)
         val dir = File("build/screens-mockup").apply { mkdirs() }
         val renders = ScreenId.entries.map { Triple(it, PanelRole.Resident, "") } +
             listOf(ScreenId.WinInsiders, ScreenId.WinResidents).map { Triple(it, PanelRole.Insider, "-insider") }

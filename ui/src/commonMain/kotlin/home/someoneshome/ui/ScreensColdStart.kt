@@ -54,7 +54,7 @@ import home.someoneshome.model.opensTheGate
  * looks like.
  */
 @Composable
-fun BootScreen(vals: PanelVals) = Mockup {
+fun BootScreen(vals: PanelVals) {
     val p = Palette.BONE
     KitScreen(padding = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 24.dp), gap = 16.dp) {
         Words("SOMEONE'S HOME", Modifier.padding(top = 16.dp), size = 48, color = p.ink, lineHeight = 0.9)
@@ -152,7 +152,7 @@ private const val MAX_DOTS = 10_000
  * Settings needs to happen.
  */
 @Composable
-fun PermsScreen() = Mockup {
+fun PermsScreen() {
     val go = navigator()
     val actions = LocalActions.current
     val perms = LocalPerms.current
@@ -256,7 +256,7 @@ const val RESIDENT_NAME: String = "resident-name"
  * [LobbyModel.residentName] and [LobbyModel.attachTo].
  */
 @Composable
-fun JoinScreen() = Mockup {
+fun JoinScreen() {
     val go = navigator()
     val actions = LocalActions.current
     val lobby = LocalLobby.current

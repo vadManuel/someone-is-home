@@ -20,7 +20,7 @@ class StandingAgainstTheBuildTest {
     fun `the reconnecting screen dims its chrome with the revoked screen`() {
         for (screen in listOf(ScreenId.Revoked, ScreenId.Disconnect)) {
             assertEquals(Amber.Dim, vals(screen).ink, "$screen is lit above the concealment step")
-            assertEquals(Amber.Faint, vals(screen).dim, "$screen is lit above the concealment step")
+            assertEquals(Ramp.Faint, vals(screen).dim, "$screen is lit above the concealment step")
         }
         assertEquals(Amber.Bright, vals(ScreenId.Home).ink, "the springboard was dimmed with them")
     }

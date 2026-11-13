@@ -766,10 +766,10 @@ class PanelVals(
     }
     val dim: Color = when {
         isPre -> Amber.BoneDim
-        concealed -> Amber.Faint
+        concealed -> Ramp.Faint
         else -> Amber.Dim
     }
-    val edge: Color = if (isPre) Amber.BoneEdge else Amber.Edge
+    val edge: Color = if (isPre) Amber.BoneEdge else Ramp.Faint
 
     /**
      * **The carrier says one thing and only one: what happened to you, once something has.**
@@ -2040,6 +2040,7 @@ object Plan {
 
     /** Live view: three staleness bands, error injected both ways, your own room outlined. */
     val terminalCounts = counts(
+        // OPEN for the owner: HALL and STUDY keep the retired Faint/Edge until their colour is ruled.
         mapOf(
             "KITCHEN" to (2 to Amber.Bright),
             "LIVING" to (4 to Amber.Dim),
@@ -2278,7 +2279,7 @@ fun Plan.mapCells(): List<MapCell> =
             start = edgeTo(roomAt(row, col - 1)),
             fill = when {
                 room == null -> null
-                room.transit -> Amber.Edge
+                room.transit -> Ramp.Faint
                 mine -> Amber.Deep
                 else -> null
             },

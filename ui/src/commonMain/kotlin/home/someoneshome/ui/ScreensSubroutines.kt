@@ -1101,7 +1101,7 @@ private fun SubroutineFrame(
     bodyModifier: Modifier = Modifier,
     submit: (@Composable () -> Unit)? = null,
     body: @Composable ColumnScope.() -> Unit,
-) = Mockup {
+) {
     KitScreen(gap = 10.dp) {
         Row(
             Modifier.fillMaxWidth().heightIn(min = 56.dp),

@@ -378,7 +378,7 @@ fun EditorLabels(
     rows: Int = HomeEditorModel.ROWS,
     size: Int = 18,
 ) {
-    // Mockup pixels (D-202): every caller draws this inside [Mockup].
+    // Mockup pixels (D-202).
     BoxWithConstraints(modifier) {
         val w = maxWidth
         val h = maxHeight

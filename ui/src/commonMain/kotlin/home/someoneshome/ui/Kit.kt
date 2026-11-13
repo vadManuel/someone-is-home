@@ -17,8 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -31,7 +29,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.layout.layout
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
@@ -45,7 +42,6 @@ import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -57,49 +53,9 @@ import kotlin.math.roundToInt
  * a time, so a header, a row, a button or a hold is drawn one way everywhere.
  *
  * **Every number in this file is the mockup's own pixel value**, on its 360-wide canvas: a 22px
- * caption is `22`, a 56px target is `56.dp`. That is only true inside [Mockup], which is how a
- * restyled screen gets the mockup's coordinate space while the screens not yet restyled keep the
- * 300-unit space they were drawn in. See [Mockup] for why the two live side by side for a while.
+ * caption is `22`, a 56px target is `56.dp`. The canvas is [DESIGN_WIDTH] units wide, so a mockup
+ * pixel and a unit are the same thing everywhere in the panel.
  */
-
-/** The mockup's canvas width. Where [DESIGN_WIDTH] is going, and where [Mockup] already is. */
-const val MOCKUP_WIDTH: Float = 360f
-
-/**
- * **A restyled screen, drawn in the mockup's 360-unit space** (D-202).
- *
- * D-202 moves the canvas from 300 to 360 units. Flipping [DESIGN_WIDTH] in one commit would shrink
- * every screen not yet restyled by a sixth, on main, for the whole of the restyle: text that is
- * already too small, made smaller, on a build people playtest. So the restyle goes screen by screen
- * instead, and each restyled screen is wrapped in this, which rescales density by
- * `DESIGN_WIDTH / MOCKUP_WIDTH` so 360 of its units span the panel.
- *
- * **It is a bridge and it ends.** When the last screen is restyled, [DESIGN_WIDTH] becomes 360, the
- * ratio here becomes 1, and this goes. Everything a screen reads about the panel is rescaled with
- * it -- height, insets and scale -- so a restyled screen never mixes the two unit systems.
- */
-@Composable
-fun Mockup(content: @Composable () -> Unit) {
-    // Reentrant: a kit block that brings its own bridge, drawn inside a screen that already has
-    // one, must not be scaled twice.
-    if (LocalInMockup.current) return content()
-    val ratio = DESIGN_WIDTH / MOCKUP_WIDTH
-    val base = LocalDensity.current
-    val insets = LocalPanelInsets.current
-    CompositionLocalProvider(
-        LocalDensity provides Density(base.density * ratio, fontScale = 1f),
-        LocalPanelScale provides LocalPanelScale.current * ratio,
-        LocalPanelHeight provides LocalPanelHeight.current / ratio,
-        LocalPanelInsets provides PanelInsets(
-            top = insets.top / ratio, bottom = insets.bottom / ratio, side = insets.side / ratio,
-        ),
-        LocalInMockup provides true,
-        content = content,
-    )
-}
-
-/** Whether the bridge is already in effect, so [Mockup] applies it once. */
-private val LocalInMockup = staticCompositionLocalOf { false }
 
 /**
  * **One of the redesign's four palettes: what each role on a screen is drawn in** (D-202, D-077).

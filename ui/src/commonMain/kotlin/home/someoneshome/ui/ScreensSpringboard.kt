@@ -46,7 +46,7 @@ import androidx.compose.ui.unit.dp
  * Insider run Subroutines that write nothing without noticing the number fail to move.
  */
 @Composable
-fun HomeScreen(vals: PanelVals, widget: @Composable (PanelVals) -> Unit = { IntegrityWidget(it) }) = Mockup {
+fun HomeScreen(vals: PanelVals, widget: @Composable (PanelVals) -> Unit = { IntegrityWidget(it) }) {
     val go = navigator()
     // The swipe covers the page above the dock, so a swipe across the dock is not a page turn.
     Column(
@@ -207,7 +207,7 @@ private const val APP_CAMERA = "M4 9h20v14H4z M10 9l2-3h4l2 3 M11 13h6v6h-6z"
  * cooldown with no cancel, and because the Egress is the misclick the design calls *game-ending*.
  */
 @Composable
-fun Page2Screen(vals: PanelVals) = Mockup {
+fun Page2Screen(vals: PanelVals) {
     val go = navigator()
     val actions = LocalActions.current
     // The swipe covers the page above the dock, so a swipe across the dock is not a page turn.

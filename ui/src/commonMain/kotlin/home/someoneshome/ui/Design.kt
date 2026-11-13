@@ -31,9 +31,8 @@ import org.jetbrains.compose.resources.Font
  * **Text uses the top three only**, which all clear 4.5:1 on black and 6.3:1 on [Fill]. The one
  * exception D-202 names is the ACCESS REVOKED headline, in [Line] at 56px.
  *
- * Screens restyled to the mockup draw from this, through a [Palette]. Screens not yet restyled
- * still draw from [Amber]'s older ramp; that ramp's `#46300B`, `#241806` and `#0B0703` are retired
- * by D-202 and go when the last of them is restyled.
+ * Every screen draws from this, through a [Palette]. [Amber]'s older `#46300B` and `#241806` are
+ * retired by D-202 and survive only where [Amber.Faint] says why; `#0B0703` is gone.
  */
 object Ramp {
     val Ink = Color(0xFFFFC759)
@@ -45,8 +44,8 @@ object Ramp {
 }
 
 /**
- * The amber panel, as a palette. **The older ramp, being retired screen by screen** (D-202): see
- * [Ramp] for the one restyled screens use.
+ * The amber panel, as a palette. **The older ramp, retired by D-202**: see [Ramp] for the one the
+ * screens use. Its bone, slate and caution values are unchanged and current.
  *
  * **Four luminance steps, one hue, no second hue.** Emphasis comes from inversion — amber
  * ground, black glyphs — the way a real amber panel does it. Adding a colour here is not a
@@ -70,17 +69,18 @@ object Amber {
     /** Step 2 — body text and inactive controls. */
     val Dim = Color(0xFF8A5C12)
 
-    /** Step 1 — hairlines, borders, spent segments. Barely lit, on purpose. */
+    /**
+     * Retired by D-202, and kept for two readers only, which D-202 sends back to the owner: the
+     * live terminal's staleness bands ([Plan.terminalCounts], whose colour is an open question) and
+     * the jam veil's floor ([StaticNoise], where moving it would change the light the veil emits).
+     */
     val Faint = Color(0xFF46300B)
 
-    /** Step 0 — an edge that exists structurally but emits almost nothing. */
+    /** Retired by D-202, and kept for the same two readers as [Faint]. */
     val Edge = Color(0xFF241806)
 
     /** True black. Not "very dark grey" — the pixel is off. */
     val Black = Color(0xFF000000)
-
-    /** Darker than an edge: an unlit cell inside a lit grid. */
-    val Well = Color(0xFF0B0703)
 
     /** The fill for the room you are standing in, on a live plan. */
     val Deep = Color(0xFF150E04)
@@ -161,11 +161,8 @@ object PanelType {
 }
 
 /**
- * **Going to 360** (D-202). Screens restyled to the mockup are already drawn in its 360-unit space
- * inside [Mockup]; this flips when the last one is, and [Mockup] goes with it.
- *
- * The design canvas is 300 units wide, and every dimension in this module is written in those
- * units — a 7px label is `7.0`, a 17px status bar is `17.u`.
+ * **The mockup's 360-wide canvas** (D-202). Every dimension in this module is written in its
+ * pixels — a 22px caption is `22`, the 34px status strip is `34.dp`.
  *
  * The whole tree is scaled once at the root by [DeviceCanvas]. Without that, every number would
  * have to be re-derived by hand against a real device size, and a hand-derived number cannot be
@@ -174,7 +171,7 @@ object PanelType {
  * Width is pinned; height flows. The design's screens are column layouts with a growing middle,
  * so a taller panel gives the middle more room rather than letterboxing the whole thing.
  */
-const val DESIGN_WIDTH: Float = 300f
+const val DESIGN_WIDTH: Float = 360f
 
 /** The design canvas height. A reference, not a cap — screens may be taller. */
 const val DESIGN_HEIGHT: Float = 400f

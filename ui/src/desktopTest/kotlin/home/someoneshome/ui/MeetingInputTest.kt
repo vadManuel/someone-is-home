@@ -355,12 +355,16 @@ class MeetingInputTest {
 
     // ---- Tap targets ------------------------------------------------------------------------------
 
+    /** 44pt on a 375pt-wide phone, in units of the 360 canvas: the old canvas's 36, unchanged in size. */
+    private val FLOOR = 43.2f
+
     /**
      * **Every control at a meeting is big enough to hit in the dark.**
      *
      * The measurement is real pixels off the rendered tree, converted back to design units, so it
-     * cannot pass by agreeing with a constant. [TAP_TARGET] is 36 units, which clears Apple's 44pt
-     * on the narrowest phone this app targets.
+     * cannot pass by agreeing with a constant. The floor is 43.2 units, which is Apple's 44pt on the
+     * narrowest phone this app targets: the 36 units of the old 300-wide canvas, carried to D-202's
+     * 360 unchanged in size. [TAP_TARGET] was written on the old canvas and is 36 units still.
      *
      * This is the screen where it matters most and the reason is not comfort: a finger landing one
      * row off restrains the wrong resident, in an unlit room, under a rule that forbids saying so
@@ -398,11 +402,11 @@ class MeetingInputTest {
                         onAllNodesWithTag(HOLD_BLOCK).fetchSemanticsNodes()
                     for (node in controls) {
                         val units = node.size.height / perUnit
-                        if (units >= TAP_TARGET.value) continue
+                        if (units >= FLOOR) continue
                         val what = node.config.getOrNull(SemanticsProperties.Text)
                             ?.joinToString(" ") { it.text }?.take(28) ?: "(unlabelled)"
                         val line = "$id/${role.name} — \"$what\" is ${units.toInt()}u, " +
-                            "under ${TAP_TARGET.value.toInt()}u"
+                            "under ${FLOOR}u"
                         if (id in theMeeting) small += line else elsewhere += line
                     }
                 }
