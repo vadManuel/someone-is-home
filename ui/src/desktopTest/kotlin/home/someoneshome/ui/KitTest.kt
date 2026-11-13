@@ -1,0 +1,77 @@
+package home.someoneshome.ui
+
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.getBoundsInRoot
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.runDesktopComposeUiTest
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
+
+/**
+ * **The restyle's kit holds D-202's numbers, whatever the panel is** (D-202).
+ *
+ * Three things a restyled screen leans on without checking: inside [Mockup], the panel is 360 of
+ * its units wide, so a mockup pixel is a unit; every control the kit draws is a 56-unit target or
+ * taller; and a caption cannot be set under the 18px floor.
+ */
+@OptIn(ExperimentalTestApi::class)
+class KitTest {
+
+    @Test
+    fun `inside the bridge the panel is the mockup's 360 units, at any phone width`() {
+        for (width in listOf(390, 600, 430)) {
+            var seen: Dp? = null
+            runDesktopComposeUiTest(width = width, height = 900) {
+                setContent {
+                    DeviceCanvas(insets = PanelInsets()) {
+                        Mockup { BoxWithConstraints { seen = maxWidth } }
+                    }
+                }
+                waitForIdle()
+            }
+            assertEquals(MOCKUP_WIDTH, seen!!.value, 0.01f, "a $width-wide panel is not 360 mockup units")
+        }
+    }
+
+    @Test
+    fun `every control the kit draws is a 56 target or taller`() {
+        runDesktopComposeUiTest(width = 360, height = 1400) {
+            setContent {
+                DeviceCanvas(insets = PanelInsets()) {
+                    Mockup {
+                        val p = Palette.DARK
+                        Column {
+                            KitPrimary("A", p, Modifier.testTag("primary")) {}
+                            KitSecondary("B", p, Modifier.testTag("secondary")) {}
+                            KitQuiet("C", p, Modifier.testTag("quiet")) {}
+                            Box(Modifier.testTag("nav")) { KitNavRow("D", p, onClick = {}) }
+                        }
+                    }
+                }
+            }
+            // Bounds come back in the node's own density, which inside the bridge is the mockup unit.
+            for (tag in listOf("primary", "secondary", "quiet", "nav")) {
+                val tall = onNodeWithTag(tag).getBoundsInRoot().let { it.bottom - it.top }
+                assertTrue(tall >= 56.dp - 0.5.dp, "$tag is ${tall.value} tall, under D-202's 56")
+            }
+        }
+    }
+
+    @Test
+    fun `a caption under 18 is refused`() {
+        assertFailsWith<IllegalArgumentException> {
+            runDesktopComposeUiTest {
+                setContent { KitCaption("TOO SMALL", Palette.DARK, size = 17) }
+            }
+        }
+    }
+}

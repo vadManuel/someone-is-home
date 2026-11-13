@@ -77,7 +77,7 @@ class ScanRefusalTest {
      */
     @Test
     fun bothRefusalsOfferTheSameTwoWaysOut() {
-        for (screen in listOf(ScreenId.ScanBad, ScreenId.ScanUnknown)) {
+        for (screen in listOf(ScreenId.ScanBad, ScreenId.ScanUnknown, ScreenId.TermBusy)) {
             refusal(screen) {
                 onAllNodesWithText("SCAN ANOTHER").assertCountEquals(1)
                 onAllNodesWithText("SEE MY SUBROUTINES").assertCountEquals(1)

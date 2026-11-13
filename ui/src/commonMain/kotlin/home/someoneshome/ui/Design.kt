@@ -16,7 +16,37 @@ import home.someoneshome.ui.generated.resources.VT323_Regular
 import org.jetbrains.compose.resources.Font
 
 /**
- * The amber panel, as a palette.
+ * **The redesign's dark ramp** (D-202): five amber values on true black, and the fill of the room
+ * you are standing in.
+ *
+ * | value | on black | carries |
+ * |---|---|---|
+ * | [Ink] `#FFC759` | 13.6:1 | headings, live values, the one solid block |
+ * | [Mid] `#E39A22` | 8.9:1 | secondary ink, and the whole ink of a medium screen |
+ * | [Dim] `#C08A2E` | 6.9:1 | dim text, and the ceiling of a concealment screen (D-077) |
+ * | [Line] `#8A5C12` | 3.6:1 | button edges, inactive borders. **Never text** |
+ * | [Faint] `#5A3D0E` | 2.1:1 | hairlines, spent segments. **Never text** |
+ * | [Fill] `#150E04` | -- | the current room's fill, and the dark stripe of the stairs hatch |
+ *
+ * **Text uses the top three only**, which all clear 4.5:1 on black and 6.3:1 on [Fill]. The one
+ * exception D-202 names is the ACCESS REVOKED headline, in [Line] at 56px.
+ *
+ * Screens restyled to the mockup draw from this, through a [Palette]. Screens not yet restyled
+ * still draw from [Amber]'s older ramp; that ramp's `#46300B`, `#241806` and `#0B0703` are retired
+ * by D-202 and go when the last of them is restyled.
+ */
+object Ramp {
+    val Ink = Color(0xFFFFC759)
+    val Mid = Color(0xFFE39A22)
+    val Dim = Color(0xFFC08A2E)
+    val Line = Color(0xFF8A5C12)
+    val Faint = Color(0xFF5A3D0E)
+    val Fill = Color(0xFF150E04)
+}
+
+/**
+ * The amber panel, as a palette. **The older ramp, being retired screen by screen** (D-202): see
+ * [Ramp] for the one restyled screens use.
  *
  * **Four luminance steps, one hue, no second hue.** Emphasis comes from inversion — amber
  * ground, black glyphs — the way a real amber panel does it. Adding a colour here is not a
@@ -98,6 +128,11 @@ object Amber {
 /**
  * The two faces, both bitmap-derived.
  *
+ * **D-202 changes the split, and restyled screens follow it:** VT323 carries everything a player
+ * reads -- headings, numbers, buttons, reading text at 22px and up -- and Silkscreen is for 12px
+ * labels only. See [Words] and [Tag]. What follows describes the older split, which the screens not
+ * yet restyled still draw with.
+ *
  * Silkscreen carries every label; VT323 carries anything read as a *quantity* — a clock, a
  * count, a countdown. The split is doing work: labels are chrome the player learns once and
  * stops reading, readouts are values that change, and on a screen with no colour to spare that
@@ -126,6 +161,9 @@ object PanelType {
 }
 
 /**
+ * **Going to 360** (D-202). Screens restyled to the mockup are already drawn in its 360-unit space
+ * inside [Mockup]; this flips when the last one is, and [Mockup] goes with it.
+ *
  * The design canvas is 300 units wide, and every dimension in this module is written in those
  * units — a 7px label is `7.0`, a 17px status bar is `17.u`.
  *

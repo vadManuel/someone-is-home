@@ -89,6 +89,41 @@ class ScreenshotTest {
     }
 
     /**
+     * **Every screen at the mockup's own proportions, for comparing against it** (D-202, Step 3).
+     *
+     * The sweep above is 3:4, which the mockup is not: its device is 360 by 760, and a restyled
+     * screen laid out against that height squashes on a 3:4 canvas in ways that are the canvas and
+     * not the screen. This renders every screen at 720 by 1520 -- the mockup at twice size -- into
+     * `build/screens-mockup/`, one role, so a restyled screen can be laid beside the mockup's own
+     * render. A viewer, not an assertion.
+     */
+    @OptIn(ExperimentalTestApi::class, ExperimentalComposeUiApi::class)
+    @Test
+    fun renderEveryScreenAtMockupSize() {
+        val dir = File("build/screens-mockup").apply { mkdirs() }
+        for (id in ScreenId.entries) {
+            val outBy = when (id) {
+                ScreenId.Restrained -> OutBy.Restrained
+                ScreenId.Revoked, ScreenId.Ghost2, ScreenId.Ghost3, ScreenId.GhostMeeting -> OutBy.Revoked
+                else -> null
+            }
+            runDesktopComposeUiTest(width = 720, height = 1520) {
+                setContent {
+                    Box(Modifier.fillMaxSize().background(Color.Black)) {
+                        DeviceCanvas(insets = PanelInsets()) {
+                            Screen(PanelState(screen = id, outBy = outBy))
+                        }
+                    }
+                }
+                ImageIO.write(
+                    onRoot().captureToImage().toAwtImage(), "png",
+                    File(dir, "${id.name.lowercase()}.png"),
+                )
+            }
+        }
+    }
+
+    /**
      * **The lobby's other three states, which the loop above cannot reach.**
      *
      * Every screen in this game is drawn from a [PanelState] and can therefore be rendered by

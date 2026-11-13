@@ -32,6 +32,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
 
 /**
  * Work — what Residents actually do, and what an Insider imitates.
@@ -650,10 +651,7 @@ fun ScanCaughtScreen(vals: PanelVals) {
  */
 @Composable
 fun ScanBadScreen() {
-    ScanRefusal(
-        headline = "NOTHING FOR\nYOU HERE",
-        detail = "Nothing of yours opens here.",
-    )
+    ScanRefusal(headline = "NOTHING FOR\nYOU HERE")
 }
 
 /**
@@ -683,10 +681,7 @@ fun ScanBadScreen() {
  */
 @Composable
 fun ScanUnknownScreen() {
-    ScanRefusal(
-        headline = "NOT A MARKER",
-        detail = "This card was never registered in this home. It is not part of the game.",
-    )
+    ScanRefusal(headline = "NOT A MARKER")
 }
 
 /**
@@ -704,10 +699,7 @@ fun ScanUnknownScreen() {
  */
 @Composable
 fun TermBusyScreen() {
-    ScanRefusal(
-        headline = "ONE READER\nAT A TIME",
-        detail = "The terminal already has a reader. Others may stand here, but only one person reads.",
-    )
+    ScanRefusal(headline = "ONE READER\nAT A TIME")
 }
 
 /**
@@ -724,53 +716,34 @@ fun TermBusyScreen() {
  * a round, so the two must sound different. What may not differ is everything around them.
  */
 @Composable
-private fun ScanRefusal(headline: String, detail: String) {
+private fun ScanRefusal(headline: String) = Mockup {
     val go = navigator()
-    Column(
-        Modifier.fillMaxSize().padding(8.u),
-        verticalArrangement = Arrangement.spacedBy(7.u),
-    ) {
-        Label("SCAN", size = 7.0, color = Amber.Dim, tracking = 0.16)
-
+    val p = Palette.DARK
+    // **The headline and the two ways out, and nothing else** (Step 3, screens say little). The
+    // line of explanation under each headline is cut: the buzz has said *no*, the headline says
+    // which no, and a sentence read in the dark at a card is a player standing lit for longer.
+    KitScreen {
+        KitHeader("SCAN", p)
         Column(
-            Modifier.weight(1f).fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(9.u, Alignment.CenterVertically),
+            Modifier.weight(1f).fillMaxWidth().padding(bottom = 40.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Box(Modifier.padding(vertical = 3.u).size(46.u), contentAlignment = Alignment.Center) {
-                Box(Modifier.fillMaxSize().border(1.3.u, Amber.Bright, CircleShape))
-                Box(Modifier.fillMaxHeight().width(1.3.u).rotate(45f).background(Amber.Bright))
-            }
-            // Centred and given a line height because one of the two headlines is now two lines
-            // (D-124's NOTHING FOR YOU HERE will not sit on one at this size). Both go through it,
-            // so the frame stays one frame: the single-line headline is unmoved by either.
-            Label(
-                headline,
-                modifier = Modifier.fillMaxWidth(),
-                size = 13.0, color = Amber.Bright, tracking = 0.1, lineHeight = 1.35,
-                align = TextAlign.Center,
+            PanelIcon(
+                REFUSED, size = 72.dp, color = Ramp.Mid, strokeWidth = 3f,
+                circles = listOf(Triple(32f, 32f, 26f)), viewBox = 64f,
             )
-            Label(
-                detail,
-                size = 7.0, color = Amber.Dim, tracking = 0.02, lineHeight = 1.9,
-                align = TextAlign.Center,
-            )
+            Words(headline, size = 52, color = p.ink, lineHeight = 0.85, align = TextAlign.Center)
         }
-
-        PanelButton(
-            "SCAN ANOTHER",
-            border = Amber.Bright, ink = Amber.Bright,
-            size = 9.0, tracking = 0.18, verticalPadding = 13.u,
-            onClick = { go(ScreenId.Scan) },
-        )
-        PanelButton(
-            "SEE MY SUBROUTINES",
-            border = Amber.Faint, ink = Amber.Dim,
-            size = 7.0, verticalPadding = 9.u,
-            onClick = { go(ScreenId.Work) },
-        )
+        KitSecondary(
+            "SCAN ANOTHER", p, size = 30, height = 64.dp, edge = p.ink, edgeWidth = 2.dp,
+        ) { go(ScreenId.Scan) }
+        KitQuiet("SEE MY SUBROUTINES", p) { go(ScreenId.Work) }
     }
 }
+
+/** The refusal mark, on the mockup's 64 grid: a ring and its bar. */
+private val REFUSED = listOf("M14 50L50 14")
 
 /**
  * Files: **one item, and every other app refuses.**

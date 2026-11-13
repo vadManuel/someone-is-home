@@ -67,10 +67,16 @@ fun PanelIcon(
     color: Color = Amber.Bright,
     strokeWidth: Float = 1.4f,
     circles: List<Triple<Float, Float, Float>> = emptyList(),
+    /**
+     * The grid [paths] are drawn on. [PanelIcons] are on 20; the redesign's glyphs (`Kit.kt`) are
+     * on the mockup's own 24, so their path data can be diffed against `kit.py` character for
+     * character rather than re-scaled by hand.
+     */
+    viewBox: Float = PanelIcons.VIEWBOX,
 ) {
     val parsed = remember(paths) { paths.map { PathParser().parsePathString(it).toPath() } }
     Canvas(modifier.size(size)) {
-        val factor = this.size.minDimension / PanelIcons.VIEWBOX
+        val factor = this.size.minDimension / viewBox
         scale(factor, factor, pivot = Offset.Zero) {
             val stroke = Stroke(width = strokeWidth, cap = StrokeCap.Butt, join = StrokeJoin.Miter)
             parsed.forEach { drawPath(it, color, style = stroke) }
