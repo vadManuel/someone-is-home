@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=VT323&display=swap" rel="stylesheet">
+<style>input,textarea,button{-webkit-font-smoothing:none}</style></helmet>
+<div style="width:360px;height:760px;background:#000;overflow:hidden;position:relative;display:flex;flex-direction:column;font-family:'VT323',ui-monospace,monospace;color:{{ sbInk }};text-align:left;-webkit-font-smoothing:none">
+<sc-if value="{{ isPre }}" hint-placeholder-val="{{ true }}"><div style="position:absolute;inset:0;background:#A29A86"></div></sc-if>
+
+<!-- STATUS STRIP. Present on every screen (D-078). 36px above it is the camera band. The
+     lantern and the scan fill the panel with amber, so they draw this row themselves, inverted. -->
+<sc-if value="{{ sbShow }}" hint-placeholder-val="{{ true }}">
+<div style="position:relative;z-index:1;flex:0 0 auto;margin:36px 20px 0;height:34px;box-sizing:border-box;display:flex;align-items:center;gap:8px;padding-bottom:4px;border-bottom:1px solid {{ sbEdge }};font-family:'Silkscreen',ui-monospace,monospace;font-size:12px;line-height:1;letter-spacing:.04em;text-transform:uppercase;color:{{ sbInk }}">
+  <div aria-hidden="true" style="flex:0 0 auto;display:flex;align-items:flex-end;gap:2px;height:12px">
+    <div style="width:3px;height:5px;background:{{ sbSig }}"></div>
+    <div style="width:3px;height:8px;background:{{ sbSig }}"></div>
+    <div style="width:3px;height:12px;background:{{ sbSigOff }}"></div>
+  </div>
+  <span style="flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:{{ sbDim }}">{{ sbCarrier }}</span>
+  <sc-if value="{{ sbArmedIcon }}" hint-placeholder-val="{{ true }}"><span style="flex:0 0 auto;display:flex;align-items:center;gap:4px;border:1px solid {{ sbInk }};padding:3px 4px"><span aria-hidden="true" style="box-sizing:border-box;width:9px;height:9px;border:1px solid {{ sbInk }};border-radius:50%;display:flex;align-items:center;justify-content:center"><span style="width:3px;height:3px;background:{{ sbInk }}"></span></span>ARMED</span></sc-if>
+  <sc-if value="{{ sbDisarmedIcon }}" hint-placeholder-val="{{ true }}"><span style="flex:0 0 auto;display:flex;align-items:center;gap:4px;border:1px solid {{ sbDim }};padding:3px 4px;color:{{ sbDim }}"><span aria-hidden="true" style="box-sizing:border-box;width:9px;height:9px;border:1px solid {{ sbDim }};border-radius:50%;display:flex;align-items:center;justify-content:center"><span style="width:3px;height:3px;background:{{ sbEdge }}"></span></span>DISARMED</span></sc-if>
+  <sc-if value="{{ sbLock }}" hint-placeholder-val="{{ true }}"><svg role="img" aria-label="Locked" viewBox="0 0 10 12" width="10" height="12" fill="none" stroke="{{ sbInk }}" strokeWidth="1.5" strokeLinejoin="miter" strokeLinecap="square" style="flex:0 0 auto"><path d="M1 5.5h8v5.5H1z M3 5.5V2h4v3.5"></path></svg></sc-if>
+  <span style="flex:0 0 auto;font-family:'VT323',ui-monospace,monospace;font-size:22px;letter-spacing:0;color:{{ sbInk }}">{{ sbTime }}</span>
+</div>
+</sc-if>
+

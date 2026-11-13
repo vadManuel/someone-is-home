@@ -4174,6 +4174,91 @@ participation pair from D-195. Nothing about a round changes — the pool behave
 
 ---
 
+## Revision 41 — the map you walk to, and three places the build had drifted
+
+*Ruled by the owner 2026-11-12, during the redesign of the device mockup for legibility. Comparing
+every mockup screen against the shipped Kotlin screens turned up two kinds of finding: a tile that
+had no reason to exist, and three places where the build had quietly narrowed or contradicted a
+standing ruling. Both entries are the owner's.*
+
+### D-199 · **The Terminal tile is deleted. The map opens by scanning the T card — decided**
+
+**The tile only ever said NO SIGNAL.** M11 makes the map a place, not a screen, and the springboard
+tile was how `gdd.md` made that rule a device state: tap it anywhere but the station and it refuses.
+**It is deleted on the argument that deleted PHONE (D-121):** a tile that refuses teaches the rule by
+punishing somebody for pressing it in the dark, it costs a grid slot and a tap, and it says nothing
+the host does not already say aloud during setup, *here is the terminal*.
+
+**The deletion exposed the real gap: nothing said how the map opens at the station.** The T card is
+printed paper. The phone cannot sense that it is standing next to it, and the shipped NO SIGNAL
+screen reached the live map through a RETRY that succeeded unconditionally, which was a fixture
+standing in for a mechanism nobody had ruled.
+
+**The mechanism is the scan.** The map opens when the SCAN button is pointed at the T card, which
+is how every other place in the house is entered: a Subroutine at its marker, a meeting at the
+meeting card (D-121). **The scan is the station's check-in** (M11, *the station generates its own
+check-in*), so the reader is recorded at a known place exactly as the rule intends, and **it is the
+claim on the exclusive lock**. A scan of the T card while someone else is reading is refused on the
+scan path, beside NOTHING FOR YOU HERE and NOT A MARKER: `ONE READER AT A TIME` / *The terminal
+already has a reader. Others may stand here, but only one person reads.* That refusal is new copy
+and awaits the owner's eye. The live view and the timelapse both carry the motion budget row,
+because reading is an uncompletable task.
+
+**The slot stays empty**, as PHONE's did, so the grid keeps its shape for both roles. Page 1 is now
+FILES, NOTES, MESSAGES, an empty slot, then SETTINGS, CAMERA and two empty slots.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `gdd.md:171` steer | *Terminal reads NO SIGNAL everywhere but the map station* | the map opens by scanning the T card |
+| `gdd.md:470` | *Everywhere else, the Terminal app reads NO SIGNAL* | there is no Terminal app. The station is reached by scanning |
+| `gdd.md:944` | the Terminal row of the device-state table | deleted |
+| `epics.md` stories 3.3 and 8.1 | *NO SIGNAL elsewhere* | the scan opens the map, and a second reader is refused |
+| `ScreensSpringboard.kt` | the TERMINAL tile | deleted, slot empty |
+| `ScreenId.TermNo`, `Flow.kt:184` | NO SIGNAL and its unconditional RETRY | deleted. A T-card acquisition pushes `TermLive` |
+
+### D-200 · **D-077, D-093 and the house thread stand against the build — decided**
+
+Three places where the shipped code had drifted from a ruling. **The ruling wins in each.**
+
+- **The reconnecting screen dims.** D-077 names it among the concealment screens. The build had
+  narrowed that to the revoked screen alone, arguing that a reconnecting phone needs to be noticed.
+  The narrowing was never ruled, and a reconnecting phone lit brighter than its neighbours is exactly
+  the flare D-077 exists to prevent.
+- **The scan ring does not pulse.** `ringPulse()` animates the ring on the full amber field, which is
+  a local animation the core never emitted (D-093) on the one screen that is already a lamp.
+- **The house is one conversation.** Messages lists one row per sender, and the build drew the house
+  twice, at 21:02 and 21:01, which reads as two different numbers. It is one row now, showing its
+  newest text and opening a thread that holds all four, the 21:01 line *Do not attempt the exterior
+  doors.* included. D-105's reason for drawing both rows identically (dimming the older one would
+  read as a read mark) does not arise with one row. The header still counts messages, not rows.
+
+**Also confirmed, not changed:** the notice copy *Resident MARCUS was unreachable 21:04–21:07* stays.
+D-187 narrows when a notice fires, to deliberate evasion only, and says nothing against the
+sentence, which is `gdd.md:440`'s own example. And **D-168's carry state is still unbuilt**: the
+mockup now draws it on the work-order widget (CARRYING / DISK 01 / TO RACK / NOTHING ELSE OPENS
+UNTIL IT IS DELIVERED, opening Files), and that copy also awaits the owner's eye.
+
+### D-201 · **The unlock text is a player's voice. The sign-off is the house's — decided**
+
+Two senders had been drawn on the phone, HOUSE and NUMBER WITHHELD, and neither document said why.
+
+**NUMBER WITHHELD is a player.** The text that tells a Resident their next Subroutine is open
+reads as another player telling them they can go: **`you're up`**, lower case, in the register of
+every other personal text on the phone. **The number is withheld because the dependency is never
+named** (`gdd.md:278`): a sender's name would hand out a confirmed-innocent identity. **And the
+words never say why**, because the unlock is identical whether the upstream player finished or was
+revoked (`gdd.md:279`), and a text that said *done* would be a lie on one path and a tell on the
+other. The random unlock delay (`gdd.md:284`) is what keeps its timestamp from saying it instead.
+
+**The house signs off as HOUSE.** *Thank you for your cooperation.* on the Insiders' ending and
+*Unfortunate.* on the Residents' ending both come from HOUSE, the same sender as the thread. There
+is one house and it has one name.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| the quiet notification and the lantern card (`Notifications.kt`) | `NUMBER WITHHELD` / *A subroutine is available to you.* | `NUMBER WITHHELD` / *you're up* |
+| both endings' sign-off card (`PanelModel.kt:1445`) | `NUMBER WITHHELD` | `HOUSE` |
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><link href="https://fonts.googleapis.com/css2?family=Silkscreen&family=VT323&display=swap" rel="stylesheet"><style>body{margin:0;background:#222}</style></helmet>
+<div style="display:flex;flex-wrap:wrap;gap:12px;padding:12px">
+  <sc-for list="{{ items }}" as="t" hint-placeholder-count="4">
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <div style="position:relative;width:360px;height:760px;overflow:hidden;background:#000">
+        <dc-import name="Screen" screen="{{ t.id }}" role="{{ t.role }}" revoke-state="{{ t.rs }}" hint-size="360px,760px"></dc-import>
+        <div style="position:absolute;inset:0;pointer-events:none;background:{{ t.scan }}"></div>
+      </div>
+      <div style="color:#fff;font:14px monospace">{{ t.id }} {{ t.role }}</div>
+    </div>
+  </sc-for>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() {
+    const q = new URLSearchParams(location.search);
+    const ids = (q.get("s") || "home").split(",");
+    const role = q.get("r") || "resident";
+    const rs = q.get("rs") || "ready";
+    const PRE = ["boot","perms","join","secret","maps","editor","savename","homedetail","delete","lobby","roomedit","markersheet","stairswarn","scanmarker","termtaken","meettaken","termremove","meetremove","floors","reviewneeds","lock","locknotify","scan","wininsiders","winresidents","tally","notice","banner","notify","discussion","vote"];
+    return { items: ids.map(id => ({ id, role, rs, scan: PRE.indexOf(id) >= 0
+      ? "repeating-linear-gradient(0deg,rgba(0,0,0,.08) 0 1px,transparent 1px 3px)"
+      : "repeating-linear-gradient(0deg,rgba(0,0,0,.32) 0 1px,transparent 1px 3px)" })) };
+  }
+}
+</script>
+</body>
+</html>
