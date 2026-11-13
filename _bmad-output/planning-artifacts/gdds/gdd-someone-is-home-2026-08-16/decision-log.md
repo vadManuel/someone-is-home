@@ -4259,6 +4259,82 @@ is one house and it has one name.
 | the quiet notification and the lantern card (`Notifications.kt`) | `NUMBER WITHHELD` / *A subroutine is available to you.* | `NUMBER WITHHELD` / *you're up* |
 | both endings' sign-off card (`PanelModel.kt:1445`) | `NUMBER WITHHELD` | `HOUSE` |
 
+---
+
+## Revision 42 — the panel, as the mockup draws it
+
+*Ruled by the owner 2026-11-12, at the close of the mockup redesign. The redesign changed how every
+screen is drawn, and none of it reached this log: the palette, the faces, the canvas and the layout
+rules lived only in `tools/design-mockup/kit.py`, while `Design.kt` still documents the system they
+replace. One entry, because it is one system.*
+
+### D-202 · **The panel is five amber steps, two faces and a 360 canvas — decided**
+
+**The old ramp could not be read.** `Design.kt` set body text in `#8A5C12`, which is 3.6:1 on
+black, and drew its hairlines and edges in `#46300B` and `#241806`, at 1.7:1 and 1.2:1: lines that
+existed in the code and barely reached the eye. The redesign was for legibility, and legibility
+starts with the ramp.
+
+**The dark ramp**, on true black:
+
+| value | on `#000` | carries |
+|---|---|---|
+| `#FFC759` | 13.6:1 | ink: headings, live values, the one solid block |
+| `#E39A22` | 8.9:1 | secondary ink, and the whole ink of a medium screen |
+| `#C08A2E` | 6.9:1 | dim text, and the ceiling of a concealment screen (D-077) |
+| `#8A5C12` | 3.6:1 | lines: button edges, inactive borders. **Never text** |
+| `#5A3D0E` | 2.1:1 | hairlines: list rules, spent segments. **Never text** |
+| `#150E04` | — | the fill of the room you are standing in, and the dark stripe of the stairs hatch |
+
+**Text uses the top three only**, and all three clear 4.5:1 on black and still clear 6.3:1 on the
+`#150E04` fill. **`#46300B` and `#241806` are retired, and so is `#0B0703`** (`Amber.Well`), which the
+mockup never draws; if the port finds a screen that still needs it, that screen comes back here
+rather than keeping the value quietly. Bone, slate and caution are unchanged, value for value: they
+belong to screens played with the house lights on, and nothing about them was failing.
+
+**One text is below the top three, and it is named so it stays the only one:** the ACCESS REVOKED
+headline on the revoked screen, `#8A5C12` at 56px (3.6:1, which clears the 3:1 that large text
+needs). It recedes on purpose, under its own instruction line in `#C08A2E`: the screen is a
+concealment screen, and what the revoked player needs to read is what to do, not what happened.
+
+**Two faces, split by reading rather than by kind.** **VT323 carries everything a player reads:**
+headings, numbers, buttons and reading text, at 22px and up. **Two smaller sizes, and only these:**
+a caption runs 18–20px (the hold note, a setup hint, a widget line such as OF 7 ASSIGNED), and a
+map's room labels and chips run 17px, because a 10 × 12 plan at 360 has no room for 22. **Silkscreen is for 12px labels only**, the status strip and the small
+heading over a section, chrome learned once and then not read. This reverses `Design.kt`'s split,
+which gave Silkscreen every label and VT323 only quantities, and put most of the screen in the face
+that is hardest to read small.
+
+**The canvas is 360 units wide**, up from 300, and **every tap target is 56 or taller**: a thumb in
+the dark finds a target by its size, never by seeing it. **The springboard's page bar is not a
+target.** Paging is the horizontal swipe, and the two-segment bar only says which page is showing;
+the mockup's 28px tappable bar becomes a plain indicator. Five setup controls drawn under 56 rise to
+it, in the mockup and the port alike: the name chips (40), and the marker-remove chips, the
+terminal's remove control and YOUR ONE LINE (52).
+
+**Five layout rules**, all of them the light rules applied to layout:
+
+- **Hairline lists, not boxed rows.** A list is rows divided by `#5A3D0E` rules. A box around every
+  row multiplies lit edges for no information.
+- **One solid block per shift screen.** The single filled amber area is the action. Everything else
+  is line and glyph, because lit area is what carries across a dark room (`gdd.md:1195`).
+- **No glow, gradients or local animation** (rule 5, D-093). The stairs hatch is two flat values in
+  a hard stripe, which is a pattern, not a gradient.
+- **Screens say little.** A headline and the one next action. The buzz and the light change have
+  already said that something happened.
+- **Variants of one screen share one layout**, and only the words change: register marker and its
+  two refusals, the two remove screens, the scan refusals, the two incoming calls.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `Design.kt` `Amber` | Bright, Mid, Dim `#8A5C12` as body text, Faint `#46300B`, Edge `#241806`, Well `#0B0703` | the ramp above. `#8A5C12` becomes a line value; Faint, Edge and Well go |
+| `Design.kt` `PanelType` | Silkscreen carries every label, VT323 anything read as a quantity | VT323 carries what is read, Silkscreen is 12px labels |
+| `Design.kt` `DESIGN_WIDTH` | 300 | 360 |
+| `gdd.md:1193`, `gdd.md:1211` | four amber luminance steps · one bitmap typeface | the ramp above · two faces, split as above |
+| `gdd.md:621` | legible at the dimmest amber luminance step | legible in `#C08A2E`, the dimmest value text may use |
+| `game-architecture.md:756` | `palette.kt`: 4 amber luminance steps | the ramp above |
+| `tools/design-mockup` `s_play.py` `pagebar`, `s_setup.py:84`, `:123`, `:124`, `:248` | a 28px tappable page bar · setup targets at 40 and 52 | an indicator, not a button · 56 |
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).
