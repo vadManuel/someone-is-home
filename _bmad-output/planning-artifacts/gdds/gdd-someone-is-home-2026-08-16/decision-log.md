@@ -4335,6 +4335,43 @@ terminal's remove control and YOUR ONE LINE (52).
 | `game-architecture.md:756` | `palette.kt`: 4 amber luminance steps | the ramp above |
 | `tools/design-mockup` `s_play.py` `pagebar`, `s_setup.py:84`, `:123`, `:124`, `:248` | a 28px tappable page bar · setup targets at 40 and 52 | an indicator, not a button · 56 |
 
+---
+
+## Revision 43 — when the station comes free
+
+*Ruled by the owner 2026-11-12, while building D-199. D-199 made the scan of the T card the claim
+on the station's lock and said nothing about when the claim ends; `gdd.md:472` says only that the
+station locks on any viewing. Building the lock needed the other half.*
+
+### D-203 · **The Terminal's lock comes free four ways — decided**
+
+**The reader leaves the view.** BACK, the dock, STOP THE PLAYBACK onward to the springboard, or the
+motion budget closing it: any move off the live view and the timelapse ends the reading. Moving
+between those two does not. The phone reports it with the actor and nothing else, as STOP NOW does,
+because a reason would be a record of how somebody left the station.
+
+**A meeting is called.** The map is never read at a meeting (`gdd.md:470`), and D-185 already ends
+every running effect at the call. A lock that outlived the call would hand the next shift's station
+to whoever was reading when it rang. No scan claims it while the meeting runs.
+
+**The reader is put outside the system**, revoked or restrained. A seat that is out holds nothing,
+whichever way it went out.
+
+**The reader's connection drops.** A phone that is gone cannot say it stopped reading, so the house
+says it on that seat's behalf, the moment the connection closes. Otherwise a flat phone would keep
+the station for the rest of the round.
+
+**Nothing announces any of the four.** The next scan of the T card finds the station free; a push
+saying so would tell somebody who had been reading.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `GameState.reader`, `readerHolding()` | (new) | the lock; an out seat holds nothing |
+| `Event.TerminalLeft`, `Intent.LeaveTerminal`, `IntentMessage.LeaveTerminal` | (new) | the reader leaving, by the phone or by the house for a dropped connection |
+| `Rules.kt` `meetingCalled` | clears the jam and the isolations | also frees the station |
+| `FlowModel.arrive` | — | leaving the station's two screens sends the leave |
+| `LobbyOverTransport` `onLost` | releases the seat on the desk | also asks the rules to free the station |
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

@@ -185,6 +185,16 @@ sealed class IntentMessage {
     data object StopSubroutine : IntentMessage()
 
     /**
+     * **The live view or the timelapse closed, for whatever reason** (D-199, D-203,
+     * [Intent.LeaveTerminal]). Empty for [StopSubroutine]'s reason: the event it becomes carries the
+     * actor and nothing else, and the lock needs nothing more.
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("LeaveTerminal")
+    data object LeaveTerminal : IntentMessage()
+
+    /**
      * **The Sync Pulse, handed over — the containment channel, which was not on the wire at all**
      * (E-P2-5 / E-P3-7, `gdd.md:355`, [Intent.ReturnSyncPulse]).
      *
@@ -284,6 +294,7 @@ sealed class IntentMessage {
         is FireStatic -> Intent.FireStatic(actor)
         is BeginSubroutine -> Intent.BeginSubroutine(actor, marker)
         is StopSubroutine -> Intent.StopSubroutine(actor)
+        is LeaveTerminal -> Intent.LeaveTerminal(actor)
         is ReturnSyncPulse -> Intent.ReturnSyncPulse(actor, taps)
         is CallMeeting -> Intent.CallMeeting(actor)
         is CheckIn -> Intent.CheckIn(actor)

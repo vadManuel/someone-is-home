@@ -62,7 +62,7 @@ class RecordingTextTest {
         )
 
         assertTrue(
-            text.startsWith("someone-is-home/recording/17"),
+            text.startsWith("someone-is-home/recording/18"),
             "the format changed shape twice and the version did not move with it",
         )
     }
@@ -120,7 +120,7 @@ class RecordingTextTest {
             "ContactMade", "SurgeFired", "StaticFired", "IsolateFired", "MeetingCalled",
             "MeetingCheckedIn", "ReadyToVoteDeclared", "VoteSelected", "VoteLocked",
             "DiscussionClosed", "VoteWindowClosed", "TallyHalfwayReached", "MeetingClosed",
-            "EgressFired", "SyncPulseReturned",
+            "EgressFired", "SyncPulseReturned", "TerminalLeft",
         )
         val walked = original.events.map { Transcript.render(it).substringBefore('|') }.toSet()
         assertEquals(

@@ -28,6 +28,9 @@ internal val INSIDERS = listOf(Seat(1), Seat(5))
 /** The home the fixture round is played in. Eight ordinary markers is D-127's floor. */
 internal val MARKERS = (0 until 8).map { MarkerId("m$it") }
 
+/** The T card. Not among [MARKERS]: the reserved cards are never round markers (D-122). */
+internal val STATION = MarkerId("TERM")
+
 /**
  * **The same home, with a glyph and a room on every card** — what arming actually takes.
  *
@@ -116,7 +119,7 @@ private fun actor(state: GameState, insiders: List<Seat>): Seat =
 internal fun round(insiders: List<Seat> = INSIDERS): List<Event> {
     val arming = Event.RoundArmed(
         Tick(0), seed = 20260818L, seats = SEATS, insiders = insiders, markers = placed(MARKERS), names = NAMES,
-        oneLines = LINES,
+        oneLines = LINES, terminal = STATION,
     )
     // **The round is walked forward as it is built.** Each seat's next piece of work depends on
     // what it has already completed, and an Insider's Revoke depends on a cooldown that started at
@@ -167,6 +170,15 @@ internal fun round(insiders: List<Seat> = INSIDERS): List<Event> {
             // fixture's path so that the replay guarantee covers a window that shut without an
             // entry — the one way a window closes that the work plane never hears about.
             if (i % 13 == 7) add(walk(Event.PerformanceEnded(Tick(t++), SEATS[(i + 2) % SEATS.size])))
+            // **The station, three times a round** (D-199, D-203): one seat reads, a second is
+            // refused ONE READER AT A TIME, and the reader leaves. On the fixture's path so the
+            // role-swapped differential covers the lock -- an answer that noticed who was asking
+            // would diverge here -- and so the recording round-trips both the answer and the leave.
+            if (i % 11 == 3) {
+                add(walk(Event.MarkerScanned(Tick(t++), seat, STATION)))
+                add(walk(Event.MarkerScanned(Tick(t++), SEATS[(i + 3) % SEATS.size], STATION)))
+                add(walk(Event.TerminalLeft(Tick(t++), seat)))
+            }
             if (i % 9 == 0) {
                 // Pushed to the moment the house says this seat is ready, so the fixture's Revokes
                 // land instead of being refused inside the opening stretch of peace.

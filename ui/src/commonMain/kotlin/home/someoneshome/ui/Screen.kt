@@ -185,6 +185,7 @@ fun Screen(
                 ScreenId.ScanCaught -> ScanCaughtScreen(vals)
                 ScreenId.ScanBad -> ScanBadScreen()
                 ScreenId.ScanUnknown -> ScanUnknownScreen()
+                ScreenId.TermBusy -> TermBusyScreen()
                 // The verdict, and DELIBERATELY NOT `vals`. Every other screen that needs
                 // anything derived takes the whole `PanelVals`, which carries `insider` -- and
                 // handing that to a Subroutine screen would make "no role reaches this file" a
@@ -202,7 +203,6 @@ fun Screen(
                 ScreenId.SubDrift -> DriftScreen(state.verdict)
                 ScreenId.Files -> FilesScreen()
                 ScreenId.Notes -> NotesScreen(vals)
-                ScreenId.TermNo -> TermNoScreen()
                 ScreenId.TermLive -> TermLiveScreen(vals)
                 ScreenId.Timelapse -> TimelapseScreen(vals)
                 ScreenId.EgressWidget -> EgressWidgetScreen(vals)

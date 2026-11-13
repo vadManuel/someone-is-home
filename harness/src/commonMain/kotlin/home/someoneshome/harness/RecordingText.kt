@@ -220,11 +220,16 @@ object RecordingText {
                 at, long("seed"), seats("seats"), seats("insiders"),
                 chosen("chosen"), destinations("markers"), int("voteWindow"),
                 heldNames("names"), heldLines("lines"),
+                // `none` for a round armed without a station, and required like every field here:
+                // a missing one cannot be read as none, because a replay that lost the T card
+                // answers every scan of it as an empty marker.
+                if (req("terminal") == "none") null else marker("terminal"),
             )
             "MarkerScanned" -> Event.MarkerScanned(at, seat("actor"), marker("marker"))
             "SubroutineReturned" ->
                 Event.SubroutineReturned(at, seat("actor"), marker("marker"), ints("entered"))
             "PerformanceEnded" -> Event.PerformanceEnded(at, seat("actor"))
+            "TerminalLeft" -> Event.TerminalLeft(at, seat("actor"))
             "RevokeArmed" -> Event.RevokeArmed(at, seat("actor"))
             // Both targets are required, like every other field here. A missing one cannot be
             // defaulted: `Seat(0)` is a real seat and a blank card id is a real card id, so a
@@ -269,11 +274,12 @@ object RecordingText {
         "RoundArmed" ->
             setOf(
                 "at", "seed", "seats", "insiders", "chosen", "markers", "voteWindow", "names",
-                "lines",
+                "lines", "terminal",
             )
         "MarkerScanned" -> setOf("at", "actor", "marker")
         "SubroutineReturned" -> setOf("at", "actor", "marker", "entered")
         "PerformanceEnded" -> setOf("at", "actor")
+        "TerminalLeft" -> setOf("at", "actor")
         "RevokeArmed" -> setOf("at", "actor")
         "ContactMade" -> setOf("at", "actor", "target")
         // ⚠️ **These three were missing and the two Tier-2 rows above them were unreadable.** T1

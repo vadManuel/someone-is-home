@@ -313,6 +313,17 @@ class LobbyHouse(
          * player made them.
          */
         data class Fired(val seat: Seat, val fire: RoundBody.Fire) : Arrival
+
+        /**
+         * **A phone's connection dropped, from [TransportHost.onLost]** (D-203).
+         *
+         * A phone that is gone cannot say it stopped reading the Terminal, and the station would
+         * stay held for the rest of the round. So the house says it on that seat's behalf, as
+         * [Intent.LeaveTerminal] -- the request the phone would have sent -- and it rides this
+         * queue so that it reaches the rules after everything the phone did before it dropped.
+         * From a seat that is not reading, it changes nothing.
+         */
+        data class Lost(val seat: Seat) : Arrival
     }
 
     private val arriving = Channel<Arrival>(Channel.UNLIMITED)
@@ -388,7 +399,7 @@ class LobbyHouse(
             // against nothing. The intent desk's mark rides the ordered queue instead -- see
             // Arrival, and the silent failure it exists to prevent.
             onSeated = { seat -> desk.seated(seat); arriving.trySend(Arrival.Seated(seat)); publish() },
-            onLost = { desk.left(it); publish() },
+            onLost = { seat -> desk.left(seat); arriving.trySend(Arrival.Lost(seat)); publish() },
             // The authority's record of a connection turned away — the reason and never the
             // token (E-D3-1). A refused resume is the one the host most needs: it means a phone
             // in this room is holding a seat from an evening this house never ran.
@@ -579,6 +590,9 @@ class LobbyHouse(
                     // A `Fire` carries no intent, so there is nothing here a `Put` could hold.
                     is IntentDesk.Landing.Put -> Unit
                 }
+                // **The house says the reader left, because the reader cannot** (D-203). Not through
+                // the desk: there is no frame and no sequence, only a connection that closed.
+                is Arrival.Lost -> onIntent(Intent.LeaveTerminal(arrival.seat))
             }
         }
     }

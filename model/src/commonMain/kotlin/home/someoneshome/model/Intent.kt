@@ -91,6 +91,12 @@ sealed interface Intent {
     data class StopSubroutine(val actor: Seat) : Intent
 
     /**
+     * **This phone stopped reading the Terminal** (D-199, D-203). The actor and nothing else, as
+     * [StopSubroutine] reports the actor and nothing else: no reason, no place.
+     */
+    data class LeaveTerminal(val actor: Seat) : Intent
+
+    /**
      * **One participant's taps on the Sync Pulse, handed over** (`gdd.md:355`,
      * [Event.SyncPulseReturned]).
      *

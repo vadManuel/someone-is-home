@@ -106,6 +106,8 @@ class HouseBuzzer(
      */
     fun heard(effect: Effect) {
         if (effect is Effect.ScanAnswered) open = effect.opened
+        // A scan of the T card spends whatever was armed (D-199), so nothing is open after it.
+        if (effect is Effect.TerminalAnswered) open = null
         if (effect.ringing()) return ring()
         buzz(effect.haptic() ?: return)
     }
@@ -126,6 +128,7 @@ class HouseBuzzer(
      */
     fun heard(message: RoundMessage) {
         if (message is RoundMessage.ScanAnswered) open = message.opened
+        if (message is RoundMessage.TerminalAnswered) open = null
         if (message.ringing()) return ring()
         buzz(message.haptic() ?: return)
     }
@@ -292,7 +295,8 @@ internal fun Effect.ringing(): Boolean = when (this) {
     // The Revoke landing says its thing once, like the takeover it mirrors; the roster is silent
     // entirely and is one of the `null` rows in [haptic] below.
     is Effect.RevokeLanded, is Effect.RosterIssued,
-    is Effect.WorkOrderIssued, is Effect.ScanAnswered, is Effect.PresenceChanged,
+    is Effect.WorkOrderIssued, is Effect.ScanAnswered, is Effect.TerminalAnswered,
+    is Effect.PresenceChanged,
     is Effect.CheckInProgressed, is Effect.ReadyProgressed, is Effect.VoteProgressed,
     is Effect.VoteHeld, is Effect.VoteSelectionShown, is Effect.MeetingResolved,
     is Effect.SyncPulseAnswered, is Effect.InsidersRevealed, is Effect.RoleRevealed,
@@ -401,6 +405,8 @@ internal fun Effect.haptic(): Haptic? = when (this) {
     is Effect.WorkOrderIssued -> null
     // The answer to a scan the player is holding the phone up to do.
     is Effect.ScanAnswered -> null
+    // The station's answer, for the same reason: the phone is held up to the T card already.
+    is Effect.TerminalAnswered -> null
     // The map moving. Every phone in the house would buzz every time anybody walked anywhere.
     is Effect.PresenceChanged -> null
     // Counts ticking up on a screen the player is watching tick up.
@@ -455,7 +461,7 @@ internal fun RoundMessage.ringing(): Boolean = when (this) {
     is RoundMessage.SubroutineProgressed, is RoundMessage.SystemIntegrityLive,
     is RoundMessage.SystemIntegrityBatched, is RoundMessage.MessageDelivered,
     is RoundMessage.HouseSignedOff, is RoundMessage.WorkOrderIssued,
-    is RoundMessage.ScanAnswered, is RoundMessage.PresenceChanged,
+    is RoundMessage.ScanAnswered, is RoundMessage.TerminalAnswered, is RoundMessage.PresenceChanged,
     is RoundMessage.CheckInProgressed, is RoundMessage.ReadyProgressed,
     is RoundMessage.VoteProgressed, is RoundMessage.VoteHeld,
     is RoundMessage.VoteSelectionShown, is RoundMessage.MeetingResolved,
@@ -516,6 +522,7 @@ internal fun RoundMessage.haptic(): Haptic? = when (this) {
     is RoundMessage.HouseSignedOff -> null
     is RoundMessage.WorkOrderIssued -> null
     is RoundMessage.ScanAnswered -> null
+    is RoundMessage.TerminalAnswered -> null
     is RoundMessage.PresenceChanged -> null
     is RoundMessage.CheckInProgressed -> null
     is RoundMessage.ReadyProgressed -> null

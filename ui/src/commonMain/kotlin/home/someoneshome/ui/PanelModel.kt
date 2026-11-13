@@ -71,10 +71,13 @@ enum class ScreenId {
     // per Subroutine is also what keeps the sweeps honest — every guard in this module walks
     // `ScreenId.entries`, so a Subroutine hiding behind a field on a shared screen would be a
     // Subroutine none of them ever looked at.
-    Work, Scan, ScanCaught, ScanBad, ScanUnknown,
+    // `TermBusy` is the third scan refusal (D-199): the T card, while somebody else is reading.
+    Work, Scan, ScanCaught, ScanBad, ScanUnknown, TermBusy,
     SubHandshake, SubReplay, SubParity, SubShort, SubTrace, SubJam, SubSniff, SubDeallocate,
     SubInterrupt, SubDrift,
-    Files, Notes, TermNo, TermLive, Timelapse,
+    // **No `TermNo`.** NO SIGNAL is deleted with the tile that reached it (D-199): the live view
+    // opens because the house answered a scan of the T card, and from nowhere else.
+    Files, Notes, TermLive, Timelapse,
 
     // The house's hands.
     Banner, EgressWidget,
@@ -1820,7 +1823,7 @@ class PanelVals(
             ScreenId.Call, ScreenId.Found,
             ScreenId.Assemble, ScreenId.Notice, ScreenId.Tally, ScreenId.Revoked,
             ScreenId.Restrained, ScreenId.ScanMarker, ScreenId.ScanCaught, ScreenId.ScanBad,
-            ScreenId.ScanUnknown, ScreenId.GhostMeeting, ScreenId.WinInsiders,
+            ScreenId.ScanUnknown, ScreenId.TermBusy, ScreenId.GhostMeeting, ScreenId.WinInsiders,
             ScreenId.WinResidents,
         )
 

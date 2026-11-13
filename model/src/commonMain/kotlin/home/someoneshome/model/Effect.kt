@@ -326,6 +326,32 @@ sealed interface Effect {
     data class ScanAnswered(val seat: Seat, val opened: SubroutineInstance?) : Effect
 
     /**
+     * **The house's answer to a scan of the T card: you are reading, or somebody else is** (D-199).
+     *
+     * [reading] true opens the live view. False is ONE READER AT A TIME, the one refusal on the
+     * scan path that names something about another player -- and what it names is a person
+     * standing lit at a fixed place everybody knows, which the scanner is looking at.
+     *
+     * ### One kind for both answers, for [ScanAnswered]'s reason
+     *
+     * An open station and a held one are this effect with a different boolean, so the allowlist
+     * holds one row and the wire carries one shape. Split, a reader of the allowlist could count
+     * refusals without seeing either payload.
+     *
+     * ### A second kind beside ScanAnswered, and why that is not the leak it looks like
+     *
+     * *Which kind answers a scan* is decided by the card and by nothing else: every phone that
+     * scans the T card gets this, whatever its role, and every phone that scans an ordinary
+     * marker gets [ScanAnswered]. The card is printed paper with a T on it, the phone has already
+     * read its shape, and the host named the station aloud during setup, so the kind says nothing
+     * the scanner did not hold before the answer arrived.
+     *
+     * **Addressed to the scanning seat and to nobody else.** A broadcast would tell the whole
+     * house who is reading the map, which is the anonymity M11's check-in rule is careful about.
+     */
+    data class TerminalAnswered(val seat: Seat, val reading: Boolean) : Effect
+
+    /**
      * **The presence plane's whole output: a window opened, or a window closed** (D-111, D-136).
      *
      * See [Presence]. The house **records, never recites** — this effect has no row in the emit

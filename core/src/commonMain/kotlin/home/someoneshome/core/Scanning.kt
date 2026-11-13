@@ -39,10 +39,11 @@ sealed interface ScanRouting {
     /**
      * An ordinary registered card, and the Terminal with it. The rules resolve `(seat, card)`.
      *
-     * **The Terminal routes here too, and answers NOTHING FOR YOU HERE until it is built.** It is
-     * a registered card, so D-124's registered vocabulary is the honest one for it; its own screen
-     * is not in this build, and routing it anywhere else would have meant inventing a fourth case
-     * for a screen nobody has drawn. Fail-closed and unremarkable, which is what D-124 asks for.
+     * **The Terminal routes here too, and the rules answer it as the station** (D-199). It is a
+     * registered card and the scan is one event either way; what turns it into the station is
+     * that the arming event names the T card, so `reduce` recognises it by id and answers with the
+     * station's own effect. No fourth case here: the routing decides what kind of fact the paper
+     * is, and a scan of the T card is the same fact as any scan -- *this seat read this card*.
      */
     data class Work(val event: Event.MarkerScanned) : ScanRouting
 

@@ -187,6 +187,15 @@ sealed class RoundMessage {
     data class ScanAnswered(val opened: SubroutineInstance?) : RoundMessage()
 
     /**
+     * The answer to a scan of the T card: the live view opens, or ONE READER AT A TIME (D-199).
+     * One kind for both, for [ScanAnswered]'s reason. See [Effect.TerminalAnswered].
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("TerminalAnswered")
+    data class TerminalAnswered(val reading: Boolean) : RoundMessage()
+
+    /**
      * **Projected and permitted to nobody, exactly as its kind is named in [EmitSchema.kindOf] and
      * granted nothing** (D-111, D-136).
      *
@@ -510,6 +519,7 @@ sealed class RoundMessage {
             is MessageDelivered -> EmitSchema.MESSAGE_DELIVERED
             is WorkOrderIssued -> EmitSchema.WORK_ORDER_ISSUED
             is ScanAnswered -> EmitSchema.SCAN_ANSWERED
+            is TerminalAnswered -> EmitSchema.TERMINAL_ANSWERED
             is PresenceChanged -> EmitSchema.PRESENCE_CHANGED
             is OpeningMessage -> EmitSchema.OPENING_MESSAGE
             is RoleRevealed -> EmitSchema.ROLE_REVEALED
@@ -712,6 +722,7 @@ object RoundWire {
         is Effect.MessageDelivered -> RoundMessage.MessageDelivered(effect.body)
         is Effect.WorkOrderIssued -> RoundMessage.WorkOrderIssued(effect.lines)
         is Effect.ScanAnswered -> RoundMessage.ScanAnswered(effect.opened)
+        is Effect.TerminalAnswered -> RoundMessage.TerminalAnswered(effect.reading)
         is Effect.PresenceChanged -> RoundMessage.PresenceChanged(effect.at, effect.open)
         is Effect.OpeningMessage -> RoundMessage.OpeningMessage(effect.haptic)
         // **The seat comes off and the role narrows to one bit about the recipient.**

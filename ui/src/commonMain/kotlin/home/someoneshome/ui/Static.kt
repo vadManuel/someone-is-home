@@ -27,10 +27,10 @@ import androidx.compose.ui.platform.testTag
  * ### Why the real data stays underneath rather than being replaced
  *
  * A blanked view is a broken view, and D-186 is explicit that Static must be **distinguishable from
- * a disconnection** — a jammed Terminal does not read as a broken one. `NO SIGNAL` already means
- * *you are not at the station*, and a third failure picture that resembled either would turn the
- * ability's one guaranteed consequence — the reader knowing precisely what they were prevented from
- * seeing — into a bug report. Leaving the true render beneath is also what makes the jam legible as
+ * a disconnection** — a jammed Terminal does not read as a broken one. ONE READER AT A TIME
+ * already means *somebody else is at the station* (D-199), and a third failure picture that
+ * resembled either would turn the ability's one guaranteed consequence — the reader knowing
+ * precisely what they were prevented from seeing — into a bug report. Leaving the true render beneath is also what makes the jam legible as
  * an attack rather than as a fault: you can see there is something there.
  *
  * ### Rule 5: this is authored light, and the device invents none of it

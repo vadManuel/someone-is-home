@@ -205,6 +205,9 @@ class RoundAuthority(
             markers = markers,
             voteWindowSeconds = inputs.voteWindowSeconds,
             names = inputs.names,
+            // The station's card, so that a scan of it opens the map (D-199). The id alone: the
+            // room the host put it in is the host's to say aloud.
+            terminal = hosted.map.terminal?.card?.id,
         ).copy(oneLines = inputs.oneLines)
         home = hosted
 

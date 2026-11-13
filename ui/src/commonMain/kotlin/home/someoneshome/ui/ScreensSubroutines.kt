@@ -1383,6 +1383,9 @@ const val RESCAN: String = "REJECTED . RESCAN THE MARKER"
 /**
  * The motion budget, as a readout rather than as a bar.
  *
+ * On every Subroutine screen, and on the Terminal's live view and timelapse, because reading the
+ * map is an uncompletable task (`gdd.md:476`, D-199).
+ *
  * It calibrates on entry to a Subroutine against that player's own hand steadiness, and it is the
  * **one** thing in the game a client adjudicates (D-043) — 100 Hz cannot round-trip and the
  * failure has to be immediate. None of that exists yet: there is no motion on a desktop render and
@@ -1391,7 +1394,7 @@ const val RESCAN: String = "REJECTED . RESCAN THE MARKER"
  * is the worst place to put a decorative animation.
  */
 @Composable
-private fun MotionBudgetRow(
+internal fun MotionBudgetRow(
     ink: Color,
     value: Color,
     /**

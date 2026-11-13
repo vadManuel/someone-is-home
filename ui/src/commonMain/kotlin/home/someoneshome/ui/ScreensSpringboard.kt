@@ -30,9 +30,9 @@ import androidx.compose.ui.text.style.TextAlign
  * ability gets a plausible nothing.
  *
  * The governing principle for the whole device shows up here most clearly: *every rule the player
- * would have to remember becomes a state the device is in.* Files holds one item. Terminal reads
- * NO SIGNAL away from the station. Messages cannot reply. None of those are enforced by telling
- * anyone off.
+ * would have to remember becomes a state the device is in.* Files holds one item. The map opens
+ * only at the station, because only a scan of the T card opens it (D-199). Messages cannot reply.
+ * None of those are enforced by telling anyone off.
  */
 
 /**
@@ -154,12 +154,18 @@ fun HomeScreen(vals: PanelVals, widget: @Composable (PanelVals) -> Unit = { Inte
                         "SETTINGS", PanelIcons.Settings, Modifier.weight(1f),
                         circles = PanelIcons.SettingsDots,
                     ) { go(ScreenId.Settings) }
-                    SpringTile("TERMINAL", PanelIcons.Terminal, Modifier.weight(1f)) { go(ScreenId.TermNo) }
+                    // **THE TERMINAL TILE IS GONE, on the argument that deleted PHONE** (D-199). It
+                    // only ever said NO SIGNAL: a tile that refuses teaches the rule by punishing
+                    // somebody for pressing it in the dark, and it said nothing the host does not say
+                    // aloud during setup. The map opens by scanning the T card. CAMERA moves up one
+                    // slot and the row ends in two empty ones, so the grid keeps its shape for both
+                    // roles.
                     // Camera is inert, not merely dim. See SpringTile.
                     SpringTile(
                         "CAMERA", PanelIcons.Camera, Modifier.weight(1f),
                         circles = PanelIcons.CameraLens, enabled = false,
                     )
+                    Box(Modifier.weight(1f))
                     Box(Modifier.weight(1f))
                 }
             }

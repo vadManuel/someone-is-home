@@ -50,6 +50,13 @@ class Recording(
     }
 
     companion object {
+        // 18: the Terminal became a station (D-199, D-203). One event a version 17 build cannot
+        // construct (`TerminalLeft`) and one effect it cannot name (`TerminalAnswered`), and two
+        // rows changed shape: **`RoundArmed` gained the T card's id**, without which a replay
+        // answers every scan of it as NOTHING FOR YOU HERE, and **the state row gained the
+        // station's card and its reader**, which reach no client and are therefore held nowhere
+        // else. A version 17 arming row is missing a field this build requires.
+        //
         // 17: two rows changed shape, in opposite directions, and neither could have been a
         // tolerant read.
         //
@@ -182,7 +189,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/17"
+        const val HEADER = "someone-is-home/recording/18"
     }
 }
 

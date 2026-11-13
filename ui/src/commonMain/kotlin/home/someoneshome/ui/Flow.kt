@@ -151,9 +151,10 @@ object ScreenGraph {
         // NOT THIS ONE, and nothing else: BEGIN names no screen, because which Subroutine opens
         // is a fact about the card that was read. See Flow.viaActions.
         ScreenId.ScanCaught -> setOf(ScreenId.Work)
-        // Both refusals, pixel-identical apart from their text, and identical here too. One of
-        // them is Resident-only; differing exits would be the tell the shared body prevents.
-        ScreenId.ScanBad, ScreenId.ScanUnknown -> setOf(ScreenId.Scan, ScreenId.Work)
+        // All three refusals, pixel-identical apart from their text, and identical here too. One
+        // of them is Resident-only; differing exits would be the tell the shared body prevents.
+        ScreenId.ScanBad, ScreenId.ScanUnknown, ScreenId.TermBusy ->
+            setOf(ScreenId.Scan, ScreenId.Work)
         // **Every Subroutine screen has exactly one exit, and it is STOP NOW.** Handing your
         // entry over is not one: whether the work landed is the house's answer, and a screen that
         // walked away on the strength of its own last tap would be this phone announcing a
@@ -181,7 +182,8 @@ object ScreenGraph {
         ScreenId.SubInterrupt, ScreenId.SubDrift -> emptySet()
         ScreenId.Files -> setOf(ScreenId.Home)
         ScreenId.Notes -> setOf(ScreenId.Home)
-        ScreenId.TermNo -> setOf(ScreenId.Home, ScreenId.TermLive)
+        // **The live view is opened by the house and left by the player** (D-199). See
+        // [Flow.houseOpened]: nothing walks to it except its own timelapse coming back.
         ScreenId.TermLive -> setOf(ScreenId.Home, ScreenId.Timelapse)
         ScreenId.Timelapse -> setOf(ScreenId.TermLive)
         ScreenId.Reveal -> setOf(ScreenId.Home, ScreenId.RevealThread)
@@ -233,7 +235,8 @@ object ScreenGraph {
         // that ruling forbids outright. The tile is deleted rather than retargeted and `Calling`
         // has moved to [Flow.housePushed], where `MeetingCalling` is the only thing that reaches it.
         ScreenId.Work, ScreenId.Files, ScreenId.Notes, ScreenId.Reveal,
-        ScreenId.Settings, ScreenId.TermNo, ScreenId.Page2, ScreenId.Scan, ScreenId.Lock,
+        // No TERMINAL tile (D-199). The map opens by scanning the T card, so it is not here.
+        ScreenId.Settings, ScreenId.Page2, ScreenId.Scan, ScreenId.Lock,
     )
 
     /** The whole graph, for the walks that need it all at once. */
@@ -585,7 +588,7 @@ object Flow {
         // `RoundMessage.MeetingCalling`, sent to the one seat that scanned the meeting card
         // (D-191), and nothing on any phone can walk here.
         ScreenId.Calling,
-        ScreenId.ScanCaught, ScreenId.ScanBad, ScreenId.ScanUnknown,
+        ScreenId.ScanCaught, ScreenId.ScanBad, ScreenId.ScanUnknown, ScreenId.TermBusy,
         ScreenId.Revoked, ScreenId.Restrained, ScreenId.Ghost2,
         // **The meeting, past the ring.** Each of these was reachable by a timer and is now
         // reachable only by the house — see [housePushes] for which effect carries which. They are
@@ -616,6 +619,33 @@ object Flow {
      * without anyone saying so: a screen nothing reaches is a screen drawn for nobody.
      */
     val unrouted: Set<ScreenId> = emptySet()
+
+    /**
+     * **Screens only the house can open, which the player then uses like any app** (D-199).
+     *
+     * The live view is the one. It used to be walked to, through a TERMINAL tile and a NO SIGNAL
+     * screen whose RETRY always worked; now it opens because the house answered a scan of the T
+     * card with *you are reading*, and from nowhere else. That makes it house-pushed in the sense
+     * [housePushed] is about -- **no tap anywhere in the app may put a phone on it** -- and unlike
+     * every screen in that set in one respect: once it is open, it is the player's. It has a way
+     * home, and its timelapse comes back to it.
+     *
+     * So it is a set of its own rather than a member of [housePushed], and the difference is
+     * exactly the two things that set forbids: a back arrow to a declared parent, and a child
+     * screen walking back into it. `FlowTest.nothingWalksIntoAHouseOpenedViewFromOutsideIt` holds
+     * the narrower rule that replaces them -- the only screens that walk here are ones reachable
+     * from nowhere else.
+     */
+    val houseOpened: Set<ScreenId> = setOf(ScreenId.TermLive)
+
+    /**
+     * **The station's screens: while a phone is on one of these, it is the reader** (D-203).
+     *
+     * Leaving the set for any screen outside it is the phone stopping reading, and [FlowModel]
+     * says so to the house from the one place every navigation passes through. Moving between the
+     * two is still reading.
+     */
+    val atTheStation: Set<ScreenId> = setOf(ScreenId.TermLive, ScreenId.Timelapse)
 
     /**
      * **The browsing surfaces: the screens a finger may step backwards off.**
@@ -1102,6 +1132,12 @@ class FlowModel(
      */
     private fun arrive(next: PanelState) {
         val moved = next.screen != state.screen
+        // **Leaving the station, by any route, is the reading ending** (D-203). BACK, the dock, a
+        // meeting being pushed, a Surge rebooting the phone, the motion budget closing the view:
+        // every one of them arrives here, so the report is made here and nowhere else, and a new
+        // way off the live view cannot forget to make it. The actor and nothing else.
+        val leftTheStation = moved && state.screen in Flow.atTheStation &&
+            next.screen !in Flow.atTheStation
         val beginning = moved && next.screen in MeetingModel.STARTS
         if (beginning) {
             meeting.meetingBegan()
@@ -1117,6 +1153,7 @@ class FlowModel(
         // question — are both answers to *where the player is now*, and a report made before the
         // move would be answering about where they were.
         if (moved) onScreen(next.screen)
+        if (leftTheStation) send(IntentMessage.LeaveTerminal)
     }
 
     // ---- The Surge, five seconds of it (D-182) ---------------------------------------------------
@@ -2054,6 +2091,13 @@ class FlowModel(
             // and not a derivation. An answer naming an entry no order line holds moves nothing,
             // which is fail-closed: the phone stays on the scan rather than opening a card the
             // house cannot place.
+            // **The T card's answer: the live view, or ONE READER AT A TIME** (D-199). Both are
+            // the house's word about this phone's own scan, and the phone moves on it and decides
+            // nothing. The station screen is not a Subroutine and has no BEGIN: reading starts the
+            // moment the house says this phone is the reader.
+            is RoundMessage.TerminalAnswered ->
+                push(if (message.reading) ScreenId.TermLive else ScreenId.TermBusy)
+
             is RoundMessage.ScanAnswered -> when (val opened = message.opened) {
                 null -> push(ScreenId.ScanBad)
                 else -> currentFrom(opened)?.let { current ->

@@ -386,12 +386,13 @@ class ScanRoutingTest {
     }
 
     /**
-     * **The Terminal routes to work too, and answers NOTHING FOR YOU HERE until it is built.**
+     * **The Terminal routes to work too, and never to the unregistered alert.**
      *
-     * It is a registered card, so D-124's registered vocabulary is the honest one for it. Routing
-     * it to the unregistered alert would tell a player that the T card in their hand is not part
-     * of the home, which is false and is the one thing that refusal is allowed to be specific
-     * about.
+     * It is a registered card. Routing it to the unregistered alert would tell a player that the T
+     * card in their hand is not part of the home, which is false and is the one thing that refusal
+     * is allowed to be specific about. What the rules then answer depends on whether the arming
+     * named it as the station (D-199) -- see `TerminalLockTest`. This round's arming does not, so
+     * the card opens nothing here.
      */
     @Test
     fun `the terminal is a registered card and is answered as one`() {

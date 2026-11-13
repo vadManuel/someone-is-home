@@ -197,7 +197,7 @@ private fun firedBy(event: Event): Seat? = when (event) {
     is Event.MeetingCheckedIn, is Event.ReadyToVoteDeclared, is Event.DiscussionClosed,
     is Event.VoteSelected, is Event.VoteLocked, is Event.VoteWindowClosed,
     is Event.TallyHalfwayReached, is Event.MeetingClosed,
-    is Event.SyncPulseReturned, is Event.EgressExpired,
+    is Event.SyncPulseReturned, is Event.EgressExpired, is Event.TerminalLeft,
     -> null
 }
 
@@ -229,6 +229,12 @@ private fun phaseOf(event: Event): MeetingPhase? = when (event) {
     // would leave the presence plane holding a window that never shut, and the one consumer it has
     // is an expiry (D-136).
     is Event.PerformanceEnded -> null
+
+    // Not a meeting event, and not refused during one, for [Event.PerformanceEnded]'s reason: the
+    // live view closes wherever the reader is when the house rings, and a phone whose connection
+    // drops at a meeting has dropped all the same. The call has already freed the station, so at a
+    // meeting this changes nothing -- which is the harmless direction.
+    is Event.TerminalLeft -> null
 
     is Event.MeetingCheckedIn -> MeetingPhase.CheckIn
     is Event.ReadyToVoteDeclared, is Event.DiscussionClosed -> MeetingPhase.Discussion
@@ -262,6 +268,7 @@ private fun isTierTwo(event: Event): Boolean = when (event) {
     is Event.DiscussionClosed, is Event.VoteSelected, is Event.VoteLocked,
     is Event.VoteWindowClosed, is Event.TallyHalfwayReached, is Event.MeetingClosed,
     is Event.EgressFired, is Event.SyncPulseReturned, is Event.EgressExpired,
+    is Event.TerminalLeft,
     -> false
 }
 
@@ -294,5 +301,6 @@ private fun needsEgress(event: Event): Boolean = when (event) {
     // about a list of markers and a Static names no marker, no room and no seat -- so there is
     // nothing here for it to need, and a gate would refuse every Static in every quiet round.
     is Event.StaticFired,
+    is Event.TerminalLeft,
     -> false
 }

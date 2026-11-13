@@ -690,9 +690,30 @@ fun ScanUnknownScreen() {
 }
 
 /**
- * Both refusals, drawn by one function.
+ * **The T card, while somebody else is reading** (D-199, `gdd.md:472`).
  *
- * **The two screens are identical apart from their two lines of text, and that must stay true.**
+ * *The station locks on any viewing. Others may stand here; only one person reads.* The third
+ * refusal on the scan path, drawn by the same body as the other two so that, across a room, it is
+ * the same screen with different words.
+ *
+ * **It is the one refusal that says something about another player, and what it says is already
+ * in front of the scanner**: a person standing lit at a fixed place everybody knows, reading. The
+ * house answers it to either role on the same terms, because either role may hold the station.
+ *
+ * ⚠️ **ONE READER AT A TIME is new copy and awaits the owner's eye** (D-199).
+ */
+@Composable
+fun TermBusyScreen() {
+    ScanRefusal(
+        headline = "ONE READER\nAT A TIME",
+        detail = "The terminal already has a reader. Others may stand here, but only one person reads.",
+    )
+}
+
+/**
+ * All three refusals, drawn by one function.
+ *
+ * **The three screens are identical apart from their two lines of text, and that must stay true.**
  * If they had different icons or different shapes, an onlooker could tell which refusal you got
  * from across a room — and one of them (NOTHING FOR YOU HERE) is reachable only by a Resident.
  * Sharing the body makes that identity structural instead of a coincidence someone later
@@ -851,52 +872,6 @@ fun NotesScreen(vals: PanelVals) {
 }
 
 /**
- * Terminal, away from the station: **NO SIGNAL.**
- *
- * Self-enforcing. Nobody has to remember that the map only works at one place, because the app is
- * simply in that state everywhere else — and the state is identical for both roles, so trying it
- * from the wrong room reveals nothing about who tried.
- */
-@Composable
-fun TermNoScreen() {
-    val go = navigator()
-    Column(
-        Modifier.fillMaxSize().padding(8.u),
-        verticalArrangement = Arrangement.spacedBy(7.u),
-    ) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            BackChevron(ScreenId.Home, Amber.Dim)
-            Label("TERMINAL", size = 7.0, color = Amber.Dim, tracking = 0.16)
-            Label(
-                "NO SIGNAL",
-                modifier = Modifier.weight(1f),
-                size = 7.0, color = Amber.Faint, tracking = 0.16, align = TextAlign.End,
-            )
-        }
-
-        Column(
-            Modifier.weight(1f).fillMaxWidth().border(1.u, Amber.Edge),
-            verticalArrangement = Arrangement.spacedBy(10.u, Alignment.CenterVertically),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Label("NO SIGNAL", size = 15.0, color = Amber.Dim, tracking = 0.16)
-            Label(
-                "TERMINAL UNREACHABLE\nFROM THIS LOCATION",
-                size = 6.5, color = Amber.Faint, tracking = 0.12, lineHeight = 2.0,
-                align = TextAlign.Center,
-            )
-        }
-
-        PanelButton(
-            "RETRY",
-            border = Amber.Edge, ink = Amber.Faint,
-            size = 7.0, tracking = 0.14, verticalPadding = 8.u,
-            onClick = { go(ScreenId.TermLive) },
-        )
-    }
-}
-
-/**
  * Counts per room, three staleness bands, your own room outlined. Never dots.
  *
  * **STATIC lands here** (D-186). The plan, the labels and the counts are drawn exactly as they
@@ -926,6 +901,10 @@ fun TermLiveScreen(vals: PanelVals) {
             vals.staticJam?.let { StaticNoise(it, Modifier.fillMaxSize()) }
         }
         Label("YOUR ROOM OUTLINED", size = 5.5, color = Amber.Faint, tracking = 0.08)
+        // **Reading is an uncompletable task, so the motion budget applies** (`gdd.md:476`, D-199).
+        // Standing still, glowing, at a place everybody knows: move too much and the view closes,
+        // and *the exposure is the limit* rather than a timer.
+        MotionBudgetRow(Amber.Dim, Amber.Bright)
         PanelButton(
             "TIMELAPSE . 2:00 AT 6X",
             border = Amber.Dim, ink = Amber.Bright,
@@ -976,6 +955,9 @@ fun TimelapseScreen(vals: PanelVals) {
             Box(Modifier.weight(44f).fillMaxHeight().background(Amber.Bright))
             Box(Modifier.weight(56f).fillMaxHeight().background(Amber.Edge))
         }
+        // The same budget as the live view: watching the playback is still standing at the
+        // station reading (D-199).
+        MotionBudgetRow(Amber.Dim, Amber.Bright)
         // Playback can be abandoned. It plays once either way, so stopping early is a real
         // decision rather than a convenience.
         PanelButton(

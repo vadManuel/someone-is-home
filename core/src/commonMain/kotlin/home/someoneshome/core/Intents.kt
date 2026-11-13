@@ -64,6 +64,8 @@ fun factOf(intent: Intent, at: Tick): Event = when (intent) {
     // neither needs a draw -- which is exactly why they could have travelled from the day the
     // channel existed, and the gap was a missing member rather than a missing argument (E-P2-5).
     is Intent.StopSubroutine -> Event.PerformanceEnded(at, intent.actor)
+    // The live view closed. The actor alone, for STOP NOW's reason (D-203).
+    is Intent.LeaveTerminal -> Event.TerminalLeft(at, intent.actor)
     is Intent.ReturnSyncPulse -> Event.SyncPulseReturned(at, intent.actor, intent.taps)
 
     // The trigger is which control was pressed, and the wire has a member per control for exactly

@@ -240,7 +240,40 @@ class GameState private constructor(
     val voteWindowSeconds: Int,
     val nextEntity: Long,
     val seed: Long,
+    /**
+     * **The T card, off the arming event, or null in a round armed without a station** (D-199).
+     * The id and nothing else -- see [Event.RoundArmed.terminal].
+     */
+    val terminal: MarkerId?,
+    /**
+     * **Who is reading the Terminal, or nobody** (D-199, D-203, `gdd.md:472`).
+     *
+     * *The station locks on any viewing. Others may stand there; only one person reads.* The scan
+     * of the T card is the claim, and the claim is answered against this field and nothing else.
+     *
+     * **Freed four ways, and read through [readerHolding] so the fourth cannot be forgotten.** The
+     * reader leaves the view, a meeting is called, the reader's connection drops -- each of those
+     * clears the field -- and **the reader is put outside the system**, which clears nothing and is
+     * not asked to: a seat that is out holds no lock, so the field can name one and the station is
+     * still free. A Revoke and a Restrain each land in a different handler, and a rule written
+     * into both would be a rule the next way out is missing.
+     *
+     * Never reaches a client as itself. What a scanner is told is a boolean about themselves.
+     */
+    val reader: Seat?,
 ) {
+    /**
+     * The reader the lock is held by, or null if the station is free. A seat that is out holds
+     * nothing (D-203) -- see [reader].
+     */
+    fun readerHolding(): Seat? = reader?.takeIf { !isOut(it) }
+
+    /** Whether [marker] is this round's T card. False in a round armed without one. */
+    fun isTerminal(marker: MarkerId): Boolean = terminal?.value == marker.value
+
+    /** The station claimed by [reader], or freed with null. Greppable, as [withEgress] is. */
+    fun withReader(reader: Seat?): GameState = copy(reader = reader)
+
     fun roleOf(seat: Seat): Role =
         if (insiderSeats.any { it.index == seat.index }) Role.Insider else Role.Resident
 
@@ -524,11 +557,13 @@ class GameState private constructor(
         voteWindowSeconds: Int = this.voteWindowSeconds,
         nextEntity: Long = this.nextEntity,
         seed: Long = this.seed,
+        terminal: MarkerId? = this.terminal,
+        reader: Seat? = this.reader,
     ) = GameState(
         armed, outcome, seats, insiderSeats, revoked, newlyRevoked, restrained, cooldownArmed,
         cooldowns, isolated, systemIntegrity, openSubroutines, workOrders, stations,
         activeMarkers, destinations, presence, staticUntil, meeting, egress, egressReadyAt, oneLines,
-        names, voteWindowSeconds, nextEntity, seed,
+        names, voteWindowSeconds, nextEntity, seed, terminal, reader,
     )
 
     companion object {
@@ -602,6 +637,11 @@ class GameState private constructor(
              * room. Forty-five is what the design says a ballot is when nobody has said otherwise.
              */
             voteWindowSeconds: Int = Balance.VOTE_WINDOW_SECONDS,
+            /**
+             * The T card (D-199). Defaulted null for [destinations]' reason: a round armed by hand
+             * to exercise something else has no station, and every scan in it is work.
+             */
+            terminal: MarkerId? = null,
         ) = GameState(
             armed = true,
             outcome = null,
@@ -635,6 +675,10 @@ class GameState private constructor(
             voteWindowSeconds = voteWindowSeconds,
             nextEntity = 1L,
             seed = seed,
+            terminal = terminal,
+            // Nobody is reading. The station is claimed by a scan of the T card, and a round has
+            // had none at the moment it is armed.
+            reader = null,
         )
 
         val EMPTY = GameState(
@@ -664,6 +708,8 @@ class GameState private constructor(
             voteWindowSeconds = Balance.VOTE_WINDOW_SECONDS,
             nextEntity = 1L,
             seed = 0L,
+            terminal = null,
+            reader = null,
         )
     }
 }

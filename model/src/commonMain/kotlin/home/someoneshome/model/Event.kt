@@ -109,6 +109,19 @@ sealed interface Event {
          * kept in the one artefact of this game that outlives the evening.
          */
         val oneLines: List<OneLineHeld> = emptyList(),
+        /**
+         * **The T card, so that a scan of it can be answered as the station** (D-199).
+         *
+         * The reserved cards used to stay off this event entirely, and the cost was that the rules
+         * could not tell the Terminal from any other registered card: a scan of it came back
+         * NOTHING FOR YOU HERE, and the station had no way to hold a reader. **The id and nothing
+         * else** -- no room, because the station's room is said aloud by the host during setup
+         * and the rules need only recognise the paper.
+         *
+         * Defaulted null for [markers]' reason: a round armed to exercise something else has no
+         * station, and a scan in it can only be work.
+         */
+        val terminal: MarkerId? = null,
     ) : Event
 
     /**
@@ -163,6 +176,20 @@ sealed interface Event {
      * lands: a device-side rule about the player's own phone, adding no report to the work plane.
      */
     data class PerformanceEnded(override val at: Tick, val actor: Seat) : Event
+
+    /**
+     * **The reader is no longer reading the Terminal** (D-199, D-203).
+     *
+     * One event for every way a reading ends, and **it carries no reason**, for [PerformanceEnded]'s
+     * argument: a reason would be a record of how somebody left the station, and the only thing
+     * the lock needs is that they did. A phone sends it when its live view or timelapse closes for
+     * any cause -- BACK, STOP NOW, the motion budget -- and the host composes it for a seat whose
+     * connection dropped, because a phone that is gone cannot say so and the station would
+     * otherwise stay held for the rest of the round.
+     *
+     * From a seat that is not the reader it changes nothing, and it emits nothing either way.
+     */
+    data class TerminalLeft(override val at: Tick, val actor: Seat) : Event
 
     /** Armed, not fired. The cooldown starts here — a botched stalk costs a full cooldown. */
     data class RevokeArmed(override val at: Tick, val actor: Seat) : Event

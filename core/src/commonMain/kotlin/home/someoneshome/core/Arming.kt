@@ -67,6 +67,11 @@ fun armingFor(
      * a round armed to exercise a meeting does not have to invent six people to hold it with.
      */
     names: List<SeatNamed> = emptyList(),
+    /**
+     * The home's T card, off its map (D-199). Defaulted null for [names]' reason: a round armed to
+     * exercise something else has no station, and every scan in it is work.
+     */
+    terminal: MarkerId? = null,
 ): Event.RoundArmed {
     require(seats.size >= Balance.MINIMUM_SEATS) {
         "a round cannot be armed for ${seats.size} seats: the minimum party is " +
@@ -83,6 +88,7 @@ fun armingFor(
         markers = markers,
         voteWindowSeconds = voteWindowSeconds,
         names = names,
+        terminal = terminal,
     )
 }
 

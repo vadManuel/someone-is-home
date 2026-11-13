@@ -112,7 +112,9 @@ class FlowTest {
     @Test
     fun everyScreenIsReachedByWalkingOrIsOneTheHouseMustPush() {
         val seen = mutableSetOf<ScreenId>()
-        val queue = ArrayDeque(listOf(ScreenId.Boot) + Flow.housePushed + Flow.unrouted)
+        val queue = ArrayDeque(
+            listOf(ScreenId.Boot) + Flow.housePushed + Flow.unrouted + Flow.houseOpened,
+        )
         seen += queue
         while (queue.isNotEmpty()) {
             for (next in onward(queue.removeFirst())) if (seen.add(next)) queue.addLast(next)
@@ -148,6 +150,34 @@ class FlowTest {
                 "$id is listed as unreachable by tapping, but something reaches it: " +
                     ScreenId.entries.filter { id in walked(it) },
             )
+        }
+    }
+
+    /**
+     * **A view the house opens is entered from nowhere else** (D-199, [Flow.houseOpened]).
+     *
+     * The narrower rule that stands in for [nothingWalksToAScreenOnlyTheHouseCanPush] on a screen
+     * the player uses once it is open. Something may walk to it, but only a screen that is itself
+     * reached from that view and from nothing else -- the live view's own timelapse coming back.
+     * A tile, a dock button or a refusal that walked to the live view would be the NO SIGNAL
+     * screen's unconditional RETRY again: the map opened from somewhere other than the station.
+     */
+    @Test
+    fun nothingWalksIntoAHouseOpenedViewFromOutsideIt() {
+        fun walked(id: ScreenId): Set<ScreenId> =
+            ScreenGraph.exitsOf(id) + Flow.viaActions[id].orEmpty() +
+                setOfNotNull(Flow.autoAdvance[id]?.to)
+
+        fun walkersOf(id: ScreenId): Set<ScreenId> =
+            ScreenId.entries.filterTo(mutableSetOf()) { id in walked(it) }
+
+        for (view in Flow.houseOpened) {
+            for (walker in walkersOf(view)) {
+                assertEquals(
+                    setOf(view), walkersOf(walker),
+                    "$walker walks into $view, and $walker is reachable from outside it",
+                )
+            }
         }
     }
 

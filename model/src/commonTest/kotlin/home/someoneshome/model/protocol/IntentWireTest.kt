@@ -52,6 +52,7 @@ class IntentWireTest {
         IntentMessage.FireStatic,
         IntentMessage.BeginSubroutine(marker),
         IntentMessage.StopSubroutine,
+        IntentMessage.LeaveTerminal,
         IntentMessage.ReturnSyncPulse(listOf(1L, 2L, 3L, 4L)),
         IntentMessage.CallMeeting,
         IntentMessage.CheckIn,
@@ -77,6 +78,7 @@ class IntentWireTest {
         is Intent.FireStatic -> IntentMessage.FireStatic
         is Intent.BeginSubroutine -> IntentMessage.BeginSubroutine(intent.marker)
         is Intent.StopSubroutine -> IntentMessage.StopSubroutine
+        is Intent.LeaveTerminal -> IntentMessage.LeaveTerminal
         is Intent.ReturnSyncPulse -> IntentMessage.ReturnSyncPulse(intent.taps)
         is Intent.CallMeeting -> IntentMessage.CallMeeting
         is Intent.CheckIn -> IntentMessage.CheckIn
@@ -269,6 +271,7 @@ class IntentWireTest {
         is Intent.FireStatic -> intent.actor
         is Intent.BeginSubroutine -> intent.actor
         is Intent.StopSubroutine -> intent.actor
+        is Intent.LeaveTerminal -> intent.actor
         is Intent.ReturnSyncPulse -> intent.actor
         is Intent.CallMeeting -> intent.actor
         is Intent.CheckIn -> intent.actor

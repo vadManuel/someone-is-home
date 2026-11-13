@@ -76,6 +76,7 @@ object EmitSchema {
         is Effect.MessageDelivered -> MESSAGE_DELIVERED
         is Effect.WorkOrderIssued -> WORK_ORDER_ISSUED
         is Effect.ScanAnswered -> SCAN_ANSWERED
+        is Effect.TerminalAnswered -> TERMINAL_ANSWERED
         is Effect.PresenceChanged -> PRESENCE_CHANGED
         is Effect.OpeningMessage -> OPENING_MESSAGE
         is Effect.RoleRevealed -> ROLE_REVEALED
@@ -116,6 +117,7 @@ object EmitSchema {
     val MESSAGE_DELIVERED = MessageKind("MessageDelivered")
     val WORK_ORDER_ISSUED = MessageKind("WorkOrderIssued")
     val SCAN_ANSWERED = MessageKind("ScanAnswered")
+    val TERMINAL_ANSWERED = MessageKind("TerminalAnswered")
 
     /**
      * **Named here and permitted nowhere. That is the whole of the presence plane's boundary.**
@@ -319,6 +321,15 @@ object EmitSchema {
         // two independent denials a Revoked seat's scan meets, the first being the state gate in
         // the rules.
         SCAN_ANSWERED to LIVING,
+
+        // **Both living classes, for SCAN_ANSWERED's reason** (D-199). The station is open to
+        // either role on the same terms -- `gdd.md:526` counts an Insider squatting it among the
+        // game's working parts -- so a row narrowed to Residents would be an Insider whose every
+        // read of the map came back with nothing.
+        //
+        // Not the out classes. A player outside the system reads no map (`gdd.md:495`: ghosts see
+        // the couch's true occupancy instead), and the rules hold no reader who is out.
+        TERMINAL_ANSWERED to LIVING,
 
         // **PRESENCE_CHANGED HAS NO ROW, DELIBERATELY, AND THAT IS THE DECISION** (D-111, D-136).
         //
@@ -616,6 +627,8 @@ object EmitSchema {
             // house -- the per-player read the percentage meter (D-103) exists to keep out of
             // aggregate, arriving one scan at a time.
             is Effect.ScanAnswered -> listOf(effect.seat)
+            // The scanning seat alone. Broadcast, it would say who is reading the map.
+            is Effect.TerminalAnswered -> listOf(effect.seat)
             // **The performing seat, and this is the second of the presence plane's two
             // independent denials** -- the first being that the kind has no row at all. Neither
             // subsumes the other: a row written by mistake still could not carry seat 3's window

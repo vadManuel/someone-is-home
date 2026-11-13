@@ -57,6 +57,8 @@ private fun dispatch(state: GameState, event: Event): Reduction<GameState, Effec
 
     is Event.PerformanceEnded -> performanceEnded(state, event)
 
+    is Event.TerminalLeft -> terminalLeft(state, event)
+
     is Event.MeetingCalled -> meetingCalled(state, event)
     is Event.MeetingCheckedIn -> checkedIn(state, event)
     is Event.ReadyToVoteDeclared -> readyDeclared(state, event)
@@ -342,6 +344,8 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
         // Balance values lock at arming. The ballot's length is the host's and it is public; it is
         // read once, by `openVote`, and published on the push that opens the vote.
         voteWindowSeconds = event.voteWindowSeconds,
+        // The station's card, so that a scan of it is answered as the station (D-199).
+        terminal = event.terminal,
     )
 
     // **The round's names, in seat order, one slot per seat** (D-115). A seat whose phone never
@@ -440,7 +444,74 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
  * You cannot be armed at a card you are not standing at, and D-111 is explicit that there is no
  * half-finished performance to come back to — *the next scan restarts.*
  */
-private fun scanned(state: GameState, event: Event.MarkerScanned): Reduction<GameState, Effect> {
+private fun scanned(state: GameState, event: Event.MarkerScanned): Reduction<GameState, Effect> =
+    if (state.isTerminal(event.marker)) stationScanned(state, event) else markerScanned(state, event)
+
+/**
+ * **The T card was read: the scan is the claim on the station** (D-199, `gdd.md:472`).
+ *
+ * ### A branch on the card, which is not rule 1's shape
+ *
+ * [scanned] splits on *which card this is*, and the split decides which kind answers. That is a
+ * branch in a client-visible path, so it is worth saying why it is allowed: **the condition is a
+ * fact the scanner already holds.** The T card is printed paper with a T on it, the phone read its
+ * shape before it sent anything, and the host named the station aloud during setup. Nothing about
+ * the scanner's role, work order or state chooses the branch, so the kind of answer carries no
+ * information the scanner did not have before it arrived.
+ *
+ * ### Inside the branch, one effect shape for both answers
+ *
+ * Open and held are [Effect.TerminalAnswered] with a different boolean, constructed once below,
+ * outside the decision. The decision is on [GameState.readerHolding], which is *somebody is
+ * standing lit at the station reading* -- something the scanner is looking at.
+ *
+ * ### What else it does, and what it deliberately does not
+ *
+ * **It places the scanner at the station and spends what was armed**, exactly as a scan that finds
+ * nothing does (D-136): the scan is the station's own check-in (`gdd.md:476`), and a player
+ * standing at the Terminal is not standing at the marker they armed at. **It mints no instance and
+ * opens no Subroutine**, because reading is not work: nothing is graded and nothing is banked.
+ *
+ * **A seat that is out claims nothing.** It is answered on the same shape, the allowlist delivers
+ * [Effect.TerminalAnswered] to no out class anyway, and the lock never names an out seat as
+ * holding -- the second and third of three independent denials, as [markerScanned] argues for the
+ * Revoked seat's gate.
+ *
+ * **The reader re-scanning is still the reader**, so a phone that lost its place and scanned again
+ * is let back in rather than refused by its own lock.
+ */
+private fun stationScanned(state: GameState, event: Event.MarkerScanned): Reduction<GameState, Effect> {
+    val holder = state.readerHolding()
+    // A meeting is the one other reason the station is shut, and it is the most public fact in the
+    // house (`gdd.md:470`). No honest client is on a scan screen during one; this keeps a forged or
+    // late frame from claiming a lock that would outlive the meeting.
+    val reading = !state.isOut(event.actor) && state.meeting == null &&
+        (holder == null || holder.index == event.actor.index)
+    val next = spend(state, event.actor)
+        .withPresence(Presence(event.actor, event.marker, open = false))
+        .let { if (reading) it.withReader(event.actor) else it }
+    // Both constructed once, outside the decision above.
+    val answered = Effect.TerminalAnswered(seat = event.actor, reading = reading)
+    val placed = Effect.PresenceChanged(event.actor, event.marker, open = false)
+    return Reduction(next, listOf(answered, placed))
+}
+
+/**
+ * **The reader stopped reading** (D-203) -- the live view closed on their phone, or their
+ * connection dropped and the host said so on their behalf.
+ *
+ * **It emits nothing, from the reader and from anybody else alike**, so the two cannot be told
+ * apart by what comes back. Nobody needs telling that the station is free: the next scan of the T
+ * card finds out, and a push saying so would be a report to somebody about who was reading.
+ */
+private fun terminalLeft(state: GameState, event: Event.TerminalLeft): Reduction<GameState, Effect> {
+    val held = state.reader
+    val next = if (held != null && held.index == event.actor.index) state.withReader(null) else state
+    return Reduction(next, emptyList())
+}
+
+/** **An ordinary registered card was read.** Everything [scanned]'s KDoc says is about this half. */
+private fun markerScanned(state: GameState, event: Event.MarkerScanned): Reduction<GameState, Effect> {
     val (id, minted) = state.mintId()
     // **An Isolated card opens nothing, for anybody, and it answers exactly as an empty one does**
     // (`gdd.md:315`, and see [Isolation] for the ruling this is). The branch is on state and the
@@ -1181,6 +1252,12 @@ private fun meetingCalled(
             // frame — so there is no surface left showing noise for a message to clear.
             isolated = emptyList(),
             staticUntil = null,
+            // **The station comes free at the call** (D-203). The map is never read at a meeting
+            // (`gdd.md:470`), every living phone is pushed the meeting in this frame, and a lock
+            // that outlived the call would hand the first shift after it to whoever happened to
+            // be reading when it rang. Nothing is emitted: the reader's own phone is on the
+            // meeting now, and the next scan of the T card finds the station free.
+            reader = null,
         ),
         listOf(ring, calling) + walkIn + gateCount(state, meeting) + batched + stopped,
     )

@@ -65,7 +65,10 @@ object Transcript {
                 // carried it because a picker over rooms cannot be drawn without rooms; Static has
                 // no picker, the plan crosses to no client, and `Event.RoundArmed` no longer holds
                 // one. This is the largest thing this format has ever stopped carrying.
-                "lines" to event.oneLines.joinToString(",") { num(it.seat.index) })
+                "lines" to event.oneLines.joinToString(",") { num(it.seat.index) },
+                // **The T card's id, or none** (D-199). An id and no room: the rules need only
+                // recognise the paper, and the station's room is the host's to say aloud.
+                "terminal" to (event.terminal?.let { text(it.value) } ?: "none"))
         is Event.MarkerScanned ->
             row("MarkerScanned", event.at, "actor" to num(event.actor.index), "marker" to text(event.marker.value))
         is Event.SubroutineReturned ->
@@ -77,6 +80,10 @@ object Transcript {
         // grow, and it would grow in the artifact kept specifically to find out what happened.
         is Event.PerformanceEnded ->
             row("PerformanceEnded", event.at, "actor" to num(event.actor.index))
+        // The actor alone, for PerformanceEnded's reason: a reason here would be a record of how
+        // somebody left the station (D-203).
+        is Event.TerminalLeft ->
+            row("TerminalLeft", event.at, "actor" to num(event.actor.index))
         is Event.RevokeArmed ->
             row("RevokeArmed", event.at, "actor" to num(event.actor.index))
         // The two Tier-2 fires. Both carry their target, because the target is what was ASKED for
@@ -248,6 +255,9 @@ object Transcript {
                 (effect.opened?.let {
                     "${it.entry}:${it.subroutine}:${it.parameters.joinToString(".") { p -> num(p) }}"
                 } ?: "none")
+        // Open and held are one kind and one row shape, for ScanAnswered's reason (D-199).
+        is Effect.TerminalAnswered ->
+            "TerminalAnswered|seat=${effect.seat.index}|reading=${effect.reading}"
         is Effect.PresenceChanged ->
             "PresenceChanged|seat=${effect.seat.index}" +
                 "|at=${effect.at?.let { text(it.value) } ?: "none"}|open=${effect.open}"
@@ -541,6 +551,12 @@ object Transcript {
         // deadline would come out of the jam at the wrong moment. **It carries no seat**, which is
         // the ability's anonymity kept in the one artifact of this game that outlives the evening.
         append("|static=").append(state.staticUntil?.let { num(it.step) } ?: "none")
+        // **The station's card and who holds it** (D-199, D-203). Load-bearing for the presence
+        // plane's reason: the lock reaches no client as itself, so a state row is the only
+        // artifact that holds it, and a replay that stopped short of it would certify a build
+        // whose station never came free.
+        append("|terminal=").append(state.terminal?.let { text(it.value) } ?: "none")
+        append("|reader=").append(seatOrNone(state.reader))
         // **The meeting, ballots and all.** Live selections are the one thing at a meeting that
         // only a player outside the system may read (D-075), which is exactly why they belong in
         // an authority-side state row: a recording that stopped short of them could not tell a

@@ -69,6 +69,7 @@ class RoundWireTest {
             Seat(3),
             SubroutineInstance(entry = 0, subroutine = SubroutineKind.Handshake, parameters = listOf(2, 5)),
         ),
+        Effect.TerminalAnswered(Seat(3), reading = true),
         Effect.PresenceChanged(Seat(3), at = MarkerId("M-1"), open = true),
         Effect.OpeningMessage(Seat(3), Haptic.Short),
         // The Insider's copy, because the projection's one decision on this kind is the
@@ -184,6 +185,7 @@ class RoundWireTest {
         bothWays { Effect.MessageDelivered(it, body = "x") }
         bothWays { Effect.WorkOrderIssued(it, emptyList()) }
         bothWays { Effect.ScanAnswered(it, opened = null) }
+        bothWays { Effect.TerminalAnswered(it, reading = false) }
         bothWays { Effect.PresenceChanged(it, at = null, open = false) }
         bothWays { Effect.OpeningMessage(it, Haptic.Short) }
         bothWays { Effect.StandAndWalkIn(it, Haptic.Long) }
