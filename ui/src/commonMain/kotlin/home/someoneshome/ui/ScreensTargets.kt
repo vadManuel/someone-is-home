@@ -4,6 +4,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -14,7 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import home.someoneshome.model.MarkerShapes
 
 /**
@@ -97,7 +98,7 @@ fun SurgeTargetsScreen(vals: PanelVals) {
                 tag = "$TARGET_ROW$index",
                 onPick = { actions.fireSurge(index) },
             ) {
-                Label(name, size = 9.0, color = Amber.Bright, tracking = 0.08)
+                Words(name, Modifier.weight(1f), size = 28, lineHeight = 1.0)
             }
         }
     }
@@ -137,18 +138,12 @@ fun IsolateTargetsScreen(vals: PanelVals) {
                 tag = "$TARGET_ROW${destination.marker.value}",
                 onPick = { actions.fireIsolate(destination.marker.value) },
             ) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.u),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    // **A glyph this client's roster does not hold draws nothing**, and the row
-                    // still draws — the work order's `at?.let` exactly, and the same fail-closed
-                    // direction: a room with no shape beside it is a visible gap, where a
-                    // substituted shape would send somebody to the wrong card in the dark.
-                    MarkerShapes[destination.shape]?.let { MarkerGlyph(it, 13.u, Amber.Bright) }
-                    Label(destination.room, size = 9.0, color = Amber.Bright, tracking = 0.08)
-                }
+                // **A glyph this client's roster does not hold draws nothing**, and the row still
+                // draws: the work order's `at?.let` exactly, and the same fail-closed direction. A
+                // room with no shape beside it is a visible gap, where a substituted shape would
+                // send somebody to the wrong card in the dark.
+                MarkerShapes[destination.shape]?.let { MarkerGlyph(it, 14.dp, Ramp.Ink) }
+                Words(destination.room, Modifier.weight(1f), size = 28, lineHeight = 1.0)
             }
         }
     }
@@ -164,43 +159,30 @@ fun IsolateTargetsScreen(vals: PanelVals) {
  * sentence about the house's state on a screen that has no business holding an opinion about one.
  */
 @Composable
-private fun TargetList(title: String, note: String, rows: @Composable () -> Unit) {
-    Column(Modifier.fillMaxSize()) {
+private fun TargetList(title: String, note: String, rows: @Composable () -> Unit) = Mockup {
+    KitScreen {
+        // The way out is the header's arrow, a plain tap back to page 2. A picker that could only
+        // be left by firing would be a control that costs a cooldown to change your mind about.
+        KitHeader(title, Palette.DARK, back = ScreenId.Page2, meta = note)
         Column(
-            Modifier.fillMaxWidth().weight(1f).padding(horizontal = 7.u).padding(top = 7.u),
-            verticalArrangement = Arrangement.spacedBy(6.u),
+            Modifier.fillMaxWidth().weight(1f).edgeLine(PanelSide.Top, Ramp.Faint, 1.dp)
+                .verticalScroll(rememberScrollState()),
         ) {
-            Label(title, size = 13.0, color = Amber.Bright, tracking = 0.18)
-            Label(note, size = 6.0, color = Amber.Dim, tracking = 0.12)
-            Column(
-                Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(5.u),
-            ) {
-                rows()
-            }
-            // The way out, and it is a plain tap. A picker that could only be left by firing would
-            // be a control that costs a cooldown to change your mind about.
-            val go = navigator()
-            Label(
-                "BACK",
-                modifier = Modifier.fillMaxWidth().tap { go(ScreenId.Page2) }
-                    .padding(vertical = 7.u).testTag(TARGET_BACK),
-                size = 6.5, color = Amber.Dim, tracking = 0.14, align = TextAlign.Center,
-            )
+            rows()
         }
     }
 }
 
-/** One row. A tap fires; see this file's header for why there is no second confirm. */
+/** One row on a hairline. A tap fires; see this file's header for why there is no second confirm. */
 @Composable
-private fun TargetRow(tag: String, onPick: () -> Unit, content: @Composable () -> Unit) {
-    Column(
-        Modifier.fillMaxWidth().heightIn(min = TAP_TARGET).border(1.u, Amber.Edge)
-            .tap(onPick).padding(horizontal = 8.u, vertical = 7.u).testTag(tag),
-        verticalArrangement = Arrangement.spacedBy(3.u),
-    ) {
-        content()
-    }
+private fun TargetRow(tag: String, onPick: () -> Unit, content: @Composable RowScope.() -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 56.dp).edgeLine(PanelSide.Bottom, Ramp.Faint, 1.dp)
+            .tap(onPick).padding(horizontal = 2.dp).testTag(tag),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        content = content,
+    )
 }
 
 /**
@@ -212,5 +194,3 @@ private fun TargetRow(tag: String, onPick: () -> Unit, content: @Composable () -
  */
 const val TARGET_ROW: String = "target-row-"
 
-/** The way back to page 2, tagged so a walk can leave a picker without firing anything. */
-const val TARGET_BACK: String = "target-back"

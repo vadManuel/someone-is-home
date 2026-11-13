@@ -18,11 +18,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -39,6 +45,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 
 /*
  * **The redesign's building blocks** (D-202), ported from `tools/design-mockup/kit.py` one block at
@@ -159,12 +166,9 @@ fun Words(
     maxLines: Int = Int.MAX_VALUE,
     overflow: TextOverflow = TextOverflow.Clip,
 ) {
-    // How many lines the text took, written during its own measure and read straight after it in
-    // the same pass: a plain holder, not state, so knowing it costs no recomposition.
-    val lines = remember { IntArray(1) }
     BasicText(
         text = text,
-        modifier = modifier.cssLineBox(size * lineHeight, lines),
+        modifier = modifier.cssLineBox(size * lineHeight, size.toDouble()),
         style = TextStyle(
             fontFamily = PanelType.readout,
             fontSize = size.sp,
@@ -176,7 +180,6 @@ fun Words(
         ),
         maxLines = maxLines,
         overflow = overflow,
-        onTextLayout = { lines[0] = it.lineCount },
     )
 }
 
@@ -184,18 +187,26 @@ fun Words(
  * **A line box as tall as CSS makes it, and no taller** (D-202).
  *
  * Compose spaces lines by the line height but will not make a line's box shorter than the font's
- * own height, so a 124px clock at line-height .8 took about 120px instead of 99 and pushed
- * everything under it down the panel. This reports `lines × line height` and centres the text in
- * it, letting the glyphs overhang the way the mockup's do. A taller line box is left to Compose,
- * which already gets it right.
+ * own height, so a 124px clock at line-height .8 took 124px instead of 99 and pushed everything
+ * under it down the panel. This reports `lines × line height` and centres the text in it, letting
+ * the glyphs overhang the way the mockup's do. A taller line box is left to Compose, which already
+ * gets it right.
+ *
+ * **The line count is read off the height Compose measured, in the same pass.** VT323 is exactly
+ * one em from ascent to descent, so a short line height gives `(lines - 1) × line + font size`.
+ * The first version asked the text-layout callback instead, which arrives after this has sized the
+ * box: a two-line banner came up one line tall for a frame and then jumped, and the step-not-fade
+ * guard caught the panel moving.
  */
-private fun Modifier.cssLineBox(linePx: Double, lines: IntArray): Modifier = layout { measurable, constraints ->
+private fun Modifier.cssLineBox(linePx: Double, fontPx: Double): Modifier = layout { measurable, constraints ->
     val placeable = measurable.measure(constraints.copy(minHeight = 0))
-    val target = (linePx.toFloat() * lines[0].coerceAtLeast(1)).sp.roundToPx()
-        .coerceAtLeast(constraints.minHeight)
-    if (target >= placeable.height) {
+    val line = linePx.toFloat().sp.toPx()
+    val font = fontPx.toFloat().sp.toPx()
+    if (line >= font) {
         layout(placeable.width, placeable.height) { placeable.place(0, 0) }
     } else {
+        val lines = ((placeable.height - font) / line).roundToInt().coerceAtLeast(0) + 1
+        val target = (line * lines).roundToInt().coerceAtLeast(constraints.minHeight)
         layout(placeable.width, target) { placeable.place(0, (target - placeable.height) / 2) }
     }
 }
@@ -514,6 +525,56 @@ fun KitMeter(
                 Modifier.weight(1f).fillMaxSize().border(1.dp, if (on) ink else edge)
                     .then(if (on) Modifier.background(ink) else Modifier)
             )
+        }
+    }
+}
+
+/**
+ * `kit.py`'s legend box: **a bordered panel with its name set into the top edge**, the way the
+ * mockup draws System Integrity and the Egress widget. The legend sits on a black patch across the
+ * line, so the line reads as broken by the word.
+ */
+@Composable
+fun KitLegendBox(
+    legend: String,
+    legendInk: Color,
+    edge: Color,
+    modifier: Modifier = Modifier,
+    edgeWidth: Dp = 1.dp,
+    gap: Dp = 10.dp,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Box(modifier.fillMaxWidth()) {
+        Column(
+            Modifier.padding(top = 7.dp).fillMaxWidth().border(edgeWidth, edge)
+                .padding(start = 14.dp, end = 14.dp, top = 22.dp, bottom = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(gap),
+            content = content,
+        )
+        Box(
+            Modifier.padding(start = 10.dp).height(14.dp).background(Amber.Black).padding(horizontal = 6.dp),
+            contentAlignment = Alignment.Center,
+        ) { Tag(legend, legendInk) }
+    }
+}
+
+/**
+ * **The stairs hatch, and the inert tile's: two flat values in a hard 45-degree stripe** (D-202).
+ * A pattern, not a gradient: [stripe] and [ground] alternate every [band], with no blend between.
+ */
+fun Modifier.hatch(stripe: Color, ground: Color = Amber.Black, band: Dp = 6.dp): Modifier = drawBehind {
+    drawRect(ground)
+    val b = band.toPx()
+    clipRect {
+        // Stripes run at 45 degrees: a parallelogram band per period, across the whole box.
+        var x = -size.height
+        while (x < size.width) {
+            val path = Path().apply {
+                moveTo(x, size.height); lineTo(x + b, size.height)
+                lineTo(x + b + size.height, 0f); lineTo(x + size.height, 0f); close()
+            }
+            drawPath(path, stripe)
+            x += 2 * b
         }
     }
 }

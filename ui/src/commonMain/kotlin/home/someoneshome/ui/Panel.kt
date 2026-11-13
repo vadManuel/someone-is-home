@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -297,6 +298,11 @@ fun LightMark(
     cell: Dp = 4.u,
     height: Dp = 6.5.u,
     gap: Dp = 2.u,
+    /**
+     * Draw the unlit rungs as outlines in [color], as the redesign does (D-202): the count reads
+     * by shape as well as by light. Off, they are measured gaps.
+     */
+    outline: Boolean = false,
 ) {
     val rungs = LightSignature.entries.size
     Row(
@@ -310,7 +316,11 @@ fun LightMark(
             // The unlit rungs hold their place and emit nothing. A Box with no background is a
             // measured gap, not a dark cell someone could mistake for a fourth luminance step.
             Box(Modifier.width(cell).fillMaxHeight().then(
-                if (index < signature.rung) Modifier.background(color) else Modifier
+                when {
+                    index < signature.rung -> Modifier.background(color)
+                    outline -> Modifier.border(1.dp, color)
+                    else -> Modifier
+                }
             ))
         }
     }

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -126,30 +127,25 @@ fun SecretScreen() {
  * that differs by device.
  */
 @Composable
-fun ArmedScreen() {
+fun ArmedScreen() = Mockup {
     val go = navigator()
-    Column(
-        Modifier.fillMaxSize().padding(horizontal = 14.u),
-        verticalArrangement = Arrangement.spacedBy(10.u, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Label(
-            "PERIMETER\nARMED",
-            size = 18.0, color = Amber.Bright, tracking = 0.14, lineHeight = 1.5,
-            align = TextAlign.Center,
-        )
-        Box(Modifier.width(40.u).height(1.u).background(Amber.Dim))
-        Label(
-            "6 RESIDENTS\nACCOUNTED FOR",
-            size = 7.0, color = Amber.Dim, tracking = 0.14, lineHeight = 2.0,
-            align = TextAlign.Center,
-        )
-        Box(
-            Modifier.padding(top = 12.u).border(1.u, Amber.Faint)
-                .tap { go(ScreenId.Home) }
-                .padding(horizontal = 20.u, vertical = 8.u)
+    KitScreen {
+        Column(
+            Modifier.weight(1f).fillMaxWidth().padding(bottom = 60.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp, Alignment.CenterVertically),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Label("CONTINUE", size = 7.5, color = Amber.Dim, tracking = 0.18)
+            Words("PERIMETER\nARMED", size = 72, lineHeight = 0.85, tracking = 0.04, align = TextAlign.Center)
+            Box(Modifier.size(width = 48.dp, height = 2.dp).background(Ramp.Line))
+            Words(
+                "6 RESIDENTS\nACCOUNTED FOR", size = 26, color = Ramp.Dim, lineHeight = 1.1,
+                align = TextAlign.Center,
+            )
+            // Outline only: the lights have just gone out, and nothing here may flare.
+            KitSecondary(
+                "CONTINUE", Palette.DARK.copy(ink = Ramp.Mid),
+                Modifier.padding(top = 20.dp).width(200.dp),
+            ) { go(ScreenId.Home) }
         }
     }
 }
@@ -162,50 +158,31 @@ fun ArmedScreen() {
  * identical sender, time and preview for both roles — the thread has to be *opened* to read.
  */
 @Composable
-fun RevealScreen(vals: PanelVals) {
+fun RevealScreen(vals: PanelVals) = Mockup {
     val go = navigator()
-    Column(
-        Modifier.fillMaxSize().padding(8.u),
-        verticalArrangement = Arrangement.spacedBy(5.u),
-    ) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            BackChevron(ScreenId.Home, Amber.Dim)
-            Label("MESSAGES", size = 7.0, color = Amber.Dim, tracking = 0.14)
-            Label(
-                "${vals.inboxCount} MESSAGES",
-                modifier = Modifier.weight(1f),
-                size = 7.0, color = Amber.Faint, tracking = 0.14, align = TextAlign.End,
-            )
-        }
-        Label(
-            "DELIVERED WHEN SIGNAL RETURNED . 21:00",
-            size = 5.5, color = Amber.Faint, tracking = 0.08,
-        )
-
-        Column(
-            Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(3.u),
-        ) {
+    KitScreen(gap = 8.dp) {
+        KitHeader("MESSAGES", Palette.DARK, back = ScreenId.Home, meta = "${vals.inboxCount} MESSAGES")
+        // One row per conversation, on hairlines (D-202). D-105: no read state, so no unread count
+        // and no NEW tag.
+        Column(Modifier.weight(1f).fillMaxWidth().edgeLine(PanelSide.Top, Ramp.Faint, 1.dp)) {
             vals.inbox.forEach { row ->
                 Column(
-                    Modifier.fillMaxWidth().border(1.u, row.edge)
+                    Modifier.fillMaxWidth().heightIn(min = 60.dp).edgeLine(PanelSide.Bottom, Ramp.Faint, 1.dp)
                         .tap { go(ScreenId.RevealThread) }
-                        .padding(horizontal = 7.u, vertical = 5.u),
-                    verticalArrangement = Arrangement.spacedBy(2.u),
+                        .padding(horizontal = 2.dp, vertical = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically),
                 ) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Label(row.from, size = 6.5, color = row.fromInk, tracking = 0.1)
-                        Label(row.at, size = 6.5, color = Amber.Faint, tracking = 0.1)
+                        Tag(row.from, row.fromInk)
+                        Tag(row.at, Ramp.Dim)
                     }
-                    Label(
-                        row.preview,
-                        size = 7.0, color = row.ink, lineHeight = 1.5,
+                    Words(
+                        row.preview, size = 22, color = row.ink, lineHeight = 1.0,
                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
         }
-
         ReplyUnavailable()
     }
 }
@@ -222,56 +199,26 @@ fun RevealScreen(vals: PanelVals) {
  * The house never addresses a Resident directly. It is intimate only with the people it owns.
  */
 @Composable
-fun RevealThreadScreen(vals: PanelVals) {
-    Column(
-        Modifier.fillMaxSize().padding(8.u),
-        verticalArrangement = Arrangement.spacedBy(6.u),
-    ) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            BackChevron(ScreenId.Reveal, Amber.Dim)
-            Label("HOUSE", size = 7.0, color = Amber.Dim, tracking = 0.14)
-            Label(
-                "${vals.houseThread.size} MESSAGES",
-                modifier = Modifier.weight(1f),
-                size = 7.0, color = Amber.Faint, tracking = 0.14, align = TextAlign.End,
-            )
+fun RevealThreadScreen(vals: PanelVals) = Mockup {
+    KitScreen {
+        KitHeader("HOUSE", Palette.DARK, back = ScreenId.Reveal, meta = "${vals.houseThread.size} MESSAGES")
+        // Every text drawn alike, oldest first (D-202). THE NEWEST WAS ONCE STAMPED "NEW" AND THE
+        // TAG HAD TO GO (D-105): an unread badge on the one message whose text differs by role,
+        // claiming the phone knows what this player has looked at, which nothing in the app does.
+        // It is last in the thread, and that is all that marks it.
+        Column(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            vals.houseThread.forEach { (at, text) ->
+                Column(
+                    Modifier.padding(end = 28.dp).fillMaxWidth().border(1.dp, Ramp.Faint)
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Tag(at, Ramp.Dim)
+                    Words(text, size = 24, color = Ramp.Mid, lineHeight = 1.1)
+                }
+            }
         }
-
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.u)) {
-            val (newest, earlier) = vals.houseThread.let { it.last() to it.dropLast(1) }
-            earlier.forEach { (at, text) -> ThreadMessage(at, text) }
-            // THE STAMP SAID "21:02 . NEW" AND THE TAG HAD TO GO (D-105). It is the design's
-            // own wording and it is an unread badge in the plainest form there is — on the one
-            // message in the game whose text differs by role, which is where a mark drawing the
-            // eye is least wanted. Nothing is lost: the message is last in the thread, it is the
-            // only one drawn at full intensity, and the time is right there. What the tag added
-            // was the claim that the phone knows what this player has and has not looked at, and
-            // there is nothing anywhere in the app that knows that.
-            ThreadMessage(
-                newest.first, newest.second,
-                border = Amber.Bright, stampInk = Amber.Dim, bodyInk = Amber.Bright,
-            )
-        }
-
         ReplyUnavailable()
-    }
-}
-
-@Composable
-private fun ThreadMessage(
-    stamp: String,
-    body: String,
-    border: Color = Amber.Edge,
-    stampInk: Color = Amber.Faint,
-    bodyInk: Color = Amber.Dim,
-) {
-    Column(Modifier.fillMaxWidth().border(1.u, border).padding(6.u)) {
-        Label(
-            stamp,
-            modifier = Modifier.padding(bottom = 3.u),
-            size = 6.0, color = stampInk, tracking = 0.14,
-        )
-        Label(body, size = 8.0, color = bodyInk, lineHeight = 1.6)
     }
 }
 
@@ -286,13 +233,10 @@ private fun ThreadMessage(
 @Composable
 private fun ReplyUnavailable() {
     Box(
-        Modifier.fillMaxWidth().dashedBorder(Amber.Edge).padding(5.u),
+        Modifier.fillMaxWidth().heightIn(min = 48.dp).dashedBorder(Ramp.Faint),
         contentAlignment = Alignment.Center,
     ) {
-        Label(
-            "REPLY UNAVAILABLE . NO PERMISSION",
-            size = 6.0, color = Amber.Faint, tracking = 0.1, align = TextAlign.Center,
-        )
+        Words("REPLY UNAVAILABLE", size = 22, color = Ramp.Dim, lineHeight = 1.0, align = TextAlign.Center)
     }
 }
 

@@ -23,8 +23,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 
 /**
  * The springboard — **identical for both roles.**
@@ -46,147 +46,143 @@ import androidx.compose.ui.unit.Dp
  * Insider run Subroutines that write nothing without noticing the number fail to move.
  */
 @Composable
-fun HomeScreen(vals: PanelVals, widget: @Composable (PanelVals) -> Unit = { IntegrityWidget(it) }) {
+fun HomeScreen(vals: PanelVals, widget: @Composable (PanelVals) -> Unit = { IntegrityWidget(it) }) = Mockup {
     val go = navigator()
-    Column(Modifier.fillMaxSize()) {
+    // The swipe covers the page above the dock, so a swipe across the dock is not a page turn.
+    Column(
+        Modifier.fillMaxSize().padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
         Column(
-            Modifier.fillMaxWidth().weight(1f)
-                .pageSwipe(PageTurn.Forward) { go(ScreenId.Page2) }
-                .padding(horizontal = 7.u).padding(top = 7.u),
-            verticalArrangement = Arrangement.spacedBy(6.u),
+            Modifier.weight(1f).fillMaxWidth().pageSwipe(PageTurn.Forward) { go(ScreenId.Page2) },
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             // The one slot the house can take away. Everything below it is unchanged.
             widget(vals)
 
-            // **THE TWO WIDGETS ARE ONE HEIGHT** (E-PAY-6, the owner's *the NEXT SUBROUTINE and
-            // COMPLETED widgets are differing heights*). Each column used to take whatever its own
-            // content wanted, and the contents genuinely differ — a heading, a name and a row of
-            // marks against a heading, a 26-unit numeral and a line — so the two bordered boxes came
-            // out ragged against each other at the top of the screen a player looks at most.
-            //
-            // `IntrinsicSize.Min` on the row and `fillMaxHeight` on both columns, rather than a
-            // height typed on each: a fixed number would be wrong the first time a Subroutine name
-            // wraps to two lines, and it would be wrong silently — the taller box would clip. This
-            // asks both what they need and gives both the larger answer, so the pair stays level
-            // whatever the house deals.
+            // **THE TWO WIDGETS ARE ONE HEIGHT** (E-PAY-6). `IntrinsicSize.Min` on the row and
+            // `fillMaxHeight` on both, rather than a height typed on each: a fixed number would be
+            // wrong, silently, the first time a Subroutine name wraps.
             Row(
                 Modifier.fillMaxWidth().height(IntrinsicSize.Min),
-                horizontalArrangement = Arrangement.spacedBy(6.u),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 // **CARRYING takes the widget's place, because carrying blocks the list** (D-168).
-                // The state and the list it blocks are one surface, and the widget says the rule
-                // on its face. It opens Files, which is where the carried thing is.
                 val carried = vals.carrying
                 if (carried != null) {
                     CarryingWidget(carried, Modifier.weight(1f).fillMaxHeight()) { go(ScreenId.Files) }
                 } else Column(
-                    Modifier.weight(1f).fillMaxHeight().border(1.u, Amber.Faint).tap { go(ScreenId.Work) }
-                        .padding(horizontal = 7.u, vertical = 6.u),
-                    verticalArrangement = Arrangement.spacedBy(3.u),
+                    Modifier.weight(1f).fillMaxHeight().border(2.dp, Ramp.Ink).tap { go(ScreenId.Work) }
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(7.dp),
                 ) {
                     // ⚠️ NEXT is the queue D-114 replaced with a menu, surviving as a heading.
-                    // The house designates nothing; this names the first actionable line so the
-                    // slot is not blank. Flagged at PanelVals.nextUp, not defended.
-                    Label("NEXT SUBROUTINE", size = 6.0, color = Amber.Dim, tracking = 0.12)
-                    Label(vals.nextUp.name, size = 9.0, color = Amber.Bright, tracking = 0.06)
+                    // Flagged at PanelVals.nextUp, not defended.
+                    Tag("NEXT SUBROUTINE", Ramp.Mid)
+                    Words(vals.nextUp.name, size = 40, lineHeight = 0.8)
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(4.u),
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        // The marker is named by its SHAPE, not by a number: the same token
-                        // printed on the card the player is walking towards. Both halves come off
-                        // the wire now -- `OrderLine.Known.at` carries the room the host named and
-                        // the glyph id -- and both are absent together on a line the house dealt
+                        // The marker is named by its SHAPE, the token printed on the card the player
+                        // is walking towards. Both halves are absent together on a line the house dealt
                         // with no home behind it. See OrderRow.Named.room.
                         vals.nextUp.room?.let {
-                            Label(
-                                it, modifier = Modifier.testTag(ORDER_DESTINATION),
-                                size = 6.5, color = Amber.Mid, tracking = 0.08,
-                            )
+                            Words(it, Modifier.testTag(ORDER_DESTINATION), size = 22, color = Ramp.Mid, lineHeight = 1.0)
                         }
                         vals.nextUp.marker?.let {
-                            MarkerGlyph(it, 11.u, Amber.Mid, Modifier.testTag(ORDER_DESTINATION))
+                            MarkerGlyph(it, 10.dp, Ramp.Mid, Modifier.testTag(ORDER_DESTINATION))
                         }
-                        // D-106's springboard surface, and the slot where a full sentence was
-                        // tried and removed. A mark sits inside the line the widget already has,
-                        // so the widget does not grow and the glance stays a glance.
+                        Box(Modifier.weight(1f))
+                        // D-106's springboard surface: a mark inside the line the widget already has.
                         vals.nextUp.light?.let {
-                            LightMark(it, Amber.Mid, Modifier.padding(start = 2.u))
+                            LightMark(it, Ramp.Mid, cell = 7.dp, height = 14.dp, gap = 2.dp, outline = true)
                         }
                     }
                 }
                 Column(
-                    Modifier.width(78.u).fillMaxHeight().border(1.u, Amber.Faint).tap { go(ScreenId.Work) }
-                        .padding(horizontal = 7.u, vertical = 6.u),
-                    verticalArrangement = Arrangement.spacedBy(3.u),
+                    Modifier.width(122.dp).fillMaxHeight().border(1.dp, Ramp.Line).tap { go(ScreenId.Work) }
+                        .padding(horizontal = 10.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(7.dp),
                 ) {
-                    Label("COMPLETED", size = 6.0, color = Amber.Dim, tracking = 0.12)
-                    // Both numbers counted off the order the house sent. ASSIGNED is its length,
-                    // which is the same for every seat and both roles by construction (D-129) --
-                    // so this tile is not a channel in either direction.
-                    Readout(
-                        "${vals.nextUp.done}",
-                        size = 26.0, color = Amber.Bright, lineHeight = 0.95,
-                    )
-                    Label(
-                        "OF ${vals.nextUp.total} ASSIGNED",
-                        size = 5.5, color = Amber.Dim, tracking = 0.08,
-                    )
+                    Tag("COMPLETED", Ramp.Dim)
+                    // Both numbers counted off the order the house sent. ASSIGNED is its length, the
+                    // same for every seat and both roles by construction (D-129).
+                    Words("${vals.nextUp.done}", size = 40, lineHeight = 0.8)
+                    Words("OF ${vals.nextUp.total} ASSIGNED", size = 18, color = Ramp.Dim, lineHeight = 1.0)
                 }
             }
 
+            // **THE PHONE TILE IS GONE** (D-121: meetings are called only by scanning the meeting
+            // card) **and so is TERMINAL** (D-199: the map opens only by scanning the T card). Their
+            // slots stand empty, so the grid keeps its shape, and the shape is part of the parity every
+            // phone on this screen is holding.
             Column(
-                Modifier.weight(1f).fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(5.u),
+                Modifier.fillMaxWidth().padding(top = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                // **THE PHONE TILE IS GONE, AND IT IS A DELETION RATHER THAN A REWIRING** (D-121).
-                //
-                // It went to `Calling` — the caller's own ring — so tapping it *called a house
-                // meeting*, from wherever the player happened to be standing. That is the exact
-                // thing D-121 refuses: **meetings are called only by physically scanning the meeting
-                // card. No remote calls, ever.** Its closing paragraph is about this tile without
-                // knowing it existed — *a remote call is a button that summons the whole house from
-                // a chair. Making it a walk to a known place puts the caller somewhere everyone can
-                // see them, at the moment they would most like to be unseen.*
-                //
-                // **There was nothing to wire it to instead.** A tile that opened a call log or a
-                // dialler would be furniture pretending at a feature, and a tile that refused would
-                // teach the rule by punishing somebody for pressing it in the dark. What calls a
-                // meeting now is a card and a scan, and this is the fourth slot standing empty
-                // exactly as the CAMERA row's does — the grid keeps its shape, and the shape is part
-                // of the parity every phone on this screen is holding.
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.u)) {
-                    SpringTile("FILES", PanelIcons.Files, Modifier.weight(1f)) { go(ScreenId.Files) }
-                    SpringTile("NOTES", PanelIcons.Notes, Modifier.weight(1f)) { go(ScreenId.Notes) }
-                    SpringTile("MESSAGES", PanelIcons.Messages, Modifier.weight(1f)) { go(ScreenId.Reveal) }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    AppTile("FILES", APP_FILES, Modifier.weight(1f)) { go(ScreenId.Files) }
+                    AppTile("NOTES", APP_NOTES, Modifier.weight(1f)) { go(ScreenId.Notes) }
+                    AppTile("MESSAGES", APP_MESSAGES, Modifier.weight(1f)) { go(ScreenId.Reveal) }
                     Box(Modifier.weight(1f))
                 }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.u)) {
-                    SpringTile(
-                        "SETTINGS", PanelIcons.Settings, Modifier.weight(1f),
-                        circles = PanelIcons.SettingsDots,
-                    ) { go(ScreenId.Settings) }
-                    // **THE TERMINAL TILE IS GONE, on the argument that deleted PHONE** (D-199). It
-                    // only ever said NO SIGNAL: a tile that refuses teaches the rule by punishing
-                    // somebody for pressing it in the dark, and it said nothing the host does not say
-                    // aloud during setup. The map opens by scanning the T card. CAMERA moves up one
-                    // slot and the row ends in two empty ones, so the grid keeps its shape for both
-                    // roles.
-                    // Camera is inert, not merely dim. See SpringTile.
-                    SpringTile(
-                        "CAMERA", PanelIcons.Camera, Modifier.weight(1f),
-                        circles = PanelIcons.CameraLens, enabled = false,
-                    )
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    AppTile("SETTINGS", APP_SETTINGS, Modifier.weight(1f)) { go(ScreenId.Settings) }
+                    // Camera is inert, not merely dim. See AppTile.
+                    AppTile("CAMERA", APP_CAMERA, Modifier.weight(1f), onClick = null)
                     Box(Modifier.weight(1f))
                     Box(Modifier.weight(1f))
                 }
             }
 
+            Box(Modifier.weight(1f))
             PageBar(onPage = 0)
         }
         Dock()
     }
 }
+
+/**
+ * A springboard app: a 56 square with its glyph, and the name beneath (D-202).
+ *
+ * **The inert tile is not a disabled tile that happens to look dim.** Camera has a dashed edge, the
+ * hatch for a ground and no tap target at all, because an app that responded and then refused
+ * would be a channel: the refusal itself carries information about what the device thinks you may
+ * do.
+ */
+@Composable
+private fun AppTile(label: String, path: String, modifier: Modifier, onClick: (() -> Unit)?) {
+    val live = onClick != null
+    Column(
+        modifier.then(if (onClick != null) Modifier.tap(onClick) else Modifier)
+            .padding(top = 4.dp, bottom = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(7.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            Modifier.size(56.dp).then(
+                if (live) Modifier.background(Amber.Black).border(1.dp, Ramp.Line)
+                else Modifier.hatch(Ramp.Fill).dashedBorder(Ramp.Line)
+            ),
+            contentAlignment = Alignment.Center,
+        ) {
+            PanelIcon(
+                listOf(path), size = 28.dp, color = if (live) Ramp.Ink else Ramp.Line,
+                strokeWidth = 2.5f, viewBox = 28f,
+            )
+        }
+        Words(label, size = 20, color = if (live) Ramp.Mid else Ramp.Dim, lineHeight = 1.0)
+    }
+}
+
+/** The mockup's app glyphs, on its 28-unit grid. */
+private const val APP_FILES = "M4 8h8l2 3h10v12H4z"
+private const val APP_NOTES = "M7 4h14v20H7z M11 10h6 M11 14h6 M11 18h4"
+private const val APP_MESSAGES = "M4 6h20v13H12l-5 4v-4H4z"
+private const val APP_SETTINGS = "M4 9h3 M13 9h11 M4 19h11 M21 19h3 M7 6h6v6H7z M15 16h6v6h-6z"
+private const val APP_CAMERA = "M4 9h20v14H4z M10 9l2-3h4l2 3 M11 13h6v6h-6z"
 
 /**
  * Page 2: the ability, the second slot, and the shared pool.
@@ -211,95 +207,83 @@ fun HomeScreen(vals: PanelVals, widget: @Composable (PanelVals) -> Unit = { Inte
  * cooldown with no cancel, and because the Egress is the misclick the design calls *game-ending*.
  */
 @Composable
-fun Page2Screen(vals: PanelVals) {
+fun Page2Screen(vals: PanelVals) = Mockup {
     val go = navigator()
     val actions = LocalActions.current
-    Column(Modifier.fillMaxSize()) {
+    // The swipe covers the page above the dock, so a swipe across the dock is not a page turn.
+    Column(
+        Modifier.fillMaxSize().padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
         Column(
-            Modifier.fillMaxWidth().weight(1f)
-                .pageSwipe(PageTurn.Back) { go(ScreenId.Home) }
-                .padding(horizontal = 7.u).padding(top = 7.u),
-            verticalArrangement = Arrangement.spacedBy(7.u),
+            Modifier.weight(1f).fillMaxWidth().pageSwipe(PageTurn.Back) { go(ScreenId.Home) },
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.u)) {
-                AbilityTile(
-                    modifier = Modifier.weight(1f),
-                    name = vals.abilityName,
-                    sub = vals.abilitySub,
-                    border = vals.revokeBorder,
-                    fill = vals.revokeFill,
-                    nameInk = vals.revokeInk,
-                    subInk = vals.revokeSubInk,
-                    bar = vals.revokeBar,
-                    barInk = vals.revokeBarInk,
-                    // A Resident's tile is not a control at all — see the KDoc above. The tile is
-                    // real, the cooldown bar is real, and neither answers the question.
-                    armable = vals.insider,
-                    onArm = actions.stepRevoke,
-                )
-                AbilityTile(
-                    modifier = Modifier.weight(1f),
-                    name = vals.secondName,
-                    sub = vals.secondSub,
-                    border = vals.tileBorder,
-                    fill = Color.Transparent,
-                    nameInk = vals.tileInk,
-                    subInk = Amber.Dim,
-                    bar = vals.secondBar,
-                    barInk = vals.secondBarInk,
-                    armable = vals.insider,
-                    onArm = actions.armEgress,
-                )
+            AbilityTile(
+                name = vals.abilityName,
+                sub = vals.abilitySub,
+                border = vals.revokeBorder,
+                fill = vals.revokeFill,
+                nameInk = vals.revokeInk,
+                subInk = vals.revokeSubInk,
+                bar = vals.revokeBar,
+                barInk = vals.revokeBarInk,
+                // A Resident's tile is not a control at all — see the KDoc above. The tile is real,
+                // the cooldown bar is real, and neither answers the question.
+                armable = vals.insider,
+                onArm = actions.stepRevoke,
+            )
+            AbilityTile(
+                name = vals.secondName,
+                sub = vals.secondSub,
+                border = vals.tileBorder,
+                fill = Color.Transparent,
+                nameInk = vals.tileInk,
+                subInk = Ramp.Dim,
+                bar = vals.secondBar,
+                barInk = vals.secondBarInk,
+                armable = vals.insider,
+                onArm = actions.armEgress,
+            )
 
-                // **Tier 2, on one shared bar** (`gdd.md:306`). Three tiles, one Access pool, and
-                // the bar under them is the pool rather than any one ability's clock — which is why
-                // it is drawn once, below all three, instead of three times inside them.
-                //
-                // **All three take the same two-second hold, and what it does differs** — two open a
-                // list, and STATIC fires in place (D-186). A Resident's three are all inert,
-                // identically, and take no pointer input at all (D-142), which is what makes the
-                // row's appearance carry no role: the three tiles are the same three tiles either
-                // way, and the only thing that differs is whether a thumb held on one does
-                // anything.
-                Column(verticalArrangement = Arrangement.spacedBy(5.u)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.u)) {
-                        Tier2Tile(vals.tier2A, vals, Modifier.weight(1f), armable = vals.insider) {
-                            go(ScreenId.SurgeTargets)
-                        }
-                        // **STATIC, and the hold FIRES rather than opening anything** (D-186). It
-                        // has no target — no seat, no card, no room — so there is no picker to
-                        // open and nothing on this phone to choose. `armable` is the same
-                        // expression the other two carry and not a narrower one: nothing about
-                        // this tile may differ from its neighbours except what the hold does.
-                        //
-                        // **Nothing is drawn afterwards and nothing may be.** The screen does not
-                        // move, no tile lights, no line appears — the house's answer is the jam
-                        // every living phone in the building gets, and it reaches this one as a
-                        // bystander's rather than as a report about this thumb (`gdd.md:398`).
-                        Tier2Tile(vals.tier2B, vals, Modifier.weight(1f), armable = vals.insider) {
-                            actions.fireStatic()
-                        }
-                        Tier2Tile(vals.tier2C, vals, Modifier.weight(1f), armable = vals.insider) {
-                            go(ScreenId.IsolateTargets)
-                        }
+            // **Tier 2, on one shared bar** (`gdd.md:306`). Three tiles, one Access pool, and the bar
+            // under them is the pool rather than any one ability's clock.
+            //
+            // **All three take the same two-second hold, and what it does differs**: two open a list,
+            // and STATIC fires in place (D-186). A Resident's three are all inert, identically, and take
+            // no pointer input at all (D-142).
+            Column(Modifier.padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Tier2Tile(vals.tier2A, vals, Modifier.weight(1f), armable = vals.insider) {
+                        go(ScreenId.SurgeTargets)
                     }
-                    FillBar(vals.tier2Bar, vals.tier2BarInk)
-                    Label(
-                        vals.tier2Sub,
-                        modifier = Modifier.fillMaxWidth(),
-                        size = 5.5, color = Amber.Faint, tracking = 0.1, align = TextAlign.Center,
-                    )
-                    Label(
-                        vals.tier2Note,
-                        modifier = Modifier.fillMaxWidth(),
-                        size = 5.5, color = Amber.Faint, tracking = 0.1, align = TextAlign.Center,
-                    )
+                    // **STATIC, and the hold FIRES rather than opening anything** (D-186). Nothing is
+                    // drawn afterwards and nothing may be: the house's answer is the jam every living
+                    // phone gets, and it reaches this one as a bystander's (`gdd.md:398`).
+                    Tier2Tile(vals.tier2B, vals, Modifier.weight(1f), armable = vals.insider) {
+                        actions.fireStatic()
+                    }
+                    Tier2Tile(vals.tier2C, vals, Modifier.weight(1f), armable = vals.insider) {
+                        go(ScreenId.IsolateTargets)
+                    }
                 }
+                PoolBar(vals.tier2Bar, vals.tier2BarInk)
+                // One line, and the same length for both roles (D-142). The mockup cut the second one.
+                Words(vals.tier2Note, size = 22, color = Ramp.Dim, lineHeight = 1.1)
             }
 
+            Box(Modifier.weight(1f))
             PageBar(onPage = 1)
         }
         Dock()
+    }
+}
+
+/** A cooldown or pool bar: an 8-tall hairline box, filled to [fraction] (D-202). */
+@Composable
+private fun PoolBar(fraction: Float, ink: Color) {
+    Box(Modifier.fillMaxWidth().height(8.dp).border(1.dp, Ramp.Faint)) {
+        Box(Modifier.fillMaxWidth(fraction).fillMaxHeight().background(ink))
     }
 }
 
@@ -317,7 +301,6 @@ fun Page2Screen(vals: PanelVals) {
  */
 @Composable
 private fun AbilityTile(
-    modifier: Modifier,
     name: String,
     sub: String,
     border: Color,
@@ -330,22 +313,19 @@ private fun AbilityTile(
     onArm: () -> Unit,
 ) {
     val hold = rememberHold(onArm, enabled = armable)
-    Box(modifier.fillMaxWidth().border(1.u, border).background(fill).then(hold.surface)) {
+    Box(Modifier.fillMaxWidth().border(2.dp, border).background(fill).then(hold.surface)) {
         Column(
-            Modifier.fillMaxSize().padding(horizontal = 10.u, vertical = 8.u),
-            verticalArrangement = Arrangement.spacedBy(6.u, Alignment.CenterVertically),
-            horizontalAlignment = Alignment.CenterHorizontally,
+            Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Label(name, size = 13.0, color = nameInk, tracking = 0.18)
-            Label(sub, size = 6.0, color = subInk, tracking = 0.12)
-            FillBar(bar, barInk)
+            Words(name, size = 52, color = nameInk, lineHeight = 0.8, tracking = 0.04)
+            Words(sub, size = 22, color = subInk, lineHeight = 1.0)
+            Box(Modifier.padding(top = 4.dp)) { PoolBar(bar, barInk) }
         }
         if (hold.holding) {
             Box(
-                Modifier.align(Alignment.BottomStart)
-                    .fillMaxWidth(hold.fraction)
-                    .height(2.u)
-                    .background(Amber.Bright)
+                Modifier.align(Alignment.BottomStart).fillMaxWidth(hold.fraction).height(3.dp)
+                    .background(Ramp.Ink)
             )
         }
     }
@@ -381,16 +361,14 @@ private fun Tier2Tile(
 ) {
     val hold = rememberHold(onArm, enabled = armable)
     Box(
-        modifier.border(1.u, Amber.Edge).then(hold.surface).padding(vertical = 13.u),
+        modifier.height(56.dp).border(1.dp, Ramp.Line).then(hold.surface),
         contentAlignment = Alignment.Center,
     ) {
-        Label(name, size = 6.5, color = vals.tier2Ink, tracking = 0.1)
+        Words(name, size = 24, color = vals.tier2Ink, lineHeight = 1.0, tracking = 0.04)
         if (hold.holding) {
             Box(
-                Modifier.align(Alignment.BottomStart)
-                    .fillMaxWidth(hold.fraction)
-                    .height(2.u)
-                    .background(Amber.Bright)
+                Modifier.align(Alignment.BottomStart).fillMaxWidth(hold.fraction).height(3.dp)
+                    .background(Ramp.Ink)
             )
         }
     }
@@ -408,15 +386,13 @@ private fun Tier2Tile(
  */
 @Composable
 private fun ColumnScope.PageBar(onPage: Int) {
-    Row(
-        Modifier.align(Alignment.CenterHorizontally).padding(top = 7.u, bottom = 6.u)
-            .size(width = 46.u, height = 3.u).background(Amber.Faint),
-    ) {
-        repeat(2) { i ->
-            Box(
-                Modifier.weight(1f).fillMaxHeight()
-                    .background(if (i == onPage) Amber.Bright else Amber.Faint)
-            )
+    Box(Modifier.align(Alignment.CenterHorizontally).height(28.dp), contentAlignment = Alignment.Center) {
+        Row(Modifier.size(width = 56.dp, height = 4.dp).background(Ramp.Faint)) {
+            repeat(2) { i ->
+                Box(Modifier.weight(1f).fillMaxHeight().then(
+                    if (i == onPage) Modifier.background(Ramp.Ink) else Modifier
+                ))
+            }
         }
     }
 }
@@ -477,34 +453,42 @@ private val PAGE_SWIPE_TRAVEL: Dp = 40.u
 private fun Dock() {
     val go = navigator()
     Row(
-        Modifier.fillMaxWidth().edgeLine(PanelSide.Top, Amber.Faint).background(Amber.Edge),
+        Modifier.fillMaxWidth().edgeLine(PanelSide.Top, Ramp.Faint, 1.dp).padding(top = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        DockButton("SUBROUTINES", PanelIcons.Work, Modifier.weight(1f), divider = true) { go(ScreenId.Work) }
-        DockButton("SCAN", PanelIcons.Scan, Modifier.weight(1f), divider = true) { go(ScreenId.Scan) }
-        DockButton("LOCK SCREEN", PanelIcons.Lock, Modifier.weight(1f)) { go(ScreenId.Lock) }
+        DockButton("SUBROUTINES", DOCK_WORK, Modifier.weight(1f)) { go(ScreenId.Work) }
+        // SCAN is the one solid block on the springboard (D-202): the thing a player does most.
+        DockButton("SCAN", DOCK_SCAN, Modifier.weight(1f), lit = true) { go(ScreenId.Scan) }
+        DockButton("LOCK SCREEN", DOCK_LOCK, Modifier.weight(1f)) { go(ScreenId.Lock) }
     }
 }
 
 @Composable
 private fun DockButton(
     label: String,
-    paths: List<String>,
+    path: String,
     modifier: Modifier = Modifier,
-    divider: Boolean = false,
+    lit: Boolean = false,
     onClick: () -> Unit,
 ) {
+    val ink = if (lit) Amber.Black else Ramp.Ink
     Column(
-        modifier
-            .then(if (divider) Modifier.edgeLine(PanelSide.End, Amber.Faint) else Modifier)
-            .tap(onClick)
-            .padding(top = 7.u, bottom = 8.u),
-        verticalArrangement = Arrangement.spacedBy(3.u),
+        modifier.height(64.dp).then(if (lit) Modifier.background(Ramp.Ink) else Modifier).tap(onClick),
+        verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        PanelIcon(paths, size = 15.u, color = Amber.Bright, strokeWidth = 1.5f)
-        Label(label, size = 5.5, color = Amber.Bright, tracking = 0.1)
+        PanelIcon(listOf(path), size = 24.dp, color = ink, strokeWidth = 2.5f, viewBox = 28f)
+        Words(
+            label, size = if (lit) 24 else 20, color = ink, lineHeight = 1.0,
+            tracking = if (lit) 0.08 else 0.0, maxLines = 1,
+        )
     }
 }
+
+/** The mockup's dock glyphs, on its 28-unit grid. */
+private const val DOCK_WORK = "M5 5h18v18H5z M9 11h10 M9 16h6"
+private const val DOCK_SCAN = "M4 10V4h6 M18 4h6v6 M24 18v6h-6 M10 24H4v-6 M9 14h10"
+private const val DOCK_LOCK = "M7 13h14v11H7z M10 13V7h8v6"
 
 /**
  * System Integrity: **a percentage, quantised into a bar**, and frozen until the next house
@@ -526,33 +510,12 @@ private fun DockButton(
  */
 @Composable
 fun IntegrityWidget(vals: PanelVals) {
-    Column(
-        Modifier.fillMaxWidth().border(1.u, Amber.Faint).padding(horizontal = 7.u, vertical = 6.u),
-        verticalArrangement = Arrangement.spacedBy(5.u),
-    ) {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            Label("SYSTEM INTEGRITY", size = 6.5, color = Amber.Dim, tracking = 0.14)
-            Row(verticalAlignment = Alignment.Bottom) {
-                // **Off [PanelVals.integrityPercent], not a literal.** It was `"88%"` typed here
-                // beside a bar drawn from `integrityLit` -- two hand-maintained facts about one
-                // meter, on the screen a player looks at most, which is the fault revision 21
-                // found as `14 / 32` and C2 found again as Ghost3's `66%`. It survived both passes
-                // because a literal that happens to be right is invisible until something moves
-                // it, and the house pushing the meter is that something.
-                Readout(vals.integrityPercent, size = 19.0, color = Amber.Bright, lineHeight = 1.0)
-            }
-        }
-        SegmentBar(
-            total = PanelVals.METER_SEGMENTS,
-            lit = vals.integrityLit,
-            litColor = Amber.Bright,
-            unlitColor = Amber.Edge,
-        )
-        Label("FROZEN UNTIL NEXT HOUSE MEETING", size = 6.0, color = Amber.Faint, tracking = 0.1)
+    KitLegendBox("SYSTEM INTEGRITY", Ramp.Mid, Ramp.Line) {
+        // **Off [PanelVals.integrityPercent], not a literal.** A literal that happens to be right
+        // is invisible until the house pushes the meter.
+        Words(vals.integrityPercent, size = 76, lineHeight = 0.8)
+        KitMeter(PanelVals.METER_SEGMENTS, vals.integrityLit, Ramp.Mid, Ramp.Faint)
+        Words("Frozen until next house meeting", size = 22, color = Ramp.Dim, lineHeight = 1.0)
     }
 }
 
@@ -567,15 +530,12 @@ fun IntegrityWidget(vals: PanelVals) {
 @Composable
 private fun CarryingWidget(carried: Carried, modifier: Modifier, open: () -> Unit) {
     Column(
-        modifier.border(1.u, Amber.Faint).tap(open).padding(horizontal = 7.u, vertical = 6.u),
-        verticalArrangement = Arrangement.spacedBy(3.u),
+        modifier.border(2.dp, Ramp.Ink).tap(open).padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(7.dp),
     ) {
-        Label("CARRYING", size = 6.0, color = Amber.Dim, tracking = 0.12)
-        Label(carried.item, size = 9.0, color = Amber.Bright, tracking = 0.06)
-        Label("TO ${carried.to}", size = 6.5, color = Amber.Mid, tracking = 0.08)
-        Label(
-            "NOTHING ELSE OPENS UNTIL IT IS DELIVERED",
-            size = 5.5, color = Amber.Dim, tracking = 0.06, lineHeight = 1.5,
-        )
+        Tag("CARRYING", Ramp.Mid)
+        Words(carried.item, size = 40, lineHeight = 0.8)
+        Words("TO ${carried.to}", size = 22, color = Ramp.Mid, lineHeight = 1.0)
+        Words("NOTHING ELSE OPENS UNTIL IT IS DELIVERED", size = 18, color = Ramp.Dim, lineHeight = 1.05)
     }
 }

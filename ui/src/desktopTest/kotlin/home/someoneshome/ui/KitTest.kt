@@ -89,11 +89,12 @@ class KitTest {
                         Column {
                             Box(Modifier.testTag("clock")) { Words("21:04", size = 124, lineHeight = 0.8) }
                             Box(Modifier.testTag("two")) { Words("TURN\nTO", size = 44, lineHeight = 0.9) }
+                            Box(Modifier.testTag("three")) { Words("A\nB\nC", size = 52, lineHeight = 0.85) }
                         }
                     }
                 }
             }
-            for ((tag, want) in listOf("clock" to 124 * 0.8, "two" to 2 * 44 * 0.9)) {
+            for ((tag, want) in listOf("clock" to 124 * 0.8, "two" to 2 * 44 * 0.9, "three" to 3 * 52 * 0.85)) {
                 val tall = onNodeWithTag(tag).getBoundsInRoot().let { it.bottom - it.top }.value
                 assertEquals(want.toFloat(), tall, 1f, "$tag's line box is $tall tall, not the mockup's $want")
             }

@@ -12,11 +12,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.safeContent
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -24,7 +19,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -33,15 +27,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TileMode
@@ -215,18 +205,17 @@ private const val STRIP_HEIGHT = 34
  *   changed brightness. The two arguments are separate here because the two questions are
  *   separate; [Notifications.dims] is the one place the second one is answered.
  *
- * ### The panel makes room for the banner rather than being covered by it
+ * ### The banner lies over the page; it does not push it (D-202)
  *
- * The banner used to be drawn straight over the top of whatever the screen had put there, which on
- * the springboard is the System Integrity meter: the bar came out cut in half, with FROZEN UNTIL
- * NEXT HOUSE MEETING under a bright block. Half a widget reads as a rendering fault rather than as
- * something on top of something, and the meter is the Residents' only number.
- *
- * So the content is inset by whatever the banner turns out to be tall, measured rather than
- * guessed — a notification is one line or three depending on what the house has to say, and a
- * reserved constant would be wrong for two of those. **The inset does not track the swipe**: the
- * banner slides up under the finger and the room it left stays open until it is actually gone, so
- * dismissing a notification does not drag the whole screen up with it.
+ * It used to inset the content by the banner's measured height, because a banner drawn over the
+ * System Integrity meter cut the bar in half and half a widget reads as a rendering fault. The
+ * redesign answers that the mockup's way instead. A heavy banner arrives over a page that has just
+ * dropped to [NOTIFIED_DIM], so what is under it reads as behind it; the quiet one is drawn tall
+ * enough to cover the whole widget rather than slicing it. And the inset could not survive the new
+ * page 1, which fills a phone: pushed down by a banner, it lost its page bar and the foot of its
+ * grid. It also cost a frame, since the height was only known after the banner was drawn, so the
+ * page jumped one frame after the banner arrived and the step-not-fade guard caught the panel
+ * moving.
  */
 @Composable
 fun PanelFrame(
@@ -253,12 +242,6 @@ fun PanelFrame(
     val statusBand = if (vals.statusVisible) safeTop + STATUS_BAR_HEIGHT else 0.u
     val overlayTop = if (vals.statusVisible) statusBand else safeTop
 
-    // How tall the banner turned out to be, measured at layout. Read back as room for the content
-    // only while there IS an overlay, so a banner that leaves does not leave its hole behind.
-    var bannerHeight by remember { mutableStateOf(0.dp) }
-    val bannerRoom = if (overlay != null) bannerHeight else 0.dp
-    val density = LocalDensity.current
-
     Box(modifier.fillMaxSize().background(Amber.Black)) {
         Box(
             Modifier.fillMaxSize()
@@ -279,7 +262,7 @@ fun PanelFrame(
                 // only the Island moved the collision to the other end of the panel.
                 Column(
                     Modifier.fillMaxWidth().weight(1f)
-                        .padding(top = bannerRoom, bottom = safeBottom),
+                        .padding(bottom = safeBottom),
                     content = content,
                 )
             }
@@ -298,14 +281,7 @@ fun PanelFrame(
                     .padding(top = overlayTop, bottom = safeBottom)
                     .clipToBounds()
             ) {
-                // Measured on a wrapper rather than asked of the banner, so the overlay slot stays
-                // a `BoxScope` lambda that knows nothing about the frame it is drawn in.
-                Box(
-                    Modifier.fillMaxWidth()
-                        .onSizeChanged { bannerHeight = with(density) { it.height.toDp() } }
-                ) {
-                    overlay(this)
-                }
+                overlay(this)
             }
         }
 

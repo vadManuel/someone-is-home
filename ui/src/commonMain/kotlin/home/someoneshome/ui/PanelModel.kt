@@ -891,7 +891,6 @@ class PanelVals(
         val from: String,
         val at: String,
         val preview: String,
-        val edge: Color,
         val fromInk: Color,
         val ink: Color,
     )
@@ -900,7 +899,7 @@ class PanelVals(
         val seed = state.inboxSeed
         val keep = 3 + (seed % 4)
         val rest = backlog.drop(seed % 3).take(keep).map { (from, at, preview) ->
-            InboxRow(from, at, preview, Amber.Edge, Amber.Faint, Amber.Dim)
+            InboxRow(from, at, preview, Ramp.Dim, Ramp.Mid)
         }
         // Identical sender, time and preview for both roles: the thread must be OPENED to read.
         // The row itself cannot be a tell to anyone glancing at a neighbour's screen.
@@ -921,7 +920,7 @@ class PanelVals(
                 // list is built at construction, before [houseLine] -- which the thread holds --
                 // has been assigned.
                 Notifications.opening.from, "21:02", Notifications.opening.body,
-                Amber.Dim, Amber.Bright, Amber.Bright,
+                Ramp.Ink, Ramp.Ink,
             ),
         ) + rest
     }
@@ -984,9 +983,9 @@ class PanelVals(
      * which is the tell the whole parity discipline exists to prevent. The Resident sees this
      * page lit exactly as an Insider does; nothing here answers them.
      */
-    val tileBorder: Color = Amber.Dim
-    val tileInk: Color = Amber.Bright
-    val tier2Ink: Color = Amber.Mid
+    val tileBorder: Color = Ramp.Line
+    val tileInk: Color = Ramp.Ink
+    val tier2Ink: Color = Ramp.Mid
 
     val abilityName: String = if (insider) "REVOKE" else "POWER"
 
@@ -1010,18 +1009,18 @@ class PanelVals(
         RevokeState.Ready -> if (insider) "READY . HOLD TO ARM" else "READY . ALL NOMINAL"
     }
 
-    val revokeBorder: Color = if (state.revoke == RevokeState.Armed) Amber.Bright else Amber.Dim
-    val revokeFill: Color = if (state.revoke == RevokeState.Armed) Amber.Edge else Color.Transparent
-    val revokeInk: Color = if (state.revoke == RevokeState.Cooldown) Amber.Dim else Amber.Bright
-    val revokeSubInk: Color = if (state.revoke == RevokeState.Armed) Amber.Bright else Amber.Dim
+    val revokeBorder: Color = if (state.revoke == RevokeState.Armed) Ramp.Ink else Ramp.Line
+    val revokeFill: Color = if (state.revoke == RevokeState.Armed) Ramp.Fill else Color.Transparent
+    val revokeInk: Color = if (state.revoke == RevokeState.Cooldown) Ramp.Dim else Ramp.Ink
+    val revokeSubInk: Color = if (state.revoke == RevokeState.Armed) Ramp.Ink else Ramp.Dim
     val revokeBar: Float = if (state.revoke == RevokeState.Cooldown) 0.38f else 1f
-    val revokeBarInk: Color = if (state.revoke == RevokeState.Cooldown) Amber.Dim else Amber.Bright
+    val revokeBarInk: Color = if (state.revoke == RevokeState.Cooldown) Ramp.Line else Ramp.Ink
 
     val secondName: String = if (insider) "EGRESS" else "SUBSYS"
     val secondSub: String =
         if (insider) "SHARED WITH THE OTHER INSIDER" else "ALL SYSTEMS RESPONDING"
     val secondBar: Float = 0.64f
-    val secondBarInk: Color = Amber.Dim
+    val secondBarInk: Color = Ramp.Line
 
     val tier2A: String = if (insider) "SURGE" else "BUS"
     // **STATIC took SPOOF's slot and the Resident's cover word did not move** (D-186). THERMAL is
@@ -1031,26 +1030,22 @@ class PanelVals(
     val tier2B: String = if (insider) "STATIC" else "THERMAL"
     val tier2C: String = if (insider) "ISOLATE" else "CACHE"
     val tier2Bar: Float = 0.82f
-    val tier2BarInk: Color = Amber.Mid
-    val tier2Note: String =
-        if (insider) "SURGE, STATIC AND ISOLATE SHARE THIS" else "BUS, THERMAL AND CACHE NOMINAL"
-
+    val tier2BarInk: Color = Ramp.Mid
     /**
-     * **The line under the three tier-2 tiles, and it is the same length for both roles.**
+     * **The one line under the three tier-2 tiles, and it is the same length for both roles.**
      *
      * D-142 asks that a Resident's copy be *true, and not shorter, dimmer or otherwise
-     * distinguishable* — and the Insider's is an instruction that has to be right, because a hold
-     * that a player did not know was a hold is a support ability they never fire. Same slot, same
-     * brightness, same word count; the Resident's says nothing about what the tiles do under a
-     * thumb, because for that player they do nothing.
+     * distinguishable*: same slot, same brightness, same word count. The Insider's says what the
+     * three share; the Resident's says nothing about what the tiles do under a thumb, because for
+     * that player they do nothing.
      *
-     * **It said HOLD TO SELECT A TARGET until D-186, and that line is now false.** Static has no
-     * target and its tile fires in place, so two of the three select and one does not; a line that
-     * still promised a picker would send an Insider looking for a screen that no longer exists.
-     * What replaced it is the true statement all three share, at the same length the old one was,
-     * so the row's shape against the Resident's copy has not moved.
+     * **There used to be a second line**, HOLD TO USE THESE THREE against WITHIN NOMINAL
+     * PARAMETERS. The redesign cut it (D-202: screens say little): the hold is taught by the tile,
+     * whose bar fills under a thumb, and an instruction that only one role's copy could carry was a
+     * line the parity had to work to keep level.
      */
-    val tier2Sub: String = if (insider) "HOLD TO USE THESE THREE" else "WITHIN NOMINAL PARAMETERS"
+    val tier2Note: String =
+        if (insider) "SURGE, STATIC AND ISOLATE SHARE THIS" else "BUS, THERMAL AND CACHE NOMINAL"
 
     /**
      * **The seat roster the Surge picker draws** (`gdd.md:392`, D-115).

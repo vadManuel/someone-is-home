@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -19,13 +20,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -53,6 +53,9 @@ import androidx.compose.ui.unit.dp
  * and a known row that lost one fails too.
  */
 const val ORDER_DESTINATION: String = "order-destination"
+
+/** The banner a notification arrives as, for tests that measure where it lies. */
+const val NOTIFICATION_BANNER: String = "notification-banner"
 
 /**
  * **A banner, not a takeover — and one of them costs the house its light (D-105, D-118).**
@@ -103,53 +106,60 @@ const val ORDER_DESTINATION: String = "order-destination"
 @Composable
 fun BoxScope.NotificationBanner(notification: Notification) {
     val actions = LocalActions.current
-    val threshold = with(LocalDensity.current) { SWIPE_DISMISS.toPx() }
     val heavy = notification.kind.heavy
-
-    // Where the finger has taken it, in pixels, never below zero. Keyed on the notification so a
-    // second one arriving does not inherit half a swipe made at the first.
-    var lifted by remember(notification) { mutableStateOf(0f) }
-
-    Column(
-        Modifier.align(Alignment.TopCenter)
-            // The lambda form: it reads `lifted` at draw time rather than at composition, so a
-            // finger moving up the screen does not recompose the banner on every frame. The whole
-            // app has an allocation budget of about 0.5 MB/s and a drag is sixty frames a second.
-            .offset { IntOffset(0, lifted.toInt()) }
-            .padding(6.u)
-            .fillMaxWidth()
-            // THE QUIET BANNER EMITS NOTHING THE PANEL WAS NOT ALREADY EMITTING: black ground,
-            // one hairline, and the same ink every other panel is written in.
-            .background(if (heavy) Amber.Bright else Amber.Black)
-            .then(if (heavy) Modifier else Modifier.border(1.u, Amber.Edge))
-            .pointerInput(notification) {
-                detectVerticalDragGestures(
-                    onDragEnd = { if (-lifted >= threshold) actions.dismissNotification() else lifted = 0f },
-                    onDragCancel = { lifted = 0f },
-                ) { _, delta -> lifted = (lifted + delta).coerceAtMost(0f) }
-            }
-            .then(
-                if (notification.opens != null) {
-                    Modifier.tap { actions.nav(notification.opens) }
-                } else {
-                    Modifier
+    val box = this
+    Mockup {
+        val threshold = with(LocalDensity.current) { SWIPE_DISMISS.toPx() }
+        // Where the finger has taken it, in pixels, never below zero. Keyed on the notification so a
+        // second one arriving does not inherit half a swipe made at the first.
+        var lifted by remember(notification) { mutableStateOf(0f) }
+        with(box) {
+            Column(
+                Modifier.align(Alignment.TopCenter).testTag(NOTIFICATION_BANNER)
+                    // The lambda form: it reads `lifted` at draw time rather than at composition,
+                    // so a finger moving up the screen does not recompose the banner every frame.
+                    .offset { IntOffset(0, lifted.toInt()) }
+                    .padding(start = 20.dp, end = 20.dp, top = 12.dp)
+                    .fillMaxWidth()
+                    // THE QUIET BANNER EMITS NOTHING THE PANEL WAS NOT ALREADY EMITTING: black
+                    // ground, one line, and the same ink every other panel is written in.
+                    .background(if (heavy) Ramp.Ink else Amber.Black)
+                    .then(if (heavy) Modifier else Modifier.border(1.dp, Ramp.Line))
+                    // The quiet banner covers the whole System Integrity widget rather than slicing
+                    // it: it arrives over a page that has not dimmed, so a half-covered meter
+                    // would read as a fault rather than as something behind.
+                    .then(if (heavy) Modifier else Modifier.heightIn(min = 156.dp))
+                    .pointerInput(notification) {
+                        detectVerticalDragGestures(
+                            onDragEnd = { if (-lifted >= threshold) actions.dismissNotification() else lifted = 0f },
+                            onDragCancel = { lifted = 0f },
+                        ) { _, delta -> lifted = (lifted + delta).coerceAtMost(0f) }
+                    }
+                    .then(
+                        if (notification.opens != null) {
+                            Modifier.tap { actions.nav(notification.opens) }
+                        } else {
+                            Modifier
+                        }
+                    )
+                    .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                val ink = if (heavy) Amber.Black else Ramp.Ink
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Tag(notification.from, if (heavy) ink else Ramp.Mid)
+                    Tag(notification.at, if (heavy) ink else Ramp.Dim)
                 }
-            )
-            .padding(horizontal = 8.u, vertical = 7.u),
-        verticalArrangement = Arrangement.spacedBy(3.u),
-    ) {
-        val ink = if (heavy) Amber.Black else Amber.Bright
-        val faint = if (heavy) Amber.Black else Amber.Dim
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Label(notification.from, size = 6.0, color = faint, tracking = 0.14)
-            Label(notification.at, size = 6.0, color = faint, tracking = 0.14)
-        }
-        Label(
-            notification.body,
-            size = notification.bodySize, color = ink, tracking = 0.02, lineHeight = 1.5,
-        )
-        notification.detail?.let {
-            Label(it, size = 6.5, color = ink, tracking = 0.08)
+                // The mockup's three sizes: the Egress alert's headline, the house text, and a
+                // player's quiet line.
+                val egress = notification.detail != null
+                Words(
+                    notification.body, color = ink,
+                    size = if (!heavy) 26 else if (egress) 32 else 28,
+                    lineHeight = if (egress) 0.95 else 1.05,
+                )
+                notification.detail?.let { Words(it, size = 22, color = ink, lineHeight = 1.0) }
+            }
         }
     }
 }
@@ -920,57 +930,33 @@ fun EgressWidgetScreen(vals: PanelVals) {
  */
 @Composable
 private fun EgressWidget(vals: PanelVals) {
-    Column(
-        Modifier.fillMaxWidth().border(1.u, Amber.Bright).padding(horizontal = 7.u, vertical = 6.u),
-        verticalArrangement = Arrangement.spacedBy(5.u),
-    ) {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            Label(
-                "EGRESS . ${vals.egressType}",
-                size = 6.5, color = Amber.Bright, tracking = 0.14,
-            )
-            // **HELD replaces the clock rather than sitting beside it** (`Effect.EgressHeld`,
-            // D-133). A paused countdown drawn as a still number is indistinguishable from one the
-            // phone has stopped receiving, and the difference between *the house stopped this* and
-            // *your phone went quiet* is the whole of what a player is trying to read here. The
-            // clock is dimmed with it, so the pause is a change in the widget's whole weight.
-            if (vals.egressHeld) {
-                Readout("HELD", size = 19.0, color = Amber.Dim, lineHeight = 1.0)
-            } else {
-                Readout("1:42", size = 19.0, color = Amber.Bright, lineHeight = 1.0)
-            }
+    KitLegendBox("EGRESS . ${vals.egressType}", Ramp.Ink, Ramp.Ink, edgeWidth = 2.dp) {
+        // **HELD replaces the clock rather than sitting beside it** (`Effect.EgressHeld`, D-133). A
+        // paused countdown drawn as a still number is indistinguishable from one the phone has
+        // stopped receiving, so the pause dims the clock and the bar together.
+        if (vals.egressHeld) {
+            Words("HELD", size = 76, color = Ramp.Dim, lineHeight = 0.8)
+        } else {
+            Words("1:42", size = 76, lineHeight = 0.8)
         }
-        SegmentBar(
-            total = PanelVals.METER_SEGMENTS,
-            lit = vals.egressLit,
-            litColor = if (vals.egressHeld) Amber.Dim else Amber.Bright,
-            unlitColor = Amber.Edge,
+        KitMeter(
+            PanelVals.METER_SEGMENTS, vals.egressLit,
+            if (vals.egressHeld) Ramp.Dim else Ramp.Mid, Ramp.Faint,
         )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Label("CONTAIN AT", size = 6.0, color = Amber.Dim, tracking = 0.1)
-            Label(
-                vals.egressNodes.joinToString(" . "),
-                size = 6.0, color = Amber.Bright, tracking = 0.1,
-            )
+            Words("CONTAIN AT", size = 22, color = Ramp.Dim, lineHeight = 1.0)
+            Words(vals.egressNodes.joinToString(" . "), size = 22, lineHeight = 1.0)
         }
         // **The house's answer to this phone's own beat, and it says nothing about anybody else**
         // (`Effect.SyncPulseAnswered`, `gdd.md:355`). ON THE BEAT is *the house is holding your
-        // tap*; OFF THE BEAT is every other answer there is — missed, locked out, not at a node, out
-        // of the round — because the effect is one shape with one boolean and a screen that split it
-        // finer would be reporting where the house thinks you are standing.
-        //
-        // Drawn only once this phone has returned a beat. A row that stood there saying OFF THE BEAT
-        // before anybody had tapped would be the widget grading a player for not having started.
+        // tap*; OFF THE BEAT is every other answer there is, because the effect is one shape with
+        // one boolean. Drawn only once this phone has returned a beat.
         vals.beatHeld?.let { held ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Label("YOUR BEAT", size = 6.0, color = Amber.Dim, tracking = 0.1)
-                Label(
+                Words("YOUR BEAT", size = 22, color = Ramp.Dim, lineHeight = 1.0)
+                Words(
                     if (held) "ON THE BEAT" else "OFF THE BEAT",
-                    size = 6.0, color = if (held) Amber.Bright else Amber.Dim, tracking = 0.1,
+                    size = 22, color = if (held) Ramp.Ink else Ramp.Dim, lineHeight = 1.0,
                 )
             }
         }
