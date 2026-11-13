@@ -149,6 +149,38 @@ class ScreenshotTest {
     }
 
     /**
+     * **Page 1 while carrying** (D-168), which the sweep cannot reach: carrying is a state of the
+     * springboard, not a screen. Both roles, for the parity audit. A viewer, not an assertion;
+     * `CarryingWidgetTest` holds the behaviour.
+     */
+    @OptIn(ExperimentalTestApi::class, ExperimentalComposeUiApi::class)
+    @Test
+    fun renderTheSpringboardWhileCarrying() {
+        for (role in PanelRole.entries) {
+            runDesktopComposeUiTest(width = 600, height = 800) {
+                setContent {
+                    Box(Modifier.fillMaxSize().background(Color.Black)) {
+                        Box(Modifier.size(600.dp, 800.dp)) {
+                            DeviceCanvas {
+                                Screen(
+                                    PanelState(
+                                        screen = ScreenId.Home, role = role,
+                                        carrying = Carried(item = "DISK 01", to = "RACK"),
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                }
+                ImageIO.write(
+                    onRoot().captureToImage().toAwtImage(), "png",
+                    File(out, "home-carrying-${role.name.lowercase()}.png"),
+                )
+            }
+        }
+    }
+
+    /**
      * **The two hosting refusals, which the sweep above cannot reach either** — and one of them now
      * carries a control (D-197).
      *

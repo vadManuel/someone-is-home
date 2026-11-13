@@ -144,6 +144,12 @@ data class StaticJam(val seconds: Int, val seed: Long)
  * `core`, and a screen that could ask the rules a question is a screen that could leak the
  * answer. Every field here arrives already decided at the effect boundary.
  */
+/**
+ * **One carried thing and where it goes** (D-168): `DISK 01`, `RACK`. Both are words the widget
+ * prints, and neither is decided here -- see [PanelState.carrying].
+ */
+data class Carried(val item: String, val to: String)
+
 data class PanelState(
     val screen: ScreenId = ScreenId.Home,
     /**
@@ -549,6 +555,21 @@ data class PanelState(
      * says so.
      */
     val staticJam: StaticJam? = null,
+    /**
+     * **What this phone is carrying, or nothing** (D-168).
+     *
+     * *Carrying blocks every other entry*, so the state and the list it blocks are one surface: the
+     * work-order widget turns into the carry while this is set, and says on its face that nothing
+     * else opens until the thing is delivered. The player does not have to hold the rule in their
+     * head in a dark room.
+     *
+     * ⚠️ **Nothing writes it yet.** Carrying is the Array Wipe circuit (Spares, Rack, Disposal), and
+     * the circuit is unbuilt: `AssignedWork.ArrayWipe` has no `opensAs` and there is no carried
+     * state anywhere in the rules (F-014, E7). Until E7 lands, the widget is reachable by the cheat
+     * picker and by tests. One field, one shape, so E7 fills it from a house message and nothing
+     * on the surface changes.
+     */
+    val carrying: Carried? = null,
     /** Randomises the backlog's *count and mix*, so inbox density can never imply a role. */
     val inboxSeed: Int = 3,
     val noteSeed: Int = 0,
@@ -1048,6 +1069,9 @@ class PanelVals(
      * that makes it deterministic.
      */
     val staticJam: StaticJam? = state.staticJam
+
+    /** What this phone is carrying, if anything (D-168). See [PanelState.carrying]. */
+    val carrying: Carried? = state.carrying
 
     // ---- Host setup -------------------------------------------------------------------------
 

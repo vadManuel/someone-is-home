@@ -67,7 +67,13 @@ fun HomeScreen(vals: PanelVals, widget: @Composable (PanelVals) -> Unit = { Inte
                 Modifier.fillMaxWidth().height(IntrinsicSize.Min),
                 horizontalArrangement = Arrangement.spacedBy(6.u),
             ) {
-                Column(
+                // **CARRYING takes the widget's place, because carrying blocks the list** (D-168).
+                // The state and the list it blocks are one surface, and the widget says the rule
+                // on its face. It opens Files, which is where the carried thing is.
+                val carried = vals.carrying
+                if (carried != null) {
+                    CarryingWidget(carried, Modifier.weight(1f).fillMaxHeight()) { go(ScreenId.Files) }
+                } else Column(
                     Modifier.weight(1f).fillMaxHeight().border(1.u, Amber.Faint).tap { go(ScreenId.Work) }
                         .padding(horizontal = 7.u, vertical = 6.u),
                     verticalArrangement = Arrangement.spacedBy(3.u),
@@ -488,5 +494,29 @@ fun IntegrityWidget(vals: PanelVals) {
             unlitColor = Amber.Edge,
         )
         Label("FROZEN UNTIL NEXT HOUSE MEETING", size = 6.0, color = Amber.Faint, tracking = 0.1)
+    }
+}
+
+/**
+ * **The work-order widget while this phone is carrying** (D-168).
+ *
+ * The same box in the same slot as NEXT SUBROUTINE, so the springboard keeps its shape; only the
+ * words change, and the last line is the rule the carry imposes.
+ *
+ * ⚠️ **NOTHING ELSE OPENS UNTIL IT IS DELIVERED is new copy and awaits the owner's eye** (D-200).
+ */
+@Composable
+private fun CarryingWidget(carried: Carried, modifier: Modifier, open: () -> Unit) {
+    Column(
+        modifier.border(1.u, Amber.Faint).tap(open).padding(horizontal = 7.u, vertical = 6.u),
+        verticalArrangement = Arrangement.spacedBy(3.u),
+    ) {
+        Label("CARRYING", size = 6.0, color = Amber.Dim, tracking = 0.12)
+        Label(carried.item, size = 9.0, color = Amber.Bright, tracking = 0.06)
+        Label("TO ${carried.to}", size = 6.5, color = Amber.Mid, tracking = 0.08)
+        Label(
+            "NOTHING ELSE OPENS UNTIL IT IS DELIVERED",
+            size = 5.5, color = Amber.Dim, tracking = 0.06, lineHeight = 1.5,
+        )
     }
 }
