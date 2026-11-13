@@ -8,6 +8,7 @@ import home.someoneshome.model.MarkerShapes
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithText
@@ -235,8 +236,9 @@ class HostSetupInputTest {
         assertEquals(2, before.size, "the fixture room no longer holds two cards")
         show(model)
 
-        // The chips come first on the screen; the terminal's own × is the one after them.
-        onAllNodes(hasText("×") and hasClickAction())[0].performClick()
+        // The chips come first on the screen, each named for its one act; the terminal's own × is
+        // named for the terminal.
+        onAllNodes(hasContentDescription(REMOVE_MARKER) and hasClickAction())[0].performClick()
         mainClock.advanceTimeBy(100)
 
         assertEquals(
@@ -416,7 +418,7 @@ class HostSetupInputTest {
             assertEquals(ScreenId.MeetTaken, model.state.screen)
             show(model)
 
-            onNodeWithText("This home has one meeting card and it is in").assertExists()
+            onNodeWithText("This home has one meeting card and it is in", substring = true).assertExists()
             onNode(hasText("MOVE THE MEETING CARD TO KITCHEN") and hasClickAction()).performClick()
             mainClock.advanceTimeBy(100)
 
@@ -538,7 +540,7 @@ class HostSetupInputTest {
             model.openSavedHome(HomeEditorModel.BUNGALOW)
             show(model)
 
-            onNodeWithText("HOSTS UP TO 6").assertExists()
+            onNodeWithText("Hosts up to 6").assertExists()
             onNode(hasText("HOST WITH THIS HOME") and hasClickAction()).assertExists()
         }
 

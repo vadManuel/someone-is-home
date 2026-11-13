@@ -49,73 +49,51 @@ import androidx.compose.ui.unit.IntOffset
  * Insider's blackmail text later quotes this line back; that is the entire mechanism.
  */
 @Composable
-fun SecretScreen() {
+fun SecretScreen() = Mockup {
     val actions = LocalActions.current
     val lobby = LocalLobby.current
-    PrePage(gap = 7) {
-        // **The page name, with the way back beside it** (E-PAY-6). It was a bare `Label` drawing
-        // the same thing [PreHeading] draws, which is how this screen came to be the one trap in
-        // setup: `ScreenGraph.exitsOf(Secret)` is empty, HAND IT OVER refuses a blank line and stays
-        // put, and a player who opened it with nothing to say had no control on the screen at all.
-        // `Lobby` is the fallback rather than the destination — see [BackChevron].
-        PreHeading("BEFORE THE LIGHTS GO OUT", back = ScreenId.Lobby)
-
-        InfoBox(border = Amber.BoneInk, gap = 4.u) {
-            Label(
-                "SOMETHING YOU WOULD RATHER NOT EXPLAIN",
-                size = 9.0, color = Amber.BoneInk, tracking = 0.04, lineHeight = 1.5,
-            )
-            Label(
-                "One line, and make it real. A thing you did, owe, broke, or never told them. " +
-                    "If the house picks you tonight, this is what it will hold over you.",
-                size = 7.5, color = Amber.BoneDeep, lineHeight = 1.8,
-            )
-        }
-
-        Column(Modifier.fillMaxWidth().weight(1f).border(1.u, Amber.BoneEdge).padding(7.u)) {
-            Label(
-                "YOUR LINE",
-                modifier = Modifier.padding(bottom = 5.u),
-                size = 6.0, color = Amber.BoneDim, tracking = 0.14,
-            )
-            // Real typing, in lower case. `transform` is identity here rather than the field's
-            // usual shout: a house name is a label and a confession is a sentence, and the one
-            // screen that asks somebody for something true must not restyle it as they type.
-            // **The field fills the panel it is drawn in** (E-PAY-6). It was one line pinned to the
-            // top of a box four fifths of a screen tall, and a tap anywhere in the rest of it hit
-            // nothing — on the one screen in this game where somebody is being asked for something
-            // they would rather not say. The glyphs still sit at the top; what changed is what the
-            // finger may aim at. See [ReadoutField].
+    val p = Palette.BONE
+    KitScreen {
+        // **The page name, with the way back beside it** (E-PAY-6): HAND IT OVER refuses a blank
+        // line and stays put, so without the arrow a player who opened this with nothing to say
+        // had no control on the screen at all. `Lobby` is the fallback rather than the destination.
+        KitHeader("BEFORE THE LIGHTS GO OUT", p, back = ScreenId.Lobby, titleSize = 28, trail = true)
+        Words("SOMETHING YOU WOULD RATHER NOT EXPLAIN", size = 30, color = p.ink, lineHeight = 1.0)
+        KitCaption(
+            "One line, and make it real. A thing you did, owe, broke, or never told them. " +
+                "If the house picks you tonight, this is what it will hold over you.",
+            p,
+        )
+        Column(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            KitLabel("YOUR LINE", p, SILK_LINE)
+            // Real typing, in lower case: a house name is a label and a confession is a sentence,
+            // and the one screen that asks somebody for something true must not restyle it as
+            // they type. **The field fills the box it is drawn in** (E-PAY-6), so a tap anywhere in
+            // it reaches the field.
             ReadoutField(
                 value = lobby.line.text,
                 onValueChange = actions.typeLine,
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                size = 17.0, color = Amber.BoneInk,
+                modifier = Modifier.weight(1f).heightIn(min = 96.dp).fillMaxWidth()
+                    .border(2.dp, p.ink).padding(horizontal = 12.dp, vertical = 10.dp),
+                size = 32.0, color = p.ink, tracking = 0.0,
                 hint = "one line",
-                transform = { it },
+                // One line, wrapped as the mockup's box wraps it: a return is a space, so the
+                // line the house holds is still one line.
+                transform = { it.replace('\n', ' ') },
+                singleLine = false,
             )
         }
-
-        Column(verticalArrangement = Arrangement.spacedBy(3.u)) {
-            // The two promises, in the host's own words. They are on this screen because the
-            // player is being asked for something real on the strength of them, and both are
-            // kept below: the host holds the line in memory and writes it nowhere, and the round
-            // ending drops it on both phones.
-            PreRow("SEEN BY", "THE HOUSE ONLY", border = Amber.BoneSoft, size = 6.5, verticalPadding = 5.u)
-            PreRow("DELETED", "WHEN THE ROUND ENDS", border = Amber.BoneSoft, size = 6.5, verticalPadding = 5.u)
+        // The two promises. They are on this screen because the player is being asked for
+        // something real on the strength of them, and both are kept: the host holds the line in
+        // memory and writes it nowhere, and the round ending drops it on both phones.
+        KitRules(p) {
+            KitInfo("SEEN BY", "THE HOUSE ONLY", p, minHeight = 44.dp)
+            KitInfo("DELETED", "WHEN THE ROUND ENDS", p, minHeight = 44.dp)
         }
-
         // A refused hand-over stays on this screen with the reason under the button. Nothing
         // about this is mid-round: the lights are still on and the player is owed the reason.
-        lobby.refusal?.let {
-            PreNote(it, color = Amber.BoneDim, size = 6.5, lineHeight = 1.0, align = TextAlign.Center)
-        }
-
-        SlateButton(
-            if (lobby.line.handedOver) "HAND IT OVER AGAIN" else "HAND IT OVER",
-            actions.handOverLine,
-            tracking = 0.18, verticalPadding = 11.u,
-        )
+        lobby.refusal?.let { KitBody(it, p, Modifier.fillMaxWidth(), size = 22, align = TextAlign.Center) }
+        KitPrimary(if (lobby.line.handedOver) "HAND IT OVER AGAIN" else "HAND IT OVER", p, onClick = actions.handOverLine)
     }
 }
 

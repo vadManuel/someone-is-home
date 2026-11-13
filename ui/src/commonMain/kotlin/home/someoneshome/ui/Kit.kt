@@ -39,6 +39,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
@@ -170,6 +171,23 @@ fun Words(
     maxLines: Int = Int.MAX_VALUE,
     overflow: TextOverflow = TextOverflow.Clip,
     decoration: TextDecoration? = null,
+) = Words(
+    AnnotatedString(text), modifier, size, color, lineHeight, tracking, align, maxLines, overflow, decoration,
+)
+
+/** [Words] for a line with a span set in another ink, as the mockup's inline `<span>`s are. */
+@Composable
+fun Words(
+    text: AnnotatedString,
+    modifier: Modifier = Modifier,
+    size: Int = 24,
+    color: Color = Ramp.Ink,
+    lineHeight: Double = 1.12,
+    tracking: Double = 0.0,
+    align: TextAlign? = null,
+    maxLines: Int = Int.MAX_VALUE,
+    overflow: TextOverflow = TextOverflow.Clip,
+    decoration: TextDecoration? = null,
 ) {
     BasicText(
         text = text,
@@ -291,6 +309,11 @@ private val CHEVRON_RIGHT = listOf("M9 4l8 8-8 8")
  * **With [back] null there is no arrow, trail or no trail**, which is `kit.py`'s `hdr` exactly: the
  * screen decides whether it has a way back. A header that grew an arrow because a trail happened to
  * exist would put one on screens the house pushed you onto (`BackNavigationTest`).
+ *
+ * **[trail] is that decision for the browsing surfaces of setup** (`Flow.backable`): the arrow is
+ * drawn once there is somewhere behind the phone, as [BackChevron] draws it, and at [back] when the
+ * screen names a parent of its own. With no trail and no parent it is absent, which is the state
+ * the mockup draws.
  */
 @Composable
 fun KitHeader(
@@ -299,10 +322,11 @@ fun KitHeader(
     back: ScreenId? = null,
     meta: String? = null,
     titleSize: Int = 32,
+    trail: Boolean = false,
 ) {
     val actions = LocalActions.current
     val trailed = actions.canGoBack()
-    val arrow = back != null
+    val arrow = back != null || (trail && trailed)
     Row(
         Modifier.fillMaxWidth().then(if (arrow) Modifier.bleedStart(16.dp) else Modifier)
             .heightIn(min = 56.dp),
@@ -441,11 +465,18 @@ fun KitHold(
     lit: Boolean = false,
     size: Int = 28,
     note: Boolean = true,
+    height: Dp = 64.dp,
+    tracking: Double = 0.06,
+    restingNote: String = HOLD_NOTE,
+    noteGap: Dp = 12.dp,
+    inert: Boolean = false,
 ) {
     val hold = rememberHold(onConfirm, enabled)
-    val edge = if (lit) palette.fillEdge else if (palette.bone) palette.ink else palette.line
-    val ink = if (lit) palette.onFill else palette.ink
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    // [inert] is the mockup's disabled block: a dashed edge in the dim value, words in the same.
+    // The hold under it is refused at the surface by [enabled]; this only says so to the eye.
+    val edge = if (inert) palette.dim else if (lit) palette.fillEdge else if (palette.bone) palette.ink else palette.line
+    val ink = if (inert) palette.dim else if (lit) palette.onFill else palette.ink
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(noteGap)) {
         Box(
             // [HOLD_BLOCK], so the tap-target sweep still measures a control that has no click
             // action; and the bar's progress as semantics, because a hold drawn without its note
@@ -453,11 +484,12 @@ fun KitHold(
             // whether the bar ran.
             Modifier.testTag(HOLD_BLOCK)
                 .semantics { progressBarRangeInfo = ProgressBarRangeInfo(hold.fraction, 0f..1f) }
-                .fillMaxWidth().height(64.dp).border(2.dp, edge)
-                .background(if (lit) palette.fill else Color.Transparent).then(hold.surface),
+                .fillMaxWidth().height(height)
+                .then(if (inert) Modifier.dashedBorder(edge) else Modifier.border(2.dp, edge))
+                .background(if (lit && !inert) palette.fill else Color.Transparent).then(hold.surface),
             contentAlignment = Alignment.Center,
         ) {
-            Words(text, size = size, color = ink, tracking = 0.06, lineHeight = 1.0, align = TextAlign.Center)
+            Words(text, size = size, color = ink, tracking = tracking, lineHeight = 1.0, align = TextAlign.Center)
             Box(
                 Modifier.align(Alignment.BottomStart).fillMaxWidth(hold.fraction).height(5.dp)
                     .background(ink)
@@ -465,10 +497,24 @@ fun KitHold(
         }
         if (note) {
             KitCaption(
-                if (hold.holding) "KEEP HOLDING" else HOLD_NOTE,
+                if (hold.holding) "KEEP HOLDING" else restingNote,
                 palette, Modifier.fillMaxWidth(), size = 20, center = true,
             )
         }
+    }
+}
+
+/**
+ * `kit.py`'s `token`: **a letter in a ring**, the terminal's T and the meeting card's U (D-121).
+ * Never a marker glyph: neither card is ever an ordinary marker.
+ */
+@Composable
+fun KitToken(letter: String, ink: Color, size: Dp = 28.dp) {
+    Box(
+        Modifier.size(size).border(2.dp, ink, androidx.compose.foundation.shape.CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        Words(letter, size = (size.value * 0.72f).roundToInt(), color = ink, lineHeight = 1.0)
     }
 }
 

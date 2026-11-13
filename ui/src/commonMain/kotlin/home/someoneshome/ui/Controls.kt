@@ -638,6 +638,11 @@ fun ReadoutField(
     /** The field's handle, for the human-mock. Kebab-case, unique on its screen. */
     tag: String = "",
     transform: (String) -> String = { it.uppercase() },
+    /**
+     * Whether the words wrap onto a second line. They are one line either way — a caller that wraps
+     * keeps newlines out in [transform] — and this is only whether a long one is still on screen.
+     */
+    singleLine: Boolean = true,
 ) {
     val focus = remember { FocusRequester() }
     Box(modifier.tap { focus.requestFocus() }) {
@@ -659,7 +664,7 @@ fun ReadoutField(
                 color = color,
                 letterSpacing = tracking.em,
             ),
-            singleLine = true,
+            singleLine = singleLine,
             cursorBrush = SolidColor(color),
         )
     }

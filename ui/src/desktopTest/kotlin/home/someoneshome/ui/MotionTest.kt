@@ -89,7 +89,8 @@ class MotionTest {
     @Test
     fun theSelfTestBarFillsAcrossItsWholeWindow() {
         val window = Flow.autoAdvance.getValue(ScreenId.Boot).afterMillis
-        val fill = Amber.BoneDim.toArgb()
+        // The lit segments are ink, as the mockup's `bootCells` lights them (D-202).
+        val fill = Amber.BoneInk.toArgb()
         val counts = mutableListOf<Int>()
         runDesktopComposeUiTest(width = width, height = height) {
             mainClock.autoAdvance = false

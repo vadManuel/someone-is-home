@@ -145,7 +145,7 @@ class LobbyInputTest {
             // And it is not blank instead: the names and the counts the house sent are on it.
             onNodeWithText("ELLIOT").assertExists()
             onNodeWithText("6 JOINED").assertExists()
-            onNodeWithText("5 OF 6 HANDED THEIRS OVER").assertExists()
+            onNodeWithText("5 of 6 handed theirs over").assertExists()
         }
 
     // ---- Typing ------------------------------------------------------------------------------

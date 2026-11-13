@@ -3,12 +3,16 @@ package home.someoneshome.ui
 import home.someoneshome.model.CellRect
 import home.someoneshome.model.MarkerShape
 import home.someoneshome.model.MarkerShapes
+import home.someoneshome.model.RoomKind
 import home.someoneshome.model.PlanRoom as PaintedRoom
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.defaultMinSize
@@ -28,6 +32,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.PathFillType
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -144,16 +149,46 @@ private fun cellBounds(
  * a fill of any intensity would not.
  */
 private fun DrawScope.drawHatch(x: Float, y: Float, w: Float, h: Float) {
-    val step = 4.dp.toPx()
-    val stroke = 3.dp.toPx()
+    // The mockup's `repeating-linear-gradient(45deg, #B3AA96 0 3px, #234A3A 3px 4px)`, per cell as
+    // its cells draw it: three of pale to one of slate, measured ACROSS the stripe, running the way
+    // CSS's 45deg runs (see [hatch]). The first port stroked 3-wide lines 4 apart along the edge,
+    // which is 2.8 across, so the slate never showed and the stairs went flat pale.
+    val root2 = kotlin.math.sqrt(2f)
+    val period = 4.dp.toPx() * root2
+    val slate = 1.dp.toPx() * root2
+    val stripes = hatchStripes(w, h, period)
+    if (stripes == 0) return
     clipRect(x, y, x + w, y + h) {
-        var d = -h
-        while (d < w + h) {
-            drawLine(Amber.BoneHatch, Offset(x + d, y + h), Offset(x + d + h, y), strokeWidth = stroke)
-            d += step
+        drawRect(Amber.BoneHatch, Offset(x, y), Size(w, h))
+        // A stripe is the run where `x - y + h` falls in [k*period + pale, (k+1)*period). A counted
+        // walk with one path, never a float stepping until it passes the edge: see [hatchStripes].
+        val path = androidx.compose.ui.graphics.Path()
+        repeat(stripes) { k ->
+            val d = -h + period - slate + k * period
+            path.reset()
+            path.moveTo(x + d, y); path.lineTo(x + d + slate, y)
+            path.lineTo(x + d + slate + h, y + h); path.lineTo(x + d + h, y + h); path.close()
+            drawPath(path, Amber.Slate)
         }
     }
 }
+
+/**
+ * **How many stripes cross a [w] by [h] cell, which is always a finite number** — zero for a cell
+ * with no size, a size that is not a number, or a period that does not move.
+ *
+ * Counted once rather than walked: a drawing loop that steps a float until it passes an edge never
+ * ends when the step or the edge is not a real number, and every pass records into the frame. A
+ * runaway dotted rule on the self-test screen took a test worker to some 80 GB that way.
+ */
+internal fun hatchStripes(w: Float, h: Float, period: Float): Int {
+    if (!(w.isFinite() && h.isFinite() && period.isFinite()) || w <= 0f || h <= 0f || period <= 0f) return 0
+    // Capped as well: no cell on a phone needs ten thousand stripes, and a cell that claims to is
+    // a measuring fault this must not turn into ten thousand native paths.
+    return (kotlin.math.ceil((w + h) / period).toInt() + 1).coerceAtMost(MAX_STRIPES)
+}
+
+private const val MAX_STRIPES = 10_000
 
 /**
  * A live plan: no fills except your own room and the stairs, and outlines only where a room
@@ -341,40 +376,50 @@ fun EditorLabels(
     meeting: String? = null,
     cols: Int = HomeEditorModel.COLS,
     rows: Int = HomeEditorModel.ROWS,
+    size: Int = 18,
 ) {
+    // Mockup pixels (D-202): every caller draws this inside [Mockup].
     BoxWithConstraints(modifier) {
         val w = maxWidth
         val h = maxHeight
         rooms.forEach { room ->
             val anchor = room.strokes.minWithOrNull(compareBy({ it.y }, { it.x })) ?: return@forEach
             val isHeld = room.name == held
-            val ink = if (isHeld) Amber.BoneChip else Amber.BoneInk
-            val chipInk = if (isHeld) Amber.SlateFocusFill else Amber.SlateFill
+            // The label sits on a patch of its own room's fill, as the mockup's `boneRooms` draws
+            // it, so a gridline running under the name does not cut through the letters.
+            val ground = when {
+                isHeld -> Amber.SlateFocusFill
+                room.kind == RoomKind.Stairs -> Amber.BoneHatch
+                else -> Amber.SlateFill
+            }
+            val ink = if (isHeld) Amber.BoneChip else Amber.SlateInk
             val count = markers(room.name)
-            // What the label has to fit in: the anchor stroke's cells, less the inset that holds
+            // What the label has to fit in: the anchor stroke's cells, less the margin that holds
             // it off the room's own border.
-            val inset = 3.u
-            val nameWidth = (w * (anchor.width.toFloat() / cols) - inset).coerceAtLeast(inset)
-            Column(
+            val inset = 4.dp
+            val room0 = w * (anchor.width.toFloat() / cols)
+            val bound = (room0 - inset * 2).coerceAtLeast(inset)
+            Row(
                 Modifier
-                    .offset(
-                        x = w * (anchor.x.toFloat() / cols),
-                        y = h * (anchor.y.toFloat() / rows),
-                    )
-                    .padding(start = inset, top = 2.u)
-                    .width(nameWidth)
+                    .offset(x = w * (anchor.x.toFloat() / cols), y = h * (anchor.y.toFloat() / rows))
+                    .padding(inset)
+                    .widthIn(max = bound)
+                    .background(ground)
+                    .padding(horizontal = 3.dp, vertical = 1.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Label(
-                    room.name, size = 5.5, color = ink, tracking = 0.06,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                Words(
+                    room.name, Modifier.weight(1f, fill = false), size = size, color = ink,
+                    lineHeight = 1.0, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 )
-                if (count > 0) EditorChip("$count", ink, chipInk, round = false)
+                if (count > 0) EditorChip("$count", ink, ground, round = false)
                 // The T and the U are their own chips rather than replacing the count: a room can
                 // hold cards AND a reserved card — the meeting card in particular is expected to
                 // share (D-121) — and a chip that showed one of them would be the editor quietly
                 // hiding another from the host who is about to go and find it.
-                if (room.name == terminal) EditorChip("T", ink, chipInk, round = true)
-                if (room.name == meeting) EditorChip("U", ink, chipInk, round = true)
+                if (room.name == terminal) EditorChip("T", ink, ground, round = true)
+                if (room.name == meeting) EditorChip("U", ink, ground, round = true)
             }
         }
     }
@@ -383,13 +428,12 @@ fun EditorLabels(
 @Composable
 private fun EditorChip(text: String, ink: Color, chipInk: Color, round: Boolean) {
     Box(
-        Modifier.padding(top = 1.u).let {
-            if (round) it.size(8.u).background(ink, CircleShape)
-            else it.defaultMinSize(minWidth = 8.u).height(8.u).background(ink)
-        },
+        Modifier.height(18.dp).defaultMinSize(minWidth = 18.dp)
+            .background(ink, if (round) CircleShape else RectangleShape)
+            .padding(horizontal = 3.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Label(text, size = 4.5, color = chipInk)
+        Words(text, size = 17, color = chipInk, lineHeight = 1.0)
     }
 }
 
