@@ -22,6 +22,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.PathEffect
@@ -572,17 +573,27 @@ fun KitLegendBox(
  * up and a root-two too narrow, which the side-by-side render of the locked rows showed.
  */
 fun Modifier.hatch(stripe: Color, ground: Color = Amber.Black, band: Dp = 6.dp): Modifier = drawBehind {
-    drawRect(ground)
+    drawHatch(Offset.Zero, size, stripe, ground, band.toPx())
+}
+
+/**
+ * [hatch] drawn into one rectangle of a canvas rather than behind a whole element: Drift's cover
+ * is a stretch of a lane, not a box of its own. The stripe starts at [topLeft]'s bottom-left
+ * corner, exactly as [hatch]'s starts at its element's.
+ */
+fun DrawScope.drawHatch(topLeft: Offset, area: Size, stripe: Color, ground: Color = Amber.Black, band: Float) {
     // A band across the stripe is root two wider along the edge.
-    val b = band.toPx() * kotlin.math.sqrt(2f)
-    val h = size.height
-    clipRect {
+    val b = band * kotlin.math.sqrt(2f)
+    val h = area.height
+    val (x0, y0) = topLeft
+    clipRect(x0, y0, x0 + area.width, y0 + h) {
+        drawRect(ground, topLeft, area)
         // A stripe is the run where `x - y + h` falls in [k*2b, k*2b + b), zero at bottom-left.
         var d = -h
-        while (d < size.width) {
+        while (d < area.width) {
             val path = Path().apply {
-                moveTo(d, 0f); lineTo(d + b, 0f)
-                lineTo(d + b + h, h); lineTo(d + h, h); close()
+                moveTo(x0 + d, y0); lineTo(x0 + d + b, y0)
+                lineTo(x0 + d + b + h, y0 + h); lineTo(x0 + d + h, y0 + h); close()
             }
             drawPath(path, stripe)
             d += 2 * b

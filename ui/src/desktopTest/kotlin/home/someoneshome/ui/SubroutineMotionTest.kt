@@ -414,30 +414,59 @@ class SubroutineMotionTest {
      * instances of one Subroutine differing **only** in the band's width, and the picture moving
      * with it.
      *
-     * Counted in [Amber.Faint], which is the band's own fill, and asserted as *wider band, more of
-     * it* rather than against a pixel count: the exact number is the layout's business and this
-     * claim is about where the number came from. Injecting the bug is a one-word edit — draw the
-     * band from anything other than `sweep.bandHalf` — and the two counts become the same.
+     * Measured on the bar's own pixels as *the distance between the band's two edges*, and asserted
+     * as *wider band, wider apart* rather than against a pixel count: the exact number is the
+     * layout's business and this claim is about where the number came from. The edges are dashed
+     * lines, so their pixel count is the same at any width -- which is why this measures where they
+     * stand rather than how much of them there is. Only the rows above the sweep are read, so the
+     * sweep, drawn in the same ink, cannot stand in for an edge. Injecting the bug is a one-word
+     * edit -- draw the band from anything other than `sweep.bandHalf` -- and the two spans become
+     * the same.
      */
     @Test
     fun theBandIsDrawnFromTheWidthTheHouseSentAndNotFromAFixture() {
-        val rgb = Amber.Faint.toArgb()
         val middle = InterruptSweep.SPAN / 2
         // Same position, same speed, same phase. One number differs and it is the graded one.
         val narrow = InterruptSweep.of(listOf(middle, InterruptSweep.BAND_LEAST, 14, 0))
         val wide = InterruptSweep.of(listOf(middle, InterruptSweep.BAND_MOST, 14, 0))
 
-        val drawnNarrow =
-            pixels(frames(Subroutine.Interrupt, emptyList(), model = SubroutineModel(sweep = narrow)).single(), rgb)
-        val drawnWide =
-            pixels(frames(Subroutine.Interrupt, emptyList(), model = SubroutineModel(sweep = wide)).single(), rgb)
+        val drawnNarrow = bandSpan(SubroutineModel(sweep = narrow))
+        val drawnWide = bandSpan(SubroutineModel(sweep = wide))
 
         assertTrue(
-            drawnWide > drawnNarrow,
-            "a band of ${wide.bandHalf} either side drew $drawnWide lit pixels and one of " +
-                "${narrow.bandHalf} drew $drawnNarrow — the screen is not rendering the width it " +
-                "was sent, so the house is grading a band nobody is looking at",
+            drawnNarrow > 0 && drawnWide > drawnNarrow,
+            "a band of ${wide.bandHalf} either side drew its edges $drawnWide pixels apart and one " +
+                "of ${narrow.bandHalf} drew them $drawnNarrow apart — the screen is not rendering " +
+                "the width it was sent, so the house is grading a band nobody is looking at",
         )
+    }
+
+    /** How far apart the band's two edges stand on the bar, read off the bar's own pixels. */
+    private fun bandSpan(model: SubroutineModel): Int {
+        // Bright enough to be the band's ink and not the bar's outline, which is the line value.
+        // Not an exact colour: a two-unit dashed edge at a fractional scale is antialiased on
+        // every pixel it touches.
+        val outline = (Ramp.Line.toArgb() shr 16) and 0xFF
+        var span = 0
+        runDesktopComposeUiTest(width = width, height = height) {
+            mainClock.autoAdvance = false
+            setContent {
+                Box(Modifier.fillMaxSize()) {
+                    DeviceCanvas(insets = PanelInsets()) {
+                        Screen(PanelState(screen = ScreenId.SubInterrupt), subroutines = model)
+                    }
+                }
+            }
+            mainClock.advanceTimeByFrame()
+            val bar = onNodeWithTag(INTERRUPT_BAR, useUnmergedTree = true).captureToImage().toAwtImage()
+            // Above the sweep, which is inset from the bar's top; below the bar's own outline.
+            val rows = 2 until bar.height / 20
+            val columns = (0 until bar.width).filter { x ->
+                rows.any { y -> (bar.getRGB(x, y) shr 16) and 0xFF > outline + 40 }
+            }
+            span = if (columns.isEmpty()) 0 else columns.last() - columns.first()
+        }
+        return span
     }
 
     @Test

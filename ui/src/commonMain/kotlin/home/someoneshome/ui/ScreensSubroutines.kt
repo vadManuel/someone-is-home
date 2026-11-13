@@ -7,12 +7,15 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -30,11 +33,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import home.someoneshome.model.DotColumns
 import home.someoneshome.model.DriftPath
 import home.someoneshome.model.InterruptSweep
@@ -128,33 +133,26 @@ import home.someoneshome.model.SignalGraph
 fun HandshakeScreen(verdict: SubroutineVerdict? = null) {
     val entry = LocalSubroutine.current.handshake
     val actions = LocalActions.current
-    SubroutineFrame(Subroutine.Handshake, ink = Amber.Dim, mark = Amber.Faint) {
-        Column(
-            Modifier.weight(1f).fillMaxWidth().border(1.u, Amber.Edge).padding(10.u),
-            verticalArrangement = Arrangement.spacedBy(12.u, Alignment.CenterVertically),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            SequenceCells(entry, lit = Amber.Dim, unlit = Amber.Edge)
-            ReturnLine(entry.handedOver, verdict, Amber.Faint)
-        }
+    val p = Palette.CONCEAL
+    SubroutineFrame(Subroutine.Handshake, p, entry.handedOver, verdict) {
+        BeatCells(entry)
 
-        MotionBudgetRow(Amber.Faint, Amber.Dim)
-
-        // The whole input surface of this Subroutine: one target, as large as the screen can make
+        // The whole input surface of this Subroutine: one target, as large as the body can make
         // it, because it is pressed by somebody who is not looking at it. It goes inert once the
         // rhythm has gone back -- a control that accepts taps it discards is worse than one that
         // does not move, and this is the one screen where the player has no way to see that it did.
-        PanelButton(
-            "TAP",
-            border = if (entry.handedOver) Amber.Edge else Amber.Faint,
-            ink = if (entry.handedOver) Amber.Faint else Amber.Dim,
-            size = 16.0, tracking = 0.2, verticalPadding = 22.u,
-            onClick = if (entry.handedOver) null else {
-                { actions.tapSubroutine(Subroutine.Handshake, entry.entered.size) }
-            },
-        )
-
-        StopNow(Amber.Edge, Amber.Faint)
+        // Inert, it loses its outline: the word stays, because D-202 has no dimmer text to give it.
+        Box(
+            Modifier.fillMaxWidth().height(180.dp)
+                .then(if (entry.handedOver) Modifier else Modifier.border(1.dp, p.faint))
+                .then(
+                    if (entry.handedOver) Modifier
+                    else Modifier.tap { actions.tapSubroutine(Subroutine.Handshake, entry.entered.size) }
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Words("TAP", size = 40, color = p.ink, tracking = 0.2, lineHeight = 1.0)
+        }
     }
 }
 
@@ -180,27 +178,17 @@ fun HandshakeScreen(verdict: SubroutineVerdict? = null) {
 fun ReplayScreen(verdict: SubroutineVerdict? = null) {
     val entry = LocalSubroutine.current.replay
     val actions = LocalActions.current
-    SubroutineFrame(Subroutine.Replay, ink = Amber.Dim, mark = Amber.Bright) {
-        Column(
-            Modifier.weight(1f).fillMaxWidth().border(1.u, Amber.Edge).padding(10.u),
-            verticalArrangement = Arrangement.spacedBy(10.u, Alignment.CenterVertically),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
+    val p = Palette.DARK
+    SubroutineFrame(Subroutine.Replay, p, entry.handedOver, verdict) {
+        Column(verticalArrangement = Arrangement.spacedBy(22.dp)) {
             for (pair in (0 until entry.length).chunked(2)) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.u),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(64.dp)) {
                     for (at in pair) {
                         val touched = entry.holds(at)
                         Box(
                             Modifier.size(DOT)
-                                .background(
-                                    if (touched) Amber.Bright else Color.Transparent, CircleShape,
-                                )
-                                .border(
-                                    1.u, if (touched) Amber.Bright else Amber.Dim, CircleShape,
-                                )
+                                .background(if (touched) p.ink else Color.Transparent, CircleShape)
+                                .border(2.dp, p.ink, CircleShape)
                                 .then(
                                     if (entry.handedOver) Modifier
                                     else Modifier.tap {
@@ -211,12 +199,12 @@ fun ReplayScreen(verdict: SubroutineVerdict? = null) {
                     }
                 }
             }
-            SequenceCells(entry, lit = Amber.Bright, unlit = Amber.Edge)
-            ReturnLine(entry.handedOver, verdict, Amber.Dim)
         }
-
-        MotionBudgetRow(Amber.Dim, Amber.Bright)
-        StopNow(Amber.Faint, Amber.Dim)
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            repeat(entry.length) { at ->
+                Cell(28.dp, 12.dp, edge = p.ink, fill = if (at < entry.entered.size) p.ink else null)
+            }
+        }
     }
 }
 
@@ -251,54 +239,49 @@ fun ParityCheckScreen(verdict: SubroutineVerdict? = null) {
     val entry = LocalSubroutine.current.parity
     val actions = LocalActions.current
     val cells = SubroutineModel.PARITY
-    SubroutineFrame(Subroutine.ParityCheck, ink = Amber.Dim, mark = Amber.Bright) {
-        Column(
-            Modifier.weight(1f).fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(3.u),
-        ) {
-            for (row in cells.indices.chunked(ParityGrid.COLUMNS)) {
-                Row(
-                    Modifier.fillMaxWidth().weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(3.u),
-                ) {
-                    for (at in row) {
-                        val held = entry.holds(at)
-                        Box(
-                            Modifier.weight(1f).fillMaxHeight()
-                                .background(if (cells[at]) Amber.Mid else Amber.Well)
-                                .border(
-                                    if (held) 2.u else 1.u,
-                                    if (held) Amber.Bright else Amber.Faint,
-                                )
-                                .then(if (held) Modifier.testTag(PARITY_MARK) else Modifier)
-                                .then(
-                                    if (entry.handedOver != null) Modifier
-                                    else Modifier.tap {
-                                        actions.tapSubroutine(Subroutine.ParityCheck, at)
-                                    }
-                                )
-                        )
+    val p = Palette.DARK
+    val live = entry.choice != null && !entry.locked
+    SubroutineFrame(
+        Subroutine.ParityCheck, p, entry.gone, verdict,
+        submit = {
+            SubmitButton(if (entry.locked) "SUBMITTED" else "SUBMIT", p, live) {
+                actions.handOverSubroutine(Subroutine.ParityCheck)
+            }
+        },
+    ) {
+        // Square, and as large as the body allows: the mockup's `aspect-ratio: 1` at full width,
+        // shrunk to the body's height on a panel too short to take it.
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            val side = minOf(maxWidth, maxHeight)
+            Column(Modifier.size(side), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                for (row in cells.indices.chunked(ParityGrid.COLUMNS)) {
+                    Row(
+                        Modifier.fillMaxWidth().weight(1f),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        for (at in row) {
+                            val held = entry.holds(at)
+                            val lit = cells[at]
+                            Box(
+                                Modifier.weight(1f).fillMaxHeight()
+                                    .background(if (lit) p.ink else Ramp.Fill)
+                                    .border(if (held) 3.dp else 1.dp, if (held || lit) p.ink else p.faint)
+                                    // On a lit cell a ring in ink is ink on ink. A black line
+                                    // inside it is what lets the ring read there too.
+                                    .then(if (held && lit) Modifier.padding(3.dp).border(3.dp, Amber.Black) else Modifier)
+                                    .then(if (held) Modifier.testTag(PARITY_MARK) else Modifier)
+                                    .then(
+                                        if (entry.handedOver != null) Modifier
+                                        else Modifier.tap {
+                                            actions.tapSubroutine(Subroutine.ParityCheck, at)
+                                        }
+                                    )
+                            )
+                        }
                     }
                 }
             }
         }
-
-        ReturnLine(entry.gone, verdict, Amber.Dim)
-        MotionBudgetRow(Amber.Dim, Amber.Bright)
-
-        PanelButton(
-            if (entry.locked) "SUBMITTED" else "SUBMIT",
-            border = if (entry.choice == null || entry.locked) Amber.Faint else Amber.Dim,
-            ink = if (entry.choice == null || entry.locked) Amber.Dim else Amber.Bright,
-            tracking = 0.18, verticalPadding = 9.u,
-            onClick = if (entry.choice == null || entry.locked) {
-                null
-            } else {
-                { actions.handOverSubroutine(Subroutine.ParityCheck) }
-            },
-        )
-
-        StopNow(Amber.Faint, Amber.Dim)
     }
 }
 
@@ -335,20 +318,24 @@ fun ParityCheckScreen(verdict: SubroutineVerdict? = null) {
 fun ShortScreen(verdict: SubroutineVerdict? = null) {
     val entry = LocalSubroutine.current.short
     val actions = LocalActions.current
-    SubroutineFrame(Subroutine.Short, ink = Amber.Dim, mark = Amber.Faint) {
-        HoldSurface(
+    val p = Palette.CONCEAL
+    val asks = SubroutineModel.SHORT_FINGERS
+    val down = entry.handedOver ?: entry.fingers
+    // Both rows keep the same number of slots, so their cells line up and the comparison is a
+    // length against a length. A hand is five; more fingers than that widen both rows together
+    // rather than drawing fewer than were sent.
+    val slots = maxOf(MOST_FINGERS, asks, down)
+    SubroutineFrame(
+        Subroutine.Short, p, entry.handedOver != null, verdict,
+        bodyModifier = holdSurface(
             live = entry.handedOver == null,
             onFingers = { actions.tapSubroutine(Subroutine.Short, it) },
             onHeld = { actions.handOverSubroutine(Subroutine.Short) },
-            modifier = Modifier.weight(1f).fillMaxWidth().border(1.u, Amber.Edge).padding(10.u),
-        ) {
-            CountRow("ASKS", SubroutineModel.SHORT_FINGERS, Amber.Faint, Amber.Dim)
-            CountRow("DOWN", entry.handedOver ?: entry.fingers, Amber.Faint, Amber.Dim)
-            ReturnLine(entry.handedOver != null, verdict, Amber.Faint)
-        }
-
-        MotionBudgetRow(Amber.Faint, Amber.Dim)
-        StopNow(Amber.Edge, Amber.Faint)
+        ),
+    ) {
+        CountRow("ASKS", asks, slots, p)
+        CountRow("DOWN", down, slots, p)
+        Box(Modifier.fillMaxWidth().height(180.dp).border(1.dp, p.faint))
     }
 }
 
@@ -359,18 +346,14 @@ fun ShortScreen(verdict: SubroutineVerdict? = null) {
  * satisfying.* Which two shapes and how far a tap moves are both left open, so both are decided
  * here and flagged.
  *
- * ### Two rings converging in size, rather than two shapes sliding together
+ * ### Two rings sitting apart along one row, as the mockup draws them
  *
- * The input vocabulary at four luminance steps of amber is position, shape, count, size, order,
- * presence and slow motion. Two concentric rings closing on one another use **size alone**, with
- * both shapes sharing a centre — so there is nothing to track across the screen, nothing that goes
- * off the edge, and no direction to get confused about in the dark. It is also the version that
- * has the moment the design asks for: the last press puts one ring exactly on the other and two
- * things become one thing.
- *
- * The fixed ring is drawn thicker and dimmer, the player's ring thinner and brighter, so at the
- * moment they coincide the bright one sits inside the dim one's stroke and reads as a single
- * ring with a halo rather than as one ring that ate the other.
+ * The briefing says *TWO RINGS WILL SIT APART* (D-194), and the mockup draws exactly that: two
+ * rings of one size side by side, the player's in the screen's ink and the fixed one in the line
+ * value. **This replaced two concentric rings converging in size**, the port's own earlier answer
+ * to a question the design had left open; the redesign answered it. The pair moves along one axis
+ * only, so there is still no direction to get confused about in the dark, and the last press puts
+ * one ring exactly on the other and two things become one thing.
  *
  * **Neither the screen nor the entry knows how far apart they are.** [ScalarEntry] holds the net
  * steps pressed and nothing else; the gap is a thing the eye measures.
@@ -384,46 +367,33 @@ fun JamScreen(verdict: SubroutineVerdict? = null) {
     // waiting for -- the band's arrangement, one Subroutine along (E-S2-1).
     val rings = LocalSubroutine.current.rings
     val live = entry.handedOver == null
-    SubroutineFrame(Subroutine.Jam, ink = Amber.Dim, mark = Amber.Mid) {
-        Box(
-            Modifier.weight(1f).fillMaxWidth().border(1.u, Amber.Edge),
-            contentAlignment = Alignment.Center,
-        ) {
-            Box(Modifier.size(JAM_TARGET).border(2.u, Amber.Dim, CircleShape))
-            Box(
-                Modifier
-                    .size(JAM_TARGET + JAM_STEP * (rings.opening + entry.offset))
-                    .border(1.u, Amber.Mid, CircleShape),
-            )
-        }
+    val p = Palette.MEDIUM
+    SubroutineFrame(
+        Subroutine.Jam, p, entry.gone, verdict,
+        // Live with nothing pressed: an inert SUBMIT would be the phone saying the opening
+        // position is not the answer, and it is not the phone's to know. See ScalarEntry.
+        submit = {
+            SubmitButton(if (entry.gone) "SUBMITTED" else "SUBMIT", p, live) {
+                actions.handOverSubroutine(Subroutine.Jam)
+            }
+        },
+    ) {
+        JamRow(rings.opening, entry.offset, p)
 
         // Two targets, as large as the row can make them, because they are pressed many times by
-        // somebody who is not looking down. The glyphs are shapes rather than words: at the
-        // dimmest step a minus is a bar and a plus is a cross, and neither has to be read.
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.u)) {
+        // somebody who is not looking down. The glyphs are shapes rather than words: a minus is a
+        // bar and a plus is a cross, and neither has to be read.
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             for ((glyph, by) in listOf("-" to -1, "+" to 1)) {
-                Box(Modifier.weight(1f)) {
-                    PanelButton(
-                        glyph,
-                        border = if (live) Amber.Dim else Amber.Edge,
-                        ink = if (live) Amber.Mid else Amber.Faint,
-                        size = 14.0, tracking = 0.0, verticalPadding = 11.u,
-                        onClick = if (live) {
-                            { actions.tapSubroutine(Subroutine.Jam, by) }
-                        } else {
-                            null
-                        },
-                    )
+                Box(
+                    Modifier.weight(1f).height(56.dp).border(1.dp, if (live) p.line else p.faint)
+                        .then(if (live) Modifier.tap { actions.tapSubroutine(Subroutine.Jam, by) } else Modifier),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Words(glyph, size = 36, color = if (live) p.ink else p.dim, lineHeight = 1.0)
                 }
             }
         }
-
-        ReturnLine(entry.gone, verdict, Amber.Dim)
-        MotionBudgetRow(Amber.Dim, Amber.Mid)
-        // Live with nothing pressed: an inert SUBMIT would be the phone saying the opening
-        // position is not the answer, and it is not the phone's to know. See ScalarEntry.
-        SubmitButton(Subroutine.Jam, sent = entry.gone, enabled = live)
-        StopNow(Amber.Faint, Amber.Dim)
     }
 }
 
@@ -441,11 +411,14 @@ fun JamScreen(verdict: SubroutineVerdict? = null) {
  * opinion about how the work is going. *Never early-return on invalid: the absent effect is the
  * leak.* The route goes back and the house decides whether it was a route.
  *
- * ### Nodes light; edges never do
+ * ### The route is drawn as tapped, and the wiring never lights
  *
- * A walked *edge* lighting up would be the screen confirming that two nodes really are joined,
- * which is the same tell wearing a line instead of a word. So the wiring is drawn at one intensity
- * throughout and only the nodes you touched change — which is your own input and nothing else.
+ * The mockup echoes a route as a heavier line from node to node. Here that line is drawn between
+ * **consecutive taps, whether or not the wiring joins them**, so it is the player's input and
+ * nothing else: a leg drawn only along real wiring would be the screen confirming that two nodes
+ * are joined, which is the tell this note used to forbid by drawing no legs at all. The wiring stays
+ * at one value throughout, and a walked node's outline goes to full ink, so a first tap -- which has
+ * no leg yet -- still echoes.
  */
 @Composable
 fun SignalTraceScreen(verdict: SubroutineVerdict? = null) {
@@ -453,72 +426,67 @@ fun SignalTraceScreen(verdict: SubroutineVerdict? = null) {
     val actions = LocalActions.current
     val live = entry.handedOver == null
     val wiring = SubroutineModel.TRACE
-    SubroutineFrame(Subroutine.SignalTrace, ink = Amber.Dim, mark = Amber.Mid) {
-        Box(
-            Modifier.weight(1f).fillMaxWidth().border(1.u, Amber.Edge),
-            contentAlignment = Alignment.Center,
-        ) {
-            Box(Modifier.size(GRAPH_WIDTH, GRAPH_HEIGHT)) {
-                // The wiring, behind the nodes and at one intensity: see the note above about why
-                // a walked edge must not light.
-                Canvas(Modifier.matchParentSize()) {
-                    for ((a, b) in wiring.edges) {
-                        drawLine(
-                            color = Amber.Faint,
-                            start = nodeCentre(wiring.nodes[a]),
-                            end = nodeCentre(wiring.nodes[b]),
-                            strokeWidth = 2.u.toPx(),
-                        )
-                    }
+    val p = Palette.MEDIUM
+    SubroutineFrame(
+        Subroutine.SignalTrace, p, entry.gone, verdict,
+        // Inert with an empty route, which is the refusal LOCK IN makes on an empty ballot: a
+        // control that sends nothing and looks like it sent something is a phone lying about what
+        // the house holds. Nothing about *which* route, which is why Jam's is live from the start.
+        submit = {
+            SubmitButton(if (entry.gone) "SUBMITTED" else "SUBMIT", p, live && entry.touched) {
+                actions.handOverSubroutine(Subroutine.SignalTrace)
+            }
+        },
+    ) {
+        Box(Modifier.size(GRAPH_WIDTH, GRAPH_HEIGHT)) {
+            Canvas(Modifier.matchParentSize()) {
+                // The wiring, at one value throughout.
+                for ((a, b) in wiring.edges) {
+                    drawLine(
+                        p.line, nodeCentre(wiring.nodes[a]), nodeCentre(wiring.nodes[b]),
+                        strokeWidth = 2.dp.toPx(),
+                    )
                 }
-                for (at in wiring.nodes.indices) {
-                    val node = wiring.nodes[at]
-                    val walked = entry.holds(at)
+                // The route, as tapped: one leg per consecutive pair, whether or not the wiring
+                // joins them. It is the player's input and nothing else -- see the note above.
+                for ((a, b) in entry.entered.zipWithNext()) {
+                    drawLine(
+                        p.ink, nodeCentre(wiring.nodes[a]), nodeCentre(wiring.nodes[b]),
+                        strokeWidth = 4.dp.toPx(),
+                    )
+                }
+            }
+            for (at in wiring.nodes.indices) {
+                val node = wiring.nodes[at]
+                val walked = entry.holds(at)
+                // The target is a full tap target; the node drawn in it is the mockup's 24.
+                Box(
+                    Modifier
+                        .offset(
+                            x = NODE_INSET + COLUMN_STEP * node.column - NODE_TARGET / 2,
+                            y = NODE_INSET + ROW_STEP * node.row - NODE_TARGET / 2,
+                        )
+                        .size(NODE_TARGET)
+                        .then(
+                            if (live) Modifier.tap { actions.tapSubroutine(Subroutine.SignalTrace, at) }
+                            else Modifier
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
                     Box(
-                        Modifier
-                            .offset(
-                                x = NODE_INSET + COLUMN_STEP * node.column - NODE / 2,
-                                y = NODE_INSET + ROW_STEP * node.row - NODE / 2,
-                            )
-                            .size(NODE)
-                            .background(
-                                if (at == wiring.source) Amber.Dim else Color.Transparent,
-                                CircleShape,
-                            )
-                            .border(
-                                if (walked) 3.u else 1.u,
-                                if (walked) Amber.Bright else Amber.Dim,
-                                CircleShape,
-                            )
-                            .then(
-                                if (live) {
-                                    Modifier.tap {
-                                        actions.tapSubroutine(Subroutine.SignalTrace, at)
-                                    }
-                                } else {
-                                    Modifier
-                                }
-                            ),
+                        Modifier.size(NODE)
+                            .background(if (at == wiring.source) p.ink else Amber.Black)
+                            .border(if (walked) 3.dp else 2.dp, if (walked) Ramp.Ink else p.ink),
                         contentAlignment = Alignment.Center,
                     ) {
-                        // The sink wears a second ring inside the first: a target, and the only
-                        // node that is neither filled nor plain. Direction has to be visible or
-                        // "from the disc to the target" is two instructions with one picture.
-                        if (at == wiring.sink) {
-                            Box(Modifier.size(NODE / 3).background(Amber.Dim, CircleShape))
-                        }
+                        // The sink wears a square inside the square: a target, and the only node
+                        // that is neither filled nor plain. The house grades the route from the
+                        // filled end, so which end is which has to be visible.
+                        if (at == wiring.sink) Box(Modifier.size(8.dp).background(p.ink))
                     }
                 }
             }
         }
-
-        ReturnLine(entry.gone, verdict, Amber.Dim)
-        MotionBudgetRow(Amber.Dim, Amber.Mid)
-        // Inert with an empty route, which is the refusal LOCK IN makes on an empty ballot: a
-        // control that sends nothing and looks like it sent something is a phone lying about what
-        // the house holds. Nothing about *which* route, which is why Jam's is live from the start.
-        SubmitButton(Subroutine.SignalTrace, sent = entry.gone, enabled = live && entry.touched)
-        StopNow(Amber.Faint, Amber.Dim)
     }
 }
 
@@ -588,62 +556,43 @@ fun SniffScreen(verdict: SubroutineVerdict? = null) {
     // nothing chosen: a screen that could not show the house's answer would be the device
     // withholding it, which is the opposite of what D-109 gave the house a verdict for.
     val lit = entry.choice != null || verdict != null
-    val ink = if (lit) Amber.Dim else Amber.Black
-    val mark = if (lit) Amber.Faint else Amber.Black
-    val edge = if (lit) Amber.Edge else Amber.Black
-    // The brightest thing this screen ever draws, and it is [Amber.Dim] — the same ceiling
+    // The concealment palette once lit, whose brightest value is `#C08A2E` -- the same ceiling
     // HANDSHAKE has. The dark rung is a claim about how much light a Subroutine makes a player
     // emit (D-106), and a screen that went dark for the perception and then flared for the answer
-    // would be making that claim about half of itself.
-    val chosen = if (lit) Amber.Dim else Amber.Black
+    // would be making that claim about half of itself. Before that, every role is black.
+    val p = if (lit) Palette.CONCEAL else UNLIT
+    val live = entry.choice != null && !entry.locked
 
-    SubroutineFrame(Subroutine.Sniff, ink = ink, mark = mark) {
-        // The whole body, split down the middle. No divider between them: a line drawn on a dark
-        // screen is light, and the two halves are told apart by the phone's own edges.
-        Row(
-            Modifier.weight(1f).fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(7.u),
-        ) {
-            for (at in listOf(SubroutineModel.SNIFF_FIRST, SubroutineModel.SNIFF_SECOND)) {
+    SubroutineFrame(
+        Subroutine.Sniff, p, entry.gone, verdict,
+        // Refused with nothing chosen, which is [ChoiceEntry]'s refusal and the one LOCK IN makes
+        // on an empty ballot: refusing to send NOTHING is honest. It is drawn in its place from
+        // the first frame either way -- the layout must not move under a thumb, least of all one
+        // that cannot see.
+        submit = {
+            SubmitButton(if (entry.locked) "SUBMITTED" else "SUBMIT", p, live) {
+                actions.handOverSubroutine(Subroutine.Sniff)
+            }
+        },
+    ) {
+        // The two halves. The held one wears the heavier outline, in the screen's top value: the
+        // echo, and its only claim is *this is the side you touched*.
+        Row(Modifier.fillMaxWidth().height(260.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            for ((at, side) in listOf(SubroutineModel.SNIFF_FIRST to "LEFT", SubroutineModel.SNIFF_SECOND to "RIGHT")) {
                 val held = entry.holds(at)
                 Box(
                     Modifier.weight(1f).fillMaxHeight()
-                        .border(if (held) 2.u else 1.u, if (held) chosen else edge)
+                        .border(if (held) 2.dp else 1.dp, if (held) p.ink else p.faint)
                         .then(
                             if (entry.handedOver != null) Modifier
                             else Modifier.tap { actions.tapSubroutine(Subroutine.Sniff, at) }
                         ),
                     contentAlignment = Alignment.Center,
                 ) {
-                    // The echo, and its only claim: this is the side you touched. Drawn as a block
-                    // in the same grammar as every other count on these screens, and drawn on one
-                    // side only -- an unheld half shows nothing at all, so there is no pair of
-                    // marks for the eye to compare and no second thing to read.
-                    if (held) Block(26.u, 26.u, chosen)
+                    Words(side, size = 28, color = p.ink, lineHeight = 1.0)
                 }
             }
         }
-
-        ReturnLine(entry.gone, verdict, ink)
-        MotionBudgetRow(ink, mark, border = edge)
-
-        // Refused with nothing chosen, which is [ChoiceEntry]'s refusal and the one LOCK IN makes
-        // on an empty ballot: refusing to send NOTHING is honest. It is drawn in its place from
-        // the first frame either way -- the layout must not move under a thumb, least of all one
-        // that cannot see.
-        PanelButton(
-            if (entry.locked) "SUBMITTED" else "SUBMIT",
-            border = if (entry.choice == null || entry.locked) mark else ink,
-            ink = if (entry.choice == null || entry.locked) ink else chosen,
-            tracking = 0.18, verticalPadding = 9.u,
-            onClick = if (entry.choice == null || entry.locked) {
-                null
-            } else {
-                { actions.handOverSubroutine(Subroutine.Sniff) }
-            },
-        )
-
-        StopNow(edge, ink)
     }
 }
 
@@ -692,64 +641,45 @@ fun DeallocateScreen(verdict: SubroutineVerdict? = null) {
     val actions = LocalActions.current
     val columns = SubroutineModel.DEALLOCATE
     val live = entry.handedOver == null
-    SubroutineFrame(Subroutine.Deallocate, ink = Amber.Dim, mark = Amber.Bright) {
+    val p = Palette.DARK
+    SubroutineFrame(
+        Subroutine.Deallocate, p, entry.gone, verdict,
+        // Live from the first frame: see Jam's note, and ScalarEntry's.
+        submit = {
+            SubmitButton(if (entry.gone) "SUBMITTED" else "SUBMIT", p, live) {
+                actions.handOverSubroutine(Subroutine.Deallocate)
+            }
+        },
+    ) {
         // **The field is a fixed height and the body is not.** A column area that stretched with
-        // the panel would draw the same five dots against a different amount of nothing on every
-        // handset, and *how tall is that column* is the entire question — so the field is exactly
-        // as tall as the tallest distribution this panel accepts, centred in whatever room the
-        // body has. It is also what guarantees a full column is never clipped: the space is
-        // reserved whether or not anything is standing in it.
-        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-            Column(Modifier.fillMaxWidth().border(1.u, Amber.Edge).padding(8.u)) {
-                Row(
-                    Modifier.height(DEAL_FIELD).fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.u),
-                ) {
-                    for (at in columns.indices) {
-                        // What is left of this column: what it was dealt, less what this phone
-                        // has taken off it. Floored at nothing in the same expression that
-                        // decides whether it is a target — see the note above about the two
-                        // staying one fact.
-                        val height = (columns[at] - entry.taken(at)).coerceAtLeast(0)
-                        Box(
-                            Modifier.weight(1f).fillMaxHeight()
-                                .then(
-                                    if (live && height > 0) {
-                                        Modifier.tap {
-                                            actions.tapSubroutine(Subroutine.Deallocate, at)
-                                        }
-                                    } else {
-                                        Modifier
-                                    }
-                                ),
-                            contentAlignment = Alignment.BottomCenter,
-                        ) {
-                            Column(
-                                verticalArrangement = Arrangement.spacedBy(DEAL_GAP),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                            ) {
-                                repeat(height) {
-                                    Box(
-                                        Modifier.size(DEAL_DOT)
-                                            .background(Amber.Bright, CircleShape),
-                                    )
-                                }
+        // the panel would draw the same blocks against a different amount of nothing on every
+        // handset, and *how tall is that column* is the entire question. The columns stand on its
+        // foot, so they are heights off one line.
+        Row(Modifier.height(DEAL_FIELD), horizontalArrangement = Arrangement.spacedBy(DEAL_COLUMN_GAP)) {
+            for (at in columns.indices) {
+                // What is left of this column: what it was dealt, less what this phone has taken
+                // off it. Floored at nothing in the same expression that decides whether it is a
+                // target -- see the note above about the two staying one fact.
+                val height = (columns[at] - entry.taken(at)).coerceAtLeast(0)
+                Box(
+                    Modifier.width(DEAL_BLOCK_WIDTH).fillMaxHeight()
+                        .then(
+                            if (live && height > 0) {
+                                Modifier.tap { actions.tapSubroutine(Subroutine.Deallocate, at) }
+                            } else {
+                                Modifier
                             }
+                        ),
+                    contentAlignment = Alignment.BottomCenter,
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(DEAL_GAP)) {
+                        repeat(height) {
+                            Box(Modifier.size(DEAL_BLOCK_WIDTH, DEAL_BLOCK_HEIGHT).background(p.ink))
                         }
                     }
                 }
-                // The floor they all stand on. Without it the columns are lengths hanging in a
-                // box and the comparison is a judgement about where each one ends; with it they
-                // are heights off one line, which is the comparison the Subroutine is made of.
-                Hairline(Amber.Faint, Modifier.padding(top = 6.u))
             }
         }
-
-        ReturnLine(entry.gone, verdict, Amber.Dim)
-        MotionBudgetRow(Amber.Dim, Amber.Bright)
-        // Live from the first frame: see Jam's note, and ScalarEntry's.
-        SubmitButton(Subroutine.Deallocate, sent = entry.gone, enabled = live)
-        StopNow(Amber.Faint, Amber.Dim)
     }
 }
 
@@ -773,8 +703,8 @@ fun DeallocateScreen(verdict: SubroutineVerdict? = null) {
  *
  * A button under the bar would put the finger somewhere the eye is not, on the one Subroutine where
  * *when* is the entire answer. So the body is the control — a target the size of the screen, pressed
- * without looking away — and its outline is what says so: [Amber.Dim] while it is live, [Amber.Edge]
- * once the catch has gone, which is exactly how [PanelButton] draws the difference.
+ * without looking away — and the bar's outline is what says it is live: the line value while it
+ * is, the hairline value once the catch has gone.
  *
  * **The tap is the entry and there is no SUBMIT.** A confirmation step would be asking the player to
  * ratify a moment that is already seconds in the past, so the entry goes on the tap that makes it
@@ -798,28 +728,18 @@ fun InterruptScreen(verdict: SubroutineVerdict? = null) {
     // Where it is, or where it was caught. One expression, because they are the same picture: the
     // bar carries a mark at a step of the span and what put it there is not the bar's business.
     val at = entry.entered.firstOrNull() ?: sweep.at(elapsed)
+    val p = Palette.MEDIUM
 
-    SubroutineFrame(Subroutine.Interrupt, ink = Amber.Dim, mark = Amber.Mid) {
-        Box(
-            Modifier.weight(1f).fillMaxWidth()
-                .border(1.u, if (live) Amber.Dim else Amber.Edge)
-                .then(
-                    if (live) {
-                        Modifier.tap {
-                            actions.tapSubroutine(Subroutine.Interrupt, sweep.at(elapsed))
-                        }
-                    } else {
-                        Modifier
-                    }
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            SweepBar(sweep, at, caught = entry.handedOver)
-        }
-
-        ReturnLine(entry.handedOver, verdict, Amber.Dim)
-        MotionBudgetRow(Amber.Dim, Amber.Mid)
-        StopNow(Amber.Faint, Amber.Dim)
+    SubroutineFrame(
+        Subroutine.Interrupt, p, entry.handedOver, verdict,
+        // The whole body is the target, not just the bar drawn in it: see the note above.
+        bodyModifier = if (live) {
+            Modifier.tap { actions.tapSubroutine(Subroutine.Interrupt, sweep.at(elapsed)) }
+        } else {
+            Modifier
+        },
+    ) {
+        SweepBar(sweep, at, caught = entry.handedOver, p)
     }
 }
 
@@ -872,103 +792,93 @@ fun DriftScreen(verdict: SubroutineVerdict? = null) {
     // Drawn only where there is nothing in front of it. The cover is drawn over the dot as well,
     // so the last of it goes behind an edge rather than blinking out of a clear stretch of lane.
     val dot = path.at(elapsed)?.takeIf { !path.covered(it) }
+    val p = Palette.MEDIUM
 
-    SubroutineFrame(Subroutine.Drift, ink = Amber.Dim, mark = Amber.Mid) {
-        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-            Box(
-                Modifier.fillMaxWidth().height(LANE_FIELD).border(1.u, Amber.Edge)
-                    .testTag(DRIFT_LANE)
-                    // It publishes no click action, exactly as [HoldSurface] does not: a position
-                    // is where the finger landed, and a synthetic click carries no position. The
-                    // tag is how a test finds it, and `DriftInputTest` drives real pointers at it.
-                    .pointerInput(live, asked) {
-                        if (!live) return@pointerInput
-                        detectTapGestures { offset ->
-                            // The step under the finger. Clamped to the lane it is a tap inside
-                            // of: an edge pixel is not a position a player can tell apart from
-                            // the end of the strip, which is D-125's rule for what may be clamped.
-                            val step = (offset.x * DriftPath.SPAN / size.width)
-                                .toInt().coerceIn(0, DriftPath.SPAN)
-                            actions.tapSubroutine(Subroutine.Drift, step)
-                            if (asked) actions.handOverSubroutine(Subroutine.Drift)
-                        }
-                    },
-            ) {
-                DriftLane(path, dot, entry.choice)
-            }
+    SubroutineFrame(Subroutine.Drift, p, entry.gone, verdict) {
+        Box(
+            Modifier.fillMaxWidth().height(LANE_FIELD).border(1.dp, p.line)
+                .testTag(DRIFT_LANE)
+                // It publishes no click action, exactly as [holdSurface] does not: a position
+                // is where the finger landed, and a synthetic click carries no position. The
+                // tag is how a test finds it, and `DriftInputTest` drives real pointers at it.
+                .pointerInput(live, asked) {
+                    if (!live) return@pointerInput
+                    detectTapGestures { offset ->
+                        // The step under the finger. Clamped to the lane it is a tap inside
+                        // of: an edge pixel is not a position a player can tell apart from
+                        // the end of the strip, which is D-125's rule for what may be clamped.
+                        val step = (offset.x * DriftPath.SPAN / size.width)
+                            .toInt().coerceIn(0, DriftPath.SPAN)
+                        actions.tapSubroutine(Subroutine.Drift, step)
+                        if (asked) actions.handOverSubroutine(Subroutine.Drift)
+                    }
+                },
+        ) {
+            DriftLane(path, dot, entry.choice, p)
         }
-
-        ReturnLine(entry.gone, verdict, Amber.Dim)
-        MotionBudgetRow(Amber.Dim, Amber.Mid)
-        StopNow(Amber.Faint, Amber.Dim)
     }
 }
 
 // ---- The furniture every Subroutine screen shares ------------------------------------------
 
 /** How big a Replay dot is. Named because it is a decision about a finger, not a layout number. */
-private val DOT: Dp = 44.u
+private val DOT: Dp = 72.dp
 
 /**
- * **Deallocate's dot, and the gap above it.**
+ * **Deallocate's block, the gap above it, and the field they stand in** (the mockup's 40 × 30,
+ * 6 apart, in a 260 field).
  *
- * Smaller than [DOT] because a dot here is not a target — the *column* is, at a strip the full
- * height of the body, which is a far larger thing to hit than any single dot could be. What these
- * two have to do instead is let [DotColumns.MOST_DOTS] of them stand up inside the body without
- * being clipped: seven at 16 units with 3 between them is 130, against roughly 195 of body.
+ * The block is not a target -- the *column* is, a strip the full height of the field. What the
+ * numbers have to do instead is let [DotColumns.MOST_DOTS] blocks stand up inside the field without
+ * being clipped, and [DotColumns.MOST_COLUMNS] strips sit side by side in the body. A field short of
+ * what the reader lets through is a clipped column, which is a *different question* from the one
+ * the house asked; `SubroutineFitTest` holds both.
  */
-private val DEAL_DOT: Dp = 16.u
-private val DEAL_GAP: Dp = 3.u
+internal val DEAL_BLOCK_WIDTH: Dp = 40.dp
+internal val DEAL_BLOCK_HEIGHT: Dp = 30.dp
+internal val DEAL_GAP: Dp = 6.dp
+internal val DEAL_FIELD: Dp = 260.dp
+
+/** The space between Deallocate's columns. */
+internal val DEAL_COLUMN_GAP: Dp = 14.dp
 
 /**
- * How tall the field the columns stand in is: the tallest distribution the panel accepts, exactly.
+ * **Jam's two rings, and the step is a placeholder** (the mockup's 140 rings, 3 units of line).
  *
- * Derived rather than typed, so the two numbers above and [DotColumns.MOST_DOTS] cannot disagree —
- * a field short of what the reader lets through is a clipped column, which is a *different
- * question* from the one the house asked.
+ * The rings sit apart along the row and the player's walks onto the fixed one, which is what the
+ * briefing says will happen (*TWO RINGS WILL SIT APART*, D-194). **Where the player's ring opens is
+ * not here** -- it is `JamRings.opening`, drawn by the house with the rest of the question, and the
+ * ring is drawn that many steps from the fixed one. The pair is centred on the opening, so the
+ * fixed ring never moves and the start is the mockup's picture.
+ *
+ * The step is the **presentation fixture**: four units is a press you can see land at arm's
+ * length, and at `JamRings.REACH` past the widest opening the ring still stays on the glass.
  */
-private val DEAL_FIELD: Dp =
-    DEAL_DOT * DotColumns.MOST_DOTS + DEAL_GAP * (DotColumns.MOST_DOTS - 1)
+internal val JAM_RING: Dp = 140.dp
+internal val JAM_STEP: Dp = 4.dp
+private val JAM_FIELD: Dp = 220.dp
 
 /**
- * **Jam's three sizes, and the step is a placeholder.**
+ * **Signal Trace's lattice, in mockup units.**
  *
- * [JAM_TARGET] is the fixed ring and [JAM_STEP] is how much one press moves the player's. **Where
- * the player's ring opens is not here** — it is `JamRings.opening`, drawn by the house with the
- * rest of the question, and the ring is sized at the target plus that many steps. It was a third
- * size on this line, which was a second number for a fact the house had already decided: eleven
- * steps of daylight on the glass while the house asked for nine, and the press that visibly put
- * one ring on the other would have been refused. The band's fault, one Subroutine along (E-S2-1).
- *
- * The step is the **presentation fixture**: it decides how many presses the work takes, which is
- * difficulty, which is balance, which nobody has played with. Six units is a step you can see land
- * at arm's length in an unlit room, and it is a whole number of them from the target either way, so
- * the rings can be brought exactly together.
+ * [NODE] is the mockup's 24 square, drawn inside a [NODE_TARGET] of 56 -- D-202's least tap target,
+ * because a node is a control pressed one-handed in the dark by somebody watching a doorway, and the
+ * graph is the one screen where two targets sit close enough that a near miss lands on the wrong
+ * one. The lattice is spread over the mockup's 320 × 280 so no two targets overlap.
  */
-private val JAM_TARGET: Dp = 84.u
-private val JAM_STEP: Dp = 6.u
+private val NODE: Dp = 24.dp
+private val NODE_TARGET: Dp = 56.dp
+private val GRAPH_WIDTH: Dp = 320.dp
+private val GRAPH_HEIGHT: Dp = 280.dp
+private val NODE_INSET: Dp = NODE_TARGET / 2
+private val COLUMN_STEP: Dp = (GRAPH_WIDTH - NODE_TARGET) / (SignalGraph.COLUMNS - 1)
+private val ROW_STEP: Dp = (GRAPH_HEIGHT - NODE_TARGET) / (SignalGraph.ROWS - 1)
 
-/**
- * **Signal Trace's lattice, in design units.**
- *
- * [NODE] is 36 units because that is [TAP_TARGET] — a node is a control pressed one-handed in the
- * dark by somebody watching a doorway, and the graph is the one screen in this game where two
- * targets sit close enough that a near miss lands on the wrong one. Everything else is derived
- * from it: the lattice is as wide as the panel's body allows and as tall as leaves the instruction
- * and the two buttons their room.
- */
 /**
  * How many finger-cells Short's two rows keep room for, so neither row's cells move when the
  * count changes. A hand, because a hand is what is on the glass.
  */
 private const val MOST_FINGERS = 5
-
-private val NODE: Dp = 36.u
-private val COLUMN_STEP: Dp = 74.u
-private val ROW_STEP: Dp = 70.u
-private val NODE_INSET: Dp = NODE / 2
-private val GRAPH_WIDTH: Dp = NODE + COLUMN_STEP * (SignalGraph.COLUMNS - 1)
-private val GRAPH_HEIGHT: Dp = NODE + ROW_STEP * (SignalGraph.ROWS - 1)
 
 /** Where a node's centre falls inside the graph box. The one place the lattice becomes a picture. */
 private fun DrawScope.nodeCentre(node: SignalGraph.Node): Offset = Offset(
@@ -977,26 +887,46 @@ private fun DrawScope.nodeCentre(node: SignalGraph.Node): Offset = Offset(
 )
 
 /**
- * **Interrupt's bar, and Drift's lane — the two screens the house draws with a clock.**
+ * **Interrupt's bar, and Drift's lane -- the two screens the house draws with a clock.**
  *
  * [BAR_FIELD] and [LANE_FIELD] are fixed heights for [DEAL_FIELD]'s reason: a field that stretched
  * with the panel would draw the same motion across a different amount of nothing on every handset,
- * and *how far along is it* is the entire question on both screens. They are within twenty units of
- * one another on purpose — the two moving Subroutines should have the same weight on the glass, or
- * the roster's light ladder acquires a second axis nobody rated.
+ * and *how far along is it* is the entire question on both screens.
  *
  * [SWEEP] and [MARK] are wide enough to be a thing rather than a hairline at arm's length in an
  * unlit room, and narrow enough that where they are is a position rather than a region. [DRIFT_DOT]
  * is the one round thing on either screen, which is what makes it the thing that moves.
  */
-private val BAR_FIELD: Dp = 110.u
-private val SWEEP: Dp = 5.u
-private val LANE_FIELD: Dp = 120.u
-private val LANE_INSET: Dp = 24.u
-private val LANE_STEP: Dp = 36.u
-private val COVER_HEIGHT: Dp = 30.u
-private val DRIFT_DOT: Dp = 9.u
-private val MARK: Dp = 5.u
+private val BAR_FIELD: Dp = 200.dp
+private val SWEEP: Dp = 6.dp
+private val SWEEP_INSET: Dp = 12.dp
+private val BAND_EDGE: Dp = 2.dp
+private val LANE_FIELD: Dp = 120.dp
+private val LANE_INSET: Dp = 24.dp
+private val LANE_STEP: Dp = 36.dp
+private val DRIFT_DOT: Dp = 10.dp
+private val MARK: Dp = 6.dp
+
+/** What Jam's rings tag themselves with, so a guard can read the fixed ring off its own pixels. */
+const val JAM_RINGS: String = "subroutine-rings"
+
+/** What Interrupt's bar tags itself with, so a guard can read the band off its own pixels. */
+const val INTERRUPT_BAR: String = "subroutine-bar"
+
+/**
+ * What Short's hold surface tags itself with.
+ *
+ * It publishes no click action on purpose, so a test cannot find it the way it finds every other
+ * control in this app -- and finding it by the words on it would be finding the label, which is not
+ * the thing several fingers have to land inside.
+ */
+const val HOLD_SURFACE: String = "subroutine-hold"
+
+/** A palette with nothing lit: every role black. Sniff, before the answer (D-137). */
+private val UNLIT = Palette(
+    ink = Amber.Black, mid = Amber.Black, dim = Amber.Black, line = Amber.Black,
+    faint = Amber.Black, fill = Color.Transparent, onFill = Amber.Black, fillEdge = Amber.Black,
+)
 
 /** What the chosen parity cell tags itself with, so a guard counts marks rather than pixels. */
 const val PARITY_MARK: String = "subroutine-mark"
@@ -1027,7 +957,7 @@ const val DRIFT_LANE: String = "subroutine-lane"
  * auto-advances, the frames stop and the screen renders its opening position — deterministic,
  * identical for both roles, and not a hang. Under `mainClock.autoAdvance = false` the frames arrive
  * exactly where the test puts them, which is how the sweeps sample an animated screen at the same
- * instant for both roles. [HoldSurface]'s clock is `withFrameMillis` because a hold *does* end.
+ * instant for both roles. [holdSurface]'s clock is `withFrameMillis` because a hold *does* end.
  *
  * **It accumulates deltas rather than subtracting from a start.** The frame clock's origin is not
  * this screen's, so the first frame is zero by definition of the thing being measured, and every
@@ -1065,35 +995,36 @@ private fun screenMillis(running: Boolean, instance: Int): Long {
 }
 
 /**
- * The bar, the band on it, and the sweep at [at].
+ * The bar, the band on it, and the sweep at [at] (the mockup's: a 200-tall box, the band's two
+ * edges dashed, the sweep a bar inset from the box's top and foot).
  *
  * Drawn in one canvas because they are one picture and share one mapping from a step of
  * [InterruptSweep.SPAN] to a place on the glass. **The band is drawn and the sweep is drawn and
- * nothing here asks whether one is inside the other** — that is the house's, and there is no
+ * nothing here asks whether one is inside the other** -- that is the house's, and there is no
  * expression in this function that could form the question.
  *
- * The caught mark is [Amber.Bright] and the running sweep is [Amber.Mid], which is the same grammar
- * every other screen in this file uses: what the house drew is dimmer than what the player did.
+ * The caught mark is [Ramp.Ink] and the running sweep is the screen's ink, which is the same
+ * grammar every other screen in this file uses: what the house drew is dimmer than what the player
+ * did.
  */
 @Composable
-private fun SweepBar(sweep: InterruptSweep, at: Int, caught: Boolean) {
-    Canvas(Modifier.fillMaxWidth().padding(horizontal = 10.u).height(BAR_FIELD)) {
+private fun SweepBar(sweep: InterruptSweep, at: Int, caught: Boolean, p: Palette) {
+    Canvas(
+        Modifier.fillMaxWidth().height(BAR_FIELD).testTag(INTERRUPT_BAR)
+            .border(1.dp, if (caught) p.faint else p.line)
+    ) {
         fun x(step: Int): Float = size.width * step / InterruptSweep.SPAN
-        // The bar itself: a floor and a ceiling rather than a filled block, so the band inside it
-        // is the only lit area and the extent of the travel is still legible.
-        val rule = 1.u.toPx()
-        drawRect(Amber.Edge, Offset(0f, 0f), Size(size.width, rule))
-        drawRect(Amber.Edge, Offset(0f, size.height - rule), Size(size.width, rule))
-        drawRect(
-            Amber.Faint,
-            Offset(x(sweep.bandFrom), 0f),
-            Size(x(sweep.bandTo) - x(sweep.bandFrom), size.height),
-        )
+        val edge = BAND_EDGE.toPx()
+        val dashes = PathEffect.dashPathEffect(floatArrayOf(edge * 2, edge * 2))
+        for (side in listOf(x(sweep.bandFrom) + edge / 2, x(sweep.bandTo) - edge / 2)) {
+            drawLine(p.ink, Offset(side, 0f), Offset(side, size.height), edge, pathEffect = dashes)
+        }
         val width = SWEEP.toPx()
+        val inset = SWEEP_INSET.toPx()
         drawRect(
-            if (caught) Amber.Bright else Amber.Mid,
-            Offset(x(at) - width / 2, 0f),
-            Size(width, size.height),
+            if (caught) Ramp.Ink else p.ink,
+            Offset(x(at) - width / 2, inset),
+            Size(width, size.height - inset * 2),
         )
     }
 }
@@ -1103,162 +1034,200 @@ private fun SweepBar(sweep: InterruptSweep, at: Int, caught: Boolean) {
  * mark.
  *
  * **The cover is drawn after the dot**, so the dot passes behind an edge rather than blinking out
- * in a clear stretch of lane — and it is drawn at all only where nothing stands in front of it, so
+ * in a clear stretch of lane -- and it is drawn at all only where nothing stands in front of it, so
  * a dot half-way under an edge is not a dot whose position can be read off the part still showing.
+ * The cover is the stairs hatch, the full height of the lane, between two line-value edges.
+ *
+ * **The path is a hairline.** The mockup draws no path at all; it is kept because the lane is the
+ * target and only *how far along* is asked, and a drawn path is what says the height is not.
  *
  * The mark spans the whole field rather than sitting on the lane: it is the one thing here the
  * player put on the screen, it has to be findable without looking for it, and a tick the height of
  * the field cannot be mistaken for something that drifted there.
  */
 @Composable
-private fun DriftLane(path: DriftPath, dot: Int?, mark: Int?) {
+private fun DriftLane(path: DriftPath, dot: Int?, mark: Int?, p: Palette) {
     // **No inset, because the finger and the picture have to be measuring the same rectangle.**
     // The tap arrives as an offset into the surface this fills, and the step it becomes is that
-    // offset over this width — so a canvas narrower than its own touch surface would put the mark
+    // offset over this width -- so a canvas narrower than its own touch surface would put the mark
     // somewhere other than where the finger landed and send the house the other one. What is drawn
     // and what is sent stay one fact.
     Canvas(Modifier.fillMaxSize()) {
         fun x(step: Int): Float = size.width * step / DriftPath.SPAN
         val lane = (LANE_INSET + LANE_STEP * path.lane).toPx()
-        val rule = 1.u.toPx()
-        drawRect(Amber.Edge, Offset(0f, lane - rule / 2), Size(size.width, rule))
+        val rule = 1.dp.toPx()
+        drawRect(p.faint, Offset(0f, lane - rule / 2), Size(size.width, rule))
         if (dot != null) {
-            drawCircle(Amber.Mid, DRIFT_DOT.toPx() / 2, Offset(x(dot), lane))
+            drawCircle(p.ink, DRIFT_DOT.toPx() / 2, Offset(x(dot), lane))
         }
         for (cover in path.cover) {
-            drawRect(
-                Amber.Faint,
-                Offset(x(cover.first), lane - COVER_HEIGHT.toPx() / 2),
-                Size(x(cover.last + 1) - x(cover.first), COVER_HEIGHT.toPx()),
-            )
+            val from = x(cover.first)
+            val to = x(cover.last + 1)
+            drawHatch(Offset(from, 0f), Size(to - from, size.height), Ramp.Fill, band = 6.dp.toPx())
+            drawRect(p.line, Offset(from, 0f), Size(rule, size.height))
+            drawRect(p.line, Offset(to - rule, 0f), Size(rule, size.height))
         }
         if (mark != null) {
             val width = MARK.toPx()
-            drawRect(Amber.Bright, Offset(x(mark) - width / 2, 0f), Size(width, size.height))
+            drawRect(Ramp.Ink, Offset(x(mark) - width / 2, 0f), Size(width, size.height))
         }
     }
 }
 
 /**
- * What Short's hold surface tags itself with.
- *
- * It publishes no click action on purpose, so a test cannot find it the way it finds every other
- * control in this app — and finding it by the words on it would be finding the label, which is not
- * the thing several fingers have to land inside.
- */
-const val HOLD_SURFACE: String = "subroutine-hold"
-
-/**
- * The header every Subroutine screen wears: its name, and what it will do to the lamp.
+ * **Every Subroutine screen, one layout** (`s_work.py`'s `sub`): the name and what it will do to
+ * the lamp, the work in the middle, the return line, the motion budget, SUBMIT where there is one,
+ * and STOP NOW.
  *
  * **One fixed slot for the light mark, on every Subroutine screen** (D-106). It is the same place
  * on the near-black one and on the lit ones, which is what makes it a thing a player recognises
- * rather than reads — HANDSHAKE shows one faint cell and PARITY CHECK three bright ones, in the
- * same corner, at the same size.
+ * rather than reads -- HANDSHAKE shows one cell and PARITY CHECK three, in the same corner, at the
+ * same size.
  *
  * The name comes off the roster rather than out of a string, so a screen cannot be titled with a
- * Subroutine whose light it is not showing.
+ * Subroutine whose light it is not showing. [p] is the whole of a screen's light: the palette is the
+ * Subroutine's rung (bright, medium, or concealment for the dark ones, D-077), so nothing on the
+ * screen is brighter than its rung allows.
+ *
+ * [bodyModifier] is for the two screens whose body *is* the control -- Interrupt's tap and Short's
+ * hold.
  */
 @Composable
 private fun SubroutineFrame(
     subroutine: Subroutine,
-    ink: Color,
-    mark: Color,
-    body: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
-) {
-    Column(
-        Modifier.fillMaxSize().padding(8.u),
-        verticalArrangement = Arrangement.spacedBy(7.u),
-    ) {
+    p: Palette,
+    handedOver: Boolean,
+    verdict: SubroutineVerdict?,
+    bodyModifier: Modifier = Modifier,
+    submit: (@Composable () -> Unit)? = null,
+    body: @Composable ColumnScope.() -> Unit,
+) = Mockup {
+    KitScreen(gap = 10.dp) {
         Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            Modifier.fillMaxWidth().heightIn(min = 56.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Label(subroutine.label, size = 7.0, color = ink, tracking = 0.14)
-            LightMark(subroutine.light, mark, cell = 5.u, height = 8.u)
+            Words(subroutine.label, Modifier.weight(1f), size = 32, color = p.ink, lineHeight = 1.0)
+            LightMark(subroutine.light, p.ink, cell = 7.dp, height = 14.dp, gap = 2.dp, outline = true)
         }
-        body()
+        Column(
+            Modifier.weight(1f).fillMaxWidth().then(bodyModifier),
+            verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            content = body,
+        )
+        ReturnLine(handedOver, verdict, p.dim)
+        KitBudgetRow(p, height = 44.dp)
+        submit?.invoke()
+        StopNow(p)
     }
 }
 
+/** A cell: an outline, filled when it counts. The meter's grammar at a Subroutine's size. */
+@Composable
+private fun Cell(width: Dp, height: Dp, edge: Color, fill: Color?) {
+    Box(
+        Modifier.size(width, height).border(1.dp, edge)
+            .then(if (fill != null) Modifier.background(fill) else Modifier)
+    )
+}
+
 /**
- * How much of the sequence has gone back, as cells.
+ * **Handshake's beats gone back, as cells -- uniform, because the rhythm is felt, not seen.**
  *
- * One cell per element the house asked for, lit up to what this phone has entered — the same
- * grammar as [LightMark] one row above it, and the bench's own rule applied: *comparing quantities
- * is perception; adding numbers is computation*, so any Subroutine showing a numeral is suspect.
- * The ported fixtures both printed one (`3 OF 5 RETURNED`, `FOUND 4 OF 7`) beside a display that
- * was already carrying the same fact.
+ * One cell per beat the house asked for, lit up to what this phone has entered. The ported fixture
+ * drew its beats at differing widths, which read as *long beat, short beat* -- the rhythm itself, on
+ * the screen, in a Subroutine whose one instruction is **by feel**. So the cells are identical and
+ * carry only *how many* beats have gone back, which is the player's own input.
  *
  * **It counts and it does not judge.** A cell lights because a finger landed, not because the
- * finger landed in the right place — see [SequenceEntry].
+ * finger landed at the right moment -- see [SequenceEntry].
  */
 @Composable
-private fun SequenceCells(entry: SequenceEntry, lit: Color, unlit: Color) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(4.u),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+private fun BeatCells(entry: SequenceEntry) {
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         repeat(entry.length) { at ->
-            Block(11.u, 8.u, if (at < entry.entered.size) lit else unlit)
+            val lit = at < entry.entered.size
+            Cell(30.dp, 14.dp, edge = if (lit) Ramp.Line else Ramp.Faint, fill = if (lit) Ramp.Line else null)
         }
     }
 }
 
 /**
- * A named quantity, drawn as cells — the row grammar with the numeral taken out.
+ * A named quantity, drawn as cells -- the row grammar with the numeral taken out.
  *
  * *Comparing quantities is perception; adding numbers is computation*, so a count that a player
  * has to hold against another count is drawn as a length rather than written as a digit. Used on
- * Short for the two counts that matter, one above the other, so the comparison is a glance.
+ * Short for the two counts that matter, one above the other, so the comparison is a glance: ASKS
+ * is the house's instruction, DOWN this phone's echo of the hand. Two rows rather than one lit
+ * part-way, because a single row that filled exactly when you had it right would be a verdict
+ * drawn as a diagram.
  */
 @Composable
-private fun CountRow(label: String, count: Int, ink: Color, lit: Color) {
+private fun CountRow(label: String, count: Int, slots: Int, p: Palette) {
     Row(
-        horizontalArrangement = Arrangement.spacedBy(8.u),
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // A fixed slot for the word, so the two rows' cells start at the same place and the
-        // comparison is a length against a length rather than two rows of ragged left edges.
-        Label(label, modifier = Modifier.width(26.u), size = 6.0, color = ink, tracking = 0.12)
-        Row(
-            Modifier.width(11.u * MOST_FINGERS + 4.u * (MOST_FINGERS - 1)).height(9.u),
-            horizontalArrangement = Arrangement.spacedBy(4.u),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            repeat(count) { Block(11.u, 8.u, lit) }
+        // A fixed slot for the word, so the two rows' cells start at the same place.
+        Tag(label, p.ink, Modifier.width(64.dp))
+        repeat(slots) { at ->
+            Box(
+                Modifier.weight(1f).height(22.dp).border(1.dp, p.faint)
+                    .then(if (at < count) Modifier.background(Ramp.Line) else Modifier)
+            )
         }
     }
 }
 
 /**
- * **The surface Short is held with: the panel itself, counting the fingers on it.**
+ * Jam's two rings: the fixed one in the line value, the player's in the screen's ink, along one
+ * row. At an offset that cancels the opening the player's ring is drawn exactly on the fixed one,
+ * so the two read as one -- `SubroutineFitTest` holds that.
+ */
+@Composable
+private fun JamRow(opening: Int, offset: Int, p: Palette) {
+    Canvas(Modifier.fillMaxWidth().height(JAM_FIELD).testTag(JAM_RINGS)) {
+        val step = JAM_STEP.toPx()
+        val radius = (JAM_RING.toPx() - 3.dp.toPx()) / 2
+        val stroke = Stroke(3.dp.toPx())
+        val fixed = Offset(size.width / 2 - step * opening / 2f, size.height / 2)
+        val player = fixed + Offset(step * (opening + offset), 0f)
+        drawCircle(p.line, radius, fixed, style = stroke)
+        drawCircle(p.ink, radius, player, style = stroke)
+    }
+}
+
+/**
+ * **The surface Short is held with: the whole body, counting the fingers on it.**
  *
- * Two pieces of state that look like one and are not. [down] is how many pointers the *glass*
+ * Two pieces of state that look like one and are not. `down` is how many pointers the *glass*
  * currently reports, and it exists to drive the clock; the entry beside it is the *echo*, and it
  * is what gets drawn. They are the same number in a player's hand, and they are deliberately not
  * the same variable: the clock must only ever be started by a finger, so a fixture that puts a
- * count into the entry — every render, every parity comparison — moves the cells on the screen and
+ * count into the entry -- every render, every parity comparison -- moves the cells on the screen and
  * starts nothing.
  *
  * The hold restarts whenever the number of fingers changes, because *hold N fingers for two
  * seconds* is a hold of an unchanging hand: fingers arriving one at a time each begin it again,
  * which is what the gesture is.
  *
- * **It publishes no click action**, exactly as [HoldToConfirm] does not — a hold a single
- * synthetic click could fire would not be a hold — and it walks no edge, so there is nothing for
+ * ### The hold ends on the clock and not on your hand
+ *
+ * A hold that completed when the *asked-for* number of fingers arrived would be the phone grading
+ * the answer -- and grading it visibly, since a wrong hand would sit there while a right one went.
+ * So the two seconds run against whatever is on the glass and the entry goes with whatever was
+ * there. See [HoldEntry].
+ *
+ * **It publishes no click action**, exactly as [HoldToConfirm] does not -- a hold a single
+ * synthetic click could fire would not be a hold -- and it walks no edge, so there is nothing for
  * `ScreenGraphTest` to miss. `ShortInputTest` drives real pointers, several at once, against a
  * clock it controls.
  */
 @Composable
-private fun HoldSurface(
-    live: Boolean,
-    onFingers: (Int) -> Unit,
-    onHeld: () -> Unit,
-    modifier: Modifier = Modifier,
-    body: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit,
-) {
+private fun holdSurface(live: Boolean, onFingers: (Int) -> Unit, onHeld: () -> Unit): Modifier {
     var down by remember { mutableStateOf(0) }
 
     LaunchedEffect(down, live) {
@@ -1273,177 +1242,117 @@ private fun HoldSurface(
         onHeld()
     }
 
-    Column(
-        modifier.testTag(HOLD_SURFACE).pointerInput(Unit) {
-            awaitPointerEventScope {
-                while (true) {
-                    val event = awaitPointerEvent()
-                    val pressed = event.changes.count { it.pressed }
-                    if (pressed != down) {
-                        down = pressed
-                        onFingers(pressed)
-                    }
+    return Modifier.testTag(HOLD_SURFACE).pointerInput(Unit) {
+        awaitPointerEventScope {
+            while (true) {
+                val event = awaitPointerEvent()
+                val pressed = event.changes.count { it.pressed }
+                if (pressed != down) {
+                    down = pressed
+                    onFingers(pressed)
                 }
             }
-        },
-        verticalArrangement = Arrangement.spacedBy(12.u, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        content = body,
-    )
+        }
+    }
 }
 
 /**
- * SUBMIT, on the Subroutines whose answer can still change — and SUBMITTED once it cannot.
+ * SUBMIT, on the Subroutines whose answer can still change -- and SUBMITTED once it cannot
+ * (`s_work.py`'s 60-tall outline in the screen's ink).
  *
  * Drawn inert rather than hidden when there is nothing to send: the layout must not move under a
- * thumb. Whether it is live at all is the caller's, because the reasons differ and the difference
- * is the interesting part — see the notes at the two call sites.
+ * thumb. Inert, its edge drops to the line value and its words to the dim one. Whether it is live
+ * at all is the caller's, because the reasons differ and the difference is the interesting part --
+ * see the notes at the call sites.
  */
 @Composable
-private fun SubmitButton(subroutine: Subroutine, sent: Boolean, enabled: Boolean) {
-    val actions = LocalActions.current
-    PanelButton(
-        if (sent) "SUBMITTED" else "SUBMIT",
-        border = if (enabled) Amber.Dim else Amber.Faint,
-        ink = if (enabled) Amber.Bright else Amber.Dim,
-        tracking = 0.18, verticalPadding = 9.u,
-        onClick = if (enabled) {
-            { actions.handOverSubroutine(subroutine) }
-        } else {
-            null
-        },
+private fun SubmitButton(label: String, p: Palette, enabled: Boolean, onClick: () -> Unit) {
+    KitSecondary(
+        label, if (enabled) p else p.copy(ink = p.dim),
+        size = 28, height = 60.dp,
+        edge = if (enabled) p.ink else p.line, edgeWidth = 2.dp,
+        onClick = if (enabled) onClick else null,
     )
 }
 
 /**
- * **The one line that says the phone is no longer waiting for you — and then what the house said.**
+ * **The one line that says the phone is no longer waiting for you -- and then what the house said.**
  *
  * Three states in one fixed slot: empty while the player is still working, `RETURNED . WAITING`
  * once the entry has gone, and the house's verdict once it arrives. A fixed slot whether or not
  * there is anything in it, so nothing above it moves at the moment of completion or at the moment
- * of the answer — a layout that jumps is a change in lit area nobody authored, on the two frames
+ * of the answer -- a layout that jumps is a change in lit area nobody authored, on the two frames
  * the player is most likely to be looking away.
  *
  * *Waiting* is the honest word for the middle state and the only one available: whether the entry
- * was right is the house's answer, and the device has no opinion to offer in the meantime. It is
- * the state every one of these screens sat in permanently before the loop had a verdict in it.
+ * was right is the house's answer, and the device has no opinion to offer in the meantime.
  *
  * ### The copy, and the register it is in (D-109)
  *
  * **Success is a damage report, and the house is not on your side.** *THE HOUSE GROWS WEAKER* is
  * the decision log's own candidate and the family it names; the house narrates its own decline
- * rather than congratulating anybody, and *"the house has it"* is ruled out explicitly — the house
- * must never be made to sound like an ally. The final wording is a build-time call and this is a
- * draft; **the register is not a draft.**
+ * rather than congratulating anybody, and *"the house has it"* is ruled out explicitly. The final
+ * wording is a build-time call and this is a draft; **the register is not a draft.**
  *
  * **Failure is a rejection plus an instruction to re-scan in place**, and the instruction is load-
  * bearing rather than helpful: D-110 makes the walk back to the marker the price of a wrong
  * answer, so the line has to say where the player must stand. It says nothing about *what* was
- * wrong — a mismatch reports only that it was a mismatch (`gdd.md:608`).
+ * wrong -- a mismatch reports only that it was a mismatch (`gdd.md:608`).
  *
- * **Neither line offers a retry, and no control on any of these screens re-arms.** The entry has
- * gone, so every control is already inert, and it stays inert: the only way back to ready is a
- * fresh scan of the marker. A RETRY button here would be the phone re-arming work on its own
- * schedule, which D-110 rules out in the same breath.
+ * **Neither line offers a retry, and no control on any of these screens re-arms.** The only way
+ * back to ready is a fresh scan of the marker (D-110).
  *
  * ### Identical for both roles, which is the whole of D-109
  *
- * There is no role in this file and none in this function. An Insider's fake is graded honestly
- * and answered in these exact words, on this exact schedule; the only difference is a number in
- * the authority's ledger that no screen can read. `SubroutineParityTest` renders both roles in all
- * three states and compares the pixels.
+ * There is no role in this file and none in this function. `SubroutineParityTest` renders both
+ * roles in all three states and compares the pixels.
  */
 @Composable
 private fun ReturnLine(handedOver: Boolean, verdict: SubroutineVerdict?, color: Color) {
-    // Full width and centred, not wrap-content. Three of the six place this at the root of the
-    // screen's column, where wrapping put the line hard against the left edge while the other
-    // three -- inside a centred column -- had it in the middle. The same sentence in two places
-    // depending on which Subroutine you are doing is the opposite of the muscle memory the rest
-    // of this file is built around.
-    Box(Modifier.fillMaxWidth().height(9.u), contentAlignment = Alignment.Center) {
+    Box(Modifier.fillMaxWidth().height(24.dp), contentAlignment = Alignment.Center) {
         val line = when {
             verdict == SubroutineVerdict.Accepted -> HOUSE_WEAKER
             verdict == SubroutineVerdict.Rejected -> RESCAN
             handedOver -> "RETURNED . WAITING"
             else -> null
         }
-        if (line != null) Label(line, size = 6.0, color = color, tracking = 0.12)
+        if (line != null) Words(line, size = 22, color = color, lineHeight = 1.0)
     }
 }
 
 /**
  * **Drafted copy, flagged. The register is ruled (D-109); these exact words are not.**
  *
- * Named constants rather than literals at six call sites, so the two lines cannot drift into six
- * variants of themselves — and so that whoever settles the wording changes it in one place.
+ * Named constants rather than literals at ten call sites, so the two lines cannot drift into ten
+ * variants of themselves -- and so that whoever settles the wording changes it in one place.
  */
 const val HOUSE_WEAKER: String = "THE HOUSE GROWS WEAKER"
 const val RESCAN: String = "REJECTED . RESCAN THE MARKER"
 
 /**
- * The motion budget, as a readout rather than as a bar.
- *
- * On every Subroutine screen, and on the Terminal's live view and timelapse, because reading the
- * map is an uncompletable task (`gdd.md:476`, D-199).
- *
- * It calibrates on entry to a Subroutine against that player's own hand steadiness, and it is the
- * **one** thing in the game a client adjudicates (D-043) — 100 Hz cannot round-trip and the
- * failure has to be immediate. None of that exists yet: there is no motion on a desktop render and
- * no phone attached, so this states the condition and does not draw a draining bar. **A bar that
- * moved here would be moving on nothing**, which on the one client-adjudicated value in the game
- * is the worst place to put a decorative animation.
- */
-@Composable
-internal fun MotionBudgetRow(
-    ink: Color,
-    value: Color,
-    /**
-     * The outline, which is [Amber.Edge] on seven of the eight and **black on Sniff until the
-     * answer** — a hairline is still emitted light, and D-137 does not carve an exception for
-     * chrome. It is a parameter rather than a `when` on the screen for the reason every colour on
-     * these screens is one: the caller knows what it is drawing on and this row does not.
-     */
-    border: Color = Amber.Edge,
-) {
-    Row(
-        Modifier.fillMaxWidth().border(1.u, border).padding(horizontal = 7.u, vertical = 6.u),
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Label("MOTION BUDGET", size = 6.0, color = ink, tracking = 0.1)
-        Label("HOLDING", size = 6.0, color = value, tracking = 0.1)
-    }
-}
-
-/**
- * **STOP NOW — the same words, in the same place, on every Subroutine screen.**
+ * **STOP NOW -- the same words, in the same place, on every Subroutine screen.**
  *
  * Somebody walked in. The player is heads-down, lit or blind, both hands occupied, and needs to be
- * out of this screen without reading it: so the control is constant across all three, keeps its
- * words whether or not the entry has gone back, and sits where the scan's own STOP NOW sits. In
- * the dark that is muscle memory, and muscle memory is the only interface that works when you are
- * not looking at the phone.
+ * out of this screen without reading it: so the control is constant across all ten, keeps its
+ * words whether or not the entry has gone back, and sits at the foot where the scan's own STOP NOW
+ * sits. In the dark that is muscle memory, and muscle memory is the only interface that works when
+ * you are not looking at the phone. On Sniff before the answer it is drawn in black and is live
+ * all the same: in the dark that is what it already was.
  *
- * It goes to the work order rather than the springboard — you came from the list and the list is
- * where the next decision is — which is where NOT THIS ONE goes from the screen before this one.
+ * It goes to the work order rather than the springboard -- you came from the list and the list is
+ * where the next decision is -- which is where NOT THIS ONE goes from the screen before this one.
  *
  * **It is not a claim about the Subroutine, and it never became one.** It reports to the house now
- * (`Intent.StopSubroutine`) — the window this phone opened has shut, which the presence plane needs
- * in order to expire a placement (D-111, D-136) — and what it reports is **the actor and nothing
- * else**: no marker, no reason, no progress. Walking away from work is still your own phone's
- * business; whether anything was banked is still the house's, and this button still neither asks
- * nor says.
+ * (`Intent.StopSubroutine`) -- the window this phone opened has shut, which the presence plane needs
+ * in order to expire a placement (D-111, D-136) -- and what it reports is **the actor and nothing
+ * else**: no marker, no reason, no progress.
  *
  * **It reports even when nothing was entered.** A phone that only told the house about abandoned
  * work it had made progress on would make the report itself a signal, which is the statistic
  * separating a real Subroutine from a fake.
  */
 @Composable
-private fun StopNow(border: Color, ink: Color) {
+private fun StopNow(p: Palette) {
     val actions = LocalActions.current
-    PanelButton(
-        "STOP NOW",
-        border = border, ink = ink,
-        size = 7.0, verticalPadding = 9.u,
-        onClick = actions.stopSubroutine,
-    )
+    KitQuiet("STOP NOW", p.copy(mid = p.dim), onClick = actions.stopSubroutine)
 }

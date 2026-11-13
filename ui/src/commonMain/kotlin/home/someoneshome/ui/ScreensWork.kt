@@ -32,6 +32,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 
@@ -805,14 +806,20 @@ private fun FloorStrip(p: Palette) {
 }
 
 /**
- * The motion budget as the mockup draws it: a reading between two hairlines, not a bar. See
- * [MotionBudgetRow] for why nothing here drains -- a bar that moved on a desktop would be moving
- * on nothing.
+ * The motion budget as the mockup draws it: a reading between two hairlines, not a bar. On every
+ * Subroutine screen (44 tall there) and on the Terminal's live view and timelapse, because reading
+ * the map is an uncompletable task (`gdd.md:476`, D-199).
+ *
+ * It calibrates on entry against that player's own hand steadiness, and it is the **one** thing in
+ * the game a client adjudicates (D-043). None of that exists yet: there is no motion on a desktop
+ * render, so this states the condition and does not draw a draining bar. **A bar that moved here
+ * would be moving on nothing**, which on the one client-adjudicated value in the game is the worst
+ * place to put a decorative animation.
  */
 @Composable
-internal fun KitBudgetRow(p: Palette = Palette.DARK) {
+internal fun KitBudgetRow(p: Palette = Palette.DARK, height: Dp = 40.dp) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 40.dp)
+        Modifier.fillMaxWidth().heightIn(min = height)
             .edgeLine(PanelSide.Top, p.faint, 1.dp).edgeLine(PanelSide.Bottom, p.faint, 1.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
