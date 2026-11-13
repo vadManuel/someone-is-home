@@ -143,6 +143,17 @@ class NotificationsTest {
      * sentence has not quietly become an entry in a log somewhere, which is the direction this
      * feature grows.
      */
+    /**
+     * **The unlock text is a player's voice** (D-201): a withheld number saying `you're up`, which
+     * never says why, because *why* is the one thing that differs between the upstream player
+     * finishing and being revoked.
+     */
+    @Test
+    fun theUnlockTextIsAWithheldNumberSayingYoureUp() {
+        assertEquals("NUMBER WITHHELD", Notifications.unblocked.from)
+        assertEquals("you're up", Notifications.unblocked.body)
+    }
+
     @Test
     fun anUnblockedSubroutineIsAnnouncedTwiceAndFiledNowhere() {
         assertEquals(

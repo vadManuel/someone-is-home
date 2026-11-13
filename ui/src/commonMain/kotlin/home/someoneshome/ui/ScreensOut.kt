@@ -631,7 +631,9 @@ fun WinInsidersScreen(vals: PanelVals) {
  * house says something either way (`gdd.md:1051`) and a second hand-written copy of this block
  * would be the two screens disagreeing about its shape.
  *
- * Its number is withheld, as it has been all evening. That is the whole characterisation.
+ * **It signs as HOUSE** (D-201): the same sender as the thread, because there is one house and it
+ * has one name. NUMBER WITHHELD is a player's voice, the one that says `you're up`, and the house
+ * signing off under it would make the house two people.
  *
  * ### The palette is a parameter, because one of the two endings comes back to the light
  *
@@ -657,7 +659,7 @@ private fun HouseSignOff(
         verticalArrangement = Arrangement.spacedBy(3.u),
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Label("NUMBER WITHHELD", size = 5.5, color = label, tracking = 0.12)
+            Label("HOUSE", size = 5.5, color = label, tracking = 0.12)
             Label("21:38", size = 5.5, color = stamp, tracking = 0.12)
         }
         Label(body, size = 9.0, color = ink, lineHeight = 1.5)

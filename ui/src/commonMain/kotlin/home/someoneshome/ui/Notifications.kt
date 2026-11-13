@@ -285,13 +285,22 @@ object Notifications {
      * A Subroutine coming unblocked — the design's first lock message, and D-119's example of the
      * kind quiet storage exists for.
      *
-     * **NUMBER WITHHELD, not HOUSE.** The design gives the system a second sender for the messages
-     * that are about work rather than about the evening, and it is the better of the two names for
-     * a phone in a dark room: the house talks to you, the work just appears.
+     * **NUMBER WITHHELD is a player, and the words are theirs** (D-201). The text reads as another
+     * player telling you that you can go: `you're up`, lower case, in the register of every other
+     * personal text on the phone.
+     *
+     * - **The number is withheld because the dependency is never named** (`gdd.md:278`). A
+     *   sender's name would hand out a confirmed-innocent identity.
+     * - **The words never say why**, because the unlock is identical whether the upstream player
+     *   finished or was revoked (`gdd.md:279`). A text that said *done* would be a lie on one path
+     *   and a tell on the other. The random unlock delay (`gdd.md:284`) keeps its timestamp from
+     *   saying it instead.
+     *
+     * ⚠️ **`you're up` is new copy and awaits the owner's eye** (D-201).
      */
     val unblocked: Notification = Notification(
         kind = NotificationKind.Unblocked,
-        body = "A subroutine is available to you.",
+        body = "you're up",
         from = "NUMBER WITHHELD",
         at = "21:03",
         bodySize = 8.0,

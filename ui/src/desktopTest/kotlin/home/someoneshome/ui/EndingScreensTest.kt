@@ -152,6 +152,23 @@ class EndingScreensTest {
     }
 
     /**
+     * **The sign-off is the house's, under the house's own name** (D-201). NUMBER WITHHELD is a
+     * player's voice, the unlock text's; the house signing under it would make it two senders.
+     */
+    @Test
+    fun theSignOffIsFromHouseOnBothEndings() {
+        for (ending in listOf(ScreenId.WinInsiders, ScreenId.WinResidents)) {
+            val shown = texts(ending, PanelRole.Insider, hosting = false)
+            // Each entry is a node's text list rendered as a string, so the sender alone is `[HOUSE]`.
+            assertTrue("[HOUSE]" in shown, "$ending: the sign-off is not signed HOUSE: $shown")
+            assertFalse(
+                shown.any { it.contains("NUMBER WITHHELD") },
+                "$ending: the house signed off as a withheld number",
+            )
+        }
+    }
+
+    /**
      * **PERIMETER DISARMED, wired to the push** (`gdd.md:203`).
      *
      * The status row has read `ARMED` for twenty-five minutes and the Resident ending is what
