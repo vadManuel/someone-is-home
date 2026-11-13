@@ -5,18 +5,23 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 
 /**
  * Out, and the end of the round.
@@ -32,144 +37,84 @@ import androidx.compose.ui.text.style.TextAlign
  */
 
 /**
- * Access revoked. **Dark, so it never flares.**
+ * Access revoked. **A concealment screen, so it never flares** (D-077).
  *
- * The dimmest ink in the palette, because the alternative — a bright screen at the moment of
- * revocation — would light the revoked player's position for the whole house and hand the
- * attacker away. It says only what has been withdrawn, and what to do.
+ * Nothing on it is brighter than `#C08A2E`, because the alternative — a bright screen at the moment
+ * of revocation — would light the revoked player's position for the whole house and hand the
+ * attacker away. **The headline recedes on purpose** (D-202 names it as the one text in `#8A5C12`):
+ * what the revoked player needs to read is what to do, not what happened.
  */
 @Composable
-fun RevokedScreen() {
-    OutNotice(
-        heading = "ACCESS\nREVOKED",
-        withdrawn = "PERMISSIONS WITHDRAWN\nLAMP ALLOCATION WITHDRAWN\nREGISTRY ENTRY CLEARED",
-        instruction = "STAY WHERE YOU ARE.\nDO NOT MOVE. DO NOT SPEAK.\n" +
-            "WALK IN ONLY WHEN A\nMEETING IS CALLED.",
-        footer = "NOTHING FURTHER IS REQUIRED OF YOU",
-        step = OutStep.Dark,
-    )
-}
+fun RevokedScreen() = OutNotice(
+    heading = "ACCESS\nREVOKED",
+    instruction = "STAY WHERE YOU ARE.\nDO NOT SPEAK.",
+    palette = Palette.CONCEAL,
+    headingSize = 56,
+    headingInk = Ramp.Line,
+    rule = 1.dp,
+)
 
 /**
- * Restrained — the same notice, **one luminance step brighter, everywhere.**
+ * Restrained — **the same notice, on the dark palette.**
  *
  * It arrives mid-result, at a meeting, with every lamp in the house already up and the vote
- * public. There is nothing left to conceal, so the screen stops whispering: heading and
- * instruction go to full intensity, and every other element rises exactly one step with them.
+ * public. There is nothing left to conceal, so the screen stops whispering: the headline and the
+ * instruction are full ink.
  *
  * That step *is* the difference between the two ways out. A revoked player is told in the dark,
  * quietly, because the light would give them away; a restrained player is told in a lit room in
  * front of the people who did it.
  */
 @Composable
-fun RestrainedScreen() {
-    OutNotice(
-        heading = "YOU WERE\nRESTRAINED",
-        withdrawn = "THE VOTE WENT AGAINST YOU\nREGISTRY ENTRY CLEARED",
-        instruction = "STAY AT THE MEETING AREA.\nYOU HAVE NO VOICE.\n" +
-            "DO NOT SPEAK AT ALL,\nNOT EVEN IN A MEETING.",
-        footer = "THE OTHERS ARE STILL READING THE RESULT",
-        step = OutStep.Lit,
-    )
-}
+fun RestrainedScreen() = OutNotice(
+    heading = "YOU WERE\nRESTRAINED",
+    instruction = "STAY AT THE MEETING AREA.\nDO NOT SPEAK.",
+    palette = Palette.DARK,
+    headingSize = 64,
+    headingInk = Ramp.Ink,
+    rule = 2.dp,
+)
 
 /**
- * Where on the four-step scale an out-notice sits.
- *
- * The two screens are the same structure at two intensities, and holding the ramp in one place is
- * what keeps them exactly one step apart. Written as two independent screens they would drift the
- * first time either was touched, and the drift would be invisible — nobody compares two screens
- * that are never on the same device at the same time.
+ * **The two ways out share one layout** (D-202): a headline, a short rule and what to do. Only the
+ * words and the palette change. Held in one place so the two cannot drift apart unseen — nobody
+ * compares two screens that are never on the same device at the same time.
  */
-private enum class OutStep(
-    val quiet: Color,
-    val loud: Color,
-    val rule: Color,
-    val footer: Color,
-) {
-    /** Told in the dark. Every element at the bottom of the scale. */
-    Dark(quiet = Amber.Faint, loud = Amber.Dim, rule = Amber.Edge, footer = Amber.Edge),
-
-    /** Told in a lit room. Every element one step up. */
-    Lit(quiet = Amber.Dim, loud = Amber.Bright, rule = Amber.Faint, footer = Amber.Faint),
-}
-
 @Composable
 private fun OutNotice(
     heading: String,
-    withdrawn: String,
     instruction: String,
-    footer: String,
-    step: OutStep,
-) {
-    Column(
-        Modifier.fillMaxSize().background(Amber.Black).padding(horizontal = 16.u, vertical = 22.u),
-        verticalArrangement = Arrangement.spacedBy(11.u, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Label("RESIDENT STATUS", size = 6.0, color = step.quiet, tracking = 0.24)
-        Label(
-            heading,
-            size = 17.0, color = step.loud, tracking = 0.1, lineHeight = 1.5,
-            align = TextAlign.Center,
-        )
-        Box(Modifier.width(26.u).height(1.u).background(step.rule))
-        Label(
-            withdrawn,
-            size = 6.5, color = step.quiet, tracking = 0.1, lineHeight = 2.2,
-            align = TextAlign.Center,
-        )
-        Box(
-            Modifier.padding(top = 6.u).border(1.u, step.rule)
-                .padding(horizontal = 9.u, vertical = 8.u)
+    palette: Palette,
+    headingSize: Int,
+    headingInk: Color,
+    rule: Dp,
+) = Mockup {
+    KitScreen {
+        Column(
+            Modifier.weight(1f).fillMaxWidth().padding(bottom = 48.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp, Alignment.CenterVertically),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Label(
-                instruction,
-                size = 7.0, color = step.loud, tracking = 0.06, lineHeight = 2.1,
-                align = TextAlign.Center,
-            )
+            Words(heading, size = headingSize, color = headingInk, lineHeight = 0.85, align = TextAlign.Center)
+            Box(Modifier.size(width = 48.dp, height = rule).background(palette.line))
+            Words(instruction, size = 30, color = palette.ink, lineHeight = 1.1, align = TextAlign.Center)
         }
-        Label(
-            footer,
-            modifier = Modifier.padding(top = 2.u),
-            size = 6.0, color = step.footer, tracking = 0.14,
-        )
     }
 }
 
 /**
  * Stand and walk in.
  *
- * **Dark, and it used to be lit.** The earlier version reasoned that a meeting means every lamp
- * is up, so being bright was camouflage. It is not: a restrained player has no lamp allocation,
- * so a bright screen would mark them out as they crossed a room full of people who do.
+ * **The living's walk-in, word for word but for the words** ([WalkIn]): the same headline, rule,
+ * instruction and [CheckIn] block. A newly revoked player crosses a room the house has just lit,
+ * among people who have not yet been told, so the screen in their hand must look exactly like the
+ * one in everybody else's.
  *
- * The instruction is absolute in a way no living player's is — *do not speak at all, not even in
- * the meeting.* Being out is a complete loss of channel, not a reduced one.
+ * The instruction is absolute in a way no living player's is — *do not speak.* Being out is a
+ * complete loss of channel, not a reduced one.
  */
 @Composable
-fun Ghost2Screen() {
-    Column(
-        Modifier.fillMaxSize().padding(14.u),
-        verticalArrangement = Arrangement.spacedBy(10.u, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Label(
-            "STAND\nAND WALK IN",
-            size = 19.0, color = Amber.Bright, tracking = 0.1, lineHeight = 1.45,
-            align = TextAlign.Center,
-        )
-        Box(Modifier.width(30.u).height(1.u).background(Amber.Faint))
-        Label(
-            "YOU HAVE NO VOICE NOW.\nDO NOT SPEAK AT ALL,\nNOT EVEN IN THE MEETING.",
-            size = 7.0, color = Amber.Dim, tracking = 0.1, lineHeight = 2.1,
-            align = TextAlign.Center,
-        )
-        // The same gate as the living's, and the same control drawing it: D-104 counts the out
-        // players too, so a ghost whose phone has not checked in holds up the whole room's talk.
-        CheckIn()
-    }
-}
+fun Ghost2Screen() = WalkIn("STAND\nAND WALK IN", "DO NOT SPEAK.")
 
 /**
  * The meeting, watched from outside. **Every vote and who cast it, live** (D-134, D-117, D-075).
@@ -187,10 +132,9 @@ fun Ghost2Screen() {
  * styled as decided while reading as undecided, and the count above it cannot be computed off a
  * string. The port's five stand in while there is no house.
  *
- * **The clock is the phase's** ([PanelVals.meetingPhase]). This screen does not move while a
- * meeting runs four phases underneath it, so it is the one surface in the game that has to be told
- * which clock it is showing — and it used to say VOTING ENDS IN throughout, counting down a window
- * that had not opened while the room was still talking.
+ * **The clock is the phase's** ([PanelVals.meetingClockLabel]), set into the top edge of its box.
+ * This screen does not move while a meeting runs four phases underneath it, so it is the one
+ * surface in the game that has to be told which clock it is showing.
  *
  * ### The one thing this screen does not draw is a readiness control
  *
@@ -199,96 +143,58 @@ fun Ghost2Screen() {
  * living's** — which is why [Ghost2Screen] above draws the check-in gate and this screen does not.
  */
 @Composable
-fun GhostMeetingScreen(vals: PanelVals) {
-    Column(
-        Modifier.fillMaxSize().padding(8.u),
-        verticalArrangement = Arrangement.spacedBy(6.u),
-    ) {
-        Label("MEETING IN PROGRESS", size = 7.0, color = Amber.Dim, tracking = 0.16)
+fun GhostMeetingScreen(vals: PanelVals) = Mockup {
+    KitScreen {
+        KitHeader("MEETING IN PROGRESS", Palette.DARK)
 
-        Column(
-            Modifier.fillMaxWidth().border(1.u, Amber.Faint).padding(horizontal = 7.u, vertical = 8.u),
-            verticalArrangement = Arrangement.spacedBy(5.u),
-        ) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom,
-            ) {
-                Label(vals.meetingClockLabel, size = 6.0, color = Amber.Dim, tracking = 0.13)
-                // **No window, no clock, and the bar goes with it.** The check-in gate closes on
-                // the last player walking in rather than on a timer (D-104), so there is nothing
-                // for a bar to be a fraction of -- and an empty bar under a `0` is worse than no
-                // bar at all: it reads as a clock that has run out, on the one screen whose reader
-                // has nothing to do but read it.
-                if (vals.hasMeetingClock) {
-                    Readout(vals.countdown.text, size = 22.0, color = Amber.Bright, lineHeight = 1.0)
-                }
-            }
+        KitLegendBox(vals.meetingClockLabel, Ramp.Mid, Ramp.Line) {
+            // **No window, no clock, and the bar goes with it.** The check-in gate closes on the
+            // last player walking in rather than on a timer (D-104), so there is nothing for a bar
+            // to be a fraction of -- and an empty bar under a `0` reads as a clock that has run
+            // out, on the one screen whose reader has nothing to do but read it.
             if (vals.hasMeetingClock) {
-                SegmentBar(
-                    total = PanelVals.VOTE_SEGMENTS,
-                    lit = vals.countdown.litOf(PanelVals.VOTE_SEGMENTS),
-                    litColor = Amber.Bright,
-                    unlitColor = Amber.Edge,
-                    height = 5.u,
+                Words(vals.countdown.text, size = 64, lineHeight = 0.8)
+                KitMeter(
+                    PanelVals.VOTE_SEGMENTS, vals.countdown.litOf(PanelVals.VOTE_SEGMENTS),
+                    Ramp.Ink, Ramp.Faint, height = 10.dp,
                 )
             }
-            Label(
-                "YOU HAVE NO VOICE AND NO VOTE.",
-                size = 6.0, color = Amber.Faint, tracking = 0.1, lineHeight = 1.8,
-            )
         }
 
         // Counted off the rows below rather than written beside them. It was a literal that
         // happened to agree with them, which is the state two numbers for one fact start in.
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Label("VOTES CAST", size = 6.5, color = Amber.Dim, tracking = 0.14)
-            Label(
-                "${vals.votesCast} OF ${vals.ballots.size}",
-                size = 6.5, color = Amber.Faint, tracking = 0.14,
-            )
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp)) {
+            Words("VOTES CAST", Modifier.weight(1f), size = 22, color = Ramp.Dim, lineHeight = 1.0)
+            Words("${vals.votesCast} OF ${vals.ballots.size}", size = 22, color = Ramp.Dim, lineHeight = 1.0)
         }
 
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.u)) {
-            // A ballot that has not been cast yet is a null target, not the words STILL DECIDING
-            // stored in a fixture — so a row cannot be styled as decided while reading as undecided,
-            // and the count above cannot be computed off a string.
+        KitRules(Palette.DARK) {
             vals.ballots.forEach { ballot ->
                 val decided = ballot.forWhom != null
                 Row(
-                    Modifier.fillMaxWidth().border(1.u, if (decided) Amber.Faint else Amber.Edge)
-                        .padding(horizontal = 7.u, vertical = 6.u),
-                    horizontalArrangement = Arrangement.spacedBy(6.u),
+                    Modifier.fillMaxWidth().heightIn(min = 52.dp)
+                        .edgeLine(PanelSide.Bottom, Ramp.Faint, 1.dp).padding(horizontal = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Label(
-                        ballot.by,
-                        modifier = Modifier.weight(1f),
-                        size = 8.5, color = if (decided) Amber.Bright else Amber.Dim, tracking = 0.06,
+                    Words(
+                        ballot.by, Modifier.weight(1f),
+                        size = 28, color = if (decided) Ramp.Ink else Ramp.Mid, lineHeight = 1.0,
                     )
-                    if (decided) {
-                        Label(OutsideView.CAST_FOR, size = 6.0, color = Amber.Faint, tracking = 0.1)
-                    }
-                    Label(
+                    if (decided) Words(OutsideView.CAST_FOR, size = 22, color = Ramp.Dim, lineHeight = 1.0)
+                    Words(
                         ballot.forWhom ?: "STILL DECIDING",
-                        size = 8.5, color = if (decided) Amber.Bright else Amber.Faint, tracking = 0.06,
+                        size = if (decided) 28 else 22, color = if (decided) Ramp.Ink else Ramp.Dim,
+                        lineHeight = 1.0,
                     )
                 }
             }
         }
-
-        Label(
-            "THE REVOKED SEE EVERY VOTE AND WHO CAST IT.\nTHE LIVING SEE ONLY THE TALLY.",
-            modifier = Modifier.fillMaxWidth(),
-            size = 6.0, color = Amber.Faint, tracking = 0.1, lineHeight = 1.8,
-            align = TextAlign.Center,
-        )
     }
 }
 
 /**
- * Outside the system: **both bars, and true occupancy.**
+ * Outside the system: **both meters, and true occupancy.**
  *
  * The fiction is that deauthorisation cuts both ways — the house erased you from the registry, so
  * it can no longer see or control you, and its blackmail is worthless against someone it has
@@ -296,20 +202,17 @@ fun GhostMeetingScreen(vals: PanelVals) {
  *
  * So you get what the whole house is denied: Resident progress *and* the real Egress number,
  * which no living player of either role can see, plus occupancy with no injected error and no
- * staleness. **Still counts, never identities, and never alignments** — the tools to deduce,
- * never the answer.
+ * staleness, every count in full ink. **Still counts, never identities, and never alignments** —
+ * the tools to deduce, never the answer. Nor is there any channel: the screen offers nothing to
+ * press.
  *
  * ### Both numbers are percentages, and both are computed rather than written (D-103, D-153)
  *
  * D-153's rule has no exception for the one audience that can act on nothing: the denominator is
  * `(seats − insiders) × 7`, and printing it hands the reader with nothing else to do all evening
  * the Insider count by division — for this round and, since an evening is two to three rounds
- * (D-157), for every round after it.
- *
- * Both readouts used to be literals — `66%` over a bar lit to 21 of 32, and `71%` over one lit to
- * 22 — which is not a rounding disagreement but two hand-maintained facts about one meter, on the
- * screen where a meter is watched most closely. They come off [PanelVals.outsidePercent] and
- * [PanelVals.egressPercent] now, which are the same fraction the bars are drawn at.
+ * (D-157), for every round after it. They come off [PanelVals.outsidePercent] and
+ * [PanelVals.egressPercent], which are the same fraction the meters are drawn at.
  *
  * ### ⚠️ *Live* is D-134's word and it is not true of the meter yet
  *
@@ -320,55 +223,54 @@ fun GhostMeetingScreen(vals: PanelVals) {
  * ### The Egress widget is empty until there is an Egress
  *
  * See [GhostEgressWidget]. It is the one block on this screen that is not always saying something,
- * because it is the one whose subject is not always happening — and a couch that has been reading
- * `EGRESS . TRUE 68%` since lights-out would be reading it in a house where nothing has happened.
+ * because it is the one whose subject is not always happening.
  */
 @Composable
-fun Ghost3Screen(vals: PanelVals) {
-    Column(
-        Modifier.fillMaxSize().padding(8.u),
-        verticalArrangement = Arrangement.spacedBy(6.u),
+fun Ghost3Screen(vals: PanelVals) = Mockup {
+    KitScreen(
+        padding = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 20.dp),
+        gap = 10.dp,
     ) {
-        Column(
-            Modifier.fillMaxWidth().border(1.u, Amber.Faint).padding(horizontal = 7.u, vertical = 6.u),
-            verticalArrangement = Arrangement.spacedBy(4.u),
-        ) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom,
-            ) {
-                Label("SYSTEM INTEGRITY", size = 6.5, color = Amber.Dim, tracking = 0.13)
-                Readout(vals.outsidePercent, size = 15.0, color = Amber.Bright, lineHeight = 1.0)
-            }
-            SegmentBar(
-                total = PanelVals.METER_SEGMENTS, lit = vals.outsideLit,
-                litColor = Amber.Mid, unlitColor = Amber.Edge, height = 6.u,
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CouchMeter(
+                Modifier.weight(1f), Ramp.Line, 1.dp, "SYSTEM INTEGRITY", Ramp.Mid,
+                vals.outsidePercent, vals.outsideLit,
             )
+            GhostEgressWidget(vals, Modifier.weight(1f))
         }
-
-        GhostEgressWidget(vals)
-
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.u)) {
-            Box(
-                Modifier.weight(1f).border(1.u, Amber.Dim).padding(vertical = 4.u),
-                contentAlignment = Alignment.Center,
-            ) { Label("GROUND", size = 6.5, color = Amber.Bright, tracking = 0.1) }
-            Box(
-                Modifier.weight(1f).border(1.u, Amber.Edge).padding(vertical = 4.u),
-                contentAlignment = Alignment.Center,
-            ) { Label("UPPER", size = 6.5, color = Amber.Dim, tracking = 0.1) }
+        FloorStrip(Palette.DARK)
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            KitLivePlan(Plan.trueCounts, Modifier.fillMaxSize())
         }
+    }
+}
 
-        Box(Modifier.weight(1f).fillMaxWidth().border(1.u, Amber.Edge)) {
-            LivePlan(Plan.mapCells(), Modifier.fillMaxSize())
-            PlanRoomLabels(Modifier.fillMaxSize())
-            PlanCounts(Plan.trueCounts, Modifier.fillMaxSize())
-        }
-
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Label("TRUE OCCUPANCY", size = 5.5, color = Amber.Faint, tracking = 0.08)
-            Label("NO CHANNEL AVAILABLE", size = 5.5, color = Amber.Faint, tracking = 0.08)
+/**
+ * One of the couch's two meters: a name, a percentage and the segments, in a box. The two sit
+ * side by side at the same size whatever their edge, so an edge two units wide gives up one unit
+ * of padding to it.
+ */
+@Composable
+private fun CouchMeter(
+    modifier: Modifier,
+    edge: Color,
+    edgeWidth: Dp,
+    name: String,
+    nameInk: Color,
+    percent: String,
+    lit: Int?,
+) {
+    Column(
+        modifier.border(edgeWidth, edge).padding(horizontal = 13.dp - edgeWidth, vertical = 11.dp - edgeWidth),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Words(name, size = 18, color = nameInk, lineHeight = 1.0, maxLines = 1)
+        Words(percent, size = 44, lineHeight = 0.8)
+        // A meter with nothing to be a fraction of keeps its height and draws nothing.
+        if (lit != null) {
+            KitMeter(PanelVals.METER_SEGMENTS, lit, Ramp.Mid, Ramp.Faint, height = 8.dp, gap = 1.dp)
+        } else {
+            Box(Modifier.fillMaxWidth().height(8.dp))
         }
     }
 }
@@ -379,62 +281,40 @@ fun Ghost3Screen(vals: PanelVals) {
  * The couch is the one audience in the building allowed to watch this move, and it watches from a
  * single screen for the entire round — so unlike the living's widget, which is a screen the house
  * pushes and therefore cannot be wrong about whether a crisis is on, this one has to be able to be
- * **empty**. It says `EGRESS . <type>` and the live percentage while an Egress runs, and it is dim
- * and blank the rest of the time: no percentage, no type, no word.
+ * **empty**. It says `EGRESS . <type>` and the live percentage, edged in full ink, while an Egress
+ * runs, and it is a plain box the rest of the time: no percentage, no type, no word.
  *
  * ### `EGRESS . TRUE` is gone, and it was two meanings in one shape
  *
- * The literal here read TRUE as an *adjective* — the true Egress number, matching TRUE OCCUPANCY at
- * the foot of the same screen. But the living's widget draws `"EGRESS . ${type}"`, where the second
- * half **is** the type: `EGRESS . BEACON`. One screen apart, one shape, two grammars, and the couch
- * is the reader with the most time to notice. It says the type now, which is the reading the shape
- * already had everywhere else.
+ * The literal here read TRUE as an *adjective* — the true Egress number. But the living's widget
+ * draws `"EGRESS . ${type}"`, where the second half **is** the type: `EGRESS . BEACON`. One screen
+ * apart, one shape, two grammars, and the couch is the reader with the most time to notice. It says
+ * the type, which is the reading the shape already had everywhere else.
  *
  * ### The frame stays, and only the frame
  *
- * The box is drawn at its full height either way so the plan below it does not walk up the screen
- * when an Egress fires — a layout that moved would be a second, silent announcement of the crisis,
- * arriving before the widget said anything. What changes is the ink and what is inside it.
+ * The box is drawn at its full size either way so nothing beside or below it moves when an Egress
+ * fires — a layout that moved would be a second, silent announcement of the crisis, arriving before
+ * the widget said anything. What changes is the edge and what is inside it.
  *
- * **Empty is not zero.** Nothing draws a bar with no lit segments here: a drained bar is a
+ * **Empty is not zero.** Nothing draws a meter with no lit segments here: a drained meter is a
  * statement about an Egress that is nearly contained, and *no Egress at all* is not a value on that
  * scale.
  */
 @Composable
-private fun GhostEgressWidget(vals: PanelVals) {
+private fun GhostEgressWidget(vals: PanelVals, modifier: Modifier) {
     val running = vals.egressRunning
-    Column(
-        Modifier.fillMaxWidth()
-            .border(1.u, if (running) Amber.Bright else Amber.Edge)
-            .padding(horizontal = 7.u, vertical = 6.u),
-        verticalArrangement = Arrangement.spacedBy(4.u),
-    ) {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            // Empty strings rather than an absent row: the height comes off the same type ramp the
-            // populated widget uses, so the two states are the same box without a measurement
-            // written down twice.
-            Label(
-                if (running) "EGRESS . ${vals.egressType}" else "",
-                size = 6.5, color = Amber.Bright, tracking = 0.13,
-            )
-            Readout(
-                if (running) vals.egressPercent else "",
-                size = 15.0, color = Amber.Bright, lineHeight = 1.0,
-            )
-        }
-        if (running) {
-            SegmentBar(
-                total = PanelVals.METER_SEGMENTS, lit = vals.egressLit,
-                litColor = Amber.Bright, unlitColor = Amber.Edge, height = 6.u,
-            )
-        } else {
-            Box(Modifier.fillMaxWidth().height(6.u))
-        }
-    }
+    // Empty strings rather than absent lines: the height comes off the same type the populated
+    // widget uses, so the two states are the same box without a measurement written down twice.
+    CouchMeter(
+        modifier,
+        edge = if (running) Ramp.Ink else Ramp.Line,
+        edgeWidth = if (running) 2.dp else 1.dp,
+        name = if (running) "EGRESS . ${vals.egressType}" else "",
+        nameInk = Ramp.Ink,
+        percent = if (running) vals.egressPercent else "",
+        lit = if (running) vals.egressLit else null,
+    )
 }
 
 /**
@@ -442,53 +322,29 @@ private fun GhostEgressWidget(vals: PanelVals) {
  *
  * An unauthorised lamp change is an unauthored game signal, so a phone that has lost the host
  * must not go dark, brighten, or flicker — it keeps emitting exactly what it was emitting. The
- * screen says so, because the player needs to know not to move.
+ * screen says only what the player must do: stay where they are.
  *
- * **A concealment screen, drawn on the revoked screen's dark step** (D-077, D-200). Its loudest ink
- * is [Amber.Dim] and everything else sits below it: a reconnecting phone lit brighter than its
- * neighbours is the flare D-077 exists to prevent. The status bar dims with it — see
- * `PanelVals.concealed`.
+ * **A concealment screen, on the revoked screen's palette** (D-077, D-200): nothing on it is above
+ * `#C08A2E`, because a reconnecting phone lit brighter than its neighbours is the flare D-077
+ * exists to prevent. The status strip dims with it — see `PanelVals.concealed`.
  */
 @Composable
-fun DisconnectScreen() {
-    Column(
-        Modifier.fillMaxSize().padding(8.u),
-        verticalArrangement = Arrangement.spacedBy(8.u),
-    ) {
-        Label("CONNECTION", size = 7.0, color = Amber.Faint, tracking = 0.16)
+fun DisconnectScreen() = Mockup {
+    val p = Palette.CONCEAL
+    KitScreen {
+        KitHeader("CONNECTION", p)
         Column(
-            Modifier.weight(1f).fillMaxWidth().border(1.u, Amber.Edge),
-            verticalArrangement = Arrangement.spacedBy(12.u, Alignment.CenterVertically),
+            Modifier.weight(1f).fillMaxWidth().padding(bottom = 40.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Row(
-                Modifier.height(16.u),
-                horizontalArrangement = Arrangement.spacedBy(3.u),
-                verticalAlignment = Alignment.Bottom,
-            ) {
-                Block(4.u, 5.u, Amber.Edge)
-                Block(4.u, 9.u, Amber.Edge)
-                Block(4.u, 13.u, Amber.Edge)
-            }
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Label(
-                    "RECONNECTING",
-                    size = 9.0, color = Amber.Dim, tracking = 0.14, lineHeight = 1.9,
-                    align = TextAlign.Center,
-                )
-                Label("ATTEMPT 3 . 8S", size = 6.5, color = Amber.Faint, tracking = 0.14)
-            }
+            Words("RECONNECTING", size = 52, color = p.ink, lineHeight = 0.85, align = TextAlign.Center)
+            KitCaption("ATTEMPT 3 . 8S", p, size = 24, center = true)
         }
-        Box(
-            Modifier.fillMaxWidth().border(1.u, Amber.Edge).padding(7.u),
-            contentAlignment = Alignment.Center,
-        ) {
-            Label(
-                "YOUR LAMP IS HOLDING ITS LAST STATE.\nSTAY WHERE YOU ARE.",
-                size = 6.5, color = Amber.Dim, tracking = 0.1, lineHeight = 1.9,
-                align = TextAlign.Center,
-            )
-        }
+        Words(
+            "STAY WHERE YOU ARE.", Modifier.fillMaxWidth(),
+            size = 28, color = p.ink, lineHeight = 1.1, align = TextAlign.Center,
+        )
     }
 }
 

@@ -476,11 +476,17 @@ class ScanLinesTest {
      *
      * Null means "this row tells us nothing": content is changing across it, or there is no light
      * here for a band to take away. Both are ordinary and neither is a fault.
+     *
+     * **Same means within half a percent.** It was one percent, and the meeting's restyle showed
+     * what that let through: rows inside a 64-unit pixel-font headline whose neighbours happened to
+     * agree to 0.7%, read as bands three points off the glass. Measured over every render, every
+     * band off its ground's glass on a black ground had a surround between 0.5% and 1%, and all
+     * but nine of the ones on it had one under 0.25%.
      */
     private fun flatRatioAt(img: BufferedImage, y: Int): Double? {
         val above = rowMean(img, y - 1)
         val below = rowMean(img, y + 1)
-        if (above < 20.0 || kotlin.math.abs(above - below) > above * 0.01) return null
+        if (above < 20.0 || kotlin.math.abs(above - below) > above * 0.005) return null
         return rowMean(img, y) / above
     }
 

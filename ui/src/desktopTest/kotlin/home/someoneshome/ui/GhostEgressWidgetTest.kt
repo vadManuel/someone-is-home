@@ -26,9 +26,9 @@ import kotlin.test.assertTrue
  * deleting the other.
  *
  * **`EGRESS . TRUE` is what this replaces**, and it was two grammars in one shape: TRUE read as an
- * adjective here (the *true* Egress number, matching TRUE OCCUPANCY at the foot of the same screen)
- * and as a **type** on the living's widget one screen over, which draws `EGRESS . BEACON`. One of
- * the two had to go and the type is the one the shape already meant everywhere else.
+ * adjective here (the *true* Egress number) and as a **type** on the living's widget one screen
+ * over, which draws `EGRESS . BEACON`. One of the two had to go and the type is the one the shape
+ * already meant everywhere else.
  */
 @OptIn(ExperimentalTestApi::class)
 class GhostEgressWidgetTest {
@@ -74,9 +74,10 @@ class GhostEgressWidgetTest {
     }
 
     /**
-     * **TRUE is not an Egress type and no longer reads like one.** The adjective survives where it
-     * belongs — TRUE OCCUPANCY, at the foot of the same screen — so this asserts the removal
-     * against the thing that made it ambiguous rather than against a bare absence.
+     * **TRUE is not an Egress type and no longer reads like one.** The removal is asserted against
+     * the type that took its place rather than against a bare absence: while an Egress runs the
+     * widget names its type, so a screen that drew nothing at all would fail here too. *(It was
+     * asserted against TRUE OCCUPANCY at the foot of the screen, until the mockup cut that line.)*
      */
     @Test
     fun theCouchNoLongerCallsAnEgressTrue() {
@@ -88,7 +89,7 @@ class GhostEgressWidgetTest {
                     }
                 }
                 onAllNodesWithText("EGRESS . TRUE").assertCountEquals(0)
-                onAllNodesWithText("TRUE OCCUPANCY").assertCountEquals(1)
+                onAllNodesWithText("EGRESS . BEACON").assertCountEquals(if (running) 1 else 0)
             }
         }
     }

@@ -57,6 +57,16 @@ class MeetingInputTest {
     private fun DesktopComposeUiTest.says(text: String): Boolean =
         onAllNodes(hasText(text, substring = true)).fetchSemanticsNodes().isNotEmpty()
 
+    /**
+     * **Whether the bar under a hold has run at all**, read off the block's progress rather than
+     * off the words under it. The ballot's hold is drawn without a note (the mockup's), so there
+     * is no KEEP HOLDING to look for: the bar is the only thing that moves while a finger is down.
+     */
+    private fun DesktopComposeUiTest.holdRan(): Boolean =
+        onAllNodesWithTag(HOLD_BLOCK).fetchSemanticsNodes().any {
+            (it.config.getOrNull(SemanticsProperties.ProgressBarRangeInfo)?.current ?: 0f) > 0f
+        }
+
     // ---- The vote ------------------------------------------------------------------------------
 
     /**
@@ -153,6 +163,8 @@ class MeetingInputTest {
         onNodeWithText("HOLD TO CAST").performTouchInput { down(center) }
         mainClock.advanceTimeBy(HOLD_MILLIS - 100L)
         assertFalse(model.meeting.locked, "the ballot was cast before the two seconds were up")
+        // The observation the inert-control tests below rely on, shown to see a bar that runs.
+        assertTrue(holdRan(), "a live ballot's bar did not run, so no test here can see one run")
 
         onNodeWithText("HOLD TO CAST").performTouchInput { up() }
         mainClock.advanceTimeBy(HOLD_MILLIS + 200L)
@@ -183,7 +195,7 @@ class MeetingInputTest {
             // Half the window, finger still down — the only moment a bar that runs and then
             // declines can be told apart from one that never started.
             mainClock.advanceTimeBy(HOLD_MILLIS / 2L)
-            assertFalse(says("KEEP HOLDING"), "the bar ran on a ballot with nothing on it")
+            assertFalse(holdRan(), "the bar ran on a ballot with nothing on it")
             onNodeWithText("HOLD TO CAST").performTouchInput { up() }
             mainClock.advanceTimeBy(HOLD_MILLIS + 200L)
             assertFalse(model.meeting.locked, "an empty vote could be handed over")
@@ -228,7 +240,7 @@ class MeetingInputTest {
             // be indistinguishable from a hold that never started.
             onNodeWithText("VOTE CAST").performTouchInput { down(center) }
             mainClock.advanceTimeBy(HOLD_MILLIS / 2L)
-            assertFalse(says("KEEP HOLDING"), "a cast ballot ran a second hold")
+            assertFalse(holdRan(), "a cast ballot ran a second hold")
             onNodeWithText("VOTE CAST").performTouchInput { up() }
             mainClock.advanceTimeBy(HOLD_MILLIS + 200L)
             assertEquals(

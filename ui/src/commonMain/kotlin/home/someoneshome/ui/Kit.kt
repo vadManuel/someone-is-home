@@ -33,8 +33,10 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -445,7 +447,13 @@ fun KitHold(
     val ink = if (lit) palette.onFill else palette.ink
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Box(
-            Modifier.fillMaxWidth().height(64.dp).border(2.dp, edge)
+            // [HOLD_BLOCK], so the tap-target sweep still measures a control that has no click
+            // action; and the bar's progress as semantics, because a hold drawn without its note
+            // has no words that change while a finger is down, and a test has to be able to see
+            // whether the bar ran.
+            Modifier.testTag(HOLD_BLOCK)
+                .semantics { progressBarRangeInfo = ProgressBarRangeInfo(hold.fraction, 0f..1f) }
+                .fillMaxWidth().height(64.dp).border(2.dp, edge)
                 .background(if (lit) palette.fill else Color.Transparent).then(hold.surface),
             contentAlignment = Alignment.Center,
         ) {

@@ -792,7 +792,7 @@ private fun TerminalView(
  * sits on the room fill; the shipped strip takes no taps.
  */
 @Composable
-private fun FloorStrip(p: Palette) {
+internal fun FloorStrip(p: Palette) {
     Row(Modifier.fillMaxWidth().height(44.dp).border(1.dp, p.line)) {
         Box(
             Modifier.weight(1f).fillMaxHeight().background(Ramp.Fill)

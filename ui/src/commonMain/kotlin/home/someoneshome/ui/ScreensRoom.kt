@@ -6,15 +6,15 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -22,11 +22,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
 
 /**
  * The room — where the phones get out of the way.
@@ -66,52 +66,43 @@ private const val VOTE_HOLD = "HOLD TO CAST"
 /** The irrevocable half. Not *YOU ARE READY*, which is the discussion's button on another screen. */
 private const val VOTE_CAST = "VOTE CAST"
 
-/** What the note under the bar says once there is nothing left to do to it. */
-private const val VOTE_DONE_NOTE = "THIS PHONE HAS VOTED. IT CANNOT BE TAKEN BACK."
-
-/** And what it says while the ballot is empty, which is a refusal with a reason on it. */
-private const val VOTE_EMPTY_NOTE = "CHOOSE A NAME OR SKIP FIRST."
+/**
+ * **The meeting's band: the one solid block on the notice, the discussion and the vote** (D-202).
+ * Every lamp in the house has just gone to full white, so a filled block costs nothing here; it is
+ * the screen's name, and the eye finds it before anything else.
+ */
+@Composable
+private fun MeetingBand(title: String) {
+    Box(Modifier.fillMaxWidth().background(Ramp.Ink).padding(14.dp)) {
+        Words(title, size = 26, color = Amber.Black, lineHeight = 1.0)
+    }
+}
 
 /** You called it. Every phone in the building rings, and you wait with everyone else. */
 @Composable
-fun CallingScreen() {
+fun CallingScreen() = Mockup {
     val counts = LocalMeeting.current.counts
-    Column(
-        Modifier.fillMaxSize().padding(12.u),
-        verticalArrangement = Arrangement.spacedBy(7.u, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Label(
-            "CALLING",
+    KitScreen {
+        Column(
+            Modifier.weight(1f).fillMaxWidth().padding(bottom = 60.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
             // Steady (D-200, D-093). It pulsed: a local animation the core never emitted, on a
             // phone the whole house is ringing at once.
-            size = 6.5, color = Amber.Dim, tracking = 0.24,
-        )
-        Label(
-            "HOUSE\nMEETING",
-            size = 17.0, color = Amber.Bright, tracking = 0.12, lineHeight = 1.5,
-            align = TextAlign.Center,
-        )
-        Label(
-            "CALLING ALL\nRESIDENTS",
-            size = 6.5, color = Amber.Dim, tracking = 0.14, lineHeight = 2.0,
-            align = TextAlign.Center,
-        )
-        // The dots and the line below them are one count drawn twice, so they are read from one
-        // number. Written separately they are a picture that can disagree with the caption under it.
-        Row(
-            Modifier.padding(top = 10.u),
-            horizontalArrangement = Arrangement.spacedBy(4.u),
-        ) {
-            repeat(counts.answered) { Box(Modifier.size(8.u).background(Amber.Bright)) }
-            repeat(counts.seats - counts.answered) { Box(Modifier.size(8.u).border(1.u, Amber.Faint)) }
+            Tag("CALLING", Ramp.Mid, tracking = 0.2)
+            Words("HOUSE\nMEETING", size = 72, lineHeight = 0.85, align = TextAlign.Center)
+            // The squares and the line below them are one count drawn twice, so they are read from
+            // one number. Written separately they are a picture that can disagree with its caption.
+            Row(
+                Modifier.padding(top = 18.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                repeat(counts.answered) { Box(Modifier.size(18.dp).background(Ramp.Ink)) }
+                repeat(counts.seats - counts.answered) { Box(Modifier.size(18.dp).border(1.dp, Ramp.Line)) }
+            }
+            Words("${counts.ofSeats(counts.answered)} ANSWERED", size = 24, lineHeight = 1.0)
         }
-        Label("${counts.ofSeats(counts.answered)} ANSWERED", size = 6.0, color = Amber.Dim, tracking = 0.12)
-        Label(
-            "WAITING FOR THE REST",
-            modifier = Modifier.padding(top = 12.u),
-            size = 6.5, color = Amber.Dim, tracking = 0.16,
-        )
     }
 }
 
@@ -139,60 +130,54 @@ fun FoundScreen(vals: PanelVals) {
     IncomingCall(caller = vals.callerOr("ELLIOT"), reason = "REVOKED\nRESIDENT FOUND") { go(ScreenId.Assemble) }
 }
 
+/**
+ * **The two incoming calls share one layout** (D-202): the caller large, the reason under it, and
+ * ANSWER as the one solid block at the foot. Only the words change.
+ */
 @Composable
-private fun IncomingCall(caller: String, reason: String, onAnswer: () -> Unit) {
-    Column(
-        Modifier.fillMaxSize().padding(10.u),
-        verticalArrangement = Arrangement.spacedBy(6.u, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Label(
-            "INCOMING",
+private fun IncomingCall(caller: String, reason: String, onAnswer: () -> Unit) = Mockup {
+    KitScreen {
+        Column(
+            Modifier.weight(1f).fillMaxWidth().padding(top = 80.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
             // Steady (D-200, D-093). It pulsed: a local animation the core never emitted, on a
             // phone the whole house is ringing at once.
-            size = 6.5, color = Amber.Dim, tracking = 0.24,
-        )
-        Label(caller, size = 22.0, color = Amber.Bright, tracking = 0.12)
-        Label(
-            reason,
-            size = 8.0, color = Amber.Mid, tracking = 0.16, lineHeight = 1.8,
-            align = TextAlign.Center,
-        )
-        Box(
-            Modifier.padding(top = 16.u).border(1.u, Amber.Bright).tapTarget(onAnswer)
-                .padding(horizontal = 26.u, vertical = 11.u),
-            contentAlignment = Alignment.Center,
-        ) {
-            Label("ANSWER", size = 9.0, color = Amber.Bright, tracking = 0.22)
+            Tag("INCOMING", Ramp.Mid, tracking = 0.2)
+            Words(caller, size = 88, lineHeight = 0.85, align = TextAlign.Center)
+            Words(reason, size = 30, color = Ramp.Mid, lineHeight = 1.0, align = TextAlign.Center)
         }
+        KitPrimary("ANSWER", Palette.DARK, size = 36, height = 72.dp, onClick = onAnswer)
     }
 }
 
 /**
  * Answered: lamps up, nobody speaks yet.
  *
- * The instruction not to speak until everyone has arrived is a *social* rule the app states and
- * never enforces — physical conduct is contract, never software.
+ * The instruction not to speak yet is a *social* rule the app states and never enforces — physical
+ * conduct is contract, never software.
  */
 @Composable
-fun AssembleScreen() {
-    Column(
-        Modifier.fillMaxSize().padding(14.u),
-        verticalArrangement = Arrangement.spacedBy(10.u, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Label("CALL ANSWERED . PRIYA", size = 6.5, color = Amber.Dim, tracking = 0.22)
-        Label(
-            "WALK TO THE\nMEETING AREA",
-            size = 17.0, color = Amber.Bright, tracking = 0.1, lineHeight = 1.5,
-            align = TextAlign.Center,
-        )
-        Box(Modifier.width(30.u).height(1.u).background(Amber.Faint))
-        Label(
-            "DO NOT SPEAK UNTIL\nEVERYONE HAS ARRIVED.",
-            size = 7.0, color = Amber.Dim, tracking = 0.1, lineHeight = 2.1,
-            align = TextAlign.Center,
-        )
+fun AssembleScreen() = WalkIn("WALK TO THE\nMEETING AREA", "DO NOT SPEAK YET.")
+
+/**
+ * **Walking in, on both halves of the check-in gate** (D-104): the living's [AssembleScreen] and
+ * the out player's [Ghost2Screen] are one layout, a headline, a rule, one line of instruction and
+ * [CheckIn] at the foot. Only the words change, so across a room the two cannot be told apart.
+ */
+@Composable
+internal fun WalkIn(headline: String, instruction: String) = Mockup {
+    KitScreen {
+        Column(
+            Modifier.weight(1f).fillMaxWidth().padding(top = 60.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Words(headline, size = 60, lineHeight = 0.85, align = TextAlign.Center)
+            Box(Modifier.size(width = 48.dp, height = 2.dp).background(Ramp.Line))
+            KitCaption(instruction, Palette.DARK, size = 26, center = true)
+        }
         CheckIn()
     }
 }
@@ -218,31 +203,28 @@ fun CheckIn() {
     val actions = LocalActions.current
     val meeting = LocalMeeting.current
     val here = meeting.checkedIn
+    val counts = meeting.counts
 
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(10.u),
+    // Spent rather than gone. A control that vanished when pressed would take the one thing on the
+    // screen the player just aimed at away from under their thumb, in the dark. Pressed, it drops
+    // from the solid block to an outline and loses its press.
+    Box(
+        Modifier.fillMaxWidth().height(64.dp)
+            .then(if (here) Modifier else Modifier.background(Ramp.Ink))
+            .border(2.dp, if (here) Ramp.Line else Ramp.Ink)
+            .then(if (here) Modifier else Modifier.tap(actions.checkIn)),
+        contentAlignment = Alignment.Center,
     ) {
-        // Spent rather than gone. A control that vanished when pressed would take the one thing on
-        // the screen the player just aimed at away from under their thumb, in the dark.
-        val block = Modifier.padding(top = 10.u).border(1.u, if (here) Amber.Faint else Amber.Bright)
-        Box(
-            (if (here) block else block.tapTarget(actions.checkIn))
-                .padding(horizontal = 22.u, vertical = 11.u),
-            contentAlignment = Alignment.Center,
-        ) {
-            Label(
-                if (here) "YOU ARE HERE" else "I AM HERE",
-                size = 8.5, color = if (here) Amber.Dim else Amber.Bright, tracking = 0.2,
-            )
-        }
-        // The house's count, and it does NOT include your press. It moves when the house says so.
-        val counts = meeting.counts
-        Label(
-            "${counts.ofSeats(counts.present)} CHECKED IN",
-            size = 6.0, color = Amber.Faint, tracking = 0.12,
+        Words(
+            if (here) "YOU ARE HERE" else "I AM HERE",
+            size = 32, color = if (here) Ramp.Mid else Amber.Black, tracking = 0.1, lineHeight = 1.0,
         )
     }
+    // The house's count, and it does NOT include your press. It moves when the house says so.
+    KitCaption(
+        "${counts.ofSeats(counts.present)} CHECKED IN", Palette.DARK, Modifier.fillMaxWidth(),
+        center = true,
+    )
 }
 
 /**
@@ -269,21 +251,20 @@ fun CheckIn() {
  *
  * It walks to the discussion because a notice sits between the check-in gate and the talk, and the
  * house's own nine seconds ([Flow.autoAdvance]) walks there too. Swiping is *going first*, never
- * going somewhere else.
+ * going somewhere else. **The gesture is no longer spelled out under the card** (D-202, screens
+ * say little): the same swipe has already put a banner away, and the house clears this one anyway.
  */
 @Composable
-fun NoticeScreen() {
+fun NoticeScreen() = Mockup {
     val actions = LocalActions.current
-    val threshold = with(LocalDensity.current) { SWIPE_DISMISS.toPx() }
-    // Where the finger has taken it, never below zero — the same tracking the banner does, because
+    // The banner's distance, measured inside the bridge exactly as the banner measures it, because
     // the hand does not know which screen it is on.
+    val threshold = with(LocalDensity.current) { SWIPE_DISMISS.toPx() }
+    // Where the finger has taken it, never below zero — the same tracking the banner does.
     var lifted by remember { mutableStateOf(0f) }
 
-    Column(
-        Modifier.fillMaxSize().padding(8.u),
-        verticalArrangement = Arrangement.spacedBy(7.u),
-    ) {
-        Label("HOUSE MEETING . NOTICES", size = 7.0, color = Amber.Dim, tracking = 0.16)
+    KitScreen(padding = MEETING_PADDING, gap = 16.dp) {
+        MeetingBand("HOUSE MEETING . NOTICES")
         Column(
             // Read at draw time rather than at composition: a drag is sixty frames a second and
             // the whole app has an allocation budget of about 0.5 MB/s.
@@ -293,26 +274,17 @@ fun NoticeScreen() {
                         onDragEnd = { if (-lifted >= threshold) actions.dismissNotice() else lifted = 0f },
                         onDragCancel = { lifted = 0f },
                     ) { _, delta -> lifted = (lifted + delta).coerceAtMost(0f) }
-                },
+                }
+                .fillMaxWidth().border(1.dp, Ramp.Line)
+                .padding(horizontal = 16.dp, vertical = 14.dp),
         ) {
-            InfoBox(border = Amber.Bright, padding = 8.u, gap = 5.u) {
-                Label("NOTICE 1 OF 1", size = 6.0, color = Amber.Dim, tracking = 0.14)
-                Label(
-                    Notifications.notice.body,
-                    size = Notifications.notice.bodySize, color = Amber.Bright, lineHeight = 1.7,
-                )
-            }
+            Words(Notifications.notice.body, size = 28, lineHeight = 1.08)
         }
-        Box(Modifier.weight(1f))
-        // The gesture said in words, once, where the button used to be. Not a control: it has no
-        // border, no tap target and nothing to press.
-        Label(
-            "SWIPE UP TO DISMISS",
-            modifier = Modifier.fillMaxWidth(),
-            size = 6.5, color = Amber.Faint, tracking = 0.14, align = TextAlign.Center,
-        )
     }
 }
+
+/** The screens that open on [MeetingBand] sit a little lower than `kit.py`'s default. */
+private val MEETING_PADDING = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 20.dp)
 
 /**
  * Discussion: **a clock and one control.**
@@ -325,52 +297,51 @@ fun NoticeScreen() {
  * from the same number rather than from the time.
  */
 @Composable
-fun DiscussionScreen(vals: PanelVals) {
+fun DiscussionScreen(vals: PanelVals) = Mockup {
     val meeting = LocalMeeting.current
     val counts = meeting.counts
-    Column(
-        Modifier.fillMaxSize().padding(8.u),
-        verticalArrangement = Arrangement.spacedBy(7.u),
-    ) {
-        Label("HOUSE MEETING . DISCUSSION", size = 7.0, color = Amber.Dim, tracking = 0.16)
+    KitScreen(padding = MEETING_PADDING, gap = 16.dp) {
+        MeetingBand("HOUSE MEETING . DISCUSSION")
         Column(
             Modifier.weight(1f).fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(6.u, Alignment.CenterVertically),
+            verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Readout(vals.countdown.text, size = 62.0, color = Amber.Bright, lineHeight = 0.9)
-            Label("REMAINING", size = 6.5, color = Amber.Dim, tracking = 0.2)
+            Words(vals.countdown.text, size = 150, lineHeight = 0.75)
+            Tag("REMAINING", Ramp.Mid, tracking = 0.2)
         }
-        Row(Modifier.fillMaxWidth().height(5.u), horizontalArrangement = Arrangement.spacedBy(3.u)) {
-            repeat(counts.ready) { Box(Modifier.weight(1f).fillMaxHeight().background(Amber.Bright)) }
+        Row(Modifier.fillMaxWidth().height(10.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            repeat(counts.ready) { Box(Modifier.weight(1f).fillMaxHeight().background(Ramp.Ink)) }
             repeat(counts.seats - counts.ready) {
-                Box(Modifier.weight(1f).fillMaxHeight().background(Amber.Edge))
+                Box(Modifier.weight(1f).fillMaxHeight().border(1.dp, Ramp.Line))
             }
         }
-        Label(
-            "${counts.ofLiving(counts.ready)} READY . UNANIMOUS SKIPS AHEAD",
-            modifier = Modifier.fillMaxWidth(),
-            size = 6.5, color = Amber.Faint, tracking = 0.12, align = TextAlign.Center,
+        KitCaption(
+            "${counts.ofLiving(counts.ready)} READY", Palette.DARK, Modifier.fillMaxWidth(),
+            size = 24, center = true,
         )
         // Unanimous is a count of six phones. This one says only that this phone is done.
-        PanelButton(
-            if (meeting.ready) "YOU ARE READY" else "READY TO VOTE",
-            border = if (meeting.ready) Amber.Faint else Amber.Dim,
-            ink = if (meeting.ready) Amber.Dim else Amber.Bright,
-            tracking = 0.18, verticalPadding = 11.u,
-            onClick = if (meeting.ready) null else LocalActions.current.sayReady,
-        )
+        val ready = meeting.ready
+        Box(
+            Modifier.fillMaxWidth().height(64.dp).border(2.dp, if (ready) Ramp.Line else Ramp.Ink)
+                .then(if (ready) Modifier else Modifier.tap(LocalActions.current.sayReady)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Words(
+                if (ready) "YOU ARE READY" else "READY TO VOTE",
+                size = 32, color = if (ready) Ramp.Mid else Ramp.Ink, tracking = 0.08, lineHeight = 1.0,
+            )
+        }
     }
 }
 
 /**
  * The vote. **You see how many have voted, never what.**
  *
- * **Not voting counts as a Skip** rather than as an abstention (D-075) — which is what the line at
- * the foot of the screen has always said. Combined with ties resolving to Skip, the whole weight of
- * inaction sits behind restraining nobody. *(The KDoc here used to claim the opposite, carried over
- * from the GDD paragraph D-075 reversed; the screen's own copy was right and the comment above it
- * was not.)*
+ * **Not voting counts as a Skip** rather than as an abstention (D-075). Combined with ties
+ * resolving to Skip, the whole weight of inaction sits behind restraining nobody. *(The KDoc here
+ * used to claim the opposite, carried over from the GDD paragraph D-075 reversed.)* The line at the
+ * foot used to say so too; the mockup cut it to the count, and the rule is the briefing's to teach.
  *
  * ### The rows echo your finger. Nothing on this screen knows the result
  *
@@ -390,31 +361,26 @@ fun DiscussionScreen(vals: PanelVals) {
  * only a player outside the system sees what anybody chose.
  */
 @Composable
-fun VoteScreen(vals: PanelVals) {
+fun VoteScreen(vals: PanelVals) = Mockup {
     val actions = LocalActions.current
     val meeting = LocalMeeting.current
     val counts = meeting.counts
 
-    Column(
-        Modifier.fillMaxSize().padding(8.u),
-        verticalArrangement = Arrangement.spacedBy(5.u),
-    ) {
+    KitScreen(padding = MEETING_PADDING, gap = 10.dp) {
         Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Bottom,
+            Modifier.fillMaxWidth().background(Ramp.Ink).padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Label("RESTRAIN . VOTE", size = 7.0, color = Amber.Dim, tracking = 0.14)
-            Readout(vals.countdown.text, size = 13.0, color = Amber.Bright)
+            Words("RESTRAIN . VOTE", Modifier.weight(1f), size = 30, color = Amber.Black, lineHeight = 1.0)
+            Words(vals.countdown.text, size = 56, color = Amber.Black, lineHeight = 0.75)
         }
 
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.u)) {
+        Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             for (name in meeting.names) {
-                val held = meeting.holds(name)
                 VoteRow(
                     label = name,
-                    note = if (held) "YOUR VOTE" else null,
-                    held = held,
+                    held = meeting.holds(name),
                     onPick = { actions.chooseVote(VoteChoice.Named(name)) },
                 )
             }
@@ -422,38 +388,37 @@ fun VoteScreen(vals: PanelVals) {
             // the one row that is not a person.
             VoteRow(
                 label = "SKIP",
-                note = "RESTRAIN NOBODY",
                 held = meeting.skipping,
                 dashed = true,
                 onPick = { actions.chooseVote(VoteChoice.Skip) },
             )
         }
 
+        KitSpacer()
         // The house's count. It does not move when you lock yours in.
-        Label(
-            "${counts.ofLiving(counts.voted)} VOTED . NOT VOTING COUNTS AS A SKIP",
-            modifier = Modifier.fillMaxWidth(),
-            size = 6.5, color = Amber.Faint, tracking = 0.1, align = TextAlign.Center,
+        KitCaption(
+            "${counts.ofLiving(counts.voted)} VOTED", Palette.DARK, Modifier.fillMaxWidth(),
+            size = 24, center = true,
         )
         // Three states, all of them facts about this phone: nothing chosen yet, something chosen
         // and not yet handed over, and a ballot that has been cast and cannot be taken back.
         // **One control through all three**, present and inert in the first and last rather than
-        // absent, so the block under the player's thumb never moves and never changes height.
+        // absent, so the block under the player's thumb never moves and never changes height. The
+        // ink says which: full while it will take a hold, dim with nothing chosen, mid once cast.
         val live = meeting.choice != null && !meeting.locked
-        HoldToConfirm(
+        KitHold(
             if (meeting.locked) VOTE_CAST else VOTE_HOLD,
-            restingNote = when {
-                meeting.locked -> VOTE_DONE_NOTE
-                meeting.choice == null -> VOTE_EMPTY_NOTE
-                else -> HOLD_NOTE
-            },
+            Palette.DARK.copy(
+                ink = when {
+                    meeting.locked -> Ramp.Mid
+                    live -> Ramp.Ink
+                    else -> Ramp.Dim
+                },
+            ),
             onConfirm = actions.readyToVote,
             enabled = live,
-            spent = Amber.Bright,
-            track = Amber.Edge,
-            border = if (live) Amber.Dim else Amber.Faint,
-            ink = if (live) Amber.Bright else Amber.Dim,
-            noteInk = Amber.Faint,
+            size = 32,
+            note = false,
         )
     }
 }
@@ -469,25 +434,28 @@ fun VoteScreen(vals: PanelVals) {
 @Composable
 private fun VoteRow(
     label: String,
-    note: String?,
     held: Boolean,
     onPick: () -> Unit,
     dashed: Boolean = false,
 ) {
-    val edged =
-        if (dashed) Modifier.dashedBorder(if (held) Amber.Bright else Amber.Faint)
-        else Modifier.border(1.u, if (held) Amber.Bright else Amber.Edge)
+    val edge = if (held) Ramp.Ink else Ramp.Line
+    // YOUR VOTE on the row you hold, whichever it is, and SKIP's meaning on SKIP while it is not.
+    val note = if (held) "YOUR VOTE" else if (dashed) "RESTRAIN NOBODY" else null
     Row(
-        Modifier.fillMaxWidth()
-            .then(edged)
-            .background(if (held) Amber.Edge else Color.Transparent)
-            .tapTarget(onPick)
-            .padding(horizontal = 7.u, vertical = 6.u),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        Modifier.fillMaxWidth().heightIn(min = 56.dp)
+            // The fill first: a dashed edge is drawn behind the content, and a fill drawn after it
+            // would cover it.
+            .then(if (held) Modifier.background(Ramp.Ink) else Modifier)
+            .then(if (dashed) Modifier.dashedBorder(edge, 1.dp) else Modifier.border(1.dp, edge))
+            .tap(onPick)
+            .padding(horizontal = 14.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Label(label, size = 8.0, color = if (held) Amber.Bright else Amber.Mid)
-        if (note != null) Label(note, size = 6.0, color = Amber.Dim)
+        Words(label, Modifier.weight(1f), size = 28, color = if (held) Amber.Black else Ramp.Ink, lineHeight = 1.0)
+        if (note != null) {
+            Words(note, size = 22, color = if (held) Amber.Black else Ramp.Dim, lineHeight = 1.0)
+        }
     }
 }
 
@@ -511,56 +479,44 @@ private fun VoteRow(
  * names against it (D-075, `GhostMeetingScreen`) — and can act on none of it.
  */
 @Composable
-fun TallyScreen(vals: PanelVals) {
-    Column(
-        Modifier.fillMaxSize().padding(8.u),
-        verticalArrangement = Arrangement.spacedBy(6.u),
-    ) {
-        Label("RESTRAIN . RESULT", size = 7.0, color = Amber.Dim, tracking = 0.16)
+fun TallyScreen(vals: PanelVals) = Mockup {
+    KitScreen {
+        KitHeader("RESTRAIN . RESULT", Palette.DARK)
 
         // **The empty middle is the result** (the owner's 2026-08-24 ruling). Three rows of names
         // and counts used to sit here and there is nothing to put in their place: what the living
         // are told is two facts, and a screen that filled the gap would be filling it with
         // something nobody ruled. The room is looking up from their phones by now.
-        Box(Modifier.weight(1f))
+        KitSpacer()
 
         // **The two facts as one block, and the order is the sentence.** `6 OF 6 VOTED` then
         // `MARCUS WAS RESTRAINED` — how much of the room took part, then what it decided — drawn
-        // adjacent because they are read as one statement and separated by half the panel they
-        // would be read as two. The count is dim and outlined, the outcome is the design's inverted
-        // amber block, so which of the two the eye lands on first is not left to the layout.
+        // adjacent because they are read as one statement. The count is outlined and the outcome
+        // is the screen's one solid block, so which the eye lands on first is not left to chance.
         Box(
-            Modifier.fillMaxWidth().border(1.u, Amber.Edge).padding(7.u),
+            Modifier.fillMaxWidth().border(1.dp, Ramp.Line).padding(14.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Readout(vals.votedLine, size = 15.0, color = Amber.Mid, lineHeight = 1.0)
+            Words(vals.votedLine, size = 28, lineHeight = 1.0, align = TextAlign.Center)
         }
-
         Box(
-            Modifier.fillMaxWidth().background(Amber.Bright).padding(8.u),
+            Modifier.fillMaxWidth().background(Ramp.Ink).padding(horizontal = 14.dp, vertical = 18.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Label(
+            Words(
                 vals.restrainedLine,
-                size = 8.0, color = Amber.Black, tracking = 0.14, align = TextAlign.Center,
+                size = 30, color = Amber.Black, tracking = 0.02, lineHeight = 1.0, align = TextAlign.Center,
             )
         }
 
-        // The bar drains rather than fills, and it is the same number as the line under it — two
-        // weights of 9 and 6 out of a fifteen-second window, now one value drawn twice. A weight
-        // of zero still draws its own hairline, so each half appears only while it has width.
-        Column(verticalArrangement = Arrangement.spacedBy(5.u)) {
-            val left = vals.countdown.remaining
-            Row(Modifier.fillMaxWidth().height(6.u), horizontalArrangement = Arrangement.spacedBy(1.u)) {
-                if (left > 0f) Box(Modifier.weight(left).fillMaxHeight().background(Amber.Dim))
-                if (left < 1f) Box(Modifier.weight(1f - left).fillMaxHeight().background(Amber.Edge))
-            }
-            Label(
-                "LIGHTS OUT IN ${vals.countdown.text}",
-                modifier = Modifier.fillMaxWidth(),
-                size = 6.5, color = Amber.Dim, tracking = 0.14, align = TextAlign.Center,
-            )
+        // The bar drains rather than fills, and it is the same number as the line under it: one
+        // value drawn twice.
+        Box(Modifier.fillMaxWidth().height(8.dp).border(1.dp, Ramp.Faint)) {
+            Box(Modifier.fillMaxWidth(vals.countdown.remaining).fillMaxHeight().background(Ramp.Line))
         }
+        KitCaption(
+            "LIGHTS OUT IN ${vals.countdown.text}", Palette.DARK, Modifier.fillMaxWidth(),
+            size = 24, center = true,
+        )
     }
 }
-

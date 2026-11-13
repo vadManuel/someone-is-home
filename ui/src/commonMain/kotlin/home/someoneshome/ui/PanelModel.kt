@@ -1869,7 +1869,9 @@ class PanelVals(
          *
          * **`Work` and `ScanCaught` joined with the restyle** (D-202): the work order's current
          * row and the caught scan's BEGIN are each the screen's one solid block, full width, with
-         * black words on it, and the guard named both the moment they were drawn.
+         * black words on it, and the guard named both the moment they were drawn. **So did the
+         * meeting's seven**: ANSWER on the two calls, I AM HERE on both walk-ins, and the band the
+         * notice, the discussion and the vote open on. Every lamp in the house is white by then.
          *
          * Written down here rather than left as a `when` branch for [BUZZING]'s reason exactly: it
          * is the kind of set a new screen joins, and a new amber block on a screen that is not in
@@ -1878,6 +1880,8 @@ class PanelVals(
         val AMBER_BLOCKS: Set<ScreenId> = setOf(
             ScreenId.Tally, ScreenId.WinInsiders, ScreenId.Notify, ScreenId.Banner,
             ScreenId.Work, ScreenId.ScanCaught,
+            ScreenId.Call, ScreenId.Found, ScreenId.Assemble, ScreenId.Ghost2,
+            ScreenId.Notice, ScreenId.Discussion, ScreenId.Vote,
         )
 
         val BUZZING: Set<ScreenId> = setOf(

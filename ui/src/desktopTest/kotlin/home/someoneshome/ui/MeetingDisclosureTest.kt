@@ -176,7 +176,7 @@ class MeetingDisclosureTest {
                 onAllNodes(hasText(OutsideView.CAST_FOR, substring = true)).fetchSemanticsNodes().size,
                 "the vote screen drew a pairing",
             )
-            onNodeWithText("4 OF 6 VOTED . NOT VOTING COUNTS AS A SKIP").assertExists()
+            onNodeWithText("4 OF 6 VOTED").assertExists()
         }
 
     /**
