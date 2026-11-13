@@ -395,7 +395,9 @@ fun ScanScreen(vals: PanelVals) {
     val go = navigator()
     val ink = Amber.Black
     Column(
-        Modifier.fillMaxSize().background(Amber.Bright).padding(8.u),
+        // The ground runs to the top edge; the content starts under the safe area.
+        Modifier.fillMaxSize().background(Amber.Bright)
+            .padding(start = 8.u, end = 8.u, top = LocalPanelInsets.current.top, bottom = 8.u),
         verticalArrangement = Arrangement.spacedBy(7.u),
     ) {
         InvertedStatusRow("SCANNING")
@@ -468,47 +470,6 @@ fun ScanScreen(vals: PanelVals) {
             border = ink, ink = ink, size = 7.0, verticalPadding = 9.u,
             onClick = { go(ScreenId.Home) },
         )
-    }
-}
-
-/**
- * The status row the lit-field screens draw for themselves, in black on amber.
- *
- * They suppress the real status bar because they are inverted; drawing it here keeps the chrome
- * present rather than letting a lit screen become a different device.
- */
-@Composable
-fun InvertedStatusRow(carrier: String) {
-    val ink = Amber.Black
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(5.u),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Row(
-            Modifier.height(7.u),
-            horizontalArrangement = Arrangement.spacedBy(1.u),
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            val spent = ink.copy(alpha = 0.25f)
-            Block(2.u, 3.u, spent); Block(2.u, 5.u, spent); Block(2.u, 7.u, spent)
-        }
-        Column(
-            Modifier.width(7.u),
-            verticalArrangement = Arrangement.spacedBy(1.u),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Block(7.u, 1.u, ink); Block(5.u, 1.u, ink); Block(1.u, 1.u, ink)
-        }
-        Label(carrier, modifier = Modifier.weight(1f), size = 6.5, color = ink, tracking = 0.1)
-        Box(Modifier.size(7.u).border(1.u, ink, CircleShape), contentAlignment = Alignment.Center) {
-            Box(Modifier.size(3.u).background(ink))
-        }
-        Row(Modifier.width(11.u).height(6.u).border(1.u, ink.copy(alpha = 0.55f)).padding(1.u)) {
-            Box(Modifier.weight(1f).fillMaxHeight().background(ink))
-            Box(Modifier.weight(1f).fillMaxHeight().background(ink))
-            Box(Modifier.weight(1f).fillMaxHeight())
-        }
     }
 }
 

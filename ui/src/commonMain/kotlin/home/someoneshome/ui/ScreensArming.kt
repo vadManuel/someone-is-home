@@ -350,47 +350,10 @@ fun LockScreen(vals: PanelVals) {
                 val ground = if (set == LampState.UNSET) Amber.Bright else Color(set)
                 drawRect(if (heavy) ground.copy(alpha = NOTIFIED_DIM) else ground)
             }
-            .padding(start = 10.u, end = 10.u, top = 10.u, bottom = 9.u)
+            // The ground above runs to the top edge; the content starts under the safe area.
+            .padding(start = 10.u, end = 10.u, top = LocalPanelInsets.current.top, bottom = 9.u)
     ) {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(5.u),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Row(
-                Modifier.height(7.u),
-                horizontalArrangement = Arrangement.spacedBy(1.u),
-                verticalAlignment = Alignment.Bottom,
-            ) {
-                val spent = ink.copy(alpha = 0.25f)
-                Block(2.u, 3.u, spent)
-                Block(2.u, 5.u, spent)
-                Block(2.u, 7.u, spent)
-            }
-            Column(
-                Modifier.width(7.u),
-                verticalArrangement = Arrangement.spacedBy(1.u),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Block(7.u, 1.u, ink)
-                Block(5.u, 1.u, ink)
-                Block(1.u, 1.u, ink)
-            }
-            Label(
-                "SOMEONE'S HOME",
-                modifier = Modifier.weight(1f),
-                size = 6.5, color = ink, tracking = 0.1,
-            )
-            Box(
-                Modifier.size(7.u).border(1.u, ink, CircleShape),
-                contentAlignment = Alignment.Center,
-            ) { Box(Modifier.size(3.u).background(ink)) }
-            Row(Modifier.width(11.u).height(6.u).border(1.u, ink.copy(alpha = 0.55f)).padding(1.u)) {
-                Box(Modifier.weight(1f).fillMaxHeight().background(ink))
-                Box(Modifier.weight(1f).fillMaxHeight().background(ink))
-                Box(Modifier.weight(1f).fillMaxHeight())
-            }
-        }
+        InvertedStatusRow("SOMEONE'S HOME")
 
         Readout(
             "21:04",

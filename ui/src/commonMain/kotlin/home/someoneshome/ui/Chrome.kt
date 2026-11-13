@@ -1,6 +1,15 @@
 package home.someoneshome.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.WindowInsets
@@ -41,158 +50,136 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 /**
- * The status bar — the one piece of chrome on screen for nearly the whole round.
+ * **The status strip: the one piece of chrome on screen for nearly the whole round** (D-204).
  *
- * It carries the perimeter as a **glyph**, so the fact is stated once rather than written out in
- * words on thirty screens, and so a revoked player's device says exactly what everyone else's
- * says. The signal bars go defunct the moment the round starts, because from then on the house owns
- * the network — a fiction and a rule at the same time.
+ * The mockup's strip, drawn by [StatusStrip] in mockup pixels under the top safe area. It says four
+ * things and only four: the signal the house took, what happened to you once something has (the
+ * carrier, D-078), whether the perimeter is armed, and the time. Files and carrying add the padlock.
  *
  * **Nothing here is role-dependent.** If a value in this function ever needs to consult the role,
  * that is the bug, not the feature.
  */
 @Composable
-fun StatusBar(vals: PanelVals, bandHeight: Dp = STATUS_BAR_HEIGHT, sideInset: Dp = 0.u) {
+fun StatusBar(vals: PanelVals) = Mockup {
+    StatusStrip(
+        ink = vals.stripInk, dim = vals.stripDim, edge = vals.stripEdge,
+        signal = vals.signalOn, signalOff = vals.signalOff,
+        carrier = vals.carrier,
+        perimeter = when {
+            vals.armedGlyph -> Perimeter.Armed
+            vals.disarmedGlyph -> Perimeter.Disarmed
+            else -> null
+        },
+        lock = vals.lockChip,
+        clock = vals.clock,
+        modifier = Modifier.padding(horizontal = 20.dp),
+    )
+}
+
+/** The perimeter's two states as the strip words them. */
+enum class Perimeter { Armed, Disarmed }
+
+/**
+ * **The mockup's status strip, in its own pixels** (D-204). Draw it inside [Mockup].
+ *
+ * 34 tall with a hairline beneath: three signal bars, the carrier taking what room is left, then
+ * the perimeter chip, the padlock and the clock. Every colour is passed in, because the same row is
+ * drawn amber on black, ink on bone, dimmed for concealment and black on the lantern's amber.
+ */
+@Composable
+fun StatusStrip(
+    ink: Color,
+    dim: Color,
+    edge: Color,
+    signal: Color,
+    signalOff: Color,
+    carrier: String,
+    perimeter: Perimeter?,
+    lock: Boolean,
+    clock: String?,
+    modifier: Modifier = Modifier,
+) {
     Row(
-        Modifier.fillMaxWidth().height(maxOf(bandHeight, STATUS_BAR_HEIGHT))
-            // The rule spans the full width; only the GLYPHS are held off the curve. A divider
-            // that stopped short of each edge would read as a shorter bar, not a safer one.
-            .edgeLine(PanelSide.Bottom, vals.edge)
-            .padding(horizontal = 6.u + sideInset),
+        modifier.fillMaxWidth().height(STRIP_HEIGHT.dp)
+            .edgeLine(PanelSide.Bottom, edge, 1.dp)
+            .padding(bottom = 5.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // Three bars, and after arming all three are spent. The house is the network now.
         Row(
-            Modifier.weight(LEFT_ZONE),
-            horizontalArrangement = Arrangement.spacedBy(5.u),
-            verticalAlignment = Alignment.CenterVertically,
+            Modifier.height(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            verticalAlignment = Alignment.Bottom,
         ) {
-            SignalBars(on = vals.signalOn, off = vals.signalOff)
-            ReceptionGlyph(vals.receptionInk)
-
-            Label(
-                vals.carrier,
-                size = 7.0, color = vals.dim, tracking = 0.06,
-                maxLines = 1, overflow = TextOverflow.Ellipsis,
-            )
+            Block(3.dp, 5.dp, signal)
+            Block(3.dp, 8.dp, signal)
+            Block(3.dp, 12.dp, signalOff)
         }
-
-        // THE MIDDLE IS EMPTY, ON EVERY DEVICE. Not "empty where there is an Island" -- the row
-        // is three zones and the middle is never used, so the layout owes nothing to hardware it
-        // cannot measure. Compose reports that a cutout EXISTS (displayCutout top=62) and nothing
-        // whatever about how wide it is, so any rule keyed on the pill's geometry would be a
-        // guess at Apple's numbers that silently goes wrong on the next phone.
-        //
-        // Reserved a little wider than the pill needs: the Island is about 32% of a 393pt panel,
-        // and this holds 36% clear.
-        Spacer(Modifier.weight(MIDDLE_ZONE))
-
-        Row(
-            Modifier.weight(RIGHT_ZONE),
-            horizontalArrangement = Arrangement.spacedBy(5.u, Alignment.End),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // The iris follows the panel's ink rather than being pinned to full intensity. The
-            // design hardcodes #FFC759 here, which left it the single brightest element on the
-            // very screens that dim everything else -- and a 7-unit lit ring is exactly the kind
-            // of thing that carries across a dark room when the text does not.
-            if (vals.armedGlyph) PerimeterGlyph(ring = vals.ink, core = vals.ink)
-            if (vals.disarmedGlyph) PerimeterGlyph(ring = vals.dim, core = vals.edge)
-
-            if (vals.lockChip) {
-                Box(Modifier.border(1.u, Amber.Dim).padding(horizontal = 2.u)) {
-                    Label("LOCK", size = 7.0, color = Amber.Bright, tracking = 0.06)
-                }
-            }
-
-            Readout(vals.clock, size = 11.0, color = vals.ink)
-            Battery(ink = vals.ink, edge = vals.dim)
+        Tag(
+            carrier, dim, Modifier.weight(1f), tracking = 0.04,
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
+        )
+        when (perimeter) {
+            Perimeter.Armed -> PerimeterChip("ARMED", ink = ink, core = ink)
+            Perimeter.Disarmed -> PerimeterChip("DISARMED", ink = dim, core = edge)
+            null -> Unit
         }
+        if (lock) Padlock(ink)
+        if (clock != null) Words(clock, size = 22, color = ink, lineHeight = 1.0)
     }
 }
 
 /**
- * The status row's three zones: content at each end, nothing in the middle.
- *
- * Weights rather than widths, so the reserve scales with the panel instead of being a point count
- * that happens to be right on one phone.
- *
- * **Deliberately lopsided.** The right zone holds a clock and a battery and wants about 16% of
- * the panel; the left holds two glyphs AND the carrier, which is a word. Splitting the sides
- * evenly looked tidy and truncated UNREGISTERED to `UNREGISTER…` — a game-critical string
- * clipped to make room for space the right side was not using.
- *
- * **Sized so the middle is provably clear, not tuned until this pill happened to fit.** An
- * earlier pass widened the left zone until UNREGISTERED stopped ellipsizing, which pushed its
- * last character under the pill's left edge — trading a visible truncation for an invisible one.
- * Measured: the carrier has about 60 design units before the pill and UNREGISTERED wants 60.3.
- *
- * So REVOKED and RESTRAINED — the distinction D-078 exists to keep legible — fit whole, and
- * UNREGISTERED ellipsizes. That is the right one to lose: it is the fallback for a missing cause,
- * chosen because it "asserts only that you are out", and `UNREGISTER…` still asserts exactly that.
- * Clipping it under a cutout would not.
- *
- * ### ⚠️ It is not *room to spare* — the slot draws exactly ten characters and RESTRAINED is ten
- *
- * That sentence used to read *with room to spare* and it was wrong, on the word that matters most:
- * measured, the zone renders ten characters and truncates the eleventh, so the longer of the two
- * ways out of a round fits with **zero** margin. `StatusCarrierTest` holds both ends of that — the
- * two real words drawn to their last character, and UNREGISTERED cut at exactly ten — so a change
- * to this weight, to the tracking or to the glyphs beside it fails there rather than in a dark
- * house.
+ * The perimeter as a worded chip: the iris and the word, in a 1-unit box (D-204). One symbol in two
+ * intensities, so "the perimeter came down" reads as a change on something already looked at.
  */
-private const val LEFT_ZONE = 0.30f
-private const val MIDDLE_ZONE = 0.44f
-private const val RIGHT_ZONE = 0.26f
-
-/** Three bars, and after arming all three are spent. The house is the network now. */
 @Composable
-private fun SignalBars(on: Color, off: Color) {
+private fun PerimeterChip(word: String, ink: Color, core: Color) {
     Row(
-        Modifier.height(7.u),
-        horizontalArrangement = Arrangement.spacedBy(1.u),
-        verticalAlignment = Alignment.Bottom,
+        Modifier.border(1.dp, ink).padding(horizontal = 4.dp, vertical = 3.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Block(2.u, 3.u, on)
-        Block(2.u, 5.u, on)
-        Block(2.u, 7.u, off)
+        Box(Modifier.size(9.dp).border(1.dp, ink, CircleShape), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(3.dp).background(core))
+        }
+        Tag(word, ink, tracking = 0.04)
     }
 }
 
-/** The inverted-triangle reception mark, built from three rules the way the panel would. */
+/** The mockup's padlock, `M1 5.5h8v5.5H1z M3 5.5V2h4v3.5` on a 10 by 12 grid. */
 @Composable
-private fun ReceptionGlyph(ink: Color) {
-    Column(
-        Modifier.width(7.u),
-        verticalArrangement = Arrangement.spacedBy(1.u),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Block(7.u, 1.u, ink)
-        Block(5.u, 1.u, ink)
-        Block(1.u, 1.u, ink)
+private fun Padlock(ink: Color) {
+    Canvas(Modifier.size(10.dp, 12.dp).semantics { contentDescription = "Locked" }) {
+        val k = size.width / 10f
+        val stroke = Stroke(width = 1.5f * k, cap = StrokeCap.Square, join = StrokeJoin.Miter)
+        drawRect(ink, topLeft = Offset(1f * k, 5.5f * k), size = Size(8f * k, 5.5f * k), style = stroke)
+        val shackle = Path().apply {
+            moveTo(3f * k, 5.5f * k); lineTo(3f * k, 2f * k); lineTo(7f * k, 2f * k); lineTo(7f * k, 5.5f * k)
+        }
+        drawPath(shackle, ink, style = stroke)
     }
 }
 
 /**
- * The perimeter iris: a lit ring with a lit core when armed, the same iris drained when not.
+ * **The strip the lantern and the scan draw for themselves**, black on their amber (D-204).
  *
- * One symbol in two intensities rather than two symbols, so "the perimeter came down" reads as a
- * state change on something the player has been looking at all evening.
+ * They suppress the shared strip because their ground is the lamp; this keeps the chrome present
+ * rather than letting a lit screen become a different device. No clock: the lantern draws its own,
+ * large.
  */
 @Composable
-private fun PerimeterGlyph(ring: Color, core: Color) {
-    Box(Modifier.size(7.u).border(1.u, ring, CircleShape), contentAlignment = Alignment.Center) {
-        Box(Modifier.size(3.u).background(core))
-    }
+fun InvertedStatusRow(carrier: String) = Mockup {
+    StatusStrip(
+        ink = Amber.Black, dim = Amber.Black, edge = Amber.Black,
+        signal = Ramp.Faint, signalOff = Ramp.Faint,
+        carrier = carrier, perimeter = Perimeter.Armed, lock = false, clock = null,
+    )
 }
 
-@Composable
-private fun Battery(ink: Color, edge: Color) {
-    Row(Modifier.width(11.u).height(6.u).border(1.u, edge).padding(1.u)) {
-        Box(Modifier.weight(1f).fillMaxHeight().background(ink))
-        Box(Modifier.weight(1f).fillMaxHeight().background(ink))
-        Box(Modifier.weight(1f).fillMaxHeight())
-    }
-}
+/** The strip's height in mockup pixels. */
+private const val STRIP_HEIGHT = 34
 
 /**
  * The device screen: ground, status bar, and the content area every screen fills.
@@ -257,21 +244,14 @@ fun PanelFrame(
     val safeTop = insets.top
     val safeBottom = insets.bottom
 
-    // THE SCREEN'S CORNERS ARE ROUND, and the status row is the one thing that lives up in them.
-    // iOS reports NO horizontal safe-area inset in portrait — measured, not assumed — so nothing
-    // in the top band is held off the curve by the system, and the row's own 6u is not enough.
-    val sideInset = insets.side
-    val statusHeight = if (vals.statusVisible) STATUS_BAR_HEIGHT else 0.u
-
-    // THE ROW OCCUPIES THE WHOLE BAND THE ISLAND SITS IN, rather than being a 17u strip placed
-    // somewhere inside it. Its glyphs centre vertically, so they come out level with the Island
-    // the way the system's own bar does — and its bottom rule lands exactly on the safe-area
-    // boundary, CLEAR of the Island, instead of being crossed by the pill halfway along.
-    //
-    // Both earlier attempts got this wrong in visible ways: flush to y=0 put the row above the
-    // Island in the corner radius, and centring a 17u strip put the rule behind it.
-    val statusBand = if (vals.statusVisible) maxOf(safeTop, statusHeight) else 0.u
-    val contentTop = if (vals.statusVisible) 0.u else safeTop
+    // THE STRIP SITS UNDER THE ISLAND, NOT BESIDE IT (D-204). The band the Island takes is left
+    // as ground, and the strip starts at the safe area's edge, so nothing the strip draws can go
+    // under the pill whatever width the next phone's pill turns out to be. The inverted screens
+    // draw their own strip, and their ground is the lamp, so it runs to the top edge with the
+    // Island on bare light: the frame does not inset them, and each pads its own content by the
+    // safe area inside its ground.
+    val statusBand = if (vals.statusVisible) safeTop + STATUS_BAR_HEIGHT else 0.u
+    val overlayTop = if (vals.statusVisible) statusBand else safeTop
 
     // How tall the banner turned out to be, measured at layout. Read back as room for the content
     // only while there IS an overlay, so a banner that leaves does not leave its hole behind.
@@ -290,17 +270,16 @@ fun PanelFrame(
             if (vals.isPre) Box(Modifier.fillMaxSize().background(Amber.Bone))
 
             Column(Modifier.fillMaxSize()) {
-                // The status row STAYS in the Island's band, which is what the row was already
-                // shaped for: signal at the left ear, clock and battery at the right, the way
-                // the system's own bar is laid out. Moving it down would waste the one strip of
-                // screen the Island has already taken.
-                if (vals.statusVisible) StatusBar(vals, bandHeight = statusBand, sideInset = sideInset)
+                if (vals.statusVisible) {
+                    Spacer(Modifier.height(safeTop))
+                    StatusBar(vals)
+                }
                 // BOTTOM AS WELL AS TOP. The home indicator takes 34pt and the boot screen's
                 // UPTIME line, progress bar and STARTING label were sitting under it — fixing
                 // only the Island moved the collision to the other end of the panel.
                 Column(
                     Modifier.fillMaxWidth().weight(1f)
-                        .padding(top = contentTop + bannerRoom, bottom = safeBottom),
+                        .padding(top = bannerRoom, bottom = safeBottom),
                     content = content,
                 )
             }
@@ -316,7 +295,7 @@ fun PanelFrame(
             // keeps the rule where the rule is: this box is the region an overlay may occupy.
             Box(
                 Modifier.fillMaxSize()
-                    .padding(top = statusBand + contentTop, bottom = safeBottom)
+                    .padding(top = overlayTop, bottom = safeBottom)
                     .clipToBounds()
             ) {
                 // Measured on a wrapper rather than asked of the banner, so the overlay slot stays
@@ -498,12 +477,13 @@ private val SCAN_LINE_INK: Color = Color.Black.copy(alpha = 0.32f)
 private val SCAN_LINE_INK_LIT: Color = Color.Black.copy(alpha = 0.08f)
 
 /**
- * The status row's height, which the overlay and the content inset both measure against.
+ * The strip's height in the panel's units, which the overlay and the content inset both measure
+ * against: [STRIP_HEIGHT] mockup pixels, carried across the [Mockup] bridge.
  *
- * Named rather than repeated: it was written as a bare `17.u` in two places, and the two are
- * required to agree or a banner lands on top of the one row that must never move.
+ * Named rather than repeated: the two are required to agree or a banner lands on top of the one row
+ * that must never move.
  */
-val STATUS_BAR_HEIGHT: Dp = 17.u
+val STATUS_BAR_HEIGHT: Dp = (STRIP_HEIGHT * DESIGN_WIDTH / MOCKUP_WIDTH).dp
 
 /**
  * How far the panel drops for the two notifications that dim the house (D-118).

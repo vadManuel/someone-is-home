@@ -96,10 +96,14 @@ class ScreenshotTest {
      * not the screen. This renders every screen at 720 by 1520 -- the mockup at twice size -- into
      * `build/screens-mockup/`, one role, so a restyled screen can be laid beside the mockup's own
      * render. A viewer, not an assertion.
+     *
+     * The top inset is the mockup's 36-pixel camera band, so the status strip lands where the
+     * mockup draws it (D-204) and the two renders line up row for row.
      */
     @OptIn(ExperimentalTestApi::class, ExperimentalComposeUiApi::class)
     @Test
     fun renderEveryScreenAtMockupSize() {
+        val cameraBand = PanelInsets(top = (36f * DESIGN_WIDTH / MOCKUP_WIDTH).dp)
         val dir = File("build/screens-mockup").apply { mkdirs() }
         for (id in ScreenId.entries) {
             val outBy = when (id) {
@@ -110,7 +114,7 @@ class ScreenshotTest {
             runDesktopComposeUiTest(width = 720, height = 1520) {
                 setContent {
                     Box(Modifier.fillMaxSize().background(Color.Black)) {
-                        DeviceCanvas(insets = PanelInsets()) {
+                        DeviceCanvas(insets = cameraBand) {
                             Screen(PanelState(screen = id, outBy = outBy))
                         }
                     }

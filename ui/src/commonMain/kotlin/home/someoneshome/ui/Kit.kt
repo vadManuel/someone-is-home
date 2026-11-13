@@ -170,7 +170,15 @@ fun Words(
  * strip. Chrome a player learns once and then does not read.
  */
 @Composable
-fun Tag(text: String, color: Color, modifier: Modifier = Modifier, align: TextAlign? = null) {
+fun Tag(
+    text: String,
+    color: Color,
+    modifier: Modifier = Modifier,
+    align: TextAlign? = null,
+    tracking: Double = 0.08,
+    maxLines: Int = Int.MAX_VALUE,
+    overflow: TextOverflow = TextOverflow.Clip,
+) {
     BasicText(
         text = text,
         modifier = modifier,
@@ -179,9 +187,11 @@ fun Tag(text: String, color: Color, modifier: Modifier = Modifier, align: TextAl
             fontSize = 12.sp,
             lineHeight = 12.sp,
             color = color,
-            letterSpacing = 0.08.em,
+            letterSpacing = tracking.em,
             textAlign = align ?: TextAlign.Unspecified,
         ),
+        maxLines = maxLines,
+        overflow = overflow,
     )
 }
 

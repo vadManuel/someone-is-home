@@ -810,21 +810,30 @@ class PanelVals(
         else -> ""
     }
 
-    /** Once the round starts the house owns the network: no bars on any live screen. */
-    val signalOn: Color = if (isPre) Amber.BoneInk else Amber.Edge
-
     /**
-     * The reception mark drops to the defunct intensity while reconnecting.
-     *
-     * The lamp holds its last authorised state throughout — that is the rule, and it is why the
-     * screen says so in words — but the *chrome* carries no such obligation, and a healthy-looking
-     * link above a body announcing the link is gone is the screen contradicting itself.
+     * **The strip's ink: the brightest thing on it** (D-204). Bone ink before arming, and on a
+     * concealment screen (D-077) `#C08A2E` like everything else there.
      */
-    val receptionInk: Color get() = if (state.screen == ScreenId.Disconnect) Amber.Edge else ink
+    val stripInk: Color = when {
+        isPre -> Amber.BoneInk
+        concealed -> Ramp.Dim
+        else -> Ramp.Ink
+    }
+
+    /** The carrier's ink, and the drained perimeter chip's. */
+    val stripDim: Color = if (isPre) Amber.BoneDim else Ramp.Dim
+
+    /** The strip's hairline, and the drained chip's core. */
+    val stripEdge: Color = if (isPre) Amber.BoneEdge else Ramp.Faint
+
+    /** Once the round starts the house owns the network: no bars on any live screen. */
+    val signalOn: Color = if (isPre) Amber.BoneInk else Ramp.Faint
+
+    /** The third bar: unlit on the bone screens, until the Residents' ending gives it back. */
     val signalOff: Color = when {
         isPre && state.screen != ScreenId.WinResidents -> Amber.BoneEdge
         isPre -> Amber.BoneInk
-        else -> Amber.Edge
+        else -> Ramp.Faint
     }
 
     /**
@@ -839,7 +848,11 @@ class PanelVals(
     /** The same iris, drained. An unarmed perimeter drawn like the defunct bars, not a new symbol. */
     val disarmedGlyph: Boolean = state.screen == ScreenId.WinResidents
 
-    val lockChip: Boolean = state.screen == ScreenId.Files || state.screen == ScreenId.Lock
+    /**
+     * The padlock: on Files and while carrying (D-168, D-204), the two places nothing else opens.
+     * The lantern draws its own strip and carries none.
+     */
+    val lockChip: Boolean = state.screen == ScreenId.Files || state.carrying != null
 
     val clock: String = when {
         state.screen == ScreenId.WinResidents -> "21:38"

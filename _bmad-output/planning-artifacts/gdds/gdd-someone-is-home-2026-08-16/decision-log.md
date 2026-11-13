@@ -1116,6 +1116,8 @@ verifiable anywhere but on plural physical devices in a dark room.
 
 ### D-091 · **The status row is three zones and the middle is empty on every device — decided**
 
+*Retired by D-204 (2026-11-13): the strip moved under the Island, so nothing sits beside the pill.*
+
 Not "empty where there is a cutout". **Compose reports that a cutout exists and nothing whatever
 about how wide it is**, so any rule keyed on the pill is a guess at Apple's geometry that goes
 quietly wrong on the next handset. The middle is simply never used, and the layout owes nothing to
@@ -4374,6 +4376,54 @@ saying so would tell somebody who had been reading.
 | `Rules.kt` `meetingCalled` | clears the jam and the isolations | also frees the station |
 | `FlowModel.arrive` | — | leaving the station's two screens sends the leave |
 | `LobbyOverTransport` `onLost` | releases the seat on the desk | also asks the rules to free the station |
+
+---
+
+## Revision 44 — the status strip moves under the Island
+
+*Ruled by the owner 2026-11-13, porting the chrome in D-202's restyle. The mockup draws the strip
+below a 36px camera band and fills the row; D-091 kept it in the Island's band with the middle
+third empty. Both could not stand.*
+
+### D-204 · **The status strip sits under the Island, laid out as the mockup draws it — decided**
+
+**Measured, the mockup's strip cannot share the Island's band.** At 360 its right group (the ARMED
+chip, the padlock on Files, the clock) starts 180 units into the 320-unit row, 198 without the
+padlock; an iPhone 16's Island covers roughly units 102 to 218 of it. Kept in the band, the chip
+runs 20 to 40 units under the pill, which is the fault D-091 was written to stop.
+
+**So the strip moves down instead of shrinking.** It is drawn 34 tall directly under the top safe
+area, 20 in from each side, with a `#5A3D0E` hairline beneath it, and the band beside the Island is
+left as ground. A screen gives up 34 units of height for it: about 661 for content on an iPhone
+16, against the 690 the mockup's screens were drawn for.
+
+**D-091 is retired, not amended.** The empty middle existed because the row lived beside the pill.
+Nothing sits beside the pill now, so the row is the mockup's: signal, carrier, then the chips and
+the clock at the right. Its concession goes with it: the carrier slot is 169 units, and
+UNREGISTERED, which D-091 cut to `UNREGISTER…`, is drawn whole.
+
+**What the strip carries, from the mockup:**
+
+- three signal bars, spent in play (`#5A3D0E`), lit on the bone screens;
+- the carrier in Silkscreen 12, blank until a player is out, then REVOKED or RESTRAINED (D-078);
+- the perimeter as a **worded chip**, ARMED in ink or DISARMED drained, rather than a bare iris;
+- a padlock on Files and while carrying, the two places nothing else opens;
+- the clock, VT323 22.
+
+**The reception glyph and the battery go.** Neither said anything in the game, and both were lit
+edges on the one row that is on screen all evening. On a concealment screen (D-077) the strip's ink
+is `#C08A2E`, like everything else there.
+
+**The lantern and the scan keep drawing their own**, inverted: the same row in black on amber,
+without the clock, which the lantern draws large.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `Chrome.kt` `StatusBar`, `PanelFrame` | a 17-unit row in the Island's band, three zones | a 34-unit strip under the safe area, laid out as the mockup |
+| `ScreensWork.kt` `InvertedStatusRow`, `ScreensArming.kt` `LockScreen` | two copies of an inverted row with a battery | one inverted strip |
+| `PanelVals` `signalOn`, `signalOff`, `receptionInk`, `lockChip` | the old ramp; a reception mark; the lock on Files and the lantern | the strip's values in D-202's ramp; no reception mark; the lock on Files and while carrying |
+| `StatusCarrierTest` | UNREGISTERED cut at ten characters | every carrier drawn whole |
+| D-091 | the middle is empty on every device | retired |
 
 ## State after revision 12
 

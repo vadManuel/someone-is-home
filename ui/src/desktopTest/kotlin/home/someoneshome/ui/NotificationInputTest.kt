@@ -339,9 +339,10 @@ class NotificationInputTest {
         waitForIdle()
         val midSwipe = onRoot().captureToImage().toAwtImage()
 
-        // The band the status row occupies, in image pixels, taken from the insets rather than
-        // from a number typed here.
-        val band = (insets.top.value * midSwipe.width / DESIGN_WIDTH).toInt()
+        // The band the status row occupies, in image pixels, taken from the insets and the strip's
+        // own height rather than from a number typed here: the safe area, and the strip under it
+        // (D-204).
+        val band = ((insets.top + STATUS_BAR_HEIGHT).value * midSwipe.width / DESIGN_WIDTH).toInt()
 
         // THE TEST CHECKS ITSELF FIRST. `positionInRoot` is where the banner was laid out, before
         // any clipping — so this asserts the banner really is over the status band right now, and
