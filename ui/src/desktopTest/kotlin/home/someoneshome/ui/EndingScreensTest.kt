@@ -5,6 +5,9 @@ import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.runDesktopComposeUiTest
@@ -216,6 +219,58 @@ class EndingScreensTest {
             )
         }
     }
+
+    /**
+     * **NEW ROUND is a control on the host's phone and on nobody else's** (D-157, D-177).
+     *
+     * The words above can all be right while the press is wrong: a client row that kept a tap
+     * would be one phone asking the house for a round, and a host row that lost it would be an
+     * evening that ends wherever the first round did. So the click action itself is counted, on
+     * both endings and both phones.
+     */
+    @Test
+    fun newRoundTakesAPressOnlyOnTheHostsPhone() {
+        for (id in listOf(ScreenId.WinInsiders, ScreenId.WinResidents)) {
+            for (hosting in listOf(false, true)) {
+                runDesktopComposeUiTest(width = 600, height = 1300) {
+                    setContent {
+                        DeviceCanvas(insets = PanelInsets()) {
+                            Screen(
+                                PanelState(screen = id, role = PanelRole.Resident),
+                                lobby = if (hosting) LobbyModel.sample() else clientLobby(),
+                            )
+                        }
+                    }
+                    // A pressable row merges its words, so the press and the label are one node.
+                    val pressable = onAllNodes(hasClickAction() and hasText("NEW ROUND"))
+                        .fetchSemanticsNodes().size
+                    assertEquals(
+                        if (hosting) 1 else 0, pressable,
+                        "$id, hosting=$hosting: NEW ROUND offered $pressable presses",
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * **Settings: you can see all of what you cannot do, and press only the way back.**
+     *
+     * DO NOT DISTURB reads like a setting with a value, and that is the mockup's look, not a
+     * control: a working one would leave one phone undimmed under a banner every other phone
+     * dims for (D-118), a beacon. END SESSION is boxed like a button and is not one on any phone.
+     */
+    @Test
+    fun settingsOffersOnlyTheWayBack() =
+        runDesktopComposeUiTest(width = 600, height = 1300) {
+            setContent {
+                DeviceCanvas(insets = PanelInsets()) {
+                    Screen(PanelState(screen = ScreenId.Settings), lobby = LobbyModel.sample())
+                }
+            }
+            onAllNodes(hasClickAction()).assertCountEquals(1)
+            onAllNodesWithTag(BACK_CHEVRON).assertCountEquals(1)
+        }
 
     /**
      * The endings draw the meter and draw it as a percentage. `MeterDisclosureTest` owns the sweep

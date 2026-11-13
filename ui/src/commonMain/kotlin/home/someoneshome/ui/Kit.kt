@@ -481,15 +481,22 @@ fun KitRules(palette: Palette, modifier: Modifier = Modifier, content: @Composab
     Column(modifier.fillMaxWidth().edgeLine(PanelSide.Top, palette.faint, 1.dp), content = content)
 }
 
-/** `kit.py`'s `info`: a key and its value, on a hairline. */
+/** `kit.py`'s `info`: a key and its value, on a hairline. [minHeight] is its `h`. */
 @Composable
-fun KitInfo(key: String, value: String, palette: Palette, valueColor: Color = palette.ink) {
+fun KitInfo(
+    key: String,
+    value: String,
+    palette: Palette,
+    valueColor: Color = palette.ink,
+    minHeight: Dp = 48.dp,
+    keyColor: Color = palette.dim,
+) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 48.dp).edgeLine(PanelSide.Bottom, palette.faint, 1.dp),
+        Modifier.fillMaxWidth().heightIn(min = minHeight).edgeLine(PanelSide.Bottom, palette.faint, 1.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Words(key, Modifier.weight(1f), size = 22, color = palette.dim, lineHeight = 1.0)
+        Words(key, Modifier.weight(1f), size = 22, color = keyColor, lineHeight = 1.0)
         Words(value, size = 24, color = valueColor, lineHeight = 1.0)
     }
 }

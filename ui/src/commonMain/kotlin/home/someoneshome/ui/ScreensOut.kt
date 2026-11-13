@@ -7,14 +7,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -354,64 +352,55 @@ fun DisconnectScreen() = Mockup {
  * Everything is LOCKED and visibly so, which is the standing-condition pattern again — the list
  * is identical on every device, so nothing about which rows are locked can distinguish a player.
  * END SESSION is host-only and says so.
+ *
+ * Drawn as the mockup draws it (D-202): a hairline list rather than boxed rows, and the one
+ * boxed thing, END SESSION, at the foot.
  */
 @Composable
-fun SettingsScreen() {
-    Column(
-        Modifier.fillMaxSize().padding(8.u),
-        verticalArrangement = Arrangement.spacedBy(5.u),
-    ) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            BackChevron(ScreenId.Home, Amber.Dim)
-            Label("SETTINGS", size = 7.0, color = Amber.Dim, tracking = 0.16)
-        }
-
-        // Off, and inert. It is here for the device fiction and nothing else.
-        //
-        // A WORKING ONE WOULD BREAK THE BANNER DIM. Every banner goes to everyone at once and
-        // drops every lamp together; a player who had suppressed theirs would be the one phone
-        // in the room that did not react, which is a beacon. They would also miss the Egress
-        // alert. So it renders at the same intensity as the locked rows -- present, legible,
-        // and visibly not a control.
-        SettingRow("DO NOT DISTURB", "OFF", Amber.Faint, Amber.Faint)
-        SettingRow("NETWORK", "LOCKED", Amber.Faint, Amber.Faint)
-        SettingRow("PERMISSIONS", "LOCKED", Amber.Faint, Amber.Faint)
-        SettingRow("OCCUPANCY", "LOCKED", Amber.Faint, Amber.Faint)
-
-        Column(
-            Modifier.fillMaxWidth().border(1.u, Amber.Edge).padding(7.u),
-            verticalArrangement = Arrangement.spacedBy(4.u),
-        ) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Label("ABOUT", size = 7.5, color = Amber.Mid)
-                Label("HOUSE CONTROLLER", size = 7.5, color = Amber.Dim)
+fun SettingsScreen() = Mockup {
+    val p = Palette.DARK
+    KitScreen {
+        KitHeader("SETTINGS", p, back = ScreenId.Home)
+        KitRules(p) {
+            // Off, and inert: there is no tap on this row. It is here for the device fiction.
+            //
+            // A WORKING ONE WOULD BREAK THE BANNER DIM. Every banner goes to everyone at once and
+            // drops every lamp together; a player who had suppressed theirs would be the one phone
+            // in the room that did not react, which is a beacon. They would also miss the Egress
+            // alert. The mockup lifts its name to ink, a setting with a value, and keeps OFF in dim.
+            KitInfo("DO NOT DISTURB", "OFF", p, valueColor = p.dim, minHeight = 56.dp, keyColor = p.ink)
+            for (name in listOf("NETWORK", "PERMISSIONS", "OCCUPANCY")) {
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 56.dp)
+                        .edgeLine(PanelSide.Bottom, p.faint, 1.dp).padding(horizontal = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Words(name, Modifier.weight(1f), size = 26, color = p.dim, lineHeight = 1.0)
+                    Words("LOCKED", size = 26, color = p.dim, lineHeight = 1.0)
+                }
             }
-            Label(
-                "UPTIME 4331D 02:14\nFIRMWARE 1.0.4 . UNSUPPORTED",
-                size = 6.0, color = Amber.Faint, tracking = 0.1, lineHeight = 1.9,
-            )
+            Column(
+                Modifier.fillMaxWidth().edgeLine(PanelSide.Bottom, p.faint, 1.dp)
+                    .padding(horizontal = 2.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Row(Modifier.fillMaxWidth()) {
+                    Words("ABOUT", Modifier.weight(1f), size = 26, color = p.ink, lineHeight = 1.0)
+                    Words("HOUSE CONTROLLER", size = 26, color = p.mid, lineHeight = 1.0)
+                }
+                KitCaption("UPTIME 4331D 02:14\nFIRMWARE 1.0.4 . UNSUPPORTED", p)
+            }
         }
-
-        Box(Modifier.weight(1f))
-
+        KitSpacer()
+        // Not a control on any phone, the host's included: it says whose it would be.
         Row(
-            Modifier.fillMaxWidth().border(1.u, Amber.Dim).padding(8.u),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            Modifier.fillMaxWidth().cssBorder(1.dp, p.line).heightIn(min = 56.dp).padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Label("END SESSION", size = 7.5, color = Amber.Bright)
-            Label("HOST ONLY", size = 7.5, color = Amber.Dim)
+            Words("END SESSION", Modifier.weight(1f), size = 26, color = p.ink, lineHeight = 1.0)
+            Tag("HOST ONLY", p.dim)
         }
-    }
-}
-
-@Composable
-private fun SettingRow(name: String, value: String, nameInk: Color, valueInk: Color) {
-    Row(
-        Modifier.fillMaxWidth().border(1.u, Amber.Edge).padding(7.u),
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Label(name, size = 7.5, color = nameInk)
-        Label(value, size = 7.5, color = valueInk)
     }
 }
 
@@ -436,118 +425,26 @@ private fun SettingRow(name: String, value: String, nameInk: Color, valueInk: Co
  * over, nothing can be acted on — and they are not, because the app is played two to three rounds
  * in an evening (D-157) and a denominator printed at the end of round one is a denominator
  * carried into round two.
+ *
+ * ### The two endings are one set of parts in two palettes
+ *
+ * [EndingBanner], [HouseSignOff], [Revealed] and [NewRound] are drawn once and take the palette,
+ * so the dark ending and the lights-on one cannot disagree about a shape. Only the words, the
+ * palette and the order of the middle differ, which is how the mockup draws them.
  */
 @Composable
-fun WinInsidersScreen(vals: PanelVals) {
-    Column(Modifier.fillMaxSize()) {
-        Column(
-            Modifier.fillMaxWidth().background(Amber.Bright)
-                .padding(start = 10.u, end = 10.u, top = 14.u, bottom = 12.u),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Label("ROUND OVER", size = 6.5, color = Amber.Black, tracking = 0.24)
-            Label(
-                "INSIDERS\nWIN",
-                modifier = Modifier.padding(top = 6.u),
-                size = 21.0, color = Amber.Black, tracking = 0.1, lineHeight = 1.4,
-                align = TextAlign.Center,
-            )
-            Label(
-                "THE HOUSE REACHED THE INTERNET",
-                modifier = Modifier.padding(top = 7.u),
-                size = 7.0, color = Amber.Black, tracking = 0.1,
-            )
-        }
-
+fun WinInsidersScreen(vals: PanelVals) = Mockup {
+    val p = Palette.DARK
+    KitScreen(padding = ENDING_PADDING, gap = 10.dp) {
+        EndingBanner("INSIDERS WIN", "THE HOUSE REACHED THE INTERNET", p, lineSize = 24)
         // The house speaks last, and only to the people it owned.
-        vals.signOff?.let { HouseSignOff(it) }
-
-        Column(
-            Modifier.weight(1f).padding(horizontal = 8.u, vertical = 9.u),
-            verticalArrangement = Arrangement.spacedBy(6.u),
-        ) {
-            Label("THE INSIDERS WERE", size = 6.5, color = Amber.Dim, tracking = 0.16)
-            Column(verticalArrangement = Arrangement.spacedBy(4.u)) {
-                vals.revealed.forEach { NamedInsider(it) }
-            }
-            SummaryRow("EGRESS COMPLETE", "21:38 . BEACON")
-            SummaryRow("SYSTEM INTEGRITY", vals.integrityPercent)
-
-            Box(Modifier.weight(1f))
-
-            NewRound(Amber.Bright, Amber.Dim)
+        vals.signOff?.let { HouseSignOff(it, p) }
+        Revealed("THE INSIDERS WERE", vals.revealed, p, labelInk = p.mid)
+        KitRules(p) {
+            KitInfo("EGRESS COMPLETE", "21:38 . BEACON", p, valueColor = p.mid, minHeight = 40.dp)
+            KitInfo("SYSTEM INTEGRITY", vals.integrityPercent, p, valueColor = p.mid, minHeight = 40.dp)
         }
-    }
-}
-
-/**
- * **The house's message card, on both endings, on two phones.**
- *
- * Lifted out of the Insiders' ending so the Residents' ending can draw the identical card — the
- * house says something either way (`gdd.md:1051`) and a second hand-written copy of this block
- * would be the two screens disagreeing about its shape.
- *
- * **It signs as HOUSE** (D-201): the same sender as the thread, because there is one house and it
- * has one name. NUMBER WITHHELD is a player's voice, the one that says `you're up`, and the house
- * signing off under it would make the house two people.
- *
- * ### The palette is a parameter, because one of the two endings comes back to the light
- *
- * `WinResidents` is a lights-on bone screen and every sibling on it already takes its ink that
- * way — [BoneSummaryRow], [BoneNamedInsider], [NewRound]'s three colours. This card did not, so
- * `Unfortunate.` was **the one amber element on a sage screen**, and the reason nothing caught it
- * is that it reaches only an Insider's phone: a two-role layout sweep compares geometry and this
- * is a palette, so both roles rendered the same shape and only one of them rendered it in the
- * wrong colour. Passing the ink in keeps the *shape* shared, which is what the lift was for.
- */
-@Composable
-private fun HouseSignOff(
-    body: String,
-    border: Color = Amber.Dim,
-    label: Color = Amber.Dim,
-    stamp: Color = Amber.Faint,
-    ink: Color = Amber.Bright,
-) {
-    Column(
-        Modifier.padding(horizontal = 8.u).padding(top = 7.u)
-            .fillMaxWidth().border(1.u, border)
-            .padding(horizontal = 7.u, vertical = 6.u),
-        verticalArrangement = Arrangement.spacedBy(3.u),
-    ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Label("HOUSE", size = 5.5, color = label, tracking = 0.12)
-            Label("21:38", size = 5.5, color = stamp, tracking = 0.12)
-        }
-        Label(body, size = 9.0, color = ink, lineHeight = 1.5)
-    }
-}
-
-/**
- * One Insider, named, **with what was held over them printed underneath**.
- *
- * The row used to say `BLACKMAILED` beside the name, which is the fact without the content — and
- * the content is the half that matters. *Everyone learns who **and why** — the petty, mundane
- * thing each Insider was coerced with.* The line is the reveal; the label was a placeholder for it.
- */
-@Composable
-private fun NamedInsider(who: RevealedInsider) {
-    Column(
-        Modifier.fillMaxWidth().border(1.u, Amber.Bright).padding(7.u),
-        verticalArrangement = Arrangement.spacedBy(3.u),
-    ) {
-        Label(who.name, size = 10.0, color = Amber.Bright)
-        Label(who.line, size = 6.5, color = Amber.Dim, lineHeight = 1.5)
-    }
-}
-
-@Composable
-private fun SummaryRow(name: String, value: String) {
-    Row(
-        Modifier.fillMaxWidth().border(1.u, Amber.Edge).padding(horizontal = 7.u, vertical = 6.u),
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Label(name, size = 6.5, color = Amber.Dim)
-        Label(value, size = 6.5, color = Amber.Mid)
+        NewRound(p)
     }
 }
 
@@ -570,108 +467,126 @@ private fun SummaryRow(name: String, value: String) {
  * headline — the disclosure is identical, because it is one disclosure to one room.
  */
 @Composable
-fun WinResidentsScreen(vals: PanelVals) {
-    Column(Modifier.fillMaxSize()) {
-        Column(
-            Modifier.fillMaxWidth().background(Amber.SlateFill)
-                .edgeLine(PanelSide.Bottom, Amber.Slate)
-                .padding(start = 10.u, end = 10.u, top = 14.u, bottom = 12.u),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Label("ROUND OVER", size = 6.5, color = Amber.SlateInk, tracking = 0.24)
-            Label(
-                "RESIDENTS\nWIN",
-                modifier = Modifier.padding(top = 6.u),
-                size = 21.0, color = Amber.SlateInk, tracking = 0.1, lineHeight = 1.4,
-                align = TextAlign.Center,
-            )
-            Label(
-                "PERIMETER DISARMED . YOU CAN LEAVE",
-                modifier = Modifier.padding(top = 7.u),
-                size = 7.0, color = Amber.SlateInk, tracking = 0.1,
-            )
-        }
-
+fun WinResidentsScreen(vals: PanelVals) = Mockup {
+    val p = Palette.BONE
+    KitScreen(padding = ENDING_PADDING, gap = 8.dp) {
+        EndingBanner("RESIDENTS WIN", "PERIMETER DISARMED . YOU CAN LEAVE", p, lineSize = 20)
         // The house speaks last here too, and to the same two people. Nothing about a Resident win
         // makes it apologetic -- but the lights are on, so it says it in bone, like everything
         // else on this screen.
-        vals.signOff?.let {
-            HouseSignOff(
-                it,
-                border = Amber.BonePale,
-                label = Amber.BoneDim,
-                stamp = Amber.BoneFaint,
-                ink = Amber.BoneInk,
-            )
+        vals.signOff?.let { HouseSignOff(it, p) }
+        Row(Modifier.fillMaxWidth()) {
+            Words("THE RESIDENTS", Modifier.weight(1f), size = 22, color = p.dim, lineHeight = 1.0)
+            // Who is still standing, which everybody in the room can already see. A count of
+            // seats is not a count of Insiders and divides nothing out -- see
+            // PanelVals.integrityPercent for the number that would.
+            Words("4 OF 6", size = 22, color = p.dim, lineHeight = 1.0)
         }
-
-        Column(
-            Modifier.weight(1f).padding(horizontal = 8.u, vertical = 9.u),
-            verticalArrangement = Arrangement.spacedBy(6.u),
-        ) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Label("THE RESIDENTS", size = 6.5, color = Amber.BoneDim, tracking = 0.16)
-                // Who is still standing, which everybody in the room can already see. A count of
-                // seats is not a count of Insiders and divides nothing out -- see
-                // PanelVals.integrityPercent for the number that would.
-                Label("4 OF 6", size = 6.5, color = Amber.BoneFaint, tracking = 0.16)
-            }
-            Column(verticalArrangement = Arrangement.spacedBy(4.u)) {
-                listOf("ELLIOT" to "PRIYA", "MARCUS" to "ROSE").forEach { (a, b) ->
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.u)) {
-                        SurvivorChip(a, Modifier.weight(1f))
-                        SurvivorChip(b, Modifier.weight(1f))
-                    }
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOf("ELLIOT" to "PRIYA", "MARCUS" to "ROSE").forEach { (a, b) ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    SurvivorChip(a, p, Modifier.weight(1f))
+                    SurvivorChip(b, p, Modifier.weight(1f))
                 }
             }
-            BoneSummaryRow("SYSTEM INTEGRITY", vals.integrityPercent)
-            BoneSummaryRow("EGRESSES CONTAINED", "2")
-
-            Box(Modifier.weight(1f))
-
-            // Named without their alignment ever having been confirmed in play, and the blackmail
-            // publishes with them: everyone learns who AND why, at the same moment, on the winning
-            // side's screen as much as on the losing side's. This used to be a summary row reading
-            // `WORKING FOR THE HOUSE  DANI . TOMAS` -- the names without the reason, which is the
-            // half that turns a result into a person.
-            Label("WORKING FOR THE HOUSE", size = 6.5, color = Amber.BoneFaint, tracking = 0.16)
-            Column(verticalArrangement = Arrangement.spacedBy(4.u)) {
-                vals.revealed.forEach { BoneNamedInsider(it) }
-            }
-
-            NewRound(Amber.BoneInk, Amber.BoneDim, border = Amber.BonePale)
         }
+        KitRules(p) {
+            KitInfo("SYSTEM INTEGRITY", vals.integrityPercent, p, minHeight = 36.dp)
+            KitInfo("EGRESSES CONTAINED", "2", p, minHeight = 36.dp)
+        }
+        // Named without their alignment ever having been confirmed in play, and the blackmail
+        // publishes with them: everyone learns who AND why, at the same moment, on the winning
+        // side's screen as much as on the losing side's.
+        Revealed("WORKING FOR THE HOUSE", vals.revealed, p, labelInk = p.dim)
+        NewRound(p)
     }
 }
 
-/** [NamedInsider] in the bone palette, for the ending that comes back to the light. */
+/** Both endings open a little lower than `kit.py`'s default, as the meeting band does. */
+private val ENDING_PADDING = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 20.dp)
+
+/**
+ * **ROUND OVER and who won, as the palette's filled block.** Amber with black words on the dark
+ * ending (which is why `WinInsiders` is in [PanelVals.AMBER_BLOCKS]), slate on the lights-on one.
+ */
 @Composable
-private fun BoneNamedInsider(who: RevealedInsider) {
+private fun EndingBanner(headline: String, line: String, p: Palette, lineSize: Int) {
     Column(
-        Modifier.fillMaxWidth().border(1.u, Amber.BoneInk).padding(7.u),
-        verticalArrangement = Arrangement.spacedBy(3.u),
+        Modifier.fillMaxWidth().background(p.fill).cssBorder(1.dp, p.fillEdge).padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Label(who.name, size = 10.0, color = Amber.BoneInk)
-        Label(who.line, size = 6.5, color = Amber.BoneDim, lineHeight = 1.5)
+        Tag("ROUND OVER", p.onFill, LABEL_BOX, tracking = 0.2)
+        Words(headline, size = 52, color = p.onFill, lineHeight = 0.85, align = TextAlign.Center)
+        Words(line, size = lineSize, color = p.onFill, lineHeight = 1.0, align = TextAlign.Center)
+    }
+}
+
+/**
+ * **The house's message card, on both endings, on two phones.**
+ *
+ * One card for both endings — the house says something either way (`gdd.md:1051`) and a second
+ * hand-written copy of this block would be the two screens disagreeing about its shape.
+ *
+ * **It signs as HOUSE** (D-201): the same sender as the thread, because there is one house and it
+ * has one name. NUMBER WITHHELD is a player's voice, the one that says `you're up`, and the house
+ * signing off under it would make the house two people.
+ *
+ * ### The palette is a parameter, because one of the two endings comes back to the light
+ *
+ * `Unfortunate.` was once **the one amber element on a sage screen**, and the reason nothing caught
+ * it is that it reaches only an Insider's phone: a two-role layout sweep compares geometry and this
+ * is a palette. Passing the palette in keeps the *shape* shared, which is what the lift was for.
+ */
+@Composable
+private fun HouseSignOff(body: String, p: Palette) {
+    Column(
+        Modifier.fillMaxWidth().cssBorder(1.dp, if (p.bone) p.ink else p.line)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(Modifier.fillMaxWidth()) {
+            Tag("HOUSE", if (p.bone) p.dim else p.mid, Modifier.weight(1f).then(LABEL_BOX))
+            Tag("21:38", p.dim, LABEL_BOX)
+        }
+        Words(body, size = 26, color = p.ink, lineHeight = 1.05)
+    }
+}
+
+/**
+ * **The Insiders, named, each with what was held over them printed underneath.**
+ *
+ * The row used to say `BLACKMAILED` beside the name, which is the fact without the content — and
+ * the content is the half that matters. *Everyone learns who **and why** — the petty, mundane
+ * thing each Insider was coerced with.* The line is the reveal; the label was a placeholder for it.
+ */
+@Composable
+private fun Revealed(heading: String, insiders: List<RevealedInsider>, p: Palette, labelInk: Color) {
+    Tag(heading, labelInk, LABEL_BOX)
+    for (who in insiders) {
+        Column(
+            Modifier.fillMaxWidth().cssBorder(2.dp, p.ink).padding(horizontal = 12.dp, vertical = 7.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Words(who.name, size = 28, color = p.ink, lineHeight = 1.0)
+            Words(who.line, size = 20, color = p.dim, lineHeight = 1.05)
+        }
     }
 }
 
 /**
  * **NEW ROUND — the host's control, on both endings, and the app's only way to have a second one**
- * (D-157).
+ * (D-157, D-177).
  *
  * *Two to three rounds in an evening* is the design's own expectation, and until this existed the
  * app had no way to meet it: both ending screens were graph terminals, and the evening finished
  * wherever the round did.
  *
- * ### Host-only, for LIGHTS OUT's reason and not quite in LIGHTS OUT's way
+ * ### Host-only, and no hold
  *
- * It starts a round in front of the whole party, so it is the host's to press. Whether it takes
- * D-141's two-second hold is a build-time call and this does not take one: D-141's argument is
- * about a control **pressed in the dark**, where a thumb finds a tile by feel and a mis-tap cannot
- * be taken back. This is pressed in the light, with everyone watching, on the one screen in the
- * game where the lights are on and nobody is hiding their display. *(The label and the hold are
- * both recorded as copy-pending in revision 33; this is the shape, not the last word on either.)*
+ * It starts a round in front of the whole party, so it is the host's to press. It takes no
+ * two-second hold (D-177): D-141's argument is about a control **pressed in the dark**, and this is
+ * pressed in the light, with everyone watching.
  *
  * ### It returns everybody, and the house is what returns them
  *
@@ -684,36 +599,46 @@ private fun BoneNamedInsider(who: RevealedInsider) {
  * On a phone that is not hosting it is present and inert with `HOST ONLY` beside it, exactly as
  * `END SESSION` is on the settings screen — a control that appeared only on one phone would be
  * a layout that moves under a thumb, and one that vanished would be a host wondering where it went.
+ * The mockup draws only the host's face; the other phones' words drop to dim, since they press
+ * nothing.
  */
 @Composable
-private fun NewRound(ink: Color, subInk: Color, border: Color = Amber.Dim) {
+private fun NewRound(p: Palette) {
     val actions = LocalActions.current
     val hosting = LocalLobby.current.hosting
     Row(
-        Modifier.fillMaxWidth().border(1.u, border)
+        Modifier.fillMaxWidth().heightIn(min = 56.dp).border(1.dp, if (p.bone) p.ink else p.line)
             .then(if (hosting) Modifier.tapTarget(actions.newRound) else Modifier)
-            .padding(8.u),
-        horizontalArrangement = Arrangement.SpaceBetween,
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Label("NEW ROUND", size = 7.5, color = if (hosting) ink else subInk)
-        Label(if (hosting) "EVERYONE RETURNS" else "HOST ONLY", size = 7.5, color = subInk)
+        Words("NEW ROUND", Modifier.weight(1f), size = 26, color = if (hosting) p.ink else p.dim, lineHeight = 1.0)
+        Tag(if (hosting) "EVERYONE RETURNS" else "HOST ONLY", p.dim)
     }
 }
 
+/** One of the Residents still standing, on the lights-on ending. */
 @Composable
-private fun SurvivorChip(name: String, modifier: Modifier = Modifier) {
-    Box(modifier.border(1.u, Amber.BoneInk).padding(horizontal = 7.u, vertical = 6.u)) {
-        Label(name, size = 9.0, color = Amber.BoneInk)
+private fun SurvivorChip(name: String, p: Palette, modifier: Modifier = Modifier) {
+    Box(
+        modifier.cssBorder(1.dp, p.ink).heightIn(min = 34.dp).padding(horizontal = 12.dp),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Words(name, size = 24, color = p.ink, lineHeight = 1.0)
     }
 }
 
-@Composable
-private fun BoneSummaryRow(name: String, value: String, nameInk: Color = Amber.BoneDim) {
-    Row(
-        Modifier.fillMaxWidth().border(1.u, Amber.BonePale).padding(horizontal = 7.u, vertical = 6.u),
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Label(name, size = 6.5, color = nameInk)
-        Label(value, size = 6.5, color = Amber.BoneInk)
-    }
-}
+/**
+ * **A border the way CSS draws one on a `div`: outside the content box, adding to its size.**
+ * Compose's `border` paints inside the bounds it is given, so a mockup box with a 2px edge came up
+ * 4 units short and everything under it rode up the panel. (The mockup's `<button>`s are
+ * border-box, so NEW ROUND keeps the plain border.)
+ */
+private fun Modifier.cssBorder(width: Dp, color: Color): Modifier = border(width, color).padding(width)
+
+/**
+ * **A Silkscreen label's line box, 12 tall as the mockup's `line-height: 1` makes it.** The font's
+ * own ascent and descent come to about 16, and [Tag] lets them stand, so each label in a stack ran
+ * the column 4 units long and pushed the Residents' NEW ROUND into the foot padding.
+ */
+private val LABEL_BOX = Modifier.height(12.dp)

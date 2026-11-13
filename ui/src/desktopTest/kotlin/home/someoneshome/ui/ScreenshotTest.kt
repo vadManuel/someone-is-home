@@ -99,13 +99,18 @@ class ScreenshotTest {
      *
      * The top inset is the mockup's 36-pixel camera band, so the status strip lands where the
      * mockup draws it (D-204) and the two renders line up row for row.
+     *
+     * The two endings are drawn a second time as an Insider holds them, `<id>-insider.png`,
+     * because the house's sign-off card reaches only those phones and is otherwise never seen.
      */
     @OptIn(ExperimentalTestApi::class, ExperimentalComposeUiApi::class)
     @Test
     fun renderEveryScreenAtMockupSize() {
         val cameraBand = PanelInsets(top = (36f * DESIGN_WIDTH / MOCKUP_WIDTH).dp)
         val dir = File("build/screens-mockup").apply { mkdirs() }
-        for (id in ScreenId.entries) {
+        val renders = ScreenId.entries.map { Triple(it, PanelRole.Resident, "") } +
+            listOf(ScreenId.WinInsiders, ScreenId.WinResidents).map { Triple(it, PanelRole.Insider, "-insider") }
+        for ((id, role, suffix) in renders) {
             val outBy = when (id) {
                 ScreenId.Restrained -> OutBy.Restrained
                 ScreenId.Revoked, ScreenId.Ghost2, ScreenId.Ghost3, ScreenId.GhostMeeting -> OutBy.Revoked
@@ -115,13 +120,13 @@ class ScreenshotTest {
                 setContent {
                     Box(Modifier.fillMaxSize().background(Color.Black)) {
                         DeviceCanvas(insets = cameraBand) {
-                            Screen(PanelState(screen = id, outBy = outBy))
+                            Screen(PanelState(screen = id, role = role, outBy = outBy))
                         }
                     }
                 }
                 ImageIO.write(
                     onRoot().captureToImage().toAwtImage(), "png",
-                    File(dir, "${id.name.lowercase()}.png"),
+                    File(dir, "${id.name.lowercase()}$suffix.png"),
                 )
             }
         }
