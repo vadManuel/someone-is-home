@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -29,6 +31,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
@@ -65,6 +68,9 @@ const val MOCKUP_WIDTH: Float = 360f
  */
 @Composable
 fun Mockup(content: @Composable () -> Unit) {
+    // Reentrant: a kit block that brings its own bridge, drawn inside a screen that already has
+    // one, must not be scaled twice.
+    if (LocalInMockup.current) return content()
     val ratio = DESIGN_WIDTH / MOCKUP_WIDTH
     val base = LocalDensity.current
     val insets = LocalPanelInsets.current
@@ -75,9 +81,13 @@ fun Mockup(content: @Composable () -> Unit) {
         LocalPanelInsets provides PanelInsets(
             top = insets.top / ratio, bottom = insets.bottom / ratio, side = insets.side / ratio,
         ),
+        LocalInMockup provides true,
         content = content,
     )
 }
+
+/** Whether the bridge is already in effect, so [Mockup] applies it once. */
+private val LocalInMockup = staticCompositionLocalOf { false }
 
 /**
  * **One of the redesign's four palettes: what each role on a screen is drawn in** (D-202, D-077).
@@ -149,9 +159,12 @@ fun Words(
     maxLines: Int = Int.MAX_VALUE,
     overflow: TextOverflow = TextOverflow.Clip,
 ) {
+    // How many lines the text took, written during its own measure and read straight after it in
+    // the same pass: a plain holder, not state, so knowing it costs no recomposition.
+    val lines = remember { IntArray(1) }
     BasicText(
         text = text,
-        modifier = modifier,
+        modifier = modifier.cssLineBox(size * lineHeight, lines),
         style = TextStyle(
             fontFamily = PanelType.readout,
             fontSize = size.sp,
@@ -159,11 +172,41 @@ fun Words(
             letterSpacing = tracking.em,
             lineHeight = (size * lineHeight).sp,
             textAlign = align ?: TextAlign.Unspecified,
+            lineHeightStyle = CSS_LINE,
         ),
         maxLines = maxLines,
         overflow = overflow,
+        onTextLayout = { lines[0] = it.lineCount },
     )
 }
+
+/**
+ * **A line box as tall as CSS makes it, and no taller** (D-202).
+ *
+ * Compose spaces lines by the line height but will not make a line's box shorter than the font's
+ * own height, so a 124px clock at line-height .8 took about 120px instead of 99 and pushed
+ * everything under it down the panel. This reports `lines × line height` and centres the text in
+ * it, letting the glyphs overhang the way the mockup's do. A taller line box is left to Compose,
+ * which already gets it right.
+ */
+private fun Modifier.cssLineBox(linePx: Double, lines: IntArray): Modifier = layout { measurable, constraints ->
+    val placeable = measurable.measure(constraints.copy(minHeight = 0))
+    val target = (linePx.toFloat() * lines[0].coerceAtLeast(1)).sp.roundToPx()
+        .coerceAtLeast(constraints.minHeight)
+    if (target >= placeable.height) {
+        layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+    } else {
+        layout(placeable.width, target) { placeable.place(0, (target - placeable.height) / 2) }
+    }
+}
+
+/**
+ * **Lines sit the way the mockup's CSS sets them**: the leading split evenly above and below the
+ * glyphs, and kept even when it is negative, so a 124px clock at line-height .8 takes 99px and its
+ * glyphs overhang both ways. Compose's default places a short line differently and pushed every
+ * tight heading down the panel.
+ */
+private val CSS_LINE = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None)
 
 /**
  * **Silkscreen, 12px, and nothing else** (D-202): the small label over a section and the status
@@ -189,6 +232,7 @@ fun Tag(
             color = color,
             letterSpacing = tracking.em,
             textAlign = align ?: TextAlign.Unspecified,
+            lineHeightStyle = CSS_LINE,
         ),
         maxLines = maxLines,
         overflow = overflow,
@@ -446,6 +490,31 @@ fun KitNavRow(
     ) {
         Words(text, Modifier.weight(1f), size = size, color = palette.ink, lineHeight = 1.0)
         trailing?.invoke(this)
+    }
+}
+
+/**
+ * `kit.py`'s `meter`: **segments, lit solid or left as an outline** (D-202). A spent segment is
+ * an edge, not a dimmer fill, so the count reads by shape as well as by light.
+ */
+@Composable
+fun KitMeter(
+    total: Int,
+    lit: Int,
+    ink: Color,
+    edge: Color,
+    modifier: Modifier = Modifier,
+    height: Dp = 12.dp,
+    gap: Dp = 2.dp,
+) {
+    Row(modifier.fillMaxWidth().height(height), horizontalArrangement = Arrangement.spacedBy(gap)) {
+        repeat(total) { i ->
+            val on = i < lit
+            Box(
+                Modifier.weight(1f).fillMaxSize().border(1.dp, if (on) ink else edge)
+                    .then(if (on) Modifier.background(ink) else Modifier)
+            )
+        }
     }
 }
 

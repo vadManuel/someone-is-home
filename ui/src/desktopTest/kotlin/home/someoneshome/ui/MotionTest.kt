@@ -5,7 +5,6 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
-import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.runDesktopComposeUiTest
@@ -128,10 +127,11 @@ class MotionTest {
     /**
      * **The scan window really counts its ten seconds down** — the owner's second sentence.
      *
-     * Both halves of it, because the screen draws the same value twice and the report named both:
-     * the readout above the bar and the twenty segments under it. They come from one number now, so
-     * this checks them together — the figure has to be *this* second's figure and the segments have
-     * to be *this* second's segments.
+     * The screen used to draw the value twice, a seconds readout over twenty segments, and the
+     * report named both. The mockup cut the readout (D-202: screens say little), so the bar is the
+     * whole of it now, and this holds the bar to everything the readout was held to: it opens on
+     * the whole window, never gains, visits most of the window rather than sitting on a drawn
+     * moment, and is empty when the window runs out.
      *
      * D-159's window is a safety device rather than pacing, which is why the last assertion matters
      * as much as the first: a bar that reaches zero is the phone saying *the light is about to fail*,
@@ -139,13 +139,13 @@ class MotionTest {
      * has already spent.
      *
      * Injecting the bug: hand `Countdowns.on` the fixture again — drop [PanelVals.window] out of
-     * `PanelVals.countdown` — and every sample comes back `6S LEFT` over twelve segments.
+     * `PanelVals.countdown` — and every sample comes back as the same twelve segments.
      */
     @Test
-    fun theScanWindowCountsItsTenSecondsDownOnBothTheReadoutAndTheBar() {
+    fun theScanWindowCountsItsTenSecondsDownOnTheBar() {
         val window = Flow.autoAdvance.getValue(ScreenId.Scan).afterMillis
         val lit = Amber.Black.toArgb()
-        val seen = mutableListOf<Pair<String, Int>>()
+        val bars = mutableListOf<Int>()
         runDesktopComposeUiTest(width = width, height = height) {
             mainClock.autoAdvance = false
             setContent {
@@ -153,67 +153,51 @@ class MotionTest {
             }
             mainClock.advanceTimeByFrame()
 
-            fun sample(): Pair<String, Int> {
-                val bar = pixels(onNodeWithTag(SCAN_BAR).captureToImage().toAwtImage(), lit)
-                val shown = (0..window / 1000).map { "${it}S LEFT" }
-                    .firstOrNull { onAllNodes(hasText(it)).fetchSemanticsNodes().isNotEmpty() }
-                return (shown ?: "NO READOUT AT ALL") to bar
-            }
+            fun sample(): Int = segmentsLit(onNodeWithTag(SCAN_BAR).captureToImage().toAwtImage(), lit)
 
-            seen += sample()
+            bars += sample()
             // A second at a time, the whole way, and one second past the end.
             repeat(window / 1000 + 1) {
                 mainClock.advanceTimeBy(1_000)
-                seen += sample()
+                bars += sample()
             }
         }
 
         assertEquals(
-            "${window / 1000}S LEFT", seen.first().first,
-            "the scan opened on ${seen.first().first} rather than its whole window — the readout " +
-                "is a drawn moment, not this phone's clock. Sequence: ${seen.map { it.first }}",
+            PanelVals.SCAN_SEGMENTS, bars.first(),
+            "the scan opened on ${bars.first()} lit segments rather than its whole window — the " +
+                "bar is a drawn moment, not this phone's clock: $bars",
         )
-        // Second by second, and the figure has to come down every time until it reaches nothing.
-        // Asserted as *never goes up, and visits most of the window* rather than as an exact
-        // sequence: a frame either side of a second boundary is the harness's business and not a
-        // claim anybody is making, while a readout that repeats itself for the whole ten seconds is
-        // precisely the report being closed.
-        val readouts = seen.map { it.first }
-        val figures = readouts.map { it.removeSuffix("S LEFT").toIntOrNull() ?: -1 }
-        assertTrue(
-            figures.none { it < 0 },
-            "the scan drew no countdown at all at some point in its window: $readouts",
-        )
-        for (step in 1 until figures.size) {
-            assertTrue(
-                figures[step] <= figures[step - 1],
-                "the scan readout went UP, from ${figures[step - 1]} to ${figures[step]}: $readouts",
-            )
-        }
-        assertTrue(
-            figures.distinct().size >= window / 1000,
-            "the scan readout showed only ${figures.distinct().size} different figures across a " +
-                "${window}ms window — it is not counting, it is sitting on a drawn moment: $readouts",
-        )
-        assertEquals(
-            0, figures.last(),
-            "the scan window ran out and the readout still says ${readouts.last()}: $readouts",
-        )
-        // The bar drains with it, and drains the whole way. Checked as a sequence rather than
-        // against segment counts, because how many segments a second is worth is the screen's.
-        val bars = seen.map { it.second }
         for (step in 1 until bars.size) {
             assertTrue(
                 bars[step] <= bars[step - 1],
-                "the scan bar gained ${bars[step] - bars[step - 1]} lit pixels while the clock " +
-                    "was running down: $bars",
+                "the scan bar gained ${bars[step] - bars[step - 1]} segments while the clock was " +
+                    "running down: $bars",
             )
         }
         assertTrue(
-            bars.first() > 0 && bars.last() == 0,
-            "the scan bar went from ${bars.first()} lit pixels to ${bars.last()} across its whole " +
-                "window — it is not draining with the clock beside it: $bars",
+            bars.distinct().size >= window / 1000,
+            "the scan bar showed only ${bars.distinct().size} different lengths across a " +
+                "${window}ms window — it is not counting, it is sitting on a drawn moment: $bars",
         )
+        assertEquals(0, bars.last(), "the scan window ran out and the bar is not empty: $bars")
+    }
+
+    /**
+     * How many segments of a segment bar are lit: the runs of [lit] along its middle row. A lit
+     * segment is solid edge to edge and the gaps between segments are ground, so each lit segment
+     * is one run however wide the panel draws it.
+     */
+    private fun segmentsLit(img: BufferedImage, lit: Int): Int {
+        val y = img.height / 2
+        var runs = 0
+        var inRun = false
+        for (x in 0 until img.width) {
+            val on = img.getRGB(x, y) == lit
+            if (on && !inRun) runs++
+            inRun = on
+        }
+        return runs
     }
 
     /**

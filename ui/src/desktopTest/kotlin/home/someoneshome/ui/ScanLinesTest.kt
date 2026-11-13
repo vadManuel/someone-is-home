@@ -533,13 +533,16 @@ class ScanLinesTest {
         /**
          * A pixel this bright is ground rather than ink, and this dark is ink rather than ground.
          *
-         * Far apart on purpose. The dimmest lit ground in the app is `Bone` at 154, the brightest
-         * ink standing on one is `BoneEdge` at 128 — but `BoneEdge` draws hairlines rather than
-         * words, and the brightest ink that draws a *word* is `BoneDim` at 46. The band can take at
-         * most 8% of either.
+         * The dimmest lit ground in the app is the lantern under a notification that dims the
+         * house: the lamp at [NOTIFIED_DIM], about 64, and 59 under the lit band. It carries black
+         * words, which is exactly the case the lighter band exists for, so it has to count as lit;
+         * at 100 it did not, and the screen only passed while its arriving card was a bright amber
+         * block (the mockup made that card black, D-202). The brightest ink that draws a *word* is
+         * `BoneDim` at 46, so the two still do not meet. `BoneEdge`, at 128 on bone, draws
+         * hairlines rather than words.
          */
-        const val GROUND_LIT = 100
-        const val INK_DARK = 60
+        const val GROUND_LIT = 50
+        const val INK_DARK = 48
 
         /**
          * How tall a run of lit rows has to be before it can be carrying a line of type.

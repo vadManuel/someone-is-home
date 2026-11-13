@@ -67,6 +67,40 @@ class KitTest {
     }
 
     @Test
+    fun `a bridge inside a bridge is still 360 units`() {
+        var seen: Dp? = null
+        runDesktopComposeUiTest(width = 600, height = 900) {
+            setContent {
+                DeviceCanvas(insets = PanelInsets()) {
+                    Mockup { Mockup { BoxWithConstraints { seen = maxWidth } } }
+                }
+            }
+            waitForIdle()
+        }
+        assertEquals(MOCKUP_WIDTH, seen!!.value, 0.01f, "a nested bridge scaled the panel twice")
+    }
+
+    @Test
+    fun `a line box is as tall as the mockup's CSS makes it`() {
+        runDesktopComposeUiTest(width = 360, height = 900) {
+            setContent {
+                DeviceCanvas(insets = PanelInsets()) {
+                    Mockup {
+                        Column {
+                            Box(Modifier.testTag("clock")) { Words("21:04", size = 124, lineHeight = 0.8) }
+                            Box(Modifier.testTag("two")) { Words("TURN\nTO", size = 44, lineHeight = 0.9) }
+                        }
+                    }
+                }
+            }
+            for ((tag, want) in listOf("clock" to 124 * 0.8, "two" to 2 * 44 * 0.9)) {
+                val tall = onNodeWithTag(tag).getBoundsInRoot().let { it.bottom - it.top }.value
+                assertEquals(want.toFloat(), tall, 1f, "$tag's line box is $tall tall, not the mockup's $want")
+            }
+        }
+    }
+
+    @Test
     fun `a caption under 18 is refused`() {
         assertFailsWith<IllegalArgumentException> {
             runDesktopComposeUiTest {

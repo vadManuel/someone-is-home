@@ -391,85 +391,53 @@ private fun WorkLocked() {
  * A lit field, and one of only three in the game. Here that is the function, not the style.
  */
 @Composable
-fun ScanScreen(vals: PanelVals) {
+fun ScanScreen(vals: PanelVals) = Mockup {
     val go = navigator()
     val ink = Amber.Black
     Column(
         // The ground runs to the top edge; the content starts under the safe area.
         Modifier.fillMaxSize().background(Amber.Bright)
-            .padding(start = 8.u, end = 8.u, top = LocalPanelInsets.current.top, bottom = 8.u),
-        verticalArrangement = Arrangement.spacedBy(7.u),
+            .padding(start = 20.dp, end = 20.dp, top = LocalPanelInsets.current.top, bottom = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         InvertedStatusRow("SCANNING")
 
         Column(
             Modifier.weight(1f).fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(9.u, Alignment.CenterVertically),
+            verticalArrangement = Arrangement.spacedBy(18.dp, Alignment.CenterVertically),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Box(Modifier.size(62.u), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(96.dp), contentAlignment = Alignment.Center) {
                 // **Steady, and it used to pulse** (D-200, D-093). `ringPulse()` animated this ring
                 // on the full amber field: a local animation the core never emitted, on the one
                 // screen that is already a lamp.
-                Box(Modifier.fillMaxSize().border(2.u, ink, CircleShape))
-                Box(Modifier.size(38.u).border(1.u, ink.copy(alpha = 0.35f), CircleShape))
-                Box(Modifier.size(9.u).background(ink, CircleShape))
+                Box(Modifier.fillMaxSize().border(3.dp, ink, CircleShape))
+                Box(Modifier.size(52.dp).border(2.dp, Ramp.Faint, CircleShape))
+                Box(Modifier.size(12.dp).background(ink, CircleShape))
             }
-            Label(
+            Words(
                 "TURN THE SCREEN\nTO THE MARKER",
-                size = 12.0, color = ink, tracking = 0.1, lineHeight = 1.5,
-                align = TextAlign.Center,
-            )
-            Label(
-                "The lit screen is your light. Your front camera reads the card, so you will " +
-                    "not see this while it works.",
-                size = 7.0, color = ink.copy(alpha = 0.68f), tracking = 0.04, lineHeight = 1.9,
-                align = TextAlign.Center,
+                size = 44, color = ink, lineHeight = 0.9, align = TextAlign.Center,
             )
         }
 
-        Column(
-            Modifier.fillMaxWidth().border(1.u, ink).padding(horizontal = 8.u, vertical = 7.u),
-            verticalArrangement = Arrangement.spacedBy(5.u),
-        ) {
-            // The figure and the bar are one value: ten seconds, twenty segments, two a second.
-            // They were a hardcoded `6S LEFT` beside a `SCAN_LIT = 12` — the same fact written
-            // twice, agreeing by hand, on the one countdown here that is a safety device.
-            //
-            // **And then the one value never moved**, which is the owner's *the scanning timeout
-            // doesn't countdown nor does its countdown bar move*: `vals.countdown` resolved to
-            // [Countdowns]' drawn moment of six and stayed there, so the safety window ran out
-            // behind a readout still promising six seconds. It is [PanelVals.window] now — this
-            // phone's own clock over the same ten seconds the fall-through counts — so the segments
-            // really do go two a second and reach nothing in the frame the light goes dark.
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Label("YOU WILL FEEL IT CATCH", size = 6.0, color = ink, tracking = 0.14)
-                Label(
-                    "${vals.countdown.text}S LEFT",
-                    size = 6.0, color = ink.copy(alpha = 0.55f), tracking = 0.14,
-                )
-            }
-            SegmentBar(
-                total = PanelVals.SCAN_SEGMENTS,
-                lit = vals.countdown.litOf(PanelVals.SCAN_SEGMENTS),
-                litColor = ink,
-                unlitColor = ink.copy(alpha = 0.2f),
-                modifier = Modifier.testTag(SCAN_BAR),
-                height = 4.u,
-            )
-            // D-160's alphabet, in the two sentences a player needs it in. One buzz is yes and
-            // the Subroutine is already open behind the light; two is no, and nothing was spent.
-            Label(
-                "One buzz and it opens itself. Two buzzes and it gave up — tap SCAN again.",
-                size = 7.0, color = ink.copy(alpha = 0.72f), tracking = 0.02, lineHeight = 1.8,
-            )
-        }
-
-        PanelButton(
-            "STOP NOW",
-            border = ink, ink = ink, size = 7.0, verticalPadding = 9.u,
-            onClick = { go(ScreenId.Home) },
+        // The window, and only the window (D-159): twenty segments over ten seconds, two a second.
+        // [PanelVals.window] is this phone's own clock over the same ten seconds the fall-through
+        // counts, so the segments really do go and reach nothing in the frame the light goes dark. The
+        // seconds figure beside it went with the mockup's copy cut: the bar says the same thing.
+        KitMeter(
+            total = PanelVals.SCAN_SEGMENTS,
+            lit = vals.countdown.litOf(PanelVals.SCAN_SEGMENTS),
+            ink = ink, edge = Ramp.Line,
+            modifier = Modifier.testTag(SCAN_BAR),
         )
+
+        Box(
+            Modifier.fillMaxWidth().height(64.dp).border(2.dp, ink).tap { go(ScreenId.Home) },
+            contentAlignment = Alignment.Center,
+        ) {
+            Words("STOP NOW", size = 30, color = ink, lineHeight = 1.0, tracking = 0.08)
+        }
     }
 }
 

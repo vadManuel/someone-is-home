@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -350,31 +351,45 @@ fun LockScreen(vals: PanelVals) {
                 val ground = if (set == LampState.UNSET) Amber.Bright else Color(set)
                 drawRect(if (heavy) ground.copy(alpha = NOTIFIED_DIM) else ground)
             }
-            // The ground above runs to the top edge; the content starts under the safe area.
-            .padding(start = 10.u, end = 10.u, top = LocalPanelInsets.current.top, bottom = 9.u)
+    ) {
+        Mockup { LanternFace(arrival, heavy, ink, go, actions) }
+    }
+}
+
+/**
+ * The lantern's face, in mockup pixels (D-202): the inverted strip, the clock, what is standing
+ * under it, and SLIDE TO OPEN at the foot. The ground behind is the lamp's, drawn by [LockScreen].
+ */
+@Composable
+private fun LanternFace(
+    arrival: Arrival?,
+    heavy: Boolean,
+    ink: Color,
+    go: (ScreenId) -> Unit,
+    actions: PanelActions,
+) {
+    Column(
+        // The ground runs to the top edge; the content starts under the safe area.
+        Modifier.fillMaxSize().padding(start = 20.dp, end = 20.dp, top = LocalPanelInsets.current.top, bottom = 20.dp)
     ) {
         InvertedStatusRow("SOMEONE'S HOME")
 
-        Readout(
-            "21:04",
-            modifier = Modifier.fillMaxWidth().padding(top = 10.u),
-            size = 58.0, color = ink, tracking = 0.02, lineHeight = 1.0,
-            align = TextAlign.Center,
+        Words(
+            "21:04", Modifier.fillMaxWidth().padding(top = 52.dp),
+            size = 124, color = ink, lineHeight = 0.8, align = TextAlign.Center,
         )
-        Label(
-            "SATURDAY 16 AUGUST",
-            modifier = Modifier.fillMaxWidth().padding(top = 1.u),
-            size = 6.5, color = ink, tracking = 0.2, align = TextAlign.Center,
+        Words(
+            "SATURDAY 16 AUGUST", Modifier.fillMaxWidth().padding(top = 12.dp),
+            size = 26, color = ink, lineHeight = 1.0, tracking = 0.06, align = TextAlign.Center,
         )
 
         Column(
-            Modifier.padding(top = 12.u),
-            verticalArrangement = Arrangement.spacedBy(5.u),
+            Modifier.padding(top = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            // The arriving one first, above everything that was already standing, and drawn as a
-            // filled block rather than an outline: on a field the house has just darkened it is
-            // the only thing left at full amber, which is the whole of what "the rest of the
-            // screen dims around it" means.
+            // The arriving one first, above everything that was already standing, as the one
+            // solid block: black, with its words in amber, on a ground the house may just have
+            // darkened (D-118).
             arrival?.let {
                 LockNotification(
                     it.notification, ink, filled = true,
@@ -384,9 +399,13 @@ fun LockScreen(vals: PanelVals) {
             // WHAT IS STANDING IS ASKED FOR, NOT DRAWN FROM MEMORY. These used to be two literal
             // sentences on this screen and nowhere else, which is how a message ends up on the
             // lock screen saying one thing and in Messages saying another.
+            //
+            // The sender line drops to the line value on the full lamp and stays black on a
+            // darkened one, where #5A3D0E would vanish into the ground.
             for (notification in LocalNotifications.current.standing) {
                 LockNotification(
                     notification, ink, filled = false,
+                    sender = if (heavy) ink else Ramp.Faint,
                     onSwipeAway = { actions.dismissStanding(notification) },
                 )
             }
@@ -395,12 +414,10 @@ fun LockScreen(vals: PanelVals) {
         Box(Modifier.weight(1f))
 
         Box(
-            Modifier.fillMaxWidth().border(1.u, ink)
-                .tap { go(ScreenId.Home) }
-                .padding(vertical = 10.u),
+            Modifier.fillMaxWidth().height(64.dp).border(2.dp, ink).tap { go(ScreenId.Home) },
             contentAlignment = Alignment.Center,
         ) {
-            Label("SLIDE TO OPEN >>", size = 8.0, color = ink, tracking = 0.2)
+            Words("SLIDE TO OPEN >>", size = 30, color = ink, lineHeight = 1.0, tracking = 0.06)
         }
     }
 }
@@ -425,38 +442,31 @@ private fun LockNotification(
     ink: Color,
     filled: Boolean,
     onSwipeAway: () -> Unit,
+    sender: Color = Ramp.Faint,
 ) {
     val threshold = with(LocalDensity.current) { SWIPE_DISMISS.toPx() }
     // Keyed on the notification: the one below it moving up into this slot must not inherit half
     // a swipe made at the one that left.
     var pushed by remember(notification) { mutableStateOf(0f) }
+    val words = if (filled) Ramp.Ink else ink
 
     Column(
         Modifier.fillMaxWidth()
             // Read at draw time rather than at composition — a drag is sixty frames a second and
             // the whole app has an allocation budget of about 0.5 MB/s.
             .offset { IntOffset(pushed.toInt(), 0) }
-            .then(if (filled) Modifier.background(Amber.Bright) else Modifier)
-            .border(1.u, ink)
+            .then(if (filled) Modifier.background(ink) else Modifier.border(2.dp, ink))
             .pointerInput(notification) {
                 detectHorizontalDragGestures(
                     onDragEnd = { if (-pushed >= threshold) onSwipeAway() else pushed = 0f },
                     onDragCancel = { pushed = 0f },
                 ) { _, delta -> pushed = (pushed + delta).coerceAtMost(0f) }
             }
-            .padding(horizontal = 7.u, vertical = 5.u)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Label(
-            "${notification.from} . ${notification.at}",
-            size = 6.0, color = ink, tracking = 0.14,
-        )
-        Label(
-            notification.body,
-            modifier = Modifier.padding(top = 3.u),
-            size = 8.0, color = ink, lineHeight = 1.5,
-        )
-        notification.detail?.let {
-            Label(it, modifier = Modifier.padding(top = 2.u), size = 6.5, color = ink, tracking = 0.08)
-        }
+        Tag("${notification.from} . ${notification.at}", if (filled) Ramp.Mid else sender)
+        Words(notification.body, size = 26, color = words, lineHeight = 1.05)
+        notification.detail?.let { Words(it, size = 22, color = words, lineHeight = 1.1) }
     }
 }
