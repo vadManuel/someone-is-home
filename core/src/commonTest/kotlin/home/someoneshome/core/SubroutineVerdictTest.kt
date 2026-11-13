@@ -4,8 +4,10 @@ import home.someoneshome.model.Effect
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
 import home.someoneshome.model.MarkerId
+import home.someoneshome.model.OpenSubroutine
 import home.someoneshome.model.Role
 import home.someoneshome.model.Seat
+import home.someoneshome.model.SubroutineKind
 import home.someoneshome.model.Tick
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -278,5 +280,88 @@ class OneAttemptPerScanTest {
             thrice.openSubroutineFor(Seat(0))!!.armedAt,
         )
         assertEquals(once.systemIntegrity, thrice.systemIntegrity)
+    }
+}
+
+/** **D-211 — a Signal Trace route is the same answer from either end, for both roles.** */
+class ASignalTraceGradesFromEitherEndTest {
+
+    /**
+     * [seat] standing at its own card holding a Signal Trace, with the house's route known.
+     *
+     * The draw decides which kind a seat's first line is, so the instance the scan opened is
+     * replaced by a Signal Trace at the same card and the same line: everything else about the walk
+     * is the rules' own.
+     */
+    private fun holdingATrace(seat: Seat): GameState {
+        val base = armed()
+        val scanned = reduce(base, Event.MarkerScanned(Tick(1), seat, cardFor(base, seat))).state
+        val open = scanned.openSubroutineFor(seat) ?: error("seat ${seat.index} opened nothing")
+        val parameters = drawParameters(SubroutineKind.SignalTrace, Draw(seed = 20261113L, domain = 8L))
+        return scanned.withOpenSubroutine(
+            OpenSubroutine(
+                seat = seat,
+                entry = open.entry,
+                subroutine = SubroutineKind.SignalTrace,
+                parameters = parameters,
+                expected = answerTo(SubroutineKind.SignalTrace, parameters),
+                armedAt = open.armedAt,
+            ),
+        )
+    }
+
+    private fun handedOver(state: GameState, seat: Seat, route: List<Int>) =
+        reduce(state, Event.SubroutineReturned(Tick(2), seat, cardFor(armed(), seat), route))
+
+    /**
+     * **The reversed route is indistinguishable from the forward one, in state and in every
+     * effect**, for a Resident and for an Insider's fake alike.
+     *
+     * Compared beyond the verdict: a reversed route that was accepted but banked
+     * differently, or emitted one effect more, would be a second verdict the screen could read.
+     * And the Insider's fake is graded by the same rule, so the screen parity rule 8 asks for holds
+     * on this Subroutine too: the same route, either way round, lands the same on both phones.
+     */
+    @Test
+    fun `a route traced from either end grades alike for real and fake`() {
+        for (seat in listOf(Seat(0), Seat(1))) {
+            val holding = holdingATrace(seat)
+            val forward = holding.openSubroutineFor(seat)!!.expected
+            val reversed = forward.reversed()
+            assertNotEquals(forward, reversed)
+
+            val there = handedOver(holding, seat, forward)
+            val back = handedOver(holding, seat, reversed)
+            assertEquals(
+                listOf(Effect.SubroutineGraded(seat, accepted = true)),
+                back.effects.filterIsInstance<Effect.SubroutineGraded>(),
+                "${holding.roleOf(seat)}'s route traced from the far end was refused",
+            )
+            assertEquals(there.effects, back.effects, "the two directions emitted different effects")
+            // `GameState` has no structural equality, so the state is read where a return writes:
+            // the meter, and the instance it spent. The order it marked done is in the effects.
+            assertEquals(
+                there.state.systemIntegrity, back.state.systemIntegrity,
+                "the two directions banked differently",
+            )
+            assertEquals(
+                there.state.openSubroutineFor(seat)?.armed, back.state.openSubroutineFor(seat)?.armed,
+                "the two directions left the instance in different states",
+            )
+        }
+    }
+
+    /** The Resident and the Insider are graded alike on the reversed route, verdict for verdict. */
+    @Test
+    fun `the fake's reversed route is graded exactly as the real one's`() {
+        val verdicts = listOf(Seat(0), Seat(1)).map { seat ->
+            val holding = holdingATrace(seat)
+            val reversed = holding.openSubroutineFor(seat)!!.expected.reversed()
+            handedOver(holding, seat, reversed).effects
+                .filterIsInstance<Effect.SubroutineGraded>().single().accepted
+        }
+        assertEquals(Role.Resident, armed().roleOf(Seat(0)))
+        assertEquals(Role.Insider, armed().roleOf(Seat(1)))
+        assertEquals(listOf(true, true), verdicts, "real and fake disagree on a reversed route")
     }
 }

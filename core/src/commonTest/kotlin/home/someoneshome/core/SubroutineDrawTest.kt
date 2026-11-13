@@ -432,6 +432,44 @@ class TheToleranceIsRealAndItIsTheHousesTest {
     }
 
     /**
+     * **A Signal Trace route grades the same traced from either end** (D-211).
+     *
+     * The two ends are drawn alike, so a player who starts at the far one has walked the right
+     * route. Three claims, each a different failure: the forward route and its reverse **both** land
+     * and land alike; the reverse of a **wrong** route is still wrong, so *either end* has not become
+     * *any order*; and a reversed route missing an end is refused, so the reverse is not a prefix
+     * match. Graded the same, every time, from the question alone: nothing here reads a role.
+     */
+    @Test
+    fun `a Signal Trace route grades the same traced from either end`() {
+        val marker = MARKERS.first()
+        for (parameters in dealt(SubroutineKind.SignalTrace, many = 60)) {
+            val open = instance(SubroutineKind.SignalTrace, parameters)
+            val forward = open.expected
+            val reversed = forward.reversed()
+            assertNotEquals(forward, reversed, "a route of one node has no second end: $forward")
+
+            assertTrue(grades(open, marker, forward), "the forward route was refused: $forward")
+            assertEquals(
+                grades(open, marker, forward), grades(open, marker, reversed),
+                "the route traced from the sink graded differently from the same route from the " +
+                    "source: $reversed",
+            )
+
+            val wrong = forward.toMutableList().also { it[1] = it[1] + 1 }
+            assertFalse(grades(open, marker, wrong.reversed()), "a wrong route reversed was accepted")
+            assertFalse(
+                grades(open, marker, reversed.dropLast(1)),
+                "a reversed route that never reached the source was accepted",
+            )
+            assertFalse(
+                grades(open, MarkerId("somewhere else"), reversed),
+                "a reversed route handed over at the wrong card was accepted",
+            )
+        }
+    }
+
+    /**
      * **An entry handed over at the wrong card is refused, whatever it said** (D-110, D-123).
      *
      * The half of grading that is a fact about a place, and it survived the move of the other half

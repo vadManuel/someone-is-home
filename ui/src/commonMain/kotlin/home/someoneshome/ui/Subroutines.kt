@@ -40,7 +40,7 @@ import home.someoneshome.model.protocol.IntentMessage
  * | 5 | Deallocate | Short | Counting | A tap removes a dot; level is the shortest column (D-138) | Bright |
  * | 6 | Drift | Medium | Tracking under occlusion | A buzz asks where the hidden dot is (D-140) | Medium |
  * | 7 | Short | Short | Gross motor | Hold N fingers on the screen for two seconds | Dark |
- * | 8 | Signal Trace | Medium | Pathfinding | Tap node-to-node from source to sink | Medium |
+ * | 8 | Signal Trace | Medium | Pathfinding | Tap node-to-node from one end to the other (D-211) | Medium |
  * | 9 | Jam | Medium | Convergence | Tap +/− until two shapes overlap | Medium |
  * | 10 | Handshake | Medium | Haptic echo | The phone buzzes a pattern; you tap it back | Dark |
  *
@@ -521,9 +521,9 @@ class ScalarEntry(val reach: Int) : SubroutineEntry {
 /**
  * **The route a finger walked — Signal Trace's entry, and it accepts moves the graph forbids.**
  *
- * The design's Signal Trace is *tap node-to-node from source to sink through a small graph*. This
- * keeps the nodes tapped, in order, and **does not check that consecutive ones are joined by an
- * edge.** That is rule 1 stated as a type: *never early-return on invalid in a client-visible
+ * The design's Signal Trace is *tap node-to-node from one end to the other through a small graph*,
+ * either end first (D-211). This keeps the nodes tapped, in order, and **does not check that
+ * consecutive ones are joined by an edge.** That is rule 1 stated as a type: *never early-return on invalid in a client-visible
  * path — the absent effect is the leak.* A screen that refused a tap on an unconnected node would
  * be telling the player their move was illegal, which is the house's answer arriving from the
  * phone; and worse, it would be the only Subroutine in the game where the device says anything at

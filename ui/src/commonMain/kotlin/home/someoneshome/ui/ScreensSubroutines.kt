@@ -398,7 +398,11 @@ fun JamScreen(verdict: SubroutineVerdict? = null) {
 }
 
 /**
- * **Signal Trace — tap node to node, from the disc to the target.**
+ * **Signal Trace — tap node to node, from one marked end to the other.**
+ *
+ * **The two ends are drawn alike**, as the mockup draws them: filled, and nothing else is. The house
+ * accepts the route traced from either one (D-211), so neither end may look like the start; a
+ * screen that marked a source would be asking a question the house no longer grades.
  *
  * The design's *pathfinding* Subroutine, shipping with generated graphs so that the optimum is
  * computed rather than authored ([SignalGraph]).
@@ -473,17 +477,13 @@ fun SignalTraceScreen(verdict: SubroutineVerdict? = null) {
                         ),
                     contentAlignment = Alignment.Center,
                 ) {
+                    // Both ends filled, alike: the house grades the route from either (D-211).
+                    val end = at == wiring.source || at == wiring.sink
                     Box(
                         Modifier.size(NODE)
-                            .background(if (at == wiring.source) p.ink else Amber.Black)
+                            .background(if (end) p.ink else Amber.Black)
                             .border(if (walked) 3.dp else 2.dp, if (walked) Ramp.Ink else p.ink),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        // The sink wears a square inside the square: a target, and the only node
-                        // that is neither filled nor plain. The house grades the route from the
-                        // filled end, so which end is which has to be visible.
-                        if (at == wiring.sink) Box(Modifier.size(8.dp).background(p.ink))
-                    }
+                    )
                 }
             }
         }

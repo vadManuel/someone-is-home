@@ -193,7 +193,8 @@ internal fun answerTo(kind: SubroutineKind, parameters: List<Int>): List<Int> = 
     SubroutineKind.Short -> listOf(ShortHold.of(parameters).fingers)
 
     // The shortest route across the lattice, computed rather than authored, and unique because the
-    // draw only deals seeds whose lattice has one (see [traceSeeds]).
+    // draw only deals seeds whose lattice has one (see [traceSeeds]). Stated from the source; its
+    // reverse is accepted too (D-211), and is unique for the same reason.
     SubroutineKind.SignalTrace -> shortestRoutes(SignalGraph.of(parameters)).single()
 
     // What closes the gap: the opposite of the opening, because the entry is net steps pressed.
@@ -209,7 +210,10 @@ internal fun answerTo(kind: SubroutineKind, parameters: List<Int>): List<Int> = 
  * question's own tolerance where it is a position (E-L4-3).
  *
  * Eight of the ten are a choice, a count, a sequence or a final state, and for those *right* is
- * exactly right: there is no near-miss in tapping the wrong cell. Two of them are a **place on a
+ * exactly right: there is no near-miss in tapping the wrong cell. Signal Trace's route is exactly
+ * right **in either direction** (D-211): the screen marks two ends alike and the briefing says
+ * *from one to the other*, so the house's route and its reverse are the same answer, and nothing
+ * else is. Two of them are a **place on a
  * moving picture**, and D-139 and D-140 both rule a tolerance rather than a point — *inside the
  * band*, *within the hit radius* — because a blind one-handed tap at a bouncing sweep is not a
  * claim about an integer.
@@ -229,10 +233,14 @@ internal fun grades(open: OpenSubroutine, marker: MarkerId, entered: List<Int>):
         SubroutineKind.Sniff,
         SubroutineKind.Deallocate,
         SubroutineKind.Short,
-        SubroutineKind.SignalTrace,
         SubroutineKind.Jam,
         SubroutineKind.Handshake,
         -> open.expected == entered
+
+        // D-211: the route traced from either end. Both ends are drawn alike, so which one the
+        // player started from is not part of the question; the route is.
+        SubroutineKind.SignalTrace ->
+            open.expected == entered || open.expected.asReversed() == entered
 
         SubroutineKind.Interrupt ->
             within(entered, open.expected, InterruptSweep.of(open.parameters).bandHalf)

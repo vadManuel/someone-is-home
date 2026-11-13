@@ -4510,6 +4510,44 @@ there: what the player did is brighter than what the house drew, the grammar eve
 screen uses, and the tests pin it. **This is the one exception to a medium screen's single ink.**
 No code changes.
 
+---
+
+## Revision 46 — the route from either end
+
+*Ruled by the owner 2026-11-13, with revision 45. The house graded a Signal Trace route only from
+the source, so the port drew the two ends differently; the mockup draws them alike, and D-194's
+briefing already says TAP NODE TO NODE FROM ONE TO THE OTHER.*
+
+### D-211 · **Signal Trace accepts the route traced from either end — decided**
+
+**The house grades the route and its reverse as the same answer.** A player who starts at the far
+end and walks the shortest route back has done the work, and the screen gives them no way to know
+which end the house had called the start. Nothing else loosens: a wrong route is wrong either way
+round, a route missing an end is refused, and the right route at the wrong card is still not an
+answer (D-110).
+
+**It is decided in `core`, where the house grades**, as a second equality in `grades` and nothing
+more. It is a pure function of the question and the entry, so a replay grades every route as it
+was graded (rule 4). The reverse of the unique shortest route is itself unique, so `traceSeeds`
+deals the same seeds it did.
+
+**The fake is unchanged and stays identical** (rule 8). An Insider's entry goes through the same
+`grades`, so the same route, either way round, gets the same verdict on both phones. `returned`
+still builds its effects once, outside every branch (rule 1): a reversed route that lands emits
+exactly what the forward one does, and one that does not land emits exactly what any refusal does.
+Nothing on the phone asks which end a route started from, so no client path branches on it.
+
+**Then the ends are drawn alike**, as the mockup draws them: both filled in the screen's ink, and
+the sink's inner square goes. A screen that still marked a start would be asking a question the
+house no longer grades.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `core` `Subroutines.kt` `grades` | Signal Trace graded by equality with the route from the source | equality with that route or its reverse |
+| `ScreensSubroutines.kt` `SignalTraceScreen` | the source filled, the sink a square inside a square | both ends filled, alike |
+| `gdd.md:599` | tap node-to-node from source to sink | superseded: from one end to the other, either end first |
+| `SubroutineDrawTest`, `SubroutineVerdictTest` | (new) | forward and reversed routes grade alike; the Insider's fake grades them as the Resident's work does |
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).
