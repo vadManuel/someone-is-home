@@ -97,10 +97,14 @@ enum class NotificationKind(
 
     /**
      * Any later text from the house. **Quiet** — the house talking is not the round turning over,
-     * and a second dim would spend the first one's meaning. Messages holds it, and it stands on
-     * the lock screen until swiped.
+     * and a second dim would spend the first one's meaning. **The house thread holds it**, and it
+     * stands on the lock screen until swiped.
+     *
+     * The thread and not the Messages list (D-200): the house is one conversation and one row, the
+     * row shows the opening text's words, and every later text lives behind it. A tap on the banner
+     * opens the conversation it belongs to.
      */
-    Text(heavy = false, stored = true, heldBy = ScreenId.Reveal),
+    Text(heavy = false, stored = true, heldBy = ScreenId.RevealThread),
 
     /**
      * A Subroutine that was WAITING UPSTREAM and is not any more — D-119's own example of the kind
@@ -274,7 +278,7 @@ object Notifications {
         body = "Do not attempt the exterior doors.",
         at = "21:01",
         bodySize = 8.0,
-        opens = ScreenId.Reveal,
+        opens = ScreenId.RevealThread,
     )
 
     /**

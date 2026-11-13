@@ -443,6 +443,11 @@ private fun GhostEgressWidget(vals: PanelVals) {
  * An unauthorised lamp change is an unauthored game signal, so a phone that has lost the host
  * must not go dark, brighten, or flicker — it keeps emitting exactly what it was emitting. The
  * screen says so, because the player needs to know not to move.
+ *
+ * **A concealment screen, drawn on the revoked screen's dark step** (D-077, D-200). Its loudest ink
+ * is [Amber.Dim] and everything else sits below it: a reconnecting phone lit brighter than its
+ * neighbours is the flare D-077 exists to prevent. The status bar dims with it — see
+ * `PanelVals.concealed`.
  */
 @Composable
 fun DisconnectScreen() {
@@ -450,7 +455,7 @@ fun DisconnectScreen() {
         Modifier.fillMaxSize().padding(8.u),
         verticalArrangement = Arrangement.spacedBy(8.u),
     ) {
-        Label("CONNECTION", size = 7.0, color = Amber.Dim, tracking = 0.16)
+        Label("CONNECTION", size = 7.0, color = Amber.Faint, tracking = 0.16)
         Column(
             Modifier.weight(1f).fillMaxWidth().border(1.u, Amber.Edge),
             verticalArrangement = Arrangement.spacedBy(12.u, Alignment.CenterVertically),
@@ -461,26 +466,26 @@ fun DisconnectScreen() {
                 horizontalArrangement = Arrangement.spacedBy(3.u),
                 verticalAlignment = Alignment.Bottom,
             ) {
-                Block(4.u, 5.u, Amber.Faint)
+                Block(4.u, 5.u, Amber.Edge)
                 Block(4.u, 9.u, Amber.Edge)
                 Block(4.u, 13.u, Amber.Edge)
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Label(
                     "RECONNECTING",
-                    size = 9.0, color = Amber.Mid, tracking = 0.14, lineHeight = 1.9,
+                    size = 9.0, color = Amber.Dim, tracking = 0.14, lineHeight = 1.9,
                     align = TextAlign.Center,
                 )
-                Label("ATTEMPT 3 . 8S", size = 6.5, color = Amber.Dim, tracking = 0.14)
+                Label("ATTEMPT 3 . 8S", size = 6.5, color = Amber.Faint, tracking = 0.14)
             }
         }
         Box(
-            Modifier.fillMaxWidth().border(1.u, Amber.Dim).padding(7.u),
+            Modifier.fillMaxWidth().border(1.u, Amber.Edge).padding(7.u),
             contentAlignment = Alignment.Center,
         ) {
             Label(
                 "YOUR LAMP IS HOLDING ITS LAST STATE.\nSTAY WHERE YOU ARE.",
-                size = 6.5, color = Amber.Mid, tracking = 0.1, lineHeight = 1.9,
+                size = 6.5, color = Amber.Dim, tracking = 0.1, lineHeight = 1.9,
                 align = TextAlign.Center,
             )
         }

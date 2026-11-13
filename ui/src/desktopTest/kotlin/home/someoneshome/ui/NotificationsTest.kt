@@ -127,7 +127,8 @@ class NotificationsTest {
         for (notification in listOf(Notifications.opening, Notifications.text)) {
             assertTrue(
                 notification.kind.heldBy!! in screensShowing(notification.body),
-                "the ${notification.kind} text is not in Messages; the banner would have been " +
+                "the ${notification.kind} text is not where it says it is held " +
+                    "(${notification.kind.heldBy}); the banner would have been " +
                     "the only time it was ever readable",
             )
         }

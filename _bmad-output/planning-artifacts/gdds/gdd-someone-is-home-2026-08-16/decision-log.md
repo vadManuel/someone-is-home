@@ -4226,6 +4226,9 @@ Three places where the shipped code had drifted from a ruling. **The ruling wins
   the flare D-077 exists to prevent.
 - **The scan ring does not pulse.** `ringPulse()` animates the ring on the full amber field, which is
   a local animation the core never emitted (D-093) on the one screen that is already a lamp.
+  **Widened by the owner 2026-11-13: the incoming-call screens go steady too.** CALLING and
+  INCOMING pulsed by the same function for the same non-reason, on every phone the house rings at
+  once. `ringPulse()` is deleted, so nothing is left to call.
 - **The house is one conversation.** Messages lists one row per sender, and the build drew the house
   twice, at 21:02 and 21:01, which reads as two different numbers. It is one row now, showing its
   newest text and opening a thread that holds all four, the 21:01 line *Do not attempt the exterior

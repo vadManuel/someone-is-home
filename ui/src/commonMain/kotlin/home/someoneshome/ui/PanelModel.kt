@@ -713,15 +713,20 @@ class PanelVals(
     val drawsOwnStatusRow: Boolean get() = mode == PanelMode.Inverted
 
     /**
-     * The two screens whose whole job is to emit as little light as possible — **the status bar
+     * The screens whose whole job is to emit as little light as possible — **the status bar
      * included**.
      *
      * A bright bar above deliberately dim text is the same flare the screen exists to avoid, and
      * it is worse than a bright body, because chrome is the part nobody thinks to check.
      *
-     * **Only these two.** The set briefly included every out-screen, and that was wrong: once you
-     * are on the couch the room already knows you are out, so there is nothing left to conceal —
-     * and a reconnecting phone needs to be *noticed*, not hidden.
+     * **The revoked screen, the dark Subroutines, and the reconnecting screen.** The set briefly
+     * included every out-screen, and that was wrong: once you are on the couch the room already
+     * knows you are out, so there is nothing left to conceal.
+     *
+     * **The reconnecting screen was narrowed out, and D-200 put it back.** The argument for leaving
+     * it bright was that a reconnecting phone needs to be *noticed*; that narrowing was never
+     * ruled, D-077 names the disconnect screen among the concealment screens, and a reconnecting
+     * phone lit brighter than its neighbours is exactly the flare D-077 exists to prevent.
      *
      * **Asked of the roster rather than named.** It used to name `Sub` — the one dark Subroutine
      * screen the port had — so a second dark Subroutine would have shipped with a bright status
@@ -730,6 +735,7 @@ class PanelVals(
      * light signature.
      */
     private val concealed: Boolean = state.screen == ScreenId.Revoked ||
+        state.screen == ScreenId.Disconnect ||
         Subroutine.on(state.screen)?.light == LightSignature.Dark
 
     val ink: Color = when {
@@ -870,21 +876,40 @@ class PanelVals(
         // -- so the two saying different things would make that claim false while both looked
         // right.
         //
-        // BOTH HOUSE ROWS ARE DRAWN THE SAME. The older one dimmed would be indistinguishable
-        // from a read mark, which is the one thing D-105 removes from every surface in the game:
-        // the eye reads "bright above, faint below" as attended-to, and nobody would ever call it
-        // a feature, which is exactly why it would survive review.
+        // **THE HOUSE IS ONE ROW, BECAUSE IT IS ONE CONVERSATION** (D-200). Messages lists one row
+        // per sender, and two HOUSE rows at 21:02 and 21:01 read as two different numbers. The
+        // row is the newest time and the opening banner's words; the thread behind it holds all
+        // four texts, the 21:01 line included. D-105's reason for drawing two rows identically
+        // (the older one dimmed would read as a read mark) does not arise with one.
         listOf(
             InboxRow(
+                // The thread's newest time. A literal rather than a read of [houseThread]: this
+                // list is built at construction, before [houseLine] -- which the thread holds --
+                // has been assigned.
                 Notifications.opening.from, "21:02", Notifications.opening.body,
-                Amber.Dim, Amber.Bright, Amber.Bright,
-            ),
-            InboxRow(
-                Notifications.text.from, Notifications.text.at, Notifications.text.body,
                 Amber.Dim, Amber.Bright, Amber.Bright,
             ),
         ) + rest
     }
+
+    /**
+     * **What the Messages header counts: messages, not rows** (D-200, D-105). The house's row
+     * stands for every text in its thread.
+     */
+    val inboxCount: Int get() = inbox.size - 1 + houseThread.size
+
+    /**
+     * **The house thread, oldest first: time, then text** (D-200). Four texts, and only the newest
+     * differs by role. The 21:01 line is the later text's own words, so the thread and the lock
+     * screen cannot say two different things.
+     */
+    val houseThread: List<Pair<String, String>>
+        get() = listOf(
+            "20:58" to "Occupancy nominal. Access reviewed and retained.",
+            "20:59" to "Seven subroutines assigned. Begin at your convenience.",
+            Notifications.text.at to Notifications.text.body,
+            "21:02" to houseLine,
+        )
 
     /** Only the newest message in the house thread differs by role. Everything above it is shared. */
     val houseLine: String = if (insider) {

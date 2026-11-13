@@ -5,12 +5,10 @@ import home.someoneshome.model.DevicePermission
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.RoomKind
 
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -844,21 +842,3 @@ const val HOLD_BLOCK: String = "hold-block"
  * separate things to work out at the moment each of them cannot be taken back.
  */
 const val HOLD_NOTE: String = "HOLD THE BUTTON FOR TWO SECONDS."
-
-/**
- * The slow pulse on an incoming call.
- *
- * Both animations in this file sit on screens that are *demanding attention*, never on ambient
- * chrome. A pulse anywhere else would be light the rules did not emit.
- */
-@Composable
-fun ringPulse(): Float {
-    val transition = rememberInfiniteTransition(label = "ring")
-    val alpha by transition.animateFloat(
-        initialValue = 1f,
-        targetValue = 0.35f,
-        animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
-        label = "ringAlpha",
-    )
-    return alpha
-}

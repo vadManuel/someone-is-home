@@ -83,7 +83,9 @@ fun CallingScreen() {
     ) {
         Label(
             "CALLING",
-            size = 6.5, color = Amber.Dim.copy(alpha = ringPulse()), tracking = 0.24,
+            // Steady (D-200, D-093). It pulsed: a local animation the core never emitted, on a
+            // phone the whole house is ringing at once.
+            size = 6.5, color = Amber.Dim, tracking = 0.24,
         )
         Label(
             "HOUSE\nMEETING",
@@ -146,7 +148,9 @@ private fun IncomingCall(caller: String, reason: String, onAnswer: () -> Unit) {
     ) {
         Label(
             "INCOMING",
-            size = 6.5, color = Amber.Dim.copy(alpha = ringPulse()), tracking = 0.24,
+            // Steady (D-200, D-093). It pulsed: a local animation the core never emitted, on a
+            // phone the whole house is ringing at once.
+            size = 6.5, color = Amber.Dim, tracking = 0.24,
         )
         Label(caller, size = 22.0, color = Amber.Bright, tracking = 0.12)
         Label(

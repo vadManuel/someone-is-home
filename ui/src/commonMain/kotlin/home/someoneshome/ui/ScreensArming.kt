@@ -171,7 +171,7 @@ fun RevealScreen(vals: PanelVals) {
             BackChevron(ScreenId.Home, Amber.Dim)
             Label("MESSAGES", size = 7.0, color = Amber.Dim, tracking = 0.14)
             Label(
-                "${vals.inbox.size} MESSAGES",
+                "${vals.inboxCount} MESSAGES",
                 modifier = Modifier.weight(1f),
                 size = 7.0, color = Amber.Faint, tracking = 0.14, align = TextAlign.End,
             )
@@ -213,7 +213,10 @@ fun RevealScreen(vals: PanelVals) {
  * The house thread, opened. **Only the newest message differs by role.**
  *
  * Everything above it is shared word for word, which is what makes the last one deniable: a
- * Resident who glimpsed a neighbour's screen would see the same two messages they have.
+ * Resident who glimpsed a neighbour's screen would see the same three messages they have.
+ *
+ * **All four of the house's texts are here** (D-200), the 21:01 line included: the house is one
+ * conversation and one row in Messages, so this is the only place its texts are read in order.
  *
  * The house never addresses a Resident directly. It is intimate only with the people it owns.
  */
@@ -227,18 +230,15 @@ fun RevealThreadScreen(vals: PanelVals) {
             BackChevron(ScreenId.Reveal, Amber.Dim)
             Label("HOUSE", size = 7.0, color = Amber.Dim, tracking = 0.14)
             Label(
-                "3 MESSAGES",
+                "${vals.houseThread.size} MESSAGES",
                 modifier = Modifier.weight(1f),
                 size = 7.0, color = Amber.Faint, tracking = 0.14, align = TextAlign.End,
             )
         }
 
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.u)) {
-            ThreadMessage("20:58", "Occupancy nominal. Access reviewed and retained.")
-            ThreadMessage(
-                "20:59",
-                "Seven subroutines assigned. Begin at your convenience.",
-            )
+            val (newest, earlier) = vals.houseThread.let { it.last() to it.dropLast(1) }
+            earlier.forEach { (at, text) -> ThreadMessage(at, text) }
             // THE STAMP SAID "21:02 . NEW" AND THE TAG HAD TO GO (D-105). It is the design's
             // own wording and it is an unread badge in the plainest form there is — on the one
             // message in the game whose text differs by role, which is where a mark drawing the
@@ -247,7 +247,7 @@ fun RevealThreadScreen(vals: PanelVals) {
             // was the claim that the phone knows what this player has and has not looked at, and
             // there is nothing anywhere in the app that knows that.
             ThreadMessage(
-                "21:02", vals.houseLine,
+                newest.first, newest.second,
                 border = Amber.Bright, stampInk = Amber.Dim, bodyInk = Amber.Bright,
             )
         }

@@ -405,10 +405,10 @@ fun ScanScreen(vals: PanelVals) {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Box(Modifier.size(62.u), contentAlignment = Alignment.Center) {
-                Box(
-                    Modifier.fillMaxSize()
-                        .border(2.u, ink.copy(alpha = ringPulse()), CircleShape)
-                )
+                // **Steady, and it used to pulse** (D-200, D-093). `ringPulse()` animated this ring
+                // on the full amber field: a local animation the core never emitted, on the one
+                // screen that is already a lamp.
+                Box(Modifier.fillMaxSize().border(2.u, ink, CircleShape))
                 Box(Modifier.size(38.u).border(1.u, ink.copy(alpha = 0.35f), CircleShape))
                 Box(Modifier.size(9.u).background(ink, CircleShape))
             }
