@@ -2124,6 +2124,12 @@ class FlowModel(
             // nearest.
             is RoundMessage.PresenceChanged -> Unit
 
+            // **The radio's key, and the screen is not where it goes** (D-212). It belongs to the
+            // contact radio, which is `platform`'s and is not built yet (unit 4); routing it is unit
+            // 3's. Nothing on [PanelState] may hold it -- a seed a screen could draw is a seed a
+            // screenshot could carry -- so this branch is a named no-op and stays one.
+            is RoundMessage.ContactSeedIssued -> Unit
+
             // **The house's opening text — the heavy one, and the round starting** (D-118, D-119).
             // Heavy is the ruling and not the volume: the whole house dims at the same moment, and
             // *that says exactly what it is.* It is one of exactly two arrivals permitted to do it.

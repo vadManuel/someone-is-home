@@ -279,6 +279,12 @@ object Transcript {
         // recording honest without the transcript holding anybody's name.
         is Effect.RosterIssued ->
             "RosterIssued|seat=${effect.seat.index}|seats=${num(effect.roster.size)}"
+        // **The seat and the seed itself** (D-212). The recording is the authority's artifact and
+        // already holds the round's seed every contact seed is derived from, so the hex adds nothing
+        // a replay could not re-derive -- and rendering it is what lets the differential harness see
+        // a seed that moved with a role, which is the leak this row exists to be compared for.
+        is Effect.ContactSeedIssued ->
+            "ContactSeedIssued|seat=${effect.seat.index}|seed=${effect.seed.hex}"
         is Effect.MeetingOpened ->
             "MeetingOpened|caller=${effect.caller.index}|trigger=${trigger(effect.trigger)}" +
                 "|haptic=${effect.haptic}"

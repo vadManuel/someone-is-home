@@ -81,6 +81,7 @@ object EmitSchema {
         is Effect.OpeningMessage -> OPENING_MESSAGE
         is Effect.RoleRevealed -> ROLE_REVEALED
         is Effect.RosterIssued -> ROSTER_ISSUED
+        is Effect.ContactSeedIssued -> CONTACT_SEED_ISSUED
         is Effect.MeetingOpened -> MEETING_OPENED
         is Effect.MeetingCalling -> MEETING_CALLING
         is Effect.StandAndWalkIn -> STAND_AND_WALK_IN
@@ -129,6 +130,7 @@ object EmitSchema {
     val OPENING_MESSAGE = MessageKind("OpeningMessage")
     val ROLE_REVEALED = MessageKind("RoleRevealed")
     val ROSTER_ISSUED = MessageKind("RosterIssued")
+    val CONTACT_SEED_ISSUED = MessageKind("ContactSeedIssued")
     val MEETING_OPENED = MessageKind("MeetingOpened")
     val MEETING_CALLING = MessageKind("MeetingCalling")
     val STAND_AND_WALK_IN = MessageKind("StandAndWalkIn")
@@ -387,6 +389,20 @@ object EmitSchema {
         // in the arming burst, when every seat is Live. A row that could deliver it later would be a
         // permission with no moment behind it.
         ROSTER_ISSUED to LIVING,
+
+        // **The radio's key, one seat's own, to that seat** (D-212). Seat-only by ADDRESSING --
+        // [audienceOf] names the one seat it belongs to -- and living-only by this row.
+        //
+        // **Both living classes, never one.** Every phone advertises (D-008: a Revoked phone too),
+        // so every phone needs a seed. A row of `Insider/Live` would leave Residents unable to
+        // advertise and make every Resident invisible to the radio; a row of `Resident/Live` would
+        // make the Insiders the phones that are never sighted. Either would be the role, delivered
+        // by the radio rather than by a screen.
+        //
+        // Not the out classes and not AFTER, for ROLE_REVEALED's reason exactly: it is emitted once,
+        // in the arming burst, when every seat is Live. A seat that goes out already holds its seed
+        // and keeps advertising with it.
+        CONTACT_SEED_ISSUED to LIVING,
 
         // **The ring, and it is for the living** (D-134). A player who is out gets no phone call
         // -- they get STAND AND WALK IN, which is the row below. This narrows on the ROUND-STATE
@@ -650,6 +666,10 @@ object EmitSchema {
             // reason. Nothing is narrowed by the addressing here and nothing could be: every
             // recipient is sent the same list, and the seat on the effect is the recipient's.
             is Effect.RosterIssued -> listOf(effect.seat)
+            // **The seed's own seat, and no other phone** (D-212). Two living phones are one class,
+            // so this addressing is the only thing that keeps seat 3's key off seat 5's phone -- and
+            // a phone holding another seat's key can follow that player through the house by radio.
+            is Effect.ContactSeedIssued -> listOf(effect.seat)
             is Effect.SubroutineProgressed -> state.seats
             // Broadcast, and left to the allowlist to narrow -- the two meter kinds are facts about
             // the house rather than about the phone they arrive on, and addressing them by

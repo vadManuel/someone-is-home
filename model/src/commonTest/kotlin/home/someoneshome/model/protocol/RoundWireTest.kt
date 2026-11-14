@@ -1,6 +1,7 @@
 package home.someoneshome.model.protocol
 
 import home.someoneshome.model.AssignedWork
+import home.someoneshome.model.ContactSeed
 import home.someoneshome.model.Destination
 import home.someoneshome.model.Effect
 import home.someoneshome.model.EgressType
@@ -76,6 +77,7 @@ class RoundWireTest {
         // narrowing of `Role` to a bit and `Role.Resident` would project `false` either way.
         Effect.RoleRevealed(Seat(3), Role.Insider),
         Effect.RosterIssued(Seat(3), listOf("PRIYA", "MARCUS", "", "ROSE")),
+        Effect.ContactSeedIssued(Seat(3), ContactSeed("0123456789abcdef0123456789abcdef")),
         Effect.MeetingOpened(Seat(3), MeetingTrigger.MeetingCard, Haptic.Long),
         Effect.MeetingCalling(Seat(3)),
         Effect.StandAndWalkIn(Seat(3), Haptic.Long),

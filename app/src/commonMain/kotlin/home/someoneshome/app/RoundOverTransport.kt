@@ -175,6 +175,9 @@ class RoundOverTransport(
             // business knowing it moved — and on this one member that phone would be learning
             // there is an Insider in the house and which socket they are on.
             is RoundBody.Fire -> Unit
+            // Upward only, like the two above: what somebody else's radio heard is theirs and the
+            // house's, never another phone's (D-212).
+            is RoundBody.Sighted -> Unit
         }
     }
 

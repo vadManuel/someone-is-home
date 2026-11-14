@@ -483,6 +483,32 @@ sealed interface Effect {
      */
     data class RosterIssued(val seat: Seat, val roster: List<String>) : Effect
 
+    /**
+     * **This seat's contact seed, said once, at arming, to the one phone it belongs to** (D-212).
+     *
+     * The radio's key. The phone advertises `ContactTokens.of(seed, window)` and nothing else, so
+     * the house — which can derive every seat's seed — can invert any token it is told about, and
+     * nobody else can link one window's token to the next (D-032/D7).
+     *
+     * ### One per seat, every seat, whatever its role
+     *
+     * [RoleRevealed]'s shape and for its reason: a run of one per seat, grouped with the other
+     * arming runs. **The seed is drawn from the round's seed and the seat index alone**, never from
+     * the role, so a role-swapped round puts byte-identical seeds on every wire — the differential
+     * harness finds nothing here, and `DifferentialTest` checks that it really finds nothing rather
+     * than that the run is missing.
+     *
+     * ### Addressed to its seat, and that is half the guarantee
+     *
+     * A phone holding another seat's seed could follow that player by radio all round, which is the
+     * leak D7 exists to close. Two living phones are one class, so the allowlist cannot stop seat 5
+     * receiving seat 3's seed; [EmitSchema.audienceOf] does, and the row stops it reaching anybody
+     * who is not living. Neither subsumes the other.
+     *
+     * Silent: it rides the arming burst, where a second buzz is F-003's tell.
+     */
+    data class ContactSeedIssued(val seat: Seat, val seed: ContactSeed) : Effect
+
     // ---- The meeting -----------------------------------------------------------------------
     //
     // Twelve kinds for one lifecycle looks like a lot until you try to merge two of them. Every

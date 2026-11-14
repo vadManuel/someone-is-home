@@ -294,7 +294,7 @@ internal fun Effect.ringing(): Boolean = when (this) {
     is Effect.SystemIntegrityBatched, is Effect.MessageDelivered, is Effect.HouseSignedOff,
     // The Revoke landing says its thing once, like the takeover it mirrors; the roster is silent
     // entirely and is one of the `null` rows in [haptic] below.
-    is Effect.RevokeLanded, is Effect.RosterIssued,
+    is Effect.RevokeLanded, is Effect.RosterIssued, is Effect.ContactSeedIssued,
     is Effect.WorkOrderIssued, is Effect.ScanAnswered, is Effect.TerminalAnswered,
     is Effect.PresenceChanged,
     is Effect.CheckInProgressed, is Effect.ReadyProgressed, is Effect.VoteProgressed,
@@ -383,6 +383,9 @@ internal fun Effect.haptic(): Haptic? = when (this) {
     // one moment nobody has dispersed -- and a list of names is not an event, it is the thing four
     // later screens are drawn from.
     is Effect.RosterIssued -> null
+    // **Silent, for the roster's reason** (D-212). The radio's key rides the same arming burst, and
+    // a buzz here is a second vibration on every phone at the one moment nobody has dispersed.
+    is Effect.ContactSeedIssued -> null
     // **Silent, and D-156 is why rather than taste** (see the effect). It is constructed on every
     // contact so the authority's stream cannot report whether one landed, which means a buzz here
     // would go off in the pocket of somebody already sitting out every time an Insider fired at
@@ -467,6 +470,7 @@ internal fun RoundMessage.ringing(): Boolean = when (this) {
     is RoundMessage.VoteSelectionShown, is RoundMessage.MeetingResolved,
     is RoundMessage.SyncPulseAnswered, is RoundMessage.InsidersRevealed,
     is RoundMessage.RoleRevealed, is RoundMessage.RevokeLanded, is RoundMessage.RosterIssued,
+    is RoundMessage.ContactSeedIssued,
     is RoundMessage.Surged, is RoundMessage.IsolateTargetsOffered,
     is RoundMessage.StaticOpened, is RoundMessage.MeetingCalling,
     -> false
@@ -511,6 +515,7 @@ internal fun RoundMessage.haptic(): Haptic? = when (this) {
     // F-003, on the receiving side. See the effect-side branch.
     is RoundMessage.RoleRevealed -> null
     is RoundMessage.RosterIssued -> null
+    is RoundMessage.ContactSeedIssued -> null
     is RoundMessage.RevokeLanded -> null
     is RoundMessage.SubroutineGraded -> null
     is RoundMessage.SubroutineProgressed -> null

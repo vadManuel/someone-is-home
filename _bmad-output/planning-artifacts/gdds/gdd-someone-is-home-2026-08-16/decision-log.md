@@ -4549,6 +4549,80 @@ house no longer grades.
 | `gdd.md:599` | tap node-to-node from source to sink | superseded: from one end to the other, either end first |
 | `SubroutineDrawTest`, `SubroutineVerdictTest` | (new) | forward and reversed routes grade alike; the Insider's fake grades them as the Resident's work does |
 
+## Revision 47 — the radio's key and what a phone says it heard
+
+*Ruled by the owner 2026-11-13, scoping the contact handshake that lets a Revoke and a Revoked
+report land on real phones. Until now `ContactMade` and `RevokeReported` were minted only by the
+bench. This is unit 1 of that build: the tokens and the upload. The house's resolver, the wiring
+and the radio itself are later units.*
+
+### D-212 · **Each phone gets a seed at arming, advertises an HMAC token, and uploads at one size — decided**
+
+Five rulings, all from the scoping recommendations:
+
+1. **Each phone gets a seed at arming.** The seed rides a schema row of its own, `ContactSeedIssued`,
+   addressed to its seat and no other phone. The row names both living classes and nothing else,
+   and like every row it fails closed: with the row deleted, the seed reaches nobody.
+2. **Tokens are an HMAC of the seed and the 15-second window index** (D-032/D7's rotating token,
+   now given its function). The phone and the house compute one function from the same two inputs.
+   The house can derive every seat's seed, so it can turn any token back into a seat. Nobody else
+   can link one window's token to the next.
+3. **Every live phone scans continuously and uploads sightings on one cadence, in one message shape,
+   padded to one size, whatever its role or armed state.** A phone that heard nothing sends exactly
+   as many bytes as one that heard everybody. An observer of the Wi-Fi must not be able to tell
+   armed from unarmed, or Insider from Resident.
+4. **Revoked phones advertise but never scan.** This is D-008's rule, restated for the radio that
+   now exists.
+5. **No armed bit, role or seat ever goes on the radio.** The token's inputs are the seed and the
+   window and nothing else. Whether a contact was a Revoke is the house's conclusion, drawn from
+   the two phones' state, never something a phone announces (D-121 corrected).
+
+**The seed is drawn from the round's seed and the seat index, through an HMAC and not through
+`Draw`.** `Draw` is a linear generator, so a phone handed raw outputs of it could run it backwards
+to the round's seed, and the Insiders are drawn from that seed. The HMAC is one-way. It is seeded
+and recorded (rule 4), because the round's seed is already on `RoundArmed`, so a replay issues
+every phone the same seed and the house holds nothing new. The seed never reads a role, so a
+role-swapped round puts byte-identical seeds on every wire.
+
+**The upload is a report of fact, not a request** (rule 10). `IntentMessage`'s header already
+names the contact as deliberately absent from it: the seat it would name is one only the house can
+resolve. So the phone reports what it heard, as tokens, signal strengths and windows, and the
+contact is the house's conclusion. It travels as `RoundBody.Sighted`, a body member of its own,
+like `Fire`. **It carries no sequence number**: a counter's digits grow, and a field that grew
+with what a phone had done is one a reader of the Wi-Fi could measure. It has 24 fixed-width slots.
+Empty slots get filler keyed off the seed, which resolves to no seat, and all slots are sorted so
+the filler sits nowhere in particular.
+
+**D-136 stands as written.** It says which sightings the spectator map is built from, which is
+those made while a player performs, and that is the house's filter. It does not say when the radio
+runs. Continuous scanning feeds it the same sightings and more.
+
+**Open, and raised rather than decided:**
+
+- **The transport is plain `ws`.** A reader on the Wi-Fi can read every frame, not only measure
+  it, including `ArmRevoke` on the way up and `RoleRevealed` on the way down. Ruling 3's observer is
+  defeated above this unit, so padding meets the ruling on size and cannot meet it on content.
+- **`StaticOpened.seed` can be run back to the round's seed.** The round's seed times an odd
+  constant, plus the tick times another, is invertible modulo 2⁶⁴ by anybody who guesses the tick.
+  A modded phone could then redraw the Insiders and, now, every seat's contact seed. This predates
+  this unit.
+- **What a Revoked phone uploads.** Ruling 3 says every *live* phone uploads, and ruling 4 says a
+  Revoked one never scans. If it stops uploading, the Wi-Fi sees who is out. If it keeps uploading
+  heard-nothing messages on the cadence, it does not. That is for unit 3 to wire, and the message
+  allows either.
+- **The token's length (16 bytes) and the cadence (1 s)** are provisional for the radio (unit 4)
+  and for the contact-to-dark measurement (unit 7).
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `model` `Contact.kt`, `Hmac.kt` | (new) | `ContactSeed`, `ContactWindow`, `ContactToken`, `Sighting`; `ContactTokens.of` and `seatOf`; HMAC-SHA-256 in common Kotlin |
+| `model` `Effect.ContactSeedIssued`, `EmitSchema` | (new) | one per seat, addressed to that seat; row: both living classes |
+| `model/protocol` `RoundMessage.ContactSeedIssued`, `RoundBody.Sighted`, `SightingUpload` | (new) | the seed with the seat removed; the fixed-size upload and its packing |
+| `core` `contactSeedFor`, `armed` | (new) | the seed run in the arming burst, after the role reveal |
+| `harness` `Recording.HEADER` | `recording/18` | `recording/19`: one effect a version 18 build cannot name |
+| `app`, `ui` consumers | (new) | named no-ops: silent, never on `PanelState`, and the house drops uploads until unit 2 |
+| `ContactTokensTest`, `SightingUploadTest`, `ContactSeedTest`, `ContactDifferentialTest`, `EmitSchemaTest` | (new) | RFC 4231 and outside vectors; rotation; inversion; one seed per seat and its own, fails closed; seeds and uploads unmoved by a role exchange; one frame length for every phone |
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

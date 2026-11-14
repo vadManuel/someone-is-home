@@ -2,6 +2,7 @@ package home.someoneshome.model.protocol
 
 import home.someoneshome.model.AssignedWork
 import home.someoneshome.model.ClientFacing
+import home.someoneshome.model.ContactSeed
 import home.someoneshome.model.Destination
 import home.someoneshome.model.Effect
 import home.someoneshome.model.EgressType
@@ -261,6 +262,20 @@ sealed class RoundMessage {
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("RosterIssued")
     data class RosterIssued(val roster: List<String>) : RoundMessage()
+
+    /**
+     * **This phone's contact seed, and nothing else** (D-212, [Effect.ContactSeedIssued]).
+     *
+     * The seat comes off like every addressed kind here: the socket is the address, and a seat
+     * riding inside would tell a phone which seat it is. What is left is the key this phone's
+     * radio derives its tokens from. It is the same width on every phone and is drawn without
+     * reference to role, so the message is the same size and shape on an Insider's phone as on a
+     * Resident's.
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("ContactSeedIssued")
+    data class ContactSeedIssued(val seed: ContactSeed) : RoundMessage()
 
     /** The ring, to the living. Carries who called it, who is public by construction (D-121). */
     @ClientFacing
@@ -524,6 +539,7 @@ sealed class RoundMessage {
             is OpeningMessage -> EmitSchema.OPENING_MESSAGE
             is RoleRevealed -> EmitSchema.ROLE_REVEALED
             is RosterIssued -> EmitSchema.ROSTER_ISSUED
+            is ContactSeedIssued -> EmitSchema.CONTACT_SEED_ISSUED
             is MeetingOpened -> EmitSchema.MEETING_OPENED
             is MeetingCalling -> EmitSchema.MEETING_CALLING
             is StandAndWalkIn -> EmitSchema.STAND_AND_WALK_IN
@@ -561,6 +577,8 @@ sealed class RoundMessage {
  * - [Act] goes **client → host**. One request, with the sequence number this connection is at.
  * - [Fire] goes **client → host**. The Egress tile, held down — the one request whose fact the
  *   house must *compose* rather than translate, which is why it is not an [Act].
+ * - [Sighted] goes **client → host**. What this phone's radio heard: a report of fact, never a
+ *   request, on a fixed cadence and at a fixed size (D-212).
  *
  * ### [Gap] is not an Intent, and the distinction is not pedantry
  *
@@ -671,6 +689,34 @@ sealed class RoundBody {
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("fire")
     data class Fire(val seq: Long) : RoundBody()
+
+    /**
+     * **Client → host. "This is what my radio heard."** A fact, reported (rule 10, D-212).
+     *
+     * ### Why it is not an [Act], and why it is not a [Fire]
+     *
+     * [IntentMessage]'s header names the contact as deliberately absent: *physical, so it is
+     * reported, never requested*, and the seat it would name is one only the house can resolve from
+     * a rotating token (D7). So the phone does not report a contact at all. It reports what it heard
+     * — tokens, signal strengths, windows — and the contact is the house's conclusion (unit 2), made
+     * above the rules the way [Fire]'s draw is. Nothing here can be refused, because nothing here
+     * asks for anything; an upload the house cannot read is dropped.
+     *
+     * ### Fixed size, and that is the ruling rather than a tidiness
+     *
+     * [slots] is always [SightingUpload.BODY_CHARS] lowercase hex characters, built by
+     * [SightingUpload.pack] and by nothing else. **There is no sequence number**: a counter's digits
+     * grow, and a field whose width grew with what this phone had done would be a field a reader of
+     * the Wi-Fi could measure. A delivered-twice upload has to be harmless to the house's contact
+     * rule, which is the resolver's to guarantee (unit 2): the owner has ruled one contact per pair
+     * per five seconds.
+     *
+     * No seat and no actor: the seat comes off the connection, like every request's.
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("sighted")
+    data class Sighted(val slots: String) : RoundBody()
 }
 
 /**
@@ -733,6 +779,8 @@ object RoundWire {
         is Effect.RoleRevealed -> RoundMessage.RoleRevealed(effect.role == Role.Insider)
         // The seat comes off; the list is the same list on every wire it goes down.
         is Effect.RosterIssued -> RoundMessage.RosterIssued(effect.roster)
+        // The seat comes off; the seed is the message.
+        is Effect.ContactSeedIssued -> RoundMessage.ContactSeedIssued(effect.seed)
         is Effect.MeetingOpened ->
             RoundMessage.MeetingOpened(effect.caller, effect.trigger, effect.haptic)
         // **The seat comes off here, and the message is empty afterwards.** What survives the

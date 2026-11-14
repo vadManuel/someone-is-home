@@ -1,6 +1,7 @@
 package home.someoneshome.app
 
 import home.someoneshome.model.AssignedWork
+import home.someoneshome.model.ContactSeed
 import home.someoneshome.model.Destination
 import home.someoneshome.model.DriftPath
 import home.someoneshome.model.Effect
@@ -327,6 +328,7 @@ class HouseBuzzTest {
         Effect.RoleRevealed(Seat(1), Role.Resident),
         Effect.MeetingCalling(Seat(1)),
         Effect.RosterIssued(Seat(1), emptyList()),
+        Effect.ContactSeedIssued(Seat(1), ContactSeed("0123456789abcdef0123456789abcdef")),
         Effect.RevokeLanded(Seat(1)),
     )
 
@@ -468,6 +470,7 @@ class HouseBuzzTest {
             "SyncPulseAnswered", "EgressContained", "EgressSucceeded", "RoundEnded",
             "InsidersRevealed", "HouseSignedOff",
             "RoleRevealed", "MeetingCalling", "RosterIssued", "RevokeLanded",
+            "ContactSeedIssued",
         )
 
         /** The two nodes, as places. The rooms are never read here; the pair is what buzzes. */

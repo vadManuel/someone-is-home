@@ -50,6 +50,11 @@ class Recording(
     }
 
     companion object {
+        // 19: one effect a version 18 build cannot name -- `ContactSeedIssued`, one per seat in the
+        // arming burst (D-212). No event and no state row changed: the seed is derived from the
+        // round's seed, which the arming row already holds. It is still a bump for version 15's
+        // reason: the events are the same and the effect transcripts are not.
+        //
         // 18: the Terminal became a station (D-199, D-203). One event a version 17 build cannot
         // construct (`TerminalLeft`) and one effect it cannot name (`TerminalAnswered`), and two
         // rows changed shape: **`RoundArmed` gained the T card's id**, without which a replay
@@ -189,7 +194,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/18"
+        const val HEADER = "someone-is-home/recording/19"
     }
 }
 

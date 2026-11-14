@@ -386,6 +386,10 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
             // harness reads. Read off `state` rather than off `insiders`, so there is one answer to
             // this question in the round and the recording agrees with the phone.
             seats.map { Effect.RoleRevealed(it, state.roleOf(it)) } +
+            // **The radio's key, one per seat, every seat** (D-212). Drawn from the round's seed and
+            // the seat alone, never from a role, so the run is the same on both sides of a role
+            // swap; addressed to its own seat, so no phone holds another's.
+            seats.map { Effect.ContactSeedIssued(it, contactSeedFor(event.seed, it)) } +
             // **The Isolate picker, for every seat, narrowed to Insiders by the allowlist and not
             // by this line.** A phone cannot draw a list it was never sent, and the ruling says
             // Isolate picks from one. Grouped by kind like the three runs above it, and the same

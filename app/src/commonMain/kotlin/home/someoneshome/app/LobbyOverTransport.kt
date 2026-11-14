@@ -632,6 +632,11 @@ class LobbyHouse(
                 // reason: two arrivals from one phone must reach the rules in the order the player
                 // made them, and two launches would reach them in the order they finished.
                 is RoundBody.Fire -> arriving.trySend(Arrival.Fired(seat, round))
+                // ⚠️ **What a phone's radio heard, and nothing reads it yet** (D-212). The resolver
+                // that turns sightings into contacts is unit 2's and the queue it joins is unit 3's;
+                // until then an upload lands here and stops, which is the fail-closed direction: no
+                // contact is minted from a phone's report before the house knows how to judge one.
+                is RoundBody.Sighted -> Unit
             }
             return
         }

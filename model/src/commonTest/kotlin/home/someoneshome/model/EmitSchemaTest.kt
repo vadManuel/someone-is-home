@@ -1101,6 +1101,54 @@ class EmitSchemaTest {
         )
     }
 
+    /**
+     * **The contact seed reaches its own seat and no other phone, and only while that seat is
+     * living** (D-212).
+     *
+     * Three denials, each independent. The **row** names both living classes — narrowed to either
+     * role it would make the other role the phones the radio never sights. The **addressing** keeps
+     * seat 3's key off seat 5's phone, which the row cannot, because two living phones are one
+     * class. And the round-state axis declines it to a seat that is out, pre-arm or past the ending.
+     */
+    @Test
+    fun `a contact seed reaches its own seat only and both living roles alike`() {
+        assertEquals(
+            listOf(
+                ClientClass(Role.Resident, RoundState.Live),
+                ClientClass(Role.Insider, RoundState.Live),
+            ),
+            EmitSchema.classesFor(EmitSchema.CONTACT_SEED_ISSUED),
+            "the seed's row moved: narrowed to one role, the other is invisible to the radio",
+        )
+        val state = live()
+        val seed = ContactSeed("0123456789abcdef0123456789abcdef")
+        for (seat in seats) {
+            assertEquals(
+                listOf(seat),
+                EmitSchema.deliveries(Effect.ContactSeedIssued(seat, seed), state).map { it.seat },
+                "seat ${seat.index}'s seed did not go to exactly its own phone",
+            )
+        }
+        assertEquals(
+            emptyList(),
+            EmitSchema.deliveries(Effect.ContactSeedIssued(Seat(3), seed), state.copy(revoked = listOf(Seat(3)))),
+            "a seed was issued to a seat that is out",
+        )
+        assertEquals(emptyList(), EmitSchema.deliveries(Effect.ContactSeedIssued(Seat(3), seed), over()))
+        assertEquals(emptyList(), EmitSchema.deliveries(Effect.ContactSeedIssued(Seat(9), seed), state))
+    }
+
+    /**
+     * **The seed's row is what lets it out at all** — rule 2, asserted on this kind rather than on a
+     * made-up one. The kind has a row; a kind spelled one letter differently has none and reaches
+     * nobody, so the day the row is deleted the seed ships to nobody rather than to everybody.
+     */
+    @Test
+    fun `a contact seed with no row would ship to nobody`() {
+        assertTrue(EmitSchema.CONTACT_SEED_ISSUED in EmitSchema.knownKinds(), "the seed has no row")
+        assertEquals(emptyList(), EmitSchema.classesFor(MessageKind("ContactSeedIssue")))
+    }
+
     /** The ending itself is addressed per seat, and every seat gets exactly one. */
     @Test
     fun `the ending reaches every seat once`() {

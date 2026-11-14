@@ -2,8 +2,10 @@ package home.someoneshome.core
 
 import home.someoneshome.model.AssignedWork
 import home.someoneshome.model.Balance
+import home.someoneshome.model.ContactSeed
 import home.someoneshome.model.Destination
 import home.someoneshome.model.Event
+import home.someoneshome.model.Hmac
 import home.someoneshome.model.InsiderBand
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.OrderEntry
@@ -216,6 +218,30 @@ internal fun workOrderFor(
     }
     return WorkOrder(seat, entries)
 }
+
+/**
+ * **One seat's contact seed: HMAC-SHA-256 of the round's seed, keyed, over the seat index** (D-212).
+ *
+ * Seeded and recorded rather than random (rule 4): the round's seed is on `Event.RoundArmed`, so a
+ * replay issues every phone the seed it was issued that evening, and the house can re-derive any
+ * seat's seed whenever it needs to invert a token — nothing extra is held on `GameState`.
+ *
+ * **One-way, and that is why it is an HMAC rather than a [Draw].** [Draw] is a linear generator:
+ * a phone handed raw outputs of it could run it backwards to the round's seed, and the round's seed
+ * is what [insidersFor] draws the Insiders from. A phone holding its own seed learns nothing about
+ * the round's seed, another seat's seed, or anybody's role.
+ *
+ * **Nothing about the seat but its index is an input.** No role, no armed state: every seat's seed
+ * is drawn by the same rule, so a role-swapped round issues identical seeds.
+ */
+fun contactSeedFor(roundSeed: Long, seat: Seat): ContactSeed {
+    val key = ByteArray(8) { i -> (roundSeed ushr (56 - 8 * i)).toByte() }
+    val message = CONTACT_SEED_LABEL.encodeToByteArray() +
+        ByteArray(4) { i -> (seat.index ushr (24 - 8 * i)).toByte() }
+    return ContactSeed.of(Hmac.sha256(key, message))
+}
+
+private const val CONTACT_SEED_LABEL = "someone-is-home/contact-seed/1"
 
 /**
  * A deterministic stream, written out rather than borrowed.
