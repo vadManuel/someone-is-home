@@ -4623,6 +4623,77 @@ runs. Continuous scanning feeds it the same sightings and more.
 | `app`, `ui` consumers | (new) | named no-ops: silent, never on `PanelState`, and the house drops uploads until unit 2 |
 | `ContactTokensTest`, `SightingUploadTest`, `ContactSeedTest`, `ContactDifferentialTest`, `EmitSchemaTest` | (new) | RFC 4231 and outside vectors; rotation; inversion; one seed per seat and its own, fails closed; seeds and uploads unmoved by a role exchange; one frame length for every phone |
 
+## Revision 48 — the house's contact resolver
+
+*Unit 2 of the contact handshake. The owner's 2026-11-13 rulings 2–4 (D-212's scoping) are
+applied here; the numbers they left open are chosen, and two of them are placeholders. Nothing is
+wired yet: the arrival queue and the bench's stand-ins are unit 3's.*
+
+### D-213 · **The house turns sightings into contacts, mints every pair, and leaves the outcome to the rules — decided, two tolerances provisional**
+
+**Where it lives.** `core` `Contacts.kt`, `resolveContacts`, above the rules beside `routeScan`
+and for its reason: deciding what kind of fact an arrival is needs knowledge `reduce` never holds,
+here the token book. It is pure. The tick and the house's window are arguments, and what it
+remembers between arrivals is a value (`ContactMemory`), so a replay of the same arrivals rebuilds
+the same events and the same memory.
+
+**What it mints.** A mutual sighting mints `ContactMade` in both directions, for every pair,
+whoever they are. A one-sided sighting of a Revoked seat mints `MeetingCalled` with
+`RevokeReported`, which is exactly what the bench's stand-in mints. One side is enough because a
+Revoked phone advertises and never scans (D-008). Where several apply, every one is minted, sorted
+by the seat that acts or calls and then the seat it names, with a contact before a report between
+the same two, and the rules decide. In a huddle that means an armed Insider's contact reaches the
+lowest seat they touched. A second report in one arrival is refused by the gate and recorded, like
+any second meeting.
+
+**It never reads a role or an armed state, and the field list is the guarantee.** The only state
+it sees is `ContactHouse`: the round's seed, its seats, and who is Revoked. That last one is read
+because the report *is* that fact meeting a phone. `ContactResolverDifferentialTest` runs one set
+of arrivals against role exchanges, a role toggle and arms, and requires identical events and
+memory on every seat.
+
+| tolerance | value | standing |
+|---|---|---|
+| RSSI floor | **−35 dBm**, at or above is contact | ⚠️ **placeholder until unit 5.** D-008 and `gdd.md` make the radius a hard constraint: unit 5 may tighten it towards contact, per model pair if it must, and never loosen it towards *nearby* |
+| RSSI ceiling | 0 dBm or more is not a reading | decided. CoreBluetooth reports 127 for *no RSSI*; ungated, it would pass as the strongest contact in the house, from anywhere |
+| windows | the house's and the one before it | decided. A token from two windows back is stale; one from the window ahead is refused, so an advertiser whose clock runs ahead past an edge is lost for its skew and heard by the next upload |
+| mutual | both halves arrive within **2 s** | ⚠️ **placeholder.** Measured on arrival ticks: one 1 s upload interval each side, plus jitter. Unit 7 sets it, together with the cadence |
+| debounce | one contact per unordered pair per **5 s**, whatever was minted | ruled (D-212's scoping, ruling 4) |
+| duplicates | same seat, same slot list, within two windows | derived. Filler is keyed off the upload's counter, so honest uploads never match. After two windows every token in a repeat is stale anyway |
+
+**The token book replaces a `seatOf` call per slot.** `seatOf` derives every seat's token to answer
+one, so per slot it costs two HMACs per seat. Across 24 slots, 18 seats and every phone once a
+second, on a host that is itself a phone, that breaks rule 7's budget. The book is built by
+`ContactTokens.of` once per window, in seat order, keeping the first match, and a test pins it to
+`seatOf`.
+
+**Open, and raised for unit 3 rather than decided** (the rules and the schema are unchanged):
+
+1. **A touch by an unarmed Insider puts a message on their socket.** `Rules.contact` emits
+   `AbilityFired` to the actor on every contact (rule 1), and the row ships it to a living Insider
+   whether armed or not. Until now only the bench minted contacts, always from an armed Insider.
+   Once unit 3 wires the resolver, every touch sends one frame to an Insider's socket and none to
+   a Resident's. Nothing shows on screen and nothing buzzes, but the frame's presence follows the
+   role, on a transport D-212 already records as readable. **This needs a ruling before unit 3
+   wires.**
+2. **An armed Revoke outlives its holder going out.** Only a contact clears `cooldownArmed`, and
+   `Rules.contact` does not ask whether the actor is still living. An Insider who armed and was
+   then Restrained or Revoked can still land a Revoke if their phone uploads a mutual sighting.
+3. **A report's caller is never checked for being living**, not here and not at the gate. That is
+   harmless while out phones never scan. It stops being harmless if the pending question of what a
+   Revoked phone uploads is answered with sightings.
+4. **A refused event the resolver minted must not trigger D-097's re-push.** No phone asked for it.
+5. **An Insider who stays beside the player they Revoked for longer than the debounce reports
+   them**, which calls a meeting under the Insider's own name. That is the gesture working as
+   designed (D-121 corrected: one gesture, outcome by state). Noted for the playtest.
+6. **A contact during a meeting is admitted**, so a Revoke armed before the call can land in the
+   meeting room. This predates the resolver.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `core` `Contacts.kt` | (new) | `resolveContacts`, `ContactGate`, `ContactMemory`, `ContactBook`, `ContactHouse` |
+| `ContactResolverTest`, `ContactResolverDifferentialTest` | (new) | the gate on both sides; mutual and one-sided; window edges; debounce; duplicates; filler and strangers; a huddle of three; overlaps in seat order; replay; output unmoved by role or arm |
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).
