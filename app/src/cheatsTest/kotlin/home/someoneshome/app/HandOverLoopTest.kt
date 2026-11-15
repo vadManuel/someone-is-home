@@ -184,9 +184,17 @@ class HandOverLoopTest {
 
         // The work, with the input a screen offers. The three sequences go on their own last
         // element and the rest go on the control; both routes end at `posted`.
+        //
+        // **A tap stops landing once the entry has gone**, because that is where every screen goes
+        // inert (`ScreensSubroutines.kt`: no `tap` modifier once `handedOver`). Until D-214 the
+        // bench tapped eight times regardless, and nothing noticed, because the seed had never
+        // dealt this test a sequence on its first card: once it dealt a Handshake, each tap past
+        // the fifth beat filed a hand-over that no phone could file. SUBMIT is held to the same
+        // rule: a sequence has no button, so one that has gone is not pressed again.
         val gradedBefore = house.emitted.count { it is Effect.SubroutineGraded }
-        repeat(8) { actions.tapSubroutine(subroutine, it) }
-        actions.handOverSubroutine(subroutine)
+        fun gone() = phone.subroutines.entry(subroutine)?.gone == true
+        repeat(8) { if (!gone()) actions.tapSubroutine(subroutine, it) }
+        if (!gone()) actions.handOverSubroutine(subroutine)
         drain()
 
         val graded = house.emitted.count { it is Effect.SubroutineGraded } > gradedBefore

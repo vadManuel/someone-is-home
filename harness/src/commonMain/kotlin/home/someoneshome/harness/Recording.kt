@@ -50,6 +50,14 @@ class Recording(
     }
 
     companion object {
+        // 20: no row changed shape and every round re-draws (D-214). Every stream the house draws
+        // from the round's seed -- the Insider count and seats, the stations, the active set, each
+        // seat's anchors and kinds, each Subroutine's question, each Egress's nodes and type -- now
+        // starts from an HMAC of the seed under its own label rather than from the seed times a
+        // constant, and the jam's seed on `StaticOpened` is an HMAC too. A version 19 recording
+        // replayed by this build draws different work orders, questions, Egress nodes and noise from
+        // the same arming row, and would report every one of them as a divergence.
+        //
         // 19: one effect a version 18 build cannot name -- `ContactSeedIssued`, one per seat in the
         // arming burst (D-212). No event and no state row changed: the seed is derived from the
         // round's seed, which the arming row already holds. It is still a bump for version 15's
@@ -194,7 +202,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/19"
+        const val HEADER = "someone-is-home/recording/20"
     }
 }
 

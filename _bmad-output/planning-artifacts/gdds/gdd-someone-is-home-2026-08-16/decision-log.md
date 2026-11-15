@@ -4694,6 +4694,84 @@ second, on a host that is itself a phone, that breaks rule 7's budget. The book 
 | `core` `Contacts.kt` | (new) | `resolveContacts`, `ContactGate`, `ContactMemory`, `ContactBook`, `ContactHouse` |
 | `ContactResolverTest`, `ContactResolverDifferentialTest` | (new) | the gate on both sides; mutual and one-sided; window edges; debounce; duplicates; filler and strangers; a huddle of three; overlaps in seat order; replay; output unmoved by role or arm |
 
+## Revision 49 — nothing a phone holds leads back to the round's seed
+
+*Ruled by the owner 2026-11-15 (R6 of the contact handshake's second set): clients get a one-way
+derived seed. It is fixed before unit 3, because unit 3 puts contact seeds on every phone and the
+leak below hands a modded phone all of them.*
+
+### D-214 · **Every value the house derives from the round's seed goes through an HMAC under its own label — decided**
+
+**The leak, confirmed.** `StaticOpened.seed` was `roundSeed * 0x5DEECE66D + tick * 0x9E3779B9`
+modulo 2⁶⁴, and it reaches every living phone. The first constant is odd, so it has an inverse. A
+phone that guesses the firing tick computes `(jamSeed - tick * 0x9E3779B9) * inverse` and checks
+the answer against its own contact seed (D-212), which is exact. A thousand guesses take
+milliseconds. With the round's seed it reruns `insidersFor` and knows who the Insiders are, and it
+reruns `contactSeedFor` and holds every seat's radio key. `RoundSeedSecrecyTest` runs this attack.
+Against the old derivation it recovered the round at the true tick and redrew the Insiders.
+
+**The same flaw, one step removed.** Every `Draw` stream started at `roundSeed * constant + domain`,
+so every stream in the round was an affine function of one secret. Its outputs reach phones: a
+seat's work order (stations, active set, anchors, kinds), each opened Subroutine's question, the
+Insiders' Isolate picker (the active set), and each Egress's nodes and type. These outputs are
+truncated and reduced, so recovering the seed from them takes a search rather than a division. A
+Drift's 512-way draw exposes nine bits of the state at a time, and the low bits of an LCG modulo 2⁶⁴
+evolve without the high ones, so the search is on the order of 2⁴² rather than 2⁶⁴. That attack was
+not run. It is harder than the jam's seed but not out of reach, and the fix is the same.
+
+**The ruling, applied.**
+
+1. `oneWaySeed(roundSeed, purpose, index)` is HMAC-SHA-256 keyed by the round's seed (eight
+   big-endian bytes, as `contactSeedFor` already keys it) over the purpose's label and the index as
+   eight bytes. Its output is the digest's first eight bytes. `Hmac.kt` from D-212 is reused.
+2. **Each purpose has a label of its own**: `insider-count`, `insider-seats`, `stations`, `active`,
+   `anchors`, `kinds`, `instance`, `egress-nodes` under `someone-is-home/draw/…/1`, and
+   `someone-is-home/static-noise/1`. No label is a prefix of another. Indices: seat for anchors and
+   kinds, entity for instances, tick for Egress and Static. These replace the old strides.
+3. **`Draw` has no constructor that takes a raw state.** It takes the round's seed, a purpose and
+   an index, and starts from `oneWaySeed`. The generator after that is unchanged. A new stream gets
+   the HMAC whether or not its author knew why.
+4. **`StaticOpened.seed` is `oneWaySeed(roundSeed, StaticNoise, tick)`.** The message, its shape,
+   its audience, its timing and the lamp are unchanged. Only the value is new, and the client
+   draws noise from it exactly as before.
+5. `contactSeedFor` keeps its own label and its four-byte index (D-212), so the pinned token
+   vectors stand.
+
+**What moves.** Every round re-draws: for a given arming row, the Insiders, stations, work orders,
+questions, Egress nodes and noise all differ from what version 19 drew. No message changed shape and
+no client receives anything new. **Recording format 20.**
+
+**Why none of the three instruments caught it.** The differential harness holds the seed fixed and
+exchanges roles, so a value that encodes the seed is byte-identical in both runs. That is the
+property the harness certifies, and here it is the leak. The harness also rewrites the Insider list
+without touching the seed, so in its swapped run the seed no longer even predicts the Insiders. The
+schema allowlist checks which kind reaches which phone, never what a value can be solved for. Radio
+sniffing sees the radio. **This is a fourth class: a symmetric value that is a function of the
+secret.** It is guarded at the derivation. `RoundSeedSecrecyTest` asserts that no purpose's stream
+origin, and no jam seed as the rules emit it, is affine in the round's seed (any `a·s + b` satisfies
+`f(x+d) − f(x) = f(y+d) − f(y)`). It asserts that the labels are distinct and prefix-free, and it
+runs the attack above.
+
+**Allocation.** One HMAC per `Draw`: per seat twice at arming, once per scan, and once per Egress
+or Static. That is a few hundred bytes per event, on the host, off the blackout path (rule 7).
+
+**Open, and raised rather than decided:**
+
+- **Where the round's seed comes from.** The only source found, `RoundCheat.seed()`, falls back to
+  `Random.nextLong()`, which is not a cryptographic source. An HMAC hides a 64-bit key only as well
+  as the key is unpredictable. The release build's seed should come from the platform's secure
+  random. Not changed here.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `core` `Arming.kt` `Draw` | `seed * GOLDEN + domain`, numeric domains and strides | `SeedPurpose`, `oneWaySeed`; `Draw(roundSeed, purpose, index)` starts from the HMAC |
+| `core` `Rules.kt` `staticSeed` | `seed * 0x5DEECE66D + tick * 0x9E3779B9` | `oneWaySeed(seed, StaticNoise, tick)` |
+| `core` `Scanning.kt`, `Egress.kt` | `seed + id * stride`, `seed + tick * stride` | `Draw(seed, Instance, id)`, `Draw(seed, EgressNodes, tick)` |
+| `harness` `Recording.HEADER` | `recording/19` | `recording/20`: every round re-draws |
+| `RoundSeedSecrecyTest` | (new) | the jam-seed attack; no derived seed affine in the round's seed; labels distinct and prefix-free; the jam still replays |
+| `HostArmingTest` Egress test | fired from seat 0, which the old seed drew as the Insider | fired from the seat the seed drew |
+| `HandOverLoopTest.playOneCard` | tapped eight times and pressed SUBMIT whatever the screen was | stops where the screen goes inert. The re-draw dealt a Handshake first, and the bench filed five hand-overs that no phone could file |
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

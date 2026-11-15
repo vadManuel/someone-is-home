@@ -112,8 +112,8 @@ fun insidersFor(seed: Long, seats: List<Seat>, chosen: Int?): List<Seat> {
     val band = InsiderBand.of(seats.size)
     if (band.isEmpty()) return emptyList()
     val count = InsiderBand.clamp(seats.size, chosen)
-        ?: (band.first + Draw(seed, DOMAIN_COUNT).next(band.last - band.first + 1))
-    return seats.shuffledBy(Draw(seed, DOMAIN_WHO)).take(count).sortedBy { it.index }
+        ?: (band.first + Draw(seed, SeedPurpose.InsiderCount).next(band.last - band.first + 1))
+    return seats.shuffledBy(Draw(seed, SeedPurpose.InsiderSeats)).take(count).sortedBy { it.index }
 }
 
 /**
@@ -128,7 +128,7 @@ fun insidersFor(seed: Long, seats: List<Seat>, chosen: Int?): List<Seat> {
  * input was not. Registration already refuses a duplicate (D-086); this does not depend on it.
  */
 internal fun stationsFor(seed: Long, markers: List<MarkerId>): List<MarkerId> =
-    markers.distinctBy { it.value }.shuffledBy(Draw(seed, DOMAIN_STATIONS)).take(Balance.STATIONS)
+    markers.distinctBy { it.value }.shuffledBy(Draw(seed, SeedPurpose.Stations)).take(Balance.STATIONS)
 
 /**
  * **The round's active set: the stations, plus as many more markers as the party is sized for**
@@ -151,7 +151,7 @@ internal fun activeFor(
     if (all.isEmpty()) return emptyList()
     val wanted = maxOf(Balance.activeMarkers(seats, all.size), stations.size)
     val rest = all.filterNot { m -> stations.any { it.value == m.value } }
-    return stations + rest.shuffledBy(Draw(seed, DOMAIN_ACTIVE)).take(wanted - stations.size)
+    return stations + rest.shuffledBy(Draw(seed, SeedPurpose.Active)).take(wanted - stations.size)
 }
 
 /**
@@ -191,8 +191,8 @@ internal fun workOrderFor(
     active: List<MarkerId>,
 ): WorkOrder {
     if (active.isEmpty() || size <= 0) return WorkOrder(seat, emptyList())
-    val anchors = active.shuffledBy(Draw(seed + seat.index * SEAT_STRIDE, DOMAIN_ANCHORS))
-    val kinds = Draw(seed + seat.index * SEAT_STRIDE, DOMAIN_KINDS)
+    val anchors = active.shuffledBy(Draw(seed, SeedPurpose.Anchors, seat.index.toLong()))
+    val kinds = Draw(seed, SeedPurpose.Kinds, seat.index.toLong())
     val entries = mutableListOf<OrderEntry>()
     for (index in 0 until size) {
         val marker = anchors[index % anchors.size]
@@ -235,13 +235,82 @@ internal fun workOrderFor(
  * is drawn by the same rule, so a role-swapped round issues identical seeds.
  */
 fun contactSeedFor(roundSeed: Long, seat: Seat): ContactSeed {
-    val key = ByteArray(8) { i -> (roundSeed ushr (56 - 8 * i)).toByte() }
     val message = CONTACT_SEED_LABEL.encodeToByteArray() +
         ByteArray(4) { i -> (seat.index ushr (24 - 8 * i)).toByte() }
-    return ContactSeed.of(Hmac.sha256(key, message))
+    return ContactSeed.of(Hmac.sha256(roundKey(roundSeed), message))
 }
 
 private const val CONTACT_SEED_LABEL = "someone-is-home/contact-seed/1"
+
+/**
+ * **Everything the house derives from the round's seed, each under a label of its own** (D-214).
+ *
+ * The round's seed is the one value the Insiders are drawn from, so **nothing derived from it may
+ * lead back to it**. Every derivation goes through [oneWaySeed], an HMAC keyed by the round's seed
+ * over the purpose's label and an index, and the label is what keeps two purposes from reading one
+ * stream: moving the station draw cannot move the Insider draw, and a phone that somehow recovered
+ * the state of one stream holds an HMAC output, not the key it was made under.
+ *
+ * The labels are versioned. Changing one changes every round drawn under it, which is a recording
+ * format bump, not a refactor.
+ *
+ * [contactSeedFor] is one more derivation and predates this list (D-212). It keeps its own
+ * label and its four-byte seat index so that every contact token already pinned stays pinned.
+ */
+internal enum class SeedPurpose(val label: String) {
+    /** The Insider count, when the host left it UNKNOWN. Never reaches a phone. */
+    InsiderCount("someone-is-home/draw/insider-count/1"),
+
+    /** Who holds it. Never reaches a phone. */
+    InsiderSeats("someone-is-home/draw/insider-seats/1"),
+
+    /** The Array Wipe's three stations. Reach phones through the work orders. */
+    Stations("someone-is-home/draw/stations/1"),
+
+    /** The round's active markers. Reach the Insiders' picker and every work order. */
+    Active("someone-is-home/draw/active/1"),
+
+    /** One seat's anchors, indexed by seat. Reach that seat's work order. */
+    Anchors("someone-is-home/draw/anchors/1"),
+
+    /** One seat's Subroutine kinds, indexed by seat. Reach that seat's work order. */
+    Kinds("someone-is-home/draw/kinds/1"),
+
+    /** One opened Subroutine's question, indexed by its entity. Reaches the scanning phone. */
+    Instance("someone-is-home/draw/instance/1"),
+
+    /** An Egress's two nodes and its type, indexed by the firing tick. Reach every phone. */
+    EgressNodes("someone-is-home/draw/egress-nodes/1"),
+
+    /**
+     * A Static's noise field, indexed by the firing tick. **Rides `Effect.StaticOpened` to every
+     * living phone as a raw value**, which is why this purpose existed before the others were moved
+     * behind the HMAC: it was the round's seed times an odd constant plus the tick times another,
+     * and anybody who guessed the tick could divide it back out.
+     */
+    StaticNoise("someone-is-home/static-noise/1"),
+}
+
+/**
+ * **A 64-bit seed for [purpose], one-way from [roundSeed]** (D-214).
+ *
+ * HMAC-SHA-256 keyed by the round's seed, over the purpose's label and [index] as eight big-endian
+ * bytes, and the first eight bytes of the digest. Deterministic and replayable (rule 4): the round's
+ * seed is on `Event.RoundArmed`, so a replay derives every value again and nothing new is recorded.
+ *
+ * **Never a sum or a product of the round's seed.** Anything linear in it is invertible modulo 2⁶⁴,
+ * and `RoundSeedSecrecyTest` asserts that no derived seed is even affine in it.
+ */
+internal fun oneWaySeed(roundSeed: Long, purpose: SeedPurpose, index: Long = 0L): Long {
+    val message = purpose.label.encodeToByteArray() + ByteArray(8) { i -> (index ushr (56 - 8 * i)).toByte() }
+    val digest = Hmac.sha256(roundKey(roundSeed), message)
+    var out = 0L
+    for (i in 0 until 8) out = (out shl 8) or (digest[i].toLong() and 0xff)
+    return out
+}
+
+/** The round's seed as the HMAC key: eight big-endian bytes. [contactSeedFor]'s since D-212. */
+private fun roundKey(roundSeed: Long): ByteArray = ByteArray(8) { i -> (roundSeed ushr (56 - 8 * i)).toByte() }
 
 /**
  * A deterministic stream, written out rather than borrowed.
@@ -251,11 +320,22 @@ private const val CONTACT_SEED_LABEL = "someone-is-home/contact-seed/1"
  * would be a recording that no longer describes the evening it was made on. Same reasoning the
  * harness's own generator is written out for.
  *
- * [domain] separates the four draws that share a seed. Without it the station draw and the Insider
- * draw would be reading the same stream, and moving one would silently move the other.
+ * ### It starts from [oneWaySeed] and from nothing else (D-214)
+ *
+ * The generator itself is linear, and its outputs reach phones: a work order is a shuffle, a
+ * Subroutine's question is a run of draws. Until D-214 it started from the round's seed times a
+ * constant plus the domain, so every stream in the round was an affine function of one secret and
+ * a phone collecting enough of its own outputs could search its way back to the Insider draw. Now
+ * each stream starts from an HMAC output under its own [SeedPurpose], so the most a phone can
+ * recover is that one stream's state, and that leads nowhere. **There is no constructor that takes
+ * a raw state**, and that is the guarantee rather than a convention.
  */
-internal class Draw(seed: Long, domain: Long) {
-    private var state: Long = seed * GOLDEN + domain
+internal class Draw(roundSeed: Long, purpose: SeedPurpose, index: Long = 0L) {
+
+    /** Where this stream starts. Read by `RoundSeedSecrecyTest` and by nothing else. */
+    internal val origin: Long = oneWaySeed(roundSeed, purpose, index)
+
+    private var state: Long = origin
 
     fun next(bound: Int): Int {
         require(bound > 0) { "a draw with no options is not a draw" }
@@ -274,14 +354,5 @@ internal fun <T> List<T>.shuffledBy(draw: Draw): List<T> {
     return out
 }
 
-private const val DOMAIN_COUNT = 1L
-private const val DOMAIN_WHO = 2L
-private const val DOMAIN_STATIONS = 3L
-private const val DOMAIN_ACTIVE = 4L
-private const val DOMAIN_ANCHORS = 5L
-private const val DOMAIN_KINDS = 6L
-
-private const val SEAT_STRIDE = -0x61c8864680b583ebL
-private const val GOLDEN = -0x61c8864680b583ebL
 private const val MULTIPLIER = 6364136223846793005L
 private const val INCREMENT = 1442695040888963407L

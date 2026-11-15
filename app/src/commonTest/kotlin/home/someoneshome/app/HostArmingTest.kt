@@ -360,8 +360,10 @@ class HostArmingTest {
         armAtLightsOut(bench.house, hosting = true, seed = SEED, note = { bench.said += it })
         bench.house.at(SECONDS_PAST_THE_EGRESS_COOLDOWN)
 
+        // The Insider the seed drew, not seat 0: a Resident's fire is refused at the gate, and
+        // which seat the seed draws moved with D-214.
         assertTrue(
-            bench.house.fireEgress(bench.house.state.seats.first()),
+            bench.house.fireEgress(bench.house.state.insiderSeats.first()),
             "the house drew no Egress at all: ${bench.said}",
         )
         val ids = home.map.registrations.map { it.card.id.value }.toSet()

@@ -60,7 +60,7 @@ private fun armed(seed: Long = 20260822L): GameState = reduce(
 
 /** Every kind, dealt [many] times over from a stream nothing else is drawing from. */
 private fun dealt(kind: SubroutineKind, many: Int = 400): List<List<Int>> =
-    (0 until many).map { drawParameters(kind, Draw(it.toLong(), kind.ordinal.toLong())) }
+    (0 until many).map { drawParameters(kind, Draw(it.toLong(), SeedPurpose.Instance, kind.ordinal.toLong())) }
 
 /** An instance of [kind] with a known question, built the way the rules build one. */
 private fun instance(

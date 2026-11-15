@@ -297,7 +297,7 @@ class ASignalTraceGradesFromEitherEndTest {
         val base = armed()
         val scanned = reduce(base, Event.MarkerScanned(Tick(1), seat, cardFor(base, seat))).state
         val open = scanned.openSubroutineFor(seat) ?: error("seat ${seat.index} opened nothing")
-        val parameters = drawParameters(SubroutineKind.SignalTrace, Draw(seed = 20261113L, domain = 8L))
+        val parameters = drawParameters(SubroutineKind.SignalTrace, Draw(20261113L, SeedPurpose.Instance))
         return scanned.withOpenSubroutine(
             OpenSubroutine(
                 seat = seat,

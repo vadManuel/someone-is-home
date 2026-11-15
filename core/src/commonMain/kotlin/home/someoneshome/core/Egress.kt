@@ -57,9 +57,10 @@ import home.someoneshome.model.Tick
  *
  * ### Seeded off the round and the moment
  *
- * Never `Random`. The draw folds the round's seed with the tick, so two Egresses in one round draw
- * different pairs and a replay draws what it drew before — and because the answer rides the event,
- * the recording holds it whether or not this function is ever called again.
+ * Never `Random`. The draw is keyed one-way off the round's seed and indexed by the tick (D-214),
+ * so two Egresses in one round draw different pairs and a replay draws what it drew before — and
+ * because the answer rides the event, the recording holds it whether or not this function is ever
+ * called again.
  */
 fun egressFor(
     at: Tick,
@@ -71,7 +72,7 @@ fun egressFor(
     val candidates = state.activeMarkers.distinctBy { it.value }
     if (candidates.size < 2) return null
 
-    val draw = Draw(state.seed + at.step * EGRESS_STRIDE, DOMAIN_EGRESS_NODES)
+    val draw = Draw(state.seed, SeedPurpose.EgressNodes, at.step)
     val shuffled = candidates.shuffledBy(draw)
     val hops = hopsBetween(plan)
 
@@ -231,6 +232,3 @@ internal fun onTheBeat(firedAt: Tick, taps: List<Long>): Boolean {
 
 /** Two storeys apart, or no path at all — ranked above every finite distance. See [separation]. */
 private const val UNREACHABLE = Int.MAX_VALUE
-
-private const val DOMAIN_EGRESS_NODES = 9L
-private const val EGRESS_STRIDE = -0x61c8864680b583ebL

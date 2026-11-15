@@ -849,8 +849,9 @@ private fun isolateFired(state: GameState, event: Event.IsolateFired): Reduction
  * ### The seed is a fact about WHEN and never about WHO
  *
  * The noise on the client is authored light (rule 5) and has to replay, so the field it is generated
- * from rides the effect. It is minted from the round's seed and the firing tick, **and from nothing
- * else** — no actor, no seat index, no Insider count. Two Statics fired at the same tick by
+ * from rides the effect. It is minted one-way from the round's seed and the firing tick, **and from
+ * nothing else** — no actor, no seat index, no Insider count — and it can never be run back to the
+ * round's seed, which the Insiders are drawn from (D-214). Two Statics fired at the same tick by
  * different Insiders would produce identical bytes, which is the property the anonymity rests on and
  * is asserted directly.
  *
@@ -878,9 +879,10 @@ private fun staticFired(state: GameState, event: Event.StaticFired): Reduction<G
     val answered = Effect.AbilityFired(actor = event.actor, cooldownStarted = ready)
 
     // **The house announcing its own blindness, to every living phone in the building.** Not
-    // addressed, not narrowed, and carrying no seat -- see Effect.StaticOpened. The seed is the
-    // round's own, folded with the tick the fire landed on, so a replay draws the same noise and
-    // two Insiders firing at the same tick are indistinguishable.
+    // addressed, not narrowed, and carrying no seat -- see Effect.StaticOpened. The seed is derived
+    // one-way from the round's own and the tick the fire landed on, so a replay draws the same noise,
+    // two Insiders firing at the same tick are indistinguishable, and no phone can run it back to
+    // the seed the Insiders were drawn from (D-214).
     val jammed = if (!ready) {
         emptyList()
     } else {
@@ -896,13 +898,16 @@ private fun staticFired(state: GameState, event: Event.StaticFired): Reduction<G
 }
 
 /**
- * **The noise field's seed: the round's own, folded with the tick.**
+ * **The noise field's seed: one-way from the round's own, under its own label, indexed by the tick**
+ * (D-214).
  *
  * Deterministic, replayable, and **incapable of naming anybody** — there is no seat argument and
- * there must never be one. A mix rather than a sum so that two jams a few ticks apart do not draw
- * two nearly identical fields, which on a ten-second window would read as the same jam continuing.
+ * there must never be one. An HMAC rather than a mix, because this value reaches every living phone
+ * raw: until D-214 it was `seed * 0x5DEECE66D + tick * 0x9E3779B9`, and the first constant is odd, so
+ * a phone that guessed the tick multiplied by its inverse modulo 2⁶⁴ and held the round's seed, and
+ * with it the Insider draw. Two jams a few ticks apart still draw unrelated fields.
  */
-private fun staticSeed(seed: Long, at: Tick): Long = seed * 0x5DEECE66DL + at.step * 0x9E3779B9L
+internal fun staticSeed(seed: Long, at: Tick): Long = oneWaySeed(seed, SeedPurpose.StaticNoise, at.step)
 
 /**
  * **The Isolate picker — built for EVERY seat, and narrowed by the allowlist** (D-150, D-079, the

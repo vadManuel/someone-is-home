@@ -195,7 +195,9 @@ sealed interface Effect {
      * animation the core did not author. So the field the noise is generated from **rides the
      * effect**: the same seed on every phone draws the same field, and a replay of the round draws
      * it again. It is minted off the round's seed and the firing tick and from nothing else, so it
-     * is a fact about *when* and never about *who* — see `staticFired` in the rules.
+     * is a fact about *when* and never about *who* — see `staticFired` in the rules. **Through an
+     * HMAC, never arithmetic** (D-214): every living phone holds this value, and one that could be
+     * divided back to the round's seed would redraw the Insiders.
      *
      * ### It has no [Sound] and no [Haptic], and both are rulings rather than omissions
      *

@@ -145,7 +145,7 @@ internal fun instanceFor(
     kind: SubroutineKind,
     marker: MarkerId,
 ): OpenSubroutine {
-    val draw = Draw(seed + id.value * INSTANCE_STRIDE, DOMAIN_INSTANCE)
+    val draw = Draw(seed, SeedPurpose.Instance, id.value)
     val parameters = drawParameters(kind, draw)
     return OpenSubroutine(
         seat = seat,
@@ -156,6 +156,3 @@ internal fun instanceFor(
         armedAt = marker,
     )
 }
-
-private const val DOMAIN_INSTANCE = 8L
-private const val INSTANCE_STRIDE = 0x2545F4914F6CDD1DL
