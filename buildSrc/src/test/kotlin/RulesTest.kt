@@ -178,3 +178,38 @@ class ArmingCordonRulesTest {
         assertEquals("launchSwitch", v.single().text)
     }
 }
+
+/** The seed-source cordon (D-215), checked the way the arming cordon is. */
+class SeedSourceRulesTest {
+
+    private fun caught(source: String) = SeedSourceRules.violations(source).isNotEmpty()
+
+    @Test
+    fun `the insecure fallback that was here is caught`() {
+        assertTrue(caught("fun seed(): Long = launchValue(SEED_SWITCH)?.toLongOrNull() ?: Random.nextLong()"))
+        assertTrue(caught("import kotlin.random.Random"))
+        assertTrue(caught("val r = Random(42)"))
+        assertTrue(caught("val r = kotlin.random.Random.Default"))
+        assertTrue(caught("val t = Random . nextBytes(16)"))
+    }
+
+    @Test
+    fun `the secure draw and names that merely contain the word are not uses`() {
+        assertTrue(!caught("fun seed(): Long = launchValue(SEED_SWITCH)?.toLongOrNull() ?: drawRoundSeed()"))
+        assertTrue(!caught("val s = secureRandomLong()"))
+        assertTrue(!caught("val b = secureRandomBytes(16)"))
+        assertTrue(!caught("class RandomAccessThing"))
+    }
+
+    @Test
+    fun `documentation about the rule does not trip it`() {
+        assertTrue(!caught("// it used to be Random.nextLong()\nval x = 1"))
+        assertTrue(!caught("/**\n * Never `kotlin.random.Random`.\n */\nval x = 1"))
+    }
+
+    @Test
+    fun `it reports the line the use is on`() {
+        val v = SeedSourceRules.violations("val a = 1\nval b = Random.nextLong()")
+        assertEquals(2, v.single().line)
+    }
+}

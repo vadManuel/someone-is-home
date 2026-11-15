@@ -16,7 +16,6 @@ import home.someoneshome.ui.FlowModel
 import home.someoneshome.ui.ScreenId
 import home.someoneshome.ui.Subroutine
 import kotlin.concurrent.Volatile
-import kotlin.random.Random
 import kotlinx.coroutines.delay
 
 /**
@@ -958,8 +957,12 @@ class RoundCheat(
          * and for the same reason: tokens and seeds never enter a recording as anything but the
          * value that was used, and the determinism rules are about what *does* — the draw from a
          * seed, which is `armingFor`'s and is unchanged.
+         *
+         * **The draw is [drawRoundSeed], the platform's secure source** (D-215). It was
+         * `kotlin.random.Random.nextLong()`, which is a seeded generator with a published
+         * algorithm, and every secret in the round is an HMAC under this value (D-214).
          */
-        fun seed(): Long = launchValue(SEED_SWITCH)?.toLongOrNull() ?: Random.nextLong()
+        fun seed(): Long = launchValue(SEED_SWITCH)?.toLongOrNull() ?: drawRoundSeed()
 
         private const val STEP_MILLIS = 400L
         private const val SETTLE_MILLIS = 1_500L

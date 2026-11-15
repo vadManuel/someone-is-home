@@ -38,7 +38,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.random.Random
 
 /**
  * **The lobby's two seams, joined to the radio.**
@@ -384,8 +383,9 @@ class LobbyHouse(
         val ledger = SeatLedger(
             List(LOBBY_SEATS) { Seat(it) },
             // The app root is where real randomness belongs (the ledger's own KDoc): tokens never
-            // enter a recording, and the determinism rules are about what does.
-            mint = { SeatToken(Random.nextLong().toString(16) + Random.nextLong().toString(16)) },
+            // enter a recording, and the determinism rules are about what does. Secure, because a
+            // token a phone could guess is a resume as somebody else's seat (D-215).
+            mint = ::mintSeatToken,
         )
         val server = TransportHost(
             ledger,

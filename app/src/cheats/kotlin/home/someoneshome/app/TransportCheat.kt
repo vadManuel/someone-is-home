@@ -47,7 +47,6 @@ import home.someoneshome.ui.u
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import kotlin.random.Random
 
 /** The cheat's fixed port. Not part of the wire contract — mDNS will advertise the real one. */
 const val CHEAT_TRANSPORT_PORT: Int = 47747
@@ -123,9 +122,10 @@ class TransportCheat(private val scope: CoroutineScope) {
         if (host != null) return
         val seats = SeatLedger(
             List(8) { Seat(it) },
-            // Real randomness belongs to the app root (the ledger's own KDoc); a cheat's tokens
-            // never outlive the process, so Random is exactly right here and nowhere else.
-            mint = { SeatToken(Random.nextLong().toString(16) + Random.nextLong().toString(16)) },
+            // Real randomness belongs to the app root (the ledger's own KDoc). The secure mint even
+            // here, where tokens never outlive the process: `seedSourceCordon` admits no
+            // `kotlin.random` anywhere in this module, so there is no second source to reach for.
+            mint = ::mintSeatToken,
         )
         ledger = seats
         val h = TransportHost(

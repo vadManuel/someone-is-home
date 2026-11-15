@@ -116,3 +116,25 @@ abstract class ArmingCordonTask : SourceGuardTask() {
         },
     )
 }
+
+/**
+ * Seed-source cordon (D-215).
+ *
+ * *"A round's seed comes from the platform's secure source."* Scans every source set of `app` and
+ * `platform` that compiles into a phone, cheats included, and fails on any use of `kotlin.random`.
+ */
+abstract class SeedSourceCordonTask : SourceGuardTask() {
+    @TaskAction
+    fun check() = scan(
+        name = "seedSourceCordon",
+        rule = SeedSourceRules::violations,
+        advice = buildString {
+            appendLine("Every secret in a round is an HMAC keyed by the round's seed (D-214). A")
+            appendLine("seed from kotlin.random is a seed a phone can guess, and a guessed seed")
+            appendLine("redraws the Insiders and every seat's radio key.")
+            appendLine()
+            appendLine("Draw seeds with drawRoundSeed() and seat tokens with mintSeatToken(); both")
+            appendLine("read platform's secureRandomBytes (SecRandomCopyBytes on iOS).")
+        },
+    )
+}

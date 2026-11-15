@@ -255,3 +255,38 @@ object ArmingCordonRules {
         }.toList()
     }
 }
+
+/**
+ * **The seed-source cordon: no seed and no seat token is drawn from `kotlin.random`** (D-215).
+ *
+ * Every secret in a round is an HMAC keyed by the round's seed (D-212, D-214): the Insider draw,
+ * every seat's contact seed and so every radio token, the jam's noise, the work orders. An HMAC
+ * hides its key only as well as the key is unpredictable, and `kotlin.random.Random` is a seeded
+ * generator with a published algorithm. `RoundCheat.seed()` fell back to `Random.nextLong()` for a
+ * whole unit after the derivations were made one-way, and nothing failed.
+ *
+ * So the modules that draw seeds and tokens may not name `kotlin.random` at all, in any source set
+ * that compiles into a phone, cheats included: the secure draw is `drawRoundSeed` and
+ * `mintSeatToken`, over `platform`'s `secureRandomBytes`. A whole-module rule rather than one about
+ * a function, for the arming cordon's reason: a guard that named one call site is satisfied by the
+ * call one line up.
+ *
+ * Matched: the package, and `Random` used as a receiver or a constructor. A word that merely
+ * contains it (`secureRandomLong`, `RandomAccess`) is not a use.
+ */
+object SeedSourceRules {
+
+    private val USES = Regex("""\bkotlin\.random\b|\bRandom\s*[.(]""")
+
+    fun violations(source: String): List<Violation> {
+        val code = SourceText.blankComments(source)
+        return USES.findAll(code).map { m ->
+            Violation(
+                line = code.take(m.range.first).count { it == '\n' } + 1,
+                text = m.value.trim(),
+                reason = "a seed or a seat token drawn from kotlin.random can be guessed — draw it " +
+                    "with drawRoundSeed() / mintSeatToken() (platform secureRandomBytes)",
+            )
+        }.toList()
+    }
+}

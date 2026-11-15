@@ -15,9 +15,13 @@ val redactionModules = setOf("model")
 // The arming cordon covers `app`, which is the only module that holds the house. Its production
 // source sets are what a release build compiles; the benches beside them are not.
 val cordonModules = setOf("app")
+// The seed-source cordon (D-215) covers the two modules that draw a round's seed and a seat's token:
+// `app`, every source set that compiles into a phone and the cheats among them, and `platform`,
+// where the secure source itself lives.
+val seedSourceModules = setOf("app", "platform")
 gradle.projectsEvaluated {
     val present = subprojects.map { it.name }.toSet()
-    val missing = (vocabularyModules + redactionModules + cordonModules) - present
+    val missing = (vocabularyModules + redactionModules + cordonModules + seedSourceModules) - present
     require(missing.isEmpty()) {
         "Guards are registered by module name and these do not exist: $missing. " +
             "Renaming a module must not silently remove its guard."
@@ -76,6 +80,22 @@ subprojects {
             )
         }
         tasks.matching { it.name == "check" }.configureEach { dependsOn(cordon) }
+    }
+
+    // **The seed-source cordon (D-215).** Every secret in a round is an HMAC keyed by the round's
+    // seed, so the seed's source is the whole of the secrecy. No `kotlin.random` in any source set
+    // that compiles into a phone -- the cheats included, because the bench's seed draw is the one an
+    // evening actually got. The directories are named, for the arming cordon's reason above.
+    if (name in seedSourceModules) {
+        val seedSource = tasks.register<SeedSourceCordonTask>("seedSourceCordon") {
+            group = "verification"
+            description = "Fails on any use of kotlin.random where a seed or a seat token is drawn."
+            listOf("src/commonMain", "src/iosMain", "src/variant", "src/cheats")
+                .map { layout.projectDirectory.dir(it) }
+                .filter { it.asFile.exists() }
+                .forEach { sources.from(it) }
+        }
+        tasks.matching { it.name == "check" }.configureEach { dependsOn(seedSource) }
     }
 
     // Redaction lint covers model, which is where the schema and every wire type live.

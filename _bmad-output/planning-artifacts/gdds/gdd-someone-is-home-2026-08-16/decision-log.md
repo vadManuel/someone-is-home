@@ -4772,6 +4772,70 @@ or Static. That is a few hundred bytes per event, on the host, off the blackout 
 | `HostArmingTest` Egress test | fired from seat 0, which the old seed drew as the Insider | fired from the seat the seed drew |
 | `HandOverLoopTest.playOneCard` | tapped eight times and pressed SUBMIT whatever the screen was | stops where the screen goes inert. The re-draw dealt a Handshake first, and the bench filed five hand-overs that no phone could file |
 
+## Revision 50 — the round's seed comes from the secure source
+
+*Step 0 of unit 3 of the contact handshake, closing D-214's open item. Every derivation in D-214 is
+one-way, so the round's seed is now the whole of the secrecy, and it was drawn from a generator
+anybody can run.*
+
+### D-215 · **A round's seed and a seat's token are drawn from the platform's secure source — decided**
+
+**Where a round's seed originates, all of it.** A search of every module for a seed being made
+found one live source and three that are not live:
+
+| origin | what it is | what it draws from now |
+|---|---|---|
+| `RoundCheat.seed()` (cheats; debug and playtest) | the seed every evening armed by a thumb gets, and the bench's when no switch names one | `drawRoundSeed()`. It was `kotlin.random.Random.nextLong()` |
+| the bench's `SOMEONES_HOME_ROUND_SEED` switch | a rehearsal naming its own evening, so it can be repeated | unchanged. A named seed is meant to be known |
+| `harness` `Fuzz` | the fuzzer's generated rounds, from its own seeded stream | unchanged. A test input, never an evening |
+| tests' fixed seeds | pinned rounds | unchanged |
+
+The release variant arms nothing yet (its root shows Boot), so it has no seed source of its own.
+When it gains one, `drawRoundSeed()` is the only function in `app` that draws one.
+
+**The ruling, applied.**
+
+1. `platform` gains `secureRandomBytes(count)`, an `expect` with an iOS `actual` over
+   `SecRandomCopyBytes(kSecRandomDefault, …)`, and `secureRandomLong()`, eight of those bytes
+   big-endian. **It throws rather than falling back.** A secure source quietly replaced by a weaker
+   one is the failure nobody sees, in the one value whose quality cannot be seen. The draw happens
+   before a round exists, on the host's phone, in a lit room, so a LIGHTS OUT that does nothing and
+   says why on the authority's log is the loud direction (rule 6).
+2. `app` gains `drawRoundSeed()`, and `RoundCheat.seed()` falls back to it.
+3. **Seat tokens move too.** They are not seeds, but a token a modded phone could guess is a resume
+   as somebody else's seat, and that seat's pushes, its role among them. Both mints, the lobby's and
+   the transport bench's, are now `mintSeatToken()`: sixteen secure bytes as 32 hex characters.
+4. **It is still recorded.** The value drawn is the value `RoundArmed` carries, so a recording replays
+   the evening exactly. Nothing about derivation changes, and no recording format moves.
+5. **Guarded by `seedSourceCordon`**, a source rule over every source set of `app` and `platform`
+   that compiles into a phone, cheats included. It fails on any use of `kotlin.random`. A rule over
+   the whole module rather than one function, for the arming cordon's reason: a guard that names one
+   call site is satisfied by the call one line up. `SecureRandomTest` covers what a test can: the
+   source answers, never repeats in a thousand draws, and moves all 64 bits of a seed.
+
+**There is no JVM or desktop actual.** `platform` has iOS targets only, and nothing on a JVM arms a
+round. Adding a JVM target to `platform` for this one function would need a JVM actual for every
+`expect` in the module. When `platform` gains a JVM target, the actual is `java.security.SecureRandom`.
+
+**Open, and raised rather than decided:**
+
+- **The host's log prints the seed.** `RoundAuthority.arm` writes `ARMING — SEED n`, and the debug
+  and playtest roots send it to the device console. From the seed, `insidersFor` redraws the Insiders
+  and `contactSeedFor` every radio key. The arming note's own comment already says a file naming the
+  Insiders gives the game away, and this line is that file one function call removed. It is also, today,
+  the only place an evening's seed is kept, because no build writes a recording yet (`RECORDING_ON`
+  has no consumer). It is left as it is: removing it loses replay, keeping it keeps the leak, and the
+  choice is the owner's.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `platform` `SecureRandom.kt`, `SecureRandom.ios.kt` | (new) | `secureRandomBytes`, `secureRandomLong`; `SecRandomCopyBytes`, throwing on failure |
+| `app` `RoundSeed.kt` | (new) | `drawRoundSeed()`, `mintSeatToken()` |
+| `RoundCheat.seed()` | `?: Random.nextLong()` | `?: drawRoundSeed()` |
+| `LobbyHouse.start`, `TransportCheat.startHost` | `SeatToken(Random.nextLong()… + Random.nextLong()…)` | `mintSeatToken()` |
+| `buildSrc` `SeedSourceRules`, `SeedSourceCordonTask`; root `build.gradle.kts` | (new) | `seedSourceCordon` on `app` and `platform`, under `check` |
+| `SecureRandomTest`, `SeedSourceRulesTest` | (new) | the source answers, never repeats, moves every bit; the rule catches the old fallback and leaves the secure draw alone |
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).
