@@ -124,4 +124,17 @@ class SimulatedRadio internal constructor(val seat: Seat, private val air: Simul
         advertised = null
         scanning = false
     }
+
+    private var down = false
+
+    /**
+     * **The bench's hand on the Bluetooth switch** (T2, D-222). Down, this radio reports one fault
+     * onset at the next beat; it hears and is heard as before, because what a fault does to the air
+     * is the hardware's and not the bench's question.
+     */
+    fun fail() {
+        down = true
+    }
+
+    override fun faultBegan(): Boolean = down.also { down = false }
 }

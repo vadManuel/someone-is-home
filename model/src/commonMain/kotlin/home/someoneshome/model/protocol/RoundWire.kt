@@ -338,6 +338,16 @@ sealed class RoundMessage {
     data class CheckInProgressed(val present: Int, val expected: Int) : RoundMessage()
 
     /** Where the meeting has got to, and the ballot's window on the push that opens it (D-117). */
+    /**
+     * **The radios that went down since the last meeting, named to the whole room** (T2, D-222).
+     * Every phone gets the same list, empty at a meeting where none did. See
+     * [home.someoneshome.model.Effect.RadioFaultsAnnounced].
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("RadioFaultsAnnounced")
+    data class RadioFaultsAnnounced(val seats: List<Seat>) : RoundMessage()
+
     @ClientFacing
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("MeetingPhaseOpened")
@@ -584,6 +594,7 @@ sealed class RoundMessage {
             is StandAndWalkIn -> EmitSchema.STAND_AND_WALK_IN
             is CheckInProgressed -> EmitSchema.CHECK_IN_PROGRESSED
             is MeetingPhaseOpened -> EmitSchema.MEETING_PHASE_OPENED
+            is RadioFaultsAnnounced -> EmitSchema.RADIO_FAULTS_ANNOUNCED
             is ReadyProgressed -> EmitSchema.READY_PROGRESSED
             is VoteHeld -> EmitSchema.VOTE_HELD
             is VoteSelectionShown -> EmitSchema.VOTE_SELECTION_SHOWN
@@ -618,6 +629,8 @@ sealed class RoundMessage {
  *   house must *compose* rather than translate, which is why it is not an [Act].
  * - [Sighted] goes **client → host**. What this phone's radio heard: a report of fact, never a
  *   request, on a fixed cadence and at a fixed size (D-212).
+ * - [RadioFaulted] goes **client → host**. This phone's radio went down: a report of fact, one fixed
+ *   shape with nothing in it, once per fault onset (T2, D-222).
  *
  * ### [Gap] is not an Intent, and the distinction is not pedantry
  *
@@ -756,6 +769,21 @@ sealed class RoundBody {
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("sighted")
     data class Sighted(val slots: String) : RoundBody()
+
+    /**
+     * **Client → host. "My radio went down."** A fact, reported (rule 10; T2, D-222).
+     *
+     * **One fixed shape and nothing in it.** No kind, no reason, no time, no seat: every phone that
+     * sends one sends the same bytes, whatever its role, whether it is out, and whether its radio was
+     * switched off, had its permission withdrawn or reset. So a reader of the Wi-Fi learns that some
+     * phone's radio went down, which the room learns at the next meeting anyway, and nothing else.
+     * Sent once per fault onset (`SwitchboardRadio`), never per callback. The seat comes off the
+     * connection, like every upward body's.
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("radioFaulted")
+    data object RadioFaulted : RoundBody()
 }
 
 /**
@@ -833,6 +861,7 @@ object RoundWire {
             RoundMessage.CheckInProgressed(effect.present, effect.expected)
         is Effect.MeetingPhaseOpened ->
             RoundMessage.MeetingPhaseOpened(effect.phase, effect.voteWindowSeconds, effect.haptic)
+        is Effect.RadioFaultsAnnounced -> RoundMessage.RadioFaultsAnnounced(effect.seats)
         is Effect.ReadyProgressed -> RoundMessage.ReadyProgressed(effect.ready, effect.expected)
         is Effect.VoteHeld -> RoundMessage.VoteHeld(effect.selection, effect.locked)
         is Effect.VoteSelectionShown ->

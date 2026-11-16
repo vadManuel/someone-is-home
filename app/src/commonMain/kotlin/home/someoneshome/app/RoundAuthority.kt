@@ -343,6 +343,17 @@ class RoundAuthority(
         for (event in resolution.events) concluded(event)
     }
 
+    /**
+     * **A phone's radio went down** (T2, D-222). Loud here, in the house's log, and put to the rules,
+     * which hold it for the next meeting's notice. Admitted or refused, nothing goes down any socket
+     * now: the notice is the meeting's, to everybody at once. A report that arrives before arming or
+     * after the round is refused by the gate and recorded, like any.
+     */
+    suspend fun radioFaulted(seat: Seat) {
+        note("RADIO FAULT — SEAT ${seat.index} · THE HOUSE ANNOUNCES IT AT THE NEXT MEETING")
+        concluded(Event.RadioFaulted(Tick(tick++), seat))
+    }
+
     /** One event the resolver minted, admitted; refused, it is recorded and answered with nothing. */
     private suspend fun concluded(event: Event) {
         val before = state

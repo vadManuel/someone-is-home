@@ -1986,6 +1986,13 @@ class FlowModel(
             // that it had been touched; this branch is a named no-op and stays one.
             is RoundMessage.ContactAnswered -> Unit
 
+            // **The house's radio notice, held back until its words are decided** (T2, D-222). It
+            // arrives on every phone at every meeting, just before the push that opens the notices,
+            // and it is the content the notices screen is waiting for. What that screen says about
+            // it is the owner's to rule, so for now it moves nothing and draws nothing: a named
+            // no-op, replaced by one call when the copy is settled.
+            is RoundMessage.RadioFaultsAnnounced -> Unit
+
             // **THE SURGE LANDING ON THIS PHONE, and it is five seconds of the phone malfunctioning**
             // (D-182: 1.5s at full, 1.0s black, 2.5s of the Boot render, no input at any point, and
             // the open Subroutine instance lost).

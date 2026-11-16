@@ -108,6 +108,9 @@ object Transcript {
         is Event.MeetingCalled ->
             row("MeetingCalled", event.at, "caller" to num(event.caller.index),
                 "trigger" to trigger(event.trigger))
+        // The seat and the tick, and nothing else: the report has no kind (T2, D-222).
+        is Event.RadioFaulted ->
+            row("RadioFaulted", event.at, "seat" to num(event.seat.index))
         is Event.MeetingCheckedIn ->
             row("MeetingCheckedIn", event.at, "seat" to num(event.seat.index))
         is Event.ReadyToVoteDeclared ->
@@ -303,6 +306,8 @@ object Transcript {
         // The ballot's window is on the row and renders as a token when it is absent, for the
         // reason a scan's null does: a phase that carries no window and a phase that carries one
         // must not be separable by the shape of the line rather than by its contents.
+        is Effect.RadioFaultsAnnounced ->
+            "RadioFaultsAnnounced|seats=" + effect.seats.joinToString(",") { num(it.index) }
         is Effect.MeetingPhaseOpened ->
             "MeetingPhaseOpened|phase=${effect.phase}" +
                 "|voteWindow=${effect.voteWindowSeconds?.let { num(it) } ?: "none"}" +
@@ -459,6 +464,16 @@ object Transcript {
         append("|newlyRevoked=").append(state.newlyRevoked.joinToString(",") { num(it.index) })
         append("|restrained=").append(state.restrained.joinToString(",") { num(it.index) })
         append("|armedRevoke=").append(state.cooldownArmed.joinToString(",") { num(it.index) })
+        // S4's list (D-219), which this row had left out: a replay that reported a seat twice must
+        // not match one that refused the second report.
+        append("|reported=").append(state.reported.joinToString(",") { num(it.index) })
+        // The touches answered at the current tick (T1, D-220), so a replay that answered a second
+        // half as a first does not match one that recognised it.
+        append("|touches=").append(
+            state.touches.joinToString(",") { "${num(it.at.step)}:${num(it.a.index)}:${num(it.b.index)}" }
+        )
+        // The radios awaiting the next meeting's notice (T2, D-222).
+        append("|radioFaulted=").append(state.radioFaulted.joinToString(",") { num(it.index) })
         // Every Insider cooldown, as the tick it is ready at (D-132). A remaining count would be a
         // fact about the moment somebody asked; a tick is a fact about the round, and it replays.
         append("|cooldowns=").append(

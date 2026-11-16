@@ -65,7 +65,7 @@ import platform.darwin.dispatch_time
  *
  * Both managers are built with the system's power alert switched off, which is a dialog iOS would
  * otherwise put over the lamp the moment Bluetooth is off. An outage goes to the device log and to
- * the switchboard's `outage`, and nowhere else.
+ * the switchboard, which reports each fault onset once to the house (T2, D-222), and nowhere else.
  */
 actual fun bluetoothContactRadio(log: (String) -> Unit): ContactRadio = IosContactRadio(log)
 
@@ -100,6 +100,17 @@ private class IosContactRadio(private val log: (String) -> Unit) : ContactRadio 
     override fun silence() {
         log("SILENCE — NOT ADVERTISING, NOT SCANNING")
         dispatch_async(queue) { board.silence() }
+    }
+
+    /**
+     * **Whether the radio went down since the last beat** (T2, D-222). The managers' state callbacks
+     * land on [queue] and the switchboard turns them into one onset; this is a second synchronous hop
+     * a beat, beside [drain], and allocates nothing.
+     */
+    override fun faultBegan(): Boolean {
+        var began = false
+        dispatch_sync(queue) { began = board.faultBegan() }
+        return began
     }
 }
 

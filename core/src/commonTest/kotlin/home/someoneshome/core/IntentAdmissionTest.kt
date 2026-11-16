@@ -189,6 +189,12 @@ class IntentAdmissionTest {
 
         /** Nobody pressed anything. The house's own clock, sampled at the edge. */
         HouseClock,
+
+        /**
+         * **Nobody pressed anything: a phone's radio told it so** (T2, D-222). Reported up its own
+         * fixed body (`RoundBody.RadioFaulted`), never requested, so no [Intent] may carry it.
+         */
+        RadioReported,
     }
 
     private fun originOf(event: Event): Origin = when (event) {
@@ -216,6 +222,7 @@ class IntentAdmissionTest {
 
         is Event.ContactMade -> Origin.ContactResolved
         is Event.EgressFired -> Origin.HouseComposed
+        is Event.RadioFaulted -> Origin.RadioReported
 
         // **STOP NOW and the taps of a Sync Pulse, carried now** (E-P2-5 / E-P3-7, closed). Both
         // were real controls with no member on the wire, and both belong on this row rather than
@@ -252,6 +259,7 @@ class IntentAdmissionTest {
         Event.IsolateFired(at, Seat(1), marker),
         Event.StaticFired(at, Seat(1)),
         Event.ContactMade(at, Seat(1), Seat(2)),
+        Event.RadioFaulted(at, Seat(2)),
         Event.MeetingCalled(at, Seat(3), MeetingTrigger.MeetingCard),
         Event.MeetingCalled(at, Seat(3), MeetingTrigger.RevokeReported(Seat(2))),
         Event.MeetingCheckedIn(at, Seat(4)),
@@ -289,7 +297,7 @@ class IntentAdmissionTest {
                     asked,
                     "${event::class.simpleName} is a phone's to ask for and no request produces it",
                 )
-                Origin.ContactResolved, Origin.HouseComposed, Origin.HouseClock -> assertTrue(
+                Origin.ContactResolved, Origin.HouseComposed, Origin.HouseClock, Origin.RadioReported -> assertTrue(
                     !asked,
                     "${event::class.simpleName} can be built from a frame, and it must not be — " +
                         "see Origin for which of the three reasons applies",

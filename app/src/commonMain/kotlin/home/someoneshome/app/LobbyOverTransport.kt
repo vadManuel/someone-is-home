@@ -240,6 +240,14 @@ class LobbyHouse(
      * request's actor is; the upload carries none and has nowhere to put one.
      */
     private val onSighted: (Seat, RoundBody.Sighted) -> Unit = { _, _ -> },
+    /**
+     * **A phone saying its radio went down** ([RoundBody.RadioFaulted], T2, D-222).
+     *
+     * [onSighted]'s sibling: a fact one phone reports about itself, which `RoundAuthority.radioFaulted`
+     * puts to the rules to be announced at the next meeting. The seat is the connection's; the body
+     * carries nothing at all.
+     */
+    private val onRadioFaulted: (Seat) -> Unit = {},
 ) {
 
     private val desk = LobbyDesk()
@@ -350,6 +358,9 @@ class LobbyHouse(
          * else that phone did; launched separately it would land in the order it finished.
          */
         data class Sighted(val seat: Seat, val upload: RoundBody.Sighted) : Arrival
+
+        /** **A phone's radio went down** ([RoundBody.RadioFaulted], T2, D-222). On the ordered queue. */
+        data class RadioFaulted(val seat: Seat) : Arrival
     }
 
     private val arriving = Channel<Arrival>(Channel.UNLIMITED)
@@ -624,6 +635,10 @@ class LobbyHouse(
                 // no sequence by design (D-212), and the resolver recognises a second delivery by
                 // the slots themselves (D-213).
                 is Arrival.Sighted -> onSighted(arrival.seat, arrival.upload)
+                // **The radio fault, to the rules** (T2, D-222). Not through the desk: the body has
+                // no sequence and nothing to deduplicate. A second report of one onset cannot be
+                // sent (the radio debounces it), and the rules list a seat once anyway.
+                is Arrival.RadioFaulted -> onRadioFaulted(arrival.seat)
             }
         }
     }
@@ -666,6 +681,8 @@ class LobbyHouse(
                 // **What a phone's radio heard, onto the ordered queue** (D-217). The resolver
                 // judges it there; an upload the house cannot read resolves to nothing.
                 is RoundBody.Sighted -> arriving.trySend(Arrival.Sighted(seat, round))
+                // **A phone saying its radio went down** (T2, D-222), onto the same ordered queue.
+                is RoundBody.RadioFaulted -> arriving.trySend(Arrival.RadioFaulted(seat))
             }
             return
         }
@@ -803,6 +820,8 @@ class LobbyOverTransport(
     private val onEgressFired: (Seat) -> Unit = {},
     /** [LobbyHouse.onSighted], threaded through: what another phone's radio heard (D-217). */
     private val onSighted: (Seat, RoundBody.Sighted) -> Unit = { _, _ -> },
+    /** [LobbyHouse.onRadioFaulted], threaded through: another phone's radio went down (T2, D-222). */
+    private val onRadioFaulted: (Seat) -> Unit = {},
     /**
      * **The round's client half, on this phone's one socket.** Null in every production
      * construction — nothing arms a round yet. See [RoundSeam].
@@ -844,7 +863,7 @@ class LobbyOverTransport(
      * at all. `emit` and `armingInputs` are what it is reached for, and both are the authority's
      * own calls rather than a screen's.
      */
-    internal val house = LobbyHouse(scope, onEvent, onIntent, onEgressFired, onSighted)
+    internal val house = LobbyHouse(scope, onEvent, onIntent, onEgressFired, onSighted, onRadioFaulted)
     private var session: ClientSession? = null
     private var client: TransportClient? = null
     private var clientJob: Job? = null

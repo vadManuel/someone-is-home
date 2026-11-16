@@ -41,6 +41,14 @@ interface ContactRadio {
 
     /** The round is over: stop advertising and stop scanning. */
     fun silence()
+
+    /**
+     * **Whether the radio went down since the last call: switched off, its permission withdrawn, or
+     * reset** (T2, D-222). True once per fault onset and then false until the radio has recovered
+     * and gone down again, however many callbacks the OS makes in between. Never a reason: the house
+     * is told that a radio went down and nothing about how.
+     */
+    fun faultBegan(): Boolean
 }
 
 /**
@@ -56,6 +64,7 @@ object NoRadio : ContactRadio {
     override fun scan(on: Boolean) = Unit
     override fun drain(): List<RadioReading> = emptyList()
     override fun silence() = Unit
+    override fun faultBegan(): Boolean = false
 }
 
 /**

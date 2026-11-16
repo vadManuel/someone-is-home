@@ -224,7 +224,7 @@ private fun firedBy(event: Event): Seat? = when (event) {
     is Event.EgressFired -> event.actor
 
     is Event.RoundArmed, is Event.MarkerScanned, is Event.SubroutineReturned,
-    is Event.PerformanceEnded, is Event.ContactMade, is Event.MeetingCalled,
+    is Event.PerformanceEnded, is Event.ContactMade, is Event.RadioFaulted, is Event.MeetingCalled,
     is Event.MeetingCheckedIn, is Event.ReadyToVoteDeclared, is Event.DiscussionClosed,
     is Event.VoteSelected, is Event.VoteLocked, is Event.VoteWindowClosed,
     is Event.TallyHalfwayReached, is Event.MeetingClosed,
@@ -242,7 +242,7 @@ private fun firedBy(event: Event): Seat? = when (event) {
  */
 private fun phaseOf(event: Event): MeetingPhase? = when (event) {
     is Event.RoundArmed, is Event.MarkerScanned, is Event.SubroutineReturned,
-    is Event.RevokeArmed, is Event.ContactMade, is Event.MeetingCalled -> null
+    is Event.RevokeArmed, is Event.ContactMade, is Event.RadioFaulted, is Event.MeetingCalled -> null
 
     // **Not meeting events, and they are refused at a meeting by [isTierTwo] rather than by a phase
     // here.** T1·7 / T2·8 was unruled and is ruled now: Tier 2 may not be fired at a meeting at all.
@@ -294,7 +294,7 @@ private fun isTierTwo(event: Event): Boolean = when (event) {
     is Event.SurgeFired, is Event.IsolateFired, is Event.StaticFired -> true
 
     is Event.RoundArmed, is Event.MarkerScanned, is Event.SubroutineReturned,
-    is Event.PerformanceEnded, is Event.RevokeArmed, is Event.ContactMade,
+    is Event.PerformanceEnded, is Event.RevokeArmed, is Event.ContactMade, is Event.RadioFaulted,
     is Event.MeetingCalled, is Event.MeetingCheckedIn, is Event.ReadyToVoteDeclared,
     is Event.DiscussionClosed, is Event.VoteSelected, is Event.VoteLocked,
     is Event.VoteWindowClosed, is Event.TallyHalfwayReached, is Event.MeetingClosed,
@@ -318,7 +318,7 @@ private fun needsEgress(event: Event): Boolean = when (event) {
     is Event.SyncPulseReturned, is Event.EgressExpired -> true
 
     is Event.RoundArmed, is Event.MarkerScanned, is Event.SubroutineReturned,
-    is Event.PerformanceEnded, is Event.RevokeArmed, is Event.ContactMade,
+    is Event.PerformanceEnded, is Event.RevokeArmed, is Event.ContactMade, is Event.RadioFaulted,
     is Event.MeetingCalled, is Event.MeetingCheckedIn, is Event.ReadyToVoteDeclared,
     is Event.DiscussionClosed, is Event.VoteSelected, is Event.VoteLocked,
     is Event.VoteWindowClosed, is Event.TallyHalfwayReached, is Event.MeetingClosed,

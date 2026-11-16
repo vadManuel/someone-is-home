@@ -810,6 +810,21 @@ sealed interface Effect {
      */
     data class RevokeLanded(val seat: Seat) : Effect
 
+    /**
+     * **The house's notice of every radio that went down since the last one, at the top of the
+     * meeting** (T2, D-222; D-035).
+     *
+     * Sent to every phone, living and out, at the moment the check-in gate closes, and **sent at
+     * every meeting, empty when no radio went down**, so its arrival says nothing; only its content
+     * does, and the content is the same on every phone. [seats] are in seat order, each once, and
+     * name no role: a fault is reported identically by every phone (D-222), so being named says
+     * which radio failed and nothing about who holds it.
+     *
+     * ⚠️ **What a phone draws from it is not decided**: the copy is the owner's (D-222). Until then
+     * it reaches every phone and moves nothing.
+     */
+    data class RadioFaultsAnnounced(val seats: List<Seat>) : Effect
+
     /** Lights out. The meeting is over, and D-135's fifth long haptic rides it. */
     data class MeetingEnded(val haptic: Haptic) : Effect
 

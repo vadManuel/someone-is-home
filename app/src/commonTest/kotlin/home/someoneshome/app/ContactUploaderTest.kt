@@ -9,6 +9,7 @@ import home.someoneshome.model.WinRoute
 import home.someoneshome.model.Winner
 import home.someoneshome.model.protocol.RoundBody
 import home.someoneshome.model.protocol.RoundMessage
+import home.someoneshome.model.protocol.RoundWire
 import home.someoneshome.model.protocol.SightingUpload
 import home.someoneshome.platform.ContactRadio
 import home.someoneshome.platform.RadioReading
@@ -34,6 +35,8 @@ class ContactUploaderTest {
         override fun scan(on: Boolean) { scanning = on }
         override fun drain(): List<RadioReading> = listOf(RadioReading(stranger, -31))
         override fun silence() { silenced++; scanning = false }
+        var faults = 0
+        override fun faultBegan(): Boolean = (faults > 0).also { if (it) faults-- }
     }
 
     private val seed = ContactSeed("0123456789abcdef0123456789abcdef")
@@ -103,5 +106,34 @@ class ContactUploaderTest {
         repeat(3) { up.beat() }
         assertEquals(1, sent.size, "a phone kept uploading after the round ended")
         assertEquals(1, radio.silenced)
+    }
+
+    /**
+     * **T2: a fault goes up once, on the beat after its onset, from a living phone and an out one
+     * alike, and never outside a round** (D-222).
+     */
+    @Test
+    fun aRadioFaultGoesUpOnceOnTheBeatAfterItBeganInARoundOnly() {
+        for (out in listOf(false, true)) {
+            val radio = LoudRadio()
+            var faults = 0
+            val up = ContactUploader(radio, { ContactWindow(10) }, send = { }, faulted = { faults++ })
+            radio.faults = 1
+            up.beat()
+            assertEquals(0, faults, "a fault went up before the phone was in a round")
+            up.heard(RoundMessage.ContactSeedIssued(seed))
+            if (out) up.heard(RoundMessage.RevokeLanded.Padded)
+            repeat(3) { up.beat() }
+            assertEquals(1, faults, "out=$out: one onset did not go up exactly once")
+        }
+    }
+
+    /** The upward body has one shape: the same bytes from every phone, whatever it is or what failed. */
+    @Test
+    fun theFaultBodyIsOneFixedString() {
+        assertEquals(
+            "{\"type\":\"radioFaulted\"}", RoundWire.encode(RoundBody.RadioFaulted),
+            "the fault body changed shape: anything added to it is something one phone could say that another does not",
+        )
     }
 }

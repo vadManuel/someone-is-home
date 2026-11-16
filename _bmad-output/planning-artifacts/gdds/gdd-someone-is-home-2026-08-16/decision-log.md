@@ -5281,6 +5281,89 @@ would have kept the screen on too. `left()` now silences both.
 | `app` cheats `Cheats.kt` | (none) | `ScreenWake(deviceIdleTimer())` handed to the round |
 | `ScreenWakeTest`, `ScreenAwakeTest`, `RoundEndedPushTest` | (new) | restore and idempotence; held through the funnel from arming to the end and to a hang-up; a leave reaches the round half |
 
+## Revision 56 — a radio that goes down is announced at the next meeting
+
+*The owner's 2026-11-15 ruling T2, on D-218's raised item 2. The mechanism is built; what a phone
+draws from the notice is proposed below and waits on the owner.*
+
+### D-222 · **A phone reports its radio going down in one fixed body, the house records it, and announces it to every phone at the next meeting — built; the copy is the owner's**
+
+**What goes up.** `RoundBody.RadioFaulted`, a `data object`: `{"type":"radioFaulted"}`, the same
+bytes from every phone whatever its role, whether it is out, and whether the radio was switched
+off, had its permission withdrawn or reset. No kind, no time, no seat (the seat is the
+connection's). `ContactUploaderTest` pins the string.
+
+**When it goes up: once per fault onset.** `SwitchboardRadio` calls the radio *down* while either
+manager is Off, Unauthorized, Resetting or Unsupported, and the change from up to down is one onset,
+however many callbacks follow: a Bluetooth switch-off reaches both managers, a reset passes through
+Resetting and Off. `faultBegan()` hands the onset over once; the uploader sends it on the next beat.
+Both managers On is up again, so a second switch-off is a second onset. Only a round's radio reports
+(before the first advertise there is nobody to tell), and a radio still down when the next round
+arms is a fault of that round. On iOS `faultBegan` is a second synchronous hop onto the radio's
+queue, beside `drain`, once a beat, and allocates nothing. Every phone reports alike, out or not.
+
+**What the house does.** `LobbyHouse.onFrame` puts it on the ordered arrival queue
+(`Arrival.RadioFaulted`), `RoundAuthority.radioFaulted` logs `RADIO FAULT — SEAT n` (loud to the
+authority) and admits `Event.RadioFaulted(at, seat)`, a fact (rule 10). The rule records the seat on
+`GameState.radioFaulted` (the round's seats, each once, in seat order) and **emits nothing, in every
+case, to anybody** (rule 6: the player's screen, lamp and motor never hear of it). A report before
+arming or after the round is refused at the gate and recorded.
+
+**The announcement reuses the meeting's notices moment.** The house already has one place it
+announces: the notices screen (`ScreenId.Notice`, D-035, D-105), which every phone reaches when the
+check-in gate closes and `MeetingPhaseOpened(Discussion)` moves it off the assembly screen. Its words
+are still the design's fixture (*Resident MARCUS was unreachable 21:04–21:07*), and nothing has fed
+it until now. At that same transition the rules now emit `Effect.RadioFaultsAnnounced(seats)` just
+ahead of the phase push, then empty the list.
+
+- **Schema row `RADIO_FAULTS_ANNOUNCED` to `LIVING + OUTSIDE`**, exactly the phase push's audience:
+  the living and the out are both standing at the meeting. It fails closed like every row: deleted,
+  the notice reaches nobody; narrowed to Residents, the phones it missed would be the Insiders.
+- **Sent at every meeting, empty when no radio went down** (rule 1), so its arrival is the gate
+  closing, which the room already knows, and only its content says anything. The content is the
+  same on every phone.
+- **It names seats and no role.** Every phone reports a fault identically, so being named says which
+  radio went down, never who holds it. `RadioFaultTest` shows an Insider's fault and a Resident's
+  produce the same stream on every phone, bar the seat named.
+- `ui` `Flow` names `RadioFaultsAnnounced` as a no-op and `HouseBuzzer` keeps it silent (the gate's
+  own push buzzes). **Nothing on any screen changes yet**: that is the copy question below.
+
+**Raised with the owner: D-187.** D-187 narrowed house notices to deliberate evasion and said
+*genuine radio loss earns no notice*, because a notice naming a player whose hardware failed reads
+to the room like a notice naming a cheat. T2 announces all three faults. Switching Bluetooth off and
+withdrawing the permission are a person's act (D-187's own scope); a reset is not. The body carries
+no kind, so if Reset should not be announced, the radio would have to stop reporting it rather than
+the house filtering it.
+
+**Proposed copy, in the house's administrative register, for the owner to choose** (not built):
+
+- **A, named, the D-035 sentence:** *"Resident MARCUS's radio went dark. Occupancy data since the
+  last meeting is incomplete."* With two: *"Residents MARCUS and ELLIOT …: radios went dark."*
+- **B, unnamed, D-187's caution kept:** *"A radio in this house went dark. Occupancy data since the
+  last meeting is incomplete."* With two: *"2 radios in this house went dark."* If B, the effect
+  narrows to a count, because a client-facing type should not carry names it never shows (rule 3).
+- **And for a meeting with no fault:** either *"Occupancy data since the last meeting is complete."*
+  or the notices screen is skipped. Skipping it would make its presence the news, so the first is
+  recommended.
+
+**Found on the way:** the state row (`Transcript.render`) had left out S4's `reported` list; it
+now carries `reported`, `touches` (D-220) and `radioFaulted`.
+
+**Recording format 25**: one event and one effect a version 24 build cannot name, every meeting's
+transcript changes, and the state row gains three columns.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `model` `Event.RadioFaulted`, `GameState.radioFaulted` | (new) | the fact; the seats awaiting the notice |
+| `model` `Effect.RadioFaultsAnnounced`, `EmitSchema` | (new) | every seat; row `LIVING + OUTSIDE` |
+| `model/protocol` `RoundBody.RadioFaulted`, `RoundMessage.RadioFaultsAnnounced` | (new) | the fixed upward body; the seats, projected |
+| `core` `Rules` `radioFaulted`, `checkedIn`; `Admission` | (new) | recorded silently; announced and emptied at the gate |
+| `platform` `ContactRadio.faultBegan`, `SwitchboardRadio`, `BluetoothRadio.ios.kt` | outages logged, the house not told | one onset per outage, collected each beat |
+| `app` `ContactUploader`, `RoundOverTransport`, `LobbyHouse`/`LobbyOverTransport`, `RoundAuthority.radioFaulted`, cheats `Cheats.kt`, `RoundClient` | (new) | up on the beat; the queue; the house's log; the console's `RADIO NOTICE` line |
+| `ui` `Flow`, `app` `HouseBuzzer` | (new) | a named no-op, silent, until the copy is ruled |
+| `harness` `Transcript`, `RecordingText`, `Recording.HEADER` | `recording/24` | the rows; `recording/25` |
+| `RadioFaultTest`, `SwitchboardRadioTest`, `ContactUploaderTest`, `ContactRadioBenchTest` | (new) | silent report, every class told, empty notice, role-blind; one onset per outage; the fixed body; on sockets |
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

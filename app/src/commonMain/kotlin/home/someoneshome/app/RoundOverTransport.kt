@@ -118,7 +118,12 @@ class RoundOverTransport(
     private val outbox = IntentOutbox()
 
     /** This phone's half of the contact handshake (D-217). Fed every applied push; beaten by [upload]. */
-    private val contacts = ContactUploader(radio, windowNow) { sighted -> up(RoundWire.encode(sighted)) }
+    private val contacts = ContactUploader(
+        radio, windowNow,
+        send = { sighted -> up(RoundWire.encode(sighted)) },
+        // **The radio went down: one fixed body, up this phone's own socket** (T2, D-222).
+        faulted = { up(RoundWire.encode(RoundBody.RadioFaulted)) },
+    )
 
     /** Whether the house has put this phone out, as the uploader was told. For the bench and tests. */
     val outOfTheRound: Boolean get() = contacts.isOut
@@ -216,6 +221,9 @@ class RoundOverTransport(
             // Upward only, like the two above: what somebody else's radio heard is theirs and the
             // house's, never another phone's (D-212).
             is RoundBody.Sighted -> Unit
+            // Upward only: another phone's radio going down is the house's to announce, at the
+            // meeting, to everybody at once (T2, D-222), never one phone's to tell another.
+            is RoundBody.RadioFaulted -> Unit
         }
     }
 

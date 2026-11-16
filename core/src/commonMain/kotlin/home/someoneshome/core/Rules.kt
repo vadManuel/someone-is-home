@@ -53,6 +53,8 @@ private fun dispatch(state: GameState, event: Event): Reduction<GameState, Effec
 
     is Event.ContactMade -> contact(state, event)
 
+    is Event.RadioFaulted -> radioFaulted(state, event)
+
     is Event.SubroutineReturned -> returned(state, event)
 
     is Event.MarkerScanned -> scanned(state, event)
@@ -1078,6 +1080,26 @@ private fun contact(state: GameState, event: Event.ContactMade): Reduction<GameS
 }
 
 /**
+ * **A phone's radio went down, and the house writes it down** (T2, D-222).
+ *
+ * Recorded for the next meeting's notice and nothing else: no effect, in every case, to anybody.
+ * The phone's own screen does not move (rule 6), no other phone hears of it until the room does,
+ * and the same is true whoever reported it, so there is no branch here and nothing to tell apart.
+ * A seat not in the round, or one already on the list, changes nothing: the list is the house's
+ * seats, each once, in seat order.
+ */
+private fun radioFaulted(state: GameState, event: Event.RadioFaulted): Reduction<GameState, Effect> {
+    val seated = state.seats.any { it.index == event.seat.index }
+    val listed = state.radioFaulted.any { it.index == event.seat.index }
+    val next = if (seated && !listed) {
+        state.copy(radioFaulted = (state.radioFaulted + event.seat).sortedBy { it.index })
+    } else {
+        state
+    }
+    return Reduction(next, emptyList())
+}
+
+/**
  * **D-109 — the house grades every entry for real, for both roles, in identical words.**
  *
  * The verdict is constructed once, outside every branch, and it is the same shape in every case:
@@ -1373,9 +1395,16 @@ private fun checkedIn(state: GameState, event: Event.MeetingCheckedIn): Reductio
 
         val talking = next.copy(phase = MeetingPhase.Discussion)
         Reduction(
-            state.copy(meeting = talking),
+            // The radios announced are forgotten here: a fault after this is the next meeting's.
+            state.copy(meeting = talking, radioFaulted = emptyList()),
             listOf(
                 counted,
+                // **The house's radio notice, before the push that opens the notices** (T2, D-222).
+                // Every phone, every class, at every meeting, empty when no radio went down: its
+                // arrival is the gate closing, which the whole room already knows, and its content is
+                // the same on every phone. Ahead of the phase push so that a phone is holding it when
+                // that push moves it to the notices screen.
+                Effect.RadioFaultsAnnounced(seats = state.radioFaulted),
                 Effect.MeetingPhaseOpened(
                     MeetingPhase.Discussion,
                     voteWindowSeconds = null,

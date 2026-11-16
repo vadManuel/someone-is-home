@@ -44,7 +44,7 @@ xcrun devicectl device process launch --console --terminate-existing \
 
 The lines that matter are `[radio] …` (this unit), `[round] PUSH n — …` (what the house told this
 phone) and `[house] …` (the host only). To filter them:
-`grep -E '\[radio\]|\[round\] PUSH|\[house\] REFUSED' phone-A.log`.
+`grep -E '\[radio\]|\[round\] PUSH|\[house\] (REFUSED|RADIO FAULT)' phone-A.log`.
 
 ## 0. Off before arming (D-067)
 
@@ -119,12 +119,11 @@ Pull down Control Center on any phone and turn on Airplane Mode. Wi-Fi drops too
 told iOS to keep it on in Airplane Mode.
 
 - **Pass:**
-  - The phone logs `[radio] OUTAGE — SCANNER OFF · THE HOUSE IS NOT TOLD: NO EVENT CARRIES IT`
-    (and `ADVERTISER OFF`).
+  - The phone logs `[radio] OUTAGE — SCANNER OFF` (and `ADVERTISER OFF`).
   - Nothing on the screen changes: no dialog, no flicker, no lamp change.
   - Turn Airplane Mode off: `ADVERTISING` returns, and `HEARD` resumes, without anyone touching the
     app.
-- The house is not told. That is a known gap (D-218 item 2), so it is not a failure of this check.
+- Since D-222 the house is told once per outage. Step 7 checks that.
 
 ## 6. The screen stays awake for the round, and only for the round (D-221)
 
@@ -140,9 +139,33 @@ Set one phone's Auto-Lock to 30 seconds before the lobby.
 - **Fail:** the phone dims or locks mid-round; or it stays awake in the lobby before arming or after
   the round; or its brightness moves when the round arms or ends.
 
+## 7. A radio that goes down is announced at the next meeting (D-222)
+
+During a round, on one living phone (call it **F**), open **Settings → Bluetooth** and switch it
+off. (The Control Center toggle may only disconnect accessories and not power the radio down; use
+Settings.) Wait 5 s, switch it back on, and return to the app.
+
+- **Pass, on F:**
+  - `[radio] OUTAGE — …` lines, and **exactly one** `[radio] FAULT — THE RADIO WENT DOWN … THE HOUSE
+    IS TOLD ONCE`, however many OUTAGE lines there are.
+  - Nothing on F's screen changes: no dialog, no flicker, no lamp change, no buzz.
+- **Pass, on the host:** exactly one `[house] RADIO FAULT — SEAT <F's seat> · THE HOUSE ANNOUNCES IT
+  AT THE NEXT MEETING`. Nothing reaches any phone at that moment: no `[round] PUSH` line on any phone
+  that is about F.
+- Then call a meeting at the meeting card and check everybody in. **Pass:** when the gate closes,
+  **every** phone, living and out, logs `[round] PUSH … RADIO NOTICE — SEAT <F's seat>`, just before
+  the `PHASE Discussion` push that opens the notices.
+- At the meeting after that, with no radio switched off in between, every phone logs `RADIO NOTICE —
+  NO RADIO WENT DOWN`. That empty notice at every meeting is correct (rule 1).
+- Do it once more with F being the Insider if you can: the lines must be identical, bar the seat.
+- **What the screen says about it is not decided yet** (D-222). The notices screen still shows its
+  old fixture words. That is expected and not a failure.
+- **Fail:** no FAULT line; more than one FAULT line, or more than one host line, for one switch-off;
+  a phone missing the notice; or anything on F's screen moving.
+
 ## Report back
 
-For each step, 0 to 6, send pass or fail. Also send:
+For each step, 0 to 7, send pass or fail. Also send:
 - the strongest touching RSSI for each phone pair;
 - the CALLBACKS figure from one `TALLY` line;
 - any line containing `FAILED`, `OUTAGE` or `REFUSED`.

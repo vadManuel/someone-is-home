@@ -70,7 +70,7 @@ class HouseAir(
         val seats = house.state.seats
         uploaders.clear()
         for (seat in seats) {
-            val up = ContactUploader(air.radioFor(seat), window) { body -> pending += seat to body }
+            val up = ContactUploader(air.radioFor(seat), window, send = { body -> pending += seat to body })
             up.heard(RoundMessage.ContactSeedIssued(contactSeedFor(house.state.seed, seat)))
             uploaders[seat.index] = up
         }

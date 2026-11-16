@@ -73,6 +73,14 @@ class GameState private constructor(
      */
     val touches: List<Touch>,
     /**
+     * **Every seat whose radio went down since the house last announced it, in seat order, each
+     * once** (T2, D-222).
+     *
+     * Written by [Event.RadioFaulted], read and emptied when the next meeting's check-in gate
+     * closes, where the house announces it to everybody. Holds no kind and no role.
+     */
+    val radioFaulted: List<Seat>,
+    /**
      * **Every Insider ability's cooldown, already running when the round opens** (D-132).
      *
      * Each begins at **half** its normal duration, so the round opens with a guaranteed stretch of
@@ -570,6 +578,7 @@ class GameState private constructor(
         restrained: List<Seat> = this.restrained,
         cooldownArmed: List<Seat> = this.cooldownArmed,
         touches: List<Touch> = this.touches,
+        radioFaulted: List<Seat> = this.radioFaulted,
         cooldowns: List<Cooldown> = this.cooldowns,
         isolated: List<Isolation> = this.isolated,
         systemIntegrity: Int = this.systemIntegrity,
@@ -592,7 +601,7 @@ class GameState private constructor(
         reader: Seat? = this.reader,
     ) = GameState(
         armed, outcome, seats, insiderSeats, revoked, newlyRevoked, reported, restrained, cooldownArmed,
-        touches, cooldowns, isolated, systemIntegrity, openSubroutines, workOrders, stations,
+        touches, radioFaulted, cooldowns, isolated, systemIntegrity, openSubroutines, workOrders, stations,
         activeMarkers, destinations, presence, staticUntil, meeting, egress, egressReadyAt, oneLines,
         names, voteWindowSeconds, nextEntity, seed, terminal, reader,
     )
@@ -684,6 +693,7 @@ class GameState private constructor(
             restrained = emptyList(),
             cooldownArmed = emptyList(),
             touches = emptyList(),
+            radioFaulted = emptyList(),
             cooldowns = cooldowns,
             // Nothing is dark. A round that carried an isolation across an arming would open with a
             // marker offline that nobody had ever fired at, and that is not announced.
@@ -725,6 +735,7 @@ class GameState private constructor(
             restrained = emptyList(),
             cooldownArmed = emptyList(),
             touches = emptyList(),
+            radioFaulted = emptyList(),
             cooldowns = emptyList(),
             isolated = emptyList(),
             systemIntegrity = 0,

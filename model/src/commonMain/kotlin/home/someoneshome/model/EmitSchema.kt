@@ -96,6 +96,7 @@ object EmitSchema {
         is Effect.MeetingResolved -> MEETING_RESOLVED
         is Effect.RestrainedTakeover -> RESTRAINED_TAKEOVER
         is Effect.RevokeLanded -> REVOKE_LANDED
+        is Effect.RadioFaultsAnnounced -> RADIO_FAULTS_ANNOUNCED
         is Effect.MeetingEnded -> MEETING_ENDED
         is Effect.EgressOpened -> EGRESS_OPENED
         is Effect.EgressHeld -> EGRESS_HELD
@@ -146,6 +147,7 @@ object EmitSchema {
     val MEETING_RESOLVED = MessageKind("MeetingResolved")
     val RESTRAINED_TAKEOVER = MessageKind("RestrainedTakeover")
     val REVOKE_LANDED = MessageKind("RevokeLanded")
+    val RADIO_FAULTS_ANNOUNCED = MessageKind("RadioFaultsAnnounced")
     val MEETING_ENDED = MessageKind("MeetingEnded")
     val EGRESS_OPENED = MessageKind("EgressOpened")
     val EGRESS_HELD = MessageKind("EgressHeld")
@@ -456,6 +458,13 @@ object EmitSchema {
         // arriving are each known to the whole room at the moment they happen.
         MEETING_PHASE_OPENED to (LIVING + OUTSIDE),
 
+        // **The radio notice, to the whole room: every class there is a meeting for** (T2, D-222).
+        // It rides the gate closing beside the phase push above and has exactly its audience,
+        // because it is read aloud into the same room: the living and the out are both standing at
+        // the meeting. Never one role: a notice that reached only Residents would make the phones it
+        // missed the Insiders. Sent at every meeting, empty or not, so its arrival is no signal.
+        RADIO_FAULTS_ANNOUNCED to (LIVING + OUTSIDE),
+
         // The readiness count, which appears on the living's discussion screen and nowhere else.
         // D-134 lists what the couch watches -- the discussion and vote timers and the live vote
         // -- and this is not on it, so it is not sent. The fail-closed direction, deliberately.
@@ -707,6 +716,8 @@ object EmitSchema {
             is Effect.MeetingOpened -> state.seats
             is Effect.CheckInProgressed -> state.seats
             is Effect.MeetingPhaseOpened -> state.seats
+            // Every phone, as the phase push it rides beside. Its content is the same for all.
+            is Effect.RadioFaultsAnnounced -> state.seats
             is Effect.ReadyProgressed -> state.seats
             is Effect.VoteSelectionShown -> state.seats
             is Effect.VoteProgressed -> state.seats

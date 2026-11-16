@@ -232,13 +232,16 @@ class SightingRing(val capacity: Int = SightingUpload.SLOTS) {
  * advertises and never scans** (D-008, story 9.4): told `scan(false)`, nothing here starts the
  * scanner again until `scan(true)`, and readings already in flight are dropped on arrival.
  *
- * ### Outages: silent to the player, and not yet loud to the house (rule 6)
+ * ### Outages: silent to the player, loud to the house (rule 6; T2, D-222)
  *
  * A manager going Off, Unauthorized, Resetting or Unsupported is reported to [outages] and to the
- * device log, and the lamp, the screen and the haptics never hear of it. **The house is not told.**
- * No event carries a radio outage up a socket: the architecture names one (`BleUnavailable`) that
- * was never built, and D-187 has since narrowed what a house notice may say. [outage] is the one
- * place the report would go up, and choosing what goes up is the owner's (D-218).
+ * device log, and the lamp, the screen and the haptics never hear of it. **The house is told once
+ * per fault onset**: the radio is *down* while either manager is in one of those four, and the moment
+ * it goes from up to down is one onset, however many callbacks follow (both managers report a
+ * Bluetooth switch-off, and a reset passes through Resetting and Off). [faultBegan] hands that
+ * onset to the uploader once, which sends it up as `RoundBody.RadioFaulted`. Both managers back On is
+ * up again, so a second switch-off is a second onset. A radio still down when a new round arms is
+ * an onset in that round.
  *
  * Not thread-safe: every call is made on the radio's own queue on iOS, and on the test's thread in
  * the tests.
@@ -257,6 +260,12 @@ class SwitchboardRadio(
     private var advertiser = RadioPower.Unknown
     private var scanner = RadioPower.Unknown
 
+    /** Whether either manager is down, as last assessed. See the class KDoc. */
+    private var down = false
+
+    /** A fault began and the uploader has not collected it yet. */
+    private var began = false
+
     private var cycles = 0
     private var callbacks = 0L
     private var drained = 0L
@@ -272,6 +281,7 @@ class SwitchboardRadio(
         }
         hasToken = true
         if (advertiser == RadioPower.On) hardware.advertise(this.token)
+        assess()
     }
 
     override fun scan(on: Boolean) {
@@ -293,15 +303,22 @@ class SwitchboardRadio(
         hasToken = false
         scanning = false
         ring.clear()
+        // The round is over and so is what it was told. A radio still down at the next arming is a
+        // fault of that round, found again by the first advertise.
+        down = false
+        began = false
         if (!awake) return
         if (advertiser == RadioPower.On) hardware.stopAdvertising()
         if (scanner == RadioPower.On) hardware.stopScan()
     }
 
+    override fun faultBegan(): Boolean = began.also { began = false }
+
     /** The advertiser's power changed. On, it takes up whatever was asked of it. */
     fun advertiserPower(power: RadioPower) {
         if (power == advertiser) return
         advertiser = power
+        assess()
         if (power == RadioPower.On) {
             if (hasToken) hardware.advertise(token)
         } else {
@@ -313,6 +330,7 @@ class SwitchboardRadio(
     fun scannerPower(power: RadioPower) {
         if (power == scanner) return
         scanner = power
+        assess()
         if (power == RadioPower.On) {
             if (scanning) hardware.startScan()
         } else {
@@ -340,6 +358,20 @@ class SwitchboardRadio(
         if (++cycles % ContactAdvertisement.TALLY_CYCLES == 0 && awake) tally()
     }
 
+    /**
+     * **One fault onset, however many callbacks** (T2, D-222). Down is either manager Off,
+     * Unauthorized, Resetting or Unsupported; Unknown is not yet answered and is not down. Only a
+     * round's radio reports: before the first advertise of a round there is nobody to tell.
+     */
+    private fun assess() {
+        val now = isDown(advertiser) || isDown(scanner)
+        if (now && !down && hasToken) {
+            began = true
+            log("FAULT — THE RADIO WENT DOWN (ADVERTISER $advertiser · SCANNER $scanner) · THE HOUSE IS TOLD ONCE")
+        }
+        down = now && hasToken
+    }
+
     private fun wake() {
         if (awake) return
         awake = true
@@ -350,13 +382,12 @@ class SwitchboardRadio(
      * **The one place a radio outage is reported** (rule 6). To the device log and to [outages], and
      * never to the lamp, a screen or a buzz.
      *
-     * TODO(D-218): report it to the house as an event. None exists, and what one may carry and what
-     * the house may say about it (D-187: a permission revoked mid-round earns a notice, a radio that
-     * failed does not) is the owner's to rule, so it is raised rather than invented here.
+     * The house hears of it through [faultBegan], once per onset (T2, D-222), not from here: this
+     * is called once per manager per change.
      */
     private fun outage(side: RadioSide, power: RadioPower) {
         if (power == RadioPower.Unknown) return
-        log("OUTAGE — ${side.name.uppercase()} ${power.name.uppercase()} · THE HOUSE IS NOT TOLD: NO EVENT CARRIES IT")
+        log("OUTAGE — ${side.name.uppercase()} ${power.name.uppercase()}")
         outages(side, power)
     }
 
@@ -381,6 +412,11 @@ class SwitchboardRadio(
 
     private companion object {
         fun digit(c: Char): Int = if (c <= '9') c - '0' else c - 'a' + 10
+
+        fun isDown(power: RadioPower): Boolean = when (power) {
+            RadioPower.Off, RadioPower.Unauthorized, RadioPower.Resetting, RadioPower.Unsupported -> true
+            RadioPower.Unknown, RadioPower.On -> false
+        }
     }
 }
 

@@ -50,6 +50,12 @@ class Recording(
     }
 
     companion object {
+        // 25: one event and one effect a version 24 build cannot name -- `RadioFaulted` and
+        // `RadioFaultsAnnounced` (T2, D-222) -- and a new state column, the radios awaiting the next
+        // meeting's notice. Every meeting's gate now emits the notice, so every meeting's effect
+        // transcript changes. The state row gains three columns: `reported` (S4's list, which it had
+        // left out), `touches` (T1, D-220) and `radioFaulted`.
+        //
         // 24: no row changed shape, and every touch reduces differently (T1, D-220). The first half
         // of a touch answers both of its phones and lands any Revoke either held; the second half,
         // at the same tick, changes nothing. So the same events replay to a different effect
@@ -221,7 +227,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/24"
+        const val HEADER = "someone-is-home/recording/25"
     }
 }
 
