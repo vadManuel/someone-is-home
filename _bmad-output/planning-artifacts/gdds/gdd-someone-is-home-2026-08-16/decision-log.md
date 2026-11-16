@@ -5377,7 +5377,7 @@ transcript changes, and the state row gains three columns.
 *The owner's 2026-11-15 ruling on D-222's raised D-187 conflict. Built, except the words for a named
 player, which wait on the owner.*
 
-### D-223 · **A radio switched off or its permission withdrawn is named in the house notice; a reset is recorded and named nowhere; a meeting with no evasion draws nothing — built; one line of copy is the owner's**
+### D-223 · **A radio switched off or its permission withdrawn is named in the house notice; a reset is recorded and named nowhere; a meeting with no evasion draws nothing — built**
 
 **D-187 governs and D-222 is brought under it.** A house notice reports detectable deliberate
 evasion and nothing else. Of the radio's outages, two are a person's act and two are not:
@@ -5429,8 +5429,9 @@ off at the meeting) is a design question, not copy. **Proposed, in its voice and
 
 > *Resident MARCUS was unreachable this shift. Occupancy data for this interval is incomplete.*
 
-Until the owner rules, a notice that names a player reaches every phone and draws nothing new.
-`noticeBody` in `ui` `PanelModel.kt` is the one function the ruling changes.
+**Ruled by the owner, 2026-11-15: the proposed line, as written.** It is built in `noticeBody`, in `ui`
+`PanelModel.kt`. Several named in one meeting read as one sentence: *Residents ROSE and DANI were
+unreachable this shift. …* `HouseNoticeTest` pins the words.
 
 **Also kept:** a radio still switched off when a round arms is reported at that round's first
 advertise. It is off during the round, and a player who switches Bluetooth off in the lobby to be

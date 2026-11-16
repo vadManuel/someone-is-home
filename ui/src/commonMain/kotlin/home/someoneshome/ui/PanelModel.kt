@@ -2330,11 +2330,14 @@ fun Plan.mapCells(): List<MapCell> =
  */
 fun noticeBody(names: List<String>): String? = when {
     names.isEmpty() -> NOTHING
-    else -> AWAITING_THE_OWNER
+    else -> "${residents(names)} unreachable this shift. Occupancy data for this interval is incomplete."
 }
 
 /** A meeting where nobody evaded: no words, and no box to put them in. */
 private val NOTHING: String? = null
 
-/** The notice for a named player, until the owner rules its words (D-223). */
-private val AWAITING_THE_OWNER: String? = null
+/** The owner's words for the named (D-223, 2026-11-15): one sentence, however many were named. */
+private fun residents(names: List<String>): String = when (names.size) {
+    1 -> "Resident ${names[0]} was"
+    else -> "Residents ${names.dropLast(1).joinToString(", ")} and ${names.last()} were"
+}

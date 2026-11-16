@@ -60,6 +60,30 @@ class HouseNoticeTest {
         )
     }
 
+    /** **GUARD: a named player is named in the owner's words** (D-223), and nobody else is. */
+    @Test
+    fun aNamedPlayerIsNamedInTheOwnersWords() {
+        val texts = drawn(housed(listOf(Seat(2))))
+        assertTrue(
+            texts.any { it == "Resident PRIYA was unreachable this shift. Occupancy data for this interval is incomplete." },
+            "the notice did not name PRIYA in the owner's words: $texts",
+        )
+        assertTrue(texts.none { "ROSE" in it || "ELLIOT" in it || "DANI" in it }, "the notice named a player nobody reported: $texts")
+    }
+
+    /** Two named in one meeting read as one sentence. */
+    @Test
+    fun twoNamedReadAsOneSentence() {
+        assertEquals(
+            "Residents ROSE and DANI were unreachable this shift. Occupancy data for this interval is incomplete.",
+            noticeBody(listOf("ROSE", "DANI")),
+        )
+        assertEquals(
+            "Residents ROSE, ELLIOT and DANI were unreachable this shift. Occupancy data for this interval is incomplete.",
+            noticeBody(listOf("ROSE", "ELLIOT", "DANI")),
+        )
+    }
+
     /** A housed phone the house has told nothing yet is not shown the design's MARCUS either. */
     @Test
     fun aHousedPhoneIsNeverShownTheFixture() {
