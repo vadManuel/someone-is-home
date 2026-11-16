@@ -49,8 +49,9 @@ class ContactAct(
  * the door the arrival queue feeds. **What is stood in for is the hop up each phone's socket and
  * nothing below it**: the tokens are each seat's own (the house may derive every seed, D-212), the
  * window is the wall clock's, and the resolver, the gate, the rules and every push down are real.
- * Each phone's own uploader keeps sending its `NoRadio` filler up its own socket all the while, so
- * the cadence on the air is the real one too.
+ * Each phone's own uploader keeps uploading what its own radio heard up its own socket all the
+ * while (filler only on a Simulator, which has no Bluetooth), so the cadence on the air is the real
+ * one too.
  *
  * Out is the house's word, as it is on a phone: a seat the state says is out is told
  * `RevokeLanded`, which is the push its own phone would have had. The in-process tests carry every

@@ -12,8 +12,8 @@ import home.someoneshome.model.ContactToken
 data class RadioReading(val token: ContactToken, val rssi: Int)
 
 /**
- * **The contact radio, as the app sees it** (D-217). Unit 4's iOS radio implements this over
- * CoreBluetooth; until then a phone holds [NoRadio], and the bench holds a simulated one.
+ * **The contact radio, as the app sees it** (D-217). A phone holds the CoreBluetooth one
+ * ([bluetoothContactRadio], D-218), the bench a simulated one, and the tests [NoRadio].
  *
  * Four calls and nothing that could carry a role or an armed bit (D-212 ruling 5): the phone says
  * which token to advertise, whether to scan, takes what was heard, and goes quiet when the round is
@@ -46,9 +46,10 @@ interface ContactRadio {
 /**
  * **No radio at all: advertises nothing and hears nothing** (D-217).
  *
- * What a phone holds until unit 4 builds the iOS radio. It is not a fake of anything: the uploader
- * still runs on the fixed cadence and still sends a full-size upload of filler every second, so the
- * wire looks the same as it will with a radio in, and the house resolves nothing from it.
+ * What a test holds when the radio is not the question, and what every phone held until the
+ * CoreBluetooth radio (D-218). It is not a fake of anything: the uploader still runs on the fixed
+ * cadence and still sends a full-size upload of filler every second, and the house resolves nothing
+ * from it.
  */
 object NoRadio : ContactRadio {
     override fun advertise(token: ContactToken) = Unit

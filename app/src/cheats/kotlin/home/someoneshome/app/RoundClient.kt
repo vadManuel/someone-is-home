@@ -95,8 +95,8 @@ class RoundClient(
     private val buzzer: HouseBuzzer,
     /**
      * **This seat's contact radio**, handed straight down to [RoundOverTransport] (D-217).
-     * [home.someoneshome.platform.NoRadio] on a phone until unit 4's iOS radio exists; a
-     * `SimulatedRadio` on a bench that plays seats in one process.
+     * The CoreBluetooth radio on a phone (`bluetoothContactRadio`, D-218); a `SimulatedRadio` on a
+     * bench that plays seats in one process.
      */
     private val radio: ContactRadio,
     private val note: (String) -> Unit,

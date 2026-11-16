@@ -5000,6 +5000,118 @@ reduce differently.
 | `ContactResolverTest` (a pair hearing a Revoked seat) | one refusal, the second meeting | two: the touch's other half (R5) and the second meeting |
 | `ContactResolverDifferentialTest` (the rules diverge) | the huddle's armed Revoke lands though a report in the same arrival sorted first | shown on a huddle that hears no Revoked seat; with one, the report's meeting refuses the touch (R5) |
 
+## Revision 53 — the radio is CoreBluetooth
+
+*Unit 4 of the contact handshake. Every phone held `NoRadio` until now; this puts the real radio
+behind `ContactRadio` (D-217). Written and compiled for a device; nothing here has run on a phone
+yet. That is the owner's device check (`_bmad-output/implementation-artifacts/ble-unit4-device-check.md`).*
+
+### D-218 · **The radio advertises a 16-bit service UUID and the token, turns its scan over every 250 ms into a fixed ring, and reports an outage to nobody yet — built, three items raised**
+
+**The shape.** `platform` `BluetoothRadio.kt` holds every decision, in common code: `SwitchboardRadio`
+(what was asked, what each manager's power allows, and the hardware put wherever both agree),
+`SightingRing` (the coalescing buffer) and `RadioHardware` (the five-call seam CoreBluetooth sits
+behind). `BluetoothRadio.ios.kt` is the managers, their delegates and one serial queue. Both managers
+call back on that queue and the app's calls are put on it, so the switchboard is single-threaded;
+`drain` is the one synchronous hop, once a beat. Nothing runs on the main thread. `Cheats.kt` holds
+`bluetoothContactRadio` where it held `NoRadio`, logging to stdout only, never to the rig's on-screen
+log: a radio line on a screen is a screen that changed for a reason the house did not author.
+
+**What goes on the air: two service UUIDs and nothing else.** No local name, so iOS sends none. One
+UUID is the game's, identical on every phone; the other is the window's token, carried whole as a
+128-bit UUID. **The game's UUID is 16 bits because nothing else fits.** iOS gives a foreground app 28
+bytes and accepts only service UUIDs and a local name. A 128-bit list costs 2 + 16n bytes, so a 128-bit
+game UUID beside a 128-bit token (34) does not fit, and iOS moves what does not fit to its overflow
+area, where only a scanner asking for that exact UUID finds it, and no scanner can ask for a token it
+does not know. A 16-bit list costs 4, so the pair fits in 22. The scanner filters on the game's UUID,
+which also keeps every other Bluetooth device in the house from waking the callback (rule 7).
+
+**Rotation** is the uploader's (D-217): the first beat after a window boundary calls `advertise`, which
+stops the old advertisement and starts the new. So the air turns within one beat (1 s) of the boundary,
+and the resolver's previous-window allowance (D-213) covers the lag. `ContactRadioRotationTest` reads it
+off a clock it turns by hand.
+
+**Off before arming (D-067).** The managers are built at the first `advertise` or `scan(true)`, which the
+uploader makes only once `ContactSeedIssued` arrives. Before that nothing exists to put anything on the
+air, and no Bluetooth prompt can be raised in the lobby. `silence` at `RoundEnded` takes both off.
+
+**Revoked phones advertise and never scan (D-008, story 9.4).** Scanning follows the last `scan` call
+and nothing else: no reset, power cycle or scan-cycle tick starts it again, and a reading in flight
+when `scan(false)` lands is dropped on arrival, so it cannot ride out in an upload (R8's reason).
+
+**Allocation (rule 7).** Every CoreBluetooth callback into Kotlin/Native allocates before our code
+runs: the bridge wraps the manager, the peripheral, the advertisement dictionary, the RSSI number,
+the UUID list, two UUIDs and the token's data, about eight objects. **Estimate: 300 bytes a callback,
+at most 500.** Our code adds nothing: the dictionary key is read once, the token's bytes go into a
+buffer allocated once, and the ring is two fixed arrays.
+- **The scan rate, chosen: duplicates filtered, scan stopped and restarted every 250 ms**
+  (`ContactAdvertisement.SCAN_CYCLE_MILLIS`). iOS reports each phone once per scan, so at most four
+  reports a second per phone heard, whatever iOS's own advertising rate. The scan is never off for longer
+  than a restart, so living phones still scan continuously (D-212 ruling 3).
+- **At 7 peers: at most 28 callbacks a second, about 8.4 KB/s (14 KB/s at 500 B).** The drain adds about
+  1 KB/s (up to 14 readings a beat at a window edge, each a reading, a token and a 32-character string),
+  and the device log's HEARD line about 0.2 KB/s. **About 10 to 16 KB/s, 2 to 3 per cent of the
+  0.5 MB/s budget.** With duplicates allowed and no cycle, the rate would be iOS's: if that is 30
+  reports a second per phone, 63 to 105 KB/s.
+- The ring (`SightingRing`) is the upload's 24 slots: one per token, the strongest reading kept. Full,
+  the weakest gives way to a stronger newcomer. **iOS's 127 is no reading**: kept only when nothing
+  better was heard for that token, so it never displaces a real one. Left to `pack`, which keeps the
+  highest number per token, 127 would win and the house would reject it, losing the contact.
+- **`AllocationBudget` is not wired to the radio's queue** (TODO in `SwitchboardRadio.tally`). Its
+  counter counts the whole process, only moves when a collection runs, and allocates a `GCInfo` on
+  every read. Sampled from the radio's queue it would cost more than the radio and still not say what
+  the radio spent. The radio logs its callback count every 10 s instead; unit 8 measures bytes per
+  callback on a phone and multiplies.
+- Not this unit's, noticed: `SightingUpload.pack` runs up to 24 HMACs and builds its slots as strings
+  every second on every phone. Unit 8 should measure it beside the radio.
+
+**Errors: silent to the player; not yet loud to the house (rule 6).** Both managers are built with
+the system power alert off, which is a dialog iOS would otherwise lay over the lamp. A manager going
+Off, Unauthorized, Resetting or Unsupported is logged and reported to `SwitchboardRadio`'s `outage`,
+and the lamp, screens and haptics never hear of it. On power returning, the radio takes up what was
+asked of it without being asked again. **No event exists to carry an outage to the house.** The
+architecture names `BleUnavailable` in its error table, but it was never built; nothing in `Event`,
+`RoundBody` or `RoundMessage` carries one. D-187 has since ruled that a radio that failed earns no
+notice and a permission revoked mid-round does. So what goes up, and what the house does with it, is
+raised rather than invented. `outage` is the one place it would go.
+
+**Info.plist: unchanged.** `NSBluetoothAlwaysUsageDescription` is already there in the house's voice,
+written for the permission prompt (*"The house senses which phones are near each other in the rooms.
+No connection leaves this house."*), and it is accurate for this radio. **No background modes were
+added**; that is the owner's call. What their absence costs: when a phone locks or leaves the app,
+iOS suspends it within seconds and its radio goes quiet. It stops advertising and scanning, so it
+cannot Revoke or be Revoked, report or be reported, and its socket goes quiet too. With the modes,
+the app would keep running but iOS would move both service UUIDs to the overflow area. No scanner
+could read the token, so a backgrounded phone still could not be resolved, and D-032's worry (a
+backgrounded phone becoming identifiable by something nobody designed) would apply in full. Unit 6's
+sniffing is where that gets settled.
+
+**Raised, not decided:**
+
+1. **The 16-bit service UUID (`5348`) is a placeholder.** 16-bit UUIDs belong to the Bluetooth SIG,
+   and this one is unassigned rather than ours: fine in a living room, not on the App Store. The ways
+   out both change what the radio emits: a SIG member UUID, or a 128-bit game UUID beside a token cut
+   to fit (which moves the truncation into `ContactTokens.of`, as `ContactToken`'s KDoc foresaw).
+2. **The outage event** (above): what a phone sends when its radio is down, whether a permission
+   revoked mid-round is told apart from a radio that failed (D-187), and what the house says.
+3. **Auto-Lock.** The app never disables the idle timer, so a phone left alone dims and then locks
+   during a round, which suspends the radio and the socket. Disabling it is a lamp decision as well
+   as a radio one: the dim before the lock is a fade nobody authored (rule 5). The device check sets
+   Auto-Lock to Never by hand.
+
+Also open: the iOS Bluetooth address rotates on its own schedule, not ours, so it can link one window's
+token to the next. That is unit 6's sniff. If iOS does not reset its duplicate filter on a scan
+restart, a device shows each phone reported once and never again; the fallback is one line (duplicates
+on, no cycle), at the cost above.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `platform` `BluetoothRadio.kt` | (new) | `ContactAdvertisement`, `RadioHardware`, `SightingRing`, `SwitchboardRadio`, `expect bluetoothContactRadio` |
+| `platform` `BluetoothRadio.ios.kt` | (new) | CoreBluetooth managers on one queue, the hot-path callback, the scan-cycle timer |
+| `app` cheats `Cheats.kt` | `NoRadio` | `bluetoothContactRadio`, stdout only |
+| `platform` `ContactRadio.kt`, `RoundClient`, `HouseAir` KDoc | "until unit 4" | the radio that exists |
+| `SightingRingTest`, `SwitchboardRadioTest`, `ContactRadioRotationTest` | (new) | coalescing and 127; pre-arm off, one advertisement, the Revoked no-scan switch through resets, outages, silence; rotation within one beat of every boundary |
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).
