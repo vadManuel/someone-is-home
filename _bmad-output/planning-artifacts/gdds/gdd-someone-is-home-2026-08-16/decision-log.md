@@ -5458,6 +5458,119 @@ renamed.
 | `RadioFaultTest`, `SwitchboardRadioTest`, `ContactUploaderTest`, `ContactRadioBenchTest`, `HouseNoticeTest` | announce everything | a reset unnamed, a switch-off named, nothing before arming, nothing drawn when empty, one length |
 | `ble-unit4-device-check.md` step 7 | the radio notice | the house notice, and a reset unnamed |
 
+## Revision 58 — the host's phone, locked in its lobby
+
+*The owner's 2026-11-16 rulings H1 and H2, on the bug the one-phone session found: when the host's
+phone auto-locked in the lobby every seat's socket dropped (`ENOTCONN`), the advertisement was refused
+(`NSNetServicesErrorCode -72000`), the house woke with nobody seated and nothing that would seat them,
+and LIGHTS OUT then logged `WILL NOT ARM — 0 SEAT(S), 0 LINE(S) IN` under a screen that said ARMED
+(`/tmp/someones-home-one-phone/phone-roundB1.log`). On a game night, a host who sets the phone down in
+the lobby silently loses the room.*
+
+**Root cause, three faults in a row.** (1) Nothing held the host's screen in the lobby: D-221 holds it
+from arming. (2) iOS suspends an app that leaves the foreground, and a suspended app keeps neither its
+listening socket nor its Bonjour service; nothing in the house ever listened or advertised again. The
+clients already rejoin by token on a bounded backoff (G3, story 0.8), but there was no listener to
+rejoin. (3) `FlowModel.lightsOut` walked the host's screen to ARMED on the press and told the house
+after, so a refusal still showed ARMED; and the host's button was drawn from the last standing its own
+socket received, a READY one from before the lock.
+
+### D-224 · **The host's screen is kept awake from the moment its lobby opens until hosting ends — decided**
+
+**H1, extending D-221.** The host holds the idle timer off when its home is on the air and it is walked
+into its lobby, and the hold ends when hosting does: CLOSE THE HOUSE, LEAVE, or the round ending.
+NEW ROUND opens the host's lobby again, so it holds again. **Non-host phones keep D-221 as it is**:
+nothing in a guest's lobby touches the idle timer.
+
+**One idle timer, one `ScreenWake`, two holds.** The app root builds one and lends it to the lobby link
+and the round half. Two wakes over one property would each remember the other's `true` as the owner's
+setting. The two holds are one state with three values: a round's hold takes over the lobby's with no
+instant where the timer is back on; a round's release ends both (hosting ends with the round); a round's
+release with a lobby held does nothing, because the house's `RoundEnded` broadcast reaches the host's own
+round half after NEW ROUND has already re-held; a hosting release leaves a round's hold to the round.
+
+**Checked against D-077, D-093 and D-118: it changes no light level, only Auto-Lock.** It is D-221's
+property, `UIApplication.idleTimerDisabled`, held earlier. It does not touch `UIScreen.brightness`,
+draws nothing and animates nothing. D-077's concealment chrome, D-093's absent Island ring and D-118's
+two dims are untouched. What it removes, in the host's lobby, is the OS's own dim before the lock.
+
+### D-225 · **A host that leaves the foreground takes the house off the air and puts it back on the same port with the same ledger; every seat returns to its own chair by its own token — decided**
+
+**H2.** A lock, the side button or a swipe home is still possible by hand, and still suspends the app (no
+background modes, T4). So the house now handles the two moments itself, through a `platform` seam,
+`Foreground` (iOS: `UIApplicationDidEnterBackground` and `WillEnterForeground` on the main queue):
+
+- **Leaving:** the advertisement comes off the air and the server stops, while the app still has the
+  seconds iOS gives it. The connections close cleanly, so each phone learns at once and starts the
+  reconnect it already has. **The ledger, the desk and the round survive**; each lost connection reaches
+  the desk and the round's queue exactly as any lost connection does (`onLost`, unchanged).
+- **Returning:** the same port is bound again on the same `TransportHost`, whose ledger minted every
+  token in the room, and the home goes back on the air under the same name. A client holds the address
+  and port it joined on and its token, and resumes by presenting the token (D-052's gotcha, G3, D-094).
+  **Identity on reconnect is the stored seat token and nothing else**: a token the ledger minted returns
+  *that* seat, one it never minted is refused (`UnknownToken`, then D-172's silent fresh join), no token
+  is a stranger who gets a free seat and never a held one, and after arming not even that. D-097's
+  re-push rides the re-seating unchanged (`RoundSeam.seated`).
+- A Bonjour refusal on the return is logged and the house stays up: seated phones return by address and
+  need no advertisement. A port that cannot be bound after ten tries is said in so many words, because
+  it strands the room.
+
+**The line rides back up with the name.** The desk drops a seat's line with its connection
+(`LobbyDesk.left`), because a person leaving is also only a closed connection. The name has always been
+re-sent on every seating; without the line the room came back with every phone saying HANDED OVER over
+a count of 0 OF 3, and nobody would think to re-type. The link now keeps the handed line in memory,
+beside the name, until the round ends, the phone leaves or the house closes (the screen's own `OneLine`
+copy lives exactly as long), and re-sends it by the one body that always carried it. **Nothing a client
+receives changes**: the line goes up only, never down, and the desk's leave semantics are unchanged.
+
+**The address must be reused, and a refused bind must be catchable.** The server closed the
+connections, so they sit in TIME_WAIT on its port; it is now bound with address reuse. And Ktor's engine
+binds on a coroutine of its own, where a refusal is an **uncaught** exception that ends a Kotlin/Native
+process: found by breaking address reuse in `HostReopenTest`, which failed with `EADDRINUSE` instead of
+failing. On a phone that is the house crashing at the moment it recovers. A named port is now bound
+once by the caller, with the engine's options, before the engine is given it.
+
+**Found on the way: CLOSE THE HOUSE never stopped the server.** `LobbyHouse.stop` read the server field
+inside a launched coroutine after nulling it, so on the main thread's dispatcher the stop saw null. The
+server is now read into a local first.
+
+**Mid-round, nothing about the round changes, and nothing names the host.** The same two moments apply
+to a host backgrounded mid-round, because they are transport, not rules. What follows is all existing
+behaviour: each dropped seat gets D-203's `LeaveTerminal`, pushes to a seat that is away are recorded as
+unreachable and collected on its `Gap` (D-097, D-190), the seats resume under the locked ledger, and the
+tick driver measures the gap on its return and abandons a backlog too large to chase, out loud (E-P3-3).
+**D-187 calls locking or backgrounding mid-round deliberate evasion, but D-223 recorded that neither is
+yet detectable, and the host is the house**, so no notice names anyone for it. With D-224 and D-221 the
+host's screen is held awake through the lobby and the round, so a host can only be backgrounded by
+their own hand. Whether a host doing that should be named is not decided here: raised for the owner.
+
+### D-226 · **LIGHTS OUT walks the host to ARMED only on the house's yes, and a host whose own link is down is shown an empty room — decided**
+
+**The walk is handed to the arming.** `FlowModel.lightsOut` hands its walk to the seam, and
+`armAtLightsOut` calls it after the house armed and on nothing else. A refused press leaves the host on
+its lobby. With no house behind the model (renders, the desktop preview) the default walks at once, as
+it always did.
+
+**The host's standing is not kept past its own link.** While the host's own socket is down, its lobby is
+shown the empty standing LEAVE already shows, so LIGHTS OUT is drawn defunct under NEEDS 3 RESIDENTS, the
+existing words, until the house sends a real one. The host only: a guest draws no button from it, and
+its list blinking empty on each reconnect would change what a guest is shown for nothing. So LIGHTS OUT
+is refused below `MINIMUM_SEATS` connected three times over: the button is defunct, the house refuses
+(`readyToArm` counts connected seats), and the screen does not move.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `platform` `ScreenWake` | one hold, the round's | `holdWhileHosting`, `releaseHosting`; the round's hold takes over and ends both |
+| `platform` `Foreground`, `Foreground.ios.kt` | (new) | `deviceForeground()`: background and foreground, on the main queue |
+| `platform` `TransportHost.start` | port 0 only, once | startable again after `stop`, address reuse, a named port tried before the engine binds it |
+| `app` `LobbyHouse` | `HostAdvertiser` direct; `stop` never stopped the server | `Advertising` seam; `backgrounded`, `foregrounded`, `reopen`; the server read before the launch |
+| `app` `LobbyOverTransport` | no idle timer; the line sent once | a required `ScreenWake`, held at lobby open and NEW ROUND, released at leave and close; the line re-sent on every seating; the host's standing emptied while its link is down |
+| `app` `armAtLightsOut` | the screen walked before it was asked | `armed`, called on a yes |
+| `ui` `FlowModel.lightsOut`, `onLightsOut` | `push(Armed)`, then report | report and hand over the walk |
+| `app` cheats `Cheats.kt` | a wake built inside the round client | one wake for lobby and round; the foreground watched; `armed` handed to the arming |
+| `ScreenWakeTest`, `HostReopenTest`, `HostForegroundTest`, `HostArmingTest`, `LightsOutSeamTest` | (new cases) | the two holds; same chair by token across a reopen, wrong and missing tokens; suspend and resume with three phones on loopback; a refused press stays on the lobby |
+| `tools/one-phone/README.md` | Auto-Lock Never for round B | section 6: lock the host by hand in the lobby, unlock, the room comes back, LIGHTS OUT works |
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

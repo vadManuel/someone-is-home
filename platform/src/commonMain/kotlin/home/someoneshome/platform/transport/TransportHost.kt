@@ -7,6 +7,7 @@ import home.someoneshome.model.protocol.TransportWire
 import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.EmbeddedServer
+import io.ktor.server.engine.connector
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.routing.routing
 import io.ktor.server.websocket.DefaultWebSocketServerSession
@@ -16,6 +17,11 @@ import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
 import io.ktor.websocket.readText
+import io.ktor.network.selector.SelectorManager
+import io.ktor.network.sockets.aSocket
+import io.ktor.utils.io.core.use
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -71,18 +77,62 @@ class TransportHost(
     private var malformed = 0
     private var server: EmbeddedServer<*, *>? = null
 
-    /** Binds and returns the actual port — pass 0 to let the OS pick one (tests do). */
+    /**
+     * Binds and returns the actual port — pass 0 to let the OS pick one (tests do).
+     *
+     * **Startable again after [stop], on the same port, with the same ledger** (H2, D-225). That
+     * is how a host that left the foreground comes back: iOS does not keep a suspended app's
+     * listening socket, every phone in the house holds this port and its own seat token, and a
+     * server reopened here with the ledger it had answers each of them with *that* seat. So the
+     * port is bound with address reuse — the server closed the connections, so they sit in
+     * TIME_WAIT on this port — and a bind that fails leaves this object stopped rather than
+     * half-started, so the caller can try again.
+     *
+     * ### A named port is tried before the engine is given it
+     *
+     * Ktor's engine binds on a coroutine of its own, and a refused bind there is an **uncaught**
+     * exception on its IO dispatcher — which on Kotlin/Native ends the process. Seen in the test
+     * written for this (`HostReopenTest`, with address reuse switched off): `EADDRINUSE`, and the
+     * test binary failed rather than failing. On the host's phone that would be the house crashing
+     * at the moment it was trying to recover. So a named port is bound once here, with the
+     * engine's options, where a refusal is an ordinary exception the caller can catch and retry,
+     * and only then handed over. Port 0 is the OS's choice and cannot be refused this way.
+     */
     suspend fun start(port: Int): Int {
         check(server == null) { "the host is already running" }
-        val s = embeddedServer(CIO, port = port, host = "0.0.0.0") {
+        if (port != 0) portAccepts(port)
+        val wanted = port
+        val s = embeddedServer(
+            CIO,
+            configure = {
+                connector {
+                    this.port = wanted
+                    host = "0.0.0.0"
+                }
+                reuseAddress = true
+            },
+        ) {
             install(WebSockets)
             routing {
                 webSocket(TRANSPORT_PATH) { attend(this) }
             }
         }
-        server = s
-        s.start(wait = false)
-        return s.engine.resolvedConnectors().first().port
+        try {
+            s.start(wait = false)
+            val bound = s.engine.resolvedConnectors().first().port
+            server = s
+            return bound
+        } catch (failed: Throwable) {
+            runCatching { s.stop(gracePeriodMillis = 0, timeoutMillis = 250) }
+            throw failed
+        }
+    }
+
+    /** Binds [port] the way the engine will and lets it go; throws where the engine would crash. */
+    private suspend fun portAccepts(port: Int) {
+        SelectorManager(Dispatchers.IO).use { selector ->
+            aSocket(selector).tcp().bind("0.0.0.0", port) { reuseAddress = true }.close()
+        }
     }
 
     suspend fun stop() {

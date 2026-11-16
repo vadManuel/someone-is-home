@@ -20,6 +20,7 @@ import home.someoneshome.platform.loadSeatToken
 import home.someoneshome.platform.monotonicNanos
 import home.someoneshome.platform.saveHostAddress
 import home.someoneshome.platform.saveSeatToken
+import home.someoneshome.platform.ScreenWake
 import home.someoneshome.platform.transport.AdvertiseFailure
 import home.someoneshome.platform.transport.ClientSession
 import home.someoneshome.platform.transport.EffectWire
@@ -106,6 +107,45 @@ object DeviceSeat : SeatStore {
     }
     override fun forget() = clearSeatToken()
 }
+
+/**
+ * **What puts a home on the air, and hands back the way to take it off again** (H2, D-225).
+ *
+ * A seam for [SeatStore]'s reason: the behaviour the owner ruled on is what the house does when
+ * its phone leaves the foreground and comes back — off the air, then on it again under the same
+ * name and port — and a test cannot count advertisements against a Bonjour stack it does not have.
+ * [DeviceAdvertising] is what every production construction gets.
+ *
+ * The callbacks are [HostAdvertiser]'s, unchanged: exactly one of [onAir] and [onFailed], and
+ * neither at the call.
+ */
+fun interface Advertising {
+    fun advertise(
+        name: String,
+        port: Int,
+        onEvent: (String) -> Unit,
+        onAir: () -> Unit,
+        onFailed: (AdvertiseFailure) -> Unit,
+    ): () -> Unit
+}
+
+/** [Advertising] over Bonjour: story 0.8's [HostAdvertiser], started on the caller's (main) thread. */
+val DeviceAdvertising: Advertising = Advertising { name, port, onEvent, onAir, onFailed ->
+    val advertiser = HostAdvertiser(name, port, onEvent, onAir, onFailed)
+    advertiser.start()
+    advertiser::stop
+}
+
+/**
+ * **How many times a house coming back tries its own port before saying it cannot**, and how long
+ * it waits between tries (H2, D-225).
+ *
+ * The port is reopened with address reuse, so the first try is expected to land; the rest are for
+ * a server whose last connections are still closing. A device-side patience like
+ * [ADVERTISE_PATIENCE_MILLIS]: no rule reads it and it stamps into no recording.
+ */
+private const val REOPEN_TRIES: Int = 10
+private const val REOPEN_PAUSE_MILLIS: Long = 500
 
 /**
  * **The round's client half, handed this phone's own socket** — the seam between the lobby's
@@ -250,11 +290,25 @@ class LobbyHouse(
      * and nothing else.
      */
     private val onRadioFaulted: (Seat, RadioCause) -> Unit = { _, _ -> },
+    /** What puts the home on the air. [DeviceAdvertising] in every production construction. */
+    private val advertising: Advertising = DeviceAdvertising,
 ) {
 
     private val desk = LobbyDesk()
     private var host: TransportHost? = null
-    private var advertiser: HostAdvertiser? = null
+
+    /** Takes the advertisement off the air, or null when nothing is on it. */
+    private var advertiser: (() -> Unit)? = null
+
+    /**
+     * **The house is up but this phone has left the foreground** (H2, D-225), so the server is
+     * stopped and the advertisement is off, and both come back at [foregrounded].
+     */
+    private var away = false
+
+    /** The server's last stop, awaited before the port is bound again (and by a test, before it ends). */
+    internal var closing: Job? = null
+        private set
 
     /**
      * **The home this house came up under, or none because this phone is not hosting.**
@@ -451,14 +505,14 @@ class LobbyHouse(
             val bound = server.start(port = 0)
             port = bound
             onEvent("HOSTING '$homeName' ON :$bound")
-            advertiser = HostAdvertiser(
+            advertiser = advertising.advertise(
                 homeName, bound,
                 onEvent = onEvent,
                 // Loopback, deliberately: the host is a player and joins its own house on the
                 // same path everybody else uses.
                 onAir = { answer { onUp(NearbyHome(homeName, "127.0.0.1", bound)) } },
                 onFailed = { why -> answer { stop(); onRefused(why) } },
-            ).also { it.start() }
+            )
             delay(ADVERTISE_PATIENCE_MILLIS)
             // Hung up while waiting: there is nothing left to refuse.
             if (host == null) return@launch
@@ -589,14 +643,118 @@ class LobbyHouse(
     fun stop() {
         attending?.cancel()
         attending = null
-        advertiser?.stop()
+        advertiser?.invoke()
         advertiser = null
-        scope.launch { host?.stop() }
+        // **Read into a local before the launch.** This used to be `scope.launch { host?.stop() }`
+        // followed by `host = null`, and on a dispatcher that runs the launch later — the main
+        // thread's, which is where every production call comes from — the field was already null
+        // by then and the server was never stopped: CLOSE THE HOUSE took the house off the air and
+        // left its port bound.
+        val server = host
+        closing = scope.launch { runCatching { server?.stop() } }
         host = null
         port = null
+        away = false
         // The house is down, so this phone is hosting nothing — and a stale home here would let a
         // later arming draw from a house that is no longer on the air.
         hosted = null
+    }
+
+    /** True while this phone is running a house, whether or not it is in the foreground. */
+    val up: Boolean get() = host != null
+
+    /**
+     * **This phone left the foreground: take the house off the air, and keep everything it knows**
+     * (H2, D-225).
+     *
+     * iOS suspends an app that leaves the foreground, and a suspended app keeps neither its
+     * listening socket nor its Bonjour advertisement. On 2026-11-16 a host that auto-locked in the
+     * lobby woke with both gone and nothing that would bring them back: every seat dropped, and
+     * LIGHTS OUT then reached a house with nobody in it. So the house stops them itself while it
+     * still can, and the connections close cleanly — each phone learns at once that it is off the
+     * line, rather than at its next write, and starts the reconnect it already has.
+     *
+     * **What survives is the ledger, the desk and the round.** The ledger is what knows which token
+     * holds which seat, so it is the one thing a seat coming back needs; the server object keeps
+     * it and is started again at [foregrounded]. Each lost connection reaches the desk and the
+     * round's queue exactly as any lost connection does (`onLost`), which is existing behaviour
+     * and is not changed here: in a round that is D-203's `LeaveTerminal` for each seat.
+     *
+     * Nothing here touches a screen, the lamp or a rule (rules 5 and 6). The host's own phone is
+     * one of the seats that drops, and its lobby says so in the words it already has — see
+     * `LobbyOverTransport`'s `Rejoining`.
+     */
+    fun backgrounded() {
+        val server = host ?: return
+        if (away) return
+        away = true
+        advertiser?.invoke()
+        advertiser = null
+        onEvent("THIS PHONE LEFT THE FOREGROUND — THE HOUSE IS OFF THE AIR UNTIL IT IS BACK")
+        closing = scope.launch { runCatching { server.stop() } }
+    }
+
+    /**
+     * **This phone is back: reopen the same port with the same ledger, and go back on the air**
+     * (H2, D-225).
+     *
+     * The same port, because that is where every phone in the house is dialling: a client holds
+     * the address and port it joined on and its seat token, and resumes by presenting the token
+     * there (D-087, D-094). Each one is answered with **that** seat, because the ledger that
+     * minted the token is the one listening — no lobby code, no fresh seat, no second opinion
+     * about who seat four is.
+     *
+     * The advertisement goes back up for the phones that have not joined yet. If Bonjour refuses
+     * it this time, the house stays up and says so in its log: every seated phone comes back by
+     * address and needs no advertisement, so a refusal here costs new arrivals and nobody already
+     * in the room. A port that cannot be reopened is the one failure that strands the room, and it
+     * is said in so many words.
+     */
+    fun foregrounded() {
+        val server = host ?: return
+        if (!away) return
+        away = false
+        val home = hosted ?: return
+        val at = port ?: return
+        val stopping = closing
+        scope.launch {
+            stopping?.join()
+            val bound = reopen(server, at)
+            // Closed, left or backgrounded again while the port was being reopened: whatever this
+            // coroutine just bound is not the house any more.
+            if (host !== server || away) {
+                if (bound != null) runCatching { server.stop() }
+                return@launch
+            }
+            if (bound == null) {
+                onEvent("COULD NOT REOPEN :$at — NO SEAT CAN COME BACK TO THIS HOUSE")
+                return@launch
+            }
+            onEvent("BACK IN THE FOREGROUND — LISTENING AGAIN ON :$bound · SEATS COME BACK BY THEIR OWN TOKENS")
+            advertiser = advertising.advertise(
+                home.name, bound,
+                onEvent = onEvent,
+                onAir = { onEvent("BACK ON THE AIR AS '${home.name}'") },
+                onFailed = { why ->
+                    onEvent("NOT BACK ON THE AIR — $why · SEATED PHONES RETURN BY ADDRESS, A NEW ONE CANNOT FIND THIS HOME")
+                },
+            )
+        }
+    }
+
+    /** The port this house had, bound again; null after [REOPEN_TRIES] refusals. */
+    private suspend fun reopen(server: TransportHost, at: Int): Int? {
+        repeat(REOPEN_TRIES) { attempt ->
+            try {
+                return server.start(at)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (refused: Throwable) {
+                onEvent("REOPENING :$at — TRY ${attempt + 1} OF $REOPEN_TRIES REFUSED (${refused::class.simpleName})")
+                delay(REOPEN_PAUSE_MILLIS)
+            }
+        }
+        return null
     }
 
     /**
@@ -854,6 +1012,15 @@ class LobbyOverTransport(
      * left to the panel.
      */
     private val onHouseClosed: () -> Unit = {},
+    /**
+     * **The screen, kept awake while this phone hosts a lobby** (H1, D-224), and the same object
+     * the round half holds at arming (D-221) — one idle timer, so one [ScreenWake]. Required for
+     * the round's reason: a root that has not decided what the idle timer is does not compile. A
+     * construction with no idle timer passes one over [home.someoneshome.platform.NoIdleTimer].
+     */
+    private val wake: ScreenWake,
+    /** What puts a hosted home on the air. [DeviceAdvertising] in every production construction. */
+    private val advertising: Advertising = DeviceAdvertising,
 ) : LobbyLink {
 
     /**
@@ -865,7 +1032,7 @@ class LobbyOverTransport(
      * at all. `emit` and `armingInputs` are what it is reached for, and both are the authority's
      * own calls rather than a screen's.
      */
-    internal val house = LobbyHouse(scope, onEvent, onIntent, onEgressFired, onSighted, onRadioFaulted)
+    internal val house = LobbyHouse(scope, onEvent, onIntent, onEgressFired, onSighted, onRadioFaulted, advertising)
     private var session: ClientSession? = null
     private var client: TransportClient? = null
     private var clientJob: Job? = null
@@ -880,6 +1047,22 @@ class LobbyOverTransport(
      */
     private var residentName: String = ""
 
+    /**
+     * **The line this phone handed over, kept so it can be handed over again** (H2, D-225).
+     *
+     * [residentName]'s twin and for its reason. The desk drops a seat's line with its connection
+     * (`LobbyDesk.left`), because a lost connection is also what a person leaving looks like and
+     * the house cannot tell the two apart. So a phone that dropped and came back to its own seat —
+     * every phone in the room, when the host's phone locks — arrives at a desk holding nothing of
+     * it, while its own screen still says HANDED OVER. The name has always ridden back up on every
+     * seating; the line now rides with it.
+     *
+     * **In memory and nowhere else, and only until the promise says it goes**: the round ends,
+     * this phone leaves, or the house closes. The screen's own copy (`OneLine`) lives exactly as
+     * long. It is never logged, and it goes up by the one body that has always carried it.
+     */
+    private var handedLine: String? = null
+
     init {
         // The 0.8 property on relaunch: a stopped app reads its token back and resumes as THAT
         // seat, never as *a* seat. The restored session never says Hello.
@@ -887,7 +1070,16 @@ class LobbyOverTransport(
     }
 
     override fun host(home: SavedHome, onUp: (NearbyHome) -> Unit, onRefused: (HostRefusal) -> Unit) =
-        house.start(home, onUp) { why ->
+        house.start(
+            home,
+            // **The lobby is open, so the host's screen stays on** (H1, D-224). Held here rather
+            // than at the button because a house nobody can find is not a lobby: the hold begins
+            // when the home is on the air and the host is walked in.
+            onUp = { nearby ->
+                wake.holdWhileHosting()
+                onUp(nearby)
+            },
+        ) { why ->
             // `app` is the one module that sees both sides, so the translation from what the
             // radio said to what a host can act on happens here — `ui` never learns that Bonjour
             // exists, and `platform` never learns that there is a screen.
@@ -941,6 +1133,7 @@ class LobbyOverTransport(
                     // pushes as frames it already had. Then the panel is told, which is the half
                     // this class cannot do itself.
                     is LobbyBody.RoundEnded -> {
+                        handedLine = null
                         round?.roundEnded()
                         onRoundEnded()
                     }
@@ -979,7 +1172,16 @@ class LobbyOverTransport(
                         // is a fault nobody could diagnose from the screen. The name is never
                         // persisted — it is re-sent from what this phone still has in memory, or
                         // not at all.
-                        client?.let { live -> scope.launch { live.send(naming(name)) } }
+                        //
+                        // **And the line, for the same reason** (H2, D-225): the desk dropped it
+                        // with the connection, and the screen still says HANDED OVER. Sent after
+                        // the name, on the same socket, by the same one body that always carries it.
+                        client?.let { live ->
+                            scope.launch {
+                                live.send(naming(name))
+                                handedLine?.let { live.send(handover(it)) }
+                            }
+                        }
                         // **On every seating, exactly as the name is re-sent on every seating**,
                         // and for the mirror of that reason: the name is what the house has to be
                         // told again, and the pushes are what this phone has to ask for again. A
@@ -992,7 +1194,20 @@ class LobbyOverTransport(
                             startOver(home, name, onStanding)
                         }
                     }
-                    is ClientSession.Phase.Joining, is ClientSession.Phase.Rejoining -> Unit
+                    // **The host's own link is down, so its standing is not the house's any more**
+                    // (H2, D-226). The host's LIGHTS OUT is drawn from the standing that last came
+                    // down its own socket, and a host whose phone locked held a READY standing from
+                    // before the lock while the house beside it had nobody seated: the button was
+                    // live, the house refused, and the screen walked to ARMED anyway. A phone that
+                    // is not in its lobby has no standing to hold a stale copy of — LEAVE wipes the
+                    // counts for exactly that reason — so the host is shown an empty room until the
+                    // house says otherwise, which draws NEEDS N RESIDENTS under a inert button.
+                    //
+                    // The host only. A guest draws no button from it, and its list blinking empty
+                    // on every reconnect would be a change to what a guest is shown for no gain.
+                    is ClientSession.Phase.Rejoining ->
+                        if (house.up) onStanding(LobbyBody.Standing(joined = 0, linesIn = 0))
+                    is ClientSession.Phase.Joining -> Unit
                 }
             },
         )
@@ -1046,8 +1261,12 @@ class LobbyOverTransport(
      */
     override fun handOver(line: String) {
         val c = client ?: return
-        scope.launch { c.send(TransportFrame.Carry(LobbyWire.encode(LobbyBody.Handover(line)))) }
+        handedLine = line
+        scope.launch { c.send(handover(line)) }
     }
+
+    private fun handover(line: String): TransportFrame =
+        TransportFrame.Carry(LobbyWire.encode(LobbyBody.Handover(line)))
 
     private fun naming(name: String): TransportFrame =
         TransportFrame.Carry(LobbyWire.encode(LobbyBody.Naming(name)))
@@ -1073,7 +1292,12 @@ class LobbyOverTransport(
      * phone still has in memory; it is never persisted.
      */
     override fun roundEnded() {
+        handedLine = null
         house.roundEnded()
+        // **NEW ROUND opens the host's lobby again, so its screen is held again** (H1, D-224). The
+        // round's end let it go (`ScreenWake.release` ends hosting with the round); the host is now
+        // back in a lobby the house runs on this phone.
+        if (house.up) wake.holdWhileHosting()
         val c = client ?: return
         scope.launch { c.send(naming(residentName)) }
     }
@@ -1095,6 +1319,8 @@ class LobbyOverTransport(
         hangUp()
         house.roundEnded()
         house.stop()
+        // Hosting ended (H1, D-224). A guest never held for hosting, so this touches nothing there.
+        wake.releaseHosting()
     }
 
     /**
@@ -1116,13 +1342,25 @@ class LobbyOverTransport(
         // joined over loopback like everybody else.
         house.houseClosed()
         hangUp()
+        wake.releaseHosting()
     }
+
+    /**
+     * **This phone left the foreground** (H2, D-225). On the host, the house goes off the air and
+     * its server stops, keeping the ledger every seat comes back through. On a guest, nothing: its
+     * own reconnect already does everything a guest can (D-087, G3).
+     */
+    fun backgrounded() = house.backgrounded()
+
+    /** **This phone is back** (H2, D-225). On the host, the same port, the same ledger, on the air again. */
+    fun foregrounded() = house.foregrounded()
 
     /** This phone's own end of the socket, dropped. Shared by the two exits so they cannot drift. */
     private fun hangUp() {
         // The round's half first: a phone that has hung up is in no round, so its radio stops and
         // its screen may sleep (T4, D-221). Harmless when it already holds nothing.
         round?.left()
+        handedLine = null
         clientJob?.cancel()
         clientJob = null
         client = null

@@ -42,11 +42,14 @@ prints), `seat-1.log`, `seat-2.log`, `driver.log`, and the build and install log
 Simulators and the log writers. `round.sh stop` does the same from another terminal. Neither touches
 a log.
 
-**A locked phone.** A host phone that locks or sleeps is suspended and its sockets go with it, so the
-house drops every seat (`Websocket handler failed … ENOTCONN`, then `WILL NOT ARM — 0 SEAT(S)`).
-`start` refuses to launch on a locked phone, says so if the app could not start because it was
-locked, and while it follows the log it prints `!!! THE PHONE IS LOCKED` when the phone locks. It can
-only see a lock on a phone with a passcode.
+**A locked phone.** Since D-224 the host's screen is held on from the moment its lobby opens, so it no
+longer locks by itself in the lobby. Locked **by hand** (the side button), it is still suspended: the
+house takes itself off the air, and when the phone is unlocked it listens on the same port again, goes
+back on the air, and every seat comes back to its own chair by its own token (D-225; section 6 checks
+it). Before D-225 the house dropped every seat for good (`Websocket handler failed … ENOTCONN`, then
+`WILL NOT ARM — 0 SEAT(S)` under an ARMED screen). `start` still refuses to launch on a locked phone,
+says so if the app could not start because it was locked, and while it follows the log it prints
+`!!! THE PHONE IS LOCKED` when the phone locks. It can only see a lock on a phone with a passcode.
 
 ## 1. Install
 
@@ -70,10 +73,10 @@ Network, and any other it asks for). Then check Settings → Apps → Someone's 
 
 - **PASS:** every row the app asks for is on.
 - Swipe the app away afterwards. `start` relaunches it with its launch switches.
-- Set **Auto-Lock to 30 seconds** (Settings → Display & Brightness) for round A's step 4, and keep
-  the phone awake by touching it while round A is in the lobby. **Before round B, set Auto-Lock to
-  Never**: in the lobby nothing keeps the host awake, and the first round-B try lost every seat when
-  the phone locked. Put Auto-Lock back when you are done.
+- Set **Auto-Lock to 30 seconds** (Settings → Display & Brightness) and leave it there for every
+  round: since D-224 the host is held awake from its lobby on, so Auto-Lock Never is no longer needed,
+  and 30 s is what round A's step 4 and section 6 check against. Put Auto-Lock back to your usual
+  setting when you are done.
 
 `start` would raise the same prompts itself, but it waits only 15 s for them.
 
@@ -130,8 +133,9 @@ and window the token resolves to.
 **Step 4 (the device check's step 6), the screen stays awake (D-221).** Put the phone down untouched
 for a minute (twice Auto-Lock).
 
-- **PASS:** it never dims or locks, and its brightness does not move. (Before LIGHTS OUT it should have
-  dimmed on its usual schedule; you can check that at the start of round B.)
+- **PASS:** it never dims or locks, and its brightness does not move. (Since D-224 the host does not dim
+  in its lobby either; section 6 checks that. A guest's lobby still dims on its usual schedule, which
+  needs a second phone to see.)
 
 **Step 5 (the device check's step 7), Bluetooth switched off is named (D-222, D-223).** Open Settings →
 Bluetooth on the phone, switch it off, wait 5 s, switch it on, and go back to the app.
@@ -178,7 +182,7 @@ That needs a phone that is advertising, so do it at the end of round A, or right
 round B. `--quiet` prints the median and best RSSI every 2 s. Move the phone over the Mac (around the
 hinge and the keyboard) and remember where the reading is best.
 
-Check Auto-Lock is **Never** (step 2). Then, in one terminal:
+Then, in one terminal:
 
 ```
 tools/one-phone/round.sh start --no-install
@@ -235,6 +239,45 @@ With the phone armed and advertising (round A or B), run `ble-peer sniff --round
 **PASS** is only that the numbers fall with distance. This is a Mac and a phone; it does not set the
 contact gate.
 
+## 6. The host locks in the lobby, and the room comes back (H1, H2: D-224, D-225, D-226)
+
+The bug this checks: on 2026-11-16 the host locked in the lobby, every seat dropped for good, and
+LIGHTS OUT logged `WILL NOT ARM — 0 SEAT(S)` under a screen that said ARMED. Auto-Lock at 30 s (step 2).
+
+```
+tools/one-phone/round.sh start --no-install --by-hand
+```
+
+Wait for `seat 2 is seated`. Hand the phone's line over if the lobby asks for it, and wait until the
+lobby shows three seated and `3 of 3 handed theirs over`, with LIGHTS OUT live. Note the port in the
+phone's `[lobby] HOSTING 'ONE PHONE' ON :<port>` line. **Do not press LIGHTS OUT yet.**
+
+1. **Awake in the lobby (H1).** Put the phone down untouched for a minute (twice Auto-Lock).
+   - **PASS:** it never dims or locks, and its brightness does not move.
+2. **Lock it by hand.** Press the side button. Wait 20 s.
+   - **PASS:** the launcher prints `!!! THE PHONE IS LOCKED`, and the phone's log has `[lobby] THIS PHONE
+     LEFT THE FOREGROUND — THE HOUSE IS OFF THE AIR UNTIL IT IS BACK` (it may only reach the log at the
+     unlock). `seat-1.log` and `seat-2.log` show their sockets dropping.
+3. **Unlock it** and come back to the app.
+   - **PASS, in order:** `[lobby] BACK IN THE FOREGROUND — LISTENING AGAIN ON :<the same port>`, then
+     `[lobby] BACK ON THE AIR AS 'ONE PHONE'`. While the seats come back the lobby may show `NEEDS 3
+     RESIDENTS` under a defunct LIGHTS OUT: that is the guard, not a fault. Within about 15 s the lobby
+     shows three seated again, the same three names (their order may change), and `3 of 3 handed
+     theirs over` with **nobody re-typing a line**.
+   - **FAIL:** a different port; `COULD NOT REOPEN`; any `JOINING FRESH` or `A CONNECTION WAS REFUSED`
+     line (a phone came back as a stranger); a fourth seat; the count stuck below 3.
+   - **Report, not a fail:** `NOT BACK ON THE AIR — …`. Seated phones come back by address without the
+     advertisement; only a phone that has not joined yet would miss it.
+4. **LIGHTS OUT.** Hold it.
+   - **PASS:** `[house] ARMED — 3 SEAT(S) IN THE ROUND`, the screen ARMED, and the Simulators' work
+     orders arrive (`[round-bench] THE ORDER ARRIVED` in their logs).
+   - **FAIL:** `WILL NOT ARM`, or ARMED on the screen with no `[house] ARMED —` line.
+5. **Hosting ends, and the screen sleeps.** Run the section again, and at step 4 press LEAVE instead of
+   LIGHTS OUT, then put the phone down.
+   - **PASS:** it dims and locks on its usual schedule.
+
+Put Auto-Lock back to your usual setting when you are done.
+
 ## What only more phones can verify
 
 - **A real Revoke.** It needs mutual sighting, and the Mac cannot upload what it hears. The device
@@ -249,6 +292,6 @@ contact gate.
 
 ## Report back
 
-For each of step 0, arming, the sniffer's shape, token and rotation checks, steps 4 and 5, and round B:
-pass or fail. Also send any `FAIL`, `NOTE`, `OUTAGE` or `REFUSED` line, the RSSI table, and the run
+For each of step 0, arming, the sniffer's shape, token and rotation checks, steps 4 and 5, round B and
+section 6: pass or fail. Also send any `FAIL`, `NOTE`, `OUTAGE` or `REFUSED` line, the RSSI table, and the run
 folders under `/tmp/someones-home-one-phone/runs/` (one per `start`; `latest/` is the newest).

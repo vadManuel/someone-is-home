@@ -6,6 +6,8 @@ import home.someoneshome.model.protocol.LobbyWire
 import home.someoneshome.model.protocol.SeatToken
 import home.someoneshome.model.protocol.TransportFrame
 import home.someoneshome.model.protocol.TransportRefusal
+import home.someoneshome.platform.NoIdleTimer
+import home.someoneshome.platform.ScreenWake
 import home.someoneshome.platform.monotonicNanos
 import home.someoneshome.platform.transport.LobbyDesk
 import home.someoneshome.platform.transport.SeatLedger
@@ -98,7 +100,7 @@ class StaleSeatTest {
         val port = host.start(0)
         val log = mutableListOf<String>()
         val kept = Kept(stale)
-        val link = LobbyOverTransport(this, onEvent = { log += it }, seat = kept)
+        val link = LobbyOverTransport(this, onEvent = { log += it }, seat = kept, wake = ScreenWake(NoIdleTimer))
         val model = LobbyModel(link = link)
         model.nameResident("ELLIOT")
         try {
@@ -205,7 +207,7 @@ class StaleSeatTest {
         )
         val port = host.start(0)
         val kept = Kept(stale)
-        val link = LobbyOverTransport(this, seat = kept)
+        val link = LobbyOverTransport(this, seat = kept, wake = ScreenWake(NoIdleTimer))
         val refusals = mutableListOf<TransportRefusal>()
         try {
             ledger.lock()

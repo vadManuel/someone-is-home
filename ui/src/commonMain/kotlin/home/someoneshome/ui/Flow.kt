@@ -991,11 +991,21 @@ class FlowModel(
      * a person reaches it: a live button, held. `HoldToConfirm(enabled = false)` takes no pointer
      * input at all (D-141), so a short lobby cannot even begin the hold.
      *
-     * **Defaulted to nothing**, which is every render, every screenshot and every phone that is
-     * not hosting — a client's lobby draws no such button, and a host with no house behind it
-     * arms nobody. `FlowModel` decides none of that: it reports the press.
+     * ### The screen moves when the house says it armed, and not before (D-226)
+     *
+     * It is handed `armed`, and walks this phone to [ScreenId.Armed] only when that is called.
+     * Until 2026-11-16 the screen moved on the press and the house was told after, so a press the
+     * house refused still walked the host to ARMED: a host whose phone had locked in the lobby held
+     * a READY standing from before the lock, the house beside it had nobody seated and said `WILL
+     * NOT ARM — 0 SEAT(S)`, and the screen said ARMED over a room with no round in it. A refused
+     * press now leaves the host on the lobby, which is still drawing why.
+     *
+     * **Defaulted to arming at once**, which is every render, every screenshot and the desktop
+     * preview — no house is behind those, so nothing could refuse, and the walk is what it always
+     * was. A client's lobby draws no such button, and a host with no house behind it arms nobody.
+     * `FlowModel` decides none of that: it reports the press and follows the answer.
      */
-    private val onLightsOut: () -> Unit = {},
+    private val onLightsOut: (armed: () -> Unit) -> Unit = { armed -> armed() },
     /**
      * **This phone landed on a screen** — reported, never interpreted.
      *
@@ -1711,7 +1721,8 @@ class FlowModel(
      * press that landed, and no round anywhere in the house. Every other phone stood in the lobby
      * forever.
      *
-     * So the screen still moves and [onLightsOut] is now told, and the division is unchanged:
+     * So [onLightsOut] is told, and the screen moves when it answers that the house armed — never
+     * on the press alone, which walked a refused host to ARMED (D-226). The division is unchanged:
      * **nothing about the round is decided here.** What the host did is a fact; what it means is
      * the house's, one module up, where `core` can be seen.
      *
@@ -1721,8 +1732,7 @@ class FlowModel(
      * again on arrival, in a lit room, out loud.
      */
     fun lightsOut() {
-        push(ScreenId.Armed)
-        onLightsOut()
+        onLightsOut { push(ScreenId.Armed) }
     }
 
     /**

@@ -5,6 +5,8 @@ import home.someoneshome.model.protocol.LobbyBody
 import home.someoneshome.model.protocol.LobbyWire
 import home.someoneshome.model.protocol.SeatToken
 import home.someoneshome.model.protocol.TransportFrame
+import home.someoneshome.platform.NoIdleTimer
+import home.someoneshome.platform.ScreenWake
 import home.someoneshome.platform.monotonicNanos
 import home.someoneshome.platform.transport.LobbyDesk
 import home.someoneshome.platform.transport.SeatLedger
@@ -79,7 +81,7 @@ class RoundEndedPushTest {
         )
         val port = host.start(0)
         val seam = Seam()
-        val link = LobbyOverTransport(this, round = seam)
+        val link = LobbyOverTransport(this, round = seam, wake = ScreenWake(NoIdleTimer))
         val model = LobbyModel(link = link)
         model.nameResident("ELLIOT")
         try {
@@ -124,6 +126,7 @@ class RoundEndedPushTest {
             // performed, so this test says *the transport reported it* and `FlowModel.newRound` is
             // asserted where it lives.
             onRoundEnded = { returned++ },
+            wake = ScreenWake(NoIdleTimer),
         )
         val model = LobbyModel(link = link)
         model.nameResident("ELLIOT")
@@ -195,7 +198,7 @@ class RoundEndedPushTest {
         )
         val port = host.start(0)
 
-        val link = LobbyOverTransport(this)
+        val link = LobbyOverTransport(this, wake = ScreenWake(NoIdleTimer))
         val model = LobbyModel(link = link)
         model.nameResident("ELLIOT")
         try {

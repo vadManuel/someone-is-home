@@ -17,6 +17,11 @@ import home.someoneshome.model.Room
 import home.someoneshome.model.SavedHome
 import home.someoneshome.model.Seat
 import home.someoneshome.model.SeatNamed
+import home.someoneshome.ui.FlowModel
+import home.someoneshome.ui.PanelState
+import home.someoneshome.ui.ScreenId
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -164,6 +169,68 @@ class HostArmingTest {
             "a phone that is not hosting armed a round",
         )
         assertFalse(bench.house.armed, "a client's press armed the house it does not run")
+    }
+
+    /**
+     * **LIGHTS OUT below the minimum is refused, and the host's screen never says ARMED** (D-226).
+     *
+     * The 2026-11-16 device log, as a test: the host's phone locked in the lobby, every seat
+     * dropped, and the press reached a house with nobody in it. The house refused — `WILL NOT ARM —
+     * 0 SEAT(S)` — and the screen walked to ARMED anyway, because the walk happened on the press.
+     * Driven through `FlowModel.lightsOut` with the seam wired the way the app root wires it, so the
+     * screen is the thing asserted.
+     */
+    @Test
+    fun aLightsOutTheHouseRefusesLeavesTheHostOnItsLobby() = runBlocking<Unit> {
+        for (party in listOf(emptyList(), seats.take(2))) {
+            val bench = bench(seats = party, ready = false)
+            val answered = CompletableDeferred<Boolean>()
+            val flow = FlowModel(
+                PanelState(screen = ScreenId.Lobby),
+                onLightsOut = { armed ->
+                    launch {
+                        answered.complete(
+                            armAtLightsOut(bench.house, hosting = true, seed = SEED, armed = armed, note = { bench.said += it }),
+                        )
+                    }
+                },
+            )
+
+            flow.lightsOut()
+
+            assertFalse(answered.await(), "the house armed ${party.size} seat(s)")
+            assertFalse(bench.house.armed, "a round was armed with ${party.size} seat(s) in the lobby")
+            assertEquals(
+                ScreenId.Lobby, flow.state.screen,
+                "the house refused ${party.size} seat(s) and the host's screen said ARMED anyway",
+            )
+            assertTrue(
+                bench.said.any { it.startsWith("WILL NOT ARM — ${party.size} SEAT(S)") },
+                "the refusal was not said out loud to the authority: ${bench.said}",
+            )
+        }
+    }
+
+    /** **And a house that arms walks the host to ARMED**, through the same wiring. */
+    @Test
+    fun aLightsOutTheHouseArmsWalksTheHostToArmed() = runBlocking<Unit> {
+        val bench = bench()
+        val answered = CompletableDeferred<Boolean>()
+        val flow = FlowModel(
+            PanelState(screen = ScreenId.Lobby),
+            onLightsOut = { armed ->
+                launch {
+                    answered.complete(
+                        armAtLightsOut(bench.house, hosting = true, seed = SEED, armed = armed, note = { bench.said += it }),
+                    )
+                }
+            },
+        )
+
+        flow.lightsOut()
+
+        assertTrue(answered.await(), "the house did not arm a ready lobby: ${bench.said}")
+        assertEquals(ScreenId.Armed, flow.state.screen, "the house armed and the host's screen stayed put")
     }
 
     /** A second press on a running round arms nothing and says so, rather than refusing silently. */

@@ -2,6 +2,7 @@ package home.someoneshome.app
 
 import home.someoneshome.platform.ScreenWake
 import home.someoneshome.platform.bluetoothContactRadio
+import home.someoneshome.platform.deviceForeground
 import home.someoneshome.platform.deviceIdleTimer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -175,6 +176,11 @@ fun CheatRoot() {
     // owns the session's lifetime — see the DisposableEffect further down — while the object that
     // knows which lens registration uses has to outlive any one visit to it.
     val registration = remember { MarkerRegistration(haptics) }
+    // **ONE idle timer, so ONE ScreenWake, lent to the lobby and the round alike.** The host holds it
+    // from the moment its lobby is on the air (H1, D-224) and every phone holds it from arming until
+    // the round ends (T4, D-221). Two wakes over one property would each remember the other's `true`
+    // as the owner's setting, and the second release would leave Auto-Lock off for good.
+    val wake = remember { ScreenWake(deviceIdleTimer()) }
     // Held in a named val because the round is armed off the house behind it: `armingInputs` is
     // what LIGHTS OUT reads and `emit` is the authority's only exit to the phones. Every other
     // caller in this file still reaches it as a `LobbyLink` and cannot see either.
@@ -206,7 +212,21 @@ fun CheatRoot() {
             // is where it lands: `newRound` walks back to the lobby, and `houseClosed` walks to the
             // join screen with an honest line on it, because there is no lobby left to walk to.
             onHouseClosed = { panel.value?.houseClosed() },
+            wake = wake,
         )
+    }
+    // **THE HOST'S PHONE LEAVING THE FOREGROUND, AND COMING BACK** (H2, D-225). A lock, the side
+    // button or a swipe home suspends the app, and a suspended app keeps neither its listening
+    // socket nor its advertisement: on 2026-11-16 the host locked in the lobby and woke to a house
+    // with nobody in it. The house now goes off the air itself, keeps the ledger, and reopens the same
+    // port at the return, so every seat comes back to its own chair by its own token. On a guest
+    // both calls do nothing; its reconnect is the one it always had.
+    DisposableEffect(link) {
+        val unwatch = deviceForeground().watch(
+            onBackground = link::backgrounded,
+            onForeground = link::foregrounded,
+        )
+        onDispose { unwatch() }
     }
     val flow = remember {
         FlowModel(
@@ -288,7 +308,10 @@ fun CheatRoot() {
             // later. The two guards are `hosting` and the desk's own `readyToArm`, and neither is
             // this file's opinion: the first is the lobby's answer and the second is the gate the
             // button itself is drawn from.
-            onLightsOut = {
+            //
+            // **And the screen walks to ARMED only on the house's yes** (D-226). `armed` is the
+            // walk; a refused press leaves the host on its lobby, which says why under a inert button.
+            onLightsOut = { armed ->
                 val house = rules.value
                 scope.launch {
                     if (house == null) {
@@ -303,6 +326,7 @@ fun CheatRoot() {
                         // instant of the press.
                         hosting = panel.value?.lobby?.hosting == true,
                         seed = RoundCheat.seed(),
+                        armed = armed,
                     ) { line -> println("[house] $line"); transport.note(line) }
                 }
             },
@@ -350,8 +374,8 @@ fun CheatRoot() {
         // screen is a screen that changed for a reason the house did not author (rules 5 and 6).
         val radio = bluetoothContactRadio { line -> println("[radio] $line") }
         // **The screen held awake for the round** (T4, D-221): the idle timer off from arming until
-        // the round ends or this phone hangs up, then put back. No brightness is touched.
-        val wake = ScreenWake(deviceIdleTimer())
+        // the round ends or this phone hangs up, then put back. No brightness is touched. The same
+        // wake the lobby holds for the host (H1, D-224), built once above.
         RoundClient(scope, flow, watch, buzzer, radio, wake) { line -> println("[round] $line"); transport.note(line) }
             // Both knots tied in one place: the lobby gets the seam it was promised, and the four
             // meeting controls, the Subroutine's hand-over and page 2's two fires get the way up

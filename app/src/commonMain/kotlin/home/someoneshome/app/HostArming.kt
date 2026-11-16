@@ -47,6 +47,16 @@ suspend fun armAtLightsOut(
      * on.
      */
     seed: Long,
+    /**
+     * **The host's screen walking to ARMED, called on a yes and on nothing else** (D-226).
+     *
+     * `FlowModel.lightsOut` hands it over. Before 2026-11-16 the screen moved on the press and this
+     * was told after, so a refusal still put ARMED on the host's phone: the phone had locked in the
+     * lobby, the house beside it had nobody seated, it said `WILL NOT ARM — 0 SEAT(S)`, and the
+     * screen said ARMED over a room with no round in it. The walk is here, beside the arming it
+     * reports, so the two cannot disagree.
+     */
+    armed: () -> Unit = {},
     note: (String) -> Unit,
 ): Boolean {
     if (!hosting) {
@@ -64,7 +74,10 @@ suspend fun armAtLightsOut(
         return false
     }
     note("=== THE LIGHTS GO OUT — ARMING FOR A ROOM FULL OF PEOPLE ===")
+    // **Refused: the host stays on the lobby**, which is drawing why under a inert button. Nothing on
+    // the screen moves for a refusal (rule 6): the reason is in the log, in a lit room.
     if (!house.arm(seed)) return false
     note("ARMED — ${house.state.seats.size} SEAT(S) IN THE ROUND · THE EVENING IS THEIRS")
+    armed()
     return true
 }
