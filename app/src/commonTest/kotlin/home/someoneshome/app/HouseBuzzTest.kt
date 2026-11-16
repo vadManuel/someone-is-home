@@ -333,8 +333,8 @@ class HouseBuzzTest {
         Effect.RevokeLanded(Seat(1)),
         // A touch, answered (R1, D-216): silent, because every touch in the house sends one.
         Effect.ContactAnswered(Seat(1)),
-        // The radio notice (T2, D-222): silent, because the gate's own push beside it buzzes.
-        Effect.RadioFaultsAnnounced(listOf(Seat(2))),
+        // The house notice (D-187, D-223): silent, because the gate's own push beside it buzzes.
+        Effect.NoticeIssued(listOf(Seat(2))),
     )
 
     /**
@@ -477,7 +477,7 @@ class HouseBuzzTest {
             "RoleRevealed", "MeetingCalling", "RosterIssued", "RevokeLanded",
             "ContactSeedIssued",
             "ContactAnswered",
-            "RadioFaultsAnnounced",
+            "NoticeIssued",
         )
 
         /** The two nodes, as places. The rooms are never read here; the pair is what buzzes. */

@@ -1,6 +1,7 @@
 package home.someoneshome.platform
 
 import home.someoneshome.model.ContactToken
+import home.someoneshome.model.RadioCause
 
 /**
  * **What this phone's radio heard: a token, and how loud** (D-212, D-217).
@@ -43,12 +44,13 @@ interface ContactRadio {
     fun silence()
 
     /**
-     * **Whether the radio went down since the last call: switched off, its permission withdrawn, or
-     * reset** (T2, D-222). True once per fault onset and then false until the radio has recovered
-     * and gone down again, however many callbacks the OS makes in between. Never a reason: the house
-     * is told that a radio went down and nothing about how.
+     * **Whether the radio went down since the last call, and on which side of D-187's line** (T2,
+     * D-222; D-223). [RadioCause.Person] for Bluetooth switched off or its permission withdrawn,
+     * [RadioCause.Device] for a reset or unsupported hardware; null when no outage began. Non-null
+     * once per fault onset and then null until the radio has recovered and gone down again, however
+     * many callbacks the OS makes in between. The cause is the only thing the house is told.
      */
-    fun faultBegan(): Boolean
+    fun faultBegan(): RadioCause?
 }
 
 /**
@@ -64,7 +66,7 @@ object NoRadio : ContactRadio {
     override fun scan(on: Boolean) = Unit
     override fun drain(): List<RadioReading> = emptyList()
     override fun silence() = Unit
-    override fun faultBegan(): Boolean = false
+    override fun faultBegan(): RadioCause? = null
 }
 
 /**

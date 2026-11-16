@@ -255,7 +255,7 @@ fun CheckIn() {
  * say little): the same swipe has already put a banner away, and the house clears this one anyway.
  */
 @Composable
-fun NoticeScreen() {
+fun NoticeScreen(vals: PanelVals) {
     val actions = LocalActions.current
     // The banner's distance, measured exactly as the banner measures it, because
     // the hand does not know which screen it is on.
@@ -265,7 +265,10 @@ fun NoticeScreen() {
 
     KitScreen(padding = MEETING_PADDING, gap = 16.dp) {
         MeetingBand("HOUSE MEETING . NOTICES")
-        Column(
+        // **Nobody evaded, so nothing is drawn: no line and no box** (D-223). The band says where
+        // the room is; a sentence here would be the house speaking when it has nothing to say.
+        val body = vals.notice
+        if (body != null) Column(
             // Read at draw time rather than at composition: a drag is sixty frames a second and
             // the whole app has an allocation budget of about 0.5 MB/s.
             Modifier.offset { IntOffset(0, lifted.toInt()) }
@@ -278,7 +281,7 @@ fun NoticeScreen() {
                 .fillMaxWidth().border(1.dp, Ramp.Line)
                 .padding(horizontal = 16.dp, vertical = 14.dp),
         ) {
-            Words(Notifications.notice.body, size = 28, lineHeight = 1.08)
+            Words(body, size = 28, lineHeight = 1.08)
         }
     }
 }

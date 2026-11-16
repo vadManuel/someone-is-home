@@ -2,6 +2,7 @@ package home.someoneshome.harness
 
 import home.someoneshome.model.Destination
 import home.someoneshome.model.EgressType
+import home.someoneshome.model.RadioCause
 import home.someoneshome.model.Event
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MeetingTrigger
@@ -242,7 +243,7 @@ object RecordingText {
             "StaticFired" -> Event.StaticFired(at, seat("actor"))
             "ContactMade" -> Event.ContactMade(at, seat("actor"), seat("target"))
             "MeetingCalled" -> Event.MeetingCalled(at, seat("caller"), trigger(req("trigger"), line))
-            "RadioFaulted" -> Event.RadioFaulted(at, seat("seat"))
+            "RadioFaulted" -> Event.RadioFaulted(at, seat("seat"), radioCause(req("cause"), line))
             "MeetingCheckedIn" -> Event.MeetingCheckedIn(at, seat("seat"))
             "ReadyToVoteDeclared" -> Event.ReadyToVoteDeclared(at, seat("seat"))
             "VoteSelected" -> Event.VoteSelected(at, seat("voter"), seatOrNone("target"))
@@ -297,7 +298,7 @@ object RecordingText {
         "IsolateFired" -> setOf("at", "actor", "target")
         "StaticFired" -> setOf("at", "actor")
         "MeetingCalled" -> setOf("at", "caller", "trigger")
-        "RadioFaulted" -> setOf("at", "seat")
+        "RadioFaulted" -> setOf("at", "seat", "cause")
         "MeetingCheckedIn" -> setOf("at", "seat")
         "ReadyToVoteDeclared" -> setOf("at", "seat")
         "VoteSelected" -> setOf("at", "voter", "target")
@@ -323,6 +324,14 @@ object RecordingText {
     private fun egressType(raw: String, line: Int): EgressType =
         EgressType.entries.firstOrNull { it.toString() == raw }
             ?: throw MalformedRecording(line, "unknown Egress type '$raw'")
+
+    /**
+     * Which side of D-187's line an outage was on (D-223). **Fatal rather than defaulted**: a cause
+     * defaulted to either would replay a reset as a named player, or a switch-off as nobody.
+     */
+    private fun radioCause(raw: String, line: Int): RadioCause =
+        RadioCause.entries.firstOrNull { it.toString() == raw }
+            ?: throw MalformedRecording(line, "unknown radio cause '$raw'")
 
     /**
      * How a meeting was called, read back.

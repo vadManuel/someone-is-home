@@ -5,6 +5,7 @@ import home.someoneshome.model.ContactToken
 import home.someoneshome.model.ContactTokens
 import home.someoneshome.model.ContactWindow
 import home.someoneshome.model.Haptic
+import home.someoneshome.model.RadioCause
 import home.someoneshome.model.WinRoute
 import home.someoneshome.model.Winner
 import home.someoneshome.model.protocol.RoundBody
@@ -36,7 +37,8 @@ class ContactUploaderTest {
         override fun drain(): List<RadioReading> = listOf(RadioReading(stranger, -31))
         override fun silence() { silenced++; scanning = false }
         var faults = 0
-        override fun faultBegan(): Boolean = (faults > 0).also { if (it) faults-- }
+        var cause = RadioCause.Person
+        override fun faultBegan(): RadioCause? = if (faults > 0) cause.also { faults-- } else null
     }
 
     private val seed = ContactSeed("0123456789abcdef0123456789abcdef")
@@ -109,31 +111,39 @@ class ContactUploaderTest {
     }
 
     /**
-     * **T2: a fault goes up once, on the beat after its onset, from a living phone and an out one
-     * alike, and never outside a round** (D-222).
+     * **T2: a fault goes up once, on the beat after its onset, with its cause, from a living phone
+     * and an out one alike, and never outside a round** (D-222; D-223). **GUARD: before arming,
+     * nothing goes up**, so nothing can be announced.
      */
     @Test
     fun aRadioFaultGoesUpOnceOnTheBeatAfterItBeganInARoundOnly() {
-        for (out in listOf(false, true)) {
+        for (out in listOf(false, true)) for (cause in RadioCause.entries) {
             val radio = LoudRadio()
-            var faults = 0
-            val up = ContactUploader(radio, { ContactWindow(10) }, send = { }, faulted = { faults++ })
+            radio.cause = cause
+            val faults = mutableListOf<RadioCause>()
+            val up = ContactUploader(radio, { ContactWindow(10) }, send = { }, faulted = { faults += it })
             radio.faults = 1
             up.beat()
-            assertEquals(0, faults, "a fault went up before the phone was in a round")
+            assertEquals(emptyList(), faults, "a fault went up before the phone was in a round")
             up.heard(RoundMessage.ContactSeedIssued(seed))
             if (out) up.heard(RoundMessage.RevokeLanded.Padded)
             repeat(3) { up.beat() }
-            assertEquals(1, faults, "out=$out: one onset did not go up exactly once")
+            assertEquals(listOf(cause), faults, "out=$out, $cause: one onset did not go up exactly once, as itself")
         }
     }
 
-    /** The upward body has one shape: the same bytes from every phone, whatever it is or what failed. */
+    /**
+     * **GUARD: the upward body is one shape of one length**, the same bytes from every phone whatever
+     * it is, and the same length whichever side of D-187's line it reports (D-223). A cause whose
+     * serial name was longer would let a reader of the Wi-Fi tell a reset from a switch-off by size.
+     */
     @Test
-    fun theFaultBodyIsOneFixedString() {
+    fun theFaultBodyIsOneFixedLength() {
+        assertEquals("{\"type\":\"radioFaulted\",\"cause\":\"person\"}", RoundWire.encode(RoundBody.RadioFaulted(RadioCause.Person)))
+        assertEquals("{\"type\":\"radioFaulted\",\"cause\":\"device\"}", RoundWire.encode(RoundBody.RadioFaulted(RadioCause.Device)))
         assertEquals(
-            "{\"type\":\"radioFaulted\"}", RoundWire.encode(RoundBody.RadioFaulted),
-            "the fault body changed shape: anything added to it is something one phone could say that another does not",
+            1, RadioCause.entries.map { RoundWire.encode(RoundBody.RadioFaulted(it)).length }.toSet().size,
+            "the fault body's length depends on its cause",
         )
     }
 }

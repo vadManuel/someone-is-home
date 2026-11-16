@@ -5288,6 +5288,14 @@ draws from the notice is proposed below and waits on the owner.*
 
 ### D-222 · **A phone reports its radio going down in one fixed body, the house records it, and announces it to every phone at the next meeting — built; the copy is the owner's**
 
+> ⚠️ **Superseded in part by D-223 (2026-11-15).** The announcement below broke D-187: it named
+> every outage, resets included. Since D-223 the house names only a radio switched off or its
+> permission withdrawn, in the house notice D-187 already covers; a reset is recorded for the
+> authority and named nowhere; a meeting where nobody evaded draws nothing; the body carries a cause;
+> `RadioFaultsAnnounced` and its schema row are gone, folded into `NoticeIssued`. The upward report,
+> the debounce and the arrival queue stand. The proposed copy A and B and the *data is complete*
+> line below are withdrawn.
+
 **What goes up.** `RoundBody.RadioFaulted`, a `data object`: `{"type":"radioFaulted"}`, the same
 bytes from every phone whatever its role, whether it is out, and whether the radio was switched
 off, had its permission withdrawn or reset. No kind, no time, no seat (the seat is the
@@ -5363,6 +5371,91 @@ transcript changes, and the state row gains three columns.
 | `ui` `Flow`, `app` `HouseBuzzer` | (new) | a named no-op, silent, until the copy is ruled |
 | `harness` `Transcript`, `RecordingText`, `Recording.HEADER` | `recording/24` | the rows; `recording/25` |
 | `RadioFaultTest`, `SwitchboardRadioTest`, `ContactUploaderTest`, `ContactRadioBenchTest` | (new) | silent report, every class told, empty notice, role-blind; one onset per outage; the fixed body; on sockets |
+
+## Revision 57 — the house notice names evasion, and nothing else
+
+*The owner's 2026-11-15 ruling on D-222's raised D-187 conflict. Built, except the words for a named
+player, which wait on the owner.*
+
+### D-223 · **A radio switched off or its permission withdrawn is named in the house notice; a reset is recorded and named nowhere; a meeting with no evasion draws nothing — built; one line of copy is the owner's**
+
+**D-187 governs and D-222 is brought under it.** A house notice reports detectable deliberate
+evasion and nothing else. Of the radio's outages, two are a person's act and two are not:
+
+- **Named:** Bluetooth switched off (`poweredOff`) or its permission withdrawn (`unauthorized`)
+  during a round. Every grant is given at setup, in the light (D-161), so one missing mid-round is
+  something a person did.
+- **Not named:** `resetting` and `unsupported`. Recorded for the authority, in the house's log and
+  the round's recording, and shown as disconnection on the monitoring surfaces and nowhere else,
+  which a radio that is down does by itself.
+
+**The phone says which, and nothing more.** `RoundBody.RadioFaulted` carries `cause`, `person` or
+`device`, two serial names of six letters, so the one body is the same length either way and from
+every phone (`ContactUploaderTest` pins both strings). `SwitchboardRadio` decides the cause once, at
+the onset (`causeOf`): Off or Unauthorized is a person's, Resetting or Unsupported the phone's own,
+and **the phone's own failure wins** a disagreement between the managers. The cause holds for the
+outage, so a reset that passes through Off is still a reset. ⚠️ Limit, reasoned and not observed: a
+manager whose reset callbacks arrive after the other has already come back up starts a second onset,
+which would read as a person's if it opened on Off. A reset cannot be induced on demand at the
+device check.
+
+**The rules draw the line in one function** (`namedByTheNotice`). A person's outage puts the seat on
+`GameState.unreachable`; a device's is admitted, so it is recorded, and moves nothing. Neither emits
+anything to anybody when it arrives, so the two are not told apart then (rule 1). The house's log
+says which: `RADIO FAULT — SEAT n · PERSON · NAMED AT THE NEXT MEETING`, or `· DEVICE · RECORDED ·
+NAMED BY NO NOTICE (D-187)`.
+
+**One notice, not a radio notice beside it.** The house had one notice path, the notices screen
+(`ScreenId.Notice`, D-035) with D-035's sentence as its fixture, and no effect fed it: lock and
+backgrounding, D-187's other two, are not yet detectable. D-222's `RadioFaultsAnnounced` was the
+first feed and was named for the radio. It is now **`Effect.NoticeIssued(unreachable)`**, schema row
+**`NOTICE_ISSUED`**, same audience (`LIVING + OUTSIDE`), same moment (the check-in gate closing,
+ahead of the phase push), and `GameState.unreachable` is the one list every evasion will write.
+`RADIO_FAULTS_ANNOUNCED` is gone. The schema still fails closed: the `when` is exhaustive and an
+effect with no row ships to nobody.
+
+**A meeting with no evasion draws nothing.** The empty notice is still sent at every meeting, so the
+frame count does not say whether anybody evaded, and every phone gets the same bytes. The notices
+screen draws its band and no box and no line: no *data is complete* sentence. A housed phone is never
+shown the fixture (it named MARCUS at every live meeting until now). A phone with no house still
+draws it, for the render harness.
+
+**The copy, raised and not built.** The existing notice sentence, *Resident MARCUS was unreachable
+21:04–21:07. Occupancy data for this interval is incomplete.*, already covers a permission revoked
+mid-round (D-161: *same shape, same words*), but it cannot be reused unchanged: it carries a clock
+interval, and the house keeps no clock. Every time on every screen is a fixture, and `Tick` is a
+sequence, not a time. Building one (whose clock, which zone, when an interval ends for a radio still
+off at the meeting) is a design question, not copy. **Proposed, in its voice and shape, one line:**
+
+> *Resident MARCUS was unreachable this shift. Occupancy data for this interval is incomplete.*
+
+Until the owner rules, a notice that names a player reaches every phone and draws nothing new.
+`noticeBody` in `ui` `PanelModel.kt` is the one function the ruling changes.
+
+**Also kept:** a radio still switched off when a round arms is reported at that round's first
+advertise. It is off during the round, and a player who switches Bluetooth off in the lobby to be
+unseen all round is the evasion D-187 is about. Nothing is reported or named before arming: the
+radio has no token, the uploader has no seed, and the gate refuses a report from the lobby.
+
+**`project-context.md` rule 6 amended** to match: it said a failed radio *is announced at the next
+meeting*. A failed radio is recorded; only evasion is announced.
+
+**Recording format 26**: `RadioFaulted` carries `cause`, the notice effect and the state column are
+renamed.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `model` `RadioCause` | (new) | `Person` / `Device`, serial names of one length |
+| `model` `Event.RadioFaulted`, `RoundBody.RadioFaulted` | no kind | `cause` |
+| `model` `Effect.RadioFaultsAnnounced`, `RoundMessage.RadioFaultsAnnounced`, `RADIO_FAULTS_ANNOUNCED` | every outage, named | `NoticeIssued(unreachable)`, `NOTICE_ISSUED`: evasion only |
+| `model` `GameState.radioFaulted` | every outage | `unreachable`: a person's outage only |
+| `core` `Rules` `radioFaulted`, `namedByTheNotice` | every outage listed | the line, in one function |
+| `platform` `ContactRadio.faultBegan`, `SwitchboardRadio`, `causeOf`, `BluetoothRadio.ios.kt` | `Boolean` | the onset's `RadioCause` |
+| `app` `ContactUploader`, `RoundOverTransport`, `LobbyHouse`, `RoundAuthority.radioFaulted`, `HouseBuzzer`, cheats | no cause | the cause up, through the queue, into the log |
+| `ui` `Flow`, `PanelState.notice`, `PanelVals.notice`, `noticeBody`, `NoticeScreen` | a no-op; the fixture at every live meeting | the house's notice; nothing for an empty one |
+| `harness` `Transcript`, `RecordingText`, `Recording.HEADER` | `recording/25` | `cause`, `NoticeIssued`, `unreachable`; `recording/26` |
+| `RadioFaultTest`, `SwitchboardRadioTest`, `ContactUploaderTest`, `ContactRadioBenchTest`, `HouseNoticeTest` | announce everything | a reset unnamed, a switch-off named, nothing before arming, nothing drawn when empty, one length |
+| `ble-unit4-device-check.md` step 7 | the radio notice | the house notice, and a reset unnamed |
 
 ## State after revision 12
 

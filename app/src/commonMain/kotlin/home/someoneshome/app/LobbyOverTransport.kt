@@ -4,6 +4,7 @@ import home.someoneshome.model.Effect
 import home.someoneshome.model.GameState
 import home.someoneshome.model.Intent
 import home.someoneshome.model.OneLineHeld
+import home.someoneshome.model.RadioCause
 import home.someoneshome.model.SavedHome
 import home.someoneshome.model.Seat
 import home.someoneshome.model.SeatNamed
@@ -241,13 +242,14 @@ class LobbyHouse(
      */
     private val onSighted: (Seat, RoundBody.Sighted) -> Unit = { _, _ -> },
     /**
-     * **A phone saying its radio went down** ([RoundBody.RadioFaulted], T2, D-222).
+     * **A phone saying its radio went down, and why** ([RoundBody.RadioFaulted], T2, D-222; D-223).
      *
      * [onSighted]'s sibling: a fact one phone reports about itself, which `RoundAuthority.radioFaulted`
-     * puts to the rules to be announced at the next meeting. The seat is the connection's; the body
-     * carries nothing at all.
+     * puts to the rules. A person's act is named at the next meeting; the phone's own failure is
+     * recorded and named nowhere (D-187). The seat is the connection's; the body carries the cause
+     * and nothing else.
      */
-    private val onRadioFaulted: (Seat) -> Unit = {},
+    private val onRadioFaulted: (Seat, RadioCause) -> Unit = { _, _ -> },
 ) {
 
     private val desk = LobbyDesk()
@@ -359,8 +361,8 @@ class LobbyHouse(
          */
         data class Sighted(val seat: Seat, val upload: RoundBody.Sighted) : Arrival
 
-        /** **A phone's radio went down** ([RoundBody.RadioFaulted], T2, D-222). On the ordered queue. */
-        data class RadioFaulted(val seat: Seat) : Arrival
+        /** **A phone's radio went down** ([RoundBody.RadioFaulted], T2, D-222; D-223). On the ordered queue. */
+        data class RadioFaulted(val seat: Seat, val cause: RadioCause) : Arrival
     }
 
     private val arriving = Channel<Arrival>(Channel.UNLIMITED)
@@ -638,7 +640,7 @@ class LobbyHouse(
                 // **The radio fault, to the rules** (T2, D-222). Not through the desk: the body has
                 // no sequence and nothing to deduplicate. A second report of one onset cannot be
                 // sent (the radio debounces it), and the rules list a seat once anyway.
-                is Arrival.RadioFaulted -> onRadioFaulted(arrival.seat)
+                is Arrival.RadioFaulted -> onRadioFaulted(arrival.seat, arrival.cause)
             }
         }
     }
@@ -682,7 +684,7 @@ class LobbyHouse(
                 // judges it there; an upload the house cannot read resolves to nothing.
                 is RoundBody.Sighted -> arriving.trySend(Arrival.Sighted(seat, round))
                 // **A phone saying its radio went down** (T2, D-222), onto the same ordered queue.
-                is RoundBody.RadioFaulted -> arriving.trySend(Arrival.RadioFaulted(seat))
+                is RoundBody.RadioFaulted -> arriving.trySend(Arrival.RadioFaulted(seat, round.cause))
             }
             return
         }
@@ -820,8 +822,8 @@ class LobbyOverTransport(
     private val onEgressFired: (Seat) -> Unit = {},
     /** [LobbyHouse.onSighted], threaded through: what another phone's radio heard (D-217). */
     private val onSighted: (Seat, RoundBody.Sighted) -> Unit = { _, _ -> },
-    /** [LobbyHouse.onRadioFaulted], threaded through: another phone's radio went down (T2, D-222). */
-    private val onRadioFaulted: (Seat) -> Unit = {},
+    /** [LobbyHouse.onRadioFaulted], threaded through: another phone's radio went down (T2, D-222; D-223). */
+    private val onRadioFaulted: (Seat, RadioCause) -> Unit = { _, _ -> },
     /**
      * **The round's client half, on this phone's one socket.** Null in every production
      * construction — nothing arms a round yet. See [RoundSeam].

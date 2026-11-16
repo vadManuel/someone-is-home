@@ -333,9 +333,9 @@ class RoundClient(
         is RoundMessage.MeetingCalling -> "I AM THE ONE CALLING"
         is RoundMessage.StandAndWalkIn -> "STAND AND WALK IN · HAPTIC ${m.haptic}"
         is RoundMessage.CheckInProgressed -> "CHECK-IN GATE ${m.present}/${m.expected}"
-        // The seats as numbers, never as names (T2, D-222): what the notice names is the house's.
-        is RoundMessage.RadioFaultsAnnounced ->
-            "RADIO NOTICE — " + (m.seats.takeIf { it.isNotEmpty() }?.joinToString(",") { "SEAT ${it.index}" } ?: "NO RADIO WENT DOWN")
+        // The seats as numbers, never as names (D-223): what the notice names is the house's.
+        is RoundMessage.NoticeIssued ->
+            "NOTICE — " + (m.unreachable.takeIf { it.isNotEmpty() }?.joinToString(",") { "SEAT ${it.index} UNREACHABLE" } ?: "NOBODY NAMED")
         is RoundMessage.MeetingPhaseOpened ->
             "PHASE ${m.phase}" + (m.voteWindowSeconds?.let { " · ${it}S" } ?: "")
         is RoundMessage.ReadyProgressed -> "READY ${m.ready}/${m.expected}"

@@ -50,6 +50,10 @@ class Recording(
     }
 
     companion object {
+        // 26: `RadioFaulted` carries `cause` (D-223), and a row without one is fatal; the notice
+        // effect is `NoticeIssued|unreachable=` where it was `RadioFaultsAnnounced|seats=`, and the
+        // state column `radioFaulted` is `unreachable`, which a reset never writes (D-187).
+        //
         // 25: one event and one effect a version 24 build cannot name -- `RadioFaulted` and
         // `RadioFaultsAnnounced` (T2, D-222) -- and a new state column, the radios awaiting the next
         // meeting's notice. Every meeting's gate now emits the notice, so every meeting's effect
@@ -227,7 +231,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/25"
+        const val HEADER = "someone-is-home/recording/26"
     }
 }
 

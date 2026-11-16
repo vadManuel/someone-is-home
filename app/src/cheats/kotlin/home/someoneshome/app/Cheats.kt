@@ -191,9 +191,9 @@ fun CheatRoot() {
             // **The third door: what another phone's radio heard** (D-217). The house judges it
             // with the resolver and puts whatever it concludes to the rules.
             onSighted = { seat, upload -> scope.launch { rules.value?.sighted(seat, upload) } },
-            // **The fourth: a phone saying its radio went down** (T2, D-222). Recorded by the rules
-            // and announced to the room at the next meeting.
-            onRadioFaulted = { seat -> scope.launch { rules.value?.radioFaulted(seat) } },
+            // **The fourth: a phone saying its radio went down, and why** (T2, D-222; D-223). A
+            // person's act is named to the room at the next meeting; a reset is recorded only.
+            onRadioFaulted = { seat, cause -> scope.launch { rules.value?.radioFaulted(seat, cause) } },
             round = seam,
             // **The host said the round is over** (D-157, E-R2-10). The transport has already reset
             // this phone's inbox by the time this runs; what is left is the screen answer, which is

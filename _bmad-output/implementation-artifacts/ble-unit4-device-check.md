@@ -123,7 +123,8 @@ told iOS to keep it on in Airplane Mode.
   - Nothing on the screen changes: no dialog, no flicker, no lamp change.
   - Turn Airplane Mode off: `ADVERTISING` returns, and `HEARD` resumes, without anyone touching the
     app.
-- Since D-222 the house is told once per outage. Step 7 checks that.
+- Since D-222 the house is told once per outage. Airplane Mode is a person switching the radio off,
+  so since D-223 the house names this phone at the next meeting. Step 7 checks that.
 
 ## 6. The screen stays awake for the round, and only for the round (D-221)
 
@@ -139,29 +140,41 @@ Set one phone's Auto-Lock to 30 seconds before the lobby.
 - **Fail:** the phone dims or locks mid-round; or it stays awake in the lobby before arming or after
   the round; or its brightness moves when the round arms or ends.
 
-## 7. A radio that goes down is announced at the next meeting (D-222)
+## 7. Bluetooth switched off mid-round is named in the house notice (D-222, D-223)
+
+D-187: a house notice reports deliberate evasion, and nothing else. Switching Bluetooth off is a
+person's act, so the house names the player at the next meeting. A radio that resets is not, and is
+named by no notice.
 
 During a round, on one living phone (call it **F**), open **Settings → Bluetooth** and switch it
 off. (The Control Center toggle may only disconnect accessories and not power the radio down; use
-Settings.) Wait 5 s, switch it back on, and return to the app.
+Settings. If you try Control Center as well, note whether F logs an OUTAGE line at all.) Wait 5 s,
+switch it back on, and return to the app.
 
 - **Pass, on F:**
-  - `[radio] OUTAGE — …` lines, and **exactly one** `[radio] FAULT — THE RADIO WENT DOWN … THE HOUSE
-    IS TOLD ONCE`, however many OUTAGE lines there are.
+  - `[radio] OUTAGE — …` lines, and **exactly one** `[radio] FAULT — THE RADIO WENT DOWN (…) · PERSON
+    · THE HOUSE IS TOLD ONCE`, however many OUTAGE lines there are.
   - Nothing on F's screen changes: no dialog, no flicker, no lamp change, no buzz.
-- **Pass, on the host:** exactly one `[house] RADIO FAULT — SEAT <F's seat> · THE HOUSE ANNOUNCES IT
-  AT THE NEXT MEETING`. Nothing reaches any phone at that moment: no `[round] PUSH` line on any phone
-  that is about F.
+- **Pass, on the host:** exactly one `[house] RADIO FAULT — SEAT <F's seat> · PERSON · NAMED AT THE
+  NEXT MEETING`. Nothing reaches any phone at that moment: no `[round] PUSH` line on any phone that
+  is about F.
 - Then call a meeting at the meeting card and check everybody in. **Pass:** when the gate closes,
-  **every** phone, living and out, logs `[round] PUSH … RADIO NOTICE — SEAT <F's seat>`, just before
-  the `PHASE Discussion` push that opens the notices.
-- At the meeting after that, with no radio switched off in between, every phone logs `RADIO NOTICE —
-  NO RADIO WENT DOWN`. That empty notice at every meeting is correct (rule 1).
+  **every** phone, living and out, logs `[round] PUSH … NOTICE — SEAT <F's seat> UNREACHABLE`, just
+  before the `PHASE Discussion` push that opens the notices.
+- At the meeting after that, with nothing switched off in between, every phone logs `NOTICE — NOBODY
+  NAMED`, and the notices screen shows its band and **nothing under it**: no box, no sentence, and
+  not the old *Resident MARCUS was unreachable* words. That empty notice at every meeting is correct
+  (rule 1).
 - Do it once more with F being the Insider if you can: the lines must be identical, bar the seat.
-- **What the screen says about it is not decided yet** (D-222). The notices screen still shows its
-  old fixture words. That is expected and not a failure.
-- **Fail:** no FAULT line; more than one FAULT line, or more than one host line, for one switch-off;
-  a phone missing the notice; or anything on F's screen moving.
+- **What the screen says for a named player is not decided yet** (D-223: the copy waits on the
+  owner). At the meeting that names F the notices screen also shows its band and nothing under it.
+  That is expected and not a failure; the `NOTICE — SEAT …` push line is the pass.
+- **If a phone ever logs `FAULT … · DEVICE`** (a reset; it cannot be caused on demand), the host logs
+  `· DEVICE · RECORDED · NAMED BY NO NOTICE (D-187)` and the next meeting's notice names nobody.
+  Send the lines if you see one.
+- **Fail:** no FAULT line, or one that says DEVICE for a switch-off; more than one FAULT line, or
+  more than one host line, for one switch-off; a phone missing the notice; a sentence on the notices
+  screen at a meeting where nobody switched anything off; or anything on F's screen moving.
 
 ## Report back
 

@@ -9,6 +9,7 @@ import home.someoneshome.model.Intent
 import home.someoneshome.model.MeetingPhase
 import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.OneLineHeld
+import home.someoneshome.model.RadioCause
 import home.someoneshome.model.RefusalReason
 import home.someoneshome.model.Seat
 import home.someoneshome.model.SeatNamed
@@ -78,7 +79,7 @@ class ContactRadioBenchTest {
         val air = SimulatedAir()
         val said = mutableListOf<String>()
         private val arrivals = Channel<Pair<Seat, RoundBody.Sighted>>(Channel.UNLIMITED)
-        private val faults = Channel<Seat>(Channel.UNLIMITED)
+        private val faults = Channel<Pair<Seat, RadioCause>>(Channel.UNLIMITED)
 
         /** Every radio-fault body the host took, raw, per seat (T2, D-222). */
         val faultBodies = seats.associate { it.index to mutableListOf<String>() }
@@ -104,7 +105,7 @@ class ContactRadioBenchTest {
                 if (body is RoundBody.Sighted) arrivals.trySend(seat to body)
                 if (body is RoundBody.RadioFaulted) {
                     faultBodies.getValue(seat.index) += raw
-                    faults.trySend(seat)
+                    faults.trySend(seat to body.cause)
                 }
             },
             onSeated = { seated.trySend(it) },
@@ -129,8 +130,8 @@ class ContactRadioBenchTest {
                 }
             }
             jobs += scope.launch {
-                for (seat in faults) {
-                    house.radioFaulted(seat)
+                for ((seat, cause) in faults) {
+                    house.radioFaulted(seat, cause)
                     faultsTaken++
                 }
             }
@@ -435,42 +436,66 @@ class ContactRadioBenchTest {
         assertEquals(framesBefore, seats.associate { it.index to pushed.getValue(it.index).size }, "R4: a refused report was answered")
     }
 
-    // ---- T2 · A radio that went down, announced at the next meeting (D-222) ---------------------
+    // ---- T2 · A radio that went down: named if a person did it, recorded if not (D-222; D-223) ----
 
     /**
-     * **One phone's radio goes down: it sends one fixed body, nothing reaches any phone, and at the
-     * next meeting every phone is told the same thing.** The Insider's radio here, so the notice is
-     * shown to name an Insider exactly as it would a Resident (the rules' differential is
-     * `RadioFaultTest`).
+     * **One phone's radio goes down and the meeting is called: what every socket carried.** The
+     * Insider's radio here, so the notice is shown to name an Insider exactly as it would a Resident
+     * (the rules' differential is `RadioFaultTest`). Returns each seat's notices at that meeting,
+     * re-encoded with `RoundWire`, which is deterministic and is what the host wrote.
      */
-    @Test
-    fun aRadioThatWentDownIsAnnouncedToEveryPhoneAtTheNextMeeting() = rig {
+    private suspend fun Rig.outageThenMeeting(cause: RadioCause): Pair<Seat, Map<Int, List<String>>> {
         armed()
         val insider = house.state.livingInsiders.single()
         val framesBefore = seats.associate { it.index to pushed.getValue(it.index).size }
-        air.radioFor(insider).fail()
+        air.radioFor(insider).fail(cause)
         beat()
         withTimeout(30_000) { while (faultsTaken < 1) delay(5) }
         beat()
         delay(SETTLE_MILLIS)
         assertEquals(listOf(1), seats.map { faultBodies.getValue(it.index).size }.filter { it > 0 }, "not one fault body, from one phone")
         assertEquals(
-            listOf(RoundWire.encode(RoundBody.RadioFaulted)), faultBodies.getValue(insider.index),
+            listOf(RoundWire.encode(RoundBody.RadioFaulted(cause))), faultBodies.getValue(insider.index),
             "the fault went up as something other than the one fixed body",
         )
         assertEquals(framesBefore, seats.associate { it.index to pushed.getValue(it.index).size }, "a radio fault reached a phone before the meeting")
-        assertTrue(said.any { it.startsWith("RADIO FAULT — SEAT ${insider.index}") }, "the house's log never said so: $said")
+        assertTrue(said.any { it.startsWith("RADIO FAULT — SEAT ${insider.index} · ${cause.name.uppercase()}") }, "the house's log never said so: $said")
 
         val caller = house.state.livingPlainResidents.first()
         house.mint(Event.MeetingCalled(house.now(), caller, MeetingTrigger.MeetingCard))
         for (seat in seats.filter { it.index != caller.index }) house.heard(Intent.CheckIn(seat))
         delay(SETTLE_MILLIS)
+        return insider to seats.associate { seat ->
+            seat.index to pushed.getValue(seat.index).filterIsInstance<RoundMessage.NoticeIssued>()
+                .map { RoundWire.encode(RoundBody.Push(1, it)) }
+        }
+    }
+
+    /**
+     * **GUARD: Bluetooth switched off mid-round is named to every phone at the next meeting, in one
+     * frame of one length on every socket**, living and out, Insider or not.
+     */
+    @Test
+    fun aRadioSwitchedOffIsNamedToEveryPhoneAtTheNextMeeting() = rig {
+        val (insider, notices) = outageThenMeeting(RadioCause.Person)
+        val expected = RoundWire.encode(RoundBody.Push(1, RoundMessage.NoticeIssued(listOf(insider))))
         for (seat in seats) {
-            assertEquals(
-                listOf(RoundMessage.RadioFaultsAnnounced(listOf(insider))),
-                pushed.getValue(seat.index).filterIsInstance<RoundMessage.RadioFaultsAnnounced>(),
-                "seat ${seat.index} was not told exactly once, at the meeting",
-            )
+            assertEquals(listOf(expected), notices.getValue(seat.index), "seat ${seat.index} was not told exactly once, at the meeting")
+        }
+        assertEquals(1, notices.values.flatten().map { it.length }.toSet().size, "the notice's frame differs in length between phones")
+    }
+
+    /**
+     * **GUARD: a reset is named by no notice.** The house logs it (loud to the authority) and every
+     * phone gets the same empty notice every meeting gets, which draws nothing.
+     */
+    @Test
+    fun aRadioThatResetIsRecordedAndNamedToNobody() = rig {
+        val (insider, notices) = outageThenMeeting(RadioCause.Device)
+        assertTrue(said.any { it.startsWith("RADIO FAULT — SEAT ${insider.index} · DEVICE · RECORDED") }, "the reset was not recorded for the authority: $said")
+        val empty = RoundWire.encode(RoundBody.Push(1, RoundMessage.NoticeIssued(emptyList())))
+        for (seat in seats) {
+            assertEquals(listOf(empty), notices.getValue(seat.index), "a reset was named to seat ${seat.index} (D-187)")
         }
     }
 

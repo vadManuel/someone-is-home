@@ -1,6 +1,7 @@
 package home.someoneshome.platform
 
 import home.someoneshome.model.ContactToken
+import home.someoneshome.model.RadioCause
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -187,28 +188,72 @@ class SwitchboardRadioTest {
         assertFalse(hw.scanning, "a reset started a silenced radio's scanner")
     }
 
-    // ---- T2: one fault onset, however many callbacks (D-222) -------------------------------------
+    // ---- T2: one fault onset, however many callbacks (D-222), and why (D-223) -------------------
 
-    /** A Bluetooth switch-off reaches both managers; the house hears of it once. */
+    /** A Bluetooth switch-off reaches both managers; the house hears of it once, as a person's act. */
     @Test
     fun aSwitchOffIsOneFaultHoweverManyCallbacks() {
         val radio = SwitchboardRadio(RecordingHardware())
         radio.scan(true)
         radio.advertise(t1)
         on(radio)
-        assertFalse(radio.faultBegan(), "a radio that came up reported a fault")
+        assertNull(radio.faultBegan(), "a radio that came up reported a fault")
         radio.advertiserPower(RadioPower.Off)
-        assertTrue(radio.faultBegan(), "the radio went down and the house was never told")
+        assertEquals(RadioCause.Person, radio.faultBegan(), "Bluetooth switched off was not reported as a person's act")
         // Collected between callbacks, as the uploader collects once a beat.
         radio.scannerPower(RadioPower.Off)
-        assertFalse(radio.faultBegan(), "the scanner's callback for the same switch-off was reported as a second fault")
+        assertNull(radio.faultBegan(), "the scanner's callback for the same switch-off was reported as a second fault")
         radio.scannerPower(RadioPower.Resetting)
         radio.advertiserPower(RadioPower.Unauthorized)
         radio.advertise(t2)
-        assertFalse(radio.faultBegan(), "callbacks inside one outage were reported as more faults")
+        assertNull(radio.faultBegan(), "callbacks inside one outage were reported as more faults")
     }
 
-    /** Back up on both managers, then down again: a second onset. */
+    /** **GUARD: the permission withdrawn mid-round is a person's act** (D-187, D-161). */
+    @Test
+    fun aPermissionWithdrawnIsAPersonsAct() {
+        val radio = SwitchboardRadio(RecordingHardware())
+        radio.scan(true)
+        radio.advertise(t1)
+        on(radio)
+        radio.scannerPower(RadioPower.Unauthorized)
+        assertEquals(RadioCause.Person, radio.faultBegan(), "a permission withdrawn mid-round was not a person's act")
+    }
+
+    /**
+     * **GUARD: a reset is the phone's own, for the whole outage.** A reset that passes through Off is
+     * still a reset, so the house never names the player (D-187: genuine radio loss earns no notice).
+     */
+    @Test
+    fun aResetIsTheDevicesOwnEvenThroughOff() {
+        val radio = SwitchboardRadio(RecordingHardware())
+        radio.scan(true)
+        radio.advertise(t1)
+        on(radio)
+        radio.advertiserPower(RadioPower.Resetting)
+        assertEquals(RadioCause.Device, radio.faultBegan(), "a reset was reported as a person's act")
+        radio.scannerPower(RadioPower.Resetting)
+        radio.advertiserPower(RadioPower.Off)
+        radio.scannerPower(RadioPower.Off)
+        assertNull(radio.faultBegan(), "a reset passing through Off became a second, deliberate, fault")
+        on(radio)
+        radio.advertiserPower(RadioPower.Unsupported)
+        assertEquals(RadioCause.Device, radio.faultBegan(), "unsupported hardware was reported as a person's act")
+    }
+
+    /** The line itself, every pairing: the phone's own failure wins a disagreement. */
+    @Test
+    fun theCauseIsAPersonsOnlyWhenNothingFailed() {
+        val down = listOf(RadioPower.Off, RadioPower.Unauthorized, RadioPower.Resetting, RadioPower.Unsupported)
+        val failed = setOf(RadioPower.Resetting, RadioPower.Unsupported)
+        for (a in RadioPower.entries) for (b in RadioPower.entries) {
+            if (a !in down && b !in down) continue
+            val expected = if (a in failed || b in failed) RadioCause.Device else RadioCause.Person
+            assertEquals(expected, causeOf(a, b), "advertiser $a, scanner $b")
+        }
+    }
+
+    /** Back up on both managers, then down again: a second onset, with its own cause. */
     @Test
     fun aRadioThatRecoversAndFailsAgainIsASecondFault() {
         val radio = SwitchboardRadio(RecordingHardware())
@@ -216,30 +261,33 @@ class SwitchboardRadioTest {
         radio.advertise(t1)
         on(radio)
         radio.advertiserPower(RadioPower.Resetting)
-        assertTrue(radio.faultBegan())
+        assertEquals(RadioCause.Device, radio.faultBegan())
         radio.advertiserPower(RadioPower.On)
-        assertFalse(radio.faultBegan(), "a recovery was reported as a fault")
+        assertNull(radio.faultBegan(), "a recovery was reported as a fault")
         radio.scannerPower(RadioPower.Unauthorized)
-        assertTrue(radio.faultBegan(), "the second onset was swallowed by the first")
+        assertEquals(RadioCause.Person, radio.faultBegan(), "the second onset was swallowed by the first, or took its cause")
         // One manager back is not the radio back: still down, so no new onset.
         radio.scannerPower(RadioPower.Off)
-        assertFalse(radio.faultBegan(), "a manager changing state inside an outage was reported as a new fault")
+        assertNull(radio.faultBegan(), "a manager changing state inside an outage was reported as a new fault")
     }
 
-    /** Before the round's first advertise there is nobody to tell; already down at arming, it is told. */
+    /**
+     * **GUARD: before arming, nothing is reported.** Before the round's first advertise there is
+     * nobody to tell; already down at arming, it is told, because the radio is down in the round.
+     */
     @Test
     fun aRadioAlreadyDownAtArmingIsOneFaultOfThatRound() {
         val radio = SwitchboardRadio(RecordingHardware())
         radio.scan(true)
         radio.advertiserPower(RadioPower.Off)
         radio.scannerPower(RadioPower.Off)
-        assertFalse(radio.faultBegan(), "a fault was reported before the round's radio had a token")
+        assertNull(radio.faultBegan(), "a fault was reported before the round's radio had a token")
         radio.advertise(t1)
-        assertTrue(radio.faultBegan(), "a radio down at arming was never reported")
+        assertEquals(RadioCause.Person, radio.faultBegan(), "a radio switched off at arming was never reported")
         // The round ends with it still down; the next round's first advertise finds it again.
         radio.silence()
-        assertFalse(radio.faultBegan(), "a fault outlived the round it was reported in")
+        assertNull(radio.faultBegan(), "a fault outlived the round it was reported in")
         radio.advertise(t2)
-        assertTrue(radio.faultBegan(), "the next round never heard of a radio still down")
+        assertEquals(RadioCause.Person, radio.faultBegan(), "the next round never heard of a radio still down")
     }
 }

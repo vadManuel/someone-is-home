@@ -7,12 +7,14 @@ import home.someoneshome.core.admit
 import home.someoneshome.core.resolveContacts
 import home.someoneshome.core.armingFor
 import home.someoneshome.core.egressFor
+import home.someoneshome.core.namedByTheNotice
 import home.someoneshome.model.Balance
 import home.someoneshome.model.ContactWindow
 import home.someoneshome.model.Effect
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
 import home.someoneshome.model.Intent
+import home.someoneshome.model.RadioCause
 import home.someoneshome.model.RefusalReason
 import home.someoneshome.model.SavedHome
 import home.someoneshome.model.Seat
@@ -344,14 +346,16 @@ class RoundAuthority(
     }
 
     /**
-     * **A phone's radio went down** (T2, D-222). Loud here, in the house's log, and put to the rules,
-     * which hold it for the next meeting's notice. Admitted or refused, nothing goes down any socket
-     * now: the notice is the meeting's, to everybody at once. A report that arrives before arming or
-     * after the round is refused by the gate and recorded, like any.
+     * **A phone's radio went down** (T2, D-222; D-223). Loud here, in the house's log, whatever the
+     * cause, and put to the rules: a person's act goes on the next meeting's notice, the phone's own
+     * failure is recorded and named by nobody (D-187). Admitted or refused, nothing goes down any
+     * socket now: the notice is the meeting's, to everybody at once. A report that arrives before
+     * arming or after the round is refused by the gate and recorded, like any.
      */
-    suspend fun radioFaulted(seat: Seat) {
-        note("RADIO FAULT — SEAT ${seat.index} · THE HOUSE ANNOUNCES IT AT THE NEXT MEETING")
-        concluded(Event.RadioFaulted(Tick(tick++), seat))
+    suspend fun radioFaulted(seat: Seat, cause: RadioCause) {
+        val fate = if (namedByTheNotice(cause)) "NAMED AT THE NEXT MEETING" else "RECORDED · NAMED BY NO NOTICE (D-187)"
+        note("RADIO FAULT — SEAT ${seat.index} · ${cause.name.uppercase()} · $fate")
+        concluded(Event.RadioFaulted(Tick(tick++), seat, cause))
     }
 
     /** One event the resolver minted, admitted; refused, it is recorded and answered with nothing. */

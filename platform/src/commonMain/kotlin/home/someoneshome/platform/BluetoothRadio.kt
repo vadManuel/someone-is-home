@@ -2,6 +2,7 @@ package home.someoneshome.platform
 
 import home.someoneshome.model.ContactToken
 import home.someoneshome.model.ContactTokens
+import home.someoneshome.model.RadioCause
 import home.someoneshome.model.protocol.SightingUpload
 
 /*
@@ -232,7 +233,7 @@ class SightingRing(val capacity: Int = SightingUpload.SLOTS) {
  * advertises and never scans** (D-008, story 9.4): told `scan(false)`, nothing here starts the
  * scanner again until `scan(true)`, and readings already in flight are dropped on arrival.
  *
- * ### Outages: silent to the player, loud to the house (rule 6; T2, D-222)
+ * ### Outages: silent to the player, loud to the house (rule 6; T2, D-222; D-223)
  *
  * A manager going Off, Unauthorized, Resetting or Unsupported is reported to [outages] and to the
  * device log, and the lamp, the screen and the haptics never hear of it. **The house is told once
@@ -242,6 +243,13 @@ class SightingRing(val capacity: Int = SightingUpload.SLOTS) {
  * onset to the uploader once, which sends it up as `RoundBody.RadioFaulted`. Both managers back On is
  * up again, so a second switch-off is a second onset. A radio still down when a new round arms is
  * an onset in that round.
+ *
+ * **The onset says which side of D-187's line it is on, decided once, at the onset** ([causeOf]):
+ * Off or Unauthorized is a person's act, Resetting or Unsupported is the phone's own. The cause holds
+ * for the whole outage, so a reset that passes through Off is still a reset and is never named.
+ * ⚠️ Limit: a manager whose reset callbacks arrive after the other has already come back up would
+ * start a second onset, and if that one opened on Off it would read as a person's. The device check
+ * cannot induce a reset on demand, so this is reasoned rather than observed.
  *
  * Not thread-safe: every call is made on the radio's own queue on iOS, and on the test's thread in
  * the tests.
@@ -263,8 +271,8 @@ class SwitchboardRadio(
     /** Whether either manager is down, as last assessed. See the class KDoc. */
     private var down = false
 
-    /** A fault began and the uploader has not collected it yet. */
-    private var began = false
+    /** A fault began, and why, and the uploader has not collected it yet. */
+    private var began: RadioCause? = null
 
     private var cycles = 0
     private var callbacks = 0L
@@ -306,13 +314,13 @@ class SwitchboardRadio(
         // The round is over and so is what it was told. A radio still down at the next arming is a
         // fault of that round, found again by the first advertise.
         down = false
-        began = false
+        began = null
         if (!awake) return
         if (advertiser == RadioPower.On) hardware.stopAdvertising()
         if (scanner == RadioPower.On) hardware.stopScan()
     }
 
-    override fun faultBegan(): Boolean = began.also { began = false }
+    override fun faultBegan(): RadioCause? = began.also { began = null }
 
     /** The advertiser's power changed. On, it takes up whatever was asked of it. */
     fun advertiserPower(power: RadioPower) {
@@ -366,8 +374,12 @@ class SwitchboardRadio(
     private fun assess() {
         val now = isDown(advertiser) || isDown(scanner)
         if (now && !down && hasToken) {
-            began = true
-            log("FAULT — THE RADIO WENT DOWN (ADVERTISER $advertiser · SCANNER $scanner) · THE HOUSE IS TOLD ONCE")
+            val cause = causeOf(advertiser, scanner)
+            began = cause
+            log(
+                "FAULT — THE RADIO WENT DOWN (ADVERTISER $advertiser · SCANNER $scanner) · " +
+                    "${cause.name.uppercase()} · THE HOUSE IS TOLD ONCE",
+            )
         }
         down = now && hasToken
     }
@@ -418,6 +430,25 @@ class SwitchboardRadio(
             RadioPower.Unknown, RadioPower.On -> false
         }
     }
+}
+
+/**
+ * **D-187's line, drawn on the radio: was this outage a person's act, or the phone's own?** (D-223)
+ *
+ * Asked once, at the onset, of whichever managers are down then. Off or Unauthorized is
+ * [RadioCause.Person]: Bluetooth switched off, or its permission withdrawn, and every grant was
+ * given at setup (D-161), so one missing in a round is something somebody did. Resetting or
+ * Unsupported is [RadioCause.Device], and **the phone's own failure wins** when the two managers
+ * disagree, because naming a player whose phone failed is the injustice D-187 exists to prevent and
+ * missing one evasion is not. On and Unknown are not down and say nothing.
+ */
+fun causeOf(advertiser: RadioPower, scanner: RadioPower): RadioCause {
+    // Exhaustive, so a state the OS adds later has to be put on one side of the line by somebody.
+    fun failed(power: RadioPower) = when (power) {
+        RadioPower.Resetting, RadioPower.Unsupported -> true
+        RadioPower.Off, RadioPower.Unauthorized, RadioPower.On, RadioPower.Unknown -> false
+    }
+    return if (failed(advertiser) || failed(scanner)) RadioCause.Device else RadioCause.Person
 }
 
 /**

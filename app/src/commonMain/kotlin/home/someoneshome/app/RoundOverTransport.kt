@@ -121,8 +121,8 @@ class RoundOverTransport(
     private val contacts = ContactUploader(
         radio, windowNow,
         send = { sighted -> up(RoundWire.encode(sighted)) },
-        // **The radio went down: one fixed body, up this phone's own socket** (T2, D-222).
-        faulted = { up(RoundWire.encode(RoundBody.RadioFaulted)) },
+        // **The radio went down: one fixed body, up this phone's own socket** (T2, D-222; D-223).
+        faulted = { cause -> up(RoundWire.encode(RoundBody.RadioFaulted(cause))) },
     )
 
     /** Whether the house has put this phone out, as the uploader was told. For the bench and tests. */

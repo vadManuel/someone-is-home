@@ -811,19 +811,23 @@ sealed interface Effect {
     data class RevokeLanded(val seat: Seat) : Effect
 
     /**
-     * **The house's notice of every radio that went down since the last one, at the top of the
-     * meeting** (T2, D-222; D-035).
+     * **The house notice, at the top of the meeting: who was unreachable on purpose since the last
+     * one** (D-035, D-187, D-223).
+     *
+     * D-187's notice and nothing else: it reports detectable deliberate evasion (locking the phone,
+     * backgrounding the app, disabling a permission mid-round) and never a radio that failed. Today
+     * the one evasion the house can detect is a radio switched off or its permission withdrawn
+     * (`Event.RadioFaulted` with `RadioCause.Person`); the other two fold into [unreachable] when
+     * they are built, and there is no second notice to fold them into.
      *
      * Sent to every phone, living and out, at the moment the check-in gate closes, and **sent at
-     * every meeting, empty when no radio went down**, so its arrival says nothing; only its content
-     * does, and the content is the same on every phone. [seats] are in seat order, each once, and
-     * name no role: a fault is reported identically by every phone (D-222), so being named says
-     * which radio failed and nothing about who holds it.
-     *
-     * ⚠️ **What a phone draws from it is not decided**: the copy is the owner's (D-222). Until then
-     * it reaches every phone and moves nothing.
+     * every meeting, empty when nobody evaded**, so its arrival says nothing; only its content
+     * does, and the content is the same on every phone. **An empty one draws nothing** (the owner,
+     * 2026-11-15): no *data is complete* line. [unreachable] is in seat order, each once, and names
+     * no role: every phone reports an outage identically, so being named says whose phone went
+     * quiet and nothing about who holds it.
      */
-    data class RadioFaultsAnnounced(val seats: List<Seat>) : Effect
+    data class NoticeIssued(val unreachable: List<Seat>) : Effect
 
     /** Lights out. The meeting is over, and D-135's fifth long haptic rides it. */
     data class MeetingEnded(val haptic: Haptic) : Effect

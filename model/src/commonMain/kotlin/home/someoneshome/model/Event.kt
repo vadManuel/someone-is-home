@@ -285,20 +285,21 @@ sealed interface Event {
     data class ContactMade(override val at: Tick, val actor: Seat, val target: Seat) : Event
 
     /**
-     * **This phone's radio went down: switched off, its permission withdrawn, or reset** (T2 of the
-     * owner's 2026-11-15 rulings, D-222).
+     * **This phone's radio went down, and on which side of D-187's line** (T2, D-222; D-223).
      *
      * A fact the phone reports, never a request (rule 10): its own radio told it so. Once per fault
      * onset, whatever the radio does next, and the same from every phone whatever its role or
-     * whether it is out. **It carries no kind and no reason**: the upward body is one fixed shape
-     * (`RoundBody.RadioFaulted`), so it cannot say more about one phone than another, and what the
-     * house does with it is the same for all three. The seat is the connection's.
+     * whether it is out. **[cause] is the only thing it says**: [RadioCause.Person] for Bluetooth
+     * switched off or its permission withdrawn, [RadioCause.Device] for a reset or unsupported
+     * hardware. The upward body is one fixed shape of one length (`RoundBody.RadioFaulted`), so it
+     * cannot say more about one phone than another. The seat is the connection's.
      *
-     * Rule 6 in its constructive form: a failed radio makes a living player invisible to every touch
-     * and every report, which nobody, the player included, would otherwise detect. Silent on the
-     * phone; recorded by the house; announced to everybody at the next meeting.
+     * Silent on the phone in every case (rule 6). A [RadioCause.Person] outage is deliberate
+     * evasion and the house names the seat in the next meeting's notice; a [RadioCause.Device] one
+     * is recorded here, in the round's recording and the house's log, and announced to nobody
+     * (D-187: *genuine radio loss earns no notice*).
      */
-    data class RadioFaulted(override val at: Tick, val seat: Seat) : Event
+    data class RadioFaulted(override val at: Tick, val seat: Seat, val cause: RadioCause) : Event
 
     /**
      * **A meeting was called, and how** (D-121).

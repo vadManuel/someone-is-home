@@ -108,9 +108,9 @@ object Transcript {
         is Event.MeetingCalled ->
             row("MeetingCalled", event.at, "caller" to num(event.caller.index),
                 "trigger" to trigger(event.trigger))
-        // The seat and the tick, and nothing else: the report has no kind (T2, D-222).
+        // The seat, the tick and D-187's line (D-223): a replay that named a reset must not match.
         is Event.RadioFaulted ->
-            row("RadioFaulted", event.at, "seat" to num(event.seat.index))
+            row("RadioFaulted", event.at, "seat" to num(event.seat.index), "cause" to event.cause.toString())
         is Event.MeetingCheckedIn ->
             row("MeetingCheckedIn", event.at, "seat" to num(event.seat.index))
         is Event.ReadyToVoteDeclared ->
@@ -306,8 +306,8 @@ object Transcript {
         // The ballot's window is on the row and renders as a token when it is absent, for the
         // reason a scan's null does: a phase that carries no window and a phase that carries one
         // must not be separable by the shape of the line rather than by its contents.
-        is Effect.RadioFaultsAnnounced ->
-            "RadioFaultsAnnounced|seats=" + effect.seats.joinToString(",") { num(it.index) }
+        is Effect.NoticeIssued ->
+            "NoticeIssued|unreachable=" + effect.unreachable.joinToString(",") { num(it.index) }
         is Effect.MeetingPhaseOpened ->
             "MeetingPhaseOpened|phase=${effect.phase}" +
                 "|voteWindow=${effect.voteWindowSeconds?.let { num(it) } ?: "none"}" +
@@ -472,8 +472,8 @@ object Transcript {
         append("|touches=").append(
             state.touches.joinToString(",") { "${num(it.at.step)}:${num(it.a.index)}:${num(it.b.index)}" }
         )
-        // The radios awaiting the next meeting's notice (T2, D-222).
-        append("|radioFaulted=").append(state.radioFaulted.joinToString(",") { num(it.index) })
+        // The seats the next meeting's notice names (D-187, D-223).
+        append("|unreachable=").append(state.unreachable.joinToString(",") { num(it.index) })
         // Every Insider cooldown, as the tick it is ready at (D-132). A remaining count would be a
         // fact about the moment somebody asked; a tick is a fact about the round, and it replays.
         append("|cooldowns=").append(

@@ -9,6 +9,7 @@ import home.someoneshome.model.MarkerShapes
 import home.someoneshome.model.MeetingPhase
 import home.someoneshome.model.OrderLine
 import home.someoneshome.model.RoomKind
+import home.someoneshome.model.Seat
 
 import androidx.compose.ui.graphics.Color
 
@@ -520,6 +521,16 @@ data class PanelState(
      * [PanelVals.roster] resolves the port's five. [egressNodes]' arrangement exactly.
      */
     val roster: List<String>? = null,
+    /**
+     * **The seats the house notice names at this meeting, in seat order** (`Effect.NoticeIssued`,
+     * D-187, D-223).
+     *
+     * Deliberate evasion only: today a radio switched off or its permission withdrawn mid-round.
+     * Arrives at every meeting as the check-in gate closes, **empty when nobody evaded, and an empty
+     * one draws nothing** (the owner, 2026-11-15). Null means the house has said nothing, which on a
+     * phone with no house attached is always; [PanelVals.notice] resolves the drawn fixture there.
+     */
+    val notice: List<Seat>? = null,
     /**
      * **The markers this phone may Isolate, as the house last offered them**
      * (`Effect.IsolateTargetsOffered`, D-150).
@@ -1058,6 +1069,24 @@ class PanelVals(
      * ability is fired at. See [PanelState.roster].
      */
     val roster: List<String> = housed(state.roster, ROSTER, nothing = emptyList())
+
+    /**
+     * **What the notices screen says: the house notice's words, or nothing at all** (D-035, D-187,
+     * D-223).
+     *
+     * Three cases, [housed]'s three. A phone with no house attached and no notice pushed draws the
+     * design's fixture, so the render harness still shows the screen as drawn. **A notice naming
+     * nobody draws nothing**: no *data is complete* line (the owner, 2026-11-15), because the empty
+     * notice arrives at every meeting and a sentence on it would be the house speaking when nobody
+     * evaded. A housed phone that was pushed nothing draws nothing too, never the fixture: the
+     * fixture names MARCUS, and on a housed phone that would be the house naming a player nobody
+     * reported. A notice naming somebody draws [noticeBody].
+     */
+    val notice: String? = when {
+        state.notice != null -> noticeBody(state.notice.map { roster.getOrNull(it.index).orEmpty() })
+        state.houseAttached -> null
+        else -> Notifications.notice.body
+    }
 
     /**
      * **The markers the Isolate picker draws** (`gdd.md:315`, D-150).
@@ -2286,3 +2315,26 @@ fun Plan.mapCells(): List<MapCell> =
         )
     }
 
+/**
+ * **The house notice's words for the players it names, or null for none** (D-035, D-187, D-223).
+ *
+ * The one place those words are decided. **An empty list is null**: a meeting where nobody evaded
+ * draws nothing (the owner, 2026-11-15).
+ *
+ * ⚠️ **A non-empty list is null too, until the owner rules the copy** (D-223). The existing notice
+ * (`Notifications.notice`, D-035's sentence, which D-161 says a permission flip is reported in)
+ * carries a clock interval, *21:04–21:07*, and the house keeps no clock to fill one: every time on
+ * every screen is a fixture. So the sentence cannot be reused unchanged, and a new one is the
+ * owner's. Proposed, in its voice and shape: *Resident MARCUS was unreachable this shift. Occupancy
+ * data for this interval is incomplete.* When it is ruled, this function is the whole change.
+ */
+fun noticeBody(names: List<String>): String? = when {
+    names.isEmpty() -> NOTHING
+    else -> AWAITING_THE_OWNER
+}
+
+/** A meeting where nobody evaded: no words, and no box to put them in. */
+private val NOTHING: String? = null
+
+/** The notice for a named player, until the owner rules its words (D-223). */
+private val AWAITING_THE_OWNER: String? = null

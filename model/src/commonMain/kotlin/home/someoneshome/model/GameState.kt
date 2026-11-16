@@ -73,13 +73,16 @@ class GameState private constructor(
      */
     val touches: List<Touch>,
     /**
-     * **Every seat whose radio went down since the house last announced it, in seat order, each
-     * once** (T2, D-222).
+     * **Every seat the next house notice names: deliberate evasion since the last one, in seat
+     * order, each once** (D-187, D-223).
      *
-     * Written by [Event.RadioFaulted], read and emptied when the next meeting's check-in gate
-     * closes, where the house announces it to everybody. Holds no kind and no role.
+     * The notice's one list, whatever the evasion. Today [Event.RadioFaulted] with
+     * [RadioCause.Person] is its only writer (Bluetooth switched off, or its permission withdrawn);
+     * locking the phone and backgrounding the app are D-187's other two and will write here too when
+     * the house can detect them. A [RadioCause.Device] outage never does. Read and emptied when the
+     * next meeting's check-in gate closes, where the house tells everybody. Holds no role.
      */
-    val radioFaulted: List<Seat>,
+    val unreachable: List<Seat>,
     /**
      * **Every Insider ability's cooldown, already running when the round opens** (D-132).
      *
@@ -578,7 +581,7 @@ class GameState private constructor(
         restrained: List<Seat> = this.restrained,
         cooldownArmed: List<Seat> = this.cooldownArmed,
         touches: List<Touch> = this.touches,
-        radioFaulted: List<Seat> = this.radioFaulted,
+        unreachable: List<Seat> = this.unreachable,
         cooldowns: List<Cooldown> = this.cooldowns,
         isolated: List<Isolation> = this.isolated,
         systemIntegrity: Int = this.systemIntegrity,
@@ -601,7 +604,7 @@ class GameState private constructor(
         reader: Seat? = this.reader,
     ) = GameState(
         armed, outcome, seats, insiderSeats, revoked, newlyRevoked, reported, restrained, cooldownArmed,
-        touches, radioFaulted, cooldowns, isolated, systemIntegrity, openSubroutines, workOrders, stations,
+        touches, unreachable, cooldowns, isolated, systemIntegrity, openSubroutines, workOrders, stations,
         activeMarkers, destinations, presence, staticUntil, meeting, egress, egressReadyAt, oneLines,
         names, voteWindowSeconds, nextEntity, seed, terminal, reader,
     )
@@ -693,7 +696,7 @@ class GameState private constructor(
             restrained = emptyList(),
             cooldownArmed = emptyList(),
             touches = emptyList(),
-            radioFaulted = emptyList(),
+            unreachable = emptyList(),
             cooldowns = cooldowns,
             // Nothing is dark. A round that carried an isolation across an arming would open with a
             // marker offline that nobody had ever fired at, and that is not announced.
@@ -735,7 +738,7 @@ class GameState private constructor(
             restrained = emptyList(),
             cooldownArmed = emptyList(),
             touches = emptyList(),
-            radioFaulted = emptyList(),
+            unreachable = emptyList(),
             cooldowns = emptyList(),
             isolated = emptyList(),
             systemIntegrity = 0,

@@ -67,7 +67,7 @@ No local animation, tween, or easing the core didn't emit. **Light is game state
 
 ### 6. Errors are silent to the *player*, loud to the *authority*
 
-No dialogs, toasts, or unexpected screen state — an error surfacing as an Insider fires an ability is an alignment tell delivered by the crash handler. **But report the failure as an event**: a failed radio makes a living player invisible on the map, which nobody including them would detect. The house announces it at the next meeting.
+No dialogs, toasts, or unexpected screen state — an error surfacing as an Insider fires an ability is an alignment tell delivered by the crash handler. **But report the failure as an event**: a failed radio makes a living player invisible on the map, which nobody including them would detect. The house records it; only deliberate evasion is announced, at the next meeting (D-187).
 
 ### 7. The whole app has an allocation budget: **~0.5 MB/s**
 

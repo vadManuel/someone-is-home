@@ -211,7 +211,7 @@ fun Screen(
                 ScreenId.Call -> CallScreen(vals)
                 ScreenId.Found -> FoundScreen(vals)
                 ScreenId.Assemble -> AssembleScreen()
-                ScreenId.Notice -> NoticeScreen()
+                ScreenId.Notice -> NoticeScreen(vals)
                 ScreenId.Discussion -> DiscussionScreen(vals)
                 ScreenId.Vote -> VoteScreen(vals)
                 ScreenId.Tally -> TallyScreen(vals)

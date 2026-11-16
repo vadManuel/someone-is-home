@@ -1986,12 +1986,11 @@ class FlowModel(
             // that it had been touched; this branch is a named no-op and stays one.
             is RoundMessage.ContactAnswered -> Unit
 
-            // **The house's radio notice, held back until its words are decided** (T2, D-222). It
-            // arrives on every phone at every meeting, just before the push that opens the notices,
-            // and it is the content the notices screen is waiting for. What that screen says about
-            // it is the owner's to rule, so for now it moves nothing and draws nothing: a named
-            // no-op, replaced by one call when the copy is settled.
-            is RoundMessage.RadioFaultsAnnounced -> Unit
+            // **The house notice** (D-187, D-223). It arrives on every phone at every meeting, just
+            // before the push that opens the notices, and it is what the notices screen draws: the
+            // seats it names, or none, and none draws nothing. It moves no screen; the phase push
+            // beside it does. The words for a named seat are `noticeBody`'s, and the owner's.
+            is RoundMessage.NoticeIssued -> state = state.copy(notice = message.unreachable)
 
             // **THE SURGE LANDING ON THIS PHONE, and it is five seconds of the phone malfunctioning**
             // (D-182: 1.5s at full, 1.0s black, 2.5s of the Boot render, no input at any point, and

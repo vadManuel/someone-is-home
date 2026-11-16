@@ -1,6 +1,7 @@
 package home.someoneshome.app
 
 import home.someoneshome.model.ContactToken
+import home.someoneshome.model.RadioCause
 import home.someoneshome.model.Seat
 import home.someoneshome.platform.ContactRadio
 import home.someoneshome.platform.RadioReading
@@ -125,16 +126,16 @@ class SimulatedRadio internal constructor(val seat: Seat, private val air: Simul
         scanning = false
     }
 
-    private var down = false
+    private var down: RadioCause? = null
 
     /**
-     * **The bench's hand on the Bluetooth switch** (T2, D-222). Down, this radio reports one fault
-     * onset at the next beat; it hears and is heard as before, because what a fault does to the air
-     * is the hardware's and not the bench's question.
+     * **The bench's hand on the Bluetooth switch, or the OS resetting it** (T2, D-222; D-223). Down,
+     * this radio reports one fault onset with [cause] at the next beat; it hears and is heard as
+     * before, because what a fault does to the air is the hardware's and not the bench's question.
      */
-    fun fail() {
-        down = true
+    fun fail(cause: RadioCause = RadioCause.Person) {
+        down = cause
     }
 
-    override fun faultBegan(): Boolean = down.also { down = false }
+    override fun faultBegan(): RadioCause? = down.also { down = null }
 }

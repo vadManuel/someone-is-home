@@ -6,6 +6,7 @@ import home.someoneshome.model.GameState
 import home.someoneshome.model.Intent
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MeetingTrigger
+import home.someoneshome.model.RadioCause
 import home.someoneshome.model.RefusalReason
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
@@ -259,7 +260,8 @@ class IntentAdmissionTest {
         Event.IsolateFired(at, Seat(1), marker),
         Event.StaticFired(at, Seat(1)),
         Event.ContactMade(at, Seat(1), Seat(2)),
-        Event.RadioFaulted(at, Seat(2)),
+        Event.RadioFaulted(at, Seat(2), RadioCause.Person),
+        Event.RadioFaulted(at, Seat(2), RadioCause.Device),
         Event.MeetingCalled(at, Seat(3), MeetingTrigger.MeetingCard),
         Event.MeetingCalled(at, Seat(3), MeetingTrigger.RevokeReported(Seat(2))),
         Event.MeetingCheckedIn(at, Seat(4)),

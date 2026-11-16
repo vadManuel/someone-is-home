@@ -3,6 +3,7 @@ package home.someoneshome.app
 import home.someoneshome.model.ContactSeed
 import home.someoneshome.model.ContactTokens
 import home.someoneshome.model.ContactWindow
+import home.someoneshome.model.RadioCause
 import home.someoneshome.model.Sighting
 import home.someoneshome.model.protocol.RoundBody
 import home.someoneshome.model.protocol.RoundMessage
@@ -33,11 +34,12 @@ import home.someoneshome.platform.ContactRadio
  * fact the house keeps until somebody finds the body of it. What the radio buffered is drained and
  * dropped every beat, so a reading taken a moment before the house's push cannot ride out later.
  *
- * ### A radio fault goes up on the beat after it begins (T2, D-222)
+ * ### A radio fault goes up on the beat after it begins (T2, D-222; D-223)
  *
- * The radio reports an onset once ([ContactRadio.faultBegan]); the next beat sends one
- * `RoundBody.RadioFaulted`, the same from every phone. Before arming and after the round nothing is
- * beaten, so nothing is sent.
+ * The radio reports an onset once, with its cause ([ContactRadio.faultBegan]); the next beat sends
+ * one `RoundBody.RadioFaulted` carrying that cause and nothing else, the same from every phone and
+ * the same length whichever the cause. Before arming and after the round nothing is beaten, so
+ * nothing is sent.
  *
  * ### Why the one early exit here is not rule 1's
  *
@@ -50,11 +52,11 @@ class ContactUploader(
     /** The window this phone is in now. The wall clock in production (`wallClockMillis`). */
     private val windowNow: () -> ContactWindow,
     /**
-     * **This phone's radio went down: say so, once** (T2, D-222). Up this phone's own socket as the
-     * one fixed body `RoundBody.RadioFaulted`. Called on the beat after the radio reports an onset,
-     * in a round only, from every phone alike, out or not.
+     * **This phone's radio went down: say so, once, and why** (T2, D-222; D-223). Up this phone's
+     * own socket as the one fixed body `RoundBody.RadioFaulted(cause)`. Called on the beat after the
+     * radio reports an onset, in a round only, from every phone alike, out or not.
      */
-    private val faulted: () -> Unit = {},
+    private val faulted: (RadioCause) -> Unit = {},
     /** Up this phone's own socket. */
     private val send: (RoundBody.Sighted) -> Unit,
 ) {
@@ -110,7 +112,7 @@ class ContactUploader(
         send(SightingUpload.pack(key, window, uploads++, heard))
         // **Rule 6: silent here, loud at the house** (T2, D-222). The radio reports each fault once,
         // at its onset; nothing on this phone's screen, lamp or motor hears of it.
-        if (radio.faultBegan()) faulted()
+        radio.faultBegan()?.let(faulted)
     }
 
     /** A new round is coming: forget this one's seed and stop the radio. */

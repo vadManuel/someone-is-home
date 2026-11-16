@@ -161,3 +161,33 @@ internal fun ByteArray.toLowerHex(bytes: Int = size): String = buildString(bytes
 }
 
 private const val HEX = "0123456789abcdef"
+
+/**
+ * **Why a phone's radio went down, in the one distinction D-187 draws: a person's act, or the
+ * phone's own** (D-223, the owner's 2026-11-15 ruling).
+ *
+ * D-187: *a house notice reports detectable deliberate evasion and nothing else; genuine radio loss
+ * earns no notice.* So the only thing the house needs to know about an outage is which side of that
+ * line it is on, and this is the whole of what a phone says about one.
+ *
+ * - [Person]: Bluetooth switched off, or its permission withdrawn, during a round. Every grant is
+ *   asked at setup, in the light, before a seat is taken (D-161), so one missing during a round is
+ *   something a person did. **The house names the player at the next meeting**, in the house
+ *   notice that lock and backgrounding are reported in.
+ * - [Device]: the OS resetting the radio, or the hardware not supporting it. **Recorded for the
+ *   authority and announced to nobody**: a notice naming a player whose phone failed reads to the
+ *   room exactly like a notice naming a cheat (D-187). It shows as disconnection on the monitoring
+ *   surfaces, which it does by itself, since a radio that is down is heard by nobody.
+ *
+ * **The two serial names are the same length**, so the one upward body is the same number of bytes
+ * whichever it carries. `RadioFaultTest` pins it.
+ */
+@ClientFacing
+@kotlinx.serialization.Serializable
+enum class RadioCause {
+    @kotlinx.serialization.SerialName("person")
+    Person,
+
+    @kotlinx.serialization.SerialName("device")
+    Device,
+}

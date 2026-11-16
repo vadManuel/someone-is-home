@@ -2,6 +2,7 @@ package home.someoneshome.platform
 
 import home.someoneshome.model.ContactToken
 import home.someoneshome.model.ContactWindow
+import home.someoneshome.model.RadioCause
 import kotlinx.cinterop.ByteVar
 import kotlinx.cinterop.allocArray
 import kotlinx.cinterop.get
@@ -103,12 +104,12 @@ private class IosContactRadio(private val log: (String) -> Unit) : ContactRadio 
     }
 
     /**
-     * **Whether the radio went down since the last beat** (T2, D-222). The managers' state callbacks
+     * **Whether the radio went down since the last beat, and why** (T2, D-222; D-223). The managers' state callbacks
      * land on [queue] and the switchboard turns them into one onset; this is a second synchronous hop
      * a beat, beside [drain], and allocates nothing.
      */
-    override fun faultBegan(): Boolean {
-        var began = false
+    override fun faultBegan(): RadioCause? {
+        var began: RadioCause? = null
         dispatch_sync(queue) { began = board.faultBegan() }
         return began
     }
