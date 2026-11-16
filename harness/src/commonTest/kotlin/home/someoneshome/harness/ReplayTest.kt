@@ -250,14 +250,18 @@ class RecordingTest {
                 line
             }
         }
+        // The actor's answer lines only: since T1 (D-220) the touch also answers its target, seat 3,
+        // and that line is the same in both runs and is compared below with everything else.
+        fun actorAnswers(transcript: List<String>) =
+            transcript.filter { it == "AbilityFired|actor=1|cooldownStarted=true" || it == "ContactAnswered|seat=1" }
         assertEquals(
             listOf("AbilityFired|actor=1|cooldownStarted=true"),
-            recordingA.effectTranscript.filter { it.startsWith("AbilityFired") || it.startsWith("ContactAnswered") },
+            actorAnswers(recordingA.effectTranscript),
             "an armed touch was not answered as a spent Revoke, exactly once",
         )
         assertEquals(
             listOf("ContactAnswered|seat=1"),
-            recordingB.effectTranscript.filter { it.startsWith("AbilityFired") || it.startsWith("ContactAnswered") },
+            actorAnswers(recordingB.effectTranscript),
             "an unarmed touch was not answered as one, exactly once",
         )
         assertEquals(

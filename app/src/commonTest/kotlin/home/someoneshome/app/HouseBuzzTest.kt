@@ -560,7 +560,7 @@ class HouseBuzzTest {
         // and a phone on the springboard would take a different route through `houseSaid`.
         val flow = FlowModel(PanelState(screen = ScreenId.Assemble))
         val round = RoundOverTransport(
-            this, flow, buzzer = HouseBuzzer(motor), send = { }, radio = NoRadio,
+            this, flow, buzzer = HouseBuzzer(motor), send = { }, radio = NoRadio, wake = home.someoneshome.platform.ScreenWake(home.someoneshome.platform.NoIdleTimer),
         )
         val draining = launch { round.run() }
 

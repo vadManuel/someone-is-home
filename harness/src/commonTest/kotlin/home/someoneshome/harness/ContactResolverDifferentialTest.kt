@@ -131,12 +131,16 @@ class ContactResolverDifferentialTest {
             listOf(2, 6), revokedAfter(armed, huddleHearsTheRevoked = false),
             "the armed Insider's huddle should Revoke seat 2",
         )
-        // **R5 inside one arrival** (D-217). When seat 2 also hears the Revoked seat 6, its report
-        // sorts ahead of seat 5's touch on it (seat order, D-213), the report calls a meeting, and
-        // from then on a touch is not a contact: the armed Revoke does not land at the meeting.
+        // **One touch, landed in its first half, before the report sorted after it** (T1, D-220).
+        // When seat 2 also hears the Revoked seat 6, its report sorts after its own half of the touch
+        // with seat 5 (seat order, D-213). Since T1 that half answers the whole touch and lands seat
+        // 5's armed Revoke, so seat 2 is out before its report is admitted, and R3 refuses a report
+        // from an out seat. Until T1 the Revoke waited for seat 5's own half, sorted after the
+        // report's meeting, and R5 refused it; an Insider seated below seat 2 already landed it
+        // first. The outcome no longer depends on which of the two sits higher.
         assertEquals(
-            listOf(6), revokedAfter(armed, huddleHearsTheRevoked = true),
-            "an armed Revoke landed after a report in the same arrival had called the meeting",
+            listOf(2, 6), revokedAfter(armed, huddleHearsTheRevoked = true),
+            "the armed Revoke did not land in the touch's first half, ahead of the report sorted after it",
         )
     }
 }

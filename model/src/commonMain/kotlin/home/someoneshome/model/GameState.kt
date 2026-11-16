@@ -62,6 +62,17 @@ class GameState private constructor(
     val restrained: List<Seat>,
     val cooldownArmed: List<Seat>,
     /**
+     * **The touches already answered at the tick being reduced** (T1 of the owner's 2026-11-15
+     * rulings, D-220).
+     *
+     * The resolver mints both halves of every touch at one tick (D-213), and the first half to be
+     * reduced answers the whole touch: both phones, once each, and any Revoke either of them was
+     * holding. This is how the second half knows it is the other half of a touch already answered
+     * and changes nothing. Only the current tick's touches are kept; a contact at a later tick
+     * drops the rest. Never reaches a client.
+     */
+    val touches: List<Touch>,
+    /**
      * **Every Insider ability's cooldown, already running when the round opens** (D-132).
      *
      * Each begins at **half** its normal duration, so the round opens with a guaranteed stretch of
@@ -558,6 +569,7 @@ class GameState private constructor(
         reported: List<Seat> = this.reported,
         restrained: List<Seat> = this.restrained,
         cooldownArmed: List<Seat> = this.cooldownArmed,
+        touches: List<Touch> = this.touches,
         cooldowns: List<Cooldown> = this.cooldowns,
         isolated: List<Isolation> = this.isolated,
         systemIntegrity: Int = this.systemIntegrity,
@@ -580,7 +592,7 @@ class GameState private constructor(
         reader: Seat? = this.reader,
     ) = GameState(
         armed, outcome, seats, insiderSeats, revoked, newlyRevoked, reported, restrained, cooldownArmed,
-        cooldowns, isolated, systemIntegrity, openSubroutines, workOrders, stations,
+        touches, cooldowns, isolated, systemIntegrity, openSubroutines, workOrders, stations,
         activeMarkers, destinations, presence, staticUntil, meeting, egress, egressReadyAt, oneLines,
         names, voteWindowSeconds, nextEntity, seed, terminal, reader,
     )
@@ -671,6 +683,7 @@ class GameState private constructor(
             reported = emptyList(),
             restrained = emptyList(),
             cooldownArmed = emptyList(),
+            touches = emptyList(),
             cooldowns = cooldowns,
             // Nothing is dark. A round that carried an isolation across an arming would open with a
             // marker offline that nobody had ever fired at, and that is not announced.
@@ -711,6 +724,7 @@ class GameState private constructor(
             reported = emptyList(),
             restrained = emptyList(),
             cooldownArmed = emptyList(),
+            touches = emptyList(),
             cooldowns = emptyList(),
             isolated = emptyList(),
             systemIntegrity = 0,
@@ -733,4 +747,16 @@ class GameState private constructor(
             reader = null,
         )
     }
+}
+
+/**
+ * **One touch, by the tick it was minted at and its two seats in either order** (D-220).
+ *
+ * See [GameState.touches]. A touch is one gesture between two phones; [ContactMade][Event.ContactMade]
+ * is one half of it, so the two halves of one touch are the same [Touch].
+ */
+data class Touch(val at: Tick, val a: Seat, val b: Seat) {
+    /** Whether a contact between [x] and [y] at [at] is this touch, in either order. */
+    fun joins(at: Tick, x: Seat, y: Seat): Boolean = this.at == at &&
+        ((a.index == x.index && b.index == y.index) || (a.index == y.index && b.index == x.index))
 }

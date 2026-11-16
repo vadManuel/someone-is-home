@@ -130,6 +130,7 @@ class ContactRadioBenchTest {
                     buzzer = HouseBuzzer(SilentHaptics),
                     send = { frame -> client.send(frame) },
                     radio = air.radioFor(seat),
+                    wake = home.someoneshome.platform.ScreenWake(home.someoneshome.platform.NoIdleTimer),
                     windowNow = { window },
                     onInbound = { body ->
                         (RoundWire.decodeOrNull(body) as? RoundBody.Push)?.let { pushed.getValue(seat.index) += it.message }

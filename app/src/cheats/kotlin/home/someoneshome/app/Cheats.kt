@@ -1,6 +1,8 @@
 package home.someoneshome.app
 
+import home.someoneshome.platform.ScreenWake
 import home.someoneshome.platform.bluetoothContactRadio
+import home.someoneshome.platform.deviceIdleTimer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -344,7 +346,10 @@ fun CheatRoot() {
         // lines go to stdout and NEVER to the rig's on-screen log: a line about the radio on a
         // screen is a screen that changed for a reason the house did not author (rules 5 and 6).
         val radio = bluetoothContactRadio { line -> println("[radio] $line") }
-        RoundClient(scope, flow, watch, buzzer, radio) { line -> println("[round] $line"); transport.note(line) }
+        // **The screen held awake for the round** (T4, D-221): the idle timer off from arming until
+        // the round ends or this phone hangs up, then put back. No brightness is touched.
+        val wake = ScreenWake(deviceIdleTimer())
+        RoundClient(scope, flow, watch, buzzer, radio, wake) { line -> println("[round] $line"); transport.note(line) }
             // Both knots tied in one place: the lobby gets the seam it was promised, and the four
             // meeting controls, the Subroutine's hand-over and page 2's two fires get the way up
             // they were promised (E-P2-3). Before this line every one of them reached nobody.

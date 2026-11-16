@@ -154,6 +154,15 @@ interface RoundSeam {
      * (`LobbyHouse.roundEnded`); this is the client's, reached when the host's push arrives.
      */
     fun roundEnded()
+
+    /**
+     * **This phone hung up: it left, or the host closed the house** (T4, D-221).
+     *
+     * The phone holds nothing of the round it walked out of, so by default this is [roundEnded]:
+     * the radio is silenced and the screen is let sleep. Before T4 a phone that left mid-round kept
+     * its radio on, and with the screen held awake it would have kept the screen on too.
+     */
+    fun left() = roundEnded()
 }
 
 /**
@@ -1090,6 +1099,9 @@ class LobbyOverTransport(
 
     /** This phone's own end of the socket, dropped. Shared by the two exits so they cannot drift. */
     private fun hangUp() {
+        // The round's half first: a phone that has hung up is in no round, so its radio stops and
+        // its screen may sleep (T4, D-221). Harmless when it already holds nothing.
+        round?.left()
         clientJob?.cancel()
         clientJob = null
         client = null

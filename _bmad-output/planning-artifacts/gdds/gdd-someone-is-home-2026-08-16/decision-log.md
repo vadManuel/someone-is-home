@@ -5187,6 +5187,100 @@ reduces differently.
 | `ContactRulingsTest` | R2, R3, R5 | and S4: refused after its meeting, a fresh seat still reportable, a card meeting reports nobody |
 | `ContactResolverTest` (a pair hearing a Revoked seat) | the second report refused `MeetingAlreadyRunning` | refused `AlreadyReported`: S4 sits above the meeting checks |
 
+## Revision 55 — one frame per touch in either seat order, and the screen kept awake
+
+*The owner's 2026-11-15 rulings T1 and T4, on the items D-219 and D-218 left open. T3 (UUID `5348`
+stays for the playtest; a permanent ID goes on the pre-release list with R7 and S2) needs no code.*
+
+### D-220 · **The first half of a touch answers the whole touch, so a Revoked target is sent `RevokeLanded` in place of its answer — decided**
+
+**What it was.** Each half of a touch answered its own actor, and the armed half also sent the
+target `RevokeLanded`. The resolver mints the halves in seat order (D-213), so when the target sat
+below its Insider the target's own half came first: still living and unarmed, it was answered
+`ContactAnswered`, and then the Insider's half sent `RevokeLanded`. Two frames to the one phone whose
+count should least differ (D-219 raised item 1).
+
+**The ruling, applied.**
+
+1. **The first half reduced answers both phones and lands any Revoke either holds.** The actor's
+   armed Revoke is read first, so two armed Insiders resolve as they did when the lower seat's half
+   came first. A Revoke the target holds lands on the actor in the same half. Every armed phone that
+   touched spends its Revoke, landed or not, and R2's disarm falls out of the same line.
+2. **The second half is recognised and changes nothing.** `GameState.touches` holds the touches
+   answered at the tick being reduced, as unordered pairs; a contact at a later tick drops them. Both
+   halves are always minted at one tick, so whether a half is the second is a fact about the arrival,
+   never a role or an arm. It emits nothing in every case.
+3. **Each phone is sent two effects and the boundary keeps one.** Its answer (`AbilityFired` if it was
+   armed, `ContactAnswered` otherwise; living rows) and `RevokeLanded` (out rows). A phone the touch
+   Revoked is out and gets the Revoke landing; every other phone is living and gets its answer. The
+   stream is the same four effects whether the Revoke landed, hit a seat already out, was never armed
+   or was aimed at the actor, so `AbsentEffectIsTheLeakTest` still compares equal line for line, and
+   a self-touch keeps an other-touch's shape (`gdd.md:393`). A phone never hears itself, so a
+   self-touch is forged-only and its second answer lands on the forger alone.
+4. **The answer reads one thing, the phone's own armed state.** Nothing reads the other phone's.
+
+**Measured on sockets.** `TouchFrameSizeTest` now makes the touches in both seat orders, unarmed and
+armed, and asserts every socket's frame count per touch: **1 for each phone that touched, 0 for each
+bystander, in all four cases**, every frame 120 bytes. The lower-seated target is sent exactly
+`RevokeLanded`; the higher-seated Insider exactly `AbilityFired`. `TouchAnsweredOnceTest` (core)
+asserts the same deliveries off the rules, and a huddle of three around an armed Insider: each phone
+in two touches is delivered two effects.
+
+**One consequence, stated.** A Revoke held by the higher seat now lands in the lower seat's half. In
+`ContactResolverDifferentialTest`'s huddle, seat 2's report of the couch seat 6 sorts after its own
+half of the touch with the armed seat 5. Until T1 the Revoke waited for seat 5's half, sorted after
+the report's meeting, and R5 refused it. Now it lands first, seat 2 is out, and R3 refuses its report.
+That is what already happened when the Insider sat below seat 2, so the outcome no longer depends on
+which of the two sits higher. In huddles generally a phone is also no longer short a frame for a
+touch it made after going out mid-arrival.
+
+**Recording format 24**: no row changed shape, and every touch reduces to a different transcript.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `model` `GameState.touches`, `Touch` | (new) | the touches answered at the current tick, unordered pairs |
+| `core` `Rules.contact` | each half answers its actor; the armed half sends the target `RevokeLanded` | the first half answers both phones and lands either Revoke; the second changes nothing |
+| `harness` `Recording.HEADER` | `recording/23` | `recording/24` |
+| `TouchFrameSizeTest` | the lower-seated target's two frames, asserted as they were | one frame per socket per touch, both seat orders, armed and unarmed |
+| `TouchAnsweredOnceTest` | (new) | deliveries per seat: both orders, unarmed, a huddle, the same pair at a later tick |
+| `RulesTest`, `ArmingTest`, `ReplayTest` | two effects per contact | four, the pair once for each phone |
+| `ContactResolverDifferentialTest` (the report in the huddle) | R5 refuses the armed touch | the Revoke lands in the first half; R3 refuses the report |
+
+### D-221 · **The screen is kept awake from arming until the round ends or the player leaves, and nothing else changes — decided**
+
+**The ruling, applied.** `platform` `ScreenWake` over a one-property `IdleTimer`; on iOS
+`UIApplication.idleTimerDisabled`, written on the main thread. `RoundOverTransport` takes one,
+required, for the radio's reason (D-217). It holds at `ContactSeedIssued`, which is arming for every
+seated phone whatever its role (`keepsTheScreenAwake`, one named question), and releases at
+`RoundEnded` and when the round half is told the phone has hung up. `RoundSeam` gains `left()`,
+reached from `LobbyOverTransport.hangUp`, which every exit shares (leave, close the house, the house
+closed). Release puts back what hold found, so a phone whose owner had already disabled the timer is
+left that way; both calls are idempotent, so a resume's re-asserted seed is harmless.
+
+**No background modes** were added. A phone whose side button is pressed, or that leaves the app,
+still suspends; that is a person's act and D-187's notice is about it.
+
+**Checked against D-077, D-093 and D-118: it changes no light level.** The property stops Auto-Lock
+and the OS's dim before it. It does not touch `UIScreen.brightness`, draws nothing and animates
+nothing, so the lamp is still a pure function of state (rule 5). D-077's concealment screens dim
+their own chrome, which is app-drawn and untouched. D-093's Island ring is not built and this adds
+none. D-118's two dims are the app's, the Egress and the opening text, and are untouched. What the
+idle timer used to do was dim a phone nobody had touched for a while, on the OS's schedule: a fade
+nobody in the game authored, and a third light change the closed vocabulary never had. Holding the
+timer removes that one and adds nothing.
+
+**Found on the way: a phone that left mid-round kept its radio on.** `leave` hung up the socket and
+told the round half nothing, so the radio advertised and scanned on; with the screen held awake it
+would have kept the screen on too. `left()` now silences both.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `platform` `ScreenWake.kt`, `ScreenWake.ios.kt` | (new) | `IdleTimer`, `ScreenWake` (hold, release, restore), `NoIdleTimer`, `deviceIdleTimer` |
+| `app` `RoundOverTransport` | no idle timer | a required `ScreenWake`; held at `ContactSeedIssued`, released at `RoundEnded` and `roundEnded()` |
+| `app` `RoundSeam.left`, `LobbyOverTransport.hangUp`, `RoundClient` | a hang-up reached no round | the round half silences the radio and releases the screen |
+| `app` cheats `Cheats.kt` | (none) | `ScreenWake(deviceIdleTimer())` handed to the round |
+| `ScreenWakeTest`, `ScreenAwakeTest`, `RoundEndedPushTest` | (new) | restore and idempotence; held through the funnel from arming to the end and to a hang-up; a leave reaches the round half |
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

@@ -55,6 +55,44 @@ class RoundEndedPushTest {
         override fun roundEnded() {
             ended++
         }
+        var left = 0
+        override fun left() {
+            left++
+        }
+    }
+
+    /**
+     * **A phone that leaves tells its round half, so the radio stops and the screen may sleep**
+     * (T4, D-221). Before T4 nothing reached the round on a leave: its radio stayed on, and with the
+     * screen now held awake through a round, the screen would have too.
+     */
+    @Test
+    fun aClientThatLeavesTellsItsRoundHalf() = runBlocking {
+        var minted = 0
+        val ledger = SeatLedger(List(4) { Seat(it) }, mint = { SeatToken("tk-${minted++}") })
+        val seated = Channel<Seat>(Channel.UNLIMITED)
+        val host = TransportHost(
+            ledger,
+            nowMillis = ::nowMillis,
+            onFrame = { _, _ -> },
+            onSeated = { seated.trySend(it) },
+        )
+        val port = host.start(0)
+        val seam = Seam()
+        val link = LobbyOverTransport(this, round = seam)
+        val model = LobbyModel(link = link)
+        model.nameResident("ELLIOT")
+        try {
+            withTimeout(30_000) {
+                model.attachTo(NearbyHome("THE BUNGALOW", "127.0.0.1", port))
+                seated.receive()
+            }
+            assertEquals(0, seam.left, "the round half was told it left before anybody left")
+            link.leave()
+            assertEquals(1, seam.left, "a phone that left never told its round half: its radio and screen stay on")
+        } finally {
+            host.stop()
+        }
     }
 
     @Test

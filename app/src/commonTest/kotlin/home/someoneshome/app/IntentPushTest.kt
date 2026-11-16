@@ -331,7 +331,7 @@ class IntentPushTest {
                 // what keeps the constructor unable to be forgotten by an app root.
                 buzzer = HouseBuzzer(SilentHaptics),
                 send = { frame -> client.send(frame) },
-                radio = NoRadio,
+                radio = NoRadio, wake = home.someoneshome.platform.ScreenWake(home.someoneshome.platform.NoIdleTimer),
                 onOutbound = { outbound += it },
             )
             // The real control surface: a meeting model whose four buttons go up this phone's own

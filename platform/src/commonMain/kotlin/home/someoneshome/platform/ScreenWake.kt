@@ -1,0 +1,65 @@
+package home.someoneshome.platform
+
+/**
+ * **The phone's idle timer: the one switch that decides whether the OS dims and locks a phone
+ * nobody is touching** (T4 of the owner's 2026-11-15 rulings, D-221).
+ *
+ * One property, so the decisions in [ScreenWake] can be tested off a phone. On iOS it is
+ * `UIApplication.idleTimerDisabled`, and like every UIKit property it is read and written on the
+ * main thread, which is where the round's pushes are applied.
+ */
+interface IdleTimer {
+    var disabled: Boolean
+}
+
+/**
+ * **The screen stays awake from arming until the round ends or the player leaves, and then the
+ * idle timer is put back as it was** (T4, D-221).
+ *
+ * Without it a phone left alone during a round dims and then locks, and iOS suspends a locked app
+ * within seconds: its radio stops advertising and scanning and its socket goes quiet (D-218 item 3).
+ * Disabling the idle timer stops Auto-Lock **and nothing else**. It sets no brightness and draws
+ * nothing: the lamp is still a pure function of state (rule 5). What it removes is the OS's own dim
+ * before the lock, a fade nobody in the game authored and the one light change a phone made on its
+ * own. D-118's two dims are the app's and are untouched.
+ *
+ * No background modes are added (T4). A player who presses the side button or leaves the app still
+ * suspends it; that is a person's act, and D-187's notice is the house's answer to it.
+ *
+ * ### Restored, not switched off
+ *
+ * [hold] remembers what the timer was and [release] puts that back, so a phone whose owner had
+ * disabled it for some other reason before the round is left that way. Both are idempotent: a
+ * second [hold] does not overwrite the remembered value with the game's own `true`, and a [release]
+ * with nothing held touches nothing.
+ */
+class ScreenWake(private val timer: IdleTimer) {
+    private var before: Boolean? = null
+
+    /** Whether this round is holding the screen awake. */
+    val holding: Boolean get() = before != null
+
+    /** Keep the screen awake. Called at arming; again on a resume, harmlessly. */
+    fun hold() {
+        if (before != null) return
+        before = timer.disabled
+        timer.disabled = true
+    }
+
+    /** Put the idle timer back as [hold] found it. Called when the round ends or the player leaves. */
+    fun release() {
+        val was = before ?: return
+        before = null
+        timer.disabled = was
+    }
+}
+
+/** **No idle timer at all.** What a test or a bench holds when the screen is not the question. */
+object NoIdleTimer : IdleTimer {
+    override var disabled: Boolean
+        get() = false
+        set(_) = Unit
+}
+
+/** This phone's idle timer. `UIApplication.idleTimerDisabled` on iOS. */
+expect fun deviceIdleTimer(): IdleTimer

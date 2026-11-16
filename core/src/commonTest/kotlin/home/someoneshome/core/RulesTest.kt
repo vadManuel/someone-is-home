@@ -130,8 +130,12 @@ class AbsentEffectIsTheLeakTest {
             listOf(
                 Effect.ContactAnswered(Seat(1)),
                 // **Constructed for a seat this contact did not revoke** (E-R2-5). That is what
-                // keeps the test above true: the stream is the same two effects whether the Revoke
-                // landed, hit somebody already out, was fired at the actor, or was never armed.
+                // keeps the test above true: the stream is the same four effects whether the Revoke
+                // landed, hit somebody already out, was fired at the actor, or was never armed. Since
+                // T1 (D-220) the first half of a touch answers both of its phones, so the pair is
+                // written once for each.
+                Effect.RevokeLanded(Seat(1)),
+                Effect.ContactAnswered(Seat(3)),
                 Effect.RevokeLanded(Seat(3)),
             ).toString(),
             unarmed.toString(),
@@ -181,9 +185,12 @@ class AbsentEffectIsTheLeakTest {
     @Test
     fun `every touch answers its actor once and only an armed Insider is told AbilityFired`() {
         val base = armed()
-        fun answerTo(state: GameState, actor: Seat): List<Effect> =
-            reduce(state, Event.ContactMade(Tick(READY + 2), actor, Seat(3))).effects
-                .filter { EmitSchema.audienceOf(it, state).any { s -> s.index == actor.index } }
+        // What reaches the actor's phone, read off the state after the touch: since T1 (D-220) each
+        // phone is sent its answer and `RevokeLanded`, and the boundary keeps exactly one.
+        fun answerTo(state: GameState, actor: Seat): List<Effect> {
+            val after = reduce(state, Event.ContactMade(Tick(READY + 2), actor, Seat(3)))
+            return after.effects.filter { e -> EmitSchema.deliveries(e, after.state).any { it.seat.index == actor.index } }
+        }
 
         val armedState = reduce(base, Event.RevokeArmed(Tick(READY + 1), Seat(1))).state
         assertEquals(listOf<Effect>(Effect.AbilityFired(Seat(1), cooldownStarted = true)), answerTo(armedState, Seat(1)))

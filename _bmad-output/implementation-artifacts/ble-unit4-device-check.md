@@ -11,9 +11,11 @@ a report land, and do the phones agree on the window. Every answer comes from th
   Phone A hosts. The examples below call the Insider **I**, its target **T**, and the third phone
   **R**, a Resident. Which phone is the Insider is only known once the round arms.
 - All three on the same Wi-Fi, with Bluetooth on.
-- On each phone, **Settings → Display & Brightness → Auto-Lock → Never.** The app does not keep the
-  screen awake (D-218, raised). A phone that locks, or leaves the app, is suspended within seconds,
-  and its radio and socket go quiet. With no background modes this is expected: it is not a fault.
+- On each phone, **leave Auto-Lock as it normally is** (Settings → Display & Brightness → Auto-Lock,
+  30 seconds or 1 minute is best for step 6). Since D-221 the app keeps the screen awake from arming
+  until the round ends or the phone leaves. A phone whose side button is pressed, or that leaves the
+  app, is still suspended within seconds, and its radio and socket go quiet. With no background
+  modes this is expected: it is not a fault.
 - On each phone, **Settings → General → Date & Time → Set Automatically: on.** The window is cut
   from the wall clock.
 - On each phone, grant Bluetooth at the Perms screen, in the light, before taking a seat.
@@ -124,9 +126,23 @@ told iOS to keep it on in Airplane Mode.
     app.
 - The house is not told. That is a known gap (D-218 item 2), so it is not a failure of this check.
 
+## 6. The screen stays awake for the round, and only for the round (D-221)
+
+Set one phone's Auto-Lock to 30 seconds before the lobby.
+
+- **Before arming:** leave that phone untouched on the lobby screen. **Pass:** it dims and locks on
+  its usual schedule. Unlock it.
+- **After LIGHTS OUT:** put it down untouched for at least twice its Auto-Lock time. **Pass:** the
+  screen never dims and never locks, and its brightness does not change at any point. The only light
+  changes are the game's own (the opening text's dim, D-118).
+- **After the round ends** (or after LEAVE on that phone): put it down again. **Pass:** it dims and
+  locks on its usual schedule.
+- **Fail:** the phone dims or locks mid-round; or it stays awake in the lobby before arming or after
+  the round; or its brightness moves when the round arms or ends.
+
 ## Report back
 
-For each step, send pass or fail. Also send:
+For each step, 0 to 6, send pass or fail. Also send:
 - the strongest touching RSSI for each phone pair;
 - the CALLBACKS figure from one `TALLY` line;
 - any line containing `FAILED`, `OUTAGE` or `REFUSED`.

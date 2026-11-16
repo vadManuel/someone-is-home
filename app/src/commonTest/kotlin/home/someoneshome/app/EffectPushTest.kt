@@ -451,7 +451,7 @@ class EffectPushTest {
                 // default, so nothing that carries pushes can be built having forgotten the motor.
                 buzzer = HouseBuzzer(SilentHaptics),
                 send = { frame -> client.send(frame) },
-                radio = NoRadio,
+                radio = NoRadio, wake = home.someoneshome.platform.ScreenWake(home.someoneshome.platform.NoIdleTimer),
                 onEvent = onEvent,
                 onInbound = onInbound,
             )

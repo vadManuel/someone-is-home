@@ -50,6 +50,12 @@ class Recording(
     }
 
     companion object {
+        // 24: no row changed shape, and every touch reduces differently (T1, D-220). The first half
+        // of a touch answers both of its phones and lands any Revoke either held; the second half,
+        // at the same tick, changes nothing. So the same events replay to a different effect
+        // transcript for every touch, and a Revoke held by the higher seat now lands in the lower
+        // seat's half.
+        //
         // 23: one refusal reason a version 22 build cannot name -- `AlreadyReported` (S4, D-219) --
         // and the rule change behind it: a second report of a Revoked seat a meeting has already
         // reported is refused, so the same events reduce differently. No row changed shape.
@@ -215,7 +221,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/23"
+        const val HEADER = "someone-is-home/recording/24"
     }
 }
 

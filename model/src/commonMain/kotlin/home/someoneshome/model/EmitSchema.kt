@@ -630,9 +630,9 @@ object EmitSchema {
         val addressed = when (effect) {
             is Effect.LampSet -> listOf(effect.seat)
             is Effect.AbilityFired -> listOf(effect.actor)
-            // **The phone that touched, and no other.** One answer per actor per touch; the other
-            // phone is the actor of the touch's other half and is answered by that one. Broadcast,
-            // it would tell the house who is touching whom.
+            // **The phone that touched, and no other.** One answer per phone per touch: the first
+            // half of a touch answers both of its phones, each with its own effect (T1, D-220).
+            // Broadcast, it would tell the house who is touching whom.
             is Effect.ContactAnswered -> listOf(effect.seat)
             // **The target, and no other phone.** The actor is not a recipient of this and must not
             // become one -- *no actor-side feedback on firing any ability; all observable effect

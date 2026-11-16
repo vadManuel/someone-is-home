@@ -1,6 +1,7 @@
 package home.someoneshome.app
 
 import home.someoneshome.platform.ContactRadio
+import home.someoneshome.platform.ScreenWake
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.OrderLine
 import home.someoneshome.model.SubroutineInstance
@@ -54,6 +55,10 @@ class DeferredRoundSeam : RoundSeam {
         target?.seated()
     }
 
+    override fun left() {
+        target?.left()
+    }
+
     override fun roundEnded() {
         target?.roundEnded()
     }
@@ -99,6 +104,12 @@ class RoundClient(
      * bench that plays seats in one process.
      */
     private val radio: ContactRadio,
+    /**
+     * **This phone's screen, kept awake through the round** (T4, D-221), handed straight down to
+     * [RoundOverTransport]. The UIKit idle timer on a phone; [home.someoneshome.platform.NoIdleTimer]
+     * on a bench.
+     */
+    private val wake: ScreenWake,
     private val note: (String) -> Unit,
 ) : RoundSeam {
 
@@ -131,6 +142,7 @@ class RoundClient(
         // lobby owns it. A round that opened a second one would be a second seat.
         send = { frame -> up?.invoke(frame) },
         radio = radio,
+        wake = wake,
         onEvent = note,
         onInbound = { body ->
             // The probe first, on the raw bytes, before anything has decided what they are — a
@@ -184,8 +196,17 @@ class RoundClient(
         round.reseated()
     }
 
+    override fun left() {
+        note("THIS PHONE HUNG UP — IT HOLDS NOTHING OF THE ROUND, AND THE SCREEN MAY SLEEP")
+        forget()
+    }
+
     override fun roundEnded() {
         note("THE HOUSE ENDED THE ROUND — THIS PHONE HOLDS NOTHING OF IT")
+        forget()
+    }
+
+    private fun forget() {
         round.roundEnded()
         kinds.clear()
         order = emptyList()

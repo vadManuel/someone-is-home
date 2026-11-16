@@ -19,6 +19,7 @@ import home.someoneshome.model.Presence
 import home.someoneshome.model.PulseOffer
 import home.someoneshome.model.Role
 import home.someoneshome.model.Tick
+import home.someoneshome.model.Touch
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Sound
 import home.someoneshome.model.SubroutineInstance
@@ -983,54 +984,97 @@ private fun isolateOffers(state: GameState): List<Effect> {
  * branch below is on the **actor's own** armed state, which their phone already knows because they
  * held the tile down. It never reads the target, so nothing about what the touch did can reach the
  * frame.
+ *
+ * ### One touch, answered once, by whichever half arrives first (T1, D-220)
+ *
+ * The two halves of a touch are one gesture. The first half reduced answers **both** phones and
+ * lands any Revoke either was holding; the second is recognised by [GameState.touches] and changes
+ * nothing. A target is sent `RevokeLanded` in place of its answer, never beside it, so every phone
+ * that touched gets one frame whatever the seat order. Before T1 a target seated below its Insider
+ * was answered by its own half first and then sent `RevokeLanded` by the Insider's: two frames.
  */
 private fun contact(state: GameState, event: Event.ContactMade): Reduction<GameState, Effect> {
-    val armed = state.cooldownArmed.any { it.index == event.actor.index }
+    val actor = event.actor
+    val target = event.target
+    val self = sameSeat(actor, target)
+    val current = state.touches.filter { it.at == event.at }
 
-    val next = if (!armed || state.isRevoked(event.target) || sameSeat(event.actor, event.target)) {
-        // Nothing lands, but the cooldown is still spent.
-        state.copy(cooldownArmed = state.cooldownArmed.filterNot { it.index == event.actor.index })
+    // **T1: the first half of a touch answers the whole touch** (the owner's 2026-11-15 ruling,
+    // D-220). The resolver mints both halves at one tick, in seat order (D-213). Until T1 each half
+    // answered its own actor and the armed half sent the target `RevokeLanded`, so a target seated
+    // below its Insider was answered twice: its own `ContactAnswered`, then `RevokeLanded`. Now the
+    // first half answers both phones once and lands any Revoke either was holding, and the second
+    // half is recognised here and changes nothing. Whether a half is the second is a fact about the
+    // arrival, both halves always being minted, and never about a role or an arm.
+    val echo = !self && current.any { it.joins(event.at, actor, target) }
+
+    val actorArmed = !echo && state.cooldownArmed.any { it.index == actor.index }
+    val targetArmed = !echo && !self && state.cooldownArmed.any { it.index == target.index }
+    // A touch is one gesture between two phones, so an armed Revoke lands whichever half carries
+    // it in first. The actor's is read first, so two armed Insiders touching resolve as they always
+    // did when the lower seat's half came first: the actor's lands, and the target, now Revoked,
+    // is disarmed (R2) and lands nothing.
+    val outward = actorArmed && !state.isRevoked(target) && !self
+    val inward = !outward && targetArmed && !state.isRevoked(actor)
+    val landed: Seat? = when {
+        outward -> target
+        inward -> actor
+        else -> null
+    }
+
+    val next = if (echo) {
+        state.copy(touches = current)
     } else {
         state.copy(
-            revoked = (state.revoked + event.target).sortedBy { it.index },
+            revoked = if (landed == null) state.revoked else (state.revoked + landed).sortedBy { it.index },
             // D-134's split: *newly* Revoked means revoked since the last meeting ended, and it
             // decides whether the next meeting rings this phone or tells it to stand and walk in.
             // Two lists rather than a timestamp, because "newer than the last meeting" is a fact
             // about meetings and comparing ticks to work it out would put the rule in two places.
-            newlyRevoked = (state.newlyRevoked + event.target).sortedBy { it.index },
-            // **R2: being Revoked disarms an armed Revoke** (D-217). The actor spent theirs, and a
-            // target who was holding one is out of the round and loses it with everything else; an
-            // armed Revoke outliving its holder would be a Revoke a seat on the couch could land.
-            cooldownArmed = state.cooldownArmed.filterNot {
-                it.index == event.actor.index || it.index == event.target.index
+            newlyRevoked = if (landed == null) {
+                state.newlyRevoked
+            } else {
+                (state.newlyRevoked + landed).sortedBy { it.index }
             },
+            // Every armed phone that touched spends its Revoke, landed or not: a botched stalk costs
+            // a full cooldown. **R2: being Revoked disarms an armed Revoke** (D-217) falls out of the
+            // same line, because the Revoked seat is one of the two.
+            cooldownArmed = state.cooldownArmed.filterNot { it.index == actor.index || it.index == target.index },
+            touches = if (self) current else current + Touch(event.at, actor, target),
         )
     }
 
-    // **Both identical in every case. Deliberately not inside the branch above** (D-134, E-R2-5).
+    // **Constructed for both phones in every case. Deliberately not inside the branches above**
+    // (D-134, E-R2-5, T1).
     //
-    // The second one is the target's screen (`ScreenId.Revoked`), and the first version of it was
-    // emitted only when the contact landed. `AbsentEffectIsTheLeakTest` refused that immediately and
-    // was right to: the authority's stream then differs between a Revoke that took and one that hit
-    // a seat already out, which is this file's own header rule with a new effect written into it.
+    // Each phone is sent two effects and **the emit boundary is what narrows them to one**: its
+    // answer, whose rows are the living classes, and `RevokeLanded`, whose row is the two OUT
+    // classes. A phone the touch Revoked is out by now and gets the Revoke landing; every other
+    // phone is still Live and gets its answer. So every phone that touched receives exactly one
+    // frame, whichever seat it sits in and whichever half came first. The first version of the
+    // Revoked screen was emitted only when the contact landed, and `AbsentEffectIsTheLeakTest`
+    // refused it immediately and was right to: the authority's stream then differed between a
+    // Revoke that took and one that hit a seat already out.
     //
-    // So it is built here, unconditionally, and **the emit boundary is what narrows it**: the row
-    // permits `REVOKE_LANDED` to the two OUT classes only, so a contact that revoked nobody
-    // constructs one for a seat that is still Live and the delivery is declined. `surgeFired`'s
-    // arrangement inverted, and the same two independent denials — neither of which is visible as
-    // an absence, because the shape here does not have one.
-    val answered = if (armed) {
-        Effect.AbilityFired(actor = event.actor, cooldownStarted = true)
+    // The answer reads one thing, the phone's **own** armed state, which that phone already knows
+    // because it held the tile down. Nothing reads the other phone's.
+    fun answer(seat: Seat, armed: Boolean): Effect =
+        if (armed) Effect.AbilityFired(actor = seat, cooldownStarted = true) else Effect.ContactAnswered(seat = seat)
+
+    // **A touch on oneself keeps the same four** (`gdd.md:393`): a self-target must come back the
+    // shape of an other-target. A phone never hears itself (the resolver drops it), so only a forged
+    // event reaches this, and its second answer lands on the forging phone alone.
+    val effects = if (echo) {
+        emptyList()
     } else {
-        Effect.ContactAnswered(seat = event.actor)
-    }
-    return Reduction(
-        next,
         listOf(
-            answered,
-            Effect.RevokeLanded(seat = event.target),
-        ),
-    )
+            answer(actor, actorArmed),
+            Effect.RevokeLanded(seat = actor),
+            answer(target, targetArmed),
+            Effect.RevokeLanded(seat = target),
+        )
+    }
+    return Reduction(next, effects)
 }
 
 /**

@@ -531,9 +531,12 @@ class OpeningCooldownTest {
         // **The answer is `ContactAnswered`, not `AbilityFired`** (R1, D-216): the arm armed
         // nothing, so this is an unarmed touch, and only an armed Insider's touch spends the
         // ability. The two are one length on the wire (`ContactAnswerSizeTest`).
+        // Four since T1 (D-220): the first half of a touch answers both of its phones.
         assertEquals(
             listOf(
                 Effect.ContactAnswered(Seat(1)),
+                Effect.RevokeLanded(Seat(1)),
+                Effect.ContactAnswered(Seat(3)),
                 Effect.RevokeLanded(Seat(3)),
             ),
             contact.effects,

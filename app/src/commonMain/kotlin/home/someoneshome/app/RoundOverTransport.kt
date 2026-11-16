@@ -8,6 +8,7 @@ import home.someoneshome.model.protocol.RoundWire
 import home.someoneshome.model.protocol.SightingUpload
 import home.someoneshome.model.protocol.TransportFrame
 import home.someoneshome.platform.ContactRadio
+import home.someoneshome.platform.ScreenWake
 import home.someoneshome.platform.wallClockMillis
 import home.someoneshome.platform.transport.IntentOutbox
 import home.someoneshome.platform.transport.RoundInbox
@@ -76,6 +77,13 @@ class RoundOverTransport(
      * out loud by passing [home.someoneshome.platform.NoRadio], and still uploads on the cadence.
      */
     private val radio: ContactRadio,
+    /**
+     * **The screen kept awake for the round, and it is not optional either** (T4, D-221), for
+     * [radio]'s reason. Held from arming (`ContactSeedIssued`) until the round ends or this phone
+     * leaves, then put back. A root with no idle timer passes one over
+     * [home.someoneshome.platform.NoIdleTimer].
+     */
+    private val wake: ScreenWake,
     /** The window this phone is in now: the wall clock, which every phone and the house share. */
     private val windowNow: () -> ContactWindow = { ContactWindow.containing(wallClockMillis()) },
     private val onEvent: (String) -> Unit = {},
@@ -177,6 +185,11 @@ class RoundOverTransport(
                     // The radio last: nothing it does can move a screen, and the seed and the
                     // out-of-the-round facts are read off the same applied message, once.
                     contacts.heard(landing.message)
+                    when (keepsTheScreenAwake(landing.message)) {
+                        true -> wake.hold()
+                        false -> wake.release()
+                        null -> Unit
+                    }
                 }
                 // The re-assertion arriving over what this phone already holds. Silent by design:
                 // there is nothing for a player to do about it and nothing for them to see.
@@ -248,10 +261,11 @@ class RoundOverTransport(
      */
     fun fireEgress() = up(RoundWire.encode(outbox.fire()))
 
-    /** A new round: this phone holds nothing of the last one. */
+    /** A new round, or this phone has left: it holds nothing of the last one, and lets the screen sleep. */
     fun roundEnded() {
         inbox.roundEnded()
         contacts.roundEnded()
+        wake.release()
     }
 
     /**
@@ -277,4 +291,18 @@ class RoundOverTransport(
         onOutbound(body)
         scope.launch { send(TransportFrame.Carry(body)) }
     }
+}
+
+/**
+ * **Whether a push starts or ends the screen being kept awake** (T4, D-221): true at arming, false
+ * at the round's end, null for everything else.
+ *
+ * Arming is `ContactSeedIssued`, the push that starts this phone's radio, and every seated phone is
+ * sent one at the same moment, whatever its role. A resume re-asserts it, and a second hold is
+ * harmless. One named question so that a later "awake from somewhere else" changes only the answer.
+ */
+internal fun keepsTheScreenAwake(message: RoundMessage): Boolean? = when (message) {
+    is RoundMessage.ContactSeedIssued -> true
+    is RoundMessage.RoundEnded -> false
+    else -> null
 }
