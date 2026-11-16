@@ -50,6 +50,11 @@ class Recording(
     }
 
     companion object {
+        // 21: one effect a version 20 build cannot name -- `ContactAnswered` (R1, D-216). A contact
+        // from an actor who holds no armed Revoke used to answer `AbilityFired` and now answers
+        // this, so the same events replayed by a version 20 build produce a different effect
+        // transcript for every unarmed touch. No event and no state row changed.
+        //
         // 20: no row changed shape and every round re-draws (D-214). Every stream the house draws
         // from the round's seed -- the Insider count and seats, the stations, the active set, each
         // seat's anchors and kinds, each Subroutine's question, each Egress's nodes and type -- now
@@ -202,7 +207,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/20"
+        const val HEADER = "someone-is-home/recording/21"
     }
 }
 

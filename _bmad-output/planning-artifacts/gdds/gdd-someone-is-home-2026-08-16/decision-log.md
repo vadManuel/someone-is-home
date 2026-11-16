@@ -4836,6 +4836,76 @@ round. Adding a JVM target to `platform` for this one function would need a JVM 
 | `buildSrc` `SeedSourceRules`, `SeedSourceCordonTask`; root `build.gradle.kts` | (new) | `seedSourceCordon` on `app` and `platform`, under `check` |
 | `SecureRandomTest`, `SeedSourceRulesTest` | (new) | the source answers, never repeats, moves every bit; the rule catches the old fallback and leaves the secure draw alone |
 
+## Revision 51 — every touch is answered at one size
+
+*R1 of the owner's 2026-11-15 rulings, closing D-213's open item 1. Unit 3 of the contact handshake
+wires the resolver to the live house; before it does, a touch must stop putting a frame on a socket
+whose presence follows the role.*
+
+### D-216 · **Every touch puts one frame of one size on each phone that touched; only an armed Insider's is `AbilityFired` — decided**
+
+**What it was.** `Rules.contact` answered every actor with `AbilityFired`, and that row ships to
+living Insiders only. With the resolver minting both halves of every touch, an unarmed Insider's
+touch would have put a frame on their socket and a Resident's would have put nothing on theirs.
+
+**The ruling, applied.**
+
+1. **A new effect, `ContactAnswered(seat)`,** addressed to the actor. Its row is both living classes,
+   written out as a two-class set, and like every row it fails closed: a kind spelled otherwise
+   reaches nobody. Not the out classes: a Revoked phone never scans (D-008), so it is never the actor
+   of a contact, and a seat that went out between the two halves of one touch is denied on the
+   round-state axis, which carries no role.
+2. **`Rules.contact` answers each actor exactly once.** An actor holding an armed Revoke is told
+   `AbilityFired(cooldownStarted = true)`, because it really was spent. Every other actor, an unarmed
+   Insider and every Resident, is told `ContactAnswered`. The resolver mints both halves of every
+   touch (D-213), so each phone that touched is the actor of exactly one event and gets exactly one
+   frame. `RevokeLanded` is still built on every contact and narrowed by its row, unchanged.
+3. **The two are one length on the wire.** `RoundMessage.ContactAnswered` carries `pad`, always the
+   nine-character constant `PAD`, so that once each is pushed, encoded and carried, it and
+   `AbilityFired(true)` are the same number of bytes. `ContactAnswerSizeTest` pins this through the
+   real `RoundWire` and `TransportWire` at sequence numbers from 1 to a million.
+4. **It moves nothing.** No screen, no lamp, no buzz: `Flow` and `HouseBuzzer` name it as a no-op.
+
+**Measured on sockets.** `TouchFrameSizeTest` stands up a real host, five real clients over
+loopback and the real `EffectWire`, and puts both halves of three touches through `admit`. Each
+toucher's socket received one frame per touch: **120 bytes** for an unarmed Insider, its Resident
+partner, two Residents, and an armed Insider. The bystanders received nothing.
+
+**Rule 1 still holds, and this is why.** The branch is on the actor's own armed state, which their
+phone already knows because they held the tile down. Nothing reads the target: an armed touch on a
+live player, a Revoked one, another Insider or oneself is answered identically, and so is an
+unarmed one. One consequence, stated: a Revoke armed into a running clock arms nothing, so the touch
+after it is answered `ContactAnswered`. That tells the actor about their own clock and nothing else,
+which is what a Tier-2 fire into a running pool already tells them (`cooldownStarted = false`,
+T1·8 / T2·7). `AbilityRulesTest` and `OpeningCooldownTest` are amended to say so.
+
+**Recording format 21**: one effect a version 20 build cannot name, and every unarmed touch's
+effect transcript changes.
+
+**Open, and raised rather than decided** (each changes what a client receives beyond R1):
+
+- **The Revoked target's frame.** When an armed touch lands, the target is sent `RevokeLanded`, which
+  is 95 bytes against the 120 every other touch frame is, and in some seat orders it also receives
+  its own `ContactAnswered` first. On a readable or merely measurable Wi-Fi this marks the phone that
+  was just Revoked. Padding `RevokeLanded`, or sending it in place of that seat's answer, is a change
+  to what a client receives.
+- **The push sequence number grows per seat.** `RoundBody.Push.seq` is in every frame, and its
+  digits grow with how many messages that seat has been sent. Insiders are sent kinds Residents are
+  not (`IsolateTargetsOffered` at arming and on every Egress), so over a round an Insider's sequence
+  can cross a power of ten before a Resident's, and every frame after is a byte longer.
+- **Frame counts by role exist elsewhere.** `IsolateTargetsOffered` reaches Insiders only, so the
+  arming burst already has one more frame on an Insider's socket than on a Resident's. R7's
+  encryption hides content, not counts.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `model` `Effect.ContactAnswered`, `EmitSchema` | (new) | addressed to the actor; row: both living classes |
+| `model/protocol` `RoundMessage.ContactAnswered` | (new) | the seat removed, `pad = PAD`, `AbilityFired(true)`'s length on the wire |
+| `core` `Rules.contact` | `AbilityFired(actor, true)` to every actor | `AbilityFired` to an armed actor, `ContactAnswered` to every other |
+| `ui` `Flow`, `app` `HouseBuzzer`, `harness` `Transcript` | (new) | a named no-op, silent, one transcript row |
+| `harness` `Recording.HEADER` | `recording/20` | `recording/21` |
+| `ContactAnswerSizeTest`, `TouchFrameSizeTest`, `RulesTest`, `AbilityRulesTest`, `ArmingTest` | (new, amended) | one length at every sequence; one frame per toucher on real sockets; the armed and unarmed answers |
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

@@ -215,6 +215,14 @@ class RecordingTest {
      *
      * But the emitted effects must be IDENTICAL, because a client that could tell the two apart
      * would know whether the contact landed, which is rule 1 exactly.
+     *
+     * **With one exception since R1, and it is the actor's own answer** (D-216). An actor holding an
+     * armed Revoke is told `AbilityFired`; one who is not is told `ContactAnswered`, at the same
+     * length on the wire. The actor already knows which: they held the tile down, or did not. So
+     * the actor's one answer line is compared as *one answer*, and every other line, including the
+     * target's `RevokeLanded`, must still be identical. Whether the contact landed on the target is
+     * `AbsentEffectIsTheLeakTest`'s comparison, where both runs are armed and the streams are equal
+     * line for line.
      */
     @Test
     fun `order changes the state but never the visible effect stream`() {
@@ -235,9 +243,26 @@ class RecordingTest {
         assertEquals(listOf(3), stateA.revoked.map { it.index }, "arming before contact must land")
         assertEquals(emptyList(), stateB.revoked.map { it.index }, "contact before arming must not")
 
+        fun answeredAsOne(transcript: List<String>): List<String> = transcript.map { line ->
+            if (line == "AbilityFired|actor=1|cooldownStarted=true" || line == "ContactAnswered|seat=1") {
+                "THE ACTOR'S ONE ANSWER"
+            } else {
+                line
+            }
+        }
         assertEquals(
-            recordingA.effectTranscript,
-            recordingB.effectTranscript,
+            listOf("AbilityFired|actor=1|cooldownStarted=true"),
+            recordingA.effectTranscript.filter { it.startsWith("AbilityFired") || it.startsWith("ContactAnswered") },
+            "an armed touch was not answered as a spent Revoke, exactly once",
+        )
+        assertEquals(
+            listOf("ContactAnswered|seat=1"),
+            recordingB.effectTranscript.filter { it.startsWith("AbilityFired") || it.startsWith("ContactAnswered") },
+            "an unarmed touch was not answered as one, exactly once",
+        )
+        assertEquals(
+            answeredAsOne(recordingA.effectTranscript),
+            answeredAsOne(recordingB.effectTranscript),
             "the effect stream reveals whether the contact landed",
         )
     }

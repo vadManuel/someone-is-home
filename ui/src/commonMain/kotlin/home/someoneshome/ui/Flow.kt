@@ -1980,6 +1980,12 @@ class FlowModel(
             // field here would be the first actor-side feedback in the game.
             is RoundMessage.AbilityFired -> Unit
 
+            // **A touch, answered, and the screen does not move** (R1, D-216). Every touch puts one
+            // of these, or an armed Insider's `AbilityFired`, on each phone that touched, so that the
+            // frame count never follows the role. A phone that showed it would be a phone announcing
+            // that it had been touched; this branch is a named no-op and stays one.
+            is RoundMessage.ContactAnswered -> Unit
+
             // **THE SURGE LANDING ON THIS PHONE, and it is five seconds of the phone malfunctioning**
             // (D-182: 1.5s at full, 1.0s black, 2.5s of the Boot render, no input at any point, and
             // the open Subroutine instance lost).

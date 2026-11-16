@@ -66,6 +66,7 @@ object EmitSchema {
     fun kindOf(effect: Effect): MessageKind = when (effect) {
         is Effect.LampSet -> LAMP_SET
         is Effect.AbilityFired -> ABILITY_FIRED
+        is Effect.ContactAnswered -> CONTACT_ANSWERED
         is Effect.Surged -> SURGED
         is Effect.IsolateTargetsOffered -> ISOLATE_TARGETS_OFFERED
         is Effect.StaticOpened -> STATIC_OPENED
@@ -108,6 +109,7 @@ object EmitSchema {
 
     val LAMP_SET = MessageKind("LampSet")
     val ABILITY_FIRED = MessageKind("AbilityFired")
+    val CONTACT_ANSWERED = MessageKind("ContactAnswered")
     val SURGED = MessageKind("Surged")
     val ISOLATE_TARGETS_OFFERED = MessageKind("IsolateTargetsOffered")
     val STATIC_OPENED = MessageKind("StaticOpened")
@@ -188,6 +190,25 @@ object EmitSchema {
         // revoke landed or not, which is exactly why it must not be widened: shipped to a
         // Resident it would be an unexplained event on a screen with no ability behind it.
         ABILITY_FIRED to setOf(ClientClass(Role.Insider, RoundState.Live)),
+
+        // **A touch, answered, and both living classes -- this row must never be narrowed to one
+        // of them** (R1, D-216). Every touch puts one frame on each phone that touched, and this is
+        // the frame for everybody who did not spend an armed Revoke: every Resident, and every
+        // Insider who was not armed. Narrowed to `Resident/Live` it would make the Insiders the
+        // phones that get nothing back from a touch; narrowed to `Insider/Live` it would be
+        // D-213's open item 1 again, one class over. Either is the role, delivered by the frame
+        // count rather than by a screen.
+        //
+        // Not the out classes. A Revoked phone never scans (D-008), so it is never half of a mutual
+        // sighting and never the actor of a contact; a seat that went out in the same arrival,
+        // between the two halves of its touch, is denied this on the round-state axis, which is
+        // publicly observable (D-068) and carries no role. Written out as a two-class set for
+        // ABILITY_FIRED's reason: a form that could widen itself the day somebody adds a class is
+        // a form that will.
+        CONTACT_ANSWERED to setOf(
+            ClientClass(Role.Resident, RoundState.Live),
+            ClientClass(Role.Insider, RoundState.Live),
+        ),
 
         // **The Surge landing, and BOTH living classes — this row must never be narrowed to one of
         // them** (gdd.md:391, :393). *Every observable effect must be self-inflictable. Insiders can
@@ -609,6 +630,10 @@ object EmitSchema {
         val addressed = when (effect) {
             is Effect.LampSet -> listOf(effect.seat)
             is Effect.AbilityFired -> listOf(effect.actor)
+            // **The phone that touched, and no other.** One answer per actor per touch; the other
+            // phone is the actor of the touch's other half and is answered by that one. Broadcast,
+            // it would tell the house who is touching whom.
+            is Effect.ContactAnswered -> listOf(effect.seat)
             // **The target, and no other phone.** The actor is not a recipient of this and must not
             // become one -- *no actor-side feedback on firing any ability; all observable effect
             // happens on the target* (gdd.md:398). When the actor IS the target this addresses them

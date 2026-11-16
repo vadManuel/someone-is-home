@@ -114,13 +114,21 @@ class AbsentEffectIsTheLeakTest {
             "the effect stream differs, so the absence of an effect reveals the target was already revoked")
     }
 
+    /**
+     * **An unarmed touch is answered, and it is not answered as a spent Revoke** (R1, D-216).
+     *
+     * Until R1 this test asserted `AbilityFired` here, and the row ships that kind to living
+     * Insiders only: an unarmed Insider's touch put a frame on their socket and a Resident's put
+     * none on theirs. The answer is now `ContactAnswered`, the same for an unarmed Insider and a
+     * Resident, which `ContactAnswerSizeTest` pins to `AbilityFired`'s length on the wire.
+     */
     @Test
-    fun `contacting without arming still spends the ability visibly`() {
+    fun `contacting without arming is answered and spends nothing`() {
         val start = armed()
         val (after, unarmed) = run(start, listOf(Event.ContactMade(Tick(READY + 2), Seat(1), Seat(3))))
         assertEquals(
             listOf(
-                Effect.AbilityFired(Seat(1), cooldownStarted = true),
+                Effect.ContactAnswered(Seat(1)),
                 // **Constructed for a seat this contact did not revoke** (E-R2-5). That is what
                 // keeps the test above true: the stream is the same two effects whether the Revoke
                 // landed, hit somebody already out, was fired at the actor, or was never armed.
@@ -160,6 +168,30 @@ class AbsentEffectIsTheLeakTest {
             EmitSchema.deliveries(Effect.RevokeLanded(Seat(3)), after).map { it.seat },
             "the Revoke landing reached the wrong phones",
         )
+    }
+
+    /**
+     * **R1: every actor gets one answer, and only an armed one is told it spent a Revoke** (D-216).
+     *
+     * Three actors touching the same live Resident: an armed Insider, an unarmed Insider, a
+     * Resident. Each is answered with exactly one effect addressed to themselves; the armed one's is
+     * `AbilityFired`, the other two's is `ContactAnswered`, and neither of those two reveals which
+     * role touched. Only the armed touch revokes.
+     */
+    @Test
+    fun `every touch answers its actor once and only an armed Insider is told AbilityFired`() {
+        val base = armed()
+        fun answerTo(state: GameState, actor: Seat): List<Effect> =
+            reduce(state, Event.ContactMade(Tick(READY + 2), actor, Seat(3))).effects
+                .filter { EmitSchema.audienceOf(it, state).any { s -> s.index == actor.index } }
+
+        val armedState = reduce(base, Event.RevokeArmed(Tick(READY + 1), Seat(1))).state
+        assertEquals(listOf<Effect>(Effect.AbilityFired(Seat(1), cooldownStarted = true)), answerTo(armedState, Seat(1)))
+        assertEquals(listOf<Effect>(Effect.ContactAnswered(Seat(5))), answerTo(base, Seat(5)), "an unarmed Insider")
+        assertEquals(listOf<Effect>(Effect.ContactAnswered(Seat(2))), answerTo(base, Seat(2)), "a Resident")
+
+        assertTrue(reduce(armedState, Event.ContactMade(Tick(READY + 2), Seat(1), Seat(3))).state.isRevoked(Seat(3)))
+        assertFalse(reduce(base, Event.ContactMade(Tick(READY + 2), Seat(5), Seat(3))).state.isRevoked(Seat(3)))
     }
 
     @Test

@@ -291,12 +291,31 @@ class AbilityRulesTest {
             for ((what, walked) in listOf(
                 "a target already out" to atOut,
                 "a fellow Insider" to atInsider,
-                "a clock that had not come back" to onCooldown,
             )) {
                 assertEquals(
                     actorAlone(landed.second, landed.first),
                     actorAlone(walked.second, walked.first),
                     "${fire.name}: $what told the firing phone something a landed shot does not",
+                )
+            }
+
+            // **The clock, and here the Revoke parts from the other three on purpose** (R1, D-216).
+            // A Tier-2 fire into a running pool is told `AbilityFired(cooldownStarted = false)`: the
+            // actor's own clock, which is the actor's own business (T1·8 / T2·7). The Revoke's arm
+            // into a running clock arms nothing, so the touch after it is a touch by an unarmed
+            // phone, and R1 answers every unarmed touch with `ContactAnswered`, at `AbilityFired`'s
+            // length on the wire. What it says is about this phone's own clock and never about the
+            // target, which is the half rule 1 is about and the half the two cases above hold.
+            val clock = actorAlone(onCooldown.second, onCooldown.first)
+            if (fire.name == "Revoke") {
+                assertEquals(
+                    setOf(EmitSchema.CONTACT_ANSWERED), clock,
+                    "Revoke: an arm into a running clock armed nothing, and the touch after it was not answered as unarmed",
+                )
+            } else {
+                assertEquals(
+                    actorAlone(landed.second, landed.first), clock,
+                    "${fire.name}: a clock that had not come back told the firing phone something a landed shot does not",
                 )
             }
         }

@@ -330,6 +330,8 @@ class HouseBuzzTest {
         Effect.RosterIssued(Seat(1), emptyList()),
         Effect.ContactSeedIssued(Seat(1), ContactSeed("0123456789abcdef0123456789abcdef")),
         Effect.RevokeLanded(Seat(1)),
+        // A touch, answered (R1, D-216): silent, because every touch in the house sends one.
+        Effect.ContactAnswered(Seat(1)),
     )
 
     /**
@@ -471,6 +473,7 @@ class HouseBuzzTest {
             "InsidersRevealed", "HouseSignedOff",
             "RoleRevealed", "MeetingCalling", "RosterIssued", "RevokeLanded",
             "ContactSeedIssued",
+            "ContactAnswered",
         )
 
         /** The two nodes, as places. The rooms are never read here; the pair is what buzzes. */

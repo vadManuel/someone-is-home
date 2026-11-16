@@ -28,6 +28,36 @@ sealed interface Effect {
     data class AbilityFired(val actor: Seat, val cooldownStarted: Boolean) : Effect
 
     /**
+     * **A touch, answered: the house heard this phone touch another, and it changed nothing this
+     * phone may be told about** (R1 of the owner's 2026-11-15 rulings, D-216).
+     *
+     * ### Every touch puts one frame of one size on both phones, whatever they are
+     *
+     * The resolver mints [Event.ContactMade] in both directions for every mutual sighting (D-213), so
+     * each of the two phones is the actor of exactly one event per touch, and `Rules.contact` answers
+     * every actor with exactly one effect. **Which effect is the actor's own state and nothing else:**
+     * an armed Insider is told [AbilityFired], because their Revoke really was spent; everybody else,
+     * an unarmed Insider and every Resident alike, is told this. The two project to frames of one
+     * length (`RoundWire`'s padding, pinned by `ContactAnswerSizeTest`), so a reader of the Wi-Fi sees
+     * the same frame go down both sockets on every touch in the house.
+     *
+     * Until this existed, an unarmed Insider's touch put [AbilityFired] on their socket and a
+     * Resident's put nothing on theirs: a frame whose presence followed the role, on a transport
+     * D-212 records as readable (D-213, open item 1).
+     *
+     * ### It is not a branch on success, and that is why rule 1 still holds
+     *
+     * The branch is on whether *the actor* holds an armed Revoke, which their own phone already knows:
+     * they held the tile down. Nothing here asks what the touch did to the other phone. An armed
+     * Insider touching a live player, a Revoked one, another Insider or themselves is told
+     * [AbilityFired] identically; an unarmed phone touching any of them is told this identically.
+     *
+     * **It moves nothing.** No screen, no lamp, no buzz: a touch that did nothing must look like
+     * nothing, and a phone that reacted to it would be a phone announcing that it had been touched.
+     */
+    data class ContactAnswered(val seat: Seat) : Effect
+
+    /**
      * **The house's answer to a returned entry — the same words on the same schedule for both
      * roles (D-109).**
      *

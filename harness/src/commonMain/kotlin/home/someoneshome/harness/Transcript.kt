@@ -194,6 +194,7 @@ object Transcript {
             "LampSet|seat=${effect.seat.index}|luminance=${effect.luminance}"
         is Effect.AbilityFired ->
             "AbilityFired|actor=${effect.actor.index}|cooldownStarted=${effect.cooldownStarted}"
+        is Effect.ContactAnswered -> "ContactAnswered|seat=${effect.seat.index}"
         // **The whole gesture, luminances included.** The lamp is a pure function of state (rule 5),
         // so the two numbers ARE the effect rather than a device's reading of it -- a row that held
         // only `Surged|seat=` could not tell a replayed slam from one that lit nothing.

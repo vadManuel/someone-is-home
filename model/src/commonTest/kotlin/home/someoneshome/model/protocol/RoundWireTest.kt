@@ -78,6 +78,7 @@ class RoundWireTest {
         Effect.RoleRevealed(Seat(3), Role.Insider),
         Effect.RosterIssued(Seat(3), listOf("PRIYA", "MARCUS", "", "ROSE")),
         Effect.ContactSeedIssued(Seat(3), ContactSeed("0123456789abcdef0123456789abcdef")),
+        Effect.ContactAnswered(Seat(3)),
         Effect.MeetingOpened(Seat(3), MeetingTrigger.MeetingCard, Haptic.Long),
         Effect.MeetingCalling(Seat(3)),
         Effect.StandAndWalkIn(Seat(3), Haptic.Long),

@@ -78,6 +78,27 @@ sealed class RoundMessage {
     data class AbilityFired(val cooldownStarted: Boolean) : RoundMessage()
 
     /**
+     * **A touch, answered, at exactly [AbilityFired]'s length on the wire** (R1, D-216,
+     * [Effect.ContactAnswered]).
+     *
+     * The seat comes off: it is the recipient's, and the socket is the address. What is left is
+     * [pad], which carries nothing and exists so that this frame and an armed Insider's
+     * `AbilityFired(cooldownStarted = true)` are the same number of bytes once each is pushed and
+     * carried. Always [PAD] and never anything else: a field whose width could vary would be a
+     * field a reader of the Wi-Fi could measure. `ContactAnswerSizeTest` encodes both through the
+     * real `RoundWire` and `TransportWire` and fails if a rename on either side moves one of them.
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("ContactAnswered")
+    data class ContactAnswered(val pad: String) : RoundMessage() {
+        companion object {
+            /** Nine characters: `"ContactAnswered","pad":"…"` against `"AbilityFired","cooldownStarted":true`. */
+            const val PAD: String = "000000000"
+        }
+    }
+
+    /**
      * **The Surge, landing on this phone** (`gdd.md:313`, `:342`).
      *
      * The seat goes: it was the recipient's, and the socket is the address. What is left is the
@@ -524,6 +545,7 @@ sealed class RoundMessage {
         get() = when (this) {
             is LampSet -> EmitSchema.LAMP_SET
             is AbilityFired -> EmitSchema.ABILITY_FIRED
+            is ContactAnswered -> EmitSchema.CONTACT_ANSWERED
             is Surged -> EmitSchema.SURGED
             is IsolateTargetsOffered -> EmitSchema.ISOLATE_TARGETS_OFFERED
             is StaticOpened -> EmitSchema.STATIC_OPENED
@@ -757,6 +779,8 @@ object RoundWire {
     fun project(effect: Effect): RoundMessage = when (effect) {
         is Effect.LampSet -> RoundMessage.LampSet(effect.luminance)
         is Effect.AbilityFired -> RoundMessage.AbilityFired(effect.cooldownStarted)
+        // The seat comes off; the pad is what makes this frame an armed Insider's length.
+        is Effect.ContactAnswered -> RoundMessage.ContactAnswered(RoundMessage.ContactAnswered.PAD)
         is Effect.Surged ->
             RoundMessage.Surged(effect.peak, effect.black, effect.sound, effect.haptic)
         is Effect.IsolateTargetsOffered -> RoundMessage.IsolateTargetsOffered(effect.targets)

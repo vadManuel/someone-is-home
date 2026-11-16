@@ -959,9 +959,9 @@ private fun isolateOffers(state: GameState): List<Effect> {
  * **The rule idiomatic code breaks.**
  *
  * There is no early return on an invalid target. Every path through this function emits exactly
- * one [Effect.AbilityFired] with `cooldownStarted = true`, and spends the cooldown, whether the
- * contact landed on a live player, an already-revoked one, a fellow Insider, or the actor
- * themselves.
+ * one answer to the actor, and an armed actor's is [Effect.AbilityFired] with
+ * `cooldownStarted = true` and the Revoke spent, whether the contact landed on a live player, an
+ * already-revoked one, a fellow Insider, or the actor themselves.
  *
  * Written the obvious way — `if (target.isRevoked) return Reduction(state, emptyList())` — the
  * *absence* of the effect tells the actor their target was already revoked. Nobody has to see a
@@ -969,6 +969,19 @@ private fun isolateOffers(state: GameState): List<Effect> {
  * review because the code looks like ordinary defensive programming.
  *
  * So the branch is on the STATE TRANSITION only, never on the emitted shape.
+ *
+ * ### The answer, and the one thing it does read (R1, D-216)
+ *
+ * **Every actor is answered with one frame of one size.** An armed Insider is told
+ * [Effect.AbilityFired], because their Revoke really was spent; every other actor, an unarmed
+ * Insider and every Resident alike, is told [Effect.ContactAnswered], which projects to a frame of
+ * the same length. The resolver mints both halves of every touch, so both phones are answered.
+ *
+ * Until R1 every actor was told `AbilityFired`, and the row ships that to living Insiders only: an
+ * unarmed Insider's touch put a frame on their socket and a Resident's put nothing on theirs. The
+ * branch below is on the **actor's own** armed state, which their phone already knows because they
+ * held the tile down. It never reads the target, so nothing about what the touch did can reach the
+ * frame.
  */
 private fun contact(state: GameState, event: Event.ContactMade): Reduction<GameState, Effect> {
     val armed = state.cooldownArmed.any { it.index == event.actor.index }
@@ -1000,10 +1013,15 @@ private fun contact(state: GameState, event: Event.ContactMade): Reduction<GameS
     // constructs one for a seat that is still Live and the delivery is declined. `surgeFired`'s
     // arrangement inverted, and the same two independent denials — neither of which is visible as
     // an absence, because the shape here does not have one.
+    val answered = if (armed) {
+        Effect.AbilityFired(actor = event.actor, cooldownStarted = true)
+    } else {
+        Effect.ContactAnswered(seat = event.actor)
+    }
     return Reduction(
         next,
         listOf(
-            Effect.AbilityFired(actor = event.actor, cooldownStarted = true),
+            answered,
             Effect.RevokeLanded(seat = event.target),
         ),
     )
