@@ -5601,6 +5601,24 @@ roster is drawn seat by seat, and a name is only ever filed under the seat whose
 | `platform` `TransportHost` | `onLost` after the lock, and skipped when a cancelled connection waited for it | `onLost` under the lock, never cancelled |
 | `HostForegroundTest` | (new cases) | six guests through five locks keep their names; a seat resuming out of order keeps its own; the desk is changed only on the house's thread |
 
+### D-228 · **The one-phone rig plays four seats by default, under seed 20261150 — built**
+
+At three seats (one Insider) the bench's Revoke left one plain Resident against one Insider, which is
+parity (D-131): the round ended at the Revoke, the report was refused as `RoundAlreadyEnded`, and the
+report path and the meeting notice could not be checked on the device. `round.sh` now runs a third
+Simulator filler seat (`--seats 3|4`, default 4), and one Revoke leaves two against one.
+
+The seed moves with it. 20261116 dealt seat 0 the Insider role at three seats but seat 2 at four, where
+the bench's Revoke (the first living plain Resident other than the Insider) would have landed on the
+phone and stopped its scan. 20261150 is the first seed from 20261116 up that deals seat 0 at three and
+at four, so the Revoke lands on seat 1, a Simulator, and the Mac advertises as seat 1. Pinned in
+`OnePhoneVectorsTest` (with the round going on after that Revoke) and in `tools/ble-peer`'s tests.
+
+`round.sh start --no-phone` now plays the Mac half end to end: the seats must keep looking without
+giving up, then a fourth Simulator hosts in the phone's place and the round is played to the end of its
+first meeting. The bench gains `SOMEONES_HOME_LOBBY_SEATS`, so an automatic LIGHTS OUT waits for the
+whole party rather than pressing at the three seats that make the button live.
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

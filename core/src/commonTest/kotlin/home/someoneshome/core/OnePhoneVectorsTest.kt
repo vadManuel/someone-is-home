@@ -4,9 +4,14 @@ import home.someoneshome.model.ContactSeed
 import home.someoneshome.model.ContactToken
 import home.someoneshome.model.ContactTokens
 import home.someoneshome.model.ContactWindow
+import home.someoneshome.model.Event
+import home.someoneshome.model.GameState
 import home.someoneshome.model.Seat
+import home.someoneshome.model.Tick
+import home.someoneshome.model.WinRoute
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 /**
  * **The values the Mac's BLE peer (`tools/ble-peer`) is pinned to, and the one fact the one-phone
@@ -24,24 +29,33 @@ class OnePhoneVectorsTest {
 
     private fun token(seed: ContactSeed, window: Long): ContactToken = ContactTokens.of(seed, ContactWindow(window))
 
-    /** The launcher's fixed seed. Changing it means changing `round.sh` and the Swift tests too. */
-    private val launcherSeed = 20261116L
+    /**
+     * The launcher's fixed seed. Changing it means changing `round.sh`, the README and the Swift
+     * tests too.
+     *
+     * **20261150, not 20261116** (D-228). 20261116 dealt the Insider role to seat 0 at three seats
+     * and to seat 2 at four, where the bench's Revoke would have landed on the phone itself. Of the
+     * seeds from 20261116 to 20261160, 20261150 is the first that deals seat 0 at both counts, so
+     * `--seats 3` and `--seats 4` play under one seed.
+     */
+    private val launcherSeed = 20261150L
 
     @Test
     fun `the launcher's seed gives these seat seeds`() {
-        assertEquals(ContactSeed("7995882527fa09a3ce75db487404b23a"), contactSeedFor(launcherSeed, Seat(0)))
-        assertEquals(ContactSeed("130f00039e6f9efdc337d82ba3bf7b59"), contactSeedFor(launcherSeed, Seat(1)))
-        assertEquals(ContactSeed("fc274ca75d79c8f78e2e496afa36a637"), contactSeedFor(launcherSeed, Seat(2)))
+        assertEquals(ContactSeed("f79b6f331bf6d28bbdbeddd74aaa18a2"), contactSeedFor(launcherSeed, Seat(0)))
+        assertEquals(ContactSeed("aed69e6fc764d486ab051d7fdc760ad4"), contactSeedFor(launcherSeed, Seat(1)))
+        assertEquals(ContactSeed("4f06e585f8ab672c59d4a161b987199f"), contactSeedFor(launcherSeed, Seat(2)))
+        assertEquals(ContactSeed("8f12a2ae4efbc0960d06c55f87d91269"), contactSeedFor(launcherSeed, Seat(3)))
     }
 
     @Test
     fun `and those seats advertise these tokens`() {
         val one = contactSeedFor(launcherSeed, Seat(1))
-        assertEquals(ContactToken("8c714648964924c65201ff4a48e23f37"), token(one, 0L))
-        assertEquals(ContactToken("bb3b6d5dcbbc59c87787b1959b3a982a"), token(one, 1L))
-        assertEquals(ContactToken("16dd923b17fd4239b701611561bfb7a2"), token(one, 117_888_000L))
+        assertEquals(ContactToken("f7b01e60a5f1b47206a3c79d535a4b69"), token(one, 0L))
+        assertEquals(ContactToken("33cec58d2d012e756c02b98c965fab5f"), token(one, 1L))
+        assertEquals(ContactToken("615f52c14cb48655c67bbefca08afd6d"), token(one, 117_888_000L))
         val zero = contactSeedFor(launcherSeed, Seat(0))
-        assertEquals(ContactToken("0aa2b4e3ff3c4b96c60062568d758520"), token(zero, 117_888_000L))
+        assertEquals(ContactToken("c8246bc64c3355d2ffce2b55a82f6380"), token(zero, 117_888_000L))
     }
 
     /** A negative round seed, so the Swift side's signed big-endian key is pinned as well. */
@@ -53,7 +67,8 @@ class OnePhoneVectorsTest {
     }
 
     /**
-     * **At three seats the launcher's seed deals the Insider role to seat 0, the host phone.**
+     * **At three seats and at four, the launcher's seed deals the Insider role to seat 0, the host
+     * phone, and to nobody else.**
      *
      * The bench's scripted Revoke (`RoundCheat.theRevoke`) targets the first living plain Resident
      * other than the Insider, so this is what puts the Revoke on seat 1, a Simulator, and leaves the
@@ -61,7 +76,44 @@ class OnePhoneVectorsTest {
      * of it is the check. Any other dealing would Revoke the phone itself, which stops its scan.
      */
     @Test
-    fun `the launcher's seed deals seat 0 the Insider role at three seats`() {
-        assertEquals(listOf(Seat(0)), insidersFor(launcherSeed, (0 until 3).map { Seat(it) }, null))
+    fun `the launcher's seed deals seat 0 the Insider role at three and four seats`() {
+        assertEquals(listOf(Seat(0)), insidersFor(launcherSeed, seats(3), null))
+        assertEquals(listOf(Seat(0)), insidersFor(launcherSeed, seats(4), null))
     }
+
+    /**
+     * **At four seats the bench's Revoke lands on seat 1, and the round goes on** (D-228).
+     *
+     * At three seats one Revoke leaves one plain Resident against one Insider, which is parity
+     * (D-131): the round ends on the spot, and the report and the meeting after it cannot be
+     * reached. At four it leaves two against one, so the report and the meeting are played. The
+     * target is picked exactly as `RoundCheat.theRevoke` picks it.
+     */
+    @Test
+    fun `at four seats the bench Revokes seat 1 and the round goes on`() {
+        val state = GameState.armedRound(
+            seed = launcherSeed,
+            seats = seats(4),
+            insiders = insidersFor(launcherSeed, seats(4), null),
+            systemIntegrity = 30,
+        )
+        val insider = state.livingInsiders.first()
+        val target = state.livingPlainResidents.first { it.index != insider.index }
+        assertEquals(Seat(1), target, "the bench's Revoke would not land on the first Simulator")
+
+        val afterTheRevoke = state.copy(revoked = listOf(target), newlyRevoked = listOf(target))
+        assertNull(
+            outcomeOf(afterTheRevoke, Event.RevokeArmed(Tick(0), insider)),
+            "one Revoke at four seats ended the round, so no report or meeting can follow it",
+        )
+        // And the same at three seats does end it, which is why the rig needs the fourth seat.
+        val three = GameState.armedRound(launcherSeed, seats(3), insidersFor(launcherSeed, seats(3), null), 30)
+        assertEquals(
+            WinRoute.Parity,
+            outcomeOf(three.copy(revoked = listOf(Seat(1))), Event.RevokeArmed(Tick(0), Seat(0)))?.by,
+            "the three-seat round no longer ends at the first Revoke; the reason for the fourth seat is stale",
+        )
+    }
+
+    private fun seats(n: Int): List<Seat> = (0 until n).map { Seat(it) }
 }

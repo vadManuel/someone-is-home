@@ -324,6 +324,13 @@ class LobbyCheat(
             note("THE BUTTON IS INERT — THIS PHONE STAYS ON ${flow.state.screen.name.uppercase()}")
             return false
         }
+        // A host waiting for the whole party rather than the minimum: the button is live at three,
+        // and a thumb that pressed it then would arm a round the fourth phone never sat down in.
+        val party = launchValue(SEATS_SWITCH)?.toIntOrNull()
+        if (party != null && lobby.standing.joined < party) {
+            note("THE BUTTON IS LIVE — WAITING FOR $party SEATED, ${lobby.standing.joined} SO FAR")
+            return false
+        }
         flow.lightsOut()
         note("ARMED THIS PHONE ONLY — ON ${flow.state.screen.name.uppercase()}")
         return true
@@ -403,6 +410,12 @@ class LobbyCheat(
 
         /** Ask for LIGHTS OUT at the end — and report the refusal when the house has one. */
         const val LIGHTS_OUT_SWITCH = "SOMEONES_HOME_LOBBY_LIGHTS_OUT"
+
+        /**
+         * With [LIGHTS_OUT_SWITCH]: press it only once this many are seated. Absent, the bench
+         * presses as soon as the button is live, which is at `Balance.MINIMUM_SEATS`.
+         */
+        const val SEATS_SWITCH = "SOMEONES_HOME_LOBBY_SEATS"
 
         /**
          * **Drop the stored seat token before anything is built. The rig's FORGET, as a switch.**

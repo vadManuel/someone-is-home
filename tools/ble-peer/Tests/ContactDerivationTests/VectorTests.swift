@@ -5,7 +5,9 @@ import XCTest
 /// Python's `hmac` gives. If these fail, the Mac advertises tokens the house cannot resolve.
 final class VectorTests: XCTestCase {
 
-    private let launcherSeed: Int64 = 20261116
+    /// The launcher's seed (`round.sh`). 20261150 deals seat 0 the Insider role at three and at
+    /// four seats; 20261116, the first one, Revoked the phone itself at four.
+    private let launcherSeed: Int64 = 20261150
 
     private func seed(_ round: Int64, _ seat: Int32) -> String {
         ContactDerivation.hex(ContactDerivation.seatSeed(roundSeed: round, seat: seat))
@@ -22,16 +24,17 @@ final class VectorTests: XCTestCase {
     }
 
     func testTheLaunchersSeatSeeds() {
-        XCTAssertEqual(seed(launcherSeed, 0), "7995882527fa09a3ce75db487404b23a")
-        XCTAssertEqual(seed(launcherSeed, 1), "130f00039e6f9efdc337d82ba3bf7b59")
-        XCTAssertEqual(seed(launcherSeed, 2), "fc274ca75d79c8f78e2e496afa36a637")
+        XCTAssertEqual(seed(launcherSeed, 0), "f79b6f331bf6d28bbdbeddd74aaa18a2")
+        XCTAssertEqual(seed(launcherSeed, 1), "aed69e6fc764d486ab051d7fdc760ad4")
+        XCTAssertEqual(seed(launcherSeed, 2), "4f06e585f8ab672c59d4a161b987199f")
+        XCTAssertEqual(seed(launcherSeed, 3), "8f12a2ae4efbc0960d06c55f87d91269")
     }
 
     func testTheLaunchersTokens() {
-        XCTAssertEqual(token(launcherSeed, 1, 0), "8c714648964924c65201ff4a48e23f37")
-        XCTAssertEqual(token(launcherSeed, 1, 1), "bb3b6d5dcbbc59c87787b1959b3a982a")
-        XCTAssertEqual(token(launcherSeed, 1, 117_888_000), "16dd923b17fd4239b701611561bfb7a2")
-        XCTAssertEqual(token(launcherSeed, 0, 117_888_000), "0aa2b4e3ff3c4b96c60062568d758520")
+        XCTAssertEqual(token(launcherSeed, 1, 0), "f7b01e60a5f1b47206a3c79d535a4b69")
+        XCTAssertEqual(token(launcherSeed, 1, 1), "33cec58d2d012e756c02b98c965fab5f")
+        XCTAssertEqual(token(launcherSeed, 1, 117_888_000), "615f52c14cb48655c67bbefca08afd6d")
+        XCTAssertEqual(token(launcherSeed, 0, 117_888_000), "c8246bc64c3355d2ffce2b55a82f6380")
     }
 
     func testANegativeRoundSeed() {

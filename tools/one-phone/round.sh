@@ -1,28 +1,37 @@
 #!/usr/bin/env bash
-# One phone, two Simulator filler seats, one round: the contact radio checked with a single iPhone.
+# One phone, Simulator filler seats, one round: the contact radio checked with a single iPhone.
 #
 #   tools/one-phone/round.sh check                  read-only: signing team, the phone, the sims, the peer
 #   tools/one-phone/round.sh install                build the Playtest app and install it on the phone
-#   tools/one-phone/round.sh start [options]        install, then host a round on the phone + 2 sims
+#   tools/one-phone/round.sh start [options]        install, then host a round on the phone + 3 sims
 #   tools/one-phone/round.sh stop                   end it: the app on the phone, the sims, the logs' writers
 #
 #   start options:
+#     --seats 3|4         seats in the round, the phone included (default 4: the phone and 3 sims)
 #     --no-install        skip the phone build and install (it is already on the phone)
-#     --auto-lights-out   let the bench press LIGHTS OUT once three are seated (default: you press it)
+#     --auto-lights-out   let the bench press LIGHTS OUT once every seat is in (default: you press it)
 #     --by-hand           the phone plays no script: you arm, you call meetings (the sims still play)
-#     --no-phone          dry run of the Mac half only: sims built, booted and launched, nothing on the phone
+#     --no-phone          dry run of the Mac half only: nothing on the phone. The filler seats are
+#                         launched and must keep looking without giving up; then one more Simulator
+#                         stands in for the phone as host, and the round is played to its first
+#                         meeting: act 3's Revoke must land on seat 1 and the round must not end
+#                         before the meeting
 #
-# THE PHONE HOSTS. It plays seat 0 and runs the house. The two Simulators join it over mDNS on the
-# Mac's network, as seats 1 and 2, and play by themselves (SOMEONES_HOME_ROUND=1): they walk their
-# work orders and check in at every meeting. **They are wire-only filler.** A Simulator has no
-# Bluetooth, so its radio reports Unsupported, which the house records as a device fault and names
-# in no notice (D-187, D-223). Nothing about the radio may be signed off from a Simulator.
+# THE PHONE HOSTS. It plays seat 0 and runs the house. The Simulators join it over mDNS on the Mac's
+# network, as seats 1 to 3, and play by themselves (SOMEONES_HOME_ROUND=1): they walk their work
+# orders and check in at every meeting. **They are wire-only filler.** A Simulator has no Bluetooth,
+# so its radio reports Unsupported, which the house records as a device fault and names in no notice
+# (D-187, D-223). Nothing about the radio may be signed off from a Simulator.
 #
-# THE SEED IS FIXED, so the Mac's BLE peer can derive any seat's token (tools/ble-peer). At three
-# seats, 20261116 deals the Insider role to seat 0, the phone, so the bench's scripted Revoke
-# (`RoundCheat.theRevoke`) lands on seat 1, a Simulator; `OnePhoneVectorsTest` pins that. The Mac
-# then advertises as seat 1 and the phone's report of it is the check. Another seed may Revoke the
-# phone itself, which stops its scan.
+# FOUR SEATS BY DEFAULT (D-228). At three seats one Insider and one Revoke leave one plain Resident
+# against one Insider, which is parity: the round ends at the Revoke, so the report and the meeting
+# notice cannot be reached. At four the Revoke leaves two against one and the round goes on.
+#
+# THE SEED IS FIXED, so the Mac's BLE peer can derive any seat's token (tools/ble-peer). 20261150
+# deals the Insider role to seat 0, the phone, at three seats and at four, so the bench's scripted
+# Revoke (`RoundCheat.theRevoke`) lands on seat 1, a Simulator; `OnePhoneVectorsTest` pins that. The
+# Mac then advertises as seat 1 and the phone's report of it is the check. (20261116, the first
+# seed, dealt seat 2 at four seats, which would have Revoked the phone itself and stopped its scan.)
 #
 # Logs land in $OUT (default /tmp/someones-home-one-phone). Every `start` (and `install`) gets a run
 # directory of its own, $OUT/runs/<date-time>/, and no later run deletes or overwrites it:
@@ -41,16 +50,22 @@ cd "$REPO" || exit 1
 export PATH="$HOME/.local/share/mise/shims:$PATH"
 
 PHONE_NAME="${APP_DEVICE_NAME:-vadManuel-Phone}"
-SEED="${SOMEONES_HOME_ROUND_SEED:-20261116}"
+SEED="${SOMEONES_HOME_ROUND_SEED:-20261150}"
 BUNDLE_ID="home.someoneshome.app"
 CONFIG=Playtest
 DERIVED="${APP_DERIVED_DATA:-/tmp/someones-home-dd}"
 OUT="${ONE_PHONE_OUT:-/tmp/someones-home-one-phone}"
 # A home already stored on the phone under this name is hosted as it is and never overwritten.
 HOME_NAME="${ONE_PHONE_HOME:-ONE PHONE}"
-SIM_DEVICES=("iPhone 17" "iPhone 17 Pro")
-SIM_TYPES=("com.apple.CoreSimulator.SimDeviceType.iPhone-17" "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro")
-SEAT_NAMES=(PHONE SIMA SIMB)
+# Seats 1 to 3, in that order. A run of three seats uses the first two.
+SIM_DEVICES=("iPhone 17" "iPhone 17 Pro" "iPhone 17e")
+SIM_TYPES=("com.apple.CoreSimulator.SimDeviceType.iPhone-17" "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro" "com.apple.CoreSimulator.SimDeviceType.iPhone-17e")
+# --no-phone only: the Simulator that stands in for the phone as host, seat 0.
+STAND_IN_DEVICE="iPhone Air"
+STAND_IN_TYPE="com.apple.CoreSimulator.SimDeviceType.iPhone-Air"
+SEAT_NAMES=(PHONE SIMA SIMB SIMC)
+# Seats in the round, the phone included. `start --seats` sets it.
+SEATS=4
 
 mkdir -p "$OUT"
 
@@ -65,7 +80,8 @@ nap() { python3 -c "import time; time.sleep($1)"; }
 
 RUN=""
 # The followed logs, linked from $OUT to the latest run's own copies.
-LINKED_LOGS=(phone.log seat-1.log seat-2.log driver.log)
+# seat-0.log is the --no-phone stand-in host's; with the phone it stays empty.
+LINKED_LOGS=(phone.log seat-0.log seat-1.log seat-2.log seat-3.log driver.log)
 # Loose files an older version of this script wrote straight into $OUT and overwrote every run.
 LOOSE_LOGS=(phone.log seat-1.log seat-2.log driver.log build-phone.log build-sims.log install-phone.log grants.txt)
 
@@ -240,7 +256,8 @@ launch_phone() {
     # round is the owner's; the seed is read at arming either way.
     local HOST_ROUND=("DEVICECTL_CHILD_SOMEONES_HOME_ROUND=1")
     [ -n "$BY_HAND" ] && HOST_ROUND=()
-    [ -n "$AUTO_LIGHTS_OUT" ] && lights=("DEVICECTL_CHILD_SOMEONES_HOME_LOBBY_LIGHTS_OUT=1")
+    # The bench waits for every seat, not the three that make the button live.
+    [ -n "$AUTO_LIGHTS_OUT" ] && lights=("DEVICECTL_CHILD_SOMEONES_HOME_LOBBY_LIGHTS_OUT=1" "DEVICECTL_CHILD_SOMEONES_HOME_LOBBY_SEATS=$SEATS")
     # `--console` streams the app's stdout here and forwards a signal sent to devicectl to the app.
     env "DEVICECTL_CHILD_SOMEONES_HOME_LOBBY_NAME=${SEAT_NAMES[0]}" \
         "DEVICECTL_CHILD_SOMEONES_HOME_LOBBY_HOST=$HOME_NAME" \
@@ -291,35 +308,53 @@ stop_lock_watch() {
 }
 
 # ---------------------------------------------------------------------------------------------
-# The two Simulator seats
+# The Simulator seats
 
+# Filler seats 1..$SEATS-1 are SIM_UDIDS[0..]; the --no-phone stand-in host is STAND_IN_UDID.
 SIM_UDIDS=()
+STAND_IN_UDID=""
 udid_for() {
     xcrun simctl list devices available | awk -v name="$1" -F '[()]' '$0 ~ "    " name " \\(" { print $2; exit }'
 }
 
-ensure_sims() {
-    local runtime
-    runtime="$(xcrun simctl list runtimes -j | python3 -c "
+# Prints the udid of the simulator named $1, creating it as type $2 when it is missing.
+ensure_sim() {
+    local name="$1" type="$2" u runtime
+    u="$(udid_for "$name")"
+    if [ -z "$u" ]; then
+        runtime="$(xcrun simctl list runtimes -j | python3 -c "
 import json, sys
 r = [x for x in json.load(sys.stdin)['runtimes'] if x['platform'] == 'iOS' and x['isAvailable']]
 print(sorted(r, key=lambda x: [int(n) for n in x['version'].split('.')])[-1]['identifier'] if r else '')
 ")"
+        [ -n "$runtime" ] || fail "No iOS Simulator runtime is installed: \`xcodebuild -downloadPlatform iOS\` (several GB)."
+        u="$(xcrun simctl create "$name" "$type" "$runtime")" || fail "could not create the simulator '$name'"
+        say "created simulator '$name' ($u) on $runtime" >&2
+    fi
+    printf '%s\n' "$u"
+}
+
+ensure_sims() {
+    local stand_in="$1" i u listed=""
     SIM_UDIDS=()
-    local i
-    for i in 0 1; do
-        local u
-        u="$(udid_for "${SIM_DEVICES[$i]}")"
-        if [ -z "$u" ]; then
-            [ -n "$runtime" ] || fail "No iOS Simulator runtime is installed: \`xcodebuild -downloadPlatform iOS\` (several GB)."
-            u="$(xcrun simctl create "${SIM_DEVICES[$i]}" "${SIM_TYPES[$i]}" "$runtime")" \
-                || fail "could not create the simulator '${SIM_DEVICES[$i]}'"
-            say "created simulator '${SIM_DEVICES[$i]}' ($u) on $runtime"
-        fi
+    STAND_IN_UDID=""
+    for ((i = 0; i < SEATS - 1; i++)); do
+        u="$(ensure_sim "${SIM_DEVICES[$i]}" "${SIM_TYPES[$i]}")" || exit 1
         SIM_UDIDS+=("$u")
+        listed="$listed · seat $((i + 1)) ${SIM_DEVICES[$i]} $u"
     done
-    printf '%s\n' "${SIM_UDIDS[@]}" >"$OUT/sims.udids"
-    say "simulators: ${SIM_DEVICES[0]} ${SIM_UDIDS[0]} · ${SIM_DEVICES[1]} ${SIM_UDIDS[1]}"
+    if [ -n "$stand_in" ]; then
+        STAND_IN_UDID="$(ensure_sim "$STAND_IN_DEVICE" "$STAND_IN_TYPE")" || exit 1
+        listed="$listed · seat 0 (standing in for the phone) $STAND_IN_DEVICE $STAND_IN_UDID"
+    fi
+    all_sims >"$OUT/sims.udids"
+    say "simulators:${listed}"
+}
+
+# Every simulator this run uses, one per line.
+all_sims() {
+    printf '%s\n' "${SIM_UDIDS[@]}"
+    [ -z "$STAND_IN_UDID" ] || printf '%s\n' "$STAND_IN_UDID"
 }
 
 build_sims() {
@@ -335,9 +370,23 @@ build_sims() {
 
 prepare_sims() {
     say "=== THE GRANTS A HOST WOULD HAVE GIVEN, AND THE INSTALL (see sim-grants.py) ==="
-    local u
-    for u in "${SIM_UDIDS[@]}"; do xcrun simctl shutdown "$u" 2>/dev/null || true; done
-    python3 "$REPO/sim-grants.py" notifications "${SIM_UDIDS[@]}" | tee -a "$OUT/driver.log" | tee "$RUN/grants.txt"
+    local u sims=()
+    while read -r u; do [ -z "$u" ] || sims+=("$u"); done < <(all_sims)
+    for u in "${sims[@]}"; do xcrun simctl shutdown "$u" 2>/dev/null || true; done
+    # A Simulator that has never booted has no bulletin store for sim-grants to write the answer
+    # into (a seat Simulator `ensure_sim` has just created, say), and would be refused a seat. Booted
+    # once and shut down, it has one.
+    local fresh=()
+    for u in "${sims[@]}"; do
+        [ -f "$HOME/Library/Developer/CoreSimulator/Devices/$u/data/Library/BulletinBoard/VersionedSectionInfo.plist" ] || fresh+=("$u")
+    done
+    for u in ${fresh[@]+"${fresh[@]}"}; do
+        say "booting $u once, so it has a notification store to answer into"
+        xcrun simctl boot "$u" 2>/dev/null || true
+        xcrun simctl bootstatus "$u" -b >/dev/null
+        xcrun simctl shutdown "$u" 2>/dev/null || true
+    done
+    python3 "$REPO/sim-grants.py" notifications "${sims[@]}" | tee -a "$OUT/driver.log" | tee "$RUN/grants.txt"
     # A Simulator that has never answered the notification prompt is refused a seat, naming
     # NOTIFICATIONS. sim-grants copies an answer from any Simulator that has one; with none, a person
     # answers it once and every run after this is covered.
@@ -349,13 +398,13 @@ prepare_sims() {
         say ""
         open -a Simulator 2>/dev/null || true
     fi
-    for u in "${SIM_UDIDS[@]}"; do xcrun simctl boot "$u" 2>/dev/null || true; done
-    for u in "${SIM_UDIDS[@]}"; do
+    for u in "${sims[@]}"; do xcrun simctl boot "$u" 2>/dev/null || true; done
+    for u in "${sims[@]}"; do
         xcrun simctl bootstatus "$u" -b >/dev/null
         xcrun simctl terminate "$u" "$BUNDLE_ID" 2>/dev/null || true
         xcrun simctl install "$u" "$SIM_APP" || fail "could not install on simulator $u"
     done
-    python3 "$REPO/sim-grants.py" privacy "${SIM_UDIDS[@]}" | tee -a "$OUT/driver.log"
+    python3 "$REPO/sim-grants.py" privacy "${sims[@]}" | tee -a "$OUT/driver.log"
 }
 
 launch_sim() {
@@ -372,6 +421,23 @@ launch_sim() {
     echo $! >>"$OUT/sims.pids"
 }
 
+# --no-phone only: a Simulator hosts as seat 0, plays the bench's script and presses LIGHTS OUT
+# itself once every seat is in. It has no radio either, so it checks the wire and the script only.
+launch_stand_in() {
+    say "=== LAUNCHING THE STAND-IN HOST ON $STAND_IN_DEVICE AS SEAT 0 · SEED $SEED ==="
+    env "SIMCTL_CHILD_SOMEONES_HOME_LOBBY_NAME=${SEAT_NAMES[0]}" \
+        "SIMCTL_CHILD_SOMEONES_HOME_LOBBY_HOST=$HOME_NAME" \
+        "SIMCTL_CHILD_SOMEONES_HOME_LOBBY_LINE=SEAT 0 WROTE THIS AND NOBODY MAY SEE IT" \
+        "SIMCTL_CHILD_SOMEONES_HOME_LOBBY_FORGET=1" \
+        "SIMCTL_CHILD_SOMEONES_HOME_LOBBY_INSIDERS=0" \
+        "SIMCTL_CHILD_SOMEONES_HOME_LOBBY_LIGHTS_OUT=1" \
+        "SIMCTL_CHILD_SOMEONES_HOME_LOBBY_SEATS=$SEATS" \
+        "SIMCTL_CHILD_SOMEONES_HOME_ROUND=1" \
+        "SIMCTL_CHILD_SOMEONES_HOME_ROUND_SEED=$SEED" \
+        xcrun simctl launch --console-pty "$STAND_IN_UDID" "$BUNDLE_ID" >>"$OUT/seat-0.log" 2>&1 &
+    echo $! >>"$OUT/sims.pids"
+}
+
 stop_sims() {
     if [ -f "$OUT/sims.udids" ]; then
         local u
@@ -380,7 +446,7 @@ stop_sims() {
             xcrun simctl terminate "$u" "$BUNDLE_ID" 2>/dev/null || true
             xcrun simctl shutdown "$u" 2>/dev/null || true
         done <"$OUT/sims.udids"
-        say "terminated the app and shut down both simulators"
+        say "terminated the app and shut down the simulators"
     fi
     if [ -f "$OUT/sims.pids" ]; then
         local p
@@ -425,6 +491,10 @@ do_start() {
     BY_HAND=""
     while [ $# -gt 0 ]; do
         case "$1" in
+            --seats)
+                shift
+                case "${1:-}" in 3|4) SEATS="$1" ;; *) fail "--seats takes 3 or 4 (seat 0 is the phone; the rest are Simulators)" ;; esac
+                ;;
             --no-install) install="" ;;
             --auto-lights-out) AUTO_LIGHTS_OUT=1 ;;
             --no-phone) phone="" ;;
@@ -433,22 +503,27 @@ do_start() {
         esac
         shift
     done
+    # The dry run hosts a home of its own, so a phone still on the air from an earlier run cannot
+    # take its seats.
+    [ -n "$phone" ] || HOME_NAME="${ONE_PHONE_HOME:-NO PHONE}"
 
     # A previous run's processes go first. Its logs stay where they are, in their own run directory.
     DRIVER_LOG=/dev/null do_stop >/dev/null 2>&1
     begin_run
     echo "$SEED" >"$RUN/seed.txt"
-    say "=== ONE-PHONE ROUND · SEED $SEED · LOGS IN $RUN (linked from $OUT) ==="
+    say "=== ONE-PHONE ROUND · $SEATS SEATS · SEED $SEED · LOGS IN $RUN (linked from $OUT) ==="
 
     if [ -n "$phone" ]; then
         if [ -n "$install" ]; then install_phone; else find_phone; fi
+        ensure_sims ""
     else
         say "--no-phone: nothing is built for, installed on or launched on the phone"
+        ensure_sims stand-in
     fi
-    ensure_sims
     build_sims
     prepare_sims
 
+    local seat
     if [ -n "$phone" ]; then
         launch_phone
         # The first launch may stand on the OS's permission prompts; answer them on the phone.
@@ -459,31 +534,22 @@ do_start() {
             fi
             fail "THE PHONE NEVER HOSTED. If the log says SETUP INCOMPLETE, do the permissions sweep (README step 2) and run start again. If the phone was locked, unlock it and run start again."
         }
-        launch_sim 1
-        wait_for "$OUT/phone.log" "2 JOINED" 90 "seat 1 is seated" || fail "seat 1 never joined. Is this Mac on the phone's Wi-Fi? Does $OUT/seat-1.log say SETUP INCOMPLETE … NOTIFICATIONS (see the one-time setup above)?"
-        launch_sim 2
-        wait_for "$OUT/phone.log" "3 JOINED" 90 "seat 2 is seated" || fail "seat 2 never joined — see $OUT/seat-2.log"
+        for ((seat = 1; seat < SEATS; seat++)); do
+            launch_sim "$seat"
+            if [ "$seat" -eq 1 ]; then
+                wait_for "$OUT/phone.log" "2 JOINED" 90 "seat 1 is seated" || fail "seat 1 never joined. Is this Mac on the phone's Wi-Fi? Does $OUT/seat-1.log say SETUP INCOMPLETE … NOTIFICATIONS (see the one-time setup above)?"
+            else
+                wait_for "$OUT/phone.log" "$((seat + 1)) JOINED" 90 "seat $seat is seated" || fail "seat $seat never joined — see $OUT/seat-$seat.log"
+            fi
+        done
     else
-        launch_sim 1
-        launch_sim 2
-        wait_for "$OUT/seat-1.log" "STILL LOOKING|ATTACHING" 120 "seat 1 is looking for '$HOME_NAME'"
-        wait_for "$OUT/seat-2.log" "STILL LOOKING|ATTACHING" 120 "seat 2 is looking for '$HOME_NAME'"
-        # Nothing hosts, so no lights go out: each seat's bench must still be waiting, not given up,
-        # past the sixty seconds after which it used to give up (RoundCheat's awaitTheWorkOrder).
-        say "waiting 75 s: a seat's bench must not give up before LIGHTS OUT"
-        nap 75
-        if grep -q "NO WORK ORDER ARRIVED" "$OUT"/seat-*.log; then
-            say "FAIL — a seat's bench gave up before any LIGHTS OUT: $(grep -h "NO WORK ORDER ARRIVED" "$OUT"/seat-*.log | head -1)"
-        else
-            say "no seat's bench has given up waiting for LIGHTS OUT"
-        fi
-        say "--no-phone dry run done. Nothing hosts, so both seats keep looking. Stop with: $0 stop"
-        return 0
+        dry_run
+        return $?
     fi
 
     say ""
-    say "THREE SEATED. ROUND SEED $SEED — the Mac's peer derives every seat's token from it:"
-    say "  tools/ble-peer/.build/release/ble-peer sniff --round-seed $SEED --seats 3"
+    say "$SEATS SEATED. ROUND SEED $SEED — the Mac's peer derives every seat's token from it:"
+    say "  tools/ble-peer/.build/release/ble-peer sniff --round-seed $SEED --seats $SEATS"
     say "  tools/ble-peer/.build/release/ble-peer advertise --round-seed $SEED --seat 1"
     if [ -n "$AUTO_LIGHTS_OUT" ]; then
         say "The bench presses LIGHTS OUT now."
@@ -498,14 +564,78 @@ do_start() {
     tail -n +1 -f "$OUT/phone.log" | grep --line-buffered -E "$FOLLOW"
 }
 
+# The line number of the first line of $1 matching $2, or nothing.
+first_line() { grep -nE "$2" "$1" 2>/dev/null | head -1 | cut -d: -f1; }
+
+# --no-phone: the filler seats look for a house that is not there yet and must not give up; then a
+# Simulator hosts in the phone's place and the round is played to the end of its first meeting.
+dry_run() {
+    local seat fails=0 host="$OUT/seat-0.log"
+    for ((seat = 1; seat < SEATS; seat++)); do launch_sim "$seat"; done
+    for ((seat = 1; seat < SEATS; seat++)); do
+        wait_for "$OUT/seat-$seat.log" "STILL LOOKING|ATTACHING" 120 "seat $seat is looking for '$HOME_NAME'"
+    done
+    # Nothing hosts yet, so no lights go out: each seat's bench must still be waiting, not given up,
+    # past the sixty seconds after which it used to give up (RoundCheat's awaitTheWorkOrder).
+    say "waiting 75 s: a seat's bench must not give up before LIGHTS OUT"
+    nap 75
+    if grep -q "NO WORK ORDER ARRIVED" "$OUT"/seat-*.log; then
+        say "FAIL — a seat's bench gave up before any LIGHTS OUT: $(grep -h "NO WORK ORDER ARRIVED" "$OUT"/seat-*.log | head -1)"
+        fails=$((fails + 1))
+    else
+        say "PASS — no seat's bench has given up waiting for LIGHTS OUT"
+    fi
+
+    launch_stand_in
+    wait_for "$host" "ON THE AIR" 120 "the stand-in's home is on the air" || fail "the stand-in never hosted — see $host"
+    wait_for "$host" "\\[lobby-bench\\] $SEATS JOINED" 120 "all $SEATS seats are in" || fail "the room never filled — see $host and the seat logs"
+    wait_for "$host" "\\[house\\] ARMED — $SEATS SEAT" 90 "the stand-in pressed LIGHTS OUT and the house armed $SEATS seats" \
+        || fail "the house never armed — see $host"
+    wait_for "$host" "WHAT THIS PHONE IS — INSIDER" 30 "seat 0 was dealt the Insider role" \
+        || { say "FAIL — seed $SEED did not deal seat 0 the Insider role at $SEATS seats"; fails=$((fails + 1)); }
+    wait_for "$host" "=== ACT 3" 300 "the bench reached act 3" || fail "the bench never reached act 3 — see $host"
+    if wait_for "$host" "THE REVOKE LANDED ON SEAT|THE TOUCH REVOKED NOBODY" 180 "act 3's touch was ruled on"; then
+        local landed
+        landed="$(grep -hoE "THE REVOKE LANDED ON SEAT [0-9]+|THE TOUCH REVOKED NOBODY" "$host" | head -1)"
+        if [ "$landed" = "THE REVOKE LANDED ON SEAT 1" ]; then say "PASS — $landed (a Simulator)"; else say "FAIL — $landed, not seat 1"; fails=$((fails + 1)); fi
+    else
+        fails=$((fails + 1))
+    fi
+    wait_for "$host" "BEAT MEETING-RINGING" 180 "a meeting was called" || fails=$((fails + 1))
+    local ended ringing
+    ended="$(first_line "$host" "THE ROUND ENDED")"
+    ringing="$(first_line "$host" "BEAT MEETING-RINGING")"
+    if [ -n "$ended" ] && { [ -z "$ringing" ] || [ "$ended" -lt "$ringing" ]; }; then
+        say "FAIL — the round ended before the meeting: $(sed -n "${ended}p" "$host")"
+        fails=$((fails + 1))
+    else
+        say "PASS — the round did not end before the meeting"
+    fi
+    grep -hE "FOUND A REVOKED PLAYER|NO MEETING CAME OF THE REPORT" "$host" | head -1 | sed 's/^/  /' | tee -a "$DRIVER_LOG"
+    # The tally is the meeting's last phase. What the room decides there may end the round (a plain
+    # Resident Restrained at four seats is parity), which is the rules and not an early ending.
+    wait_for "$host" "BEAT TALLY|BEAT LIGHTS-OUT-AGAIN" 300 "the meeting ran to its tally (gate, talk, ballot, tally)" || fails=$((fails + 1))
+    nap 5
+    grep -hE "RESTRAINED — |THE ROUND ENDED" "$host" | head -2 | sed 's/^/  after the meeting: /' | tee -a "$DRIVER_LOG"
+    say ""
+    if [ "$fails" -eq 0 ]; then
+        say "--no-phone dry run PASSED: $SEATS seats, seed $SEED. The Simulators are still playing. Stop with: $0 stop"
+    else
+        say "--no-phone dry run FAILED $fails check(s) — see $OUT/seat-*.log. Stop with: $0 stop"
+    fi
+    return "$fails"
+}
+
 do_check() {
     find_team
     find_phone
     local i u
-    for i in 0 1; do
+    for i in "${!SIM_DEVICES[@]}"; do
         u="$(udid_for "${SIM_DEVICES[$i]}")"
-        say "simulator '${SIM_DEVICES[$i]}': ${u:-missing — start creates it}"
+        say "simulator '${SIM_DEVICES[$i]}' (seat $((i + 1))): ${u:-missing — start creates it}"
     done
+    u="$(udid_for "$STAND_IN_DEVICE")"
+    say "simulator '$STAND_IN_DEVICE' (--no-phone's stand-in host): ${u:-missing — start --no-phone creates it}"
     if [ -x "$REPO/tools/ble-peer/.build/release/ble-peer" ]; then
         say "ble-peer: built"
     else
@@ -518,5 +648,5 @@ case "${1:-}" in
     install) shift; install_phone ;;
     start) shift; do_start "$@" ;;
     stop) do_stop ;;
-    *) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 64 ;;
+    *) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 64 ;;
 esac

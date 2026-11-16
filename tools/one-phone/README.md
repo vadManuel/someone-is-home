@@ -3,17 +3,21 @@
 The full device check (`_bmad-output/implementation-artifacts/ble-unit4-device-check.md`) needs three
 iPhones. This is the part of it one iPhone and this Mac can answer. Two tools:
 
-- **`tools/one-phone/round.sh`** hosts a round on the phone (seat 0) with two iOS Simulators joined as
-  seats 1 and 2. The Simulators are **wire-only filler**: they have no Bluetooth, so nothing about the
-  radio is ever read off them. They exist because a round arms at three seats.
+- **`tools/one-phone/round.sh`** hosts a round on the phone (seat 0) with three iOS Simulators joined as
+  seats 1, 2 and 3 (`--seats 3` drops seat 3). The Simulators are **wire-only filler**: they have no
+  Bluetooth, so nothing about the radio is ever read off them. They exist because a round arms at three
+  seats, and the **fourth** is there because at three seats the bench's Revoke ends the round by
+  parity on the spot (one plain Resident against one Insider), so the report and the meeting notice
+  could never be reached. At four the Revoke leaves two against one and the round goes on (D-228).
 - **`tools/ble-peer`** is a Swift CoreBluetooth tool for the Mac. `sniff` shows what the phone puts on
   the air. `advertise` puts a seat's token on the air in the phone's exact shape, so the phone has
   something to hear.
 
-The round seed is fixed at **20261116**, so the Mac can derive any seat's token. At three seats that
-seed deals the Insider role to seat 0 (the phone), and the bench's scripted Revoke lands on seat 1.
-`core/.../OnePhoneVectorsTest.kt` pins both facts, and `tools/ble-peer/Tests` pins the Swift derivation
-to the same values.
+The round seed is fixed at **20261150**, so the Mac can derive any seat's token. At three seats and at
+four that seed deals the Insider role to seat 0 (the phone), and the bench's scripted Revoke lands on
+seat 1, a Simulator. `core/.../OnePhoneVectorsTest.kt` pins those facts, and that one Revoke at four
+seats does not end the round; `tools/ble-peer/Tests` pins the Swift derivation to the same values.
+(The first seed, 20261116, dealt seat 2 at four seats, so the bench would have Revoked the phone.)
 
 ## Before you start
 
@@ -23,22 +27,28 @@ to the same values.
 3. Bluetooth is on, on both.
 4. Build the peer: `(cd tools/ble-peer && swift build -c release)`. Its tests: `swift test`.
 5. Run `tools/one-phone/round.sh check`. **PASS:** it prints a team, the phone with `developer mode
-   enabled`, the two Simulators (a missing one is created by `start`), and `ble-peer: built`.
-6. **One time only, the Simulators' notification prompt.** A Simulator that has never answered it is
+   enabled`, the three seat Simulators and the `--no-phone` stand-in (a missing one is created by
+   `start`), and `ble-peer: built`.
+6. **Optional, no phone needed: the dry run.** `tools/one-phone/round.sh start --no-phone` builds and
+   boots the Simulators, checks that the seats keep looking for a house without giving up, then has a
+   fourth Simulator host in the phone's place and plays the round to the end of its first meeting.
+   **PASS:** it ends on `--no-phone dry run PASSED`, after `PASS — THE REVOKE LANDED ON SEAT 1` and
+   `PASS — the round did not end before the meeting`. Stop it with `round.sh stop`.
+7. **One time only, the Simulators' notification prompt.** A Simulator that has never answered it is
    refused a seat, naming NOTIFICATIONS, and no Simulator on this Mac has answered it yet. The first
    `start` prints `ONE-TIME SETUP` and opens the Simulator app: press **Allow** on *"Someone's Home
    Would Like to Send You Notifications"*, then Ctrl-C and run `start` again. `sim-grants.py` copies
    that answer to every Simulator from then on.
-7. **Terminal needs Bluetooth.** The first `ble-peer` run may ask *"Terminal would like to use
+8. **Terminal needs Bluetooth.** The first `ble-peer` run may ask *"Terminal would like to use
    Bluetooth"*: allow it. If it says `BLUETOOTH IS NOT ALLOWED FOR THIS TERMINAL`, go to System Settings
    → Privacy & Security → Bluetooth, switch on the terminal app you use, and run it again.
 
 Logs go to `/tmp/someones-home-one-phone/`. **Every `start` keeps its own**, in
 `runs/<date-time>/`, and no later run deletes or overwrites them: `phone.log` (everything the phone
-prints), `seat-1.log`, `seat-2.log`, `driver.log`, and the build and install logs. `phone.log`,
-`seat-1.log`, `seat-2.log` and `driver.log` in the top folder are links to the latest run's, and
+prints), `seat-1.log` to `seat-3.log`, `seat-0.log` (the `--no-phone` stand-in host's), `driver.log`,
+and the build and install logs. Those logs in the top folder are links to the latest run's, and
 `latest/` links to its folder. `start` stays in the foreground and follows the phone's `[radio]`,
-`[round] PUSH`, `[house]` and bench lines. **Ctrl-C stops everything**: the app on the phone, both
+`[round] PUSH`, `[house]` and bench lines. **Ctrl-C stops everything**: the app on the phone, the
 Simulators and the log writers. `round.sh stop` does the same from another terminal. Neither touches
 a log.
 
@@ -87,13 +97,13 @@ tools/one-phone/round.sh start --no-install --by-hand
 ```
 
 `--by-hand` leaves the round to you: nothing is scripted on the phone. The Simulators still walk their
-work orders and check in at every meeting by themselves. Wait for `seat 2 is seated`. The phone shows
-the lobby with three seated. **Do not press LIGHTS OUT yet.**
+work orders and check in at every meeting by themselves. Wait for `seat 3 is seated`. The phone shows
+the lobby with four seated. **Do not press LIGHTS OUT yet.**
 
 **Step 0, nothing before arming (D-067).** In a second terminal:
 
 ```
-tools/ble-peer/.build/release/ble-peer sniff --round-seed 20261116 --seats 3 --seconds 20
+tools/ble-peer/.build/release/ble-peer sniff --round-seed 20261150 --seats 4 --seconds 20
 ```
 
 - **PASS:** no `[radio]` line in the followed log, and the sniffer ends on `HEARD NOTHING ON 5348` and
@@ -104,14 +114,14 @@ tools/ble-peer/.build/release/ble-peer sniff --round-seed 20261116 --seats 3 --s
 - **PASS:** in this order, `PUSH … ContactSeedIssued`, `[radio] SCAN ON`, `[radio] WAKE — THE MANAGERS
   ARE BUILT (ARMING)`, `[radio] ADVERTISE xxxxxxxx · WINDOW n · WALL ms`, `[radio] ADVERTISING`. Also
   `WHAT THIS PHONE IS — INSIDER` (seat 0, as the seed deals it).
-- **Expected, not a failure:** a `[house] RADIO FAULT — SEAT 1 …` and `SEAT 2 …` naming `DEVICE`. Those
-  are the Simulators' radios reporting no Bluetooth. A device fault is named by no notice.
+- **Expected, not a failure:** a `[house] RADIO FAULT — SEAT 1 …`, `SEAT 2 …` and `SEAT 3 …` naming
+  `DEVICE`. Those are the Simulators' radios reporting no Bluetooth. A device fault is named by no notice.
 - **FAIL:** `ADVERTISING FAILED`, or an `OUTAGE` line on the phone.
 
 **The sniffer checks.** Hold the phone about 30 cm from the Mac and run:
 
 ```
-tools/ble-peer/.build/release/ble-peer sniff --round-seed 20261116 --seats 3 --seconds 70
+tools/ble-peer/.build/release/ble-peer sniff --round-seed 20261150 --seats 4 --seconds 70
 ```
 
 Every advertisement prints as one line: time, `RSSI`, the full service UUID list, `NAME`, `MFR`,
@@ -169,13 +179,15 @@ it dims and locks on its usual schedule.
 
 The house drops a sighting nobody returns, so a touch between the phone and the Mac is never a contact.
 A **report** needs one side only, so this is the one result the phone and the Mac can produce together:
-the bench Revokes seat 1 (a Simulator), the Mac advertises seat 1's tokens, the phone hears them, and
-the house resolves the phone's sighting to seat 1 and rules on it.
+the bench Revokes seat 1 (a Simulator), the Mac advertises **as seat 1** with seed **20261150**, the
+phone hears it, and the house resolves the phone's sighting to seat 1 and rules on it. **Four seats**
+(the default): with three, the Revoke ends the round by parity and the report is refused as
+`RoundAlreadyEnded`. With four, the round goes on into the report and the meeting.
 
 First find the Mac's strongest spot. The house only counts **-35 dBm or stronger** (D-213):
 
 ```
-tools/ble-peer/.build/release/ble-peer sniff --round-seed 20261116 --seats 3 --quiet
+tools/ble-peer/.build/release/ble-peer sniff --round-seed 20261150 --seats 4 --quiet
 ```
 
 That needs a phone that is advertising, so do it at the end of round A, or right after LIGHTS OUT in
@@ -188,7 +200,7 @@ Then, in one terminal:
 tools/one-phone/round.sh start --no-install
 ```
 
-Add `--auto-lights-out` to have the bench press LIGHTS OUT itself once three are seated; then start
+Add `--auto-lights-out` to have the bench press LIGHTS OUT itself once all four are seated; then start
 `advertise` first. Either way the bench on every seat waits for LIGHTS OUT for as long as the room
 takes: it prints `STILL WAITING FOR THE LIGHTS TO GO OUT — 60S …` every minute, and gives up only if
 the lights have gone out and no work order arrives within 60 s.
@@ -196,13 +208,16 @@ the lights have gone out and no work order arrives within 60 s.
 and in a second terminal, before you press LIGHTS OUT:
 
 ```
-tools/ble-peer/.build/release/ble-peer advertise --round-seed 20261116 --seat 1
+tools/ble-peer/.build/release/ble-peer advertise --round-seed 20261150 --seat 1
 ```
 
 It prints `ADVERTISE xxxxxxxx · WINDOW n · WALL ms` every 15 s, the phone's own line.
 
 Press LIGHTS OUT and **hold the phone at the strongest spot from then on.** The bench walks one shift
-(about 15 s), Revokes seat 1, and a few seconds later reports it from seat 2 itself.
+(about 15 s), Revokes seat 1, and a few seconds later reports it from seat 2 itself. The round goes on
+into that meeting: three living seats (the phone, seats 2 and 3) check in, talk and vote. If the room
+Restrains a plain Resident at the tally, that leaves one against one and the round ends by parity
+there; that is the rules, after the report and the notice have been shown.
 
 - **PASS, the bench plays:** after `[house] === THE LIGHTS GO OUT`, `[round-bench] THE ORDER ARRIVED`
   and `=== ACT 2, A SHIFT ===`. **FAIL:** any `NO WORK ORDER ARRIVED` line.
@@ -210,7 +225,10 @@ Press LIGHTS OUT and **hold the phone at the strongest spot from then on.** The 
 - **PASS, the phone hears the Mac:** the phone logs `[radio] HEARD 1 — yyyyyyyy -nn`, where `yyyyyyyy` is
   the Mac's latest `ADVERTISE` prefix (or the one before it, at a window edge).
 - `[round-bench] THE REVOKE LANDED ON SEAT 1`. If it names another seat, the dealing was not the one
-  pinned: stop, and re-run `advertise` with that seat.
+  pinned: stop, and re-run `advertise` with that seat. If it names seat 0, the phone itself was
+  Revoked: check `SOMEONES_HOME_ROUND_SEED` is unset and the run was four seats.
+- **PASS, the round goes on:** no `THE ROUND ENDED` line before `[round] PUSH … MEETING CALLED`, and
+  no `REFUSED — RoundAlreadyEnded`.
 - **PASS, the house resolved the phone's sighting,** one of:
   - `[round] PUSH … MEETING CALLED BY SEAT 0 · RevokeReported…`: the phone's report beat the bench's.
     The strongest result.
@@ -226,7 +244,7 @@ Stop with Ctrl-C in both terminals.
 
 ## 5. A rough RSSI table
 
-With the phone armed and advertising (round A or B), run `ble-peer sniff --round-seed 20261116 --seats 3
+With the phone armed and advertising (round A or B), run `ble-peer sniff --round-seed 20261150 --seats 4
 --quiet` and hold the phone for about 10 s at each distance. Write down the MEDIAN and BEST:
 
 | | Mac hears phone (sniff) | Phone hears Mac (`HEARD`, while `advertise` runs) |
@@ -248,8 +266,8 @@ LIGHTS OUT logged `WILL NOT ARM — 0 SEAT(S)` under a screen that said ARMED. A
 tools/one-phone/round.sh start --no-install --by-hand
 ```
 
-Wait for `seat 2 is seated`. Hand the phone's line over if the lobby asks for it, and wait until the
-lobby shows three seated and `3 of 3 handed theirs over`, with LIGHTS OUT live. Note the port in the
+Wait for `seat 3 is seated`. Hand the phone's line over if the lobby asks for it, and wait until the
+lobby shows four seated and `4 of 4 handed theirs over`, with LIGHTS OUT live. Note the port in the
 phone's `[lobby] HOSTING 'ONE PHONE' ON :<port>` line. **Do not press LIGHTS OUT yet.**
 
 1. **Awake in the lobby (H1).** Put the phone down untouched for a minute (twice Auto-Lock).
@@ -262,15 +280,16 @@ phone's `[lobby] HOSTING 'ONE PHONE' ON :<port>` line. **Do not press LIGHTS OUT
    - **PASS, in order:** `[lobby] BACK IN THE FOREGROUND — LISTENING AGAIN ON :<the same port>`, then
      `[lobby] BACK ON THE AIR AS 'ONE PHONE'`. While the seats come back the lobby may show `NEEDS 3
      RESIDENTS` under a defunct LIGHTS OUT: that is the guard, not a fault. Within about 15 s the lobby
-     shows three seated again, the same three names (their order may change), and `3 of 3 handed
-     theirs over` with **nobody re-typing a line**.
+     shows four seated again, the same four names with **no `UNNAMED`** (their order may change;
+     D-227), and `4 of 4 handed theirs over` with **nobody re-typing a line**.
    - **FAIL:** a different port; `COULD NOT REOPEN`; any `JOINING FRESH` or `A CONNECTION WAS REFUSED`
-     line (a phone came back as a stranger); a fourth seat; the count stuck below 3.
+     line (a phone came back as a stranger); an `UNNAMED` seat or a `THE DESK REFUSED A CHANGE` line; a
+     fifth seat; the count stuck below 4.
    - **Report, not a fail:** `NOT BACK ON THE AIR — …`. Seated phones come back by address without the
      advertisement; only a phone that has not joined yet would miss it.
 4. **LIGHTS OUT.** Hold it.
-   - **PASS:** `[house] ARMED — 3 SEAT(S) IN THE ROUND`, the screen ARMED, and the Simulators' work
-     orders arrive (`[round-bench] THE ORDER ARRIVED` in their logs).
+   - **PASS:** `[house] ARMED — 4 SEAT(S) IN THE ROUND`, `THE ROSTER — 4 SEAT(S) · 4 NAMED`, the screen
+     ARMED, and the Simulators' work orders arrive (`[round-bench] THE ORDER ARRIVED` in their logs).
    - **FAIL:** `WILL NOT ARM`, or ARMED on the screen with no `[house] ARMED —` line.
 5. **Hosting ends, and the screen sleeps.** Run the section again, and at step 4 press LEAVE instead of
    LIGHTS OUT, then put the phone down.
