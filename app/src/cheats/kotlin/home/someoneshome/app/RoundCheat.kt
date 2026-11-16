@@ -115,9 +115,11 @@ class RoundCheat(
         private set
 
     /** What the house has told this phone so far, for the reactive half to act on. */
+    @Volatile
     private var sawOpening = false
     private var meetingCaller: Seat? = null
     private var votedThisMeeting = false
+    @Volatile
     private var scanning = false
 
     /** How far along its own order's destinations this phone has walked. See [shift]. */
@@ -355,15 +357,7 @@ class RoundCheat(
      */
     suspend fun play() {
         note("IN THE ROUND — WAITING FOR THE LIGHTS TO GO OUT")
-        var waited = 0L
-        while (!scanning && waited < PATIENCE_MILLIS) {
-            delay(STEP_MILLIS)
-            waited += STEP_MILLIS
-        }
-        if (!scanning) {
-            note("NO WORK ORDER ARRIVED IN ${PATIENCE_MILLIS / 1000}S — THIS PHONE IS NOT IN A ROUND")
-            return
-        }
+        if (!awaitTheWorkOrder(lightsOut = { sawOpening }, ordered = { scanning }, note = note)) return
         beat("WORK-ORDER")
         note("THE ORDER ARRIVED — ${client.order.size} LINE(S) · WALKING THE HOUSE")
         shift()
@@ -1000,7 +994,7 @@ class RoundCheat(
         /** A bound on every wait for something five other phones have to do. */
         private const val GATE_MILLIS = 180_000L
 
-        /** How long a seat waits to be dealt work before saying out loud that it never was. */
+        /** How long the bench waits for the house clock to reach a pushed tick. */
         private const val PATIENCE_MILLIS = 60_000L
 
         /** A bound on the banking loop, so a rule that never moves the meter cannot hang a phone. */
@@ -1017,6 +1011,58 @@ class RoundCheat(
         private const val ENTRY_CEILING = 200
     }
 }
+
+/**
+ * **Wait for the lights to go out, however long the room takes, and only then for the work order.**
+ *
+ * ⚠️ **The first one-phone device session (2026-11-16) found this clock in the wrong place.** The
+ * wait for a work order started when the app launched, because [RoundCheat.play] is launched with
+ * the app, and gave up after sixty seconds. A room is not seated in sixty seconds: the launcher
+ * starts the two Simulators one after the other once the phone is on the air, and then a person
+ * presses LIGHTS OUT, or the lobby bench presses it once three are seated. Both came after the
+ * bench had already printed `NO WORK ORDER ARRIVED IN 60S` and stopped, so it never walked its
+ * shift, never checked in, and the round it was launched to play went on without it.
+ *
+ * So the wait has two halves. **Before the lights go out there is no timeout**: a seat waits as
+ * long as the room does, and says so every [LIGHTS_OUT_REMINDER_MILLIS] so a silent phone is never
+ * a mystery. **After they go out the work order is owed**, and [ORDER_PATIENCE_MILLIS] is how long
+ * it may take before the bench says out loud that this phone is not in the round. [lightsOut] is
+ * a push that every seat gets on arming; [ordered] is the work order itself, which also ends the
+ * first half if it is the first thing to arrive.
+ */
+internal suspend fun awaitTheWorkOrder(
+    lightsOut: () -> Boolean,
+    ordered: () -> Boolean,
+    note: (String) -> Unit,
+    pause: suspend (Long) -> Unit = { delay(it) },
+): Boolean {
+    var waited = 0L
+    while (!lightsOut() && !ordered()) {
+        pause(BENCH_STEP_MILLIS)
+        waited += BENCH_STEP_MILLIS
+        if (waited % LIGHTS_OUT_REMINDER_MILLIS == 0L) {
+            note("STILL WAITING FOR THE LIGHTS TO GO OUT — ${waited / 1000}S · NO TIMEOUT BEFORE ARMING")
+        }
+    }
+    waited = 0L
+    while (!ordered() && waited < ORDER_PATIENCE_MILLIS) {
+        pause(BENCH_STEP_MILLIS)
+        waited += BENCH_STEP_MILLIS
+    }
+    if (!ordered()) {
+        note("THE LIGHTS WENT OUT AND NO WORK ORDER ARRIVED IN ${ORDER_PATIENCE_MILLIS / 1000}S — THIS PHONE IS NOT IN THE ROUND")
+    }
+    return ordered()
+}
+
+/** How often the bench looks while it waits. */
+internal const val BENCH_STEP_MILLIS = 400L
+
+/** How often a seat still waiting for LIGHTS OUT says so. Never a timeout. */
+internal const val LIGHTS_OUT_REMINDER_MILLIS = 60_000L
+
+/** How long, once the lights are out, a seat waits for its work order before saying it has none. */
+internal const val ORDER_PATIENCE_MILLIS = 60_000L
 
 /** Wait until the meeting is at [phase], or give up. The bench's only synchronisation. */
 /**
