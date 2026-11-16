@@ -44,7 +44,7 @@ class RoundClientTest {
         val flow = FlowModel()
         /** The session's motor, recorded — what this seat's pushes actually did to the hand. */
         val motor = RecordingHaptics()
-        val client = RoundClient(scope, flow, watch, HouseBuzzer(motor)) { said += it }
+        val client = RoundClient(scope, flow, watch, HouseBuzzer(motor), home.someoneshome.platform.NoRadio) { said += it }
 
         /** One push, as it would really arrive: encoded, wrapped, and off a socket. */
         fun push(seq: Long, message: RoundMessage) = client.round.frameArrived(

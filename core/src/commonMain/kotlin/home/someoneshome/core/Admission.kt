@@ -105,6 +105,16 @@ fun admit(state: GameState, event: Event): Admission = when {
     firedBy(event)?.let { actor -> state.roleOf(actor) != Role.Insider || state.isOut(actor) }
         == true -> Admission.Refused(RefusalReason.AbilityNotTheirs)
 
+    // **R3: only a living player can report** (the owner's 2026-11-15 ruling, D-217). A report is
+    // the radio's conclusion that a living phone heard a Revoked one, and a phone that is out does
+    // not scan (D-008) and uploads nothing heard (R8) -- so no honest phone produces this, and it is
+    // `AbilityNotTheirs`'s argument rather than a client-visible path. Above the meeting checks for
+    // that one's reason too: a forged report is recorded as the forgery it is, not as a meeting
+    // being busy.
+    event is Event.MeetingCalled &&
+        event.trigger is MeetingTrigger.RevokeReported &&
+        state.isOut(event.caller) -> Admission.Refused(RefusalReason.ReporterOut)
+
     // D-133. The meeting card is inert while the house is on fire; the Revoke report is NOT --
     // D-121's one exception, unchanged. Split on the trigger and on nothing else.
     event is Event.MeetingCalled &&
@@ -137,6 +147,17 @@ fun admit(state: GameState, event: Event): Admission = when {
     // **It costs nothing**, which is the whole of what a refusal at the gate means: the pool is not
     // spent, because the event never reaches the handler that would spend it.
     isTierTwo(event) && state.meeting != null ->
+        Admission.Refused(RefusalReason.MeetingAlreadyRunning)
+
+    // **R5: a touch during a meeting is not a contact** (the owner's 2026-11-15 ruling, D-217).
+    // Everybody alive is standing in one room, and the gesture that Revokes and reports is a touch;
+    // admitted, a Revoke armed before the call could land at the meeting itself, in front of the
+    // whole house, and a room full of people standing close would be a room of contacts. The
+    // decision log said nothing otherwise (checked: D-121, D-133, D-183, D-185, D-213). The refusal
+    // is symmetric -- every seat, every role, both halves of every touch -- so it is the D-183 shape,
+    // a condition the whole house is standing in, and it is recorded, which an early return is not.
+    // A report is refused already, one branch up, as any second meeting is.
+    event is Event.ContactMade && state.meeting != null ->
         Admission.Refused(RefusalReason.MeetingAlreadyRunning)
 
     // Everyone in the house is on the same phase of the same meeting, so this tells a client

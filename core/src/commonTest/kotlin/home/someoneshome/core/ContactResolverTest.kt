@@ -304,15 +304,23 @@ class ContactResolverTest {
             ),
             events,
         )
-        // The second meeting is the admission gate's to refuse, and it is recorded rather than dropped.
+        // The first report calls a meeting, and from then on the gate refuses both what follows: the
+        // touch's other half, because contacts are ignored at a meeting (R5, D-217), and the second
+        // meeting. Both are recorded rather than dropped.
         var s = state
         val refusals = events.mapNotNull { e ->
             when (val a = admit(s, e)) {
                 is Admission.Admitted -> { s = a.reduction.state; null }
-                is Admission.Refused -> a.reason
+                is Admission.Refused -> e::class.simpleName to a.reason
             }
         }
-        assertEquals(listOf(RefusalReason.MeetingAlreadyRunning), refusals)
+        assertEquals(
+            listOf(
+                "ContactMade" to RefusalReason.MeetingAlreadyRunning,
+                "MeetingCalled" to RefusalReason.MeetingAlreadyRunning,
+            ),
+            refusals,
+        )
     }
 
     // ----------------------------------------------------------------------------------------------

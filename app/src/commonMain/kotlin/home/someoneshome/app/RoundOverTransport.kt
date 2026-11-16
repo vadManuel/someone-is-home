@@ -1,15 +1,20 @@
 package home.someoneshome.app
 
+import home.someoneshome.model.ContactWindow
 import home.someoneshome.model.protocol.IntentMessage
 import home.someoneshome.model.protocol.RoundBody
 import home.someoneshome.model.protocol.RoundMessage
 import home.someoneshome.model.protocol.RoundWire
+import home.someoneshome.model.protocol.SightingUpload
 import home.someoneshome.model.protocol.TransportFrame
+import home.someoneshome.platform.ContactRadio
+import home.someoneshome.platform.wallClockMillis
 import home.someoneshome.platform.transport.IntentOutbox
 import home.someoneshome.platform.transport.RoundInbox
 import home.someoneshome.ui.FlowModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -65,6 +70,14 @@ class RoundOverTransport(
     private val buzzer: HouseBuzzer,
     /** Client → host, up this phone's own socket. */
     private val send: suspend (TransportFrame) -> Unit,
+    /**
+     * **The contact radio, and it is not optional either** (D-217), for [buzzer]'s reason: a root
+     * that has not decided what the radio is does not compile. A phone with no radio yet says so
+     * out loud by passing [home.someoneshome.platform.NoRadio], and still uploads on the cadence.
+     */
+    private val radio: ContactRadio,
+    /** The window this phone is in now: the wall clock, which every phone and the house share. */
+    private val windowNow: () -> ContactWindow = { ContactWindow.containing(wallClockMillis()) },
     private val onEvent: (String) -> Unit = {},
     /**
      * **Every body that arrives at this client, before anything is done with it.**
@@ -95,6 +108,15 @@ class RoundOverTransport(
 
     private val inbox = RoundInbox()
     private val outbox = IntentOutbox()
+
+    /** This phone's half of the contact handshake (D-217). Fed every applied push; beaten by [upload]. */
+    private val contacts = ContactUploader(radio, windowNow) { sighted -> up(RoundWire.encode(sighted)) }
+
+    /** Whether the house has put this phone out, as the uploader was told. For the bench and tests. */
+    val outOfTheRound: Boolean get() = contacts.isOut
+
+    /** Whether this phone holds a seed and is uploading on the cadence. For the bench and tests. */
+    val uploading: Boolean get() = contacts.inRound
 
     /**
      * **Frames waiting to be applied, so that a screen is never written from a socket's thread.**
@@ -152,6 +174,9 @@ class RoundOverTransport(
                 is RoundInbox.Landing.Apply -> {
                     buzzer.heard(landing.message)
                     flow.houseSaid(landing.message)
+                    // The radio last: nothing it does can move a screen, and the seed and the
+                    // out-of-the-round facts are read off the same applied message, once.
+                    contacts.heard(landing.message)
                 }
                 // The re-assertion arriving over what this phone already holds. Silent by design:
                 // there is nothing for a player to do about it and nothing for them to see.
@@ -224,7 +249,27 @@ class RoundOverTransport(
     fun fireEgress() = up(RoundWire.encode(outbox.fire()))
 
     /** A new round: this phone holds nothing of the last one. */
-    fun roundEnded() = inbox.roundEnded()
+    fun roundEnded() {
+        inbox.roundEnded()
+        contacts.roundEnded()
+    }
+
+    /**
+     * **One beat of the contact upload** (D-212 ruling 3, R8, D-217): one `RoundBody.Sighted`, at one
+     * size, while this phone is in a round, whatever it is and whether or not it is out.
+     */
+    fun beat() = contacts.beat()
+
+    /**
+     * **The fixed cadence, forever** — [beat] every `SightingUpload.CADENCE_MILLIS`. Run on the same
+     * dispatcher as [run], so the uploader's facts are written and read on one thread.
+     */
+    suspend fun upload() {
+        while (true) {
+            delay(SightingUpload.CADENCE_MILLIS)
+            beat()
+        }
+    }
 
     private fun ask(gap: RoundBody.Gap) = up(RoundWire.encode(gap))
 

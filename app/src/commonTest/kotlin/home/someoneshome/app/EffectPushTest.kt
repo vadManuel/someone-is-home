@@ -1,5 +1,6 @@
 package home.someoneshome.app
 
+import home.someoneshome.platform.NoRadio
 import home.someoneshome.model.AssignedWork
 import home.someoneshome.model.Destination
 import home.someoneshome.model.Effect
@@ -450,6 +451,7 @@ class EffectPushTest {
                 // default, so nothing that carries pushes can be built having forgotten the motor.
                 buzzer = HouseBuzzer(SilentHaptics),
                 send = { frame -> client.send(frame) },
+                radio = NoRadio,
                 onEvent = onEvent,
                 onInbound = onInbound,
             )

@@ -1,5 +1,6 @@
 package home.someoneshome.app
 
+import home.someoneshome.platform.NoRadio
 import home.someoneshome.model.Intent
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.Seat
@@ -330,6 +331,7 @@ class IntentPushTest {
                 // what keeps the constructor unable to be forgotten by an app root.
                 buzzer = HouseBuzzer(SilentHaptics),
                 send = { frame -> client.send(frame) },
+                radio = NoRadio,
                 onOutbound = { outbound += it },
             )
             // The real control surface: a meeting model whose four buttons go up this phone's own

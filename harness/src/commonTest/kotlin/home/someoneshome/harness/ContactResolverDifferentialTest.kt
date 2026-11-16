@@ -55,7 +55,7 @@ class ContactResolverDifferentialTest {
     private val w = ContactWindow(9_000L)
 
     /** The arrivals, built against the seeds the baseline round issued, which every variant shares. */
-    private fun arrivals(seed: Long): List<Pair<Long, List<ContactUpload>>> {
+    private fun arrivals(seed: Long, huddleHearsTheRevoked: Boolean = true): List<Pair<Long, List<ContactUpload>>> {
         fun hears(seat: Int, rssi: Int = -22) =
             Sighting(ContactTokens.of(contactSeedFor(seed, Seat(seat)), w), rssi, w)
         var n = 0L
@@ -66,7 +66,11 @@ class ContactResolverDifferentialTest {
         val t = ready + 200
         return listOf(
             // The armed Insider in a huddle with two Residents, and one of the Residents hears seat 6.
-            t to listOf(up(5, hears(2), hears(4)), up(2, hears(5), hears(4), hears(6)), up(4, hears(2), hears(5))),
+            t to listOf(
+                up(5, hears(2), hears(4)),
+                if (huddleHearsTheRevoked) up(2, hears(5), hears(4), hears(6)) else up(2, hears(5), hears(4)),
+                up(4, hears(2), hears(5)),
+            ),
             // The other Insider touches a Resident one-sidedly, then both ways.
             t + 10 to listOf(up(1, hears(3)), up(6)),
             t + 20 to listOf(up(3, hears(1, -30)), up(7, hears(6, -36))),
@@ -75,9 +79,9 @@ class ContactResolverDifferentialTest {
         )
     }
 
-    private fun resolve(state: GameState): List<ContactResolution> {
+    private fun resolve(state: GameState, huddleHearsTheRevoked: Boolean = true): List<ContactResolution> {
         var memory = ContactMemory.EMPTY
-        return arrivals(state.seed).map { (tick, uploads) ->
+        return arrivals(state.seed, huddleHearsTheRevoked).map { (tick, uploads) ->
             resolveContacts(memory, Tick(tick), w, uploads, state).also { memory = it.memory }
         }
     }
@@ -115,13 +119,24 @@ class ContactResolverDifferentialTest {
     /** And downstream the rules do diverge, which is the point: the outcome is theirs, not the resolver's. */
     @Test
     fun `the same events land differently once the rules read the roles`() {
-        fun revokedAfter(state: GameState) = resolve(state).flatMap { it.events }
-            .fold(state) { s, e -> (admit(s, e) as? Admission.Admitted)?.reduction?.state ?: s }
-            .revoked.map { it.index }
+        fun revokedAfter(state: GameState, huddleHearsTheRevoked: Boolean) =
+            resolve(state, huddleHearsTheRevoked).flatMap { it.events }
+                .fold(state) { s, e -> (admit(s, e) as? Admission.Admitted)?.reduction?.state ?: s }
+                .revoked.map { it.index }
         val unarmed = walk(events)
         val armed = walk(armed(events, Seat(5)))
         assertEquals(Role.Insider, armed.roleOf(Seat(5)))
-        assertEquals(listOf(6), revokedAfter(unarmed))
-        assertEquals(listOf(2, 6), revokedAfter(armed), "the armed Insider's huddle should Revoke seat 2")
+        assertEquals(listOf(6), revokedAfter(unarmed, huddleHearsTheRevoked = false))
+        assertEquals(
+            listOf(2, 6), revokedAfter(armed, huddleHearsTheRevoked = false),
+            "the armed Insider's huddle should Revoke seat 2",
+        )
+        // **R5 inside one arrival** (D-217). When seat 2 also hears the Revoked seat 6, its report
+        // sorts ahead of seat 5's touch on it (seat order, D-213), the report calls a meeting, and
+        // from then on a touch is not a contact: the armed Revoke does not land at the meeting.
+        assertEquals(
+            listOf(6), revokedAfter(armed, huddleHearsTheRevoked = true),
+            "an armed Revoke landed after a report in the same arrival had called the meeting",
+        )
     }
 }

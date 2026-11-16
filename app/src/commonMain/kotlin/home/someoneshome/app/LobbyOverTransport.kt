@@ -220,6 +220,17 @@ class LobbyHouse(
      * has no way to name one — see [RoundBody.Fire], which carries nothing but its sequence.
      */
     private val onEgressFired: (Seat) -> Unit = {},
+    /**
+     * **What one phone's radio heard, on its way to the contact resolver** ([RoundBody.Sighted],
+     * D-212, D-217).
+     *
+     * [onEgressFired]'s sibling, and a seam of its own for the same kind of reason: an upload is
+     * neither a request nor a fact yet. It is what a radio heard, and the contact is the house's
+     * conclusion (`resolveContacts`, D-213), drawn above the rules from a token book nothing else
+     * holds. `RoundAuthority.sighted` is what fills it. The seat is the connection's, exactly as a
+     * request's actor is; the upload carries none and has nowhere to put one.
+     */
+    private val onSighted: (Seat, RoundBody.Sighted) -> Unit = { _, _ -> },
 ) {
 
     private val desk = LobbyDesk()
@@ -323,6 +334,13 @@ class LobbyHouse(
          * From a seat that is not reading, it changes nothing.
          */
         data class Lost(val seat: Seat) : Arrival
+
+        /**
+         * **What a phone's radio heard** ([RoundBody.Sighted], D-217). On the same queue as every
+         * request, so a touch reaches the rules in the order it arrived relative to everything
+         * else that phone did; launched separately it would land in the order it finished.
+         */
+        data class Sighted(val seat: Seat, val upload: RoundBody.Sighted) : Arrival
     }
 
     private val arriving = Channel<Arrival>(Channel.UNLIMITED)
@@ -593,6 +611,10 @@ class LobbyHouse(
                 // **The house says the reader left, because the reader cannot** (D-203). Not through
                 // the desk: there is no frame and no sequence, only a connection that closed.
                 is Arrival.Lost -> onIntent(Intent.LeaveTerminal(arrival.seat))
+                // **The radio, to the resolver** (D-217). Not through the desk: an upload carries
+                // no sequence by design (D-212), and the resolver recognises a second delivery by
+                // the slots themselves (D-213).
+                is Arrival.Sighted -> onSighted(arrival.seat, arrival.upload)
             }
         }
     }
@@ -632,11 +654,9 @@ class LobbyHouse(
                 // reason: two arrivals from one phone must reach the rules in the order the player
                 // made them, and two launches would reach them in the order they finished.
                 is RoundBody.Fire -> arriving.trySend(Arrival.Fired(seat, round))
-                // ⚠️ **What a phone's radio heard, and nothing reads it yet** (D-212). The resolver
-                // that turns sightings into contacts is unit 2's and the queue it joins is unit 3's;
-                // until then an upload lands here and stops, which is the fail-closed direction: no
-                // contact is minted from a phone's report before the house knows how to judge one.
-                is RoundBody.Sighted -> Unit
+                // **What a phone's radio heard, onto the ordered queue** (D-217). The resolver
+                // judges it there; an upload the house cannot read resolves to nothing.
+                is RoundBody.Sighted -> arriving.trySend(Arrival.Sighted(seat, round))
             }
             return
         }
@@ -772,6 +792,8 @@ class LobbyOverTransport(
      * its own rather than another [Intent].
      */
     private val onEgressFired: (Seat) -> Unit = {},
+    /** [LobbyHouse.onSighted], threaded through: what another phone's radio heard (D-217). */
+    private val onSighted: (Seat, RoundBody.Sighted) -> Unit = { _, _ -> },
     /**
      * **The round's client half, on this phone's one socket.** Null in every production
      * construction — nothing arms a round yet. See [RoundSeam].
@@ -813,7 +835,7 @@ class LobbyOverTransport(
      * at all. `emit` and `armingInputs` are what it is reached for, and both are the authority's
      * own calls rather than a screen's.
      */
-    internal val house = LobbyHouse(scope, onEvent, onIntent, onEgressFired)
+    internal val house = LobbyHouse(scope, onEvent, onIntent, onEgressFired, onSighted)
     private var session: ClientSession? = null
     private var client: TransportClient? = null
     private var clientJob: Job? = null

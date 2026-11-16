@@ -39,9 +39,9 @@ import kotlinx.coroutines.delay
  * ### The three that are still stand-ins, and each says why
  *
  * 1. **The contact handshake** ([Event.ContactMade]) and **2. the Revoked report**
- *    ([MeetingTrigger.RevokeReported]). Unchanged from P3 and unchanged in kind: the BLE handshake
- *    is hardware nobody has built, and `factOf` rules both *reported, never requested*, because a
- *    client that could send either would be naming the seat it revoked.
+ *    ([MeetingTrigger.RevokeReported]) are **no longer minted** (D-217): the bench walks phones
+ *    together in a [SimulatedAir] and the house's resolver mints both. What remains stood in is
+ *    the hop up the other phones' sockets, because five processes share no air ([HouseAir]).
  * 3. **The correct entry.** A phone is shown the question and never the answer (rule 3), so the
  *    meter is moved by the host reading its own answer key. The clients' own entries still go up
  *    the wire and are still honestly rejected; the acceleration exists to reach an ending.
@@ -565,10 +565,15 @@ class RoundCheat(
     /**
      * Act 3 — a Revoke, a report, and the whole meeting.
      *
-     * **Two stand-ins, and P3 had three.** The contact is hardware that does not exist and the
-     * report is the same act by the same rule. The meeting's four transitions are no longer here:
-     * [tickHouse] mints every one of them, so the gate, the talk, the ballot and the tally end when
-     * the house's own deadlines say they do and this method's job is to wait.
+     * **The contact and the report are no longer minted** (D-217). Both were stand-ins until the
+     * radio existed: this act now walks the Insider's phone to the target's in a [SimulatedAir], the
+     * radios hear each other, the uploads go to the house, and the resolver mints whatever it
+     * concludes. The Revoke lands, or does not, by the rules; the report is a living phone hearing a
+     * Revoked one. What is still stood in for is the hop up each phone's socket, because five
+     * processes share no air: see [HouseAir]. The in-process tests carry that hop over real sockets.
+     *
+     * The meeting's four transitions are [tickHouse]'s, so the gate, the talk, the ballot and the
+     * tally end when the house's own deadlines say they do and this method's job is to wait.
      */
     private suspend fun theRevoke(house: RoundAuthority) {
         note("=== ACT 3, A REVOKE AND A MEETING ===")
@@ -588,23 +593,26 @@ class RoundCheat(
             note("NOBODY TO REVOKE")
             return
         }
-        // ** STAND-IN 1 — the contact handshake is unbuilt hardware.** This constructs exactly the
-        // Event the BLE handshake will construct: phone touched to phone, reported by the house,
-        // never requested by a client. See the class KDoc.
-        note("STAND-IN — CONTACT MADE (THE BLE HANDSHAKE IS NOT BUILT)")
-        house.mint(Event.ContactMade(house.now(), insider, target))
+        val radios = HouseAir(house).also { it.armed() }
+        val act = ContactAct(radios.air, beat = { radios.beat(); delay(STEP_MILLIS) }, note = note)
+        note("THE RADIO IS SIMULATED — THE HOUSE UPLOADS FOR THE OTHER PHONES (NO AIR BETWEEN PROCESSES)")
+        act.idle(beats = 2)
+        act.touch(insider, target)
         delay(SETTLE_MILLIS)
+        note(if (house.state.isRevoked(target)) "THE REVOKE LANDED ON SEAT ${target.index}" else "THE TOUCH REVOKED NOBODY")
         beat("REVOKED")
 
-        // ** STAND-IN 2 — the report, by the same rule as the contact.**
         val reporter = house.state.livingSeats.firstOrNull { it.index != insider.index }
         if (reporter == null) {
             note("NOBODY LEFT TO REPORT IT")
             return
         }
-        note("STAND-IN — A REVOKED PLAYER WAS FOUND AND REPORTED BY SEAT ${reporter.index}")
-        house.mint(
-            Event.MeetingCalled(house.now(), reporter, MeetingTrigger.RevokeReported(target))
+        // A living phone finding the Revoked one: one side hears, because a Revoked phone
+        // advertises and never scans (D-008). The resolver mints the report; the rules call it.
+        act.touch(reporter, target)
+        note(
+            if (house.state.meeting != null) "SEAT ${reporter.index} FOUND A REVOKED PLAYER — A MEETING WAS CALLED"
+            else "NO MEETING CAME OF THE REPORT"
         )
         theMeeting(house)
     }

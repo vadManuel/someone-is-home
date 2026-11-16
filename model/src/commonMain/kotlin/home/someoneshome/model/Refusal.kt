@@ -100,6 +100,17 @@ enum class RefusalReason {
     AbilityNotTheirs,
 
     /**
+     * **A report whose caller is out of the round** (R3 of the owner's 2026-11-15 rulings, D-217).
+     *
+     * *Only living players can report.* Admissible for [AbilityNotTheirs]'s reason and no other: no
+     * honest phone can produce it. A report is the house's conclusion that a living phone's radio
+     * heard a Revoked one; a phone that is out does not scan (D-008) and uploads nothing heard (R8),
+     * so the only thing that reaches this is a forged upload or a bench-built event. It is read by
+     * the authority and the recording, and by nothing that has a socket (D-097).
+     */
+    ReporterOut,
+
+    /**
      * The event belongs to a phase the meeting is not at — including there being no meeting.
      *
      * **Everyone is on the same phase**, which is what makes this admissible under D-068: one

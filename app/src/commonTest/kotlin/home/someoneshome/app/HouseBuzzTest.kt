@@ -1,5 +1,6 @@
 package home.someoneshome.app
 
+import home.someoneshome.platform.NoRadio
 import home.someoneshome.model.AssignedWork
 import home.someoneshome.model.ContactSeed
 import home.someoneshome.model.Destination
@@ -559,7 +560,7 @@ class HouseBuzzTest {
         // and a phone on the springboard would take a different route through `houseSaid`.
         val flow = FlowModel(PanelState(screen = ScreenId.Assemble))
         val round = RoundOverTransport(
-            this, flow, buzzer = HouseBuzzer(motor), send = { },
+            this, flow, buzzer = HouseBuzzer(motor), send = { }, radio = NoRadio,
         )
         val draining = launch { round.run() }
 

@@ -4905,6 +4905,100 @@ effect transcript changes.
 | `ui` `Flow`, `app` `HouseBuzzer`, `harness` `Transcript` | (new) | a named no-op, silent, one transcript row |
 | `harness` `Recording.HEADER` | `recording/20` | `recording/21` |
 | `ContactAnswerSizeTest`, `TouchFrameSizeTest`, `RulesTest`, `AbilityRulesTest`, `ArmingTest` | (new, amended) | one length at every sequence; one frame per toucher on real sockets; the armed and unarmed answers |
+| `RecordingTest` (`ReplayTest.kt`) *order changes the state but never the visible effect stream* | the two streams equal line for line | the actor's one answer compared as one answer, every other line equal |
+
+## Revision 52 — the resolver is wired, and the bench touches phones
+
+*Unit 3 of the contact handshake, with the owner's 2026-11-15 rulings R2–R5 and R8. The resolver
+(D-213) is joined to the house's arrival queue, phones upload on the cadence, and the bench's two
+minted stand-ins are replaced by a simulated radio.*
+
+### D-217 · **Uploads reach the resolver on the arrival queue; out phones upload filler; disarm, living reporters, no contacts at meetings, no answer to a refused contact — decided**
+
+**The wiring.**
+
+1. **Host.** `LobbyHouse.onFrame` puts `RoundBody.Sighted` on the same ordered queue as every request
+   (`Arrival.Sighted`); its one consumer calls the new `onSighted` seam, which the app root fills with
+   `RoundAuthority.sighted`. That unpacks the upload, runs `resolveContacts` with the house's memory,
+   the next tick and the house's window, and admits every event it mints in the order minted.
+   Memory resets at arming.
+2. **The window is cut from the wall clock on both ends.** `platform` gains `wallClockMillis()`
+   (`CLOCK_REALTIME` on iOS). The monotonic clock starts at each phone's own boot, so window indices
+   cut from it would differ by hours between phones. The wall clock is network-kept, and the
+   resolver already accepts the window before the house's (D-213). Nothing in the rules reads it.
+3. **Phone.** `platform` gains `ContactRadio` (advertise, scan, drain, silence) and `NoRadio`. Unit 4's
+   iOS radio implements the interface. `app` gains `ContactUploader`, fed every push the inbox applies.
+   It takes the seed from `ContactSeedIssued`, goes out on `RevokeLanded` or `RestrainedTakeover`, and
+   stops on `RoundEnded`. Each beat it rotates the advertised token when the window turns and sends one
+   `SightingUpload.pack` up the phone's own socket. `RoundOverTransport` requires a radio, for the
+   buzzer's reason, and runs the cadence (`upload()`). Every phone today holds `NoRadio`, so it
+   already uploads filler on the cadence.
+4. **R8: an out phone keeps uploading on the same cadence, at the same size, with nothing heard.** It
+   stops scanning and keeps advertising (D-008), and drains and drops what its radio held, so a
+   reading taken just before the push cannot ride out later.
+
+**The bench.** `RoundCheat.theRevoke` no longer mints `ContactMade` or `MeetingCalled(RevokeReported)`.
+`SimulatedAir` (in cheats) holds positions. RSSI is −30 dBm at 5 cm, falling 20 dB a decade and
+floored at −100, so contact under the −35 floor is about 9 cm. `SimulatedRadio` implements
+`ContactRadio` over it, and `ContactAct` walks one phone to another, holds them together for two
+beats, and walks back. **Across processes there is no shared air**, so in the rehearsal `HouseAir`
+runs a `ContactUploader` per seat on the host, with that seat's own seed, and puts the uploads into
+`RoundAuthority.sighted`. That stands in for the hop up each socket and for nothing below it. The
+in-process tests carry every upload over a real socket.
+
+**R2: being Restrained or Revoked disarms an armed Revoke.** In `Rules.contact` the target leaves
+`cooldownArmed` when it is Revoked, and in `takeover` the Restrained seat leaves it. Nothing is
+emitted either way.
+
+**R3: only living players can report.** The gate refuses `MeetingCalled(RevokeReported)` from an out
+caller, with a new reason, `ReporterOut`. This is admissible for `AbilityNotTheirs`'s reason: no honest
+phone produces it, because an out phone does not scan and uploads nothing heard. It sits above the
+meeting checks so that a forgery is recorded as one.
+
+**R4: a refused contact is answered with nothing.** `RoundAuthority.sighted` admits through its own
+door, `concluded`. A refusal is recorded in `refusals` and in `contactRefusals`, and is noted. Nothing
+goes down any socket, D-097's re-assertion included: D-097 answers a phone that asked for something
+stale, and nobody asked for this. D-097's re-push on a refused request is still unbuilt. When it is
+built in `heard`, it cannot reach a contact.
+
+**R5: contacts are ignored during meetings.** The decision log was checked first and says nothing
+otherwise: D-121 and D-133 govern where a report may be made, D-183 refuses Tier 2 at a meeting,
+D-185 ends running effects at the call, and D-213 item 6 only recorded the behaviour. So the gate
+refuses `ContactMade` while a meeting runs (`MeetingAlreadyRunning`). The refusal applies to every
+seat, every role and both halves of a touch, in the D-183 shape, and it is recorded. A report at a
+meeting was already refused as a second meeting.
+
+**Recording format 22**: a new refusal reason, and contacts at meetings and from disarmed seats now
+reduce differently.
+
+**Open, and raised rather than decided:**
+
+- **An already-reported Revoked player can be reported again.** After the meeting, a couch phone
+  still advertises (D-008). A living phone held against it reports it, and the rules call a new
+  meeting. The resolver reads `revoked`, not `newlyRevoked`. Which one it should read is a design
+  question.
+- **The rehearsal's radio hop is stood in for** (above). Two-phone verification of the upward hop is
+  unit 4's.
+- **A Revoked phone's uploads are filler only, but its advertising continues on the cadence.** That
+  is D-008 as written. Unit 6's sniffing should confirm that the advertisement looks the same before
+  and after.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `platform` `ContactRadio.kt`, `WallClock.ios.kt` | (new) | `ContactRadio`, `RadioReading`, `NoRadio`, `wallClockMillis` |
+| `app` `ContactUploader` | (new) | seed, out and ended off the pushes; one upload a beat, filler when out (R8) |
+| `app` `RoundOverTransport` | no radio | a required radio, `beat()`, `upload()`, the uploader fed every applied push |
+| `app` `LobbyHouse` / `LobbyOverTransport` | `RoundBody.Sighted -> Unit` | `Arrival.Sighted` on the ordered queue, `onSighted` seam |
+| `app` `RoundAuthority.sighted`, `contactRefusals` | (new) | resolver, memory, window; refused contacts recorded, never answered (R4) |
+| `app` cheats `SimulatedAir`, `SimulatedRadio`, `ContactAct`, `HouseAir` | (new) | the fake radio; the act; the rehearsal's stand-in hop |
+| `RoundCheat.theRevoke` | minted `ContactMade` and `RevokeReported` | the act through the resolver |
+| `core` `Rules.contact`, `takeover` | an armed Revoke outlived its holder | disarmed on Revoke and on Restraint (R2) |
+| `core` `admit`; `model` `RefusalReason.ReporterOut` | no living check; contacts admitted at meetings | R3 and R5 refusals |
+| `harness` `Recording.HEADER` | `recording/21` | `recording/22` |
+| `ContactRadioBenchTest`, `ContactRulingsTest`, `ContactUploaderTest` | (new) | a round to an ending through the radio; R2, R3, R5; R4 on sockets; R8 |
+| `WallClockTest` | (new) | the window clock is the epoch in milliseconds, not the time since boot |
+| `ContactResolverTest` (a pair hearing a Revoked seat) | one refusal, the second meeting | two: the touch's other half (R5) and the second meeting |
+| `ContactResolverDifferentialTest` (the rules diverge) | the huddle's armed Revoke lands though a report in the same arrival sorted first | shown on a huddle that hears no Revoked seat; with one, the report's meeting refuses the touch (R5) |
 
 ## State after revision 12
 

@@ -1,5 +1,6 @@
 package home.someoneshome.app
 
+import home.someoneshome.platform.NoRadio
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -185,6 +186,9 @@ fun CheatRoot() {
             // `fireEgress` makes the house's draw against the home's shape and then mints, which is
             // two steps where `heard` is one — the reason the request has a frame of its own.
             onEgressFired = { actor -> scope.launch { rules.value?.fireEgress(actor) } },
+            // **The third door: what another phone's radio heard** (D-217). The house judges it
+            // with the resolver and puts whatever it concludes to the rules.
+            onSighted = { seat, upload -> scope.launch { rules.value?.sighted(seat, upload) } },
             round = seam,
             // **The host said the round is over** (D-157, E-R2-10). The transport has already reset
             // this phone's inbox by the time this runs; what is left is the screen answer, which is
@@ -336,7 +340,9 @@ fun CheatRoot() {
     // because it needs the flow — `houseSaid` is the one consumer — and handed to the lobby's
     // socket through the seam that was promised it above.
     val roundClient = remember {
-        RoundClient(scope, flow, watch, buzzer) { line -> println("[round] $line"); transport.note(line) }
+        // **No radio yet** (D-217): unit 4 builds the iOS one. The phone still uploads on the
+        // cadence, filler only, so the wire already looks the way it will with a radio in.
+        RoundClient(scope, flow, watch, buzzer, NoRadio) { line -> println("[round] $line"); transport.note(line) }
             // Both knots tied in one place: the lobby gets the seam it was promised, and the four
             // meeting controls, the Subroutine's hand-over and page 2's two fires get the way up
             // they were promised (E-P2-3). Before this line every one of them reached nobody.

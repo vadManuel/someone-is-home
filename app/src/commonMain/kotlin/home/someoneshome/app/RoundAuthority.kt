@@ -1,10 +1,14 @@
 package home.someoneshome.app
 
 import home.someoneshome.core.Admission
+import home.someoneshome.core.ContactMemory
+import home.someoneshome.core.ContactUpload
 import home.someoneshome.core.admit
+import home.someoneshome.core.resolveContacts
 import home.someoneshome.core.armingFor
 import home.someoneshome.core.egressFor
 import home.someoneshome.model.Balance
+import home.someoneshome.model.ContactWindow
 import home.someoneshome.model.Effect
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
@@ -13,6 +17,9 @@ import home.someoneshome.model.RefusalReason
 import home.someoneshome.model.SavedHome
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
+import home.someoneshome.model.protocol.RoundBody
+import home.someoneshome.model.protocol.SightingUpload
+import home.someoneshome.platform.wallClockMillis
 
 /**
  * **The rules, on the host's phone, joined to both wires — E-D3-3, closed.**
@@ -75,6 +82,12 @@ class RoundAuthority(
     private val inputs: () -> ArmingInputs,
     /** The authority's only exit to the phones. [LobbyHouse.emit] in production. */
     private val emit: suspend (Effect, GameState) -> Unit,
+    /**
+     * **The house's contact window, now** (D-217): the wall clock, which every phone cuts its own
+     * window from too. A test hands a fixed window; nothing in the rules reads a clock. Before
+     * [note] so that the app root's trailing lambda stays the log.
+     */
+    private val contactWindow: () -> ContactWindow = { ContactWindow.containing(wallClockMillis()) },
     private val note: (String) -> Unit,
 ) : HouseHandle {
 
@@ -110,6 +123,16 @@ class RoundAuthority(
      * [fireEgress] can decline rather than reaching for a home that was never chosen.
      */
     private var home: SavedHome? = null
+
+    /** What the contact resolver remembers between arrivals (D-213). A value, carried here. */
+    private var contactMemory: ContactMemory = ContactMemory.EMPTY
+
+    /**
+     * **Every contact event the rules refused, in order** (R4, D-217). Also in [refusals], with the
+     * rest; kept apart so that the one property that matters here can be asserted on its own: a
+     * refused contact is recorded and **nothing is pushed for it, to anybody, ever**.
+     */
+    val contactRefusals: MutableList<Pair<Event, RefusalReason>> = mutableListOf()
 
     val armed: Boolean get() = state.armed
     val ended: Boolean get() = state.ended
@@ -210,6 +233,9 @@ class RoundAuthority(
             terminal = hosted.map.terminal?.card?.id,
         ).copy(oneLines = inputs.oneLines)
         home = hosted
+        // A new round's radios start from nothing: last round's halves and debounces are about
+        // seats and tokens that no longer exist.
+        contactMemory = ContactMemory.EMPTY
 
         // The count and never who holds it. Which seats were drawn is the one fact on this event
         // that must not reach a log on a Mac -- a device console is a file, and a file naming the
@@ -276,6 +302,55 @@ class RoundAuthority(
         }
         if (before.systemIntegrity != state.systemIntegrity) {
             note("SYSTEM INTEGRITY — ${before.systemIntegrity} -> ${state.systemIntegrity}")
+        }
+        if (!before.ended && state.ended) {
+            note("THE ROUND ENDED — ${state.outcome?.winner} BY ${state.outcome?.by}")
+        }
+    }
+
+    /**
+     * **What one phone's radio heard, judged, and whatever it amounts to put to the rules** (D-217).
+     *
+     * The arrival queue's `Sighted` lands here. The upload is unpacked (an upload that is not one
+     * resolves to nothing, and nothing about it reaches a phone), handed to `resolveContacts` with
+     * this house's memory, its clock and its window, and every event the resolver mints is admitted
+     * in the order it minted them: the gesture is the resolver's, the outcome is the rules'.
+     *
+     * ### R4: a refused contact is never answered (D-217)
+     *
+     * No phone asked for a contact or a report; the house concluded it. So when the rules refuse one
+     * (a report from a seat that is out, a second meeting, a touch during a meeting) the refusal is
+     * recorded and noted and **nothing goes down any socket** — not D-097's re-assertion and not
+     * anything else. D-097 answers a phone that asked for something stale; nobody here asked. This
+     * is a separate door from [heard] for exactly that reason: whatever [heard] one day does about
+     * a refused request, it cannot reach a contact.
+     */
+    suspend fun sighted(seat: Seat, upload: RoundBody.Sighted) {
+        val slots = SightingUpload.unpack(upload)
+        if (slots == null) {
+            note("AN UPLOAD THAT IS NOT ONE — SEAT ${seat.index}")
+            return
+        }
+        val resolution = resolveContacts(
+            contactMemory, Tick(tick++), contactWindow(), listOf(ContactUpload(seat, slots)), state,
+        )
+        contactMemory = resolution.memory
+        for (event in resolution.events) concluded(event)
+    }
+
+    /** One event the resolver minted, admitted; refused, it is recorded and answered with nothing. */
+    private suspend fun concluded(event: Event) {
+        val before = state
+        when (val admission = admit(state, event)) {
+            is Admission.Admitted -> {
+                state = admission.reduction.state
+                push(admission.reduction.effects)
+            }
+            is Admission.Refused -> {
+                refusals += admission.reason
+                contactRefusals += event to admission.reason
+                note("REFUSED — ${admission.reason} · ${event::class.simpleName} (THE RADIO'S, NOT ANSWERED)")
+            }
         }
         if (!before.ended && state.ended) {
             note("THE ROUND ENDED — ${state.outcome?.winner} BY ${state.outcome?.by}")

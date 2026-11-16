@@ -1,5 +1,6 @@
 package home.someoneshome.app
 
+import home.someoneshome.platform.ContactRadio
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.OrderLine
 import home.someoneshome.model.SubroutineInstance
@@ -92,6 +93,12 @@ class RoundClient(
      * engine costs tens of milliseconds to start — which is spent at the moment of D-135's five.
      */
     private val buzzer: HouseBuzzer,
+    /**
+     * **This seat's contact radio**, handed straight down to [RoundOverTransport] (D-217).
+     * [home.someoneshome.platform.NoRadio] on a phone until unit 4's iOS radio exists; a
+     * `SimulatedRadio` on a bench that plays seats in one process.
+     */
+    private val radio: ContactRadio,
     private val note: (String) -> Unit,
 ) : RoundSeam {
 
@@ -123,6 +130,7 @@ class RoundClient(
         // The transport holds no socket of its own: there is one connection per phone and the
         // lobby owns it. A round that opened a second one would be a second seat.
         send = { frame -> up?.invoke(frame) },
+        radio = radio,
         onEvent = note,
         onInbound = { body ->
             // The probe first, on the raw bytes, before anything has decided what they are — a
@@ -139,6 +147,10 @@ class RoundClient(
         // Drained on the caller's dispatcher, which here is the composition's — the main thread,
         // and the only place a screen may be written from.
         scope.launch { round.run() }
+        // **The contact upload's cadence, on the same dispatcher** (D-217). It sends nothing until a
+        // seed arrives and nothing after the round ends, and inside a round it never stops: one
+        // upload a beat, at one size, out or not (R8).
+        scope.launch { round.upload() }
     }
 
     /**

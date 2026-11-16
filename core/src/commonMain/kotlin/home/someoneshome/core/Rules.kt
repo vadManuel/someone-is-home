@@ -997,7 +997,12 @@ private fun contact(state: GameState, event: Event.ContactMade): Reduction<GameS
             // Two lists rather than a timestamp, because "newer than the last meeting" is a fact
             // about meetings and comparing ticks to work it out would put the rule in two places.
             newlyRevoked = (state.newlyRevoked + event.target).sortedBy { it.index },
-            cooldownArmed = state.cooldownArmed.filterNot { it.index == event.actor.index },
+            // **R2: being Revoked disarms an armed Revoke** (D-217). The actor spent theirs, and a
+            // target who was holding one is out of the round and loses it with everything else; an
+            // armed Revoke outliving its holder would be a Revoke a seat on the couch could land.
+            cooldownArmed = state.cooldownArmed.filterNot {
+                it.index == event.actor.index || it.index == event.target.index
+            },
         )
     }
 
@@ -1544,7 +1549,13 @@ private fun takeover(state: GameState, meeting: Meeting): Reduction<GameState, E
         (state.restrained + losing).sortedBy { it.index }
     }
     return Reduction(
-        state.copy(restrained = held),
+        // **R2: being Restrained disarms an armed Revoke** (D-217), at the moment the seat leaves
+        // the round. Nothing is emitted about it: the seat's phone is on the takeover, and whether
+        // it was holding a Revoke is not a fact anybody may be told.
+        state.copy(
+            restrained = held,
+            cooldownArmed = state.cooldownArmed.filterNot { it.index == losing.index },
+        ),
         listOf(Effect.RestrainedTakeover(losing, Haptic.Long)),
     )
 }

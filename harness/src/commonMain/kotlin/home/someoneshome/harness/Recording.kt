@@ -50,6 +50,10 @@ class Recording(
     }
 
     companion object {
+        // 22: one refusal reason a version 21 build cannot name -- `ReporterOut` (R3, D-217) -- and
+        // two rule changes that reduce the same events differently: a Revoked or Restrained seat
+        // is disarmed (R2), and a contact at a meeting is refused (R5). No row changed shape.
+        //
         // 21: one effect a version 20 build cannot name -- `ContactAnswered` (R1, D-216). A contact
         // from an actor who holds no armed Revoke used to answer `AbilityFired` and now answers
         // this, so the same events replayed by a version 20 build produce a different effect
@@ -207,7 +211,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/21"
+        const val HEADER = "someone-is-home/recording/22"
     }
 }
 
