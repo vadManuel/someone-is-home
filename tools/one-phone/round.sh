@@ -24,8 +24,11 @@
 # then advertises as seat 1 and the phone's report of it is the check. Another seed may Revoke the
 # phone itself, which stops its scan.
 #
-# Logs land in $OUT (default /tmp/someones-home-one-phone): phone.log, seat-1.log, seat-2.log.
-# `start` stays in the foreground following the phone's lines that matter; Ctrl-C runs `stop`.
+# Logs land in $OUT (default /tmp/someones-home-one-phone). Every `start` (and `install`) gets a run
+# directory of its own, $OUT/runs/<date-time>/, and no later run deletes or overwrites it:
+# phone.log, seat-1.log, seat-2.log and driver.log in $OUT are links to the latest run's, and
+# $OUT/latest links to its directory. `start` stays in the foreground following the phone's lines
+# that matter; Ctrl-C runs `stop`, which stops processes and touches no log.
 #
 # Signing: the Team ID is SOMEONES_HOME_DEVELOPMENT_TEAM, or else read off the one valid "Apple
 # Development" certificate's OU, which is where run-app.sh says the Team ID lives. With no
@@ -51,9 +54,46 @@ SEAT_NAMES=(PHONE SIMA SIMB)
 
 mkdir -p "$OUT"
 
-say() { printf '%s\n' "$*" | tee -a "$OUT/driver.log"; }
-fail() { printf '\n%s\n' "$*" | tee -a "$OUT/driver.log" >&2; exit 1; }
+# Where `say` writes. `start` points it at /dev/null while it stops the previous run's processes.
+DRIVER_LOG="$OUT/driver.log"
+say() { printf '%s\n' "$*" | tee -a "$DRIVER_LOG"; }
+fail() { printf '\n%s\n' "$*" | tee -a "$DRIVER_LOG" >&2; exit 1; }
 nap() { python3 -c "import time; time.sleep($1)"; }
+
+# ---------------------------------------------------------------------------------------------
+# Every run's logs, kept
+
+RUN=""
+# The followed logs, linked from $OUT to the latest run's own copies.
+LINKED_LOGS=(phone.log seat-1.log seat-2.log driver.log)
+# Loose files an older version of this script wrote straight into $OUT and overwrote every run.
+LOOSE_LOGS=(phone.log seat-1.log seat-2.log driver.log build-phone.log build-sims.log install-phone.log grants.txt)
+
+begin_run() {
+    local stamp f moved=""
+    stamp="$(date +%Y%m%d-%H%M%S)"
+    mkdir -p "$OUT/runs"
+    # Logs an older script left loose are moved into a directory of their own, never removed.
+    for f in "${LOOSE_LOGS[@]}"; do
+        if [ -f "$OUT/$f" ] && [ ! -L "$OUT/$f" ]; then
+            mkdir -p "$OUT/runs/before-$stamp"
+            mv "$OUT/$f" "$OUT/runs/before-$stamp/$f"
+            moved=1
+        fi
+    done
+    RUN="$OUT/runs/$stamp"
+    # Two runs in one second keep both: the second gets a suffix.
+    local n=1
+    while [ -e "$RUN" ]; do RUN="$OUT/runs/$stamp-$n"; n=$((n + 1)); done
+    mkdir -p "$RUN"
+    for f in "${LINKED_LOGS[@]}"; do
+        : >"$RUN/$f"
+        ln -sfn "runs/$(basename "$RUN")/$f" "$OUT/$f"
+    done
+    ln -sfn "runs/$(basename "$RUN")" "$OUT/latest"
+    DRIVER_LOG="$OUT/driver.log"
+    [ -z "$moved" ] || say "an earlier run's loose logs were moved to $OUT/runs/before-$stamp"
+}
 
 # ---------------------------------------------------------------------------------------------
 # The phone
@@ -116,31 +156,84 @@ find_team() {
 }
 
 install_phone() {
+    [ -n "$RUN" ] || begin_run
     find_team
     find_phone
     say "=== BUILDING THE PLAYTEST APP FOR $PHONE_NAME (a few minutes the first time) ==="
     if ! xcodebuild -project iosApp/iosApp.xcodeproj -scheme SomeonesHome -configuration "$CONFIG" \
         -destination "id=$PHONE_UDID" -derivedDataPath "$DERIVED-device" \
         DEVELOPMENT_TEAM="$TEAM" -allowProvisioningUpdates -allowProvisioningDeviceRegistration \
-        build >"$OUT/build-phone.log" 2>&1; then
-        tail -25 "$OUT/build-phone.log" >&2
-        if grep -qiE 'signing|provisioning|team|certificate|No Account' "$OUT/build-phone.log"; then
-            fail "SIGNING FAILED (full log: $OUT/build-phone.log). The owner must: open iosApp/iosApp.xcodeproj in Xcode once, select the SomeonesHome target → Signing & Capabilities, pick team $TEAM, and let Xcode register $PHONE_NAME. Then run this again."
+        build >"$RUN/build-phone.log" 2>&1; then
+        tail -25 "$RUN/build-phone.log" >&2
+        if grep -qiE 'signing|provisioning|team|certificate|No Account' "$RUN/build-phone.log"; then
+            fail "SIGNING FAILED (full log: $RUN/build-phone.log). The owner must: open iosApp/iosApp.xcodeproj in Xcode once, select the SomeonesHome target → Signing & Capabilities, pick team $TEAM, and let Xcode register $PHONE_NAME. Then run this again."
         fi
-        fail "THE PHONE BUILD FAILED — see $OUT/build-phone.log"
+        fail "THE PHONE BUILD FAILED — see $RUN/build-phone.log"
     fi
     local app="$DERIVED-device/Build/Products/$CONFIG-iphoneos/SomeonesHome.app"
     find "$app" -name 'Silkscreen-Regular.ttf' | grep . >/dev/null \
         || fail "the pixel fonts are not in the bundle; the app would fail on its first frame"
     say "=== INSTALLING ON $PHONE_NAME ==="
-    if ! xcrun devicectl device install app --device "$PHONE_CORE" "$app" >"$OUT/install-phone.log" 2>&1; then
-        cat "$OUT/install-phone.log" >&2
+    if ! xcrun devicectl device install app --device "$PHONE_CORE" "$app" >"$RUN/install-phone.log" 2>&1; then
+        cat "$RUN/install-phone.log" >&2
         fail "THE INSTALL FAILED. On the phone: unlock it; Settings → Privacy & Security → Developer Mode must be on (it restarts the phone)."
     fi
     say "installed."
 }
 
+# ---------------------------------------------------------------------------------------------
+# A locked phone
+#
+# A host phone that locks or sleeps is suspended, and its sockets go with it: the first round-B try
+# logged `Websocket handler failed … ENOTCONN` for every seat, then `WILL NOT ARM — 0 SEAT(S)`. The
+# OS reports a lock only as "a passcode is needed now", so a phone with no passcode cannot be seen
+# to lock from here.
+
+# Prints yes, no, or unknown.
+phone_locked() {
+    local json
+    json="$(mktemp "$OUT/lock.XXXXXX")"
+    xcrun devicectl device info lockState --device "$PHONE_CORE" --timeout 20 --json-output "$json" >/dev/null 2>&1 || true
+    python3 -c '
+import json, sys
+try:
+    v = json.load(open(sys.argv[1])).get("result", {}).get("passcodeRequired")
+except Exception:
+    v = None
+print("unknown" if v is None else ("yes" if v else "no"))
+' "$json"
+    rm -f "$json"
+}
+
+LOCKED_HELP="Unlock it, and set Settings → Display & Brightness → Auto-Lock → Never for the scripted round: a host phone that locks drops every seat. Put Auto-Lock back afterwards."
+
+refuse_if_locked() {
+    if [ "$(phone_locked)" = "yes" ]; then
+        fail "THE PHONE IS LOCKED. $LOCKED_HELP Then run this again."
+    fi
+}
+
+# In the background while `start` follows the log: says so, once per lock, when the phone locks.
+watch_lock() {
+    local was="no" now
+    while true; do
+        nap 15
+        now="$(phone_locked)"
+        if [ "$now" = "yes" ] && [ "$was" != "yes" ]; then
+            say ""
+            say "!!! THE PHONE IS LOCKED. The host's sockets stop with it and every seat drops."
+            say "!!! $LOCKED_HELP"
+            say "!!! Before LIGHTS OUT: Ctrl-C and start again."
+            say ""
+        elif [ "$now" = "no" ] && [ "$was" = "yes" ]; then
+            say "!!! the phone is unlocked again"
+        fi
+        [ "$now" = "unknown" ] || was="$now"
+    done
+}
+
 launch_phone() {
+    refuse_if_locked
     say "=== LAUNCHING THE HOST ON $PHONE_NAME · SEED $SEED ==="
     local lights=()
     # The bench's script (`RoundCheat.theRound`) runs on the host only with ROUND set. Without it the
@@ -191,6 +284,12 @@ EOF
     rm -f "$OUT/phone.pid" "$OUT/phone.core"
 }
 
+stop_lock_watch() {
+    [ -f "$OUT/lockwatch.pid" ] || return 0
+    kill "$(cat "$OUT/lockwatch.pid")" 2>/dev/null || true
+    rm -f "$OUT/lockwatch.pid"
+}
+
 # ---------------------------------------------------------------------------------------------
 # The two Simulator seats
 
@@ -227,8 +326,8 @@ build_sims() {
     say "=== BUILDING THE PLAYTEST APP FOR THE SIMULATOR ==="
     xcodebuild -project iosApp/iosApp.xcodeproj -scheme SomeonesHome -configuration "$CONFIG" \
         -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
-        -derivedDataPath "$DERIVED" build >"$OUT/build-sims.log" 2>&1 \
-        || { tail -25 "$OUT/build-sims.log" >&2; fail "the simulator build failed — see $OUT/build-sims.log"; }
+        -derivedDataPath "$DERIVED" build >"$RUN/build-sims.log" 2>&1 \
+        || { tail -25 "$RUN/build-sims.log" >&2; fail "the simulator build failed — see $RUN/build-sims.log"; }
     SIM_APP="$DERIVED/Build/Products/$CONFIG-iphonesimulator/SomeonesHome.app"
     find "$SIM_APP" -name 'Silkscreen-Regular.ttf' | grep . >/dev/null \
         || fail "the pixel fonts are not in the bundle; the app would fail on its first frame"
@@ -238,11 +337,11 @@ prepare_sims() {
     say "=== THE GRANTS A HOST WOULD HAVE GIVEN, AND THE INSTALL (see sim-grants.py) ==="
     local u
     for u in "${SIM_UDIDS[@]}"; do xcrun simctl shutdown "$u" 2>/dev/null || true; done
-    python3 "$REPO/sim-grants.py" notifications "${SIM_UDIDS[@]}" | tee -a "$OUT/driver.log" | tee "$OUT/grants.txt"
+    python3 "$REPO/sim-grants.py" notifications "${SIM_UDIDS[@]}" | tee -a "$OUT/driver.log" | tee "$RUN/grants.txt"
     # A Simulator that has never answered the notification prompt is refused a seat, naming
     # NOTIFICATIONS. sim-grants copies an answer from any Simulator that has one; with none, a person
     # answers it once and every run after this is covered.
-    if grep -q "NO ANSWERED NOTIFICATION ALERT" "$OUT/grants.txt"; then
+    if grep -q "NO ANSWERED NOTIFICATION ALERT" "$RUN/grants.txt"; then
         say ""
         say "!!! ONE-TIME SETUP: no Simulator on this Mac has answered the notification prompt."
         say "!!! When the Simulator window shows 'Someone's Home Would Like to Send You Notifications',"
@@ -309,13 +408,16 @@ wait_for() {
 
 do_stop() {
     say "=== STOPPING ==="
+    stop_lock_watch
     stop_phone
     stop_sims
-    say "logs kept in $OUT"
+    # Nothing here touches a log: every run's are kept under $OUT/runs/.
+    if [ -L "$OUT/latest" ]; then say "logs kept in $OUT/$(readlink "$OUT/latest")"; else say "logs kept in $OUT"; fi
 }
 
 # The phone's lines that matter (ble-unit4-device-check.md), plus the bench's and the lobby's.
-FOLLOW='\[radio\]|\[round\] (PUSH|WHAT THIS PHONE IS)|\[house\]|\[round-bench\]|\[lobby-bench\] (HOSTING|SETUP|SEATED|LIGHTS OUT|ARMED|NOT HOSTING|[0-9]+ JOINED)'
+# The last three are how a host that locked or slept shows in its own log.
+FOLLOW='\[radio\]|\[round\] (PUSH|WHAT THIS PHONE IS)|\[house\]|\[round-bench\]|\[lobby-bench\] (HOSTING|SETUP|SEATED|LIGHTS OUT|ARMED|NOT HOSTING|[0-9]+ JOINED)|Websocket handler failed|SEARCH FAILED|[Ll]ocked'
 
 do_start() {
     local install=1 phone=1
@@ -332,12 +434,11 @@ do_start() {
         shift
     done
 
-    # A previous run's processes and logs go first, so every log starts at this run.
-    do_stop >/dev/null 2>&1
-    rm -f "$OUT"/phone.log "$OUT"/seat-*.log "$OUT"/driver.log
-    : >"$OUT/driver.log"
-    echo "$SEED" >"$OUT/seed.txt"
-    say "=== ONE-PHONE ROUND · SEED $SEED · LOGS IN $OUT ==="
+    # A previous run's processes go first. Its logs stay where they are, in their own run directory.
+    DRIVER_LOG=/dev/null do_stop >/dev/null 2>&1
+    begin_run
+    echo "$SEED" >"$RUN/seed.txt"
+    say "=== ONE-PHONE ROUND · SEED $SEED · LOGS IN $RUN (linked from $OUT) ==="
 
     if [ -n "$phone" ]; then
         if [ -n "$install" ]; then install_phone; else find_phone; fi
@@ -353,6 +454,9 @@ do_start() {
         # The first launch may stand on the OS's permission prompts; answer them on the phone.
         wait_for "$OUT/phone.log" "ON THE AIR" 120 "the phone's home is on the air" || {
             grep -E 'SETUP|NOT HOSTING|REFUSED' "$OUT/phone.log" | tail -5
+            if grep -qi 'locked' "$OUT/phone.log" || [ "$(phone_locked)" = "yes" ]; then
+                fail "THE PHONE WAS LOCKED, SO THE APP COULD NOT START. $LOCKED_HELP Then run start again."
+            fi
             fail "THE PHONE NEVER HOSTED. If the log says SETUP INCOMPLETE, do the permissions sweep (README step 2) and run start again. If the phone was locked, unlock it and run start again."
         }
         launch_sim 1
@@ -364,6 +468,15 @@ do_start() {
         launch_sim 2
         wait_for "$OUT/seat-1.log" "STILL LOOKING|ATTACHING" 120 "seat 1 is looking for '$HOME_NAME'"
         wait_for "$OUT/seat-2.log" "STILL LOOKING|ATTACHING" 120 "seat 2 is looking for '$HOME_NAME'"
+        # Nothing hosts, so no lights go out: each seat's bench must still be waiting, not given up,
+        # past the sixty seconds after which it used to give up (RoundCheat's awaitTheWorkOrder).
+        say "waiting 75 s: a seat's bench must not give up before LIGHTS OUT"
+        nap 75
+        if grep -q "NO WORK ORDER ARRIVED" "$OUT"/seat-*.log; then
+            say "FAIL — a seat's bench gave up before any LIGHTS OUT: $(grep -h "NO WORK ORDER ARRIVED" "$OUT"/seat-*.log | head -1)"
+        else
+            say "no seat's bench has given up waiting for LIGHTS OUT"
+        fi
         say "--no-phone dry run done. Nothing hosts, so both seats keep looking. Stop with: $0 stop"
         return 0
     fi
@@ -380,6 +493,8 @@ do_start() {
     say "Following $OUT/phone.log. Ctrl-C stops everything (or: $0 stop)."
     say ""
     trap 'echo; do_stop; exit 0' INT TERM
+    watch_lock &
+    echo $! >"$OUT/lockwatch.pid"
     tail -n +1 -f "$OUT/phone.log" | grep --line-buffered -E "$FOLLOW"
 }
 

@@ -33,10 +33,20 @@ to the same values.
    Bluetooth"*: allow it. If it says `BLUETOOTH IS NOT ALLOWED FOR THIS TERMINAL`, go to System Settings
    → Privacy & Security → Bluetooth, switch on the terminal app you use, and run it again.
 
-Logs go to `/tmp/someones-home-one-phone/`: `phone.log` (everything the phone prints), `seat-1.log`,
-`seat-2.log`, `driver.log`. `start` stays in the foreground and follows the phone's `[radio]`,
+Logs go to `/tmp/someones-home-one-phone/`. **Every `start` keeps its own**, in
+`runs/<date-time>/`, and no later run deletes or overwrites them: `phone.log` (everything the phone
+prints), `seat-1.log`, `seat-2.log`, `driver.log`, and the build and install logs. `phone.log`,
+`seat-1.log`, `seat-2.log` and `driver.log` in the top folder are links to the latest run's, and
+`latest/` links to its folder. `start` stays in the foreground and follows the phone's `[radio]`,
 `[round] PUSH`, `[house]` and bench lines. **Ctrl-C stops everything**: the app on the phone, both
-Simulators and the log writers. `round.sh stop` does the same from another terminal.
+Simulators and the log writers. `round.sh stop` does the same from another terminal. Neither touches
+a log.
+
+**A locked phone.** A host phone that locks or sleeps is suspended and its sockets go with it, so the
+house drops every seat (`Websocket handler failed … ENOTCONN`, then `WILL NOT ARM — 0 SEAT(S)`).
+`start` refuses to launch on a locked phone, says so if the app could not start because it was
+locked, and while it follows the log it prints `!!! THE PHONE IS LOCKED` when the phone locks. It can
+only see a lock on a phone with a passcode.
 
 ## 1. Install
 
@@ -60,7 +70,10 @@ Network, and any other it asks for). Then check Settings → Apps → Someone's 
 
 - **PASS:** every row the app asks for is on.
 - Swipe the app away afterwards. `start` relaunches it with its launch switches.
-- Set **Auto-Lock to 30 seconds** (Settings → Display & Brightness) for step 4.
+- Set **Auto-Lock to 30 seconds** (Settings → Display & Brightness) for round A's step 4, and keep
+  the phone awake by touching it while round A is in the lobby. **Before round B, set Auto-Lock to
+  Never**: in the lobby nothing keeps the host awake, and the first round-B try lost every seat when
+  the phone locked. Put Auto-Lock back when you are done.
 
 `start` would raise the same prompts itself, but it waits only 15 s for them.
 
@@ -123,9 +136,11 @@ for a minute (twice Auto-Lock).
 **Step 5 (the device check's step 7), Bluetooth switched off is named (D-222, D-223).** Open Settings →
 Bluetooth on the phone, switch it off, wait 5 s, switch it on, and go back to the app.
 
-- **PASS:** the phone logs `[radio] OUTAGE — …` and **exactly one** `[radio] FAULT — THE RADIO WENT DOWN
-  (…) · PERSON · THE HOUSE IS TOLD ONCE`, and the host (the same phone) logs exactly one `[house] RADIO
-  FAULT — SEAT 0 · PERSON · NAMED AT THE NEXT MEETING`. Nothing on the screen changes.
+- **PASS:** the phone logs one `[radio] OUTAGE — …` line for each manager (`SCANNER OFF` and
+  `ADVERTISER OFF`), **exactly one** `[radio] FAULT — THE RADIO WENT DOWN (…) · PERSON · THE HOUSE IS
+  TOLD ONCE`, and on the way back `ADVERTISING` with **no** `ADVERTISING FAILED`. The host (the same
+  phone) logs exactly one `[house] RADIO FAULT — SEAT 0 · PERSON · NAMED AT THE NEXT MEETING`. Nothing
+  on the screen changes.
 - Going to Settings puts the host in the background, so the house pauses while you are there and the
   Simulators may reconnect. That is this rig's limit, not the radio's: with two phones the switch-off
   would happen on a phone that is not hosting.
@@ -139,7 +154,9 @@ Bluetooth on the phone, switch it off, wait 5 s, switch it on, and go back to th
     LIGHTS OUT. The bench's own meeting (about 15 s in) then carries the notice. **PASS:** when the gate closes, the phone logs `[round] PUSH … NOTICE
   — SEAT 0 UNREACHABLE` just before the `PHASE Discussion` push. At the meeting after that, with nothing
   switched off between, it logs `NOTICE — NOBODY NAMED` and the notices screen shows only its band.
-- **FAIL:** no FAULT line, one that says `DEVICE`, more than one per switch-off, or a missing notice.
+- **FAIL:** no FAULT line, one that says `DEVICE`, more than one per switch-off, `ADVERTISING FAILED`,
+  or a missing notice. To switch off a second time, wait until the phone has been back for a few
+  seconds: a switch-off within two seconds of coming back is counted as the same one.
 
 Stop with Ctrl-C. To check the end of step 4, press LEAVE on the phone first and put it down: **PASS:**
 it dims and locks on its usual schedule.
@@ -161,11 +178,16 @@ That needs a phone that is advertising, so do it at the end of round A, or right
 round B. `--quiet` prints the median and best RSSI every 2 s. Move the phone over the Mac (around the
 hinge and the keyboard) and remember where the reading is best.
 
-Then, in one terminal:
+Check Auto-Lock is **Never** (step 2). Then, in one terminal:
 
 ```
 tools/one-phone/round.sh start --no-install
 ```
+
+Add `--auto-lights-out` to have the bench press LIGHTS OUT itself once three are seated; then start
+`advertise` first. Either way the bench on every seat waits for LIGHTS OUT for as long as the room
+takes: it prints `STILL WAITING FOR THE LIGHTS TO GO OUT — 60S …` every minute, and gives up only if
+the lights have gone out and no work order arrives within 60 s.
 
 and in a second terminal, before you press LIGHTS OUT:
 
@@ -177,6 +199,9 @@ It prints `ADVERTISE xxxxxxxx · WINDOW n · WALL ms` every 15 s, the phone's ow
 
 Press LIGHTS OUT and **hold the phone at the strongest spot from then on.** The bench walks one shift
 (about 15 s), Revokes seat 1, and a few seconds later reports it from seat 2 itself.
+
+- **PASS, the bench plays:** after `[house] === THE LIGHTS GO OUT`, `[round-bench] THE ORDER ARRIVED`
+  and `=== ACT 2, A SHIFT ===`. **FAIL:** any `NO WORK ORDER ARRIVED` line.
 
 - **PASS, the phone hears the Mac:** the phone logs `[radio] HEARD 1 — yyyyyyyy -nn`, where `yyyyyyyy` is
   the Mac's latest `ADVERTISE` prefix (or the one before it, at a window edge).
@@ -225,5 +250,5 @@ contact gate.
 ## Report back
 
 For each of step 0, arming, the sniffer's shape, token and rotation checks, steps 4 and 5, and round B:
-pass or fail. Also send any `FAIL`, `NOTE`, `OUTAGE` or `REFUSED` line, the RSSI table, and
-`/tmp/someones-home-one-phone/phone.log`.
+pass or fail. Also send any `FAIL`, `NOTE`, `OUTAGE` or `REFUSED` line, the RSSI table, and the run
+folders under `/tmp/someones-home-one-phone/runs/` (one per `start`; `latest/` is the newest).
