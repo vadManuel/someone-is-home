@@ -46,9 +46,10 @@ import kotlin.test.assertTrue
  * - **an armed Insider** (seat 1) and a Resident (seat 2), which revokes seat 2.
  *
  * The toucher's frame is the same length in all three, and so is the Resident partner's in the two
- * that revoke nobody. The partner of the armed touch is now Revoked and is sent `RevokeLanded`: that
- * frame is the outcome rather than the touch, it is outside R1 (see D-216's open item), and it is
- * asserted here only as what it is, so that a change to it shows up as a change.
+ * that revoke nobody. **The partner of the armed touch is now Revoked and is sent `RevokeLanded`, and
+ * since S1 (D-219) that is one frame of the same length too**: it was 95 bytes, and on a measurable
+ * Wi-Fi the short frame was the phone that had just been Revoked. So every phone that touched, in
+ * every touch, receives exactly one frame of one size, whoever was Revoked.
  */
 class TouchFrameSizeTest {
 
@@ -125,6 +126,7 @@ class TouchFrameSizeTest {
             val residentA = residents.getValue(2)
             val residentB = residents.getValue(3)
             val armedInsider = armed.getValue(1)
+            val revoked = armed.getValue(2)
 
             for ((who, frames) in listOf(
                 "an unarmed Insider" to unarmedInsider,
@@ -132,6 +134,7 @@ class TouchFrameSizeTest {
                 "a Resident touching a Resident" to residentA,
                 "the other Resident" to residentB,
                 "an armed Insider" to armedInsider,
+                "the armed Insider's Revoked target" to revoked,
             )) {
                 assertEquals(1, frames.size, "$who's socket got ${frames.size} frames for one touch: $frames")
             }
@@ -142,6 +145,7 @@ class TouchFrameSizeTest {
                 "Resident" to residentA.single().length,
                 "Resident partner" to residentB.single().length,
                 "armed Insider" to armedInsider.single().length,
+                "Revoked target" to revoked.single().length,
             )
             assertEquals(
                 1, lengths.values.toSet().size,
@@ -164,10 +168,31 @@ class TouchFrameSizeTest {
                 }
             }
 
-            // The Revoked partner: the outcome, outside R1, asserted as what it is.
-            val revoked = armed.getValue(2)
-            assertEquals(listOf<RoundMessage?>(RoundMessage.RevokeLanded), revoked.map(::messageOf))
-            println("R1 REVOKED PARTNER — ${revoked.single().length} BYTES (RevokeLanded, outside R1)")
+            // The Revoked partner's one frame is the Revoke landing, padded to the touch's size (S1).
+            assertEquals(listOf<RoundMessage?>(RoundMessage.RevokeLanded.Padded), revoked.map(::messageOf))
+            println("S1 REVOKED PARTNER — ${revoked.single().length} BYTES (RevokeLanded, padded)")
+
+            // **The other seat order, which S1's padding does not reach** (D-219, raised). When the
+            // target sits below the Insider, the resolver mints the target's own half first: it is
+            // still living and unarmed, so it is answered `ContactAnswered`, and then the Insider's
+            // half lands and sends `RevokeLanded`. Two frames to one phone where every other toucher
+            // gets one. Both are the one size now; the count is a change to what a client receives
+            // beyond padding, so it is asserted here as what it is, so that a fix shows up as one.
+            tick += Balance.REVOKE_COOLDOWN + 1
+            put(Event.RevokeArmed(Tick(tick++), insider))
+            assertTrue(state.cooldownArmed.any { it.index == insider.index }, "the fixture never re-armed the Insider")
+            val below = touch(insider, Seat(0))
+            assertTrue(state.isRevoked(Seat(0)), "the second armed touch revoked nobody, so it measured nothing")
+            val lowTarget = below.getValue(0)
+            assertEquals(1, below.getValue(1).size, "the armed Insider's socket got ${below.getValue(1).size} frames for one touch")
+            assertEquals(
+                listOf<RoundMessage?>(RoundMessage.ContactAnswered(RoundMessage.ContactAnswered.PAD), RoundMessage.RevokeLanded.Padded),
+                lowTarget.map(::messageOf),
+                "the lower-seated target's frames changed: if this is the fix for D-219's raised item, restate this",
+            )
+            val belowLengths = (below.getValue(1) + lowTarget).map { it.length }.toSet()
+            assertEquals(setOf(lengths.values.first()), belowLengths, "a frame of the lower-seated touch is another size: $belowLengths")
+            println("S1 LOWER-SEATED TARGET — ${lowTarget.size} FRAMES OF ${lowTarget.map { it.length }} BYTES")
         } finally {
             jobs.forEach { it.cancel() }
             host.stop()

@@ -50,6 +50,10 @@ class Recording(
     }
 
     companion object {
+        // 23: one refusal reason a version 22 build cannot name -- `AlreadyReported` (S4, D-219) --
+        // and the rule change behind it: a second report of a Revoked seat a meeting has already
+        // reported is refused, so the same events reduce differently. No row changed shape.
+        //
         // 22: one refusal reason a version 21 build cannot name -- `ReporterOut` (R3, D-217) -- and
         // two rule changes that reduce the same events differently: a Revoked or Restrained seat
         // is disarmed (R2), and a contact at a meeting is refused (R5). No row changed shape.
@@ -211,7 +215,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/22"
+        const val HEADER = "someone-is-home/recording/23"
     }
 }
 

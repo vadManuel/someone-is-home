@@ -435,11 +435,28 @@ sealed class RoundMessage {
      * **No haptic**, unlike [RestrainedTakeover] — see [Effect.RevokeLanded], where D-156 carries
      * it: the effect is constructed on every contact, so a buzz would fire again each time somebody
      * touched a player who was already out.
+     *
+     * ### Padded to the touch's one frame size (S1 of the owner's 2026-11-15 rulings, D-219)
+     *
+     * This is the one frame the Revoked target's phone receives for the touch that put it out, and
+     * every other phone that touched is sent [AbilityFired] or [ContactAnswered], 120 bytes carried.
+     * Empty, this was 95: on a Wi-Fi that can be read or merely measured, the phone that had just
+     * been Revoked was the one whose touch came back short. [pad] carries nothing and is always
+     * [PAD], so that pushed, encoded and carried this is exactly `AbilityFired(true)`'s length —
+     * [ContactAnswered]'s arrangement, and `ContactAnswerSizeTest` pins all three together.
      */
     @ClientFacing
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("RevokeLanded")
-    data object RevokeLanded : RoundMessage()
+    data class RevokeLanded(val pad: String) : RoundMessage() {
+        companion object {
+            /** Twelve characters: `"RevokeLanded","pad":"…"` against `"AbilityFired","cooldownStarted":true`. */
+            const val PAD: String = "000000000000"
+
+            /** The one value this message ever takes. */
+            val Padded: RevokeLanded = RevokeLanded(PAD)
+        }
+    }
 
     /** Lights out. */
     @ClientFacing
@@ -828,8 +845,8 @@ object RoundWire {
             effect.attribution.map { (voter, selection) -> RoundMessage.Cast(voter, selection) },
         )
         is Effect.RestrainedTakeover -> RoundMessage.RestrainedTakeover(effect.haptic)
-        // The seat comes off and nothing is left, which is `MeetingCalling`'s projection.
-        is Effect.RevokeLanded -> RoundMessage.RevokeLanded
+        // The seat comes off and only the pad is left: the touch's one frame size (S1, D-219).
+        is Effect.RevokeLanded -> RoundMessage.RevokeLanded.Padded
         is Effect.MeetingEnded -> RoundMessage.MeetingEnded(effect.haptic)
         is Effect.EgressOpened ->
             RoundMessage.EgressOpened(effect.type, effect.nodes, effect.remaining, effect.haptic)

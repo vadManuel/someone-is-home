@@ -63,7 +63,7 @@ class ContactUploaderTest {
     /** R8, for both ways out: the cadence and the size hold, scanning stops, nothing heard goes up. */
     @Test
     fun anOutPhoneKeepsUploadingOnTheBeatAtOneSizeAndReportsNothing() {
-        for (out in listOf<RoundMessage>(RoundMessage.RevokeLanded, RoundMessage.RestrainedTakeover(Haptic.Long))) {
+        for (out in listOf<RoundMessage>(RoundMessage.RevokeLanded.Padded, RoundMessage.RestrainedTakeover(Haptic.Long))) {
             val (up, radio, sent) = rig()
             up.heard(RoundMessage.ContactSeedIssued(seed))
             up.beat()
@@ -84,7 +84,7 @@ class ContactUploaderTest {
         val (up, radio, _) = rig(window = { ContactWindow(w) })
         up.heard(RoundMessage.ContactSeedIssued(seed))
         up.beat(); up.beat()
-        up.heard(RoundMessage.RevokeLanded)
+        up.heard(RoundMessage.RevokeLanded.Padded)
         w = 11L
         up.beat()
         assertEquals(

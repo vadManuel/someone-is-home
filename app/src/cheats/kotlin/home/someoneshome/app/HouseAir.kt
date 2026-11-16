@@ -81,7 +81,7 @@ class HouseAir(
     suspend fun beat() {
         for (seat in house.state.seats) {
             val up = uploaders[seat.index] ?: continue
-            if (house.state.isOut(seat) && !up.isOut) up.heard(RoundMessage.RevokeLanded)
+            if (house.state.isOut(seat) && !up.isOut) up.heard(RoundMessage.RevokeLanded.Padded)
             up.beat()
         }
         val batch = pending.toList()

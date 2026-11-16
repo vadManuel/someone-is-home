@@ -38,6 +38,26 @@ class ContactAnswerSizeTest {
         }
     }
 
+    /**
+     * **S1 (D-219): the Revoked target's one frame is the same length too.** The touch that puts a
+     * phone out sends it `RevokeLanded` in place of an answer; at 95 bytes against 120 it marked the
+     * phone that had just been Revoked.
+     */
+    @Test
+    fun `the Revoked target's frame is the touch's one length on the wire`() {
+        for (seq in listOf(1L, 9L, 10L, 99L, 100L, 4_321L, 1_000_000L)) {
+            val armed = frame(seq, RoundWire.project(Effect.AbilityFired(Seat(2), cooldownStarted = true)))
+            val landed = frame(seq, RoundWire.project(Effect.RevokeLanded(Seat(3))))
+            assertEquals(
+                armed.length, landed.length,
+                "at seq $seq an armed touch is ${armed.length} bytes and the Revoked target's ${landed.length}:\n$armed\n$landed",
+            )
+        }
+        val projected = RoundWire.project(Effect.RevokeLanded(Seat(4)))
+        assertEquals(RoundMessage.RevokeLanded(RoundMessage.RevokeLanded.PAD), projected)
+        assertEquals(EmitSchema.REVOKE_LANDED, projected.kind)
+    }
+
     /** The pad is one constant: a field whose width could vary is a field somebody can measure. */
     @Test
     fun `the answer always carries the one pad`() {

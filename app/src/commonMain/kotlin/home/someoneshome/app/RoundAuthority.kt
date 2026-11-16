@@ -244,8 +244,13 @@ class RoundAuthority(
         // The home's NAME is in it and its geography is not. A name is what is already on the air
         // for the whole network; which card is in which room is the answer key to every work order
         // in the round.
+        //
+        // **And never the seed** (S3 of the owner's 2026-11-15 rulings, D-219). Every secret in the
+        // round is an HMAC under it (D-214): the Insider draw, every contact seed and so every
+        // token on the air. A log line carrying it is the round's answer key in a file.
+        // `ContactRadioBenchTest` plays a round through this and fails on the seed in any encoding.
         note(
-            "ARMING — SEED $seed · ${inputs.seats.size} SEAT(S) · " +
+            "ARMING — ${inputs.seats.size} SEAT(S) · " +
                 "INSIDERS ${arming.insiders.size} (SETTING ${inputs.chosenInsiders ?: "UNKNOWN"}) · " +
                 "IN '${hosted.name}' · ${markers.size} MARKER(S) · ${inputs.oneLines.size} LINE(S)"
         )

@@ -35,6 +35,21 @@ class GameState private constructor(
      */
     val newlyRevoked: List<Seat>,
     /**
+     * **Every Revoked seat a meeting has been called to report, in seat order** (S4 of the owner's
+     * 2026-11-15 rulings, D-219).
+     *
+     * *A second report of a Revoked player who has already been reported is refused.* A couch phone
+     * still advertises (D-008), so a living phone held against it after its meeting would otherwise
+     * call another one, and another. Written by the call and never cleared inside a round: a seat
+     * reported once is reported for the rest of it, which is what the ruling says. Public by the time
+     * it matters -- the meeting's ring names who was reported to everybody (D-121) -- and it reaches
+     * no client as itself.
+     *
+     * Kept apart from [newlyRevoked] on purpose: that list is *not yet through a meeting*, which a
+     * seat also leaves at a meeting nobody called about it. The ruling is about reports.
+     */
+    val reported: List<Seat>,
+    /**
      * **Restrained: held by the room, then deauthorised by the house** (`gdd.md:1009`).
      *
      * **A second list, never a second use of [revoked].** Rule 9 forbids collapsing the two: a
@@ -278,6 +293,9 @@ class GameState private constructor(
         if (insiderSeats.any { it.index == seat.index }) Role.Insider else Role.Resident
 
     fun isRevoked(seat: Seat): Boolean = revoked.any { it.index == seat.index }
+
+    /** Whether a meeting has already been called to report [seat] this round ([reported], S4). */
+    fun wasReported(seat: Seat): Boolean = reported.any { it.index == seat.index }
 
     fun isRestrained(seat: Seat): Boolean = restrained.any { it.index == seat.index }
 
@@ -537,6 +555,7 @@ class GameState private constructor(
         insiderSeats: List<Seat> = this.insiderSeats,
         revoked: List<Seat> = this.revoked,
         newlyRevoked: List<Seat> = this.newlyRevoked,
+        reported: List<Seat> = this.reported,
         restrained: List<Seat> = this.restrained,
         cooldownArmed: List<Seat> = this.cooldownArmed,
         cooldowns: List<Cooldown> = this.cooldowns,
@@ -560,7 +579,7 @@ class GameState private constructor(
         terminal: MarkerId? = this.terminal,
         reader: Seat? = this.reader,
     ) = GameState(
-        armed, outcome, seats, insiderSeats, revoked, newlyRevoked, restrained, cooldownArmed,
+        armed, outcome, seats, insiderSeats, revoked, newlyRevoked, reported, restrained, cooldownArmed,
         cooldowns, isolated, systemIntegrity, openSubroutines, workOrders, stations,
         activeMarkers, destinations, presence, staticUntil, meeting, egress, egressReadyAt, oneLines,
         names, voteWindowSeconds, nextEntity, seed, terminal, reader,
@@ -649,6 +668,7 @@ class GameState private constructor(
             insiderSeats = insiders,
             revoked = emptyList(),
             newlyRevoked = emptyList(),
+            reported = emptyList(),
             restrained = emptyList(),
             cooldownArmed = emptyList(),
             cooldowns = cooldowns,
@@ -688,6 +708,7 @@ class GameState private constructor(
             insiderSeats = emptyList(),
             revoked = emptyList(),
             newlyRevoked = emptyList(),
+            reported = emptyList(),
             restrained = emptyList(),
             cooldownArmed = emptyList(),
             cooldowns = emptyList(),

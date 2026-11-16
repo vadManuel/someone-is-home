@@ -13,6 +13,7 @@ import home.someoneshome.model.InsiderNamed
 import home.someoneshome.model.Isolation
 import home.someoneshome.model.Meeting
 import home.someoneshome.model.MeetingPhase
+import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.Outcome
 import home.someoneshome.model.Presence
 import home.someoneshome.model.PulseOffer
@@ -1257,6 +1258,11 @@ private fun meetingCalled(
     return Reduction(
         state.copy(
             meeting = meeting,
+            // S4 (D-219): the seat this meeting reports is reported for the rest of the round, and
+            // the gate refuses a second report of it. A meeting-card call reports nobody.
+            reported = (event.trigger as? MeetingTrigger.RevokeReported)
+                ?.let { trigger -> (state.reported + trigger.reported).distinctBy { it.index }.sortedBy { it.index } }
+                ?: state.reported,
             egress = held,
             // **A meeting call ends every running ability effect — D-185, closing T1·9 and T2·9.**
             //

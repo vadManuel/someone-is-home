@@ -1,5 +1,7 @@
 package home.someoneshome.app
 
+import home.someoneshome.core.ContactGate
+import home.someoneshome.core.contactSeedFor
 import home.someoneshome.model.ContactWindow
 import home.someoneshome.model.Event
 import home.someoneshome.model.InsiderAbility
@@ -85,9 +87,10 @@ class ContactRadioBenchTest {
         /** Every push each phone's socket delivered, decoded. */
         val pushed = seats.associate { it.index to mutableListOf<RoundMessage>() }
 
-        private var minted = 0
+        /** Every seat token the ledger minted, from the secure source production uses (D-215). */
+        val tokens = mutableListOf<SeatToken>()
         private val host = TransportHost(
-            SeatLedger(seats, mint = { SeatToken("tk-${minted++}") }),
+            SeatLedger(seats, mint = { mintSeatToken().also { tokens += it } }),
             nowMillis = { monotonicNanos() / 1_000_000 },
             onFrame = { seat, frame ->
                 // `LobbyHouse.onFrame`'s round half for this one body: onto the ordered queue.
@@ -151,8 +154,9 @@ class ContactRadioBenchTest {
 
         val act get() = ContactAct(air, beat = { beat() }, note = { said += it })
 
-        suspend fun armed() {
-            assertTrue(house.arm(SEED), "the bench never armed a round")
+        /** LIGHTS OUT through production's own arming path, its log lines into [said]. */
+        suspend fun armed(seed: Long = SEED) {
+            assertTrue(armAtLightsOut(house, hosting = true, seed = seed, note = { said += it }), "the bench never armed a round")
             withTimeout(30_000) { while (phones.values.any { !it.uploading }) delay(10) }
         }
 
@@ -189,6 +193,11 @@ class ContactRadioBenchTest {
     @Test
     fun theBenchPlaysARoundToAnEndingThroughTheFakeRadio() = rig {
         armed()
+        playToAnEnding()
+    }
+
+    /** A Revoke, its report, a meeting that Restrains the Insider: the round to an ending. */
+    private suspend fun Rig.playToAnEnding() {
         val state = { house.state }
         val insider = state().livingInsiders.single()
         val target = state().livingPlainResidents.first()
@@ -204,7 +213,7 @@ class ContactRadioBenchTest {
         act.touch(insider, target)
         assertTrue(state().isRevoked(target), "the touch did not Revoke the target: ${house.refusals}")
         assertTrue(RoundMessage.AbilityFired(cooldownStarted = true) in pushed.getValue(insider.index), "the Insider's phone was never told its Revoke fired")
-        assertTrue(RoundMessage.RevokeLanded in pushed.getValue(target.index), "the target's phone was never told")
+        assertTrue(RoundMessage.RevokeLanded.Padded in pushed.getValue(target.index), "the target's phone was never told")
         assertTrue(phones.getValue(target.index).outOfTheRound, "the Revoked phone does not know it is out")
 
         // The report: a living phone finds the Revoked one.
@@ -236,6 +245,92 @@ class ContactRadioBenchTest {
             )
         }
         assertTrue(said.any { it.startsWith("THE RADIO — SEAT ${insider.index} WALKS TO") }, "the act never walked")
+    }
+
+    // ---- S3: the host log carries no seed, token or key ------------------------------------------
+
+    /**
+     * **S3 of the owner's 2026-11-15 rulings (D-219): the host log never prints the round seed, or
+     * anything a seed, a contact seed or a seat token can be read back out of.**
+     *
+     * Every secret in the round is an HMAC under the seed (D-214), so a log line carrying it is the
+     * Insider draw and every token on the air, in a file. This plays the whole round above, armed
+     * through production's `armAtLightsOut` with a seed from the secure source, and reads every line
+     * the house, the arming and the act wrote for the seed in decimal (signed and unsigned), hex and
+     * base64 (both byte orders, both alphabets, padded or not), for every seat's contact seed and
+     * for every seat token the ledger minted, in hex and base64.
+     */
+    @Test
+    fun theHostLogCarriesNoSeedTokenOrKeyThroughARound() = rig {
+        val seed = drawRoundSeed()
+        armed(seed)
+        playToAnEnding()
+
+        val secrets = buildMap {
+            putAll(HostLogSecrets.ofSeed("the round seed", seed))
+            for (seat in seats) putAll(HostLogSecrets.ofBytes("seat ${seat.index}'s contact seed", contactSeedFor(seed, seat).bytes()))
+            for ((i, token) in tokens.withIndex()) putAll(HostLogSecrets.ofHex("seat token $i", token.value))
+        }
+        // The log read is the round's, from the arming line to the ending.
+        assertTrue(said.any { it.startsWith("ARMING — ") }, "the house's arming line is not in the log read: $said")
+        assertTrue(said.any { it.startsWith("THE ROUND ENDED — ") }, "the log read stops before the round ended: $said")
+        assertEquals(seats.size, tokens.size, "the ledger minted ${tokens.size} tokens for ${seats.size} seats")
+        // The detector, checked against the line this ruling removed: if it cannot see that, it sees nothing.
+        assertTrue(
+            HostLogSecrets.found(listOf("ARMING — SEED $seed · 5 SEAT(S)"), secrets).isNotEmpty(),
+            "the detector missed the seed in the very line S3 removed",
+        )
+        val found = HostLogSecrets.found(said, secrets)
+        assertTrue(found.isEmpty(), "S3: the host log carried a secret:\n" + found.joinToString("\n"))
+    }
+
+    // ---- S4: a Revoked player is reported once ---------------------------------------------------
+
+    /**
+     * **S4 (D-219) on the sockets: a second report of a couch phone is refused, recorded, and
+     * answered with nothing.** The report calls its meeting; the room votes Skip and the lights go
+     * out; the same living phone is held against the same Revoked phone again.
+     */
+    @Test
+    fun aSecondReportOfTheSameRevokedPhoneIsRefusedAndAnsweredWithNothing() = rig {
+        armed()
+        val insider = house.state.livingInsiders.single()
+        val target = house.state.livingPlainResidents.first()
+        val reporter = house.state.livingPlainResidents.first { it.index != target.index }
+        armRevoke(insider)
+        act.touch(insider, target)
+        assertTrue(house.state.isRevoked(target), "the fixture revoked nobody")
+        act.touch(reporter, target)
+        assertEquals(MeetingTrigger.RevokeReported(target), house.state.meeting?.trigger, "the first report called no meeting")
+
+        for (seat in seats) house.heard(Intent.CheckIn(seat))
+        if (house.state.meeting?.phase == MeetingPhase.Discussion) house.mint(Event.DiscussionClosed(house.now()))
+        for (seat in house.state.livingSeats) {
+            house.heard(Intent.SelectVote(seat, null))
+            house.heard(Intent.LockVote(seat))
+        }
+        if (house.state.meeting?.phase == MeetingPhase.Vote) house.mint(Event.VoteWindowClosed(house.now()))
+        house.mint(Event.TallyHalfwayReached(house.now()))
+        house.mint(Event.MeetingClosed(house.now()))
+        delay(SETTLE_MILLIS)
+        assertEquals(null, house.state.meeting, "the meeting never closed")
+        assertFalse(house.ended, "the round ended at the meeting, so every refusal below would be that one")
+
+        val framesBefore = seats.associate { it.index to pushed.getValue(it.index).size }
+        val refusedBefore = house.contactRefusals.size
+        // Past D-213's debounce, so the resolver mints the report again rather than swallowing it.
+        house.advanceTo(Tick(house.clock + ContactGate.DEBOUNCE_TICKS + 1))
+        act.touch(reporter, target)
+        val refused = house.contactRefusals.drop(refusedBefore)
+        assertTrue(
+            refused.any { (event, reason) ->
+                event is Event.MeetingCalled && event.trigger == MeetingTrigger.RevokeReported(target) &&
+                    reason == RefusalReason.AlreadyReported
+            },
+            "S4: the second report of seat ${target.index} was not refused as already reported: $refused",
+        )
+        assertEquals(null, house.state.meeting, "S4: the second report called a meeting")
+        assertEquals(framesBefore, seats.associate { it.index to pushed.getValue(it.index).size }, "S4: a refused second report was answered")
     }
 
     // ---- 2 · R8: out, and still uploading on the beat --------------------------------------------

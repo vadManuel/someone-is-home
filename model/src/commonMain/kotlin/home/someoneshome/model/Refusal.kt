@@ -111,6 +111,19 @@ enum class RefusalReason {
     ReporterOut,
 
     /**
+     * **A report of a Revoked player a meeting has already been called to report** (S4 of the
+     * owner's 2026-11-15 rulings, D-219).
+     *
+     * *Repeat reports of the same Revoked player are refused.* A couch phone still advertises
+     * (D-008), so after its meeting any living phone held against it would call another. This
+     * clears the entry condition above the ordinary way: the meeting that reported this seat rang
+     * every phone in the house with its name on it (D-121), so whether it has been reported is
+     * something the whole room already stood in. It is read by the authority and the recording,
+     * and, like every refusal of the radio's, it is answered with nothing (R4, D-217).
+     */
+    AlreadyReported,
+
+    /**
      * The event belongs to a phase the meeting is not at — including there being no meeting.
      *
      * **Everyone is on the same phase**, which is what makes this admissible under D-068: one

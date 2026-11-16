@@ -115,6 +115,16 @@ fun admit(state: GameState, event: Event): Admission = when {
         event.trigger is MeetingTrigger.RevokeReported &&
         state.isOut(event.caller) -> Admission.Refused(RefusalReason.ReporterOut)
 
+    // **S4: a Revoked player is reported once** (the owner's 2026-11-15 ruling, D-219). A couch
+    // phone keeps advertising (D-008), so a living phone held against it after its meeting is a
+    // second report of a seat the whole house was already rung about. Refused at the gate, as R3
+    // is, so it is recorded rather than dropped -- and, being the radio's, answered with nothing
+    // (R4), so no client's stream differs from a touch that was never made. Above the meeting checks
+    // so that a repeat during its own meeting is recorded as the repeat it is.
+    event is Event.MeetingCalled &&
+        (event.trigger as? MeetingTrigger.RevokeReported)?.let { state.wasReported(it.reported) } == true ->
+        Admission.Refused(RefusalReason.AlreadyReported)
+
     // D-133. The meeting card is inert while the house is on fire; the Revoke report is NOT --
     // D-121's one exception, unchanged. Split on the trigger and on nothing else.
     event is Event.MeetingCalled &&

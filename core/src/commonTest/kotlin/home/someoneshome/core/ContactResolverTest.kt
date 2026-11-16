@@ -306,7 +306,8 @@ class ContactResolverTest {
         )
         // The first report calls a meeting, and from then on the gate refuses both what follows: the
         // touch's other half, because contacts are ignored at a meeting (R5, D-217), and the second
-        // meeting. Both are recorded rather than dropped.
+        // report, because seat 6 has been reported already (S4, D-219, which sits above the meeting
+        // checks so a repeat is recorded as one). Both are recorded rather than dropped.
         var s = state
         val refusals = events.mapNotNull { e ->
             when (val a = admit(s, e)) {
@@ -317,7 +318,7 @@ class ContactResolverTest {
         assertEquals(
             listOf(
                 "ContactMade" to RefusalReason.MeetingAlreadyRunning,
-                "MeetingCalled" to RefusalReason.MeetingAlreadyRunning,
+                "MeetingCalled" to RefusalReason.AlreadyReported,
             ),
             refusals,
         )

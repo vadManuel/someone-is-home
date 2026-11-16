@@ -5112,6 +5112,81 @@ on, no cycle), at the cost above.
 | `platform` `ContactRadio.kt`, `RoundClient`, `HouseAir` KDoc | "until unit 4" | the radio that exists |
 | `SightingRingTest`, `SwitchboardRadioTest`, `ContactRadioRotationTest` | (new) | coalescing and 127; pre-arm off, one advertisement, the Revoked no-scan switch through resets, outages, silence; rotation within one beat of every boundary |
 
+## Revision 54 — the Revoked target's frame, the host log, and the repeat report
+
+*The owner's 2026-11-15 rulings S1, S3 and S4, on the items D-216 and D-217 left open. S2, fixed-size
+frames for every message, is folded into the transport encryption (R7) and is not here.*
+
+### D-219 · **The Revoked target's frame is padded to the touch's size, the host log prints no seed, and a Revoked player is reported once — decided, two items raised**
+
+**S1: `RevokeLanded` is padded to the touch's frame size.** `RoundMessage.RevokeLanded` was an empty
+object, 95 bytes carried against the 120 of `AbilityFired(true)` and `ContactAnswered`. On a Wi-Fi that
+can be read or merely measured, the phone whose touch came back short was the phone that had just been
+Revoked. It now carries `pad`, always the twelve-character constant `PAD`, by `ContactAnswered`'s
+arrangement (D-216). Nothing reads the pad; the screen, the lamp and the haptics are unchanged.
+`ContactAnswerSizeTest` pins it to `AbilityFired(true)`'s length at every sequence from 1 to a million,
+and `TouchFrameSizeTest`, on real sockets, now measures the target too: **120 bytes for every toucher,
+the Revoked target included.**
+
+**S3: the host log prints no seed.** `RoundAuthority.arm` logged `ARMING — SEED <seed>`, and every
+secret in the round is an HMAC under that value (D-214): the Insider draw and every contact seed, so
+every token on the air. The line keeps its counts and loses the seed. Every log and print path in
+`app` (`commonMain` and `cheats`) and `platform` was read for seed, token and key material. That was
+the only one. Two lines that come close, kept:
+
+- `BluetoothRadio.ios.kt` logs the first eight hex characters of the advertised token on each phone's
+  own console. The token is on the air in the clear by design (D-212), and an HMAC output gives up
+  neither its seed nor its key.
+- The transport bench (`TransportCheat`) logs a carried body on the client. It is a cheat-only rig on
+  its own port that carries pings, not a round.
+
+The guard is `ContactRadioBenchTest.theHostLogCarriesNoSeedTokenOrKeyThroughARound`. It arms through
+production's `armAtLightsOut` with a seed from the secure source, plays the round to an ending through
+the fake radio on real sockets, with real seat tokens from `mintSeatToken`, and searches every line
+the house, the arming and the act wrote. It looks for the seed in decimal (signed and unsigned), in hex,
+and in base64 of both byte orders (standard and URL-safe, padded or not). It looks for each seat's
+contact seed and each seat token in hex and base64. Matching ignores case. It also checks its own
+detector against the removed line, so a detector that sees nothing cannot pass.
+
+**S4: a second report of an already-reported Revoked player is refused.** A couch phone keeps
+advertising (D-008), so after its meeting any living phone held against it called another. `GameState`
+gains `reported`, written by a `RevokeReported` meeting call and never cleared inside a round. `admit`
+refuses a report of a seat on it with a new reason, `AlreadyReported`. It sits beside R3's
+`ReporterOut` and above the meeting checks, so a repeat during its own meeting is recorded as a repeat.
+It clears `RefusalReason`'s entry condition the ordinary way: the meeting rang every phone with the
+reported seat's name on it (D-121). Rule 1 holds: the refusal is recorded (`refusals`,
+`contactRefusals`), and because it is the radio's it is answered with nothing (R4). On the sockets, no
+phone's frame count moves.
+
+**Recording format 23**: one refusal reason a version 22 build cannot name, and a repeat report now
+reduces differently.
+
+**Raised, not decided** (each changes what a client receives beyond padding):
+
+1. **In one seat order the Revoked target gets two frames.** The resolver mints both halves of a touch
+   in seat order (D-213). When the target sits below the Insider, the target's own half is admitted
+   first. It is still living and unarmed, so it is answered `ContactAnswered`, and then the Insider's
+   half sends `RevokeLanded`. That is two frames to the target where every other toucher gets one,
+   both 120 bytes since S1. `TouchFrameSizeTest` asserts it as it is, so a fix shows up as one. The
+   fixes all change what a client receives: mint the armed half first, drop the target's answer, or
+   send `RevokeLanded` in its place.
+2. **"Reported" is read literally.** A seat Revoked before a meeting called from the meeting card is
+   not on `reported` afterwards, though the room saw it walk in (D-134), so it can still be reported
+   once. Refusing that too would mean reading `newlyRevoked` instead (D-217's open item), which is a
+   design question. `ContactRulingsTest` pins the literal reading.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `model/protocol` `RoundMessage.RevokeLanded` | empty object, 95 bytes carried | `pad = PAD` (12 characters), 120 bytes; `RevokeLanded.Padded` |
+| `app` `RoundAuthority.arm` | `ARMING — SEED <seed> · …` | `ARMING — <counts>` |
+| `model` `GameState.reported`, `wasReported`; `RefusalReason.AlreadyReported` | (new) | the seats a meeting has reported; the S4 refusal |
+| `core` `Rules.meetingCalled`, `admit` | a couch phone could be reported at every touch | recorded on the call; a repeat refused, answered with nothing |
+| `harness` `Recording.HEADER` | `recording/22` | `recording/23` |
+| `ContactAnswerSizeTest`, `TouchFrameSizeTest` | the target's frame "outside R1" | the target at the touch's length; the lower-seated target's two frames, asserted as they are |
+| `ContactRadioBenchTest`, `HostLogSecrets` | (new) | the host log through a round, every encoding; a repeat report on sockets |
+| `ContactRulingsTest` | R2, R3, R5 | and S4: refused after its meeting, a fresh seat still reportable, a card meeting reports nobody |
+| `ContactResolverTest` (a pair hearing a Revoked seat) | the second report refused `MeetingAlreadyRunning` | refused `AlreadyReported`: S4 sits above the meeting checks |
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).
