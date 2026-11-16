@@ -27,9 +27,20 @@ class SwitchboardRadioTest {
         var scanStarts = 0
         val calls = mutableListOf<String>()
 
+        /**
+         * A start asked for and not yet answered. CoreBluetooth reports itself not advertising in
+         * that gap, and a second start then fails with "Advertising has already started".
+         */
+        var pending = false
+
+        /** Starts asked for while another was still unanswered: each is that failure on a phone. */
+        var startedTwice = 0
+
         override fun wake() { wakes++; calls += "wake" }
         override fun advertise(token: ByteArray) {
             calls += "advertise"
+            if (pending) startedTwice++
+            pending = true
             advertising = token.copyOf()
             advertisedHex += token.joinToString("") { (it.toInt() and 0xff).toString(16).padStart(2, '0') }
         }
@@ -38,7 +49,13 @@ class SwitchboardRadioTest {
         override fun stopScan() { calls += "stopScan"; scanning = false }
 
         /** What a power change does to the real thing: the OS stops both when the radio goes down. */
-        fun lost() { advertising = null; scanning = false }
+        fun lost() { advertising = null; scanning = false; pending = false }
+
+        /** CoreBluetooth answers the start it was asked for: `peripheralManagerDidStartAdvertising`. */
+        fun answer(radio: SwitchboardRadio, ok: Boolean = true) {
+            pending = false
+            radio.advertisingStarted(ok)
+        }
     }
 
     private val t1 = ContactToken("00112233445566778899aabbccddeeff")
@@ -48,6 +65,11 @@ class SwitchboardRadioTest {
     private fun on(radio: SwitchboardRadio) {
         radio.advertiserPower(RadioPower.On)
         radio.scannerPower(RadioPower.On)
+    }
+
+    /** The radio back up for the whole settle, so the next outage is a new onset. */
+    private fun settle(radio: SwitchboardRadio) {
+        repeat(ContactAdvertisement.FAULT_SETTLE_CYCLES) { radio.cycle() }
     }
 
     /** D-067: built and left alone, or told to stop before anything began, nothing is built. */
@@ -83,6 +105,7 @@ class SwitchboardRadioTest {
         assertNull(hw.advertising, "advertised before the advertiser was on")
         radio.advertiserPower(RadioPower.On)
         assertEquals(t1.hex, hw.advertisedHex.single())
+        hw.answer(radio)
         radio.advertise(t2)
         assertEquals(listOf(t1.hex, t2.hex), hw.advertisedHex, "the window turned and the token did not")
         assertEquals(t2.hex, hw.advertising!!.joinToString("") { (it.toInt() and 0xff).toString(16).padStart(2, '0') })
@@ -127,6 +150,7 @@ class SwitchboardRadioTest {
         radio.scannerPower(RadioPower.On)
         radio.advertiserPower(RadioPower.On)
         radio.advertise(t2)
+        hw.answer(radio)
         assertFalse(hw.scanning, "a reset started a Revoked phone's scanner")
         assertEquals(1, hw.scanStarts, "the scanner was started after scan(false)")
         assertEquals(emptyList(), radio.drain(), "a Revoked phone's radio heard something")
@@ -237,6 +261,7 @@ class SwitchboardRadioTest {
         radio.scannerPower(RadioPower.Off)
         assertNull(radio.faultBegan(), "a reset passing through Off became a second, deliberate, fault")
         on(radio)
+        settle(radio)
         radio.advertiserPower(RadioPower.Unsupported)
         assertEquals(RadioCause.Device, radio.faultBegan(), "unsupported hardware was reported as a person's act")
     }
@@ -264,6 +289,7 @@ class SwitchboardRadioTest {
         assertEquals(RadioCause.Device, radio.faultBegan())
         radio.advertiserPower(RadioPower.On)
         assertNull(radio.faultBegan(), "a recovery was reported as a fault")
+        settle(radio)
         radio.scannerPower(RadioPower.Unauthorized)
         assertEquals(RadioCause.Person, radio.faultBegan(), "the second onset was swallowed by the first, or took its cause")
         // One manager back is not the radio back: still down, so no new onset.
@@ -289,5 +315,155 @@ class SwitchboardRadioTest {
         assertNull(radio.faultBegan(), "a fault outlived the round it was reported in")
         radio.advertise(t2)
         assertEquals(RadioCause.Person, radio.faultBegan(), "the next round never heard of a radio still down")
+    }
+
+    // ---- The first device session (2026-11-16): one FAULT per switch-off, and one start in flight --
+
+    /**
+     * **GUARD: a switch-off seen from Settings is one fault for the whole radio.** On a phone that
+     * comes back from Settings, CoreBluetooth hands over each manager's Off and On in turn, so both
+     * managers are On for an instant between the scanner's pair and the advertiser's. The first
+     * device session logged that as two FAULT lines. It is one onset, logged and reported once; the
+     * next is only after both managers have stayed up for the settle and then gone down again.
+     */
+    @Test
+    fun aSwitchOffSeenFromSettingsIsOneFaultForTheWholeRadio() {
+        val hw = RecordingHardware()
+        val lines = mutableListOf<String>()
+        val reported = mutableListOf<Pair<RadioSide, RadioPower>>()
+        val radio = SwitchboardRadio(hw, log = { lines += it }) { side, power -> reported += side to power }
+        radio.scan(true)
+        radio.advertise(t1)
+        on(radio)
+        hw.answer(radio)
+        settle(radio)
+
+        // The burst on the way back from Settings, in the order the phone logged it, with a cycle
+        // of the scan timer landing inside it as it can.
+        hw.lost()
+        radio.scannerPower(RadioPower.Off)
+        radio.scannerPower(RadioPower.On)
+        radio.cycle()
+        radio.advertiserPower(RadioPower.Off)
+        radio.advertiserPower(RadioPower.On)
+        val first = radio.faultBegan()
+        val faultLines = lines.count { it.startsWith("FAULT") }
+        assertEquals(RadioCause.Person, first, "Bluetooth switched off was not reported as a person's act")
+        assertEquals(1, faultLines, "one switch-off logged $faultLines FAULT lines: ${lines.filter { it.startsWith("FAULT") }}")
+        assertNull(radio.faultBegan(), "one switch-off was reported to the house twice")
+        assertEquals(
+            listOf(RadioSide.Scanner to RadioPower.Off, RadioSide.Advertiser to RadioPower.Off),
+            reported,
+            "each manager's own outage line is still its own",
+        )
+
+        // Inside the settle, a manager going down again is still the same switch-off.
+        repeat(ContactAdvertisement.FAULT_SETTLE_CYCLES - 1) { radio.cycle() }
+        radio.scannerPower(RadioPower.Off)
+        radio.scannerPower(RadioPower.On)
+        assertNull(radio.faultBegan(), "a manager going down inside the settle was reported as a new fault")
+        assertEquals(1, lines.count { it.startsWith("FAULT") }, "a manager going down inside the settle logged a new FAULT")
+
+        // Back up for the whole settle, then switched off again: a second onset, once.
+        settle(radio)
+        radio.advertiserPower(RadioPower.Off)
+        radio.scannerPower(RadioPower.Off)
+        assertEquals(RadioCause.Person, radio.faultBegan(), "a second switch-off after recovery was swallowed")
+        assertNull(radio.faultBegan(), "the second switch-off was reported twice")
+        assertEquals(2, lines.count { it.startsWith("FAULT") })
+    }
+
+    /**
+     * **GUARD: a start is never asked twice before it is answered** (the first device session's
+     * "Advertising has already started"). Bluetooth comes back and starts the old token; the window
+     * turns before CoreBluetooth has answered. The new token waits for the answer, goes up then, and
+     * nothing is reported to the house or to the outage line.
+     */
+    @Test
+    fun aStartIsNeverAskedTwiceBeforeItIsAnswered() {
+        val hw = RecordingHardware()
+        val lines = mutableListOf<String>()
+        val reported = mutableListOf<Pair<RadioSide, RadioPower>>()
+        val radio = SwitchboardRadio(hw, log = { lines += it }) { side, power -> reported += side to power }
+        radio.scan(true)
+        radio.advertise(t1)
+        on(radio)
+        hw.answer(radio)
+        settle(radio)
+        assertNull(radio.faultBegan())
+
+        // Recovery and the window turning, back to back.
+        hw.lost()
+        radio.advertiserPower(RadioPower.Off)
+        radio.advertiserPower(RadioPower.On)
+        radio.advertise(t2)
+        radio.advertise(t2)
+        assertEquals(0, hw.startedTwice, "a second start was asked while the first was unanswered")
+        assertEquals(t1.hex, hw.advertisedHex.last())
+        hw.answer(radio)
+        assertEquals(t2.hex, hw.advertisedHex.last(), "the token asked for while a start waited never went up")
+        hw.answer(radio)
+        val starts = hw.calls.count { it == "advertise" }
+        radio.advertise(t2)
+        assertEquals(starts, hw.calls.count { it == "advertise" }, "the token already on the air was started again")
+        assertEquals(0, hw.startedTwice)
+
+        assertEquals(RadioCause.Person, radio.faultBegan(), "the switch-off itself is still one fault")
+        assertNull(radio.faultBegan(), "a start was reported as a fault")
+        assertEquals(listOf(RadioSide.Advertiser to RadioPower.Off), reported, "a start was reported as an outage")
+        assertTrue(lines.none { it.contains("NOT STARTED") }, "a start that began was logged as failed")
+    }
+
+    /** A double start with no power change at all: one start reaches the hardware, no failure. */
+    @Test
+    fun aDoubleStartGivesNoFailure() {
+        val hw = RecordingHardware()
+        val reported = mutableListOf<Pair<RadioSide, RadioPower>>()
+        val radio = SwitchboardRadio(hw) { side, power -> reported += side to power }
+        radio.advertise(t1)
+        radio.advertiserPower(RadioPower.On)
+        radio.advertise(t1)
+        radio.advertise(t1)
+        assertEquals(1, hw.calls.count { it == "advertise" }, "one token was started more than once")
+        assertEquals(0, hw.startedTwice)
+        hw.answer(radio)
+        assertNull(radio.faultBegan())
+        assertEquals(emptyList(), reported)
+    }
+
+    /**
+     * A start that failed is the device log's alone, not an outage and not a fault (rule 6), and it
+     * is asked again after the patience rather than at once.
+     */
+    @Test
+    fun aFailedStartIsAskedAgainAfterThePatienceAndReportedToNobody() {
+        val hw = RecordingHardware()
+        val lines = mutableListOf<String>()
+        val reported = mutableListOf<Pair<RadioSide, RadioPower>>()
+        val radio = SwitchboardRadio(hw, log = { lines += it }) { side, power -> reported += side to power }
+        radio.advertise(t1)
+        radio.advertiserPower(RadioPower.On)
+        hw.answer(radio, ok = false)
+        assertTrue(lines.any { it.startsWith("ADVERTISING NOT STARTED") })
+        repeat(ContactAdvertisement.START_PATIENCE_CYCLES - 1) { radio.cycle() }
+        assertEquals(1, hw.calls.count { it == "advertise" }, "a failed start was asked again at once")
+        radio.cycle()
+        assertEquals(2, hw.calls.count { it == "advertise" }, "a failed start was never asked again")
+        assertEquals(0, hw.startedTwice)
+        assertNull(radio.faultBegan(), "a failed start was reported as a fault")
+        assertEquals(emptyList(), reported, "a failed start was reported as an outage")
+    }
+
+    /** The round ends while a start waits; the start begins late, and is taken off the air. */
+    @Test
+    fun aStartThatBeginsAfterTheRoundEndedIsStopped() {
+        val hw = RecordingHardware()
+        val radio = SwitchboardRadio(hw)
+        radio.advertise(t1)
+        radio.advertiserPower(RadioPower.On)
+        radio.silence()
+        hw.advertising = ByteArray(16) // CoreBluetooth began the start the stop overtook
+        hw.answer(radio)
+        assertNull(hw.advertising, "a start that began after the round ended stayed on the air")
     }
 }

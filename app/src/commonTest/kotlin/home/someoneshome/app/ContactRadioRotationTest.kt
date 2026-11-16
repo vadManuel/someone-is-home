@@ -29,9 +29,13 @@ class ContactRadioRotationTest {
         val rotations = mutableListOf<Pair<Long, String>>()
         var scanning = false
         var now = 0L
+        lateinit var radio: SwitchboardRadio
         override fun wake() { woken = true }
         override fun advertise(token: ByteArray) {
             rotations += now to token.joinToString("") { (it.toInt() and 0xff).toString(16).padStart(2, '0') }
+            // CoreBluetooth answers every start it accepts; the switchboard asks for no next one
+            // until it has. Here the answer comes at once.
+            radio.advertisingStarted(true)
         }
         override fun stopAdvertising() = Unit
         override fun startScan() { scanning = true }
@@ -42,7 +46,7 @@ class ContactRadioRotationTest {
 
     private fun rig(start: Long): Triple<ContactUploader, Air, MutableList<RoundBody.Sighted>> {
         val air = Air().also { it.now = start }
-        val radio = SwitchboardRadio(air)
+        val radio = SwitchboardRadio(air).also { air.radio = it }
         radio.advertiserPower(RadioPower.On)
         radio.scannerPower(RadioPower.On)
         val sent = mutableListOf<RoundBody.Sighted>()

@@ -164,6 +164,8 @@ private class CoreBluetoothHardware(
 
         override fun peripheralManagerDidStartAdvertising(peripheral: CBPeripheralManager, error: NSError?) {
             log(if (error == null) "ADVERTISING" else "ADVERTISING FAILED — ${error.localizedDescription}")
+            // The switchboard asks for no second start until this one is answered (D-218).
+            board.advertisingStarted(error == null)
         }
     }
 
@@ -181,6 +183,7 @@ private class CoreBluetoothHardware(
         }
     }
 
+    /** Never called while a start waits for its answer: the switchboard holds the next one back. */
     override fun advertise(token: ByteArray) {
         val manager = peripheral ?: return
         if (manager.isAdvertising) manager.stopAdvertising()

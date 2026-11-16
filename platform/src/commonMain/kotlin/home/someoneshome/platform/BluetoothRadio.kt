@@ -9,7 +9,7 @@ import home.someoneshome.model.protocol.SightingUpload
  * **The real contact radio, everything about it that is not CoreBluetooth** (D-218).
  *
  * The iOS actual (`BluetoothRadio.ios.kt`) is a thin layer: it builds the managers, turns their
- * callbacks into the four calls on [SwitchboardRadio], and turns [RadioHardware]'s five calls into
+ * callbacks into the five calls on [SwitchboardRadio], and turns [RadioHardware]'s five calls into
  * CoreBluetooth. Every decision the radio makes is here, in common code, behind that seam, because
  * the Simulator has no Bluetooth and this is the only way any of it is tested before a phone.
  */
@@ -63,6 +63,26 @@ object ContactAdvertisement {
 
     /** How many cycles between the radio's tally lines in the device log: every ten seconds. */
     const val TALLY_CYCLES: Int = 40
+
+    /**
+     * **How long the radio must stay back up before another outage is a new fault: two seconds of
+     * cycles** (T2, D-222).
+     *
+     * Both managers back On is not enough on its own. A phone that comes back from Settings is
+     * handed each manager's queued Off and On one after the other, so the scanner can be Off and On
+     * again before the advertiser has said Off at all: that is one switch-off, and the first device
+     * session logged it as two (2026-11-16). Every callback of one burst lands within milliseconds;
+     * a second switch-off by a person takes seconds.
+     */
+    const val FAULT_SETTLE_CYCLES: Int = 8
+
+    /**
+     * **How long a start may go unanswered before it is asked again: two seconds of cycles.**
+     * CoreBluetooth answers every start it accepts, so this only matters if an answer is lost; a
+     * start that failed is asked again after the same wait, never at once, so a failure that
+     * repeats costs one line every two seconds rather than four a second.
+     */
+    const val START_PATIENCE_CYCLES: Int = 8
 }
 
 /** A CoreBluetooth manager's state, as the radio needs to know it. */
@@ -95,7 +115,8 @@ interface RadioHardware {
 
     /**
      * Replace whatever is advertised with [token] ([ContactAdvertisement.TOKEN_BYTES] bytes) under
-     * [ContactAdvertisement.SERVICE_UUID], and nothing else. Only called while the advertiser is on.
+     * [ContactAdvertisement.SERVICE_UUID], and nothing else. Only called while the advertiser is on,
+     * and never while an earlier call waits for [SwitchboardRadio.advertisingStarted].
      */
     fun advertise(token: ByteArray)
 
@@ -237,19 +258,37 @@ class SightingRing(val capacity: Int = SightingUpload.SLOTS) {
  *
  * A manager going Off, Unauthorized, Resetting or Unsupported is reported to [outages] and to the
  * device log, and the lamp, the screen and the haptics never hear of it. **The house is told once
- * per fault onset**: the radio is *down* while either manager is in one of those four, and the moment
- * it goes from up to down is one onset, however many callbacks follow (both managers report a
- * Bluetooth switch-off, and a reset passes through Resetting and Off). [faultBegan] hands that
- * onset to the uploader once, which sends it up as `RoundBody.RadioFaulted`. Both managers back On is
- * up again, so a second switch-off is a second onset. A radio still down when a new round arms is
- * an onset in that round.
+ * per fault onset, for the whole radio, not once per manager**: the radio is *down* while either
+ * manager is in one of those four, and the moment it goes from up to down is one onset, however many
+ * callbacks follow (both managers report a Bluetooth switch-off, and a reset passes through
+ * Resetting and Off). [faultBegan] hands that onset to the uploader once, which sends it up as
+ * `RoundBody.RadioFaulted`, and the `FAULT` line is logged once with it.
+ *
+ * **An onset is over only once both managers are back On and have stayed On for
+ * [ContactAdvertisement.FAULT_SETTLE_CYCLES] cycles.** Both On for an instant is not recovery: a
+ * phone coming back from Settings is handed each manager's Off and On in turn, so the scanner is Off
+ * and On again before the advertiser says Off, and the first device session logged that one
+ * switch-off as two faults (2026-11-16). After the settle, a second switch-off is a second onset. A
+ * radio still down when a new round arms is an onset in that round.
  *
  * **The onset says which side of D-187's line it is on, decided once, at the onset** ([causeOf]):
  * Off or Unauthorized is a person's act, Resetting or Unsupported is the phone's own. The cause holds
- * for the whole outage, so a reset that passes through Off is still a reset and is never named.
- * ⚠️ Limit: a manager whose reset callbacks arrive after the other has already come back up would
- * start a second onset, and if that one opened on Off it would read as a person's. The device check
- * cannot induce a reset on demand, so this is reasoned rather than observed.
+ * for the whole outage, so a reset that passes through Off is still a reset and is never named. The
+ * settle also covers a manager whose reset callbacks arrive just after the other came back up.
+ * ⚠️ Limit: one that arrives more than the settle later would start a second onset, and if that one
+ * opened on Off it would read as a person's. The device check cannot induce a reset on demand, so
+ * this is reasoned rather than observed.
+ *
+ * ### One start in flight at a time
+ *
+ * CoreBluetooth answers a start later, and until it has, the advertiser reports that it is not
+ * advertising. A second start inside that gap fails with "Advertising has already started" and
+ * leaves the first start's token on the air. Bluetooth coming back and the window turning do this
+ * together, which the first device session also logged. So a start is asked of the hardware only
+ * when none is waiting for an answer, and a token asked for while one waits goes up when the answer
+ * comes ([advertisingStarted]). The same token already on the air is not started again. A failed
+ * start is not an outage and is not a fault: it is the device log's, and it is asked again after
+ * [ContactAdvertisement.START_PATIENCE_CYCLES].
  *
  * Not thread-safe: every call is made on the radio's own queue on iOS, and on the test's thread in
  * the tests.
@@ -268,11 +307,32 @@ class SwitchboardRadio(
     private var advertiser = RadioPower.Unknown
     private var scanner = RadioPower.Unknown
 
-    /** Whether either manager is down, as last assessed. See the class KDoc. */
+    /** Whether either manager is down in a round, as last assessed. See the class KDoc. */
     private var down = false
+
+    /**
+     * An onset has been reported and the radio has not yet been back up for the settle, so no
+     * outage now is a new one. See the class KDoc.
+     */
+    private var latched = false
+
+    /** Cycles the radio has been back up since the onset it is latched on. */
+    private var settled = 0
 
     /** A fault began, and why, and the uploader has not collected it yet. */
     private var began: RadioCause? = null
+
+    /** A start was asked of the hardware and CoreBluetooth has not answered it yet. */
+    private var starting = false
+
+    /** CoreBluetooth said the last start began, and nothing since has taken it off the air. */
+    private var onAir = false
+
+    /** What the last start carried. */
+    private val started = ByteArray(ContactAdvertisement.TOKEN_BYTES)
+
+    /** Cycles spent waiting for a start to be answered, or since one failed. */
+    private var unanswered = 0
 
     private var cycles = 0
     private var callbacks = 0L
@@ -288,7 +348,7 @@ class SwitchboardRadio(
             this.token[j] = ((digit(hex[2 * j]) shl 4) or digit(hex[2 * j + 1])).toByte()
         }
         hasToken = true
-        if (advertiser == RadioPower.On) hardware.advertise(this.token)
+        putOnAir()
         assess()
     }
 
@@ -314,7 +374,11 @@ class SwitchboardRadio(
         // The round is over and so is what it was told. A radio still down at the next arming is a
         // fault of that round, found again by the first advertise.
         down = false
+        latched = false
+        settled = 0
         began = null
+        starting = false
+        onAir = false
         if (!awake) return
         if (advertiser == RadioPower.On) hardware.stopAdvertising()
         if (scanner == RadioPower.On) hardware.stopScan()
@@ -326,12 +390,35 @@ class SwitchboardRadio(
     fun advertiserPower(power: RadioPower) {
         if (power == advertiser) return
         advertiser = power
+        // Down, the OS has taken the advertisement off the air and a start in flight with it.
+        if (power != RadioPower.On) {
+            starting = false
+            onAir = false
+        }
         assess()
         if (power == RadioPower.On) {
-            if (hasToken) hardware.advertise(token)
+            putOnAir()
         } else {
             outage(RadioSide.Advertiser, power)
         }
+    }
+
+    /**
+     * **CoreBluetooth answered a start** ([ok] whether it began). Begun, a token asked for while it
+     * waited goes up now. Failed, it is the device log's and nobody else's: not an outage, not a
+     * fault (rule 6), and it is asked again on the cycle, after the patience.
+     */
+    fun advertisingStarted(ok: Boolean) {
+        if (!starting) {
+            // An answer to a start already overtaken: a power change or the end of the round. A
+            // round that is over has nothing on the air, so a start that began late is stopped.
+            if (ok && !hasToken && advertiser == RadioPower.On) hardware.stopAdvertising()
+            return
+        }
+        starting = false
+        unanswered = 0
+        onAir = ok
+        if (ok) putOnAir() else log("ADVERTISING NOT STARTED — ASKED AGAIN IN 2 S")
     }
 
     /** The scanner's power changed. On, it scans if it was asked to. */
@@ -363,25 +450,54 @@ class SwitchboardRadio(
             hardware.stopScan()
             hardware.startScan()
         }
+        if (latched && !down && ++settled >= ContactAdvertisement.FAULT_SETTLE_CYCLES) latched = false
+        // A start unanswered, or failed, for the patience is asked again.
+        if (hasToken && advertiser == RadioPower.On && !onAir &&
+            ++unanswered >= ContactAdvertisement.START_PATIENCE_CYCLES
+        ) {
+            starting = false
+            putOnAir()
+        }
         if (++cycles % ContactAdvertisement.TALLY_CYCLES == 0 && awake) tally()
     }
 
     /**
-     * **One fault onset, however many callbacks** (T2, D-222). Down is either manager Off,
-     * Unauthorized, Resetting or Unsupported; Unknown is not yet answered and is not down. Only a
-     * round's radio reports: before the first advertise of a round there is nobody to tell.
+     * **The one place a start is asked of the hardware.** Only with a token, only while the
+     * advertiser is on, never while another start waits for its answer, and never for the token
+     * already on the air. See the class KDoc.
+     */
+    private fun putOnAir() {
+        if (!hasToken || advertiser != RadioPower.On || starting) return
+        if (onAir && started.contentEquals(token)) return
+        token.copyInto(started)
+        starting = true
+        onAir = false
+        unanswered = 0
+        hardware.advertise(token)
+    }
+
+    /**
+     * **One fault onset for the whole radio, however many callbacks from either manager** (T2,
+     * D-222). Down is either manager Off, Unauthorized, Resetting or Unsupported; Unknown is not yet
+     * answered and is not down. Only a round's radio reports: before the first advertise of a round
+     * there is nobody to tell. Once reported, the onset holds until [cycle] has seen the radio back
+     * up for the settle, so a manager going down inside it is the same fault.
      */
     private fun assess() {
-        val now = isDown(advertiser) || isDown(scanner)
-        if (now && !down && hasToken) {
-            val cause = causeOf(advertiser, scanner)
-            began = cause
-            log(
-                "FAULT — THE RADIO WENT DOWN (ADVERTISER $advertiser · SCANNER $scanner) · " +
-                    "${cause.name.uppercase()} · THE HOUSE IS TOLD ONCE",
-            )
+        val now = hasToken && (isDown(advertiser) || isDown(scanner))
+        if (now) {
+            settled = 0
+            if (!latched) {
+                latched = true
+                val cause = causeOf(advertiser, scanner)
+                began = cause
+                log(
+                    "FAULT — THE RADIO WENT DOWN (ADVERTISER $advertiser · SCANNER $scanner) · " +
+                        "${cause.name.uppercase()} · THE HOUSE IS TOLD ONCE",
+                )
+            }
         }
-        down = now && hasToken
+        down = now
     }
 
     private fun wake() {
