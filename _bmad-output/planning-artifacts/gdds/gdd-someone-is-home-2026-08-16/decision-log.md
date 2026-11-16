@@ -5571,6 +5571,36 @@ is refused below `MINIMUM_SEATS` connected three times over: the button is defun
 | `ScreenWakeTest`, `HostReopenTest`, `HostForegroundTest`, `HostArmingTest`, `LightsOutSeamTest` | (new cases) | the two holds; same chair by token across a reopen, wrong and missing tokens; suspend and resume with three phones on loopback; a refused press stays on the lobby |
 | `tools/one-phone/README.md` | Auto-Lock Never for round B | section 6: lock the host by hand in the lobby, unlock, the room comes back, LIGHTS OUT works |
 
+### D-227 · **The lobby's desk is changed only on the house's own thread, so a seat that resumes keeps its own name — built**
+
+**Found on the device rerun after D-225** (`runs/20261116-132911`): the host locked in the lobby, both
+filler seats resumed by token at the same instant (they had dropped at the same instant, so their
+backoffs matched), both sent their names, and the lobby read `[PHONE, SIMA, UNNAMED]` where it had read
+`SIMB`, with all three lines in. The roster at arming carried two names for three seats. Seat 1 kept its
+name only because it won the race.
+
+**Not the ledger, not the resume, not the line re-send.** The ledger seated each token in its own chair,
+and the client re-sent the name before the line on every seating, as D-225 says. The fault was below
+both: `TransportHost` calls `onFrame`, `onSeated` and `onLost` on Ktor's connection threads, one per
+socket and several at once (its KDoc said so), and `LobbyHouse` wrote the desk (a set and two plain
+maps) straight from them. Two writes into one map from two threads is a lost write or an entry filed
+under the wrong key. On loopback the race rarely shows; a device on Wi-Fi lost it once.
+
+**The ruling.** Every change a phone makes to the desk (a seating, a loss, a name, a line) is handed to
+the house's own scope, which is the main thread the host's own controls already reach the desk on, and
+the standing is built there too. A change the desk refuses is logged for the authority and never shown.
+`TransportHost` reports a loss under its lock, so a seat's loss always reaches the caller before a later
+resume of the same seat. It takes that lock uncancellably: a server stopping cancels every connection at
+once, and a cancelled connection that had to wait for the lock was thrown out before reporting its loss,
+leaving a seat on the desk whose phone had gone (seen in this work's own tests, not on the device). The standing still lists names in arrival order (`LobbyBody.Standing`); the
+roster is drawn seat by seat, and a name is only ever filed under the seat whose socket sent it.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `app` `LobbyHouse` | the desk written on connection threads | `atTheDesk`: every desk change on the house's scope, refusals logged |
+| `platform` `TransportHost` | `onLost` after the lock, and skipped when a cancelled connection waited for it | `onLost` under the lock, never cancelled |
+| `HostForegroundTest` | (new cases) | six guests through five locks keep their names; a seat resuming out of order keeps its own; the desk is changed only on the house's thread |
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

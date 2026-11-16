@@ -22,9 +22,11 @@ import io.ktor.network.sockets.aSocket
 import io.ktor.utils.io.core.use
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /** The one websocket route. Part of the wire contract, beside [TransportWire]'s JSON. */
 const val TRANSPORT_PATH: String = "/round"
@@ -44,8 +46,10 @@ const val TRANSPORT_PATH: String = "/round"
  * I/O oddity must never take a player's link down with it (silent to the player, loud to the
  * authority; the count is the authority's to read until transport failure events exist).
  *
- * Callbacks fire on Ktor's worker threads. The internal table is mutex-guarded; [SeatLedger] is
- * only ever touched under the same mutex.
+ * Callbacks fire on Ktor's worker threads, **one per connection and several at once**: a caller
+ * that keeps state off them must confine that state itself (the lobby's desk, D-227). The internal
+ * table is mutex-guarded; [SeatLedger] is only ever touched under the same mutex, and so is
+ * [onLost], which therefore must not block.
  */
 class TransportHost(
     private val ledger: SeatLedger,
@@ -206,15 +210,25 @@ class TransportHost(
                 onFrame(seat, frame)
             }
         } finally {
-            val lost = gate.withLock {
-                if (links[seat]?.id == link.id) {
-                    links.remove(seat)
-                    true
-                } else {
-                    false // already replaced by a resume; the seat was never without a link
+            // **[onLost] is called under the lock**, so a seat's loss is always reported before a
+            // later resume of the same seat is: that resume's `put` and its [onSeated] both come
+            // after this lock is released. Called after the lock, a loss could reach the caller
+            // second — and a lobby told *seated, then lost* empties a chair somebody is sitting
+            // in, and refuses the name that seat sends next.
+            //
+            // **And never cancelled.** A server stopping cancels every connection at once, and a
+            // cancelled coroutine that has to wait for the lock is thrown out of `withLock` before
+            // it gets it: that seat's link stayed in the table and its loss was never reported, so
+            // the house went on believing in a seat whose phone had gone (D-227).
+            withContext(NonCancellable) {
+                gate.withLock {
+                    if (links[seat]?.id == link.id) {
+                        links.remove(seat)
+                        onLost(seat)
+                    }
+                    // Otherwise already replaced by a resume; the seat was never without a link.
                 }
             }
-            if (lost) onLost(seat)
         }
     }
 

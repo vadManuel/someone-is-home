@@ -20,6 +20,8 @@ import home.someoneshome.ui.PanelState
 import home.someoneshome.ui.SavedHomesModel
 import home.someoneshome.ui.ScreenId
 import kotlinx.coroutines.CoroutineScope
+import platform.Foundation.NSLock
+import platform.Foundation.NSThread
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
@@ -84,9 +86,8 @@ class HostForegroundTest {
             }
     }
 
-    private class Phone(scope: CoroutineScope, name: String, val timer: Timer = Timer()) {
+    private class Phone(scope: CoroutineScope, name: String, val timer: Timer = Timer(), val kept: Kept = Kept()) {
         val air = Air()
-        val kept = Kept()
         val wake = ScreenWake(timer)
         val log = mutableListOf<String>()
         val link = LobbyOverTransport(scope, onEvent = { log += it }, seat = kept, wake = wake, advertising = air)
@@ -99,6 +100,11 @@ class HostForegroundTest {
     }
 
     private val home = SavedHomesModel.sample().homes.first()
+
+    private companion object {
+        /** Locks in a row for the race; each is a full drop and resume of every seat. */
+        const val LOCKS = 5
+    }
 
     private suspend fun until(what: String, condition: () -> Boolean) {
         try {
@@ -175,6 +181,140 @@ class HostForegroundTest {
         assertEquals(tokens, all.map { it.kept.token }, "a phone came back holding a token it did not have")
         assertTrue(host.model.readyToArm, "LIGHTS OUT stayed defunct over a room that came back")
         assertTrue(all.none { p -> p.log.any { "JOINING FRESH" in it } }, "a phone rejoined as a stranger")
+    }
+
+    // ---- The names come back with the seats ----------------------------------------------------------
+
+    /**
+     * **Every seat comes back under its own name, however many times the house locks.**
+     *
+     * The 2026-11-16 device rerun (`runs/20261116-132911`): after the host's lock both filler seats
+     * resumed by token, at the same instant because they dropped at the same instant, and the
+     * lobby read `[PHONE, SIMA, UNNAMED]` where it had read `SIMB`, with every line in. Both names
+     * went up; the desk kept one. Its maps were being written from the server's connection threads,
+     * one per socket, and two phones naming themselves at once raced on them.
+     *
+     * Six guests rather than two, and several locks, because the fault is a race: the more seats
+     * come back in the same instant, the more often the unconfined desk drops one.
+     */
+    @Test
+    fun everySeatComesBackUnderItsOwnNameHoweverOftenTheHouseLocks() = evening { phones ->
+        val host = Phone(this, "HOST").also { phones += it }
+        host.model.hostHome(home)
+        until("the host walked into its own lobby") { host.model.hosting && host.model.standing.joined == 1 }
+        val port = host.air.ports.single()
+        val guests = listOf("ROSE", "DANI", "ELLIOT", "PRIYA", "MARCUS", "JUNE").map { Phone(this, it).also { p -> phones += p } }
+        guests.forEach { it.model.attachTo(NearbyHome(home.name, "127.0.0.1", port)) }
+        until("every guest was seated, under a name") {
+            host.model.standing.joined == 7 && host.model.standing.names.none { it.isEmpty() }
+        }
+        val chairs = host.link.house.armingInputs().names
+        assertEquals(7, chairs.map { it.name }.toSet().size, "the room did not start with seven names")
+
+        repeat(LOCKS) { lock ->
+            host.link.backgrounded()
+            until("every seat dropped with the server (lock ${lock + 1})") { host.link.house.armingInputs().seats.isEmpty() }
+            host.link.foregrounded()
+            until("every seat came back, under a name (lock ${lock + 1})") {
+                val back = host.link.house.armingInputs().names
+                back.size == 7 && back.none { it.name.isEmpty() }
+            }
+            assertEquals(chairs, host.link.house.armingInputs().names, "a name was lost or moved to another seat on lock ${lock + 1}")
+            // The standing the host's own lobby draws settles on the same seven, and stays there: a
+            // standing built on one connection's thread and sent after a later one would leave the
+            // lobby showing a room that has since changed.
+            until("the host's lobby lists the same seven after lock ${lock + 1}") {
+                host.model.standing.names.sorted() == chairs.map { it.name }.sorted()
+            }
+        }
+    }
+
+    /**
+     * **The desk is changed on the house's own thread and on no other** (D-227).
+     *
+     * The two tests around this one are the symptom; this is the cause, pinned so that it cannot
+     * come back by luck. The server hands a seating, a name and a line over on its connection
+     * threads, several at once, and the desk is two plain maps — a race the device lost once and a
+     * loopback test can pass many times over. So instead of waiting for the race, this watches
+     * where each change is made: on the thread the test's own scope runs on, which in the app is
+     * the main thread the host's controls already use.
+     */
+    @Test
+    fun theDeskIsChangedOnTheHousesOwnThreadAndNoOther() = evening { phones ->
+        val home = NSThread.currentThread
+        val counting = NSLock()
+        var changes = 0
+        val elsewhere = mutableSetOf<String>()
+        val host = Phone(this, "HOST").also { phones += it }
+        host.link.house.deskWatch = {
+            counting.lock()
+            changes++
+            if (NSThread.currentThread != home) elsewhere += NSThread.currentThread.description.orEmpty()
+            counting.unlock()
+        }
+        host.model.hostHome(this@HostForegroundTest.home)
+        until("the host walked into its own lobby") { host.model.hosting && host.model.standing.joined == 1 }
+        val port = host.air.ports.single()
+        val guests = listOf("ROSE", "DANI").map { Phone(this, it).also { p -> phones += p } }
+        guests.forEach { it.model.attachTo(NearbyHome(this@HostForegroundTest.home.name, "127.0.0.1", port)) }
+        until("both guests were seated and named") {
+            host.model.standing.joined == 3 && host.model.standing.names.none { it.isEmpty() }
+        }
+        host.link.backgrounded()
+        until("every seat dropped") { host.link.house.armingInputs().seats.isEmpty() }
+        host.link.foregrounded()
+        until("every seat came back named") {
+            host.link.house.armingInputs().names.let { n -> n.size == 3 && n.none { it.name.isEmpty() } }
+        }
+        counting.lock()
+        val seen = changes
+        val off = elsewhere.toSet()
+        counting.unlock()
+        assertTrue(seen >= 12, "the desk was changed $seen time(s); a lobby and a lock make at least twelve")
+        assertEquals(emptySet(), off, "the desk was changed on a connection thread, where two phones race")
+    }
+
+    /**
+     * **A seat that comes back out of order still comes back as itself.**
+     *
+     * Both guests' phones drop and relaunch, reading their tokens back exactly as a stopped app does,
+     * and the later seat comes back first. The house must name each seat from what that seat said,
+     * never from the order the seats arrived in: the standing lists the names in arrival order,
+     * which is its design (`LobbyBody.Standing`), and the round's roster is drawn seat by seat.
+     */
+    @Test
+    fun aSeatThatResumesInADifferentOrderKeepsItsOwnName() = evening { phones ->
+        val all = room(phones)
+        val host = all.first()
+        val port = host.air.ports.single()
+        val chairs = host.link.house.armingInputs().names
+        assertEquals(setOf("HOST", "ROSE", "DANI"), chairs.map { it.name }.toSet(), "the room did not sit down named")
+        // Who sat second and who third is the ledger's arrival order, which two phones joining at
+        // once do not fix. Read it, then bring them back the other way round.
+        val (earlier, later) = chairs.drop(1).map { chair -> all.first { it.model.residentName == chair.name } }
+
+        // Both phones go dark, and the house sees both seats leave.
+        earlier.link.leave()
+        later.link.leave()
+        until("both guests' seats emptied") { host.link.house.armingInputs().seats.size == 1 }
+
+        // The guest in the later seat comes back first. Same tokens, fresh links.
+        val laterAgain = Phone(this, later.model.residentName, kept = later.kept).also { phones += it }
+        laterAgain.model.attachTo(NearbyHome(home.name, "127.0.0.1", port))
+        until("the later seat came back, named") {
+            host.link.house.armingInputs().names.any { it.name == later.model.residentName }
+        }
+        val earlierAgain = Phone(this, earlier.model.residentName, kept = earlier.kept).also { phones += it }
+        earlierAgain.model.attachTo(NearbyHome(home.name, "127.0.0.1", port))
+        until("the earlier seat came back, named") {
+            host.link.house.armingInputs().names.let { n -> n.size == 3 && n.none { it.name.isEmpty() } }
+        }
+
+        assertEquals(chairs, host.link.house.armingInputs().names, "a seat that came back out of order took somebody else's name")
+        until("the standing lists the seats in the order they came back") {
+            host.model.standing.names == listOf("HOST", later.model.residentName, earlier.model.residentName)
+        }
+        assertTrue(phones.none { p -> p.log.any { "JOINING FRESH" in it } }, "a phone rejoined as a stranger")
     }
 
     /** **A guest's phone is not the house**, so the two calls take nothing off the air there. */

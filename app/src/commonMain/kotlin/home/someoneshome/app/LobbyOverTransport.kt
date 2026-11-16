@@ -489,11 +489,13 @@ class LobbyHouse(
             // phone on a new connection begins numbering its requests again, and a desk still
             // holding the old mark would take every one of them for a duplicate and drop it in
             // silence. See IntentDesk.seated.
-            // The lobby's desk is served inline because a standing is a broadcast and orders
-            // against nothing. The intent desk's mark rides the ordered queue instead -- see
-            // Arrival, and the silent failure it exists to prevent.
-            onSeated = { seat -> desk.seated(seat); arriving.trySend(Arrival.Seated(seat)); publish() },
-            onLost = { seat -> desk.left(seat); arriving.trySend(Arrival.Lost(seat)); publish() },
+            // The lobby's desk is not on the ordered queue, because a standing is a broadcast and
+            // orders against nothing; the intent desk's mark rides the queue -- see Arrival, and
+            // the silent failure it exists to prevent. **But the lobby's desk is never changed
+            // from here either**: these run on the server's connection threads, one per socket and
+            // several at once, so it is changed through [atTheDesk] (D-227).
+            onSeated = { seat -> atTheDesk { desk.seated(seat); publish() }; arriving.trySend(Arrival.Seated(seat)) },
+            onLost = { seat -> atTheDesk { desk.left(seat); publish() }; arriving.trySend(Arrival.Lost(seat)) },
             // The authority's record of a connection turned away — the reason and never the
             // token (E-D3-1). A refused resume is the one the host most needs: it means a phone
             // in this room is holding a seat from an evening this house never ran.
@@ -848,15 +850,15 @@ class LobbyHouse(
         }
         val body = LobbyWire.decodeOrNull(carried) ?: return
         when (body) {
-            is LobbyBody.Handover -> {
+            // Deliberately not logged, not counted per player, and not echoed. The only trace a
+            // line leaves is the count going up by one.
+            is LobbyBody.Handover -> atTheDesk {
                 desk.handedOver(seat, body.line)
-                // Deliberately not logged, not counted per player, and not echoed. The only trace
-                // a line leaves is the count going up by one.
                 publish()
             }
             // The name does go back down, to every phone, which is the whole of D-115 — and it
             // goes down as part of the standing, never as an echo of the body that brought it.
-            is LobbyBody.Naming -> {
+            is LobbyBody.Naming -> atTheDesk {
                 desk.named(seat, body.name)
                 publish()
             }
@@ -877,6 +879,41 @@ class LobbyHouse(
     }
 
     private fun publish() = announce(TransportFrame.Carry(LobbyWire.encode(desk.standing())))
+
+    /**
+     * **Every change a phone makes to the desk, made on the house's own scope and nowhere else**
+     * (D-227).
+     *
+     * The server calls [onFrame] and its seat callbacks on its connection threads — one per socket,
+     * several at once — and the desk is a set and two plain maps. On 2026-11-16 both filler seats
+     * resumed in the same instant after the host's lock, both sent their names, and the desk kept
+     * one: the lobby read `[PHONE, SIMA, UNNAMED]` and the round's roster went out with two names
+     * for three seats. Two writes into one map from two threads is a lost write, or a name filed
+     * under the wrong seat.
+     *
+     * So the change is handed to [scope], which is the thread the host's own controls already
+     * reach the desk on (the setting, NEW ROUND, arming), and every one of them is made in the order
+     * the server handed it over: one connection's seating, name and line arrive in the order that
+     * phone sent them, and a seat's loss is reported before its resume (`TransportHost` reports a
+     * loss under its lock). The standing is built here too, so it is never one thread's view sent
+     * after another's newer one.
+     *
+     * **A change the desk refuses is the authority's to hear, never the player's** (rule 6): a name
+     * or line from a seat that is not on the desk is dropped and logged — the seat, never the text.
+     */
+    private fun atTheDesk(change: () -> Unit) {
+        scope.launch {
+            deskWatch()
+            try {
+                change()
+            } catch (refused: IllegalArgumentException) {
+                onEvent("THE DESK REFUSED A CHANGE — ${refused.message}")
+            }
+        }
+    }
+
+    /** Called before every change [atTheDesk] makes, where it makes it. A test's view of the confinement. */
+    internal var deskWatch: () -> Unit = {}
 
     /**
      * One frame, to every phone attached to this house.
