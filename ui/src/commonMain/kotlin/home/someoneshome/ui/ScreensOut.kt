@@ -438,10 +438,10 @@ fun WinInsidersScreen(vals: PanelVals) {
     KitScreen(padding = ENDING_PADDING, gap = 10.dp) {
         EndingBanner("INSIDERS WIN", "THE HOUSE REACHED THE INTERNET", p, lineSize = 24)
         // The house speaks last, and only to the people it owned.
-        vals.signOff?.let { HouseSignOff(it, p) }
+        vals.signOff?.let { HouseSignOff(it, vals.endedAt, p) }
         Revealed("THE INSIDERS WERE", vals.revealed, p, labelInk = p.mid)
         KitRules(p) {
-            KitInfo("EGRESS COMPLETE", "21:38 . BEACON", p, valueColor = p.mid, minHeight = 40.dp)
+            KitInfo("EGRESS COMPLETE", vals.egressEndedLine, p, valueColor = p.mid, minHeight = 40.dp)
             KitInfo("SYSTEM INTEGRITY", vals.integrityPercent, p, valueColor = p.mid, minHeight = 40.dp)
         }
         NewRound(p)
@@ -474,7 +474,7 @@ fun WinResidentsScreen(vals: PanelVals) {
         // The house speaks last here too, and to the same two people. Nothing about a Resident win
         // makes it apologetic -- but the lights are on, so it says it in bone, like everything
         // else on this screen.
-        vals.signOff?.let { HouseSignOff(it, p) }
+        vals.signOff?.let { HouseSignOff(it, vals.endedAt, p) }
         Row(Modifier.fillMaxWidth()) {
             Words("THE RESIDENTS", Modifier.weight(1f), size = 22, color = p.dim, lineHeight = 1.0)
             // Who is still standing, which everybody in the room can already see. A count of
@@ -539,7 +539,7 @@ private fun EndingBanner(headline: String, line: String, p: Palette, lineSize: I
  * is a palette. Passing the palette in keeps the *shape* shared, which is what the lift was for.
  */
 @Composable
-private fun HouseSignOff(body: String, p: Palette) {
+private fun HouseSignOff(body: String, at: String, p: Palette) {
     Column(
         Modifier.fillMaxWidth().cssBorder(1.dp, if (p.bone) p.ink else p.line)
             .padding(horizontal = 12.dp, vertical = 8.dp),
@@ -547,7 +547,7 @@ private fun HouseSignOff(body: String, p: Palette) {
     ) {
         Row(Modifier.fillMaxWidth()) {
             Tag("HOUSE", if (p.bone) p.dim else p.mid, Modifier.weight(1f).then(LABEL_BOX))
-            Tag("21:38", p.dim, LABEL_BOX)
+            Tag(at, p.dim, LABEL_BOX)
         }
         Words(body, size = 26, color = p.ink, lineHeight = 1.05)
     }

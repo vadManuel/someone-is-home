@@ -291,7 +291,7 @@ fun LockScreen(vals: PanelVals) {
                 drawRect(if (heavy) ground.copy(alpha = NOTIFIED_DIM) else ground)
             }
     ) {
-        LanternFace(arrival, heavy, ink, go, actions)
+        LanternFace(vals, arrival, heavy, ink, go, actions)
     }
 }
 
@@ -301,6 +301,7 @@ fun LockScreen(vals: PanelVals) {
  */
 @Composable
 private fun LanternFace(
+    vals: PanelVals,
     arrival: Arrival?,
     heavy: Boolean,
     ink: Color,
@@ -314,11 +315,11 @@ private fun LanternFace(
         InvertedStatusRow("SOMEONE'S HOME")
 
         Words(
-            "21:04", Modifier.fillMaxWidth().padding(top = 52.dp),
+            vals.lockClock, Modifier.fillMaxWidth().padding(top = 52.dp),
             size = 124, color = ink, lineHeight = 0.8, align = TextAlign.Center,
         )
         Words(
-            "SATURDAY 16 AUGUST", Modifier.fillMaxWidth().padding(top = 12.dp),
+            vals.lockDate, Modifier.fillMaxWidth().padding(top = 12.dp),
             size = 26, color = ink, lineHeight = 1.0, tracking = 0.06, align = TextAlign.Center,
         )
 

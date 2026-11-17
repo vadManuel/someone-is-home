@@ -206,17 +206,24 @@ data class PanelState(
      */
     val verdict: SubroutineVerdict? = null,
     /**
-     * **The clock on this screen, as the house last said it stood.**
+     * **The meeting phase's clock: seconds left until the house's deadline** (D-243, provisional).
      *
      * Seconds remaining, and nothing else — the window it is counting down is a property of the
-     * screen (see [Countdowns]), so the two cannot be sent inconsistently. Null means the house
-     * has said nothing, which on a phone with no house attached is always.
+     * screen (see [Countdowns]), so the two cannot be sent inconsistently. Null means no phase with
+     * a deadline is open, which on a phone with no house attached is always, and the design's drawn
+     * moment stands in.
      *
-     * **The device never advances it.** No screen in this module runs a clock; a countdown is
-     * redrawn when a new value arrives and is otherwise as still as any other field here. Six
-     * phones each counting down on their own would be six meetings ending at six different
-     * moments, and the one thing every player in a dark house needs is to be looking at the same
-     * clock.
+     * **Set by the push that opens the phase, counted down by `FlowHost`.** `MeetingPhaseOpened`
+     * starts it at the window the house runs that phase for (`Balance.DISCUSSION_SECONDS`, the
+     * ballot the house sent, `Balance.TALLY_SECONDS`: the same numbers `HouseClock` ends the phase
+     * on), `FlowModel.secondPassed` takes a second off it a second at a time, which is D-239's
+     * arrangement for page 2's clocks, and `MeetingEnded` clears it. Until D-243 nothing wrote it
+     * and every meeting clock on a housed phone stood at the design's `1:04`, `0:38`, `9` or `0:24`.
+     *
+     * **It drives nothing.** No screen moves when it reaches zero, no light changes with it, and no
+     * request rides on it: the house moves every phone at once when its own clock says so (rule 5;
+     * the display is the push's echo). Counting from the push's arrival errs late by the push's
+     * travel, so a phone may still read `0:01` when the house moves it, never `0:00` early.
      */
     val secondsLeft: Int? = null,
     /**
@@ -269,6 +276,19 @@ data class PanelState(
      * stopped is running.
      */
     val egressHeld: Boolean = false,
+    /**
+     * **The Egress countdown: what is left of it and how long it ran from** (D-243).
+     *
+     * From the house's own number, already on the wire: `EgressOpened.remaining` starts it (and is
+     * the length it is a fraction of), `EgressHeld.remaining` resets it at each pause and each
+     * restart (D-133), both in ticks and turned into whole seconds by `Balance.wholeSeconds`, which
+     * rounds up so the phone never reads less than the house holds. `FlowModel.secondPassed` counts
+     * it down while the house has not stopped it, and `EgressContained` clears it.
+     *
+     * Null with no Egress, and on a phone with no house attached, where the design's `1:42` over 22
+     * of 32 segments stands in. Like [secondsLeft] it drives nothing: the house ends an Egress.
+     */
+    val egressLeft: Countdown? = null,
     /**
      * **Whether the house is holding this seat's beat** (`Effect.SyncPulseAnswered`, `gdd.md:355`).
      *
@@ -593,6 +613,26 @@ data class PanelState(
      * on the surface changes.
      */
     val carrying: Carried? = null,
+    /**
+     * **This phone's own wall clock, as it last read it** (D-243). Written by `FlowModel` from the
+     * clock the app root hands it, once a minute changes; read by the status strip and the lantern
+     * on a phone with a house attached. Not a fact the house sent, and nothing but those two draws
+     * it. Null where no clock was handed down, which is every render.
+     */
+    val wallTime: WallTime? = null,
+    /**
+     * **When the house's opening text landed, on this phone's clock** (D-243). The house thread's
+     * opening rows and the role's line arrive with LIGHTS OUT (`OpeningMessage`, `RoleRevealed`),
+     * so they carry this time. Null until then.
+     */
+    val openedAt: String? = null,
+    /**
+     * **Every later text from the house, in the order it landed, each with its own arrival time**
+     * (`MessageDelivered`, D-243). The thread behind the house's row. Empty until one lands.
+     */
+    val houseTexts: List<HouseText> = emptyList(),
+    /** **When the ending landed, on this phone's clock** (`RoundEnded`, D-243). Null until then. */
+    val endedAt: String? = null,
     /** Randomises the backlog's *count and mix*, so inbox density can never imply a role. */
     val inboxSeed: Int = 3,
     val noteSeed: Int = 0,
@@ -877,13 +917,29 @@ class PanelVals(
      */
     val lockChip: Boolean = state.screen == ScreenId.Files || state.carrying != null
 
+    /**
+     * **The strip's clock: the phone's own on a phone with a house attached** (D-243), and the
+     * design's drawn times on one without, so the render harness still draws the mockup. A dash on a
+     * housed phone that was handed no clock, never a drawn time in front of a player.
+     */
     val clock: String = when {
+        state.houseAttached -> state.wallTime?.clock ?: NO_READING
         state.screen == ScreenId.WinResidents -> "21:38"
         isPre -> "20:41"
         mode == PanelMode.Ghost -> "21:31"
         mode == PanelMode.End -> "21:38"
         else -> "21:07"
     }
+
+    /** The lantern's large time (D-243): [clock]'s source, at the lantern's size. */
+    val lockClock: String = if (state.houseAttached) state.wallTime?.clock ?: NO_READING else "21:04"
+
+    /** The lantern's date line (D-243): the phone's own date with a house attached. */
+    val lockDate: String =
+        if (state.houseAttached) state.wallTime?.date ?: NO_READING else "SATURDAY 16 AUGUST"
+
+    /** When the ending landed on this phone (D-243), as the endings print it beside the house. */
+    val endedAt: String = housed(state.endedAt, fixture = "21:38", nothing = NO_READING)
 
     /**
      * Anything that arrives unasked buzzes: banners, calls, the meeting transitions, revocation,
@@ -939,10 +995,16 @@ class PanelVals(
         // (the older one dimmed would read as a read mark) does not arise with one.
         listOf(
             InboxRow(
-                // The thread's newest time. A literal rather than a read of [houseThread]: this
-                // list is built at construction, before [houseLine] -- which the thread holds --
-                // has been assigned.
-                Notifications.opening.from, "21:02", Notifications.opening.body,
+                // The thread's newest time. Not a read of [houseThread]: this list is built at
+                // construction, before [houseLine] -- which the thread holds -- has been assigned.
+                // On a housed phone it is the newest arrival's own time (D-243).
+                Notifications.opening.from,
+                if (state.houseAttached) {
+                    state.houseTexts.lastOrNull()?.at ?: state.openedAt ?: NO_READING
+                } else {
+                    "21:02"
+                },
+                Notifications.opening.body,
                 Ramp.Ink, Ramp.Ink,
             ),
         ) + rest
@@ -958,14 +1020,29 @@ class PanelVals(
      * **The house thread, oldest first: time, then text** (D-200). Four texts, and only the newest
      * differs by role. The 21:01 line is the later text's own words, so the thread and the lock
      * screen cannot say two different things.
+     *
+     * **On a phone with a house attached every row carries the time it landed** (D-243): the two
+     * opening rows and the role's line came with LIGHTS OUT and carry [PanelState.openedAt], and
+     * each later text the house sent follows, at its own arrival. The design's 21:01 line is not
+     * among them, because no house sent it. The rows' words are unchanged; only their times and
+     * the stand-in text are.
      */
     val houseThread: List<Pair<String, String>>
-        get() = listOf(
-            "20:58" to "Occupancy nominal. Access reviewed and retained.",
-            "20:59" to "Seven subroutines assigned. Begin at your convenience.",
-            Notifications.text.at to Notifications.text.body,
-            "21:02" to houseLine,
-        )
+        get() = if (state.houseAttached) {
+            val opened = state.openedAt ?: NO_READING
+            listOf(
+                opened to OPENING_THREAD[0],
+                opened to OPENING_THREAD[1],
+                opened to houseLine,
+            ) + state.houseTexts.map { it.at to it.body }
+        } else {
+            listOf(
+                "20:58" to OPENING_THREAD[0],
+                "20:59" to OPENING_THREAD[1],
+                Notifications.text.at to Notifications.text.body,
+                "21:02" to houseLine,
+            )
+        }
 
     /** Only the newest message in the house thread differs by role. Everything above it is shared. */
     val houseLine: String = if (insider) {
@@ -1354,11 +1431,10 @@ class PanelVals(
     /**
      * The countdown this screen is showing, or [Countdown.NONE] where it has none.
      *
-     * **Display, not a clock.** The value comes from [PanelState.secondsLeft] when the house has
-     * sent one and from the design's drawn moment when it has not; nothing on the device advances
-     * it either way. The window it counts down is [Countdowns]', which reads it off the
-     * auto-advance that fires when the clock runs out — so the number on screen and the moment
-     * the phone moves cannot drift apart.
+     * **Display, not a clock.** The value comes from [PanelState.secondsLeft], which the house's
+     * phase push starts and `FlowHost` counts down (D-243), and from the design's drawn moment on a
+     * phone with no house attached. A housed phone with no phase clock draws a spent one rather
+     * than the drawing's moment. The window it counts down is [Countdowns]'.
      */
     /**
      * **Which phase of the meeting the house has opened, as the couch's one screen needs it**
@@ -1387,11 +1463,17 @@ class PanelVals(
     val meetingPhase: MeetingPhase =
         housed(state.meetingPhase, MeetingPhase.Vote, nothing = MeetingPhase.CheckIn)
 
+    /**
+     * The house's phase clock, or, on a housed phone that has none, a spent one: never the design's
+     * drawn moment in front of a player (D-243).
+     */
+    private val said: Int? = state.secondsLeft ?: 0.takeIf { state.houseAttached }
+
     val countdown: Countdown = when (state.screen) {
         // The one screen whose clock changes meaning under it: the couch watches every phase of a
         // meeting without moving, so its window is the phase's and not the screen's (D-134).
         ScreenId.GhostMeeting ->
-            Countdowns.onGhostMeeting(meetingPhase, state.secondsLeft, state.voteWindowSeconds)
+            Countdowns.onGhostMeeting(meetingPhase, said, state.voteWindowSeconds)
         // **A window this phone opened is counted by this phone, and it wins here** ([window]).
         //
         // The scan is the only clock in the game of that kind, and it is the one the owner found
@@ -1402,7 +1484,7 @@ class PanelVals(
         // is exactly why the local reading is asked for first rather than as a fallback.
         else -> Countdowns.on(
             state.screen,
-            window?.secondsLeft ?: state.secondsLeft,
+            window?.secondsLeft ?: said,
             state.voteWindowSeconds,
         )
     } ?: Countdown.NONE
@@ -1484,8 +1566,18 @@ class PanelVals(
         nothing = NO_READING,
     )
 
-    /** The Egress countdown, which replaces the meter in place and takes the only number back. */
-    val egressLit: Int = 22
+    /**
+     * **The Egress countdown, which replaces the meter in place and takes the only number back.**
+     *
+     * The house's: [PanelState.egressLeft], started by `EgressOpened.remaining` and reset by each
+     * `EgressHeld.remaining` (D-243). The bar drains with the clock beside it, one value. The
+     * design's `1:42` over 22 of 32 segments stands in only on a phone with no house; a housed phone
+     * the house has told no Egress draws an empty bar and a dash.
+     */
+    val egressLit: Int = state.egressLeft?.litOf(METER_SEGMENTS) ?: if (state.houseAttached) 0 else 22
+
+    /** The countdown's readout, [egressLit]'s own value in `m:ss`. See there. */
+    val egressLeftText: String = state.egressLeft?.text ?: if (state.houseAttached) NO_READING else "1:42"
 
     /**
      * **The Egress's type and its two nodes, from the house when there is one.**
@@ -1500,6 +1592,12 @@ class PanelVals(
     val egressType: String = housed(state.egressType, Notifications.EGRESS_TYPE, nothing = "")
     val egressNodes: List<String> =
         housed(state.egressNodes, Notifications.EGRESS_NODES, nothing = emptyList())
+
+    /**
+     * The Insiders' ending's Egress line: when the ending landed and which Egress the house ran
+     * (D-243). `21:38 . BEACON` with no house; a part the house did not say is left out.
+     */
+    val egressEndedLine: String = listOf(endedAt, egressType).filter { it.isNotEmpty() }.joinToString(" . ")
 
     /**
      * **Whether the couch's Egress widget has anything to say** ([PanelState.egressRunning]).
@@ -1681,13 +1779,16 @@ class PanelVals(
      * caught on the same screen in the same pass: `71%` was drawn over a bar lit to 22 of 32, which
      * is 68.
      *
-     * `Effect.EgressHeld` carries `remaining` and `running` to LIVING + OUTSIDE, so unlike the
-     * meter above this one **has** a carrier; what it has no carrier for is the duration it is a
-     * fraction of, which is a lobby setting the wire does not send (F-009, and C1's escalation
-     * about the vote window is the same gap one setting over). Flagged, and the bar stays the
-     * port's until a number arrives.
+     * **The house's own fraction now** (D-243): what is left of [PanelState.egressLeft] over the
+     * length `EgressOpened.remaining` gave it, so the duration is the one the house fired with and
+     * no lobby setting has to be guessed. The port's fraction stands in only with no house, and a
+     * housed phone told no Egress prints the dash.
      */
-    val egressPercent: String = "${egressLit * 100 / METER_SEGMENTS}%"
+    val egressPercent: String = when {
+        state.egressLeft != null -> "${(state.egressLeft.remaining * 100).toInt()}%"
+        state.houseAttached -> NO_READING
+        else -> "${egressLit * 100 / METER_SEGMENTS}%"
+    }
 
     /**
      * **The live ballot the couch reads, from the house when there is one** (D-117, D-134, D-075).
@@ -1710,6 +1811,12 @@ class PanelVals(
     val votesCast: Int = ballots.count { it.forWhom != null }
 
     companion object {
+
+        /** The house thread's two opening rows, the same words housed or not (see [houseThread]). */
+        private val OPENING_THREAD = listOf(
+            "Occupancy nominal. Access reviewed and retained.",
+            "Seven subroutines assigned. Begin at your convenience.",
+        )
 
         /**
          * **The Subroutine this phone is being sent to — one value, read by four screens and by

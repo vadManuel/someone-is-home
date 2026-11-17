@@ -353,6 +353,8 @@ fun CheatRoot() {
             // rhythm, Sniff's groups and Drift's *now* are buzzed when their work opens. No haptic
             // is chosen on this line and none may be — see `HouseBuzzer.showing`.
             onScreen = buzzer::showing,
+            // The phone's own wall clock, for the strip, the lantern and each message's time (D-243).
+            wallClock = ::deviceWallTime,
         ).also { panel.value = it }
     }
     // The deck that stands in for a camera, kept now that there IS a camera. It is a tour of the

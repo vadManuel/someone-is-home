@@ -7,13 +7,14 @@ import kotlin.math.roundToInt
 /**
  * A clock on a screen: **how much of a window is left, and how long the window was.**
  *
- * ### It is display, and the device does not run it
+ * ### It is display, and it decides nothing
  *
- * Nothing here ticks. There is no coroutine, no frame callback and no elapsed-time arithmetic —
- * a [Countdown] is a value that arrives, is drawn, and is replaced by the next one. In play the
- * house owns every clock in this game: it decides when the talk starts, when the ballot is read
- * and when the lights go out, and it pushes the screen. A phone that counted down locally would
- * be six phones counting down slightly differently in a dark house, each of them certain.
+ * Nothing here ticks: a [Countdown] is a value that is drawn and replaced by the next one. In play
+ * the house owns every clock in this game: it decides when the talk starts, when the ballot is read
+ * and when the lights go out, and it pushes the screen. **What a phone does with the push is count
+ * the house's window down from it** (D-243, D-239's arrangement for page 2): `FlowModel.secondPassed`
+ * once a second, from the push that opened the phase, so six phones show six readings of one
+ * deadline, each a little late, and none of them moves anything when it reaches zero.
  *
  * ### The number and the bar are the same value
  *
@@ -182,6 +183,22 @@ object Countdowns {
             return voteWindow
         }
         return MEETING_WINDOWS[screen]
+    }
+
+    /**
+     * **How long the house runs [phase] for, in seconds, or null where it runs no clock** (D-243).
+     *
+     * The push that opens a phase starts [PanelState.secondsLeft] here: the talk's ninety, the
+     * ballot the house sent (its default where it sent none), the tally's fifteen. They are the
+     * numbers `HouseClock` closes each phase on, read from the same `Balance` constants, so the
+     * phone's reading and the house's deadline cannot be two numbers. [MeetingPhase.CheckIn] has
+     * none: the gate closes on a count of phones, not on a clock (D-104).
+     */
+    fun windowOfPhase(phase: MeetingPhase, voteWindow: Int? = null): Int? = when (phase) {
+        MeetingPhase.CheckIn -> null
+        MeetingPhase.Discussion -> windowOf(ScreenId.Discussion)
+        MeetingPhase.Vote -> windowOf(ScreenId.Vote, voteWindow)
+        MeetingPhase.Tally -> windowOf(ScreenId.Tally)
     }
 
     /**

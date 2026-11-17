@@ -6311,6 +6311,78 @@ recording in which an out seat reported now replays to a shorter notice.
 | `RadioFaultTest` | (none) | an out seat's report is admitted, reaches nobody, lists nothing; listed while living and out by the gate is not named, a living one still is |
 | `EvasionNoticeTest` | three seats | and four: a Revoked guest and a living guest both lock; the same body from both, only the living one listed and named |
 
+## Revision 68 — the times are the phone's and the countdowns are the house's
+
+*2026-11-16. The owner, on two real iPhones: "is the clock fake?? can we stop having fake things in
+the app". Every time and every countdown a housed phone drew was the mockup's.*
+
+### D-243 · **A housed phone draws its own wall clock and the times house messages landed; the meeting's and the Egress's countdowns run from the house's pushes — built, provisional, owner to confirm**
+
+**What was fake on a housed phone.** The strip's clock (`20:41`, `21:07`, `21:31`, `21:38`), the
+lantern's `21:04` and `SATURDAY 16 AUGUST`, the house thread's `20:58`–`21:02` and the stored text's
+`NOW`, the endings' `21:38` (and `BEACON` whatever the house ran), and every countdown: nothing wrote
+`PanelState.secondsLeft`, so the discussion stood at `1:04`, the ballot at `0:38`, the tally at
+`LIGHTS OUT IN 9` and the couch at `0:24`; the Egress widget stood at `1:42` over 22 of 32, with
+`EgressHeld.remaining` on the wire and unread (E-R2-7). The lock screen also carried the design's two
+standing texts at `21:01` and `21:03`.
+
+**What draws them now, on a phone with a house attached** (a phone with none keeps every drawn value,
+so the render harness still compares to the mockup):
+
+1. **The phone's own wall clock** (`platform` `localWallTime`, `localtime_r`; handed to `ui` by the
+   app root as `WallTime`, because `ui` cannot see `platform`). The strip, the lantern's time and its
+   date. Read once a second by `FlowHost` while housed; the panel changes when the minute does. Rule 4
+   is untouched: `core` never sees it and nothing in the round reads it.
+2. **The moment each house message landed, on that clock.** `OpeningMessage` stamps the thread's two
+   opening rows and the role's line; each `MessageDelivered` is stamped on arrival, on the lock screen
+   and as a new row of the house thread; `RoundEnded` stamps the endings (the line and the sign-off).
+   The Insiders' ending prints the Egress type the house ran. **The design's `21:01` text is not in a
+   housed thread, and the two standing stand-ins leave a housed lock screen** when the house attaches:
+   no house sent them (removed by value, so nothing the house sent is touched).
+3. **The meeting's clocks run from the push that opens the phase.** `MeetingPhaseOpened` starts
+   `secondsLeft` at the window the house runs that phase for (`Balance.DISCUSSION_SECONDS`, the ballot
+   it sent, `Balance.TALLY_SECONDS`: the constants `HouseClock` closes each phase on), `MeetingEnded`
+   clears it, and the gate has none (D-104).
+4. **The Egress countdown is the house's `remaining`.** `EgressOpened.remaining` starts it and is the
+   length the bar is a fraction of; each `EgressHeld.remaining` resets it, and HELD stops it (D-133);
+   `EgressContained` clears it. Ticks become seconds by `Balance.wholeSeconds`, which rounds up.
+
+**One second hand, D-239's.** `FlowModel.secondPassed` now also counts these two down, keyed the same
+way in `FlowHost`, so a push restarts a fresh second and a partial second is dropped: the phone reads
+late by the push's travel, never early. **Nothing moves when a clock reaches zero**: no screen, no
+light, no request (rule 5). The house moves every phone by a push on its own clock, as before.
+
+**⚠️ Provisional (owner to confirm).** This is E-R2-7's second answer, *send an anchor and let the
+phone count*, which `secondsLeft`'s old KDoc refused (*six phones counting down differently*). D-239
+took the same road for page 2; this extends it to the meeting and the Egress. The phones agree to
+within a push's travel, not exactly. The clock is twenty-four hour, the design's form, whatever the
+phone's own setting.
+
+**Raised, not decided: the Egress bar on a living phone.** `gdd.md:545` and `:1052` give the couch
+*the real Egress progress that no living player of either role can see*, while `:375`, `:735` and
+`:1012` make the living's widget *the Egress countdown*. The mockup draws the living's widget with a
+countdown and a bar; both are now real, and since the timer's length is known, the countdown already
+says what the bar does. The couch's percentage and the living's bar are the same fraction. If the
+owner reads `:545` as hiding the bar from the living, the bar comes off their widget and the number
+stays.
+
+**Not covered.** A phone that relaunches mid-round is caught up by D-097's replay of every push, at
+once, so its clocks restart at the replay, late (page 2's by up to their whole length), and its
+replayed texts carry the replay's time. Fixing either needs the house's time on the wire, a time base
+the build does not have (E-R2-4); not done. `FlowHost` counts only while the panel is composed (the
+cheat picker or a backgrounded app pauses it, which errs late). Nothing here has run on a phone.
+
+| site | what it said | what it says now |
+|---|---|---|
+| `platform` `localWallTime` | (none) | the phone's clock in its own zone; `LocalWallTimeTest` |
+| `app` `deviceWallTime`, cheats `CheatRoot` | (none) | handed to `FlowModel(wallClock = …)` |
+| `ui` `WallTime`, `HouseText`; `PanelState.wallTime`, `openedAt`, `houseTexts`, `endedAt`, `egressLeft` | (none) | the clock, the arrival stamps, the Egress countdown |
+| `ui` `PanelVals.clock`, `lockClock`, `lockDate`, `houseThread`, `inbox`, `endedAt`, `egressEndedLine`, `egressLit`, `egressLeftText`, `egressPercent`, `countdown` | the mockup's times and moments | the phone's clock, the arrivals, the house's countdowns; the drawn values only with no house; a dash where a housed phone has no reading |
+| `ui` `FlowModel.houseSaid` | `secondsLeft` and `remaining` unread | the phase push and both Egress pushes write them; the opening, a text and the ending are stamped |
+| `ui` `FlowModel.secondPassed`, `FlowHost` | page 2's three clocks | and the phase's and the Egress's; a wall-clock read each second while housed |
+| `ui` `FlowModel.houseAttached` | the flag only | and the stand-in standing texts leave |
+| `RealClocksTest` (new), `EffectPushTest` | (none) | housed phones draw the injected clock and the arrivals, unhoused ones the design's; the clocks follow the pushes in process, under `FlowHost`, and over a real socket |
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

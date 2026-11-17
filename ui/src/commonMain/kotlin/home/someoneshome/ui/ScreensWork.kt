@@ -865,7 +865,7 @@ private fun EgressWidget(vals: PanelVals) {
         if (vals.egressHeld) {
             Words("HELD", size = 76, color = Ramp.Dim, lineHeight = 0.8)
         } else {
-            Words("1:42", size = 76, lineHeight = 0.8)
+            Words(vals.egressLeftText, size = 76, lineHeight = 0.8)
         }
         KitMeter(
             PanelVals.METER_SEGMENTS, vals.egressLit,

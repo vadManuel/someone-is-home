@@ -30,9 +30,13 @@ import home.someoneshome.platform.transport.EffectWire
 import home.someoneshome.platform.transport.SeatLedger
 import home.someoneshome.platform.transport.TransportClient
 import home.someoneshome.platform.transport.TransportHost
+import home.someoneshome.model.EgressType
+import home.someoneshome.ui.Countdown
 import home.someoneshome.ui.FlowModel
 import home.someoneshome.ui.PanelState
+import home.someoneshome.ui.PanelVals
 import home.someoneshome.ui.ScreenId
+import home.someoneshome.ui.WallTime
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -386,6 +390,75 @@ class EffectPushTest {
         }
         phone.hangUp()
         return generateSequence { seen.tryReceive().getOrNull() }.toList()
+    }
+
+    // ---- 4 · Real clocks and real times (D-243) --------------------------------------------------------
+
+    /**
+     * **GUARD: off a real socket, every clock a housed phone draws is the house's and every time is
+     * the phone's own** (D-243; the owner's *is the clock fake??*).
+     *
+     * The rules' own effects go down a real websocket into a housed [FlowModel] with a wall clock the
+     * test owns. The meeting's phase clocks start at the house's windows and count down a second at a
+     * time (the test is `FlowHost`'s second hand, as in `AbilityWiringTest`); the Egress countdown is
+     * the house's `remaining`, held and restarted by `EgressHeld`; a later text carries the minute it
+     * landed. Before D-243 each of these was the design's drawn value on a housed phone.
+     */
+    @Test
+    fun theClocksAndTimesOnAHousedPhoneAreWhatTheHousePushed() = runBlocking {
+        val state = round()
+        var now = WallTime(hour = 21, minute = 50, weekday = 6, day = 14, month = 11)
+        val flow = FlowModel(PanelState(screen = ScreenId.Assemble, houseAttached = true), wallClock = { now })
+        val house = House(this)
+        var sent = 0L
+        val phone: Phone
+        try {
+            house.start()
+            phone = house.seat(flow)
+            house.awaitSeated()
+            suspend fun say(vararg effects: Effect) {
+                for (effect in effects) house.effects.emit(effect, state)
+                sent += forSeatZero(effects.toList(), state).size
+                phone.awaitHeld(sent)
+            }
+
+            say(Effect.OpeningMessage(Seat(0), Haptic.Long))
+            assertEquals("21:50", flow.state.openedAt, "LIGHTS OUT was not stamped with the phone's time")
+            assertEquals("21:50", PanelVals(flow.state).clock, "the strip is not the phone's own clock")
+
+            say(
+                Effect.MeetingOpened(Seat(2), MeetingTrigger.MeetingCard, Haptic.Long),
+                Effect.MeetingPhaseOpened(MeetingPhase.Discussion, voteWindowSeconds = null, haptic = Haptic.Short),
+            )
+            assertEquals(90, flow.state.secondsLeft, "the talk did not start at the house's ninety")
+            repeat(26) { flow.secondPassed() }
+            assertEquals(64, flow.state.secondsLeft)
+
+            say(Effect.MeetingPhaseOpened(MeetingPhase.Vote, voteWindowSeconds = 30, haptic = Haptic.Short))
+            assertEquals(30, flow.state.secondsLeft, "the ballot did not start at the window the house sent")
+            repeat(7) { flow.secondPassed() }
+            assertEquals(23, flow.state.secondsLeft)
+
+            say(Effect.MeetingEnded(Haptic.Long))
+            assertEquals(null, flow.state.secondsLeft, "a meeting's clock outlived the meeting")
+
+            say(Effect.EgressOpened(Seat(0), EgressType.Tether, emptyList(), remaining = 2_400, haptic = Haptic.Long))
+            assertEquals(Countdown(120, 120), flow.state.egressLeft, "the Egress did not start at the house's remaining")
+            repeat(20) { flow.secondPassed() }
+            assertEquals("1:40", PanelVals(flow.state).egressLeftText)
+
+            say(Effect.EgressHeld(remaining = 1_210, running = false, haptic = Haptic.Short))
+            repeat(5) { flow.secondPassed() }
+            assertEquals(Countdown(61, 120), flow.state.egressLeft, "the held Egress is not the house's number, or it moved")
+
+            now = now.copy(hour = 22, minute = 4)
+            say(Effect.MessageDelivered(Seat(0), "Do not run."))
+            assertEquals("22:04", flow.notifications.standing.first().at, "the text was not stamped with its arrival")
+            assertEquals("22:04" to "Do not run.", PanelVals(flow.state).houseThread.last())
+        } finally {
+            house.stop()
+        }
+        phone.hangUp()
     }
 
     // ---- The rig -------------------------------------------------------------------------------------

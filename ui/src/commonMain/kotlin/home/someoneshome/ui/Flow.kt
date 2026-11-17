@@ -1062,6 +1062,16 @@ class FlowModel(
      * motor behind it, which is what a desktop harness is.
      */
     private val onScreen: (ScreenId) -> Unit = {},
+    /**
+     * **This phone's own wall clock** (D-243), for the status strip, the lantern and the time each
+     * house message landed, and for nothing else. [onTorch]'s shape: the clock is `platform`'s and
+     * `ui` may not see `platform`, so the app root hands it down.
+     *
+     * Defaulted to no clock at all, which is every render, every screenshot and every test that
+     * does not hand one down: a housed phone without one prints a dash where the time goes, and a
+     * phone with no house draws the design's times whatever this says.
+     */
+    private val wallClock: () -> WallTime? = { null },
 ) {
 
     var state: PanelState by mutableStateOf(initial)
@@ -1340,16 +1350,51 @@ class FlowModel(
     }
 
     /**
-     * **One second of the public clocks** (D-239). Called by `FlowHost` once a second while one is
-     * running, and by a test standing in for it. It counts from the push; see [PublicCooldown].
+     * **One second of every clock the house started on this phone** (D-239, D-243). Called by
+     * `FlowHost` once a second while [ticking], and by a test standing in for it. It counts from
+     * the push; see [PublicCooldown].
+     *
+     * Page 2's three public clocks fill; the meeting phase's clock ([PanelState.secondsLeft]) and
+     * the Egress's ([PanelState.egressLeft]) drain, the Egress's only while the house has not held
+     * it (D-133). Each stops at its end and none of them moves a screen or a light when it gets
+     * there: the house does that, by a push, on its own clock (rule 5).
      */
     fun secondPassed() {
         state = state.copy(
             revokeClock = state.revokeClock?.secondPassed(),
             accessClock = state.accessClock?.secondPassed(),
             egressClock = state.egressClock?.secondPassed(),
+            secondsLeft = state.secondsLeft?.let { (it - 1).coerceAtLeast(0) },
+            egressLeft = state.egressLeft?.let { left ->
+                if (state.egressHeld) left else left.copy(secondsLeft = (left.secondsLeft - 1).coerceAtLeast(0))
+            },
         )
     }
+
+    /** Whether any clock [secondPassed] counts still has a second to count. */
+    val ticking: Boolean
+        get() = state.revokeClock?.running == true ||
+            state.accessClock?.running == true ||
+            state.egressClock?.running == true ||
+            (state.secondsLeft ?: 0) > 0 ||
+            (!state.egressHeld && (state.egressLeft?.secondsLeft ?: 0) > 0)
+
+    /**
+     * **Read the phone's wall clock onto the panel** (D-243). Called by `FlowHost` once a second
+     * while a house is attached, and when one attaches; the panel changes only when the minute
+     * does, so a second that changes nothing redraws nothing. False when no clock was handed down,
+     * which is every render and test that did not ask for one, and then nothing is read again.
+     */
+    fun wallClockRead(): Boolean {
+        val now = wallClock() ?: return false
+        if (now != state.wallTime) state = state.copy(wallTime = now)
+        return true
+    }
+
+    /** The time a house message landed, on this phone's clock, or null with no clock (D-243). */
+    private fun landedAt(): String? = wallClock()?.also { now ->
+        if (now != state.wallTime) state = state.copy(wallTime = now)
+    }?.clock
 
     /**
      * **A shift began: the per-seat clocks back to half on every phone** (D-132 at LIGHTS OUT,
@@ -1889,6 +1934,16 @@ class FlowModel(
      */
     fun houseAttached(attached: Boolean) {
         state = state.copy(houseAttached = attached)
+        if (attached) {
+            // The strip's clock is the phone's own from this moment, not from FlowHost's next second.
+            wallClockRead()
+            // **And the lock screen holds nothing the house did not send** (D-243). The design's
+            // two standing texts (`21:01`, `21:03`) are the stand-ins a phone with no house shows;
+            // on a housed phone they were two fake times under the clock all evening. Each is
+            // removed by its own value (words, sender and time), so a reconnect, which calls this
+            // again, clears only a real text identical to a stand-in to the minute.
+            Notifications.stored.forEach(notifications::dismiss)
+        }
     }
 
     // ---- Subroutines ---------------------------------------------------------------------------
@@ -2203,8 +2258,16 @@ class FlowModel(
             // **Stored first, then the banner.** The banner is a screen and the standing list is
             // where the thing survives; raising the banner first would leave a phone whose player
             // swiped it in the same frame with nothing anywhere to have swiped.
+            //
+            // **Stamped with the moment it landed** (D-243): the lock screen keeps it for as long as
+            // nobody swipes it, so NOW would be a lie a minute later, and the house thread keeps it
+            // for good, in arrival order.
             is RoundMessage.MessageDelivered -> {
-                notifications.houseSent(Notification(NotificationKind.Text, body = message.body))
+                val at = landedAt()
+                state = state.copy(houseTexts = state.houseTexts + HouseText(at ?: PanelVals.NO_READING, message.body))
+                notifications.houseSent(
+                    Notification(NotificationKind.Text, body = message.body, at = at ?: "NOW"),
+                )
                 arrived(ScreenId.Quiet)
             }
 
@@ -2274,8 +2337,12 @@ class FlowModel(
             //
             // **And it is the first shift beginning, on every phone at once** (D-132, D-239): page
             // 2's clocks start here, at half, the same on an Insider's phone and a Resident's.
+            //
+            // **And it is when the house thread's opening rows landed** (D-243), on this phone's clock.
             is RoundMessage.OpeningMessage -> {
                 shiftBegan(opening = true)
+                val at = landedAt()
+                state = state.copy(openedAt = at, houseTexts = emptyList(), endedAt = null)
                 roundOpened()
             }
 
@@ -2439,6 +2506,11 @@ class FlowModel(
                     // one screen, and a vote window blanked by the tally's push would take the
                     // ballot's clock off a screen that is still drawing it.
                     voteWindowSeconds = message.voteWindowSeconds ?: state.voteWindowSeconds,
+                    // **The phase's clock starts now, at the window the house runs it for** (D-243).
+                    // Null at the gate, which runs on a count and not a clock (D-104).
+                    secondsLeft = Countdowns.windowOfPhase(
+                        message.phase, message.voteWindowSeconds ?: state.voteWindowSeconds,
+                    ),
                 )
                 housePushed(message)
             }
@@ -2556,6 +2628,8 @@ class FlowModel(
             // clock goes back to half on every phone (D-184, D-239).
             is RoundMessage.MeetingEnded -> {
                 shiftBegan()
+                // The meeting's last clock goes with it (D-243).
+                state = state.copy(secondsLeft = null)
                 housePushed(message)
             }
 
@@ -2585,10 +2659,9 @@ class FlowModel(
             // ordering and its reason: the banner is drawn from the pair, so a banner raised before
             // the pair was written would draw the port's UTILITY and LANDING for one frame.
             //
-            // ⚠️ **The countdown on the widget is still the fixture's** (E-R2-7). `remaining` is in
-            // ticks, [PanelState.secondsLeft] is in seconds, and the conversion is not `ui`'s to
-            // make — see the branch below and the escalation in the worklog. What this closes is
-            // the alert and the two names; the number is the missing carrier's.
+            // **And the countdown on the widget is the house's** (E-R2-7, closed by D-243):
+            // `remaining`, in ticks, through `Balance.wholeSeconds`, the conversion `model` names
+            // so that `ui` holds no opinion about the tick rate (D-239).
             is RoundMessage.EgressOpened -> {
                 state = state.copy(
                     egressType = message.type.name.uppercase(),
@@ -2601,22 +2674,30 @@ class FlowModel(
                     // The house-wide clock restarts at full on the fire (D-151), and every phone is
                     // told it fired by this push, so the bar restarts on every phone (D-239).
                     egressClock = PublicCooldown.EgressFired,
+                    // **The countdown, from the house's own number** (D-243): what it fired with is
+                    // both what is left and what the bar is a fraction of.
+                    egressLeft = Balance.wholeSeconds(message.remaining).let { Countdown(it, it) },
+                    egressHeld = false,
                 )
                 arrived(ScreenId.Banner)
             }
 
             // **The countdown stopping and starting again, on the containment screen** (D-133).
             //
-            // **`running` lands and `remaining` does not**, and the split is where the line already
-            // was. Whether the number is moving is a fact about the house that the widget has to be
-            // able to draw — a meeting called by reporting a Revoke pauses the Egress, and a
-            // countdown that went on falling through a meeting the whole house had stopped for
-            // would be the one screen contradicting the room. The *number* is in ticks, and
-            // [PanelState.secondsLeft] is in seconds: `Balance` says outright that a screen dividing
-            // by the tick rate is a screen holding an opinion about it, so the conversion is not
-            // `ui`'s to make. ⚠️ Flagged, and it is E7's with the tick rate — the same gap
-            // `egressPercent` has, one field over.
-            is RoundMessage.EgressHeld -> state = state.copy(egressHeld = !message.running)
+            // **Both halves land** (D-243). Whether the number is moving is a fact about the house
+            // the widget has to draw: a meeting called by reporting a Revoke pauses the Egress, and
+            // a countdown that went on falling through a meeting the whole house had stopped for
+            // would be the one screen contradicting the room. The number itself resets the phone's
+            // count at every pause and restart, through `Balance.wholeSeconds` (D-239), which
+            // rounds up so the phone never reads less than the house holds. The length stays the
+            // one the Egress fired with; a phone that missed the fire falls back to the house's
+            // timer.
+            is RoundMessage.EgressHeld -> state = state.copy(
+                egressHeld = !message.running,
+                egressLeft = Balance.wholeSeconds(message.remaining).let { left ->
+                    Countdown(left, state.egressLeft?.ofSeconds ?: maxOf(left, Balance.wholeSeconds(Balance.EGRESS_TIMER)))
+                },
+            )
 
             // **The house's answer to one beat, and it is the same answer either way** (`gdd.md:355`,
             // rule 1). `held` is true when the house is now holding this seat's beat, waiting for
@@ -2634,14 +2715,19 @@ class FlowModel(
             // is deliberately left standing: it says which Egress the house ran, and unsetting it
             // here would make the widget's two facts one field again. What comes back down is
             // whether one is on.
-            is RoundMessage.EgressContained -> state = state.copy(egressRunning = false)
+            is RoundMessage.EgressContained -> state = state.copy(egressRunning = false, egressLeft = null)
 
             // **Permitted to nobody, so it cannot arrive** — its row is gone (D-131, D-156), and
             // what every phone gets instead is the ending carrying `WinRoute.EgressUncontained`.
             // Named for `PresenceChanged`'s reason.
             is RoundMessage.EgressSucceeded -> Unit
 
-            is RoundMessage.RoundEnded -> Flow.endings[message.winner]?.let { push(it.to) }
+            // Stamped before the push, so the ending is drawn with its time from its first frame (D-243).
+            is RoundMessage.RoundEnded -> {
+                val at = landedAt()
+                state = state.copy(endedAt = at)
+                Flow.endings[message.winner]?.let { push(it.to) }
+            }
 
             is RoundMessage.InsidersRevealed -> state = state.copy(
                 revealed = message.insiders.map { RevealedInsider(it.name, it.line) },
@@ -3067,15 +3153,25 @@ fun FlowHost(
         }
     }
 
-    // **Page 2's public clocks, a second at a time** (D-239). Keyed on the three values, so each
-    // second relaunches the wait and a restart (a push) begins a fresh second rather than finishing
-    // somebody else's: a partial second is dropped, which is the late direction [PublicCooldown]
-    // asks for. Nothing runs once all three have run out.
-    val clocks = Triple(model.state.revokeClock, model.state.accessClock, model.state.egressClock)
+    // **Every clock the house started, a second at a time** (D-239: page 2's three; D-243: the
+    // meeting phase's and the Egress's). Keyed on the values, so each second relaunches the wait
+    // and a restart (a push) begins a fresh second rather than finishing somebody else's: a partial
+    // second is dropped, which is the late direction [PublicCooldown] asks for. Nothing runs once
+    // every one of them has run out, and nothing here moves a screen or the lamp.
+    val s = model.state
+    val clocks = listOf(s.revokeClock, s.accessClock, s.egressClock, s.secondsLeft, s.egressLeft, s.egressHeld)
     LaunchedEffect(clocks) {
-        if (clocks.toList().any { it?.running == true }) {
+        if (model.ticking) {
             delay(1_000L)
             model.secondPassed()
+        }
+    }
+
+    // **The phone's own wall clock, while a house is attached** (D-243). Read once a second; the
+    // panel changes only when the minute does. Display only: nothing in the round reads it.
+    LaunchedEffect(housed) {
+        if (housed) {
+            while (model.wallClockRead()) delay(1_000L)
         }
     }
 
