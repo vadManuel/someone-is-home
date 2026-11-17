@@ -118,11 +118,11 @@ fun SecretScreen() {
  * The perimeter arms — **the house answering, not the host announcing**.
  *
  * The lights have just gone out, so this is the first dark-field screen anyone sees, and it says
- * only what is true for everyone. Six residents accounted for; no roles, no assignments, nothing
- * that differs by device.
+ * only what is true for everyone. Every resident accounted for, as the house counted them
+ * ([PanelVals.accountedFor], D-247); no roles, no assignments, nothing that differs by device.
  */
 @Composable
-fun ArmedScreen() {
+fun ArmedScreen(vals: PanelVals) {
     val go = navigator()
     KitScreen {
         Column(
@@ -133,7 +133,7 @@ fun ArmedScreen() {
             Words("PERIMETER\nARMED", size = 72, lineHeight = 0.85, tracking = 0.04, align = TextAlign.Center)
             Box(Modifier.size(width = 48.dp, height = 2.dp).background(Ramp.Line))
             Words(
-                "6 RESIDENTS\nACCOUNTED FOR", size = 26, color = Ramp.Dim, lineHeight = 1.1,
+                vals.accountedFor, size = 26, color = Ramp.Dim, lineHeight = 1.1,
                 align = TextAlign.Center,
             )
             // Outline only: the lights have just gone out, and nothing here may flare.

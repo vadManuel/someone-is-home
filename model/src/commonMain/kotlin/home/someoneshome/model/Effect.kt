@@ -470,8 +470,30 @@ sealed interface Effect {
      * A row of `Insider/Live` alone would deliver this to Insiders and to nobody else, and the
      * absence would then *be* the answer — rule 1's forbidden shape moved into the allowlist. The
      * message reaches every living phone; what differs is what it says.
+     *
+     * ### [line] is the Insider's own one line, quoted back to the phone that typed it (D-116, D-247)
+     *
+     * *Insiders receive a petty, mundane blackmail text* — and D-101 makes that text a verbatim
+     * template over the line the player handed over. Every phone drew the port's *Priya's spare key*
+     * instead, because nothing carried the line back. It rides here rather than on a kind of its
+     * own because the blackmail text **is** the Insider's role reveal (story 2.7): one message per
+     * seat, at the same point in the same burst, so the burst's shape is unchanged.
+     *
+     * **A Resident's carries nothing**, and that is D-116 rather than redaction: every line is real
+     * and the house simply never uses a Resident's, so it is never sent anywhere again. An
+     * Insider's carries their own line and only that — it reaches the seat that wrote it and no
+     * other (the row and `EmitSchema.audienceOf`), so it tells no phone anything it did not type.
+     * Blank, too, for an Insider who never handed one over, and on a replay, which rebuilds blank
+     * lines (`Event.RoundArmed.oneLines`); `Transcript` renders the seat and the role and never
+     * the line, so the live and replayed transcripts stay byte-identical.
+     *
+     * **[toString] prints the line's length and never its words** (`OneLine`'s rule): an effect is
+     * the thing a bench, a log line or a failure message stringifies, and a device console is a file
+     * that outlives the evening. `RoundAuthorityTest` sweeps everything pushed for the typed text.
      */
-    data class RoleRevealed(val seat: Seat, val role: Role) : Effect
+    data class RoleRevealed(val seat: Seat, val role: Role, val line: String = "") : Effect {
+        override fun toString(): String = "RoleRevealed(seat=$seat, role=$role, line=${line.length} chars)"
+    }
 
     /**
      * **Who is in the round, in SEAT ORDER — the arming push that makes every name on every screen

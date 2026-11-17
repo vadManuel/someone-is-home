@@ -6486,6 +6486,86 @@ descheduled at the wrong moment, or a slow desk):
    for the lock when the stopping server cancels them. Without `NonCancellable`: *a stopping server
    reported 1 of 4 losses: [0]*.
 
+## Revision 70 — a housed phone draws the house's people and counts, or nothing
+
+*2026-11-17. The owner's "can we stop having fake things in the app", the rest of it: after D-243
+took the times, the design's people, counts and sample texts were still on housed phones.*
+
+### D-247 · **What a housed phone draws is the house's, or nothing: the Insider's own line, the seat count, the meeting's counts, the endings, the notes, the caller and the banners — built; the inbox and the note's words provisional, owner to confirm**
+
+**What was still fake on a housed phone, and what draws it now** (a phone with no house keeps every
+drawn value, so the render harness still compares to the mockup):
+
+1. **The Insider's blackmail text** said *You still have Priya's spare key* to every Insider in every
+   round. D-101 makes it a verbatim template over the line the player handed over, and nothing carried
+   the line back. **`RoleRevealed` now carries `line`**: an Insider's own one line, read off the
+   house's desk at arming (`GameState.lineOf`), and blank on a Resident's (D-116: the house never uses
+   a Resident's line, so it is never sent again). It rides the existing seat-only `ROLE_REVEALED` row
+   rather than a kind of its own, because the blackmail text *is* the Insider's role reveal (story
+   2.7): one message per seat at the same point in the burst, so the burst's shape is unchanged and
+   no phone learns anything it did not type. The thread reads *I know you said "…". Follow my
+   instructions tonight and nobody else needs to hear about it.* `PanelState.heldOver` holds it as a
+   `HeldLine`, whose `toString` prints a length (`OneLine`'s rule), and drops it when the round ends.
+   **Both `RoleRevealed`s print a length too.** `RoundAuthorityTest` held that *no effect carries a
+   line while the round runs*, by sweeping every pushed effect's `toString`; that rule is now
+   *exactly one does, the Insider's own reveal, and it prints none*, and the test checks both halves.
+   `Transcript` renders the seat and the role and never the line, and a replay rebuilds blank lines,
+   so live and replayed transcripts stay byte-identical: **no recording version bump.** Checked
+   against D-116 and D-101: the line reaches only the phone that typed it.
+2. **PERIMETER ARMED's `6 RESIDENTS`** is the round's seat count (`PanelState.seats`, the roster's
+   length). Everyone is a Resident.
+3. **The meeting counts.** `MeetingCounts` held the design's 6/6/4/4/3/4 and nothing reset them, and
+   `answered` is pushed by nothing, so every housed caller's screen said `4 OF 6 ANSWERED`. The counts
+   are nullable now and **reset to unsaid** when a house attaches (unless a house already counted, so a
+   reconnect keeps a meeting in progress) and on each `MeetingOpened` and `StandAndWalkIn`, which
+   arrive before the gate's first count. **`answered` stays unsaid:** the house hears a ring answered
+   only as a check-in, which is a different fact, so the caller's screen draws the headline alone. The
+   discussion's ready bar is now drawn against the living, like its caption (D-147).
+4. **The Residents' ending** drew `4 OF 6`, ELLIOT, PRIYA, MARCUS, ROSE and `EGRESSES CONTAINED 2`. It
+   now lists the roster less the seats `InsidersRevealed` named (by seat, blanks left out); counts the
+   `EgressContained` pushes since LIGHTS OUT; and **drops the standing count**, because the house sends
+   no list of who is still standing. The chips now name every Resident, out or not.
+5. **Notes.** Every Resident read *why was rose in the garage* (`noteSeed` is never set). ⚠️ A housed
+   Resident's note is now *somebody was already at the marker*: no name, no room, no count.
+   Provisional words. Naming a real player instead would put the same accusation on every
+   Resident's phone, which is the app making a read the room is meant to make.
+6. **Reconnecting's `ATTEMPT 3 . 8S`**: nothing counts attempts, so a housed phone draws nothing there.
+7. **The ring's fallback caller** (PRIYA, ELLIOT) when the house named nobody: a housed phone draws no
+   name.
+8. **⚠️ The inbox backlog (MUM, DELIVERY, FLAT CHAT, VOICEMAIL, BANK, UNKNOWN, PRIYA and their times)
+   is gone from housed phones. Provisional, owner to confirm.** It was meant as a per-player disguise,
+   but `inboxSeed` is never set, so every phone showed the same list, and D-156 refuses fake
+   deliveries. A housed inbox is the house's one row, identical on every phone, so density says
+   nothing.
+9. **Found by the sweep: every house text arrived under the design's banner.** `MessageDelivered`
+   lands on `Quiet`, whose static arrival is the design's `you're up` from NUMBER WITHHELD at `21:03`,
+   so the house's words never showed on the banner. On a housed phone `Quiet` now draws the house's
+   newest text at the time it landed, and swiping it removes that text from the lock screen
+   (`Notifications.houseText`, one value for both). A text that landed with no clock is stamped `-`
+   rather than `NOW`, D-243's reason.
+10. **The evasion notice's `21:04–21:07`** was already reachable only unhoused (D-223); the sweep
+    confirms it.
+
+**The sweep.** `HousedContentTest.noHousedScreenDrawsAFixture` renders every `ScreenId` in both roles on
+a housed phone fed a round, a meeting and an ending, and fails on any of the design's names, senders,
+counts and times. Found nothing else.
+
+**Not done, and reported rather than guessed.** FILES' `1 ITEM . DISK 01 . DESTINATION . RACK`, and the
+Terminal, Timelapse and Ghost3 counts, are unit 4d. The survivors are not on the wire; listing them
+would need `RoundEnded` to carry them. Nothing here has run on a phone.
+
+| site | what it said | what it says now |
+|---|---|---|
+| `model` `Effect.RoleRevealed`, `RoundMessage.RoleRevealed` | the role | and `line`: an Insider's own, blank for a Resident |
+| `core` arming | the role | and an Insider's own line off the desk |
+| `ui` `PanelState.heldOver`, `egressesContained`, `residents`; `HeldLine` | (none) | the quote, the contained count, the Residents |
+| `ui` `PanelVals.houseLine`, `inbox`, `noteLine`, `callerOr`, `accountedFor`, `residentNames`, `residentsStanding`, `egressesContained`, `reconnectLine`, `arrival` | the design's | the house's, or nothing, on a housed phone |
+| `ui` `MeetingCounts`, `MeetingModel` | Int fixtures, never reset | nullable; reset on attach and per meeting; nothing drawn while unsaid |
+| `ui` `FlowModel` | `dismissNotification` swiped the static arrival | swipes the banner the panel drew |
+| `app` cheats `ScreenLedger` | `GATE 4/6` | `-` for an unsaid count |
+| `RoundAuthorityTest` | no pushed effect carries a line | none prints one; only the Insiders' own reveals carry one |
+| `HousedContentTest` (new), `HousedContentWiringTest` (new) | (none) | one guard per item, the sweep, and five phones over a real loopback socket |
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

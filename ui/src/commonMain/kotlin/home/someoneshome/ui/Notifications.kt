@@ -358,6 +358,13 @@ object Notifications {
     fun onScreen(screen: ScreenId): Notification? = arrivals[screen]?.notification
 
     /**
+     * **A text the house sent, as the banner, the lock screen and the swipe all see it** (D-243,
+     * D-247). Built in one place, so the lock screen's copy and the banner's are one value and a
+     * swipe on either removes the other.
+     */
+    fun houseText(text: HouseText): Notification = Notification(NotificationKind.Text, body = text.body, at = text.at)
+
+    /**
      * **What is up over [screen], with the Egress alert naming the pair the house actually drew.**
      *
      * [arrivals] is a static table and has to be: it is the port's fixture for a push that does not

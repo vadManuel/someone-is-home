@@ -160,7 +160,7 @@ fun Screen(
                 ScreenId.Lobby -> LobbyScreen(vals)
 
                 ScreenId.Secret -> SecretScreen()
-                ScreenId.Armed -> ArmedScreen()
+                ScreenId.Armed -> ArmedScreen(vals)
                 // Every banner screen draws the springboard it interrupted and hands the banner
                 // itself up as an overlay. "A banner, not a takeover" is only true if what was
                 // underneath is still visible and still recognisable — which is also why only the
@@ -221,7 +221,7 @@ fun Screen(
                 ScreenId.Ghost2 -> Ghost2Screen()
                 ScreenId.GhostMeeting -> GhostMeetingScreen(vals)
                 ScreenId.Ghost3 -> Ghost3Screen(vals)
-                ScreenId.Disconnect -> DisconnectScreen()
+                ScreenId.Disconnect -> DisconnectScreen(vals)
                 ScreenId.Settings -> SettingsScreen()
                 ScreenId.WinInsiders -> WinInsidersScreen(vals)
                 ScreenId.WinResidents -> WinResidentsScreen(vals)

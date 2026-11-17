@@ -212,6 +212,32 @@ class MeetingModel(
     }
 
     /**
+     * **A house opened a meeting: every count is unsaid until it counts** (D-247).
+     *
+     * Called from `FlowModel` on the house's own ring (`MeetingOpened`, `StandAndWalkIn`), which
+     * arrive before the gate's first count in the same burst, so the counts a screen draws are this
+     * meeting's and never the last one's or the design's. Not from [meetingBegan], which runs on a
+     * screen arriving and could land after the count it would wipe.
+     */
+    fun houseOpenedMeeting() {
+        counts = MeetingCounts.UNSAID
+        counted = true
+    }
+
+    /**
+     * **A house attached: drop the design's counts if no house has counted yet** (D-247). A
+     * reconnect calls this too, and must not wipe a meeting in progress, so it clears only counts
+     * no house has written.
+     */
+    fun houseAttached() {
+        if (!counted) counts = MeetingCounts.UNSAID
+        counted = true
+    }
+
+    /** Whether a house has written [counts] since this model was built. */
+    private var counted = false
+
+    /**
      * **The house counted, and this is the one writer of [counts].**
      *
      * Four kinds land here — the ring answered, the gate, the hands up, the ballots locked — and
@@ -233,6 +259,7 @@ class MeetingModel(
         seats: Int? = null,
         living: Int? = null,
     ) {
+        counted = true
         counts = counts.copy(
             seats = seats ?: counts.seats,
             living = living ?: counts.living,
@@ -416,7 +443,7 @@ sealed interface VoteChoice {
  * two halves of one gate print different numbers.
  */
 data class MeetingCounts(
-    val seats: Int = 6,
+    val seats: Int? = 6,
     /**
      * **The living, which is the other denominator and not a second copy of [seats].**
      *
@@ -429,21 +456,34 @@ data class MeetingCounts(
      *
      * It defaults to [seats] so a fixture with nobody out draws what it always drew.
      */
-    val living: Int = 6,
-    /** Phones that answered the ring. */
-    val answered: Int = 4,
+    val living: Int? = 6,
+    /**
+     * Phones that answered the ring. **No house sends this** (D-247): the ring is answered on the
+     * phone and the house hears nothing until a check-in, so on a housed phone it stays null and
+     * the caller's screen draws no count at all.
+     */
+    val answered: Int? = 4,
     /** Phones standing at the meeting area — living and out alike (D-104). */
-    val present: Int = 4,
+    val present: Int? = 4,
     /** Players who have said they are ready to vote. Unanimous skips the talk ahead. */
-    val ready: Int = 3,
+    val ready: Int? = 3,
     /** Players who have voted. Never *what* they voted. */
-    val voted: Int = 4,
+    val voted: Int? = 4,
 ) {
-    /** `4 OF 6` — against every seat in the round. The ring and the check-in gate. */
-    fun ofSeats(n: Int): String = "$n OF $seats"
+    /** `4 OF 6` — against every seat in the round. The ring and the check-in gate. Null if either is unsaid. */
+    fun ofSeats(n: Int?): String? = if (n != null && seats != null) "$n OF $seats" else null
 
-    /** `3 OF 4` — against the living. Readiness and the ballot. See [living]. */
-    fun ofLiving(n: Int): String = "$n OF $living"
+    /** `3 OF 4` — against the living. Readiness and the ballot. See [living]. Null if either is unsaid. */
+    fun ofLiving(n: Int?): String? = if (n != null && living != null) "$n OF $living" else null
+
+    companion object {
+        /**
+         * **A meeting the house has said nothing about yet** (D-247). Every count null, so every
+         * screen draws no number until a push fills it — never the design's six, four and three,
+         * which on a housed phone were `4 OF 6 ANSWERED` at every meeting of every round.
+         */
+        val UNSAID: MeetingCounts = MeetingCounts(null, null, null, null, null, null)
+    }
 }
 
 /**

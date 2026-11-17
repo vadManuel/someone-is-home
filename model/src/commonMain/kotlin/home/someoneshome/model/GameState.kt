@@ -243,7 +243,8 @@ class GameState private constructor(
      * The house holds these so it can do the two things the design asks of them: quote a Insider's
      * own line back to them at the reveal, and **publish the Insiders' lines to everybody when the
      * round ends**. Nothing else may read them, and nothing else does — [lineOf] has two callers in
-     * the rules and both of them are the ending.
+     * the rules: arming, which quotes an Insider's own line to that Insider's phone alone
+     * (`Effect.RoleRevealed.line`, D-247), and the ending.
      *
      * **[endRound] drops the list, and that is the deletion promise made structural.** Not a wipe
      * somebody remembers to call: the transition that ends a round is the transition that empties

@@ -633,6 +633,26 @@ data class PanelState(
     val houseTexts: List<HouseText> = emptyList(),
     /** **When the ending landed, on this phone's clock** (`RoundEnded`, D-243). Null until then. */
     val endedAt: String? = null,
+    /**
+     * **The one line this phone handed over, as the house quotes it back to an Insider** (D-116,
+     * D-101, D-247). `RoleRevealed.line`: set on an Insider's phone, never on a Resident's, and
+     * dropped when the round ends, so the promise *deleted when the round ends* holds on this side
+     * too. A [HeldLine] rather than a String so that this class's `toString` — which a log line or a
+     * ledger can print — reports a length and never the words ([OneLine]'s rule).
+     */
+    val heldOver: HeldLine? = null,
+    /**
+     * **How many Egresses the house has told this phone were contained this round**
+     * (`EgressContained`, D-247). Zero from LIGHTS OUT, one more per push; null until a house has
+     * opened a round, which is what the Residents' ending draws as nothing.
+     */
+    val egressesContained: Int? = null,
+    /**
+     * **The Residents, by name, once the house has said who the Insiders were** (D-247). The roster
+     * less the seats `InsidersRevealed` named, in seat order, blanks left out. Null until the
+     * ending; what the Residents' ending lists instead of the port's four.
+     */
+    val residents: List<String>? = null,
     /** Randomises the backlog's *count and mix*, so inbox density can never imply a role. */
     val inboxSeed: Int = 3,
     val noteSeed: Int = 0,
@@ -647,6 +667,16 @@ data class PanelState(
  * in the house.
  */
 data class RevealedInsider(val name: String, val line: String)
+
+/**
+ * **A one line held on the panel, which never prints its words** (D-247).
+ *
+ * [OneLine]'s `toString` rule applied to [PanelState.heldOver]: [PanelState] is a data class, so
+ * anything that prints it prints its fields, and a line in a log is a line kept.
+ */
+data class HeldLine(val text: String) {
+    override fun toString(): String = "HeldLine(${text.length} chars)"
+}
 
 /**
  * **What the room decided, and how many of it voted — the whole of a living player's result**
@@ -942,6 +972,41 @@ class PanelVals(
     val endedAt: String = housed(state.endedAt, fixture = "21:38", nothing = NO_READING)
 
     /**
+     * **PERIMETER ARMED's count: every seat in the round, as the house counted them** (D-247).
+     * Everyone is a Resident, so the roster's length is the number. The port's six on a phone with
+     * no house; on a housed phone not yet told a seat total, the line without a number.
+     */
+    val accountedFor: String = when {
+        !state.houseAttached -> "6 RESIDENTS\nACCOUNTED FOR"
+        state.seats != null -> "${state.seats} RESIDENTS\nACCOUNTED FOR"
+        else -> "ACCOUNTED FOR"
+    }
+
+    /**
+     * **The Residents' ending: who the Residents were** (D-247) — the roster less the Insiders the
+     * house named, from [PanelState.residents]. The port's four with no house; nothing on a housed
+     * phone not yet told. The house does not say who is still standing, so neither does this.
+     */
+    val residentNames: List<String> = housed(state.residents, ENDING_RESIDENTS, nothing = emptyList())
+
+    /**
+     * The port's `4 OF 6` beside them, and **nothing on a housed phone** (D-247): the house sends no
+     * count of who is still standing, and a phone that worked one out would be guessing.
+     */
+    val residentsStanding: String? = if (state.houseAttached) null else "4 OF 6"
+
+    /** **How many Egresses were contained** (D-247), as the house's pushes counted them. */
+    val egressesContained: String =
+        housed(state.egressesContained?.toString(), fixture = "2", nothing = NO_READING)
+
+    /**
+     * **The reconnecting screen's attempt line**: the port's `ATTEMPT 3 . 8S`, and nothing on a
+     * housed phone (D-247). Nothing on this phone counts reconnect attempts, so there is no real
+     * number to draw.
+     */
+    val reconnectLine: String? = if (state.houseAttached) null else "ATTEMPT 3 . 8S"
+
+    /**
      * Anything that arrives unasked buzzes: banners, calls, the meeting transitions, revocation,
      * a caught scan, and the round ending. Nothing the player *chose* to open does.
      */
@@ -977,7 +1042,12 @@ class PanelVals(
     val inbox: List<InboxRow> = run {
         val seed = state.inboxSeed
         val keep = 3 + (seed % 4)
-        val rest = backlog.drop(seed % 3).take(keep).map { (from, at, preview) ->
+        // **No backlog on a housed phone** (D-247, provisional, owner to confirm). It was meant as a
+        // per-player disguise, but nothing ever set [PanelState.inboxSeed], so every phone in the
+        // house showed the same seven invented senders at the same invented times — texts nobody
+        // sent, from people who are not in the room, which D-156 already refuses as fake
+        // deliveries. One row, the house's, is identical on every phone, so density says nothing.
+        val rest = if (state.houseAttached) emptyList() else backlog.drop(seed % 3).take(keep).map { (from, at, preview) ->
             InboxRow(from, at, preview, Ramp.Dim, Ramp.Mid)
         }
         // Identical sender, time and preview for both roles: the thread must be OPENED to read.
@@ -1044,12 +1114,20 @@ class PanelVals(
             )
         }
 
-    /** Only the newest message in the house thread differs by role. Everything above it is shared. */
-    val houseLine: String = if (insider) {
-        "You still have Priya's spare key. Follow my instructions tonight and nobody else " +
-            "needs to hear about it."
-    } else {
-        "I am watching you. Thank you for your cooperation."
+    /**
+     * Only the newest message in the house thread differs by role. Everything above it is shared.
+     *
+     * **On a housed Insider's phone it quotes the line that phone handed over** (D-101, D-116,
+     * D-247): *I know you said "…".* The port's *Priya's spare key* is the render harness's, and on
+     * a housed phone it was the house holding a stranger's secret over every Insider in every
+     * round. An Insider the house quoted nothing to (no line handed over, or a replay) gets the
+     * instruction alone, never somebody else's line.
+     */
+    val houseLine: String = when {
+        !insider -> "I am watching you. Thank you for your cooperation."
+        !state.houseAttached -> "You still have Priya's spare key. $HOUSE_INSTRUCTION"
+        else -> state.heldOver?.text?.takeIf { it.isNotBlank() }
+            ?.let { "I know you said \"$it\". $HOUSE_INSTRUCTION" } ?: HOUSE_INSTRUCTION
     }
 
     /**
@@ -1070,9 +1148,18 @@ class PanelVals(
         "rose scanned nothing for a long time",
     )
 
-    val noteLine: String =
-        if (insider) "i hope no one finds out"
-        else residentNotes[state.noteSeed.mod(residentNotes.size)]
+    /**
+     * **A housed Resident's note names nobody and no room** (D-247). The port's lines name five
+     * people who are not in the house and rooms it may not have, and [PanelState.noteSeed] is never
+     * set, so every Resident in every round was handed *why was rose in the garage*. Picking a real
+     * player instead would be every Resident's phone accusing the same person, which is the app
+     * authoring a read the room is meant to make. ⚠️ The words are provisional, owner to confirm.
+     */
+    val noteLine: String = when {
+        insider -> "i hope no one finds out"
+        state.houseAttached -> HOUSED_NOTE
+        else -> residentNotes[state.noteSeed.mod(residentNotes.size)]
+    }
 
     // ---- The springboard's two tiles --------------------------------------------------------
 
@@ -1626,7 +1713,16 @@ class PanelVals(
      * drew a different one the banner and the widget would disagree — silently, in the dark, to two
      * people who cannot speak to each other.
      */
-    val arrival: Arrival? = Notifications.arrivalOn(state.screen, egressType, egressNodes)
+    //
+    // **On a housed phone the quiet banner is the house's newest text** (D-247). `Quiet` is where a
+    // house text lands, and the static table's entry for it is the design's `you're up` from
+    // NUMBER WITHHELD at 21:03, so every text the house sent arrived under somebody else's words
+    // and a drawn time. Nothing yet sent draws no banner.
+    val arrival: Arrival? = when {
+        state.houseAttached && state.screen == ScreenId.Quiet -> state.houseTexts.lastOrNull()
+            ?.let { Arrival(Notifications.houseText(it), under = ScreenId.Home) }
+        else -> Notifications.arrivalOn(state.screen, egressType, egressNodes)
+    }
 
     /**
      * **THE INSIDERS WERE, with the blackmail published beside each name** — from the house when
@@ -1738,9 +1834,10 @@ class PanelVals(
      * [drawn] is the name on the design's frame for whichever ring screen is asking, so the two
      * keep their separate fixtures — the port drew PRIYA on the call and ELLIOT on the report, and
      * a single fallback here would silently redraw one of the two frames the screenshots are read
-     * against.
+     * against. **A housed phone the house named nobody to draws no name** (D-247): the port's
+     * PRIYA on a ring in a house with no Priya is the app naming the meeting's author.
      */
-    fun callerOr(drawn: String): String = state.caller ?: drawn
+    fun callerOr(drawn: String): String = state.caller ?: if (state.houseAttached) "" else drawn
 
     /**
      * **Resident progress, live, and still only ever a percentage** (D-103, D-134, D-153).
@@ -2070,6 +2167,15 @@ class PanelVals(
          * screenshots; see [PanelVals.housed].
          */
         const val NO_READING = "-"
+
+        /** What the house tells every Insider to do, after the quote (D-101, D-247). */
+        const val HOUSE_INSTRUCTION = "Follow my instructions tonight and nobody else needs to hear about it."
+
+        /** A housed Resident's note: no name, no room, no count (D-247, provisional). */
+        const val HOUSED_NOTE = "somebody was already at the marker"
+
+        /** The Residents' ending's names, as the port drew them. The render harness's only. */
+        val ENDING_RESIDENTS: List<String> = listOf("ELLIOT", "PRIYA", "MARCUS", "ROSE")
 
         /**
          * **What a housed phone says where a meeting result would be** — [NO_READING]'s sibling,

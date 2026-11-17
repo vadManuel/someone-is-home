@@ -390,7 +390,14 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
             // so the *shape* of the burst still says nothing, which is what the differential
             // harness reads. Read off `state` rather than off `insiders`, so there is one answer to
             // this question in the round and the recording agrees with the phone.
-            seats.map { Effect.RoleRevealed(it, state.roleOf(it)) } +
+            //
+            // **And an Insider's carries their own one line, for the blackmail text** (D-116,
+            // D-101, D-247). The house quotes it back to the phone that typed it; a Resident's
+            // carries nothing, because the house never uses a Resident's line.
+            seats.map {
+                val role = state.roleOf(it)
+                Effect.RoleRevealed(it, role, line = if (role == Role.Insider) state.lineOf(it).orEmpty() else "")
+            } +
             // **The radio's key, one per seat, every seat** (D-212). Drawn from the round's seed and
             // the seat alone, never from a role, so the run is the same on both sides of a role
             // swap; addressed to its own seat, so no phone holds another's.

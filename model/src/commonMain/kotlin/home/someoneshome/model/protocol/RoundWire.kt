@@ -260,11 +260,20 @@ sealed class RoundMessage {
      * *a message from each fellow Insider* is text on a thread (`gdd.md:923`), diegetic and
      * deliberately not a roster; a list on this member would be the endgame reveal arriving at
      * arming.
+     *
+     * **[line] is this phone's own one line, and only an Insider's is ever sent** (D-116, D-247).
+     * The house's blackmail text quotes it back (D-101); a Resident's message carries a blank,
+     * because the house never uses a Resident's line. It is the recipient's own words, so it names
+     * nobody the recipient did not name. Defaulted blank: a message that never carried one quotes
+     * nothing rather than somebody else's.
      */
     @ClientFacing
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("RoleRevealed")
-    data class RoleRevealed(val insider: Boolean) : RoundMessage()
+    data class RoleRevealed(val insider: Boolean, val line: String = "") : RoundMessage() {
+        /** The length, never the words: `Effect.RoleRevealed`'s rule, one layer out (D-247). */
+        override fun toString(): String = "RoleRevealed(insider=$insider, line=${line.length} chars)"
+    }
 
     /**
      * **Who is in the round, in seat order** (D-115, E-R2-6, C3·4).
@@ -889,7 +898,7 @@ object RoundWire {
         // no way to put the authority's own type on a socket and no reason to want one:
         // what a phone needs is whether page 2 answers its thumb, and rule 3 says redact
         // by constructing a narrower type rather than by carrying the wide one.
-        is Effect.RoleRevealed -> RoundMessage.RoleRevealed(effect.role == Role.Insider)
+        is Effect.RoleRevealed -> RoundMessage.RoleRevealed(effect.role == Role.Insider, effect.line)
         // The seat comes off; the list is the same list on every wire it goes down.
         is Effect.RosterIssued -> RoundMessage.RosterIssued(effect.roster)
         // The seat comes off; the seed is the message.

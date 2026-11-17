@@ -68,9 +68,10 @@ class ScreenLedger(
             append(" · SECS ${s.secondsLeft ?: "-"}")
             append(" · PHASE ${s.meetingPhase?.name?.uppercase() ?: "-"}")
             append(" · CALLER ${s.caller ?: "-"}")
-            append(" · GATE ${counts.present}/${counts.seats}")
-            append(" · READY ${counts.ready}/${counts.living}")
-            append(" · VOTED ${counts.voted}/${counts.living}")
+            // A count the house has not said is `-`, like every null on this line (D-247).
+            append(" · GATE ${counts.present ?: "-"}/${counts.seats ?: "-"}")
+            append(" · READY ${counts.ready ?: "-"}/${counts.living ?: "-"}")
+            append(" · VOTED ${counts.voted ?: "-"}/${counts.living ?: "-"}")
             // The couch's live ballot is a count here for a different reason from the reveal's: it
             // is lawful on the screen that draws it and this line is drawn on all five, so a ledger
             // that printed it would publish the ghosts' view into every seat's log and the

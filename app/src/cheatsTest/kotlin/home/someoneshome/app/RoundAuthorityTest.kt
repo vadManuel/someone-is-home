@@ -114,6 +114,11 @@ class RoundAuthorityTest {
      * take to get there keeps a copy: this sweeps everything the authority said out loud, and
      * every effect it pushed, for the text five people typed.
      *
+     * **One effect carries a line in the round, by design, and prints none** (D-247, D-101):
+     * `RoleRevealed` quotes an Insider's own line back to that Insider's phone. So the sweep reads
+     * every pushed effect as it would be printed, and a second check holds the one carrier to its
+     * rule — the line is on the Insider's own reveal, on no Resident's, and on nothing else.
+     *
      * **It is self-verifying.** A sweep that reads nothing passes for the same reason a sweep that
      * reads everything does, so the first assertion is that the lines really did arrive.
      */
@@ -138,7 +143,22 @@ class RoundAuthorityTest {
             )
             assertFalse(
                 everythingPushed.contains(line),
-                "a one line was on an effect while the round was still running",
+                "a one line was printed off an effect while the round was still running",
+            )
+        }
+        val carried = bench.pushed.map { it.first }.filter { effect ->
+            lines.any { it.text in (effect as? Effect.RoleRevealed)?.line.orEmpty() }
+        }
+        assertEquals(
+            bench.house.state.insiderSeats.map { seat -> lines.single { it.seat.index == seat.index }.text }.sorted(),
+            carried.map { (it as Effect.RoleRevealed).line }.sorted(),
+            "the Insiders' own reveals are not the only carriers of a line",
+        )
+        for (reveal in bench.pushed.map { it.first }.filterIsInstance<Effect.RoleRevealed>()) {
+            val own = lines.single { it.seat.index == reveal.seat.index }.text
+            assertEquals(
+                if (bench.house.state.roleOf(reveal.seat) == home.someoneshome.model.Role.Insider) own else "",
+                reveal.line, "seat ${reveal.seat.index}'s reveal carried somebody else's line, or a Resident's",
             )
         }
         // And the count is reported, because *nothing was typed* and *something was typed and did

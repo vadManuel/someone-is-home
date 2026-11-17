@@ -1077,6 +1077,11 @@ class FlowModel(
     var state: PanelState by mutableStateOf(initial)
         private set
 
+    // A phone built already housed draws no design count at its first meeting either (D-247).
+    init {
+        if (initial.houseAttached) meeting.houseAttached()
+    }
+
     /**
      * **The lamp, and it is deliberately not a field of [state]** (rule 7, D-182).
      *
@@ -1943,6 +1948,10 @@ class FlowModel(
             // removed by its own value (words, sender and time), so a reconnect, which calls this
             // again, clears only a real text identical to a stand-in to the minute.
             Notifications.stored.forEach(notifications::dismiss)
+            // **And the meeting counts are the house's from here** (D-247): the design's
+            // `4 OF 6 ANSWERED` was on every housed caller's screen. A reconnect keeps a count the
+            // house has already written.
+            meeting.houseAttached()
         }
     }
 
@@ -2263,11 +2272,9 @@ class FlowModel(
             // nobody swipes it, so NOW would be a lie a minute later, and the house thread keeps it
             // for good, in arrival order.
             is RoundMessage.MessageDelivered -> {
-                val at = landedAt()
-                state = state.copy(houseTexts = state.houseTexts + HouseText(at ?: PanelVals.NO_READING, message.body))
-                notifications.houseSent(
-                    Notification(NotificationKind.Text, body = message.body, at = at ?: "NOW"),
-                )
+                val text = HouseText(landedAt() ?: PanelVals.NO_READING, message.body)
+                state = state.copy(houseTexts = state.houseTexts + text)
+                notifications.houseSent(Notifications.houseText(text))
                 arrived(ScreenId.Quiet)
             }
 
@@ -2342,7 +2349,11 @@ class FlowModel(
             is RoundMessage.OpeningMessage -> {
                 shiftBegan(opening = true)
                 val at = landedAt()
-                state = state.copy(openedAt = at, houseTexts = emptyList(), endedAt = null)
+                // A new round holds no last round's Egress count, quoted line or Residents (D-247).
+                state = state.copy(
+                    openedAt = at, houseTexts = emptyList(), endedAt = null,
+                    egressesContained = 0, heldOver = null, residents = null,
+                )
                 roundOpened()
             }
 
@@ -2365,8 +2376,13 @@ class FlowModel(
             // and the opening banner one branch up is what says *now*. A navigation here would be
             // this phone doing something the Resident's phone does not, in the light, with the
             // whole party standing together — which is the tell the parity discipline exists for.
+            //
+            // **And an Insider's carries the line this phone handed over** (D-116, D-101, D-247),
+            // which the house thread quotes back. Held only on an Insider's phone and only if the
+            // house sent words; a Resident's message carries none.
             is RoundMessage.RoleRevealed -> state = state.copy(
                 role = if (message.insider) PanelRole.Insider else PanelRole.Resident,
+                heldOver = message.line.takeIf { message.insider && it.isNotBlank() }?.let(::HeldLine),
             )
 
             // **Who is in the round, in seat order — and it is the field four screens were reading
@@ -2431,6 +2447,9 @@ class FlowModel(
                 // readable at one. This is the phone's copy of a window the house has ended, thrown
                 // away in the frame it is told why.
                 state = state.copy(caller = nameOf(message.caller), staticJam = null)
+                // **A new meeting's counts start unsaid** (D-247), before the gate's first count,
+                // which follows in the same burst. Never the last meeting's, never the design's.
+                if (state.houseAttached) meeting.houseOpenedMeeting()
                 push(
                     when (message.trigger) {
                         is MeetingTrigger.RevokeReported -> ScreenId.Found
@@ -2472,7 +2491,11 @@ class FlowModel(
             // does not stay: `Flow.housePushes` already walks `Ghost2 → GhostMeeting` when the phase
             // opens. Sending the previously-out straight to the couch instead would be this phone
             // deciding it need not check in, which is the gate the rules are counting.
-            is RoundMessage.StandAndWalkIn -> push(ScreenId.Ghost2)
+            is RoundMessage.StandAndWalkIn -> {
+                // The out seat's ring, and its counts start unsaid for the same reason (D-247).
+                if (state.houseAttached) meeting.houseOpenedMeeting()
+                push(ScreenId.Ghost2)
+            }
 
             // **The gate and the hands, on the screens that were drawing fixtures of them.**
             // `4 OF 6 CHECKED IN` was a constant on a phone in a house where six people were
@@ -2715,7 +2738,11 @@ class FlowModel(
             // is deliberately left standing: it says which Egress the house ran, and unsetting it
             // here would make the widget's two facts one field again. What comes back down is
             // whether one is on.
-            is RoundMessage.EgressContained -> state = state.copy(egressRunning = false, egressLeft = null)
+            // Counted for the Residents' ending (D-247): every Egress the house says was contained.
+            is RoundMessage.EgressContained -> state = state.copy(
+                egressRunning = false, egressLeft = null,
+                egressesContained = (state.egressesContained ?: 0) + 1,
+            )
 
             // **Permitted to nobody, so it cannot arrive** — its row is gone (D-131, D-156), and
             // what every phone gets instead is the ending carrying `WinRoute.EgressUncontained`.
@@ -2725,12 +2752,20 @@ class FlowModel(
             // Stamped before the push, so the ending is drawn with its time from its first frame (D-243).
             is RoundMessage.RoundEnded -> {
                 val at = landedAt()
-                state = state.copy(endedAt = at)
+                // **The quoted line goes when the round ends** (D-116's promise, kept on this side).
+                state = state.copy(endedAt = at, heldOver = null)
                 Flow.endings[message.winner]?.let { push(it.to) }
             }
 
             is RoundMessage.InsidersRevealed -> state = state.copy(
                 revealed = message.insiders.map { RevealedInsider(it.name, it.line) },
+                // **Who the Residents were: the roster less the seats just named** (D-247), in seat
+                // order, blanks left out. By seat and never by name, so two players who gave one
+                // name cannot both be counted as Insiders.
+                residents = state.roster?.let { roster ->
+                    val insiders = message.insiders.map { it.seat.index }.toSet()
+                    roster.filterIndexed { seat, name -> seat !in insiders && name.isNotBlank() }
+                },
             )
 
             // **The house's last word, to the people it owned.** A field of its own beside
@@ -2944,7 +2979,8 @@ class FlowModel(
      * is the fail-closed direction: a gesture the panel cannot service must not move the phone.
      */
     fun dismissNotification() {
-        val arrival = Notifications.arrivals[state.screen] ?: return
+        // The banner the panel drew, which on a housed phone is the house's own text (D-247).
+        val arrival = PanelVals(state).arrival ?: return
         notifications.dismiss(arrival.notification)
         go(arrival.under)
     }

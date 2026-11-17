@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -327,7 +328,7 @@ private fun GhostEgressWidget(vals: PanelVals, modifier: Modifier) {
  * exists to prevent. The status strip dims with it — see `PanelVals.concealed`.
  */
 @Composable
-fun DisconnectScreen() {
+fun DisconnectScreen(vals: PanelVals) {
     val p = Palette.CONCEAL
     KitScreen {
         KitHeader("CONNECTION", p)
@@ -337,7 +338,7 @@ fun DisconnectScreen() {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Words("RECONNECTING", size = 52, color = p.ink, lineHeight = 0.85, align = TextAlign.Center)
-            KitCaption("ATTEMPT 3 . 8S", p, size = 24, center = true)
+            vals.reconnectLine?.let { KitCaption(it, p, size = 24, center = true) }
         }
         Words(
             "STAY WHERE YOU ARE.", Modifier.fillMaxWidth(),
@@ -480,19 +481,21 @@ fun WinResidentsScreen(vals: PanelVals) {
             // Who is still standing, which everybody in the room can already see. A count of
             // seats is not a count of Insiders and divides nothing out -- see
             // PanelVals.integrityPercent for the number that would.
-            Words("4 OF 6", size = 22, color = p.dim, lineHeight = 1.0)
+            vals.residentsStanding?.let { Words(it, size = 22, color = p.dim, lineHeight = 1.0) }
         }
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf("ELLIOT" to "PRIYA", "MARCUS" to "ROSE").forEach { (a, b) ->
+            // The house's Residents on a housed phone (D-247), two to a row; the port's four without.
+            vals.residentNames.chunked(2).forEach { pair ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    SurvivorChip(a, p, Modifier.weight(1f))
-                    SurvivorChip(b, p, Modifier.weight(1f))
+                    SurvivorChip(pair[0], p, Modifier.weight(1f))
+                    val second = pair.getOrNull(1)
+                    if (second != null) SurvivorChip(second, p, Modifier.weight(1f)) else Spacer(Modifier.weight(1f))
                 }
             }
         }
         KitRules(p) {
             KitInfo("SYSTEM INTEGRITY", vals.integrityPercent, p, minHeight = 36.dp)
-            KitInfo("EGRESSES CONTAINED", "2", p, minHeight = 36.dp)
+            KitInfo("EGRESSES CONTAINED", vals.egressesContained, p, minHeight = 36.dp)
         }
         // Named without their alignment ever having been confirmed in play, and the blackmail
         // publishes with them: everyone learns who AND why, at the same moment, on the winning
@@ -617,7 +620,11 @@ private fun NewRound(p: Palette) {
     }
 }
 
-/** One of the Residents still standing, on the lights-on ending. */
+/**
+ * One of the Residents, on the lights-on ending. The port drew those still standing; a housed phone
+ * names every Resident the house did not reveal, because the house sends no list of who is standing
+ * (D-247).
+ */
 @Composable
 private fun SurvivorChip(name: String, p: Palette, modifier: Modifier = Modifier) {
     Box(

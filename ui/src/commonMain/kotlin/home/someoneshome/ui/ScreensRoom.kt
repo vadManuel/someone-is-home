@@ -94,14 +94,21 @@ fun CallingScreen() {
             Words("HOUSE\nMEETING", size = 72, lineHeight = 0.85, align = TextAlign.Center)
             // The squares and the line below them are one count drawn twice, so they are read from
             // one number. Written separately they are a picture that can disagree with its caption.
-            Row(
-                Modifier.padding(top = 18.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                repeat(counts.answered) { Box(Modifier.size(18.dp).background(Ramp.Ink)) }
-                repeat(counts.seats - counts.answered) { Box(Modifier.size(18.dp).border(1.dp, Ramp.Line)) }
+            //
+            // **Nothing at all where the house has said nothing** (D-247). No house sends a count of
+            // answered rings, so on a housed phone this is the headline alone.
+            val answered = counts.answered
+            val seats = counts.seats
+            if (answered != null && seats != null) {
+                Row(
+                    Modifier.padding(top = 18.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    repeat(answered) { Box(Modifier.size(18.dp).background(Ramp.Ink)) }
+                    repeat(seats - answered) { Box(Modifier.size(18.dp).border(1.dp, Ramp.Line)) }
+                }
+                Words("${counts.ofSeats(answered)} ANSWERED", size = 24, lineHeight = 1.0)
             }
-            Words("${counts.ofSeats(counts.answered)} ANSWERED", size = 24, lineHeight = 1.0)
         }
     }
 }
@@ -221,10 +228,10 @@ fun CheckIn() {
         )
     }
     // The house's count, and it does NOT include your press. It moves when the house says so.
-    KitCaption(
-        "${counts.ofSeats(counts.present)} CHECKED IN", Palette.DARK, Modifier.fillMaxWidth(),
-        center = true,
-    )
+    // Nothing until the house has counted this meeting's gate (D-247).
+    counts.ofSeats(counts.present)?.let {
+        KitCaption("$it CHECKED IN", Palette.DARK, Modifier.fillMaxWidth(), center = true)
+    }
 }
 
 /**
@@ -314,15 +321,20 @@ fun DiscussionScreen(vals: PanelVals) {
             Tag("REMAINING", Ramp.Mid, tracking = 0.2)
         }
         Row(Modifier.fillMaxWidth().height(10.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            repeat(counts.ready) { Box(Modifier.weight(1f).fillMaxHeight().background(Ramp.Ink)) }
-            repeat(counts.seats - counts.ready) {
-                Box(Modifier.weight(1f).fillMaxHeight().border(1.dp, Ramp.Line))
+            // Against the living, like the caption under it: a ghost has no hand to put up (D-147).
+            // Nothing until the house has counted (D-247).
+            val ready = counts.ready
+            val living = counts.living
+            if (ready != null && living != null) {
+                repeat(ready) { Box(Modifier.weight(1f).fillMaxHeight().background(Ramp.Ink)) }
+                repeat(living - ready) {
+                    Box(Modifier.weight(1f).fillMaxHeight().border(1.dp, Ramp.Line))
+                }
             }
         }
-        KitCaption(
-            "${counts.ofLiving(counts.ready)} READY", Palette.DARK, Modifier.fillMaxWidth(),
-            size = 24, center = true,
-        )
+        counts.ofLiving(counts.ready)?.let {
+            KitCaption("$it READY", Palette.DARK, Modifier.fillMaxWidth(), size = 24, center = true)
+        }
         // Unanimous is a count of six phones. This one says only that this phone is done.
         val ready = meeting.ready
         Box(
@@ -399,10 +411,9 @@ fun VoteScreen(vals: PanelVals) {
 
         KitSpacer()
         // The house's count. It does not move when you lock yours in.
-        KitCaption(
-            "${counts.ofLiving(counts.voted)} VOTED", Palette.DARK, Modifier.fillMaxWidth(),
-            size = 24, center = true,
-        )
+        counts.ofLiving(counts.voted)?.let {
+            KitCaption("$it VOTED", Palette.DARK, Modifier.fillMaxWidth(), size = 24, center = true)
+        }
         // Three states, all of them facts about this phone: nothing chosen yet, something chosen
         // and not yet handed over, and a ballot that has been cast and cannot be taken back.
         // **One control through all three**, present and inert in the first and last rather than
