@@ -567,6 +567,18 @@ data class PanelState(
      */
     val staticJam: StaticJam? = null,
     /**
+     * **Page 2's three clocks, as every phone was told they restarted** (D-239). See
+     * [PublicCooldown]. Null means no house has armed a round on this phone, and the port's drawn
+     * bars stand in.
+     *
+     * Set by pushes every seat gets (LIGHTS OUT, a meeting's end, an Egress opening), advanced by
+     * `FlowHost` once a second, and never by anything a seat did: an Insider's clocks and a
+     * Resident's are the same three values at the same moment.
+     */
+    val revokeClock: PublicCooldown? = null,
+    val accessClock: PublicCooldown? = null,
+    val egressClock: PublicCooldown? = null,
+    /**
      * **What this phone is carrying, or nothing** (D-168).
      *
      * *Carrying blocks every other entry*, so the state and the list it blocks are one surface: the
@@ -1014,24 +1026,38 @@ class PanelVals(
      * about what the tile does when touched — because for that player it does nothing, and a
      * sentence about a control is exactly what a Resident is not entitled to.
      */
-    val abilitySub: String = when (state.revoke) {
+    /**
+     * **The state the REVOKE tile is drawn in** ([revokeShown], D-239): ARMED if this phone held it,
+     * COOLING DOWN while the public clock runs, READY after. Read by every line below, so the
+     * tile's words, ink and bar cannot disagree about which state it is in.
+     */
+    val revoke: RevokeState = state.revokeShown
+
+    val abilitySub: String = when (revoke) {
         RevokeState.Armed -> "ARMED . TOUCH THEIR PHONE"
         RevokeState.Cooldown -> "COOLING DOWN"
         RevokeState.Ready -> if (insider) "READY . HOLD TO ARM" else "READY . ALL NOMINAL"
     }
 
-    val revokeBorder: Color = if (state.revoke == RevokeState.Armed) Ramp.Ink else Ramp.Line
-    val revokeFill: Color = if (state.revoke == RevokeState.Armed) Ramp.Fill else Color.Transparent
-    val revokeInk: Color = if (state.revoke == RevokeState.Cooldown) Ramp.Dim else Ramp.Ink
-    val revokeSubInk: Color = if (state.revoke == RevokeState.Armed) Ramp.Ink else Ramp.Dim
-    val revokeBar: Float = if (state.revoke == RevokeState.Cooldown) 0.38f else 1f
-    val revokeBarInk: Color = if (state.revoke == RevokeState.Cooldown) Ramp.Line else Ramp.Ink
+    val revokeBorder: Color = if (revoke == RevokeState.Armed) Ramp.Ink else Ramp.Line
+    val revokeFill: Color = if (revoke == RevokeState.Armed) Ramp.Fill else Color.Transparent
+    val revokeInk: Color = if (revoke == RevokeState.Cooldown) Ramp.Dim else Ramp.Ink
+    val revokeSubInk: Color = if (revoke == RevokeState.Armed) Ramp.Ink else Ramp.Dim
+
+    /**
+     * **The three bars are the house's public clocks now, not the mockup's 0.38, 0.64 and 0.82**
+     * (D-239). Each is [PublicCooldown.fraction], restarted by a push every seat gets, so both roles
+     * draw the same length at the same moment. The drawn values stay as the port's fixture for a
+     * phone no house has armed, which is what the render harness shows.
+     */
+    val revokeBar: Float = if (revoke == RevokeState.Cooldown) state.revokeClock?.fraction ?: 0.38f else 1f
+    val revokeBarInk: Color = if (revoke == RevokeState.Cooldown) Ramp.Line else Ramp.Ink
 
     val secondName: String = if (insider) "EGRESS" else "SUBSYS"
     val secondSub: String =
         if (insider) "SHARED WITH THE OTHER INSIDER" else "ALL SYSTEMS RESPONDING"
-    val secondBar: Float = 0.64f
-    val secondBarInk: Color = Ramp.Line
+    val secondBar: Float = state.egressClock?.fraction ?: 0.64f
+    val secondBarInk: Color = if (state.egressClock?.running == false) Ramp.Ink else Ramp.Line
 
     val tier2A: String = if (insider) "SURGE" else "BUS"
     // **STATIC took SPOOF's slot and the Resident's cover word did not move** (D-186). THERMAL is
@@ -1040,7 +1066,8 @@ class PanelVals(
     // had played before would notice the one that did.
     val tier2B: String = if (insider) "STATIC" else "THERMAL"
     val tier2C: String = if (insider) "ISOLATE" else "CACHE"
-    val tier2Bar: Float = 0.82f
+    /** The pool's public half only (D-239): a Tier-2 fire restarts the actor's own pool, which no bar draws. */
+    val tier2Bar: Float = state.accessClock?.fraction ?: 0.82f
     val tier2BarInk: Color = Ramp.Mid
     /**
      * **The one line under the three tier-2 tiles, and it is the same length for both roles.**

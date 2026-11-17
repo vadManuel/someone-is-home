@@ -338,7 +338,7 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
         cooldowns = openingCooldowns(seats, event.at),
         // D-132 again, and it is ONE value rather than a row per seat because the Egress cooldown
         // is house-wide -- *shared with the other Insider*. See GameState.egressReadyAt.
-        egressReadyAt = event.at + Balance.EGRESS_COOLDOWN / 2,
+        egressReadyAt = event.at + Balance.EGRESS_OPENING,
         // The house takes custody of the lines here and gives them back once, at the ending, and
         // only the Insiders' (D-116). Carried across arming rather than drawn, because they are
         // the one thing in the round a player wrote themselves.
@@ -682,8 +682,8 @@ private fun spendPool(state: GameState, actor: Seat, at: Tick, weight: Long): Ga
  */
 private fun openingCooldowns(seats: List<Seat>, at: Tick): List<Cooldown> = seats.flatMap {
     listOf(
-        Cooldown(it, InsiderAbility.Revoke, at + Balance.REVOKE_COOLDOWN / 2),
-        Cooldown(it, InsiderAbility.Access, at + Balance.ACCESS_COOLDOWN / 2),
+        Cooldown(it, InsiderAbility.Revoke, at + Balance.REVOKE_OPENING),
+        Cooldown(it, InsiderAbility.Access, at + Balance.ACCESS_OPENING),
     )
 }
 
@@ -1697,7 +1697,7 @@ private fun lightsOut(state: GameState, event: Event.MeetingClosed): Reduction<G
     // already makes a running Egress outlive its Insiders, so the two together would put the round
     // beyond the Residents on a rule about cooldowns. With no Egress running it resets like the
     // rest, because then it is an ordinary cooldown and the ruling says every cooldown.
-    val egressReopened = if (running != null) state.egressReadyAt else event.at + Balance.EGRESS_COOLDOWN / 2
+    val egressReopened = if (running != null) state.egressReadyAt else event.at + Balance.EGRESS_OPENING
 
     return Reduction(
         state.copy(

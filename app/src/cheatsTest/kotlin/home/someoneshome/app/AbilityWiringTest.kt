@@ -19,6 +19,7 @@ import home.someoneshome.ui.PanelState
 import home.someoneshome.ui.RevokeState
 import home.someoneshome.ui.SavedHomesModel
 import home.someoneshome.ui.ScreenId
+import home.someoneshome.ui.revokeShown
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
@@ -233,6 +234,19 @@ class AbilityWiringTest {
         delay(SETTLE_MILLIS)
     }
 
+    /**
+     * **This phone's public Revoke clock, counted out the way `FlowHost` counts it** (D-239): one
+     * `secondPassed` per second. No composable runs here, so the test is the second hand, as it is
+     * the house's ([RoundAuthority.advanceTo]). Refuses to start on a phone no LIGHTS OUT reached,
+     * so a guard below cannot pass on a phone that never had a clock.
+     */
+    private fun Phone.countOutTheRevokeClock() {
+        val clock = flow.state.revokeClock
+        assertTrue(clock != null && clock.running, "$name had no public Revoke clock running after LIGHTS OUT: $clock")
+        repeat(clock.seconds) { flow.secondPassed() }
+        assertEquals(RevokeState.Ready, flow.state.revokeShown, "$name's tile did not read READY once its clock ran out")
+    }
+
     // ---- REVOKE -------------------------------------------------------------------------------------
 
     /**
@@ -247,9 +261,11 @@ class AbilityWiringTest {
         // the Insider, so the guest's hop was the one never covered.)
         assertFalse(insider === room.host, "the draw made the host the Insider; this test is the guest's")
         val target = room.phoneAt(room.target)
-        // Past the opening half-cooldown (D-132), so an arm is not a silent refusal.
+        // Past the opening half-cooldown (D-132), on the house's clock and on the phone's public
+        // one (D-239), so the arm is not a silent refusal and the tile reads READY when it is held.
         val ready = room.house.state.cooldownFor(room.insider, InsiderAbility.Revoke)?.readyAt?.step ?: 0L
         room.house.advanceTo(Tick(ready))
+        insider.countOutTheRevokeClock()
         val before = room.frames()
 
         insider.flow.actions().armRevoke()
@@ -276,23 +292,26 @@ class AbilityWiringTest {
     }
 
     /**
-     * **GUARD (rule 1): an arm into a running clock is sent exactly the same way and arms nothing.**
-     * The tile echoes ARMED either way; the house answers nobody either way; the touch after it is an
-     * ordinary touch.
+     * **GUARD (rule 1, D-239): an early hold is sent exactly the same way, arms nothing, and the tile
+     * does not say ARMED.** The request is the same either way; the house answers nobody either way;
+     * the touch after it is an ordinary touch. Before D-239 this test asserted the tile said ARMED,
+     * which is the owner's two-phone failure written down as correct: ARMED over a refused arm.
      */
     @Test
-    fun aRevokeHeldIntoARunningClockIsSentTheSameAndArmsNothing() = evening { room ->
+    fun anEarlyRevokeHoldIsSentTheSameShowsNoArmedAndArmsNothing() = evening { room ->
         val insider = room.phoneAt(room.insider)
         val target = room.phoneAt(room.target)
         val ready = room.house.state.cooldownFor(room.insider, InsiderAbility.Revoke)?.readyAt?.step ?: 0L
         assertTrue(room.house.clock < ready, "the fixture's clock was already past the opening cooldown")
+        assertTrue(insider.flow.state.revokeClock?.running == true, "the phone's public clock was not running after LIGHTS OUT")
+        assertEquals(RevokeState.Cooldown, insider.flow.state.revokeShown, "the tile did not read COOLING DOWN before the hold")
         val before = room.frames()
 
         insider.flow.actions().armRevoke()
 
         until("the arm reached the house") { Intent.ArmRevoke(room.insider) in room.house.heard }
         assertFalse(room.house.state.cooldownArmed.any { it.index == room.insider.index }, "an arm into a running clock armed")
-        assertEquals(RevokeState.Armed, insider.flow.state.revoke, "the tile's echo depended on the outcome")
+        assertEquals(RevokeState.Cooldown, insider.flow.state.revokeShown, "an early hold said ARMED over a refused arm")
         delay(SETTLE_MILLIS)
         assertEquals(before, room.frames(), "a refused arm was answered on a socket")
 
@@ -327,6 +346,7 @@ class AbilityWiringTest {
             host.flow.actions().armRevoke()
             until("the host's early arm reached its own house") { Intent.ArmRevoke(room.insider) in room.house.heard }
             assertFalse(room.house.state.cooldownArmed.any { it.index == seat }, "an arm into the opening half-cooldown armed")
+            assertEquals(RevokeState.Cooldown, host.flow.state.revokeShown, "the host's early hold said ARMED over a refused arm")
             val early = room.abilities.single { it.startsWith("REVOKE ARM") }
             assertTrue(
                 Regex("""REVOKE ARM — SEAT $seat · COOLING DOWN \(READY IN \d+S\)""").matches(early),
@@ -337,12 +357,14 @@ class AbilityWiringTest {
             assertFalse(room.house.state.isRevoked(room.target), "a touch after a refused arm Revoked the target")
             assertTrue(host.pushed.none { it is RoundMessage.AbilityFired }, "a touch after a refused arm fired")
 
-            // 2. Past the clock: the same press, the same way up, and this time it arms.
+            // 2. Past the clock: the same press, the same way up, and this time it arms and says so.
             room.house.advanceTo(Tick(ready))
+            host.countOutTheRevokeClock()
             host.flow.actions().armRevoke()
             until("the house armed the host's own Revoke", { "abilities=${room.abilities}" }) {
                 room.house.state.cooldownArmed.any { it.index == seat }
             }
+            assertEquals(RevokeState.Armed, host.flow.state.revokeShown, "the host's hold past the clock did not echo ARMED")
             assertEquals("REVOKE ARM — SEAT $seat · ARMED", room.abilities.last(), "the house did not say it armed")
             delay(SETTLE_MILLIS)
 

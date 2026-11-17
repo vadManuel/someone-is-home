@@ -1320,9 +1320,15 @@ class FlowModel(
      * Whether the arm takes is the house's: it spends the cooldown at the moment of arming and
      * refuses an arm into a running clock, **silently in both outcomes** (D-009, D-142, D-216), so
      * there is no answer to follow. The tile's ARMED is therefore input echo, the design's own
-     * reading of it (D-216: *their phone already knows because they held the tile down*), and it is
-     * set unconditionally — nothing here branches on whether the arm took (rule 1). It no longer
-     * steps on to COOLING DOWN or READY: a second hold is a second request, not a local clock.
+     * reading of it (D-216: *their phone already knows because they held the tile down*).
+     *
+     * **The echo waits for the public clock** (D-239). Until D-239 it was set on every hold, and a
+     * hold into the opening half-cooldown (D-132) or the half after a meeting (D-184) said ARMED
+     * over a house that had refused it: on two real iPhones the owner held 2.5 s early, read ARMED,
+     * touched, and nothing happened (D-237). [PanelState.revokeClock] restarts at moments every
+     * phone is told, so the branch below reads public time and nothing else: not the role, not
+     * the house's answer (there is none), and not the request, which goes up the same way on every
+     * hold (rule 1).
      *
      * **Reached only from an Insider's tile.** Not by a branch inside it: a Resident's tile takes
      * no pointer input at all, so this is not something a Resident's phone declines to do — it is
@@ -1330,7 +1336,37 @@ class FlowModel(
      */
     fun armRevoke() {
         send(IntentMessage.ArmRevoke)
-        state = state.copy(revoke = RevokeState.Armed)
+        if (state.revokeClock?.running != true) state = state.copy(revoke = RevokeState.Armed)
+    }
+
+    /**
+     * **One second of the public clocks** (D-239). Called by `FlowHost` once a second while one is
+     * running, and by a test standing in for it. It counts from the push; see [PublicCooldown].
+     */
+    fun secondPassed() {
+        state = state.copy(
+            revokeClock = state.revokeClock?.secondPassed(),
+            accessClock = state.accessClock?.secondPassed(),
+            egressClock = state.egressClock?.secondPassed(),
+        )
+    }
+
+    /**
+     * **A shift began: the per-seat clocks back to half on every phone** (D-132 at LIGHTS OUT,
+     * D-184 at each meeting's end, which starts the next shift). The house-wide Egress clock goes
+     * back with them, except at a meeting's end while an Egress is running, which D-184 freezes out
+     * of the reset. LIGHTS OUT has no running Egress to freeze, whatever an earlier round left here.
+     */
+    private fun shiftBegan(opening: Boolean = false) {
+        val frozen = !opening && state.egressRunning
+        state = state.copy(
+            // A new round holds no arm, so an earlier round's echo does not survive into it. A
+            // meeting's end keeps it: the house keeps the arm across a meeting.
+            revoke = if (opening) RevokeState.Ready else state.revoke,
+            revokeClock = PublicCooldown.Revoke,
+            accessClock = PublicCooldown.Access,
+            egressClock = if (frozen) state.egressClock else PublicCooldown.EgressOpening,
+        )
     }
 
     /**
@@ -2235,7 +2271,13 @@ class FlowModel(
             //
             // **And it is what walks every phone in the lobby to PERIMETER ARMED** (D-234). See
             // [roundOpened].
-            is RoundMessage.OpeningMessage -> roundOpened()
+            //
+            // **And it is the first shift beginning, on every phone at once** (D-132, D-239): page
+            // 2's clocks start here, at half, the same on an Insider's phone and a Resident's.
+            is RoundMessage.OpeningMessage -> {
+                shiftBegan(opening = true)
+                roundOpened()
+            }
 
             // **What this phone is, from the house** (`gdd.md:923`, E-R2-2). One field copied onto
             // [PanelState], which is all this branch may do and all it needs to.
@@ -2510,7 +2552,12 @@ class FlowModel(
             // of.
             is RoundMessage.RevokeLanded -> push(ScreenId.Revoked)
 
-            is RoundMessage.MeetingEnded -> housePushed(message)
+            // The meeting ends the shift it interrupted and starts the next (D-170), and every
+            // clock goes back to half on every phone (D-184, D-239).
+            is RoundMessage.MeetingEnded -> {
+                shiftBegan()
+                housePushed(message)
+            }
 
             // **THE HOUSE IS ON FIRE, AND THIS IS WHERE EVERY PHONE IN IT FINDS OUT** (E-R2-3;
             // `gdd.md:370-378`, D-118, D-076). The effect reached every seat and moved nothing on
@@ -2551,6 +2598,9 @@ class FlowModel(
                     // be rule 4 arriving as *the screens disagree*.
                     egressNodes = message.nodes.map { it.room },
                     egressRunning = true,
+                    // The house-wide clock restarts at full on the fire (D-151), and every phone is
+                    // told it fired by this push, so the bar restarts on every phone (D-239).
+                    egressClock = PublicCooldown.EgressFired,
                 )
                 arrived(ScreenId.Banner)
             }
@@ -3014,6 +3064,18 @@ fun FlowHost(
         if (jam != null) {
             delay(jam.seconds * 1_000L)
             model.staticLapsed(jam)
+        }
+    }
+
+    // **Page 2's public clocks, a second at a time** (D-239). Keyed on the three values, so each
+    // second relaunches the wait and a restart (a push) begins a fresh second rather than finishing
+    // somebody else's: a partial second is dropped, which is the late direction [PublicCooldown]
+    // asks for. Nothing runs once all three have run out.
+    val clocks = Triple(model.state.revokeClock, model.state.accessClock, model.state.egressClock)
+    LaunchedEffect(clocks) {
+        if (clocks.toList().any { it?.running == true }) {
+            delay(1_000L)
+            model.secondPassed()
         }
     }
 

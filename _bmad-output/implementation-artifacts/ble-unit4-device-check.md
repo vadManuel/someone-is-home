@@ -94,10 +94,11 @@ Hold two phones about 30 cm apart for 10 s, then put them back to back.
 
 ## 3. A Revoke lands
 
-**Wait 35 s after LIGHTS OUT (and 35 s after any meeting ends) before arming.** The Revoke's clock opens
-at half, 30 s (D-132); a hold before then is refused in silence while the tile still says ARMED. The
-host's console says which: `[house] REVOKE ARM — SEAT n · ARMED` or `· COOLING DOWN (READY IN Ns)`
-(D-237). If it says COOLING DOWN, hold REVOKE again once the clock is up.
+**Arm when the REVOKE tile reads READY . HOLD TO ARM** (31 s after LIGHTS OUT, and after any meeting
+ends; COOLING DOWN with a filling bar until then, D-239). The Revoke's clock opens at half, 30 s
+(D-132); a hold before then is refused in silence and the tile does not say ARMED. The host's console
+says which: `[house] REVOKE ARM — SEAT n · ARMED` or `· COOLING DOWN (READY IN Ns)` (D-237). If the
+tile says ARMED but the console says COOLING DOWN, that is a D-239 bug: note it.
 
 On phone I, arm Revoke from its abilities. Then hold I against T, back to back, for 2 to 3 s.
 

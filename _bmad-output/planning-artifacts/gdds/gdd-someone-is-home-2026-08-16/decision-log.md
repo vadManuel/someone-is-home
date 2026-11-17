@@ -6134,6 +6134,84 @@ every completed Handshake is accepted.
 | `HousedSubroutineQuestionTest` (`ui`, new) | (none) | all ten: the model holds the dealt question; the pixels differ from the fixture's and the Insider's equal the Resident's; housed and undealt opens nothing; a malformed question opens nothing; the flash order |
 | `SubroutineQuestionWiringTest` (`app`, new) | (none) | five phones over real loopback sockets, every card of three seeded rounds: the phone decodes the house's parameters and holds them; answered right from what the phone holds it is graded right, wrong graded wrong, for all ten for a Resident and for the Insider's fake; only a Resident's right answer moves System Integrity |
 
+## Revision 66 — the REVOKE tile waits for a clock every phone can see
+
+*2026-11-16, overnight run, review finding R1 (CRITICAL). The fix is a bug fix; drawing the cooldown
+from public times is a provisional call made without the owner: **owner to confirm.** When ARMED
+comes back down is NOT decided and is raised below with a recommendation. Desktop and loopback tests
+only; nothing here has been on a phone.*
+
+### D-239 · **Page 2's clocks are drawn from LIGHTS OUT, a meeting's end and an Egress opening, the same on every phone; the REVOKE hold says ARMED only once the public clock has run out — built, provisional, owner to confirm; when ARMED ends — raised**
+
+**The bug** (R1, and the likeliest cause of D-237's failed two-phone Revoke). `Rules.revokeArmed` is
+a silent no-op while the seat's clock runs: 30 s after LIGHTS OUT (D-132), 30 s after every meeting's
+end (D-184), 60 s after an arm that took. `FlowModel.armRevoke` set ARMED on every hold and nothing
+cleared it, so a hold 2.5 s early said ARMED over an unarmed house and the touch did nothing.
+`AbilityWiringTest` asserted the ARMED echo on a refused arm as correct, and the bench re-held REVOKE
+every second, so a refused hold was always followed by one that took.
+
+**What changed.**
+1. **Three public clocks on every phone** (`ui` `PublicCooldown`, `PanelState.revokeClock`,
+   `accessClock`, `egressClock`). Each restarts on a push every seat gets: `OpeningMessage` (all three
+   at half), `MeetingEnded` (all three at half, except the Egress's while an Egress runs, D-184's
+   freeze) and `EgressOpened` (the house-wide Egress clock at full). `FlowHost` counts them a second at
+   a time from the push, the Static window's arrangement. The lengths are `Balance`'s, now named once
+   (`REVOKE_OPENING`, `ACCESS_OPENING`, `EGRESS_OPENING`, which `core` writes the seats' clocks from
+   too) and converted by `Balance.wholeSeconds`, plus **one second of pad so the phone never says READY
+   before the house**: the host's tick driver starts a quarter-second poll after arming. The pad errs
+   late on purpose: a hold inside it arms the house without the echo, and the next hold says ARMED over
+   an arm that is really there; erring early is ARMED over nothing, which is the bug.
+2. **The REVOKE hold sends `ArmRevoke` every time, the same way (rule 1), and says ARMED only when the
+   public clock has run out.** Before that the tile reads COOLING DOWN with its bar filling. The branch
+   reads public time only: not the role, not an answer (there is none), not the request.
+3. **The bars are real.** The mockup's fixed 0.38 / 0.64 / 0.82 are now the three clocks' fractions;
+   the fixtures remain only for a phone no house has armed, so the render sweep still draws the design.
+   The Access bar draws the pool's public half only: a Tier-2 fire restarts the actor's own pool, which
+   no bar draws (the same question as below, one tier down).
+4. **An arm survives a meeting on the tile as it does in the house** (D-184 resets the clock, not the
+   arm), and a new LIGHTS OUT clears an earlier round's ARMED.
+5. **The bench holds REVOKE once**, when its own tile reads READY, as a person does.
+
+**Parity.** Before anybody holds anything, an Insider's page 2 and a Resident's draw the same bars,
+inks, fills, borders and state at every public moment; only D-142's words differ (REVOKE / POWER, the
+two resting lines). After an Insider's hold the tile says ARMED, an asymmetry D-231 already built.
+
+**Raised, not decided: when ARMED comes back down.** Today it never does (unchanged). The provisional
+direction was *on `AbilityFired`, with a post-fire cooldown*, and that needs a ruling for three
+reasons: (a) `gdd.md:322`, `:325` and M9 (`gdd.md:416-417`) say the Insider's phone shows *no light
+change, no visible animation when arming or landing a Revoke* and *no feedback whatsoever*, and D-231
+already raised that a tile changing at contact is that feedback; (b) `RoundMessage.AbilityFired` does
+not say which ability, and Surge, Isolate and Static send it too; (c) a private 60 s cooldown on the
+Insider's tile, with every Resident's tile at READY, is a resting tell no ruling (D-009, D-142) covers.
+The options:
+
+| | ARMED ends | cost |
+|---|---|---|
+| A | on `AbilityFired(true)`, then the seat's own cooldown drawn | feedback at contact (M9); a private clock on one role's tile; needs the ability named on the wire |
+| B | at the next meeting's end, silently; the tile rejoins the public clock exactly, since the house's clock is then the public half | a spent Revoke reads ARMED until the meeting |
+| C | 45 s after the hold, on the phone's own clock, with the house disarming at the same moment (the window D-142 and `gdd.md:323` name); the echo then waits until 60 s after the hold, drawn as the public clock | the window is built in `core` too; a hold between 45 and 60 s fills and says nothing |
+
+**Recommendation: C**, because it is the design's own window, it never changes the tile at contact,
+and it keeps every drawn bar public. It needs the owner's word on two things the docs do not say: what
+the 45 s window does across a meeting (D-185 ends *running ability effects*; whether an armed Revoke
+is one is unruled, and today a meeting keeps the arm), and whether the window expiring is silent.
+
+**Not covered.** A phone that joins mid-round, or misses `OpeningMessage`, has no clock and echoes
+ARMED as before. `FlowHost` counts only while the panel is composed (the cheat picker or a
+backgrounded app pauses it), which errs late. Nothing here has run on a phone, and the simulator
+rehearsal with the bench's single hold has not been run.
+
+| site | what it said | what it says now |
+|---|---|---|
+| `model` `Balance` | `REVOKE_COOLDOWN / 2` etc. written in `core` | `REVOKE_OPENING`, `ACCESS_OPENING`, `EGRESS_OPENING`, `wholeSeconds` |
+| `core` `Rules` | `/ 2` at arming and meeting end | the named halves (same values) |
+| `ui` `FlowModel.armRevoke` | ARMED on every hold | ARMED only once `revokeClock` has run out; the request on every hold |
+| `ui` `FlowModel.houseSaid` | clocks drawn nowhere | `OpeningMessage`, `MeetingEnded`, `EgressOpened` restart them; `secondPassed` counts |
+| `ui` `PanelVals` | bars 0.38 / 0.64 / 0.82 | the clocks' fractions; the tile drawn from `revokeShown` |
+| `app` cheats `RoundCheat.pressing` | REVOKE re-held every second | held once, when the tile reads READY |
+| `AbilityWiringTest` | a refused arm echoes ARMED | an early hold sends the same request and shows no ARMED; a hold after the public clock shows ARMED and the touch lands, for a guest and the host |
+| `PublicCooldownTest` (`ui`, new) | (none) | the two roles' page 2 equal at every public moment; the early hold sends and does not echo; the lengths are `Balance`'s plus the pad |
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

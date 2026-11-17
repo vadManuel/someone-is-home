@@ -12,7 +12,9 @@ import home.someoneshome.platform.monotonicNanos
 import home.someoneshome.platform.launchValue
 import home.someoneshome.ui.FlowModel
 import home.someoneshome.ui.PanelRole
+import home.someoneshome.ui.RevokeState
 import home.someoneshome.ui.ScreenId
+import home.someoneshome.ui.revokeShown
 import home.someoneshome.ui.Subroutine
 import kotlin.concurrent.Volatile
 import kotlinx.coroutines.delay
@@ -141,11 +143,12 @@ class RoundCheat(
     /**
      * **The REVOKE tile, held on this phone's own page 2** (D-231), from the work order until the
      * first meeting rings. Only an Insider's page 2 answers a hold (D-142), so only a phone whose
-     * screen says it is an Insider presses it, through the same action the tile calls. The house
-     * refuses every arm into a running clock in silence, so the repeats cost nothing; the first one
-     * after the host's script has pushed the clock past the cooldown is the one that arms.
+     * screen says it is an Insider presses it, through the same action the tile calls. It is held
+     * once, when the tile reads READY (D-239): the tile's clock is the public one, counted on this
+     * phone from LIGHTS OUT, so the hold comes after the house's clock too.
      */
     private var pressingRevoke = false
+    private var heldRevoke = false
     private var egressRunning = false
     private var jammed = false
     private var over = false
@@ -456,7 +459,13 @@ class RoundCheat(
             // a person holds sent nothing at all.
             if (flow.state.role == PanelRole.Insider) {
                 val tiles = flow.actions()
-                if (!over && pressingRevoke) tiles.armRevoke()
+                // REVOKE is held ONCE, when this phone's own tile says READY, which is what a person
+                // does (D-239). Re-holding it every second hid that a hold into the opening clock was
+                // refused while the tile said ARMED: the next hold landed and the bench looked fine.
+                if (!over && pressingRevoke && !heldRevoke && flow.state.revokeShown == RevokeState.Ready) {
+                    heldRevoke = true
+                    tiles.armRevoke()
+                }
                 if (!over && pressingEgress && !egressRunning) tiles.armEgress()
                 if (!over && pressingStatic && !jammed) tiles.fireStatic()
             }

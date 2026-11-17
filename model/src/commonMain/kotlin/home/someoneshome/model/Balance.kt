@@ -188,6 +188,27 @@ object Balance {
     const val ACCESS_COOLDOWN: Long = 90L * TICKS_PER_SECOND
 
     /**
+     * **The three clocks at half: D-132's opening, and D-184's every meeting end.**
+     *
+     * One arithmetic, named once, because two layers read it: the rules write every seat's clocks
+     * off it at LIGHTS OUT and at each meeting's end, and page 2 draws the same halves on every
+     * phone (D-239). Both moments are pushed to every phone, so a clock restarted there is a
+     * PUBLIC fact; a `/ 2` in each layer would be two copies that agree until somebody moves one.
+     */
+    const val REVOKE_OPENING: Long = REVOKE_COOLDOWN / 2
+    const val ACCESS_OPENING: Long = ACCESS_COOLDOWN / 2
+    const val EGRESS_OPENING: Long = EGRESS_COOLDOWN / 2
+
+    /**
+     * **A duration in ticks, as the whole seconds a screen counts, rounded up.**
+     *
+     * Here and not in `ui` for the reason [TICKS_PER_SECOND] is named at all: a screen that divided
+     * by the tick rate would hold its own opinion of it. Rounded up so that a screen counting these
+     * seconds never reaches the end before the house does.
+     */
+    fun wholeSeconds(ticks: Long): Int = ((ticks + TICKS_PER_SECOND - 1) / TICKS_PER_SECOND).toInt()
+
+    /**
      * **Surge's weight on the pool — the longest in it, and a placeholder** (`gdd.md:342`).
      *
      * *Surge is a commitment, not a tool. Either half alone was a nudge; together it is the loudest,

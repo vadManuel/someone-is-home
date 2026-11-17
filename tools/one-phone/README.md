@@ -350,11 +350,12 @@ Stop with Ctrl-C. Put Auto-Lock back to your usual setting when you are done.
 
 - **A real Revoke.** It needs mutual sighting, and the Mac cannot upload what it hears. The device
   check's steps 2 and 3 (a touch answered on both phones, the target's scan going off) need two phones.
-  **Wait 35 s after LIGHTS OUT before holding REVOKE**, and 35 s after each meeting ends. The Revoke's
-  clock opens at half, 30 s (D-132, `Balance.REVOKE_COOLDOWN / 2`), and a meeting hands it back at half
-  again. A hold before then is refused in silence, the tile still says ARMED, and every touch after it
-  is a plain touch: hold REVOKE again once the 30 s are up. An arm that does land restarts the clock at
-  the full 60 s. The host's console says which it was: `[house] REVOKE ARM — SEAT n · ARMED`, or
+  **Hold REVOKE when its tile reads READY . HOLD TO ARM**: it says COOLING DOWN, with a filling bar,
+  for 31 s after LIGHTS OUT and after each meeting ends (D-239). The Revoke's clock opens at half,
+  30 s (D-132, `Balance.REVOKE_OPENING`), and a meeting hands it back at half again. A hold before
+  then is refused in silence and the tile does not say ARMED; every touch after it is a plain touch.
+  An arm that does land restarts the house's clock at the full 60 s, and the tile does not show that
+  (D-239's open item: it keeps saying ARMED). The host's console says which it was: `[house] REVOKE ARM — SEAT n · ARMED`, or
   `· COOLING DOWN (READY IN Ns)`, or `· REFUSED <reason>` (the seat is named only when the launch
   set the seed, as `round.sh` does). The same lines exist for `EGRESS FIRE`, `SURGE FIRE`,
   `ISOLATE FIRE` and `STATIC FIRE`. They go to the console only and never to the TRANSPORT view.
