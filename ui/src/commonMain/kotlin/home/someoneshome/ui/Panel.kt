@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.safeContent
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -97,6 +98,10 @@ private fun platformInsets(): PanelInsets {
         top = safe.calculateTopPadding(),
         bottom = safe.calculateBottomPadding(),
         side = maxOf(content.calculateLeftPadding(layout), content.calculateRightPadding(layout)),
+        // The software keyboard, while it is up (D-235). Read on its own rather than trusted to be
+        // inside `safeDrawing`, so the frame's answer does not hang on what one platform folds
+        // into that union; the frame takes the taller of this and [PanelInsets.bottom].
+        keyboard = WindowInsets.ime.asPaddingValues().calculateBottomPadding(),
     )
 }
 

@@ -1310,17 +1310,17 @@ private fun LobbyRow(key: String, value: String, onClick: (() -> Unit)? = null) 
  * button is called. So the label says which act this is, and there is exactly one of them on any
  * phone. **A two-second hold** (D-141): it costs a seat and a line, or everybody's.
  *
- * **The note under it names the consequence rather than the gesture**: the gesture is already known
- * by this point in the evening, and the thing worth reading is *how many people this is about*.
+ * **No note under it** (the owner, 2026-11-16; D-235). It used to name the consequence; the label
+ * already says which act it is, and screens say little. A guest's label is LEAVE THIS HOUSE, the
+ * owner's words, beside the host's CLOSE THE HOUSE.
  */
 @Composable
 private fun LobbyExit(hosting: Boolean, actions: PanelActions) {
     KitHold(
-        if (hosting) "CLOSE THE HOUSE" else "LEAVE THIS LOBBY",
+        if (hosting) "CLOSE THE HOUSE" else "LEAVE THIS HOUSE",
         P,
         if (hosting) actions.terminateHouse else actions.leaveLobby,
-        height = 44.dp, size = 22, noteGap = 6.dp,
-        restingNote = if (hosting) "Every phone goes back to the start." else "Your seat and your line are dropped.",
+        height = 44.dp, size = 22, note = false,
     )
 }
 
@@ -1371,6 +1371,12 @@ private fun ResidentStrip(residents: List<String>, isMine: (String) -> Boolean) 
  * through both states**, so the thing under the thumb never moves; the gate is the hold refusing
  * to start, drawn dashed as the mockup draws a control that is not live yet. It is a two-second
  * hold (D-141), and [waitingFor] says which condition is open on every phone.
+ *
+ * **No helper text under it** (the owner, 2026-11-16; D-235): HOLD THE BUTTON FOR TWO SECONDS and
+ * KEEP HOLDING are gone, because the bar running under the thumb already says both. What stays is
+ * the inert button's reason, NEEDS n RESIDENTS or WAITING FOR EVERYONE'S LINE, which is not help with
+ * the gesture but the answer to *why will it not start* (D-226). Its line is kept when the gate
+ * opens, empty, so the block under the host's thumb does not move at the moment it goes live.
  */
 @Composable
 private fun LightsOut(hosting: Boolean, ready: Boolean, waitingFor: String?, onArm: () -> Unit) {
@@ -1378,12 +1384,15 @@ private fun LightsOut(hosting: Boolean, ready: Boolean, waitingFor: String?, onA
         KitCaption(waitingFor ?: "WAITING FOR THE HOST", P, Modifier.fillMaxWidth(), size = 20, center = true)
         return
     }
-    KitHold(
-        "LIGHTS OUT", P, onArm,
-        enabled = ready, lit = ready, inert = !ready,
-        height = 56.dp, size = 30, tracking = 0.1, noteGap = 6.dp,
-        restingNote = waitingFor ?: HOLD_NOTE,
-    )
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        KitHold(
+            "LIGHTS OUT", P, onArm,
+            enabled = ready, lit = ready, inert = !ready,
+            height = 56.dp, size = 30, tracking = 0.1, note = false,
+        )
+        // A space rather than nothing when the gate is open: the line keeps its height.
+        KitCaption(waitingFor ?: " ", P, Modifier.fillMaxWidth(), size = 20, center = true)
+    }
 }
 
 // ---------------------------------------------------------------------------------------------

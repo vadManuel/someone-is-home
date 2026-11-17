@@ -231,7 +231,10 @@ fun PanelFrame(
     // below still run edge to edge, and the Dynamic Island sits on bare light.
     val insets = LocalPanelInsets.current
     val safeTop = insets.top
-    val safeBottom = insets.bottom
+    // THE KEYBOARD TAKES THE BOTTOM WHILE IT IS UP (D-235). The owner typed their one line into a
+    // field the keyboard covered and could not see a word of it. The content now ends where the
+    // keyboard starts, on every screen with a field, and the ground behind it still runs to the edge.
+    val safeBottom = maxOf(insets.bottom, insets.keyboard)
 
     // THE STRIP SITS UNDER THE ISLAND, NOT BESIDE IT (D-204). The band the Island takes is left
     // as ground, and the strip starts at the safe area's edge, so nothing the strip draws can go

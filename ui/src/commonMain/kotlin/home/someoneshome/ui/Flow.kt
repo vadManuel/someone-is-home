@@ -569,6 +569,12 @@ object Flow {
     }
 
     /**
+     * **Where a seated phone stands when the lights go out**: the lobby, and the one-line screen it
+     * opens. The house's opening push walks a phone on either to [ScreenId.Armed] (D-234).
+     */
+    val seatedBeforeArming: Set<ScreenId> = setOf(ScreenId.Lobby, ScreenId.Secret)
+
+    /**
      * The screens no tap and no fall-through reaches: **in play, the house puts you there.**
      *
      * Written down rather than left implicit, because this list is the honest answer to "why can
@@ -1017,6 +1023,11 @@ class FlowModel(
      * preview — no house is behind those, so nothing could refuse, and the walk is what it always
      * was. A client's lobby draws no such button, and a host with no house behind it arms nobody.
      * `FlowModel` decides none of that: it reports the press and follows the answer.
+     *
+     * **With a house behind it the app root does not call `armed` at all** (D-234). The house's
+     * `OpeningMessage`, sent to every seat at arming, is what walks every phone to ARMED, the
+     * host's over its own loopback socket (see [roundOpened]), so the host and its guests reach the
+     * screen by one path. A refused press still sends nothing and still moves nothing.
      */
     private val onLightsOut: (armed: () -> Unit) -> Unit = { armed -> armed() },
     /**
@@ -1091,6 +1102,21 @@ class FlowModel(
 
     /** What this screen will do on its own, if anything. */
     val pending: AutoAdvance? get() = Flow.autoAdvance[state.screen]
+
+    /**
+     * **Where a fall-through lands, asked when it fires** — [AutoAdvance.to], except for the
+     * permissions screen (D-235).
+     *
+     * The self-test falls through to the Perms screen, which asks for the whole D-161 set in the
+     * light. A phone the OS already grants every row has nothing to be asked, so it goes straight
+     * past to the join screen. The question is [PermsModel.missingNow], the fresh read the lobby's
+     * gate asks, never the screen's cached rows; it is asked when the timer fires rather than when
+     * the self-test is drawn, because two rows answer through a callback that lands after launch.
+     * **It fails toward the screen**: a row the OS has not answered yet is missing, so a phone that
+     * cannot be sure is shown the screen, and a missing grant always is.
+     */
+    fun fallThrough(rule: AutoAdvance): ScreenId =
+        if (rule.to == ScreenId.Perms && perms.missingNow().isEmpty()) ScreenId.Join else rule.to
 
     /** What the house will do to this screen, if anything. Nothing here fires it — see [FlowHost]. */
     val awaitingPush: HousePush? get() = Flow.housePushes[state.screen]
@@ -1646,7 +1672,7 @@ class FlowModel(
     }
 
     /**
-     * **LEAVE THIS LOBBY — and the phone goes back to the join screen** (E-PAY-6).
+     * **LEAVE THIS HOUSE — and the phone goes back to the join screen** (E-PAY-6).
      *
      * A push rather than a `go`, and that is the whole of the navigation decision: the trail behind
      * this phone runs back through a lobby it is no longer in, and a back arrow that walked into it
@@ -1743,8 +1769,9 @@ class FlowModel(
      * press that landed, and no round anywhere in the house. Every other phone stood in the lobby
      * forever.
      *
-     * So [onLightsOut] is told, and the screen moves when it answers that the house armed — never
-     * on the press alone, which walked a refused host to ARMED (D-226). The division is unchanged:
+     * So [onLightsOut] is told, and the screen moves when the house armed — never on the press
+     * alone, which walked a refused host to ARMED (D-226). With a house attached the walk is the
+     * house's opening push, on every phone alike (D-234, [roundOpened]). The division is unchanged:
      * **nothing about the round is decided here.** What the host did is a fact; what it means is
      * the house's, one module up, where `core` can be seen.
      *
@@ -2182,7 +2209,10 @@ class FlowModel(
             // house's own and the same on every phone, so `Notifications.arrivals` already holds
             // what the banner says and the message's job is to say *now*. A body on this kind would
             // be a second copy of one sentence.
-            is RoundMessage.OpeningMessage -> arrived(ScreenId.Notify)
+            //
+            // **And it is what walks every phone in the lobby to PERIMETER ARMED** (D-234). See
+            // [roundOpened].
+            is RoundMessage.OpeningMessage -> roundOpened()
 
             // **What this phone is, from the house** (`gdd.md:923`, E-R2-2). One field copied onto
             // [PanelState], which is all this branch may do and all it needs to.
@@ -2632,6 +2662,27 @@ class FlowModel(
     }
 
     /**
+     * **The house armed, and every phone still standing in the lobby goes to PERIMETER ARMED**
+     * (D-234).
+     *
+     * Found on two real iPhones on 2026-11-16: after LIGHTS OUT the host's phone said PERIMETER
+     * ARMED and the guests' did not. The host walked itself there on the house's yes (D-226, a call
+     * on the host's own phone), and nothing the house sent walked anybody else: `OpeningMessage`
+     * raised the opening banner, so a guest went from the lobby straight to the springboard, and
+     * the host, already on ARMED, never saw that banner at all (ARMED is the house's screen, and a
+     * banner does not land on one). Two phones, two different first frames of the round.
+     *
+     * Now the one message every seat is sent once, at arming, is what walks every seat there, the
+     * host's included over its own loopback socket, and the host no longer walks itself. One path,
+     * the same frame on every phone (rule 1). The two screens are the lobby and the one-line screen
+     * it opens, which is where a seated phone stands when the lights go out. Anywhere else (a phone
+     * the house is catching up after a gap) the message is what it always was, the banner.
+     */
+    private fun roundOpened() {
+        if (state.screen in Flow.seatedBeforeArming) push(ScreenId.Armed) else arrived(ScreenId.Notify)
+    }
+
+    /**
      * **A seat as the name the house sent for it** — a lookup against [PanelState.roster], and it
      * is [fireSurge]'s move read backwards.
      *
@@ -2936,7 +2987,8 @@ fun FlowHost(
         // screen change, so reaching either branch means the screen is still the one that owed it.
         if (pending != null) {
             delay(pending.afterMillis.toLong())
-            if (model.state.screen == screen) model.push(pending.to)
+            // Where it lands is asked now, not when the effect started: see `fallThrough` (D-235).
+            if (model.state.screen == screen) model.push(model.fallThrough(pending))
         } else if (awaiting != null) {
             delay(HOUSE_STAND_IN_MS)
             if (model.state.screen == screen) model.push(awaiting.to)

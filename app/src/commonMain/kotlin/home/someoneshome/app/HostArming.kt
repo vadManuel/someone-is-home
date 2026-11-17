@@ -47,16 +47,6 @@ suspend fun armAtLightsOut(
      * on.
      */
     seed: Long,
-    /**
-     * **The host's screen walking to ARMED, called on a yes and on nothing else** (D-226).
-     *
-     * `FlowModel.lightsOut` hands it over. Before 2026-11-16 the screen moved on the press and this
-     * was told after, so a refusal still put ARMED on the host's phone: the phone had locked in the
-     * lobby, the house beside it had nobody seated, it said `WILL NOT ARM — 0 SEAT(S)`, and the
-     * screen said ARMED over a room with no round in it. The walk is here, beside the arming it
-     * reports, so the two cannot disagree.
-     */
-    armed: () -> Unit = {},
     note: (String) -> Unit,
 ): Boolean {
     if (!hosting) {
@@ -78,6 +68,9 @@ suspend fun armAtLightsOut(
     // the screen moves for a refusal (rule 6): the reason is in the log, in a lit room.
     if (!house.arm(seed)) return false
     note("ARMED — ${house.state.seats.size} SEAT(S) IN THE ROUND · THE EVENING IS THEIRS")
-    armed()
+    // **No screen is walked from here** (D-234). It used to call the host's own walk to ARMED
+    // (D-226), and that was the only walk there was: the guests' phones went from the lobby to the
+    // springboard. The house's `OpeningMessage`, which `arm` has just sent every seat, the host's
+    // own included over loopback, is what walks each of them to ARMED, by one path.
     return true
 }

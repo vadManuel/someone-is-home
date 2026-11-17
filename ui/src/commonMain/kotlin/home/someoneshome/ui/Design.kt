@@ -188,8 +188,18 @@ val Double.u: Dp get() = this.dp
  * [side] does NOT come from `safeDrawing`, which reports zero left and right in portrait —
  * measured, not assumed. It comes from `safeContent`, which is the only place iOS exposes a
  * horizontal margin, and it is what holds the status glyphs off the curved corners.
+ *
+ * [keyboard] is the software keyboard's height from the bottom edge, zero while it is down (D-235).
+ * It is read from `WindowInsets.ime` and is here, as a value, for the same reason as the rest: the
+ * desktop has no keyboard, so the only way to see a screen laid out above one is to pass one in.
+ * [PanelFrame] keeps the content above whichever of [bottom] and [keyboard] is taller.
  */
-data class PanelInsets(val top: Dp = 0.dp, val bottom: Dp = 0.dp, val side: Dp = 0.dp)
+data class PanelInsets(
+    val top: Dp = 0.dp,
+    val bottom: Dp = 0.dp,
+    val side: Dp = 0.dp,
+    val keyboard: Dp = 0.dp,
+)
 
 /** Zero everywhere the hardware takes nothing: the desktop preview, and a phone with a flat top. */
 val LocalPanelInsets: ProvidableCompositionLocal<PanelInsets> =

@@ -319,9 +319,11 @@ fun CheatRoot() {
             // this file's opinion: the first is the lobby's answer and the second is the gate the
             // button itself is drawn from.
             //
-            // **And the screen walks to ARMED only on the house's yes** (D-226). `armed` is the
-            // walk; a refused press leaves the host on its lobby, which says why under a inert button.
-            onLightsOut = { armed ->
+            // **And the screen walks to ARMED only on the house's yes, by the house's push** (D-226,
+            // D-234). The seam's walk is not called here: the `OpeningMessage` the arming sends
+            // every seat walks every phone, this one included over its loopback socket, so host and
+            // guests reach ARMED by one path. A refused press sends nothing and moves nothing.
+            onLightsOut = { _ ->
                 val house = rules.value
                 scope.launch {
                     if (house == null) {
@@ -336,7 +338,6 @@ fun CheatRoot() {
                         // instant of the press.
                         hosting = panel.value?.lobby?.hosting == true,
                         seed = RoundCheat.seed(),
-                        armed = armed,
                     ) { line -> println("[house] $line"); transport.note(line) }
                 }
             },
@@ -462,8 +463,8 @@ fun CheatRoot() {
     //
     // Two coroutines and they are not the same job. Every seat walks the house when its own work
     // order arrives, which is a reaction to a push and runs on all five. The *script* runs on one
-    // phone, and the test for which one is the screen: LIGHTS OUT is what walks the host to ARMED,
-    // so a phone standing there having pressed it is the phone holding the house.
+    // phone, and the test for which one is the lobby's: the house's opening push walks every phone
+    // to ARMED (D-234), and the one standing there that is hosting is the phone holding the house.
     LaunchedEffect(round) {
         // **Nothing here arms anything any more, and that is the unit.** Arming is production's —
         // it hangs off `onLightsOut` where the `FlowModel` is built, reached by a thumb on a live

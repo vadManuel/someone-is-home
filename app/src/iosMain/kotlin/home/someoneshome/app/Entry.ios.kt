@@ -1,5 +1,6 @@
 package home.someoneshome.app
 
+import androidx.compose.ui.uikit.OnFocusBehavior
 import androidx.compose.ui.window.ComposeUIViewController
 import home.someoneshome.ui.DeviceCanvas
 import platform.UIKit.UIViewController
@@ -31,7 +32,14 @@ import platform.UIKit.UIViewController
  * here, and the day this shell grows a lamp it stops being verifiable anywhere but on plural
  * physical devices in a dark room.
  */
-fun mainViewController(): UIViewController = ComposeUIViewController {
+fun mainViewController(): UIViewController = ComposeUIViewController(
+    // **The keyboard is the panel's to lay out around, not the view controller's to slide away
+    // from** (D-235). The panel reads the keyboard's height as an inset (`PanelInsets.keyboard`) and
+    // ends its content there, which the desktop renders can show; the built-in nudge toward the
+    // focused field is switched off so that one rule moves the screen rather than two, and so that
+    // the layout a test rendered is the layout the phone draws.
+    configure = { onFocusBehavior = OnFocusBehavior.DoNothing },
+) {
     DeviceCanvas {
         VariantRoot()
     }

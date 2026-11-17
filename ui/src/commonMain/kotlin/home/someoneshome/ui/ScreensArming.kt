@@ -47,23 +47,38 @@ import androidx.compose.ui.unit.IntOffset
  * Seen by the house only, deleted when the round ends — both stated on screen, because the player
  * is being asked for something real and the promise has to be legible before they type it. The
  * Insider's blackmail text later quotes this line back; that is the entire mechanism.
+ *
+ * ### While the keyboard is up, the field and the button are what is on screen (D-235)
+ *
+ * Found on real iPhones on 2026-11-16: the keyboard covered the field and nobody could see what
+ * they were typing. The frame now ends the content where the keyboard starts ([PanelFrame]), and
+ * on a 13 Pro that leaves about 470 units of a 780-unit panel. The caption and the two promises
+ * alone take about 170 of them, and the field is the one block that gives way (it is weighted),
+ * so it was squeezed to nothing. **So while [PanelInsets.keyboard] is up the caption and the two
+ * promise rows step aside**, and the header, the headline, the field and HAND IT OVER stay: the
+ * player sees every word they type and can hand it over without closing the keyboard first. The
+ * promises are read before typing begins, which is when they have to be legible; they are back the
+ * moment the keyboard goes down. `KeyboardLayoutTest` holds the field and the button above it.
  */
 @Composable
 fun SecretScreen() {
     val actions = LocalActions.current
     val lobby = LocalLobby.current
     val p = Palette.BONE
+    val typing = LocalPanelInsets.current.keyboard > 0.dp
     KitScreen {
         // **The page name, with the way back beside it** (E-PAY-6): HAND IT OVER refuses a blank
         // line and stays put, so without the arrow a player who opened this with nothing to say
         // had no control on the screen at all. `Lobby` is the fallback rather than the destination.
         KitHeader("BEFORE THE LIGHTS GO OUT", p, back = ScreenId.Lobby, titleSize = 28, trail = true)
         Words("SOMETHING YOU WOULD RATHER NOT EXPLAIN", size = 30, color = p.ink, lineHeight = 1.0)
-        KitCaption(
-            "One line, and make it real. A thing you did, owe, broke, or never told them. " +
-                "If the house picks you tonight, this is what it will hold over you.",
-            p,
-        )
+        if (!typing) {
+            KitCaption(
+                "One line, and make it real. A thing you did, owe, broke, or never told them. " +
+                    "If the house picks you tonight, this is what it will hold over you.",
+                p,
+            )
+        }
         Column(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             KitLabel("YOUR LINE", p, SILK_LINE)
             // Real typing, in lower case: a house name is a label and a confession is a sentence,
@@ -86,9 +101,11 @@ fun SecretScreen() {
         // The two promises. They are on this screen because the player is being asked for
         // something real on the strength of them, and both are kept: the host holds the line in
         // memory and writes it nowhere, and the round ending drops it on both phones.
-        KitRules(p) {
-            KitInfo("SEEN BY", "THE HOUSE ONLY", p, minHeight = 44.dp)
-            KitInfo("DELETED", "WHEN THE ROUND ENDS", p, minHeight = 44.dp)
+        if (!typing) {
+            KitRules(p) {
+                KitInfo("SEEN BY", "THE HOUSE ONLY", p, minHeight = 44.dp)
+                KitInfo("DELETED", "WHEN THE ROUND ENDS", p, minHeight = 44.dp)
+            }
         }
         // A refused hand-over stays on this screen with the reason under the button. Nothing
         // about this is mid-round: the lights are still on and the player is owed the reason.

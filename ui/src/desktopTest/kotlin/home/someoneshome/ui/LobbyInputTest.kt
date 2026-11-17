@@ -4,7 +4,10 @@ import home.someoneshome.model.Balance
 
 import androidx.compose.ui.test.DesktopComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithText
@@ -78,6 +81,12 @@ class LobbyInputTest {
         }
         mainClock.autoAdvance = false
     }
+
+    /** Whether a hold's bar has run at all, read off the block's progress semantics. */
+    private fun DesktopComposeUiTest.holdRan(): Boolean =
+        onAllNodesWithTag(HOLD_BLOCK).fetchSemanticsNodes().any {
+            (it.config.getOrNull(SemanticsProperties.ProgressBarRangeInfo)?.current ?: 0f) > 0f
+        }
 
     private fun DesktopComposeUiTest.assertNothingSays(text: String, why: String) {
         val found = onAllNodes(hasText(text, substring = true, ignoreCase = true))
@@ -235,7 +244,9 @@ class LobbyInputTest {
         // Half the window, finger still down: a bar that ran and then declined would have reset
         // itself by the time a check made afterwards looked at it.
         mainClock.advanceTimeBy(HOLD_MILLIS / 2L)
-        assertNothingSays("KEEP HOLDING", "the bar ran on a gate that was still shut")
+        // Read off the bar itself: LIGHTS OUT has no note any more (D-235), so there is no KEEP
+        // HOLDING to look for, and the bar is the only thing that moves while a finger is down.
+        assertFalse(holdRan(), "the bar ran on a gate that was still shut")
         onNodeWithText("LIGHTS OUT").performTouchInput { up() }
         mainClock.advanceTimeBy(HOLD_MILLIS + 200L)
         assertEquals(ScreenId.Lobby, model.state.screen, "a closed gate armed the round on a hold")
@@ -280,6 +291,38 @@ class LobbyInputTest {
 
             assertNothingSays("LIGHTS OUT", "a client was given the host's control")
             onNodeWithText("WAITING FOR THE HOST").assertExists()
+        }
+
+    /**
+     * **The two holds carry no helper text, and a guest's way out is LEAVE THIS HOUSE** (the
+     * owner, 2026-11-16; D-235). The defunct LIGHTS OUT still says why it is defunct (D-226).
+     */
+    @Test
+    fun theLobbysHoldsSayNoMoreThanTheirLabels() =
+        runDesktopComposeUiTest(width = 300, height = 650) {
+            val (host, _) = modelOn(ScreenId.Lobby, joined = 6, linesIn = 6)
+            show(host)
+            onNodeWithText("CLOSE THE HOUSE").assertExists()
+            for (gone in listOf(HOLD_NOTE, "Every phone goes back to the start.", "KEEP HOLDING")) {
+                assertNothingSays(gone, "the host's lobby still says '$gone'")
+            }
+            // Mid-hold too: the note used to turn into KEEP HOLDING under a finger.
+            onNodeWithText("LIGHTS OUT").performTouchInput { down(center) }
+            mainClock.advanceTimeBy(HOLD_MILLIS / 2L)
+            assertTrue(holdRan(), "the bar did not run on an open gate")
+            assertNothingSays("KEEP HOLDING", "a hold under a finger still teaches the gesture")
+            onNodeWithText("LIGHTS OUT").performTouchInput { up() }
+        }
+
+    @Test
+    fun aGuestLeavesTheHouseWithNoNoteUnderIt() =
+        runDesktopComposeUiTest(width = 300, height = 650) {
+            val (guest, _) = modelOn(ScreenId.Lobby, joined = 6, linesIn = 4, hosting = false)
+            show(guest)
+            onNodeWithText("LEAVE THIS HOUSE").assertExists("a guest's way out is not LEAVE THIS HOUSE")
+            assertNothingSays("LEAVE THIS LOBBY", "the old label is still drawn")
+            assertNothingSays("Your seat and your line are dropped.", "the guest's exit still carries its note")
+            assertNothingSays(HOLD_NOTE, "the guest's lobby still teaches the gesture")
         }
 
     // ---- D-103 at the control ------------------------------------------------------------------

@@ -17,6 +17,7 @@ import home.someoneshome.model.Room
 import home.someoneshome.model.SavedHome
 import home.someoneshome.model.Seat
 import home.someoneshome.model.SeatNamed
+import home.someoneshome.model.protocol.RoundMessage
 import home.someoneshome.ui.FlowModel
 import home.someoneshome.ui.PanelState
 import home.someoneshome.ui.ScreenId
@@ -187,10 +188,10 @@ class HostArmingTest {
             val answered = CompletableDeferred<Boolean>()
             val flow = FlowModel(
                 PanelState(screen = ScreenId.Lobby),
-                onLightsOut = { armed ->
+                onLightsOut = { _ ->
                     launch {
                         answered.complete(
-                            armAtLightsOut(bench.house, hosting = true, seed = SEED, armed = armed, note = { bench.said += it }),
+                            armAtLightsOut(bench.house, hosting = true, seed = SEED, note = { bench.said += it }),
                         )
                     }
                 },
@@ -199,6 +200,10 @@ class HostArmingTest {
             flow.lightsOut()
 
             assertFalse(answered.await(), "the house armed ${party.size} seat(s)")
+            assertTrue(
+                bench.pushed.none { it is Effect.OpeningMessage },
+                "a refused press sent the opening push that walks every phone to ARMED",
+            )
             assertFalse(bench.house.armed, "a round was armed with ${party.size} seat(s) in the lobby")
             assertEquals(
                 ScreenId.Lobby, flow.state.screen,
@@ -211,17 +216,25 @@ class HostArmingTest {
         }
     }
 
-    /** **And a house that arms walks the host to ARMED**, through the same wiring. */
+    /**
+     * **And a house that arms walks the host to ARMED by the push it sends every seat** (D-234),
+     * through the same wiring.
+     *
+     * The press itself walks nothing: until 2026-11-16 the host walked itself on the house's yes and
+     * no guest was walked at all. Here the host's screen holds the lobby until its own seat's
+     * `OpeningMessage` arrives, the message every guest is sent too. `ArmedForEveryPhoneTest` runs
+     * the same thing over real sockets with guests.
+     */
     @Test
-    fun aLightsOutTheHouseArmsWalksTheHostToArmed() = runBlocking<Unit> {
+    fun aLightsOutTheHouseArmsWalksTheHostToArmedByItsOwnPush() = runBlocking<Unit> {
         val bench = bench()
         val answered = CompletableDeferred<Boolean>()
         val flow = FlowModel(
             PanelState(screen = ScreenId.Lobby),
-            onLightsOut = { armed ->
+            onLightsOut = { _ ->
                 launch {
                     answered.complete(
-                        armAtLightsOut(bench.house, hosting = true, seed = SEED, armed = armed, note = { bench.said += it }),
+                        armAtLightsOut(bench.house, hosting = true, seed = SEED, note = { bench.said += it }),
                     )
                 }
             },
@@ -230,7 +243,10 @@ class HostArmingTest {
         flow.lightsOut()
 
         assertTrue(answered.await(), "the house did not arm a ready lobby: ${bench.said}")
-        assertEquals(ScreenId.Armed, flow.state.screen, "the house armed and the host's screen stayed put")
+        assertEquals(ScreenId.Lobby, flow.state.screen, "the host walked itself to ARMED, not by the house's push")
+        val opening = bench.pushed.filterIsInstance<Effect.OpeningMessage>().single { it.seat == seats.first() }
+        flow.houseSaid(RoundMessage.OpeningMessage(opening.haptic))
+        assertEquals(ScreenId.Armed, flow.state.screen, "the house's opening push left the host on its lobby")
     }
 
     /** A second press on a running round arms nothing and says so, rather than refusing silently. */
