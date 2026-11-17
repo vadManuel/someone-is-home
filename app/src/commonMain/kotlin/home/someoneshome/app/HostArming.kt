@@ -56,7 +56,11 @@ suspend fun armAtLightsOut(
         note("LIGHTS OUT — NOT THE HOST, SO THERE IS NO HOUSE HERE TO ARM")
         return false
     }
-    if (house.armed) {
+    // **A round that has ended is not one that is running** (D-157, D-252). `armed` stays true on a
+    // finished round, and this read it alone, so after NEW ROUND the host's LIGHTS OUT said the
+    // house was already playing and the second round never armed. Arming constructs a fresh round
+    // (`Rules.armed`), which is all a second round needs from here.
+    if (house.armed && !house.ended) {
         // A second press on a round that is already running. The rules would refuse it in any
         // case; saying so here is what keeps the refusal readable on the host's own phone rather
         // than arriving as an unexplained `RefusalReason` in a log.

@@ -1148,6 +1148,25 @@ class LobbyOverTransport(
      */
     private val onHouseClosed: () -> Unit = {},
     /**
+     * **The house has been out of reach for [houseGoneAfterMillis]** (H4 of the 2026-11-17 hunt,
+     * D-253). [onHouseClosed]'s sibling for the house that could not say goodbye: the host's phone
+     * failed, crashed or walked out of range, so no `HouseClosed` came down and this phone's socket
+     * simply stopped. Its reconnect keeps trying (the token stays this seat's, G1); what this adds
+     * is the screen answer, which is the app root's: [home.someoneshome.ui.ScreenId.Disconnect].
+     *
+     * **A guest only.** The host's own link drops when its phone locks (D-225), and the house that
+     * would be missing is in the host's hand.
+     */
+    private val onHouseLost: () -> Unit = {},
+    /** **And it is back**: this phone was seated again after [onHouseLost] fired. */
+    private val onHouseBack: () -> Unit = {},
+    /**
+     * **How long a guest's link to the house is down before the house is called gone** (D-253,
+     * provisional, owner to confirm). Long enough that a host whose phone locked for a moment and
+     * came back (D-225) never puts five phones on the disconnect screen; see [HOUSE_GONE_AFTER_MILLIS].
+     */
+    private val houseGoneAfterMillis: Long = HOUSE_GONE_AFTER_MILLIS,
+    /**
      * **The screen, kept awake while this phone hosts a lobby** (H1, D-224), and the same object
      * the round half holds at arming (D-221) — one idle timer, so one [ScreenWake]. Required for
      * the round's reason: a root that has not decided what the idle timer is does not compile. A
@@ -1267,10 +1286,28 @@ class LobbyOverTransport(
                     // a phone carrying it into the next one would refuse that round's opening
                     // pushes as frames it already had. Then the panel is told, which is the half
                     // this class cannot do itself.
+                    //
+                    // **Answering it ends nothing** (H1 of the 2026-11-17 hunt). The panel's answer
+                    // is `FlowModel.newRound`, the same call the host's NEW ROUND makes, and that
+                    // call comes back into [roundEnded] below. Taken there as a new end, the host's
+                    // own phone, which hears its broadcast over loopback like everybody, broadcast
+                    // it again, heard it again, and so on: hundreds of RoundEnded a second, every
+                    // pass wiping the desk's names, until the host crashed. So [roundEnded] is told
+                    // that this is the house's push being answered, and keeps only its local half.
+                    //
+                    // **The name goes back up from here, once**: the desk dropped every name with
+                    // the lines (D-115), and this is the one moment every phone, the host's
+                    // included, knows the desk has done it.
                     is LobbyBody.RoundEnded -> {
                         handedLine = null
                         round?.roundEnded()
-                        onRoundEnded()
+                        answeringTheHouse = true
+                        try {
+                            onRoundEnded()
+                        } finally {
+                            answeringTheHouse = false
+                        }
+                        client?.let { live -> scope.launch { live.send(naming(residentName)) } }
                     }
                     // **The host closed the house** (E-PAY-6). The round's inbox goes first and
                     // unconditionally for `RoundEnded`'s reason, and then this phone hangs up: the
@@ -1321,6 +1358,11 @@ class LobbyOverTransport(
                         // and for the mirror of that reason: the name is what the house has to be
                         // told again, and the pushes are what this phone has to ask for again. A
                         // phone that dropped mid-round has missed an unknown amount (D-097, G3).
+                        //
+                        // **The house is back** (D-253), said before the round asks for what it
+                        // missed, so the screen this phone was on is restored first and whatever
+                        // the house re-pushes lands on top of it.
+                        houseReached()
                         round?.seated()
                     }
                     is ClientSession.Phase.Dismissed -> {
@@ -1340,8 +1382,10 @@ class LobbyOverTransport(
                     //
                     // The host only. A guest draws no button from it, and its list blinking empty
                     // on every reconnect would be a change to what a guest is shown for no gain.
+                    //
+                    // **On a guest, the clock on the house starts** (D-253): see [houseUnreached].
                     is ClientSession.Phase.Rejoining ->
-                        if (house.up) onStanding(LobbyBody.Standing(joined = 0, linesIn = 0))
+                        if (house.up) onStanding(LobbyBody.Standing(joined = 0, linesIn = 0)) else houseUnreached()
                     is ClientSession.Phase.Joining -> Unit
                 }
             },
@@ -1420,22 +1464,32 @@ class LobbyOverTransport(
      * same shape [setInsiders] has, and for the same reason: the desk belongs to the host and a
      * client that had one would be a second copy of the lobby.
      *
-     * **The name goes back up afterwards**, because the desk drops names with the lines (D-115 —
-     * they are text, held for one round like everything else on it). That is the same re-send a
-     * re-seating does, for the same reason: a lobby listing an empty chip for somebody standing in
-     * the room is a fault nobody could diagnose from the screen. It is re-sent from what this
-     * phone still has in memory; it is never persisted.
+     * **The name goes back up when the house's `RoundEnded` comes down**, not from here (D-115:
+     * the desk drops names with the lines). Every phone hears that push, the host's over loopback,
+     * so it is the one moment each of them knows the desk has been wiped; a name sent from here
+     * as well raced the wipe on a guest and went up twice on the host.
+     *
+     * **Called while this phone is answering that push, it ends nothing** (H1 of the 2026-11-17
+     * hunt, D-252). The panel answers `RoundEnded` with `FlowModel.newRound`, which calls this; a
+     * host that took that call as a new end broadcast the round's end again, heard it again over
+     * loopback, and looped until it crashed. The house ends a round once, when a thumb presses.
      */
     override fun roundEnded() {
         handedLine = null
+        if (answeringTheHouse) return
         house.roundEnded()
         // **NEW ROUND opens the host's lobby again, so its screen is held again** (H1, D-224). The
         // round's end let it go (`ScreenWake.release` ends hosting with the round); the host is now
         // back in a lobby the house runs on this phone.
         if (house.up) wake.holdWhileHosting()
-        val c = client ?: return
-        scope.launch { c.send(naming(residentName)) }
     }
+
+    /**
+     * **True only while this phone is answering the house's own `RoundEnded`** (D-252). Set and
+     * cleared around the panel's answer in the frame handler, on the same call stack as the
+     * [roundEnded] it guards, so it is never read from anywhere else.
+     */
+    private var answeringTheHouse = false
 
     /**
      * **This phone stands up and walks out.**
@@ -1503,8 +1557,54 @@ class LobbyOverTransport(
         round?.backInTheForeground()
     }
 
+    /**
+     * **A guest's link to the house is down, or a reconnect to it was just refused** (H4 of the
+     * 2026-11-17 hunt, D-253).
+     *
+     * The first call marks when the link went. **The house is called gone at a refused reconnect
+     * made [houseGoneAfterMillis] or more after that**, never by a timer alone: the reconnect backs
+     * off to eight seconds between tries, so a timer would fire on a host that came back a moment
+     * after a try and is simply waiting for the next one. Only a seating clears the mark. Nothing
+     * about the reconnect changes: it keeps presenting this seat's token on its bounded backoff, so
+     * a host that relaunches or walks back into range still gets this seat back in its own chair.
+     *
+     * **Never on the host's phone.** That link drops whenever the host's own phone locks (D-225),
+     * and the house it would be missing is the one in the host's hand.
+     */
+    private fun houseUnreached() {
+        if (house.up) return
+        val now = monotonicNanos() / 1_000_000
+        val since = unreachedSince ?: now.also { unreachedSince = it }
+        if (houseLostShown || now - since < houseGoneAfterMillis) return
+        houseLostShown = true
+        scope.launch {
+            onEvent("THE HOUSE HAS BEEN OUT OF REACH FOR ${(now - since) / 1_000}S — STILL TRYING")
+            onHouseLost()
+        }
+    }
+
+    /** **Seated again**: the mark goes, and a phone that was told the house was gone is told it is back. */
+    private fun houseReached() {
+        unreachedSince = null
+        if (!houseLostShown) return
+        houseLostShown = false
+        scope.launch {
+            onEvent("THE HOUSE IS BACK — THIS PHONE IS IN ITS OWN CHAIR AGAIN")
+            onHouseBack()
+        }
+    }
+
+    /** When the link went, in monotonic milliseconds, or null while this phone is seated or has hung up. */
+    private var unreachedSince: Long? = null
+
+    /** True between [onHouseLost] and the seating that answers it with [onHouseBack]. */
+    private var houseLostShown = false
+
     /** This phone's own end of the socket, dropped. Shared by the two exits so they cannot drift. */
     private fun hangUp() {
+        // A phone that walked out is not waiting for a house: no mark, and nothing owed back.
+        unreachedSince = null
+        houseLostShown = false
         // The round's half first: a phone that has hung up is in no round, so its radio stops and
         // its screen may sleep (T4, D-221). Harmless when it already holds nothing.
         round?.left()
@@ -1514,3 +1614,15 @@ class LobbyOverTransport(
         client = null
     }
 }
+
+/**
+ * **How long a guest waits on a house it cannot reach before its screen says so** (D-253,
+ * provisional, owner to confirm).
+ *
+ * Read against the reconnect's own schedule: [home.someoneshome.platform.transport.ReconnectBackoff]
+ * waits 0.5, 1, 2, 4 and 8 seconds, so the tries fall at about 0.5, 1.5, 3.5, 7.5 and 15.5 seconds
+ * after the link goes, and the screen changes when the fifth is refused. A host whose phone locked
+ * and came back before that try (D-225) is answered by it and walks nobody; a host whose app failed
+ * is not coming back by then without a relaunch, which is what the screen tells the room.
+ */
+const val HOUSE_GONE_AFTER_MILLIS: Long = 15_000

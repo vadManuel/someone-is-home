@@ -949,7 +949,9 @@ class SubroutineModel(
             Subroutine.Replay -> replay.enter(at)
             Subroutine.ParityCheck -> parity.choose(at)
             Subroutine.Short -> short.press(at)
-            Subroutine.SignalTrace -> trace.walk(at)
+            // A node the house did not deal is not on the screen to tap (H3, D-252): D-238's graphs
+            // can hold seven nodes, and a route holding an eighth crashed the canvas that draws it.
+            Subroutine.SignalTrace -> if (at in wiring.nodes.indices) trace.walk(at)
             Subroutine.Jam -> jam.step(at)
             Subroutine.Sniff -> sniff.choose(at)
             Subroutine.Deallocate -> deallocate.remove(at)

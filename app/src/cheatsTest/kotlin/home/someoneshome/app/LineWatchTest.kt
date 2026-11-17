@@ -3,6 +3,9 @@ package home.someoneshome.app
 import home.someoneshome.model.protocol.LobbyBody
 import home.someoneshome.model.protocol.LobbyWire
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -115,5 +118,40 @@ class LineWatchTest {
         val watch = LineWatch {}
         watch.mine(line)
         assertTrue(watch.verdict().contains("0 FRAME(S)"), watch.verdict())
+    }
+
+    /**
+     * **A verdict read while frames are still landing does not throw** (H5 of the 2026-11-17 hunt,
+     * D-252).
+     *
+     * The host of the five-seat hunt failed of a `ConcurrentModificationException` inside [LineWatch.verdict]:
+     * the lobby bench read the tally on its own coroutine while frames appended to it on another.
+     * Two threads, one writing and one reading, for as long as the writer runs; then every frame is
+     * accounted for.
+     */
+    @Test
+    fun aVerdictReadWhileFramesLandNeitherThrowsNorLosesAFrame() = runBlocking {
+        val watch = LineWatch {}
+        watch.mine(line)
+        val standing = LobbyWire.encode(LobbyBody.Standing(joined = 2, linesIn = 2, names = listOf("ELLIOT", "PRIYA")))
+        val ended = LobbyWire.encode(LobbyBody.RoundEnded)
+        val frames = 20_000
+        val writer = async(Dispatchers.Default) {
+            repeat(frames) { watch.saw(if (it % 2 == 0) standing else ended) }
+        }
+        val reader = async(Dispatchers.Default) {
+            var reads = 0
+            while (!writer.isCompleted) {
+                watch.verdict()
+                reads++
+            }
+            reads
+        }
+        writer.await()
+        assertTrue(reader.await() > 0, "the reader never overlapped the writer, so this proved nothing")
+        assertTrue(
+            watch.verdict().startsWith("INBOUND — $frames FRAME(S) {STANDING=${frames / 2}, ROUND ENDED=${frames / 2}}"),
+            "a frame went missing under the lock: ${watch.verdict()}",
+        )
     }
 }

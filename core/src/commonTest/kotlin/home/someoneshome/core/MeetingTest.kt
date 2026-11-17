@@ -345,6 +345,36 @@ class MeetingTest {
         )
     }
 
+    /**
+     * **A ghost's vote is refused at the gate, recorded, and shown to nobody** (H8 of the 2026-11-17
+     * hunt, D-252).
+     *
+     * The hunt's five-seat round: a Revoked seat's phone sent a selection, the house answered it
+     * with a live selection of SKIP, live selections go to every seat outside the system, and the
+     * couch read VOTES CAST 5 OF 5 over a ballot of four. The ballot never held it; the stream did.
+     */
+    @Test
+    fun `an out seat's vote is refused and the couch is shown nothing`() {
+        val start = Walk(armed()).revoke(Seat(1), Seat(4)).state
+        assertTrue(start.isOut(Seat(4)), "the fixture's Revoke never landed")
+        val walk = voting(start)
+        val refusedBefore = walk.refusals.size
+
+        walk.feed(Event.VoteSelected(t(), Seat(4), null), Event.VoteLocked(t(), Seat(4)))
+
+        assertEquals(
+            listOf(RefusalReason.VoterOut, RefusalReason.VoterOut), walk.refusals.drop(refusedBefore),
+            "an out seat's selection and READY were not refused at the gate",
+        )
+        assertEquals(emptyList(), walk.drain(), "an out seat's vote put something on the wire")
+        assertNull(walk.state.meeting!!.ballotFor(Seat(4)), "an out seat was given a ballot")
+        assertEquals(0, walk.state.meeting!!.lockedCount, "an out seat's READY was counted")
+
+        // The living still vote: the gate is about the seat, not the phase.
+        walk.feed(Event.VoteSelected(t(), Seat(2), null))
+        assertEquals(1, walk.drain().filterIsInstance<Effect.VoteSelectionShown>().size, "a living tap went unanswered")
+    }
+
     // ---- The vote (D-117) ---------------------------------------------------------------------
 
     /** Every tap transmits live, which is what the couch watches happen. */

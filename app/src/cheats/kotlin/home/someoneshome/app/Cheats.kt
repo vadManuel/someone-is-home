@@ -192,6 +192,8 @@ fun CheatRoot() {
     // per arrival, so the arrival queue took the next upload while the last was still pushing and two
     // touches' halves interleaved. `HouseDoors` suspends until the rules are done.
     val doors = remember { HouseDoors { rules.value } }
+    // The disconnect screen's walk there and back, reading the panel the line below it is promised.
+    val gone = remember { HouseGone { panel.value } }
     val link = remember {
         LobbyOverTransport(
             scope, onEvent = radio, onInbound = watch::saw,
@@ -220,6 +222,12 @@ fun CheatRoot() {
             // is where it lands: `newRound` walks back to the lobby, and `houseClosed` walks to the
             // join screen with an honest line on it, because there is no lobby left to walk to.
             onHouseClosed = { panel.value?.houseClosed() },
+            // **The host's phone went without a word** (H4, D-253): it failed, crashed or left range,
+            // so no `HouseClosed` came. After the link has been down long enough that it is not a
+            // lock the host comes straight back from (D-225), every guest is walked to the
+            // disconnect screen, and walked back when its seat is taken again.
+            onHouseLost = gone::lost,
+            onHouseBack = gone::back,
             wake = wake,
         )
     }
@@ -441,10 +449,13 @@ fun CheatRoot() {
     remember { roundClient.onMessage = round::react }
     // **NEW ROUND, when the house says the round is over.** `flow.newRound` is the control the
     // ending screen draws: it calls `lobby.roundEnded()` and walks this phone back to the lobby.
-    // Pressed on every seat because the host pressing it moves only the host — see the reaction
-    // in RoundCheat, and the escalation it names.
+    // **Pressed on the host's phone only** (D-252), because that is the only phone that draws it as
+    // a control. It used to be pressed on every seat, from before the house's `RoundEnded` push
+    // existed, and every guest that pressed it was a thumb no person could have; the guests now go
+    // back to the lobby by the push alone, which is what a hunt has to be able to see.
     remember {
-        round.onEnding = {
+        round.onEnding = onEnding@{
+            if (!flow.lobby.hosting) return@onEnding
             flow.newRound()
             println("[round-bench] NEW ROUND — BACK ON ${flow.state.screen.name.uppercase()}")
             println(

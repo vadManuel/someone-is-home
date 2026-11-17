@@ -20,10 +20,11 @@
 #   periodic/TTTT--seatK.png   every seat every $EVERY seconds
 #   beats.txt            the beats, in order, with the wall second each was seen
 #
-# NEW ROUND: the bench presses it on every seat about 14 s after the reveal (RoundCheat's
-# ENDING_NANOS). This keeps capturing for --tail seconds after the ENDING beat (default 45), so the
-# lobby the evening comes back to is photographed on every seat. A second round needs LIGHTS OUT
-# pressed by a thumb (the lobby bench presses it once per launch) and the lines typed again.
+# NEW ROUND: the bench presses it on the host about 14 s after the reveal (RoundCheat's
+# ENDING_NANOS); the guests go back by the house's push. This keeps capturing for --tail seconds
+# after the ENDING beat (default 45), so the lobby the evening comes back to is photographed on
+# every seat. With LOBBY_AGAIN every seat then hands its line over again and the host presses
+# LIGHTS OUT again, so the second round arming is in the logs and the last pictures (D-252).
 set -o pipefail
 
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -132,6 +133,7 @@ launch_seat() {
         "SIMCTL_CHILD_SOMEONES_HOME_LOBBY_NAME=${SEAT_NAMES[$i]}"
         "SIMCTL_CHILD_SOMEONES_HOME_LOBBY_LINE=SEAT $i WROTE THIS AND NOBODY MAY SEE IT"
         "SIMCTL_CHILD_SOMEONES_HOME_LOBBY_FORGET=1"
+        "SIMCTL_CHILD_SOMEONES_HOME_LOBBY_AGAIN=1"
         "SIMCTL_CHILD_SOMEONES_HOME_ROUND=1"
         "SIMCTL_CHILD_SOMEONES_HOME_ROUND_SEED=$SEED"
     )

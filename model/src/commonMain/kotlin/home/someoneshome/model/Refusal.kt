@@ -111,6 +111,18 @@ enum class RefusalReason {
     ReporterOut,
 
     /**
+     * **A vote from a seat that is out of the round** (H8 of the 2026-11-17 hunt, D-252).
+     *
+     * *Ghosts cast nothing* (`gdd.md:417`), and the ballot has always had no row for them. What it
+     * had was an answer: a selection tap from a seat with no ballot came back as a live selection
+     * of nothing, and live selections go to every seat outside the system, so the couch counted a
+     * ghost's SKIP and read VOTES CAST 5 OF 5 on a ballot of four. Admissible for [ReporterOut]'s
+     * reason and no other: the couch has no ballot to tap (D-134), so no honest phone produces it.
+     * It is read by the authority and the recording, and by nothing that has a socket (D-097).
+     */
+    VoterOut,
+
+    /**
      * **A report of a Revoked player a meeting has already been called to report** (S4 of the
      * owner's 2026-11-15 rulings, D-219).
      *

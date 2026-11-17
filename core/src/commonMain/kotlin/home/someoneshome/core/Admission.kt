@@ -115,6 +115,16 @@ fun admit(state: GameState, event: Event): Admission = when {
         event.trigger is MeetingTrigger.RevokeReported &&
         state.isOut(event.caller) -> Admission.Refused(RefusalReason.ReporterOut)
 
+    // **Ghosts cast nothing** (`gdd.md:417`; H8 of the 2026-11-17 hunt, D-252). An out seat has no
+    // ballot, and a selection or a READY from one was answered in the rules by the same two effects
+    // a refused tap gets -- one of them a live selection, which goes to every seat outside the
+    // system. So a forged tap from the couch put a SKIP on every ghost's screen and VOTES CAST 5 OF
+    // 5 over a ballot of four. No honest phone produces it: the couch has no ballot to tap (D-134),
+    // which is `ReporterOut`'s argument, so it is refused here, recorded, and answered with nothing.
+    (event is Event.VoteSelected && state.isOut(event.voter)) ||
+        (event is Event.VoteLocked && state.isOut(event.voter)) ->
+        Admission.Refused(RefusalReason.VoterOut)
+
     // **S4: a Revoked player is reported once** (the owner's 2026-11-15 ruling, D-219). A couch
     // phone keeps advertising (D-008), so a living phone held against it after its meeting is a
     // second report of a seat the whole house was already rung about. Refused at the gate, as R3

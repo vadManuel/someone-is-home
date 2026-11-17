@@ -3,6 +3,7 @@ package home.someoneshome.app
 import home.someoneshome.model.protocol.LobbyBody
 import home.someoneshome.model.protocol.LobbyWire
 import home.someoneshome.model.protocol.RoundWire
+import platform.Foundation.NSLock
 
 /**
  * **What came down the socket, on a phone, and whether any of it was somebody's line.**
@@ -44,15 +45,35 @@ class LineWatch(private val note: (String) -> Unit) {
      */
     private var mine: String = ""
 
-    /** Every kind seen so far, in arrival order, so the summary is a fact rather than a memory. */
-    private val kinds = mutableListOf<String>()
+    /**
+     * Every kind seen so far, counted in first-arrival order, so the summary is a fact rather than a
+     * memory.
+     *
+     * **A count per kind, not a list of every frame, and behind [lock]** (H5 of the 2026-11-17
+     * hunt, D-252). [saw] runs wherever a frame lands and [verdict] on the lobby bench's own
+     * coroutine; the list was appended by one while the other iterated it, and the host failed of a
+     * `ConcurrentModificationException` inside `verdict`. The list also grew by one entry per frame
+     * for the life of the process, which is a whole round's pushes held to print five numbers.
+     */
+    private val kinds = LinkedHashMap<String, Int>()
 
     /** How many of them contained this phone's line. The number the whole class is about. */
     private var carriers = 0
 
+    /** How many frames, of every kind. */
+    private var frames = 0
+
+    /** One lock over [mine], [kinds], [carriers] and [frames]: each read or write is a few lines. */
+    private val lock = NSLock()
+
     /** Set once, from the switch this process was launched with. */
     fun mine(line: String) {
-        mine = line
+        lock.lock()
+        try {
+            mine = line
+        } finally {
+            lock.unlock()
+        }
     }
 
     /**
@@ -90,9 +111,14 @@ class LineWatch(private val note: (String) -> Unit) {
             // What is fixed here is only which frames are worth shouting about.
             null -> if (RoundWire.decodeOrNull(body) != null) "ROUND" else "UNDECODABLE"
         }
-        kinds += kind
-        val carriesMine = mine.isNotBlank() && body.contains(mine)
-        if (carriesMine) carriers++
+        lock.lock()
+        val carriesMine = try {
+            frames++
+            kinds[kind] = (kinds[kind] ?: 0) + 1
+            (mine.isNotBlank() && body.contains(mine)).also { if (it) carriers++ }
+        } finally {
+            lock.unlock()
+        }
         // A STANDING is the lobby doing its job, a ROUND body is the house doing its job, and a
         // ROUND ENDED is the host handing every phone back to the lobby. Everything else, and
         // anything at all carrying this phone's line, is shouted about.
@@ -108,9 +134,14 @@ class LineWatch(private val note: (String) -> Unit) {
      * frames is what a phone that never connected reports, and it is the answer this probe is most
      * likely to give by accident.
      */
-    fun verdict(): String =
-        "INBOUND — ${kinds.size} FRAME(S) ${kinds.groupingBy { it }.eachCount()} · " +
-            "$carriers CARRIED THIS PHONE'S LINE"
+    fun verdict(): String {
+        lock.lock()
+        try {
+            return "INBOUND — $frames FRAME(S) ${kinds.toMap()} · $carriers CARRIED THIS PHONE'S LINE"
+        } finally {
+            lock.unlock()
+        }
+    }
 
     private companion object {
         /**

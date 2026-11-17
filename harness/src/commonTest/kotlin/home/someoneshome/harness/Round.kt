@@ -211,7 +211,10 @@ internal fun round(insiders: List<Seat> = INSIDERS): List<Event> {
                 SEATS.filter { it.index % 2 == 0 }
                     .forEach { v -> add(walk(Event.ReadyToVoteDeclared(Tick(t++), v))) }
                 add(walk(Event.DiscussionClosed(Tick(t++))))
-                SEATS.forEach { v ->
+                // **The living vote, and only the living** (D-252): the couch has no ballot to
+                // tap, so a vote from an out seat is a forged frame the gate refuses, and a fixture
+                // that cast one would no longer be a round that refuses nothing.
+                state.livingSeats.forEach { v ->
                     add(
                         walk(
                             Event.VoteSelected(

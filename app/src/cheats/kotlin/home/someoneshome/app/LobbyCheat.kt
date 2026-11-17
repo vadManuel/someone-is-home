@@ -350,7 +350,20 @@ class LobbyCheat(
     private suspend fun watch(armed: Boolean) {
         var lit = armed
         var last = ""
+        // **A second round, by the same fingers** ([AGAIN_SWITCH], D-252). Set when this phone is
+        // anywhere but the lobby's two screens, which after the handover is only ever a round.
+        var played = false
+        val again = launchSwitch(AGAIN_SWITCH)
         while (true) {
+            if (flow.state.screen != ScreenId.Lobby && flow.state.screen != ScreenId.Secret) played = true
+            // NEW ROUND brought this phone back with its line wiped, as promised. A person types it
+            // again, and the host's thumb goes back over LIGHTS OUT.
+            if (again && played && flow.state.screen == ScreenId.Lobby && !lobby.line.handedOver) {
+                played = false
+                note("BACK IN THE LOBBY AFTER A ROUND — HANDING THE LINE OVER AGAIN")
+                handOverLine()
+                lit = false
+            }
             val now = "${standing()} · ${lobby.waitingFor() ?: "READY"} · ${flow.state.screen.name.uppercase()}"
             if (now != last) {
                 note(now)
@@ -407,6 +420,12 @@ class LobbyCheat(
 
         /** How many times to tap the INSIDERS row. Host only; on a client the row is a reading. */
         const val INSIDERS_SWITCH = "SOMEONES_HOME_LOBBY_INSIDERS"
+
+        /**
+         * **After NEW ROUND, hand the line over again and, on the host, press LIGHTS OUT again**
+         * (D-252). How a hunt shows that a second round arms; absent, the bench plays one round.
+         */
+        const val AGAIN_SWITCH = "SOMEONES_HOME_LOBBY_AGAIN"
 
         /** Ask for LIGHTS OUT at the end — and report the refusal when the house has one. */
         const val LIGHTS_OUT_SWITCH = "SOMEONES_HOME_LOBBY_LIGHTS_OUT"

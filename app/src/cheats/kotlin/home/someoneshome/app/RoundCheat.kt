@@ -510,9 +510,20 @@ class RoundCheat(
             return
         }
         note("BEGAN ${opened.label} — WORKING IT ON THE REAL SCREEN")
-        repeat(ENTRY_TAPS) { actions.tapSubroutine(opened, it) }
+        repeat(entryTaps(opened)) { actions.tapSubroutine(opened, it) }
         actions.handOverSubroutine(opened)
         note("HANDED OVER ${opened.label} — AN ANSWER THIS PHONE CANNOT KNOW")
+    }
+
+    /**
+     * **Only what the screen draws** (H3, D-252). Signal Trace's nodes are the house's wiring, and
+     * D-238's graphs can hold seven: [ENTRY_TAPS] tapped an eighth node no screen draws, and the
+     * 4-seat dry run at seed 20261150 failed in the canvas. A finger cannot tap a node that is not
+     * there, so the bench taps the nodes dealt.
+     */
+    internal fun entryTaps(opened: Subroutine): Int = when (opened) {
+        Subroutine.SignalTrace -> minOf(ENTRY_TAPS, flow.subroutines.wiring.nodes.size)
+        else -> ENTRY_TAPS
     }
 
     /**

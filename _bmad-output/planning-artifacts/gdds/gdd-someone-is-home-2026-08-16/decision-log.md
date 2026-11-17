@@ -6743,6 +6743,95 @@ ends, so a send coupled to it waits for ever and fails at any bound: 20 s now. `
 waited 20 s per condition and 5 s per push, and every failure it guards is a seat that never comes
 back: 60 s and 30 s now.
 
+## Revision 73 — what the simulator hunt found
+
+*2026-11-17. `tools/sim-hunt/hunt.sh` played whole rounds on four, five and six Simulators (wire-only
+seats: no BLE, torch, camera or haptics) and photographed every seat at every beat. Five of its
+findings are fixed here; the rest are queued elsewhere.*
+
+### D-252 · **NEW ROUND ends the round once and the second round arms; a ghost's vote is refused at the gate; the lobby probe and Signal Trace stop crashing — built**
+
+1. **NEW ROUND looped (H1).** The host's NEW ROUND broadcasts `LobbyBody.RoundEnded`. The host's own
+   phone hears it over loopback like every seat, and `CheatRoot` answers it with `FlowModel.newRound`,
+   the same call the button makes, which reaches `LobbyOverTransport.roundEnded` and broadcast the end
+   again. The five- and six-seat hunts logged 586 `THE HOUSE ENDED THE ROUND` per seat, one seat 5932
+   frames in seconds, names flipping to UNNAMED as each pass wiped the desk, and a host that failed.
+   **Now the link answers the house's push without ending anything**: while it is handing
+   `RoundEnded` to the panel, `roundEnded()` keeps only its local half (the line goes). **The name goes
+   back up once, from the push**, on every phone, the host's included; it was sent from
+   `roundEnded()`, which raced the desk's wipe on a guest.
+2. **The second round never armed.** `armAtLightsOut` refused on `house.armed`, which stays true on a
+   finished round, so after NEW ROUND the host's LIGHTS OUT said the house was already playing. It now
+   refuses only a round that is armed and not ended; arming constructs a fresh round (`Rules.armed`).
+3. **A ghost's vote reached the couch (H8).** The ballot never held it, but `voteSelected` answered a
+   seat with no ballot with `VoteHeld` and `VoteSelectionShown`, and live selections go to every seat
+   outside the system: the couch drew *SEAT 0 SELECTED SKIP* and VOTES CAST 5 OF 5 over a ballot of
+   four. **A selection or READY from an out seat is refused at the admission gate**,
+   `RefusalReason.VoterOut`, recorded and answered with nothing. Admissible for `ReporterOut`'s reason:
+   the couch has no ballot to tap (D-134), so no honest phone produces it; rule 1 is about an effect a
+   player should have seen, and nobody's screen offers this one. Recording format 27.
+4. **The lobby probe crashed the host (H5).** `LineWatch.verdict` iterated the list `saw` appended to
+   from another thread: `ConcurrentModificationException`. It now keeps a count per kind under one
+   lock, which also stops it holding one entry per frame for the life of the process.
+5. **Signal Trace crashed the 4-seat dry run at seed 20261150 (H3).** The bench tapped nodes 0 to 7;
+   D-238's graphs can hold 7, and the canvas read `wiring.nodes[7]`. A tap on a node the house did not
+   deal now does nothing (`SubroutineModel.tap`), and the bench taps only the nodes dealt.
+
+**The bench changed with it.** NEW ROUND is pressed on the host only (the guests' presses were
+thumbs nobody has, and they hid whether the push alone returns them), and with
+`SOMEONES_HOME_LOBBY_AGAIN` (set by `hunt.sh`) every seat hands its line over again after NEW ROUND
+and the host presses LIGHTS OUT again.
+
+**Found by the re-run and not fixed here (`ui`):** after NEW ROUND a phone carries the last round's
+panel into the next one, so the second round's ARMED screen still read OUT REVOKED, OUT RESTRAINED,
+METER 96% and last round's work. `FlowModel.newRound` resets the line and the screen and nothing else.
+
+| site | what it did | what it does |
+|---|---|---|
+| `app` `LobbyOverTransport` | the push's answer ended the round again; the name went up from `roundEnded()` | the answer ends nothing; the name goes up once from the push |
+| `app` `armAtLightsOut` | refused a finished round's house | refuses only a running round |
+| `core` `admit`, `model` `RefusalReason.VoterOut`, `harness` `recording/27` | answered a ghost's vote to the couch | refused at the gate, recorded |
+| `harness` test fixture `round()` | every seat voted, the couch included | the living vote, so the clean round still refuses nothing (the fuzzer still hands ghosts ballots, and they are refused) |
+| `app` cheats `LineWatch` | a list read and written on two threads | counts under a lock |
+| `ui` `SubroutineModel.tap`, `app` cheats `RoundCheat.entryTaps` | a route could hold a node not dealt | it cannot; the bench taps the dealt nodes |
+| `app` cheats `CheatRoot`, `LobbyCheat`, `tools/sim-hunt/hunt.sh` | NEW ROUND on every seat; one round | NEW ROUND on the host; a second round with `LOBBY_AGAIN` |
+| `NewRoundLoopTest` (new) | | five phones on loopback wired as `CheatRoot` wires them: the round to its end, NEW ROUND, one `RoundEnded` per phone, the same five names, the second round arms |
+| `MeetingTest`, `LineWatchTest`, `SignalTraceBoundsTest` (new) | | a ghost's selection and READY refused with nothing emitted; a verdict read while 20 000 frames land; a tap on node 7 of a 7-node graph |
+
+### D-253 · **A guest whose house has been unreachable for fifteen seconds is shown the disconnect screen, and walked back when its seat is taken again — built, the fifteen seconds provisional, owner to confirm**
+
+**H4.** When the host's app failed the guests stayed where they were, on their last screen or on a
+lobby that still listed the host. `DisconnectScreen` (RECONNECTING, STAY WHERE YOU ARE, the lamp
+held) existed and nothing walked to it.
+
+- **When.** A guest's link marks the moment it went (`ClientSession.Phase.Rejoining`); a seating
+  clears the mark. The app root is told, once, at the first **refused reconnect** made
+  `HOUSE_GONE_AFTER_MILLIS` (15 s) or more after the mark. Never by a timer alone: the reconnect backs
+  off to 8 s between tries (0.5, 1, 2, 4, 8 s, so tries at about 0.5, 1.5, 3.5, 7.5 and 15.5 s), and a
+  timer fired on a host that had come back and was only waiting for the next try. That was found by
+  the test: with a timer, a lock the host came back from inside the window still walked the guests.
+  So in practice the screen changes at about 15.5 s, when the fifth try is refused.
+- **Never on the host.** Its own link drops when its phone locks, and the house it would miss is in its
+  hand.
+- **Nothing about the reconnect changes.** The seat token keeps being presented on the same backoff,
+  so a host that relaunches (crash recovery) or comes back into range gets every seat back in its own
+  chair, and the guest is walked back to the screen it was on (`HouseGone`), before the house re-pushes
+  what it missed (D-097).
+- **CLOSE THE HOUSE is unchanged:** `HouseClosed` still walks to the join screen with its line.
+
+**Not covered.** The disconnect screen has no way out, so a guest whose host never returns must
+leave the app by hand (owner to rule whether it gets a LEAVE). A guest leaving a station for it sends
+`LeaveTerminal` when the link returns, so it is back on the station's screen without its reading. A
+host phone that fails silently on real Wi-Fi may hold a guest's socket open until TCP gives up, so the
+fifteen seconds start later than the end, and a reconnect that hangs rather than being refused
+delays the decision to its end; the Simulators refuse at once. Not run on a phone.
+
+| site | what it said | what it says now |
+|---|---|---|
+| `app` `LobbyOverTransport` | (nothing) | `onHouseLost` after the window, `onHouseBack` at the seating that answers it; `HOUSE_GONE_AFTER_MILLIS` |
+| `app` `HouseGone` (new), cheats `CheatRoot` | (nothing) | the walk to `Disconnect` and back |
+| `HouseGoneTest` (new) | | a host that fails: every guest on the disconnect screen after the window and not before; a lock inside the window walks nobody; a long lock walks them there and back |
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).
