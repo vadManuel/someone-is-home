@@ -5851,6 +5851,84 @@ already feeds it at −20); it only means a real reading at −40 is no longer o
 | `SwitchboardRadioTest` | (none) | a new test pins 100 ms, ten restarts in ten cycles, and the 10 s / 2 s / 2 s durations |
 | `app` cheats `SimulatedAir`, `tools/one-phone/README.md`, `ble-unit4-device-check.md` | −35, 250 ms | −40, 100 ms |
 
+## Revision 62 — the owner's list from two real iPhones: ARMED on every phone, the line above the keyboard, no Perms screen when nothing is missing, and two quieter holds
+
+*2026-11-16. Found on real iPhones by the owner. Two bugs and four improvements; one is answered
+with a recommendation rather than a change.*
+
+### D-234 · **The house's opening push walks every seated phone to PERIMETER ARMED, the host's included, and the host no longer walks itself — built (amends D-226)**
+
+**Found:** after LIGHTS OUT the host's phone said PERIMETER ARMED and the guests' did not. **Cause:**
+D-226 handed the walk to `armAtLightsOut`, which called it on the host alone, on the house's yes.
+Nothing the house sent walked anybody else: `RoundMessage.OpeningMessage`, which every seat is sent
+once at arming, raised the opening banner (`Notify`), so a guest went from the lobby straight to the
+springboard. The host, already on ARMED (a screen the house drives), dropped that banner. Two
+phones, two different first frames of the round.
+
+**The ruling.** `OpeningMessage` arriving on a phone that stands in the lobby or on its one-line
+screen (`Flow.seatedBeforeArming`) pushes ARMED; anywhere else it is the banner, as before (a phone
+the house is catching up after a gap). `armAtLightsOut` loses its `armed` parameter and `CheatRoot`
+calls no walk: the host's own seat is sent the same push over its loopback socket, so every phone
+reaches ARMED by one path, in the same frame, whatever its role (rule 1). D-226's other half
+stands: a refused press sends nothing and moves nothing. With no house behind `FlowModel` (renders,
+the desktop preview) the seam's default still walks at once. No wire member, effect, schema row or
+recording format changes: the message already reached every seat.
+
+**Raised, not decided:** the opening banner (D-118/D-119's heavy notification) is now drawn at
+arming on no phone. The host never saw it before this either, and the role reveal is unchanged on
+its thread in Messages. If the banner should follow ARMED, it would arrive on a tap (CONTINUE),
+which D-102 says does not buzz and D-119 says dims the house at one moment for everybody; that is
+the owner's to rule.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `ui` `FlowModel.houseSaid` | `OpeningMessage` → the banner | `roundOpened`: ARMED from the lobby or the one-line screen, the banner elsewhere |
+| `ui` `Flow` | (none) | `seatedBeforeArming` = `Lobby`, `Secret` |
+| `app` `armAtLightsOut` | `armed()` on a yes | no walk; the push is the walk |
+| `app` cheats `CheatRoot` | `armed = armed` | the seam's walk not called |
+| `ArmedForEveryPhoneTest` (new) | (none) | three phones on loopback with the real link, desk and authority: LIGHTS OUT puts ARMED on every guest (one of them on the one-line screen) and on the host, by the push; a refused press moves nobody and sends no opening |
+| `HostArmingTest` | the host walked on `armed` | the press walks nothing; the host's own push walks it; a refusal sends no opening |
+
+### D-235 · **The line stays above the keyboard, the Perms screen is skipped when the OS grants everything, and the lobby's holds carry no helper text — built**
+
+1. **The keyboard** (bug). The owner could not see the one line they were typing. `PanelInsets`
+   gains `keyboard`, read from `WindowInsets.ime`; `PanelFrame` ends the content at the taller of
+   the home bar and the keyboard, on every screen with a field. On the one-line screen that left
+   about 470 of a 13 Pro's 780 units, and the field, the one weighted block, was squeezed to
+   nothing (rendered), so **while the keyboard is up the caption and the two promise rows step
+   aside**: the header, the headline, the field and HAND IT OVER stay, and the line can be handed
+   over without closing the keyboard. The promises are read before typing begins and are back when
+   the keyboard goes down. The iOS view controller's own nudge toward a focused field is switched
+   off (`OnFocusBehavior.DoNothing`), so one rule moves the screen and the layout a test renders is
+   the layout the phone draws. ⚠️ Rendered and tested with the keyboard's inset passed in by hand
+   (336 pt on a 13 Pro); not yet seen on a phone.
+2. **The Perms screen is skipped** when, at the moment the self-test falls through, the OS answers
+   every row (`PermsModel.missingNow()`, the fresh read the lobby's gate asks). D-161 is unchanged:
+   the gate is still at setup, in the light; any row missing, or not answered yet, shows the screen;
+   the lobby still refuses a seat on the OS's own answer. Asked when the timer fires, not when the
+   self-test is drawn, because Notifications answers through a callback that lands after launch.
+3. **LIGHTS OUT** loses HOLD THE BUTTON FOR TWO SECONDS and KEEP HOLDING: the bar under the thumb says
+   both. The inert button's reason (NEEDS n RESIDENTS, WAITING FOR EVERYONE'S LINE) stays, because it
+   answers *why will it not start* (D-226), and its line is held empty once the gate opens so the
+   block under the host's thumb does not move.
+4. **CLOSE THE HOUSE / LEAVE THIS HOUSE** lose their notes, and a guest's LEAVE THIS LOBBY is now
+   LEAVE THIS HOUSE, the owner's words.
+5. **The PLAYTEST chip stays.** It opens the cheat picker: a jump to any screen, the role switch,
+   and the transport rig's log, the haptic bench and the camera bench, which nothing else reaches.
+   `e2e.sh`'s human-mock taps it (`variant-marker`) to get past the permissions walk the Simulator
+   cannot complete, and the playtest variant's definition is a permanent visible marker. The
+   one-phone and two-phone tooling does not use it. It is compiled out of release already.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `ui` `PanelInsets`, `platformInsets` | top, bottom, side | `keyboard`, from `WindowInsets.ime` |
+| `ui` `PanelFrame` | content ends at the home bar | at the taller of the home bar and the keyboard |
+| `ui` `SecretScreen` | caption and promises always | not while the keyboard is up |
+| `app` `Entry.ios.kt` | the default focus behaviour | `OnFocusBehavior.DoNothing` |
+| `ui` `FlowModel.fallThrough`, `FlowHost` | Boot always to Perms | to Join when nothing is missing |
+| `ui` `LightsOut`, `LobbyExit` | notes under both; LEAVE THIS LOBBY | the inert button's reason only; LEAVE THIS HOUSE |
+| `KeyboardLayoutTest`, `PermsSkipTest` (new); `LobbyInputTest` | (none); KEEP HOLDING read as the bar | the field and HAND IT OVER above a 310-unit keyboard; skipped only when every row is open, row by row; the bar read off its own progress; the two holds' words |
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).
