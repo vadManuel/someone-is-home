@@ -80,6 +80,17 @@ subprojects {
             )
         }
         tasks.matching { it.name == "check" }.configureEach { dependsOn(cordon) }
+
+        // **And the one launch read the cheats may not make freely** (R4, D-240): the round seed's
+        // switch, read only inside `RoundCheat.benchSeed` and only behind the bench's own switch.
+        // The app root answers a real LIGHTS OUT from `src/cheats/`, so the cordon above cannot see
+        // the press, and until D-240 the press read the seed on every launch.
+        val benchSeed = tasks.register<BenchSeedCordonTask>("benchSeedCordon") {
+            group = "verification"
+            description = "Fails if the cheats read the round seed's switch outside the bench's gate."
+            sources.from(layout.projectDirectory.dir("src/cheats"))
+        }
+        tasks.matching { it.name == "check" }.configureEach { dependsOn(benchSeed) }
     }
 
     // **The seed-source cordon (D-215).** Every secret in a round is an HMAC keyed by the round's

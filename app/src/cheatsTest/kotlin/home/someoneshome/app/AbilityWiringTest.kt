@@ -24,7 +24,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
@@ -126,11 +125,11 @@ class AbilityWiringTest {
 
         val link = LobbyOverTransport(
             scope, onEvent = { log += it; lines.lobby(it) }, seat = Kept(),
-            // `CheatRoot`'s doors, exactly.
-            onIntent = { intent -> scope.launch { house()?.heard(intent) } },
-            onEgressFired = { actor -> scope.launch { house()?.fireEgress(actor) } },
-            onSighted = { seat, upload -> scope.launch { house()?.sighted(seat, upload) } },
-            onRadioFaulted = { seat, cause -> scope.launch { house()?.radioFaulted(seat, cause) } },
+            // `CheatRoot`'s doors, exactly: `HouseDoors`, awaited (D-241).
+            onIntent = HouseDoors(house)::heard,
+            onEgressFired = HouseDoors(house)::fired,
+            onSighted = HouseDoors(house)::sighted,
+            onRadioFaulted = HouseDoors(house)::faulted,
             round = round, wake = wake, advertising = bonjour,
         )
         val model = LobbyModel(link = link).also { it.nameResident(name) }

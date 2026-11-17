@@ -938,14 +938,24 @@ class RoundCheat(
         const val ROUND_SWITCH = "SOMEONES_HOME_ROUND"
 
         /**
-         * The arming seed, so a rehearsal can be replayed. Defaulted, never random.
+         * The arming seed, so a rehearsal can be replayed.
          *
-         * ⚠️ **It reaches the round through the app root and never through this class.** Arming is
-         * production's, and the production path may read no launch environment at all — so a
-         * process launched with nothing draws a real seed, and a rehearsal that wants a repeatable
-         * evening names one here for the root to hand over. See `armingCordon`.
+         * ⚠️ **Read by [benchSeed] and by nothing else, and only on a bench launch** (R4, D-240). It
+         * is honoured only beside [ROUND_SWITCH] or [BY_HAND_SWITCH]; alone it is never even read.
+         * `round.sh` sets it by default and its README says which seat that seed makes the Insider,
+         * so a phone that honoured it on its own would deal a published answer key to anyone
+         * holding a phone a launcher had once touched. `benchSeedCordon` fails the build on any
+         * other read of it in the cheats.
          */
         const val SEED_SWITCH = "SOMEONES_HOME_ROUND_SEED"
+
+        /**
+         * **A bench launch whose round the owner plays by hand** (`round.sh start --by-hand`): no
+         * script runs on this phone, but it is still the bench's, so [benchSeed] honours the named
+         * seed and the Mac's peer can derive every seat's token (D-240). A phone a person launches
+         * from the springboard carries neither this nor [ROUND_SWITCH].
+         */
+        const val BY_HAND_SWITCH = "SOMEONES_HOME_ROUND_BY_HAND"
 
         /** Which published Egress node this bench walks to. Absent means this seat does not go. */
         const val NODE_SWITCH = "SOMEONES_HOME_ROUND_NODE"
@@ -973,8 +983,28 @@ class RoundCheat(
          * **The draw is [drawRoundSeed], the platform's secure source** (D-215). It was
          * `kotlin.random.Random.nextLong()`, which is a seeded generator with a published
          * algorithm, and every secret in the round is an HMAC under this value (D-214).
+         *
+         * **A named seed is a bench's only** (R4, D-240): see [benchSeed]. [read] is the launch
+         * environment; a test hands a map.
          */
-        fun seed(): Long = launchValue(SEED_SWITCH)?.toLongOrNull() ?: drawRoundSeed()
+        fun seed(read: (String) -> String? = ::launchValue): Long = benchSeed(read) ?: drawRoundSeed()
+
+        /**
+         * **The seed the bench named, or null: the one read of [SEED_SWITCH]** (R4, D-240).
+         *
+         * Null unless this process is a bench launch, [ROUND_SWITCH] or [BY_HAND_SWITCH]; and on a
+         * launch that is neither, [SEED_SWITCH] is **not read at all**, so no value it holds can
+         * reach a round. Until D-240 a real LIGHTS OUT read it on its own: `round.sh` sets it by
+         * default, and its README publishes which seat that seed makes the Insider.
+         *
+         * Also what decides whether the house's ability lines may name a seat: only a round whose
+         * seed the Mac already holds may (D-237).
+         */
+        fun benchSeed(read: (String) -> String? = ::launchValue): Long? {
+            val bench = read(ROUND_SWITCH) != null || read(BY_HAND_SWITCH) != null
+            if (!bench) return null
+            return read(SEED_SWITCH)?.toLongOrNull()
+        }
 
         private const val STEP_MILLIS = 400L
         private const val SETTLE_MILLIS = 1_500L

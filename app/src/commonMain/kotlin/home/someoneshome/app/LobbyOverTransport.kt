@@ -266,7 +266,7 @@ class LobbyHouse(
      * (E-D3-3's remaining half). What is joined here is `core`'s `admit(state, intent, at)` — the
      * one gate, which the in-process source reaches by the same call.
      */
-    private val onIntent: (Intent) -> Unit = {},
+    private val onIntent: suspend (Intent) -> Unit = {},
     /**
      * **A phone held its Egress tile down** ([RoundBody.Fire], E-P2-5 / E-P3-7).
      *
@@ -278,7 +278,7 @@ class LobbyHouse(
      * [Seat] is the connection's, stamped by [IntentDesk] exactly as an intent's actor is. A client
      * has no way to name one — see [RoundBody.Fire], which carries nothing but its sequence.
      */
-    private val onEgressFired: (Seat) -> Unit = {},
+    private val onEgressFired: suspend (Seat) -> Unit = {},
     /**
      * **What one phone's radio heard, on its way to the contact resolver** ([RoundBody.Sighted],
      * D-212, D-217).
@@ -289,7 +289,7 @@ class LobbyHouse(
      * holds. `RoundAuthority.sighted` is what fills it. The seat is the connection's, exactly as a
      * request's actor is; the upload carries none and has nowhere to put one.
      */
-    private val onSighted: (Seat, RoundBody.Sighted) -> Unit = { _, _ -> },
+    private val onSighted: suspend (Seat, RoundBody.Sighted) -> Unit = { _, _ -> },
     /**
      * **A phone saying its radio went down, and why** ([RoundBody.RadioFaulted], T2, D-222; D-223).
      *
@@ -298,7 +298,7 @@ class LobbyHouse(
      * recorded and named nowhere (D-187). The seat is the connection's; the body carries the cause
      * and nothing else.
      */
-    private val onRadioFaulted: (Seat, RadioCause) -> Unit = { _, _ -> },
+    private val onRadioFaulted: suspend (Seat, RadioCause) -> Unit = { _, _ -> },
     /** What puts the home on the air. [DeviceAdvertising] in every production construction. */
     private val advertising: Advertising = DeviceAdvertising,
 ) {
@@ -773,6 +773,11 @@ class LobbyHouse(
      *
      * One coroutine, draining in order, forever. Everything it does suspends — the desk takes a
      * lock, the rules are the caller's — so the whole point is that it does them one at a time.
+     *
+     * **And the four seams are `suspend` and awaited, which is what makes "one at a time" true**
+     * (R6, D-241). They were plain functions, and the app root's bodies launched a coroutine each
+     * and returned, so this loop took the next arrival while the last was still pushing: the queue
+     * was ordered and the rules were not. See [HouseDoors].
      */
     private suspend fun attend() {
         for (arrival in arriving) {
@@ -1017,17 +1022,17 @@ class LobbyOverTransport(
      * the host. See [LobbyHouse.onIntent] — it is empty in every production construction, because
      * the round it would change does not exist yet.
      */
-    private val onIntent: (Intent) -> Unit = {},
+    private val onIntent: suspend (Intent) -> Unit = {},
     /**
      * **What this phone does when another phone holds its Egress tile down**, when this phone is
      * the host. [LobbyHouse.onEgressFired], threaded through — see there for why it is a seam of
      * its own rather than another [Intent].
      */
-    private val onEgressFired: (Seat) -> Unit = {},
+    private val onEgressFired: suspend (Seat) -> Unit = {},
     /** [LobbyHouse.onSighted], threaded through: what another phone's radio heard (D-217). */
-    private val onSighted: (Seat, RoundBody.Sighted) -> Unit = { _, _ -> },
+    private val onSighted: suspend (Seat, RoundBody.Sighted) -> Unit = { _, _ -> },
     /** [LobbyHouse.onRadioFaulted], threaded through: another phone's radio went down (T2, D-222; D-223). */
-    private val onRadioFaulted: (Seat, RadioCause) -> Unit = { _, _ -> },
+    private val onRadioFaulted: suspend (Seat, RadioCause) -> Unit = { _, _ -> },
     /**
      * **The round's client half, on this phone's one socket.** Null in every production
      * construction — nothing arms a round yet. See [RoundSeam].

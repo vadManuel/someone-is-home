@@ -187,22 +187,26 @@ fun CheatRoot() {
     // Held in a named val because the round is armed off the house behind it: `armingInputs` is
     // what LIGHTS OUT reads and `emit` is the authority's only exit to the phones. Every other
     // caller in this file still reaches it as a `LobbyLink` and cannot see either.
+    // **The four doors, awaited** (R6, D-241). Each one used to be `scope.launch { … }`, a coroutine
+    // per arrival, so the arrival queue took the next upload while the last was still pushing and two
+    // touches' halves interleaved. `HouseDoors` suspends until the rules are done.
+    val doors = remember { HouseDoors { rules.value } }
     val link = remember {
         LobbyOverTransport(
             scope, onEvent = radio, onInbound = watch::saw,
             // **The one door a request from another phone comes in by.** It only ever fires on the
             // phone that is hosting, because that is the only phone frames arrive at.
-            onIntent = { intent -> scope.launch { rules.value?.heard(intent) } },
+            onIntent = doors::heard,
             // **The other door, and the Egress's finger comes in by it** (E-P2-5 / E-P3-7 closed).
             // `fireEgress` makes the house's draw against the home's shape and then mints, which is
             // two steps where `heard` is one — the reason the request has a frame of its own.
-            onEgressFired = { actor -> scope.launch { rules.value?.fireEgress(actor) } },
+            onEgressFired = doors::fired,
             // **The third door: what another phone's radio heard** (D-217). The house judges it
             // with the resolver and puts whatever it concludes to the rules.
-            onSighted = { seat, upload -> scope.launch { rules.value?.sighted(seat, upload) } },
+            onSighted = doors::sighted,
             // **The fourth: a phone saying its radio went down, and why** (T2, D-222; D-223). A
             // person's act is named to the room at the next meeting; a reset is recorded only.
-            onRadioFaulted = { seat, cause -> scope.launch { rules.value?.radioFaulted(seat, cause) } },
+            onRadioFaulted = doors::faulted,
             round = seam,
             // **The host said the round is over** (D-157, E-R2-10). The transport has already reset
             // this phone's inbox by the time this runs; what is left is the screen answer, which is
@@ -313,8 +317,11 @@ fun CheatRoot() {
             // nothing — which is exactly how the owner lost an evening after force-quitting the
             // app to fix their name and losing the switch with it (E-PAY-7).
             //
-            // **No launch switch is read on this path.** `armingCordon` scans `app/commonMain` and
-            // fails the build on one, and the seed below draws for real when nobody named one.
+            // **A person's press reads no launch switch for the seed** (R4, D-240). `armingCordon`
+            // keeps every read out of `app/commonMain`; this lambda is in the cheats, and until
+            // D-240 it read `SOMEONES_HOME_ROUND_SEED` on every press. Now `lightsOutPressed` asks
+            // `RoundCheat.seed`, which reads the seed switch only beside a bench switch and draws
+            // for real otherwise; `benchSeedCordon` keeps every other read of it out of the cheats.
             //
             // `rules.value` is filled the line the authority is built, a few lines down — this
             // lambda is not called until a thumb reaches a live button, which is a whole lobby
@@ -329,18 +336,13 @@ fun CheatRoot() {
             onLightsOut = { _ ->
                 val house = rules.value
                 scope.launch {
-                    if (house == null) {
-                        println("[house] LIGHTS OUT — NO RULES ON THIS PHONE YET")
-                        return@launch
-                    }
-                    armAtLightsOut(
+                    lightsOutPressed(
                         house = house,
                         // Read off the panel holder for `meeting.names`' reason one field up: this
                         // lambda is handed to the model being built on this line, so it cannot
                         // name it directly. `hosting` is the lobby's own answer, asked at the
                         // instant of the press.
                         hosting = panel.value?.lobby?.hosting == true,
-                        seed = RoundCheat.seed(),
                         note = lines::house,
                     )
                 }
@@ -408,10 +410,12 @@ fun CheatRoot() {
             // long, or REFUSED and why. Stdout only, which `round.sh` keeps as `phone.log`, and
             // deliberately NOT the rig's log, which the TRANSPORT bench draws on this phone's screen.
             abilityLog = lines::house,
-            // The seat is named only when the launch handed in the round's seed: the Mac then holds
-            // the seed already, and `insidersFor` redraws every Insider from it, so the seat in the
-            // line tells it nothing it could not compute. Every other launch prints `A SEAT`.
-            namesSeats = launchValue(RoundCheat.SEED_SWITCH) != null,
+            // The seat is named only when the round is armed with the bench's seed: the Mac then
+            // holds the seed already, and `insidersFor` redraws every Insider from it, so the seat in
+            // the line tells it nothing it could not compute. Every other launch prints `A SEAT`.
+            // **The same question the arming asks** (D-240): until D-240 this read the seed switch
+            // alone, which after D-240 would name the Insider of a round drawn for real.
+            namesSeats = RoundCheat.benchSeed() != null,
             note = lines::house,
         ).also { rules.value = it }
     }
@@ -733,6 +737,29 @@ fun CheatRoot() {
  * site is worth more than a comment saying the composable will catch it.
  */
 internal fun standsInForTheHouse(houseAttached: Boolean): Boolean = !houseAttached
+
+/**
+ * **The host's LIGHTS OUT, as `CheatRoot` answers it: the seed, then [armAtLightsOut]** (R4, D-240).
+ *
+ * Pulled out of the composable for [standsInForTheHouse]'s reason: a rule inside a lambda is a rule
+ * nothing can check, and this one was wrong. The press read `SOMEONES_HOME_ROUND_SEED` whatever else
+ * the launch held, `round.sh` sets it by default, and its README says which seat that seed makes the
+ * Insider. **The seed is now [RoundCheat.seed]'s, which reads the switch only on a bench launch and
+ * draws for real otherwise.** [read] is the launch environment; `LightsOutSeedTest` hands a recorder
+ * and asserts that a press on a launch with no bench switch never asks for the seed at all.
+ */
+internal suspend fun lightsOutPressed(
+    house: RoundAuthority?,
+    hosting: Boolean,
+    note: (String) -> Unit,
+    read: (String) -> String? = ::launchValue,
+): Boolean {
+    if (house == null) {
+        println("[house] LIGHTS OUT — NO RULES ON THIS PHONE YET")
+        return false
+    }
+    return armAtLightsOut(house = house, hosting = hosting, seed = RoundCheat.seed(read), note = note)
+}
 
 internal fun inRoundScan(payload: String): IntentMessage? =
     when (val read = CardPayload.decode(payload)) {

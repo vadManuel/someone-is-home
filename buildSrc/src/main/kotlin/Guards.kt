@@ -118,6 +118,28 @@ abstract class ArmingCordonTask : SourceGuardTask() {
 }
 
 /**
+ * Bench-seed cordon (R4, D-240).
+ *
+ * *"A phone a person plays gets a secure seed."* Scans `app`'s cheat source set, where the app root
+ * answers LIGHTS OUT, and fails on any read of the round seed's launch switch outside the one gate.
+ */
+abstract class BenchSeedCordonTask : SourceGuardTask() {
+    @TaskAction
+    fun check() = scan(
+        name = "benchSeedCordon",
+        rule = BenchSeedRules::violations,
+        advice = buildString {
+            appendLine("The round seed's switch is read by RoundCheat.benchSeed and by nothing else,")
+            appendLine("and only on a bench launch (ROUND_SWITCH or BY_HAND_SWITCH). round.sh sets the")
+            appendLine("seed by default and its README says which seat it makes the Insider, so a read")
+            appendLine("anywhere else is a published answer key on a phone somebody is playing.")
+            appendLine()
+            appendLine("Ask RoundCheat.seed() or RoundCheat.benchSeed() instead.")
+        },
+    )
+}
+
+/**
  * Seed-source cordon (D-215).
  *
  * *"A round's seed comes from the platform's secure source."* Scans every source set of `app` and

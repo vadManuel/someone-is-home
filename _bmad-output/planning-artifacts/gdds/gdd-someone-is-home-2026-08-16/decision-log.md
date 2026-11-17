@@ -6212,6 +6212,105 @@ rehearsal with the bench's single hold has not been run.
 | `AbilityWiringTest` | a refused arm echoes ARMED | an early hold sends the same request and shows no ARMED; a hold after the public clock shows ARMED and the touch lands, for a guest and the host |
 | `PublicCooldownTest` (`ui`, new) | (none) | the two roles' page 2 equal at every public moment; the early hold sends and does not echo; the lengths are `Balance`'s plus the pad |
 
+## Revision 67 — three review findings: the bench's seed on a person's press, the arrival queue's order, and the out named for evasion
+
+*2026-11-16. Findings R4, R6 and R7 of the read-only review of `67f3313..b35bba3`.*
+
+### D-240 · **A person's LIGHTS OUT never reads the bench's seed; the seed switch is honoured only beside a bench switch — built**
+
+**The bug.** `CheatRoot` answered the host's press with `RoundCheat.seed()`, which read
+`SOMEONES_HOME_ROUND_SEED` whenever it was set. `round.sh` sets it by default (20261150), and
+`tools/one-phone/README.md` says that seed deals the Insider role to seat 0. `armingCordon` scans
+`app/src/commonMain` only, and the press is answered in `app/src/cheats`, so the KDoc there that said
+*no launch switch is read on this path* was false. The house's ability lines (D-237) also named seats
+whenever the seed switch alone was set.
+
+1. **`RoundCheat.benchSeed` is the one read of the seed switch.** It returns the named seed only on a
+   bench launch, one that also holds `SOMEONES_HOME_ROUND` (the scripted phone and every Simulator) or
+   `SOMEONES_HOME_ROUND_BY_HAND` (new, below). On any other launch it **does not read the seed switch
+   at all**. `seed()` is `benchSeed() ?: drawRoundSeed()`. The press is `lightsOutPressed`
+   (`Cheats.kt`), pulled out of the composable so a test can hand it the launch environment, and
+   `namesSeats` asks the same `benchSeed()`, so a round drawn for real never has its Insider's seat in
+   a log line.
+2. ⚠️ **`--by-hand` is still a bench launch.** It used to drop `SOMEONES_HOME_ROUND` and keep the seed,
+   and the README's rounds A and D need the seed (`ble-peer sniff --round-seed 20261150`, `= SEAT 0`).
+   So `round.sh start --by-hand` now sets `SOMEONES_HOME_ROUND_BY_HAND=1`, which honours the seed and
+   runs no script. **For the owner to weigh:** a two-phone session whose host is launched with
+   `--by-hand` still deals the README's Insider to that host. A phone opened from the Home Screen
+   carries no switch, so it always draws a secure seed.
+3. **`benchSeedCordon`** (new, under `check`): in `app/src/cheats` the seed switch may be named only by
+   its own declaration and inside `fun benchSeed`, whose body must name `ROUND_SWITCH` before it names
+   the seed.
+
+| site | what it said | what it says now |
+|---|---|---|
+| `app` cheats `RoundCheat.seed` | the seed switch, on any launch | `benchSeed() ?: drawRoundSeed()`; `benchSeed` reads it only beside a bench switch |
+| `app` cheats `CheatRoot` `onLightsOut`, `namesSeats` | `RoundCheat.seed()`; the seed switch alone | `lightsOutPressed`; `benchSeed() != null` |
+| `tools/one-phone/round.sh` `--by-hand` | no `ROUND`, the seed | `ROUND_BY_HAND`, the seed |
+| `build.gradle.kts`, `buildSrc` | `armingCordon` over production only | and `benchSeedCordon` over `src/cheats` (`BenchSeedRulesTest`) |
+| `LightsOutSeedTest` (new) | (none) | a press with the seed alone, or nothing, never asks for the seed switch and arms another seed; `ROUND` and `ROUND_BY_HAND` arm the named one |
+
+### D-241 · **The arrival queue awaits the rules, and the house takes one reduction at a time — built**
+
+**The bug.** `LobbyHouse.attend` is the one consumer of every arrival, and `CheatRoot`'s four doors
+were `scope.launch { rules.value?.sighted(…) }`: a coroutine per arrival, so the queue took the next
+arrival while the last was still pushing. `RoundAuthority.sighted` pushes between the two halves of a
+touch, and a second touch reduced in that gap replaced `GameState.touches` (it keeps the current
+tick's only), so the first touch's second half was taken for a fresh touch and **both of its phones
+were answered twice** (T1, D-220), with two reductions' effects interleaved on the wire. Measured with
+the fix removed: eight phones in seven rounds of four simultaneous touches were answered 8 to 10
+times each for 7 touches.
+
+1. **The four seams are `suspend`, and `attend` awaits them.** `HouseDoors` is the doors, built by
+   `CheatRoot` and by every test that stands up a host, so a test cannot pass on doors the app lacks.
+2. **`RoundAuthority` takes one reduction at a time** (a lock held by `arm`, `heard`, `mint`,
+   `sighted`, `radioFaulted` and `fireEgress`), because the queue is not its only caller: the tick
+   driver mints from its own coroutine and the bench from its own. `push` is handed its reduction's
+   own state; it read the property per effect, so a late effect was classified against a newer state.
+3. ⚠️ **Reasoned, not observed, on the real send.** With the fix removed and nothing else changed, the
+   loopback test **passed**: in that run no send suspended, so nothing interleaved. The test's `emit`
+   yields before it writes, as a real send does when a socket's buffer is full or the host's lock is
+   held; with that yield it fails without the fix. Whether phones ever hit the window is unmeasured;
+   the fix removes it either way.
+4. **Cost:** an arrival waits for the previous one's pushes. At one upload a second per phone that is
+   well inside a second; not measured on a phone.
+
+| site | what it said | what it says now |
+|---|---|---|
+| `app` `LobbyHouse` / `LobbyOverTransport` | four plain seams | four `suspend` seams, awaited by `attend` |
+| `app` cheats `CheatRoot` | a launch per arrival | `HouseDoors` (new, `app/commonMain`) |
+| `app` `RoundAuthority` | any caller reduces any time; `push` read `state` per effect | one reduction at a time; `push(effects, after)` |
+| `AbilityWiringTest`, `ArmedForEveryPhoneTest`, `SubroutineQuestionWiringTest`, `EvasionNoticeTest` | copied the launching doors | `HouseDoors` |
+| `ArrivalOrderTest` (new) | (none) | eight phones over loopback, every pair touching once in seven rounds of four at once: one answer per toucher per touch, no effect sent against a newer state, each phone's stream equal to the house's deliveries in order; and concurrent callers on the authority alone |
+
+### D-242 · **A seat that is out is never named for evasion; its phone still sends the same report — built, provisional, owner to confirm**
+
+**The bug.** `ContactUploader.leftTheForeground` checks only that the phone holds a seed, and
+`onTheNotice` (`core` `Rules.kt`) took any seated seat. So a Revoked or Restrained player who locked
+their dark phone was named at the next meeting. D-187 is about living players hiding from the house.
+
+**⚠️ The provisional call (owner to confirm): the house neither lists nor names a seat that is out.**
+`onTheNotice` refuses a seat that is out, and the check-in gate's `NoticeIssued` leaves out any seat
+that is out by then, so a seat listed while living and Revoked before the meeting is not named either.
+**The phone is unchanged, and that is rule 1:** an out phone that leaves the foreground still sends
+`RadioFaulted(Person)` on its return, the same bytes a living phone sends. A phone that stayed quiet
+because it is out would put one frame fewer on the Wi-Fi, and the missing frame would say who is out.
+The report is admitted and recorded, and moves nothing.
+
+Open for the owner: (a) whether a seat that evaded while living and is out by the meeting should still
+be named (built: it is not); (b) reasoned, not checked against play: the notice arrives at the
+meeting, where the out are already known to the room (D-134's STAND AND WALK IN), so leaving them off
+tells nobody anything. No event, effect or wire member changes, so the recording format does not; a
+recording in which an out seat reported now replays to a shorter notice.
+
+| site | what it said | what it says now |
+|---|---|---|
+| `core` `onTheNotice` | any seated seat | any seated seat that is not out |
+| `core` the check-in gate's `NoticeIssued` | every listed seat | every listed seat not out by the gate |
+| `app` `ContactUploader` | (unchanged) | KDoc: why an out phone still reports |
+| `RadioFaultTest` | (none) | an out seat's report is admitted, reaches nobody, lists nothing; listed while living and out by the gate is not named, a living one still is |
+| `EvasionNoticeTest` | three seats | and four: a Revoked guest and a living guest both lock; the same body from both, only the living one listed and named |
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

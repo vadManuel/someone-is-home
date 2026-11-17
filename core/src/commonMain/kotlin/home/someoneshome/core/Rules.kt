@@ -1091,8 +1091,9 @@ private fun contact(state: GameState, event: Event.ContactMade): Reduction<GameS
  *
  * **No effect, in either case, to anybody**, which is what keeps the two from being told apart now
  * (rule 1): the phone's own screen does not move (rule 6), no other phone hears of it until the
- * room does, and the same is true whoever reported it. A seat not in the round, or one already on
- * the list, changes nothing: the list is the house's seats, each once, in seat order.
+ * room does, and the same is true whoever reported it. A seat not in the round, one already on the
+ * list, or one that is out (R7, D-242) changes nothing: the list is the house's living seats, each
+ * once, in seat order.
  */
 private fun radioFaulted(state: GameState, event: Event.RadioFaulted): Reduction<GameState, Effect> {
     val next = if (namedByTheNotice(event.cause)) onTheNotice(state, event.seat) else state
@@ -1108,11 +1109,18 @@ fun namedByTheNotice(cause: RadioCause): Boolean = when (cause) {
     RadioCause.Device -> false
 }
 
-/** [seat] on the next notice's list, once, in seat order; a seat not in the round changes nothing. */
+/**
+ * [seat] on the next notice's list, once, in seat order; a seat not in the round changes nothing.
+ *
+ * **Nor does a seat that is out** (R7, D-242, provisional, owner to confirm). D-187 names a living
+ * player who hides from the house; a Revoked or Restrained player has nothing left to hide from it.
+ * Their phone still sends the same body when it locks (rule 1: what goes up does not change with
+ * being out), and the house keeps the seat off the list here, where nobody but the house can see.
+ */
 private fun onTheNotice(state: GameState, seat: Seat): GameState {
     val seated = state.seats.any { it.index == seat.index }
     val listed = state.unreachable.any { it.index == seat.index }
-    return if (seated && !listed) {
+    return if (seated && !listed && !state.isOut(seat)) {
         state.copy(unreachable = (state.unreachable + seat).sortedBy { it.index })
     } else {
         state
@@ -1424,7 +1432,9 @@ private fun checkedIn(state: GameState, event: Event.MeetingCheckedIn): Reductio
                 // is the gate closing, which the whole room already knows, and its content is the
                 // same on every phone. Ahead of the phase push so that a phone is holding it when
                 // that push moves it to the notices screen.
-                Effect.NoticeIssued(unreachable = state.unreachable),
+                // **And nobody who is out by now** (R7, D-242, provisional): a seat listed while it
+                // was living and Revoked or Restrained since is not named either.
+                Effect.NoticeIssued(unreachable = state.unreachable.filterNot { state.isOut(it) }),
                 Effect.MeetingPhaseOpened(
                     MeetingPhase.Discussion,
                     voteWindowSeconds = null,

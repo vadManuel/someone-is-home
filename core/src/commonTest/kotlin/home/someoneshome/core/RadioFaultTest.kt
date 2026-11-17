@@ -131,6 +131,57 @@ class RadioFaultTest {
         )
     }
 
+    /** Seat 4 Revoked by the Insider at seat 1, past the opening half-cooldown. */
+    private fun revokeFour(start: GameState): GameState {
+        val insider = Seat(1)
+        tick = maxOf(tick, Balance.REVOKE_COOLDOWN / 2 + 1L)
+        val (revoked, _) = feed(start, Event.RevokeArmed(t(), insider), Event.ContactMade(t(), insider, Seat(4)))
+        assertTrue(revoked.isRevoked(Seat(4)), "the fixture never put anybody out")
+        return revoked
+    }
+
+    /**
+     * **GUARD (R7, D-242, provisional): a seat that is out is named by nobody.** D-187 is about the
+     * living hiding from the house. A Revoked player who locks their dark phone sends the same report
+     * a living one does (rule 1, on the phone); the house admits it, records it, moves nothing, and
+     * the next meeting's notice is the empty one.
+     */
+    @Test
+    fun aSeatThatIsOutIsNamedByNobody() {
+        tick = 0
+        val revoked = revokeFour(round(Seat(1)))
+        val admission = admit(revoked, Event.RadioFaulted(t(), Seat(4), RadioCause.Person))
+        assertTrue(admission is Admission.Admitted, "an out seat's report was refused, so it is not recorded: $admission")
+        assertEquals(emptyList(), admission.reduction.effects, "an out seat's report reached a phone")
+        assertTrue(admission.reduction.state.unreachable.isEmpty(), "an out seat was put on the notice's list")
+        val (_, got) = feed(admission.reduction.state, *meeting())
+        for (seat in seats) {
+            assertEquals(
+                listOf(Effect.NoticeIssued(emptyList())), notices(got).getValue(seat.index),
+                "the Revoked seat was named to seat ${seat.index} for locking its phone",
+            )
+        }
+    }
+
+    /** **GUARD (R7): listed while living, out by the gate, named by nobody** — and a living one still is. */
+    @Test
+    fun aSeatListedWhileLivingAndOutByTheMeetingIsNotNamed() {
+        tick = 0
+        val (listed, _) = feed(
+            round(Seat(1)),
+            Event.RadioFaulted(t(), Seat(4), RadioCause.Person),
+            Event.RadioFaulted(t(), Seat(2), RadioCause.Person),
+        )
+        assertEquals(listOf(2, 4), listed.unreachable.map { it.index })
+        val (_, got) = feed(revokeFour(listed), *meeting())
+        for (seat in seats) {
+            assertEquals(
+                listOf(Effect.NoticeIssued(listOf(Seat(2)))), notices(got).getValue(seat.index),
+                "seat ${seat.index} was not told exactly seat 2: the out seat 4 named, or the living seat 2 dropped",
+            )
+        }
+    }
+
     /** Rule 1: the notice is in every meeting's stream, so its presence is not the news. */
     @Test
     fun aMeetingWithNobodyUnreachableStillSendsTheNoticeEmpty() {

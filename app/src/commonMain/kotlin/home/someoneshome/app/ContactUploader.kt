@@ -143,6 +143,11 @@ class ContactUploader(
      * **This phone left the foreground: the onset of D-187's evasion, if it is in a round** (D-229).
      * True when it counted. Before arming and after the round there is no round to evade, and
      * nothing is marked.
+     *
+     * **A phone that is out marks it too, and that is rule 1** (R7, D-242). Whether a seat that is
+     * out is named is the house's question, and the house answers no (`onTheNotice`). A phone that
+     * stayed quiet on its return because it was out would put one frame fewer on the Wi-Fi than a
+     * living phone that did the same thing, and the missing frame would say who is out.
      */
     fun leftTheForeground(): Boolean {
         if (seed == null) return false

@@ -257,6 +257,65 @@ object ArmingCordonRules {
 }
 
 /**
+ * **The bench-seed cordon: in the cheats, the round seed's launch switch is read in one place, behind
+ * the bench's own switch** (R4, D-240).
+ *
+ * [ArmingCordonRules] keeps every launch read out of production, and a real LIGHTS OUT still read one:
+ * the press is answered in `src/cheats/` (the app root lives there), and it asked for
+ * `SOMEONES_HOME_ROUND_SEED` on every launch. `round.sh` sets that switch by default and its README
+ * says which seat the seed makes the Insider. So in the cheats the seed switch may be named only by
+ * its own declaration and inside the one gate, `fun benchSeed`, and that gate must name
+ * `ROUND_SWITCH` before it names the seed. Any other mention of the switch, by constant or by its
+ * literal, is a violation: a second read is a read nobody gated.
+ */
+object BenchSeedRules {
+
+    private val NAMES = Regex("""\bSEED_SWITCH\b|"SOMEONES_HOME_ROUND_SEED"""")
+    private val DECLARATION = Regex("""\bconst\s+val\s+SEED_SWITCH\s*=\s*"SOMEONES_HOME_ROUND_SEED"""")
+    private val GATE = Regex("""\bfun\s+benchSeed\s*\(""")
+    private val BENCH = Regex("""\bROUND_SWITCH\b""")
+
+    fun violations(source: String): List<Violation> {
+        val code = SourceText.blankComments(source)
+        val allowed = DECLARATION.findAll(code).map { it.range }.toMutableList()
+        val out = mutableListOf<Violation>()
+        for (gate in GATE.findAll(code)) {
+            val body = bodyAfter(code, gate.range.last) ?: continue
+            val bench = BENCH.find(code, body.first)?.takeIf { it.range.first in body }
+            val seed = NAMES.find(code, body.first)?.takeIf { it.range.first in body }
+            if (seed != null && (bench == null || bench.range.first > seed.range.first)) {
+                out += Violation(lineOf(code, seed.range.first), seed.value, "the gate reads the seed before it asks for ROUND_SWITCH")
+            }
+            allowed += body
+        }
+        NAMES.findAll(code).filter { m -> allowed.none { m.range.first in it } }.forEach { m ->
+            out += Violation(
+                lineOf(code, m.range.first), m.value,
+                "the round seed's switch is read outside `benchSeed` — a press on a phone a person launched " +
+                    "must never read it",
+            )
+        }
+        return out.sortedBy { it.line }
+    }
+
+    /** The braces of the body that opens after [from], matched; null when there is none. */
+    private fun bodyAfter(code: String, from: Int): IntRange? {
+        val open = code.indexOf('{', from)
+        if (open < 0) return null
+        var depth = 0
+        for (i in open until code.length) {
+            when (code[i]) {
+                '{' -> depth++
+                '}' -> if (--depth == 0) return open..i
+            }
+        }
+        return null
+    }
+
+    private fun lineOf(code: String, at: Int): Int = code.take(at).count { it == '\n' } + 1
+}
+
+/**
  * **The seed-source cordon: no seed and no seat token is drawn from `kotlin.random`** (D-215).
  *
  * Every secret in a round is an HMAC keyed by the round's seed (D-212, D-214): the Insider draw,

@@ -1,7 +1,9 @@
 package home.someoneshome.app
 
 import home.someoneshome.model.Event
+import home.someoneshome.model.InsiderAbility
 import home.someoneshome.model.Intent
+import home.someoneshome.model.Tick
 import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.RadioCause
 import home.someoneshome.model.Seat
@@ -118,8 +120,8 @@ class EvasionNoticeTest {
         val half = Half(scope, wake, log)
         val link = LobbyOverTransport(
             scope, onEvent = { log += it }, seat = kept,
-            // `Cheats.kt`'s fourth door, exactly: a phone's report, put to the rules.
-            onRadioFaulted = { seat, cause -> scope.launch { house()?.radioFaulted(seat, cause) } },
+            // `CheatRoot`'s fourth door, exactly: a phone's report, put to the rules and awaited (D-241).
+            onRadioFaulted = HouseDoors(house)::faulted,
             round = half, wake = wake, advertising = air,
         )
         val model = LobbyModel(link = link).also { it.nameResident(name) }
@@ -146,7 +148,10 @@ class EvasionNoticeTest {
         fun seatOf(phone: Phone): Seat = house.state.names.single { it.name == phone.name }.seat
     }
 
-    private fun evening(body: suspend CoroutineScope.(Room) -> Unit) = runBlocking {
+    private fun evening(
+        guestNames: List<String> = listOf("ROSE", "DANI"),
+        body: suspend CoroutineScope.(Room) -> Unit,
+    ) = runBlocking {
         val job = SupervisorJob(coroutineContext[kotlinx.coroutines.Job])
         val scope = CoroutineScope(coroutineContext + job)
         val phones = mutableListOf<Phone>()
@@ -163,12 +168,12 @@ class EvasionNoticeTest {
                 host.model.hostHome(home)
                 until("the host walked into its own lobby") { host.model.hosting && host.model.standing.joined == 1 }
                 val port = host.air.ports.single()
-                val guests = listOf("ROSE", "DANI").map { Phone(scope, it) { authority }.also { p -> phones += p } }
+                val guests = guestNames.map { Phone(scope, it) { authority }.also { p -> phones += p } }
                 guests.forEach { it.model.attachTo(NearbyHome(home.name, "127.0.0.1", port)) }
-                until("both guests were seated") { host.model.standing.joined == 3 }
+                until("every guest was seated") { host.model.standing.joined == 1 + guests.size }
                 val all = listOf(host) + guests
                 all.forEachIndexed { i, p -> p.handOver("line $i") }
-                until("every line reached the house") { host.model.standing.linesIn == 3 }
+                until("every line reached the house") { host.model.standing.linesIn == all.size }
                 scope.body(Room(all, authority, said))
             }.await()
         } finally {
@@ -246,6 +251,58 @@ class EvasionNoticeTest {
 
         room.meeting()
         room.assertNoticeNames(listOf(seat))
+    }
+
+    // ---- A seat that is out (R7, D-242, provisional) ---------------------------------------------------
+
+    /**
+     * **GUARD (R7): a Revoked phone that locks sends the same body a living phone sends, and nobody
+     * is told about it.** Four seats, so one Revoke does not end the round by parity. A Revoked guest
+     * and a living guest both leave the foreground and come back: both phones send the one fixed
+     * body (rule 1, nothing on the wire says which is out), the house writes down only the living
+     * one, and the next meeting names only the living one.
+     *
+     * The Revoke is minted at the house (`RevokeArmed`, both halves of a `ContactMade`): what is
+     * under test is what happens after a seat is out, and `AbilityWiringTest` is the Revoke's own
+     * end-to-end path from the tile.
+     */
+    @Test
+    fun aPhoneThatIsOutLocksAndIsNamedByNobody() = evening(listOf("ROSE", "DANI", "MARCUS")) { room ->
+        room.lightsOut()
+        room.beats(1)
+        val house = room.house
+        val insider = house.state.insiderSeats.single()
+        // Guests only: the host's own lock takes its house off the air, which is the test below.
+        val residents = house.state.livingPlainResidents.filter { it != room.seatOf(room.host) }
+        assertTrue(residents.size >= 2, "the fixture's draw left fewer than two guests who are plain Residents")
+        val (outSeat, livingSeat) = residents[0] to residents[1]
+        val out = room.all.single { room.seatOf(it) == outSeat }
+        val living = room.all.single { room.seatOf(it) == livingSeat }
+
+        house.advanceTo(house.state.cooldownFor(insider, InsiderAbility.Revoke)?.readyAt ?: Tick(0))
+        house.mint(Event.RevokeArmed(house.now(), insider))
+        val at = house.now()
+        house.mint(Event.ContactMade(at, insider, outSeat))
+        house.mint(Event.ContactMade(at, outSeat, insider))
+        assertTrue(house.state.isRevoked(outSeat), "the fixture never put anybody out")
+        assertTrue(!house.state.ended, "the Revoke ended the round, so nothing after it is measured")
+        until("the Revoked phone was told it is out") { out.half.pushed.any { it is RoundMessage.RevokeLanded } }
+
+        for (phone in listOf(out, living)) {
+            phone.link.backgrounded()
+            room.beats(1)
+            phone.link.foregrounded()
+        }
+        room.beats()
+        until("the house heard both reports") {
+            listOf(outSeat, livingSeat).all { seat -> room.said.any { it.startsWith("RADIO FAULT — SEAT ${seat.index} · PERSON") } }
+        }
+        assertEquals(listOf(personsReport), out.half.reports, "the Revoked phone's report was not the one fixed body, once")
+        assertEquals(out.half.reports, living.half.reports, "a Revoked phone's report differs on the wire from a living one's")
+        assertEquals(listOf(livingSeat), house.state.unreachable, "the house wrote down the seat that is out, or lost the living one")
+
+        room.meeting()
+        room.assertNoticeNames(listOf(livingSeat))
     }
 
     // ---- The host ------------------------------------------------------------------------------------

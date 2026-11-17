@@ -179,6 +179,53 @@ class ArmingCordonRulesTest {
     }
 }
 
+/** The bench-seed cordon (R4, D-240), checked the way the arming cordon is. */
+class BenchSeedRulesTest {
+
+    private val gate = """
+        const val SEED_SWITCH = "SOMEONES_HOME_ROUND_SEED"
+        fun benchSeed(read: (String) -> String? = ::launchValue): Long? {
+            val bench = read(ROUND_SWITCH) != null || read(BY_HAND_SWITCH) != null
+            if (!bench) return null
+            return read(SEED_SWITCH)?.toLongOrNull()
+        }
+    """.trimIndent()
+
+    private fun caught(source: String) = BenchSeedRules.violations(source).isNotEmpty()
+
+    @Test
+    fun `the gate and the declaration are allowed`() {
+        assertTrue(!caught(gate))
+    }
+
+    /** The two reads that were here before D-240: the press, and the log's seat. */
+    @Test
+    fun `a read outside the gate is caught`() {
+        assertTrue(caught(gate + "\nfun seed(): Long = launchValue(SEED_SWITCH)?.toLongOrNull() ?: drawRoundSeed()"))
+        assertTrue(caught(gate + "\nval names = launchValue(RoundCheat.SEED_SWITCH) != null"))
+        assertTrue(caught(gate + "\nval s = getenv(\"SOMEONES_HOME_ROUND_SEED\")"))
+    }
+
+    @Test
+    fun `a gate that reads the seed before the bench switch is caught`() {
+        assertTrue(caught("fun benchSeed(read: (String) -> String?): Long? { return read(SEED_SWITCH)?.toLongOrNull() }"))
+        assertTrue(
+            caught("fun benchSeed(read: (String) -> String?): Long? { val s = read(SEED_SWITCH); return if (read(ROUND_SWITCH) != null) s?.toLongOrNull() else null }"),
+        )
+    }
+
+    @Test
+    fun `documentation about the switch does not trip it`() {
+        assertTrue(!caught(gate + "\n// until D-240 the press read launchValue(SEED_SWITCH) itself\n/** [SEED_SWITCH] */ val x = 1"))
+    }
+
+    @Test
+    fun `it reports the line the read is on`() {
+        val v = BenchSeedRules.violations("val a = 1\nval b = launchValue(SEED_SWITCH)")
+        assertEquals(2, v.single().line)
+    }
+}
+
 /** The seed-source cordon (D-215), checked the way the arming cordon is. */
 class SeedSourceRulesTest {
 

@@ -22,6 +22,8 @@ import home.someoneshome.model.Tick
 import home.someoneshome.model.protocol.RoundBody
 import home.someoneshome.model.protocol.SightingUpload
 import home.someoneshome.platform.wallClockMillis
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * **The rules, on the host's phone, joined to both wires — E-D3-3, closed.**
@@ -107,6 +109,19 @@ class RoundAuthority(
 
     var state: GameState = GameState.EMPTY
         private set
+
+    /**
+     * **One reduction at a time, and its effects out before the next begins** (R6, D-241).
+     *
+     * Every door that reads [state], reduces and pushes holds this: [arm], [heard], [mint],
+     * [sighted], [radioFaulted] and [fireEgress]. A push suspends (the effect wire's lock, a socket's
+     * send), and the arrival queue is not the only caller: the tick driver mints on its own
+     * coroutine, and the bench reaches in from its own. Without it a second caller could reduce in
+     * the gap between a touch's two halves and replace `GameState.touches` (T1 broken: both phones of
+     * the first touch answered twice), or put its effects on the wire between another reduction's.
+     * The bodies below call each other only unlocked; this lock is not re-entrant.
+     */
+    private val turn = Mutex()
 
     /** [HouseHandle.state]. The round as it stands, for the tick driver to read deadlines off. */
     override fun state(): GameState = state
@@ -222,7 +237,9 @@ class RoundAuthority(
      * `armingFor` says a refusal belongs out loud. Neither is a fallback: a round armed in a home
      * nobody chose is the defect this method just stopped having.
      */
-    suspend fun arm(seed: Long): Boolean {
+    suspend fun arm(seed: Long): Boolean = turn.withLock { armWith(seed) }
+
+    private suspend fun armWith(seed: Long): Boolean {
         val inputs = inputs()
         if (!inputs.readyToArm) {
             note("WILL NOT ARM — ${inputs.seats.size} SEAT(S), ${inputs.oneLines.size} LINE(S) IN")
@@ -268,7 +285,7 @@ class RoundAuthority(
                 "INSIDERS ${arming.insiders.size} (SETTING ${inputs.chosenInsiders ?: "UNKNOWN"}) · " +
                 "IN '${hosted.name}' · ${markers.size} MARKER(S) · ${inputs.oneLines.size} LINE(S)"
         )
-        mint(arming)
+        gate(arming)
         return armed
     }
 
@@ -279,7 +296,9 @@ class RoundAuthority(
      * with three arguments is `admit(state, factOf(intent, at))` and nothing else, so this door and
      * the [mint] door below reach the same gate.
      */
-    suspend fun heard(intent: Intent) {
+    suspend fun heard(intent: Intent): Unit = turn.withLock { hear(intent) }
+
+    private suspend fun hear(intent: Intent) {
         heard += intent
         val before = state
         val at = Tick(tick++)
@@ -287,7 +306,7 @@ class RoundAuthority(
         when (admission) {
             is Admission.Admitted -> {
                 state = admission.reduction.state
-                push(admission.reduction.effects)
+                push(admission.reduction.effects, state)
             }
             is Admission.Refused -> {
                 refusals += admission.reason
@@ -315,17 +334,20 @@ class RoundAuthority(
      * method should not have to come and look.
      */
     override suspend fun mint(event: Event) {
-        gate(event)
+        turn.withLock { gate(event) }
     }
 
-    /** [mint]'s body, returning the gate's answer for the one caller that reports it ([fireEgress]). */
+    /**
+     * [mint]'s body, returning the gate's answer for the one caller that reports it ([fireEgress]).
+     * Unlocked: every caller already holds [turn].
+     */
     private suspend fun gate(event: Event): Admission {
         val before = state
         val admission = admit(state, event)
         when (admission) {
             is Admission.Admitted -> {
                 state = admission.reduction.state
-                push(admission.reduction.effects)
+                push(admission.reduction.effects, state)
             }
             is Admission.Refused -> {
                 refusals += admission.reason
@@ -358,7 +380,9 @@ class RoundAuthority(
      * is a separate door from [heard] for exactly that reason: whatever [heard] one day does about
      * a refused request, it cannot reach a contact.
      */
-    suspend fun sighted(seat: Seat, upload: RoundBody.Sighted) {
+    suspend fun sighted(seat: Seat, upload: RoundBody.Sighted): Unit = turn.withLock { sight(seat, upload) }
+
+    private suspend fun sight(seat: Seat, upload: RoundBody.Sighted) {
         val slots = SightingUpload.unpack(upload)
         if (slots == null) {
             note("AN UPLOAD THAT IS NOT ONE — SEAT ${seat.index}")
@@ -378,7 +402,9 @@ class RoundAuthority(
      * socket now: the notice is the meeting's, to everybody at once. A report that arrives before
      * arming or after the round is refused by the gate and recorded, like any.
      */
-    suspend fun radioFaulted(seat: Seat, cause: RadioCause) {
+    suspend fun radioFaulted(seat: Seat, cause: RadioCause): Unit = turn.withLock { faulted(seat, cause) }
+
+    private suspend fun faulted(seat: Seat, cause: RadioCause) {
         val fate = if (namedByTheNotice(cause)) "NAMED AT THE NEXT MEETING" else "RECORDED · NAMED BY NO NOTICE (D-187)"
         note("RADIO FAULT — SEAT ${seat.index} · ${cause.name.uppercase()} · $fate")
         concluded(Event.RadioFaulted(Tick(tick++), seat, cause))
@@ -390,7 +416,7 @@ class RoundAuthority(
         when (val admission = admit(state, event)) {
             is Admission.Admitted -> {
                 state = admission.reduction.state
-                push(admission.reduction.effects)
+                push(admission.reduction.effects, state)
             }
             is Admission.Refused -> {
                 refusals += admission.reason
@@ -419,7 +445,9 @@ class RoundAuthority(
      * them a CELLAR the owner does not own. A round with no home has no geography to draw against
      * and declines, which cannot happen after [arm] and is not worth being able to happen.
      */
-    suspend fun fireEgress(actor: Seat): Boolean {
+    suspend fun fireEgress(actor: Seat): Boolean = turn.withLock { fire(actor) }
+
+    private suspend fun fire(actor: Seat): Boolean {
         val here = home
         if (here == null) {
             note("NO EGRESS — THERE IS NO HOME TO DRAW ONE IN")
@@ -446,11 +474,15 @@ class RoundAuthority(
      * `EffectWire.emit` takes the state **after** the event, because the round-state axis moves
      * because of the event being processed: classifying against the state before it hands a seat
      * that has just gone out one last frame of living permissions.
+     *
+     * **[after] is that reduction's own state, handed in** (R6, D-241). It read the property at each
+     * effect, so an effect still going out when another reduction landed was classified against the
+     * other one's state. Under [turn] the two are the same object; a test asserts it.
      */
-    private suspend fun push(effects: List<Effect>) {
+    private suspend fun push(effects: List<Effect>, after: GameState) {
         for (effect in effects) {
             emitted += effect
-            emit(effect, state)
+            emit(effect, after)
         }
     }
 }

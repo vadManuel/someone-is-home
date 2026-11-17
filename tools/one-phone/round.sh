@@ -252,10 +252,12 @@ launch_phone() {
     refuse_if_locked
     say "=== LAUNCHING THE HOST ON $PHONE_NAME · SEED $SEED ==="
     local lights=()
-    # The bench's script (`RoundCheat.theRound`) runs on the host only with ROUND set. Without it the
-    # round is the owner's; the seed is read at arming either way.
+    # The bench's script (`RoundCheat.theRound`) runs on the host only with ROUND set. --by-hand sets
+    # ROUND_BY_HAND instead: no script, the round is the owner's, and it is still a bench launch. The
+    # seed is honoured only beside one of the two (D-240): a phone launched with the seed alone, or
+    # from the springboard, draws a secure one, so the README's Insider seat is never a real round's.
     local HOST_ROUND=("DEVICECTL_CHILD_SOMEONES_HOME_ROUND=1")
-    [ -n "$BY_HAND" ] && HOST_ROUND=()
+    [ -n "$BY_HAND" ] && HOST_ROUND=("DEVICECTL_CHILD_SOMEONES_HOME_ROUND_BY_HAND=1")
     # The bench waits for every seat, not the three that make the button live.
     [ -n "$AUTO_LIGHTS_OUT" ] && lights=("DEVICECTL_CHILD_SOMEONES_HOME_LOBBY_LIGHTS_OUT=1" "DEVICECTL_CHILD_SOMEONES_HOME_LOBBY_SEATS=$SEATS")
     # `--console` streams the app's stdout here and forwards a signal sent to devicectl to the app.

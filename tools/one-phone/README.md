@@ -19,6 +19,12 @@ seat 1, a Simulator. `core/.../OnePhoneVectorsTest.kt` pins those facts, and tha
 seats does not end the round; `tools/ble-peer/Tests` pins the Swift derivation to the same values.
 (The first seed, 20261116, dealt seat 2 at four seats, so the bench would have Revoked the phone.)
 
+**The fixed seed holds only on a launch `round.sh` makes** (D-240). The app honours
+`SOMEONES_HOME_ROUND_SEED` only beside `SOMEONES_HOME_ROUND` (the scripted phone and every Simulator)
+or `SOMEONES_HOME_ROUND_BY_HAND` (`--by-hand`). A phone opened from the Home Screen, or launched with
+the seed alone, draws a secure seed of its own, so the Insider seat this page names is never the
+Insider of a round somebody plays from the springboard.
+
 ## Before you start
 
 1. The phone is plugged into the Mac and unlocked. The Mac and the phone are on the **same Wi-Fi**: the
@@ -356,8 +362,8 @@ Stop with Ctrl-C. Put Auto-Lock back to your usual setting when you are done.
   then is refused in silence and the tile does not say ARMED; every touch after it is a plain touch.
   An arm that does land restarts the house's clock at the full 60 s, and the tile does not show that
   (D-239's open item: it keeps saying ARMED). The host's console says which it was: `[house] REVOKE ARM — SEAT n · ARMED`, or
-  `· COOLING DOWN (READY IN Ns)`, or `· REFUSED <reason>` (the seat is named only when the launch
-  set the seed, as `round.sh` does). The same lines exist for `EGRESS FIRE`, `SURGE FIRE`,
+  `· COOLING DOWN (READY IN Ns)`, or `· REFUSED <reason>` (the seat is named only when the round
+  was armed with the bench's seed, as on every `round.sh` launch; otherwise `A SEAT`). The same lines exist for `EGRESS FIRE`, `SURGE FIRE`,
   `ISOLATE FIRE` and `STATIC FIRE`. They go to the console only and never to the TRANSPORT view.
 - **Phone-to-phone RSSI** and therefore the -40 gate itself (D-233: set from two phones; the hit rate
   and a 30 cm pass-by check are still to be rerun). Mac numbers do not transfer.
