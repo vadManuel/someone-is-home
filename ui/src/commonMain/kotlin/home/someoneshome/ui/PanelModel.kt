@@ -600,8 +600,10 @@ data class PanelState(
      * bars stand in.
      *
      * Set by pushes every seat gets (LIGHTS OUT, a meeting's end, an Egress opening), advanced by
-     * `FlowHost` once a second, and never by anything a seat did: an Insider's clocks and a
-     * Resident's are the same three values at the same moment.
+     * `FlowHost` once a second, and never by anything a seat did, with one exception: an Insider's
+     * clocks and a Resident's are the same three values at the same moment until this phone fires a
+     * Tier-2 ability, when the house's answer to that fire restarts [accessClock] from the ability's
+     * weight (`PublicCooldown.fired`, D-262). The next meeting's end puts it back on the public half.
      */
     val revokeClock: PublicCooldown? = null,
     val accessClock: PublicCooldown? = null,
@@ -1258,7 +1260,10 @@ class PanelVals(
     // had played before would notice the one that did.
     val tier2B: String = if (insider) "STATIC" else "THERMAL"
     val tier2C: String = if (insider) "ISOLATE" else "CACHE"
-    /** The pool's public half only (D-239): a Tier-2 fire restarts the actor's own pool, which no bar draws. */
+    /**
+     * The Access pool: its public half (D-239), or, after this phone's own Tier-2 fire was answered
+     * with a spent pool, the actor's own restart (D-262). The same on both roles until a fire.
+     */
     val tier2Bar: Float = state.accessClock?.fraction ?: 0.82f
     val tier2BarInk: Color = Ramp.Mid
     /**

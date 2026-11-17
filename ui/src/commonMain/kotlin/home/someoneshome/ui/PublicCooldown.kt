@@ -8,9 +8,15 @@ import home.someoneshome.model.Balance
  *
  * Page 2's three bars draw three of the house's clocks, and each restarts at moments that are
  * pushed to every seat: LIGHTS OUT (`OpeningMessage`), a meeting's end (`MeetingEnded`) and, for the
- * Egress's house-wide clock, an Egress opening (`EgressOpened`). Nothing here is a seat's own
- * clock, so an Insider's page 2 and a Resident's draw the same bar at the same moment (D-142's
- * parity), and nothing here can say that anybody spent anything.
+ * Egress's house-wide clock, an Egress opening (`EgressOpened`). Until a phone fires something,
+ * nothing here is a seat's own clock, so an Insider's page 2 and a Resident's draw the same bar at
+ * the same moment (D-142's parity), and nothing here can say that anybody spent anything.
+ *
+ * **The one exception is the actor's own** ([fired], D-262): when this phone fires a Tier-2 ability
+ * and the house answers *this phone's* request with `AbilityFired(cooldownStarted = true)`, the
+ * Access bar restarts from that ability's weight. That is input echo plus the house's answer to
+ * the one phone that asked, which nobody else is sent; it is what `gdd.md:357` calls *same
+ * cooldown spent* on the actor's device.
  *
  * **What it gates.** The REVOKE tile's ARMED is input echo (D-231), and before D-239 it was set on
  * every hold, including one into the opening half-cooldown, which the house refuses in silence
@@ -48,8 +54,16 @@ data class PublicCooldown(val seconds: Int, val elapsed: Int = 0) {
         /** The Revoke at half, per seat in the house and the same on every phone (D-132, D-184). */
         val Revoke: PublicCooldown get() = restarted(Balance.REVOKE_OPENING)
 
-        /** The Access pool at half (D-132, D-184). A Tier-2 fire's restart is the actor's own: not drawn. */
+        /** The Access pool at half (D-132, D-184). A Tier-2 fire's restart is the actor's own: [fired]. */
         val Access: PublicCooldown get() = restarted(Balance.ACCESS_OPENING)
+
+        /**
+         * **This phone's own Access pool, from the house's answer to its own Tier-2 fire** (D-262).
+         * [weight] is the ability's (`Balance.SURGE_COOLDOWN`, `STATIC_COOLDOWN`,
+         * `ISOLATE_COOLDOWN`), the one `core` spends the pool by; counted from the answer's
+         * arrival, which is after the house wrote the deadline, plus the pad, so it errs late too.
+         */
+        fun fired(weight: Long): PublicCooldown = restarted(weight)
 
         /** The house-wide Egress clock at half (D-132, D-184). */
         val EgressOpening: PublicCooldown get() = restarted(Balance.EGRESS_OPENING)

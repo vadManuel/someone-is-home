@@ -257,9 +257,9 @@ fun Page2Screen(vals: PanelVals) {
                     Tier2Tile(vals.tier2A, vals, Modifier.weight(1f), armable = vals.insider) {
                         go(ScreenId.SurgeTargets)
                     }
-                    // **STATIC, and the hold FIRES rather than opening anything** (D-186). Nothing is
-                    // drawn afterwards and nothing may be: the house's answer is the jam every living
-                    // phone gets, and it reaches this one as a bystander's (`gdd.md:398`).
+                    // **STATIC, and the hold FIRES rather than opening anything** (D-186). The jam is
+                    // the house's answer to every living phone, and it reaches this one as a
+                    // bystander's (`gdd.md:398`); only the pool bar below is this phone's own (D-262).
                     Tier2Tile(vals.tier2B, vals, Modifier.weight(1f), armable = vals.insider) {
                         actions.fireStatic()
                     }

@@ -1091,7 +1091,8 @@ class FlowModel(
      * Defaulted to nothing, so every render and every screenshot gets a phone whose page 2 is real
      * and whose requests reach nobody. That is the honest state of a bench: **a control that
      * predicted an outcome would be worse than one that did nothing**, and nothing on any screen in
-     * this app moves because a Tier-2 ability was fired.
+     * this app moves because a Tier-2 ability was fired, until the house answers the fire (the
+     * actor's own Access bar, D-262).
      */
     val send: (IntentMessage) -> Unit = {},
     /**
@@ -1189,6 +1190,23 @@ class FlowModel(
 
     var state: PanelState by mutableStateOf(initial)
         private set
+
+    /**
+     * **What this phone's last fire spends the Access pool by, until the house answers it** (D-262).
+     *
+     * Set on every Tier-2 fire this phone sends ([fireSurge], [fireStatic], [fireIsolate]) to that
+     * ability's weight, and to null by an Egress fire, whose answer restarts no Access bar. Read
+     * once, by [ownFireAnswered], and cleared there whatever the answer said.
+     *
+     * `AbilityFired` does not name the ability (D-239 (b)), so this is how the phone knows which
+     * request an answer is for: its own last one. A hold takes two seconds and the answer comes
+     * back well inside that, so at most one fire is ever in flight. ⚠️ **The limit:** an armed
+     * Revoke's contact is answered with the same `AbilityFired(true)`, and one that lands inside the
+     * round trip of a Tier-2 fire is read as that fire's answer; the Access bar then restarts a round
+     * trip early, or, if the fire fell into a running pool, restarts when it should not have (late,
+     * the safe direction). A wire answer that named the ability would close it.
+     */
+    private var awaitingFire: Long? = null
 
     // A phone built already housed draws no design count at its first meeting either (D-247).
     // And a real phone shows its own time from its first frame, housed or not (D-255): the join
@@ -1529,6 +1547,9 @@ class FlowModel(
      */
     private fun shiftBegan(opening: Boolean = false) {
         val frozen = !opening && state.egressRunning
+        // The house resets the pool to half here whatever the actor last fired (D-184), so an
+        // answer still owed from before belongs to no bar.
+        awaitingFire = null
         state = state.copy(
             // A new round holds no arm, so an earlier round's echo does not survive into it. A
             // meeting's end keeps it: the house keeps the arm across a meeting.
@@ -1550,6 +1571,7 @@ class FlowModel(
      * phone, and a refused one would have shown the alert on the actor's phone alone.
      */
     fun armEgress() {
+        awaitingFire = null
         fireEgress()
     }
 
@@ -1576,6 +1598,7 @@ class FlowModel(
      * shape, one tier down.
      */
     fun fireSurge(row: Int) {
+        awaitingFire = Balance.SURGE_COOLDOWN
         send(IntentMessage.FireSurge(target = Seat(row)))
         go(ScreenId.Page2)
     }
@@ -1592,6 +1615,7 @@ class FlowModel(
      * Walks back to page 2 and reports nothing, for [fireSurge]'s reason.
      */
     fun fireIsolate(card: String) {
+        awaitingFire = Balance.ISOLATE_COOLDOWN
         send(IntentMessage.FireIsolate(target = MarkerId(card)))
         go(ScreenId.Page2)
     }
@@ -1610,19 +1634,50 @@ class FlowModel(
      * Tier-1 tiles' behaviour (D-142) and is what makes the row's three tiles indistinguishable in
      * capability from across a dark room.
      *
-     * ### Nothing is drawn afterwards and there must be nothing to draw
+     * ### Nothing is drawn afterwards but the actor's own Access bar
      *
      * [fireSurge]'s paragraph. **No branch of any kind**: this method does the same thing whether
      * the pool was ready, whether the house is already jammed, and whoever the actor is. The house's
      * answer is [RoundMessage.StaticOpened], which arrives on *every* living phone in the building
-     * including this one — so what this phone shows is a bystander's view of a jam, and there is
-     * nothing on it that says the thumb that started it was this one (`gdd.md:398`).
+     * including this one — so what this phone shows of the jam is a bystander's view of it
+     * (`gdd.md:398`). The one thing that is this phone's own is the Access bar restarting from the
+     * house's answer to its own hold, as after a Surge ([ownFireAnswered], D-262): a cooldown, not a
+     * light, a sound or a screen, and visible only to somebody reading this page 2 beside another.
      *
      * **Reached only from an Insider's tile**, and not by a check inside it — a Resident's tier-2
      * tiles take no pointer input at all (D-142).
      */
     fun fireStatic() {
+        awaitingFire = Balance.STATIC_COOLDOWN
         send(IntentMessage.FireStatic)
+    }
+
+    /**
+     * **The house's answer to this phone's own fire: the Access bar restarts if the pool was spent**
+     * (D-262, review #2's V3).
+     *
+     * Before this the answer was dropped, so after a Surge, Static or Isolate the bar read the
+     * public clock, full, while the house's pool cooled for two minutes or more, and a hold in that
+     * time fired into a running pool and nothing happened: the silent no-op D-237 found on REVOKE,
+     * one tier down. The bar now draws what the house wrote.
+     *
+     * **Input echo, not game logic, and the answer goes to the actor alone.** The schema sends
+     * `AbilityFired` to the seat that fired and to nobody else, a Resident's page 2 takes no input
+     * (D-142) so no Resident is ever answered, and `core` never branches on the target (rule 1), so
+     * a Surge at somebody already Revoked restarts this bar exactly as one at anybody else does
+     * (`gdd.md:357`: *same cooldown spent* on the actor's device). Only the actor's own tile moves,
+     * and only in answer to the actor's own hold; until a phone fires, both roles' page 2 stay the
+     * same at every public moment (D-239).
+     *
+     * **A fire into a running pool restarts nothing**: the house spent nothing (`cooldownStarted =
+     * false`), so the bar keeps counting. **An answer with no fire of this phone's in flight moves
+     * nothing either**: that is an armed Revoke's contact, and the REVOKE tile's ARMED is D-239's
+     * open question, untouched here.
+     */
+    private fun ownFireAnswered(cooldownStarted: Boolean) {
+        val weight = awaitingFire
+        awaitingFire = null
+        if (cooldownStarted && weight != null) state = state.copy(accessClock = PublicCooldown.fired(weight))
     }
 
     /**
@@ -2316,11 +2371,11 @@ class FlowModel(
             // purpose, because the blackout is the one that must not miss.
             is RoundMessage.LampSet -> lamp.houseSet(message.luminance)
 
-            // Input echo already lit this phone's own tile (D-141); the house's answer confirms the
-            // cooldown, and the cooldown widget has no field here yet. E3's work. **It is the only
-            // thing a Tier-2 fire sends back to the actor** (`gdd.md:398`), so a branch that grew a
-            // field here would be the first actor-side feedback in the game.
-            is RoundMessage.AbilityFired -> Unit
+            // **The house's answer to this phone's own fire, and to nobody else's** (D-262). It is the
+            // only thing a Tier-2 fire sends back to the actor (`gdd.md:398`), and what it moves is
+            // the actor's own Access bar: *same cooldown spent* (`gdd.md:357`), never a light, a
+            // sound, a screen or anything about the target. See [ownFireAnswered].
+            is RoundMessage.AbilityFired -> ownFireAnswered(message.cooldownStarted)
 
             // **A touch, answered, and the screen does not move** (R1, D-216). Every touch puts one
             // of these, or an armed Insider's `AbilityFired`, on each phone that touched, so that the

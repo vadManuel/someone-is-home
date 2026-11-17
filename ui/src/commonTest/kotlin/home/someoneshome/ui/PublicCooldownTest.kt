@@ -128,6 +128,87 @@ class PublicCooldownTest {
         assertEquals(RevokeState.Cooldown, insider.vals.revoke, "an earlier round's ARMED survived LIGHTS OUT")
     }
 
+    /**
+     * **GUARD (D-262, review #2's V3): after a Surge the actor's own Access bar shows the pool
+     * cooling, and a fire during it shows not-ready.**
+     *
+     * Before D-262 the house's `AbilityFired` was dropped, so the bar read the public half, full,
+     * while the house's pool ran for the Surge's 150 s, and a hold in that time fired into a running
+     * pool and did nothing: REVOKE's silent no-op (D-237), one tier down.
+     */
+    @Test
+    fun aSurgeRestartsTheActorsOwnAccessBarAndAFireIntoItShowsNotReady() {
+        val insider = Phone(insider = true)
+        val resident = Phone(insider = false)
+        listOf(insider, resident).forEach {
+            it.said(opening)
+            it.seconds(PublicCooldown.Access.seconds)
+        }
+        assertEquals(1f, insider.vals.tier2Bar, "the Access half had not run out")
+
+        insider.flow.fireSurge(0)
+        insider.said(RoundMessage.AbilityFired(cooldownStarted = true))
+        val surge = insider.flow.state.accessClock!!
+        assertEquals(PublicCooldown.fired(Balance.SURGE_COOLDOWN), surge, "the Surge's answer did not restart the pool from the Surge's weight")
+        assertEquals(Balance.wholeSeconds(Balance.SURGE_COOLDOWN) + PublicCooldown.PAD_SECONDS, surge.seconds)
+        assertEquals(0f, insider.vals.tier2Bar, "after a Surge the actor's Access bar read ready")
+        // The answer went to the actor alone; nobody else's page 2 moved.
+        assertEquals(1f, resident.vals.tier2Bar, "a Resident's Access bar moved on somebody else's fire")
+
+        insider.seconds(10)
+        val before = insider.vals.tier2Bar
+        assertTrue(before > 0f && before < 1f, "the bar did not fill part-way: $before")
+        insider.flow.fireStatic()
+        assertEquals(IntentMessage.FireStatic, insider.sent.last(), "the fire into the running pool was not sent (rule 1)")
+        insider.said(RoundMessage.AbilityFired(cooldownStarted = false))
+        assertEquals(before, insider.vals.tier2Bar, "a fire into the running pool moved the bar")
+        assertTrue(insider.flow.state.accessClock!!.running, "the tile read ready during the Surge's pool")
+
+        insider.seconds(surge.seconds)
+        assertEquals(1f, insider.vals.tier2Bar, "the bar did not fill when the Surge's pool ran out")
+
+        // Static and Isolate restart it from their own weights.
+        insider.flow.fireStatic()
+        insider.said(RoundMessage.AbilityFired(cooldownStarted = true))
+        assertEquals(PublicCooldown.fired(Balance.STATIC_COOLDOWN), insider.flow.state.accessClock)
+        insider.seconds(insider.flow.state.accessClock!!.seconds)
+        insider.flow.fireIsolate("west-card")
+        insider.said(RoundMessage.AbilityFired(cooldownStarted = true))
+        assertEquals(PublicCooldown.fired(Balance.ISOLATE_COOLDOWN), insider.flow.state.accessClock)
+
+        // A meeting's end puts the pool back on the public half, the same on both roles (D-184).
+        listOf(insider, resident).forEach { it.said(meetingEnded) }
+        assertSameTiles(insider, resident, "the meeting's end after a fire")
+    }
+
+    /**
+     * **GUARD (D-262): an answer that is not to this phone's own Tier-2 fire moves no Access bar.**
+     * An armed Revoke's contact is answered with the same `AbilityFired(true)`, and REVOKE's ARMED
+     * is D-239's open question, so neither tile moves; an Egress fire's answer is not the pool's.
+     */
+    @Test
+    fun anAnswerToNoTier2FireMovesNothing() {
+        val insider = Phone(insider = true)
+        insider.said(opening)
+        insider.seconds(insider.flow.state.revokeClock!!.seconds)
+        insider.flow.armRevoke()
+        val armed = insider.flow.state
+
+        insider.said(RoundMessage.AbilityFired(cooldownStarted = true))
+        assertEquals(armed, insider.flow.state, "a contact's answer moved the panel")
+
+        insider.flow.armEgress()
+        insider.said(RoundMessage.AbilityFired(cooldownStarted = true))
+        assertEquals(armed.accessClock, insider.flow.state.accessClock, "an Egress fire's answer restarted the Access bar")
+        assertEquals(RevokeState.Armed, insider.vals.revoke)
+
+        // A Tier-2 fire whose answer was owed when the meeting reset the pool belongs to no bar.
+        insider.flow.fireStatic()
+        insider.said(meetingEnded)
+        insider.said(RoundMessage.AbilityFired(cooldownStarted = true))
+        assertEquals(PublicCooldown.Access, insider.flow.state.accessClock, "an answer owed across a meeting restarted the bar")
+    }
+
     /** The phone's clocks are the house's halves, from `Balance`, plus the pad, and nothing else. */
     @Test
     fun theClocksAreTheHousesHalvesAndThePad() {

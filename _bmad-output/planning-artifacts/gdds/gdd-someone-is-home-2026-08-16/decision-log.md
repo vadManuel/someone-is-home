@@ -7189,6 +7189,76 @@ looked at. **Not on a phone.**
 
 Also fixed: `RoundForgottenTest` held `STAY ON TASK`, which `:ui:vocabularyLint` refuses.
 
+## Revision 77 — the actor's Access bar follows the house's answer to its own fire
+
+### D-262 · **A Tier-2 fire's answer restarts the actor's own Access bar from that ability's weight; page 2 stays the same on both roles until a fire — built, provisional, owner to confirm**
+
+**The bug** (review #2's V3). D-239 drew the Access bar from the public clocks only and left the
+house's `AbilityFired` unread (`Flow.kt`, *a branch that grew a field here would be the first
+actor-side feedback in the game*). After a Surge, Static or Isolate the bar read full while the
+house's pool ran 150, 120 or 90 s, and a hold in that time fired into a running pool, was answered
+`AbilityFired(false)`, and did nothing: D-237's silent no-op on REVOKE, one tier down.
+
+**What changed (`ui` only).**
+1. Each Tier-2 fire this phone sends records that ability's weight (`Balance.SURGE_COOLDOWN`,
+   `STATIC_COOLDOWN`, `ISOLATE_COOLDOWN`, the ones `core` spends the pool by); an Egress fire clears
+   it. The house's next `AbilityFired` reads it once: if the pool was spent (`cooldownStarted`), the
+   bar restarts as `PublicCooldown.fired(weight)`, counted from the answer's arrival plus D-239's 1 s
+   pad, so it errs late. A fire into a running pool restarts nothing. An answer with no fire in flight
+   (an armed Revoke's contact) moves nothing.
+2. A meeting's end still puts the bar back on the public half (D-184), and drops any answer still
+   owed.
+3. **REVOKE's ARMED is untouched**, so D-239's options A/B/C stay open.
+
+**Why this is not the actor-side feedback the GDD forbids.** `gdd.md:322`/`:325` (*nothing changes on
+screen*, *no feedback whatsoever*) are Revoke's, and are about the arm and the contact. For the ranged
+abilities `gdd.md:357` asks for *same animation, **same cooldown spent**, no feedback whatsoever* on the
+actor's device. So the spent cooldown is drawn there by design. What stays forbidden is any sign of
+what happened to the target. `core` never branches on the target (rule 1), so a Surge at somebody
+already Revoked restarts this bar exactly as any other Surge does. M9 (`gdd.md:417`) keeps the
+device free of light, sound and animation, and this adds none: the bar is a hairline already on page
+2. The answer goes to the actor alone (the schema's `AbilityFired` row). It answers the actor's own
+two-second hold about a second later, so it is input echo plus the house's answer to the one phone
+that asked. It is not news at a contact, which is what keeps D-239's Revoke question separate.
+`AbilityFired` still does not name the ability; the phone knows which fire it is by its own last
+request.
+
+**Parity.** Before a fire, an Insider's page 2 and a Resident's are the same at every public moment
+(D-142, D-239), now checked in pixels too. **After a fire the actor's bar differs**, and that is
+D-239's raised point (c) accepted for this tier: someone reading an Insider's page 2 next to anyone
+else's, inside the pool's 90 to 150 s, sees a bar the others do not. This is ARMED's asymmetry
+(D-231) one tier down. After a Static it is the one thing that tells the jammer's phone from a
+bystander's. **Owner to confirm**, against the alternative: keep the bar public and let a hold into
+the running pool keep failing silently.
+
+**Limit, flagged.** An armed Revoke's contact is answered with the same `AbilityFired(true)`. One that
+lands inside a Tier-2 fire's round trip (well under the two-second hold) is read as that fire's answer.
+The bar then restarts a round trip early, or, if the fire fell into a running pool, restarts when it
+should not have (late, the safe direction). An answer that named the ability would close this; that
+is a wire change, left for after U1.
+
+**Guards, each proven by breaking it.**
+- `PublicCooldownTest.aSurgeRestartsTheActorsOwnAccessBarAndAFireIntoItShowsNotReady`. The answer
+  dropped again (`AbilityFired -> Unit`, the bug as found) fails *the Surge's answer did not restart
+  the pool from the Surge's weight expected:<PublicCooldown(seconds=151, elapsed=0)> but
+  was:<PublicCooldown(seconds=46, elapsed=46)>*. `cooldownStarted` ignored fails *a fire into the
+  running pool moved the bar expected:<0.06622516> but was:<0.0>*.
+- `PublicCooldownTest.anAnswerToNoTier2FireMovesNothing`. Every answer read as a Surge fails *a
+  contact's answer moved the panel*.
+- `AccessBarParityTest` (desktop, new) renders page 2 for both roles at LIGHTS OUT, 15 s in, the
+  Access half run out, 20 s after the Insider's Surge, and a meeting's end. Only the texts whose
+  strings differ by role (D-142's words) are masked; every other pixel must match, except after the
+  Surge, where the actor's page must differ. Breaking each:
+  - the Insider's Access clock started 3 s ahead at LIGHTS OUT fails *page 2 differed by role at
+    LIGHTS OUT, 120 pixels, first at (21,409)*, and `PublicCooldownTest`'s value check fails too;
+  - the pool bar drawn in the Insider's ink only, a shade that no value check sees, fails *page 2
+    differed by role at 15 s in, 618 pixels*;
+  - the answer dropped fails *after the Surge the actor's page 2 still drew the pool as ready*.
+- Rendered and looked at (`ui/build/screens-access/`): before the fire both roles' pool bars are
+  full; 20 s after the Surge the Insider's is about an eighth full and the Resident's is full.
+
+**Not on a phone.**
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).
