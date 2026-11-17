@@ -2,6 +2,7 @@ package home.someoneshome.ui
 
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.runDesktopComposeUiTest
+import home.someoneshome.model.MeetingPhase
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -40,8 +41,26 @@ import kotlin.test.assertEquals
  */
 class HousedPhoneTest {
 
-    /** Long enough to cover the stand-in, the notice hold, and a ninety-second discussion. */
-    private val thirtySeconds = 30_000L
+    private val meetingScreens = listOf(
+        ScreenId.Call, ScreenId.Calling, ScreenId.Found, ScreenId.Assemble,
+        ScreenId.Notice, ScreenId.Discussion, ScreenId.Vote, ScreenId.Tally,
+    )
+
+    /**
+     * **Past every stand-in a parked screen could fire, and no further** (D-251).
+     *
+     * The longest [Flow.autoAdvance] row on any meeting screen (the notice's nine seconds) or the
+     * bench's [HOUSE_STAND_IN_MS], whichever is longer, plus a second. It was a flat thirty seconds
+     * per screen, and the test clock steps every 16 ms frame of it: about 3 s of real time per
+     * screen with this composition attached (measured: 3.1 s per 30 s on the notice, 0.1 s on an
+     * empty one; no state change, recomposition or draw in any of those frames, so it is the
+     * clock's own per-frame work and not a ticker). Eight screens made the body 25 to 40 s against
+     * `runTest`'s one-minute limit, and it failed under load. Nothing on a meeting screen waits
+     * longer than this, so nothing is lost: a stand-in that fires at all fires inside it.
+     */
+    private val parked: Long = (
+        meetingScreens.mapNotNull { Flow.autoAdvance[it]?.afterMillis?.toLong() } + HOUSE_STAND_IN_MS
+        ).max() + 1_000L
 
     /**
      * **THE REPRODUCTION.** A housed phone parked on the check-in screen stays on it.
@@ -70,7 +89,7 @@ class HousedPhoneTest {
         // second half of the defect: the jump itself used to tell the phone it had no house, on
         // the one screen where the fake house then had a push waiting to fire.
         model.jump(PanelState(screen = ScreenId.Assemble))
-        mainClock.advanceTimeBy(thirtySeconds)
+        mainClock.advanceTimeBy(parked)
 
         assertEquals(
             ScreenId.Assemble, model.state.screen,
@@ -94,11 +113,37 @@ class HousedPhoneTest {
         mainClock.autoAdvance = false
         setContent { DeviceCanvas(insets = PanelInsets()) { FlowHost(model) } }
 
-        mainClock.advanceTimeBy(thirtySeconds)
+        mainClock.advanceTimeBy(parked)
 
         assertEquals(
             ScreenId.Notice, model.state.screen,
             "the notice hold walked a housed phone into a discussion the house had not opened",
+        )
+    }
+
+    /**
+     * **The pair: once the house has opened the talk, the notice's nine seconds are the phone's own**
+     * (D-250, H2). The push that walks a phone onto the notice is the talk opening, and a notice
+     * with nobody named has no card to swipe, so without this a living seat sat on HOUSE MEETING ·
+     * NOTICES through the ballot and the tally. Opened, it falls through at nine seconds, and not
+     * before.
+     */
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun aHousedPhoneLeavesTheNoticeOnceTheHouseHasOpenedTheTalk() = runDesktopComposeUiTest {
+        val model = FlowModel(
+            PanelState(screen = ScreenId.Notice, houseAttached = true, meetingPhase = MeetingPhase.Discussion),
+        )
+        mainClock.autoAdvance = false
+        setContent { DeviceCanvas(insets = PanelInsets()) { FlowHost(model) } }
+
+        val rule = Flow.autoAdvance.getValue(ScreenId.Notice)
+        mainClock.advanceTimeBy(rule.afterMillis - 500L)
+        assertEquals(ScreenId.Notice, model.state.screen, "the notice left before its nine seconds")
+        mainClock.advanceTimeBy(1_000L)
+        assertEquals(
+            ScreenId.Discussion, model.state.screen,
+            "the house opened the talk and the phone stayed on the notice (H2)",
         )
     }
 
@@ -111,17 +156,14 @@ class HousedPhoneTest {
     @OptIn(ExperimentalTestApi::class)
     @Test
     fun everyMeetingScreenParksAHousedPhoneUntilTheHouseSpeaks() = runDesktopComposeUiTest {
-        for (screen in listOf(
-            ScreenId.Call, ScreenId.Calling, ScreenId.Found, ScreenId.Assemble,
-            ScreenId.Notice, ScreenId.Discussion, ScreenId.Vote, ScreenId.Tally,
-        )) {
+        for (screen in meetingScreens) {
             val model = FlowModel(PanelState(screen = screen, houseAttached = true))
             mainClock.autoAdvance = false
             setContent {
                 DeviceCanvas(insets = PanelInsets()) { FlowHost(model, standingInForTheHouse = true) }
             }
 
-            mainClock.advanceTimeBy(thirtySeconds)
+            mainClock.advanceTimeBy(parked)
 
             assertEquals(
                 screen, model.state.screen,
@@ -144,7 +186,7 @@ class HousedPhoneTest {
         mainClock.autoAdvance = false
         setContent { DeviceCanvas(insets = PanelInsets()) { FlowHost(model) } }
 
-        mainClock.advanceTimeBy(thirtySeconds)
+        mainClock.advanceTimeBy(parked)
         assertEquals(ScreenId.Assemble, model.state.screen, "it moved before the house said anything")
 
         model.push(ScreenId.Notice)

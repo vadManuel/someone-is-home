@@ -176,7 +176,10 @@ class EffectPushTest {
 
         // ---- And none of that is vacuous ------------------------------------------------------
         assertTrue(inProcess.state != start, "the fixture shift changed nothing on this phone")
-        assertEquals(ScreenId.Notice, inProcess.state.screen, "the meeting push moved nobody")
+        // The gate's push walks Assemble → Notice and the ballot's walks Notice → Vote (D-250). Until
+        // D-250 this said Notice: the ballot's push landed on a notice with no row for it, which is
+        // the H2 phone parked on the notice for the whole meeting, written down as the expectation.
+        assertEquals(ScreenId.Vote, inProcess.state.screen, "the meeting pushes did not walk the phone to the ballot")
         assertEquals(87, inProcess.state.integrityPercent, "the meter never reached the phone")
         assertEquals(30, inProcess.state.voteWindowSeconds, "the ballot's window never reached the phone")
         assertEquals(

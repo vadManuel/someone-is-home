@@ -106,9 +106,14 @@ class HostForegroundTest {
         const val LOCKS = 5
     }
 
+    /**
+     * Waits on a condition that is either met or never met: every failure these tests guard is a
+     * seat that does not come back, not one that comes back late. So the bound is generous (D-251):
+     * at 20 s it failed once while three agents were building on the same machine.
+     */
     private suspend fun until(what: String, condition: () -> Boolean) {
         try {
-            withTimeout(20_000) { while (!condition()) delay(20) }
+            withTimeout(60_000) { while (!condition()) delay(20) }
         } catch (late: kotlinx.coroutines.TimeoutCancellationException) {
             throw AssertionError("never happened: $what", late)
         }
@@ -394,7 +399,7 @@ class HostForegroundTest {
         messages.forEach { message ->
             val seq = round.held + 1
             round.frameArrived(TransportFrame.Carry(RoundWire.encode(RoundBody.Push(seq, message))))
-            withTimeout(5_000) { while (round.held < seq) delay(1) }
+            withTimeout(30_000) { while (round.held < seq) delay(1) }
         }
         draining.cancel()
     }

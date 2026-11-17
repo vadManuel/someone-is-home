@@ -125,7 +125,8 @@ class LobbyDesk {
      */
     fun handedOver(seat: Seat, line: String) {
         require(seat in seats) { "a line arrived from $seat, which is not in this lobby" }
-        lines[seat] = line
+        // Bounded here as well as where it is typed, as a name is (D-249).
+        lines[seat] = line.take(LobbyBody.Handover.LIMIT)
     }
 
     /**

@@ -448,8 +448,10 @@ class OneLine {
         /**
          * One line, and the field is one line high. Past this the text scrolls out of the box the
          * player is reading, which is a promise about legibility rather than a limit on candour.
+         * The number lives in the model now, where the house and the reveal's padding read it too
+         * (D-249).
          */
-        const val LIMIT = 120
+        const val LIMIT = LobbyBody.Handover.LIMIT
     }
 }
 

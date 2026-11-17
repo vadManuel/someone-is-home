@@ -65,7 +65,7 @@ class OutboundQueueTest {
         )
         val port = host.start(0)
         try {
-            withTimeout(30_000) {
+            withTimeout(90_000) {
                 val a = phone(port)
                 val seatA = seated.receive()
                 val b = phone(port)
@@ -102,7 +102,7 @@ class OutboundQueueTest {
                 assertEquals(toB, gotB, "the draining seat's frames were not all there, in the order they were sent")
                 assertTrue(took < BOUND_MILLIS, "a held seat delayed the other seat's frames by ${took} ms")
 
-                assertEquals(seatA, withTimeout(5_000) { lost.receive() }, "a seat whose queue filled was never dropped")
+                assertEquals(seatA, withTimeout(30_000) { lost.receive() }, "a seat whose queue filled was never dropped")
                 // The sends past the bound threw, which is the effect wire's signal to report the
                 // seat unreachable; the phone keeps its place in its stream and asks on its return.
                 assertTrue(refused > 0, "a held seat's queue took $FRAMES frames and never filled")
@@ -121,6 +121,12 @@ class OutboundQueueTest {
     private companion object {
         const val CAPACITY = 8
         const val FRAMES = 40
-        const val BOUND_MILLIS = 2_000L
+        /**
+         * How long the other seat may take, and it is a bound on a hang rather than a speed (D-251).
+         * The held seat is released only when the test ends, so a send coupled to its socket
+         * waits for ever and fails at any bound; 40 loopback frames take milliseconds. At 2 s it
+         * failed once under three agents' builds.
+         */
+        const val BOUND_MILLIS = 20_000L
     }
 }

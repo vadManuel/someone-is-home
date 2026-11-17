@@ -9,6 +9,7 @@ import home.someoneshome.model.Balance
 import home.someoneshome.model.CardPayload
 import home.someoneshome.model.EmitSchema
 import home.someoneshome.model.MarkerId
+import home.someoneshome.model.MeetingPhase
 import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.Seat
 import home.someoneshome.model.MessageKind
@@ -421,6 +422,35 @@ object Flow {
     )
 
     /**
+     * **The rows in [autoAdvance] that are the phone's own only once the house has opened a phase**
+     * (D-250, provisional, owner to confirm).
+     *
+     * The notice's nine seconds is presentation (*shown once at the top of the meeting, then gone*),
+     * but it is not in [ownTimers]: on the owner's evening it walked a phone parked on a fake meeting
+     * into a discussion no house had opened (`HousedPhoneTest`). Left off both lists, a housed phone
+     * that reached the notice had no way off it but a swipe, and with NOBODY NAMED there is no card
+     * to swipe: the simulator hunt found living seats on HOUSE MEETING · NOTICES from the gate's
+     * close to the next LIGHTS OUT (H2).
+     *
+     * So it runs on a housed phone **once the house has opened the talk**, which is the push that
+     * walked the phone onto the notice in the first place. The phase is read off this phone's own
+     * copy of the house's push ([PanelState.meetingPhase]); a housed phone with no phase open still
+     * stays where it is.
+     */
+    val ownOncePhaseOpened: Map<ScreenId, MeetingPhase> = mapOf(
+        ScreenId.Notice to MeetingPhase.Discussion,
+    )
+
+    /**
+     * **Whether [autoAdvance]'s row for the screen [state] stands on may fire.** Unhoused, all of
+     * them; housed, [ownTimers], and [ownOncePhaseOpened] once its phase is open.
+     */
+    fun runsItsOwnTimer(state: PanelState): Boolean =
+        !state.houseAttached ||
+            state.screen in ownTimers ||
+            (ownOncePhaseOpened[state.screen]?.let { it == state.meetingPhase } ?: false)
+
+    /**
      * **The meeting's own transitions, every one of them a push.**
      *
      * These were rows in [autoAdvance] with delays on them, which was the honest thing to do while
@@ -477,6 +507,14 @@ object Flow {
         ScreenId.Vote to HousePush(
             ScreenId.Tally, EmitSchema.MEETING_PHASE_OPENED,
             "the window closes and the ballot is read; unanimous READY closes it early (D-117)",
+        ),
+        // **The notice, when the talk ends before it does** (D-250, H2). The push that walked the
+        // phone here opened the talk, so the next phase push a phone on the notice can hear is the
+        // ballot's: every other hand went up while this one was still reading. Without the row the
+        // phone stayed on the notice through the ballot and the tally.
+        ScreenId.Notice to HousePush(
+            ScreenId.Vote, EmitSchema.MEETING_PHASE_OPENED,
+            "every hand went up while this phone was still on the notice; the ballot is open",
         ),
         ScreenId.Tally to HousePush(
             ScreenId.Home, EmitSchema.MEETING_ENDED,
@@ -3172,7 +3210,8 @@ fun FlowHost(
     // off wholesale did not only stop the fiction, it stopped the scan's safety window and the
     // ten seconds a heavy notification lasts — neither of which any house can push, and both of
     // which left a housed phone stuck rather than honest. The Surge still suppresses everything.
-    val runsItsOwn = !housed || screen in Flow.ownTimers
+    // And the notice's nine seconds once the house has opened the talk ([Flow.ownOncePhaseOpened]).
+    val runsItsOwn = Flow.runsItsOwnTimer(model.state)
     val pending = if (surge == null && runsItsOwn) model.pending else null
     val awaiting = if (standingInForTheHouse && surge == null && !housed) model.awaitingPush else null
 

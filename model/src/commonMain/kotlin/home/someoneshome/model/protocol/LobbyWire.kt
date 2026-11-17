@@ -56,7 +56,20 @@ sealed class LobbyBody {
     @ClientFacing
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("handover")
-    data class Handover(val line: String) : LobbyBody()
+    data class Handover(val line: String) : LobbyBody() {
+        companion object {
+            /**
+             * **The one place the line's length lives** (D-249), in UTF-16 units as typed.
+             *
+             * One line, and the field is one line high. It was the lobby screen's alone; it lives
+             * here because two more readers need it: the house bounds what it keeps to it (a client
+             * is free to send whatever it likes), and `RoundMessage.RoleRevealed` pads every reveal
+             * to the longest line this allows, so that an Insider's reveal and a Resident's are
+             * one length on the Wi-Fi.
+             */
+            const val LIMIT: Int = 120
+        }
+    }
 
     /**
      * **Client → host. What to call the person holding this phone.**

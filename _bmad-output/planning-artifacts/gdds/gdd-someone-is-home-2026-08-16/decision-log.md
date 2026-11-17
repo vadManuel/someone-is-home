@@ -6632,6 +6632,117 @@ writes the path out, one row a step, and the player says they did it.
 version's wording (it is iOS 17's), and an iCloud restore to a new phone, which carries the file
 with it although the new phone's switch may be on.
 
+## Revision 72 — the reveal is one size, the notice lets a housed phone go, and the slow test was the clock
+
+*2026-11-17, overnight run, unit F1. Two findings by the orchestrator after D-247 (a red ui test on
+main, and `RoleRevealed`'s size following the role), and one by the simulator hunt (H2). Desktop and
+simulator unit tests only; nothing here has been on a phone.*
+
+### D-249 · **Every seat's `RoleRevealed` is one length on the Wi-Fi, whatever its role and its line — built**
+
+**What leaked.** Every seat is sent exactly one `RoleRevealed`, at the same place in the arming burst,
+so its size is a reading of the role for anybody who can measure the Wi-Fi. That breaks the
+symmetric-frame promise that R1, S1 and T1 keep for a touch (D-216, D-219, D-220). As D-247 shipped it,
+a Resident's was `"insider":false` with the blank line dropped (the JSON leaves a default out) and an
+Insider's was `"insider":true,"line":"…"`. Measured over loopback, carried and encoded: **Resident 113
+bytes; Insider 112 with a blank line, 127 with one character, 246 with 120, 163 with a line JSON
+escapes, 366 with a line past the limit.** Even before D-247, `true` and `false` differ by one byte, so
+the Insider's was the short frame.
+
+**Now.** The wire member is `RoleRevealed(role: Int, lineHex: String)`. `role` is one digit (1 Insider,
+0 Resident). `lineHex` is the line's UTF-8 bytes in lowercase hex, zero-padded to `LINE_BYTES` =
+`LobbyBody.Handover.LIMIT × 3` = 360 bytes, so it is always 720 characters. A Resident's is all
+padding. A longer line is cut at a character. Hex rather than the text, because JSON escapes some
+characters and not others. Both widths are checked when a message is built, so one of another width
+does not decode. The call sites keep `RoleRevealed(insider, line)` and read `.insider` and `.line`
+(decoded). **Every reveal is now 843 bytes**, for both roles and all six lines. The cost is about 730
+bytes per seat, once a round.
+
+**The line's limit moved to the model** (`LobbyBody.Handover.LIMIT`, 120, as typed). The house now
+bounds what it keeps to it (`LobbyDesk.handedOver`, as a name is bounded), and the padding reads it.
+The lobby screen's `OneLine.LIMIT` points at it.
+
+**Guards, each proven by breaking it.** `RoleRevealedFrameSizeTest` (app; a real `TransportHost`, five
+real clients over loopback, the rules' own arming, `TouchFrameSizeTest`'s method) arms once per line:
+blank, one character, 120 characters, 120 three-byte characters, a line JSON escapes, and one past the
+limit. Every Resident hands over a line too. With D-247's shape put back: *a reveal's frame length
+follows the role or the line: {blank={Resident 0=113, Insider=112, …}, one character={…Insider=127…},
+…}*. `RoleRevealedSizeTest` (model) checks the same at sequence numbers 1 to 4 321, the round trip,
+and that a reveal of the wrong width does not decode.
+
+**The audit: every seat-only `RoundMessage` whose content depends on the role** (file:line in
+`model/.../protocol/RoundWire.kt`):
+
+| message | why it is role-dependent | what a reader of the Wi-Fi sees | done |
+|---|---|---|---|
+| `RoleRevealed` :291 | it is the role | the size (above) | **fixed** |
+| `IsolateTargetsOffered` :137 | its row is `Insider/Live` only (`EmitSchema.kt:244`), so only Insiders' sockets get it: at arming (`Rules.kt:410`), when an Egress starts (`:1858`) and when one is contained (`:1945`) | **one frame more** on every Insider's socket at each of those moments | ⚠️ **reported, not fixed.** A frame count, not a size. Closing it means a frame of the same length to every Resident, which is a wire and allowlist change. **Owner to decide.** |
+| `AbilityFired(cooldownStarted)` :79 | Insider-only row (`EmitSchema.kt:194`); `true` and `false` differ by a byte | whether a Surge, Static, Isolate or Egress request *took* (`Rules.kt:746, 827, 891, 1829`). The frame exists only after an Insider's own request, so the reader already knows the socket is an Insider's | reported. The touch path sends only `true`, padded against `ContactAnswered` (D-216) |
+| `HouseSignedOff` :646 | `Insider/Ended` only (`EmitSchema.kt:604`) | one frame more per Insider | sent after `InsidersRevealed` has told every phone; accepted |
+| `MessageDelivered` :186 | per seat, free text | would vary | nothing in `core` constructs it today |
+
+The other seat-only kinds carry nothing a role changes: `WorkOrderIssued`, `ScanAnswered` and
+`SubroutineGraded` (an Insider's fake work is dealt and graded by the same rules, rule 8),
+`TerminalAnswered`, `SyncPulseAnswered`, `VoteHeld`, `ContactSeedIssued`, `LampSet`, `Surged`,
+`OpeningMessage`, `RosterIssued`, `RoundEnded`, `EgressOpened`, `StandAndWalkIn`,
+`RestrainedTakeover`, `MeetingCalling`, and `ContactAnswered` and `RevokeLanded` (both padded). Their
+Booleans and nullables vary with what happened, not with who it happened to.
+
+### D-250 · **A housed phone leaves the house notice: its nine seconds run once the house has opened the talk, and the ballot's push takes it off — built, provisional, owner to confirm**
+
+**What the hunt found (H2).** In the simulator round, at 5 and 6 seats, every living seat sat on HOUSE
+MEETING · NOTICES from the gate's close to the next LIGHTS OUT: never the discussion, the ballot or
+the tally. The fix for the owner's fictional meeting (`HousedPhoneTest`) had switched the notice's
+nine seconds (`Flow.autoAdvance`) off on a housed phone. `Flow.housePushes` had no row for the notice,
+and with NOBODY NAMED there is no card to swipe.
+
+**Now.**
+1. **`Flow.ownOncePhaseOpened`**: the notice's nine seconds run on a housed phone once the house has
+   opened the talk (`PanelState.meetingPhase == Discussion`). That is the push that walked the phone
+   onto the notice. A housed phone with no phase open still stays put, so the owner's evening stays
+   fixed. `Flow.runsItsOwnTimer` is the one question `FlowHost` asks.
+2. **A `housePushes` row, `Notice → Vote` on `MeetingPhaseOpened`**, for a talk that ends while the
+   phone is still on the notice (every hand went up). The next phase push a phone on the notice can
+   hear is the ballot's.
+
+⚠️ **Provisional.** The nine seconds is presentation (*shown once at the top of the meeting, then
+gone*), and the talk's clock started at the gate either way. The alternative is to skip the notice
+on a housed phone. **Owner to confirm.**
+
+**Guards, each proven by breaking it.** `NoticeWalkWiringTest` (app; five phones over a real loopback
+socket, the real `RoundAuthority`) walks Notice → Discussion → Vote → Tally → Home on the house's
+pushes: with nobody named, with a seat named (a `RadioCause.Person` fault), and with the talk closed
+while the phones are still on the notice. Those phones have no `FlowHost`, so the nine seconds are
+fired by the calls `FlowHost` makes. With the map entry removed: *nobody named: ALBA had no way off the
+notice (H2)*. With the row removed: *never happened: closed early: every phone stood on the ballot*.
+`HousedPhoneTest.aHousedPhoneLeavesTheNoticeOnceTheHouseHasOpenedTheTalk` runs the real `FlowHost` on
+the frame clock. With the entry removed: *the house opened the talk and the phone stayed on the notice
+(H2) expected:<Discussion> but was:<Notice>*.
+
+### D-251 · **The red `HousedPhoneTest` was the test clock, not a ticker; the two that flaked under load now bound a hang, not a speed — built (tests only)**
+
+**What was red.** `everyMeetingScreenParksAHousedPhoneUntilTheHouseSpeaks` failed with *the test body
+did not run to completion* after one minute, then passed on a quiet machine. **No commit broke it.**
+Its time, filtered, per commit: `a6b0164` 25.1 s, `765adf3` 28.2 s, `0cde8e0` 25.5 s, `74e2df8` 32.6 s
+(39.5 s inside the full suite). Under three agents' builds it crossed 60 s.
+
+**Why it took that long.** It advanced eight screens 30 s each, and the compose test clock steps every
+16 ms frame. Measured: 3.1 s of real time per 30 s with `FlowHost` attached, and 0.1 s with an empty
+composition, **with no state write, recomposition or draw in any of those frames**. The D-239/D-243
+ticker was not running (`ticking` was false on every screen, because no clock was pushed), and the
+wall-clock loop ends at once with no clock. So the cost is the test clock's own per-frame work over a
+large tree.
+
+**Now.** `HousedPhoneTest` advances each parked screen just past the longest stand-in that could fire:
+the longest `autoAdvance` row on a meeting screen or `HOUSE_STAND_IN_MS`, plus a second (10 s). The
+test takes 8.3 s, and no stand-in can fire later than that.
+
+**The two that flaked once under load bound a hang, not a speed.** `OutboundQueueTest` asserted that
+another seat's 40 loopback frames arrive within 2 s. The held seat is released only when the test
+ends, so a send coupled to it waits for ever and fails at any bound: 20 s now. `HostForegroundTest`
+waited 20 s per condition and 5 s per push, and every failure it guards is a seat that never comes
+back: 60 s and 30 s now.
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

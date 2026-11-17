@@ -266,13 +266,88 @@ sealed class RoundMessage {
      * because the house never uses a Resident's line. It is the recipient's own words, so it names
      * nobody the recipient did not name. Defaulted blank: a message that never carried one quotes
      * nothing rather than somebody else's.
+     *
+     * ### One length on the wire for both roles (D-249)
+     *
+     * Every seat is sent exactly one of these, at the same place in the arming burst, so its size
+     * is a reading of the role for anybody who can measure the Wi-Fi. As D-247 shipped it, a
+     * Resident's was `"insider":false` with the blank line left out (the JSON drops a default) and
+     * an Insider's was `"insider":true,"line":"…"`: the short frame was the Resident. Even before
+     * D-247, `true` and `false` are four and five characters.
+     *
+     * So the wire carries two fields whose widths cannot vary: [role] is one digit
+     * ([INSIDER] or [RESIDENT]), and [lineHex] is the line's UTF-8 bytes in lowercase hex, padded
+     * with zero bytes to [LINE_BYTES], always [LINE_CHARS] characters. A Resident's is all padding.
+     * [LINE_BYTES] is the longest line `LobbyBody.Handover.LIMIT` allows at three bytes a UTF-16
+     * unit (a surrogate pair is four bytes for two units), and a longer one is cut at a character
+     * so it still fits. Hex rather than the text itself because JSON escapes some characters and
+     * not others, so a string's width on the wire is not its length. Both are checked when a
+     * message is built, so one of the wrong width cannot be decoded or constructed.
+     * `RoleRevealedFrameSizeTest` measures the two over the real sockets.
      */
     @ClientFacing
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("RoleRevealed")
-    data class RoleRevealed(val insider: Boolean, val line: String = "") : RoundMessage() {
+    data class RoleRevealed(val role: Int, val lineHex: String) : RoundMessage() {
+
+        /** The message for this phone: its role, and its own words or none. */
+        constructor(insider: Boolean, line: String = "") : this(if (insider) INSIDER else RESIDENT, sealLine(line))
+
+        init {
+            require(role == INSIDER || role == RESIDENT) { "a reveal's role is $INSIDER or $RESIDENT" }
+            require(lineHex.length == LINE_CHARS && lineHex.all { it in '0'..'9' || it in 'a'..'f' }) {
+                "a reveal's line is $LINE_CHARS lowercase hex characters"
+            }
+        }
+
+        /** Whether page 2 answers this phone's thumb. */
+        val insider: Boolean get() = role == INSIDER
+
+        /** The words, with the padding off. Blank on a Resident's. */
+        val line: String get() = openLine(lineHex)
+
         /** The length, never the words: `Effect.RoleRevealed`'s rule, one layer out (D-247). */
         override fun toString(): String = "RoleRevealed(insider=$insider, line=${line.length} chars)"
+
+        companion object {
+            const val INSIDER: Int = 1
+            const val RESIDENT: Int = 0
+
+            /** The most bytes a line can take: [LobbyBody.Handover.LIMIT] units at three bytes each. */
+            const val LINE_BYTES: Int = LobbyBody.Handover.LIMIT * 3
+
+            /** [lineHex]'s one width. */
+            const val LINE_CHARS: Int = LINE_BYTES * 2
+
+            private const val DIGITS = "0123456789abcdef"
+
+            /** The line as [LINE_CHARS] hex characters: cut at a character to fit, zero-padded. */
+            fun sealLine(line: String): String {
+                var words = line
+                var bytes = words.encodeToByteArray()
+                while (bytes.size > LINE_BYTES) {
+                    words = words.dropLast(1)
+                    bytes = words.encodeToByteArray()
+                }
+                val out = StringBuilder(LINE_CHARS)
+                for (b in bytes) {
+                    val v = b.toInt() and 0xff
+                    out.append(DIGITS[v shr 4]).append(DIGITS[v and 0xf])
+                }
+                while (out.length < LINE_CHARS) out.append('0')
+                return out.toString()
+            }
+
+            /** [sealLine] backwards: the bytes up to the padding, read as UTF-8. */
+            fun openLine(hex: String): String {
+                val bytes = ByteArray(hex.length / 2) { i ->
+                    ((DIGITS.indexOf(hex[2 * i]) shl 4) or DIGITS.indexOf(hex[2 * i + 1])).toByte()
+                }
+                var end = bytes.size
+                while (end > 0 && bytes[end - 1] == 0.toByte()) end--
+                return bytes.decodeToString(0, end)
+            }
+        }
     }
 
     /**
