@@ -618,7 +618,7 @@ class RoutingTest {
         caught.houseSaid(RoundMessage.WorkOrderIssued(order))
         caught.houseSaid(
             RoundMessage.ScanAnswered(
-                SubroutineInstance(entry = 1, subroutine = SubroutineKind.Sniff, parameters = listOf(3, 5)),
+                SubroutineInstance(entry = 1, subroutine = SubroutineKind.Sniff, parameters = listOf(3, 5, 8)),
             ),
         )
         assertEquals(ScreenId.ScanCaught, caught.state.screen, "a caught scan opened nothing")
@@ -653,7 +653,7 @@ class RoutingTest {
             model.houseSaid(RoundMessage.WorkOrderIssued(order))
             model.houseSaid(
                 RoundMessage.ScanAnswered(
-                    SubroutineInstance(entry = entry, subroutine = SubroutineKind.Jam, parameters = emptyList()),
+                    SubroutineInstance(entry = entry, subroutine = SubroutineKind.Jam, parameters = listOf(-9)),
                 ),
             )
             assertEquals(

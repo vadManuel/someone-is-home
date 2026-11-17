@@ -270,7 +270,7 @@ class LampRoutingTest {
         model.houseSaid(
             RoundMessage.ScanAnswered(
                 home.someoneshome.model.SubroutineInstance(
-                    entry = 0, subroutine = SubroutineKind.Interrupt, parameters = listOf(4),
+                    entry = 0, subroutine = SubroutineKind.Interrupt, parameters = listOf(58, 8, 14, 30),
                 ),
             ),
         )

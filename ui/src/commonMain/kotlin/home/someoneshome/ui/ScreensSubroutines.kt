@@ -68,16 +68,18 @@ import home.someoneshome.model.SignalGraph
  *
  * ### What is here, and what is the house's
  *
- * Three of the six have a presentation or a channel this port cannot build, and pretending
- * otherwise would be worse than leaving it out:
+ * **Every question on these screens is the house's** (D-238): the scan's `SubroutineInstance`
+ * carries its parameters, `FlowModel.beginSubroutine` deals them into [SubroutineModel], and each
+ * screen draws from the model's slot for its kind. The companion's fixtures are what a phone with
+ * no house draws, which is the render harness and nothing else. Three of the ten put their question
+ * in a channel a desktop render cannot show:
  *
- * - **Replay's dots flash in order.** A timed emission of light is the lamp changing, and the lamp
- *   is a pure function of state the core emitted (rule 5). The flash is therefore an Effect, and
- *   the loop is frozen. Built: the entry.
- * - **Handshake's rhythm is buzzed.** Haptics are the house's and this build has no phone attached
- *   to feel them on. Built: the return.
- * - **Short's asked-for count arrives from the house** and is a fixture here, as every number in
- *   this port is. The *gesture* is whole: several fingers, two seconds, and a hand-over.
+ * - **Replay's dots flash in order**, played by [ReplayScreen] off the house's pattern and the
+ *   screen's own clock — D-139's arrangement, with no Effect on the wire.
+ * - **Handshake's rhythm is buzzed**, by `HouseBuzzer` off the same instance. Built: the return,
+ *   with as many beats as the house dealt.
+ * - **Short's asked-for count is the house's**, drawn as the ASKS row. The *gesture* is whole:
+ *   several fingers, two seconds, and a hand-over.
  * - **Sniff's two groups are buzzed**, for Handshake's reason and with Handshake's consequence: on
  *   a build with no phone attached the question never arrives, and the screen is black until
  *   somebody taps it. Built: the answer, and the darkness it is given in.
@@ -165,10 +167,19 @@ fun HandshakeScreen(verdict: SubroutineVerdict? = null) {
  * a claim that you are tapping the right dots, and there is nothing on this device that could make
  * one.
  *
- * **The flash is missing and its absence is deliberate.** The dots flashing in order is the house
- * emitting light on a schedule, which is an Effect, and the loop is frozen — so this screen is the
- * half of Replay that belongs to the phone. On a device with no house attached there is nothing to
- * remember, which is exactly what a Subroutine screen with no pattern behind it should look like.
+ * ### The flash is the house's pattern, played by the screen from the scan (D-238)
+ *
+ * The dots flash in the order [SubroutineModel.pattern] holds, once, from the moment the screen
+ * opens: D-139's arrangement, one Subroutine along — **the house sends the question at scan time
+ * and the client renders it deterministically** from the parameters and [screenMillis], with no
+ * Effect on the wire and no schema row. Until D-238 nothing flashed at all and the screen drew the
+ * port's four dots, so a player stood at a card the house had dealt a pattern at, shown no pattern,
+ * and was graded against it.
+ *
+ * **The schedule is a placeholder and playtest owns it** — [REPLAY_LEAD_MILLIS], [REPLAY_LIT_MILLIS]
+ * and [REPLAY_STEP_MILLIS]. It is the same for every phone and both roles, because it is a function
+ * of the pattern and the screen's own clock and of nothing else. Taps land throughout: refusing one
+ * during the playback would be the phone holding an opinion about when the work may start.
  *
  * Two columns rather than a row: a row implies a reading order, and the Subroutine is *order*, so
  * the layout must not answer it for free. Dots are drawn at [DOT] — a deliberate over-size for a
@@ -176,15 +187,23 @@ fun HandshakeScreen(verdict: SubroutineVerdict? = null) {
  */
 @Composable
 fun ReplayScreen(verdict: SubroutineVerdict? = null) {
-    val entry = LocalSubroutine.current.replay
+    val model = LocalSubroutine.current
+    val entry = model.replay
+    val order = model.pattern.order
     val actions = LocalActions.current
     val p = Palette.DARK
+    val elapsed = screenMillis(
+        running = !entry.handedOver, instance = model.instance, until = replayPlayedMillis(order),
+    )
+    // The dot the house's pattern has lit at this moment, or none. A sequence handed over has
+    // nothing left to show, so the playback stops with it rather than freezing a dot lit.
+    val flashing = if (entry.handedOver) null else replayFlashing(order, elapsed)
     SubroutineFrame(Subroutine.Replay, p, entry.handedOver, verdict) {
         Column(verticalArrangement = Arrangement.spacedBy(22.dp)) {
             for (pair in (0 until entry.length).chunked(2)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(64.dp)) {
                     for (at in pair) {
-                        val touched = entry.holds(at)
+                        val touched = entry.holds(at) || at == flashing
                         Box(
                             Modifier.size(DOT)
                                 .background(if (touched) p.ink else Color.Transparent, CircleShape)
@@ -238,7 +257,8 @@ fun ReplayScreen(verdict: SubroutineVerdict? = null) {
 fun ParityCheckScreen(verdict: SubroutineVerdict? = null) {
     val entry = LocalSubroutine.current.parity
     val actions = LocalActions.current
-    val cells = SubroutineModel.PARITY
+    // The house's grid (D-238): the cell the house grades is the one that breaks THIS pattern.
+    val cells = LocalSubroutine.current.grid
     val p = Palette.DARK
     val live = entry.choice != null && !entry.locked
     SubroutineFrame(
@@ -319,7 +339,8 @@ fun ShortScreen(verdict: SubroutineVerdict? = null) {
     val entry = LocalSubroutine.current.short
     val actions = LocalActions.current
     val p = Palette.CONCEAL
-    val asks = SubroutineModel.SHORT_FINGERS
+    // The house's ask (D-238), off the model and never off the entry -- see [HoldEntry].
+    val asks = LocalSubroutine.current.hold.fingers
     val down = entry.handedOver ?: entry.fingers
     // Both rows keep the same number of slots, so their cells line up and the comparison is a
     // length against a length. A hand is five; more fingers than that widen both rows together
@@ -429,7 +450,8 @@ fun SignalTraceScreen(verdict: SubroutineVerdict? = null) {
     val entry = LocalSubroutine.current.trace
     val actions = LocalActions.current
     val live = entry.handedOver == null
-    val wiring = SubroutineModel.TRACE
+    // The house's wiring (D-238): the route the house grades is the shortest one across THIS lattice.
+    val wiring = LocalSubroutine.current.wiring
     val p = Palette.MEDIUM
     SubroutineFrame(
         Subroutine.SignalTrace, p, entry.gone, verdict,
@@ -639,7 +661,8 @@ fun SniffScreen(verdict: SubroutineVerdict? = null) {
 fun DeallocateScreen(verdict: SubroutineVerdict? = null) {
     val entry = LocalSubroutine.current.deallocate
     val actions = LocalActions.current
-    val columns = SubroutineModel.DEALLOCATE
+    // The house's columns (D-238): the level the house grades is the shortest of THESE.
+    val columns = LocalSubroutine.current.columns
     val live = entry.handedOver == null
     val p = Palette.DARK
     SubroutineFrame(
@@ -827,6 +850,36 @@ fun DriftScreen(verdict: SubroutineVerdict? = null) {
 private val DOT: Dp = 72.dp
 
 /**
+ * **Replay's playback schedule: a still beat, then each dot of the pattern lit in turn** (D-238).
+ *
+ * Placeholders, and playtest owns them: long enough lit to be seen at arm's length in a dark room,
+ * a gap between two flashes so a dot flashed twice in a row could not be mistaken for one long
+ * flash (the reader refuses a repeat anyway), and a lead-in so the first flash is not spent on a
+ * player still lifting the phone.
+ */
+internal const val REPLAY_LEAD_MILLIS: Long = 800L
+internal const val REPLAY_LIT_MILLIS: Long = 600L
+internal const val REPLAY_STEP_MILLIS: Long = 900L
+
+/**
+ * **The dot the pattern has lit [elapsed] milliseconds into the screen, or null** (D-238).
+ *
+ * A pure function of the house's pattern and the screen's own clock, and of nothing else, so the
+ * same scan flashes the same dots at the same moments on every phone and on both roles. It says
+ * nothing about the entry: it is the question being asked, not an answer being checked.
+ */
+internal fun replayFlashing(order: List<Int>, elapsed: Long): Int? {
+    val into = elapsed - REPLAY_LEAD_MILLIS
+    if (into < 0) return null
+    val step = into / REPLAY_STEP_MILLIS
+    if (step >= order.size) return null
+    return if (into % REPLAY_STEP_MILLIS < REPLAY_LIT_MILLIS) order[step.toInt()] else null
+}
+
+/** How long the playback of [order] takes, after which nothing flashes again. */
+internal fun replayPlayedMillis(order: List<Int>): Long = REPLAY_LEAD_MILLIS + order.size * REPLAY_STEP_MILLIS
+
+/**
  * **Deallocate's block, the gap above it, and the field they stand in** (the mockup's 40 × 30,
  * 6 apart, in a 260 field).
  *
@@ -1000,12 +1053,14 @@ const val DRIFT_LANE: String = "subroutine-lane"
  * is the sentence the fix has to be, and now is.
  */
 @Composable
-private fun screenMillis(running: Boolean, instance: Int): Long {
+private fun screenMillis(running: Boolean, instance: Int, until: Long = Long.MAX_VALUE): Long {
     var elapsed by remember(instance) { mutableStateOf(0L) }
-    LaunchedEffect(running, instance) {
+    LaunchedEffect(running, instance, until) {
         if (!running) return@LaunchedEffect
         var last = withInfiniteAnimationFrameMillis { it }
-        while (true) {
+        // [until] is Replay's: its playback ends, and a clock left running past it would be a frame
+        // every refresh for a picture that no longer changes. The two that never end pass nothing.
+        while (elapsed < until) {
             val now = withInfiniteAnimationFrameMillis { it }
             elapsed += now - last
             last = now

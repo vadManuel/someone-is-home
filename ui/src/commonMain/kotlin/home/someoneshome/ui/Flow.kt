@@ -1,6 +1,8 @@
 package home.someoneshome.ui
 
 import home.someoneshome.model.SubroutineInstance
+import home.someoneshome.model.SubroutineQuestion
+import home.someoneshome.model.MalformedSubroutineParameters
 import home.someoneshome.model.OrderLine
 import home.someoneshome.model.MarkerShapes
 import home.someoneshome.model.Balance
@@ -1937,8 +1939,29 @@ class FlowModel(
          * pinned by a test — it was also, for one whole build, the *product's* state.
          */
         marker: MarkerId? = state.scannedAt,
+        /**
+         * **The question the house dealt at this scan** (D-238) — off the same row as the kind, so
+         * a kind from one scan is never drawn with a question from another.
+         *
+         * **Null opens nothing on a housed phone.** The screens draw from what [SubroutineModel.deal]
+         * writes, and a housed phone that opened work without dealing it would draw the bench's
+         * fixture in front of a player and hand the house an answer to a question it never asked —
+         * which is exactly what every phone in every round did until D-238. On a phone with no
+         * house, null is the port's own question and the fixture is what it draws.
+         */
+        parameters: List<Int>? = state.current?.takeIf { it.subroutine == subroutine }?.parameters,
     ) {
         val screen = subroutine?.screen ?: return
+        if (parameters == null && state.houseAttached) return
+        if (parameters != null) {
+            // Read at the arrival already (see [currentFrom]); a refusal here is a hand-made row,
+            // and it opens nothing for the same reason.
+            try {
+                subroutines.deal(subroutine.kind, parameters)
+            } catch (_: MalformedSubroutineParameters) {
+                return
+            }
+        }
         subroutines.beganAgain()
         subroutines.opened(marker)
         go(screen)
@@ -2625,6 +2648,17 @@ class FlowModel(
         // stations in draw order (D-122) and a screen read by lamplight has room for the one you
         // are walking to. An empty list is lawful and leaves the room unnamed rather than invented.
         val at = line.at.firstOrNull()
+        // **The question is read here, at the arrival, and a refusal opens nothing** (D-238; the
+        // boundary `MalformedSubroutineParameters` names). The house cannot deal a question this
+        // client cannot draw — `SubroutineDrawTest` reads thousands of its draws through these
+        // readers — so this is the second of two refusals, and its direction is the one that
+        // matters: the phone stays on the scan rather than opening work over a question it could
+        // not draw (rule 6: silent to the player, and the house's own log holds what it dealt).
+        try {
+            SubroutineQuestion.read(opened.subroutine, opened.parameters)
+        } catch (_: MalformedSubroutineParameters) {
+            return null
+        }
         return CurrentSubroutine(
             subroutine = Subroutine.of(opened.subroutine),
             room = at?.room,
@@ -2636,6 +2670,7 @@ class FlowModel(
             index = opened.entry + 1,
             total = lines.size,
             done = lines.count { it is OrderLine.Known && it.done },
+            parameters = opened.parameters,
         )
     }
 

@@ -280,7 +280,8 @@ sealed interface SubroutineEntry {
  * opposite of [ChoiceEntry], where the one answer can be changed right up until it is handed over
  * — the vote's shape, and for the vote's reason.
  */
-class SequenceEntry(
+class SequenceEntry(length: Int) : SubroutineEntry {
+
     /**
      * How many elements the house asked for — **the one number any entry in this file is told,
      * and the only one that has to be.**
@@ -290,13 +291,19 @@ class SequenceEntry(
      * [ScalarEntry] and [PathEntry] are told nothing at all, because a hold ends on a clock, a
      * converging shape has no finishing line, and a route ends when the player says it does.
      *
-     * **A presentation fixture here, and the house's in play**, like every number in
-     * [Flow.autoAdvance]. It is not a balance value and nothing locks it at arming: the design
-     * gives Replay 3–5 dots and rates Handshake's rhythm nowhere, so a single number written here
-     * would be an invention wearing a tuning value's clothes.
+     * **The house's on a housed phone, and the port's fixture on a bench** (D-238). Replay's dots
+     * and Handshake's beats are drawn per scan, so the count arrives with the question and
+     * [resize] is how it lands. It was a constructor `val` fixed at the port's four and five, and a
+     * five-dot Replay then took four taps and handed the house a sequence one short of its own.
      */
-    val length: Int,
-) : SubroutineEntry {
+    var length: Int by mutableStateOf(length)
+        private set
+
+    /** The house dealt a question of [to] elements. Cleared, because it is a different question. */
+    internal fun resize(to: Int) {
+        length = to
+        restart()
+    }
 
     /**
      * Every element the player has entered, in the order they entered it.
@@ -618,10 +625,22 @@ class PathEntry : SubroutineEntry {
  * with nothing removed for [ScalarEntry]'s reason: an inert SUBMIT would be the phone saying *the
  * distribution you were dealt is not already level*, which is a thing it cannot know.
  */
-class ColumnEntry(
-    /** How many places a finger can land. Structure, not answer — see the note above. */
-    val columns: Int,
-) : SubroutineEntry {
+class ColumnEntry(columns: Int) : SubroutineEntry {
+
+    /**
+     * How many places a finger can land. Structure, not answer — see the note above.
+     *
+     * The house's on a housed phone (D-238): the column count is drawn per scan, and [resize] is
+     * how it lands, for [SequenceEntry.length]'s reason.
+     */
+    var columns: Int by mutableStateOf(columns)
+        private set
+
+    /** The house dealt [to] columns. Cleared, because it is a different question. */
+    internal fun resize(to: Int) {
+        columns = to
+        restart()
+    }
 
     /** How many dots this phone has taken off each column, in column order. */
     var removed: List<Int> by mutableStateOf(List(columns) { 0 })
@@ -733,23 +752,16 @@ class SubroutineModel(
      */
     val drift: ChoiceEntry = ChoiceEntry(),
     /**
-     * **The two moving questions, as this phone was dealt them.**
+     * **Interrupt's opening question, before the house has dealt one** — the port's fixture.
      *
-     * They are on the instance rather than on the companion because **the band's width is graded**
-     * (E-S2-1, closed): the house draws it, sends it with the position, and this client renders the
-     * band it was sent. A width read off a constant would be the phone drawing one band while the
-     * house grades another, and the player would watch a tap land inside the band and be refused.
-     *
-     * So the numbers arrive by construction, which is where a pushed instance will arrive, and the
-     * default is the port's fixture — the same arrangement every other fixture here has, one step
-     * closer to the arrival that replaces it. It is also what makes *the band is rendered from the
-     * parameter* a thing a test can vary and watch move.
+     * A constructor parameter so a test can vary the band and watch it move; on a housed phone it
+     * is replaced by [deal] before the screen can open. See [sweep].
      */
-    val sweep: InterruptSweep = INTERRUPT,
-    /** Drift's, for [sweep]'s reason. Its tolerance is graded and deliberately not drawn. */
-    val path: DriftPath = DRIFT,
-    /** Jam's opening gap, for [sweep]'s reason: the screen draws the number the house will grade. */
-    val rings: JamRings = JAM,
+    sweep: InterruptSweep = INTERRUPT,
+    /** Drift's, for [sweep]'s reason. */
+    path: DriftPath = DRIFT,
+    /** Jam's, for [sweep]'s reason. */
+    rings: JamRings = JAM,
     /**
      * **Where an entry goes when it is handed over — and it does not carry a seat** (E-P2-1).
      *
@@ -768,6 +780,107 @@ class SubroutineModel(
      */
     val send: (IntentMessage) -> Unit = {},
 ) {
+
+    // ---- The question, as this phone was dealt it (D-238) --------------------------------------
+    //
+    // **Every screen draws from these and from nothing else**, and every one of them is the house's
+    // on a housed phone: [deal] writes them from `SubroutineInstance.parameters`, read through the
+    // same `model` reader `core` drew against and grades with, so the picture on the glass and the
+    // answer key are two readings of one list. Until D-238 the screens read the companion's
+    // fixtures, every phone in a round drew the same sample puzzle, and the house graded the entry
+    // against a question the player had never been shown — a correct answer to what was on the
+    // screen was refused, and Parity, Deallocate, Signal Trace and Replay could not be answered
+    // right at all.
+    //
+    // **The fixtures are the bench's.** They are what a phone with no house shows, which is what
+    // the render harness draws; a housed phone opens no Subroutine without a dealt question
+    // (`FlowModel.beginSubroutine`), so on a housed phone these are always the house's by the time a
+    // screen can read them.
+    //
+    // **No role, and no answer.** Each is the question as drawn — the grid, the columns, the band —
+    // and none of them is compared with an entry anywhere in `ui`. The Insider's fake is dealt by
+    // the same draw, read by the same reader and drawn by the same screen (rule 8).
+
+    /**
+     * **Interrupt's band, speed and phase.** The band's width is graded (E-S2-1, closed): what is
+     * drawn is the band the house will grade, because they are the same number off the same scan.
+     */
+    var sweep: InterruptSweep by mutableStateOf(sweep)
+        private set
+
+    /** **Drift's path, cover, speed and *now*.** Its tolerance is graded and deliberately not drawn. */
+    var path: DriftPath by mutableStateOf(path)
+        private set
+
+    /** **Jam's opening gap.** The press that puts one ring on the other is the one the house grades. */
+    var rings: JamRings by mutableStateOf(rings)
+        private set
+
+    /** **Replay's pattern**, flashed in order by the screen and tapped back (D-238). */
+    var pattern: ReplayPattern by mutableStateOf(REPLAY)
+        private set
+
+    /** **Parity Check's grid**, one cell breaking the checkerboard and no memory of which. */
+    var grid: List<Boolean> by mutableStateOf(PARITY)
+        private set
+
+    /**
+     * **Short's ask.** On the model and never on [HoldEntry]: an entry that knew the count could
+     * subtract it from the count it is holding. See [HoldEntry].
+     */
+    var hold: ShortHold by mutableStateOf(SHORT)
+        private set
+
+    /** **Signal Trace's wiring**, with its two ends. */
+    var wiring: SignalGraph.Wiring by mutableStateOf(TRACE)
+        private set
+
+    /** **Deallocate's columns, as dealt.** What the screen subtracts this phone's removals from. */
+    var columns: List<Int> by mutableStateOf(DEALLOCATE)
+        private set
+
+    /**
+     * **The house dealt this phone [parameters] as a question of [kind]** (D-238).
+     *
+     * Read through the `model` reader for that kind and written to the slot that kind's screen
+     * draws from; the two sequences and Deallocate also take their size from it, because a five-dot
+     * Replay owes five taps and a three-column Deallocate has three places to land. **Read before
+     * anything is written**, so a refusal leaves the phone holding exactly what it held.
+     *
+     * Two of the ten have nothing on the screen to draw: **Sniff's and Handshake's questions are
+     * felt**, and `HouseBuzzer` plays them off the same instance. They are still read here, so a
+     * malformed one opens nothing — and Handshake's beat count is the number of taps it owes.
+     *
+     * Throws [MalformedSubroutineParameters] for a question this client cannot draw. The house
+     * cannot deal one (`SubroutineDrawTest` reads thousands of its draws through these readers), and
+     * `FlowModel` reads at the arrival and opens nothing on a refusal, which is the fail-closed
+     * direction: *it did not open* rather than *it opened a question nobody asked*.
+     */
+    fun deal(kind: SubroutineKind, parameters: List<Int>) {
+        when (kind) {
+            SubroutineKind.Replay -> {
+                val read = ReplayPattern.of(parameters)
+                pattern = read
+                replay.resize(read.order.size)
+            }
+            SubroutineKind.Interrupt -> sweep = InterruptSweep.of(parameters)
+            SubroutineKind.ParityCheck -> grid = ParityGrid.of(parameters)
+            // Felt, not drawn: the two groups are `HouseBuzzer`'s to play off this same instance,
+            // and the screen's two halves are the same two halves whatever was buzzed.
+            SubroutineKind.Sniff -> SniffGroups.of(parameters)
+            SubroutineKind.Deallocate -> {
+                val read = DotColumns.of(parameters)
+                columns = read
+                deallocate.resize(read.size)
+            }
+            SubroutineKind.Drift -> path = DriftPath.of(parameters)
+            SubroutineKind.Short -> hold = ShortHold.of(parameters)
+            SubroutineKind.SignalTrace -> wiring = SignalGraph.of(parameters)
+            SubroutineKind.Jam -> rings = JamRings.of(parameters)
+            // Felt, not drawn, for Sniff's reason; the beat count is the number of taps owed.
+            SubroutineKind.Handshake -> handshake.resize(HandshakeRhythm.of(parameters).beats)
+        }
+    }
 
     /**
      * **Which card opened the work this phone has in front of it.**
@@ -942,11 +1055,11 @@ class SubroutineModel(
      * player is watching is one the house has already replaced. The clock has to restart because
      * *the instance changed*, and this is the thing that says it did.
      *
-     * ### It is this phone's count, and the arriving instance is what replaces it
+     * ### It is this phone's count, and not the instance's parameters
      *
-     * `Effect.ScanAnswered` carries a `SubroutineInstance` and nothing in `ui` consumes it yet, so
-     * the identity available here is *how many times this phone has opened work*. It is sufficient
-     * for the claim — it changes exactly when a new instance is dealt — and it is deliberately not
+     * The arriving `SubroutineInstance` is now read ([deal]), but the identity here is still *how
+     * many times this phone has opened work*. It is sufficient for the claim — it changes exactly
+     * when a new instance is dealt, because BEGIN deals and counts in one act — and it is deliberately not
      * derived from the parameters: two consecutive draws may legitimately be identical, and a
      * re-scan that happened to redraw the same band would then not restart the clock.
      */
@@ -964,9 +1077,10 @@ class SubroutineModel(
         /*
          * **Ten fixtures, and every one of them is written as the parameter list the scan sends.**
          *
-         * The push pipeline does not exist yet, so these stand where an arrival will stand. They
-         * are lists rather than named numbers so that **the reader being exercised now is the
-         * reader that will read the real one** — and so that a fixture this client could not draw
+         * **They are the bench's, and only the bench's** (D-238): what a phone with no house draws,
+         * and the slots [deal] overwrites with the house's own on a housed phone. They are lists
+         * rather than named numbers so that **the reader exercised by the bench is the reader that
+         * reads the house's** — and so that a fixture this client could not draw
          * fails the build rather than a player. That was already Sniff's, Deallocate's, Interrupt's
          * and Drift's arrangement; the other six had loose numbers, which is how a client fixture
          * and a house parameter drift apart in the first place (E-S2-1, the one that got caught).
@@ -1119,6 +1233,27 @@ class SubroutineModel(
 
         /** The path, read once — [SNIFF]'s arrangement, for [SNIFF]'s reason. */
         val DRIFT: DriftPath = DriftPath.of(DRIFT_PARAMETERS)
+
+        /**
+         * **The bench's question of [kind], as the parameter list a scan carries.**
+         *
+         * Internal, for the module's own tests: a hand-made `SubroutineInstance` needs a question
+         * the readers accept, because a housed phone now reads one at the arrival and opens nothing
+         * over a question it cannot draw (D-238). Nothing in the app may reach for it — a housed
+         * phone's question is the house's.
+         */
+        internal fun benchParameters(kind: SubroutineKind): List<Int> = when (kind) {
+            SubroutineKind.Replay -> REPLAY_PARAMETERS
+            SubroutineKind.Interrupt -> INTERRUPT_PARAMETERS
+            SubroutineKind.ParityCheck -> PARITY_PARAMETERS
+            SubroutineKind.Sniff -> SNIFF_PARAMETERS
+            SubroutineKind.Deallocate -> DEALLOCATE_PARAMETERS
+            SubroutineKind.Drift -> DRIFT_PARAMETERS
+            SubroutineKind.Short -> SHORT_PARAMETERS
+            SubroutineKind.SignalTrace -> TRACE_PARAMETERS
+            SubroutineKind.Jam -> JAM_PARAMETERS
+            SubroutineKind.Handshake -> HANDSHAKE_PARAMETERS
+        }
 
         /**
          * **The fixture: a phone part-way through each of the six.**

@@ -6068,6 +6068,72 @@ an arm that lands restarts it at the full 60 s.
 | `AbilityWiringTest` | one Revoke test, the host as Insider | a guest's and the host's (an early arm refused and logged, a touch that does nothing, then an arm that lands); nothing about the round on any phone's rig |
 | `AutoVoteGateTest`, `AbilityLogTest` (new) | (none) | no vote without the switch, a bench seat still votes; no seat named by default |
 
+## Revision 65 — every Subroutine draws the question the house dealt
+
+*2026-11-16, overnight run, from the fake-data audit (the Subroutine screens' fixtures). The fix is a
+bug fix; the Replay flash's timing is a provisional call made without the owner: **owner to
+confirm.** Desktop and loopback tests only; nothing here has been on a phone.*
+
+### D-238 · **Every Subroutine screen draws the question the house dealt at the scan, and the bench's fixture only where no house is attached; Replay's dots flash — built; the flash's timing is the owner's to confirm**
+
+**The bug.** The house drew a fresh question per scan (D-139, D-140), sent it on
+`ScanAnswered` as `SubroutineInstance.parameters`, and graded the entry against it. `ui` never read
+the parameters: all ten screens drew `SubroutineModel`'s companion fixtures, so every phone in a
+round drew the same sample puzzle, and the house graded each answer against a question the player
+had not been shown. Replay never flashed at all, and its four fixture dots took four taps from a
+player the house had dealt three or five. **Grading was wrong**, measured before the fix by playing
+every card on every seat (seeds 20260822, 7, 19, 41, 101) and answering correctly *from what the
+screen drew*:
+
+| Subroutine | graded right / answered right off the screen |
+|---|---|
+| Replay | 0 / 25 |
+| Parity Check | 0 / 12 |
+| Deallocate | 0 / 11 |
+| Signal Trace | 0 / 17 |
+| Jam | 1 / 23 |
+| Handshake | 5 / 22 (right only when the house happened to deal the fixture's five beats) |
+| Short | 8 / 22 (right only when the house dealt the fixture's three fingers) |
+| Interrupt | 12 / 23 (where the fixture's band happened to overlap the dealt one) |
+| Drift | 17 / 23 (likewise) |
+| Sniff | 22 / 22: its question is buzzed, and `HouseBuzzer` already played the house's instance |
+
+**What changed.**
+1. **The model holds the question.** `SubroutineModel` gains one slot per drawn question (`pattern`,
+   `grid`, `hold`, `wiring`, `columns`, beside the existing `sweep`, `path`, `rings`) and `deal(kind,
+   parameters)`, which reads them through the same `model` readers `core` draws and grades with. The
+   two sequences and Deallocate take their size from the question (`SequenceEntry.length`,
+   `ColumnEntry.columns` are now set by the deal). Every screen reads its slot.
+2. **BEGIN deals.** `CurrentSubroutine` carries the scan's parameters from the arrival to BEGIN, so
+   the kind and the question come off one row. **On a housed phone, BEGIN with no dealt question
+   opens nothing**; on a phone with no house the fixtures stand, and the render harness still draws
+   the design.
+3. **A question the client cannot draw opens nothing.** The read happens at the arrival (the
+   boundary `MalformedSubroutineParameters` always named), and the phone stays on the scan. The house
+   cannot deal one (`SubroutineDrawTest`); this is the second refusal.
+4. **Replay's dots flash in the house's order**, once, from the screen opening: a still 0.8 s, then
+   each dot lit 0.6 s on a 0.9 s step. This is D-139's arrangement one Subroutine along (the client
+   renders the question deterministically from the parameters and the screen's own clock; no Effect,
+   no schema row), and it replaces the KDoc's earlier claim that the flash had to be an Effect. Taps
+   land throughout. ⚠️ **The timing is a placeholder for the owner to confirm**, like the speeds
+   playtest owns.
+
+**What did not change.** The wire: `SubroutineInstance` was already the narrow client type with its
+schema row, and it still carries the question and never the answer, so a client receives nothing it
+did not before. The rules, the grading and the fake are untouched: the Insider's fake is dealt by
+the same draw, drawn by the same screen and graded identically, and its right answer writes nothing.
+**Handshake has no wrong answer a screen can give**: the entry is one ordinal per tap and the timing
+is not graded (the gap `HandshakeRhythm`'s KDoc already names), so with the beat count now right
+every completed Handshake is accepted.
+
+| site | what it said | what it says now |
+|---|---|---|
+| `ui` `SubroutineModel` | screens read the companion's fixtures | `deal` writes the house's question into the slots the screens read |
+| `ui` `FlowModel.beginSubroutine`, `currentFrom` | the instance's parameters dropped at the join | carried on `CurrentSubroutine`, read at the arrival, dealt at BEGIN; housed and undealt opens nothing |
+| `ui` `ReplayScreen` | four dots, no flash | the dealt dots, flashed in the dealt order |
+| `HousedSubroutineQuestionTest` (`ui`, new) | (none) | all ten: the model holds the dealt question; the pixels differ from the fixture's and the Insider's equal the Resident's; housed and undealt opens nothing; a malformed question opens nothing; the flash order |
+| `SubroutineQuestionWiringTest` (`app`, new) | (none) | five phones over real loopback sockets, every card of three seeded rounds: the phone decodes the house's parameters and holds them; answered right from what the phone holds it is graded right, wrong graded wrong, for all ten for a Resident and for the Insider's fake; only a Resident's right answer moves System Integrity |
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

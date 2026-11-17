@@ -2164,6 +2164,15 @@ data class CurrentSubroutine(
     val index: Int,
     val total: Int,
     val done: Int,
+    /**
+     * **The question the house dealt at this scan** — `SubroutineInstance.parameters`, carried from
+     * the arrival to BEGIN so the two are read in one act (D-238).
+     *
+     * Null on the port's fixture, and only there: a phone with no house draws the bench's own
+     * question. On a housed phone a null here is a scan the house never answered, and BEGIN opens
+     * nothing over it (`FlowModel.beginSubroutine`).
+     */
+    val parameters: List<Int>? = null,
 ) {
     /**
      * The name and the light, taken off the roster rather than stored beside it.

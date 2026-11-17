@@ -98,7 +98,7 @@ class HandOverSeamTest {
         scanning(marker)
         houseSaid(
             RoundMessage.ScanAnswered(
-                SubroutineInstance(entry = entry, subroutine = kind, parameters = emptyList()),
+                SubroutineInstance(entry = entry, subroutine = kind, parameters = SubroutineModel.benchParameters(kind)),
             ),
         )
     }
@@ -152,7 +152,7 @@ class HandOverSeamTest {
             phone.scanning(study)
             phone.houseSaid(
                 RoundMessage.ScanAnswered(
-                    SubroutineInstance(entry = 1, subroutine = kind, parameters = emptyList()),
+                    SubroutineInstance(entry = 1, subroutine = kind, parameters = SubroutineModel.benchParameters(kind)),
                 ),
             )
             phone.actions().beginSubroutine()
@@ -219,7 +219,7 @@ class HandOverSeamTest {
             phone.scanning(study)
             phone.houseSaid(
                 RoundMessage.ScanAnswered(
-                    SubroutineInstance(entry = 1, subroutine = kind, parameters = emptyList()),
+                    SubroutineInstance(entry = 1, subroutine = kind, parameters = SubroutineModel.benchParameters(kind)),
                 ),
             )
             val subroutine = Subroutine.of(kind)
