@@ -85,6 +85,13 @@ fun Screen(
      */
     perms: PermsModel = remember { PermsModel.sample() },
     /**
+     * **Whether this install has been told NameDrop is off** (D-248).
+     *
+     * Defaulted to a phone that has, for [perms]' reason: every screen after the step is reached
+     * through it. In the app [FlowHost] passes the one wired to the phone's own file.
+     */
+    nameDrop: NameDropModel = remember { NameDropModel.sample() },
+    /**
      * **The lamp — the light the house set, and the Surge's slam over the top of it.**
      *
      * Defaulted and `remember`ed for the reason the six above are, and it is the one of the seven
@@ -109,6 +116,7 @@ fun Screen(
         LocalSubroutine provides subroutines,
         LocalNotifications provides notifications,
         LocalPerms provides perms,
+        LocalNameDrop provides nameDrop,
     ) {
         // THE FRAME DIMS FOR A HEAVY BANNER AND FOR NOTHING ELSE. `dims` is the house-wide
         // question — is one of D-118's two events on this screen — and the answer is yes on the
@@ -140,6 +148,7 @@ fun Screen(
             when (state.screen) {
                 ScreenId.Boot -> BootScreen(vals)
                 ScreenId.Perms -> PermsScreen()
+                ScreenId.NameDrop -> NameDropScreen()
                 ScreenId.Join -> JoinScreen()
 
                 ScreenId.Maps -> MapsScreen()

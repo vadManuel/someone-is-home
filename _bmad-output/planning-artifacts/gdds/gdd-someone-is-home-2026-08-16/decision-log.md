@@ -6566,6 +6566,72 @@ would need `RoundEnded` to carry them. Nothing here has run on a phone.
 | `RoundAuthorityTest` | no pushed effect carries a line | none prints one; only the Insiders' own reveals carry one |
 | `HousedContentTest` (new), `HousedContentWiringTest` (new) | (none) | one guard per item, the sweep, and five phones over a real loopback socket |
 
+## Revision 71 — NameDrop is switched off at setup, by the player's own hand
+
+*2026-11-17, overnight run, unit 6, from the owner's two real iPhones on 2026-11-16. A provisional
+call made without the owner: **owner to confirm the copy and the re-entry point.** Desktop and
+simulator unit tests only; nothing here has been on a phone.*
+
+### D-248 · **A setup step asks the player to switch NameDrop off, once per install, after the Perms screen and before a seat — built, provisional, owner to confirm**
+
+**What happened.** iOS NameDrop (two unlocked iPhones held close offer to share contacts) came up
+twice in about 40 touches between two phones. Its animation **lights both screens**. In this game
+phones meet on purpose in the dark, so that is light the house never sent: rule 5's spirit, arriving
+from the OS. D-077, D-093 and D-118 are unchanged; this is a setup step, not a light rule.
+
+**What the app cannot do.** iOS has no API that switches NameDrop off or reads whether it is on. The
+one sanctioned settings link, `UIApplication.openSettingsURLString`, opens the app's own page, which
+has no AirDrop switch; the deeper links (`App-Prefs:`, `prefs:root=`) are private, change between
+iOS versions and are refused at App Store review. **So there is no OPEN SETTINGS button**: the screen
+writes the path out, one row a step, and the player says they did it.
+
+1. **The step.** A new setup screen, `NameDrop`, light-field (bone, like every setup screen),
+   reached in the light before a seat (D-161's place). Proposed copy, **flagged for the owner**:
+   header `NAMEDROP`; *iPhones brought together light up to share contacts. Turn that off now, while
+   the lights are on.*; the path as four rows, `1 SETTINGS`, `2 GENERAL`, `3 AIRDROP`,
+   `4 BRINGING DEVICES TOGETHER [OFF]`; a caption *This phone cannot see that switch.*; and the one
+   action, `DONE`.
+2. **Where it sits.** After the Perms screen, before JOIN A HOME (every seat, host or guest, is taken
+   through JOIN). Both ways past PERMISSIONS ask one question, `NameDropModel.pastPerms`: CONTINUE,
+   and D-235's skip when the OS already grants everything. So **the skip cannot walk a fresh install
+   past the step**, and a confirmed install is never stopped at it. It is not a gate: the lobby does
+   not refuse a seat over it, because nothing can check it and a self-attested gate would be a tap.
+3. **Once per install.** DONE writes `namedrop-off.txt` in Documents (the store beside the resident
+   name; a failed write is dropped, so the worst case is being asked once more). It cannot have
+   changed in any way the phone could see, so it is never asked again on its own.
+4. **Again only on request.** The PERMISSIONS screen gains a `NAMEDROP` row (`TURN OFF` filled until
+   confirmed, `OFF` in outline after) that opens the step, and JOIN A HOME's back arrow now always
+   reaches PERMISSIONS: since D-235 a set-up phone arrives at JOIN with nothing behind it. The
+   in-round SETTINGS screen was **not** used: it is dark, inert by design and identical on every
+   phone, and a bone setup screen opened from it would be a lit screen mid-round.
+5. **Docs.** `tools/one-phone/README.md` and `ble-unit4-device-check.md`: switch NameDrop off on
+   every phone before a two-phone test.
+
+| site | before | after |
+|---|---|---|
+| `ui` `ScreenId`, `PanelVals.PRE` | Boot, Perms, Join | Boot, Perms, NameDrop, Join (a setup screen) |
+| `ui` `FlowModel.fallThrough` | skip to Join | skip to `nameDrop.pastPerms` |
+| `ui` `PermsScreen` | CONTINUE to Join | CONTINUE to `pastPerms`; a NAMEDROP row |
+| `ui` `JoinScreen` | back arrow only with a trail | back arrow always, to PERMISSIONS |
+| `ui` `NameDrop.kt` (new) | — | `NameDropStore`, `NameDropModel`, `LocalNameDrop` |
+| `platform` `NameDropStore` (new), `app` `NameDropDocument` (new), `Cheats.kt` | — | the install's file, wired at the app root |
+| `NameDropStepTest` (new), `NameDropStoreTest` (new), `PermsSkipTest` | — | the guards below |
+
+**Guards, each proven by breaking it** (`NameDropStepTest`, `PermsSkipTest`):
+- The skip to Join by name (the code before this entry): *a fresh install skipped the NameDrop step on
+  its way to a seat expected:<NameDrop> but was:<Join>*.
+- CONTINUE to Join by name: *CONTINUE walked a fresh install past the NameDrop step*.
+- DONE without the write: *DONE was not written to the install's file*.
+- `pastPerms` always the step: *a returning install that had confirmed NameDrop was stopped at the
+  step again*, and PermsSkipTest's *a fully granted phone was shown the Perms screen
+  expected:<Join> but was:<NameDrop>*.
+- The skip removed: PermsSkipTest *expected:<Join> but was:<Perms>*.
+- JOIN's back arrow without its fallback: no `back-chevron` on a skipped phone's join screen.
+
+**Not verified:** on a phone (no installs in this unit), whether the 4-row path matches every iOS
+version's wording (it is iOS 17's), and an iCloud restore to a new phone, which carries the file
+with it although the new phone's switch may be on.
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

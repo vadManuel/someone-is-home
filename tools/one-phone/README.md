@@ -48,6 +48,10 @@ Insider of a round somebody plays from the springboard.
 8. **Terminal needs Bluetooth.** The first `ble-peer` run may ask *"Terminal would like to use
    Bluetooth"*: allow it. If it says `BLUETOOTH IS NOT ALLOWED FOR THIS TERMINAL`, go to System Settings
    → Privacy & Security → Bluetooth, switch on the terminal app you use, and run it again.
+9. **Before any test with two or more iPhones, switch NameDrop off on every one:** Settings → General →
+   AirDrop → Bringing Devices Together → off. Two unlocked iPhones held close otherwise offer to share
+   contacts, and the offer lights both screens (twice in about 40 touches on 2026-11-16). The app can
+   neither read nor change it; a fresh install asks once, on its NAMEDROP setup step (D-248).
 
 Logs go to `/tmp/someones-home-one-phone/`. **Every `start` keeps its own**, in
 `runs/<date-time>/`, and no later run deletes or overwrites them: `phone.log` (everything the phone

@@ -48,6 +48,7 @@ import home.someoneshome.ui.FlowModel
 import home.someoneshome.ui.Label
 import home.someoneshome.ui.LobbyModel
 import home.someoneshome.ui.MeetingModel
+import home.someoneshome.ui.NameDropModel
 import home.someoneshome.ui.LocalPanelInsets
 import home.someoneshome.ui.LocalViewfinder
 import home.someoneshome.ui.PermsModel
@@ -276,6 +277,10 @@ fun CheatRoot() {
                 ask = permissions::request,
                 reread = permissions::refresh,
             ),
+            // **The NameDrop step's answer, on the phone's own file** (D-248). Shown once per
+            // install, before a seat; the OS has no API to read the switch, so the player's DONE is
+            // the whole of what is stored.
+            nameDrop = NameDropModel(NameDropDocument()),
             // **THE TORCH, REACHING THE LED** (E-PAY-5). `toggleTorch` moved a colour value in
             // `Amber` and nothing else; the owner's finding was a button that reaches no hardware.
             // The seam refuses on any scanner whose configuration says no torch, so this line

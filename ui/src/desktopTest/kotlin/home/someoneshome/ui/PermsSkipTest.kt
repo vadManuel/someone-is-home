@@ -15,6 +15,9 @@ import kotlin.test.assertEquals
  * drawn, its 2.4 seconds run out, and the screen it falls through to is asserted. The OS is a map
  * read through [PermsModel]'s own `read` seam, which is the seam `CheatRoot` hands the real
  * permissions to.
+ *
+ * The phone here has already confirmed the NameDrop step (D-248), which is what lets the skip land on
+ * the join screen; [NameDropStepTest] holds the fresh install's half.
  */
 @OptIn(ExperimentalTestApi::class)
 class PermsSkipTest {
@@ -25,6 +28,9 @@ class PermsSkipTest {
             val model = FlowModel(
                 PanelState(screen = ScreenId.Boot),
                 perms = PermsModel(read = { os[it] ?: Grant.Unasked }),
+                // An install that has already said NameDrop is off, so a skip lands on the join
+                // screen; a fresh install's skip lands on the NameDrop step (NameDropStepTest).
+                nameDrop = NameDropModel.sample(),
             )
             setContent { DeviceCanvas(insets = PanelInsets()) { FlowHost(model) } }
             mainClock.autoAdvance = false

@@ -21,8 +21,9 @@ import androidx.compose.ui.graphics.Color
  * follows the design's own grouping, which is a review convenience only.
  */
 enum class ScreenId {
-    // Cold start — light-field, because the house lights are still on.
-    Boot, Perms, Join,
+    // Cold start — light-field, because the house lights are still on. `NameDrop` is the one
+    // setting the OS will not let the app read or change (D-248): asked once, in the light.
+    Boot, Perms, NameDrop, Join,
 
     // Host setup — once per house, in the light. The two reserved cards each have the same pair
     // of screens, because each raises the same two questions: this home already has one, and
@@ -2097,7 +2098,7 @@ class PanelVals(
             ScreenId.HomeDetail, ScreenId.Delete, ScreenId.Secret, ScreenId.RoomEdit,
             ScreenId.MarkerSheet, ScreenId.ScanMarker, ScreenId.StairsWarn, ScreenId.TermTaken,
             ScreenId.TermRemove, ScreenId.MeetTaken, ScreenId.MeetRemove,
-            ScreenId.Floors, ScreenId.ReviewNeeds, ScreenId.Perms,
+            ScreenId.Floors, ScreenId.ReviewNeeds, ScreenId.Perms, ScreenId.NameDrop,
             ScreenId.Lobby, ScreenId.WinResidents,
         )
 

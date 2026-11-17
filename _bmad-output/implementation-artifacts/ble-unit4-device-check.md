@@ -19,6 +19,10 @@ a report land, and do the phones agree on the window. Every answer comes from th
 - On each phone, **Settings → General → Date & Time → Set Automatically: on.** The window is cut
   from the wall clock.
 - On each phone, grant Bluetooth at the Perms screen, in the light, before taking a seat.
+- On each phone, **Settings → General → AirDrop → Bringing Devices Together: off** (NameDrop). Two
+  unlocked iPhones held close otherwise offer to share contacts, and the offer lights both screens:
+  it fired twice in about 40 touches on 2026-11-16. The app cannot switch it off or read it; a fresh
+  install asks once, on the NAMEDROP setup step after the Perms screen (D-248).
 
 ## Install
 
