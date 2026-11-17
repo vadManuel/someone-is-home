@@ -31,10 +31,12 @@ import home.someoneshome.model.Tick
  *   emit schema decides who hears the answer. **No role and no armed state is read here**, and
  *   the guarantee is [ContactHouse]'s field list: it carries the round's seed, its seats and who
  *   is Revoked, and nothing else.
- * - **A one-sided sighting of a Revoked seat mints the report**, `MeetingCalled` with
- *   [MeetingTrigger.RevokeReported], exactly the event the bench's stand-in mints. One side
- *   suffices because a Revoked phone advertises and never scans (D-008). Who is Revoked is the
- *   one piece of state read, because the report *is* that fact meeting a phone.
+ * - **A one-sided sighting of a Revoked seat, heard twice, mints the report**, `MeetingCalled`
+ *   with [MeetingTrigger.RevokeReported], exactly the event the bench's stand-in mints. One side
+ *   suffices because a Revoked phone advertises and never scans (D-008); twice, in two of the
+ *   reporter's three latest uploads, because one side is one radio and one stray reading over the
+ *   floor is not a find (D-236). Who is Revoked is the one piece of state read, because the report
+ *   *is* that fact meeting a phone; the count asks nothing about who is counting.
  *
  * Where several apply at once, every one is minted, in seat order ([inSeatOrder]), and the rules
  * decide. A huddle of three is six contacts; a pair that also hears a Revoked seat is two contacts
@@ -69,7 +71,10 @@ data class ContactResolution(val memory: ContactMemory, val events: List<Event>)
  * memories reached by the same arrivals are equal.
  */
 data class ContactMemory(
-    /** The latest gated, resolved sighting per (observer, target), younger than [ContactGate.MUTUAL_TICKS]. */
+    /**
+     * Every gated, resolved sighting, one per (observer, target) per upload, younger than the longer
+     * of [ContactGate.MUTUAL_TICKS] and [ContactGate.REPORT_SPAN_TICKS] (D-236: a report counts them).
+     */
     val heard: List<ContactHeard>,
     /** The last contact minted per unordered pair, younger than [ContactGate.DEBOUNCE_TICKS]. */
     val minted: List<ContactMinted>,
@@ -93,15 +98,18 @@ data class ContactMinted(val low: Seat, val high: Seat, val at: Tick)
 data class ContactReceived(val seat: Seat, val at: Tick, val sightings: List<Sighting>)
 
 /**
- * **Every token the round's seats advertise in [window] and the window before it, and whose each
- * is.** [ContactTokens.seatOf]'s inversion, computed once per window rather than once per slot.
+ * **Every token the round's seats advertise in [window], the window before it and the window after
+ * it, and whose each is** (D-236). [ContactTokens.seatOf]'s inversion, computed once per window
+ * rather than once per slot.
  *
  * `seatOf` answers one token by deriving every seat's token, which is two HMACs per seat per slot:
- * 24 slots × 18 seats × 2 windows per upload, from every phone once a second, on a host that is a
- * phone with a whole-app allocation budget (rule 7). The book derives each seat's two tokens once
- * per fifteen seconds and answers by lookup. Built by [ContactTokens.of], the function `seatOf`
- * inverts, in seat order with the current window first and the first match kept, so it answers
- * exactly what `seatOf` answers; `ContactResolverTest` pins the two together.
+ * 24 slots × 18 seats × 3 windows per upload, from every phone once a second, on a host that is a
+ * phone with a whole-app allocation budget (rule 7). The book derives each seat's three tokens once
+ * per fifteen seconds and answers by lookup; between window edges it is reused as it stands and
+ * allocates nothing. Built by [ContactTokens.of], the function `seatOf` inverts, in seat order with
+ * the current window first, then the one behind, then the one ahead, and the first match kept, so it
+ * answers exactly what `seatOf` answers asked in that order; `ContactResolverTest` pins the two
+ * together.
  *
  * The map is read by key and never iterated, so its order decides nothing (rule 4).
  */
@@ -118,8 +126,8 @@ data class ContactBook(
         fun of(house: ContactHouse, window: ContactWindow): ContactBook {
             val seeds = house.seats.map { it to contactSeedFor(house.roundSeed, it) }
             val book = LinkedHashMap<ContactToken, Seat>()
-            for (back in 0L..ContactGate.WINDOWS_BACK) {
-                val w = ContactWindow(window.index - back)
+            for (offset in ContactGate.windowOffsets) {
+                val w = ContactWindow(window.index + offset)
                 for ((seat, seed) in seeds) {
                     val token = ContactTokens.of(seed, w)
                     if (token !in book) book[token] = seat
@@ -168,11 +176,24 @@ object ContactGate {
     /**
      * **Windows behind the house's that a token may come from: one.** A sighting made just before
      * an edge arrives just after it, so the previous window's tokens are honest for a whole window
-     * longer. Anything older is stale and resolves to no seat. A token from the window *ahead* of the
-     * house's is not accepted: an advertiser whose clock runs ahead past an edge is unresolvable for
-     * its skew and is heard again by the next upload.
+     * longer, and an advertiser whose clock runs behind the house's is still in it. Anything older is
+     * stale and resolves to no seat.
      */
     const val WINDOWS_BACK: Long = 1L
+
+    /**
+     * **Windows ahead of the house's that a token may come from: one** (D-236; D-213 refused it). An
+     * advertiser whose clock runs ahead of the host's moves to the next window's token that much
+     * before the house does, at every edge; refused, every touch inside that lead was lost, four
+     * times a minute. Two ahead is refused: no honest clock is a whole window fast, and a token from
+     * further ahead than the next window can only come from a seed, never from the air. The bound is
+     * the same on both sides, so a token resolves for three windows and then never again.
+     */
+    const val WINDOWS_AHEAD: Long = 1L
+
+    /** The house's window first, then behind it, then ahead: the order [ContactBook] keeps first matches in. */
+    internal val windowOffsets: List<Long> =
+        listOf(0L) + (1L..WINDOWS_BACK).map { -it } + (1L..WINDOWS_AHEAD).toList()
 
     /**
      * ⚠️ **PLACEHOLDER: two seconds.** The two halves of a mutual sighting must arrive within this
@@ -186,12 +207,40 @@ object ContactGate {
     const val DEBOUNCE_TICKS: Long = 5L * Balance.TICKS_PER_SECOND
 
     /**
-     * **How long an upload is remembered to recognise a second delivery: the window and the one
-     * behind it.** Derived, not tuned: after that, every token in it is stale and it can resolve
+     * **One upload interval, in ticks: one second**, the same value as `SightingUpload.CADENCE_MILLIS`
+     * (provisional there, and `ContactResolverTest` pins the two together). Held here so the report's
+     * span below is counted in uploads and moves with the cadence.
+     */
+    const val UPLOAD_TICKS: Long = 1L * Balance.TICKS_PER_SECOND
+
+    /**
+     * **A report needs two readings at contact range, from two of the reporter's uploads** (D-236).
+     * A contact already needs two readings, one from each phone; a report has only one phone that
+     * scans (a Revoked phone never does, D-008), so it asks that one phone twice. One stray reading
+     * over the floor, a pass-by at 30 cm on the gate's one-dB margin or an Insider lingering near
+     * the player they Revoked, is no longer a meeting.
+     */
+    const val REPORT_READINGS: Int = 2
+
+    /**
+     * **...within two of the reporter's three latest uploads: 2.5 s**, which is two upload intervals
+     * between the first reading and the last plus half of one for delivery jitter, measured on
+     * arrival ticks as [MUTUAL_TICKS] is. Holding a phone to a Revoked one for about two seconds
+     * reports it; brushing it in one does not.
+     */
+    const val REPORT_SPAN_TICKS: Long = 2L * UPLOAD_TICKS + UPLOAD_TICKS / 2
+
+    /** How long a gated sighting is remembered: as long as the longer of the two questions asks. */
+    internal val HEARD_TICKS: Long = maxOf(MUTUAL_TICKS, REPORT_SPAN_TICKS)
+
+    /**
+     * **How long an upload is remembered to recognise a second delivery: as long as a token in it
+     * can resolve**, the window behind the house's, the house's, and the one ahead (D-236, was two
+     * windows). Derived, not tuned: after that, every token in it is stale and it can resolve
      * nothing anyway.
      */
     const val DUPLICATE_TICKS: Long =
-        (WINDOWS_BACK + 1) * ContactWindow.MILLIS * Balance.TICKS_PER_SECOND / 1_000L
+        (WINDOWS_BACK + 1 + WINDOWS_AHEAD) * ContactWindow.MILLIS * Balance.TICKS_PER_SECOND / 1_000L
 
     /** Whether [rssi] is a contact-range reading. */
     fun atContact(rssi: Int): Boolean = rssi in RSSI_FLOOR..RSSI_CEILING
@@ -230,11 +279,13 @@ internal class ContactHouse private constructor(
  *    uploads never match; a repeat is the transport's, and it must not refresh a sighting's time.
  *    An upload from a seat not in the round is ignored too: nothing it heard can be anybody's.
  * 2. **Each slot is gated, then inverted.** [ContactGate.atContact] first, then the book: a token
- *    from the house's window or the one before it, from a seat of this round, that is not the
- *    uploader's own. Filler, strangers and stale windows resolve to nobody.
- * 3. **The heard list is refreshed** with what this arrival heard.
+ *    from the house's window, the one before it or the one after it, from a seat of this round,
+ *    that is not the uploader's own. Filler, strangers and windows further off resolve to nobody.
+ * 3. **The heard list gains** one entry per seat each upload heard, and forgets what is older than
+ *    either question below asks about.
  * 4. **Each pair heard this arrival is judged:** a contact if each side has heard the other within
- *    [ContactGate.MUTUAL_TICKS]; a report for each side that heard a Revoked seat.
+ *    [ContactGate.MUTUAL_TICKS]; a report for each side that heard a Revoked seat in
+ *    [ContactGate.REPORT_READINGS] uploads within [ContactGate.REPORT_SPAN_TICKS].
  * 5. **A pair minted within [ContactGate.DEBOUNCE_TICKS] mints nothing**; otherwise everything that
  *    applies to it is minted at [at] and the pair is stamped once.
  */
@@ -248,12 +299,16 @@ fun resolveContacts(
     val house = ContactHouse.of(state)
     val book = memory.book?.takeIf { it.fits(house, window) } ?: ContactBook.of(house, window)
 
-    var received = memory.received.filter { at.step - it.at.step <= ContactGate.DUPLICATE_TICKS }
+    // One list built per arrival, filtered into and then appended to, rather than a filter and a
+    // copy per upload: it holds every upload of the last three windows, so on an eighteen-seat host
+    // it is the resolver's largest allocation (rule 7, D-236).
+    val received = ArrayList<ContactReceived>(memory.received.size + uploads.size)
+    memory.received.filterTo(received) { at.step - it.at.step <= ContactGate.DUPLICATE_TICKS }
     val fresh = mutableListOf<ContactHeard>()
     for (upload in uploads.sortedWith(compareBy<ContactUpload> { it.seat.index }.thenBy { slotsKey(it.sightings) })) {
         val repeat = received.any { it.seat.index == upload.seat.index && it.sightings == upload.sightings }
         if (repeat || !house.holds(upload.seat)) continue
-        received = received + ContactReceived(upload.seat, at, upload.sightings)
+        received += ContactReceived(upload.seat, at, upload.sightings)
         upload.sightings
             .filter { ContactGate.atContact(it.rssi) }
             .mapNotNull { book.seatOf[it.token] }
@@ -262,15 +317,14 @@ fun resolveContacts(
             .forEach { fresh += ContactHeard(upload.seat, it, at) }
     }
 
-    val heard = (
-        memory.heard.filter { old -> fresh.none { it.observer.index == old.observer.index && it.target.index == old.target.index } } +
-            fresh
-        )
-        .filter { at.step - it.at.step <= ContactGate.MUTUAL_TICKS }
-        .sortedWith(compareBy<ContactHeard> { it.observer.index }.thenBy { it.target.index })
+    val heard = (memory.heard + fresh)
+        .filter { at.step - it.at.step <= ContactGate.HEARD_TICKS }
+        .sortedWith(compareBy<ContactHeard> { it.observer.index }.thenBy { it.target.index }.thenBy { it.at.step })
 
-    fun heardBy(observer: Seat, target: Seat): ContactHeard? =
-        heard.firstOrNull { it.observer.index == observer.index && it.target.index == target.index }
+    /** How many of [observer]'s uploads heard [target] within [ticks] of this arrival. */
+    fun heardBy(observer: Seat, target: Seat, ticks: Long): Int = heard.count {
+        it.observer.index == observer.index && it.target.index == target.index && at.step - it.at.step <= ticks
+    }
 
     var minted = memory.minted.filter { at.step - it.at.step < ContactGate.DEBOUNCE_TICKS }
     val events = mutableListOf<Event>()
@@ -279,19 +333,19 @@ fun resolveContacts(
         .distinctBy { (low, high) -> low.index to high.index }
         .sortedWith(compareBy<Pair<Seat, Seat>> { it.first.index }.thenBy { it.second.index })
     for ((low, high) in pairs) {
-        val there = heardBy(low, high)
-        val back = heardBy(high, low)
         val applies = buildList {
-            // Mutual is both halves present. [heard] holds only halves younger than the window and
-            // every pair judged here has a half from this arrival, so present is within it.
-            if (there != null && back != null) {
+            // Mutual is both halves within the window. Every pair judged here has a half from this
+            // arrival, so the window is measured back from now.
+            if (heardBy(low, high, ContactGate.MUTUAL_TICKS) > 0 && heardBy(high, low, ContactGate.MUTUAL_TICKS) > 0) {
                 add(Event.ContactMade(at, low, high))
                 add(Event.ContactMade(at, high, low))
             }
-            if (there != null && house.isRevoked(high)) {
+            // A report is one side, heard twice (D-236). The count is the same question for every
+            // reporter; the only thing asked of the seat heard is whether it is Revoked.
+            if (house.isRevoked(high) && heardBy(low, high, ContactGate.REPORT_SPAN_TICKS) >= ContactGate.REPORT_READINGS) {
                 add(Event.MeetingCalled(at, low, MeetingTrigger.RevokeReported(high)))
             }
-            if (back != null && house.isRevoked(low)) {
+            if (house.isRevoked(low) && heardBy(high, low, ContactGate.REPORT_SPAN_TICKS) >= ContactGate.REPORT_READINGS) {
                 add(Event.MeetingCalled(at, high, MeetingTrigger.RevokeReported(low)))
             }
         }

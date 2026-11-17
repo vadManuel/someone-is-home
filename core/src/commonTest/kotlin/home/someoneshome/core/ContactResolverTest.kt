@@ -57,6 +57,15 @@ class ContactResolverTest {
     private fun report(caller: Int, reported: Int) =
         Event.MeetingCalled(Tick(0), Seat(caller), MeetingTrigger.RevokeReported(Seat(reported)))
 
+    /**
+     * **[caller] hears [reported] in two uploads one second apart**, the least a report takes
+     * (D-236), and returns what the second minted. The first must mint nothing.
+     */
+    private fun Feed.twice(caller: Int, reported: Int, rssi: Int = -20, window: ContactWindow = w, from: Long = t0): List<Event> {
+        assertEquals(emptyList(), at(from, up(caller, hears(reported, rssi, window))), "one reading of seat $reported minted something")
+        return at(from + ContactGate.UPLOAD_TICKS, up(caller, hears(reported, rssi, window)))
+    }
+
     /** The resolver, driven one arrival at a time. */
     private inner class Feed(var memory: ContactMemory = ContactMemory.EMPTY, val against: GameState = state) {
         val log = mutableListOf<ContactResolution>()
@@ -112,7 +121,7 @@ class ContactResolverTest {
             val f = Feed()
             f.at(t0, up(2, hears(3, rssi)))
             assertEquals(emptyList(), f.at(t0 + 10, up(3, hears(2, rssi))), "$rssi dBm is 30 cm or more (D-233) and landed")
-            assertEquals(emptyList(), Feed().at(t0, up(2, hears(6, rssi))), "$rssi dBm reported a Revoked seat")
+            assertEquals(emptyList(), Feed().twice(2, 6, rssi), "$rssi dBm, twice, reported a Revoked seat")
         }
     }
 
@@ -122,7 +131,7 @@ class ContactResolverTest {
             val f = Feed()
             f.at(t0, up(2, hears(3, -20)))
             assertEquals(emptyList(), f.at(t0 + 10, up(3, hears(2, junk))), "RSSI $junk passed as contact")
-            assertEquals(emptyList(), Feed().at(t0, up(2, hears(6, junk))), "RSSI $junk reported a Revoked seat")
+            assertEquals(emptyList(), Feed().twice(2, 6, junk), "RSSI $junk, twice, reported a Revoked seat")
         }
         val f = Feed()
         f.at(t0, up(2, hears(3, -20)))
@@ -131,8 +140,8 @@ class ContactResolverTest {
 
     @Test
     fun `a Revoked seat heard under the floor is not reported`() {
-        assertEquals(emptyList(), Feed().at(t0, up(2, hears(6, ContactGate.RSSI_FLOOR - 1))))
-        assertEquals(listOf(report(2, 6)), shape(Feed().at(t0, up(2, hears(6, ContactGate.RSSI_FLOOR)))))
+        assertEquals(emptyList(), Feed().twice(2, 6, ContactGate.RSSI_FLOOR - 1))
+        assertEquals(listOf(report(2, 6)), shape(Feed().twice(2, 6, ContactGate.RSSI_FLOOR)))
     }
 
     // ----------------------------------------------------------------------------------------------
@@ -166,19 +175,128 @@ class ContactResolverTest {
     @Test
     fun `a Revoked seat needs one side only - because it never scans`() {
         val f = Feed()
-        assertEquals(listOf(report(2, 6)), shape(f.at(t0, up(2, hears(6)), up(6))))
+        assertEquals(emptyList(), f.at(t0, up(2, hears(6)), up(6)))
+        assertEquals(listOf(report(2, 6)), shape(f.at(t0 + ContactGate.UPLOAD_TICKS, up(2, hears(6)), up(6))))
+    }
+
+    // ----------------------------------------------------------------------------------------------
+    // A report is heard twice (D-236).
+
+    @Test
+    fun `one reading of a Revoked seat reports nothing and a second within the span reports it`() {
+        assertEquals(2, ContactGate.REPORT_READINGS, "a report's readings moved without a D-entry (D-236)")
+        assertEquals(SightingUpload.CADENCE_MILLIS * Balance.TICKS_PER_SECOND / 1_000L, ContactGate.UPLOAD_TICKS, "the span is counted in uploads")
+        assertEquals(50L, ContactGate.REPORT_SPAN_TICKS, "two of three uploads, plus half of one, is 2.5 s (D-236)")
+
+        val once = Feed()
+        assertEquals(emptyList(), once.at(t0, up(2, hears(6))), "one reading reported a Revoked seat")
+        for (tick in (t0 + 1)..(t0 + ContactGate.DEBOUNCE_TICKS * 2) step 10) {
+            assertEquals(emptyList(), once.at(tick, up(2)), "one reading reported a Revoked seat later, at $tick")
+        }
+
+        val span = ContactGate.REPORT_SPAN_TICKS
+        val inside = Feed()
+        inside.at(t0, up(2, hears(6)))
+        assertEquals(listOf(report(2, 6)), shape(inside.at(t0 + span, up(2, hears(6)))), "two readings $span ticks apart")
+
+        val outside = Feed()
+        outside.at(t0, up(2, hears(6)))
+        assertEquals(emptyList(), outside.at(t0 + span + 1, up(2, hears(6))), "two readings ${span + 1} ticks apart reported")
+
+        // The two of the three latest: hear, miss, hear.
+        val gap = Feed()
+        gap.at(t0, up(2, hears(6)))
+        gap.at(t0 + ContactGate.UPLOAD_TICKS, up(2))
+        assertEquals(listOf(report(2, 6)), shape(gap.at(t0 + 2 * ContactGate.UPLOAD_TICKS, up(2, hears(6)))), "hear, miss, hear")
+    }
+
+    /**
+     * **The 30 cm pass-by and the lingering Insider** (R5 of the 2026-11-16 review): what D-233's
+     * one-dB margin lets through is one reading at a time. Stray readings at the floor three uploads
+     * apart are not a find; two in a row are.
+     */
+    @Test
+    fun `a stray reading over the floor among 30 cm readings reports nothing`() {
+        val f = Feed()
+        // 30 cm's measured spread (D-233, −41 to −45), with a stray −40 every third upload.
+        val pass = listOf(-43, -41, -40, -44, -45, -40, -42, -45, -40)
+        for ((i, rssi) in pass.withIndex()) {
+            assertEquals(emptyList(), f.at(t0 + i * ContactGate.UPLOAD_TICKS, up(2, hears(6, rssi))), "a 30 cm pass reported at reading $i ($rssi dBm)")
+        }
+        assertEquals(listOf(report(2, 6)), shape(f.at(t0 + pass.size * ContactGate.UPLOAD_TICKS, up(2, hears(6, -40)))), "two readings at the floor, one upload apart")
+    }
+
+    @Test
+    fun `readings from different phones do not add up to one report`() {
+        val f = Feed()
+        assertEquals(emptyList(), f.at(t0, up(2, hears(6))))
+        assertEquals(emptyList(), f.at(t0 + ContactGate.UPLOAD_TICKS, up(3, hears(6))), "two phones' single readings made a report")
+    }
+
+    @Test
+    fun `a second delivery of one upload is not a second reading`() {
+        val f = Feed()
+        val first = up(2, hears(6))
+        f.at(t0, first)
+        assertEquals(emptyList(), f.at(t0 + ContactGate.UPLOAD_TICKS, first), "a duplicate counted as the second reading")
+    }
+
+    @Test
+    fun `a contact still needs only one reading from each phone`() {
+        val f = Feed()
+        assertEquals(emptyList(), f.at(t0, up(2, hears(3, -37))))
+        assertEquals(contacts(2, 3), shape(f.at(t0 + ContactGate.UPLOAD_TICKS, up(3, hears(2, -38)))), "a quick touch, one reading a side, did not land")
     }
 
     // ----------------------------------------------------------------------------------------------
     // Windows.
 
+    /**
+     * **R8 of the 2026-11-16 review: a phone whose clock runs ahead of the host's** moves to its next
+     * token before the house's window does. Its sightings of others resolve either way (it reports
+     * the tokens it heard); what a fast clock changes is the token *it* advertises.
+     */
     @Test
-    fun `the house's window and the one before it are accepted and nothing else`() {
+    fun `a phone whose clock runs one window ahead is still mapped at the edge - and two ahead is not`() {
+        val ahead = ContactWindow(w.index + 1)
+        val f = Feed()
+        f.at(t0, up(2, hears(3, window = w)))
+        assertEquals(contacts(2, 3), shape(f.at(t0 + 10, up(3, hears(2, window = w)))), "the baseline touch")
+
+        val edge = Feed()
+        edge.at(t0, up(2, hears(3, window = ahead)), window = w)
+        assertEquals(contacts(2, 3), shape(edge.at(t0 + 10, up(3, hears(2, window = w)), window = w)), "seat 3 is a window ahead and its touch was lost")
+        assertEquals(listOf(Seat(3)), edge.memory.heard.filter { it.observer == Seat(2) }.map { it.target }, "seat 3's next-window token mapped to nobody")
+
+        val far = Feed()
+        far.at(t0, up(2, hears(3, window = ContactWindow(w.index + 2))), window = w)
+        assertEquals(emptyList(), far.at(t0 + 10, up(3, hears(2, window = w)), window = w), "a token two windows ahead was mapped")
+        assertEquals(emptyList(), far.memory.heard.filter { it.observer == Seat(2) }, "a token two windows ahead was remembered")
+    }
+
+    @Test
+    fun `a token one window ahead is remembered against a second delivery for as long as it resolves`() {
+        // Taken at the start of the house's window, carrying the next window's token: that token
+        // resolves until the end of the window after next, which is just under three windows on.
+        val start = 0L
+        val first = up(2, hears(6, window = ContactWindow(w.index + 1)))
+        val f = Feed()
+        f.at(start, first, window = w)
+        f.at(start + 1, up(2, hears(6, window = ContactWindow(w.index + 1))), window = w) // the report
+        val late = start + 3L * ContactWindow.MILLIS * Balance.TICKS_PER_SECOND / 1_000L - 1
+        assertEquals(emptyList(), f.at(late, first, window = ContactWindow(w.index + 2)), "the duplicate counted")
+        assertTrue(f.memory.heard.none { it.at.step >= late }, "a duplicate's token was taken as a fresh reading: ${f.memory.heard}")
+        assertEquals(late + 1, ContactGate.DUPLICATE_TICKS, "the duplicate memory is as long as a token resolves: three windows")
+    }
+
+    @Test
+    fun `the house's window and one either side of it are accepted and nothing else`() {
         for ((label, window, accepted) in listOf(
             Triple("current", w, true),
             Triple("previous", ContactWindow(w.index - 1), true),
             Triple("two back", ContactWindow(w.index - 2), false),
-            Triple("ahead", ContactWindow(w.index + 1), false),
+            Triple("ahead", ContactWindow(w.index + 1), true),
+            Triple("two ahead", ContactWindow(w.index + 2), false),
         )) {
             val f = Feed()
             f.at(t0, up(2, hears(3, window = window)))
@@ -186,7 +304,7 @@ class ContactResolverTest {
             assertEquals(if (accepted) contacts(2, 3) else emptyList(), shape(got), "a token from the $label window")
             assertEquals(
                 if (accepted) listOf(report(2, 6)) else emptyList(),
-                shape(Feed().at(t0, up(2, hears(6, window = window)))),
+                shape(Feed().twice(2, 6, window = window)),
                 "a report from the $label window",
             )
         }
@@ -205,14 +323,18 @@ class ContactResolverTest {
     fun `the book answers exactly what seatOf answers`() {
         val seeds = seats.map { it to contactSeedFor(state.seed, it) }
         val book = ContactBook.of(ContactHouse.of(state), w)
-        for (back in -2L..3L) {
+        for (back in -3L..3L) {
             val window = ContactWindow(w.index - back)
             for (seat in seats) {
                 val t = ContactTokens.of(seeds[seat.index].second, window)
-                val expected = ContactTokens.seatOf(t, w, seeds) ?: ContactTokens.seatOf(t, ContactWindow(w.index - 1), seeds)
+                val expected = ContactTokens.seatOf(t, w, seeds)
+                    ?: ContactTokens.seatOf(t, ContactWindow(w.index - 1), seeds)
+                    ?: ContactTokens.seatOf(t, ContactWindow(w.index + 1), seeds)
                 assertEquals(expected, book.seatOf[t], "seat ${seat.index}'s token ${back} windows back")
+                assertEquals(back in -1L..1L, expected != null, "seat ${seat.index}'s token ${back} windows back")
             }
         }
+        assertEquals(3 * seats.size, book.seatOf.size, "the book holds three windows of every seat")
     }
 
     // ----------------------------------------------------------------------------------------------
@@ -228,10 +350,13 @@ class ContactResolverTest {
         assertEquals(contacts(2, 3), shape(f.at(t0 + gap, up(2, hears(3)), up(3, hears(2)))))
 
         val r = Feed()
-        assertEquals(listOf(report(2, 6)), shape(r.at(t0, up(2, hears(6)))))
-        assertEquals(emptyList(), r.at(t0 + 20, up(2, hears(6))), "a second report inside five seconds")
-        assertEquals(emptyList(), r.at(t0 + gap - 1, up(2, hears(6))))
-        assertEquals(listOf(report(2, 6)), shape(r.at(t0 + gap, up(2, hears(6)))))
+        assertEquals(listOf(report(2, 6)), shape(r.twice(2, 6)))
+        assertEquals(emptyList(), r.at(t0 + 40, up(2, hears(6))), "a second report inside five seconds")
+        val stamped = t0 + ContactGate.UPLOAD_TICKS
+        // Still held there, an upload a second, so every arrival below has two readings to count.
+        for (tick in listOf(t0 + 60, t0 + 80, t0 + 100)) assertEquals(emptyList(), r.at(tick, up(2, hears(6))), "reported at $tick")
+        assertEquals(emptyList(), r.at(stamped + gap - 1, up(2, hears(6))))
+        assertEquals(listOf(report(2, 6)), shape(r.at(stamped + gap, up(2, hears(6)))))
     }
 
     @Test
@@ -253,10 +378,12 @@ class ContactResolverTest {
 
     @Test
     fun `a second delivery of a report's upload does not report twice`() {
-        val first = up(2, hears(6))
         val f = Feed()
-        assertEquals(listOf(report(2, 6)), shape(f.at(t0, first)))
-        assertEquals(emptyList(), f.at(t0 + ContactGate.DEBOUNCE_TICKS + 20, first), "the duplicate reported again")
+        f.at(t0, up(2, hears(6)))
+        val second = up(2, hears(6))
+        assertEquals(listOf(report(2, 6)), shape(f.at(t0 + ContactGate.UPLOAD_TICKS, second)))
+        assertEquals(emptyList(), f.at(t0 + ContactGate.DEBOUNCE_TICKS + 20, second), "the duplicate reported again")
+        assertEquals(emptyList(), f.at(t0 + ContactGate.DEBOUNCE_TICKS + 30, second), "two duplicates counted as two readings")
     }
 
     // ----------------------------------------------------------------------------------------------
@@ -315,6 +442,7 @@ class ContactResolverTest {
     @Test
     fun `a pair that both hear a Revoked seat mints every event that applies - in seat order`() {
         val f = Feed()
+        assertEquals(emptyList(), f.at(t0 - ContactGate.UPLOAD_TICKS, up(4, hears(6)), up(2, hears(6))), "one reading reported")
         val events = f.at(t0, up(4, hears(2), hears(6)), up(2, hears(4), hears(6)))
         assertEquals(
             listOf(
@@ -354,6 +482,7 @@ class ContactResolverTest {
         f.at(t0 + 5, up(3, hears(2, -28), hears(4, -60)))
         f.at(t0 + 20, up(4, hears(3, -25)), up(3, hears(4, -22)), up(6))
         f.at(t0 + 80, up(2, hears(3)), up(3, hears(2)), up(7, hears(6), hears(5)))
+        f.at(t0 + 100, up(7, hears(6, -38)))
         f.at(t0 + 300, up(1, hears(2, window = ContactWindow(w.index))), up(2, hears(1)), window = ContactWindow(w.index + 1))
         f.at(t0 + 301, up(1, hears(2, window = ContactWindow(w.index))), window = ContactWindow(w.index + 1))
     }

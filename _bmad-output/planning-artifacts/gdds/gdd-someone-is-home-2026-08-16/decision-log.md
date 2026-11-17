@@ -5929,6 +5929,92 @@ the owner's to rule.
 | `ui` `LightsOut`, `LobbyExit` | notes under both; LEAVE THIS LOBBY | the inert button's reason only; LEAVE THIS HOUSE |
 | `KeyboardLayoutTest`, `PermsSkipTest` (new); `LobbyInputTest` | (none); KEEP HOLDING read as the bar | the field and HAND IT OVER above a 310-unit keyboard; skipped only when every row is open, row by row; the bar read off its own progress; the two holds' words |
 
+## Revision 63 — a report is heard twice, and a phone running ahead is still mapped
+
+*2026-11-16, overnight run, from findings R5 and R8 of the read-only review of `67f3313..HEAD`. A
+provisional call made without the owner: **owner to confirm.** Desktop tests only; nothing here has
+been on a phone.*
+
+### D-236 · **A report needs two readings at contact range in two of the reporter's three latest uploads; a contact is unchanged; the token book holds the window ahead — built, owner to confirm (amends D-213's report rule and its windows)**
+
+**R5, what was wrong.** D-233's −40 gate, D-233's 100 ms scan and D-218's strongest-per-second ring
+were never measured together. A report needed one side and **one** reading at or above the floor.
+Measured phone to phone (D-233): 30 cm reads −41 to −45, median −43, so the gate's margin at 30 cm is
+one dB. Those readings were the ring's at a 250 ms scan, the strongest of about four callbacks a
+second; at 100 ms it keeps the strongest of about ten, which can only move the kept reading up, and
+that has not been measured. So one stray second at −40 could call a meeting from a pass-by, and an
+Insider still near the player they Revoked after the 5 s debounce could report their own target on
+one stray reading.
+
+1. **A report needs `ContactGate.REPORT_READINGS` = 2 readings** at contact range, of the same
+   Revoked seat, by the same reporter, from two of its uploads, **within `REPORT_SPAN_TICKS` =
+   2.5 s** of arrival time: two upload intervals from the first reading to the last, plus half of
+   one for delivery jitter. That is *two of the reporter's three latest uploads*. A second delivery of
+   one upload is not a second reading (the duplicate guard drops it first), and two phones' single
+   readings do not add up.
+2. **What it buys**, worked from the measurement, because the rate at 100 ms is the unmeasured part:
+   if *p* is the chance that one second's kept reading at 30 cm reaches −40,
+
+   | *p* | 2 s pass-by, one reading | 2 s pass-by, two of three | 10 s standing at 30 cm, one reading | 10 s, two of three |
+   |---|---|---|---|---|
+   | 0.05 | 10 % | 0.3 % | 40 % | 4 % |
+   | 0.1 | 19 % | 1 % | 65 % | 13 % |
+   | 0.2 | 36 % | 4 % | 89 % | 40 % |
+
+   Exact for independent seconds (the readings are not quite independent; a phone held still at the
+   edge of range is the worst case). A pass-by falls by a factor of ten to twenty-five. Standing at
+   30 cm for long enough still reports at a high *p*: that is the gate's question, not this one, and
+   the two-phone 30 cm pass-by check D-233 asked for is still owed, now with this rule in.
+3. **What it costs.** A report now takes the reporter's phone held at contact range for about two
+   seconds (at least one upload interval, at most 2.5 s), where one qualifying second did before.
+   A Revoked phone does not move, so a finder can hold it; a brush past it no longer reports.
+   **Owner to confirm**, and if any copy says *touch* to report, *hold* is now the truer word.
+4. **The lingering Insider** (D-213, open item 5). A stray reading near the target after the
+   debounce no longer reports. An Insider who **keeps their phone at contact range** with their
+   target past the debounce still reports them, under their own name, as D-213 ruled by design.
+5. **A contact is unchanged: one reading from each phone within 2 s.** A contact already needs two
+   readings from two independent radios, the same order of false positive the report now has
+   (about *p*² at 30 cm). Asking two of three of each side would make it about *p*⁴ and would undo
+   D-233: quick moving touches gave about one qualifying reading per phone per second, and the owner
+   moved the gate to −40 to catch exactly those. `a contact still needs only one reading from each
+   phone` pins it.
+6. **Role-blind, and the field list is still the guarantee.** The count is one question asked of
+   every reporter; `ContactHouse` is unchanged (seed, seats, who is Revoked), so no role or arm can
+   reach it. A new differential case has an Insider, a Resident and the other Insider each hear the
+   Revoked seat once, again later once, then twice: no report from a single reading, three from the
+   second readings, and identical output under all six role exchanges and arms.
+
+**R8, what was wrong.** The token book held the house's window and the one behind (D-213 refused the
+one ahead). A phone whose clock runs ahead of the host's moves to its next token that much before
+the house's window does, at every edge, so for that lead four times a minute every touch with it was
+lost. The two-phone sessions measured the clocks within 0.4 to 0.5 s of each other, so the loss was
+small but real, and a phone further off loses more.
+
+7. **The book holds the window ahead too: `WINDOWS_AHEAD` = 1.** It is built once per window, the
+   house's window first, then the one behind, then the one ahead, first match kept, and pinned to
+   `ContactTokens.seatOf` asked in that order. **Bounded:** two ahead is refused (no honest clock is
+   a whole window fast, and a token from further ahead can only come from a seed), two behind is
+   refused as before, so a token resolves for exactly three windows and then never again.
+8. **Rule 7.** The book is reused between edges and allocates nothing in steady state; at an edge it
+   derives three tokens per seat instead of two (54 HMACs every 15 s at 18 seats). **The duplicate
+   memory is derived from the same bound, so it grows from two windows to three (30 s to 45 s)**:
+   otherwise a second delivery carrying a next-window token could be taken as fresh in its third
+   window. To pay for that, the received list is now built once per arrival (filtered into one
+   list, then appended to) rather than filtered and then copied again. Estimated at 8 bytes a
+   reference and one upload a second per phone: 8 seats about 23 KB/s, was about 31; 18 seats about
+   117 KB/s, was about 156. **Raised, not fixed:** at 18 seats that list is still about a quarter of
+   the 0.5 MB/s budget on the host. A ring keyed by seat would make it near zero; it is the
+   resolver's largest allocation and unit 8 should measure it.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `core` `resolveContacts` | a report on one reading; `heard` keeps the latest reading per pair for 2 s | a report on `REPORT_READINGS` readings within `REPORT_SPAN_TICKS`; `heard` keeps every reading per upload for the longer of the two spans |
+| `core` `ContactGate` | `WINDOWS_BACK`; `DUPLICATE_TICKS` two windows | `WINDOWS_AHEAD` = 1, `UPLOAD_TICKS`, `REPORT_READINGS` = 2, `REPORT_SPAN_TICKS` = 2.5 s; `DUPLICATE_TICKS` three windows |
+| `core` `ContactBook` | the house's window and the one behind | and the one ahead |
+| `ContactResolverTest` | one reading reports; the window ahead refused | one reading never reports, two within 2.5 s do and 2.55 s do not, hear-miss-hear does, a 30 cm pass with stray −40s does not, two phones do not add up, a duplicate is not a second reading, a contact still needs one a side; one window ahead mapped, two ahead not, its duplicate remembered for three windows |
+| `ContactResolverDifferentialTest` | single-reading reports | reports confirmed by a second reading; a new case, one reading against two, under every variant |
+| `tools/one-phone/README.md` | a report on one reading | two in about 2.5 s; what a single −40 line means |
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

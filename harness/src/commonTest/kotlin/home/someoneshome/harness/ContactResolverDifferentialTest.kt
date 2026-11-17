@@ -12,6 +12,7 @@ import home.someoneshome.model.ContactTokens
 import home.someoneshome.model.ContactWindow
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
+import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.Role
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Sighting
@@ -65,6 +66,9 @@ class ContactResolverDifferentialTest {
         )
         val t = ready + 200
         return listOf(
+            // One of the Residents hears seat 6 once, a second before the huddle: alone, nothing
+            // (D-236); with the huddle's reading, a report.
+            t - 20 to listOf(if (huddleHearsTheRevoked) up(2, hears(6)) else up(2)),
             // The armed Insider in a huddle with two Residents, and one of the Residents hears seat 6.
             t to listOf(
                 up(5, hears(2), hears(4)),
@@ -74,8 +78,10 @@ class ContactResolverDifferentialTest {
             // The other Insider touches a Resident one-sidedly, then both ways.
             t + 10 to listOf(up(1, hears(3)), up(6)),
             t + 20 to listOf(up(3, hears(1, -30)), up(7, hears(6, -36))),
-            // Seat 3 and seat 7, a Resident pair, and seat 7 reports seat 6.
+            // Seat 3 and seat 7, a Resident pair, and seat 7 hears seat 6 again: one reading,
+            // six seconds after the last, so nothing; then a second, a report.
             t + 140 to listOf(up(3, hears(7)), up(7, hears(3), hears(6))),
+            t + 160 to listOf(up(7, hears(6, -40))),
         )
     }
 
@@ -86,6 +92,15 @@ class ContactResolverDifferentialTest {
         }
     }
 
+    private val variants = mapOf(
+        "seats 1 and 3 exchanged" to withRolesExchanged(events, Seat(1), Seat(3)),
+        "seats 5 and 2 exchanged" to withRolesExchanged(events, Seat(5), Seat(2)),
+        "seat 4 toggled to Insider" to withRoleSwapped(events, Seat(4)),
+        "seat 5 armed" to armed(events, Seat(5)),
+        "seats 1 and 3 exchanged, seat 5 armed" to armed(withRolesExchanged(events, Seat(1), Seat(3)), Seat(5)),
+        "seats 5 and 2 exchanged, seat 2 armed" to armed(withRolesExchanged(events, Seat(5), Seat(2)), Seat(2)),
+    )
+
     @Test
     fun `the resolver mints the same events whoever holds the roles and whoever is armed`() {
         val baseline = walk(events)
@@ -94,14 +109,6 @@ class ContactResolverDifferentialTest {
         assertTrue(minted.filterIsInstance<Event.ContactMade>().size >= 6, "too few contacts to compare: $minted")
         assertTrue(minted.any { it is Event.MeetingCalled }, "no report to compare: $minted")
 
-        val variants = mapOf(
-            "seats 1 and 3 exchanged" to withRolesExchanged(events, Seat(1), Seat(3)),
-            "seats 5 and 2 exchanged" to withRolesExchanged(events, Seat(5), Seat(2)),
-            "seat 4 toggled to Insider" to withRoleSwapped(events, Seat(4)),
-            "seat 5 armed" to armed(events, Seat(5)),
-            "seats 1 and 3 exchanged, seat 5 armed" to armed(withRolesExchanged(events, Seat(1), Seat(3)), Seat(5)),
-            "seats 5 and 2 exchanged, seat 2 armed" to armed(withRolesExchanged(events, Seat(5), Seat(2)), Seat(2)),
-        )
         for ((label, variant) in variants) {
             val other = walk(variant)
             // The comparison is only worth something if the variant really is different underneath
@@ -142,5 +149,39 @@ class ContactResolverDifferentialTest {
             listOf(2, 6), revokedAfter(armed, huddleHearsTheRevoked = true),
             "the armed Revoke did not land in the touch's first half, ahead of the report sorted after it",
         )
+    }
+    /**
+     * **D-236 under the same variants: one reading of a Revoked seat reports nothing and two report
+     * it, whoever is listening.** Each of seats 1, 3 and 5 (an Insider, a Resident, the other
+     * Insider; in the variants, swapped about) hears seat 6 once, and later twice; the reports must
+     * come from the second readings alone, on every seat, and the output must not move.
+     */
+    @Test
+    fun `a report needs two readings whoever is listening and whatever they hold`() {
+        fun script(state: GameState): List<ContactResolution> {
+            fun hears(seat: Int) = Sighting(ContactTokens.of(contactSeedFor(state.seed, Seat(seat)), w), -38, w)
+            var n = 0L
+            fun up(seat: Int, vararg heard: Sighting) = ContactUpload(
+                Seat(seat),
+                SightingUpload.unpack(SightingUpload.pack(contactSeedFor(state.seed, Seat(seat)), w, n++, heard.toList()))!!,
+            )
+            val t = ready + 400
+            var memory = ContactMemory.EMPTY
+            return listOf(
+                t to listOf(up(1, hears(6)), up(3, hears(6)), up(5, hears(6))),
+                t + 200 to listOf(up(1, hears(6)), up(3, hears(6)), up(5, hears(6))),
+                t + 220 to listOf(up(1, hears(6)), up(3, hears(6)), up(5, hears(6))),
+            ).map { (tick, uploads) -> resolveContacts(memory, Tick(tick), w, uploads, state).also { memory = it.memory } }
+        }
+        val baseline = script(walk(events))
+        assertEquals(listOf(emptyList(), emptyList()), baseline.take(2).map { it.events }, "a single reading reported: ${baseline.take(2)}")
+        assertEquals(
+            listOf(1, 3, 5).map { MeetingTrigger.RevokeReported(Seat(6)) to it },
+            baseline[2].events.map { (it as Event.MeetingCalled).trigger to it.caller.index },
+            "the second readings did not report, on every seat",
+        )
+        for ((label, variant) in variants) {
+            assertEquals(baseline, script(walk(variant)), "$label: the report's count moved with a role or an arm")
+        }
     }
 }

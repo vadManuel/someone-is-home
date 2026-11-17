@@ -184,13 +184,15 @@ it dims and locks on its usual schedule.
 ## 4. Round B, scripted: the Mac advertises as the Revoked seat
 
 The house drops a sighting nobody returns, so a touch between the phone and the Mac is never a contact.
-A **report** needs one side only, so this is the one result the phone and the Mac can produce together:
+A **report** needs one side only (heard in two of that phone's three latest uploads, D-236), so this is
+the one result the phone and the Mac can produce together:
 the bench Revokes seat 1 (a Simulator), the Mac advertises **as seat 1** with seed **20261150**, the
 phone hears it, and the house resolves the phone's sighting to seat 1 and rules on it. **Four seats**
 (the default): with three, the Revoke ends the round by parity and the report is refused as
 `RoundAlreadyEnded`. With four, the round goes on into the report and the meeting.
 
-First find the Mac's strongest spot. The house only counts **-40 dBm or stronger** (D-233):
+First find the Mac's strongest spot. The house only counts **-40 dBm or stronger** (D-233), and a
+report needs that **twice within about 2.5 s** (D-236), so the spot must hold it, not touch it once:
 
 ```
 tools/ble-peer/.build/release/ble-peer sniff --round-seed 20261150 --seats 4 --quiet
@@ -243,8 +245,9 @@ there; that is the rules, after the report and the notice have been shown.
     once every 5 s. Nothing but the phone's own upload can produce it after the bench's report, so it
     shows the house mapped the Mac's token to seat 1.
 - **If HEARD shows the Mac's prefix but neither line appears:** look at the RSSI in the HEARD lines. If
-  it never reaches -40, the gate held. That is unit 5's finding (the Mac is not a phone), not a radio
-  fault. Write down the best value.
+  it never reaches -40, the gate held. If it reaches -40 only in single lines, never in two of three
+  in a row, the report's two readings held (D-236). Either is unit 5's finding (the Mac is not a
+  phone), not a radio fault. Write down the best value and how often it reached -40.
 
 Stop with Ctrl-C in both terminals.
 
