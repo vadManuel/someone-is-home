@@ -812,7 +812,7 @@ class FlowTest {
                 // in place and declares no edge (D-186).
                 ScreenId.Page2, ScreenId.SurgeTargets, ScreenId.IsolateTargets,
                 ScreenId.Notice,
-                ScreenId.Notify, ScreenId.Banner, ScreenId.Quiet, ScreenId.LockNotify,
+                ScreenId.Notify, ScreenId.ArmedNotify, ScreenId.Banner, ScreenId.Quiet, ScreenId.LockNotify,
                 // The page swipe off the two page-1 screens that carry no banner (`gdd.md:561`).
                 ScreenId.Home, ScreenId.EgressWidget,
                 // STOP NOW's ten. Named in full rather than derived from the roster, for this

@@ -6832,6 +6832,126 @@ delays the decision to its end; the Simulators refuse at once. Not run on a phon
 | `app` `HouseGone` (new), cheats `CheatRoot` | (nothing) | the walk to `Disconnect` and back |
 | `HouseGoneTest` (new) | | a host that fails: every guest on the disconnect screen after the window and not before; a lock inside the window walks nobody; a long lock walks them there and back |
 
+### D-254 · **The house's opening text lands over PERIMETER ARMED, on every phone, in the frame ARMED does: D-118's banner and dim restored — built (amends D-234)**
+
+**What D-234 broke.** D-234 made `OpeningMessage` walk a seated phone to plain ARMED, and ARMED is a
+screen the house drives (`Flow.houseDriving`), so `arrived()` dropped the banner. The opening text,
+one of D-118's only two heavy notifications, was drawn at arming on **no phone at all**: one of the two
+events allowed to dim the house had stopped dimming it. Light is the owner's, and D-234 changed it as a
+side effect. The owner's pack (Q6) asked for it back.
+
+**The order, from the docs.** D-118 ties the dim to the opening text's *arrival* (*a dim during the
+opening message is the round starting*), and D-119 has every phone dim and undim on the same ten
+seconds. D-234 itself noted that a banner after ARMED would arrive on a CONTINUE tap, at a different
+moment on every phone. So the banner lands **over** ARMED, in the same frame, from the same push. The
+docs imply this rather than state it; flagged for the owner.
+
+**Now.** `ScreenId.ArmedNotify` is PERIMETER ARMED with the opening banner over it, the
+`LockNotify` pattern: `Notifications.arrivals` maps it to the opening text over `Armed`, so it dims
+(`Notifications.dims`) exactly as `Notify` does. `roundOpened` pushes it from the lobby and the
+one-line screen; anywhere else the message is the springboard banner, as before. It leaves by the
+swipe (to ARMED) or D-119's ten seconds (`Flow.autoAdvance`, and `Flow.ownTimers` so a housed phone
+runs them); CONTINUE under it still goes to the springboard. In `BUZZING`, `housePushed` and
+`AMBER_BLOCKS` beside `Notify`. **No wire, effect, schema, buzz or lamp change**: the message, its one
+haptic and the dim rule are D-118's and D-234's; only the screen it lands on moved. `Flow.armedOn`
+(ARMED or ARMED under the banner) is what the bench's script and the host's tick driver now wait on
+(`app` cheats `Cheats.kt`): waiting on plain ARMED alone would start the house's clock ten seconds
+late, or never if the host took CONTINUE from under the banner.
+
+**Guards, each proven by breaking it.** `ArmedBannerTest` (ui): four housed phones, Resident and
+Insider, from the lobby and the one-line screen, take the arming burst; every one is on `ArmedNotify`,
+draws the opening text and PERIMETER ARMED, dims, and draws **the same frame to the pixel**; the swipe
+and the ten seconds leave ARMED. With `roundOpened` put back to D-234's `push(Armed)`: *the opening push
+did not land the banner over ARMED: Resident in the lobby expected:<ArmedNotify> but was:<Armed>*.
+`ArmedForEveryPhoneTest` (app, three phones over real loopback) now asserts the banner and the dim on
+the host and both guests.
+
+### D-255 · **Any real phone shows its own clock, housed or not; the render harness is the phone handed no clock — built (H9, extends D-243)**
+
+**Found (H9).** The join screen, the lobby and every setup screen showed the design's `20:41` until a
+house attached. A player sees it on first launch. **Nothing told the render harness apart from a real
+phone with no house yet**: both were `houseAttached = false`, and D-243 read the clock only while
+housed.
+
+**Now, explicitly.** `PanelVals.renderHarness` = no house attached **and** no device clock. The app
+root already hands the phone's clock down (`wallClock`, D-243); `FlowModel` now reads it at
+construction and `FlowHost` every second **housed or not**. The strip's clock, the lantern's time and
+its date are the device's whenever a clock exists; a dash on a housed phone with none; the design's
+times in the harness alone. No wire change.
+
+**Guard, proven by breaking it.** `HousedContentTest.aPhoneWithNoHouseYetDrawsItsOwnClock`: a phone
+with a clock and no house, on Join, Perms, NameDrop, Maps, Lobby and Secret, draws its own time and no
+`20:41`; the lantern too. With the pre-D-255 rule put back: *a phone with no house drew a drawn time on
+Join expected:<2[3:46]> but was:<2[0:41]>*. `anUnhousedPhoneStillDrawsTheDesign` holds the harness's
+`20:41`.
+
+### D-256 · **The caught scan puts the room on its own line, and two lines of mixed case match the capitals around them — built (H10)**
+
+1. **The caught scan's row** (`ScanCaughtScreen`). `<ROOM> . SUBROUTINE n OF 8` with the light mark
+   beside it was one line, which fitted the design's GARAGE and nothing a host types: on the
+   Simulators SCULLERY pushed the mark off the panel and FRONT ROOM lost it (`r5/montage/01-ARMED.png`).
+   The room is now its own centred line, over `SUBROUTINE n OF 8` and the mark; a long room wraps under
+   itself. The count gives way before the mark does.
+2. **Case.** The lobby's `n of 5 handed theirs over` and the integrity widget's `Frozen until next house
+   meeting` are now capitals, like every line around them. The setup screens' sentence-case captions
+   (*No homes yet…*, *Keep scanning…*, the NameDrop step) stand among sentence case and are unchanged.
+
+**Guard, proven by breaking it.** `CaughtRowTest` renders the caught scan on a phone-sized canvas with
+SCULLERY, FRONT ROOM, MASTER BEDROOM and DOWNSTAIRS BATHROOM at SUBROUTINE 10 OF 10: the mark is on the
+panel and not squeezed, the room and the count drawn whole. With the one-line row put back: *SCULLERY
+squeezed the light mark to nothing: DpRect(left=0.0.dp, top=0.0.dp, right=0.0.dp, bottom=0.0.dp)*.
+
+### D-257 · **A housed phone draws no bungalow and no counts on the couch or the Terminal, and FILES holds its own carry — built; the real plan and occupancy are STOPPED for the owner (unit 4d, H6)**
+
+**What was fixture.** `Plan` is the design's fixed bungalow (KITCHEN, LIVING, HALL, STAIRS, STUDY,
+GARAGE, on GROUND and UPPER) with drawn counts. On a housed phone the couch (`Ghost3`) drew
+`KITCHEN 2 / LIVING 3 / HALL 0 / STUDY 1 / GARAGE 1` in a home with none of those rooms, and the
+Terminal's live view and playback drew the same plan with their own counts and `-1:12`. FILES drew
+`1 ITEM . DISK 01 . RACK` on every phone, carrying or not.
+
+**What the house sends, checked.** **No phone is sent the home's plan.** The lobby carries counts,
+names and the setting (`LobbyBody.Standing`); the round carries destinations (marker, shape, room
+name) on work orders and Egress nodes, never geometry. D-186 says so outright: *the home plan returns
+to crossing to NO client*; reaching a living Insider was *the largest disclosure in the emit table*.
+**No message carries an occupancy count**: the couch's true occupancy is D-136's spectator map
+(*unbuilt, hardware-dependent and frozen*: BLE sightings, `Placement.Inferred` has no producer), and
+the Terminal's counts are `ObservationView`s with staleness and injected error that nothing produces.
+
+**STOPPED, owner to decide.** (1) Sending the plan to the Terminal's reader (a living seat, M11) is
+what D-186 rolled back: a living-seat disclosure. (2) Sending it to out seats only is allowed by the
+GDD (*true occupancy, every storey*, `gdd.md:546`), but the plan is not in `GameState` (the arming
+event carries destinations, not geometry), so it is a recording-format and core change, not a narrow
+message. (3) True counts need the spectator map; a count from scans alone (`Placement.Known`) would be
+a new design for a frozen system. None is built here.
+
+**Now.** `PanelVals.terminalCounts`, `timelapseCounts` and `trueCounts` are the bungalow in the
+harness and null on a housed phone; null draws `NoPlan`, the frame and a dash (`NO_READING`), with no
+floor strip. The playback's offset is a dash and its bar empty. `PanelVals.filed` is `state.carrying`
+(nothing writes it yet, E7), the port's carry in the harness alone: FILES says `0 ITEMS` with nothing
+in it, or `1 ITEM` with the carry's item and destination; the fixture's `DEGRADED` went with it.
+The same on every phone, either role. No wire change.
+
+**Guards, each proven by breaking it.** `HousedContentTest`: the sweep's fixture list gains the
+bungalow's rooms, floors, `-1:12`, `RACK` (every screen of the round; the setup editor starts from the
+bungalow on purpose and is exempt), `1 ITEM` and `DISK 01`. With the couch put back to `Plan.trueCounts`:
+*Ghost3 (Resident): 'GROUND' in "GROUND" …*; `noHousedPlanDrawsTheBungalow`: *Ghost3 drew the design's
+bungalow on a housed phone: [… GROUND, UPPER, KITCHEN, LIVING, HALL, STAIRS, STUDY, GARAGE, 2, 3, 0, 1,
+1]*. `filesFollowsTheCarry` (a carry of SPARE 03 to DISPOSAL, and none); with FILES put back to the
+fixture: *an empty FILES did not say so: [… 1 ITEM, DISK 01, IN HAND | DESTINATION . RACK …]*.
+
+**H7 (the meeting counts) needed no code.** D-247 already made them nullable and reset them at
+every meeting. The `r5` hunt that found them started a minute after `74e2df8` landed; which build it
+ran is not recorded. On this build the counts are the house's or nothing (below).
+
+**On the Simulators (D-254 to D-257 together).** `tools/sim-hunt/hunt.sh --seats 5 --seed 20260822`
+on this build, played to the ending: every seat, the host and the Insider included, went LOBBY →
+ARMEDNOTIFY within a quarter of a second and drew the same banner over PERIMETER ARMED; the caught
+scan's room and count fit on all five; the caller's ring drew no count; the revoked seat's ledger read
+`READY -/- · VOTED -/-` at every beat where `r5` read `3/6` and `4/6`; and its couch drew the empty
+frame. The Playtest app launched with no house drew the Simulator's own time on its first setup
+screen. **Not seen on a phone**, and FILES, the Terminal and the playback are not on the hunt's route
+(rendered by the harness only).
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

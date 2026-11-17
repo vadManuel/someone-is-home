@@ -515,7 +515,7 @@ fun IntegrityWidget(vals: PanelVals) {
         // is invisible until the house pushes the meter.
         Words(vals.integrityPercent, size = 76, lineHeight = 0.8)
         KitMeter(PanelVals.METER_SEGMENTS, vals.integrityLit, Ramp.Mid, Ramp.Faint)
-        Words("Frozen until next house meeting", size = 22, color = Ramp.Dim, lineHeight = 1.0)
+        Words("FROZEN UNTIL NEXT HOUSE MEETING", size = 22, color = Ramp.Dim, lineHeight = 1.0)
     }
 }
 

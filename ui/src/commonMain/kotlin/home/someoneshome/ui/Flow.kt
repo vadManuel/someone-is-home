@@ -132,6 +132,10 @@ object ScreenGraph {
         // — but the lobby is the only screen this one is ever reached from, so the two agree.
         ScreenId.Secret -> setOf(ScreenId.Lobby)
         ScreenId.Armed -> setOf(ScreenId.Home)
+        // The opening banner over ARMED (D-254): CONTINUE is still under the thumb, and a tap on the
+        // banner opens what it says, the reveal, as it does over the springboard. The swipe that
+        // clears it is a gesture, declared in [Flow.viaActions].
+        ScreenId.ArmedNotify -> setOf(ScreenId.Home, ScreenId.Reveal)
 
         // The springboard, and the screens that ARE the springboard with something on top.
         // `Quiet`'s banner opens the Subroutines list, which the springboard already reaches, so
@@ -339,6 +343,9 @@ object Flow {
         ScreenId.Notify to AutoAdvance(
             ScreenId.Home, HEAVY_HOLD, "the house's opening message clears itself and the light comes back",
         ),
+        ScreenId.ArmedNotify to AutoAdvance(
+            ScreenId.Armed, HEAVY_HOLD, "the same opening message, over PERIMETER ARMED, clears itself (D-254)",
+        ),
         ScreenId.Banner to AutoAdvance(
             ScreenId.Home, HEAVY_HOLD, "the Egress alert clears itself; the countdown is on the widget",
         ),
@@ -417,6 +424,7 @@ object Flow {
         ScreenId.Boot,
         ScreenId.Scan,
         ScreenId.Notify,
+        ScreenId.ArmedNotify,
         ScreenId.Banner,
         ScreenId.LockNotify,
     )
@@ -618,9 +626,18 @@ object Flow {
 
     /**
      * **Where a seated phone stands when the lights go out**: the lobby, and the one-line screen it
-     * opens. The house's opening push walks a phone on either to [ScreenId.Armed] (D-234).
+     * opens. The house's opening push walks a phone on either to [ScreenId.Armed] (D-234), with the
+     * opening banner over it ([ScreenId.ArmedNotify], D-254).
      */
     val seatedBeforeArming: Set<ScreenId> = setOf(ScreenId.Lobby, ScreenId.Secret)
+
+    /**
+     * **Where that push lands a seated phone: PERIMETER ARMED, under the opening banner and once it
+     * has cleared** (D-234, D-254). Anything that waits for a phone to have armed asks this set
+     * rather than one id: the banner stands for [HEAVY_HOLD], so a wait on plain ARMED alone would
+     * start ten seconds late, or never, if a thumb takes CONTINUE from under the banner.
+     */
+    val armedOn: Set<ScreenId> = setOf(ScreenId.ArmedNotify, ScreenId.Armed)
 
     /**
      * The screens no tap and no fall-through reaches: **in play, the house puts you there.**
@@ -638,6 +655,9 @@ object Flow {
         // game, and a hold that walked there told the house nothing. It is `EgressOpened`'s now, on
         // every phone alike, the actor's included.
         ScreenId.Notify, ScreenId.LockNotify, ScreenId.Quiet, ScreenId.Banner,
+        // The same opening text over PERIMETER ARMED, where a seated phone stands when it lands
+        // (D-254).
+        ScreenId.ArmedNotify,
         ScreenId.Call, ScreenId.Found,
         // **The caller's own ring, and it is here because D-121 says a meeting is a WALK** (N5b).
         // The springboard drew a PHONE tile that went straight to this screen, which is the remote
@@ -883,6 +903,9 @@ object Flow {
         ScreenId.Home to setOf(ScreenId.Page2),
         ScreenId.EgressWidget to setOf(ScreenId.Page2),
         ScreenId.Notify to setOf(ScreenId.Home, ScreenId.Page2),
+        // The opening banner over ARMED, swiped up: ARMED is left standing (D-254). No page swipe,
+        // because there is no springboard under it.
+        ScreenId.ArmedNotify to setOf(ScreenId.Armed),
         ScreenId.Banner to setOf(ScreenId.Home, ScreenId.Page2),
         ScreenId.Quiet to setOf(ScreenId.Home, ScreenId.Page2),
         ScreenId.LockNotify to setOf(ScreenId.Lock),
@@ -1132,8 +1155,11 @@ class FlowModel(
         private set
 
     // A phone built already housed draws no design count at its first meeting either (D-247).
+    // And a real phone shows its own time from its first frame, housed or not (D-255): the join
+    // screen on first launch is drawn before any house exists.
     init {
         if (initial.houseAttached) meeting.houseAttached()
+        wallClockRead()
     }
 
     /**
@@ -1442,10 +1468,11 @@ class FlowModel(
             (!state.egressHeld && (state.egressLeft?.secondsLeft ?: 0) > 0)
 
     /**
-     * **Read the phone's wall clock onto the panel** (D-243). Called by `FlowHost` once a second
-     * while a house is attached, and when one attaches; the panel changes only when the minute
-     * does, so a second that changes nothing redraws nothing. False when no clock was handed down,
-     * which is every render and test that did not ask for one, and then nothing is read again.
+     * **Read the phone's wall clock onto the panel** (D-243). Called at construction, by `FlowHost`
+     * once a second **housed or not** (D-255), and when a house attaches; the panel changes only
+     * when the minute does, so a second that changes nothing redraws nothing. False when no clock
+     * was handed down, which is every render and test that did not ask for one, and then nothing is
+     * read again.
      */
     fun wallClockRead(): Boolean {
         val now = wallClock() ?: return false
@@ -2396,8 +2423,8 @@ class FlowModel(
             // what the banner says and the message's job is to say *now*. A body on this kind would
             // be a second copy of one sentence.
             //
-            // **And it is what walks every phone in the lobby to PERIMETER ARMED** (D-234). See
-            // [roundOpened].
+            // **And it is what walks every phone in the lobby to PERIMETER ARMED** (D-234), with
+            // this banner over it on every phone (D-254). See [roundOpened].
             //
             // **And it is the first shift beginning, on every phone at once** (D-132, D-239): page
             // 2's clocks start here, at half, the same on an Insider's phone and a Resident's.
@@ -2940,9 +2967,20 @@ class FlowModel(
      * the same frame on every phone (rule 1). The two screens are the lobby and the one-line screen
      * it opens, which is where a seated phone stands when the lights go out. Anywhere else (a phone
      * the house is catching up after a gap) the message is what it always was, the banner.
+     *
+     * ### And the banner lands with ARMED, on every phone (D-254, restoring D-118)
+     *
+     * D-234 walked the seated phone to plain ARMED, and ARMED is a screen the house drives, so the
+     * opening banner, one of D-118's only two heavy notifications, was drawn at arming on no phone
+     * at all: one of the two events allowed to dim the house had quietly stopped dimming it.
+     * D-118 ties the dim to the opening text's arrival (*a dim during the opening message is the
+     * round starting*) and D-119 has every phone dim and undim on the same ten seconds, so the
+     * banner lands over ARMED in the frame ARMED does: [ScreenId.ArmedNotify], the opening text
+     * over PERIMETER ARMED, which a swipe or [HEAVY_HOLD] takes back to ARMED. One message, one
+     * screen, the same frame on every phone, whatever its role (D-142's parity).
      */
     private fun roundOpened() {
-        if (state.screen in Flow.seatedBeforeArming) push(ScreenId.Armed) else arrived(ScreenId.Notify)
+        if (state.screen in Flow.seatedBeforeArming) push(ScreenId.ArmedNotify) else arrived(ScreenId.Notify)
     }
 
     /**
@@ -3261,12 +3299,11 @@ fun FlowHost(
         }
     }
 
-    // **The phone's own wall clock, while a house is attached** (D-243). Read once a second; the
-    // panel changes only when the minute does. Display only: nothing in the round reads it.
-    LaunchedEffect(housed) {
-        if (housed) {
-            while (model.wallClockRead()) delay(1_000L)
-        }
+    // **The phone's own wall clock, on any real phone, housed or not** (D-243, D-255). Read once a
+    // second; the panel changes only when the minute does. Display only: nothing in the round reads
+    // it. A model handed no clock (the render harness) stops at the first read.
+    LaunchedEffect(model) {
+        while (model.wallClockRead()) delay(1_000L)
     }
 
     LaunchedEffect(screen, pending, awaiting) {

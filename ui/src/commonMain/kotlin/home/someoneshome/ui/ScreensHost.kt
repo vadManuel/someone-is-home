@@ -1274,7 +1274,7 @@ fun LobbyScreen(vals: PanelVals) {
         // Not drawn while nobody is here: "0 of 0" is arithmetic rather than information. It stays
         // a count and stays down here, away from the names.
         if (standing.joined > 0) {
-            KitCaption("${standing.linesIn} of ${standing.joined} handed theirs over", P, Modifier.fillMaxWidth(), center = true)
+            KitCaption("${standing.linesIn} OF ${standing.joined} HANDED THEIRS OVER", P, Modifier.fillMaxWidth(), center = true)
         }
         KitSpacer()
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {

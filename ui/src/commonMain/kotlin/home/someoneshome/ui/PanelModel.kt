@@ -36,7 +36,13 @@ enum class ScreenId {
     ReviewNeeds, Floors, SaveName, HomeDetail, Delete, Lobby,
 
     // Arming — the host turns the lights off and the house does the rest.
-    Secret, Armed, Notify, Reveal, RevealThread,
+    //
+    // `ArmedNotify` is PERIMETER ARMED with the house's opening text over it (D-118, D-254): the
+    // one message every seat gets at arming walks a seated phone to ARMED and lands the heavy
+    // banner on it in the same frame, so the house dims at one moment on every phone. Its own id
+    // for `Notify`'s reason below: the dim is a property of a drawn panel and every sweep walks
+    // `ScreenId.entries`.
+    Secret, Armed, ArmedNotify, Notify, Reveal, RevealThread,
 
     // The springboard — identical for both roles.
     //
@@ -616,9 +622,10 @@ data class PanelState(
     val carrying: Carried? = null,
     /**
      * **This phone's own wall clock, as it last read it** (D-243). Written by `FlowModel` from the
-     * clock the app root hands it, once a minute changes; read by the status strip and the lantern
-     * on a phone with a house attached. Not a fact the house sent, and nothing but those two draws
-     * it. Null where no clock was handed down, which is every render.
+     * clock the app root hands it, at construction and once a minute changes, **housed or not**
+     * (D-255); read by the status strip and the lantern. Not a fact the house sent, and nothing but
+     * those two draws it. Null where no clock was handed down, which is every render: that null is
+     * how [PanelVals.renderHarness] tells the harness from a real phone with no house yet.
      */
     val wallTime: WallTime? = null,
     /**
@@ -949,12 +956,27 @@ class PanelVals(
     val lockChip: Boolean = state.screen == ScreenId.Files || state.carrying != null
 
     /**
-     * **The strip's clock: the phone's own on a phone with a house attached** (D-243), and the
-     * design's drawn times on one without, so the render harness still draws the mockup. A dash on a
-     * housed phone that was handed no clock, never a drawn time in front of a player.
+     * **The render harness, and only the render harness: no house attached and no device clock**
+     * (D-255).
+     *
+     * Until D-255 nothing told the harness apart from **a real phone that has no house yet** (the
+     * join screen on first launch, the lobby before a seat, the setup walk): both were simply
+     * `houseAttached = false`, so a real phone drew the design's `20:41` until a house attached.
+     * The difference is a fact about the process, and the app root states it by handing down the
+     * phone's own clock (`FlowModel`'s `wallClock`), which `FlowModel` reads at construction and
+     * `FlowHost` every second after, housed or not. A render or a test that hands none down is the
+     * harness; anything with a clock is a phone.
+     */
+    val renderHarness: Boolean = !state.houseAttached && state.wallTime == null
+
+    /**
+     * **The strip's clock: the phone's own, on any real phone, housed or not** (D-243, D-255), and
+     * the design's drawn times in the [renderHarness] alone, so it still draws the mockup. A dash on
+     * a housed phone that was handed no clock, never a drawn time in front of a player.
      */
     val clock: String = when {
-        state.houseAttached -> state.wallTime?.clock ?: NO_READING
+        state.wallTime != null -> state.wallTime.clock
+        !renderHarness -> NO_READING
         state.screen == ScreenId.WinResidents -> "21:38"
         isPre -> "20:41"
         mode == PanelMode.Ghost -> "21:31"
@@ -962,12 +984,11 @@ class PanelVals(
         else -> "21:07"
     }
 
-    /** The lantern's large time (D-243): [clock]'s source, at the lantern's size. */
-    val lockClock: String = if (state.houseAttached) state.wallTime?.clock ?: NO_READING else "21:04"
+    /** The lantern's large time (D-243, D-255): [clock]'s source, at the lantern's size. */
+    val lockClock: String = state.wallTime?.clock ?: if (renderHarness) "21:04" else NO_READING
 
-    /** The lantern's date line (D-243): the phone's own date with a house attached. */
-    val lockDate: String =
-        if (state.houseAttached) state.wallTime?.date ?: NO_READING else "SATURDAY 16 AUGUST"
+    /** The lantern's date line (D-243, D-255): the phone's own date on any real phone. */
+    val lockDate: String = state.wallTime?.date ?: if (renderHarness) "SATURDAY 16 AUGUST" else NO_READING
 
     /** When the ending landed on this phone (D-243), as the endings print it beside the house. */
     val endedAt: String = housed(state.endedAt, fixture = "21:38", nothing = NO_READING)
@@ -1301,6 +1322,43 @@ class PanelVals(
 
     /** What this phone is carrying, if anything (D-168). See [PanelState.carrying]. */
     val carrying: Carried? = state.carrying
+
+    /**
+     * **What FILES holds: this phone's carry, and nothing on a housed phone that carries nothing**
+     * (D-257). The screen said `1 ITEM . DISK 01 . RACK` on every phone in every round, carrying or
+     * not; the port's carry stands in only with no house attached.
+     */
+    val filed: Carried? = housed(state.carrying, FILED, nothing = null)
+
+    /**
+     * **The Terminal's live plan, its playback and the couch's: the port's bungalow and its counts,
+     * or nothing** (D-257, unit 4d).
+     *
+     * [Plan] is the design's fixed bungalow (KITCHEN, LIVING, HALL, STAIRS, STUDY, GARAGE) with
+     * drawn counts, and on a housed phone it put rooms the home does not have, holding people
+     * nobody counted, on the Terminal and on the couch. **No phone is sent the home's plan** (D-186:
+     * *the home plan returns to crossing to NO client*) **and no house message carries an
+     * occupancy count** (the spectator map is unbuilt, D-136; the Terminal's observations have no
+     * producer), so a housed phone draws neither: an empty frame where the plan goes, the same on
+     * every phone. Null is that empty frame.
+     */
+    val terminalCounts: List<Plan.RoomCount>? = housed(null, Plan.terminalCounts, nothing = null)
+
+    /** The playback's, for [terminalCounts]' reason. */
+    val timelapseCounts: List<Plan.RoomCount>? = housed(null, Plan.timelapseCounts, nothing = null)
+
+    /** The couch's true occupancy, for [terminalCounts]' reason. */
+    val trueCounts: List<Plan.RoomCount>? = housed(null, Plan.trueCounts, nothing = null)
+
+    /**
+     * **How far back the playback is, and how much of it has played** — the port's `-1:12` and
+     * 44%, or a dash and an empty bar (D-257). Nothing on any phone knows which second of a playback
+     * it shows, because no playback history exists (E8, `TimelapseScreen`).
+     */
+    val timelapseAt: String = housed(null, "-1:12", nothing = NO_READING)
+
+    /** See [timelapseAt]. */
+    val timelapsePlayed: Float = housed(null, 0.44f, nothing = 0f)
 
     // ---- Host setup -------------------------------------------------------------------------
 
@@ -2056,6 +2114,9 @@ class PanelVals(
          */
         const val NOTHING_OPEN = "NOTHING OPEN"
 
+        /** The port's carry on FILES, for a phone with no house attached ([filed], D-257). */
+        val FILED: Carried = Carried(item = "DISK 01", to = "RACK")
+
         /**
          * The screens that arrive unasked, and therefore buzz.
          *
@@ -2139,14 +2200,14 @@ class PanelVals(
          * here ships with the band that made the owner file the report.
          */
         val AMBER_BLOCKS: Set<ScreenId> = setOf(
-            ScreenId.Tally, ScreenId.WinInsiders, ScreenId.Notify, ScreenId.Banner,
+            ScreenId.Tally, ScreenId.WinInsiders, ScreenId.Notify, ScreenId.ArmedNotify, ScreenId.Banner,
             ScreenId.Work, ScreenId.ScanCaught,
             ScreenId.Call, ScreenId.Found, ScreenId.Assemble, ScreenId.Ghost2,
             ScreenId.Notice, ScreenId.Discussion, ScreenId.Vote,
         )
 
         val BUZZING: Set<ScreenId> = setOf(
-            ScreenId.Armed, ScreenId.Notify, ScreenId.Banner, ScreenId.LockNotify,
+            ScreenId.Armed, ScreenId.ArmedNotify, ScreenId.Notify, ScreenId.Banner, ScreenId.LockNotify,
             ScreenId.Call, ScreenId.Found,
             ScreenId.Assemble, ScreenId.Notice, ScreenId.Tally, ScreenId.Revoked,
             ScreenId.Restrained, ScreenId.ScanMarker, ScreenId.ScanCaught, ScreenId.ScanBad,

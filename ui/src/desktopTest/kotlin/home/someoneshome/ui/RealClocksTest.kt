@@ -83,10 +83,11 @@ class RealClocksTest {
         val lock = drawn(PanelState(screen = ScreenId.Lock))
         assertTrue("21:04" in lock && "SATURDAY 16 AUGUST" in lock, "the harness lost the lantern's drawn time: $lock")
         assertTrue(lock.any { "21:01" in it }, "the harness lost the lantern's standing texts: $lock")
-        // A clock handed down changes nothing without a house.
+        // **A clock handed down is a real phone, house or no house** (D-255, H9): only the phone
+        // handed no clock is the harness. This line used to assert the reverse, which is how the
+        // join screen showed a player 20:41 on first launch.
         val unhoused = FlowModel(PanelState(screen = ScreenId.Home), wallClock = { now })
-        unhoused.wallClockRead()
-        assertEquals("21:07", PanelVals(unhoused.state).clock)
+        assertEquals("22:13", PanelVals(unhoused.state).clock)
     }
 
     /** A housed phone handed no clock prints the dash, never a drawn time. */

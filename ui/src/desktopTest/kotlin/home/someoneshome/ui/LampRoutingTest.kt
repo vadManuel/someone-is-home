@@ -278,7 +278,8 @@ class LampRoutingTest {
 
         assertEquals(ScreenId.ScanCaught, model.state.screen)
         onAllNodesWithText(Subroutine.Interrupt.briefing).assertCountEquals(1)
-        onAllNodesWithText("HALL . SUBROUTINE 1 OF 1").assertCountEquals(1)
+        onAllNodesWithText("HALL").assertCountEquals(1)
+        onAllNodesWithText("SUBROUTINE 1 OF 1").assertCountEquals(1)
 
         model.beginSubroutine(Subroutine.Interrupt)
         mainClock.advanceTimeBy(100L)

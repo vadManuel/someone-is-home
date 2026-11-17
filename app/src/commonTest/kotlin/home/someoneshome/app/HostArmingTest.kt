@@ -246,7 +246,8 @@ class HostArmingTest {
         assertEquals(ScreenId.Lobby, flow.state.screen, "the host walked itself to ARMED, not by the house's push")
         val opening = bench.pushed.filterIsInstance<Effect.OpeningMessage>().single { it.seat == seats.first() }
         flow.houseSaid(RoundMessage.OpeningMessage(opening.haptic))
-        assertEquals(ScreenId.Armed, flow.state.screen, "the house's opening push left the host on its lobby")
+        // ARMED, with the opening banner over it (D-254).
+        assertEquals(ScreenId.ArmedNotify, flow.state.screen, "the house's opening push left the host on its lobby")
     }
 
     /** A second press on a running round arms nothing and says so, rather than refusing silently. */

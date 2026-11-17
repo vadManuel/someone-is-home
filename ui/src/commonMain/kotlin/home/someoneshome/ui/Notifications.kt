@@ -347,6 +347,10 @@ object Notifications {
      */
     val arrivals: Map<ScreenId, Arrival> = mapOf(
         ScreenId.Notify to Arrival(opening, under = ScreenId.Home),
+        // **The same opening text, over PERIMETER ARMED** (D-118, D-254): where a seated phone
+        // stands when the house's opening push lands, so the heavy banner and the dim arrive in
+        // the frame ARMED does, on every phone.
+        ScreenId.ArmedNotify to Arrival(opening, under = ScreenId.Armed),
         ScreenId.Banner to Arrival(egress, under = ScreenId.Home),
         ScreenId.Quiet to Arrival(unblocked, under = ScreenId.Home),
         ScreenId.LockNotify to Arrival(

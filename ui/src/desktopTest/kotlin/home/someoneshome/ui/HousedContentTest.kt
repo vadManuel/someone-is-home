@@ -237,8 +237,17 @@ class HousedContentTest {
                 "FLAT CHAT", "4 OF 6", "6 RESIDENTS", "ATTEMPT 3", "spare key",
                 "20:12", "20:19", "20:31", "20:41", "20:44", "20:47", "20:52", "20:55", "20:58", "20:59",
                 "21:01", "21:02", "21:03", "21:04", "21:07", "21:31", "21:38", "SATURDAY 16 AUGUST",
-                "you're up", "NUMBER WITHHELD",
+                "you're up", "NUMBER WITHHELD", "1 ITEM", "DISK 01",
             ).joinToString("|", prefix = "\\b(", postfix = ")\\b") { Regex.escape(it) },
+            RegexOption.IGNORE_CASE,
+        )
+        // **The port's bungalow, on every screen of the round** (D-257, unit 4d): its rooms and
+        // floors on the couch and the Terminal, the playback's offset, FILES' standing destination.
+        // Not on the setup screens: the host's editor starts from the bungalow on purpose, in the
+        // light, before any house exists, and those words are the host's to paint over.
+        val bungalow = Regex(
+            listOf("KITCHEN", "LIVING", "HALL", "STAIRS", "STUDY", "GARAGE", "GROUND", "UPPER", "-1:12", "RACK")
+                .joinToString("|", prefix = "(?<![\\w-])(", postfix = ")\\b") { Regex.escape(it) },
             RegexOption.IGNORE_CASE,
         )
         val found = mutableListOf<String>()
@@ -253,14 +262,75 @@ class HousedContentTest {
             for (screen in ScreenId.entries) {
                 val state = if (screen == ScreenId.WinInsiders || screen == ScreenId.WinResidents) over else inRound
                 for (text in drawn(phone, screen, state)) {
-                    fixtures.find(text)?.let { found += "$screen (${if (insider) "Insider" else "Resident"}): '${it.value}' in \"$text\"" }
+                    val hit = fixtures.find(text) ?: bungalow.find(text)?.takeIf { screen !in PanelVals.PRE }
+                    hit?.let { found += "$screen (${if (insider) "Insider" else "Resident"}): '${it.value}' in \"$text\"" }
                 }
             }
         }
         assertEquals(emptyList(), found, "fixtures on a housed phone:\n" + found.joinToString("\n"))
     }
 
-    // ---- 7 · The harness keeps its fixtures -----------------------------------------------------
+    // ---- 7 · The clock before a house, FILES, the plan ------------------------------------------
+
+    /**
+     * **GUARD (D-255, H9): a real phone with no house yet draws its own clock**, on the join screen
+     * a player sees on first launch and on every screen before a seat, never the design's `20:41`.
+     * A real phone is one the app handed a clock; the harness is the one that was handed none.
+     */
+    @Test
+    fun aPhoneWithNoHouseYetDrawsItsOwnClock() {
+        for (screen in listOf(ScreenId.Join, ScreenId.Perms, ScreenId.NameDrop, ScreenId.Maps, ScreenId.Lobby, ScreenId.Secret)) {
+            val phone = FlowModel(PanelState(screen = screen), wallClock = { now })
+            assertEquals(false, phone.state.houseAttached)
+            val vals = PanelVals(phone.state)
+            assertEquals("23:46", vals.clock, "a phone with no house drew a drawn time on $screen")
+            assertEquals(false, vals.renderHarness, "a phone with a clock was taken for the harness on $screen")
+            val texts = drawn(phone, screen)
+            assertTrue(texts.any { "23:46" in it }, "$screen did not draw the phone's own time: $texts")
+            assertTrue(texts.none { "20:41" in it }, "$screen drew the design's 20:41 on a real phone: $texts")
+        }
+        // The lantern too, before and after a house.
+        val unhoused = PanelVals(FlowModel(PanelState(screen = ScreenId.Lock), wallClock = { now }).state)
+        assertEquals("23:46", unhoused.lockClock)
+        assertEquals(now.date, unhoused.lockDate)
+    }
+
+    /** **GUARD (D-257): FILES holds this phone's carry, and nothing when it carries nothing.** */
+    @Test
+    fun filesFollowsTheCarry() {
+        val empty = drawn(housed(), ScreenId.Files)
+        assertTrue("0 ITEMS" in empty, "an empty FILES did not say so: $empty")
+        assertTrue(empty.none { "DISK 01" in it || "RACK" in it || "1 ITEM" in it }, "an empty FILES drew the design's carry: $empty")
+
+        val phone = housed()
+        val carrying = phone.state.copy(carrying = Carried(item = "SPARE 03", to = "DISPOSAL"))
+        val held = drawn(phone, ScreenId.Files, carrying)
+        assertTrue("1 ITEM" in held, "a carrying FILES did not count its item: $held")
+        assertTrue("SPARE 03" in held, "FILES did not draw what this phone carries: $held")
+        assertTrue(held.any { "DESTINATION . DISPOSAL" in it }, "FILES did not draw where the carry goes: $held")
+        assertTrue(held.none { "DISK 01" in it || "RACK" in it }, "a carrying FILES drew the design's carry: $held")
+    }
+
+    /**
+     * **GUARD (D-257, unit 4d / H6): no housed Terminal, playback or couch draws the port's bungalow
+     * or a count.** No phone is sent the home's plan (D-186) and no message carries occupancy, so
+     * each draws the empty frame and a dash: no room name, no floor, and no bare number.
+     */
+    @Test
+    fun noHousedPlanDrawsTheBungalow() {
+        val bungalow = Plan.rooms.map { it.name } + listOf("GROUND", "UPPER")
+        for (insider in listOf(false, true)) {
+            val phone = housed(insider = insider)
+            for (screen in listOf(ScreenId.TermLive, ScreenId.Timelapse, ScreenId.Ghost3)) {
+                val texts = drawn(phone, screen)
+                assertTrue(texts.none { it in bungalow }, "$screen drew the design's bungalow on a housed phone: $texts")
+                assertTrue(texts.none { it.matches(Regex("\\d+")) }, "$screen drew a count nobody counted: $texts")
+                assertTrue(PanelVals.NO_READING in texts, "$screen drew no empty plan: $texts")
+            }
+        }
+    }
+
+    // ---- 8 · The harness keeps its fixtures -----------------------------------------------------
 
     /** And a phone with no house still draws every one of the design's, so the harness compares. */
     @Test
@@ -278,5 +348,14 @@ class HousedContentTest {
         assertEquals(MeetingCounts(), MeetingModel.sample().counts, "the harness lost its meeting counts")
         val calling = drawn(FlowModel(PanelState(screen = ScreenId.Calling)), ScreenId.Calling)
         assertTrue("4 OF 6 ANSWERED" in calling, "the harness lost the caller's count: $calling")
+        // The harness is the phone with no house and no clock (D-255, D-257).
+        val harness = PanelVals(PanelState(screen = ScreenId.Join))
+        assertTrue(harness.renderHarness)
+        assertEquals("20:41", harness.clock, "the harness lost its drawn time")
+        assertEquals(PanelVals.FILED, harness.filed, "the harness lost its carry")
+        assertEquals(Plan.trueCounts, harness.trueCounts, "the harness lost the couch's bungalow")
+        assertEquals(Plan.terminalCounts, harness.terminalCounts, "the harness lost the Terminal's bungalow")
+        val couch = drawn(FlowModel(PanelState(screen = ScreenId.Ghost3)), ScreenId.Ghost3)
+        assertTrue("KITCHEN" in couch && "GARAGE" in couch, "the harness's couch lost its rooms: $couch")
     }
 }

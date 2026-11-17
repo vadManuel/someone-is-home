@@ -169,7 +169,9 @@ fun Screen(
                 ScreenId.Lobby -> LobbyScreen(vals)
 
                 ScreenId.Secret -> SecretScreen()
-                ScreenId.Armed -> ArmedScreen(vals)
+                // ARMED, and ARMED with the house's opening text over it (D-254): the banner is the
+                // frame's overlay, so the screen under it is the one ARMED draws.
+                ScreenId.Armed, ScreenId.ArmedNotify -> ArmedScreen(vals)
                 // Every banner screen draws the springboard it interrupted and hands the banner
                 // itself up as an overlay. "A banner, not a takeover" is only true if what was
                 // underneath is still visible and still recognisable — which is also why only the
@@ -210,7 +212,7 @@ fun Screen(
                 ScreenId.SubDeallocate -> DeallocateScreen(state.verdict)
                 ScreenId.SubInterrupt -> InterruptScreen(state.verdict)
                 ScreenId.SubDrift -> DriftScreen(state.verdict)
-                ScreenId.Files -> FilesScreen()
+                ScreenId.Files -> FilesScreen(vals)
                 ScreenId.Notes -> NotesScreen(vals)
                 ScreenId.TermLive -> TermLiveScreen(vals)
                 ScreenId.Timelapse -> TimelapseScreen(vals)

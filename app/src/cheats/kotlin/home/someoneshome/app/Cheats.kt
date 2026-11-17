@@ -43,6 +43,7 @@ import home.someoneshome.platform.launchValue
 import home.someoneshome.platform.monotonicNanos
 import home.someoneshome.ui.Amber
 import home.someoneshome.ui.Ramp
+import home.someoneshome.ui.Flow
 import home.someoneshome.ui.FlowHost
 import home.someoneshome.ui.FlowModel
 import home.someoneshome.ui.Label
@@ -499,7 +500,8 @@ fun CheatRoot() {
     // Two coroutines and they are not the same job. Every seat walks the house when its own work
     // order arrives, which is a reaction to a push and runs on all five. The *script* runs on one
     // phone, and the test for which one is the lobby's: the house's opening push walks every phone
-    // to ARMED (D-234), and the one standing there that is hosting is the phone holding the house.
+    // to ARMED (D-234), under the opening banner (D-254, `Flow.armedOn`), and the one standing
+    // there that is hosting is the phone holding the house.
     LaunchedEffect(round) {
         // **Nothing here arms anything any more, and that is the unit.** Arming is production's —
         // it hangs off `onLightsOut` where the `FlowModel` is built, reached by a thumb on a live
@@ -507,7 +509,7 @@ fun CheatRoot() {
         // the host's own press armed rather than starting one of its own.
         if (!round.armed) return@LaunchedEffect
         launch { round.play() }
-        while (flow.state.screen != ScreenId.Armed) delay(250)
+        while (flow.state.screen !in Flow.armedOn) delay(250)
         if (flow.lobby.hosting) round.theRound(RoundCheat.seed())
     }
     // **The tick driver, on the host and nowhere else** (E-P3-3). The five timed transitions are
@@ -517,7 +519,7 @@ fun CheatRoot() {
     // meeting it ends may be one nobody scripted.
     LaunchedEffect(authority) {
         val house = authority ?: return@LaunchedEffect
-        while (flow.state.screen != ScreenId.Armed) delay(250)
+        while (flow.state.screen !in Flow.armedOn) delay(250)
         if (flow.lobby.hosting) {
             tickHouse(
                 house,

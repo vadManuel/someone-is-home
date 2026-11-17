@@ -237,9 +237,12 @@ fun Ghost3Screen(vals: PanelVals) {
             )
             GhostEgressWidget(vals, Modifier.weight(1f))
         }
-        FloorStrip(Palette.DARK)
+        // The port's bungalow and its counts, or the empty frame on a housed phone (D-257): no
+        // phone is sent the home's plan and nothing yet counts who is in which room.
+        val counts = vals.trueCounts
+        if (counts != null) FloorStrip(Palette.DARK)
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            KitLivePlan(Plan.trueCounts, Modifier.fillMaxSize())
+            if (counts != null) KitLivePlan(counts, Modifier.fillMaxSize()) else NoPlan(Modifier.fillMaxSize())
         }
     }
 }

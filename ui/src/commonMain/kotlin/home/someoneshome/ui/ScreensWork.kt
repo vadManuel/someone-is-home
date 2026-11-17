@@ -472,25 +472,41 @@ fun ScanCaughtScreen(vals: PanelVals) {
             }
             // **The flavour line that used to sit here is gone** (the owner's 2026-08-24 ruling,
             // D-196). What a player has to do is the briefing at the foot of this screen (D-188).
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
+            //
+            // **The room on its own line, over the count and the mark** (D-256, H10). One line,
+            // `<ROOM> . SUBROUTINE n OF 8` with the mark beside it, fitted the design's GARAGE and
+            // nothing a host actually types: on the Simulators SCULLERY pushed the mark off the
+            // panel's edge and FRONT ROOM lost it altogether. Two lines fit any room, and a room
+            // too long for one line wraps under itself rather than under the mark.
+            //
+            // The room is dropped rather than blanked where the house named none — an empty
+            // destination is lawful (`OrderLine.Known.at`) and a line holding no room reads as a
+            // rendering fault rather than as a room nobody sent.
+            Column(
+                Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                // The room is dropped rather than blanked where the house named none — an empty
-                // destination is lawful (`OrderLine.Known.at`) and a leading separator over an
-                // absent room reads as a rendering fault rather than as a room nobody sent.
-                Words(
-                    listOfNotNull(
-                        current?.room,
-                        current?.let { "SUBROUTINE ${it.index} OF ${it.total}" }
-                            ?: PanelVals.NOTHING_OPEN,
-                    ).joinToString(" . "),
-                    size = 26, color = Ramp.Mid, lineHeight = 1.0, align = TextAlign.Center,
-                )
-                // The fourth surface, and the one D-106 does not name. It is here because BEGIN
-                // and NOT THIS ONE are both live below: this is the last moment the choice is
-                // still a choice. Flagged for review. Absent where there is no Subroutine.
-                current?.let { WorkMark(it.light, Ramp.Mid) }
+                current?.room?.let {
+                    Words(
+                        it, Modifier.fillMaxWidth(),
+                        size = 26, color = Ramp.Mid, lineHeight = 1.0, align = TextAlign.Center,
+                    )
+                }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Words(
+                        current?.let { "SUBROUTINE ${it.index} OF ${it.total}" } ?: PanelVals.NOTHING_OPEN,
+                        Modifier.weight(1f, fill = false),
+                        size = 26, color = Ramp.Mid, lineHeight = 1.0, align = TextAlign.Center,
+                    )
+                    // The fourth surface, and the one D-106 does not name. It is here because BEGIN
+                    // and NOT THIS ONE are both live below: this is the last moment the choice is
+                    // still a choice. Flagged for review. Absent where there is no Subroutine.
+                    current?.let { WorkMark(it.light, Ramp.Mid) }
+                }
             }
             // The line under it -- THE CARD IN YOUR HAND MATCHES, or WAITING FOR THE HOUSE -- went
             // with the mockup's copy cut: the glyph is the comparison, and saying so is a second
@@ -659,18 +675,25 @@ private val REFUSED = listOf("M14 50L50 14")
  * ⚠️ **NOTHING ELSE OPENS UNTIL IT IS DELIVERED is new copy and awaits the owner's eye** (D-200).
  */
 @Composable
-fun FilesScreen() {
+fun FilesScreen(vals: PanelVals) {
     val p = Palette.DARK
+    // **This phone's carry, or an empty FILES** (D-257): `1 ITEM . DISK 01 . RACK` was drawn on
+    // every phone in every round, carrying or not. Nothing writes a carry yet (E7), so on a housed
+    // phone this is the empty folder until the circuit is built. The DEGRADED condition went with
+    // the fixture: a carry is an item and a destination, and nothing says what state it is in.
+    val filed = vals.filed
     KitScreen(gap = 14.dp) {
-        KitHeader("FILES", p, back = ScreenId.Home, meta = "1 ITEM")
-        Column(
-            Modifier.fillMaxWidth().border(2.dp, p.ink).padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Words("DISK 01", size = 40, color = p.ink, lineHeight = 0.85)
-            Words("DEGRADED . IN HAND\nDESTINATION . RACK", size = 22, color = p.mid, lineHeight = 1.1)
+        KitHeader("FILES", p, back = ScreenId.Home, meta = if (filed != null) "1 ITEM" else "0 ITEMS")
+        filed?.let {
+            Column(
+                Modifier.fillMaxWidth().border(2.dp, p.ink).padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Words(it.item, size = 40, color = p.ink, lineHeight = 0.85)
+                Words("IN HAND\nDESTINATION . ${it.to}", size = 22, color = p.mid, lineHeight = 1.1)
+            }
+            KitCaption("NOTHING ELSE OPENS UNTIL IT IS DELIVERED", p, size = 24)
         }
-        KitCaption("NOTHING ELSE OPENS UNTIL IT IS DELIVERED", p, size = 24)
     }
 }
 
@@ -712,7 +735,7 @@ fun NotesScreen(vals: PanelVals) {
 @Composable
 fun TermLiveScreen(vals: PanelVals) {
     val go = navigator()
-    TerminalView("TERMINAL . LIVE", ScreenId.Home, Plan.terminalCounts, vals) {
+    TerminalView("TERMINAL . LIVE", ScreenId.Home, vals.terminalCounts, vals) {
         // **Reading is an uncompletable task, so the motion budget applies** (`gdd.md:476`, D-199).
         // Standing still, glowing, at a place everybody knows: move too much and the view closes,
         // and *the exposure is the limit* rather than a timer.
@@ -743,10 +766,11 @@ fun TermLiveScreen(vals: PanelVals) {
 @Composable
 fun TimelapseScreen(vals: PanelVals) {
     val go = navigator()
-    TerminalView("TERMINAL . -1:12", ScreenId.TermLive, Plan.timelapseCounts, vals) {
-        // How far through the two minutes the playback is. A fixture, like the counts.
+    TerminalView("TERMINAL . ${vals.timelapseAt}", ScreenId.TermLive, vals.timelapseCounts, vals) {
+        // How far through the two minutes the playback is. A fixture, like the counts, and empty on
+        // a housed phone (D-257).
         Box(Modifier.fillMaxWidth().height(8.dp).border(1.dp, Ramp.Faint)) {
-            Box(Modifier.fillMaxWidth(0.44f).fillMaxHeight().background(Ramp.Mid))
+            Box(Modifier.fillMaxWidth(vals.timelapsePlayed).fillMaxHeight().background(Ramp.Mid))
         }
         // The same budget as the live view: watching the playback is still standing at the
         // station reading (D-199).
@@ -766,19 +790,35 @@ fun TimelapseScreen(vals: PanelVals) {
 private fun TerminalView(
     title: String,
     back: ScreenId,
-    counts: List<Plan.RoomCount>,
+    counts: List<Plan.RoomCount>?,
     vals: PanelVals,
     foot: @Composable ColumnScope.() -> Unit,
 ) {
     val p = Palette.DARK
     KitScreen(gap = 10.dp) {
         KitHeader(title, p, back = back)
-        FloorStrip(p)
+        // The port's floors go with the port's plan: GROUND and UPPER are the bungalow's (D-257).
+        if (counts != null) FloorStrip(p)
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            KitLivePlan(counts, Modifier.fillMaxSize())
+            if (counts != null) KitLivePlan(counts, Modifier.fillMaxSize()) else NoPlan(Modifier.fillMaxSize())
             vals.staticJam?.let { StaticNoise(it, Modifier.fillMaxSize()) }
         }
         foot()
+    }
+}
+
+/**
+ * **Where a plan goes on a phone that was sent none** (D-257): the frame and a dash, nothing else.
+ *
+ * No phone is sent the home's plan and no message carries an occupancy count (see
+ * [PanelVals.terminalCounts]), so the Terminal and the couch draw the space the plan will take and
+ * [PanelVals.NO_READING] in it, the honest-empty every other reading on a housed phone uses. Not a
+ * sentence about why: the reader is standing at a station in the dark (screens say little).
+ */
+@Composable
+internal fun NoPlan(modifier: Modifier = Modifier) {
+    Box(modifier.border(1.dp, Ramp.Faint), contentAlignment = Alignment.Center) {
+        Words(PanelVals.NO_READING, size = 44, color = Ramp.Dim, lineHeight = 1.0)
     }
 }
 

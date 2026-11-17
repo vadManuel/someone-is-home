@@ -27,7 +27,7 @@ class BannerOverPageTest {
                     DeviceCanvas(insets = PanelInsets()) { Screen(PanelState(screen = ScreenId.Quiet, role = role)) }
                 }
                 val banner = onNodeWithTag(NOTIFICATION_BANNER).getBoundsInRoot()
-                val lastLine = onNodeWithText("Frozen until next house meeting").getBoundsInRoot()
+                val lastLine = onNodeWithText("FROZEN UNTIL NEXT HOUSE MEETING").getBoundsInRoot()
                 assertTrue(
                     banner.bottom >= lastLine.bottom && banner.top <= lastLine.top,
                     "$role: the quiet banner ends at ${banner.bottom} and the meter's last line at " +
@@ -43,7 +43,7 @@ class BannerOverPageTest {
             var top = 0f
             runDesktopComposeUiTest(width = 600, height = 1300) {
                 setContent { DeviceCanvas(insets = PanelInsets()) { Screen(PanelState(screen = screen)) } }
-                top = onNodeWithText("Frozen until next house meeting").getBoundsInRoot().top.value
+                top = onNodeWithText("FROZEN UNTIL NEXT HOUSE MEETING").getBoundsInRoot().top.value
             }
             return top
         }
