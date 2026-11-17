@@ -15,10 +15,13 @@ import home.someoneshome.model.protocol.RoundWire
 import home.someoneshome.model.protocol.SeatToken
 import home.someoneshome.model.protocol.TransportFrame
 import home.someoneshome.model.protocol.TransportRefusal
+import home.someoneshome.platform.clearOwedReports
 import home.someoneshome.platform.clearSeatToken
+import home.someoneshome.platform.loadOwedReports
 import home.someoneshome.platform.loadSeatToken
 import home.someoneshome.platform.monotonicNanos
 import home.someoneshome.platform.saveHostAddress
+import home.someoneshome.platform.saveOwedReports
 import home.someoneshome.platform.saveSeatToken
 import home.someoneshome.platform.ScreenWake
 import home.someoneshome.platform.transport.AdvertiseFailure
@@ -96,9 +99,23 @@ interface SeatStore {
 
     /** Forget the token. A seat the house does not know is not worth presenting twice. */
     fun forget()
+
+    /**
+     * **The reports this phone owes the house, as last kept, or null** (D-245). Beside the token,
+     * because a report owed at a leave has to outlive the process the way the seat does: iOS ends
+     * an app whose Camera or Motion grant is withdrawn. Text the round half wrote; see
+     * `ContactUploader`. Nothing by default, for a store that keeps no reports.
+     */
+    fun owedReports(): String? = null
+
+    /** Keep them. **Throws** when the write did not happen, as [keep] does. */
+    fun keepOwedReports(text: String) = Unit
+
+    /** Forget them: the house has every one, or the round is over. */
+    fun forgetOwedReports() = Unit
 }
 
-/** [SeatStore] on the phone's own filesystem: story 0.8's two stores, behind one door. */
+/** [SeatStore] on the phone's own filesystem: story 0.8's two stores, and the owed reports, behind one door. */
 object DeviceSeat : SeatStore {
     override fun stored(): String? = loadSeatToken()
     override fun keep(token: String, hostAddress: String) {
@@ -106,6 +123,33 @@ object DeviceSeat : SeatStore {
         saveHostAddress(hostAddress)
     }
     override fun forget() = clearSeatToken()
+    override fun owedReports(): String? = loadOwedReports()
+    override fun keepOwedReports(text: String) = saveOwedReports(text)
+    override fun forgetOwedReports() = clearOwedReports()
+}
+
+/**
+ * **A [SeatStore] that lives exactly as long as this object** — what a round half keeps its owed
+ * reports in when its root names no store. A process ending loses it, which is the behaviour before
+ * D-245; [DeviceSeat] is what a phone's root passes.
+ */
+class MemorySeat : SeatStore {
+    private var token: String? = null
+    private var owed: String? = null
+    override fun stored(): String? = token
+    override fun keep(token: String, hostAddress: String) {
+        this.token = token
+    }
+    override fun forget() {
+        token = null
+    }
+    override fun owedReports(): String? = owed
+    override fun keepOwedReports(text: String) {
+        owed = text
+    }
+    override fun forgetOwedReports() {
+        owed = null
+    }
 }
 
 /**
@@ -296,9 +340,9 @@ class LobbyHouse(
      * [onSighted]'s sibling: a fact one phone reports about itself, which `RoundAuthority.radioFaulted`
      * puts to the rules. A person's act is named at the next meeting; the phone's own failure is
      * recorded and named nowhere (D-187). The seat is the connection's; the body carries the cause
-     * and nothing else.
+     * and the onset's random name, by which the authority hears one onset once (D-245).
      */
-    private val onRadioFaulted: suspend (Seat, RadioCause) -> Unit = { _, _ -> },
+    private val onRadioFaulted: suspend (Seat, RoundBody.RadioFaulted) -> Unit = { _, _ -> },
     /** What puts the home on the air. [DeviceAdvertising] in every production construction. */
     private val advertising: Advertising = DeviceAdvertising,
 ) {
@@ -425,7 +469,7 @@ class LobbyHouse(
         data class Sighted(val seat: Seat, val upload: RoundBody.Sighted) : Arrival
 
         /** **A phone's radio went down** ([RoundBody.RadioFaulted], T2, D-222; D-223). On the ordered queue. */
-        data class RadioFaulted(val seat: Seat, val cause: RadioCause) : Arrival
+        data class RadioFaulted(val seat: Seat, val report: RoundBody.RadioFaulted) : Arrival
     }
 
     private val arriving = Channel<Arrival>(Channel.UNLIMITED)
@@ -509,6 +553,7 @@ class LobbyHouse(
             // token (E-D3-1). A refused resume is the one the host most needs: it means a phone
             // in this room is holding a seat from an evening this house never ran.
             onRefused = { reason -> onEvent("A CONNECTION WAS REFUSED — $reason") },
+            socketWrite = { seat, write -> socketWrite(seat, write) },
         )
         host = server
         attending = scope.launch { attend() }
@@ -811,10 +856,15 @@ class LobbyHouse(
                 // no sequence by design (D-212), and the resolver recognises a second delivery by
                 // the slots themselves (D-213).
                 is Arrival.Sighted -> onSighted(arrival.seat, arrival.upload)
-                // **The radio fault, to the rules** (T2, D-222). Not through the desk: the body has
-                // no sequence and nothing to deduplicate. A second report of one onset cannot be
-                // sent (the radio debounces it), and the rules list a seat once anyway.
-                is Arrival.RadioFaulted -> onRadioFaulted(arrival.seat, arrival.cause)
+                // **The radio fault, to the rules, then answered** (T2, D-222; D-245). Not through
+                // the desk: the body has no sequence. A phone keeps a report until it is answered
+                // and sends it again on every resume, so one onset can arrive twice, and the
+                // authority hears each onset once by its name. The answer goes to this seat
+                // whatever the rules made of it (rule 1), after they are done with it.
+                is Arrival.RadioFaulted -> {
+                    onRadioFaulted(arrival.seat, arrival.report)
+                    answerFault(arrival.seat, arrival.report.onset)
+                }
             }
         }
     }
@@ -858,7 +908,9 @@ class LobbyHouse(
                 // judges it there; an upload the house cannot read resolves to nothing.
                 is RoundBody.Sighted -> arriving.trySend(Arrival.Sighted(seat, round))
                 // **A phone saying its radio went down** (T2, D-222), onto the same ordered queue.
-                is RoundBody.RadioFaulted -> arriving.trySend(Arrival.RadioFaulted(seat, round.cause))
+                is RoundBody.RadioFaulted -> arriving.trySend(Arrival.RadioFaulted(seat, round))
+                // The house's to send, never to receive (D-245).
+                is RoundBody.FaultHeard -> Unit
             }
             return
         }
@@ -895,6 +947,23 @@ class LobbyHouse(
     private fun publish() = announce(TransportFrame.Carry(LobbyWire.encode(desk.standing())))
 
     /**
+     * **"I have your report of [onset]"**, to the one seat that sent it (`RoundBody.FaultHeard`,
+     * D-245). The phone stops keeping it. A seat whose connection has gone by now misses this, keeps
+     * the report, and sends it again when it is back; the authority hears it once and this answers
+     * it again. Queued on the seat's own connection and never waited on (R12).
+     */
+    private suspend fun answerFault(seat: Seat, onset: String) {
+        val server = host ?: return
+        try {
+            server.send(seat, TransportFrame.Carry(RoundWire.encode(RoundBody.FaultHeard(onset))))
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            onEvent("A REPORT COULD NOT BE ANSWERED — SEAT ${seat.index} · IT IS SENT AGAIN ON ITS RETURN")
+        }
+    }
+
+    /**
      * **Every change a phone makes to the desk, made on the house's own scope and nowhere else**
      * (D-227).
      *
@@ -928,6 +997,21 @@ class LobbyHouse(
 
     /** Called before every change [atTheDesk] makes, where it makes it. A test's view of the confinement. */
     internal var deskWatch: () -> Unit = {}
+
+    /**
+     * **The real write of one frame to one seat's socket**, passed straight through (R12, D-244). A
+     * test holds one seat's write back to stand for a phone whose socket has stopped draining. Read
+     * by the server at each write, so a test sets it before or after [start].
+     */
+    internal var socketWrite: suspend (Seat, suspend () -> Unit) -> Unit = { _, write -> write() }
+
+    /**
+     * **End [seat]'s connection as a lost one** (`TransportHost.drop`, D-245): a test's way of
+     * standing a socket that failed while its phone was suspended. The phone comes back by its token.
+     */
+    internal suspend fun dropConnection(seat: Seat) {
+        host?.drop(seat)
+    }
 
     /**
      * One frame, to every phone attached to this house.
@@ -1032,7 +1116,7 @@ class LobbyOverTransport(
     /** [LobbyHouse.onSighted], threaded through: what another phone's radio heard (D-217). */
     private val onSighted: suspend (Seat, RoundBody.Sighted) -> Unit = { _, _ -> },
     /** [LobbyHouse.onRadioFaulted], threaded through: another phone's radio went down (T2, D-222; D-223). */
-    private val onRadioFaulted: suspend (Seat, RadioCause) -> Unit = { _, _ -> },
+    private val onRadioFaulted: suspend (Seat, RoundBody.RadioFaulted) -> Unit = { _, _ -> },
     /**
      * **The round's client half, on this phone's one socket.** Null in every production
      * construction — nothing arms a round yet. See [RoundSeam].

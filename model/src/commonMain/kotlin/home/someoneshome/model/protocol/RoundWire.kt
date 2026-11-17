@@ -631,8 +631,10 @@ sealed class RoundMessage {
  * - [Sighted] goes **client → host**. What this phone's radio heard: a report of fact, never a
  *   request, on a fixed cadence and at a fixed size (D-212).
  * - [RadioFaulted] goes **client → host**. This phone's radio went down: a report of fact, one fixed
- *   shape whose only field is D-187's line (a person's act, or the phone's), once per fault onset
- *   (T2, D-222; D-223).
+ *   shape carrying D-187's line (a person's act, or the phone's) and the onset's random name, once
+ *   per fault onset and again on each resume until it is answered (T2, D-222; D-223; D-245).
+ * - [FaultHeard] goes **host → client**, to the one phone that reported: the answer that lets it
+ *   stop keeping the report (D-245).
  *
  * ### [Gap] is not an Intent, and the distinction is not pedantry
  *
@@ -785,11 +787,47 @@ sealed class RoundBody {
      * room learns at the next meeting for a person anyway, and nothing about a role. Sent once per
      * fault onset (`SwitchboardRadio`), never per callback. The seat comes off the connection, like
      * every upward body's.
+     *
+     * ### [onset] names the onset, so a report sent twice is heard once (D-245)
+     *
+     * A report is kept on the phone until the house answers [FaultHeard], and sent again on every
+     * resume until then, across a socket that failed while the phone was suspended and across the
+     * process itself (iOS ends an app whose Camera or Motion grant is withdrawn). So the house can be
+     * handed one onset twice, and [onset] is how it tells: [ONSET_CHARS] lowercase hex characters,
+     * drawn fresh and at random for each onset by the phone. **Random and fixed-width, never a
+     * counter or a time**: a counter's digits would grow with how often this phone had faulted, and
+     * a time would say when; this says neither, to the house or to a reader of the Wi-Fi.
      */
     @ClientFacing
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("radioFaulted")
-    data class RadioFaulted(val cause: RadioCause) : RoundBody()
+    data class RadioFaulted(val cause: RadioCause, val onset: String) : RoundBody() {
+        init {
+            require(onset.length == ONSET_CHARS && onset.all { it in '0'..'9' || it in 'a'..'f' }) {
+                "an onset is $ONSET_CHARS lowercase hex characters"
+            }
+        }
+
+        companion object {
+            /** Eight random bytes, as hex: one onset's name (D-245). */
+            const val ONSET_CHARS: Int = 16
+        }
+    }
+
+    /**
+     * **Host → the one phone that reported. "I have your report of [onset]."** (D-245)
+     *
+     * The house's answer to [RadioFaulted], sent to the seat whose connection carried it and to no
+     * other, **whatever the rules made of the report**: named, recorded only, refused, or heard
+     * before. So it says nothing about the phone that receives it, about a role or about whether the
+     * seat is out (rule 1): every report is answered, once per time it arrives, by this one body of
+     * one length. Not a [Push]: it is transport bookkeeping, like [Gap], spends no sequence number
+     * and reaches no screen. The phone stops keeping the report when it arrives.
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("faultHeard")
+    data class FaultHeard(val onset: String) : RoundBody()
 }
 
 /**

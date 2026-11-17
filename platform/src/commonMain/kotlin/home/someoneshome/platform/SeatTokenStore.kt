@@ -33,3 +33,29 @@ class SeatTokenNotSaved(val path: String) : IllegalStateException(
     "the seat token was not written to $path. This phone cannot resume after a crash; " +
         "do not report the seating as durable."
 )
+
+/**
+ * **The reports this phone owes the house, kept beside the seat token** (D-229's recommendation,
+ * built in D-245).
+ *
+ * A phone that leaves the foreground mid-round owes the house one report (D-187), sent when it is
+ * back. iOS **ends** an app whose Camera or Motion grant is withdrawn in Settings, and going to
+ * Settings is leaving the foreground, so a report held only in memory failed with the process and the
+ * relaunch resumed its seat owing nothing. So it is written here at the leave, read back by the
+ * relaunched process, and cleared when the house answers that it has it. Text in, text out, the
+ * same doctrine as the token: this layer does not know what a report is.
+ *
+ * A failed save **throws**, as the token's does, and the caller says so in its own log.
+ */
+expect fun saveOwedReports(text: String)
+
+/** The owed reports as last kept, or null if none. Never a partial read. */
+expect fun loadOwedReports(): String?
+
+/** Forget the owed reports: the house has them, or the round they belong to is over. */
+expect fun clearOwedReports()
+
+/** A save that did not happen: a report owed now would not survive the process ending. */
+class OwedReportsNotSaved(val path: String) : IllegalStateException(
+    "the owed reports were not written to $path. A report owed now fails with this process."
+)

@@ -38,9 +38,11 @@ import kotlinx.coroutines.sync.withLock
  *
  * ### Order, and what happens when a phone is not there
  *
- * Sequencing and writing happen under one lock, which is D4's *one ordered queue* made literal:
- * per-seat order is not an emergent property of how fast sockets drain, it is the only order this
- * class can produce. A seat whose socket is gone still **spends its sequence number and keeps its
+ * Sequencing and handing to [send] happen under one lock, which is D4's *one ordered queue* made
+ * literal: per-seat order is not an emergent property of how fast sockets drain, it is the only
+ * order this class can produce. **[send] queues and returns** (`TransportHost.send`, R12, D-244):
+ * each seat's connection writes its own queue in order, so this lock is never held across a socket
+ * write, and one phone that stopped draining delays no other phone's frames. A seat whose socket is gone still **spends its sequence number and keeps its
  * message** — [onUnreachable] reports the failure to the authority (rule 6: a failed radio must never
  * make a player silently invisible) and the phone collects the message when it asks (see
  * [reassert]). A write that failed is therefore a delay, never a hole.

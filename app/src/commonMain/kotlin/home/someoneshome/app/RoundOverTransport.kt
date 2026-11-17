@@ -112,6 +112,12 @@ class RoundOverTransport(
      * **Whoever takes this must not print it.**
      */
     private val onOutbound: (String) -> Unit = {},
+    /**
+     * **Where the reports this phone owes the house are kept across the process** (D-245), beside
+     * the seat token: [DeviceSeat] on a phone. By default a store of this object's own, which fails
+     * with it, as every report did before D-245.
+     */
+    private val kept: SeatStore = MemorySeat(),
 ) {
 
     private val inbox = RoundInbox()
@@ -122,7 +128,10 @@ class RoundOverTransport(
         radio, windowNow,
         send = { sighted -> up(RoundWire.encode(sighted)) },
         // **The radio went down: one fixed body, up this phone's own socket** (T2, D-222; D-223).
-        faulted = { cause -> up(RoundWire.encode(RoundBody.RadioFaulted(cause))) },
+        // Kept until the house answers it, and sent again on each new connection until then (D-245).
+        faulted = { body -> up(RoundWire.encode(body)) },
+        kept = kept,
+        onEvent = onEvent,
     )
 
     /** Whether the house has put this phone out, as the uploader was told. For the bench and tests. */
@@ -224,8 +233,14 @@ class RoundOverTransport(
             // Upward only: another phone's radio going down is the house's to announce, at the
             // meeting, to everybody at once (T2, D-222), never one phone's to tell another.
             is RoundBody.RadioFaulted -> Unit
+            // **The house has this phone's report** (D-245): it is no longer kept. Not a push, so it
+            // spends no sequence and reaches no screen, lamp or motor.
+            is RoundBody.FaultHeard -> contacts.acknowledged(body.onset)
         }
     }
+
+    /** How many reports this phone owes the house and has not had answered (D-245). For tests. */
+    val owing: Int get() = contacts.owing
 
     /**
      * **The socket came back: ask for whatever was said while it was gone** (D-097, G3).
@@ -240,6 +255,10 @@ class RoundOverTransport(
         // socket was admitted. A request made just before the drop is deliberately NOT resent --
         // see IntentOutbox. Asking for the pushes is what corrects the screen instead.
         outbox.reseated()
+        // **Except a report the house has not answered** (D-245): it is a fact, not a request, and
+        // the house hears each onset once, so it goes up again on this connection. On [scope],
+        // where [run] and the beat read the uploader: a seating arrives on the socket's thread.
+        scope.launch { contacts.reseated() }
         ask(inbox.askAgain())
     }
 

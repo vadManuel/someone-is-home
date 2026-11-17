@@ -1,7 +1,6 @@
 package home.someoneshome.app
 
 import home.someoneshome.model.Intent
-import home.someoneshome.model.RadioCause
 import home.someoneshome.model.Seat
 import home.someoneshome.model.protocol.RoundBody
 
@@ -38,8 +37,8 @@ class HouseDoors(private val rules: () -> RoundAuthority?) {
         rules()?.sighted(seat, upload)
     }
 
-    /** A phone's radio went down, and why. */
-    suspend fun faulted(seat: Seat, cause: RadioCause) {
-        rules()?.radioFaulted(seat, cause)
+    /** A phone's radio went down, and why; heard once per onset (D-245). */
+    suspend fun faulted(seat: Seat, report: RoundBody.RadioFaulted) {
+        rules()?.radioFaulted(seat, report.cause, report.onset)
     }
 }

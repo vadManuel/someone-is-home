@@ -15,7 +15,12 @@ import platform.Foundation.writeToFile
  * round) but because Caches and tmp are deleted under storage pressure, and a token evaporating
  * mid-round is a phone that cannot resume, arriving without warning.
  */
-private fun seatTokenPath(): String {
+private fun seatTokenPath(): String = seatFilePath(FILE_NAME)
+
+/** The owed reports (D-245), in the same directory as the token and for the same reason. */
+private fun owedReportsPath(): String = seatFilePath(OWED_FILE_NAME)
+
+private fun seatFilePath(name: String): String {
     val directory = NSSearchPathForDirectoriesInDomains(
         directory = NSDocumentDirectory,
         domainMask = NSUserDomainMask,
@@ -29,10 +34,11 @@ private fun seatTokenPath(): String {
             error = null,
         )
     }
-    return "$directory/$FILE_NAME"
+    return "$directory/$name"
 }
 
 private const val FILE_NAME = "seat-token.txt"
+private const val OWED_FILE_NAME = "owed-reports.txt"
 
 /** Atomic, and the write's result is the point — see the map store's history. */
 actual fun saveSeatToken(text: String) {
@@ -55,4 +61,27 @@ actual fun loadSeatToken(): String? =
 
 actual fun clearSeatToken() {
     NSFileManager.defaultManager.removeItemAtPath(seatTokenPath(), error = null)
+}
+
+/** Atomic, like the token: a report half-written is a report that cannot be read back. */
+actual fun saveOwedReports(text: String) {
+    val path = owedReportsPath()
+    val wrote = NSString.create(string = text).writeToFile(
+        path = path,
+        atomically = true,
+        encoding = NSUTF8StringEncoding,
+        error = null,
+    )
+    if (!wrote) throw OwedReportsNotSaved(path)
+}
+
+actual fun loadOwedReports(): String? =
+    NSString.stringWithContentsOfFile(
+        path = owedReportsPath(),
+        encoding = NSUTF8StringEncoding,
+        error = null,
+    ) as String?
+
+actual fun clearOwedReports() {
+    NSFileManager.defaultManager.removeItemAtPath(owedReportsPath(), error = null)
 }

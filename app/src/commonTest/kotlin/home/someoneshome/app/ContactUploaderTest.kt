@@ -121,7 +121,7 @@ class ContactUploaderTest {
             val radio = LoudRadio()
             radio.cause = cause
             val faults = mutableListOf<RadioCause>()
-            val up = ContactUploader(radio, { ContactWindow(10) }, send = { }, faulted = { faults += it })
+            val up = ContactUploader(radio, { ContactWindow(10) }, send = { }, faulted = { faults += it.cause })
             radio.faults = 1
             up.beat()
             assertEquals(emptyList(), faults, "a fault went up before the phone was in a round")
@@ -138,7 +138,7 @@ class ContactUploaderTest {
     private fun evader(): Triple<ContactUploader, LoudRadio, MutableList<RadioCause>> {
         val radio = LoudRadio()
         val faults = mutableListOf<RadioCause>()
-        val up = ContactUploader(radio, { ContactWindow(10) }, send = { }, faulted = { faults += it })
+        val up = ContactUploader(radio, { ContactWindow(10) }, send = { }, faulted = { faults += it.cause })
         return Triple(up, radio, faults)
     }
 
@@ -277,11 +277,109 @@ class ContactUploaderTest {
      */
     @Test
     fun theFaultBodyIsOneFixedLength() {
-        assertEquals("{\"type\":\"radioFaulted\",\"cause\":\"person\"}", RoundWire.encode(RoundBody.RadioFaulted(RadioCause.Person)))
-        assertEquals("{\"type\":\"radioFaulted\",\"cause\":\"device\"}", RoundWire.encode(RoundBody.RadioFaulted(RadioCause.Device)))
-        assertEquals(
-            1, RadioCause.entries.map { RoundWire.encode(RoundBody.RadioFaulted(it)).length }.toSet().size,
-            "the fault body's length depends on its cause",
-        )
+        val onset = "0123456789abcdef"
+        assertEquals("{\"type\":\"radioFaulted\",\"cause\":\"person\",\"onset\":\"$onset\"}", RoundWire.encode(RoundBody.RadioFaulted(RadioCause.Person, onset)))
+        assertEquals("{\"type\":\"radioFaulted\",\"cause\":\"device\",\"onset\":\"$onset\"}", RoundWire.encode(RoundBody.RadioFaulted(RadioCause.Device, onset)))
+        // Every onset a phone names is the same width, so its length says nothing either (D-245).
+        val lengths = RadioCause.entries.flatMap { cause ->
+            List(50) { RoundWire.encode(RoundBody.RadioFaulted(cause, freshOnset())).length }
+        }.toSet()
+        assertEquals(1, lengths.size, "the fault body's length depends on its cause or its onset: $lengths")
+        assertEquals(null, RoundWire.decodeOrNull("{\"type\":\"radioFaulted\",\"cause\":\"person\",\"onset\":\"12\"}"), "an onset of another width was read")
+    }
+
+    // ---- D-245: a report is kept until the house answers it --------------------------------------------
+
+    /** An uploader over [kept], its reports collected whole. */
+    private fun keeper(kept: SeatStore, radio: LoudRadio = LoudRadio()): Pair<ContactUploader, MutableList<RoundBody.RadioFaulted>> {
+        val reports = mutableListOf<RoundBody.RadioFaulted>()
+        return ContactUploader(radio, { ContactWindow(10) }, faulted = { reports += it }, kept = kept, send = { }) to reports
+    }
+
+    /**
+     * **GUARD (D-245): an unanswered report goes up again on every new connection, the same onset,
+     * and stops once the house answers.** One body a beat, and never twice on one connection.
+     */
+    @Test
+    fun anUnansweredReportGoesUpAgainOnEachNewConnectionUntilTheHouseAnswers() {
+        val (up, reports) = keeper(MemorySeat())
+        up.heard(RoundMessage.ContactSeedIssued(seed))
+        up.leftTheForeground()
+        up.backInTheForeground()
+        repeat(3) { up.beat() }
+        assertEquals(1, reports.size, "one report did not go up once on one connection")
+        val onset = reports.single().onset
+        up.reseated()
+        repeat(3) { up.beat() }
+        assertEquals(listOf(onset, onset), reports.map { it.onset }, "an unanswered report did not go up again, as itself, on the new connection")
+        up.acknowledged(onset)
+        up.reseated()
+        repeat(3) { up.beat() }
+        assertEquals(2, reports.size, "an answered report went up again")
+        assertEquals(0, up.owing, "an answered report is still owed")
+    }
+
+    /** **GUARD (D-245): each onset has its own name**, so the house can tell a second onset from a repeat. */
+    @Test
+    fun twoOnsetsHaveTwoNames() {
+        val (up, reports) = keeper(MemorySeat())
+        up.heard(RoundMessage.ContactSeedIssued(seed))
+        repeat(2) {
+            up.leftTheForeground()
+            up.backInTheForeground()
+            up.beat()
+        }
+        assertEquals(2, reports.map { it.onset }.toSet().size, "two onsets went up under one name: $reports")
+    }
+
+    /**
+     * **GUARD (D-245): a report owed at a leave outlives the process.** The leave is kept beside the
+     * token before the phone comes back; a fresh uploader over the same store (the relaunch) hears
+     * the round's seed on its resume and owes the same onset; the answer clears the store. A report
+     * kept for another round is forgotten, not sent.
+     */
+    @Test
+    fun aReportOwedAtALeaveOutlivesTheProcess() {
+        val store = MemorySeat()
+        val (before, beforeReports) = keeper(store)
+        before.heard(RoundMessage.ContactSeedIssued(seed))
+        before.beat()
+        before.leftTheForeground()
+        // iOS ends the process here: nothing more of `before` runs.
+        assertTrue(store.owedReports() != null, "the leave was not kept before the phone was suspended")
+        assertEquals(emptyList(), beforeReports, "the report went up while the phone was away")
+
+        val (after, afterReports) = keeper(store)
+        after.beat()
+        assertEquals(emptyList(), afterReports, "a relaunch sent a report before it held the round's seed")
+        after.heard(RoundMessage.ContactSeedIssued(seed))
+        repeat(3) { after.beat() }
+        assertEquals(listOf(RadioCause.Person), afterReports.map { it.cause }, "the relaunched phone did not owe its leave, once, as a person's")
+        after.acknowledged(afterReports.single().onset)
+        assertEquals(null, store.owedReports(), "an answered report was still kept beside the token")
+
+        // Kept in one round, read back in another: forgotten.
+        val (old, _) = keeper(store)
+        old.heard(RoundMessage.ContactSeedIssued(seed))
+        old.leftTheForeground()
+        val (next, nextReports) = keeper(store)
+        next.heard(RoundMessage.ContactSeedIssued(ContactSeed("fedcba9876543210fedcba9876543210")))
+        repeat(3) { next.beat() }
+        assertEquals(emptyList(), nextReports, "a report kept in the last round went up in the next")
+        assertEquals(null, store.owedReports(), "a report kept for another round was not forgotten")
+    }
+
+    /** **GUARD (D-245, D-036): a crash in the foreground keeps nothing**, so its relaunch owes nothing. */
+    @Test
+    fun aCrashInTheForegroundKeepsNothing() {
+        val store = MemorySeat()
+        val (before, _) = keeper(store)
+        before.heard(RoundMessage.ContactSeedIssued(seed))
+        repeat(3) { before.beat() }
+        assertEquals(null, store.owedReports(), "a phone that never left kept a report")
+        val (after, afterReports) = keeper(store)
+        after.heard(RoundMessage.ContactSeedIssued(seed))
+        repeat(3) { after.beat() }
+        assertEquals(emptyList(), afterReports, "a phone that crashed in the foreground was reported on its relaunch")
     }
 }

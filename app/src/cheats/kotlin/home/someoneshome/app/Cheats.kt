@@ -395,7 +395,9 @@ fun CheatRoot() {
         // **The screen held awake for the round** (T4, D-221): the idle timer off from arming until
         // the round ends or this phone hangs up, then put back. No brightness is touched. The same
         // wake the lobby holds for the host (H1, D-224), built once above.
-        RoundClient(scope, flow, watch, buzzer, radio, wake, lines::round)
+        // **And the reports it owes kept beside its seat token** (D-245), so a report owed at a
+        // leave survives iOS ending the process.
+        RoundClient(scope, flow, watch, buzzer, radio, wake, kept = DeviceSeat, note = lines::round)
             // Both knots tied in one place: the lobby gets the seam it was promised, and the four
             // meeting controls, the Subroutine's hand-over and page 2's two fires get the way up
             // they were promised (E-P2-3). Before this line every one of them reached nobody.

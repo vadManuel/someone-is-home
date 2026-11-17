@@ -20,16 +20,29 @@ import io.ktor.websocket.readText
 import io.ktor.network.selector.SelectorManager
 import io.ktor.network.sockets.aSocket
 import io.ktor.utils.io.core.use
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /** The one websocket route. Part of the wire contract, beside [TransportWire]'s JSON. */
 const val TRANSPORT_PATH: String = "/round"
+
+/**
+ * **Frames one seat may have waiting before its link is dropped** (R12, D-244). A round's busiest
+ * moment (arming, a meeting) puts a few dozen on a seat at once; a phone hundreds behind has stopped
+ * reading, and holding more for it is memory spent on a socket that is not coming back as it is.
+ */
+const val OUTBOUND_FRAMES: Int = 512
 
 /**
  * D1's host half: the embedded Ktor server that turns websockets into seats.
@@ -71,9 +84,34 @@ class TransportHost(
      * host's log is not where it belongs.
      */
     private val onRefused: (TransportRefusal) -> Unit = {},
+    /**
+     * **The one write of a frame to a seat's socket, wrapped** — [write] is the real `ws.send`, and
+     * production passes it straight through. A test holds one seat's [write] back to stand for a
+     * phone whose socket has stopped draining (suspended, out of range, half-defunct): the frame is
+     * still written by the real socket, only later.
+     */
+    private val socketWrite: suspend (Seat, write: suspend () -> Unit) -> Unit = { _, write -> write() },
+    /**
+     * **How many frames one seat may have waiting before its link is dropped** (R12, D-244). A
+     * phone this far behind is not reading; it is dropped like any lost connection, and comes back
+     * by its token and asks for what it missed (D-097). [OUTBOUND_FRAMES] in production.
+     */
+    private val outboundFrames: Int = OUTBOUND_FRAMES,
 ) {
 
-    private class Link(val id: Long, val ws: DefaultWebSocketServerSession)
+    /**
+     * One seated connection, and **its own ordered outbound queue** (R12, D-244).
+     *
+     * [send] only puts a frame on [outbound]; the connection's own writer takes them off in order
+     * and does the socket write. So nobody who calls [send] waits on a socket: the house's
+     * reduction lock and the effect wire's lock are held for an enqueue, never for network I/O,
+     * and a phone whose socket has stopped draining holds up its own frames and nobody else's.
+     * One queue per link, filled in the order [send] was called, is what keeps each seat's frames
+     * in the order the house made them.
+     */
+    private class Link(val id: Long, val ws: DefaultWebSocketServerSession, val job: Job?, capacity: Int) {
+        val outbound = Channel<Frame>(capacity)
+    }
 
     private val gate = Mutex()
     private val links = HashMap<Seat, Link>()
@@ -148,11 +186,38 @@ class TransportHost(
      * Host → one seat. Throws if no connection holds the seat — the caller is the future
      * authority glue and must know a phone is unreachable, not have the frame vanish; a defunct
      * radio making a living player silently invisible is this project's canonical worst failure.
+     *
+     * **It queues and returns; it never waits on the socket** (R12, D-244). The frame goes on the
+     * seat's own [Link.outbound] and that connection's writer sends it. Until D-244 this was the
+     * socket write itself, and the house calls it under its reduction lock (D-241) and the effect
+     * wire's: a guest whose socket stopped draining held every other phone's frames behind it. A
+     * seat whose queue is full is not reading, so its link is dropped (and this throws, the same
+     * signal as no link at all): the phone comes back by its token and asks for what it missed.
      */
     suspend fun send(seat: Seat, frame: TransportFrame) {
+        val text = Frame.Text(TransportWire.encode(frame))
         val link = gate.withLock { links[seat] }
             ?: error("no connection holds ${seat} — the frame was not sent")
-        link.ws.send(Frame.Text(TransportWire.encode(frame)))
+        if (link.outbound.trySend(text).isSuccess) return
+        // Full, or closed because the link is going: either way this phone is not taking frames.
+        dropLink(link)
+        error("${seat}'s connection is not draining (${outboundFrames} frames waiting) — dropped, the frame was not sent")
+    }
+
+    /**
+     * **End [seat]'s connection as a lost one** (D-245): its queued frames go with it, `onLost`
+     * reports it, and the phone comes back by its token and asks for what it missed. What [send]
+     * does to a seat that stopped draining; a test stands a socket that failed under a suspended phone
+     * with it. Nothing when no connection holds the seat.
+     */
+    suspend fun drop(seat: Seat) {
+        val link = gate.withLock { links[seat] } ?: return
+        dropLink(link)
+    }
+
+    private fun dropLink(link: Link) {
+        link.outbound.close()
+        link.job?.cancel()
     }
 
     suspend fun connectedSeats(): Set<Seat> = gate.withLock { links.keys.toSet() }
@@ -187,27 +252,52 @@ class TransportHost(
         val link: Link
         val replaced: Link?
         gate.withLock {
-            link = Link(nextLinkId++, ws)
+            link = Link(nextLinkId++, ws, currentCoroutineContext()[Job], outboundFrames)
+            // **Seated is the first frame this connection's queue holds**, before the link is
+            // findable by [send], so no frame for this seat can reach the phone ahead of its seat.
+            link.outbound.trySend(Frame.Text(TransportWire.encode(TransportFrame.Seated(seated.token))))
             replaced = links.put(seat, link)
         }
         // A resume raced the old socket's end: the token owns the seat, so the newer
         // connection wins and the stale one is closed without ceremony (outside the lock —
-        // closing suspends).
+        // closing suspends). Its queue goes with it: this phone asks for what it missed.
+        replaced?.outbound?.close()
         replaced?.ws?.close(CloseReason(CloseReason.Codes.GOING_AWAY, "resumed elsewhere"))
 
-        ws.send(Frame.Text(TransportWire.encode(TransportFrame.Seated(seated.token))))
         onSeated(seat)
         try {
-            while (true) {
-                val frame = ws.nextFrameOrNull() ?: break
-                // Clock probes are answered HERE, below the app: the reply must carry the time
-                // the probe was seen, not the time some handler got around to it — every
-                // millisecond of detour becomes rtt, and rtt is the noise floor of D5's offset.
-                if (frame is TransportFrame.TimeProbe) {
-                    ws.send(Frame.Text(TransportWire.encode(TransportFrame.TimeMark(frame.probe, nowMillis()))))
-                    continue
+            coroutineScope {
+                // **This connection's writer, and the only thing that writes its frames** (R12,
+                // D-244): one at a time, in the order [send] queued them, on this connection's own
+                // coroutine. A socket that stops draining stops this and nothing else.
+                val writer = launch {
+                    try {
+                        for (out in link.outbound) socketWrite(seat) { ws.send(out) }
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Throwable) {
+                        // The socket is gone under the writer; the read side ends with it.
+                        dropLink(link)
+                    }
                 }
-                onFrame(seat, frame)
+                try {
+                    while (true) {
+                        val frame = ws.nextFrameOrNull() ?: break
+                        // Clock probes are answered HERE, below the app: the reply must carry the
+                        // time the probe was seen, not the time some handler got around to it —
+                        // every millisecond of detour becomes rtt, and rtt is the noise floor of
+                        // D5's offset. Written directly rather than queued behind pushes, for the
+                        // same reason.
+                        if (frame is TransportFrame.TimeProbe) {
+                            ws.send(Frame.Text(TransportWire.encode(TransportFrame.TimeMark(frame.probe, nowMillis()))))
+                            continue
+                        }
+                        onFrame(seat, frame)
+                    }
+                } finally {
+                    link.outbound.close()
+                    writer.cancel()
+                }
             }
         } finally {
             // **[onLost] is called under the lock**, so a seat's loss is always reported before a
@@ -220,6 +310,10 @@ class TransportHost(
             // cancelled coroutine that has to wait for the lock is thrown out of `withLock` before
             // it gets it: that seat's link stayed in the table and its loss was never reported, so
             // the house went on believing in a seat whose phone had gone (D-227).
+            //
+            // `LossOrderTest` holds both, by holding the lock open inside a slow `onLost`: called
+            // after the lock, a resume is reported first; cancellable, three of four losses of a
+            // stopping server go unreported (D-246).
             withContext(NonCancellable) {
                 gate.withLock {
                     if (links[seat]?.id == link.id) {

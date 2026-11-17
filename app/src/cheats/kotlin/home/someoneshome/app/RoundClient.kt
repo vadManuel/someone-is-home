@@ -118,6 +118,11 @@ class RoundClient(
      * on a bench.
      */
     private val wake: ScreenWake,
+    /**
+     * **Where this phone keeps the reports it owes the house** (D-245): beside the seat token.
+     * `CheatRoot` passes [DeviceSeat]; a test's phone keeps them in memory unless it names a store.
+     */
+    private val kept: SeatStore = MemorySeat(),
     private val note: (String) -> Unit,
 ) : RoundSeam {
 
@@ -161,6 +166,7 @@ class RoundClient(
         // The upward sweep: what goes up is composed on a phone that holds a name and a one line
         // in memory, which is the harder direction of the same question.
         onOutbound = { body -> watch.saw(body) },
+        kept = kept,
     )
 
     init {

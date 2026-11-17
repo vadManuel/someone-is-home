@@ -79,7 +79,7 @@ class ContactRadioBenchTest {
         val air = SimulatedAir()
         val said = mutableListOf<String>()
         private val arrivals = Channel<Pair<Seat, RoundBody.Sighted>>(Channel.UNLIMITED)
-        private val faults = Channel<Pair<Seat, RadioCause>>(Channel.UNLIMITED)
+        private val faults = Channel<Pair<Seat, RoundBody.RadioFaulted>>(Channel.UNLIMITED)
 
         /** Every radio-fault body the host took, raw, per seat (T2, D-222). */
         val faultBodies = seats.associate { it.index to mutableListOf<String>() }
@@ -105,7 +105,7 @@ class ContactRadioBenchTest {
                 if (body is RoundBody.Sighted) arrivals.trySend(seat to body)
                 if (body is RoundBody.RadioFaulted) {
                     faultBodies.getValue(seat.index) += raw
-                    faults.trySend(seat to body.cause)
+                    faults.trySend(seat to body)
                 }
             },
             onSeated = { seated.trySend(it) },
@@ -130,8 +130,8 @@ class ContactRadioBenchTest {
                 }
             }
             jobs += scope.launch {
-                for ((seat, cause) in faults) {
-                    house.radioFaulted(seat, cause)
+                for ((seat, report) in faults) {
+                    house.radioFaulted(seat, report.cause, report.onset)
                     faultsTaken++
                 }
             }
@@ -454,8 +454,13 @@ class ContactRadioBenchTest {
         beat()
         delay(SETTLE_MILLIS)
         assertEquals(listOf(1), seats.map { faultBodies.getValue(it.index).size }.filter { it > 0 }, "not one fault body, from one phone")
+        // The one fixed body: its cause, and an onset's random name of fixed width (D-245), so the
+        // same length from every phone. The bytes differ only in that name.
+        val sent = faultBodies.getValue(insider.index).single()
+        val report = RoundWire.decodeOrNull(sent) as? RoundBody.RadioFaulted
+        assertEquals(cause, report?.cause, "the fault went up as something other than the one fixed body")
         assertEquals(
-            listOf(RoundWire.encode(RoundBody.RadioFaulted(cause))), faultBodies.getValue(insider.index),
+            RoundWire.encode(RoundBody.RadioFaulted(cause, "0".repeat(RoundBody.RadioFaulted.ONSET_CHARS))).length, sent.length,
             "the fault went up as something other than the one fixed body",
         )
         assertEquals(framesBefore, seats.associate { it.index to pushed.getValue(it.index).size }, "a radio fault reached a phone before the meeting")

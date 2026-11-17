@@ -114,12 +114,17 @@ class RoundAuthority(
      * **One reduction at a time, and its effects out before the next begins** (R6, D-241).
      *
      * Every door that reads [state], reduces and pushes holds this: [arm], [heard], [mint],
-     * [sighted], [radioFaulted] and [fireEgress]. A push suspends (the effect wire's lock, a socket's
-     * send), and the arrival queue is not the only caller: the tick driver mints on its own
-     * coroutine, and the bench reaches in from its own. Without it a second caller could reduce in
-     * the gap between a touch's two halves and replace `GameState.touches` (T1 broken: both phones of
-     * the first touch answered twice), or put its effects on the wire between another reduction's.
-     * The bodies below call each other only unlocked; this lock is not re-entrant.
+     * [sighted], [radioFaulted] and [fireEgress]. A push suspends (the effect wire's lock), and the
+     * arrival queue is not the only caller: the tick driver mints on its own coroutine, and the bench
+     * reaches in from its own. Without it a second caller could reduce in the gap between a touch's
+     * two halves and replace `GameState.touches` (T1 broken: both phones of the first touch answered
+     * twice), or put its effects on the wire between another reduction's. The bodies below call each
+     * other only unlocked; this lock is not re-entrant.
+     *
+     * **No network I/O is done under it** (R12, D-244). A push ends at `TransportHost.send`, which
+     * puts the frame on that seat's own ordered queue and returns; the connection's writer does the
+     * socket write outside every lock. Held across the write, one guest whose socket stopped
+     * draining held every other phone's frames behind it (`StalledSocketTest`).
      */
     private val turn = Mutex()
 
@@ -267,6 +272,8 @@ class RoundAuthority(
         // A new round's radios start from nothing: last round's halves and debounces are about
         // seats and tokens that no longer exist.
         contactMemory = ContactMemory.EMPTY
+        // And no onset of last round's is one of this round's (D-245).
+        onsetsHeard.clear()
 
         // The count and never who holds it. Which seats were drawn is the one fact on this event
         // that must not reach a log on a Mac -- a device console is a file, and a file naming the
@@ -402,9 +409,21 @@ class RoundAuthority(
      * socket now: the notice is the meeting's, to everybody at once. A report that arrives before
      * arming or after the round is refused by the gate and recorded, like any.
      */
-    suspend fun radioFaulted(seat: Seat, cause: RadioCause): Unit = turn.withLock { faulted(seat, cause) }
+    suspend fun radioFaulted(seat: Seat, cause: RadioCause, onset: String): Unit = turn.withLock { faulted(seat, cause, onset) }
 
-    private suspend fun faulted(seat: Seat, cause: RadioCause) {
+    /**
+     * **Every onset each seat has reported this round, by its name** (D-245). A phone keeps a report
+     * until the house answers and sends it again on every resume, so one onset can arrive more than
+     * once; it is put to the rules the first time only. A value of this round, emptied at [arm], above
+     * the rules like the resolver's memory: the recording holds one `RadioFaulted` per onset.
+     */
+    private val onsetsHeard = HashMap<Seat, MutableSet<String>>()
+
+    private suspend fun faulted(seat: Seat, cause: RadioCause, onset: String) {
+        if (!onsetsHeard.getOrPut(seat) { mutableSetOf() }.add(onset)) {
+            note("RADIO FAULT — SEAT ${seat.index} · HEARD AGAIN, ONE ONSET · PUT TO THE RULES ONCE (D-245)")
+            return
+        }
         val fate = if (namedByTheNotice(cause)) "NAMED AT THE NEXT MEETING" else "RECORDED · NAMED BY NO NOTICE (D-187)"
         note("RADIO FAULT — SEAT ${seat.index} · ${cause.name.uppercase()} · $fate")
         concluded(Event.RadioFaulted(Tick(tick++), seat, cause))

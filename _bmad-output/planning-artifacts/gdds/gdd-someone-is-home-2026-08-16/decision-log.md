@@ -6383,6 +6383,109 @@ cheat picker or a backgrounded app pauses it, which errs late). Nothing here has
 | `ui` `FlowModel.houseAttached` | the flag only | and the stand-in standing texts leave |
 | `RealClocksTest` (new), `EffectPushTest` | (none) | housed phones draw the injected clock and the arrivals, unhoused ones the design's; the clocks follow the pushes in process, under `FlowHost`, and over a real socket |
 
+## Revision 69 — no socket write under the house's lock, every report kept until the house has it, and D-227's guard proven
+
+*2026-11-16. Finding R12 of the review of `67f3313..b35bba3` (raised in D-241), the two limits D-229
+left open, and the guard `1d16974` could not break.*
+
+### D-244 · **A push queues on its seat's own connection and returns; nothing the house holds a lock for waits on a socket — built**
+
+**The bug (R12).** D-241's lock (`RoundAuthority`'s one reduction at a time) is held across the
+pushes, and a push ended at `TransportHost.send`, which was the socket write itself (`ws.send`).
+`EffectWire.emit` held its own lock across it too. A guest whose socket stops draining (suspended,
+out of range, half-defunct) fills Ktor's buffers, `ws.send` suspends, and every other phone's frames,
+every other door into the rules and the tick driver wait behind it: the lamp's same-frame promise
+(rule 7) and the evasion return path, both held by the slowest phone in the house. Measured before the
+fix: with one guest's write held back, LIGHTS OUT never returned (`StalledSocketTest`).
+
+1. **Each seated connection has its own ordered outbound queue.** `TransportHost.send` encodes, puts
+   the frame on that seat's queue and returns; the connection's own writer takes them off in order
+   and does the socket write. The reduction lock and the effect wire's lock are held for an enqueue,
+   never for network I/O. One reducer, effects in reduction order, and each seat's frames in the
+   order the house made them (one FIFO per connection) are unchanged.
+2. **`Seated` is the first frame on a new connection's queue**, put there before the connection is
+   findable, so no frame for a seat can reach its phone ahead of its seat (it could before, by a
+   race).
+3. **A seat whose queue holds `OUTBOUND_FRAMES` (512) is not reading and is dropped** like any lost
+   connection; `send` throws, the same signal as no connection (`onUnreachable`), and the phone comes
+   back by its token and asks for what it missed (D-097). A writer whose socket fails drops its link
+   the same way. Clock probes are still answered directly on the read loop (rtt, D5).
+
+**Cost:** a channel per connection and one coroutine; nothing on the blackout path.
+
+| site | what it said | what it says now |
+|---|---|---|
+| `platform` `TransportHost.send` | the socket write | enqueue on the seat's own queue; drop the link when full |
+| `platform` `TransportHost` connection | one read loop; `Seated` written after the link was findable | a writer per connection; `Seated` first on the queue |
+| `platform` `EffectWire`, `app` `RoundAuthority` KDoc | the push suspends on a socket | no network I/O under either lock |
+| `StalledSocketTest` (new, app) | (none) | four phones over loopback, one guest's write held: arming and a meeting reach the other three within 2 s (27 ms measured), every stream in the house's order, the held guest's too once it drains |
+| `OutboundQueueTest` (new, platform) | (none) | a held seat delays no other seat's frames, which arrive in order; a full queue drops the seat |
+
+### D-245 · **Every radio report is kept until the house answers it: written beside the seat token at a leave, sent again on every resume, and heard once per onset — built**
+
+**The two limits D-229 raised.** (a) iOS ends an app whose Camera or Motion grant is withdrawn in
+Settings, and going to Settings is a leave: the report owed for it lived in memory and failed with the
+process, and the relaunch resumed its seat owing nothing. (b) `TransportClient` is at-most-once: a
+report handed to a guest's socket that failed while the phone was suspended was lost with it.
+
+1. **The body names its onset.** `RoundBody.RadioFaulted(cause, onset)`: `onset` is 16 lowercase hex
+   characters, drawn fresh from the secure source for each onset by the phone. Random and fixed-width,
+   never a counter or a time, so the body is still one length from every phone and says nothing about
+   how often or when (rule 1, D-223). A body with any other width is not read.
+2. **The phone keeps every report until the house answers it.** `ContactUploader` holds the reports
+   it owes, oldest first (at most 8). A report goes up one a beat, and goes up again on every new
+   connection until `RoundBody.FaultHeard(onset)` comes back. Once per onset is unchanged: flicks
+   between two beats are one report, and the radio's onset on that beat is folded into it.
+3. **The house answers every report and hears each onset once.** `LobbyHouse.attend` puts the report
+   to the rules (awaited, D-241) and then sends `FaultHeard` to that seat, **whatever the rules made
+   of it** (named, recorded only, refused, out or not: rule 1). `RoundAuthority` keeps each seat's
+   onsets for the round and puts a repeat to nothing, logging `HEARD AGAIN`; the recording still holds
+   one `RadioFaulted` per onset, so the format does not change (still `recording/26`). `FaultHeard` is
+   transport bookkeeping like `Gap`: not a push, no sequence, no schema row, no screen.
+4. **A report owed at a leave is written at the leave.** `SeatStore` gains the owed reports
+   (`owedReports`, `keepOwedReports`, `forgetOwedReports`); `DeviceSeat` writes them to
+   `owed-reports.txt` in Documents beside `seat-token.txt` (`platform` `saveOwedReports`, atomic,
+   throws when it did not write). The text is a one-way fingerprint of the round's contact seed (its
+   token for a window no phone is in) and one line per report. When a relaunched process hears its
+   round's seed again on its resume, it reads back the reports kept for that round and owes them; a
+   report kept for another round is forgotten. Answered, the report leaves the file; the round's end
+   or a hang-up empties it. **A crash in the foreground writes nothing, so D-036 holds**: only a leave
+   writes.
+
+**What this does not cover.** A guest whose Local Network grant is withdrawn cannot reach the house
+at all (D-229). The bench rig (`RoundClient`) is the one phone root, and `CheatRoot` passes
+`DeviceSeat`; every other construction keeps reports in memory. Nothing here has run on a phone: the
+relaunch is a test's process ending (the phone's coroutines cancelled, a fresh phone over the same
+store), not iOS ending one.
+
+| site | what it said | what it says now |
+|---|---|---|
+| `model` `RoundBody.RadioFaulted` | `cause` | `cause`, `onset` (16 hex) |
+| `model` `RoundBody.FaultHeard` | (none) | host to the reporting seat: the onset it has |
+| `platform` `saveOwedReports`, `loadOwedReports`, `clearOwedReports` | (none) | `owed-reports.txt` beside the token; `OwedReportsStoreTest` |
+| `app` `SeatStore`, `DeviceSeat`, `MemorySeat` | the token | and the owed reports |
+| `app` `ContactUploader` | one `owed` flag in memory | the reports owed, kept, re-sent per connection, cleared by the answer |
+| `app` `RoundOverTransport` | | `FaultHeard` to the uploader; a seating re-sends |
+| `app` `LobbyHouse`, `HouseDoors`, `RoundAuthority.radioFaulted` | the cause | the body; the answer after the rules; one onset once |
+| `app` cheats `RoundClient`, `CheatRoot` | | the store, `DeviceSeat` on the phone |
+| `ContactUploaderTest` | | re-sent per connection until answered; two onsets two names; kept at the leave and read back by a fresh uploader; a foreground crash keeps nothing; one length |
+| `EvasionNoticeTest` | | over loopback: a report into a socket that failed while suspended reaches the house once; a lost answer is heard once; a report owed when the app is ended reaches the house from the relaunch and the file is cleared; a foreground crash and relaunch names nobody; every report answered, out or not |
+
+### D-246 · **D-227's loss ordering is proven by breaking it — built (a test, no behaviour change)**
+
+`1d16974` reported a seat's loss under `TransportHost`'s lock, so a loss is always reported before a
+later resume of the same seat, and took that lock uncancellably, so a stopping server reports every
+loss. Neither could be made to fail by reverting it: on loopback each window is microseconds wide.
+`LossOrderTest` holds the window open on purpose, with an `onLost` that takes 400 ms (a thread
+descheduled at the wrong moment, or a slow desk):
+
+1. **Loss before resume.** A phone drops; while the loss is still being reported it resumes by its
+   token. The caller must hear `lost` before `seated`. With the loss reported after the lock (the code
+   before `1d16974`): *Expected <[lost 0, seated 0]>, actual <[seated 0, lost 0]>*.
+2. **Every loss reported.** Four phones seated; the first loss is slow, so the other three are waiting
+   for the lock when the stopping server cancels them. Without `NonCancellable`: *a stopping server
+   reported 1 of 4 losses: [0]*.
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).
