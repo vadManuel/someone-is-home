@@ -127,6 +127,33 @@ class SwitchboardRadioTest {
     }
 
     /**
+     * **D-233: the owner's ruling, the scan turned over every 100 ms, ten times a second** (it was
+     * 250 ms, D-218). Literal numbers, not [ContactAdvertisement.SCAN_CYCLE_MILLIS], so moving it
+     * either way fails here. The counts of cycles are derived from it, and the durations they stand
+     * for must not move with it: the tally every 10 s, the settle and the patience 2 s each.
+     */
+    @Test
+    fun theScanTurnsOverTenTimesASecondAndTheCountedDurationsHold() {
+        assertEquals(100L, ContactAdvertisement.SCAN_CYCLE_MILLIS, "the scan restart moved without a ruling: the owner set it at 100 ms (D-233)")
+        val hw = RecordingHardware()
+        val lines = mutableListOf<String>()
+        val radio = SwitchboardRadio(hw, log = { lines += it })
+        radio.scan(true)
+        on(radio)
+        val starts = hw.scanStarts
+        repeat(10) { radio.cycle() }
+        assertEquals(starts + 10, hw.scanStarts, "ten cycles are one second (D-233) and did not restart the scan ten times")
+
+        assertEquals(2_000L, ContactAdvertisement.FAULT_SETTLE_CYCLES * ContactAdvertisement.SCAN_CYCLE_MILLIS, "the settle is no longer two seconds")
+        assertEquals(2_000L, ContactAdvertisement.START_PATIENCE_CYCLES * ContactAdvertisement.SCAN_CYCLE_MILLIS, "the patience is no longer two seconds")
+
+        repeat(89) { radio.cycle() }
+        assertEquals(emptyList(), lines.filter { it.startsWith("TALLY") }, "the tally came before ten seconds of cycles")
+        radio.cycle()
+        assertEquals(1, lines.count { it.startsWith("TALLY 10 S") }, "ten seconds of cycles did not tally once: ${lines.filter { it.startsWith("TALLY") }}")
+    }
+
+    /**
      * **D-008 and story 9.4: told to stop scanning, it keeps advertising and never scans again** —
      * not on the cycle, not after a reset, not after Bluetooth comes back on, and nothing heard in
      * flight reaches an upload. The window still turns the token.

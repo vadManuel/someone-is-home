@@ -190,7 +190,7 @@ phone hears it, and the house resolves the phone's sighting to seat 1 and rules 
 (the default): with three, the Revoke ends the round by parity and the report is refused as
 `RoundAlreadyEnded`. With four, the round goes on into the report and the meeting.
 
-First find the Mac's strongest spot. The house only counts **-35 dBm or stronger** (D-213):
+First find the Mac's strongest spot. The house only counts **-40 dBm or stronger** (D-233):
 
 ```
 tools/ble-peer/.build/release/ble-peer sniff --round-seed 20261150 --seats 4 --quiet
@@ -243,7 +243,7 @@ there; that is the rules, after the report and the notice have been shown.
     once every 5 s. Nothing but the phone's own upload can produce it after the bench's report, so it
     shows the house mapped the Mac's token to seat 1.
 - **If HEARD shows the Mac's prefix but neither line appears:** look at the RSSI in the HEARD lines. If
-  it never reaches -35, the gate held. That is unit 5's finding (the Mac is not a phone), not a radio
+  it never reaches -40, the gate held. That is unit 5's finding (the Mac is not a phone), not a radio
   fault. Write down the best value.
 
 Stop with Ctrl-C in both terminals.
@@ -347,7 +347,8 @@ Stop with Ctrl-C. Put Auto-Lock back to your usual setting when you are done.
 
 - **A real Revoke.** It needs mutual sighting, and the Mac cannot upload what it hears. The device
   check's steps 2 and 3 (a touch answered on both phones, the target's scan going off) need two phones.
-- **Phone-to-phone RSSI** and therefore the -35 gate itself (unit 5). Mac numbers do not transfer.
+- **Phone-to-phone RSSI** and therefore the -40 gate itself (D-233: set from two phones; the hit rate
+  and a 30 cm pass-by check are still to be rerun). Mac numbers do not transfer.
 - **Two phones agreeing on the window** (the device check's step 1). Round A only compares the phone to
   the Mac.
 - **Sniffing a full room** (unit 6, three or more phones): whether an Insider's phone and a Resident's

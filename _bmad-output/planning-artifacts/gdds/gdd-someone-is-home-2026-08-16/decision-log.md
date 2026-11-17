@@ -5783,6 +5783,74 @@ and a clock anchor, both a change to what a client draws and receives.
 | `AbilityWiringTest` (new) | (none) | four phones over loopback with the real link, desk and authority: the REVOKE action arms the house and the touch lands; an early arm is sent the same and arms nothing; the EGRESS action opens on every phone by the push, an early one answered to the actor alone |
 | `HoldInputTest`, `FlowTest` | the hold changes the tile; the Egress hold reaches `Banner` | the hold sends `ArmRevoke` / fires, and no page-2 hold moves the screen |
 
+## Revision 61 — the contact gate opens at −40, and the scan turns over ten times a second
+
+*Ruled by the owner 2026-11-16, after a two-phone touch test: two iPhones, quick realistic touches,
+the radio's own `HEARD` lines read on each phone.*
+
+### D-233 · **The contact gate is −40 dBm and the scan restarts every 100 ms — decided (amends D-008's "only tighten" for this value; replaces D-213's floor and D-218's scan rate)**
+
+**What two phones read** (2026-11-16, phone to phone, the readings the uploader keeps):
+
+| distance | RSSI |
+|---|---|
+| 1 m | median −57 |
+| 30 cm | median −43, range −41 to −45 |
+| touching, loose | −37 |
+| touching, firm | −27 |
+
+**What the gate let through.** Touches came quicker than the 5 s pair debounce at first, which
+confounds the count, so the second run spaced them about 6 s apart.
+
+| gate | touches registered | readings at or above the gate |
+|---|---|---|
+| −35 (D-213) | about 33 to 50 per cent (10 of the owner's 20 to 30) | 14, against 66 at −36 to −45 |
+| −40 (a build on one phone, never committed) | about 65 to 80 per cent (10 of 12 to 16) | 16, against 14 at −41 to −46 |
+
+1. **The floor is −40 dBm** (`ContactGate.RSSI_FLOOR`). A loose touch reads −37 and opens it; 30 cm
+   reads −41 at its strongest and does not. **This loosens D-008's radius, which said the gate may
+   only ever tighten, by the owner's ruling and for this value only.** At −35 half or more of real
+   touches never landed, and a Revoke that silently never lands is D-008's other failure. The margin
+   at 30 cm is one dB, so the next two-phone session reruns the hit rate **and a 30 cm pass-by
+   false-positive check**; any further move is its own ruling. The ceiling is unchanged: 0 dBm and
+   above, CoreBluetooth's 127 included, is no reading.
+2. **The scan restarts every 100 ms** (`ContactAdvertisement.SCAN_CYCLE_MILLIS`, was 250). iOS
+   reports each phone once per scan with duplicates filtered, so a phone heard is reported up to ten
+   times a second instead of about four, and a quick touch is more likely caught at its strongest.
+   The ring still keeps the strongest reading per token, and the uploader drains it once a second.
+   **The counts of cycles are now derived from the cycle**, so what they stand for does not move:
+   the tally every 10 s (`TALLY_CYCLES` 40 → 100), the fault settle and the start patience 2 s each
+   (8 → 20). The iOS timer's leeway is a tenth of the cycle (25 → 10 ms), so it cannot slip to
+   eight restarts a second.
+
+**Allocation at 7 peers (rule 7), D-218's estimate redone at the new rate:**
+
+| | rate | bytes | KB/s |
+|---|---|---|---|
+| scan callbacks | 7 peers × 10/s = 70/s | 300 (at most 500) | 21 (35) |
+| scan restarts (stop, start, timer) | 10/s | under 100 | under 1 |
+| drain (once a beat, up to 14 readings) | 1/s | about 1 000 | about 1 |
+| device log `HEARD` line | 1/s | about 200 | 0.2 |
+| **total** | | | **about 23 (37)** |
+
+**About 23 KB/s, 37 KB/s at the worst per-callback cost: 4.6 to 7.4 per cent of the 0.5 MB/s
+budget**, against D-218's 2 to 3 per cent. Not tight. The bytes per callback are still an estimate;
+unit 8 measures them on a phone, and the `TALLY` line's callback count is the rate to multiply.
+
+**Noticed, not changed:** the upload's filler RSSI spans −100 to −40 (`SightingUpload`), so filler
+can now sit at the floor. Filler tokens resolve to nobody, so it opens nothing (`ContactResolverTest`
+already feeds it at −20); it only means a real reading at −40 is no longer outside filler's range.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `core` `ContactGate.RSSI_FLOOR` | −35, placeholder (D-213) | −40, ruled |
+| `platform` `ContactAdvertisement.SCAN_CYCLE_MILLIS` | 250 | 100 |
+| `platform` `TALLY_CYCLES`, `FAULT_SETTLE_CYCLES`, `START_PATIENCE_CYCLES` | 40, 8, 8 | 100, 20, 20, derived from the cycle |
+| `platform` iOS `LEEWAY_NANOS` | 25 ms | a tenth of the cycle, 10 ms |
+| `ContactResolverTest` | pins −35 | pins −40, citing this entry; a new test pins the gate in the measured readings (−27, −37, −40 land; −41, −43, −45, −57 do not) |
+| `SwitchboardRadioTest` | (none) | a new test pins 100 ms, ten restarts in ten cycles, and the 10 s / 2 s / 2 s durations |
+| `app` cheats `SimulatedAir`, `tools/one-phone/README.md`, `ble-unit4-device-check.md` | −35, 250 ms | −40, 100 ms |
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

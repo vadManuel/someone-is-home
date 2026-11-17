@@ -60,7 +60,7 @@ import platform.darwin.dispatch_time
  * this file adds is nothing: the dictionary key is read once, the token's bytes are copied into a
  * buffer allocated once, and the ring the switchboard keeps is fixed. **So the radio's allocation
  * rate is its callback rate**, and the scan cycle ([ContactAdvertisement.SCAN_CYCLE_MILLIS]) is what
- * bounds that: at most four reports a second per phone heard.
+ * bounds that: at most ten reports a second per phone heard (D-233).
  *
  * ### Rule 6: nothing here can reach the player
  *
@@ -230,8 +230,11 @@ private class CoreBluetoothHardware(
     private companion object {
         const val NANOS_PER_MILLI = 1_000_000L
 
-        /** The cycle may run this late; it is a scan restart, not a frame. */
-        const val LEEWAY_NANOS = 25_000_000uL
+        /**
+         * The cycle may run this late, a tenth of it; it is a scan restart, not a frame. At 25 ms on
+         * a 100 ms cycle (D-233) the timer could slip to eight restarts a second; a tenth keeps it near ten.
+         */
+        val LEEWAY_NANOS: ULong = (ContactAdvertisement.SCAN_CYCLE_MILLIS * NANOS_PER_MILLI / 10).toULong()
 
         fun powerOf(state: Long): RadioPower = when (state) {
             CBManagerStatePoweredOn -> RadioPower.On

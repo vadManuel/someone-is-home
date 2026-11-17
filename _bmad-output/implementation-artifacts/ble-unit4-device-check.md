@@ -80,15 +80,16 @@ Hold two phones about 30 cm apart for 10 s, then put them back to back.
   - Each phone logs `[radio] HEARD 1 — yyyyyyyy -nn` once a second, where `yyyyyyyy` is the
     **other** phone's latest `ADVERTISE` prefix (or the one before it, around a window edge). That
     match is the proof that what is on the air is the token.
-  - RSSI is around -50 to -70 at 30 cm and rises when the phones touch.
+  - RSSI is around -41 to -45 at 30 cm (D-233's two phones) and rises when the phones touch.
   - Write down the strongest touching value for each phone pair. That number is unit 5's input.
-- **Scan rate:** the `[radio] TALLY 10 S — CALLBACKS c …` line should show roughly 20 to 40
-  callbacks per phone heard. That is at most 4 a second, because the scan restarts every 250 ms.
+- **Scan rate:** the `[radio] TALLY 10 S — CALLBACKS c …` line should show roughly 50 to 100
+  callbacks per phone heard. That is at most 10 a second, because the scan restarts every 100 ms
+  (D-233; it was 250 ms).
   - **If CALLBACKS stays at 1 per phone after the first report**, iOS is not resetting its duplicate
     filter on a restart. Report this. The fix is one constant (`ContactAdvertisement`).
 - **Touch:** a touch between two living phones with no Revoke armed logs `PUSH … A TOUCH, ANSWERED`
   on both phones.
-  - **If touching never gives -35 or stronger**, the resolver's gate (D-213) never opens. Note the
+  - **If touching never gives -40 or stronger**, the resolver's gate (D-233) never opens. Note the
     best RSSI you saw: that is unit 5's finding, not a radio fault.
 
 ## 3. A Revoke lands

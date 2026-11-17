@@ -20,9 +20,11 @@ import kotlin.math.sqrt
  * person walking two phones together does: the uploader, the socket, the resolver, the gate.
  *
  * **Signal strength is a function of distance and of nothing else**: −30 dBm at five centimetres,
- * falling 20 dB a decade, floored at −100. The resolver's −35 dBm floor (D-213, a placeholder until
- * unit 5) is then about nine centimetres, which is a touch, and a phone across a room is about
- * −70. The curve is a stand-in and says so; unit 5 measures the real one.
+ * falling 20 dB a decade, floored at −100. The resolver's −40 dBm floor (D-233) is then about
+ * sixteen centimetres, and a phone across a room is about −70. The curve is a stand-in and says so:
+ * real phones read −43 at 30 cm and −37 touching loosely (D-233), which this curve does not follow.
+ * The bench only ever touches (4 cm) or stands a room apart (5 m), so neither side of the floor
+ * depends on the curve's shape.
  *
  * In the cheats source set, absent from a release build, like every other stand-in.
  */

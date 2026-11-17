@@ -133,23 +133,30 @@ data class ContactBook(
 /**
  * **The tolerances, named, in one place** (D-213).
  *
- * Two are placeholders and say so. A number here is a gameplay rule wearing a constant's clothes:
- * the floor decides whether a Revoke lands at all, and a mis-set one fails silently in both
- * directions (architecture risk 2).
+ * The mutual window is a placeholder and says so; the floor is the owner's ruling (D-233). A number
+ * here is a gameplay rule wearing a constant's clothes: the floor decides whether a Revoke lands at
+ * all, and a mis-set one fails silently in both directions (architecture risk 2).
  */
 object ContactGate {
 
     /**
-     * ⚠️ **PLACEHOLDER until unit 5 calibrates it on phones: −35 dBm.** A reading at or above this
-     * is contact; below it is not.
+     * **Ruled by the owner on two phones: −40 dBm** (D-233). A reading at or above this is contact;
+     * below it is not.
+     *
+     * Measured phone to phone (2026-11-16): touching firmly −27, touching loosely −37, 30 cm −43
+     * (−41 to −45), 1 m −57. At −35 about a third to a half of quick realistic touches registered;
+     * at −40 about 65 to 80 per cent. So −40 opens on a loose touch and stays shut at 30 cm, by one
+     * dB at that distance's strongest reading.
      *
      * **The radius is a hard constraint, not a tuning value** (D-008, `gdd.md`). At *nearby* the
      * report is a through-wall detector for Revoked players and *you can walk past a Revoked player
      * and never notice* stops being true; too tight, and a Revoke silently never lands, which nobody
-     * can tell from an Insider who never tried. Unit 5 sets it per model pair if it has to; it may
-     * only ever tighten towards contact, never loosen towards *nearby*.
+     * can tell from an Insider who never tried. D-008 said it may only ever tighten; **D-233 loosens
+     * it from −35 by the owner's ruling, for this value only**, because at −35 half or more of real
+     * touches never landed. Any further move needs its own ruling and a two-phone 30 cm pass-by
+     * check.
      */
-    const val RSSI_FLOOR: Int = -35
+    const val RSSI_FLOOR: Int = -40
 
     /**
      * **A reading of zero or more is not a reading.** CoreBluetooth reports 127 when it has no

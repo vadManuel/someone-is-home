@@ -50,19 +50,28 @@ object ContactAdvertisement {
      * Every callback CoreBluetooth makes into Kotlin/Native allocates (rule 7), so the callback rate
      * is the radio's allocation rate, and with duplicates allowed that rate is the OS's, not ours.
      * With duplicates filtered, iOS reports each phone once per scan; turning the scan over every
-     * 250 ms reports each phone at most four times a second, which bounds the rate at 4 × peers
+     * 100 ms reports each phone at most ten times a second, which bounds the rate at 10 × peers
      * whatever the OS does. The scan is never off for longer than the restart, so a living phone
      * still scans continuously (D-212 ruling 3).
      *
-     * ⚠️ One named value so that unit 8's on-device measurement changes one line. If a device shows a
-     * phone reported once and never again, iOS is not resetting its filter on a restart, and the
-     * fallback is duplicates on with no cycle: the reports come at the OS's rate, which is more
-     * allocation and less latency.
+     * **Ruled by the owner at 100 ms** (D-233; it was 250 ms, D-218). At 250 ms two phones saw about
+     * four readings a second each, too few for a quick touch to be caught at its strongest; the
+     * uploader's ring still keeps only the strongest per token per second. At 7 peers that is at
+     * most 70 callbacks a second, about 21 KB/s (35 KB/s at 500 B a callback), 4 to 7 per cent of
+     * rule 7's 0.5 MB/s: the arithmetic is D-233's.
+     *
+     * Every count of cycles below is derived from this, so the durations they stand for do not move
+     * with it. If a device shows a phone reported once and never again, iOS is not resetting its
+     * filter on a restart, and the fallback is duplicates on with no cycle: the reports come at the
+     * OS's rate, which is more allocation and less latency.
      */
-    const val SCAN_CYCLE_MILLIS: Long = 250L
+    const val SCAN_CYCLE_MILLIS: Long = 100L
 
-    /** How many cycles between the radio's tally lines in the device log: every ten seconds. */
-    const val TALLY_CYCLES: Int = 40
+    /** How long between the radio's tally lines in the device log: ten seconds. */
+    const val TALLY_MILLIS: Long = 10_000L
+
+    /** How many cycles between the radio's tally lines in the device log: [TALLY_MILLIS] of them. */
+    const val TALLY_CYCLES: Int = (TALLY_MILLIS / SCAN_CYCLE_MILLIS).toInt()
 
     /**
      * **How long the radio must stay back up before another outage is a new fault: two seconds of
@@ -74,15 +83,15 @@ object ContactAdvertisement {
      * session logged it as two (2026-11-16). Every callback of one burst lands within milliseconds;
      * a second switch-off by a person takes seconds.
      */
-    const val FAULT_SETTLE_CYCLES: Int = 8
+    const val FAULT_SETTLE_CYCLES: Int = (2_000L / SCAN_CYCLE_MILLIS).toInt()
 
     /**
      * **How long a start may go unanswered before it is asked again: two seconds of cycles.**
      * CoreBluetooth answers every start it accepts, so this only matters if an answer is lost; a
      * start that failed is asked again after the same wait, never at once, so a failure that
-     * repeats costs one line every two seconds rather than four a second.
+     * repeats costs one line every two seconds rather than ten a second.
      */
-    const val START_PATIENCE_CYCLES: Int = 8
+    const val START_PATIENCE_CYCLES: Int = (2_000L / SCAN_CYCLE_MILLIS).toInt()
 }
 
 /** A CoreBluetooth manager's state, as the radio needs to know it. */

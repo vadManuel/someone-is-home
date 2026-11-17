@@ -84,7 +84,7 @@ class ContactResolverTest {
     @Test
     fun `a mutual sighting at the floor is a contact and one dBm under it is not`() {
         val floor = ContactGate.RSSI_FLOOR
-        assertEquals(-35, floor, "the placeholder moved without its D-213 note")
+        assertEquals(-40, floor, "the floor moved without a ruling: the owner set it at -40 (D-233)")
         val at = Feed()
         assertEquals(emptyList(), at.at(t0, up(2, hears(3, floor))))
         assertEquals(contacts(2, 3), shape(at.at(t0 + 10, up(3, hears(2, floor)))))
@@ -93,6 +93,27 @@ class ContactResolverTest {
         under.at(t0, up(2, hears(3, floor)))
         assertEquals(emptyList(), under.at(t0 + 10, up(3, hears(2, floor - 1))), "one side under the floor")
         assertEquals(emptyList(), under.memory.heard.filter { it.observer == Seat(3) }, "an under-floor reading was remembered")
+    }
+
+    /**
+     * **The owner's ruling, pinned in the readings it was made from** (D-233, which loosens D-008's
+     * "only tighten" for this value). Literal dBm, not [ContactGate.RSSI_FLOOR], so moving the
+     * constant in either direction fails here: a loose touch (−37) and the floor itself (−40) are
+     * contact; one dB under, 30 cm's strongest (−41), 30 cm's median (−43) and 1 m (−57) are not.
+     */
+    @Test
+    fun `the gate is the owner's -40 ruling - a loose touch lands and 30 cm does not`() {
+        for (rssi in listOf(-27, -37, -40)) {
+            val f = Feed()
+            f.at(t0, up(2, hears(3, rssi)))
+            assertEquals(contacts(2, 3), shape(f.at(t0 + 10, up(3, hears(2, rssi)))), "$rssi dBm is a touch (D-233) and did not land")
+        }
+        for (rssi in listOf(-41, -43, -45, -57)) {
+            val f = Feed()
+            f.at(t0, up(2, hears(3, rssi)))
+            assertEquals(emptyList(), f.at(t0 + 10, up(3, hears(2, rssi))), "$rssi dBm is 30 cm or more (D-233) and landed")
+            assertEquals(emptyList(), Feed().at(t0, up(2, hears(6, rssi))), "$rssi dBm reported a Revoked seat")
+        }
     }
 
     @Test
