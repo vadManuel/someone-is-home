@@ -455,12 +455,15 @@ fun SettingsScreen() {
 fun WinInsidersScreen(vals: PanelVals) {
     val p = Palette.DARK
     KitScreen(padding = ENDING_PADDING, gap = 10.dp) {
-        EndingBanner("INSIDERS WIN", "THE HOUSE REACHED THE INTERNET", p, lineSize = 24)
+        EndingBanner("INSIDERS WIN", vals.insidersEndingLine, p, lineSize = 24)
         // The house speaks last, and only to the people it owned.
         vals.signOff?.let { HouseSignOff(it, vals.endedAt, p) }
         Revealed("THE INSIDERS WERE", vals.revealed, p, labelInk = p.mid)
         KitRules(p) {
-            KitInfo("EGRESS COMPLETE", vals.egressEndedLine, p, valueColor = p.mid, minHeight = 40.dp)
+            // Only when an Egress is how they won (D-261): a parity win completed no Egress.
+            if (vals.egressCompleted) {
+                KitInfo("EGRESS COMPLETE", vals.egressEndedLine, p, valueColor = p.mid, minHeight = 40.dp)
+            }
             KitInfo("SYSTEM INTEGRITY", vals.integrityPercent, p, valueColor = p.mid, minHeight = 40.dp)
         }
         NewRound(p)
@@ -477,8 +480,8 @@ fun WinInsidersScreen(vals: PanelVals) {
  * **PERIMETER DISARMED is not written twice.** The status bar carries it off
  * [PanelVals.disarmedGlyph], which is true on this screen and on no other — so the moment the
  * house pushes this ending, the row that has read `ARMED` for twenty-five minutes changes for
- * everybody at once (`gdd.md:203`). The banner's own line says the same thing to the eye that is
- * looking at the middle of the screen rather than the top of it.
+ * everybody at once (`gdd.md:203`). The banner's own line says how the round was won, from the
+ * house's route (D-261): the same words as the status bar on a meter win, the Restrain on the other.
  *
  * **The reveal is the same reveal** the Insiders' ending draws, off the same [PanelVals.revealed],
  * and the house's message card is the same card: it has something to say when it loses too, and
@@ -489,7 +492,7 @@ fun WinInsidersScreen(vals: PanelVals) {
 fun WinResidentsScreen(vals: PanelVals) {
     val p = Palette.BONE
     KitScreen(padding = ENDING_PADDING, gap = 8.dp) {
-        EndingBanner("RESIDENTS WIN", "PERIMETER DISARMED . YOU CAN LEAVE", p, lineSize = 20)
+        EndingBanner("RESIDENTS WIN", vals.residentsEndingLine, p, lineSize = 20)
         // The house speaks last here too, and to the same two people. Nothing about a Resident win
         // makes it apologetic -- but the lights are on, so it says it in bone, like everything
         // else on this screen.

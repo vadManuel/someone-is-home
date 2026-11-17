@@ -2517,7 +2517,7 @@ class FlowModel(
                 val at = landedAt()
                 // A new round holds no last round's Egress count, quoted line or Residents (D-247).
                 state = state.copy(
-                    openedAt = at, houseTexts = emptyList(), endedAt = null,
+                    openedAt = at, houseTexts = emptyList(), endedAt = null, endedBy = null,
                     egressesContained = 0, heldOver = null, residents = null,
                 )
                 roundOpened()
@@ -2919,7 +2919,7 @@ class FlowModel(
             is RoundMessage.RoundEnded -> {
                 val at = landedAt()
                 // **The quoted line goes when the round ends** (D-116's promise, kept on this side).
-                state = state.copy(endedAt = at, heldOver = null)
+                state = state.copy(endedAt = at, endedBy = message.by, heldOver = null)
                 Flow.endings[message.winner]?.let { push(it.to) }
             }
 

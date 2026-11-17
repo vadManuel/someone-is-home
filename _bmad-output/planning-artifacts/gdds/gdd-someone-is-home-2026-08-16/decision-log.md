@@ -7150,6 +7150,45 @@ COMPLETE whatever the route, so a parity win (the 4-seat run) is drawn as an Egr
 (`ScreensOut.kt:458`).
 
 
+## Revision 76 — each ending says how the round was won
+
+### D-261 · **Each ending names the route the house sent: the meter and the Egress keep the design's words, parity and Restraining every Insider get new ones — built; the two new lines provisional, owner to confirm**
+
+D-260's finding: the Insiders' ending drew THE HOUSE REACHED THE INTERNET and EGRESS COMPLETE on
+every Insider win, so the 4-seat hunt's parity win at the tally (seed 20261150, `f5-r4`) was drawn
+as an Egress. The route was already on the wire (`RoundEnded.by`, D-131's four, all public) and the
+phone threw it away. It is now kept on the panel (`PanelState.endedBy`; set by `RoundEnded`, cleared
+at LIGHTS OUT and by D-259's reset) and the banner's line is `PanelVals.endingLine(by)`, the one
+place all four live. The same on every phone, either role: the route is one public fact.
+
+| route | ending | line | EGRESS COMPLETE row | source |
+|---|---|---|---|---|
+| `SystemIntegrityCleared` | Residents | PERIMETER DISARMED . YOU CAN LEAVE | n/a | `gdd.md:205`, the mockup |
+| `InsidersRestrained` | Residents | INSIDERS RESTRAINED . YOU CAN LEAVE | n/a | **provisional** |
+| `Parity` | Insiders | TOO FEW RESIDENTS LEFT | not drawn | **provisional** |
+| `EgressUncontained` | Insiders | THE HOUSE REACHED THE INTERNET | drawn | the mockup, `gdd.md:29` |
+
+**No document gives parity or the Restrain route any words**, so these are the shortest that say
+what the whole room watched happen, in the banner's register. A parity win completed no Egress, so
+its ending drops that row rather than printing one that did not happen. The Restrain line is the
+mockup line's length so it stays on one line. The status bar still reads DISARMED on both Residents'
+routes, which `Flow.endings` already said ("the perimeter disarms").
+
+A housed phone told no route draws no line and no Egress row (D-247's rule); the unhoused render
+harness keeps the mockup's two endings.
+
+**Guards, each proven by breaking it.** `EndingRouteTest` feeds each route to a housed phone in both
+roles and checks the screen it walks to draws that route's line, no other route's, and EGRESS
+COMPLETE only for an Egress. The banner hard-coded back to the Insiders' old line with the row
+always drawn (the bug as found): *Parity (Resident) did not draw 'TOO FEW RESIDENTS LEFT': [… INSIDERS
+WIN, THE HOUSE REACHED THE INTERNET, …, EGRESS COMPLETE, …]* and *the parity ending is not drawn*.
+The Residents' banner hard-coded to the meter's line: *InsidersRestrained (Resident) did not draw
+'INSIDERS RESTRAINED . YOU CAN LEAVE'*. `RoundForgottenTest` now carries a route into NEW ROUND
+and the other exits. Each of the eight endings and the harness's two were rendered at 600×1300 and
+looked at. **Not on a phone.**
+
+Also fixed: `RoundForgottenTest` held `STAY ON TASK`, which `:ui:vocabularyLint` refuses.
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

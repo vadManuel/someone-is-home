@@ -10,6 +10,7 @@ import home.someoneshome.model.MeetingPhase
 import home.someoneshome.model.OrderLine
 import home.someoneshome.model.RoomKind
 import home.someoneshome.model.Seat
+import home.someoneshome.model.WinRoute
 
 import androidx.compose.ui.graphics.Color
 
@@ -641,6 +642,11 @@ data class PanelState(
     val houseTexts: List<HouseText> = emptyList(),
     /** **When the ending landed, on this phone's clock** (`RoundEnded`, D-243). Null until then. */
     val endedAt: String? = null,
+    /**
+     * **How the round was won, as the house said it** (`RoundEnded.by`, D-131's four routes, D-261).
+     * The endings name the route from this. Null until a round ends, and reset with the round.
+     */
+    val endedBy: WinRoute? = null,
     /**
      * **The one line this phone handed over, as the house quotes it back to an Insider** (D-116,
      * D-101, D-247). `RoleRevealed.line`: set on an Insider's phone, never on a Resident's, and
@@ -1746,6 +1752,23 @@ class PanelVals(
     val egressEndedLine: String = listOf(endedAt, egressType).filter { it.isNotEmpty() }.joinToString(" . ")
 
     /**
+     * **The Insiders' ending's line: how they won** (D-261). The house's route on a housed phone;
+     * the mockup's Egress win with no house; nothing on a housed phone not told a route.
+     */
+    val insidersEndingLine: String =
+        housed(state.endedBy?.let(::endingLine), endingLine(WinRoute.EgressUncontained), nothing = "")
+
+    /** **The Residents' ending's line: how they won** (D-261). [insidersEndingLine]'s arrangement. */
+    val residentsEndingLine: String =
+        housed(state.endedBy?.let(::endingLine), endingLine(WinRoute.SystemIntegrityCleared), nothing = "")
+
+    /**
+     * **Whether the Insiders' ending draws EGRESS COMPLETE** (D-261): only when an Egress ran out,
+     * and always in the render harness, which draws the mockup's Egress win.
+     */
+    val egressCompleted: Boolean = housed(state.endedBy?.let { it == WinRoute.EgressUncontained }, true, nothing = false)
+
+    /**
      * **Whether the couch's Egress widget has anything to say** ([PanelState.egressRunning]).
      *
      * Read off the state and **not off the screen**, which is the distinction the carrier had to be
@@ -2235,6 +2258,20 @@ class PanelVals(
 
         /** A housed Resident's note: no name, no room, no count (D-247, provisional). */
         const val HOUSED_NOTE = "somebody was already at the marker"
+
+        /**
+         * **The ending's line for each of D-131's four routes** (D-261), one place for all four.
+         *
+         * The meter's and the Egress's are the design's (`gdd.md:205`, the mockup's two endings).
+         * **Parity's and Restraining every Insider's are provisional, owner to confirm**: no document
+         * gives them words, so these are the shortest that say what the whole room watched happen.
+         */
+        fun endingLine(by: WinRoute): String = when (by) {
+            WinRoute.SystemIntegrityCleared -> "PERIMETER DISARMED . YOU CAN LEAVE"
+            WinRoute.InsidersRestrained -> "INSIDERS RESTRAINED . YOU CAN LEAVE"
+            WinRoute.Parity -> "TOO FEW RESIDENTS LEFT"
+            WinRoute.EgressUncontained -> "THE HOUSE REACHED THE INTERNET"
+        }
 
         /** The Residents' ending's names, as the port drew them. The render harness's only. */
         val ENDING_RESIDENTS: List<String> = listOf("ELLIOT", "PRIYA", "MARCUS", "ROSE")

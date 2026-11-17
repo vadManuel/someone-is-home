@@ -6,6 +6,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import home.someoneshome.model.OrderLine
+import home.someoneshome.model.WinRoute
 import home.someoneshome.model.protocol.RoundMessage
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -58,8 +59,9 @@ class RoundForgottenTest {
         carrying = Carried("DISK 01", "RACK"),
         wallTime = clock,
         openedAt = "21:00",
-        houseTexts = listOf(HouseText("21:03", "STAY ON TASK")),
+        houseTexts = listOf(HouseText("21:03", "STAY QUIET")),
         endedAt = "21:30",
+        endedBy = WinRoute.Parity,
         heldOver = HeldLine("a line"),
         egressesContained = 1,
         residents = listOf("BRUNO"),
