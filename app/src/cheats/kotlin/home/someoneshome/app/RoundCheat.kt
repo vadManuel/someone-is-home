@@ -91,11 +91,17 @@ class RoundCheat(
     private val isHost: () -> Boolean,
     /** This seat's screen, at every beat. Null on a seat with no ledger attached. */
     private val ledger: ScreenLedger? = null,
+    /**
+     * **True when this process was launched to play a round rather than to be tapped** — the
+     * [ROUND_SWITCH], read once. A parameter only so a test can hold a bench seat beside a person's.
+     *
+     * ⚠️ **It gates [react]'s acts as well as [play]**, and until D-237 it did not: the app root
+     * wires [react] to every phone's pushes, so every phone a person launched from the springboard
+     * cast a vote for the meeting's caller by itself the instant the ballot opened (D-232).
+     */
+    val armed: Boolean = launchSwitch(ROUND_SWITCH),
     private val note: (String) -> Unit,
 ) {
-
-    /** True when this process was launched to play a round rather than to be tapped. */
-    val armed: Boolean = launchSwitch(ROUND_SWITCH)
 
     /**
      * **How far ahead of real time the house's clock is being run, in nanoseconds.**
@@ -282,7 +288,9 @@ class RoundCheat(
                 // millisecond would make the live half unobservable — four seats locking together
                 // closes the window early, and the first run of this rehearsal had a whole ballot
                 // that opened and closed inside half a second with nothing able to see it.
-                MeetingPhase.Vote -> if (!votedThisMeeting) {
+                // **Only on a bench seat** (D-237). `react` hears every phone's pushes, a person's
+                // included, and a phone a person holds never votes by itself (D-232).
+                MeetingPhase.Vote -> if (armed && !votedThisMeeting) {
                     votedThisMeeting = true
                     val target = if (isHost()) null else meetingCaller
                     client.act(IntentMessage.SelectVote(target))

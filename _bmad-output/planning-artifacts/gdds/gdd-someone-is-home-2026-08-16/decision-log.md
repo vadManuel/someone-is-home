@@ -6015,6 +6015,59 @@ small but real, and a phone further off loses more.
 | `ContactResolverDifferentialTest` | single-reading reports | reports confirmed by a second reading; a new case, one reading against two, under every variant |
 | `tools/one-phone/README.md` | a report on one reading | two in about 2.5 s; what a single −40 line means |
 
+## Revision 64 — why the two-phone Revoke did not land, and three things a person's phone did by itself
+
+*2026-11-16. Two iPhones (`bfdc404`, run `20261116-214533`): A hosted and was the only Insider (seat
+0), held REVOKE (the tile said ARMED) and touched B. The house answered three touches, all as plain
+`ContactAnswered`. The house logged nothing about the arm.*
+
+### D-237 · **The house logs what became of every ability request, round lines leave the TRANSPORT screen, and a person's phone no longer votes by itself — built; the seat in the log line is provisional, owner to confirm**
+
+**The diagnosis.** The opening Revoke clock is `Balance.REVOKE_COOLDOWN / 2` = 600 ticks = **30 s of
+house time** from arming (D-132; the tick driver starts at the ARMED screen). Phone A's one
+`PRESSED — ArmRevoke` sits about 27.5 s after arming (±1 s, placed between radio lines one second
+apart and anchored on `ADVERTISE … WALL` stamps; B's first advertisement puts arming at about
+`1794883765.4`). So the arm came **about 2.5 s inside the opening half-cooldown** and `revokeArmed` kept
+the state unchanged and said nothing (Rules.kt, D-132). The arm is a single request, not a standing
+one, so the three touches at about 45, 60 and 72 s were unarmed touches. Inferred from timing, not
+observed: the house printed nothing. The other candidate is ruled out on loopback: the host's own
+press reaching its own house is now a test, and it passes. **The pre-existing `AbilityWiringTest`
+already had the host as the Insider** (seed 20261150 draws seat 0); the hop it never covered was a
+guest's, and it now covers both. The bench hides this: `RoundCheat.pressing` re-holds REVOKE every
+second, so a refused arm is followed by one that lands. The tile still echoes ARMED on a refused arm
+(D-231's open item, unchanged here).
+
+1. **The house says what became of every ability request** (rule 6), to the device console only:
+   `REVOKE ARM — SEAT n · ARMED`, `· COOLING DOWN (READY IN Ns)` (`· ALREADY ARMED` when it was), or
+   `· REFUSED <reason>`; `EGRESS FIRE`, `SURGE FIRE`, `ISOLATE FIRE` and `STATIC FIRE` say `FIRED`, `COOLING
+   DOWN`, `NOT FIRED` or `REFUSED`. Read off the gate's answer and the state, after the push; no
+   effect or frame changes. ⚠️ **Provisional, owner to confirm: the seat.** Only an Insider holds an
+   ability, so a seat in the line names an Insider in a file, which the arming note has always
+   refused. `RoundAuthority` names no seat by default (`A SEAT`); `CheatRoot` names it only when the
+   launch set `SOMEONES_HOME_ROUND_SEED`, where the Mac already holds the seed and `insidersFor` redraws
+   every Insider from it.
+2. **Every `[house]`, `[round]`, `[round-bench]`, `[screen]` and `[house-clock]` line goes to the
+   console only** (`ConsoleLines`). They also went to the transport rig's log, which the TRANSPORT view
+   draws, two taps from the PLAYTEST chip on every playtest phone: a player's own `WHAT THIS PHONE IS —
+   INSIDER`, `PRESSED — ArmRevoke`, `ABILITY FIRED` and the screen ledger's `ROLE INSIDER` were on their
+   own screen, and the house's lines on the host's. The rig keeps the lobby's transport lines.
+3. **The bench's vote is cast only on a bench seat.** `RoundCheat.react` is wired to every phone's
+   pushes, and it answered every ballot with `SelectVote(caller)`, so a phone launched from the
+   springboard voted by itself the instant the vote opened. It now needs `SOMEONES_HOME_ROUND`, the
+   switch that runs the rest of the bench.
+
+**The READMEs** (`tools/one-phone/README.md`, `ble-unit4-device-check.md`) now say: wait 35 s after
+LIGHTS OUT, and after each meeting, before holding REVOKE (a meeting resets the clock to half, D-184);
+an arm that lands restarts it at the full 60 s.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `app` `RoundAuthority` | ability requests unlogged | `abilityLog`, `namesSeats` (`AbilityLog.kt`) |
+| `app` cheats `CheatRoot` | round lines to stdout and the rig | `ConsoleLines`: console only; the lobby's to both |
+| `app` cheats `RoundCheat.react` | votes on every phone | votes only when `armed` |
+| `AbilityWiringTest` | one Revoke test, the host as Insider | a guest's and the host's (an early arm refused and logged, a touch that does nothing, then an arm that lands); nothing about the round on any phone's rig |
+| `AutoVoteGateTest`, `AbilityLogTest` (new) | (none) | no vote without the switch, a bench seat still votes; no seat named by default |
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

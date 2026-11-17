@@ -90,6 +90,18 @@ class RoundAuthority(
      * [note] so that the app root's trailing lambda stays the log.
      */
     private val contactWindow: () -> ContactWindow = { ContactWindow.containing(wallClockMillis()) },
+    /**
+     * **Where the house says what it did with each ability request** — [abilityLine]: armed, cooling
+     * down and for how long, or refused and why. The developer console and nowhere else: never a
+     * screen, never a frame (rule 6). Silent by default, so a caller that never asked for it gets
+     * nothing printed.
+     */
+    private val abilityLog: (String) -> Unit = {},
+    /**
+     * **Whether [abilityLog]'s lines may name the seat.** Off by default: only an Insider holds an
+     * ability, so a seat in the line names an Insider in a file. See [abilityLine].
+     */
+    private val namesSeats: Boolean = false,
     private val note: (String) -> Unit,
 ) : HouseHandle {
 
@@ -270,7 +282,9 @@ class RoundAuthority(
     suspend fun heard(intent: Intent) {
         heard += intent
         val before = state
-        when (val admission = admit(state, intent, Tick(tick++))) {
+        val at = Tick(tick++)
+        val admission = admit(state, intent, at)
+        when (admission) {
             is Admission.Admitted -> {
                 state = admission.reduction.state
                 push(admission.reduction.effects)
@@ -281,6 +295,11 @@ class RoundAuthority(
                 // screen is corrected by whatever the house said last. D-066, rule 6.
                 note("REFUSED — ${admission.reason} · ${intent::class.simpleName}")
             }
+        }
+        // An ability request says what became of it, whatever that was (rule 6). Read off the gate's
+        // answer and the two states, after the push, so it can change nothing that went out.
+        abilityRequestOf(intent)?.let { (request, actor) ->
+            abilityLog(abilityLine(request, actor, at, before, admission, namesSeats))
         }
         if (before.systemIntegrity != state.systemIntegrity) {
             note("SYSTEM INTEGRITY — ${before.systemIntegrity} -> ${state.systemIntegrity}")
@@ -296,8 +315,14 @@ class RoundAuthority(
      * method should not have to come and look.
      */
     override suspend fun mint(event: Event) {
+        gate(event)
+    }
+
+    /** [mint]'s body, returning the gate's answer for the one caller that reports it ([fireEgress]). */
+    private suspend fun gate(event: Event): Admission {
         val before = state
-        when (val admission = admit(state, event)) {
+        val admission = admit(state, event)
+        when (admission) {
             is Admission.Admitted -> {
                 state = admission.reduction.state
                 push(admission.reduction.effects)
@@ -313,6 +338,7 @@ class RoundAuthority(
         if (!before.ended && state.ended) {
             note("THE ROUND ENDED — ${state.outcome?.winner} BY ${state.outcome?.by}")
         }
+        return admission
     }
 
     /**
@@ -397,15 +423,19 @@ class RoundAuthority(
         val here = home
         if (here == null) {
             note("NO EGRESS — THERE IS NO HOME TO DRAW ONE IN")
+            abilityLog(abilityLineDeclined(AbilityRequest.Egress, actor, "NO HOME TO DRAW ONE IN", namesSeats))
             return false
         }
         val fired = egressFor(now(), actor, state, here.map, here.plan)
         if (fired == null) {
             note("NO EGRESS — THE HOUSE DECLINED TO DRAW ONE")
+            abilityLog(abilityLineDeclined(AbilityRequest.Egress, actor, "THE HOUSE DREW NO EGRESS", namesSeats))
             return false
         }
         note("EGRESS DRAWN — ${fired.type} AT ${fired.nodes.joinToString { it.value }}")
-        mint(fired)
+        val before = state
+        val admission = gate(fired)
+        abilityLog(abilityLine(AbilityRequest.Egress, actor, fired.at, before, admission, namesSeats))
         return state.egressRunning
     }
 

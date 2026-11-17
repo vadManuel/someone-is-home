@@ -39,6 +39,7 @@ import kotlinx.coroutines.launch
 import home.someoneshome.platform.deviceHaptics
 import home.someoneshome.platform.deviceSystemSettings
 import home.someoneshome.platform.launchSwitch
+import home.someoneshome.platform.launchValue
 import home.someoneshome.platform.monotonicNanos
 import home.someoneshome.ui.Amber
 import home.someoneshome.ui.Ramp
@@ -110,9 +111,11 @@ fun CheatRoot() {
     // two phones on a real network it is not — an advertisement that never went out and a browser
     // that never answered look identical from a Mac, and only a console line separates them. It
     // carries the radio's own events and nothing a player typed.
-    val radio = remember<(String) -> Unit> {
-        { line -> println("[lobby] $line"); transport.note(line) }
-    }
+    //
+    // **Every other line about a round goes to the console only** (D-237): see ConsoleLines. The
+    // rig's log is drawn on this phone's TRANSPORT view, two taps from the PLAYTEST chip.
+    val lines = remember { ConsoleLines(rig = transport::note) }
+    val radio = remember<(String) -> Unit> { lines::lobby }
     // What comes down the socket, classified and counted. Built before the flow because the link
     // is built inside it, and the probe has to be attached before the first frame rather than
     // after — a leak detector that starts late reports a clean run for the frames it missed.
@@ -338,7 +341,8 @@ fun CheatRoot() {
                         // instant of the press.
                         hosting = panel.value?.lobby?.hosting == true,
                         seed = RoundCheat.seed(),
-                    ) { line -> println("[house] $line"); transport.note(line) }
+                        note = lines::house,
+                    )
                 }
             },
             // **WHERE THIS PHONE IS, TOLD TO THE MOTOR.** `ui` cannot see `platform`, so the two
@@ -387,7 +391,7 @@ fun CheatRoot() {
         // **The screen held awake for the round** (T4, D-221): the idle timer off from arming until
         // the round ends or this phone hangs up, then put back. No brightness is touched. The same
         // wake the lobby holds for the host (H1, D-224), built once above.
-        RoundClient(scope, flow, watch, buzzer, radio, wake) { line -> println("[round] $line"); transport.note(line) }
+        RoundClient(scope, flow, watch, buzzer, radio, wake, lines::round)
             // Both knots tied in one place: the lobby gets the seam it was promised, and the four
             // meeting controls, the Subroutine's hand-over and page 2's two fires get the way up
             // they were promised (E-P2-3). Before this line every one of them reached nobody.
@@ -400,18 +404,25 @@ fun CheatRoot() {
         RoundAuthority(
             inputs = { link.house.armingInputs() },
             emit = { effect, state -> link.house.emit(effect, state) },
-        ) { line -> println("[house] $line"); transport.note(line) }.also { rules.value = it }
+            // **What became of every ability request** (rule 6): ARMED, COOLING DOWN and for how
+            // long, or REFUSED and why. Stdout only, which `round.sh` keeps as `phone.log`, and
+            // deliberately NOT the rig's log, which the TRANSPORT bench draws on this phone's screen.
+            abilityLog = lines::house,
+            // The seat is named only when the launch handed in the round's seed: the Mac then holds
+            // the seed already, and `insidersFor` redraws every Insider from it, so the seat in the
+            // line tells it nothing it could not compute. Every other launch prints `A SEAT`.
+            namesSeats = launchValue(RoundCheat.SEED_SWITCH) != null,
+            note = lines::house,
+        ).also { rules.value = it }
     }
     // **What this seat's screen says, at every beat** — the instrument P3 did not have. It reads
     // the same model the composition draws from and is handed to the bench so the script's own
     // beats and the screen's own changes land in one stream in one order.
     val ledger = remember {
-        ScreenLedger(flow) { line -> println("[screen] $line"); transport.note(line) }
+        ScreenLedger(flow, lines::screen)
     }
     val round = remember {
-        RoundCheat(roundClient, flow, authority, isHost = { flow.lobby.hosting }, ledger = ledger) { line ->
-            println("[round-bench] $line"); transport.note(line)
-        }
+        RoundCheat(roundClient, flow, authority, isHost = { flow.lobby.hosting }, ledger = ledger, note = lines::bench)
     }
     // Every push, to the reactive half — the only channel five processes in a dark house have.
     remember { roundClient.onMessage = round::react }
@@ -486,7 +497,7 @@ fun CheatRoot() {
         if (flow.lobby.hosting) {
             tickHouse(
                 house,
-                note = { line -> println("[house-clock] $line"); transport.note(line) },
+                note = lines::clock,
                 // **The bench's one remaining hand on the clock, and it is on the clock rather than
                 // on the counter.** P3's script set the authority's tick directly to jump a
                 // cooldown; with a driver running, that leaves the driver's own timestep behind and
