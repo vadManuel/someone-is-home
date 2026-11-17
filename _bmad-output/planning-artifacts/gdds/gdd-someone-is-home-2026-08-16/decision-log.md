@@ -5711,6 +5711,78 @@ would name a guest. No branch anywhere asks whether the reporter is the host.
 | `EvasionNoticeTest` | (new) | over loopback with the real link and authority: a guest named once; the host names its own seat across its house's reopening; a leave in the lobby named by nobody |
 | `tools/one-phone/README.md` | (none) | section 7: lock the host mid-round, unlock, and the act-3 meeting's notice names seat 0 |
 
+## Revision 60 — page 2's two holds reach the house, and the bench mints no player's act
+
+*2026-11-16. Found on two real iPhones: the Insider held REVOKE, the tile said ARMED · TOUCH THEIR
+PHONE, and every touch was answered as an ordinary `ContactAnswered`. Nothing in `app` or `ui` sent
+`IntentMessage.ArmRevoke`. Every earlier "the Revoke lands" result came from the bench minting
+`RevokeArmed` (`RoundCheat.theRevoke`) or a test putting `Intent.ArmRevoke` to the house directly.*
+
+### D-231 · **The REVOKE and EGRESS holds send their requests; the tile echoes ARMED and nothing more; the Egress alert is the house's push on every phone — built**
+
+**The audit** (every action the UI offers in a round, traced from the control to the house on the
+live path in `CheatRoot`): the meeting's four controls, the scans (a Subroutine card and the meeting
+card), BEGIN, the hand-over, STOP NOW, leaving the live view, SURGE, ISOLATE and STATIC were wired. The
+contact and the report go up as sightings on the cadence (D-217). **Two were not:** the REVOKE hold
+(`FlowModel.stepRevoke` stepped the tile and sent nothing) and the EGRESS hold (`armEgress` walked the
+phone to the alert and sent nothing; only the bench, calling `RoundClient.fireEgress`, could start an
+Egress). **One has no control at all:** containment (`ReturnSyncPulse`); see D-232.
+
+1. **REVOKE.** `FlowModel.armRevoke` (renamed from `stepRevoke`) sends `IntentMessage.ArmRevoke` up the
+   existing `send` seam on every hold, the same way whatever the outcome (rule 1). The house admits
+   `Intent.ArmRevoke` as `RevokeArmed`; arming stays silent in both outcomes (D-009, D-142, D-216), so
+   there is no answer for the tile to follow. **ARMED is input echo**, which is D-216's own reading
+   (*their phone already knows because they held the tile down*), set unconditionally. The tile no
+   longer steps to COOLING DOWN and READY on later holds: a second hold is a second request.
+2. **EGRESS.** `FlowModel` gains a `fireEgress` seam (the Egress is `RoundBody.Fire`, not an
+   `IntentMessage`), which `CheatRoot` points at `RoundClient.fireEgress`. The hold sends it and the
+   screen stays on page 2. **The alert reaches the actor as it reaches everybody, by `EgressOpened`**,
+   so `ScreenId.Banner` moves to `Flow.housePushed` and leaves `Flow.viaActions[Page2]`. That removes
+   the game's only role-asymmetric edge. A press into a running clock is answered as every fire into
+   a running clock is (T1·8): `AbilityFired(cooldownStarted = false)` to the actor alone, which moves
+   nothing.
+
+**Open, raised with the owner rather than decided** (each changes what a client receives or draws):
+
+- **When the REVOKE tile stops saying ARMED.** No house message can drive it. The arm is silent by
+  design, a refused arm (a clock still running, including the opening half) still echoes ARMED, and
+  the tile changing at contact on `AbilityFired` would be actor-side feedback at the instant the
+  target's light goes dark (`gdd.md:398`). Today it says ARMED from the first hold until the round ends,
+  and READY · HOLD TO ARM before it, whatever the clock. Recommendation: send every seat its own two
+  ability clocks in one fixed-shape row (Residents' included, as `openingCooldowns` already draws
+  them), at arming and at each meeting's end, so the tile draws READY or COOLING DOWN as a pure
+  function of the house's deadline and drops ARMED when the clock it was armed under restarts.
+- **The 45 s window** D-009 and D-142 name is not built: an armed Revoke lasts until a contact, being
+  out, or being Restrained (R2).
+
+### D-232 · **The bench presses the Insider's tiles on the panel and mints no player's act — built; containment has no control — raised**
+
+**Removed from `RoundCheat`:** the minted `RevokeArmed` (act 3), the minted `SyncPulseReturned`
+beats that contained every rehearsal's Egress (act 5), and the answer-key `MarkerScanned` and
+`SubroutineReturned` that banked the meter (act 6). **Now:** a phone whose own screen says Insider
+holds REVOKE (from its work order to the first meeting), EGRESS and STATIC through `flow.actions()`,
+the lambdas the tiles hold, and nothing else presses them; act 3 waits for the house to hold the
+Insider's arm before the touch. The contact, the report and the hop between processes are still
+`SimulatedAir` and `HouseAir` (D-217).
+
+**What the bench now shows, because it is true of the phones:** an Egress is not contained (no screen
+draws a containment control, and nothing on the wire carries the house's clock that `onTheBeat`
+grades taps against), and the meter moves only by the phones' own entries, which the bench cannot
+answer. A rehearsal should therefore end by its Egress running out; that has not been run on
+Simulators in this change. **Raised:** containment needs a control
+and a clock anchor, both a change to what a client draws and receives.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `ui` `FlowModel.stepRevoke` | steps the tile, sends nothing | `armRevoke`: sends `ArmRevoke`, echoes ARMED |
+| `ui` `FlowModel.armEgress` | `go(Banner)`, sends nothing | calls the new `fireEgress` seam, moves nothing |
+| `ui` `Flow.housePushed`, `Flow.viaActions` | `Banner` walked to from `Page2` | `Banner` pushed only |
+| `ui` `PanelActions.stepRevoke` | (renamed) | `armRevoke` |
+| `app` cheats `Cheats.kt` | (none) | `fireEgress = { press.value?.fireEgress() }` |
+| `app` cheats `RoundCheat` | four player-act mints; every seat pressing `RoundClient` directly | none; the Insider's panel pressing |
+| `AbilityWiringTest` (new) | (none) | four phones over loopback with the real link, desk and authority: the REVOKE action arms the house and the touch lands; an early arm is sent the same and arms nothing; the EGRESS action opens on every phone by the push, an early one answered to the actor alone |
+| `HoldInputTest`, `FlowTest` | the hold changes the tile; the Egress hold reaches `Banner` | the hold sends `ArmRevoke` / fires, and no page-2 hold moves the screen |
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

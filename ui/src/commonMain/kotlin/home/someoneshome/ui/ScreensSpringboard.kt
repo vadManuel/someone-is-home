@@ -231,7 +231,7 @@ fun Page2Screen(vals: PanelVals) {
                 // A Resident's tile is not a control at all — see the KDoc above. The tile is real,
                 // the cooldown bar is real, and neither answers the question.
                 armable = vals.insider,
-                onArm = actions.stepRevoke,
+                onArm = actions.armRevoke,
             )
             AbilityTile(
                 name = vals.secondName,

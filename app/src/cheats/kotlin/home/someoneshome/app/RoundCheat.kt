@@ -1,10 +1,8 @@
 package home.someoneshome.app
 
 import home.someoneshome.model.Balance
-import home.someoneshome.model.Event
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MeetingPhase
-import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.OrderLine
 import home.someoneshome.model.Seat
 import home.someoneshome.model.protocol.IntentMessage
@@ -13,6 +11,7 @@ import home.someoneshome.platform.launchSwitch
 import home.someoneshome.platform.monotonicNanos
 import home.someoneshome.platform.launchValue
 import home.someoneshome.ui.FlowModel
+import home.someoneshome.ui.PanelRole
 import home.someoneshome.ui.ScreenId
 import home.someoneshome.ui.Subroutine
 import kotlin.concurrent.Volatile
@@ -31,30 +30,27 @@ import kotlinx.coroutines.delay
  * | P3 | now |
  * |---|---|
  * | the round's five timed transitions were minted by this class | [tickHouse] mints all five off a monotonic clock |
- * | the Egress firing had no wire member | every living seat presses the tile; the house admits one ([RoundBody.Fire]) |
+ * | the Egress firing had no wire member | an Insider's phone holds the EGRESS tile on its page 2; the house admits it ([RoundBody.Fire], D-231) |
+ * | the Revoke's arming was minted by this class | an Insider's phone holds the REVOKE tile on its page 2 ([IntentMessage.ArmRevoke], D-231) |
  * | the Sync Pulse had no wire member at all | two seats scan a node and send [IntentMessage.ReturnSyncPulse] up their own socket |
  * | STOP NOW had no wire member | one seat presses it on real work ([IntentMessage.StopSubroutine]) |
  * | the hand-over had no send seam | every entry in the round goes up as [IntentMessage.HandOverEntry] |
  *
- * ### The three that are still stand-ins, and each says why
+ * ### No player's act is minted by this class (D-231)
  *
- * 1. **The contact handshake** ([Event.ContactMade]) and **2. the Revoked report**
- *    ([MeetingTrigger.RevokeReported]) are **no longer minted** (D-217): the bench walks phones
- *    together in a [SimulatedAir] and the house's resolver mints both. What remains stood in is
- *    the hop up the other phones' sockets, because five processes share no air ([HouseAir]).
- * 3. **The correct entry.** A phone is shown the question and never the answer (rule 3), so the
- *    meter is moved by the host reading its own answer key. The clients' own entries still go up
- *    the wire and are still honestly rejected; the acceleration exists to reach an ending.
+ * The Revoke's arm, the containment beats and the answer-key scans and hand-overs were all minted
+ * here until D-231, so rehearsals showed a Revoke landing and an Egress contained while the phones
+ * could do neither. All three are gone. What is still stood in is **below** the acts: the contact
+ * and the report are concluded by the house's resolver from a [SimulatedAir] (D-217), and the hop
+ * up the other phones' sockets is [HouseAir]'s, because five processes share no air.
  *
- * ### And one that changed shape rather than going away — the Sync Pulse's tick anchor
+ * ### What the phones still cannot do, and the bench now shows it
  *
- * The frame is real, the desk attributes it, the rules grade it. What a phone cannot produce is the
- * **taps**: `onTheBeat` grades them against `egress.firedAt` in absolute house ticks, and nothing on
- * the wire carries the house's clock — [RoundMessage.EgressOpened] carries how much time is left and
- * not what time it is. So the bench sends the best four taps a phone can actually compute, watches
- * them be graded and miss, and *then* the host mints the same seats' beats off the house's own
- * anchor so that the round can go on. **Both halves are in the log on purpose**: the miss is the
- * finding and the mint is the stand-in. See the escalation.
+ * **Contain an Egress.** No screen draws a containment control, and `onTheBeat` grades taps against
+ * `egress.firedAt` in absolute house ticks while nothing on the wire carries the house's clock. The
+ * bench's own unanchored taps go up and miss; nothing contains the Egress after that. **Answer a
+ * Subroutine correctly**: a phone is shown the question and never the answer (rule 3), so the
+ * bench's entries are honestly rejected and the meter does not reach the bar.
  *
  * ### The clock is pushed forward and never turned by hand
  *
@@ -126,16 +122,24 @@ class RoundCheat(
     private var walked = 0
 
     /**
-     * **The three controls this seat keeps its thumb on, and why they are flags rather than calls.**
+     * **The page-2 tiles this seat keeps its thumb on, and why they are flags rather than calls.**
      *
-     * No phone in this game is told its role — nothing in the emit table carries one (see the
-     * escalation) — so the bench cannot ask *am I the Insider* and press only there. What it does
-     * instead is what the design already permits and what a room full of people does anyway:
-     * **every living seat presses, and the house admits exactly one.** Four refusals are silent,
-     * cost nothing, and are the guarantee working rather than a bug being tolerated.
+     * Each phone is told its own role (`RoleRevealed`), and only an Insider's page 2 takes a hold
+     * (D-142), so the bench presses only where its own screen says Insider, through the actions the
+     * tiles call (D-231). A press the house refuses (a clock still running) is silent and costs
+     * nothing.
      */
     private var pressingEgress = false
     private var pressingStatic = false
+
+    /**
+     * **The REVOKE tile, held on this phone's own page 2** (D-231), from the work order until the
+     * first meeting rings. Only an Insider's page 2 answers a hold (D-142), so only a phone whose
+     * screen says it is an Insider presses it, through the same action the tile calls. The house
+     * refuses every arm into a running clock in silence, so the repeats cost nothing; the first one
+     * after the host's script has pushed the clock past the cooldown is the one that arms.
+     */
+    private var pressingRevoke = false
     private var egressRunning = false
     private var jammed = false
     private var over = false
@@ -210,7 +214,10 @@ class RoundCheat(
 
             // The work order. A player walks to the nearest card and turns the lamp on it; the
             // order says WHAT, never WHERE (D-114), so this walks the house exactly as they do.
-            is RoundMessage.WorkOrderIssued -> scanning = true
+            is RoundMessage.WorkOrderIssued -> {
+                scanning = true
+                pressingRevoke = true
+            }
 
             // A scan that opened work. **STOP NOW first, and only once**: the control is on every
             // Subroutine screen, it had no wire member until R1, and the one thing that proves a
@@ -239,6 +246,7 @@ class RoundCheat(
 
             // The ring. Everybody walks in, and the gate does not close a player short (D-104).
             is RoundMessage.MeetingOpened -> {
+                pressingRevoke = false
                 meetingCaller = message.caller
                 votedThisMeeting = false
                 ringingSince = monotonicNanos()
@@ -284,8 +292,8 @@ class RoundCheat(
             }
 
             // **The meeting is over and the thumbs go onto the Egress tile** (D-141's two-second
-            // hold, once every few seconds, on every living phone). Nothing here knows which of
-            // them is the Insider because nothing the house has said would tell it.
+            // hold, once every few seconds). [pressing] holds them only on a phone whose own screen
+            // says Insider, because only that page 2 takes a hold (D-142, D-231).
             is RoundMessage.MeetingEnded -> {
                 pressingEgress = true
                 // **Both tiles, from the same moment.** The first run set this one only on a
@@ -396,10 +404,8 @@ class RoundCheat(
     /**
      * **The thumb, for the rest of the round — on every seat, for the whole of it.**
      *
-     * Three controls and every one of them goes up this phone's own socket as a frame the house may
-     * refuse in silence. That is not the bench being lax about which seat should press: **it is the
-     * only thing a phone in this build can do**, because no push tells a phone its role, and it is
-     * the finding this loop exists to make visible. The house admits exactly one of the five.
+     * Every control here goes up this phone's own socket as a frame the house may refuse in silence,
+     * and the page-2 ones go through [FlowModel.actions], the same lambdas the tiles hold (D-231).
      */
     private suspend fun pressing() {
         while (!handedBack) {
@@ -434,8 +440,18 @@ class RoundCheat(
             }
             // Held down again every few seconds, which is what a person does with a tile that did
             // nothing. `Balance.EGRESS_COOLDOWN` is the house's and the phone is not told it.
-            if (!over && pressingEgress && !egressRunning) client.fireEgress()
-            if (!over && pressingStatic && !jammed) client.act(IntentMessage.FireStatic)
+            //
+            // **Pressed on the panel, through the actions the tiles call, and only on a phone whose
+            // own screen says Insider** (D-231): a Resident's page 2 takes no pointer input (D-142),
+            // so a bench that pressed there would be doing what no thumb can. Until D-231 these went
+            // straight to `RoundClient`, which is how the bench kept firing Egresses while the tile
+            // a person holds sent nothing at all.
+            if (flow.state.role == PanelRole.Insider) {
+                val tiles = flow.actions()
+                if (!over && pressingRevoke) tiles.armRevoke()
+                if (!over && pressingEgress && !egressRunning) tiles.armEgress()
+                if (!over && pressingStatic && !jammed) tiles.fireStatic()
+            }
             revealedAt?.let { landed ->
                 if (monotonicNanos() - landed > ENDING_NANOS) {
                     handedBack = true
@@ -494,8 +510,8 @@ class RoundCheat(
      * `egress.firedAt` in absolute house ticks, and a phone has never been told what time it is —
      * `EgressOpened` carries `remaining`, which is a duration. So the best a phone can compose is
      * the schedule's own shape from `Balance` with **no anchor under it**, and that is what goes up.
-     * It will miss, the house will answer `held = false`, and that answer is the evidence. The
-     * containment that follows is the host's mint. See the escalation.
+     * It will miss, the house will answer `held = false`, and that answer is the evidence. Nothing
+     * contains the Egress after it: the host's mint that used to is gone (D-231).
      */
     private suspend fun reachNodeAndPulse(destination: MarkerId) {
         note("WALKING TO ${destination.value} — THE HOUSE WILL READ THIS SEAT'S OWN SCAN")
@@ -580,7 +596,15 @@ class RoundCheat(
         // own clock has to reach the far side of it before an arm is anything but a silent refusal.
         skipTo(house, house.state.cooldownFor(insider, home.someoneshome.model.InsiderAbility.Revoke)
             ?.readyAt?.step ?: 0L)
-        house.mint(Event.RevokeArmed(house.now(), insider))
+        // **The arm is the Insider's phone's, never this script's** (D-231). It used to be minted
+        // here, which is how a Revoke "landed" in every rehearsal while the tile on a real phone
+        // sent nothing. Now the Insider's own bench holds REVOKE on its page 2 (see [pressing]),
+        // the request goes up its own socket, and this waits for the house to have armed it.
+        if (!awaitRevokeArmed(house, insider)) {
+            note("NO PHONE ARMED A REVOKE — THE HOUSE HOLDS NO ARMED SEAT")
+            return
+        }
+        note("THE HOUSE ARMED SEAT ${insider.index}'S REVOKE — FROM ITS OWN PHONE")
 
         val target = house.state.livingPlainResidents.firstOrNull { it.index != insider.index }
         if (target == null) {
@@ -693,7 +717,7 @@ class RoundCheat(
         // act exists to watch happen.
         if (!house.state.egressRunning) {
             skipTo(house, house.state.egressReadyAt.step)
-            note("THE EGRESS CLOCK IS READY — FIVE THUMBS ARE ON THE TILE, THE HOUSE ADMITS ONE")
+            note("THE EGRESS CLOCK IS READY — THE INSIDER'S THUMB IS ON THE TILE")
         } else {
             note("THE HOUSE IS ALREADY ON FIRE — A PHONE FIRED ONE WHILE THE JAM WAS LANDING")
         }
@@ -712,32 +736,12 @@ class RoundCheat(
         note("AT A NODE — ${pair.size} SEAT(S) BY THE HOUSE'S OWN PRESENCE PLANE")
 
         if (house.state.egressRunning) {
-            // ** STAND-IN — the tick anchor, and only the tick anchor.** The frames went up, the
-            // desk attributed them and the rules graded them; what the phones could not put in them
-            // was a tap in the house's own ticks, because nothing on the wire carries the house's
-            // clock. So the same two seats' beats are minted here off `firedAt`, which is the one
-            // number a phone has never been given. See the class KDoc and the escalation.
-            // **One seat per node, and never two at the same one.** `partnerFor` looks for somebody
-            // at the OTHER node — that is the whole of what an Egress asks for, two people who
-            // cannot speak to each other standing at opposite ends of a house — so a pair taken off
-            // the front of the list would contain it only when the list happened to alternate.
-            val running = house.state.egress
-            val standing = running?.nodes.orEmpty().mapNotNull { node ->
-                house.state.livingSeats.firstOrNull { seat ->
-                    house.state.presenceFor(seat)?.at?.value == node.value
-                }
-            }.distinctBy { it.index }
-            note("AT A NODE, ONE PER NODE — ${standing.size} SEAT(S)")
-            if (standing.size < 2) {
-                note("FEWER THAN TWO SEATS AT A NODE — NOTHING TO CONTAIN IT WITH")
-            } else {
-                val firedAt = house.state.egress?.firedAt?.step ?: 0L
-                val beats = List(Balance.SYNC_PULSE_BEATS) { b ->
-                    firedAt + Balance.SYNC_PULSE_LEAD + b * Balance.SYNC_PULSE_INTERVAL
-                }
-                note("STAND-IN — THE SAME TWO SEATS' TAPS, ANCHORED ON THE HOUSE'S OWN FIRED-AT")
-                standing.forEach { seat -> house.mint(Event.SyncPulseReturned(house.now(), seat, beats)) }
-            }
+            // **No stand-in any more** (D-231). The same two seats' beats used to be minted here off
+            // the house's own `firedAt`, so every rehearsal contained its Egress while no phone
+            // could: the UI draws no containment control, and nothing on the wire carries the
+            // house's clock for a tap to be anchored to. Raised with the owner; until it is ruled,
+            // an Egress in a rehearsal is not contained, which is the truth about the phones.
+            note("NO PHONE CAN CONTAIN IT — NO CONTAINMENT CONTROL ON ANY SCREEN, NO HOUSE CLOCK ON THE WIRE")
         }
         delay(SETTLE_MILLIS)
         beat("EGRESS-RESOLVED")
@@ -751,10 +755,10 @@ class RoundCheat(
     /**
      * Act 5 — the meter, the ending, and a new lobby.
      *
-     * ** STAND-IN 3 — the host reads its own answer key.** A phone is shown the question and never
-     * the answer, so nothing on a client can produce a correct entry; the bench that could would
-     * be a phone that can adjudicate, which is rule 8's whole objection. So the meter is moved
-     * here, in process, one line of one order at a time.
+     * **The answer-key stand-in is gone** (D-231). A phone is shown the question and never the
+     * answer, so nothing on a client can produce a correct entry, and the meter used to be moved
+     * here by minting scans and hand-overs no phone made. Now the meter moves only as far as the
+     * phones' own entries take it, and a bar out of reach ends the other way ([theOtherEnding]).
      */
     private suspend fun theEnding(house: RoundAuthority) {
         note("=== ACT 6, AN ENDING ===")
@@ -764,12 +768,10 @@ class RoundCheat(
             beat("ENDING")
             return
         }
-        note("STAND-IN — BANKING CORRECT ENTRIES OFF THE HOUSE'S OWN ANSWER KEY")
-        var guard = 0
-        while (!house.ended && guard++ < ENTRY_CEILING) {
-            val worked = house.state.livingPlainResidents.any { seat -> bank(house, seat) }
-            if (!worked) break
-        }
+        // **No answer key any more** (D-231). Correct entries were minted here off the house's own
+        // answers: a scan and a hand-over no phone made. The phones' own entries still go up the
+        // wire through the real screens (see [workTheCaughtScan]) and are graded; what the bench
+        // cannot do is know the answers, so the meter moves only as far as they take it.
         note("SYSTEM INTEGRITY — ${house.state.systemIntegrity}")
         delay(SETTLE_MILLIS)
 
@@ -802,7 +804,7 @@ class RoundCheat(
      * **The round ends the other way: an Egress nobody contains — and no part of it is minted.**
      *
      * D-131's fourth route, and in P3 both halves of it were stand-ins: the finger had no wire
-     * member and the countdown had nothing counting. Both are real now. **Five thumbs are already
+     * member and the countdown had nothing counting. Both are real now. **The Insider's thumb is already
      * on the tile** — [pressing] never stops — so all this has to do is push the house past the
      * Egress's full cooldown and then past the countdown, and let [tickHouse] mint the expiry off
      * its own deadline.
@@ -819,25 +821,6 @@ class RoundCheat(
         note("NOBODY IS WALKING TO A NODE — PUSHING THE HOUSE PAST THE COUNTDOWN")
         skipTo(house, deadline)
         awaitEnded(house)
-    }
-
-    /**
-     * One line of one seat's order, scanned and banked correctly.
-     *
-     * The scan is what arms the instance (D-110) and the entry is what spends it, so both halves
-     * have to happen — and the answer is read off `OpenSubroutine.expected`, which is the authority
-     * state a client is physically incapable of holding.
-     */
-    private suspend fun bank(house: RoundAuthority, seat: Seat): Boolean {
-        val order = house.state.workOrderFor(seat) ?: return false
-        val entry = order.entries.firstOrNull { order.isActionable(it) } ?: return false
-        // An entry with no anchor is one no card opens, so there is nothing to walk to and
-        // nothing to bank. Skipped rather than guessed at.
-        val marker: MarkerId = entry.anchor ?: return false
-        house.mint(Event.MarkerScanned(house.now(), seat, marker))
-        val open = house.state.openSubroutineFor(seat)?.takeIf { it.armed } ?: return false
-        house.mint(Event.SubroutineReturned(house.now(), seat, marker, open.expected))
-        return true
     }
 
     /**
@@ -878,6 +861,16 @@ class RoundCheat(
             delay(STEP_MILLIS)
             waited += STEP_MILLIS
         }
+    }
+
+    /** Until the house holds [insider]'s Revoke armed: the arm came from that seat's own phone. */
+    private suspend fun awaitRevokeArmed(house: RoundAuthority, insider: Seat): Boolean {
+        var waited = 0L
+        while (house.state.cooldownArmed.none { it.index == insider.index } && !house.ended && waited < GATE_MILLIS) {
+            delay(STEP_MILLIS)
+            waited += STEP_MILLIS
+        }
+        return house.state.cooldownArmed.any { it.index == insider.index }
     }
 
     private suspend fun awaitEgress(house: RoundAuthority): Boolean {
@@ -997,7 +990,6 @@ class RoundCheat(
         /** How long the bench waits for the house clock to reach a pushed tick. */
         private const val PATIENCE_MILLIS = 60_000L
 
-        /** A bound on the banking loop, so a rule that never moves the meter cannot hang a phone. */
         /**
          * How many taps the bench puts into a Subroutine before handing it over.
          *
@@ -1008,7 +1000,6 @@ class RoundCheat(
          */
         private const val ENTRY_TAPS = 8
 
-        private const val ENTRY_CEILING = 200
     }
 }
 

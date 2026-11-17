@@ -114,16 +114,15 @@ class PanelActions(
      * **The two things page 2 can arm, and both take a two-second hold** (D-141, D-142).
      *
      * They are actions rather than a `go(...)` on the tile for the reason [saveHome] and
-     * [lightsOut] are: neither is reachable by a synthetic click, so neither can be read off the
-     * screen by `ScreenGraphTest`, and the edge [armEgress] walks is declared in [Flow.viaActions]
-     * with the rest of them.
+     * [lightsOut] are: neither is reachable by a synthetic click. **Neither walks anywhere** (D-231):
+     * both send a request up and arm in place, and the Egress alert is the house's push.
      *
      * **Neither is attached on a Resident's phone at all.** Not attached-and-ignored — the tile
      * takes no pointer input whatever, so there is nothing to press and nothing to time (D-142).
      * What a Resident's page 2 is, is a page that looks exactly like an Insider's and answers
      * nothing.
      */
-    val stepRevoke: () -> Unit = {},
+    val armRevoke: () -> Unit = {},
     val armEgress: () -> Unit = {},
     /**
      * **Tier 2 firing, from a row of a list the house sent** (the 2026-08-22 targeting ruling).
@@ -150,7 +149,7 @@ class PanelActions(
      *
      * **None of the three is reachable on a Resident's phone.** Not by a check inside them: the
      * tier-2 tiles take no pointer input at all (D-142), so a Resident never opens a picker and
-     * never has a row to tap. The same shape [stepRevoke] has, one tier down.
+     * never has a row to tap. The same shape [armRevoke] has, one tier down.
      *
      * [fireStatic] is the third and it **takes nothing at all** (D-186). Static has no target of
      * any kind, so there is no row to tap and no picker to open: the tile's own two-second hold

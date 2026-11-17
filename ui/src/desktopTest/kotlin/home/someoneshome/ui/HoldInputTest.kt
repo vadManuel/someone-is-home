@@ -78,7 +78,9 @@ class HoldInputTest {
      */
     @Test
     fun revokeArmsOnAFullHoldAndNotBefore() = runDesktopComposeUiTest(width = 300, height = 650) {
-        val model = on(ScreenId.Page2, PanelRole.Insider)
+        val sent = mutableListOf<IntentMessage>()
+        val model = FlowModel(PanelState(screen = ScreenId.Home, role = PanelRole.Insider), send = { sent += it })
+            .also { it.push(ScreenId.Page2) }
         show(model)
         val before = model.state.revoke
 
@@ -88,31 +90,40 @@ class HoldInputTest {
         onNodeWithText("REVOKE").performTouchInput { up() }
         mainClock.advanceTimeBy(enough)
         assertEquals(before, model.state.revoke, "letting go early armed the Revoke anyway")
+        assertEquals(emptyList<IntentMessage>(), sent.toList(), "most of a hold asked the house to arm")
 
         onNodeWithText("REVOKE").performTouchInput { down(center) }
         mainClock.advanceTimeBy(enough)
-        assertNotEquals(before, model.state.revoke, "a full hold on REVOKE reached nothing")
+        assertEquals(RevokeState.Armed, model.state.revoke, "a full hold on REVOKE did not echo ARMED")
         assertEquals(ScreenId.Page2, model.state.screen, "arming opened a view; it happens in place")
+        // **D-231: the hold reaches the house.** Before it, the tile echoed ARMED and sent nothing,
+        // so no Revoke could land on a real phone.
+        assertEquals(listOf<IntentMessage>(IntentMessage.ArmRevoke), sent.toList(), "a full hold on REVOKE never asked the house to arm")
     }
 
     /**
      * **EGRESS is the same gesture on the same page**, and it is the misclick the design calls
-     * game-ending.
+     * game-ending. The hold fires the request and the screen stays put: the alert is the house's
+     * push, on every phone alike (D-231).
      */
     @Test
     fun egressArmsOnAFullHoldAndNotBefore() = runDesktopComposeUiTest(width = 300, height = 650) {
-        val model = on(ScreenId.Page2, PanelRole.Insider)
+        var fired = 0
+        val model = FlowModel(PanelState(screen = ScreenId.Home, role = PanelRole.Insider), fireEgress = { fired++ })
+            .also { it.push(ScreenId.Page2) }
         show(model)
 
         onNodeWithText("EGRESS").performTouchInput { down(center) }
         mainClock.advanceTimeBy(nearly)
         onNodeWithText("EGRESS").performTouchInput { up() }
         mainClock.advanceTimeBy(enough)
-        assertEquals(ScreenId.Page2, model.state.screen, "most of a hold fired the Egress")
+        assertEquals(0, fired, "most of a hold fired the Egress")
+        assertEquals(ScreenId.Page2, model.state.screen, "most of a hold walked somewhere")
 
         onNodeWithText("EGRESS").performTouchInput { down(center) }
         mainClock.advanceTimeBy(enough)
-        assertEquals(ScreenId.Banner, model.state.screen, "a full hold on EGRESS reached nothing")
+        assertEquals(1, fired, "a full hold on EGRESS never asked the house")
+        assertEquals(ScreenId.Page2, model.state.screen, "the Egress hold walked this phone to the alert itself")
     }
 
     /**

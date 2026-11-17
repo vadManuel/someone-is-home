@@ -579,10 +579,11 @@ object Flow {
     val housePushed: Set<ScreenId> = setOf(
         // The three notifications nothing on this phone can produce: the house's opening text
         // over the springboard, the same text under the clock on a phone lying face down, and a
-        // Subroutine coming unblocked by somebody else's work. The Egress alert is NOT here — an
-        // Insider walks to it from their own page 2, which is the one role-asymmetric edge in the
-        // game.
-        ScreenId.Notify, ScreenId.LockNotify, ScreenId.Quiet,
+        // Subroutine coming unblocked by somebody else's work. **And the Egress alert** (D-231): it
+        // used to be walked to from the Insider's own page 2, the one role-asymmetric edge in the
+        // game, and a hold that walked there told the house nothing. It is `EgressOpened`'s now, on
+        // every phone alike, the actor's included.
+        ScreenId.Notify, ScreenId.LockNotify, ScreenId.Quiet, ScreenId.Banner,
         ScreenId.Call, ScreenId.Found,
         // **The caller's own ring, and it is here because D-121 says a meeting is a WALK** (N5b).
         // The springboard drew a PHONE tile that went straight to this screen, which is the remote
@@ -774,15 +775,14 @@ object Flow {
         // left and a host who closed the house both land — see `FlowModel.leaveLobby` and
         // `FlowModel.terminateHouse`, and `FlowModel.houseClosed` for the phones that were told.
         ScreenId.Lobby to setOf(ScreenId.Armed, ScreenId.Join),
-        // The Insider's egress tile, armed by two seconds of a finger (D-141). **The only
-        // role-asymmetric edge in the game**, and it is asymmetric in capability rather than in
-        // appearance: a Resident's tile is drawn identically and takes no pointer input at all
-        // (D-142), so there is no hold to run and no view either role can be caught on.
+        // Page 2's gestures. **The Egress tile is no longer one of them** (D-231): its hold sends
+        // the request and stays put, and the alert arrives by the house's push on every phone, so
+        // `Banner` is in [housePushed]. A Resident's tiles are drawn identically and take no pointer
+        // input at all (D-142), so there is no hold to run and no view either role can be caught on.
         ScreenId.Page2 to setOf(
             // **The swipe back to page 1** (`gdd.md:561`), the same for both roles. A gesture
             // publishes no click action, so the edge is declared here.
             ScreenId.Home,
-            ScreenId.Banner,
             // **Two of the three tier-2 tiles**, armed by the same two seconds of a finger (D-141)
             // and opening a list rather than arming in place — the owner's targeting rulings, and
             // the one place the design asks for a picker. *The glow of reading the list is the
@@ -973,6 +973,19 @@ class FlowModel(
      * this app moves because a Tier-2 ability was fired.
      */
     val send: (IntentMessage) -> Unit = {},
+    /**
+     * **The Egress tile, held: where the request goes** (D-141, D-231).
+     *
+     * [send]'s sibling and not a member of it, because the Egress is not an [IntentMessage]: the
+     * house has to draw the type and the two nodes before there is a fact to admit, so the request
+     * travels as its own frame (`RoundBody.Fire`) and carries nothing. The app root points this at
+     * the round transport's `fireEgress`.
+     *
+     * Until D-231 there was no such seam and [armEgress] walked this phone to the alert itself and
+     * told nobody, so an Egress could not be fired from a phone at all. Defaulted to nothing, which
+     * is every render and every test: a page 2 whose hold reaches nobody.
+     */
+    private val fireEgress: () -> Unit = {},
     /**
      * **The host held LIGHTS OUT down for two seconds and the gate was open** (E-PAY-1 / E-D3-3's
      * trigger half).
@@ -1269,32 +1282,41 @@ class FlowModel(
     }
 
     /**
-     * **Arming a Revoke — two seconds of a finger on page 2** (D-141, D-142).
+     * **Arming a Revoke — two seconds of a finger on page 2** (D-141, D-142, D-231).
      *
-     * Presentation only, and the line it stops at is [lightsOut]'s: it walks this phone's tile
-     * through the states the design drew and tells nobody anything. Real arming is silent and
-     * invisible, spends the cooldown at the moment of arming rather than at the landing, and has
-     * no cancel — all three of which are the house's, because a device that decided any of them
-     * would be a device deciding an outcome.
+     * **The request goes to the house, every time, the same way** ([IntentMessage.ArmRevoke]). Until
+     * D-231 this method was presentation only: it stepped the tile through READY, ARMED and COOLING
+     * DOWN and told nobody, so the house never armed and every touch on two real phones was
+     * answered as an ordinary `ContactAnswered`. The bench hid it by minting `RevokeArmed` itself.
+     *
+     * Whether the arm takes is the house's: it spends the cooldown at the moment of arming and
+     * refuses an arm into a running clock, **silently in both outcomes** (D-009, D-142, D-216), so
+     * there is no answer to follow. The tile's ARMED is therefore input echo, the design's own
+     * reading of it (D-216: *their phone already knows because they held the tile down*), and it is
+     * set unconditionally — nothing here branches on whether the arm took (rule 1). It no longer
+     * steps on to COOLING DOWN or READY: a second hold is a second request, not a local clock.
      *
      * **Reached only from an Insider's tile.** Not by a branch inside it: a Resident's tile takes
      * no pointer input at all, so this is not something a Resident's phone declines to do — it is
      * something a Resident's phone has no way to ask for.
      */
-    fun stepRevoke() {
-        val next = RevokeState.entries[(state.revoke.ordinal + 1) % RevokeState.entries.size]
-        state = state.copy(revoke = next)
+    fun armRevoke() {
+        send(IntentMessage.ArmRevoke)
+        state = state.copy(revoke = RevokeState.Armed)
     }
 
     /**
-     * **Arming an Egress — the other two-second hold on page 2** (D-141).
+     * **Arming an Egress — the other two-second hold on page 2** (D-141, D-231).
      *
      * The misfire the design calls *"a game-ending misclick [that] will happen in the dark"* is
-     * the whole reason for the hold. What it reaches here is the alert every phone in the house
-     * gets; in play the alert is the house's answer to an intent, not this phone's announcement.
+     * the whole reason for the hold. **The request goes up and the screen does not move.** The alert
+     * is the house's answer (`RoundMessage.EgressOpened`, which every phone in the house gets, this
+     * one included), so this phone reaches [ScreenId.Banner] the way every other phone does, by the
+     * push. Until D-231 it walked there itself and sent nothing: no Egress could be fired from a
+     * phone, and a refused one would have shown the alert on the actor's phone alone.
      */
     fun armEgress() {
-        go(ScreenId.Banner)
+        fireEgress()
     }
 
     /**
@@ -1316,7 +1338,7 @@ class FlowModel(
      * (`Effect.AbilityFired`), which is input echo about this phone's own clock.
      *
      * **Reached only from an Insider's tile**, and not by a check inside it: a Resident's tier-2
-     * tiles take no pointer input, so a Resident never opens the picker (D-142). [stepRevoke]'s
+     * tiles take no pointer input, so a Resident never opens the picker (D-142). [armRevoke]'s
      * shape, one tier down.
      */
     fun fireSurge(row: Int) {
@@ -2726,7 +2748,7 @@ class FlowModel(
         back = { back() },
         leaveLobby = ::leaveLobby,
         terminateHouse = ::terminateHouse,
-        stepRevoke = ::stepRevoke,
+        armRevoke = ::armRevoke,
         armEgress = ::armEgress,
         fireSurge = ::fireSurge,
         fireIsolate = ::fireIsolate,

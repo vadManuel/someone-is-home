@@ -667,22 +667,23 @@ class FlowTest {
         )
         assertEquals(Flow.viaActions.getValue(ScreenId.Lobby), lobbyExits)
 
-        // The Insider's egress tile, armed by two seconds of a finger (D-141). It is the only
-        // role-asymmetric edge in the game and the only one no rendering pass can reach: a
-        // Resident's tile takes no pointer input at all (D-142), so firing everything on a
-        // Resident's page 2 finds nothing, which is the ruling rather than a gap.
-        // **All four of page 2's holds**, walked from the same screen because they are four
-        // gestures on one page and the edge set has four members. The Egress arms in place and
-        // reaches the alert every phone gets; the three tier-2 tiles each open a view, which is the
-        // targeting rulings and the one place the design asks a hold to open one. **The third tile
-        // publishes no edge at all**: Static fires in place (D-186), so its hold navigates nowhere.
+        // **Page 2's gestures, and the two Tier-1 holds publish no edge** (D-231). The Revoke and
+        // the Egress each send a request and stay on page 2; the alert is the house's push
+        // (`EgressOpened`), so `Banner` is in `Flow.housePushed`. The two targeted tier-2 tiles each
+        // open a view, which is the targeting rulings and the one place the design asks a hold to
+        // open one; Static fires in place (D-186).
+        for (hold in listOf<FlowModel.() -> Unit>({ armEgress() }, { armRevoke() }, { fireStatic() })) {
+            assertEquals(
+                ScreenId.Page2,
+                FlowModel(PanelState(screen = ScreenId.Page2, role = PanelRole.Insider)).apply(hold).state.screen,
+                "a page-2 hold that arms in place walked this phone somewhere",
+            )
+        }
         val page2 = setOf(
             // The swipe back to page 1, which both roles have (`gdd.md:561`). The gesture itself
             // is performed in `SpringboardSwipeTest`; this is where it lands.
             FlowModel(PanelState(screen = ScreenId.Page2, role = PanelRole.Resident))
                 .apply { go(ScreenId.Home) }.state.screen,
-            FlowModel(PanelState(screen = ScreenId.Page2, role = PanelRole.Insider))
-                .apply { armEgress() }.state.screen,
             FlowModel(PanelState(screen = ScreenId.Page2, role = PanelRole.Insider))
                 .apply { go(ScreenId.SurgeTargets) }.state.screen,
             FlowModel(PanelState(screen = ScreenId.Page2, role = PanelRole.Insider))

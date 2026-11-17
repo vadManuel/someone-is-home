@@ -294,7 +294,13 @@ fun CheatRoot() {
             // Page 2's two Tier-2 fires. `IntentMessage` again, and the seats that ride it are
             // CONTENT — who the Surge is aimed at, off the roster the house drew and published to
             // this phone — which is the same rule the ballot's target travels under.
+            // **And page 2's Revoke hold rides this same line** (D-231): `armRevoke` sends
+            // `IntentMessage.ArmRevoke`. Until D-231 it sent nothing and the house never armed.
             send = { intent -> press.value?.act(intent) },
+            // **THE EGRESS TILE, REACHING THE HOUSE** (D-231). `RoundBody.Fire` is its own frame, so it
+            // is its own seam. Until D-231 the hold walked the phone to the alert and sent nothing:
+            // only the bench, calling `RoundClient.fireEgress` directly, could start an Egress.
+            fireEgress = { press.value?.fireEgress() },
             // **THE HOST'S THUMB, ARMING A REAL ROUND — E-PAY-1 / E-D3-3's trigger half, closed.**
             //
             // This is the line the game did not have. `FlowModel.lightsOut` walked the host's own
