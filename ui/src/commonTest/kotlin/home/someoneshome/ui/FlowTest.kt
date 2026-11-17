@@ -37,7 +37,11 @@ class FlowTest {
      *
      * A revoked player sits in the dark until a meeting is called; a restrained player waits for
      * the others to finish reading the result; a player outside the system waits for the round to
-     * end; and a disconnected phone waits for the house to come back.
+     * end.
+     *
+     * **The disconnect screen left this set** (D-260). It waits for the house to come back, and a
+     * house that never does left the guest with no way off it but stopping the app; LEAVE THIS HOUSE
+     * is its way onward now ([Flow.viaActions]).
      *
      * **The two endings used to be in here and are not any more** (D-157). They were terminals —
      * the evening finished wherever the round did — and NEW ROUND is the walk off both of them.
@@ -49,7 +53,7 @@ class FlowTest {
      * in the dark with no instruction.
      */
     private val awaitingTheHouse = setOf(
-        ScreenId.Revoked, ScreenId.Restrained, ScreenId.Ghost3, ScreenId.Disconnect,
+        ScreenId.Revoked, ScreenId.Restrained, ScreenId.Ghost3,
     )
 
     /**
@@ -799,6 +803,13 @@ class FlowTest {
             )
         }
 
+        // **LEAVE THIS HOUSE, off RECONNECTING** (D-260): the lobby's own way out, for a house
+        // that is not coming back. A hold, so no rendering test fires it; `RoundForgottenTest`
+        // performs the hold, and `HouseGoneTest` walks it on a real socket.
+        val gone = FlowModel(PanelState(screen = ScreenId.Disconnect), lobby = LobbyModel.sample())
+        gone.leaveLobby()
+        assertEquals(Flow.viaActions.getValue(ScreenId.Disconnect), setOf(gone.state.screen))
+
         assertEquals(
             setOf(
                 // The join screen's network row, which is refusable twice over and therefore the
@@ -806,7 +817,7 @@ class FlowTest {
                 ScreenId.Join,
                 ScreenId.Editor, ScreenId.RoomEdit, ScreenId.StairsWarn,
                 ScreenId.SaveName, ScreenId.Delete, ScreenId.HomeDetail, ScreenId.ScanMarker,
-                ScreenId.Secret, ScreenId.Lobby, ScreenId.ScanCaught,
+                ScreenId.Secret, ScreenId.Lobby, ScreenId.ScanCaught, ScreenId.Disconnect,
                 ScreenId.WinInsiders, ScreenId.WinResidents,
                 // Page 2's three holds, and the two pickers a row fires off. The third hold fires
                 // in place and declares no edge (D-186).

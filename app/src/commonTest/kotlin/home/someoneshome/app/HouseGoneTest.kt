@@ -65,15 +65,16 @@ class HouseGoneTest {
         override var disabled: Boolean = false
     }
 
-    private class Phone(scope: CoroutineScope, name: String) {
+    private class Phone(scope: CoroutineScope, val name: String) {
         val air = Air()
+        val kept = Kept()
         var lost = 0
         var back = 0
         var lostAtMillis = 0L
         private var flowRef: FlowModel? = null
         private val gone = HouseGone { flowRef }
         val link = LobbyOverTransport(
-            scope, seat = Kept(), wake = ScreenWake(Timer()), advertising = air,
+            scope, seat = kept, wake = ScreenWake(Timer()), advertising = air,
             onHouseLost = {
                 lost++
                 lostAtMillis = nowMillis()
@@ -120,12 +121,14 @@ class HouseGoneTest {
         }
     }
 
+    private var port = 0
+
     /** The host on the air and two guests seated in its lobby. */
     private suspend fun CoroutineScope.room(phones: MutableList<Phone>): Pair<Phone, List<Phone>> {
         val host = Phone(this, "HOST").also { phones += it }
         host.model.hostHome(home)
         until("the host walked into its own lobby") { host.model.hosting && host.model.standing.joined == 1 }
-        val port = host.air.ports.single()
+        port = host.air.ports.single()
         val guests = listOf("ROSE", "DANI").map { Phone(this, it).also { p -> phones += p } }
         guests.forEach { it.model.attachTo(NearbyHome(home.name, "127.0.0.1", port)) }
         until("both guests were seated") { host.model.standing.joined == 3 }
@@ -186,5 +189,60 @@ class HouseGoneTest {
         until("every guest is back on the lobby it left") { guests.all { it.flow.state.screen == ScreenId.Lobby } }
         until("every seat came back") { host.link.house.armingInputs().seats.size == 3 }
         assertEquals(0, host.lost, "the host's own locked phone was told its own house is gone")
+    }
+
+    /**
+     * **The disconnect screen's way out, and the seat it keeps** (D-260).
+     *
+     * A host gone long enough puts both guests on RECONNECTING. ROSE takes LEAVE THIS HOUSE (the
+     * hold calls `FlowModel.leaveLobby`): she lands on the join screen, her link stops trying, and
+     * her seat token is still hers. DANI stays. The host comes back: **DANI, who never left, is
+     * walked back to the lobby she was on and seated in her own chair**, and ROSE stays where she
+     * walked to. When ROSE then picks the home again she presents the same token and gets the same
+     * chair, not a new one.
+     */
+    @Test
+    fun aGuestWhoLeavesKeepsHerSeatAndAGuestWhoStaysIsSeatedAgain() = evening { phones ->
+        val (host, guests) = room(phones)
+        val (rose, dani) = guests
+        val chairs = host.link.house.armingInputs().names.associate { it.name to it.seat }
+        val roseToken = rose.kept.token
+        val daniToken = dani.kept.token
+        assertTrue(roseToken != null && daniToken != null, "a guest held no seat token once seated")
+
+        host.link.backgrounded()
+        until("every guest was told the house is gone") { guests.all { it.lost == 1 } }
+        assertTrue(guests.all { it.flow.state.screen == ScreenId.Disconnect })
+
+        // **LEAVE THIS HOUSE**, held on RECONNECTING, which is the action the hold calls.
+        rose.flow.actions().leaveLobby()
+        assertEquals(ScreenId.Join, rose.flow.state.screen, "LEAVE THIS HOUSE did not walk to the join screen")
+        assertEquals(null, rose.model.attached, "ROSE left and is still attached to the home")
+        assertEquals(roseToken, rose.kept.token, "leaving the disconnect screen threw the seat token away")
+
+        host.link.foregrounded()
+        until("DANI, who stayed, was told the house is back") { dani.back == 1 }
+        until("DANI is back on the lobby she was on") { dani.flow.state.screen == ScreenId.Lobby }
+        until("DANI is in a seat again") { host.link.house.armingInputs().seats.size == 2 }
+        assertEquals(daniToken, dani.kept.token, "DANI came back on a different seat token")
+        until("DANI's name is back at the desk") { host.link.house.armingInputs().names.any { it.name == "DANI" } }
+        assertEquals(
+            chairs["DANI"], host.link.house.armingInputs().names.single { it.name == "DANI" }.seat,
+            "DANI came back to a different chair",
+        )
+        delay(GONE)
+        assertEquals(0, rose.back, "ROSE, who walked out, was walked back in")
+        assertEquals(ScreenId.Join, rose.flow.state.screen, "ROSE, who walked out, was moved off the join screen")
+        assertEquals(2, host.link.house.armingInputs().seats.size, "ROSE, who walked out, was seated again")
+
+        // **And the token she kept is the way back to her own chair.**
+        rose.model.attachTo(NearbyHome(home.name, "127.0.0.1", port))
+        until("ROSE is seated again") { host.link.house.armingInputs().seats.size == 3 }
+        until("ROSE's name is back at the desk") { host.link.house.armingInputs().names.any { it.name == "ROSE" } }
+        assertEquals(roseToken, rose.kept.token, "ROSE came back as a stranger rather than on her own token")
+        assertEquals(
+            chairs["ROSE"], host.link.house.armingInputs().names.single { it.name == "ROSE" }.seat,
+            "ROSE came back to somebody else's chair",
+        )
     }
 }

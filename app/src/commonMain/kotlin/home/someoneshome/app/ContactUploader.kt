@@ -152,12 +152,7 @@ class ContactUploader(
                 out = true
                 radio.scan(false)
             }
-            is RoundMessage.RoundEnded -> {
-                seed = null
-                advertising = null
-                forgetTheRound()
-                radio.silence()
-            }
+            is RoundMessage.RoundEnded -> roundEnded()
             else -> Unit
         }
     }
@@ -249,10 +244,16 @@ class ContactUploader(
         return true
     }
 
-    /** A new round is coming: forget this one's seed and stop the radio. */
+    /**
+     * A new round is coming: forget this one's seed, whether it put this phone out, and stop the
+     * radio. **Out goes with the round** (D-259): it was cleared only by the next round's seed, so a
+     * phone Revoked in one round said it was out of the round all through the lobby before the next.
+     */
     fun roundEnded() {
         seed = null
         advertising = null
+        out = false
+        uploads = 0L
         forgetTheRound()
         radio.silence()
     }

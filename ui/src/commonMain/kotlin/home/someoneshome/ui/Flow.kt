@@ -849,6 +849,10 @@ object Flow {
         // left and a host who closed the house both land — see `FlowModel.leaveLobby` and
         // `FlowModel.terminateHouse`, and `FlowModel.houseClosed` for the phones that were told.
         ScreenId.Lobby to setOf(ScreenId.Armed, ScreenId.Join),
+        // **LEAVE THIS HOUSE, off the disconnect screen** (D-260): the lobby's own way out, for a
+        // guest whose house has been out of reach long enough to be shown it. A hold, like the
+        // lobby's, so it is declared here.
+        ScreenId.Disconnect to setOf(ScreenId.Join),
         // Page 2's gestures. **The Egress tile is no longer one of them** (D-231): its hold sends
         // the request and stays put, and the alert arrives by the house's push on every phone, so
         // `Banner` is in [housePushed]. A Resident's tiles are drawn identically and take no pointer
@@ -940,6 +944,38 @@ fun PanelState.arrivingAt(id: ScreenId): PanelState = when (id) {
     ScreenId.Restrained -> copy(screen = id, outBy = OutBy.Restrained, verdict = null)
     else -> copy(screen = id, verdict = null)
 }
+
+/**
+ * **The panel between two rounds: what the evening keeps, and nothing the round wrote** (D-259).
+ *
+ * A round is lobby to victory (D-170), and every field the house pushed during one is about that
+ * one: who this phone was, whether it was put out and how, its work, the meter, the clocks, the
+ * meeting, the thread, the ending. After NEW ROUND the second round's PERIMETER ARMED drew the first
+ * round's OUT REVOKED, METER 96% and work order, because `newRound` walked the screen and copied
+ * everything else across.
+ *
+ * **Built fresh, not copied with a list of fields to blank.** The kept fields are named here and
+ * every other field takes its default, so a field added to [PanelState] later is reset at the
+ * boundary unless somebody says it belongs to the evening. That is the fail-closed direction: a
+ * lobby field wrongly reset shows itself at once, and a round field wrongly kept is a leak from one
+ * round into the next that nobody would see.
+ *
+ * Kept, because none of it is the round's:
+ * - [PanelState.screen] — where the phone stands; the caller moves it.
+ * - [PanelState.houseAttached] — a fact about the socket, which outlives the round (D-157).
+ * - [PanelState.markersOn], [PanelState.torch] — the host's marker registration, done in the light.
+ * - [PanelState.wallTime] — the phone's own clock (D-255).
+ * - [PanelState.inboxSeed], [PanelState.noteSeed] — the phone's own fictional backlog.
+ */
+fun PanelState.betweenRounds(): PanelState = PanelState(
+    screen = screen,
+    houseAttached = houseAttached,
+    markersOn = markersOn,
+    torch = torch,
+    wallTime = wallTime,
+    inboxSeed = inboxSeed,
+    noteSeed = noteSeed,
+)
 
 /**
  * The thing that walks the graph: [PanelState] plus the little that is needed to move it.
@@ -1855,6 +1891,9 @@ class FlowModel(
      */
     fun leaveLobby() {
         lobby.leaveLobby()
+        // A phone that walked out holds no round (D-259): the lobby's own LEAVE, and the disconnect
+        // screen's, which can be pressed in the middle of one.
+        roundForgotten()
         push(ScreenId.Join)
     }
 
@@ -1870,6 +1909,7 @@ class FlowModel(
      */
     fun terminateHouse() {
         lobby.terminateHouse()
+        roundForgotten()
         push(ScreenId.Join)
     }
 
@@ -1888,6 +1928,7 @@ class FlowModel(
      */
     fun houseClosed() {
         lobby.houseClosed()
+        roundForgotten()
         push(ScreenId.Join)
     }
 
@@ -1975,10 +2016,45 @@ class FlowModel(
      * **[LobbyModel.roundEnded] is the deletion and it is called here rather than trusted to the
      * ending screen**, because a promise kept by whichever composable happens to be on screen is
      * a promise that lapses the day somebody adds a second route to the lobby.
+     *
+     * **And the panel forgets the round** (D-259, [roundForgotten]). `Rules.armed` constructs the
+     * next round in the house, but nothing constructed the phone's: the second round's ARMED drew
+     * the first round's OUT, meter and work order. Called on every phone, the host's by its button
+     * and every phone's again by the house's push, and the second call finds nothing to forget.
      */
     fun newRound() {
         lobby.roundEnded()
+        roundForgotten()
         push(ScreenId.Lobby)
+    }
+
+    /**
+     * **Everything this phone holds about the round, gone; everything it holds about the evening,
+     * kept** (D-259). The round boundary, on the panel side.
+     *
+     * [PanelState.betweenRounds] is the panel's half and names what it keeps. The rest is the
+     * models beside it that hold a round's worth of state:
+     * - the couch's ballot ([selections]) and the meeting's own echo and counts ([meeting]): unsaid,
+     *   and on a housed phone the last roster's names go too, until the next `RosterIssued`;
+     * - the Subroutine in hand ([subroutines]): nothing entered, no card standing;
+     * - the house's texts still on the lock screen ([notifications]): each one this round's thread
+     *   holds is taken off, by its own value, so a fixture on an unhoused bench is left alone.
+     *
+     * **Not the lamp, and not a Surge in flight.** The lamp is the house's (rule 5) and the next
+     * round's arming sets it; a Surge runs itself out in five seconds, and clearing it mid-sequence
+     * would leave its slam painted with nothing left to lift it.
+     */
+    private fun roundForgotten() {
+        selections.clear()
+        meeting.meetingBegan()
+        if (state.houseAttached) {
+            meeting.houseOpenedMeeting()
+            meeting.houseNamed(emptyList())
+        }
+        subroutines.beganAgain()
+        subroutines.opened(null)
+        state.houseTexts.forEach { notifications.dismiss(Notifications.houseText(it)) }
+        state = state.betweenRounds()
     }
 
     // ---- The meeting -------------------------------------------------------------------------

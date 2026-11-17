@@ -508,9 +508,18 @@ fun CheatRoot() {
         // button and by nothing else. What is left is the script, which now waits for the house
         // the host's own press armed rather than starting one of its own.
         if (!round.armed) return@LaunchedEffect
-        launch { round.play() }
-        while (flow.state.screen !in Flow.armedOn) delay(250)
-        if (flow.lobby.hosting) round.theRound(RoundCheat.seed())
+        // **And again, for as many rounds as the evening plays** (D-259). With LOBBY_AGAIN the
+        // lobby bench hands every line over after NEW ROUND and the host presses LIGHTS OUT again;
+        // without this loop the second round armed and nobody played it, so a hunt could show it
+        // arm and nothing after. One round per pass: [RoundCheat.play] returns once this seat has
+        // stood on the reveal, and the script once it has said ENDING.
+        val again = launchSwitch(LobbyCheat.AGAIN_SWITCH)
+        do {
+            val playing = launch { round.play() }
+            while (flow.state.screen !in Flow.armedOn) delay(250)
+            if (flow.lobby.hosting) round.theRound(RoundCheat.seed())
+            playing.join()
+        } while (again)
     }
     // **The tick driver, on the host and nowhere else** (E-P3-3). The five timed transitions are
     // the authority's own, so a client running this loop would be a phone deciding when the talk

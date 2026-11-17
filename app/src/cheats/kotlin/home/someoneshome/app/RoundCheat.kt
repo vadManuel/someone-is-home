@@ -332,7 +332,31 @@ class RoundCheat(
 
             is RoundMessage.StaticOpened -> jammed = true
 
-            is RoundMessage.RoundEnded -> over = true
+            // **The round is over, and everything this seat was doing in it stops being true**
+            // (D-259). A second round reuses this object (`SOMEONES_HOME_LOBBY_AGAIN`), and its work
+            // order lands BEFORE its opening message, so the slate is wiped here, at the end of
+            // this round, never at the start of the next. What the ending itself still needs —
+            // [over], [revealedAt] and [handedBack] — is reset by [play] for the round it plays.
+            is RoundMessage.RoundEnded -> {
+                over = true
+                sawOpening = false
+                scanning = false
+                walked = 0
+                pressingEgress = false
+                pressingStatic = false
+                pressingRevoke = false
+                heldRevoke = false
+                egressRunning = false
+                jammed = false
+                meetingCaller = null
+                votedThisMeeting = false
+                ringingSince = null
+                talkingSince = null
+                votingSince = null
+                walkTo = null
+                pulsed = false
+                caughtScan = false
+            }
 
             // **NEW ROUND, on every seat — and the fact that it has to be is still the finding.**
             //
@@ -364,8 +388,13 @@ class RoundCheat(
      */
     private suspend fun beat(name: String) {
         delay(BEAT_SETTLE_MILLIS)
-        ledger?.beat(name)
+        // A second round's beats say so, so a hunt's pictures of two rounds cannot be confused.
+        ledger?.beat(if (plays > 1) "AGAIN-$name" else name)
     }
+
+    /** How many rounds [play] has been started for on this seat. */
+    @Volatile
+    private var plays = 0
 
     /**
      * **What every seat does, host included: wait to be dealt work, walk the house, then keep a
@@ -375,6 +404,12 @@ class RoundCheat(
      * because walking to the next card is what a person does between being told things.
      */
     suspend fun play() {
+        // **This round's ending is not the last one's** (D-259): the last round's reveal, its
+        // over and its hand-back are what ended the [pressing] loop that came before this call.
+        plays++
+        over = false
+        revealedAt = null
+        handedBack = false
         note("IN THE ROUND — WAITING FOR THE LIGHTS TO GO OUT")
         if (!awaitTheWorkOrder(lightsOut = { sawOpening }, ordered = { scanning }, note = note)) return
         beat("WORK-ORDER")
@@ -684,7 +719,11 @@ class RoundCheat(
         // list is the meeting's own shape rather than the shape this script expected.
         var seen: MeetingPhase? = null
         var waited = 0L
-        while (waited < GATE_MILLIS) {
+        // **And the round can end at the tally** (the 4-seat hunt at seed 20261150, D-259). A round
+        // that ends keeps its last meeting, so this loop used to wait out GATE_MILLIS on a finished
+        // round, until NEW ROUND and the next arming replaced the state; by then `house.ended` was
+        // the second round's, and the script played acts 4 and 5 against it and never said ENDING.
+        while (waited < GATE_MILLIS && !house.ended) {
             val phase = house.state.meeting?.phase ?: break
             if (phase != seen) {
                 if (seen == MeetingPhase.CheckIn) {
@@ -699,6 +738,10 @@ class RoundCheat(
             waited += STEP_MILLIS
         }
         note("RESTRAINED — ${house.state.restrained.size} SEAT(S) OUT BY THE ROOM'S DECISION")
+        if (house.ended) {
+            note("THE ROUND ENDED AT THE MEETING — ${house.state.outcome}")
+            return
+        }
         beat("LIGHTS-OUT-AGAIN")
     }
 

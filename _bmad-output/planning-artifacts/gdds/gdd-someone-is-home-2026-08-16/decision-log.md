@@ -7056,6 +7056,100 @@ only fixed-size frames (S2) close it.
 | `harness` `Recording.HEADER` | `recording/27` | `recording/28` |
 | tests | `StaticTest` seven runs; `EgressTest` containment kinds; `RoundWireTest`, `HouseBuzzTest` fixtures | eight runs; the blank named; one more effect in each sweep |
 
+## Revision 75 — a round ends on the phone too, the disconnect screen has a way out, and the 4-seat bench reaches its ending
+
+*2026-11-17, overnight run, unit F5: the three findings the F2 re-run left (D-252, D-253). Desktop,
+iOS-Simulator unit tests and a five-seat simulator hunt; nothing here has been on a phone.*
+
+### D-259 · **NEW ROUND, CLOSE THE HOUSE, a closed house and LEAVE forget the round on every phone and keep the evening; the bench plays a second round and says ENDING when a round ends at a meeting — built**
+
+**What was wrong.** `FlowModel.newRound` walked the screen to the lobby and wiped the line, and
+copied every other field across, so the second round's PERIMETER ARMED drew the first round's OUT
+REVOKED / OUT RESTRAINED, METER 96% and work order. `Rules.armed` constructs the next round in the
+house; nothing constructed the phone's.
+
+**The boundary, field by field.** `PanelState.betweenRounds()` builds a fresh panel and names what it
+keeps, so a field added later is reset unless somebody says it belongs to the evening (a lobby field
+wrongly reset is seen at once; a round field wrongly kept is a leak nobody sees).
+
+| | reset at the boundary | kept |
+|---|---|---|
+| `PanelState` (44 fields) | `role`, `revoke`, `outBy`, `verdict`, `secondsLeft`, the six Egress fields, `beatHeld`, `current`, `scannedAt`, `revealed`, `signOff`, `order`, `ballots`, `tally`, `caller`, `meetingPhase`, `voteWindowSeconds`, `integrityPercent`, `seats`, `roster`, `notice`, `isolateTargets`, `staticJam`, the three page-2 clocks (D-239), `carrying`, `openedAt`, `houseTexts`, `endedAt` (D-243), `heldOver`, `egressesContained`, `residents` (D-247): 37 | `screen` (the caller moves it), `houseAttached`, `markersOn`, `torch`, `wallTime`, `inboxSeed`, `noteSeed`: 7 |
+| beside the panel (`ui`) | the couch's ballot; the meeting's echo, counts (UNSAID) and, housed, its roster names; the Subroutine in hand and its card; every house text of the round still under the clock (by value, so an unhoused bench's fixtures stay) | the lobby (name, home, standing; the line goes as before, D-116), saved homes, editor, perms, NameDrop |
+| not touched, on purpose | **the lamp** (the house's, rule 5: the next arming's `LampSet` sets it) and **a Surge in flight** (it runs itself out in 5 s; clearing it mid-sequence would leave its slam painted). The dealt question slots are overwritten by the next BEGIN before any screen draws them | |
+| `app` | already reset by the push and checked now: `RoundClient`'s order, card and kinds; the inbox's sequence; the seed, the token window, the away mark and the owed reports, in memory and beside the token (D-245); the radio silenced; the wake released. **New:** `ContactUploader.out` and the upload count, which only the next round's seed cleared, so a Revoked phone said it was out of the round all through the lobby | the seat token and session, the name (re-sent once, D-252), the house's desk and ledger |
+
+Called by `newRound` (the host's button and every phone's answer to the house's push; the second
+call finds nothing), `houseClosed`, `terminateHouse` and `leaveLobby`.
+
+**The 4-seat bench (seed 20261150) never reached ENDING: the script, not the game.** From
+`/tmp/someones-home-hunt/f2-r4/seat-0.log`: one Insider (seat 0) Revoked seat 1, seat 2 found it and
+called the meeting, the two living guests voted for the caller and the host abstained, so seat 2 was
+restrained; one Insider against one Resident is parity (`gdd.md:206`), and the house logged `THE ROUND
+ENDED — Insiders BY Parity` at the tally. Correct. But a round that ends keeps its last meeting, and
+the bench's meeting loop waited for `meeting == null` for up to 180 s. NEW ROUND (14 s after the
+reveal) and the second arming replaced the state, the loop let go 22 s after the tally (`LIGHTS-OUT-
+AGAIN` at +89 s), `house.ended` was then the second round's, and the script played the Static and
+Egress acts against round two (`NO JAM WAS FIRED FROM ANY PHONE`; every thumb had stopped with round
+one) and never said ENDING, which `hunt.sh` waits for. **Now** the meeting loop stops on `house.ended`
+and the ending is beaten at once.
+
+**And the bench plays the second round.** With `SOMEONES_HOME_LOBBY_AGAIN` (set by `hunt.sh`) the
+second round armed and nobody played it. `CheatRoot` now loops the bench once per round; the bench's
+per-round flags are cleared at the round's `RoundEnded` (never at the next opening: the work order
+lands before `OpeningMessage`), and the ending's own at the start of each `play`. A second round's
+beats are named `AGAIN-<beat>`.
+
+| site | before | now |
+|---|---|---|
+| `ui` `PanelState.betweenRounds` (new), `FlowModel.roundForgotten` (new) | `newRound` copied the round across | the four exits call it |
+| `app` `ContactUploader.roundEnded` | `out` and the upload count survived the round | reset with the seed |
+| `app` cheats `RoundCheat`, `CheatRoot`; `tools/sim-hunt/hunt.sh` | waited on a finished round's meeting; one round per launch | stops on the end; one pass per round |
+| `RoundBoundaryTest` (new, `app`) | | five phones on loopback: a Revoke, a Restrain and a Revoke to the Insiders' parity, NEW ROUND, then every phone's whole panel equals a never-played one plus the kept fields, the meeting, card, lock screen, round client, inbox, uploader and radio are fresh, the name, token, home and hosting kept; the second ARMED is nobody's out |
+| `RoundForgottenTest` (new, `ui`) | | a filled panel through each of the four exits |
+
+### D-260 · **The disconnect screen gets LEAVE THIS HOUSE: the join screen, the round forgotten, the seat token kept — built, provisional, owner to confirm**
+
+D-253 left a guest whose host never returns on RECONNECTING with no way out but stopping the app. The
+mockup draws no control on `sDisconnect` and no entry rules one, so this is a call: **the lobby's own
+way out**, LEAVE THIS HOUSE (the owner's words for a guest leaving, D-235), a two-second hold
+(D-141), at the foot of the screen under STAY WHERE YOU ARE, on the concealment palette (D-077). It
+calls `FlowModel.leaveLobby`: the link hangs up and stops trying, the round is forgotten (D-259), the
+phone walks to the join screen. **The seat token and session stay**, so picking the home again when
+the host is back presents the same token and gets the same chair; a guest that never pressed it is
+still walked back by the host's return (D-253). Same screen on every phone, either role.
+
+| site | before | now |
+|---|---|---|
+| `ui` `DisconnectScreen`, `Flow.viaActions` | no control | LEAVE THIS HOUSE → Join |
+| `HouseGoneTest` (+1) | | ROSE leaves from RECONNECTING, DANI stays; the host returns: DANI walked back to her lobby in her own chair, ROSE left on the join screen and unseated; ROSE picks the home again and is seated in her own chair on her own token |
+| `RoundForgottenTest` | | the hold walks to Join with the round forgotten; most of a hold leaves nothing |
+
+**Guards, each proven by breaking it.** `newRound` without the reset (the bug as found):
+`RoundBoundaryTest` *the host (ALBA) carried round one into the lobby: [outBy, revealed, order,
+ballots, tally, meetingPhase, voteWindowSeconds, seats, roster, notice, revokeClock, accessClock,
+egressClock, openedAt, endedAt, egressesContained, residents]*, and `RoundForgottenTest` *NEW ROUND
+carried the round across*. `betweenRounds` keeping `outBy`: all four exits in `RoundForgottenTest`
+fail. `out` not reset: *the host (ALBA)'s radio still says it is out of the round*. The hold removed:
+*could not find any node that satisfies … 'LEAVE THIS HOUSE'* (both hold tests). Leaving forgets the
+token: *leaving the disconnect screen threw the seat token away. Expected <29aaf…>, actual <null>*.
+Leaving drops the session: *ROSE came back as a stranger rather than on her own token*.
+
+**On the Simulators** (wire-only seats; no BLE, torch, camera or haptics). `hunt.sh --seats 5 --seed
+20261150 --tail 150` (`/tmp/someones-home-hunt/f5-r5`): round one to ENDING (Insiders, Egress
+uncontained) with seat 0 Revoked and seat 1 Restrained; NEW ROUND; every seat's ledger on the lobby
+read `OUT - · WORK - · ORDER - · METER - · SEATS -`; the second round's ARMEDNOTIFY read `OUT -` on
+both seats that had been out (where `f2-r5` read OUT REVOKED); the second round was played through its
+meeting (`AGAIN-MEETING-RINGING` … `AGAIN-TALLY`) to its own ENDING, and a third armed. One `THE HOUSE
+ENDED THE ROUND` per seat per round, no crash. `--seats 4` at the same seed (`f5-r4`), the run that
+never said ENDING: `ENDING` at +76 s after `THE ROUND ENDED AT THE MEETING — Insiders by Parity`, then
+the second round to its own ENDING. **Not run on a phone.**
+
+**Found, not fixed (`ui`).** The Insiders' ending says THE HOUSE REACHED THE INTERNET and EGRESS
+COMPLETE whatever the route, so a parity win (the 4-seat run) is drawn as an Egress win
+(`ScreensOut.kt:458`).
+
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

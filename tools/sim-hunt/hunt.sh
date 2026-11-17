@@ -24,7 +24,10 @@
 # ENDING_NANOS); the guests go back by the house's push. This keeps capturing for --tail seconds
 # after the ENDING beat (default 45), so the lobby the evening comes back to is photographed on
 # every seat. With LOBBY_AGAIN every seat then hands its line over again and the host presses
-# LIGHTS OUT again, so the second round arming is in the logs and the last pictures (D-252).
+# LIGHTS OUT again, so the second round arming is in the logs and the last pictures (D-252), and
+# every seat plays that round as it played the first; its beats are named AGAIN-<beat> (D-259).
+# A second round needs about a minute after the first one's ENDING to reach its first meeting,
+# so pass --tail 150 or so to photograph it.
 set -o pipefail
 
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"

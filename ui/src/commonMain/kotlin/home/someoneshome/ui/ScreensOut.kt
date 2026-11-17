@@ -329,10 +329,23 @@ private fun GhostEgressWidget(vals: PanelVals, modifier: Modifier) {
  * **A concealment screen, on the revoked screen's palette** (D-077, D-200): nothing on it is above
  * `#C08A2E`, because a reconnecting phone lit brighter than its neighbours is the flare D-077
  * exists to prevent. The status strip dims with it — see `PanelVals.concealed`.
+ *
+ * ### LEAVE THIS HOUSE, for a house that is not coming back (D-260, provisional)
+ *
+ * The house walks a guest here when it has been out of reach for fifteen seconds (D-253), and walks
+ * it back when its seat is taken again. A host whose phone failed and is never relaunched never takes
+ * it again, and this screen had no way out: the guest's only exit was to stop the app. So it carries
+ * the lobby's own way out, in the owner's words for a guest leaving (D-235), held for two seconds
+ * (D-141) like every act that costs a seat. It walks to the join screen with the round forgotten
+ * and the seat token kept, so a host that does come back still knows this phone by it.
+ *
+ * On the concealment palette like everything else here: nothing on this screen is lit above it.
+ * The same on every phone, either role, and on the host's, which this screen never reaches.
  */
 @Composable
 fun DisconnectScreen(vals: PanelVals) {
     val p = Palette.CONCEAL
+    val actions = LocalActions.current
     KitScreen {
         KitHeader("CONNECTION", p)
         Column(
@@ -347,6 +360,8 @@ fun DisconnectScreen(vals: PanelVals) {
             "STAY WHERE YOU ARE.", Modifier.fillMaxWidth(),
             size = 28, color = p.ink, lineHeight = 1.1, align = TextAlign.Center,
         )
+        Spacer(Modifier.height(12.dp))
+        KitHold("LEAVE THIS HOUSE", p, actions.leaveLobby, height = 44.dp, size = 22, note = false)
     }
 }
 
