@@ -62,6 +62,14 @@ class DeferredRoundSeam : RoundSeam {
     override fun roundEnded() {
         target?.roundEnded()
     }
+
+    override fun leftTheForeground() {
+        target?.leftTheForeground()
+    }
+
+    override fun backInTheForeground() {
+        target?.backInTheForeground()
+    }
 }
 
 /**
@@ -205,6 +213,10 @@ class RoundClient(
         note("THE HOUSE ENDED THE ROUND — THIS PHONE HOLDS NOTHING OF IT")
         forget()
     }
+
+    override fun leftTheForeground() = round.leftTheForeground()
+
+    override fun backInTheForeground() = round.backInTheForeground()
 
     private fun forget() {
         round.roundEnded()

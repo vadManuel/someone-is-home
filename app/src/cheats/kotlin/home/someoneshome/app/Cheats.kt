@@ -220,7 +220,11 @@ fun CheatRoot() {
     // socket nor its advertisement: on 2026-11-16 the host locked in the lobby and woke to a house
     // with nobody in it. The house now goes off the air itself, keeps the ledger, and reopens the same
     // port at the return, so every seat comes back to its own chair by its own token. On a guest
-    // both calls do nothing; its reconnect is the one it always had.
+    // the transport does nothing; its reconnect is the one it always had.
+    //
+    // **And on EVERY phone, the host's included, leaving mid-round is D-187's evasion** (D-229):
+    // the round half marks the onset and, on the return, sends the house one person's fault up this
+    // phone's own socket. The host's goes over loopback once its house is listening again.
     DisposableEffect(link) {
         val unwatch = deviceForeground().watch(
             onBackground = link::backgrounded,

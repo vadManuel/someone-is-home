@@ -76,10 +76,11 @@ class GameState private constructor(
      * **Every seat the next house notice names: deliberate evasion since the last one, in seat
      * order, each once** (D-187, D-223).
      *
-     * The notice's one list, whatever the evasion. Today [Event.RadioFaulted] with
-     * [RadioCause.Person] is its only writer (Bluetooth switched off, or its permission withdrawn);
-     * locking the phone and backgrounding the app are D-187's other two and will write here too when
-     * the house can detect them. A [RadioCause.Device] outage never does. Read and emptied when the
+     * The notice's one list, whatever the evasion. [Event.RadioFaulted] with [RadioCause.Person] is
+     * its only writer, and it now carries all three of D-187's: Bluetooth switched off or its
+     * permission withdrawn (D-223), and a phone locked or taken out of the app mid-round, which is
+     * its radio taken down by the same hand and reported in the same body when the phone is back
+     * (D-229), the host's own seat included (D-230). A [RadioCause.Device] outage never does. Read and emptied when the
      * next meeting's check-in gate closes, where the house tells everybody. Holds no role.
      */
     val unreachable: List<Seat>,

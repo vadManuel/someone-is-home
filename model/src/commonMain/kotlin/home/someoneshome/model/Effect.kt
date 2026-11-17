@@ -815,10 +815,10 @@ sealed interface Effect {
      * one** (D-035, D-187, D-223).
      *
      * D-187's notice and nothing else: it reports detectable deliberate evasion (locking the phone,
-     * backgrounding the app, disabling a permission mid-round) and never a radio that failed. Today
-     * the one evasion the house can detect is a radio switched off or its permission withdrawn
-     * (`Event.RadioFaulted` with `RadioCause.Person`); the other two fold into [unreachable] when
-     * they are built, and there is no second notice to fold them into.
+     * backgrounding the app, disabling a permission mid-round) and never a radio that failed. All
+     * of them reach it as `Event.RadioFaulted` with `RadioCause.Person`: a radio switched off or its
+     * permission withdrawn (D-223), and a phone that left the foreground mid-round, reported when
+     * it is back (D-229), the host's own seat as any other (D-230). There is no second notice.
      *
      * Sent to every phone, living and out, at the moment the check-in gate closes, and **sent at
      * every meeting, empty when nobody evaded**, so its arrival says nothing; only its content

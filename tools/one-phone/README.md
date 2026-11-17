@@ -158,6 +158,12 @@ Bluetooth on the phone, switch it off, wait 5 s, switch it on, and go back to th
 - Going to Settings puts the host in the background, so the house pauses while you are there and the
   Simulators may reconnect. That is this rig's limit, not the radio's: with two phones the switch-off
   would happen on a phone that is not hosting.
+- **Since D-229, going to Settings is itself named.** Leaving the app mid-round is D-187's evasion, so
+  on the way back the phone also logs `[round] BACK IN THE FOREGROUND — THE NEXT BEAT TELLS THE HOUSE,
+  ONCE · PERSON`, and the house may log a second `RADIO FAULT — SEAT 0 · PERSON` line (one for leaving
+  the app, one for the switch-off, unless they fall on one beat). Both name seat 0, and the notice
+  names it once. The phone-side `[radio] FAULT` line is still exactly one. To see the radio's line
+  alone, switch Bluetooth off from Control Centre, which does not leave the app.
 - **Then call a meeting** at the hosted home's meeting card with the phone's camera. The Simulators
   check in by themselves; check the phone in.
   - The card must belong to the home the phone hosts. By default that is `ONE PHONE`, a seeded home
@@ -297,6 +303,46 @@ phone's `[lobby] HOSTING 'ONE PHONE' ON :<port>` line. **Do not press LIGHTS OUT
 
 Put Auto-Lock back to your usual setting when you are done.
 
+## 7. The host leaves the app mid-round, and is named like anyone else (D-229, D-230)
+
+D-187 names a phone that is locked or leaves the app during a round, and the owner ruled the host is
+treated like anyone else. The host's lock also takes its house off the air (D-225), so this checks
+that the house, on its return, records its OWN seat and names it at the next meeting. The bench's
+act-3 meeting (the Revoke's report) is that meeting, so this is round B's script with one lock in act
+2. Auto-Lock at 30 s (step 2). Four seats, the default.
+
+```
+tools/one-phone/round.sh start --no-install --auto-lights-out
+```
+
+1. **Nothing before arming.** While the lobby fills, lock the phone with the side button, wait 5 s,
+   unlock and go back to the app (the room comes back as in section 6).
+   - **PASS:** no `[round] THIS PHONE LEFT THE FOREGROUND IN A ROUND` line, and no `RADIO FAULT — SEAT
+     0 · PERSON` line. A lobby is not a round.
+2. **The lock, mid-round.** Wait for `[house] === THE LIGHTS GO OUT` and then `=== ACT 2, A SHIFT ===`.
+   At once (act 2 lasts about 12 s), press the side button. Wait 5 s. Unlock and go back to the app.
+   - **PASS, on the phone, in order:** `[round] THIS PHONE LEFT THE FOREGROUND IN A ROUND — THE HOUSE IS
+     TOLD WHEN IT IS BACK (D-187)` (it may only reach the log at the unlock), `[lobby] BACK IN THE
+     FOREGROUND — LISTENING AGAIN ON :<the same port>`, `[round] BACK IN THE FOREGROUND — THE NEXT BEAT
+     TELLS THE HOUSE, ONCE · PERSON`, then, once the phone's own seat is back, **exactly one**
+     `[house] RADIO FAULT — SEAT 0 · PERSON · NAMED AT THE NEXT MEETING`.
+   - Nothing on the phone's screen changes for it, and its light does not move.
+3. **The meeting.** The bench plays on: `=== ACT 3, A REVOKE AND A MEETING ===`, the Revoke on seat 1,
+   seat 2's report, and the meeting's gate.
+   - **PASS:** when the gate closes, the phone logs `[round] PUSH … NOTICE — SEAT 0 UNREACHABLE`, just
+     before the `PHASE Discussion` push, and the notices screen reads *Resident <the phone's name> was
+     unreachable this shift. Occupancy data for this interval is incomplete.* `seat-1.log` to
+     `seat-3.log` each log the same `NOTICE — SEAT 0 UNREACHABLE` line. No notice names seat 1, 2 or 3:
+     their `DEVICE` faults are named by no notice.
+   - **PASS, once:** at any later meeting with no lock between, the notice is `NOTICE — NOBODY NAMED`.
+   - **FAIL:** no `RADIO FAULT — SEAT 0` line; one that says `DEVICE`; two or more for the one lock; a
+     notice that names nobody, or names another seat; the notice at the meeting after.
+   - **Report, not a fail:** if you were away long enough for a deadline to pass, the house logs `THE
+     HOUSE CLOCK SKIPPED n STEP(S)` and anything that fell due fires on the return (D-230). That is the
+     round keeping the wall's time, unchanged.
+
+Stop with Ctrl-C. Put Auto-Lock back to your usual setting when you are done.
+
 ## What only more phones can verify
 
 - **A real Revoke.** It needs mutual sighting, and the Mac cannot upload what it hears. The device
@@ -312,5 +358,5 @@ Put Auto-Lock back to your usual setting when you are done.
 ## Report back
 
 For each of step 0, arming, the sniffer's shape, token and rotation checks, steps 4 and 5, round B and
-section 6: pass or fail. Also send any `FAIL`, `NOTE`, `OUTAGE` or `REFUSED` line, the RSSI table, and the run
+sections 6 and 7: pass or fail. Also send any `FAIL`, `NOTE`, `OUTAGE` or `REFUSED` line, the RSSI table, and the run
 folders under `/tmp/someones-home-one-phone/runs/` (one per `start`; `latest/` is the newest).

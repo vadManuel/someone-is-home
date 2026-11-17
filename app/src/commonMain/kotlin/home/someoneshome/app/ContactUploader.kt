@@ -41,6 +41,18 @@ import home.someoneshome.platform.ContactRadio
  * the same length whichever the cause. Before arming and after the round nothing is beaten, so
  * nothing is sent.
  *
+ * ### A phone that leaves the foreground mid-round says so once, when it is back (D-187, D-229)
+ *
+ * Locking the phone or leaving the app is D-187's evasion: with no background modes (D-221) the app
+ * is suspended, so its radio falls silent and its socket with it. [leftTheForeground] marks the
+ * onset, in a round only; [backInTheForeground] owes the house one report; the next beat pays it as
+ * the same `RoundBody.RadioFaulted` with [RadioCause.Person] that a Bluetooth switch-off sends (D-223),
+ * because that is what it is: this phone's radio down by its owner's hand. One body, so one length,
+ * from every phone whatever it is, the host's own seat included. However many times the phone leaves
+ * and returns between two beats, it is one report; and the radio's own onset on that beat is folded
+ * into it, so one beat never sends two. Before arming, after the round, and on a phone that relaunched
+ * into its seat (a crash is not a person's act, D-036), nothing is owed.
+ *
  * ### Why the one early exit here is not rule 1's
  *
  * [beat] sends nothing before a seed has arrived, which is before arming and after the round has
@@ -65,6 +77,12 @@ class ContactUploader(
     private var uploads = 0L
     private var advertising: ContactWindow? = null
 
+    /** This phone left the foreground in this round and has not come back yet (D-229). */
+    private var away = false
+
+    /** This phone came back from leaving mid-round, and the house has not been told (D-229). */
+    private var owed = false
+
     /** Whether this phone is uploading at all: a seed has arrived and the round has not ended. */
     val inRound: Boolean get() = seed != null
 
@@ -82,6 +100,7 @@ class ContactUploader(
                 out = false
                 uploads = 0L
                 advertising = null
+                forgetTheForeground()
                 radio.scan(true)
             }
             // **Out, by the house's word and by nothing else.** Stop listening; keep advertising
@@ -93,6 +112,7 @@ class ContactUploader(
             is RoundMessage.RoundEnded -> {
                 seed = null
                 advertising = null
+                forgetTheForeground()
                 radio.silence()
             }
             else -> Unit
@@ -111,14 +131,46 @@ class ContactUploader(
         val heard = if (out) emptyList() else readings.map { Sighting(it.token, it.rssi, window) }
         send(SightingUpload.pack(key, window, uploads++, heard))
         // **Rule 6: silent here, loud at the house** (T2, D-222). The radio reports each fault once,
-        // at its onset; nothing on this phone's screen, lamp or motor hears of it.
-        radio.faultBegan()?.let(faulted)
+        // at its onset; nothing on this phone's screen, lamp or motor hears of it. A return from
+        // leaving the foreground is a person's act and wins the beat (D-229): one body, never two.
+        val radioCause = radio.faultBegan()
+        val cause = if (owed) RadioCause.Person else radioCause
+        owed = false
+        cause?.let(faulted)
+    }
+
+    /**
+     * **This phone left the foreground: the onset of D-187's evasion, if it is in a round** (D-229).
+     * True when it counted. Before arming and after the round there is no round to evade, and
+     * nothing is marked.
+     */
+    fun leftTheForeground(): Boolean {
+        if (seed == null) return false
+        away = true
+        return true
+    }
+
+    /**
+     * **This phone is back: the next beat tells the house, once** (D-229). True when a report is
+     * now owed. A return with no onset in this round owes nothing.
+     */
+    fun backInTheForeground(): Boolean {
+        if (!away) return false
+        away = false
+        owed = true
+        return true
+    }
+
+    private fun forgetTheForeground() {
+        away = false
+        owed = false
     }
 
     /** A new round is coming: forget this one's seed and stop the radio. */
     fun roundEnded() {
         seed = null
         advertising = null
+        forgetTheForeground()
         radio.silence()
     }
 }

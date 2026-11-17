@@ -290,8 +290,9 @@ sealed interface Event {
      * A fact the phone reports, never a request (rule 10): its own radio told it so. Once per fault
      * onset, whatever the radio does next, and the same from every phone whatever its role or
      * whether it is out. **[cause] is the only thing it says**: [RadioCause.Person] for Bluetooth
-     * switched off or its permission withdrawn, [RadioCause.Device] for a reset or unsupported
-     * hardware. The upward body is one fixed shape of one length (`RoundBody.RadioFaulted`), so it
+     * switched off or its permission withdrawn, or the phone locked or taken out of the app
+     * mid-round (suspended, so its radio is silent; reported once it is back, D-229),
+     * [RadioCause.Device] for a reset or unsupported hardware. The upward body is one fixed shape of one length (`RoundBody.RadioFaulted`), so it
      * cannot say more about one phone than another. The seat is the connection's.
      *
      * Silent on the phone in every case (rule 6). A [RadioCause.Person] outage is deliberate

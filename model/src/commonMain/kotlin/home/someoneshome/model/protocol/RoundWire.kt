@@ -777,7 +777,8 @@ sealed class RoundBody {
      * D-222; D-223).
      *
      * **One fixed shape, one field, one length.** [cause] is `person` (Bluetooth switched off, or
-     * its permission withdrawn) or `device` (reset, unsupported), two serial names of six letters
+     * its permission withdrawn, or the phone locked or taken out of the app mid-round and now back,
+     * D-229) or `device` (reset, unsupported), two serial names of six letters
      * each, so the body is the same number of bytes whichever it carries and from every phone,
      * whatever its role and whether it is out. No reason beyond that, no time, no seat. A reader of
      * the Wi-Fi learns that some phone's radio went down and whether a person did it, which the

@@ -283,6 +283,26 @@ class RoundOverTransport(
     fun beat() = contacts.beat()
 
     /**
+     * **This phone left the foreground** (D-187, D-229): a lock, the side button or a swipe home. In
+     * a round it is the onset of the evasion D-187 names, and the house is told once, when the phone
+     * is back ([backInTheForeground]). Every phone alike, the host's own seat included; nothing on
+     * the screen, the lamp or the motor hears of it (rules 5 and 6). Before arming and after the
+     * round it is nothing.
+     */
+    fun leftTheForeground() {
+        if (contacts.leftTheForeground()) onEvent("THIS PHONE LEFT THE FOREGROUND IN A ROUND — THE HOUSE IS TOLD WHEN IT IS BACK (D-187)")
+    }
+
+    /**
+     * **This phone is back** (D-229). If it left during this round, the next beat sends the one fixed
+     * body a person's radio outage sends, up this phone's own socket: `RoundBody.RadioFaulted` with
+     * `RadioCause.Person`. A socket still coming back holds it until it is seated.
+     */
+    fun backInTheForeground() {
+        if (contacts.backInTheForeground()) onEvent("BACK IN THE FOREGROUND — THE NEXT BEAT TELLS THE HOUSE, ONCE · PERSON")
+    }
+
+    /**
      * **The fixed cadence, forever** — [beat] every `SightingUpload.CADENCE_MILLIS`. Run on the same
      * dispatcher as [run], so the uploader's facts are written and read on one thread.
      */

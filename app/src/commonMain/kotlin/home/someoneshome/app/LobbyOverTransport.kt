@@ -204,6 +204,15 @@ interface RoundSeam {
      * its radio on, and with the screen held awake it would have kept the screen on too.
      */
     fun left() = roundEnded()
+
+    /**
+     * **This phone left the foreground** (D-187, D-229). On every phone, host and guest alike; the
+     * round half marks the onset if it is in a round. Nothing by default, for a seam with no round.
+     */
+    fun leftTheForeground() = Unit
+
+    /** **This phone is back** (D-229). The round half tells the house once, if it left in a round. */
+    fun backInTheForeground() = Unit
 }
 
 /**
@@ -1383,14 +1392,27 @@ class LobbyOverTransport(
     }
 
     /**
-     * **This phone left the foreground** (H2, D-225). On the host, the house goes off the air and
-     * its server stops, keeping the ledger every seat comes back through. On a guest, nothing: its
-     * own reconnect already does everything a guest can (D-087, G3).
+     * **This phone left the foreground** (H2, D-225; D-229). On every phone, the round half marks the
+     * onset of D-187's evasion if a round is armed, the host's own seat exactly as a guest's. On the
+     * host, the house then goes off the air and its server stops, keeping the ledger every seat comes
+     * back through. On a guest the transport does nothing more: its own reconnect already does
+     * everything a guest can (D-087, G3).
      */
-    fun backgrounded() = house.backgrounded()
+    fun backgrounded() {
+        round?.leftTheForeground()
+        house.backgrounded()
+    }
 
-    /** **This phone is back** (H2, D-225). On the host, the same port, the same ledger, on the air again. */
-    fun foregrounded() = house.foregrounded()
+    /**
+     * **This phone is back** (H2, D-225; D-229). On the host, the same port, the same ledger, on the
+     * air again. On every phone, the round half owes the house one report if it left in a round; it
+     * goes up its own socket on the next beat, and a socket still coming back holds it until it is
+     * seated (the host's own over loopback, like everybody's).
+     */
+    fun foregrounded() {
+        house.foregrounded()
+        round?.backInTheForeground()
+    }
 
     /** This phone's own end of the socket, dropped. Shared by the two exits so they cannot drift. */
     private fun hangUp() {

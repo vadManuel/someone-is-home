@@ -5543,6 +5543,7 @@ tick driver measures the gap on its return and abandons a backlog too large to c
 yet detectable, and the host is the house**, so no notice names anyone for it. With D-224 and D-221 the
 host's screen is held awake through the lobby and the round, so a host can only be backgrounded by
 their own hand. Whether a host doing that should be named is not decided here: raised for the owner.
+*(Decided 2026-11-16: named like anyone else — D-229, D-230.)*
 
 ### D-226 · **LIGHTS OUT walks the host to ARMED only on the house's yes, and a host whose own link is down is shown an empty room — decided**
 
@@ -5618,6 +5619,97 @@ at four, so the Revoke lands on seat 1, a Simulator, and the Mac advertises as s
 giving up, then a fourth Simulator hosts in the phone's place and the round is played to the end of its
 first meeting. The bench gains `SOMEONES_HOME_LOBBY_SEATS`, so an automatic LIGHTS OUT waits for the
 whole party rather than pressing at the three seats that make the button live.
+
+## Revision 59 — leaving the foreground mid-round is named, the host's own seat included
+
+*The owner's 2026-11-16 ruling on the item D-225 raised: build D-187's lock and background detection
+for every phone, and treat the host like anyone else. Built; one gap raised.*
+
+### D-229 · **A phone that leaves the foreground mid-round tells the house once, when it is back, in the body a person's radio outage already sends — built**
+
+**What detects it.** D-225's `Foreground` seam (`UIApplicationDidEnterBackground` and
+`WillEnterForeground`) was watched by the host's house alone. `LobbyOverTransport.backgrounded` and
+`foregrounded` now reach every phone's round half first (`RoundSeam.leftTheForeground`,
+`backInTheForeground`), the host's and every guest's, and only then the house. In
+`ContactUploader` a leave is an onset if this phone holds the round's seed, and the return owes the
+house one report; the next beat pays it. A lock, the side button and a swipe home all post the same
+notification. Pulling down Control Centre or a notification only resigns active, suspends nothing, and
+is not watched (D-225).
+
+**What goes up: `RoundBody.RadioFaulted` with `RadioCause.Person`, unchanged.** With no background
+modes (D-221) a phone that leaves the foreground is suspended, and its radio stops advertising with
+it: a leave IS a radio taken down by its owner's hand, which is exactly what D-223's `person` cause
+says. So the `person` path is reused whole rather than paralleled: the same one body of one length
+from every phone (rule 1), no new event, effect, schema row or wire member (rule 2 is untouched
+because nothing new ships), no recording format change (still `recording/26`), the same gate, the same
+`GameState.unreachable`, the same `NoticeIssued` at the check-in gate, and D-223's line as ruled:
+*Resident X was unreachable this shift. Occupancy data for this interval is incomplete.*, several
+names one sentence. The house cannot tell a lock from a switch-off and does not need to; the phone's
+own log says which (`THIS PHONE LEFT THE FOREGROUND IN A ROUND`, `BACK IN THE FOREGROUND — THE NEXT
+BEAT TELLS THE HOUSE, ONCE · PERSON`). Nothing on any screen, lamp or motor hears of it (rules 5, 6).
+
+**Once per onset.** Leaving and returning any number of times between two beats is one report. The
+radio's own onset on the beat a phone comes back is folded into it, as a person's: leaving the app
+was a person's act whatever the radio also did, and one beat never sends two bodies. A reset with
+nobody leaving is still the device's and still named by nobody (D-223).
+
+**Told on the return, not at the leave.** At the leave the host's house is stopping its server
+(D-225), so a report sent then would race it and the host would be the one phone whose report is lost.
+On the return every phone is alike: the report goes into its socket's outbox, which holds frames
+while the connection is coming back and sends them once the seat is taken again, so the host's own
+report reaches its reopened house over loopback like anybody's. ⚠️ Limit, reasoned and not observed:
+`TransportClient` is at-most-once, so a report handed to a guest's socket that failed while the phone
+was suspended, and that the phone has not yet noticed, can be lost with it.
+
+**Nothing is owed** before arming (no seed; a leave in the lobby is not carried into the round), after
+the round (the seed is gone, and a report that crosses the end is refused by the gate and recorded,
+D-223), across a round's end, or by a phone that relaunched into its seat: a crash is not a person's
+act (D-036), and a fresh process holds no onset.
+
+**Permissions withdrawn mid-round (D-161).** Every grant is changed in Settings, and going there is
+leaving the foreground, so the leave reports it whenever the app survives the change: Notifications
+and Local Network (reasoned: iOS does not end an app for those). Bluetooth switched off or its
+permission withdrawn is D-223's own. ⚠️ **Not covered, raised:** iOS ends an app whose Camera or Motion
+grant (and, reasoned, its Bluetooth permission) is withdrawn in Settings. The onset is held in memory
+and fails with the process, and the relaunch resumes by token owing nothing, by the crash rule above.
+Recommendation: keep the onset beside the seat token at the leave (`SeatStore`), and report it at the
+resumed seat's first beat; a crash in the foreground writes no marker, so D-036 still holds. And a
+guest whose Local Network grant is withdrawn cannot reach the house at all, so its report never
+arrives; the house sees a seat that dropped, which D-187 already treats as disconnection.
+
+### D-230 · **The host is named like anyone else, and the round goes on by the house's clock while the host is away — decided, nothing about the round changed**
+
+**The owner's ruling, applied.** D-225 left open whether a host that leaves the foreground mid-round
+should be named. It is: the host's round half reports its own seat by D-229's path, up its own
+loopback socket into its own house, and the next meeting names seat 0 to every phone exactly as it
+would name a guest. No branch anywhere asks whether the reporter is the host.
+
+**What the round does while the host is away, from what is already decided and built (unchanged):**
+
+- **The house is off the air** (D-225): its server stops, every seat's connection drops, each seat gets
+  D-203's `LeaveTerminal`, pushes to a seat that is away are recorded and caught up by its `Gap` on
+  return (D-097, D-190), and the seats come back to their own chairs by their own tokens.
+- **The clock keeps the wall's time.** `tickHouse` reads `CLOCK_MONOTONIC`, which on Darwin goes on
+  counting while the phone sleeps. On the return it measures the whole gap, abandons the backlog past
+  two seconds, and skips simulation time forward to the wall (`FixedTimestep`: *a ninety-second
+  discussion has to be ninety seconds*), saying `THE HOUSE CLOCK SKIPPED n STEP(S)` in its log. Every
+  deadline that fell due inside the gap (the talk, the ballot, the tally, an Egress expiring, the
+  cooldowns) fires at the first step after the return. So a host away for long enough can come back
+  to a meeting moved on or an Egress run out. **That is the existing rule and it is not changed here.**
+- **The other phones** keep the screen they had; what they send while the house is away waits in
+  their socket's outbox and goes up when they are seated again, or is lost with a failing socket
+  (at-most-once); nothing is minted for them in the meantime because nothing is listening.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `app` `ContactUploader` | the radio's onset only | `leftTheForeground`, `backInTheForeground`: one person's report per leave, in a round, on the next beat; the radio's onset folded in |
+| `app` `RoundOverTransport` | (none) | the two calls, logged on this phone only |
+| `app` `RoundSeam`, `LobbyOverTransport.backgrounded`/`foregrounded` | the house only, the host only | every phone's round half first, then the house |
+| `app` cheats `DeferredRoundSeam`, `RoundClient`, `Cheats.kt` | (none) | forwarded to the round half |
+| `model` KDoc on `GameState.unreachable`, `Effect.NoticeIssued`, `Event.RadioFaulted`, `RoundBody.RadioFaulted` | lock and background *not yet detectable* | written by the same `person` body (no type, field or format change) |
+| `ContactUploaderTest` | (new cases) | once per onset, only on the return; nothing before arming, after the end, across it, or on a relaunch; a reset alone stays the device's; one body a beat |
+| `EvasionNoticeTest` | (new) | over loopback with the real link and authority: a guest named once; the host names its own seat across its house's reopening; a leave in the lobby named by nobody |
+| `tools/one-phone/README.md` | (none) | section 7: lock the host mid-round, unlock, and the act-3 meeting's notice names seat 0 |
 
 ## State after revision 12
 
