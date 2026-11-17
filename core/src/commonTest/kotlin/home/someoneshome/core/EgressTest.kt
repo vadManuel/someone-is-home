@@ -5,6 +5,7 @@ import home.someoneshome.model.CardPayload
 import home.someoneshome.model.CellRect
 import home.someoneshome.model.Destination
 import home.someoneshome.model.Effect
+import home.someoneshome.model.EmitSchema
 import home.someoneshome.model.Egress
 import home.someoneshome.model.EgressType
 import home.someoneshome.model.Event
@@ -28,6 +29,10 @@ import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
 import home.someoneshome.model.WinRoute
 import home.someoneshome.model.Winner
+import home.someoneshome.model.protocol.RoundBody
+import home.someoneshome.model.protocol.RoundWire
+import home.someoneshome.model.protocol.TransportFrame
+import home.someoneshome.model.protocol.TransportWire
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -521,7 +526,10 @@ class EgressTest {
         val unexpected = effects.filterNot {
             it is Effect.SyncPulseAnswered ||
                 it is Effect.EgressContained ||
-                it is Effect.IsolateTargetsOffered
+                it is Effect.IsolateTargetsOffered ||
+                // Its other half, on a Resident's phone (D-258): one frame each, and it carries
+                // nothing at all, so it says nothing about who contained it either.
+                it is Effect.IsolateTargetsBlanked
         }
         assertEquals(
             emptyList(), unexpected,
@@ -878,5 +886,58 @@ class EgressTest {
             listOf(Effect.SyncPulseAnswered(Seat(2), held = true)), walk.drain(),
             "the late arrival was not held for a partner of its own",
         )
+    }
+
+    // ---- D-258: one Isolate frame per living seat, of one length ------------------------------
+
+    /**
+     * **At arming, when an Egress starts and when one is contained, every living seat is sent
+     * exactly one Isolate frame, and every one of them is the same length on the wire** (D-258).
+     *
+     * The offer reaches living Insiders only, so before D-258 an Insider's socket carried one frame
+     * more than a Resident's at each of these moments. The blank is built beside each seat's offer
+     * and reaches living Residents only. Measured through the allowlist and the real wire encoders,
+     * with seat 3 Revoked so the out are seen to get neither.
+     */
+    @Test
+    fun `every living seat gets one Isolate frame of one length at each of the three moments`() {
+        fun isolateFrames(effects: List<Effect>, state: GameState): Map<Int, List<Int>> = effects
+            .filter { it is Effect.IsolateTargetsOffered || it is Effect.IsolateTargetsBlanked }
+            .flatMap { effect ->
+                EmitSchema.deliveries(effect, state).map { delivery ->
+                    val push = RoundWire.encode(RoundBody.Push(1, RoundWire.project(effect)))
+                    delivery.seat.index to TransportWire.encode(TransportFrame.Carry(push)).length
+                }
+            }
+            .groupBy({ it.first }, { it.second })
+
+        val living = SEATS.map { it.index } - 3
+        fun holds(moment: String, frames: Map<Int, List<Int>>) {
+            assertEquals(living.toSet(), frames.keys, "$moment: the Isolate frames reached another set of seats: $frames")
+            for ((seat, lengths) in frames) assertEquals(1, lengths.size, "$moment: seat $seat got ${lengths.size} Isolate frames")
+            assertEquals(1, frames.values.flatten().toSet().size, "$moment: the Isolate frame's length follows the role: $frames")
+        }
+
+        val arming = reduce(
+            GameState.EMPTY,
+            Event.RoundArmed(Tick(0), seed = 20260822L, seats = SEATS, insiders = INSIDERS, markers = where()),
+        )
+        holds("arming", isolateFrames(arming.effects, arming.state.copy(revoked = listOf(Seat(3)))))
+
+        val start = armed().copy(revoked = listOf(Seat(3)))
+        val walk = EgressWalk(start).feed(
+            Event.EgressFired(readyToFire(start), Seat(1), EgressType.Beacon, listOf(WEST, EAST)),
+        )
+        assertNotNull(walk.state.egress, "the Egress never started, so this measured nothing")
+        holds("an Egress starting", isolateFrames(walk.drain(), walk.state))
+
+        val fired = Tick(60)
+        val at = beatAt(fired, 3)
+        val contained = EgressWalk(burning(fired).copy(revoked = listOf(Seat(3)))).feed(
+            Event.SyncPulseReturned(Tick(at), Seat(0), onBeat(fired)),
+            Event.SyncPulseReturned(Tick(at), Seat(2), onBeat(fired)),
+        )
+        assertNull(contained.state.egress, "the Egress was not contained, so this measured nothing")
+        holds("containment", isolateFrames(contained.drain(), contained.state))
     }
 }

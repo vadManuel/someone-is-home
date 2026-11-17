@@ -76,6 +76,15 @@ class EffectPushTest {
     private val line = "i still have priya's spare key"
 
     /**
+     * Whether [body] carries [text] as itself or as the UTF-8 hex the wire seals some fields in
+     * (`RoleRevealed.lineHex`, D-249; `IsolateTargetsOffered.targetsHex`, D-258). A sweep for the
+     * plain text alone reads straight past a hex field, so it would pass with the leak in it.
+     */
+    private fun carries(body: String, text: String): Boolean =
+        body.contains(text) ||
+            body.contains(text.encodeToByteArray().joinToString("") { (it.toInt() and 0xff).toString(16).padStart(2, '0') })
+
+    /**
      * A round with one Insider, one line and one name per seat.
      *
      * The lines are here on purpose: this fixture is what `noFrameCarriesALineUntilTheRoundEnds`
@@ -263,7 +272,7 @@ class EffectPushTest {
         val duringTheShift = bodiesReachingSeatZero(state, aShift(state))
         assertTrue(duringTheShift.isNotEmpty(), "the probe read nothing, so it swept nothing")
 
-        val leaking = duringTheShift.filter { body -> body.contains(line) }
+        val leaking = duringTheShift.filter { body -> carries(body, line) }
         assertEquals(
             emptyList(), leaking,
             "${leaking.size} frame(s) carried a one line during the round",
@@ -317,11 +326,11 @@ class EffectPushTest {
         // The positive control: this seat's OWN destination is on its OWN order, and the probe can
         // see it. D-129 — knowing where your own next Subroutine is, is the game.
         assertTrue(
-            bodies.any { it.contains(MINE) },
+            bodies.any { carries(it, MINE) },
             "the seat's own work order carried no destination, so the sweep below read nothing",
         )
         assertEquals(
-            emptyList(), bodies.filter { it.contains(UNPUBLISHED) },
+            emptyList(), bodies.filter { carries(it, UNPUBLISHED) },
             "a frame carried a room this seat's own order never names — house geography is " +
                 "crossing to a Resident again",
         )
@@ -364,6 +373,15 @@ class EffectPushTest {
             ),
         ),
         Effect.IsolateTargetsOffered(
+            Seat(0),
+            listOf(
+                Destination(MarkerId("card-kitchen"), "diamond", MINE),
+                Destination(MarkerId("card-cons"), "cross", UNPUBLISHED),
+            ),
+        ),
+        // Its blank, which DOES reach this Resident (D-258): as wide as the list above and
+        // carrying none of it, which is what this sweep checks of it.
+        Effect.IsolateTargetsBlanked(
             Seat(0),
             listOf(
                 Destination(MarkerId("card-kitchen"), "diamond", MINE),

@@ -72,11 +72,41 @@ sealed class RoundMessage {
      *
      * The actor is the recipient, so the actor is the socket. What is left is the cooldown, which
      * is this phone's own business and is on nobody else's screen.
+     *
+     * ### One digit, so the frame does not say whether the request took (D-258)
+     *
+     * As a Boolean the field was `true` or `false`, four characters or five, so the frame's size
+     * told anybody measuring the Wi-Fi whether a Surge, Static, Isolate or Egress request had
+     * started a cooldown or fallen into a running one. On the wire it is now [cooldown], one digit
+     * ([STARTED] or [NOT_STARTED]), still under the name `cooldownStarted`; the call sites keep
+     * `AbilityFired(cooldownStarted = …)` and read [cooldownStarted]. A value of any other width
+     * cannot be constructed or decoded. [ContactAnswered] and [RevokeLanded] are padded to this
+     * frame's one length (D-216, D-219).
      */
     @ClientFacing
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("AbilityFired")
-    data class AbilityFired(val cooldownStarted: Boolean) : RoundMessage()
+    data class AbilityFired(
+        @kotlinx.serialization.SerialName("cooldownStarted") val cooldown: Int,
+    ) : RoundMessage() {
+
+        /** The message for this phone: whether its cooldown started. */
+        constructor(cooldownStarted: Boolean) : this(if (cooldownStarted) STARTED else NOT_STARTED)
+
+        init {
+            require(cooldown == STARTED || cooldown == NOT_STARTED) { "a cooldown is $STARTED or $NOT_STARTED" }
+        }
+
+        /** Whether the ability spent its cooldown. */
+        val cooldownStarted: Boolean get() = cooldown == STARTED
+
+        override fun toString(): String = "AbilityFired(cooldownStarted=$cooldownStarted)"
+
+        companion object {
+            const val STARTED: Int = 1
+            const val NOT_STARTED: Int = 0
+        }
+    }
 
     /**
      * **A touch, answered, at exactly [AbilityFired]'s length on the wire** (R1, D-216,
@@ -94,8 +124,8 @@ sealed class RoundMessage {
     @kotlinx.serialization.SerialName("ContactAnswered")
     data class ContactAnswered(val pad: String) : RoundMessage() {
         companion object {
-            /** Nine characters: `"ContactAnswered","pad":"…"` against `"AbilityFired","cooldownStarted":true`. */
-            const val PAD: String = "000000000"
+            /** Six characters: `"ContactAnswered","pad":"…"` against `"AbilityFired","cooldownStarted":1` (D-258). */
+            const val PAD: String = "000000"
         }
     }
 
@@ -130,11 +160,75 @@ sealed class RoundMessage {
      * The seat goes, like every addressed kind here. The list stays whole and is re-sent rather than
      * diffed — see [Effect.IsolateTargetsOffered], which carries the disclosure argument, the
      * Egress-node exclusion, and the flag.
+     *
+     * ### Hex on the wire, so a Resident's [IsolateTargetsBlanked] can be exactly as long (D-258)
+     *
+     * Every living Resident is sent [IsolateTargetsBlanked] at the moment every living Insider is
+     * sent this, so that the frame count does not follow the role. The two must then be the same
+     * number of bytes once pushed, encoded and carried. A list of destinations is JSON whose width
+     * on the wire depends on which characters the room names hold, because each layer escapes some
+     * characters and not others; so the list travels as [targetsHex], its JSON's UTF-8 bytes in
+     * lowercase hex, which no layer escapes. The serial names are both 21 characters and the field
+     * names both 10, so a blank of the same hex width is a frame of the same length.
+     * `IsolateFrameSizeTest` measures the two over the real sockets. The call sites keep
+     * `IsolateTargetsOffered(targets)` and read [targets].
      */
     @ClientFacing
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("IsolateTargetsOffered")
-    data class IsolateTargetsOffered(val targets: List<Destination>) : RoundMessage()
+    data class IsolateTargetsOffered(val targetsHex: String) : RoundMessage() {
+
+        /** The offer for this phone: these destinations, sealed. */
+        constructor(targets: List<Destination>) : this(seal(targets))
+
+        init {
+            require(targetsHex.length % 2 == 0 && WireHex.isHex(targetsHex)) {
+                "an offer's targets are lowercase hex, two characters a byte"
+            }
+            open(targetsHex)
+        }
+
+        /** The destinations this Insider may Isolate, read back off the hex. */
+        val targets: List<Destination> get() = open(targetsHex)
+
+        override fun toString(): String = "IsolateTargetsOffered(targets=$targets)"
+
+        companion object {
+            private val TARGETS = kotlinx.serialization.builtins.ListSerializer(Destination.serializer())
+
+            /** The list as hex: its JSON's UTF-8 bytes, two lowercase characters each. */
+            fun seal(targets: List<Destination>): String =
+                WireHex.of(Json.encodeToString(TARGETS, targets).encodeToByteArray())
+
+            /** [seal] backwards. Throws an `IllegalArgumentException` for hex that is not a list. */
+            fun open(hex: String): List<Destination> =
+                Json.decodeFromString(TARGETS, WireHex.bytes(hex).decodeToString())
+        }
+    }
+
+    /**
+     * **What a living Resident is sent where a living Insider is sent [IsolateTargetsOffered]:
+     * padding, and nothing else** (D-258, [Effect.IsolateTargetsBlanked]).
+     *
+     * [paddingHex] is zeros, exactly as many as the offer's [IsolateTargetsOffered.targetsHex] at
+     * the same moment, and never anything else: a Resident's phone has no list here to read,
+     * because there is no list here. It moves no screen and the phone ignores it. Serial name and
+     * field name are the offer's lengths, so the two frames are one length at every moment.
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("IsolateTargetsBlanked")
+    data class IsolateTargetsBlanked(val paddingHex: String) : RoundMessage() {
+        init {
+            require(paddingHex.all { it == '0' }) { "a blank carries zeros and nothing else" }
+        }
+
+        companion object {
+            /** The blank for a moment whose offer is [targets]: as wide as the offer, all zeros. */
+            fun over(targets: List<Destination>): IsolateTargetsBlanked =
+                IsolateTargetsBlanked("0".repeat(IsolateTargetsOffered.seal(targets).length))
+        }
+    }
 
     /**
      * **STATIC: the monitoring is jammed, for this many seconds, and the noise is drawn from this
@@ -545,8 +639,8 @@ sealed class RoundMessage {
     @kotlinx.serialization.SerialName("RevokeLanded")
     data class RevokeLanded(val pad: String) : RoundMessage() {
         companion object {
-            /** Twelve characters: `"RevokeLanded","pad":"…"` against `"AbilityFired","cooldownStarted":true`. */
-            const val PAD: String = "000000000000"
+            /** Nine characters: `"RevokeLanded","pad":"…"` against `"AbilityFired","cooldownStarted":1` (D-258). */
+            const val PAD: String = "000000000"
 
             /** The one value this message ever takes. */
             val Padded: RevokeLanded = RevokeLanded(PAD)
@@ -660,6 +754,7 @@ sealed class RoundMessage {
             is ContactAnswered -> EmitSchema.CONTACT_ANSWERED
             is Surged -> EmitSchema.SURGED
             is IsolateTargetsOffered -> EmitSchema.ISOLATE_TARGETS_OFFERED
+            is IsolateTargetsBlanked -> EmitSchema.ISOLATE_TARGETS_BLANKED
             is StaticOpened -> EmitSchema.STATIC_OPENED
             is SubroutineGraded -> EmitSchema.SUBROUTINE_GRADED
             is SubroutineProgressed -> EmitSchema.SUBROUTINE_PROGRESSED
@@ -957,6 +1052,8 @@ object RoundWire {
         is Effect.Surged ->
             RoundMessage.Surged(effect.peak, effect.black, effect.sound, effect.haptic)
         is Effect.IsolateTargetsOffered -> RoundMessage.IsolateTargetsOffered(effect.targets)
+        // The targets do not cross: only the width of the offer they make does (D-258).
+        is Effect.IsolateTargetsBlanked -> RoundMessage.IsolateTargetsBlanked.over(effect.targets)
         is Effect.StaticOpened -> RoundMessage.StaticOpened(effect.seconds, effect.seed)
         is Effect.SubroutineGraded -> RoundMessage.SubroutineGraded(effect.accepted)
         is Effect.SubroutineProgressed -> RoundMessage.SubroutineProgressed(effect.remaining)
@@ -1036,3 +1133,26 @@ object RoundWire {
 // **Role is not on that list and never will be.** It is the one type in the model whose presence
 // on a wire would end the game, and nothing in `project` can reach it.
 // ---------------------------------------------------------------------------------------------
+
+/**
+ * Bytes as lowercase hex and back: the one encoding on this wire that no layer escapes, so a
+ * field's width is its length (D-249, D-258).
+ */
+internal object WireHex {
+    private const val DIGITS = "0123456789abcdef"
+
+    fun of(bytes: ByteArray): String {
+        val out = StringBuilder(bytes.size * 2)
+        for (b in bytes) {
+            val v = b.toInt() and 0xff
+            out.append(DIGITS[v shr 4]).append(DIGITS[v and 0xf])
+        }
+        return out.toString()
+    }
+
+    fun bytes(hex: String): ByteArray = ByteArray(hex.length / 2) { i ->
+        ((DIGITS.indexOf(hex[2 * i]) shl 4) or DIGITS.indexOf(hex[2 * i + 1])).toByte()
+    }
+
+    fun isHex(text: String): Boolean = text.all { it in '0'..'9' || it in 'a'..'f' }
+}

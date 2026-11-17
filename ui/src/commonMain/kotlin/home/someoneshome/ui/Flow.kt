@@ -2289,6 +2289,12 @@ class FlowModel(
             is RoundMessage.IsolateTargetsOffered ->
                 state = state.copy(isolateTargets = message.targets)
 
+            // **A Resident's frame of the offer's size, and the screen does not move** (D-258).
+            // It exists so that every living phone gets one frame where an Insider's gets the
+            // offer. It carries padding and no list, and this branch is a named no-op: a phone that
+            // did anything with it would be a phone announcing it is not an Insider's.
+            is RoundMessage.IsolateTargetsBlanked -> Unit
+
             // **STATIC: the house telling every living phone in the building that it has gone
             // blind** (D-186). Copied onto the panel whole and never filtered, for the Isolate
             // list's reason and one sharper: there is nothing on it to filter. It carries no seat,

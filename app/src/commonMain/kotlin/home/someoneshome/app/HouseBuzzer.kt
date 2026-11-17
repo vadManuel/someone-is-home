@@ -308,7 +308,8 @@ internal fun Effect.ringing(): Boolean = when (this) {
     // the one player the whole house is already walking towards.
     is Effect.Surged,
     // A list arriving on a phone. It buzzes as much as a work order does, which is not at all.
-    is Effect.IsolateTargetsOffered,
+    // Its blank is a Resident's frame of the same size, and it buzzes exactly as much (D-258).
+    is Effect.IsolateTargetsOffered, is Effect.IsolateTargetsBlanked,
     // **STATIC, and it is silent on every phone in the building** (D-186, D-135, D-176). The jam
     // reaches every living seat at once, so a buzz here would be the only thing in the game that
     // rings a whole house without the house having called a meeting -- and it would ring it at the
@@ -436,6 +437,9 @@ internal fun Effect.haptic(): Haptic? = when (this) {
     // not at all: a phone that went off when the Egress-node exclusion changed its picker would be
     // announcing an Insider's own tooling to a pocket in a silent house.
     is Effect.IsolateTargetsOffered -> null
+    // The blank beside it on a Resident's phone (D-258). A buzz here would ring every Resident's
+    // pocket at the moment every Insider's stayed still: the role, through the motor.
+    is Effect.IsolateTargetsBlanked -> null
     // **The jam, silent, and this is the branch where a buzz would be worst.** It lands on every
     // living phone including the one that fired it, so a haptic here is `gdd.md:398`'s forbidden
     // actor-side feedback and a house-wide beacon in the same instant -- and in a silent dark house
@@ -481,7 +485,7 @@ internal fun RoundMessage.ringing(): Boolean = when (this) {
     is RoundMessage.SyncPulseAnswered, is RoundMessage.InsidersRevealed,
     is RoundMessage.RoleRevealed, is RoundMessage.RevokeLanded, is RoundMessage.RosterIssued,
     is RoundMessage.ContactSeedIssued,
-    is RoundMessage.Surged, is RoundMessage.IsolateTargetsOffered,
+    is RoundMessage.Surged, is RoundMessage.IsolateTargetsOffered, is RoundMessage.IsolateTargetsBlanked,
     is RoundMessage.StaticOpened, is RoundMessage.MeetingCalling,
     -> false
 }
@@ -549,6 +553,7 @@ internal fun RoundMessage.haptic(): Haptic? = when (this) {
     is RoundMessage.MeetingResolved -> null
     is RoundMessage.SyncPulseAnswered -> null
     is RoundMessage.IsolateTargetsOffered -> null
+    is RoundMessage.IsolateTargetsBlanked -> null
     is RoundMessage.StaticOpened -> null
     is RoundMessage.InsidersRevealed -> null
     is RoundMessage.MeetingCalling -> null

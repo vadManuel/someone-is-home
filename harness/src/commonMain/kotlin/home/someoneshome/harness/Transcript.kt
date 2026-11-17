@@ -210,6 +210,11 @@ object Transcript {
         is Effect.IsolateTargetsOffered ->
             "IsolateTargetsOffered|seat=${effect.seat.index}|targets=" +
                 effect.targets.joinToString(",") { destination(it) }
+        // **The blank beside the offer, and only how many it pads for** (D-258). The list is the
+        // offer's and is on the offer's row; this row says the blank was built, for whom, and over
+        // how many cards, which is the width a Resident's phone was sent.
+        is Effect.IsolateTargetsBlanked ->
+            "IsolateTargetsBlanked|seat=${effect.seat.index}|over=${effect.targets.size}"
         // **The jam, and there is no seat on it to render** (D-186). Every other ability's rows in
         // this transcript name somebody -- an actor, a target, a seat the offer was drawn for --
         // and this one names nobody, because the house never knew. A reader of a recording can see

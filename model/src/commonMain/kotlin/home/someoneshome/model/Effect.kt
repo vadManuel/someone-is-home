@@ -186,6 +186,28 @@ sealed interface Effect {
     data class IsolateTargetsOffered(val seat: Seat, val targets: List<Destination>) : Effect
 
     /**
+     * **The frame a Resident is sent where an Insider is sent [IsolateTargetsOffered], carrying
+     * nothing** (D-258, the owner's R1 principle: no frame count, size or timing follows the role).
+     *
+     * [IsolateTargetsOffered] reaches `Insider/Live` and nobody else, and it is sent at arming, when
+     * an Egress starts and when one is contained. So at each of those moments every living
+     * Insider's socket carried one frame more than every living Resident's: a count anybody
+     * watching the Wi-Fi could read the role from, with the content encrypted or not.
+     *
+     * `Rules.isolateOffers` builds this beside the offer for EVERY seat, in the same run, so the
+     * rules still never read a role; the allowlist does the narrowing. This kind's row is
+     * `Resident/Live` and nothing else, so each living seat is sent exactly one of the two, at the
+     * same place in the same burst. **A new kind rather than the offer widened**: widened, the row
+     * that served a Resident would hand them the geography (see [IsolateTargetsOffered]), and a
+     * Resident's phone would be handed something it could read as targets.
+     *
+     * [targets] is the offer's own list, and it stays on this side of the boundary: the projection
+     * reads only how wide the offer's frame is (`RoundMessage.IsolateTargetsBlanked`), so the two
+     * frames are one length at every moment and the Resident's carries none of it.
+     */
+    data class IsolateTargetsBlanked(val seat: Seat, val targets: List<Destination>) : Effect
+
+    /**
      * **STATIC: the house's monitoring is jammed, house-wide, for ten seconds** (D-186,
      * `gdd.md:447-495`).
      *

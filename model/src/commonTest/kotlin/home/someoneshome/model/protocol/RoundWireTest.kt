@@ -48,6 +48,10 @@ class RoundWireTest {
             Seat(3),
             listOf(Destination(MarkerId("M-1"), shape = "diamond", room = "KITCHEN")),
         ),
+        Effect.IsolateTargetsBlanked(
+            Seat(3),
+            listOf(Destination(MarkerId("M-1"), shape = "diamond", room = "KITCHEN")),
+        ),
         Effect.StaticOpened(seconds = 10, seed = 4242L),
         Effect.SubroutineGraded(Seat(3), accepted = true),
         Effect.SubroutineProgressed(remaining = 41),

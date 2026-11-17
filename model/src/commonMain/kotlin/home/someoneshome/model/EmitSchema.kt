@@ -69,6 +69,7 @@ object EmitSchema {
         is Effect.ContactAnswered -> CONTACT_ANSWERED
         is Effect.Surged -> SURGED
         is Effect.IsolateTargetsOffered -> ISOLATE_TARGETS_OFFERED
+        is Effect.IsolateTargetsBlanked -> ISOLATE_TARGETS_BLANKED
         is Effect.StaticOpened -> STATIC_OPENED
         is Effect.SubroutineGraded -> SUBROUTINE_GRADED
         is Effect.SubroutineProgressed -> SUBROUTINE_PROGRESSED
@@ -113,6 +114,7 @@ object EmitSchema {
     val CONTACT_ANSWERED = MessageKind("ContactAnswered")
     val SURGED = MessageKind("Surged")
     val ISOLATE_TARGETS_OFFERED = MessageKind("IsolateTargetsOffered")
+    val ISOLATE_TARGETS_BLANKED = MessageKind("IsolateTargetsBlanked")
     val STATIC_OPENED = MessageKind("StaticOpened")
     val SUBROUTINE_GRADED = MessageKind("SubroutineGraded")
     val SUBROUTINE_PROGRESSED = MessageKind("SubroutineProgressed")
@@ -242,6 +244,18 @@ object EmitSchema {
         // Not the out classes: a player outside the system fires nothing, the effect is addressed to
         // one seat anyway, and denying it on the round-state axis carries no role information.
         ISOLATE_TARGETS_OFFERED to setOf(ClientClass(Role.Insider, RoundState.Live)),
+
+        // **The offer's other half: a Resident, in a round that is running, and nothing else**
+        // (D-258). The rules build this beside every offer for every seat; this row is what makes
+        // each living seat get exactly one of the two, so the frame count at arming and at each
+        // Egress no longer follows the role. It carries no targets, only padding to the offer's
+        // width, so a widening would cost nothing but a second frame -- and that second frame is
+        // the leak this row exists to close. Never `LIVING`: an Insider sent both would be the
+        // phone with two frames. Spelled out as a one-class set for ABILITY_FIRED's reason.
+        //
+        // Not the out classes, for the offer's own reason: denied on the round-state axis for
+        // both kinds alike, so an out seat gets neither and the count stays level there too.
+        ISOLATE_TARGETS_BLANKED to setOf(ClientClass(Role.Resident, RoundState.Live)),
 
         // **STATIC: the jam the whole living house can see, and the ghosts are exempt** (D-186).
         //
@@ -657,6 +671,8 @@ object EmitSchema {
             // above exists to prevent -- and addressing is the half of that guarantee the allowlist
             // cannot see, because two Insiders are the same class.
             is Effect.IsolateTargetsOffered -> listOf(effect.seat)
+            // Its own seat, for the offer's reason: built once per seat, beside the offer.
+            is Effect.IsolateTargetsBlanked -> listOf(effect.seat)
             // **Every seat in the house, and the firing Insider is one of them exactly the way a
             // bystander is** (D-186). A jam is house-wide and anonymous: the effect carries no seat,
             // so there is nothing here to address it by, and that is the point rather than a

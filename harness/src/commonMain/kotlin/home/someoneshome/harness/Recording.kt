@@ -50,6 +50,11 @@ class Recording(
     }
 
     companion object {
+        // 28: one effect a version 27 build cannot name -- `IsolateTargetsBlanked` (D-258), built
+        // beside every seat's `IsolateTargetsOffered` at arming, at an Egress's start and at its
+        // containment. No event and no state row changed; the same events replay to a longer effect
+        // transcript, so it is a bump for version 15's reason.
+        //
         // 27: one refusal reason a version 26 build cannot name -- `VoterOut` (H8, D-252) -- and the
         // rule change behind it: a selection or a READY from an out seat is refused at the gate, so
         // it no longer answers `VoteHeld` and `VoteSelectionShown`. No row changed shape.
@@ -235,7 +240,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/27"
+        const val HEADER = "someone-is-home/recording/28"
     }
 }
 

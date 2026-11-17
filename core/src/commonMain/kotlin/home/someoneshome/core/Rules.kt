@@ -959,12 +959,26 @@ internal fun staticSeed(seed: Long, at: Tick): Long = oneWaySeed(seed, SeedPurpo
  * **Already-Isolated markers stay on it.** Which cards another Insider has taken dark is not this
  * Insider's to know, and an omission would report it — an argument the node exclusion does not need,
  * because the nodes are public and an isolation is not.
+ *
+ * ### Each seat's offer is followed by its blank, and the allowlist keeps one of the two (D-258)
+ *
+ * The offer reaches living Insiders only, so on its own it put one frame more on every Insider's
+ * socket at each of these three moments. [Effect.IsolateTargetsBlanked] is built beside it for every
+ * seat, with the same list, and its row is `Resident/Live` only: every living seat is sent exactly
+ * one frame, of one length, at the same place in the burst. Seat by seat rather than all offers and
+ * then all blanks, so the house writes them in seat order whatever the roles are. Still no read of
+ * a role here.
  */
 private fun isolateOffers(state: GameState): List<Effect> {
     val targets = state.activeMarkers
         .filterNot { state.egress?.isNode(it) == true }
         .mapNotNull { state.destinationOf(it) }
-    return state.seats.map { Effect.IsolateTargetsOffered(seat = it, targets = targets) }
+    return state.seats.flatMap {
+        listOf(
+            Effect.IsolateTargetsOffered(seat = it, targets = targets),
+            Effect.IsolateTargetsBlanked(seat = it, targets = targets),
+        )
+    }
 }
 
 /**

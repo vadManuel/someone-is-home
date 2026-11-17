@@ -6952,6 +6952,110 @@ frame. The Playtest app launched with no house drew the Simulator's own time on 
 screen. **Not seen on a phone**, and FILES, the Terminal and the playback are not on the hunt's route
 (rendered by the harness only).
 
+## Revision 74 — every living phone gets one Isolate frame of one size, and an ability's answer is one size
+
+*2026-11-17, overnight run, unit F4. The two items D-249's audit reported, and the audit of every
+`RoundMessage` that unit started. The principle is the owner's (R1, S1, T1; D-216, D-219, D-220,
+D-249): nobody watching the Wi-Fi may tell roles apart by frame count, size or timing. Fixed-size
+frames for every message wait for the encryption work (S2). Desktop and simulator unit tests only;
+nothing here has been on a phone.*
+
+### D-258 · **A Resident is sent a blank of the Isolate offer's size wherever an Insider is sent the offer, and `AbilityFired` carries a digit — built**
+
+**What leaked.** `IsolateTargetsOffered` reaches `Insider/Live` only, and it is sent at arming, when an
+Egress starts and when one is contained. At each of those moments every living Insider's socket
+carried one frame more than every living Resident's. Measured over loopback at arming, five seats,
+Insiders 1 and 4: **Insiders 7 frames, Residents 6.** Separately, `AbilityFired(cooldownStarted)`
+serialised `true` and `false`, so the answer to a Surge, Static, Isolate or Egress request was
+**120 bytes when it started a cooldown and 121 when it fell into a running one** (carried, at
+sequence 1): whether the request took was readable off its size.
+
+**Now, the Isolate frame.**
+
+1. **A new effect and kind, `IsolateTargetsBlanked(seat, targets)`.** `Rules.isolateOffers` builds it
+   beside each seat's offer, seat by seat, at all three moments, so the rules still read no role and
+   the house writes the frames in seat order whatever the roles are. Its row is `Resident/Live` and
+   nothing else, written out as a one-class set. The offer's row is unchanged. So each living seat is
+   sent exactly one of the two, at the same place in the burst, and the out are sent neither.
+2. **The targets never cross on the blank.** The effect holds the offer's list only so the
+   projection can read how wide the offer's frame is; `RoundMessage.IsolateTargetsBlanked` carries
+   `paddingHex`, zeros and nothing else, and a blank with anything in it does not construct or
+   decode. A Resident's phone has no list to read, and `Flow` and `HouseBuzzer` name it as a no-op.
+   A new kind rather than the offer widened: widened, the row that served a Resident would hand them
+   the geography, and their phone would hold something it could read as targets.
+3. **One length by construction.** The offer's list now travels as `targetsHex`, its JSON's UTF-8
+   bytes in lowercase hex, because each layer of the wire escapes some characters and not others.
+   The two serial names are both 21 characters and the two field names both 10, and the blank is
+   zeros of the offer's hex width, so the frames are the same length at every moment. The call sites
+   keep `IsolateTargetsOffered(targets)` and read `.targets`. The width follows the home and the
+   moment, never the role.
+
+**Now, the answer.** The wire member is `AbilityFired(cooldown: Int)`, serialised under the old name
+`cooldownStarted` as one digit (1 started, 0 not); the call sites keep
+`AbilityFired(cooldownStarted = …)` and read `.cooldownStarted`. Any other value does not decode.
+`ContactAnswered.PAD` drops from 9 to 6 characters and `RevokeLanded.PAD` from 12 to 9, so every
+touch frame stays one size: **every touch frame is now 117 bytes**, and both answers are 117.
+
+**Measured after, over loopback** (`IsolateFrameSizeTest`): at arming every seat gets 7 frames, and
+each seat's lengths are identical with seats 1 and 2 exchanging roles (`[106, 1798, 118, 133, 843,
+146, 866]` for seat 1 either way). The Isolate frame is **866 bytes on all five sockets**. At an
+Egress, every phone but the actor's gets `[326, 594]`, the other Insider's included; the actor gets
+its own 117-byte answer first. Model-level, offer and blank are equal at every sequence from 1 to a
+million for lists with no cards (128 bytes), escaped rooms (384), multibyte rooms (458) and forty
+cards (5186).
+
+**Guards, each proven by breaking it.**
+
+- `IsolateFrameSizeTest` (app; a real `TransportHost`, five real clients, the real `EffectWire`, the
+  rules' own arming and admission; a home whose room names escape and take several bytes). Arms
+  twice with roles exchanged, starts an Egress, fires again into its cooldown.
+- `EgressTest."every living seat gets one Isolate frame of one length at each of the three moments"`
+  (core; arming, Egress start and containment, through the allowlist and the real encoders, with a
+  Revoked seat).
+- `IsolateWireSizeTest` (model; offer and blank, and `true` and `false`, at sequences 1 to a million;
+  the rows; one of the pair per living seat; a blank that carries anything does not decode).
+- `EffectPushTest`'s two probes now also search for a text's UTF-8 hex, because a sweep for plain
+  text reads straight past `lineHex` (D-249) and `targetsHex`. Its geography fixture now includes the
+  blank, which does reach the Resident there and must not carry the conservatory.
+
+**Recording format 28**: one effect a version 27 build cannot name.
+
+**The audit: every `RoundMessage`, by who it goes to and what its size depends on** (rows from
+`EmitSchema.ALLOWED`; core reads a role in three places only, the admission gate, the reveal and the
+meter's banking, so no other effect's content depends on one):
+
+| message | sent to | size varies with | verdict |
+|---|---|---|---|
+| `IsolateTargetsOffered` / `IsolateTargetsBlanked` | Insider/Live; Resident/Live | the home and the moment | **fixed here** |
+| `AbilityFired` | the Insider actor | nothing now | **fixed here** (the digit). Its *count* answers the actor's own upward `Act` or `Fire`, which only an Insider sends: an upward leak a downward frame cannot cover; S2 |
+| `RoleRevealed` | every living seat | nothing | fixed, D-249 |
+| `ContactAnswered`, `RevokeLanded` | toucher; Revoked target | nothing | padded, D-216/D-219, re-padded here |
+| `HouseSignedOff` | Insider/Ended | the winner's text | **accepted**: built after `InsidersRevealed` in the same burst (`Rules.endingEffects`), when every phone already shows who the Insiders were |
+| `MessageDelivered` | living + out, per seat | free text | **unsent**: nothing in `core` constructs it. Needs a fixed width before it is |
+| `SubroutineGraded(accepted)`, `TerminalAnswered(reading)`, `SyncPulseAnswered(held)`, `VoteHeld(selection?, locked)`, `ScanAnswered(opened?)`, `MeetingCalling` | the one seat that acted, either role | what that seat did | not role: the same rules for both roles (D-109, rule 8). Each is a size tell of the seat's own act, for S2 |
+| `WorkOrderIssued`, `ContactSeedIssued`, `OpeningMessage`, `RosterIssued`, `LampSet`, `Surged`, `EgressOpened`, `StandAndWalkIn`, `RestrainedTakeover` | per seat, both roles | the seat's draw, or nothing | not role: proven for the arming burst by the exchange in `IsolateFrameSizeTest` |
+| `StaticOpened`, `SystemIntegrityBatched`, `MeetingOpened`, `CheckInProgressed`, `MeetingPhaseOpened`, `NoticeIssued`, `ReadyProgressed`, `VoteProgressed`, `MeetingResult`, `MeetingEnded`, `EgressHeld`, `EgressContained`, `RoundEnded`, `InsidersRevealed` | every seat of a class pair | nothing per seat | byte-identical on every phone |
+| `SubroutineProgressed`, `SystemIntegrityLive`, `VoteSelectionShown`, `MeetingResolved` | the out, both roles | nothing per seat | not role |
+| `PresenceChanged`, `EgressSucceeded` | nobody (no row) | | unsent |
+
+**Raised, not decided:** `RoundBody.Push.seq` still grows with what a seat has been sent (D-216's
+open item). An Egress actor's own answer puts its counter one ahead, which in the test crosses 9 to
+10, so its next frame is a byte longer than every other phone's. The Isolate fix removes the
+per-role drift at arming and at every Egress; the remaining drift follows a seat's own acts, and
+only fixed-size frames (S2) close it.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `model` `Effect.IsolateTargetsBlanked`, `EmitSchema` | (new) | built beside every offer; row `Resident/Live` only; addressed to its own seat |
+| `model/protocol` `RoundMessage.IsolateTargetsOffered` | `targets: List<Destination>` | `targetsHex`, read back as `.targets` |
+| `model/protocol` `RoundMessage.IsolateTargetsBlanked` | (new) | `paddingHex`, zeros of the offer's width |
+| `model/protocol` `RoundMessage.AbilityFired` | `cooldownStarted: Boolean` | `cooldown: Int`, one digit, under the same serial name |
+| `model/protocol` `ContactAnswered.PAD`, `RevokeLanded.PAD` | 9 and 12 characters, 120 bytes | 6 and 9, 117 bytes |
+| `core` `Rules.isolateOffers` | an offer per seat | an offer and a blank per seat, seat by seat |
+| `ui` `Flow`, `app` `HouseBuzzer`, `harness` `Transcript` | (new) | a named no-op, silent, one transcript row |
+| `harness` `Recording.HEADER` | `recording/27` | `recording/28` |
+| tests | `StaticTest` seven runs; `EgressTest` containment kinds; `RoundWireTest`, `HouseBuzzTest` fixtures | eight runs; the blank named; one more effect in each sweep |
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

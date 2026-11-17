@@ -316,6 +316,7 @@ class HouseBuzzTest {
     private fun everyKind(): List<Effect> = everyEffect() + listOf(
         Effect.Surged(Seat(1), peak = 100, black = 0, sound = Sound.Surge, haptic = Haptic.Short),
         Effect.IsolateTargetsOffered(Seat(1), emptyList()),
+        Effect.IsolateTargetsBlanked(Seat(1), emptyList()),
         Effect.StaticOpened(seconds = 10, seed = 4242L),
         // The three the quiet fixture leaves out because it is a per-seat list and these are not
         // addressed to a seat. They are exactly as silent as the rest of it, and now say so.
@@ -465,7 +466,7 @@ class HouseBuzzTest {
          * the same string, which is what lets a list this short be a completeness claim.
          */
         val EVERY_KIND: Set<String> = setOf(
-            "LampSet", "AbilityFired", "Surged", "IsolateTargetsOffered", "StaticOpened",
+            "LampSet", "AbilityFired", "Surged", "IsolateTargetsOffered", "IsolateTargetsBlanked", "StaticOpened",
             "SubroutineGraded", "SubroutineProgressed", "SystemIntegrityLive",
             "SystemIntegrityBatched", "MessageDelivered", "WorkOrderIssued", "ScanAnswered",
             "TerminalAnswered", "PresenceChanged", "OpeningMessage", "MeetingOpened", "StandAndWalkIn",
