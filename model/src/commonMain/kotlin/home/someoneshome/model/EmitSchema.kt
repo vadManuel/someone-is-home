@@ -66,6 +66,7 @@ object EmitSchema {
     fun kindOf(effect: Effect): MessageKind = when (effect) {
         is Effect.LampSet -> LAMP_SET
         is Effect.AbilityFired -> ABILITY_FIRED
+        is Effect.AbilityBlanked -> ABILITY_BLANKED
         is Effect.ContactAnswered -> CONTACT_ANSWERED
         is Effect.Surged -> SURGED
         is Effect.IsolateTargetsOffered -> ISOLATE_TARGETS_OFFERED
@@ -111,6 +112,7 @@ object EmitSchema {
 
     val LAMP_SET = MessageKind("LampSet")
     val ABILITY_FIRED = MessageKind("AbilityFired")
+    val ABILITY_BLANKED = MessageKind("AbilityBlanked")
     val CONTACT_ANSWERED = MessageKind("ContactAnswered")
     val SURGED = MessageKind("Surged")
     val ISOLATE_TARGETS_OFFERED = MessageKind("IsolateTargetsOffered")
@@ -194,6 +196,23 @@ object EmitSchema {
         // revoke landed or not, which is exactly why it must not be widened: shipped to a
         // Resident it would be an unexplained event on a screen with no ability behind it.
         ABILITY_FIRED to setOf(ClientClass(Role.Insider, RoundState.Live)),
+
+        // **Every other living phone's frame at the moment an ability is answered, and both living
+        // classes -- this row must never be narrowed to one of them** (D-263). The rules build one
+        // for every seat but the actor's, so with this row each living phone is sent exactly one
+        // frame of one length when an ability is answered: the actor its `AbilityFired`, the rest
+        // this. Narrowed to `Resident/Live` it would leave a second Insider the one bystander with
+        // no frame, which picks them out; narrowed to `Insider/Live` it would make the Residents
+        // the silent ones. It carries nothing but one digit of padding.
+        //
+        // Not the out classes, for ABILITY_FIRED's reason on the round-state axis, which is
+        // publicly observable (D-068) and carries no role. Written out as a two-class set for
+        // ABILITY_FIRED's reason: a form that could widen itself the day somebody adds a class is a
+        // form that will.
+        ABILITY_BLANKED to setOf(
+            ClientClass(Role.Resident, RoundState.Live),
+            ClientClass(Role.Insider, RoundState.Live),
+        ),
 
         // **A touch, answered, and both living classes -- this row must never be narrowed to one
         // of them** (R1, D-216). Every touch puts one frame on each phone that touched, and this is
@@ -654,6 +673,8 @@ object EmitSchema {
         val addressed = when (effect) {
             is Effect.LampSet -> listOf(effect.seat)
             is Effect.AbilityFired -> listOf(effect.actor)
+            // Its own seat: built once for every seat but the actor's (D-263).
+            is Effect.AbilityBlanked -> listOf(effect.seat)
             // **The phone that touched, and no other.** One answer per phone per touch: the first
             // half of a touch answers both of its phones, each with its own effect (T1, D-220).
             // Broadcast, it would tell the house who is touching whom.

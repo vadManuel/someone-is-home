@@ -437,17 +437,27 @@ class AbilityRulesTest {
         val (otherState, otherEffects) =
             kitWalk(kitArmed(), Event.SurgeFired(Tick(10), K_SECOND_INSIDER, K_INSIDER))
 
+        // The answer frame is set aside: the actor's own `AbilityFired` and a bystander's
+        // `AbilityBlanked` (D-263) are one frame of one length, and K_INSIDER gets exactly one of the
+        // two either way, which is asserted below.
+        val answerKinds = setOf(EmitSchema.ABILITY_FIRED, EmitSchema.ABILITY_BLANKED)
+        fun reachesTheInsider(effect: Effect, state: GameState) =
+            EmitSchema.deliveries(effect, state).any { it.seat.index == K_INSIDER.index }
         fun landedOn(effects: List<Effect>, state: GameState): List<Effect> = effects
-            .filter { EmitSchema.kindOf(it) != EmitSchema.ABILITY_FIRED }
-            .filter { effect ->
-                EmitSchema.deliveries(effect, state).any { it.seat.index == K_INSIDER.index }
-            }
+            .filter { EmitSchema.kindOf(it) !in answerKinds }
+            .filter { reachesTheInsider(it, state) }
 
         assertEquals(
             landedOn(otherEffects, otherState),
             landedOn(selfEffects, selfState),
             "a self-surge is not what being attacked looks like; the alibi is detectable",
         )
+        for ((label, effects, state) in listOf(Triple("self", selfEffects, selfState), Triple("attacked", otherEffects, otherState))) {
+            assertEquals(
+                1, effects.count { EmitSchema.kindOf(it) in answerKinds && reachesTheInsider(it, state) },
+                "$label: the surged phone was not sent exactly one answer frame (D-263)",
+            )
+        }
         // And it is not nothing, which is what makes the comparison mean something: a build that
         // delivered neither would satisfy the line above and would have deleted the ability.
         assertTrue(

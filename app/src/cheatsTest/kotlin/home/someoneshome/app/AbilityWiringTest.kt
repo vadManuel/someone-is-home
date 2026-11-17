@@ -437,8 +437,8 @@ class AbilityWiringTest {
      * **GUARD (D-231): the EGRESS tile's action fires the Egress in the house, and the alert reaches
      * every phone by the house's push, the actor's included.** A press before the clock is ready goes
      * up the same way and is answered as every Tier-1 fire into a running clock is (T1·8): the actor
-     * alone is told `AbilityFired(cooldownStarted = false)`, which moves nothing, and no other phone
-     * hears anything.
+     * is told `AbilityFired(cooldownStarted = false)`, which moves nothing, and every other living
+     * phone is sent a blank of its length at the same moment (D-263), which moves nothing either.
      */
     @Test
     fun theEgressTilesHoldFiresTheHouseAndTheAlertReachesEveryPhone() = evening { room ->
@@ -457,10 +457,19 @@ class AbilityWiringTest {
         delay(SETTLE_MILLIS)
         assertFalse(room.house.state.egressRunning, "an Egress fired into a running clock")
         val after = room.frames()
+        // **One frame on every living phone** (D-263): the actor's own answer, and a blank of its
+        // length on every other phone, so the frame count does not say who asked.
         assertEquals(
-            room.phones.map { if (it === insider) 1 else 0 }, after.zip(before) { a, b -> a - b },
-            "an Egress into a running clock was answered to somebody other than its actor, or more than once",
+            room.phones.map { 1 }, after.zip(before) { a, b -> a - b },
+            "an Egress into a running clock was answered other than once on every living phone",
         )
+        for (p in room.phones) {
+            val answer = p.pushed.last()
+            assertTrue(
+                if (p === insider) answer is RoundMessage.AbilityFired else answer is RoundMessage.AbilityBlanked,
+                "${p.name} was answered with $answer",
+            )
+        }
         assertTrue(room.phones.none { p -> p.pushed.any { it is RoundMessage.EgressOpened } }, "an Egress into a running clock opened on a phone")
         assertEquals(ScreenId.Page2, insider.flow.state.screen, "an Egress into a running clock moved the actor's phone")
 

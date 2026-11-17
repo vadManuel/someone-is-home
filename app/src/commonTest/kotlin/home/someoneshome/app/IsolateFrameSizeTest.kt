@@ -49,15 +49,14 @@ import kotlin.test.assertTrue
  *   is the same in both runs: nothing in the burst follows the role, in count or in size. Within
  *   a run every seat gets the same number of frames, and the Isolate frame (the offer on an
  *   Insider's, the blank on a Resident's) is one length at one place in every stream.
- * - **An Egress starting.** Every phone but the actor's gets the same frames, byte for byte, the
- *   other Insider's included; the actor gets the same plus one, its own `AbilityFired`, which
- *   answers the `Fire` frame its phone just sent up the wire.
+ * - **An Egress starting.** Every phone gets the same frames, byte for byte net of the sequence
+ *   number's digits, the other Insider's and the actor's included: the actor's first is its own
+ *   `AbilityFired`, and everybody else's is a blank of its length (D-263).
  * - **The actor's two answers, `true` and `false`.** A second fire into the running cooldown is
  *   told `false`, and that frame is the length of the first fire's `true` (the digit, D-258).
  *
- * The actor's frames are compared net of the sequence number's digits: its extra answer puts its
- * counter one ahead, which crosses 9 to 10 in this fixture. That is D-216's open item, a counter
- * that grows with what a seat has been sent, and only fixed-size frames close it (S2).
+ * The Egress frames are compared net of the sequence number's digits: that is D-216's open item, a
+ * counter that grows with what a seat has been sent, and only fixed-size frames close it (S2).
  */
 class IsolateFrameSizeTest {
 
@@ -125,14 +124,15 @@ class IsolateFrameSizeTest {
                 others.keys.any { it in run.insiders } && others.keys.any { it !in run.insiders },
                 "the bystanders were all one role, so this compared nothing",
             )
-            // The actor: its own answer, then the same frames. **Net of the sequence number's
-            // digits**, because the answer is one frame more on this socket and the counter can
-            // cross a power of ten (9 to 10 here): D-216's open item, which only fixed-size frames
-            // close (S2). The answer itself follows the actor's own `Fire` frame up the wire.
+            // The actor: its own answer where every other phone has its blank, then the same frames
+            // (D-263). Before D-263 the answer was one frame more on this socket alone. Net of the
+            // sequence number's digits, for D-216's item: the counter follows what a seat was sent.
+            for ((seat, got) in others) {
+                assertTrue(got.messages.first() is RoundMessage.AbilityBlanked, "seat $seat's first frame was not the blank: ${got.kinds}")
+            }
             assertEquals(
-                bystander.netLengths, actor.netLengths.drop(1),
-                "at an Egress the actor was sent other frames than everybody else, beyond its own answer: " +
-                    "${actor.kinds} against ${bystander.kinds}",
+                bystander.netLengths, actor.netLengths,
+                "at an Egress the actor was sent other frames than everybody else: ${actor.kinds} against ${bystander.kinds}",
             )
             for ((seat, got) in run.egress) {
                 val message = got.messages[got.isolate().first]
@@ -252,8 +252,17 @@ class IsolateFrameSizeTest {
                 val again = fire(ready + 1)
                 val startedAnswer = egress.getValue(actor.index).frames.first()
                 val runningAnswer = again.getValue(actor.index).frames.single()
+                // A fire into the running cooldown: the actor's answer, and one blank of its length on
+                // every other phone (D-263), so the refusal is one frame on every socket.
                 for (seat in seats) {
-                    if (seat != actor) assertEquals(emptyList(), again.getValue(seat.index).frames, "a refused Egress reached seat ${seat.index}")
+                    if (seat == actor) continue
+                    val blank = again.getValue(seat.index).frames.single()
+                    assertEquals(RoundMessage.AbilityBlanked.Padded, messageOf(blank), "seat ${seat.index} was not sent the blank")
+                    assertEquals(
+                        runningAnswer.length - seqOf(runningAnswer).toString().length,
+                        blank.length - seqOf(blank).toString().length,
+                        "seat ${seat.index}'s blank is not the actor's answer's length",
+                    )
                 }
                 assertEquals(RoundMessage.AbilityFired(cooldownStarted = true), messageOf(startedAnswer))
                 assertEquals(RoundMessage.AbilityFired(cooldownStarted = false), messageOf(runningAnswer))

@@ -290,7 +290,7 @@ internal fun Effect.ringing(): Boolean = when (this) {
     is Effect.MeetingResult, is Effect.RestrainedTakeover, is Effect.MeetingEnded,
     is Effect.EgressOpened, is Effect.EgressHeld, is Effect.EgressContained,
     is Effect.EgressSucceeded, is Effect.RoundEnded, is Effect.LampSet, is Effect.AbilityFired,
-    is Effect.ContactAnswered, is Effect.NoticeIssued,
+    is Effect.ContactAnswered, is Effect.AbilityBlanked, is Effect.NoticeIssued,
     is Effect.SubroutineGraded, is Effect.SubroutineProgressed, is Effect.SystemIntegrityLive,
     is Effect.SystemIntegrityBatched, is Effect.MessageDelivered, is Effect.HouseSignedOff,
     // The Revoke landing says its thing once, like the takeover it mirrors; the roster is silent
@@ -377,6 +377,9 @@ internal fun Effect.haptic(): Haptic? = when (this) {
     // the house sends one of these or an armed Insider's `AbilityFired`; a buzz on it would be a phone
     // going off in a dark room every time somebody brushed it.
     is Effect.ContactAnswered -> null
+    // **Somebody else's ability, answered, and it must feel like nothing** (D-263): every living phone
+    // but the actor's is sent one at that moment, and a buzz on it would tell the room an ability fired.
+    is Effect.AbilityBlanked -> null
     // **The house notice arrives with the gate closing, and the gate's own push is what buzzes**
     // (D-187, D-223). A second buzz on it would be a buzz that meant *somebody evaded*, at every
     // meeting, empty or not.
@@ -473,7 +476,8 @@ internal fun RoundMessage.ringing(): Boolean = when (this) {
     is RoundMessage.RestrainedTakeover, is RoundMessage.MeetingEnded,
     is RoundMessage.EgressOpened, is RoundMessage.EgressHeld, is RoundMessage.EgressContained,
     is RoundMessage.EgressSucceeded, is RoundMessage.RoundEnded, is RoundMessage.LampSet,
-    is RoundMessage.AbilityFired, is RoundMessage.ContactAnswered, is RoundMessage.NoticeIssued,
+    is RoundMessage.AbilityFired, is RoundMessage.AbilityBlanked, is RoundMessage.ContactAnswered,
+    is RoundMessage.NoticeIssued,
     is RoundMessage.SubroutineGraded,
     is RoundMessage.SubroutineProgressed, is RoundMessage.SystemIntegrityLive,
     is RoundMessage.SystemIntegrityBatched, is RoundMessage.MessageDelivered,
@@ -527,6 +531,7 @@ internal fun RoundMessage.haptic(): Haptic? = when (this) {
     is RoundMessage.LampSet -> null
     is RoundMessage.AbilityFired -> null
     is RoundMessage.ContactAnswered -> null
+    is RoundMessage.AbilityBlanked -> null
     is RoundMessage.NoticeIssued -> null
     // F-003, on the receiving side. See the effect-side branch.
     is RoundMessage.RoleRevealed -> null

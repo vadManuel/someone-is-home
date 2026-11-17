@@ -109,6 +109,34 @@ sealed class RoundMessage {
     }
 
     /**
+     * **Somebody's ability was answered, and this phone is sent a frame of [AbilityFired]'s length
+     * at the same moment** (D-263, [Effect.AbilityBlanked]).
+     *
+     * Every living phone but the actor's is sent this where the actor is sent [AbilityFired], so a
+     * reader of the Wi-Fi sees one frame of one length land on every living phone and cannot pick
+     * out the one that asked. It says nothing: [paddingDigits] is always [ZERO], one digit, and a
+     * value of any other width cannot be constructed or decoded. The serial name is two characters
+     * longer than `AbilityFired` and the field name two shorter than `cooldownStarted`, so the two
+     * frames are the same number of bytes at every sequence number. Nothing reads it: `Flow` and
+     * `HouseBuzzer` name it as a no-op.
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("AbilityBlanked")
+    data class AbilityBlanked(val paddingDigits: Int) : RoundMessage() {
+        init {
+            require(paddingDigits == ZERO) { "the blank carries $ZERO and nothing else" }
+        }
+
+        companion object {
+            const val ZERO: Int = 0
+
+            /** The one blank there is. */
+            val Padded: AbilityBlanked = AbilityBlanked(ZERO)
+        }
+    }
+
+    /**
      * **A touch, answered, at exactly [AbilityFired]'s length on the wire** (R1, D-216,
      * [Effect.ContactAnswered]).
      *
@@ -751,6 +779,7 @@ sealed class RoundMessage {
         get() = when (this) {
             is LampSet -> EmitSchema.LAMP_SET
             is AbilityFired -> EmitSchema.ABILITY_FIRED
+            is AbilityBlanked -> EmitSchema.ABILITY_BLANKED
             is ContactAnswered -> EmitSchema.CONTACT_ANSWERED
             is Surged -> EmitSchema.SURGED
             is IsolateTargetsOffered -> EmitSchema.ISOLATE_TARGETS_OFFERED
@@ -808,7 +837,11 @@ sealed class RoundMessage {
  * - [Fire] goes **client → host**. The Egress tile, held down — the one request whose fact the
  *   house must *compose* rather than translate, which is why it is not an [Act].
  * - [Sighted] goes **client → host**. What this phone's radio heard: a report of fact, never a
- *   request, on a fixed cadence and at a fixed size (D-212).
+ *   request, on a fixed cadence and at a fixed size (D-212). In a round it also carries the one
+ *   request slot every request rides in (D-263), so a phone sends no [Act] and no [Fire] once it
+ *   is in an armed round.
+ * - [UploadHeard] goes **host → client**, to the phone whose upload it answers, once per upload: the
+ *   slot's id, so the phone stops sending that request (D-263).
  * - [RadioFaulted] goes **client → host**. This phone's radio went down: a report of fact, one fixed
  *   shape carrying D-187's line (a person's act, or the phone's) and the onset's random name, once
  *   per fault onset and again on each resume until it is answered (T2, D-222; D-223; D-245).
@@ -947,11 +980,40 @@ sealed class RoundBody {
      * per five seconds.
      *
      * No seat and no actor: the seat comes off the connection, like every request's.
+     *
+     * ### [ask]: every request a player makes in a round rides here (D-263, provisional)
+     *
+     * One [RequestSlot] of [RequestSlot.CHARS] characters, in every upload: the phone's oldest
+     * unanswered request with its id, or an empty slot under a fresh id. A request no longer goes up
+     * as a frame of its own between beats, because the phones that did that were the ones with
+     * something only an Insider can press. The house reads the slot first, puts a request it has not
+     * heard to the rules, then judges the sightings, then answers [UploadHeard] with the slot's id.
+     * No default, so a construction that forgot the slot does not compile: a field left at its
+     * default is a field the encoder leaves out, and the upload would be shorter.
      */
     @ClientFacing
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("sighted")
-    data class Sighted(val slots: String) : RoundBody()
+    data class Sighted(val slots: String, val ask: String) : RoundBody()
+
+    /**
+     * **Host → the one phone whose upload this answers. "I have the slot named [id]."** (D-263)
+     *
+     * Sent for **every** upload that arrives, after the house has done with it, whatever the slot
+     * held: a request heard for the first time, one heard before, or nothing at all. So every phone
+     * in a round is sent one of these a beat, of one length ([RequestSlot.ID_CHARS] hex characters),
+     * and it says nothing about whether the phone asked for anything or what the rules made of it
+     * (rule 1). The phone stops sending a request once its id comes back. Not a [Push]: transport
+     * bookkeeping like [FaultHeard], spends no sequence and reaches no screen.
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("uploadHeard")
+    data class UploadHeard(val id: String) : RoundBody() {
+        init {
+            require(RequestSlot.isId(id)) { "an upload's id is ${RequestSlot.ID_CHARS} lowercase hex characters" }
+        }
+    }
 
     /**
      * **Client → host. "My radio went down", and on which side of D-187's line** (rule 10; T2,
@@ -1047,6 +1109,8 @@ object RoundWire {
     fun project(effect: Effect): RoundMessage = when (effect) {
         is Effect.LampSet -> RoundMessage.LampSet(effect.luminance)
         is Effect.AbilityFired -> RoundMessage.AbilityFired(effect.cooldownStarted)
+        // The seat comes off and only the padding is left: AbilityFired's length (D-263).
+        is Effect.AbilityBlanked -> RoundMessage.AbilityBlanked.Padded
         // The seat comes off; the pad is what makes this frame an armed Insider's length.
         is Effect.ContactAnswered -> RoundMessage.ContactAnswered(RoundMessage.ContactAnswered.PAD)
         is Effect.Surged ->

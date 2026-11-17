@@ -732,6 +732,25 @@ private fun openingCooldowns(seats: List<Seat>, at: Tick): List<Cooldown> = seat
  * that firing it pulls the whole house to a place you may be standing in. Flagged, not invented: a
  * range rule guessed here would silently refuse honest shots in a house nobody measured.
  */
+/**
+ * **An ability's answer to its actor, and a blank of its length to every other seat, seat by seat**
+ * (D-263, provisional).
+ *
+ * [Effect.AbilityFired] reaches the actor alone, so on its own it put one frame on one living phone
+ * at the moment a Surge, Isolate, Static or Egress was answered, and that phone was the one that
+ * asked. [Effect.AbilityBlanked] is built for every seat but the actor at the same place, and the
+ * allowlist sends it to the living only: every living phone is sent exactly one frame of one length.
+ * Seat by seat, so the house writes them in seat order whatever the roles are, and **no role is
+ * read**: the only question asked of a seat is whether it is the actor's, which the actor's own phone
+ * already knows. An actor who is somehow not seated is still answered, first, so rule 1's one
+ * `AbilityFired` per path holds whatever the state says.
+ */
+private fun answeredAndBlanked(state: GameState, actor: Seat, cooldownStarted: Boolean): List<Effect> {
+    val fired = Effect.AbilityFired(actor = actor, cooldownStarted = cooldownStarted)
+    if (state.seats.none { it.index == actor.index }) return listOf(fired) + state.seats.map { Effect.AbilityBlanked(it) }
+    return state.seats.map { if (it.index == actor.index) fired else Effect.AbilityBlanked(it) }
+}
+
 private fun surgeFired(state: GameState, event: Event.SurgeFired): Reduction<GameState, Effect> {
     val ready = state.accessReady(event.actor, event.at)
     val next = if (!ready) {
@@ -743,7 +762,7 @@ private fun surgeFired(state: GameState, event: Event.SurgeFired): Reduction<Gam
     // Constructed once, outside the branch above. Deliberately not inside it: the actor's device
     // stays inert whatever happened to anybody, and what it is told is that the ability fired and
     // what its own clock now says.
-    val answered = Effect.AbilityFired(actor = event.actor, cooldownStarted = ready)
+    val answered = answeredAndBlanked(state, event.actor, cooldownStarted = ready)
     val landed = if (!ready) {
         emptyList()
     } else {
@@ -763,7 +782,7 @@ private fun surgeFired(state: GameState, event: Event.SurgeFired): Reduction<Gam
             ),
         )
     }
-    return Reduction(next, listOf(answered) + landed)
+    return Reduction(next, answered + landed)
 }
 
 /**
@@ -824,7 +843,7 @@ private fun isolateFired(state: GameState, event: Event.IsolateFired): Reduction
 
     // Constructed once, outside the branch above. Deliberately not inside it, and deliberately the
     // ONLY effect this handler produces: a card going dark is discovered by walking to it.
-    return Reduction(next, listOf(Effect.AbilityFired(event.actor, cooldownStarted = takes)))
+    return Reduction(next, answeredAndBlanked(state, event.actor, cooldownStarted = takes))
 }
 
 /**
@@ -888,7 +907,7 @@ private fun staticFired(state: GameState, event: Event.StaticFired): Reduction<G
     // Constructed once, outside the branch above. Deliberately not inside it: the actor's device is
     // told the ability fired and what its own clock now says, and nothing else -- exactly what a
     // Surge into a running pool is told.
-    val answered = Effect.AbilityFired(actor = event.actor, cooldownStarted = ready)
+    val answered = answeredAndBlanked(state, event.actor, cooldownStarted = ready)
 
     // **The house announcing its own blindness, to every living phone in the building.** Not
     // addressed, not narrowed, and carrying no seat -- see Effect.StaticOpened. The seed is derived
@@ -906,7 +925,7 @@ private fun staticFired(state: GameState, event: Event.StaticFired): Reduction<G
         )
     }
 
-    return Reduction(next, listOf(answered) + jammed)
+    return Reduction(next, answered + jammed)
 }
 
 /**
@@ -1840,7 +1859,7 @@ private fun egressFired(state: GameState, event: Event.EgressFired): Reduction<G
     // own clock. This is `surgeFired`'s arrangement — the actor is the only recipient, the row
     // permits the kind to `Insider/Live`, and what it says is *your own clock*, which is input echo
     // and not a game answer.
-    val answered = Effect.AbilityFired(actor = event.actor, cooldownStarted = started != null)
+    val answered = answeredAndBlanked(state, event.actor, cooldownStarted = started != null)
     val alarm = started?.let { egress ->
         // Per seat, once each, because this is one of D-118's two dimming events and a dim that
         // reached fewer than everybody would be a beacon (D-076). Grouped as one run rather than
@@ -1871,7 +1890,7 @@ private fun egressFired(state: GameState, event: Event.EgressFired): Reduction<G
     // presence reported the state of the shared cooldown to a phone that was told it another way.
     val relisted = if (started == null) emptyList() else isolateOffers(next)
 
-    return Reduction(next, listOf(answered) + alarm + relisted)
+    return Reduction(next, answered + alarm + relisted)
 }
 
 /**

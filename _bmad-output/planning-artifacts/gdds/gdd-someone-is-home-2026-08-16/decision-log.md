@@ -7188,7 +7188,6 @@ and the other exits. Each of the eight endings and the harness's two were render
 looked at. **Not on a phone.**
 
 Also fixed: `RoundForgottenTest` held `STAY ON TASK`, which `:ui:vocabularyLint` refuses.
-
 ## Revision 77 — the actor's Access bar follows the house's answer to its own fire
 
 ### D-262 · **A Tier-2 fire's answer restarts the actor's own Access bar from that ability's weight; page 2 stays the same on both roles until a fire — built, provisional, owner to confirm**
@@ -7258,6 +7257,141 @@ is a wire change, left for after U1.
   full; 20 s after the Surge the Insider's is about an eighth full and the Resident's is full.
 
 **Not on a phone.**
+
+## Revision 78 — every request rides the upload, and every living phone is sent the answer's frame
+
+*2026-11-17, overnight run, unit U1. The two leaks the orchestrator found after D-258. The principle
+is the owner's (R1, R8; D-212 ruling 5, D-216, D-249, D-258): every living phone sends and receives
+the same number of frames, of the same size, at the same cadence, whatever its role. Desktop,
+loopback and simulator only; nothing here has been on a phone.*
+
+### D-263 · **Every request a player makes in a round rides inside the fixed-cadence upload, retried under one id until the house answers; every living phone but the actor is sent a blank of the actor's answer — built, provisional, owner to confirm (including the cost)**
+
+**What leaked.** (a) **Up.** `ArmRevoke`, the Egress tile (`RoundBody.Fire`), Surge, Isolate and
+Static each went up as a frame of its own at the moment it was pressed. Residents never send them, so
+anybody measuring the Wi-Fi saw which phones put a frame on the air between their beats, and those
+were the Insiders. Encryption (R7) hides a frame's contents, not its existence, size or timing.
+(b) **Down.** When an ability was answered the actor alone was sent `AbilityFired`, one frame more
+than every other phone at that moment (D-258's audit: the Egress actor's `+1`).
+
+**⚠️ The provisional call (owner to confirm): no request travels as its own frame once a round is
+armed.** It waits for the next beat and rides inside the upload every phone already sends once a
+second at one size (D-212). **The cost is up to one beat (`SightingUpload.CADENCE_MILLIS`, 1 s) of
+extra latency per request, and one more beat for every lost upload.** The cadence is not raised.
+
+**Up: the request slot.**
+
+1. **`RoundBody.Sighted` gains `ask`**, one `RequestSlot` of 532 characters: a 16-hex request id,
+   four hex characters of length, and the request's JSON (`Asked.Act(intent)` or `Asked.Fire`) as
+   UTF-8 hex padded with zeros to 256 bytes. Hex, because no layer escapes it, so the width is the
+   length. No default on the field, so an upload cannot be built without one. **Every upload frame
+   is 1 808 bytes for every phone, whatever its slot holds** (it was 1 263 before the slot), measured
+   on the encoded frame for every member of `IntentMessage`, the Egress tile and an empty slot.
+2. **The phone** (`SlotRequests`, in `RoundOverTransport`). In a round, `act` and `fireEgress` queue
+   the request; each beat the uploader fills the slot with the oldest one the house has not answered,
+   under its own random id, or an empty slot under a fresh random id. One a beat, in the order made,
+   so a lock never overtakes its selection (D-117). A `SelectVote` not yet sent is replaced by the
+   next one, so a finger moving down the ballot is heard where it is now rather than a row a beat. A
+   request whose JSON is over 256 bytes is said in the phone's log and not sent (rule 6); the largest
+   today is far under. The queue empties when a round begins or ends.
+3. **The house** (`LobbyHouse.attend`, one consumer, D-241 order unchanged). It reads the slot
+   **first**, then judges the sightings, so an arm and a touch in one beat are put to the rules in
+   the order they were made. `IntentDesk.slotted` attributes the request to the connection's seat
+   (the slot has nowhere to name one) and puts each id to the rules once; it keeps the last 64 ids per
+   seat **across connections**, because a request is resent on a new socket under the same id. Then
+   it answers **every** upload with `RoundBody.UploadHeard(id)`, whatever the slot held and whatever
+   the rules made of it (rule 1): one frame of one length a beat to every phone in the round.
+4. **Exactly once.** A request stays at the head of the queue, resent every beat under its id, until
+   `UploadHeard` names it. A lost upload, a closed socket or a lost answer all end the same way, and the
+   desk hears the id once.
+5. **Before arming nothing changes.** A request made while the phone holds no seed (the lobby) still
+   goes up as its own `RoundBody.Act` or `Fire`: no request means anything to the rules before arming,
+   and every phone is in that state at the same moments. The lobby's own bodies are untouched. The
+   house still reads a standalone `Act`/`Fire` at any time (a phone in a round sends neither).
+6. **Out seats** keep uploading on the same cadence at the same size (R8, unchanged), with the same
+   slot.
+7. **Not moved, and why.** `RoundBody.Gap` (a reconnect, or an out-of-order push) and
+   `RoundBody.RadioFaulted` (D-245) still travel alone. Neither depends on a role: a radio fault or a
+   phone leaving the foreground happens to any phone, and D-245's report has its own exactly-once
+   machinery that a slot would have to share. **Raised:** each still marks *that phone* to a sniffer
+   (it faulted, or it reconnected), not its role.
+
+**Down: the blank.**
+
+8. **A new effect and kind, `AbilityBlanked(seat)`.** `Rules` builds the actor's `AbilityFired` and
+   one `AbilityBlanked` for every other seat, seat by seat, at every Surge, Isolate, Static and Egress,
+   taking or falling into a running clock (`answeredAndBlanked`). No role is read: the only question
+   asked of a seat is whether it is the actor's. Its row is both living classes and nothing else, so
+   every living phone is sent exactly one frame and the out none. `RoundMessage.AbilityBlanked` carries
+   one padding digit; the serial name is two characters longer than `AbilityFired` and the field two
+   shorter than `cooldownStarted`, so both are **117 bytes** at every sequence. `Flow` and
+   `HouseBuzzer` name it as a no-op. A touch is unchanged: R1 already answered both touchers.
+9. **Measured at an Egress's start, over loopback, five phones:** every living phone, the actor
+   included, was sent `[116, 307, 891]` bytes (this home's draw) net of the sequence number's digits (the answer or the
+   blank, `EgressOpened`, the Isolate offer or blank). Before, the actor was sent one frame more.
+
+**The cost, measured** (`UplinkFrameTest`, five phones over loopback, presses one after another):
+24 requests from press to the house's hearing it, **min 5 ms, mean 695 ms, max 1 009 ms**; the Surge
+whose upload was lost, **2 008 ms**. Checked against what is time-critical:
+- **The lamp going dark on `RevokeLanded`** is downward and follows the sightings, which were already on
+  the cadence. Unchanged. The arm now reaches the house up to a beat after the hold ends; the hold is
+  two seconds (D-141) and the touch comes after it, so an Insider who touches within a second of
+  releasing the tile may touch unarmed. **For the owner.**
+- **D-141 holds:** every hold is on the phone and the request leaves when it ends.
+- **Meetings:** a check-in, READY or lock pressed in the last second of its window may now land after
+  it closes. The vote window is 45 s.
+- **Containment:** Sync Pulse taps are graded on the times the phone recorded, not on arrival; a pair
+  must hand over within six seconds of each other (`SYNC_PULSE_PAIR_WINDOW`), and each now arrives up
+  to a second late, independently. A return in an Egress's last second may miss it.
+- Subroutine entries are graded on what was entered, not on arrival.
+
+**Guards, each proven by breaking it.**
+
+- `UplinkFrameTest` (app cheats; five real phones, `FlowModel` actions, `RoundClient`,
+  `LobbyOverTransport`, `RoundAuthority`, a tap on each socket). A guest Insider arms, Surges with its
+  upload lost, everybody calls, checks in, readies and votes a Resident out with one lock's answer
+  lost, and the Insider fires the Egress. Every round frame every phone sent is an upload of one length
+  (1 808 bytes); in every four-second window the phones' counts differ by at most the one beat a
+  window edge allows; every upload is answered by one frame of one length; at the Egress every living
+  phone gets the same frames; the Surge, every check-in and every lock are heard exactly once.
+- `SlotRequestsTest` (order, resend under one id, the selection replaced, too long, cleared).
+- `RequestSlotTest`, `AbilityBlankWireSizeTest`, `SightingUploadTest` (model: one width for every
+  request; 117 bytes at sequences 1 to a million; the row; a slot that is not one reads as nothing).
+- `EgressTest."every living seat gets one answer frame of one length whenever an ability is answered"`
+  (core: Surge, Isolate, Static, Egress and an early Egress by each Insider, with a Revoked seat).
+- `IsolateFrameSizeTest` and `AbilityWiringTest` now expect the blank where they expected nothing.
+- `tools/sim-hunt/hunt.sh --seats 5` (wire-only Simulator seats, seed 20261150): the bench's round
+  played to ENDING (the Egress uncontained) and a second round armed; the guest Insider's arm,
+  Static and Egress reached the house through the slot, and no seat logged a slot it could not read.
+
+**Recording format 29**: one effect a version 28 build cannot name.
+
+**Raised, not decided:**
+
+- **Timing still links a request to its asker.** The answer's burst lands a few milliseconds after
+  the actor's upload arrives, and each phone's beat has its own phase, so a sniffer correlating "upload
+  from phone X, then a frame on every phone" can still pick out X. On the host's own phone the request
+  rides loopback, so the burst follows no guest's upload at all, which points at the host. The fix is
+  for the house to put slotted requests to the rules on **its own beat** rather than at arrival, at up
+  to one more second of latency (two in all). Not built: it doubles the cost the owner approved.
+- `Gap` and `RadioFaulted` still go alone (item 7).
+- The slot's 256 bytes and the 1 s cadence are provisional, as D-212's cadence always was.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `model/protocol` `RequestSlot`, `Asked` | (new) | the fixed-width slot; a control or the Egress tile |
+| `model/protocol` `RoundBody.Sighted` | `slots` | `slots`, `ask` |
+| `model/protocol` `RoundBody.UploadHeard` | (none) | host to the uploading seat, every upload: the slot's id |
+| `model/protocol` `SightingUpload.pack` | four arguments | and the slot, an all-zero empty one by default |
+| `model` `Effect.AbilityBlanked`, `EmitSchema`, `RoundMessage.AbilityBlanked` | (new) | every seat but the actor; row: both living classes; one padding digit, 117 bytes |
+| `core` `Rules` Surge, Isolate, Static, Egress | `AbilityFired` to the actor | `answeredAndBlanked`: the actor's answer and every other seat's blank, seat by seat |
+| `platform` `IntentDesk.slotted` | (new) | attributed by the connection, each id put once, 64 kept per seat across connections |
+| `app` `SlotRequests`, `ContactUploader.ask` | (new) | the phone's queue; the slot read once a beat |
+| `app` `RoundOverTransport.act`, `fireEgress` | an `Act` or `Fire` frame of its own | in a round, the next beat's slot; before arming, as before |
+| `app` `LobbyHouse.attend` | sightings only | the slot, then the sightings, then `UploadHeard` |
+| `ui` `Flow`, `app` `HouseBuzzer`, `harness` `Transcript` | (new) | a named no-op, silent, one transcript row |
+| `harness` `Recording.HEADER` | `recording/28` | `recording/29` |
+
 
 ## State after revision 12
 

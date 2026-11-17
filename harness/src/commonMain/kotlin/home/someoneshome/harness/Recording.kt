@@ -50,6 +50,11 @@ class Recording(
     }
 
     companion object {
+        // 29: one effect a version 28 build cannot name -- `AbilityBlanked` (D-263), built for every
+        // seat but the actor beside each `AbilityFired` a Surge, an Isolate, a Static or an Egress
+        // answers. No event and no state row changed; the same events replay to a longer effect
+        // transcript, so it is a bump for version 15's reason.
+        //
         // 28: one effect a version 27 build cannot name -- `IsolateTargetsBlanked` (D-258), built
         // beside every seat's `IsolateTargetsOffered` at arming, at an Egress's start and at its
         // containment. No event and no state row changed; the same events replay to a longer effect
@@ -240,7 +245,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/28"
+        const val HEADER = "someone-is-home/recording/29"
     }
 }
 

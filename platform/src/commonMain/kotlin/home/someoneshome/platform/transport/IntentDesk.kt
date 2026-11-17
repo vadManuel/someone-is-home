@@ -2,6 +2,7 @@ package home.someoneshome.platform.transport
 
 import home.someoneshome.model.Intent
 import home.someoneshome.model.Seat
+import home.someoneshome.model.protocol.Asked
 import home.someoneshome.model.protocol.IntentMessage
 import home.someoneshome.model.protocol.RoundBody
 import kotlinx.coroutines.sync.Mutex
@@ -131,6 +132,36 @@ class IntentDesk(
     }
 
     /**
+     * The ids each seat's slotted requests have carried, newest last, at most [SLOTTED_KEPT] a seat
+     * (D-263). Kept across connections: a request is sent again on every beat until the house
+     * answers it, a new connection included, so the mark has to outlive the socket.
+     */
+    private val slotted = HashMap<Int, ArrayDeque<String>>()
+
+    /**
+     * **A request out of one upload's slot, off one connection** (D-263).
+     *
+     * [arrived]'s two doors in one, with a different dedup key: the slot's [id], which the phone
+     * draws at random and keeps for every beat it sends the request on until the house answers.
+     * **The first time an id is heard from a seat it is put** ([Landing.Put] for a control,
+     * [Landing.Draw] for the Egress tile); every later time it is [Landing.Duplicate]. The seat is
+     * the connection's, as in [arrived]; [asked] has nowhere to name one.
+     *
+     * The id mark is not cleared by [seated]. A slotted request that went up a failing socket is sent
+     * again on the next one, under the same id, and has to be recognised there.
+     */
+    suspend fun slotted(seat: Seat, id: String, asked: Asked): Landing = gate.withLock {
+        val seen = slotted.getOrPut(seat.index) { ArrayDeque() }
+        if (id in seen) return@withLock Landing.Duplicate
+        seen.addLast(id)
+        while (seen.size > SLOTTED_KEPT) seen.removeFirst()
+        when (asked) {
+            is Asked.Act -> Landing.Put(asked.intent.attributedTo(seat))
+            is Asked.Fire -> Landing.Draw(seat)
+        }
+    }
+
+    /**
      * Move this seat's mark to [seq], or null when [seq] has already been heard.
      *
      * The one place the dedup arithmetic lives, so the two [arrived] doors cannot come to disagree
@@ -153,6 +184,14 @@ class IntentDesk(
      */
     suspend fun seated(seat: Seat) {
         gate.withLock { heard.remove(seat.index) }
+    }
+
+    private companion object {
+        /**
+         * Slotted ids remembered per seat. A phone sends its oldest unanswered request and no other,
+         * so the ids it can still send are the one at its head; this is far past that.
+         */
+        const val SLOTTED_KEPT = 64
     }
 
     // There is deliberately no `roundEnded` here, and the absence is the safe direction.

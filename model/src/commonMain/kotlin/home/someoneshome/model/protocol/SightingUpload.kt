@@ -65,6 +65,9 @@ object SightingUpload {
 
     private const val DOMAIN_FILLER: Byte = 'P'.code.toByte()
 
+    /** An empty request slot under an all-zero id: what an upload carries when nothing asks (D-263). */
+    val EMPTY_ASK: String = RequestSlot.empty("0".repeat(RequestSlot.ID_CHARS))
+
     /** The filler's RSSI range, roughly where real readings sit. */
     private const val FILLER_RSSI_FLOOR = -100
     private const val FILLER_RSSI_SPAN = 61
@@ -77,7 +80,19 @@ object SightingUpload {
      * [upload] and the slot, and every slot is then sorted by its own text, so neither position nor
      * order says which are real. RSSI is clamped to a signed byte.
      */
-    fun pack(seed: ContactSeed, window: ContactWindow, upload: Long, heard: List<Sighting>): RoundBody.Sighted {
+    fun pack(
+        seed: ContactSeed,
+        window: ContactWindow,
+        upload: Long,
+        heard: List<Sighting>,
+        /**
+         * The request slot this upload carries (D-263): a [RequestSlot], always [RequestSlot.CHARS]
+         * characters. Empty under an all-zero id when a caller has no requests to carry, which is
+         * every caller but the phone's own uploader; the width is the same either way.
+         */
+        ask: String = EMPTY_ASK,
+    ): RoundBody.Sighted {
+        require(ask.length == RequestSlot.CHARS) { "a request slot is ${RequestSlot.CHARS} characters" }
         val kept = heard
             .groupBy { it.token.hex to it.window.index }
             .map { (_, same) -> same.maxWith(compareBy<Sighting> { it.rssi }.thenBy { it.token.hex }) }
@@ -85,7 +100,7 @@ object SightingUpload {
             .take(SLOTS)
         val filler = (kept.size until SLOTS).map { slot -> filler(seed, window, upload, slot) }
         val slots = (kept + filler).map { slotOf(it) }.sorted()
-        return RoundBody.Sighted(slots.joinToString(""))
+        return RoundBody.Sighted(slots.joinToString(""), ask)
     }
 
     /**

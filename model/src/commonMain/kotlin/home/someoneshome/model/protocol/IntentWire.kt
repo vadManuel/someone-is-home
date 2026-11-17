@@ -77,6 +77,13 @@ import home.someoneshome.model.Seat
  *
  * So the request keeps its own frame and the desk keeps two answers rather than one branch. See
  * [RoundBody.Fire], where the argument is written at the frame that carries it.
+ *
+ * ### In a round, neither travels as a frame of its own (D-263)
+ *
+ * Once a round is armed, a request rides inside the upload every phone sends once a beat at one
+ * size, as an [Asked] in a [RequestSlot]: only Insiders press five of these, and a frame of their
+ * own between beats was what told the Wi-Fi which phones those were. [Asked.Act] carries one of
+ * these members and [Asked.Fire] the Egress tile, and the two stay two members for the reason above.
  */
 @ClientFacing
 @kotlinx.serialization.Serializable

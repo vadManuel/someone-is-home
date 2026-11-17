@@ -28,6 +28,24 @@ sealed interface Effect {
     data class AbilityFired(val actor: Seat, val cooldownStarted: Boolean) : Effect
 
     /**
+     * **Somebody else's ability was answered at this moment, and this seat is sent a frame of its
+     * answer's length** (D-263, provisional).
+     *
+     * [AbilityFired] reaches the actor alone, so the moment a Surge, Isolate, Static or Egress is
+     * answered the actor's socket carried one frame more than every other living phone's: on a
+     * Wi-Fi that can be measured, the one phone that got a frame was the one that asked. So the
+     * rules build one of these for **every other seat** at the same place in the burst, seat by
+     * seat, and the allowlist sends it to both living classes and to no out class. Every living
+     * phone is sent exactly one frame of one length (`RoundMessage.AbilityBlanked`), the actor its
+     * real answer and the rest this.
+     *
+     * Built without a read of any role: the rules address it to every seat that is not the actor,
+     * and the row narrows it to the living. It carries the seat and nothing else, and the seat comes
+     * off on the wire. Nothing reads it on a phone.
+     */
+    data class AbilityBlanked(val seat: Seat) : Effect
+
+    /**
      * **A touch, answered: the house heard this phone touch another, and it changed nothing this
      * phone may be told about** (R1 of the owner's 2026-11-15 rulings, D-216).
      *

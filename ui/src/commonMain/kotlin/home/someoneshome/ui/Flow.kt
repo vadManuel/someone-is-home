@@ -2383,6 +2383,12 @@ class FlowModel(
             // that it had been touched; this branch is a named no-op and stays one.
             is RoundMessage.ContactAnswered -> Unit
 
+            // **Somebody else's ability, answered** (D-263). Every living phone but the actor's is
+            // sent one where the actor is sent `AbilityFired`, so that the frame count never says who
+            // asked. It carries nothing, and a phone that moved on it would be announcing that an
+            // ability had fired somewhere: a named no-op, and it stays one.
+            is RoundMessage.AbilityBlanked -> Unit
+
             // **The house notice** (D-187, D-223). It arrives on every phone at every meeting, just
             // before the push that opens the notices, and it is what the notices screen draws: the
             // seats it names, or none, and none draws nothing. It moves no screen; the phase push

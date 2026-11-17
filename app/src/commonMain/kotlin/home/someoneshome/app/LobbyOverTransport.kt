@@ -10,6 +10,7 @@ import home.someoneshome.model.Seat
 import home.someoneshome.model.SeatNamed
 import home.someoneshome.model.protocol.LobbyBody
 import home.someoneshome.model.protocol.LobbyWire
+import home.someoneshome.model.protocol.RequestSlot
 import home.someoneshome.model.protocol.RoundBody
 import home.someoneshome.model.protocol.RoundWire
 import home.someoneshome.model.protocol.SeatToken
@@ -855,7 +856,26 @@ class LobbyHouse(
                 // **The radio, to the resolver** (D-217). Not through the desk: an upload carries
                 // no sequence by design (D-212), and the resolver recognises a second delivery by
                 // the slots themselves (D-213).
-                is Arrival.Sighted -> onSighted(arrival.seat, arrival.upload)
+                //
+                // **And the request slot first** (D-263). Every request a phone makes in a round rides
+                // its upload, so the slot is read before the sightings: an arm made before a touch in
+                // the same beat is put to the rules before the touch is judged. A slot id this seat has
+                // sent before is a resend and goes nowhere (`IntentDesk.slotted`). Then the upload is
+                // answered with its slot's id, whatever it held and whatever the rules made of it, so
+                // every phone is sent one answer a beat (rule 1).
+                is Arrival.Sighted -> {
+                    val slot = RequestSlot.read(arrival.upload.ask)
+                    if (slot == null) onEvent("AN UPLOAD'S REQUEST SLOT DID NOT READ — SEAT ${arrival.seat.index}")
+                    slot?.asked?.let { asked ->
+                        when (val landing = intents.slotted(arrival.seat, slot.id, asked)) {
+                            is IntentDesk.Landing.Put -> onIntent(landing.intent)
+                            is IntentDesk.Landing.Draw -> onEgressFired(landing.actor)
+                            is IntentDesk.Landing.Duplicate -> Unit
+                        }
+                    }
+                    onSighted(arrival.seat, arrival.upload)
+                    if (slot != null) answerUpload(arrival.seat, slot.id)
+                }
                 // **The radio fault, to the rules, then answered** (T2, D-222; D-245). Not through
                 // the desk: the body has no sequence. A phone keeps a report until it is answered
                 // and sends it again on every resume, so one onset can arrive twice, and the
@@ -911,6 +931,8 @@ class LobbyHouse(
                 is RoundBody.RadioFaulted -> arriving.trySend(Arrival.RadioFaulted(seat, round))
                 // The house's to send, never to receive (D-245).
                 is RoundBody.FaultHeard -> Unit
+                // The house's to send, never to receive (D-263).
+                is RoundBody.UploadHeard -> Unit
             }
             return
         }
@@ -960,6 +982,23 @@ class LobbyHouse(
             throw cancelled
         } catch (_: Exception) {
             onEvent("A REPORT COULD NOT BE ANSWERED — SEAT ${seat.index} · IT IS SENT AGAIN ON ITS RETURN")
+        }
+    }
+
+    /**
+     * **"I have the slot named [id]"**, to the one seat whose upload carried it (`RoundBody.UploadHeard`,
+     * D-263). Sent for every upload, so it is one frame of one length a beat on every phone. A seat
+     * whose connection has gone misses it and sends the request again on its next beat; the desk hears
+     * the id once. Queued on the seat's own connection and never waited on (R12).
+     */
+    private suspend fun answerUpload(seat: Seat, id: String) {
+        val server = host ?: return
+        try {
+            server.send(seat, TransportFrame.Carry(RoundWire.encode(RoundBody.UploadHeard(id))))
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            onEvent("AN UPLOAD COULD NOT BE ANSWERED — SEAT ${seat.index} · ITS REQUEST GOES UP AGAIN")
         }
     }
 

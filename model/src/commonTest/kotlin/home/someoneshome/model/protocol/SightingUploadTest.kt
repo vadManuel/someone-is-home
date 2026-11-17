@@ -53,6 +53,15 @@ class SightingUploadTest {
                 Sighting(ContactToken("0".repeat(32)), -500, ContactWindow(0)),
             ),
         ),
+        // D-263: the slot, empty and full, carrying what only an Insider sends and what anybody does.
+        "an Insider arming in the slot" to SightingUpload.pack(
+            seedOf(1), now, 41, emptyList(), RequestSlot.of("0123456789abcdef", Asked.Act(IntentMessage.ArmRevoke))!!,
+        ),
+        "an Insider's Egress in the slot" to SightingUpload.pack(seedOf(1), now, 41, emptyList(), RequestSlot.of("fedcba9876543210", Asked.Fire)!!),
+        "a Resident's check-in in the slot" to SightingUpload.pack(
+            seedOf(3), now, 41, emptyList(), RequestSlot.of("00000000000000aa", Asked.Act(IntentMessage.CheckIn))!!,
+        ),
+        "an empty slot under a random id" to SightingUpload.pack(seedOf(6), now, 41, emptyList(), RequestSlot.empty("9f9f9f9f9f9f9f9f")),
     )
 
     /** **The ruling, measured on the bytes a reader of the Wi-Fi would see.** */
@@ -68,12 +77,12 @@ class SightingUploadTest {
         }
     }
 
-    /** Two keys and nothing else: no seat, no sequence, no role, no armed bit. */
+    /** Three keys and nothing else: no seat, no sequence, no role, no armed bit. The slot is D-263's. */
     @Test
     fun `the body carries the slots and nothing about who sent it`() {
         for ((name, body) in cases()) {
             val keys = Json.parseToJsonElement(RoundWire.encode(body)).jsonObject.keys
-            assertEquals(setOf("type", "slots"), keys, name)
+            assertEquals(setOf("type", "slots", "ask"), keys, name)
         }
     }
 
@@ -126,7 +135,7 @@ class SightingUploadTest {
 
     @Test
     fun `a body that is not a packed upload is unreadable rather than half read`() {
-        assertNull(SightingUpload.unpack(RoundBody.Sighted("00")))
-        assertNull(SightingUpload.unpack(RoundBody.Sighted("Z".repeat(SightingUpload.BODY_CHARS))))
+        assertNull(SightingUpload.unpack(RoundBody.Sighted("00", SightingUpload.EMPTY_ASK)))
+        assertNull(SightingUpload.unpack(RoundBody.Sighted("Z".repeat(SightingUpload.BODY_CHARS), SightingUpload.EMPTY_ASK)))
     }
 }

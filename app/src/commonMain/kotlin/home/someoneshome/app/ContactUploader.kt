@@ -25,7 +25,8 @@ import home.someoneshome.platform.secureRandomBytes
  *
  * [beat] is called on `SightingUpload.CADENCE_MILLIS` by whoever owns the clock. Every call in a
  * round sends exactly one `RoundBody.Sighted`, packed to `SightingUpload.BODY_CHARS` whatever was
- * heard (D-212 ruling 3).
+ * heard (D-212 ruling 3). Each upload also carries this beat's request slot ([ask], D-263): every
+ * request the player makes in a round rides here rather than as a frame of its own.
  *
  * ### R8: a phone that is out keeps uploading, and uploads nothing heard
  *
@@ -94,6 +95,12 @@ class ContactUploader(
     private val onsetName: () -> String = ::freshOnset,
     /** This phone's log, and only its log: a report read back, or a store that would not write. */
     private val onEvent: (String) -> Unit = {},
+    /**
+     * **This beat's request slot** (D-263): `SlotRequests.slot` on a phone, read once per upload, so
+     * every request this phone makes in a round rides inside the upload it was going to send anyway.
+     * An empty slot by default, for a construction with nothing to ask.
+     */
+    private val ask: () -> String = { SightingUpload.EMPTY_ASK },
     /** Up this phone's own socket. */
     private val send: (RoundBody.Sighted) -> Unit,
 ) {
@@ -167,7 +174,7 @@ class ContactUploader(
         }
         val readings = radio.drain()
         val heard = if (out) emptyList() else readings.map { Sighting(it.token, it.rssi, window) }
-        send(SightingUpload.pack(key, window, uploads++, heard))
+        send(SightingUpload.pack(key, window, uploads++, heard, ask()))
         // **Rule 6: silent here, loud at the house** (T2, D-222). The radio reports each fault once,
         // at its onset; nothing on this phone's screen, lamp or motor hears of it. A return from
         // leaving the foreground is a person's act and wins the beat (D-229): the radio's onset is

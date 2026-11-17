@@ -43,6 +43,7 @@ class RoundWireTest {
     private val everyEffect: List<Effect> = listOf(
         Effect.LampSet(Seat(3), luminance = 1),
         Effect.AbilityFired(Seat(3), cooldownStarted = true),
+        Effect.AbilityBlanked(Seat(3)),
         Effect.Surged(Seat(3), peak = 100, black = 0, sound = Sound.Surge, haptic = Haptic.Short),
         Effect.IsolateTargetsOffered(
             Seat(3),

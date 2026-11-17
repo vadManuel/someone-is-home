@@ -57,6 +57,10 @@ import kotlin.test.assertTrue
  * second house.
  */
 private val SEATS = (0 until 6).map { Seat(it) }
+
+/** An ability's answer as the rules build it (D-263): the actor's own, and a blank for every other seat, seat by seat. */
+private fun answeredTo(actor: Seat, cooldownStarted: Boolean): List<Effect> =
+    SEATS.map { if (it == actor) Effect.AbilityFired(actor, cooldownStarted) else Effect.AbilityBlanked(it) }
 private val INSIDERS = listOf(Seat(1), Seat(4))
 
 private val WEST = MarkerId("west-card")
@@ -362,7 +366,7 @@ class EgressTest {
         // The flag is `false` because the shared cooldown really was still running: T1·8 closed,
         // and it is the actor's own clock rather than a report on the house.
         assertEquals(
-            listOf(Effect.AbilityFired(Seat(4), cooldownStarted = false)), walk.drain(),
+            answeredTo(Seat(4), cooldownStarted = false), walk.drain(),
             "the refused fire came back a different shape from one the house allowed",
         )
     }
@@ -389,7 +393,7 @@ class EgressTest {
         )
         assertNull(early.state.egress, "an Egress fired inside the opening cooldown")
         assertEquals(
-            listOf(Effect.AbilityFired(Seat(1), cooldownStarted = false)),
+            answeredTo(Seat(1), cooldownStarted = false),
             early.drain(),
             "a fire the cooldown refused came back a different shape from one it allowed",
         )
@@ -899,6 +903,43 @@ class EgressTest {
      * and reaches living Residents only. Measured through the allowlist and the real wire encoders,
      * with seat 3 Revoked so the out are seen to get neither.
      */
+    @Test
+    fun `every living seat gets one answer frame of one length whenever an ability is answered`() {
+        // D-263: the actor's `AbilityFired` and every other seat's `AbilityBlanked`, through the
+        // gate, the allowlist and the real encoders, with seat 3 Revoked. Each of the four Tier
+        // abilities and an Egress, taking and falling into a running clock, fired by either Insider.
+        fun answerFrames(effects: List<Effect>, state: GameState): Map<Int, List<Int>> = effects
+            .filter { it is Effect.AbilityFired || it is Effect.AbilityBlanked }
+            .flatMap { effect ->
+                EmitSchema.deliveries(effect, state).map { delivery ->
+                    val push = RoundWire.encode(RoundBody.Push(1, RoundWire.project(effect)))
+                    delivery.seat.index to TransportWire.encode(TransportFrame.Carry(push)).length
+                }
+            }
+            .groupBy({ it.first }, { it.second })
+
+        val living = SEATS.map { it.index } - 3
+        val start = armed().copy(revoked = listOf(Seat(3)))
+        val late = Tick(readyToFire(start).step + Balance.EGRESS_COOLDOWN)
+        val moments = INSIDERS.flatMap { actor ->
+            listOf(
+                "a Surge by $actor" to Event.SurgeFired(late, actor, Seat(2)),
+                "an Isolate by $actor" to Event.IsolateFired(late, actor, MIDDLE),
+                "a Static by $actor" to Event.StaticFired(late, actor),
+                "an Egress by $actor" to Event.EgressFired(late, actor, EgressType.Beacon, listOf(WEST, EAST)),
+                "an early Egress by $actor" to Event.EgressFired(Tick(1), actor, EgressType.Beacon, listOf(WEST, EAST)),
+            )
+        }
+        for ((moment, event) in moments) {
+            val walk = EgressWalk(start).feed(event)
+            assertTrue(walk.refusals.isEmpty(), "$moment was refused, so this measured nothing: ${walk.refusals}")
+            val frames = answerFrames(walk.drain(), walk.state)
+            assertEquals(living.toSet(), frames.keys, "$moment: the answer frames reached another set of seats: $frames")
+            for ((seat, lengths) in frames) assertEquals(1, lengths.size, "$moment: seat $seat got ${lengths.size} answer frames")
+            assertEquals(1, frames.values.flatten().toSet().size, "$moment: the answer frame's length follows the seat: $frames")
+        }
+    }
+
     @Test
     fun `every living seat gets one Isolate frame of one length at each of the three moments`() {
         fun isolateFrames(effects: List<Effect>, state: GameState): Map<Int, List<Int>> = effects

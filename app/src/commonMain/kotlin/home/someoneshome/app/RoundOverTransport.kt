@@ -1,6 +1,7 @@
 package home.someoneshome.app
 
 import home.someoneshome.model.ContactWindow
+import home.someoneshome.model.protocol.Asked
 import home.someoneshome.model.protocol.IntentMessage
 import home.someoneshome.model.protocol.RoundBody
 import home.someoneshome.model.protocol.RoundMessage
@@ -123,6 +124,12 @@ class RoundOverTransport(
     private val inbox = RoundInbox()
     private val outbox = IntentOutbox()
 
+    /**
+     * **Every request this phone makes in a round, waiting for a beat's slot** (D-263). Read once a
+     * beat by the uploader; answered by `RoundBody.UploadHeard`; emptied when the round ends here.
+     */
+    private val requests = SlotRequests(onEvent = onEvent)
+
     /** This phone's half of the contact handshake (D-217). Fed every applied push; beaten by [upload]. */
     private val contacts = ContactUploader(
         radio, windowNow,
@@ -132,7 +139,12 @@ class RoundOverTransport(
         faulted = { body -> up(RoundWire.encode(body)) },
         kept = kept,
         onEvent = onEvent,
+        // **Every request rides the beat** (D-263): the slot is filled at the upload, never sent alone.
+        ask = requests::slot,
     )
+
+    /** How many requests this phone has made in the round that the house has not answered. For tests. */
+    val requestsWaiting: Int get() = requests.count
 
     /** Whether the house has put this phone out, as the uploader was told. For the bench and tests. */
     val outOfTheRound: Boolean get() = contacts.isOut
@@ -199,6 +211,11 @@ class RoundOverTransport(
                     // The radio last: nothing it does can move a screen, and the seed and the
                     // out-of-the-round facts are read off the same applied message, once.
                     contacts.heard(landing.message)
+                    // A round begins or ends with nothing waiting from another one (D-263): a
+                    // request left over from the last round must never be put to the next.
+                    if (landing.message is RoundMessage.ContactSeedIssued || landing.message is RoundMessage.RoundEnded) {
+                        requests.clear()
+                    }
                     when (keepsTheScreenAwake(landing.message)) {
                         true -> wake.hold()
                         false -> wake.release()
@@ -236,6 +253,9 @@ class RoundOverTransport(
             // **The house has this phone's report** (D-245): it is no longer kept. Not a push, so it
             // spends no sequence and reaches no screen, lamp or motor.
             is RoundBody.FaultHeard -> contacts.acknowledged(body.onset)
+            // **The house has this beat's slot** (D-263): a request under that id is done. Every
+            // upload is answered with one of these, so it says nothing, and it reaches no screen.
+            is RoundBody.UploadHeard -> requests.heard(body.id)
         }
     }
 
@@ -265,16 +285,26 @@ class RoundOverTransport(
     /**
      * **A control the player pressed, on its way to the house** (rule 10 — a request, not a fact).
      *
-     * Fire-and-forget, because D-097 says so: *clients hold no request/response posture*. Nothing
-     * here waits for an answer, nothing here retries, and nothing here moves a screen. What the
+     * Fire-and-forget as far as the player is concerned, because D-097 says so: *clients hold no
+     * request/response posture*. Nothing here moves a screen or waits on an answer; the one thing
+     * that does wait, in a round, is the transport's own resend of a lost beat (below). What the
      * player sees is whatever the house pushes back, whenever it arrives — and a request the house
      * refuses produces a re-assertion that is indistinguishable from ordinary delivery, which is
      * what keeps the refusal invisible.
      *
      * The sequence [IntentOutbox] stamps is a dedup key rather than an ack: a frame delivered twice
      * must not be acted on twice.
+     *
+     * ### In a round it is never a frame of its own (D-263)
+     *
+     * Once this phone holds the round's seed, the request waits for the next beat's slot and rides
+     * up inside the upload every phone sends a beat at one size, retried under one id until the house
+     * answers it ([SlotRequests]). Only before arming, when no request means anything to the rules and
+     * every phone is in the same state, does it go up as its own `RoundBody.Act`.
      */
-    fun act(intent: IntentMessage) = up(RoundWire.encode(outbox.ask(intent)))
+    fun act(intent: IntentMessage) {
+        if (contacts.inRound) requests.ask(Asked.Act(intent)) else up(RoundWire.encode(outbox.ask(intent)))
+    }
 
     /**
      * **The Egress tile, held down** ([RoundBody.Fire], E-P2-5 / E-P3-7 closed).
@@ -285,13 +315,19 @@ class RoundOverTransport(
      *
      * It is a second method rather than an [IntentMessage] because the frame is a different member:
      * the house has to make a draw before there is a fact to admit. There is nothing to pass.
+     *
+     * In a round it rides the next beat's slot, for [act]'s reason (D-263): this is the press only an
+     * Insider makes, and on its own frame it was the loudest one on the Wi-Fi.
      */
-    fun fireEgress() = up(RoundWire.encode(outbox.fire()))
+    fun fireEgress() {
+        if (contacts.inRound) requests.ask(Asked.Fire) else up(RoundWire.encode(outbox.fire()))
+    }
 
     /** A new round, or this phone has left: it holds nothing of the last one, and lets the screen sleep. */
     fun roundEnded() {
         inbox.roundEnded()
         contacts.roundEnded()
+        requests.clear()
         wake.release()
     }
 
