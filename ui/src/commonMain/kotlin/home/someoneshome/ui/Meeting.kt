@@ -532,9 +532,8 @@ object OutsideView {
     /**
      * The design's own five ballots, three cast and two still out.
      *
-     * `null` is *still deciding* rather than a magic string, so the count below is arithmetic over
-     * the list rather than a second number written beside it — the ghost's `VOTES CAST 3 OF 5` had
-     * been a literal that happened to agree with the rows above it.
+     * `null` is *still deciding* rather than a magic string. The ghost screen drew a `VOTES CAST
+     * 3 OF 5` over them until the owner removed it (decision pack 9a, D-285); the rows are all of it.
      */
     val ballots: List<Ballot> = listOf(
         Ballot("ELLIOT", "DANI"),
@@ -543,9 +542,6 @@ object OutsideView {
         Ballot("ROSE", null),
         Ballot("TOMAS", null),
     )
-
-    /** How many of them have been cast. Counted, never assumed. */
-    val cast: Int get() = ballots.count { it.forWhom != null }
 
     /**
      * **The mark between a voter and the resident they voted for.**

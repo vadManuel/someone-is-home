@@ -8806,6 +8806,28 @@ that assert what the rules emit compute it rather than type it.
 
 **Not on a phone.**
 
+### D-285 · **The couch's vote screen has no count: VOTES CAST N OF M is gone — built**
+
+**The ruling** (owner, 2026-11-18, decision pack 9a): *the couch already sees who is choosing what*,
+so the out phone's "VOTES CAST 4 OF 4", which counted the live selections it is shown (D-117,
+D-134) and called them cast while the living read "0 OF 4 VOTED", adds nothing. Remove it entirely.
+Nothing new goes on the wire.
+
+**Now.** `GhostMeetingScreen` draws the phase's clock and then the rows, with no count between them.
+`PanelVals.votesCast` and `OutsideView.cast` went with it, having no other reader. The short
+denominator flagged in `Flow.kt` (the rows heard so far rather than every living seat) is gone with
+the count it divided; the comment says so. No wire, light, timing or other copy moved; the rows, the
+CAST_FOR mark and STILL DECIDING are as they were.
+
+**Looked at.** Rendered through the render harness: `RosterGapRender`'s housed couch at 600×1300
+(`ui/build/screens/gap-couch-vote.png`, four pushed rows straight under the clock box) and the
+fixture sweep's `ghostmeeting-resident.png` at 600×800. Nothing collides and nothing is left where
+the line was.
+
+**Proved.** `MeetingDisclosureTest`'s two couch cases now assert no VOTES CAST and no `N OF M` on the
+couch; they asserted the count before. *The line put back:* both red, `Did not expect any node but
+found '1' node that satisfies: (Text ... contains 'VOTES CAST' ... as substring)`.
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

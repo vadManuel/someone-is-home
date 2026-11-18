@@ -128,8 +128,8 @@ fun Ghost2Screen() = WalkIn("STAND\nAND WALK IN", "DO NOT SPEAK.")
  * The rows are [PanelVals.ballots], which the house fills one selection at a time
  * (`Effect.VoteSelectionShown`, permitted to the out classes and to nobody else). A row with no
  * target yet is a **null**, not the words STILL DECIDING sitting in a fixture — so a row cannot be
- * styled as decided while reading as undecided, and the count above it cannot be computed off a
- * string. The port's five stand in while there is no house.
+ * styled as decided while reading as undecided. The port's five stand in while there is no house.
+ * **There is no count above them** (decision pack 9a, D-285): the rows are the whole of it.
  *
  * **The clock is the phase's** ([PanelVals.meetingClockLabel]), set into the top edge of its box.
  * This screen does not move while a meeting runs four phases underneath it, so it is the one
@@ -160,12 +160,10 @@ fun GhostMeetingScreen(vals: PanelVals) {
             }
         }
 
-        // Counted off the rows below rather than written beside them. It was a literal that
-        // happened to agree with them, which is the state two numbers for one fact start in.
-        Row(Modifier.fillMaxWidth().padding(top = 4.dp)) {
-            Words("VOTES CAST", Modifier.weight(1f), size = 22, color = Ramp.Dim, lineHeight = 1.0)
-            Words("${vals.votesCast} OF ${vals.ballots.size}", size = 22, color = Ramp.Dim, lineHeight = 1.0)
-        }
+        // **No count here** (the owner's 2026-11-18 ruling, decision pack 9a; D-285). It read VOTES
+        // CAST 4 OF 4 while the living read 0 OF 4 VOTED: it counted the live selections the couch
+        // is shown (D-117) and called them cast, over a denominator of the rows heard so far. The
+        // couch already sees who is choosing what, row by row below, so the line added nothing.
 
         KitRules(Palette.DARK) {
             vals.ballots.forEach { ballot ->

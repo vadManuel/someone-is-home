@@ -1,6 +1,7 @@
 package home.someoneshome.ui
 
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.runDesktopComposeUiTest
@@ -89,7 +90,7 @@ class MeetingDisclosureTest {
     /**
      * The converse, because a rule that only ever says *fewer screens* is satisfied by an app with
      * no screens on it: the out player really is shown the whole ballot, both halves of every row,
-     * and the count above it is the number of rows that have a target.
+     * and no count above it (decision pack 9a, D-285).
      */
     /**
      * **The other direction, on the live push: the couch really is drawn the selections.**
@@ -120,8 +121,11 @@ class MeetingDisclosureTest {
                     )
                 }
             }
-            // Counted off the pushed rows, so the count cannot go on agreeing with the fixture.
-            onNodeWithText("2 OF 3").assertExists()
+            // **And no count over the pushed rows** (the owner's 2026-11-18 ruling, decision pack 9a;
+            // D-285). It read `2 OF 3` here, off the rows heard so far, where the living read their
+            // own locked count: the couch sees who is choosing what, and that is all it is drawn.
+            onAllNodes(hasText("VOTES CAST", substring = true)).assertCountEquals(0)
+            onAllNodes(hasText("2 OF 3", substring = true)).assertCountEquals(0)
             // And the port's five are gone, which is what makes this a wiring test.
             assertEquals(
                 0, onAllNodes(hasText("ELLIOT")).fetchSemanticsNodes().size,
@@ -137,7 +141,7 @@ class MeetingDisclosureTest {
                     Screen(PanelState().arrivingAt(ScreenId.GhostMeeting))
                 }
             }
-            assertTrue(OutsideView.cast > 0, "the fixture has no cast ballots; this proves nothing")
+            assertTrue(OutsideView.ballots.any { it.forWhom != null }, "the fixture has no cast ballots; this proves nothing")
             for (ballot in OutsideView.ballots) {
                 // Every name is looked for as "at least one", never "exactly one": DANI is on this
                 // screen three times, as one voter and as two people's votes.
@@ -153,7 +157,9 @@ class MeetingDisclosureTest {
                     )
                 }
             }
-            onNodeWithText("${OutsideView.cast} OF ${OutsideView.ballots.size}").assertExists()
+            // **And no count** (decision pack 9a, D-285): the couch sees who is choosing what.
+            onAllNodes(hasText("VOTES CAST", substring = true)).assertCountEquals(0)
+            onAllNodes(hasText(" OF ${OutsideView.ballots.size}", substring = true)).assertCountEquals(0)
         }
 
     /**

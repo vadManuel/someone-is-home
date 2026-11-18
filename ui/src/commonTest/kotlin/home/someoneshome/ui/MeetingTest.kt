@@ -303,7 +303,7 @@ class MeetingTest {
     @Test
     fun theGhostsBallotIsCountedRatherThanWrittenDown() {
         assertEquals(5, OutsideView.ballots.size)
-        assertEquals(3, OutsideView.cast, "VOTES CAST is counted off the rows, not typed beside them")
+        assertEquals(3, OutsideView.ballots.count { it.forWhom != null }, "three of the design's five are cast")
         assertEquals(
             2, OutsideView.ballots.count { it.forWhom == null },
             "still deciding is a missing target, not the words STILL DECIDING in a fixture",

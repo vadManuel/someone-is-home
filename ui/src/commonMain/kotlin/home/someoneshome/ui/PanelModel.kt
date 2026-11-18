@@ -1986,14 +1986,6 @@ class PanelVals(
      */
     val ballots: List<Ballot> = housed(state.ballots, OutsideView.ballots, nothing = emptyList())
 
-    /**
-     * How many of [ballots] have been cast. **Counted off the rows, never written beside them.**
-     *
-     * It was a literal that happened to agree with the fixture, which is the state two numbers for
-     * one fact always start in.
-     */
-    val votesCast: Int = ballots.count { it.forWhom != null }
-
     companion object {
 
         /**

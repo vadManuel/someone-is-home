@@ -3016,12 +3016,11 @@ class FlowModel(
             // arrival order would not be (rule 4). The roster's index is the seat, so ordering by it
             // is ordering by the house's own list.
             //
-            // ⚠️ **The denominator is still short and it is flagged rather than guessed.** The
-            // screen reads `votesCast OF ballots.size`, and this list holds the seats the house has
-            // shown rather than every living seat — a phone that has not touched a row yet has no
-            // message and therefore no line to be STILL DECIDING on. Seeding it wants the living
-            // seats at ballot-open, which nothing on the couch's side of the allowlist carries.
-            // Escalated; what is closed here is the rows.
+            // **The short denominator is gone with the count it divided** (decision pack 9a, D-285).
+            // This list holds the seats the house has shown rather than every living seat, and the
+            // couch's VOTES CAST line divided by it; the owner removed the line, since the couch
+            // already sees who is choosing what. A phone that has not touched a row yet still has no
+            // row here, which is what the couch is shown and nothing more.
             is RoundMessage.VoteSelectionShown -> {
                 selections[message.voter.index] = message.selection
                 state = state.copy(ballots = ballotRows())
