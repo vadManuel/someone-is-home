@@ -411,3 +411,19 @@ Fixed and pushed since this pack was written (all with tests that fail on the ol
 12. UWB replaces Bluetooth: the spike first, then a plan. Unsupported phones are refused at launch, with wording to approve.
 13. GDD wording: GDD:545/:1052 (couch's Egress view), GDD:323/:1155 (arm window 20 s).
 - Still open: Q5 (report hold), decided after the two-phone pass-by test, which UWB now changes.
+14. UWB rulings U1–U4 (below): the Revoke is a 10 cm flyby bubble, distance only, and no work around walls or bodies.
+
+## Owner rulings on the UWB spike, 2026-11-18
+
+Results: `uwb-spike-results-2026-11-18.md`.
+
+- **U1, the Revoke reach: a 10 cm bubble around the phone, and a flyby counts.** A Revoke fires when the two phones read within 10 cm. They do not have to stay touching. The owner prefers a flyby to a held touch.
+  - Facts the build must respect:
+    - Readings arrive every 150 ms. A hand crossing a 20 cm-wide bubble at 1 m/s gives one or two readings inside it, and a faster pass can give none.
+    - The reading wobbles by about ±3 cm, so the bubble's edge sits between about 7 and 13 cm.
+    - Side by side reads 8–9 cm, which is inside the bubble.
+    - A top-to-top flyby was not tested against NameDrop. Only a held top-to-top touch fired it.
+  - Under U3, these misses and edge cases are part of the game, not something to engineer away.
+- **U2: 6.7 readings a second is enough.**
+- **U3: the walls are part of the game.** UWB cannot tell rooms apart, and a body in the way reads long. The owner's original intent stands: the technology's uncertainty is part of the game, not something to work around.
+- **U4: direction is dropped.** Rules use distance only.
