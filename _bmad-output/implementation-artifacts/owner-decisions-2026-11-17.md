@@ -371,3 +371,43 @@ Fixed and pushed since this pack was written (all with tests that fail on the ol
 **9e. Rule 7 on the host.** What remains is mostly outside the game code: Ktor over kotlinx-io allocates a fresh 8 KB segment for most frames (~450 KB/s on the host at 6 seats, growing with seats), and every state change recomposes the screen (~270 KB/s). Both need a structural change (pooled transport buffers, or narrowing recomposition near the light rules). The 0.5 MB/s figure and the stack-gate cliff (1.5–3.0 MB/s) were themselves read with the in-app counter now shown to be wrong (D-276), so the first step is re-measuring the cliff on a phone with the validated method.
 
 **9f. The Egress cooldown can lapse while its Egress is paused** (review #4, D-279). The cooldown (180 s) runs from the moment an Egress is fired, and a meeting pauses the Egress's 120 s timer but not the cooldown. Example: fired at 0 s, so the next is ready at 180 s; a meeting runs 10–190 s; the Egress resumes and is contained at 250 s; a second Egress can fire at 251 s. The code's own comment says the cooldown "outlives the timer by construction", and D-184 says a meeting must not fund the next Egress, but here the meeting does. Options: **(a, recommended)** push the cooldown back by however long the Egress was paused, so it always outlives its own Egress; (b) keep the behaviour and correct the comment. This is a timing value, so it is yours.
+
+## Owner rulings, 2026-11-18 (gone through one by one)
+
+- **Q1 + Q2 window: an armed Revoke lasts 20 s, or until a meeting is called, whichever comes first.** Expiry is silent: nothing is sent and the Insider's tile goes back to the public clock. This overrides the 45 s window in GDD:323/:1155 and D-142. (Option C, with 20 s in place of 45 s.)
+- **Q2 containment: option B, with the clock offset refreshed every second** on the uploads every phone already sends, not measured once at join. The owner asked whether a one-time sync would drift over a round; the paper estimate was 0.05–0.1 s over 30 min against the 0.4 s window, so the offset is kept current. Every phone does the same thing. The house sends absolute beat times. Needed before the first real playtest.
+- **Q3: option A.** Living phones keep the countdown and draining bar as built. Reword GDD:545/:1052 so the couch's privilege is the percentage plus true occupancy, not a hidden "real" progress.
+- **Q4: option A.** The Egress pauses while the house is off the air (the host locked or left), as a meeting pauses it (D-133). On return every phone gets `EgressHeld(remaining)`. The host is still named at the next meeting (D-230).
+- **Q5: decide after the two-phone pass-by test** (test step 9). The 2 s hold (2 of 3 readings in 2.5 s) stays as built until then; no ruling yet.
+- **Q6 D-242: confirmed, with one exception: the host.** An out player who goes dark is not named, but an out *host* who locks or leaves is, because the whole house goes off the air with them. The owner also asked that the notice name the player, not the seat. The screen already does ("Resident MARCUS was unreachable this shift…", `noticeBody`); "SEAT 3 UNREACHABLE" is only the phone's log line. Found while checking: a seat with a blank name would read "Resident  was unreachable"; it should draw UNNAMED as the ballot does (D-277).
+- **Q6 D-247: confirmed.** No filler backlog and no names in the housed notes. The owner asked whether Messages should open straight into the house thread, since it is the only sender. **Ruling: keep the one-row list** as a privacy step, because the thread holds the role line and a glance at a phone opening Messages must catch only the identical HOUSE row.
+- **Q6 D-248: the NameDrop setup step is rejected.** The owner will not ask players to switch NameDrop off. The NFC-session idea was ruled out because iOS's scanning panel lights the screen. **New direction from the owner: replace Bluetooth with UWB (Nearby Interaction) for everything** — contact, report, presence — for precise distance and direction, so a Revoke reaches only the player intended even beside another, and contact can be at a distance short of the top-to-top hold that triggers NameDrop. Needs a two-phone UWB spike first; see the overnight note for the open questions.
+- **UWB phones only; no Bluetooth fallback.** A phone without UWB must be told at launch that it cannot play because its hardware is insufficient. Detect it with Nearby Interaction's capability check (`NISession.deviceCapabilities.supportsPreciseDistanceMeasurement`). The screen's wording is to be drafted for the owner.
+- **Q6 D-237: confirmed.** The house log names seats only in seeded (bench) rounds and writes "A SEAT" otherwise.
+- **Q6 D-240: confirmed.** `round.sh --by-hand` keeps the README's Insider (seat 0).
+- **Q6 D-238: kept provisionally** (0.8 s lead, 0.6 s lit, a step every 0.9 s). The owner will judge it by feel on a phone.
+- **Q6 D-234: option (c).** PERIMETER ARMED gains a CONTINUE tap. The tap raises the opening banner with its dim (D-118/D-119) on that phone, at whatever moment its player taps, and does not buzz (D-102). The owner chose this over one simultaneous dim, knowing the room sees separate dims.
+- **Q7: option C.** Handshake grades each gap between taps to within ±40 % of the dealt gap. The entry must carry tap timings at the same length for every role, and the Insider's fake is graded identically.
+- **9a: remove the vote count from the couch entirely.** The owner: the couch already sees who is choosing what, so "VOTES CAST 4 OF 4" adds nothing. The couch's vote screen loses the count line. Nothing new goes on the wire.
+- **9b: option (a).** The ending always carries the final System Integrity, one value to every phone.
+- **9c: a round in progress cannot be joined.** The owner's rule, which replaces the lit-waiting-screen question. A phone that was not seated at LIGHTS OUT is refused at JOIN while a round runs, instead of being seated to wait for the next one. Phones seated at LIGHTS OUT that drop and relaunch still reconnect, since that is a rejoin rather than a new join. The refusal line on JOIN is to be drafted for the owner (today's copy is "ROUND IN PROGRESS / YOU JOIN THE NEXT ONE").
+- **9d: option (a).** The lobby refuses a name already taken, case-insensitively, and the player types another. The "NAME TAKEN" wording is to be shown to the owner.
+- **9e: option (a).** Re-measure allocation and the stack-gate cliff on a phone with the validated method, after the UWB change settles the traffic. No restructure until then.
+- **9f: option (a).** When a paused Egress resumes, `egressReadyAt` is pushed back by the length of the pause, so the cooldown always outlives its Egress (D-184's intent).
+- **D-275: confirmed.** Several requests share one fixed request slot per upload (with D-263).
+
+### Build work these rulings create
+1. Revoke arm window: 20 s or a meeting call, silent (core + the ARMED tile).
+2. Containment: a clock offset refreshed every second on the uploads, absolute beat times, and a tap control after the node scan.
+3. Egress pauses while the house is off the air.
+4. The evasion notice also names an out host. A blank name is drawn UNNAMED in the notice.
+5. CONTINUE on PERIMETER ARMED raises the opening banner and dim on that phone.
+6. Handshake grades each gap within ±40 %, with tap timings carried at a fixed length.
+7. The couch's vote count is removed.
+8. The ending carries the final System Integrity.
+9. JOIN refuses a new phone while a round runs (rejoin still works), with wording to approve.
+10. The lobby refuses a taken name, with wording to approve.
+11. The Egress cooldown is pushed back by the pause.
+12. UWB replaces Bluetooth: the spike first, then a plan. Unsupported phones are refused at launch, with wording to approve.
+13. GDD wording: GDD:545/:1052 (couch's Egress view), GDD:323/:1155 (arm window 20 s).
+- Still open: Q5 (report hold), decided after the two-phone pass-by test, which UWB now changes.
