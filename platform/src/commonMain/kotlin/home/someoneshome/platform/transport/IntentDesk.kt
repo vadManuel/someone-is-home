@@ -139,25 +139,29 @@ class IntentDesk(
     private val slotted = HashMap<Int, ArrayDeque<String>>()
 
     /**
-     * **A request out of one upload's slot, off one connection** (D-263).
+     * **The requests out of one upload's slot, off one connection** (D-263, D-275).
      *
      * [arrived]'s two doors in one, with a different dedup key: the slot's [id], which the phone
-     * draws at random and keeps for every beat it sends the request on until the house answers.
-     * **The first time an id is heard from a seat it is put** ([Landing.Put] for a control,
-     * [Landing.Draw] for the Egress tile); every later time it is [Landing.Duplicate]. The seat is
-     * the connection's, as in [arrived]; [asked] has nowhere to name one.
+     * draws at random and keeps, with exactly the same requests under it, for every beat it sends
+     * them on until the house answers. **The first time an id is heard from a seat every request
+     * under it is put, in the order the slot holds them** ([Landing.Put] for a control,
+     * [Landing.Draw] for the Egress tile); every later time the id is one [Landing.Duplicate] and
+     * nothing under it is put again. The seat is the connection's, as in [arrived]; [asked] has
+     * nowhere to name one.
      *
-     * The id mark is not cleared by [seated]. A slotted request that went up a failing socket is sent
-     * again on the next one, under the same id, and has to be recognised there.
+     * The id mark is not cleared by [seated]. A slot that went up a failing socket is sent again on the
+     * next one, under the same id, and has to be recognised there.
      */
-    suspend fun slotted(seat: Seat, id: String, asked: Asked): Landing = gate.withLock {
+    suspend fun slotted(seat: Seat, id: String, asked: List<Asked>): List<Landing> = gate.withLock {
         val seen = slotted.getOrPut(seat.index) { ArrayDeque() }
-        if (id in seen) return@withLock Landing.Duplicate
+        if (id in seen) return@withLock listOf(Landing.Duplicate)
         seen.addLast(id)
         while (seen.size > SLOTTED_KEPT) seen.removeFirst()
-        when (asked) {
-            is Asked.Act -> Landing.Put(asked.intent.attributedTo(seat))
-            is Asked.Fire -> Landing.Draw(seat)
+        asked.map {
+            when (it) {
+                is Asked.Act -> Landing.Put(it.intent.attributedTo(seat))
+                is Asked.Fire -> Landing.Draw(seat)
+            }
         }
     }
 
@@ -188,8 +192,8 @@ class IntentDesk(
 
     private companion object {
         /**
-         * Slotted ids remembered per seat. A phone sends its oldest unanswered request and no other,
-         * so the ids it can still send are the one at its head; this is far past that.
+         * Slotted ids remembered per seat. A phone resends the one slot it has out and no other, so
+         * the only id it can still send again is that one; this is far past that.
          */
         const val SLOTTED_KEPT = 64
     }

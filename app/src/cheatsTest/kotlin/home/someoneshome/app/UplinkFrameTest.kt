@@ -4,6 +4,7 @@ import home.someoneshome.core.insidersFor
 import home.someoneshome.model.Event
 import home.someoneshome.model.InsiderAbility
 import home.someoneshome.model.Intent
+import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MeetingPhase
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
@@ -98,13 +99,14 @@ class UplinkFrameTest {
      * round half hands its socket ([up]) and every frame the socket hands the round half ([down]).
      * [loseAnUploadCarrying] drops the next upload whose slot holds a request it matches, before it
      * reaches the socket: a beat lost on the way up. [loseTheAnswerTo] drops the next answer to an
-     * upload whose slot held a request it matches: an answer lost on the way down.
+     * upload whose slot held a request it matches: an answer lost on the way down. A slot holds as
+     * many requests as fit (D-275), and either matches when any one of them does.
      */
     private class Tap(private val inner: RoundClient) : RoundSeam {
         private val lock = NSLock()
         private val ups = mutableListOf<Seen>()
         private val downs = mutableListOf<Seen>()
-        private val asked = HashMap<String, Asked>()
+        private val asked = HashMap<String, List<Asked>>()
         var loseAnUploadCarrying: ((Asked) -> Boolean)? = null
         var loseTheAnswerTo: ((Asked) -> Boolean)? = null
         var uploadsLost = 0
@@ -125,11 +127,11 @@ class UplinkFrameTest {
         override fun linked(send: suspend (TransportFrame) -> Unit) = inner.linked { frame ->
             val body = (frame as? TransportFrame.Carry)?.body?.let(RoundWire::decodeOrNull)
             val slot = (body as? RoundBody.Sighted)?.let { RequestSlot.read(it.ask) }
-            val request = slot?.asked
+            val request = slot?.asked?.takeIf { it.isNotEmpty() }
             val lose = locked {
                 if (slot != null && request != null) asked[slot.id] = request
                 val match = loseAnUploadCarrying
-                if (request != null && match != null && match(request)) {
+                if (request != null && match != null && request.any(match)) {
                     loseAnUploadCarrying = null
                     uploadsLost++
                     true
@@ -146,7 +148,7 @@ class UplinkFrameTest {
             val lose = locked {
                 val request = (body as? RoundBody.UploadHeard)?.let { asked[it.id] }
                 val match = loseTheAnswerTo
-                if (request != null && match != null && match(request)) {
+                if (request != null && match != null && request.any(match)) {
                     loseTheAnswerTo = null
                     answersLost++
                     true
@@ -308,8 +310,43 @@ class UplinkFrameTest {
                     phones.all { it.round.round.requestsWaiting == 0 }
                 }
 
+                // ---- 3b · A burst (D-275): the Insider's Static and four entries, a Resident's five --
+                // As many as fit go up a beat, so five requests from each of two phones reach the
+                // house within two beats rather than five; the uploads stay one length (checked with
+                // every other upload below); and every living phone is sent one frame of one length
+                // for the Static, the Insider's answer among the other phones' blanks.
+                house.advanceTo(
+                    Tick(maxOf(house.clock, house.state.cooldownFor(insiderSeat, InsiderAbility.Access)?.readyAt?.step ?: 0L)),
+                )
+                val resident = phones.first { it !== insider && it !== host && !house.state.isOut(seatOf(it)) }
+                val livingAtBurst = phones.filter { !house.state.isOut(seatOf(it)) }
+                val insiderEntries = List(4) { IntentMessage.HandOverEntry(MarkerId("HOME-0$it"), listOf(3, 1, 4, 1, 5)) }
+                val residentEntries = List(5) { IntentMessage.HandOverEntry(MarkerId("HOME-1$it"), listOf(2, 7, 1, 8, 2)) }
+                val burstRequests = insiderEntries.map { it.attributedTo(insiderSeat) } + Intent.FireStatic(insiderSeat) +
+                    residentEntries.map { it.attributedTo(seatOf(resident)) }
+                val beforeBurst = livingAtBurst.associateWith { it.tap.down.size }
+                val burstFrom = nowMillis()
+                insider.press(IntentMessage.FireStatic)
+                insiderEntries.forEach(insider::press)
+                residentEntries.forEach(resident::press)
+                until("the house heard both bursts", { "heard=${house.heard.takeLast(12)}" }) { burstRequests.all { it in house.heard } }
+                val burstMillis = nowMillis() - burstFrom
+                latencies += "a burst of five from each of two phones" to burstMillis
+                delay(SETTLE_MILLIS)
+                val staticBurst = livingAtBurst.associate { p ->
+                    p.name to p.tap.down.drop(beforeBurst.getValue(p)).filter { it.body is RoundBody.Push }
+                }
+
                 // ---- 4 · The Egress ------------------------------------------------------------
-                house.advanceTo(Tick(maxOf(house.clock, house.state.egressReadyAt.step)))
+                house.advanceTo(
+                    Tick(
+                        listOf(
+                            house.clock,
+                            house.state.egressReadyAt.step,
+                            house.state.cooldownFor(insiderSeat, InsiderAbility.Access)?.readyAt?.step ?: 0L,
+                        ).max(),
+                    ),
+                )
                 insider.flow.push(ScreenId.Page2)
                 val livingNow = phones.filter { !house.state.isOut(seatOf(it)) }
                 assertEquals(phones.size - 1, livingNow.size, "the vote did not put exactly one phone out")
@@ -381,6 +418,36 @@ class UplinkFrameTest {
                     kinds.getValue(insider.name).first() == "AbilityFired" &&
                         kinds.filterKeys { it != insider.name }.values.all { it.first() == "AbilityBlanked" },
                     "the actor's answer and the blanks are not where they should be: $kinds",
+                )
+
+                // 3b · The burst (D-275): heard within two beats and the settle, each request once, and
+                // the Static's frames the same on every living phone.
+                assertTrue(
+                    burstMillis <= 2 * SightingUpload.CADENCE_MILLIS + SETTLE_MILLIS,
+                    "five requests from each of two phones took $burstMillis ms to reach the house",
+                )
+                for (asked in burstRequests) assertEquals(1, house.heard.count { it == asked }, "$asked was heard other than once")
+                fun kindOf(seen: Seen) = (seen.body as RoundBody.Push).message.kind.name
+                println("D-275 BURST FRAMES PER LIVING PHONE (BYTES NET OF SEQ DIGITS) — ${staticBurst.mapValues { (_, s) -> s.map(::net) }}")
+                println("D-275 BURST KINDS — ${staticBurst.mapValues { (_, s) -> s.map(::kindOf) }}")
+                // An entry is answered to the one phone that handed it over, graded and with its next
+                // order, on either role (an Insider's fake is graded identically); the order is that
+                // seat's draw, whose length is the draw's and not the role's (D-258's table). So the
+                // entries' answers are counted and the grades measured, and everything else the burst
+                // made, the Static's, must be the same frames on every living phone.
+                val entryKinds = setOf("SubroutineGraded", "WorkOrderIssued")
+                val graded = staticBurst.mapValues { (_, seen) -> seen.filter { kindOf(it) == "SubroutineGraded" } }
+                assertEquals(insiderEntries.size, graded.getValue(insider.name).size, "the Insider's entries were not each answered once")
+                assertEquals(residentEntries.size, graded.getValue(resident.name).size, "the Resident's entries were not each answered once")
+                assertEquals(1, graded.values.flatten().map(::net).toSet().size, "the grades are not one length on both roles: $graded")
+                val staticOnly = staticBurst.mapValues { (_, seen) -> seen.filter { kindOf(it) !in entryKinds } }
+                val staticShapes = staticOnly.mapValues { (_, seen) -> seen.map(::net) }
+                val staticKinds = staticOnly.mapValues { (_, seen) -> seen.map(::kindOf) }
+                assertEquals(1, staticShapes.values.toSet().size, "at the burst the living phones were sent different frames: $staticKinds")
+                assertTrue(
+                    staticKinds.getValue(insider.name).first() == "AbilityFired" &&
+                        staticKinds.filterKeys { it != insider.name }.values.all { it.first() == "AbilityBlanked" },
+                    "the Static's answer and the blanks are not where they should be: $staticKinds",
                 )
 
                 // 4 · Exactly once, whatever was lost.

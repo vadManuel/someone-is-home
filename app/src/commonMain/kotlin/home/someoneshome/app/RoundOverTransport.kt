@@ -279,7 +279,7 @@ class RoundOverTransport(
             // **The house has this phone's report** (D-245): it is no longer kept. Not a push, so it
             // spends no sequence and reaches no screen, lamp or motor.
             is RoundBody.FaultHeard -> contacts.acknowledged(body.onset)
-            // **The house has this beat's slot** (D-263): a request under that id is done. Every
+            // **The house has this beat's slot** (D-263, D-275): every request under that id is done. Every
             // upload is answered with one of these, so it says nothing, and it reaches no screen.
             is RoundBody.UploadHeard -> requests.heard(body.id)
         }

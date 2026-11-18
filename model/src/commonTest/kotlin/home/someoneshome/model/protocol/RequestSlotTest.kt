@@ -59,9 +59,9 @@ class RequestSlotTest {
         for (asked in everyRequest) {
             val read = assertNotNull(RequestSlot.read(RequestSlot.of("00112233445566ff", asked)!!))
             assertEquals("00112233445566ff", read.id)
-            assertEquals(asked, read.asked)
+            assertEquals(listOf(asked), read.asked)
         }
-        assertEquals(RequestSlot.Read("aaaaaaaaaaaaaaaa", null), RequestSlot.read(RequestSlot.empty("aaaaaaaaaaaaaaaa")))
+        assertEquals(RequestSlot.Read("aaaaaaaaaaaaaaaa", emptyList()), RequestSlot.read(RequestSlot.empty("aaaaaaaaaaaaaaaa")))
     }
 
     @Test
@@ -76,9 +76,45 @@ class RequestSlotTest {
         assertNull(RequestSlot.read(good.uppercase()), "an uppercase slot was read")
         // A length past the payload.
         assertNull(RequestSlot.read(good.substring(0, 16) + "ffff" + good.substring(20)), "a length past the payload was read")
-        // A payload that is not a request: the bytes of `{}` with the length saying two.
-        val notARequest = "0123456789abcdef" + "0002" + "7b7d" + "0".repeat(RequestSlot.PAYLOAD_BYTES * 2 - 4)
-        assertNull(RequestSlot.read(notARequest), "a payload that is not a request was read")
+        // A payload that is not a list of requests: the bytes of `{}` with the length saying two.
+        val notARequest = "0123456789abcdef" + "0002" + payloadOf("{}".encodeToByteArray())
+        assertNull(RequestSlot.read(notARequest), "a payload that is not a list of requests was read")
+        // A payload that is not URL-safe base64, and one whose padding is not zeros.
+        assertNull(RequestSlot.read(good.dropLast(1) + "+"), "a payload outside the alphabet was read")
+        val dirty = "[]".encodeToByteArray().copyOf(RequestSlot.PAYLOAD_BYTES).also { it[RequestSlot.PAYLOAD_BYTES - 1] = 1 }
+        assertNull(RequestSlot.read("0123456789abcdef" + "0002" + payloadOf(dirty)), "padding that was not zeros was read")
+    }
+
+    @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
+    private fun payloadOf(bytes: ByteArray): String =
+        kotlin.io.encoding.Base64.UrlSafe.withPadding(kotlin.io.encoding.Base64.PaddingOption.ABSENT)
+            .encode(bytes.copyOf(RequestSlot.PAYLOAD_BYTES))
+
+    /**
+     * **D-275: a slot holds as many requests as fit, and is one width however many it holds.** Every
+     * prefix of a long run of requests that fits is measured on the encoded frame beside an empty slot
+     * and a slot of one, and each reads back exactly its list, in order.
+     */
+    @Test
+    fun `a slot of many requests is the width of one and of none and reads back in order`() {
+        val run = everyRequest + everyRequest
+        val lists = (0..run.size).map { run.take(it) }.filter { RequestSlot.of("0123456789abcdef", it) != null }
+        assertTrue(lists.size > 4, "fewer than four requests fit a slot: ${lists.size - 1}")
+        val frames = lists.associate { it.size to frameOf(RequestSlot.of("0123456789abcdef", it)!!) }
+        assertEquals(1, frames.values.toSet().size, "the upload's length says how many were asked: $frames")
+        for (list in lists) assertEquals(list, RequestSlot.read(RequestSlot.of("00112233445566ff", list)!!)!!.asked)
+        assertEquals(frameOf(RequestSlot.empty("fedcba9876543210")), frames.values.first(), "an empty slot is another length")
+        assertEquals(532, RequestSlot.CHARS, "the slot's width moved from D-263's")
+    }
+
+    /** [RequestSlot.fits] agrees with what [RequestSlot.of] really packs, at every size around the edge. */
+    @Test
+    fun `fits says exactly what of packs`() {
+        for (n in 0..200) {
+            val list = List(1 + n / 40) { Asked.Act(IntentMessage.HandOverEntry(marker, List(n) { 7 })) }
+            val bytes = list.sumOf { RequestSlot.bytesOf(it) }
+            assertEquals(RequestSlot.of("0123456789abcdef", list) != null, RequestSlot.fits(bytes, list.size), "$n")
+        }
     }
 
     @Test

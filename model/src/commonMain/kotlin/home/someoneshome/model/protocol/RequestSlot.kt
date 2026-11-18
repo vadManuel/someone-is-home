@@ -1,7 +1,10 @@
 package home.someoneshome.model.protocol
 
 import home.someoneshome.model.ClientFacing
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 
 /**
  * **What a phone may ask the house for from inside its upload: a control, or the Egress tile**
@@ -30,8 +33,8 @@ sealed class Asked {
 }
 
 /**
- * **The request slot: one fixed-width field in every upload, holding one request or none** (D-263,
- * provisional, owner to confirm).
+ * **The request slot: one fixed-width field in every upload, holding the requests that fit, or none**
+ * (D-263, D-275, provisional, owner to confirm).
  *
  * ### Why requests stopped travelling as frames of their own
  *
@@ -45,71 +48,116 @@ sealed class Asked {
  * number of frames of the same length on the air at the same cadence, whatever it is and whatever
  * it asks for.
  *
+ * ### As many requests as fit, under one id (D-275)
+ *
+ * The slot holds a **list** of requests, in the order they were made, and the id names the list. One
+ * request a beat queued a burst of Subroutine entries for tens of seconds; a list drains it at the
+ * cadence the upload already has. The width does not move: a request that would not fit waits, whole,
+ * for the next beat, and the padding makes one request, five and none the same length.
+ *
  * ### The id, and why every slot has one
  *
  * [ID_CHARS] lowercase hex characters, drawn fresh at random by the phone (never a counter, whose
- * digits would grow with what the phone had asked for). A request keeps its id across every beat it
- * is sent on until the house answers `RoundBody.UploadHeard` with it, and the house puts each id to
- * the rules once (`IntentDesk.slotted`), so a request is acted on exactly once however many times a
- * lost beat makes the phone send it. **An empty slot has an id too**, fresh every beat, and the house
- * answers it the same way: the answer down the wire is one frame of one length a beat for every
- * phone, and says nothing about whether the phone asked for anything.
+ * digits would grow with what the phone had asked for). A list keeps its id, and exactly its members,
+ * across every beat it is sent on until the house answers `RoundBody.UploadHeard` with it, and the
+ * house puts each id to the rules once (`IntentDesk.slotted`), so every request in it is acted on
+ * exactly once however many times a lost beat makes the phone send it. **An empty slot has an id
+ * too**, fresh every beat, and the house answers it the same way: the answer down the wire is one
+ * frame of one length a beat for every phone, and says nothing about whether the phone asked for
+ * anything, or for how much.
  *
  * ### The layout
  *
- * `id` · `length` (four hex characters, the payload's byte count) · `payload` (the request's JSON as
- * UTF-8 bytes in hex, padded with zeros to [PAYLOAD_BYTES]). Hex because no layer of the wire escapes
- * it, so the slot's width is its length (D-249, D-258). A request whose JSON is longer than
- * [PAYLOAD_BYTES] does not fit and is not packed: [of] says so with a null, and the phone says so in
- * its own log (rule 6). The largest request today, a long `HandOverEntry`, is well under it.
+ * `id` · `length` (four hex characters, the payload's byte count) · `payload` (the list's JSON as
+ * UTF-8 bytes, padded with zeros to [PAYLOAD_BYTES], in unpadded URL-safe base64). URL-safe base64 for
+ * the reason the slot was hex (D-249, D-258): no layer of the wire escapes a letter, a digit, `-` or
+ * `_`, so the slot's width is its length, and it carries half as much again as hex did in the same
+ * [CHARS] (D-275). A list whose JSON is longer than [PAYLOAD_BYTES] is not packed: [of] says so with a
+ * null, and [fitsAlone] lets the phone refuse a request that could never fit, in its own log (rule 6).
+ * The largest request today, a long `HandOverEntry`, is well under it.
  */
+@OptIn(ExperimentalEncodingApi::class)
 object RequestSlot {
 
-    /** Eight random bytes, as hex: one request's name. */
+    /** Eight random bytes, as hex: one list's name. */
     const val ID_CHARS: Int = 16
 
-    /** The most JSON one request may be. ⚠️ Provisional: sized with room over today's largest. */
-    const val PAYLOAD_BYTES: Int = 256
+    /** The most JSON one slot's list may be. ⚠️ Provisional: all that [PAYLOAD_CHARS] can carry. */
+    const val PAYLOAD_BYTES: Int = 384
 
     private const val LENGTH_CHARS = 4
 
-    /** The slot's width in characters, always. */
-    const val CHARS: Int = ID_CHARS + LENGTH_CHARS + PAYLOAD_BYTES * 2
+    /** [PAYLOAD_BYTES] in base64: four characters for every three bytes, with nothing left over. */
+    private const val PAYLOAD_CHARS = PAYLOAD_BYTES / 3 * 4
+
+    /** The slot's width in characters, always: 532, as it was when it held one request in hex (D-263). */
+    const val CHARS: Int = ID_CHARS + LENGTH_CHARS + PAYLOAD_CHARS
+
+    /** `[` and `]` around a list. */
+    private const val LIST_BYTES = 2
+
+    /** One `,` between two members. */
+    private const val SEPARATOR_BYTES = 1
 
     private val json = Json
+    private val list = ListSerializer(Asked.serializer())
+    private val base64 = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT)
 
     /** An empty slot under [id]: nothing asked, the same width as a full one. */
     fun empty(id: String): String {
         requireId(id)
-        return id + "0".repeat(LENGTH_CHARS + PAYLOAD_BYTES * 2)
+        return id + "0".repeat(LENGTH_CHARS) + base64.encode(ByteArray(PAYLOAD_BYTES))
     }
 
-    /** [asked] in a slot under [id], or null when its JSON is longer than [PAYLOAD_BYTES]. */
-    fun of(id: String, asked: Asked): String? {
+    /** [asked], in order, in a slot under [id], or null when their JSON is longer than [PAYLOAD_BYTES]. */
+    fun of(id: String, asked: List<Asked>): String? {
         requireId(id)
-        val bytes = json.encodeToString(Asked.serializer(), asked).encodeToByteArray()
+        val bytes = json.encodeToString(list, asked).encodeToByteArray()
         if (bytes.size > PAYLOAD_BYTES) return null
         val length = bytes.size.toString(16).padStart(LENGTH_CHARS, '0')
-        return id + length + WireHex.of(bytes) + "0".repeat((PAYLOAD_BYTES - bytes.size) * 2)
+        return id + length + base64.encode(bytes.copyOf(PAYLOAD_BYTES))
     }
 
-    /** What one slot held: its id, and the request, or null for an empty slot. */
-    data class Read(val id: String, val asked: Asked?)
+    /** One request alone in a slot under [id]: [of] with a list of one. */
+    fun of(id: String, asked: Asked): String? = of(id, listOf(asked))
+
+    /** **The bytes [asked] takes in a slot's list**, the separator before it not counted. */
+    fun bytesOf(asked: Asked): Int = json.encodeToString(Asked.serializer(), asked).encodeToByteArray().size
+
+    /** Whether [members] requests whose [bytesOf] add up to [memberBytes] fit one slot together. */
+    fun fits(memberBytes: Int, members: Int): Boolean =
+        LIST_BYTES + memberBytes + SEPARATOR_BYTES * (members - 1).coerceAtLeast(0) <= PAYLOAD_BYTES
+
+    /** Whether a request of [bytes] (its [bytesOf]) fits a slot on its own. One that does not, never will. */
+    fun fitsAlone(bytes: Int): Boolean = fits(bytes, 1)
+
+    /** What one slot held: its id, and its requests in the order they were made, none for an empty slot. */
+    data class Read(val id: String, val asked: List<Asked>)
 
     /**
-     * **One slot, read**, or null for a slot that is not one: the wrong width, not lowercase hex,
-     * a length past the payload, or a payload that is not a request. Its id is read whatever it holds.
+     * **One slot, read**, or null for a slot that is not one: the wrong width, an id or length that is
+     * not lowercase hex, a payload that is not URL-safe base64, a length past the payload, padding that
+     * is not zeros, or JSON that is not a list of requests. Its id is read whatever it holds.
      */
     fun read(slot: String): Read? {
-        if (slot.length != CHARS || !WireHex.isHex(slot)) return null
-        val id = slot.substring(0, ID_CHARS)
-        val length = slot.substring(ID_CHARS, ID_CHARS + LENGTH_CHARS).toInt(16)
+        if (slot.length != CHARS) return null
+        val head = slot.substring(0, ID_CHARS + LENGTH_CHARS)
+        if (!WireHex.isHex(head)) return null
+        val id = head.substring(0, ID_CHARS)
+        val length = head.substring(ID_CHARS).toInt(16)
         if (length > PAYLOAD_BYTES) return null
-        if (length == 0) return Read(id, null)
-        val start = ID_CHARS + LENGTH_CHARS
-        val text = WireHex.bytes(slot.substring(start, start + length * 2)).decodeToString()
+        val payload = slot.substring(ID_CHARS + LENGTH_CHARS)
+        if (!payload.all(::isBase64UrlSafe)) return null
+        val bytes = try {
+            base64.decode(payload)
+        } catch (_: IllegalArgumentException) {
+            return null
+        }
+        if (bytes.size != PAYLOAD_BYTES) return null
+        for (i in length until PAYLOAD_BYTES) if (bytes[i] != ZERO) return null
+        if (length == 0) return Read(id, emptyList())
         val asked = try {
-            json.decodeFromString(Asked.serializer(), text)
+            json.decodeFromString(list, bytes.decodeToString(0, length))
         } catch (_: IllegalArgumentException) {
             return null
         }
@@ -118,6 +166,10 @@ object RequestSlot {
 
     /** Whether [id] is one: [ID_CHARS] lowercase hex characters. */
     fun isId(id: String): Boolean = id.length == ID_CHARS && WireHex.isHex(id)
+
+    private const val ZERO: Byte = 0
+
+    private fun isBase64UrlSafe(c: Char) = c in 'A'..'Z' || c in 'a'..'z' || c in '0'..'9' || c == '-' || c == '_'
 
     private fun requireId(id: String) = require(isId(id)) { "a request's id is $ID_CHARS lowercase hex characters" }
 }

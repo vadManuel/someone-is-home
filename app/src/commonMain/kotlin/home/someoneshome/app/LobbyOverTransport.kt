@@ -935,11 +935,15 @@ class LobbyHouse(
                 is Arrival.Sighted -> {
                     val slot = RequestSlot.read(arrival.upload.ask)
                     if (slot == null) onEvent("AN UPLOAD'S REQUEST SLOT DID NOT READ — SEAT ${arrival.seat.index}")
-                    slot?.asked?.let { asked ->
-                        when (val landing = intents.slotted(arrival.seat, slot.id, asked)) {
-                            is IntentDesk.Landing.Put -> onIntent(landing.intent)
-                            is IntentDesk.Landing.Draw -> onEgressFired(landing.actor)
-                            is IntentDesk.Landing.Duplicate -> Unit
+                    // Every request the slot holds, one at a time and in the order it holds them,
+                    // each awaited before the next (D-275): the order the player made them in.
+                    if (slot != null && slot.asked.isNotEmpty()) {
+                        for (landing in intents.slotted(arrival.seat, slot.id, slot.asked)) {
+                            when (landing) {
+                                is IntentDesk.Landing.Put -> onIntent(landing.intent)
+                                is IntentDesk.Landing.Draw -> onEgressFired(landing.actor)
+                                is IntentDesk.Landing.Duplicate -> Unit
+                            }
                         }
                     }
                     onSighted(arrival.seat, arrival.upload)

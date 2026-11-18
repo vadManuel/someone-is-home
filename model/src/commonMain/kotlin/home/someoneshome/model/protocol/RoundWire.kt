@@ -1068,10 +1068,11 @@ sealed class RoundBody {
      * ### [ask]: every request a player makes in a round rides here (D-263, provisional)
      *
      * One [RequestSlot] of [RequestSlot.CHARS] characters, in every upload: the phone's oldest
-     * unanswered request with its id, or an empty slot under a fresh id. A request no longer goes up
-     * as a frame of its own between beats, because the phones that did that were the ones with
-     * something only an Insider can press. The house reads the slot first, puts a request it has not
-     * heard to the rules, then judges the sightings, then answers [UploadHeard] with the slot's id.
+     * unanswered requests, as many as fit, under one id (D-275), or an empty slot under a fresh id. A
+     * request no longer goes up as a frame of its own between beats, because the phones that did that
+     * were the ones with something only an Insider can press. The house reads the slot first, puts the
+     * requests of an id it has not heard to the rules in order, then judges the sightings, then
+     * answers [UploadHeard] with the slot's id.
      * No default, so a construction that forgot the slot does not compile: a field left at its
      * default is a field the encoder leaves out, and the upload would be shorter.
      */
