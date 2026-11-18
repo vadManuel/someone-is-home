@@ -1012,7 +1012,12 @@ class EgressTest {
             "a countdown reached zero with the doors open and the round carried on",
         )
         assertEquals(
-            SEATS.map { Effect.RoundEnded(it, Winner.Insiders, WinRoute.EgressUncontained, Haptic.Short) },
+            SEATS.map {
+                Effect.RoundEnded(
+                    it, Winner.Insiders, WinRoute.EgressUncontained, Haptic.Short,
+                    integrity = Balance.integrityPercent(walk.state.systemIntegrity, SEATS.size),
+                )
+            },
             emitted.filterIsInstance<Effect.RoundEnded>(),
             "the ending has to reach every seat, once each",
         )

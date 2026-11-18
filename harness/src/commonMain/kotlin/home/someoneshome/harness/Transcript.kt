@@ -411,7 +411,7 @@ object Transcript {
             "EgressSucceeded|haptic=${effect.haptic}"
         is Effect.RoundEnded ->
             "RoundEnded|seat=${effect.seat.index}|winner=${effect.winner}|by=${effect.by}" +
-                "|haptic=${effect.haptic}"
+                "|haptic=${effect.haptic}|integrity=${effect.integrity}"
         // **The seats, and neither the names nor one word of what was held over any of them**
         // (D-115, D-116).
         //

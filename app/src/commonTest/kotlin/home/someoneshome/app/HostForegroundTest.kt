@@ -380,7 +380,7 @@ class HostForegroundTest {
         pushes(round, RoundMessage.ContactSeedIssued(ContactSeed("0123456789abcdef0123456789abcdef")))
         assertEquals(listOf(true), host.timer.writes, "the timer came back on between the lobby and the round")
 
-        pushes(round, RoundMessage.RoundEnded(Winner.Residents, WinRoute.InsidersRestrained, Haptic.Long))
+        pushes(round, RoundMessage.RoundEnded(Winner.Residents, WinRoute.InsidersRestrained, Haptic.Long, integrity = 60))
         assertFalse(host.timer.disabled, "the round ended and hosting did not end with it")
 
         // NEW ROUND: the host walks back into a lobby its phone runs.

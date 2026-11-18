@@ -71,7 +71,7 @@ class RoundClientTest {
      */
     @Test
     fun theRevealIsCountedAndNeitherTheNameNorTheLineIsPrinted() = bench { b ->
-        b.push(1, RoundMessage.RoundEnded(Winner.Residents, WinRoute.SystemIntegrityCleared, Haptic.Short))
+        b.push(1, RoundMessage.RoundEnded(Winner.Residents, WinRoute.SystemIntegrityCleared, Haptic.Short, integrity = 60))
         b.push(2, RoundMessage.InsidersRevealed(listOf(InsiderNamed(Seat(3), name, line))))
         delay(SETTLE)
 

@@ -143,7 +143,7 @@ class RealClocksTest {
         phone.houseSaid(RoundMessage.RoleRevealed(insider = true))
         phone.houseSaid(RoundMessage.EgressOpened(EgressType.Tether, NODES, remaining = 2_400, haptic = Haptic.Long, pulseFrom = 86_402_000L))
         now = now.copy(hour = 22, minute = 30)
-        phone.houseSaid(RoundMessage.RoundEnded(Winner.Insiders, WinRoute.EgressUncontained, Haptic.Long))
+        phone.houseSaid(RoundMessage.RoundEnded(Winner.Insiders, WinRoute.EgressUncontained, Haptic.Long, integrity = 60))
         phone.houseSaid(RoundMessage.HouseSignedOff("Unfortunate."))
         assertEquals(ScreenId.WinInsiders, phone.state.screen)
         val vals = PanelVals(phone.state)

@@ -8768,6 +8768,44 @@ exception was not built and `onTheNotice` is unchanged.
 **Proved.** `HouseNoticeTest.aSeatWithNoNameIsNamedUnnamed`. *The mapping removed:* `expected:<Resident
 [UNNAMED] was unreachable thi...> but was:<Resident [] was unreachable thi...>`.
 
+### D-284 · **The ending always carries the final System Integrity, one value to every phone — built (recording 37)**
+
+**The ruling** (owner, 2026-11-18, decision pack 9b option a). The living are told the meter only at
+meetings (`gdd.md:192`, `:1002`) and the out when it moves or at a meeting (D-274), so at three seats a
+round that ended by parity at the first Revoke, before any meeting, drew SYSTEM INTEGRITY "–" on
+every phone's ending.
+
+**Now.** `Effect.RoundEnded` and its wire message `RoundMessage.RoundEnded` carry `integrity`, the
+percentage from `Balance.integrityPercent(systemIntegrity, seats)`, the same arithmetic as the
+meeting's batch and the couch's live reading, read in `endingEffects` off the state before the
+ending like everything else there. One value for every seat; the phone writes it to
+`integrityPercent` on arrival, so every ending draws the final number whether or not a meeting
+came first.
+
+**Schema and wire.** No new kind: `RoundEnded`'s row is unchanged (every seat, at the end), and the
+field is the same number in every seat's frame, so no frame differs by role or round state. It is a
+percentage and never the count, for D-153's reason, which holds at the ending (`PanelVals
+.integrityPercent`'s note). **Recording 37**: the `RoundEnded` effect row gains `integrity=`; no
+event or state row moved.
+
+**No light, timing or copy moved**: the ending's SYSTEM INTEGRITY line was already there, and now it
+has a number.
+
+**Proved, each red against the injected bug first.**
+
+- `EndingTest` (core), *the ending carries the final System Integrity to every seat with no meeting
+  behind it*: three seats, one Insider, parity at the first Revoke, the meter set part-way.
+  *`endingEffects` sending a constant 0:* `the ending did not carry the final System Integrity, the
+  same to every seat. Expected <[46, 46, 46]>, actual <[0, 0, 0]>`; the existing *the ending reaches
+  every seat once and buzzes once* went red with it.
+- `HousedContentTest` (ui), *theEndingDrawsTheFinalMeterWithNoMeetingBehindIt*. *The phone ignoring
+  the field:* `the ending drew no reading where the house sent one expected:<[85%]> but was:<[-]>`.
+
+Twenty constructor sites in tests across `model`, `core`, `ui` and `app` gained the field; the two
+that assert what the rules emit compute it rather than type it.
+
+**Not on a phone.**
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

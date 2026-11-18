@@ -61,7 +61,7 @@ class ScreenAwakeTest {
         assertFalse(timer.disabled, "the screen was held awake in the lobby, before arming")
         pushes(round, RoundMessage.ContactSeedIssued(seed))
         assertTrue(timer.disabled, "armed, and the phone can still lock itself")
-        pushes(round, RoundMessage.RoundEnded(Winner.Residents, WinRoute.InsidersRestrained, Haptic.Long))
+        pushes(round, RoundMessage.RoundEnded(Winner.Residents, WinRoute.InsidersRestrained, Haptic.Long, integrity = 60))
         assertFalse(timer.disabled, "the round ended and the screen is still held awake")
     }
 

@@ -39,7 +39,7 @@ class EndingRouteTest {
             phone.houseSaid(RoundMessage.RosterIssued(listOf("ALBA", "BRUNO", "CYRUS", "DEVI")))
             phone.houseSaid(RoundMessage.OpeningMessage(Haptic.Short))
             phone.houseSaid(RoundMessage.RoleRevealed(insider = insider, line = if (insider) "the cake" else ""))
-            phone.houseSaid(RoundMessage.RoundEnded(winnerOf(by), by, Haptic.Short))
+            phone.houseSaid(RoundMessage.RoundEnded(winnerOf(by), by, Haptic.Short, integrity = 60))
         }
 
     /** Every piece of text [phone] draws where it stands, drawn the way `FlowHost` draws it. */

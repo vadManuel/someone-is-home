@@ -126,7 +126,7 @@ class EffectPushTest {
     private fun theEnding(): Pair<GameState, List<Effect>> {
         val over = round().endRound(Outcome(Winner.Residents, WinRoute.SystemIntegrityCleared))
         return over to listOf(
-            Effect.RoundEnded(Seat(0), Winner.Residents, WinRoute.SystemIntegrityCleared, Haptic.Short),
+            Effect.RoundEnded(Seat(0), Winner.Residents, WinRoute.SystemIntegrityCleared, Haptic.Short, integrity = 60),
             Effect.InsidersRevealed(listOf(InsiderNamed(Seat(1), "SEAT1", "$line 1"))),
         )
     }

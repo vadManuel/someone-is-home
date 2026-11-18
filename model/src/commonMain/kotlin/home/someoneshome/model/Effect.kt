@@ -1103,6 +1103,17 @@ sealed interface Effect {
         val winner: Winner,
         val by: WinRoute,
         val haptic: Haptic,
+        /**
+         * **The final System Integrity, as the percentage every screen draws** (the owner's
+         * 2026-11-18 ruling, decision pack 9b option a).
+         *
+         * The living are told the meter only at meetings (`gdd.md:192`, `:1002`), so a round that
+         * ended before any meeting (parity at the first Revoke, at three seats) put SYSTEM
+         * INTEGRITY "–" on every ending. One value, the same to every phone and every seat, from
+         * the same `Balance.integrityPercent` the batch and the couch's live reading use: a
+         * percentage and never the count, for D-153's reason, which holds at the ending too.
+         */
+        val integrity: Int,
     ) : Effect
 
     /**

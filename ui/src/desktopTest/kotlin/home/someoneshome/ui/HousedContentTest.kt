@@ -94,7 +94,7 @@ class HousedContentTest {
         assertEquals("I am watching you. Thank you for your cooperation.", PanelVals(resident.state).houseLine)
 
         val insider = housed(insider = true)
-        insider.houseSaid(RoundMessage.RoundEnded(Winner.Residents, WinRoute.InsidersRestrained, Haptic.Short))
+        insider.houseSaid(RoundMessage.RoundEnded(Winner.Residents, WinRoute.InsidersRestrained, Haptic.Short, integrity = 60))
         assertNull(insider.state.heldOver, "the quoted line outlived the round")
         assertEquals(PanelVals.HOUSE_INSTRUCTION, PanelVals(insider.state).houseLine)
     }
@@ -138,7 +138,7 @@ class HousedContentTest {
 
     private fun ended(phone: FlowModel, contained: Int): FlowModel = phone.apply {
         repeat(contained) { houseSaid(RoundMessage.EgressContained(Haptic.Long)) }
-        houseSaid(RoundMessage.RoundEnded(Winner.Residents, WinRoute.InsidersRestrained, Haptic.Short))
+        houseSaid(RoundMessage.RoundEnded(Winner.Residents, WinRoute.InsidersRestrained, Haptic.Short, integrity = 60))
         houseSaid(RoundMessage.InsidersRevealed(listOf(InsiderNamed(Seat(2), "CYRUS", line))))
     }
 
@@ -161,6 +161,19 @@ class HousedContentTest {
         phone.houseSaid(RoundMessage.OpeningMessage(Haptic.Short))
         assertEquals(0, phone.state.egressesContained, "a new round kept the last one's Egresses")
         assertNull(phone.state.residents, "a new round kept the last one's Residents")
+    }
+
+    /**
+     * **GUARD (decision pack 9b option a, D-284): the ending draws the final System Integrity the
+     * house sent with it, even when no meeting ever told this phone the meter.**
+     */
+    @Test
+    fun theEndingDrawsTheFinalMeterWithNoMeetingBehindIt() {
+        val phone = housed()
+        assertNull(phone.state.integrityPercent, "the fixture phone was told a meter before its ending")
+        phone.houseSaid(RoundMessage.RoundEnded(Winner.Insiders, WinRoute.Parity, Haptic.Short, integrity = 85))
+        assertEquals("85%", PanelVals(phone.state).integrityPercent, "the ending drew no reading where the house sent one")
+        assertTrue("85%" in drawn(phone, ScreenId.WinInsiders), "the Insiders' ending did not draw the final meter")
     }
 
     // ---- 5 · Notes, the reconnect line, the callers, the inbox ---------------------------------

@@ -979,7 +979,7 @@ class EmitSchemaTest {
             seats,
             seats.flatMap {
                 EmitSchema.deliveries(
-                    Effect.RoundEnded(it, Winner.Insiders, WinRoute.EgressUncontained, Haptic.Short),
+                    Effect.RoundEnded(it, Winner.Insiders, WinRoute.EgressUncontained, Haptic.Short, integrity = 60),
                     over(),
                 )
             }.map { it.seat },
@@ -1158,7 +1158,7 @@ class EmitSchemaTest {
             seats,
             seats.flatMap {
                 EmitSchema.deliveries(
-                    Effect.RoundEnded(it, Winner.Residents, WinRoute.Parity, Haptic.Short), finished,
+                    Effect.RoundEnded(it, Winner.Residents, WinRoute.Parity, Haptic.Short, integrity = 60), finished,
                 )
             }.map { it.seat },
         )

@@ -1,5 +1,6 @@
 package home.someoneshome.core
 
+import home.someoneshome.model.Balance
 import home.someoneshome.model.Effect
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
@@ -307,7 +308,12 @@ class EndingTest {
         val ended = walk.emitted.filterIsInstance<Effect.RoundEnded>()
 
         assertEquals(
-            SEATS.map { Effect.RoundEnded(it, Winner.Residents, WinRoute.InsidersRestrained, Haptic.Short) },
+            SEATS.map {
+                Effect.RoundEnded(
+                    it, Winner.Residents, WinRoute.InsidersRestrained, Haptic.Short,
+                    integrity = Balance.integrityPercent(walk.state.systemIntegrity, SEATS.size),
+                )
+            },
             ended,
             "the ending did not reach every seat once, in seat order, identically",
         )
@@ -538,5 +544,34 @@ class EndingTest {
             "a state with no round in it reported a winner",
         )
         assertFalse(GameState.EMPTY.ended)
+    }
+
+    /**
+     * **GUARD (decision pack 9b option a, D-284): the ending always carries the final System
+     * Integrity, one value to every seat.** Three seats, one Insider, and the first Revoke ends the
+     * round by parity before any meeting has told anybody the meter, which is the round that drew
+     * SYSTEM INTEGRITY "–" on every ending.
+     */
+    @Test
+    fun `the ending carries the final System Integrity to every seat with no meeting behind it`() {
+        val three = (0 until 3).map { Seat(it) }
+        val armed = reduce(GameState.EMPTY, Event.RoundArmed(Tick(0), seed = 3L, seats = three, insiders = listOf(Seat(1)))).state
+        val half = Balance.meterTotal(three.size) / 2
+        val start = armed.copy(systemIntegrity = half)
+        val expected = Balance.integrityPercent(half, three.size)
+        assertTrue(expected in 1..99, "the fixture's meter is at an end, so a constant could pass: $expected")
+
+        val ready = Balance.REVOKE_COOLDOWN / 2
+        val walk = EndingWalk(start).feed(
+            Event.RevokeArmed(Tick(ready), Seat(1)),
+            Event.ContactMade(Tick(ready + 1), Seat(1), Seat(2)),
+        )
+        assertEquals(Outcome(Winner.Insiders, WinRoute.Parity), walk.state.outcome, "the fixture did not end by parity")
+        val ended = walk.emitted.filterIsInstance<Effect.RoundEnded>()
+        assertEquals(three, ended.map { it.seat }, "the ending did not reach every seat")
+        assertEquals(
+            List(three.size) { expected }, ended.map { it.integrity },
+            "the ending did not carry the final System Integrity, the same to every seat",
+        )
     }
 }

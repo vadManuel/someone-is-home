@@ -104,7 +104,7 @@ class ContactUploaderTest {
         val (up, radio, sent) = rig()
         up.heard(RoundMessage.ContactSeedIssued(seed))
         up.beat()
-        up.heard(RoundMessage.RoundEnded(Winner.Residents, WinRoute.SystemIntegrityCleared, Haptic.Short))
+        up.heard(RoundMessage.RoundEnded(Winner.Residents, WinRoute.SystemIntegrityCleared, Haptic.Short, integrity = 60))
         repeat(3) { up.beat() }
         assertEquals(1, sent.size, "a phone kept uploading after the round ended")
         assertEquals(1, radio.silenced)
@@ -204,7 +204,7 @@ class ContactUploaderTest {
      */
     @Test
     fun leavingTheForegroundAfterTheRoundOrAcrossItsEndIsNothing() {
-        val ended = RoundMessage.RoundEnded(Winner.Residents, WinRoute.SystemIntegrityCleared, Haptic.Short)
+        val ended = RoundMessage.RoundEnded(Winner.Residents, WinRoute.SystemIntegrityCleared, Haptic.Short, integrity = 60)
         val (after, _, afterFaults) = evader()
         after.heard(RoundMessage.ContactSeedIssued(seed))
         after.heard(ended)

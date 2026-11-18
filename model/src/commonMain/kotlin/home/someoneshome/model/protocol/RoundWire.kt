@@ -809,6 +809,8 @@ sealed class RoundMessage {
         val winner: Winner,
         val by: WinRoute,
         val haptic: Haptic,
+        /** The final System Integrity, the one percentage every phone draws on its ending (9b). */
+        val integrity: Int,
     ) : RoundMessage()
 
     /**
@@ -1267,7 +1269,7 @@ object RoundWire {
         is Effect.SyncPulseBlanked -> RoundMessage.SyncPulseBlanked.Padded
         is Effect.EgressContained -> RoundMessage.EgressContained(effect.haptic)
         is Effect.EgressSucceeded -> RoundMessage.EgressSucceeded(effect.haptic)
-        is Effect.RoundEnded -> RoundMessage.RoundEnded(effect.winner, effect.by, effect.haptic)
+        is Effect.RoundEnded -> RoundMessage.RoundEnded(effect.winner, effect.by, effect.haptic, effect.integrity)
         is Effect.InsidersRevealed -> RoundMessage.InsidersRevealed(effect.insiders)
         is Effect.HouseSignedOff -> RoundMessage.HouseSignedOff(effect.body)
     }

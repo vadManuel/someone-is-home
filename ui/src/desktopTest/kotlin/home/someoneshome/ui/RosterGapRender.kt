@@ -91,7 +91,7 @@ class RosterGapRender {
         render("gap-waiting-over-ending", FlowModel(PanelState(screen = ScreenId.Lobby), lobby = waiting))
 
         couch.houseSaid(RoundMessage.SystemIntegrityLive(100))
-        couch.houseSaid(RoundMessage.RoundEnded(Winner.Insiders, WinRoute.EgressUncontained, Haptic.Short))
+        couch.houseSaid(RoundMessage.RoundEnded(Winner.Insiders, WinRoute.EgressUncontained, Haptic.Short, integrity = 100))
         render("gap-couch-ending", couch)
     }
 }

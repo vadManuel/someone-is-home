@@ -115,7 +115,7 @@ class RoundWireTest {
         Effect.SyncPulseBlanked(Seat(3)),
         Effect.EgressContained(Haptic.Short),
         Effect.EgressSucceeded(Haptic.Short),
-        Effect.RoundEnded(Seat(3), Winner.Residents, WinRoute.SystemIntegrityCleared, Haptic.Short),
+        Effect.RoundEnded(Seat(3), Winner.Residents, WinRoute.SystemIntegrityCleared, Haptic.Short, integrity = 60),
         Effect.InsidersRevealed(listOf(InsiderNamed(Seat(1), name = "PRIYA", line = "a line"))),
         Effect.HouseSignedOff(Seat(1), body = "Unfortunate."),
     )
@@ -209,7 +209,7 @@ class RoundWireTest {
         bothWays { Effect.EgressOpened(it, EgressType.Beacon, emptyList(), 1, Haptic.Long, pulseFrom = 86_402_000L) }
         bothWays { Effect.SyncPulseAnswered(it, held = true) }
         bothWays { Effect.SyncPulseBlanked(it) }
-        bothWays { Effect.RoundEnded(it, Winner.Insiders, WinRoute.Parity, Haptic.Short) }
+        bothWays { Effect.RoundEnded(it, Winner.Insiders, WinRoute.Parity, Haptic.Short, integrity = 60) }
         bothWays { Effect.HouseSignedOff(it, body = "x") }
     }
 

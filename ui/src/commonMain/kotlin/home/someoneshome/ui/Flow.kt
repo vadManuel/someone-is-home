@@ -3219,7 +3219,9 @@ class FlowModel(
             is RoundMessage.RoundEnded -> {
                 val at = landedAt()
                 // **The quoted line goes when the round ends** (D-116's promise, kept on this side).
-                state = state.copy(endedAt = at, endedBy = message.by, heldOver = null)
+                // **And the final System Integrity, on every phone** (decision pack 9b option a):
+                // the meter is told at meetings, so a round that ended before one drew "–" here.
+                state = state.copy(endedAt = at, endedBy = message.by, heldOver = null, integrityPercent = message.integrity)
                 Flow.endings[message.winner]?.let { push(it.to) }
             }
 

@@ -248,6 +248,9 @@ private fun endingEffects(state: GameState, outcome: Outcome): List<Effect> {
             by = outcome.by,
             // D-135's set is closed at five and this is not one of them. See Effect.RoundEnded.
             haptic = Haptic.Short,
+            // **The final meter, one value to every seat** (decision pack 9b option a). Read off
+            // the state before the ending, like everything here; the batch's own arithmetic.
+            integrity = Balance.integrityPercent(state.systemIntegrity, state.seats.size),
         )
     } + revealed + state.insiderSeats.sortedBy { it.index }.map {
         Effect.HouseSignedOff(seat = it, body = signOff(outcome.winner))

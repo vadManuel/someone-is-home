@@ -50,6 +50,10 @@ class Recording(
     }
 
     companion object {
+        // 37: the `RoundEnded` effect row gains `integrity=` (decision pack 9b option a, D-284): the
+        // final System Integrity, one percentage to every seat, so an ending with no meeting behind
+        // it no longer draws "–". A version 36 effect row is missing it. No event or state row moved.
+        //
         // 36: no row changed shape, and the same events reduce differently (decision pack 9f option
         // a, D-282): when a paused Egress resumes, at a meeting's close or at the house's return,
         // `egressReadyAt` moves back by the length of the pause, so the state row's `egressReady=`
@@ -298,7 +302,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/36"
+        const val HEADER = "someone-is-home/recording/37"
     }
 }
 

@@ -88,8 +88,8 @@ class HouseBuzzTest {
             Effect.EgressHeld(90, running = false, haptic = haptic),
             Effect.EgressContained(haptic),
             Effect.EgressSucceeded(haptic),
-            Effect.RoundEnded(seat, Winner.Residents, WinRoute.SystemIntegrityCleared, haptic),
-            Effect.RoundEnded(seat, Winner.Insiders, WinRoute.EgressUncontained, haptic),
+            Effect.RoundEnded(seat, Winner.Residents, WinRoute.SystemIntegrityCleared, haptic, integrity = 60),
+            Effect.RoundEnded(seat, Winner.Insiders, WinRoute.EgressUncontained, haptic, integrity = 60),
         )
     }
 
