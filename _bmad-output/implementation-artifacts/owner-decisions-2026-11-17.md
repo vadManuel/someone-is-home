@@ -441,3 +441,7 @@ Results: `uwb-spike-results-2026-11-18.md`.
   - The Insider's tiles dim while an ability the Insider used is cooling down.
 
   This narrows D-142's *not shorter, dimmer or otherwise distinguishable* to the page's layout, frames and wire. A Resident's page is unchanged. It answers the 20–60 s arm gap: the Insider sees COOLING DOWN, dimmed, instead of READY.
+- **Wording approved:**
+  - **No UWB**, at launch: "THIS PHONE CAN'T PLAY" / "Someone's Home needs Ultra Wideband: iPhone 11 or later, not iPhone SE."
+  - **JOIN during a round:** keep today's "ROUND IN PROGRESS" / "YOU JOIN THE NEXT ONE".
+  - **A taken name in the lobby:** "NAME TAKEN", with no second line.
