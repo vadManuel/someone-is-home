@@ -125,7 +125,7 @@ Both phones still, 1 m apart, nobody moving: `sample.sh "rate" 30`.
 
 - **Record:** both rates (`/s over the window`), the `longest gap` and the `median gap`.
 - **PASS (working mark):** at least 10 readings a second, and no gap longer than 500 ms. For
-  comparison, the Bluetooth contact radio scans every 250 ms. Whether this mark is good enough for
+  comparison, the Bluetooth contact radio restarts its scan every 100 ms (D-233). Whether this mark is good enough for
   a Revoke is the owner's decision.
 
 ### 6. B locks, goes to the background, and comes back (0:10–0:12)

@@ -91,7 +91,7 @@ No separate window was needed. Every still window above reads **6.7/s, a median 
 
 - **FAIL against the 10/s working mark.** The rate looks fixed by iOS.
 - **PASS against the 500 ms gap mark** while still.
-- For comparison, the Bluetooth contact radio scans every 250 ms.
+- For comparison, the Bluetooth contact radio restarts its scan every 100 ms (`SCAN_CYCLE_MILLIS`, D-233), and the phone sends what it heard to the house once a second (`SightingUpload.CADENCE_MILLIS`). (An earlier version of this file said 250 ms. That was wrong.)
 
 ## Step 6: lock and background (B leaves)
 
@@ -144,7 +144,7 @@ What UWB cannot do:
 1. **The touch gesture.** Top to top lights the room through NameDrop. The candidates are:
    - **screen to screen, stacked:** cleanest, no dropout;
    - **back to back:** reads as a touch, but dropped out for 3.5 s once.
-2. **The update rate.** Is 6.7 readings a second, one every 150 ms, enough for a Revoke? It is below the spike's 10/s mark, but faster than Bluetooth's 250 ms scan.
+2. **The update rate.** Is 6.7 readings a second, one every 150 ms, enough for a Revoke? It is below the spike's 10/s mark. Bluetooth restarts its scan every 100 ms, but the house hears from each phone only once a second either way.
 3. **Presence and rooms.** UWB cannot see walls. Either presence keeps a non-UWB signal, or it becomes distance-only and accepts that a Resident just through a wall reads as close.
 4. **Direction is out.** The owner's goal included directional tracking. On the owner's own 16 Pro, it cannot work in the dark.
 
