@@ -79,7 +79,21 @@ class SlotRequests(
         val head = waiting.firstOrNull() ?: return RequestSlot.empty(freshId())
         val id = head.slotId ?: freshId().also(::take)
         val taken = waiting.takeWhile { it.slotId == id }.map { it.asked }
-        return RequestSlot.of(id, taken) ?: RequestSlot.empty(freshId())
+        return RequestSlot.of(id, taken) ?: refused(id, taken)
+    }
+
+    /**
+     * **A list [take] judged to fit that [RequestSlot.of] would not build** — unreachable while
+     * `bytesOf` and `fits` measure exactly what `of` encodes, which is the point of saying it loudly
+     * if they ever drift (D-275, review #3). Left in place, those requests would keep their id and
+     * this phone would send an empty slot every beat for the rest of the round, asking nothing and
+     * saying nothing. So they are said in the log and let go, and the queue behind them moves on.
+     * The beat still carries a slot of the one fixed width, so the wire cannot tell.
+     */
+    private fun refused(id: String, taken: List<Asked>): String {
+        onEvent("A SLOT THAT WOULD NOT BUILD WAS DROPPED — ${taken.joinToString { kindOf(it) }}")
+        waiting.removeAll { it.slotId == id }
+        return RequestSlot.empty(freshId())
     }
 
     /** Give [id] the oldest requests waiting, for as long as the next one still fits beside them. */
