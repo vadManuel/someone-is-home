@@ -445,3 +445,19 @@ Results: `uwb-spike-results-2026-11-18.md`.
   - **No UWB**, at launch: "THIS PHONE CAN'T PLAY" / "Someone's Home needs Ultra Wideband: iPhone 11 or later, not iPhone SE."
   - **JOIN during a round:** keep today's "ROUND IN PROGRESS" / "YOU JOIN THE NEXT ONE".
   - **A taken name in the lobby:** "NAME TAKEN", with no second line.
+
+## Owner rulings, 2026-11-18, on D-286's questions and Q5
+
+- **A landed Revoke takes ARMED down at once, and both phones buzz Long.**
+  - At the hit, the Insider's tile goes straight from ARMED to COOLING DOWN, instead of holding ARMED until 20 s from the arm.
+  - The Revoked phone and the Insider's phone both give the **Long** buzz.
+  - Today neither phone buzzes when a Revoke lands.
+- **The dimming of the Tier-2 names stays subtle.** It keeps the existing `Ramp.Dim`, with no new brightness level.
+- **Q5, the report: within 30 cm, held for 2 s.**
+  - The reporting phone shows a circle that fills over the 2 s, and then the meeting's call.
+  - Leaving 30 cm before the circle is full cancels the report.
+  - This replaces Bluetooth's RSSI ≥ −40 dBm in 2 of 3 uploads (D-236).
+- **The Insider who did the Revoke may report their own victim (option a).**
+  - The house's 5 s debounce between the same two phones (`ContactGate.DEBOUNCE_TICKS`) becomes a deliberate rule: a grace after a Revoke during which neither phone of the pair can report the other.
+  - After the grace, anyone can report, the Insider included, and their circle warns them first.
+  - A neighbour already within 30 cm of the victim can report at once. That is accepted under U3.
