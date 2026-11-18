@@ -3,6 +3,7 @@
 # seat at every beat the bench announces, plus one every few seconds in between.
 #
 #   tools/sim-hunt/hunt.sh [--seats N] [--seed S] [--out DIR] [--nodes] [--no-build] [--tail SECS] [--relaunch-guest K]
+#                          [--host-env NAME=VALUE]... [--all-env NAME=VALUE]... [--every SECS]
 #   tools/sim-hunt/hunt.sh stop [--out DIR]
 #
 # WHAT THIS IS FOR: finding what a person would find broken on a screen, the wire, the flow and the
@@ -34,6 +35,12 @@
 # (SOMEONES_HOME_LOBBY_SEATS_AGAIN); and once the second round's first beat is in the host's log,
 # seat K is launched again over the same files WITHOUT forgetting its seat token, so it comes back to
 # its own seat by the token. Its second process logs to seat-K-relaunch.log; relaunch.txt says when.
+#
+# --host-env NAME=VALUE (repeatable): launch the host's process with NAME=VALUE as well, for a
+# measurement switch that a build of your own reads (the host runs the house, so that is where the
+# house's costs are). The guests are launched without it; --all-env NAME=VALUE gives it to every
+# seat, the host included (a guest's figure is the phone without the house). --every SECS sets
+# the periodic shots' spacing (default 3); a measurement run wants them sparse.
 set -o pipefail
 
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -47,6 +54,8 @@ BUILD=1
 TAIL=45
 RELAUNCH=""
 EVERY=3
+HOST_ENV=()
+ALL_ENV=()
 OUT=""
 BUNDLE_ID="home.someoneshome.app"
 CONFIG=Playtest
@@ -67,6 +76,9 @@ while [ $# -gt 0 ]; do
         --no-build) BUILD=""; shift ;;
         --tail) TAIL="$2"; shift 2 ;;
         --relaunch-guest) RELAUNCH="$2"; shift 2 ;;
+        --host-env) HOST_ENV+=("SIMCTL_CHILD_$2"); shift 2 ;;
+        --all-env) ALL_ENV+=("SIMCTL_CHILD_$2"); shift 2 ;;
+        --every) EVERY="$2"; shift 2 ;;
         *) echo "unknown option '$1' — see the top of $0" >&2; exit 64 ;;
     esac
 done
@@ -153,6 +165,7 @@ launch_seat() {
         "SIMCTL_CHILD_SOMEONES_HOME_ROUND=1"
         "SIMCTL_CHILD_SOMEONES_HOME_ROUND_SEED=$SEED"
     )
+    [ "${#ALL_ENV[@]}" -gt 0 ] && env+=("${ALL_ENV[@]}")
     if [ -z "$again" ]; then
         env+=("SIMCTL_CHILD_SOMEONES_HOME_LOBBY_FORGET=1")
     else
@@ -165,6 +178,8 @@ launch_seat() {
               "SIMCTL_CHILD_SOMEONES_HOME_LOBBY_SEATS=$SEATS")
         # A guest stopped at the ending is not back when the second round arms (--relaunch-guest).
         [ -n "${RELAUNCH:-}" ] && env+=("SIMCTL_CHILD_SOMEONES_HOME_LOBBY_SEATS_AGAIN=$((SEATS - 1))")
+        # --host-env: anything else the host's process should be launched with (a measurement switch).
+        [ "${#HOST_ENV[@]}" -gt 0 ] && env+=("${HOST_ENV[@]}")
     else
         env+=("SIMCTL_CHILD_SOMEONES_HOME_LOBBY_JOIN=$HOME_NAME")
     fi
