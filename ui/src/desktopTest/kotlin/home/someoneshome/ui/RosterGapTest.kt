@@ -18,13 +18,17 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * **A round armed without seat 2: the roster holds a blank at index 2, and nothing offers it**
- * (D-115, D-274).
+ * **A round armed without seat 2: the roster holds a null at index 2, and nothing offers it**
+ * (D-115, D-274, D-277).
  *
- * The roster is read by seat index, so a seat that is not in the round is a blank slot rather than
- * a missing one. A blank is nobody: the ballot draws no row for it and the Surge picker draws no
+ * The roster is read by seat index, so a seat that is not in the round is a null slot rather than
+ * a missing one. A null is nobody: the ballot draws no row for it and the Surge picker draws no
  * row for it, so a finger can never send a vote or a Surge to a seat that is not in the house. The
  * rows that are drawn turn back into the seat at their own index, past the gap.
+ *
+ * **A blank is somebody** (D-277): a seat in the round whose phone never said a name. It keeps its
+ * row, drawn as UNNAMED, and that row reaches its own seat even with a hole in front of it — the
+ * review that found D-274 folding the two together saw an unnamed Insider nobody could vote out.
  *
  * The hunt this closes: a second round armed with seats 0, 1, 3, 4 and 5, and the house restrained
  * HERON while every screen said FINCH.
@@ -33,7 +37,10 @@ import kotlin.test.assertEquals
 class RosterGapTest {
 
     /** Seat 2 is not in this round. */
-    private val gapped = listOf("PRIYA", "MARCUS", "", "DANI")
+    private val gapped = listOf("PRIYA", "MARCUS", null, "DANI")
+
+    /** Seat 1 is not in this round; seat 2 is, and never said a name. The hole comes first. */
+    private val unnamedPastAHole = listOf("PRIYA", null, "", "DANI")
 
     private fun DesktopComposeUiTest.show(model: FlowModel) {
         setContent {
@@ -83,7 +90,7 @@ class RosterGapTest {
     @Test
     fun aNullSlotIsNobodyAndTheSeatCountIsThePeopleInTheRound() {
         val couch = FlowModel(PanelState(screen = ScreenId.GhostMeeting))
-        couch.houseSaid(RoundMessage.RosterIssued(listOf("PRIYA", "MARCUS", null, "DANI")))
+        couch.houseSaid(RoundMessage.RosterIssued(gapped))
         assertEquals(gapped, couch.state.roster, "the roster was not kept by seat index")
         assertEquals(3, couch.state.seats, "the seat total counted the hole as somebody")
         assertEquals(gapped, couch.meeting.names, "the ballot holds a different list from the roster")
@@ -114,6 +121,50 @@ class RosterGapTest {
             assertEquals(
                 listOf<IntentMessage>(IntentMessage.FireSurge(Seat(3))), sent.toList(),
                 "DANI's row fired at somebody other than seat 3",
+            )
+        }
+
+    @Test
+    fun anUnnamedSeatPastAHoleIsOnTheBallotAndItsRowIsItsOwnSeat() =
+        runDesktopComposeUiTest(width = 300, height = 650) {
+            val sent = mutableListOf<IntentMessage>()
+            lateinit var meeting: MeetingModel
+            meeting = MeetingModel(send = { sent += it.asMessage(meeting.names) })
+            val model = FlowModel(PanelState(screen = ScreenId.Home), meeting = meeting)
+            model.houseSaid(RoundMessage.RosterIssued(unnamedPastAHole))
+            model.push(ScreenId.Vote)
+            show(model)
+
+            assertEquals(
+                0, onAllNodes(aBlankRow).fetchSemanticsNodes().size,
+                "the ballot drew a row with no words on it",
+            )
+            onNodeWithText(UNNAMED).performClick()
+            waitForIdle()
+            assertEquals(
+                listOf<IntentMessage>(IntentMessage.SelectVote(Seat(2))),
+                sent.filterIsInstance<IntentMessage.SelectVote>(),
+                "the unnamed seat's row asked for somebody other than seat 2",
+            )
+        }
+
+    @Test
+    fun anUnnamedSeatPastAHoleIsOnTheSurgePickerAndItsRowIsItsOwnSeat() =
+        runDesktopComposeUiTest(width = 300, height = 650) {
+            val sent = mutableListOf<IntentMessage>()
+            val model = FlowModel(
+                PanelState(screen = ScreenId.Home, role = PanelRole.Insider, roster = unnamedPastAHole),
+                send = { sent += it },
+            ).also { it.push(ScreenId.SurgeTargets) }
+            show(model)
+
+            onNodeWithTag("${TARGET_ROW}1").assertDoesNotExist()
+            onNodeWithTag("${TARGET_ROW}2").assert(hasText(UNNAMED))
+            onNodeWithTag("${TARGET_ROW}2").performClick()
+            waitForIdle()
+            assertEquals(
+                listOf<IntentMessage>(IntentMessage.FireSurge(Seat(2))), sent.toList(),
+                "the unnamed seat's row fired at somebody other than seat 2",
             )
         }
 }

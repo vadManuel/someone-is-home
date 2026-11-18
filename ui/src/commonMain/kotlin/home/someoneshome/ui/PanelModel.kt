@@ -548,7 +548,7 @@ data class PanelState(
      * Null means the house has said nothing, which on a phone with no house attached is always;
      * [PanelVals.roster] resolves the port's five. [egressNodes]' arrangement exactly.
      */
-    val roster: List<String>? = null,
+    val roster: List<String?>? = null,
     /**
      * **The seats the house notice names at this meeting, in seat order** (`Effect.NoticeIssued`,
      * D-187, D-223).
@@ -1292,7 +1292,7 @@ class PanelVals(
      * **Order is the wire**, not a presentation: a row's position in this list is the seat the
      * ability is fired at. See [PanelState.roster].
      */
-    val roster: List<String> = housed(state.roster, ROSTER, nothing = emptyList())
+    val roster: List<String?> = housed(state.roster, ROSTER, nothing = emptyList())
 
     /**
      * **What the notices screen says: the house notice's words, or nothing at all** (D-035, D-187,

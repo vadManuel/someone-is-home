@@ -75,7 +75,7 @@ class MeetingModel(
      * writer at all, so in a real round the vote screen offered the port's five names to a house
      * with five other people standing in it.
      */
-    var names: List<String> = initialNames
+    var names: List<String?> = initialNames
         private set
 
     /**
@@ -294,11 +294,13 @@ class MeetingModel(
      * **The round's roster, from the house** (`Effect.RosterIssued`, D-115).
      *
      * One entry per seat, in seat order, blank where a phone never said what to call its owner —
-     * the shape [names] indexes into in both directions. **Blank, too, at a seat index nobody holds**
-     * (D-274): the index is the seat even across a hole, and the ballot draws no row for a blank. Written by the one branch in `FlowModel`
+     * the shape [names] indexes into in both directions. **Null at a seat index nobody holds**
+     * (D-274, D-277): the index is the seat even across a hole, and the ballot draws no row for a
+     * null. A blank is somebody — a seat in the round with no name — and keeps its row, drawn as
+     * [UNNAMED]; folding the two together left an unnamed Insider beyond the vote. Written by the one branch in `FlowModel`
      * that receives it, so the ballot and `PanelState.roster` cannot come to hold different lists.
      */
-    fun houseNamed(roster: List<String>) {
+    fun houseNamed(roster: List<String?>) {
         names = roster
     }
 
@@ -397,7 +399,17 @@ sealed interface MeetingRequest {
  * live to the couch (D-117) — and the two are kept apart by the wire type having room for the first
  * and none for the second.
  */
-fun MeetingRequest.asMessage(names: List<String>): IntentMessage = when (this) {
+/**
+ * **A seat the roster cannot name**, as every screen draws it.
+ *
+ * The same word `LobbyScreen` draws for a phone that never said what to call its owner: a row with
+ * an empty left-hand side would read as a rendering fault rather than as somebody who joined without
+ * typing a name. It is also the fail-closed answer for a seat the roster does not hold at all — a
+ * couch row still says a ballot was cast, and it names nobody rather than naming somebody nearby.
+ */
+internal const val UNNAMED = "UNNAMED"
+
+fun MeetingRequest.asMessage(names: List<String?>): IntentMessage = when (this) {
     is MeetingRequest.CheckIn -> IntentMessage.CheckIn
     is MeetingRequest.ReadyToVote -> IntentMessage.DeclareReadyToVote
     is MeetingRequest.LockVote -> IntentMessage.LockVote

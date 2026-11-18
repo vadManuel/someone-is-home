@@ -8107,7 +8107,7 @@ release sweep 127 and the playtest sweep 200, ui desktop 659, ui iOS Simulator 3
 `vocabularyLint`, `armingCordon`, `benchSeedCordon`, `seedSourceCordon` and `redactionLint` clean.
 **Not on a phone.**
 
-### D-274 · **The roster is indexed by seat across a hole; the out are told the meter at every meeting; a phone waiting on an ended round says WAITING FOR THE HOST — built (recording 32)**
+### D-274 · **(Amended by D-277: a blank is a seat with no name and keeps its row.)** **The roster is indexed by seat across a hole; the out are told the meter at every meeting; a phone waiting on an ended round says WAITING FOR THE HOST — built (recording 32)**
 
 **What broke** (`hunt.sh`, six seats, seat 2 relaunched and sat out round two;
 `/tmp/someones-home-hunt/r6-final/a6/sheets`). Round two armed with seats 0, 1, 3, 4 and 5.
@@ -8430,6 +8430,39 @@ seats ≈ 4.9 MB/s before, ≈ 3.6 MB/s after**; a guest stays near 0.5–0.7. W
 **No wire, frame count, size, cadence, timing, light or rule moved**: every frame is the bytes it was
 (compared character for character where it is built, and decoded to the same value where it is read),
 and the same uploads, answers and pushes go at the same moments to the same seats.
+
+### D-277 · **A seat in the round with no name keeps its ballot and Surge row, drawn UNNAMED; only a seat index nobody holds has none — built, amends D-274**
+
+**What D-274 got wrong.** The house's roster says two different things at an index: `null`, nobody
+sits there, and `""`, somebody sits there whose phone never said a name (`Rules.armed`,
+`state.nameOf(it) ?: ""`). The phone folded the wire's `null` into `""` on arrival, and the ballot and
+the Surge picker then skipped every blank — so a seat in the round with no name had no row on either.
+The desk still admits such a seat (`LobbyDesk.namedSeats` reads `names[it].orEmpty()`, `readyToArm`
+checks lines, not names; D-227 and D-252 have both lost names before), and an unnamed Insider could
+then never be Restrained. Before D-274 that seat had a row with no words on it and could be voted for,
+so this was a regression. Found by the read-only review of `a1ec986..423e328`; the cause was the
+orchestrator's own brief to D-274's unit ("an empty name must not be a votable row").
+
+**Second trap behind the first.** The ballot turns a row back into a seat by name
+(`asMessage`: `names.indexOf(name)`). With the hole folded into a blank, an unnamed seat's `""` would
+have found the hole's `""` first whenever the hole sat at a lower index, and voted for nobody.
+
+**Now.** `null` stays `null` on the phone: `PanelState.roster`, `PanelVals.roster` and
+`MeetingModel.names` are `List<String?>`. The ballot and the Surge picker skip `null` only; a blank is
+a row like any other, drawn as `UNNAMED` (the lobby's and the couch's existing word, now one
+`internal const` in `Meeting.kt`) and sent as the blank it is, which `indexOf` finds at its own seat
+because the hole is no longer a blank. The endings' Residents list still leaves blanks out, as before.
+No wire, frame, light, timing or rule moved; this is the phone's reading of D-274's list.
+
+**Proved.** `RosterGapTest` now feeds the wire's `null` at the hole (its D-274 cases fed `""`, which is
+why they passed with the defect) and adds an unnamed seat past a hole, `["PRIYA", null, "", "DANI"]`,
+on the ballot and on the Surge picker. With the old fold and skip put back, all three go red: the
+ballot draws two UNNAMED rows (one for nobody), the roster is not kept by seat index, and the picker
+has no row for seat 2.
+
+**Still open, older than D-274:** two seats in the round with the *same* name (two blanks included)
+share one ballot row's identity, because the ballot reaches a seat by name. The Surge picker reaches
+it by index and is unaffected.
 
 ## State after revision 12
 

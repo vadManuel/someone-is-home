@@ -91,9 +91,10 @@ fun SurgeTargetsScreen(vals: PanelVals) {
         note = "SELECT A RESIDENT",
     ) {
         vals.roster.forEachIndexed { index, name ->
-            // A blank is a seat index nobody holds (D-274) and is not a row: a Surge at it would be
+            // A null is a seat index nobody holds (D-274) and is not a row: a Surge at it would be
             // fired at a seat that is not in the house. The index is still the seat for the rest.
-            if (name.isBlank()) return@forEachIndexed
+            // A blank is a seat in the round with no name (D-277), and is a row like the others.
+            if (name == null) return@forEachIndexed
             TargetRow(
                 // Tagged by position, because position IS the seat: the actions layer turns a row
                 // index back into a seat off the same list the house sent (D-115), exactly as the
@@ -101,7 +102,7 @@ fun SurgeTargetsScreen(vals: PanelVals) {
                 tag = "$TARGET_ROW$index",
                 onPick = { actions.fireSurge(index) },
             ) {
-                Words(name, Modifier.weight(1f), size = 28, lineHeight = 1.0)
+                Words(name.ifBlank { UNNAMED }, Modifier.weight(1f), size = 28, lineHeight = 1.0)
             }
         }
     }

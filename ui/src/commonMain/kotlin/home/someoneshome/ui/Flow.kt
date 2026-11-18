@@ -2809,9 +2809,11 @@ class FlowModel(
                 // no Resident on the ending — and keeps the index, which is the seat. The seat total
                 // is the non-null slots, and never the length: with a hole in the numbering the
                 // length is the highest seat plus one, not the number of people in the round.
-                val roster = message.roster.map { it.orEmpty() }
+                // Null stays null on this phone (D-277): nobody at that index, which no screen
+                // offers, and never the same thing as a blank, which is somebody with no name.
+                val roster = message.roster
                 meeting.houseNamed(roster)
-                state = state.copy(roster = roster, seats = message.roster.count { it != null })
+                state = state.copy(roster = roster, seats = roster.count { it != null })
             }
 
             // **The ring — and this is the push that makes a round visible at all** (the owner's
@@ -3162,7 +3164,9 @@ class FlowModel(
                 // name cannot both be counted as Insiders.
                 residents = state.roster?.let { roster ->
                     val insiders = message.insiders.map { it.seat.index }.toSet()
-                    roster.filterIndexed { seat, name -> seat !in insiders && name.isNotBlank() }
+                    roster.withIndex().mapNotNull { (seat, name) ->
+                        name?.takeIf { seat !in insiders && it.isNotBlank() }
+                    }
                 },
             )
 
@@ -3481,17 +3485,6 @@ class FlowModel(
          * could not resolve rather than as a decision several people made.
          */
         const val SKIPPED = "SKIP"
-
-        /**
-         * A voter the roster cannot name.
-         *
-         * The same word `LobbyScreen` draws for a phone that never said what to call its owner, and
-         * it is here for the same reason [SKIPPED] is: a row with an empty left-hand side would
-         * read as a rendering fault rather than as somebody who joined without typing a name. It is
-         * also the fail-closed answer for a seat the roster does not hold at all — the row still
-         * says a ballot was cast, and it names nobody rather than naming somebody nearby.
-         */
-        const val UNNAMED = "UNNAMED"
     }
 }
 
