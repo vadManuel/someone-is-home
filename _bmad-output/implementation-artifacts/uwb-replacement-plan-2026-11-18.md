@@ -72,7 +72,13 @@ Each unit is its own commit, with tests, a broken-guard proof and, where a scree
   - Both sides are required, as both RSSI sides are today, so one modified phone cannot claim a touch alone.
   - Both phones read the same two-way exchange, so a real flyby shows on both.
   - Stays the same: the arm window (D-280), the answer frames (D-216, D-219) and the debounce.
-- **Report:** a Resident's phone reporting a Revoked seat within `REPORT_REACH`, over `REPORT_READINGS` of the last uploads. Both numbers wait on Q5 (see "Questions for the owner").
+- **Report (Q5, ruled 2026-11-18):** a phone reading a Revoked seat within `REPORT_REACH` = **30 cm**, held for **2 s**.
+  - The phone does not know who is Revoked, so the house drives the circle:
+    1. The first upload in range starts a pending report, and the house sends that one phone a fixed-size `ReportPending`. The phone fills a circle over 2 s.
+    2. If the phone is still in range at 2 s, the meeting is called and the phone shows the call.
+    3. If it leaves range first, the house sends `ReportCancelled`.
+  - Both frames depend on being near a body, never on the receiver's role.
+  - The 5 s debounce between two phones becomes a named grace: the Insider who did the Revoke can't report their own victim during it, and can afterwards (option a).
 - **The spectator map:** a phone performing at a card places a seat in that room when it reads it within `ROOM_REACH`. This is provisional; it starts at 1.5 m.
   - U3 accepts that a wall doesn't lengthen the reading. The map's deliberate error (D-272) stays.
 - **Outages:** Nearby Interaction has no power states, so faults come from sessions instead:
@@ -117,10 +123,7 @@ Each unit is its own commit, with tests, a broken-guard proof and, where a scree
 
 ## Questions for the owner
 
-1. **Q5, the report:**
-   - How close must a Resident's phone come to a Revoked person's phone to report it?
-   - Must it be held there, and for how long? Today it is about 2 s at Bluetooth's "close".
-   - With UWB, a 10 cm bubble like the Revoke's is possible, or a wider one such as 30 cm.
+1. ~~Q5, the report~~: ruled on 2026-11-18. It is 30 cm held 2 s, with a filling circle, and the Insider can report their own victim after a 5 s grace.
 2. **The permission row's wording:** the Nearby Interaction prompt text, and the setup walk's line for it.
 3. **Round size,** if the live-peer test shows that iOS can't range with 17 phones at once.
 
