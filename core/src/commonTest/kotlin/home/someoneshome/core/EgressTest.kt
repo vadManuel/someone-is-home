@@ -892,6 +892,73 @@ class EgressTest {
     }
 
     /**
+     * **An Egress pressed into a meeting is refused, and the shared cooldown is not spent**
+     * (`gdd.md:386`, *blocked during meetings*; review r4 F1, D-279).
+     *
+     * The honest race: the press rides the next upload beat and the meeting is admitted first.
+     * Admitted, it started an Egress with no pause on it -- D-133's pause is applied by the call,
+     * which had already happened -- and its countdown ran through the meeting and could expire
+     * there, with the whole house in one room.
+     */
+    @Test
+    fun `an Egress fired during a meeting is refused and starts nothing`() {
+        val start = armed()
+        val walk = EgressWalk(start).feed(
+            Event.MeetingCalled(readyToFire(start), Seat(0), MeetingTrigger.MeetingCard),
+        )
+        assertNotNull(walk.state.meeting, "the fixture called no meeting")
+        walk.drain()
+
+        walk.feed(
+            Event.EgressFired(readyToFire(start) + 1, Seat(1), EgressType.Beacon, listOf(WEST, EAST), pulseFrom = PULSE_FROM),
+        )
+        assertEquals(
+            listOf(RefusalReason.MeetingAlreadyRunning), walk.refusals,
+            "an Egress was admitted during a meeting",
+        )
+        assertNull(walk.state.egress, "an Egress started in the middle of a meeting")
+        assertEquals(emptyList(), walk.drain(), "a refused fire emitted something")
+        assertEquals(
+            start.egressReadyAt, walk.state.egressReadyAt,
+            "a refused fire spent the shared cooldown",
+        )
+    }
+
+    /**
+     * **The second wall: nothing expires and nobody pulses while a meeting runs, even against an
+     * Egress with no pause mark on it** (D-133; review r4 F1, D-279).
+     *
+     * Hand-built, because the branch above makes it unreachable through the rules -- which is the
+     * point of a second wall. Before it, `HouseClock` minting the expiry against an unpaused Egress
+     * inside a meeting was admitted, and the Insiders won in the middle of the vote.
+     */
+    @Test
+    fun `an Egress event during a meeting is refused even against an unpaused Egress`() {
+        val start = armed()
+        val walk = EgressWalk(start).feed(
+            Event.MeetingCalled(Tick(60), Seat(0), MeetingTrigger.MeetingCard),
+        )
+        assertNotNull(walk.state.meeting, "the fixture called no meeting")
+        val slipped = Egress.fired(Tick(61), EgressType.Beacon, listOf(WEST, EAST), Balance.EGRESS_TIMER, pulseFrom = PULSE_FROM)
+        val inside = EgressWalk(
+            walk.state.withEgress(slipped)
+                .withPresence(Presence(Seat(0), WEST, open = false))
+                .withPresence(Presence(Seat(2), EAST, open = false)),
+        )
+
+        inside.feed(
+            Event.SyncPulseReturned(Tick(70), Seat(0), onBeat()),
+            Event.EgressExpired(Tick(61 + Balance.EGRESS_TIMER)),
+        )
+        assertEquals(
+            listOf(RefusalReason.EgressNotRunning, RefusalReason.EgressNotRunning), inside.refusals,
+            "an Egress event was admitted in the middle of a meeting",
+        )
+        assertFalse(inside.state.ended, "an Egress expired in the middle of a meeting and ended the round")
+        assertEquals(emptyList(), inside.drain(), "a refused Egress event emitted something")
+    }
+
+    /**
      * **A beat during a paused Egress is refused above the rules, and recorded.**
      *
      * Everybody is standing in the meeting room; nobody is at a node. The refusal names no seat and
@@ -1037,6 +1104,102 @@ class EgressTest {
             answered(Seat(2), held = true), walk.drain(),
             "the late arrival was not held for a partner of its own",
         )
+    }
+
+    /**
+     * **A held offer from a seat that has since gone out does not pair, and a live one behind it
+     * still does** (`containment-spec-2026-11-17.md`, *a Revoked partner's held offer no longer
+     * pairs*; review r4 F2, D-279).
+     *
+     * Seat 0 taps at WEST and is Revoked inside the pair window. Seat 2's beat at EAST must not
+     * pair with it -- one living player and one out is not *two people at two separate markers*.
+     * Then the same again with seat 3 also holding at WEST, behind seat 0: seat 2's beat pairs with
+     * seat 3, because the out offer is skipped rather than taken as the end of the search, so the
+     * first LIVE match in arrival order is the one that wins.
+     */
+    @Test
+    fun `a held offer from a seat that has gone out does not pair`() {
+        val fired = Tick(60)
+        val at = pulseTick(fired, 3)
+
+        // Alone at WEST, then Revoked.
+        val alone = EgressWalk(burning(fired)).feed(Event.SyncPulseReturned(Tick(at), Seat(0), onBeat()))
+        val lone = EgressWalk(alone.state.copy(revoked = listOf(Seat(0))))
+            .feed(Event.SyncPulseReturned(Tick(at + 1), Seat(2), onBeat()))
+        assertNotNull(lone.state.egress, "an out seat's held offer contained the Egress")
+        assertEquals(
+            answered(Seat(2), held = true), lone.drain(),
+            "the living tapper was not held for a living partner",
+        )
+
+        // A live offer behind the out one, at the same node, in arrival order.
+        val two = EgressWalk(burning(fired).withPresence(Presence(Seat(3), WEST, open = false))).feed(
+            Event.SyncPulseReturned(Tick(at), Seat(0), onBeat()),
+            Event.SyncPulseReturned(Tick(at), Seat(3), onBeat()),
+        )
+        val behind = two.state.copy(revoked = listOf(Seat(0)))
+        val held = assertNotNull(behind.egress)
+        assertEquals(
+            listOf(Seat(0), Seat(3)), held.offers.map { it.seat },
+            "the fixture did not hold the out offer ahead of the live one",
+        )
+        assertEquals(
+            Seat(3),
+            held.partnerFor(Seat(2), EAST, Tick(at + 1), Balance.SYNC_PULSE_PAIR_WINDOW, behind::isOut)?.seat,
+            "the first live match in arrival order did not win",
+        )
+        val paired = EgressWalk(behind).feed(Event.SyncPulseReturned(Tick(at + 1), Seat(2), onBeat()))
+        assertNull(paired.state.egress, "a living pair at the two nodes did not contain it")
+    }
+
+    /**
+     * **A node scanned before the meeting places nobody after it** (D-136; review r4 F3, D-279).
+     *
+     * Seats 0 and 2 stand at the two nodes, a report pauses the Egress, and at lights out both tap
+     * from the meeting room without scanning again. Their presence rows still name the nodes --
+     * lights out wipes the sightings, not the rows -- but the rows are older than the shift, and
+     * `placementOf` would place neither of them. Neither does the pulse: no pair, no offer, and no
+     * lockout, because a seat standing nowhere attempted nothing. The control: the same two taps
+     * from rows written in this shift contain it.
+     */
+    @Test
+    fun `a node scanned before the meeting does not count after it`() {
+        val fired = Tick(60)
+        val closed = Tick(170)
+        val walk = EgressWalk(burning(fired)).feed(
+            Event.MeetingCalled(Tick(80), Seat(0), MeetingTrigger.RevokeReported(Seat(5))),
+        )
+        walk.feed(*SEATS.map { Event.MeetingCheckedIn(Tick(85), it) }.toTypedArray())
+        walk.feed(*SEATS.map { Event.ReadyToVoteDeclared(Tick(90), it) }.toTypedArray())
+        walk.feed(*SEATS.map { Event.VoteLocked(Tick(95), it) }.toTypedArray())
+        walk.feed(Event.MeetingClosed(closed))
+        assertNull(walk.state.meeting, "the fixture never reached lights out")
+        assertEquals(closed, walk.state.shiftStartedAt)
+        assertEquals(WEST, walk.state.presenceFor(Seat(0))?.at, "the fixture's rows did not survive lights out")
+        walk.drain()
+        val lit = walk.state
+
+        val stale = EgressWalk(lit).feed(
+            Event.SyncPulseReturned(Tick(175), Seat(0), onBeat(from = 80)),
+            Event.SyncPulseReturned(Tick(175), Seat(2), onBeat(from = 80)),
+        )
+        val egress = assertNotNull(stale.state.egress, "two seats contained the Egress from nodes scanned before the meeting")
+        assertEquals(emptyList(), egress.offers, "a pre-meeting scan put an offer on the house")
+        assertEquals(emptyList(), egress.lockouts, "a seat standing nowhere was charged a lockout")
+        assertEquals(
+            answered(Seat(0), held = false) + answered(Seat(2), held = false), stale.drain(),
+            "the answer changed shape for a seat the house no longer places",
+        )
+
+        // The control: the same two scans, made in this shift.
+        val fresh = EgressWalk(
+            lit.withPresence(Presence(Seat(0), WEST, open = false, since = Tick(171)))
+                .withPresence(Presence(Seat(2), EAST, open = false, since = Tick(172))),
+        ).feed(
+            Event.SyncPulseReturned(Tick(175), Seat(0), onBeat(from = 80)),
+            Event.SyncPulseReturned(Tick(175), Seat(2), onBeat(from = 80)),
+        )
+        assertNull(fresh.state.egress, "two seats at the two nodes in this shift did not contain it")
     }
 
     // ---- D-258: one Isolate frame per living seat, of one length ------------------------------

@@ -201,7 +201,12 @@ internal fun round(insiders: List<Seat> = INSIDERS): List<Event> {
                 // player short, so a fixture that checked in four of six would stall in CheckIn
                 // and every phase after it would be refused rather than reduced -- a fixture round
                 // that quietly stopped exercising the vote.
-                add(walk(Event.MeetingCalled(Tick(t++), seat, MeetingTrigger.MeetingCard)))
+                //
+                // **Called by the living** (D-279, F5): the couch cannot act, so a card call from
+                // an out seat is a forged frame the gate refuses -- and this pass's seat is out by
+                // the second meeting, which used to leave the whole meeting refused behind it.
+                val caller = seat.takeUnless { state.isOut(it) } ?: state.livingSeats.first()
+                add(walk(Event.MeetingCalled(Tick(t++), caller, MeetingTrigger.MeetingCard)))
                 SEATS.forEach { v -> add(walk(Event.MeetingCheckedIn(Tick(t++), v))) }
                 // **READY TO VOTE, pressed by some of the room** (D-117), which the fixture never
                 // recorded — found by the same assertion that found the Tier-2 gap. Not everybody,
@@ -301,6 +306,12 @@ internal fun round(insiders: List<Seat> = INSIDERS): List<Event> {
                 add(walk(Event.VoteWindowClosed(Tick(t++))))
                 add(walk(Event.TallyHalfwayReached(Tick(t++))))
                 add(walk(Event.MeetingClosed(Tick(t++))))
+
+                // **And they walk back and scan again** (D-279, F3). A scan from before the meeting
+                // places nobody after it: lights out starts a new shift, and the pulse reads the
+                // presence row only when it was written in this one, as `placementOf` does.
+                add(walk(Event.MarkerScanned(Tick(t++), pair[0], nodes[0])))
+                add(walk(Event.MarkerScanned(Tick(t++), pair[1], nodes[1])))
 
                 // Both hit the same four pulses off the house schedule, which runs from the anchor
                 // the Egress was fired with, on the host's clock (C2), and is untouched by the pause.

@@ -115,6 +115,17 @@ fun admit(state: GameState, event: Event): Admission = when {
         event.trigger is MeetingTrigger.RevokeReported &&
         state.isOut(event.caller) -> Admission.Refused(RefusalReason.ReporterOut)
 
+    // **Ghosts cannot act, and calling the house in is acting** (gdd M12, `gdd.md:1052`; review r4
+    // F5, D-279). R3 above refused the report from an out caller and left the meeting card's call
+    // open, so a forged call from the couch summoned the house and rang every living phone with an
+    // out seat's name on it. No honest phone produces it -- a phone that is out does not scan
+    // (D-008) -- which is `ReporterOut`'s and `VoterOut`'s argument, so it is refused here,
+    // recorded, and answered with nothing. Above the meeting checks for R3's reason: a forged call
+    // is recorded as the forgery it is, not as an Egress or a meeting.
+    event is Event.MeetingCalled &&
+        event.trigger is MeetingTrigger.MeetingCard &&
+        state.isOut(event.caller) -> Admission.Refused(RefusalReason.CallerOut)
+
     // **Ghosts cast nothing** (`gdd.md:417`; H8 of the 2026-11-17 hunt, D-252). An out seat has no
     // ballot, and a selection or a READY from one was answered in the rules by the same two effects
     // a refused tap gets -- one of them a live selection, which goes to every seat outside the
@@ -169,6 +180,20 @@ fun admit(state: GameState, event: Event): Admission = when {
     isTierTwo(event) && state.meeting != null ->
         Admission.Refused(RefusalReason.MeetingAlreadyRunning)
 
+    // **The Egress is blocked during meetings** (`gdd.md:386`; review r4 F1, D-279). It is not
+    // Tier 2 and it is refused for Tier 2's reason, D-183's: springboard page 2, where its tile
+    // lives, does not exist during a meeting for any seat of any role. Nothing blocked it before
+    // this branch -- [isTierTwo]'s KDoc said `gdd.md:373` already did, and no code did. The race is
+    // honest: a press rides the next upload beat (D-263), a meeting can be admitted first, and the
+    // Egress then started with no pause on it, ran through the check-in, the talk and the vote, and
+    // expired in front of the whole house. D-133's pause is applied by the meeting's call, so an
+    // Egress that starts after the call is one the pause never reaches. Refused, recorded, and
+    // symmetric for every seat and role; it costs nothing, because the shared cooldown is spent
+    // only by the handler this never reaches. Below the ownership check, so a forged fire is still
+    // recorded as `AbilityNotTheirs`.
+    event is Event.EgressFired && state.meeting != null ->
+        Admission.Refused(RefusalReason.MeetingAlreadyRunning)
+
     // **R5: a touch during a meeting is not a contact** (the owner's 2026-11-15 ruling, D-217).
     // Everybody alive is standing in one room, and the gesture that Revokes and reports is a touch;
     // admitted, a Revoke armed before the call could land at the meeting itself, in front of the
@@ -197,7 +222,15 @@ fun admit(state: GameState, event: Event): Admission = when {
     // standing in one room, which is what a PAUSED Egress means (D-133). Written here for
     // `withEgress`'s sake: the rules stay total, never learn the flag exists, and the refusal is
     // RECORDED, which an early return never is.
-    needsEgress(event) && (state.egress == null || state.egress?.pausedAt != null) ->
+    //
+    // **And no Egress is running while a meeting is, whatever its pause mark says** (D-133; review
+    // r4 F1, D-279). A meeting pauses the countdown, so under D-133 nothing can expire and nobody can
+    // pulse while the house is assembled. The EgressFired branch above is what keeps an unpaused
+    // Egress out of a meeting; this is the second wall, so that an expiry minted against one that
+    // slipped in anyway -- a replayed recording, a future path that starts one -- cannot end the
+    // round in the middle of the vote. It refuses nothing an honest round produces.
+    needsEgress(event) &&
+        (state.egress == null || state.egress?.pausedAt != null || state.meeting != null) ->
         Admission.Refused(RefusalReason.EgressNotRunning)
 
     else -> Admission.Admitted(reduce(state, event))
@@ -269,9 +302,10 @@ private fun phaseOf(event: Event): MeetingPhase? = when (event) {
     // [MeetingPhase] returned here would say the opposite, that there is one phase these belong to.
     is Event.SurgeFired, is Event.IsolateFired, is Event.StaticFired -> null
 
-    // Not meeting events. The Egress has its own gate below, and it already refuses these while a
-    // meeting is holding the countdown -- which is the same answer by a shorter route, and the one
-    // that stays true if the meeting's phases are ever reshaped.
+    // Not meeting events. The Egress has its own gates above: the fire is refused for the whole of
+    // a meeting, and the other two are refused while a meeting is holding the countdown -- which is
+    // the same answer by a shorter route, and the one that stays true if the meeting's phases are
+    // ever reshaped.
     is Event.EgressFired, is Event.SyncPulseReturned, is Event.EgressExpired -> null
 
     // Not a meeting event, and deliberately not refused during one either. A window that was open
@@ -309,8 +343,10 @@ private fun phaseOf(event: Event): MeetingPhase? = when (event) {
  * **[Event.RevokeArmed] is deliberately not one of them.** Tier 1 arms in place (D-142) and the
  * ruling names Tier 2; a Revoke armed at a meeting is a botched stalk that costs its own cooldown,
  * which is the ordinary case rather than a rule about meetings. [Event.EgressFired] is not one
- * either, and never needed to be: `gdd.md:373` blocks it during a meeting already, and a meeting
- * pauses the countdown rather than admitting a second crisis into it.
+ * either, because it is not Tier 2 — **but it is refused during a meeting all the same**, by its own
+ * branch in [admit] (`gdd.md:386`, *blocked during meetings*; D-279). This KDoc used to say
+ * `gdd.md:373` blocked it already. Nothing did, and an Egress pressed a beat before a meeting was
+ * called started unpaused inside it (review r4 F1).
  */
 private fun isTierTwo(event: Event): Boolean = when (event) {
     is Event.SurgeFired, is Event.IsolateFired, is Event.StaticFired -> true

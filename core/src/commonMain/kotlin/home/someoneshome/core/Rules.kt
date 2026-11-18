@@ -1962,7 +1962,14 @@ private fun pulseReturned(
     state: GameState,
     event: Event.SyncPulseReturned,
 ): Reduction<GameState, Effect> = withEgress(state) { egress ->
-    val standing = state.presenceFor(event.actor)?.at
+    // **Only a scan from this shift places anybody** (D-136; review r4 F3, D-279). Lights out wipes
+    // the sightings and moves `shiftStartedAt` but leaves the presence rows alone, so the node a
+    // seat scanned before a meeting was still its node after it, and two people who tapped from the
+    // meeting room paired across a house they were not standing in. `GameState.placementOf` and
+    // `resolvePlacements` already ignore a row older than the shift; this is the third reader and it
+    // asks the same question. A seat whose row is older stands nowhere, which is *not at a node*:
+    // the same one-shape answer, no offer and no lockout.
+    val standing = state.presenceFor(event.actor)?.takeIf { it.since >= state.shiftStartedAt }?.at
     val atNode = !state.isOut(event.actor) &&
         standing != null &&
         egress.isNode(standing)
@@ -1972,7 +1979,8 @@ private fun pulseReturned(
     val partner = if (!good || standing == null) {
         null
     } else {
-        egress.partnerFor(event.actor, standing, event.at, Balance.SYNC_PULSE_PAIR_WINDOW)
+        // A partner who has gone out since their beat no longer pairs (F2, D-279): `partnerFor` asks.
+        egress.partnerFor(event.actor, standing, event.at, Balance.SYNC_PULSE_PAIR_WINDOW, state::isOut)
     }
 
     val next = when {

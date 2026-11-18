@@ -88,6 +88,27 @@ class AdmissionTest {
     }
 
     /**
+     * **Ghosts cannot act: a meeting card call from an out seat is refused, recorded, and calls
+     * nothing** (gdd M12; review r4 F5, D-279). R3's `ReporterOut` already refused the report from
+     * the couch; the card's call from the same seat was admitted and rang the house with its name.
+     * Both kinds of out, and a living caller as the control.
+     */
+    @Test
+    fun `a meeting card call from an out seat is refused`() {
+        val state = armed().copy(revoked = listOf(Seat(2)), restrained = listOf(Seat(3)))
+        for (out in listOf(Seat(2), Seat(3))) {
+            assertEquals(
+                Admission.Refused(RefusalReason.CallerOut),
+                admit(state, Event.MeetingCalled(Tick(5), out, MeetingTrigger.MeetingCard)),
+                "seat ${out.index}, out of the round, called a meeting from the card",
+            )
+        }
+        val honest = admit(state, Event.MeetingCalled(Tick(5), Seat(0), MeetingTrigger.MeetingCard))
+        assertIs<Admission.Admitted>(honest, "a living seat's card call was refused")
+        assertTrue(honest.reduction.state.meeting != null, "a living seat's card call called nothing")
+    }
+
+    /**
      * **`reduce` never learned the flag exists**, which is what makes the branch provably outside
      * every client-visible path rather than merely reviewed as being outside one.
      */

@@ -8485,6 +8485,93 @@ whether the lobby should refuse or mark a repeated name is the owner's (copy).
 that row lit. With `asMessage` put back to send by name, it goes red: `SelectVote(Seat(0))`.
 `RoutingTest`'s re-assertion case now expects the house's echo to carry seat 1.
 
+### D-279 · **An Egress is refused during a meeting; an out partner's held beat does not pair; a node scanned before the meeting places nobody after it; an out seat's card call is refused — built (recording 33)**
+
+**What was wrong** (the read-only rule engine review r4 at `0c3473d`, findings F1, F2, F3 and F5).
+
+1. **F1, an Egress could start inside a meeting.** `admit` had no branch for `EgressFired` while a
+   meeting ran; `isTierTwo`'s KDoc said `gdd.md:373` blocked it already, and no code did. The race is
+   honest: the press rides the next upload beat (D-263), a meeting can be admitted first, and the
+   Egress then started with no pause mark, because D-133's pause is applied by the meeting's call.
+   Its countdown ran through check-in, talk and vote, `HouseClock` minted `EgressExpired` past the
+   deadline, the gate let it through (it only asked whether the Egress was paused), and the
+   Insiders won with the whole house in one room. `gdd.md:386` says *blocked during meetings*.
+2. **F2, a held Sync Pulse beat from a seat that had gone out still paired.** `Egress.partnerFor`
+   checked another seat, the other node and the pair window, never whether the partner was still in
+   the round. Revoked inside the window, the partner still contained the Egress with one living
+   player. `containment-spec-2026-11-17.md` had already called it: *a Revoked partner's held offer no
+   longer pairs*.
+3. **F3, the pulse believed a scan from before the meeting.** `pulseReturned` read
+   `presenceFor(actor)?.at` with no shift test. Lights out wipes the sightings and moves
+   `shiftStartedAt` but keeps the presence rows, so two seats who had scanned the nodes before a
+   report meeting could pair from the meeting room after it. `placementOf` and `resolvePlacements`
+   both ignore a row older than the shift (D-136); the pulse was the one reader that did not.
+4. **F5, an out seat could call a meeting from the card.** R3's `ReporterOut` (D-217) refused only
+   the report trigger, so a forged card call from the couch rang every living phone with an out
+   seat's name. Ghosts cannot act (gdd M12, `gdd.md:1052`).
+
+**Now.**
+
+1. **`EgressFired` is refused `MeetingAlreadyRunning` while a meeting runs**, at the gate, recorded,
+   symmetric for every seat and role: D-183's shape and D-183's reason, since the tile is on
+   springboard page 2, which no seat has during a meeting. Below `AbilityNotTheirs`, so a forged fire
+   is still recorded as one. It costs nothing: the shared cooldown is spent only by the handler this
+   never reaches. `MeetingAlreadyRunning` is reused because it already means *refused for the
+   duration of a meeting* for Tier 2, a touch and a sensing upload; nothing reads it per event. The
+   false KDoc is corrected. **A second wall, consistent with D-133:** `SyncPulseReturned` and
+   `EgressExpired` are refused `EgressNotRunning` while a meeting runs, whatever the Egress's pause
+   mark says. Under D-133 a meeting pauses the countdown, so nothing can expire and nobody can pulse
+   then; the wall refuses nothing an honest round produces, and it stops an expiry against an
+   unpaused Egress that slipped in some other way from ending the round mid-vote.
+2. **`partnerFor` takes `isOut` and skips an out seat's offer** rather than stopping at it, so the
+   first *live* match in arrival order wins and the pairing stays deterministic. The offer is not
+   removed; the pair window ages it out as before.
+3. **`pulseReturned` reads the presence row only when `since >= shiftStartedAt`.** A seat whose row is
+   older stands nowhere, which is *not at a node*: the same one-shape `SyncPulseAnswered(held = false)`,
+   no offer and no lockout.
+4. **`MeetingCalled(MeetingCard)` from an out seat is refused `CallerOut`**, a new reason, recorded and
+   answered with nothing, above the meeting checks for R3's reason. Its own reason rather than
+   `ReporterOut`'s because a card call is not a report and the recording should say which forgery it
+   held. Admissible for `ReporterOut`'s reason: a phone that is out does not scan (D-008).
+
+**Recording 33**, for D-217's and D-252's reason: one refusal reason a version 32 build cannot name,
+and the same events reduce differently under F1, F2 and F3. No row changed shape.
+
+**No light, timing, cooldown or copy moved.**
+
+**Open with the owner: F4**, the Egress cooldown running down while its Egress is paused. A meeting
+during an Egress can let a second Egress fire the moment the first is contained, so the meeting
+still funds the next one, which D-184's exemption meant to stop. The fix moves a cooldown value
+(push `egressReadyAt` back by the meeting's length, or correct the *outlives the timer by
+construction* comment in `egressFired` and accept it), so it is the owner's call. Not touched.
+
+**Proved, each red against the injected bug first.**
+
+- `EgressTest`: *an Egress fired during a meeting is refused and starts nothing*. *Gate branch
+  disabled:* `an Egress was admitted during a meeting. Expected <[MeetingAlreadyRunning]>, actual <[]>`.
+- `EgressTest`: *an Egress event during a meeting is refused even against an unpaused Egress*.
+  *Meeting clause removed from the Egress gate:* `an Egress event was admitted in the middle of a
+  meeting. Expected <[EgressNotRunning, EgressNotRunning]>, actual <[]>`.
+- `EgressTest`: *a held offer from a seat that has gone out does not pair*. *Liveness test removed:*
+  `an out seat's held offer contained the Egress`. *The naive fix, rejecting the first match when it
+  is out:* `the first live match in arrival order did not win. Expected <Seat(index=3)>, actual <null>`.
+- `EgressTest`: *a node scanned before the meeting does not count after it*. *Shift test removed:*
+  `two seats contained the Egress from nodes scanned before the meeting`.
+- `AdmissionTest`: *a meeting card call from an out seat is refused*. *Branch disabled:* `seat 2, out
+  of the round, called a meeting from the card. Expected <Refused(reason=CallerOut)>, actual
+  <Admitted(…MeetingOpened(caller=Seat(index=2)…`.
+
+**The harness fixture leaned on two of the four, and both are corrected.** Its second card meeting
+was called by that pass's seat, which was out by then, so F5 refused it and every check-in, vote and
+close behind it (`RecordingTest`: *a clean round records no refusals* read 53). The caller is now
+that seat if it is living, else the first living seat. And its Egress pair scanned the nodes before
+the report meeting and pulsed after it without scanning again, which is F3 exactly (`EgressFixtureTest`:
+*the fixture's pair did not contain the Egress*). They now scan again after lights out.
+
+**Checked** (every test XML read): model 313 (JVM) and 303 (iOS Simulator), core 331, harness 127,
+app 203, 0 failures; `vocabularyLint`, `redactionLint`, `armingCordon`, `benchSeedCordon` and
+`seedSourceCordon` clean. **Not on a phone.**
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

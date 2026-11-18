@@ -158,14 +158,23 @@ data class Egress(
      * the pulse is simultaneous by design and an offer that stood all round would let two people
      * who were never in the house at the same moment pair with each other.
      *
-     * The first match in arrival order wins, so *first success contains* is decided by the
-     * recording's order rather than by a hash.
+     * **And a fourth: the partner is still in the round** ([isOut], the caller's `GameState.isOut`).
+     * *Two people at two separate markers* means two living people (`containment-spec-2026-11-17.md`,
+     * *a Revoked partner's held offer no longer pairs*; review r4 F2, D-279). An offer held a beat
+     * before its holder was Revoked stood in this list for the whole pair window, and a living tap
+     * at the other node paired with it, so an Insider's Revoke of a partner — *a stalling Insider
+     * removes a partner* (`gdd.md:380`) — did nothing inside the window. The out seat's offer is
+     * skipped rather than ending the search, so a live offer behind it still pairs.
+     *
+     * The first **live** match in arrival order wins, so *first success contains* is decided by
+     * the recording's order rather than by a hash.
      */
-    fun partnerFor(seat: Seat, node: MarkerId, at: Tick, window: Long): PulseOffer? =
+    fun partnerFor(seat: Seat, node: MarkerId, at: Tick, window: Long, isOut: (Seat) -> Boolean): PulseOffer? =
         offers.firstOrNull {
             it.seat.index != seat.index &&
                 it.node.value != node.value &&
-                at.step - it.at.step <= window
+                at.step - it.at.step <= window &&
+                !isOut(it.seat)
         }
 
     /**

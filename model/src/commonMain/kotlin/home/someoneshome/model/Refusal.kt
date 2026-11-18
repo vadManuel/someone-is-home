@@ -123,6 +123,20 @@ enum class RefusalReason {
     VoterOut,
 
     /**
+     * **A meeting called from the meeting card by a seat that is out of the round** (review r4 F5,
+     * D-279).
+     *
+     * *Ghosts cannot act* (gdd M12, `gdd.md:1052`). [ReporterOut] refused the report from the couch
+     * and left the card's call open, so a forged call summoned the house and rang every living
+     * phone with an out seat's name on it. Admissible for [ReporterOut]'s reason and no other: a
+     * phone that is out does not scan (D-008), so no honest phone produces it. Its own reason rather
+     * than [ReporterOut]'s because a card call is not a report, and the recording should say which
+     * forgery it held. Read by the authority and the recording, and by nothing that has a socket
+     * (D-097).
+     */
+    CallerOut,
+
+    /**
      * **A report of a Revoked player a meeting has already been called to report** (S4 of the
      * owner's 2026-11-15 rulings, D-219).
      *

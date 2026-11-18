@@ -50,6 +50,14 @@ class Recording(
     }
 
     companion object {
+        // 33: one refusal reason a version 32 build cannot name -- `CallerOut` (review r4 F5, D-279):
+        // a meeting card call from an out seat is refused at the gate -- and three rule changes that
+        // reduce the same events differently (D-279). An `EgressFired` during a meeting is refused
+        // `MeetingAlreadyRunning`, and a `SyncPulseReturned` or `EgressExpired` during one
+        // `EgressNotRunning` (F1); a held Sync Pulse offer from a seat that has gone out no longer
+        // pairs (F2); and a presence row from before the shift places nobody at a node (F3). No row
+        // changed shape.
+        //
         // 32: every meeting call emits one more effect (D-274) -- `SystemIntegrityLive`, the same
         // percentage as the living's batch, so a seat put out before the meter moved is told it.
         // No row changed shape and no kind is new; the same events replay to a longer effect
@@ -276,7 +284,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/32"
+        const val HEADER = "someone-is-home/recording/33"
     }
 }
 
