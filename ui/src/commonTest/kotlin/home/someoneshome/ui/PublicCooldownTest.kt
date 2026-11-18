@@ -48,13 +48,17 @@ class PublicCooldownTest {
      * **What page 2 draws that is not a role's own words.** The names (REVOKE / POWER, EGRESS /
      * SUBSYS) and the resting sub-line (READY . HOLD TO ARM / READY . ALL NOMINAL) are D-142's copy
      * and differ by design; everything the clocks drive is here, and must be equal.
+     *
+     * **Not the EGRESS and Tier-2 name inks** (the owner's 2026-11-18 ruling, D-286): the Insider's
+     * dim while their clocks run and a Resident's do not, which
+     * [tier2AndEgressDimOnOnlyTheInsiderAndOnlyWhileTheirClocksRun] pins.
      */
     private fun PanelVals.drawn(): List<Any> = listOf(
         revoke,
         if (revoke == RevokeState.Ready) "(the role's resting line)" else abilitySub,
         revokeBorder, revokeFill, revokeInk, revokeSubInk, revokeBar, revokeBarInk,
-        tileBorder, tileInk, secondBar, secondBarInk,
-        tier2Bar, tier2BarInk, tier2Ink,
+        tileBorder, secondBar, secondBarInk,
+        tier2Bar, tier2BarInk,
     )
 
     private fun assertSameTiles(insider: Phone, resident: Phone, moment: String) =
@@ -127,13 +131,14 @@ class PublicCooldownTest {
     }
 
     /**
-     * **GUARD (the owner's 2026-11-18 ruling, D-280): ARMED comes down 20 s after the hold, on this
-     * phone's own clock, and the tile reads the public clock again; nothing is sent.** A hold after
-     * that, while the cooldown the arm spent is still running at the house, sends the same request
-     * and echoes nothing, because the house refuses it (D-237's ARMED over nothing).
+     * **GUARD (the owner's 2026-11-18 rulings, D-280, D-286): ARMED comes down 20 s after the hold,
+     * on this phone's own clock, and the tile reads COOLING DOWN for the rest of the arm's own
+     * cooldown; nothing is sent.** A hold in that span, while the cooldown the arm spent is still
+     * running at the house, sends the same request and echoes nothing, because the house refuses it
+     * (D-237's ARMED over nothing).
      */
     @Test
-    fun armedComesDownAtTwentySecondsAndTheTileReadsThePublicClock() {
+    fun armedComesDownAtTwentySecondsAndTheTileReadsCoolingDown() {
         val insider = Phone(insider = true)
         val resident = Phone(insider = false)
         listOf(insider, resident).forEach {
@@ -146,16 +151,17 @@ class PublicCooldownTest {
         listOf(insider, resident).forEach { it.seconds(PublicCooldown.ARM_WINDOW_SECONDS - 1) }
         assertEquals(RevokeState.Armed, insider.vals.revoke, "ARMED came down before the 20 s window closed")
         listOf(insider, resident).forEach { it.seconds(1) }
-        assertEquals(RevokeState.Ready, insider.vals.revoke, "ARMED outlived its 20 s window")
-        assertSameTiles(insider, resident, "the window's close")
+        assertEquals(RevokeState.Cooldown, insider.vals.revoke, "ARMED outlived its 20 s window, or its close read READY")
+        assertEquals(RevokeState.Ready, resident.vals.revoke, "an Insider's arm moved a Resident's tile")
         assertEquals(listOf<IntentMessage>(IntentMessage.ArmRevoke), insider.sent, "the window's close sent something")
 
         // A hold while the arm's own cooldown runs at the house: sent, and no echo.
         insider.flow.armRevoke()
         assertEquals(2, insider.sent.size, "the hold after the window was not sent")
-        assertEquals(RevokeState.Ready, insider.vals.revoke, "a hold into the arm's own cooldown said ARMED over nothing")
-        // Past that cooldown, and its pad, the next hold echoes again.
+        assertEquals(RevokeState.Cooldown, insider.vals.revoke, "a hold into the arm's own cooldown said ARMED over nothing")
+        // Past that cooldown, and its pad, the tile says READY and the next hold echoes again.
         insider.seconds(PublicCooldown.OWN_ARM_SECONDS - PublicCooldown.ARM_WINDOW_SECONDS)
+        assertEquals(RevokeState.Ready, insider.vals.revoke, "the tile did not say READY once the arm's cooldown ran out")
         insider.flow.armRevoke()
         assertEquals(RevokeState.Armed, insider.vals.revoke, "a hold after the arm's cooldown did not echo ARMED")
     }
@@ -179,10 +185,15 @@ class PublicCooldownTest {
 
         val ring = RoundMessage.MeetingOpened(caller = home.someoneshome.model.Seat(0), trigger = home.someoneshome.model.MeetingTrigger.MeetingCard, haptic = Haptic.Long)
         listOf(insider, resident).forEach { it.said(ring) }
-        assertEquals(RevokeState.Ready, insider.vals.revoke, "ARMED survived a meeting call")
+        assertEquals(RevokeState.Cooldown, insider.vals.revoke, "ARMED survived a meeting call, or the arm's cooldown read READY")
         listOf(insider, resident).forEach { it.said(meetingEnded) }
         assertEquals(RevokeState.Cooldown, insider.vals.revoke, "the meeting's end did not restart the public clock")
         assertSameTiles(insider, resident, "a meeting's end after an arm")
+        // The house put every seat's Revoke back to half at the meeting's end, the arm's included
+        // (`openingCooldowns`), so READY comes with the public clock and not 60 s from the arm.
+        listOf(insider, resident).forEach { it.seconds(PublicCooldown.Revoke.seconds) }
+        assertEquals(RevokeState.Ready, insider.vals.revoke, "the arm's own cooldown outlived the shift's reset")
+        assertSameTiles(insider, resident, "the public clock's end after a meeting")
     }
 
     /**
@@ -295,6 +306,192 @@ class PublicCooldownTest {
         insider.said(meetingEnded)
         insider.said(RoundMessage.AbilityFired(cooldownStarted = true))
         assertEquals(PublicCooldown.Access, insider.flow.state.accessClock, "an answer owed across a meeting restarted the bar")
+    }
+
+    /** Both phones, past the public Revoke clock, the Insider holding REVOKE once. */
+    private fun armedPair(): Pair<Phone, Phone> {
+        val insider = Phone(insider = true)
+        val resident = Phone(insider = false)
+        listOf(insider, resident).forEach {
+            it.said(opening)
+            it.seconds(PublicCooldown.Revoke.seconds)
+        }
+        insider.flow.armRevoke()
+        assertEquals(RevokeState.Armed, insider.vals.revoke, "the fixture's hold did not echo ARMED")
+        return insider to resident
+    }
+
+    /**
+     * **GUARD (the owner's 2026-11-18 ruling, D-286): the Insider's REVOKE never reads READY while
+     * its own arm is still spending its cooldown.** Second by second from the hold: ARMED for the
+     * window, then COOLING DOWN in the dimmed ink with a bar filling over the arm's own cooldown,
+     * then READY at [PublicCooldown.OWN_ARM_SECONDS] and not before.
+     */
+    @Test
+    fun theInsiderInTheArmsGapReadsCoolingDownDimmedAndNeverReady() {
+        val (insider, _) = armedPair()
+        var lastBar = -1f
+        for (second in 1 until PublicCooldown.OWN_ARM_SECONDS) {
+            insider.seconds(1)
+            val vals = insider.vals
+            assertTrue(vals.revoke != RevokeState.Ready, "the Insider's tile said READY $second s after its own arm")
+            if (second >= PublicCooldown.ARM_WINDOW_SECONDS) {
+                assertEquals(RevokeState.Cooldown, vals.revoke, "not COOLING DOWN $second s after the arm")
+                assertEquals("COOLING DOWN", vals.abilitySub)
+                assertEquals(Ramp.Dim, vals.revokeInk, "REVOKE was not dimmed $second s after the arm")
+                assertTrue(vals.revokeBar > lastBar && vals.revokeBar < 1f, "the bar did not fill over the arm's cooldown at $second s: ${vals.revokeBar}")
+                lastBar = vals.revokeBar
+            }
+        }
+        insider.seconds(1)
+        assertEquals(RevokeState.Ready, insider.vals.revoke, "the tile did not say READY at ${PublicCooldown.OWN_ARM_SECONDS} s")
+        assertEquals("READY . HOLD TO ARM", insider.vals.abilitySub)
+        assertEquals(Ramp.Ink, insider.vals.revokeInk)
+        assertEquals(1f, insider.vals.revokeBar)
+    }
+
+    /**
+     * **GUARD (D-286, against `core`): a touch while armed leaves the arm's own cooldown running
+     * from the arm, not from the touch.** The house spends the 60 s at the arm (`revokeArmed`:
+     * `withCooldown(cooldown.restartedAt(event.at, Balance.REVOKE_COOLDOWN))`) and a contact clears
+     * the arm without restarting it (`contact`: `revokeArms.filterNot { … }`, answered
+     * `AbilityFired(cooldownStarted = true)`), so the tile is COOLING DOWN after ARMED and READY at
+     * the arm's 61 s, whenever the touch came.
+     */
+    @Test
+    fun aContactWhileArmedLeavesTheArmsOwnCooldownRunningFromTheArm() {
+        val (insider, _) = armedPair()
+        insider.seconds(5)
+        insider.said(RoundMessage.AbilityFired(cooldownStarted = true))
+        for (second in 6 until PublicCooldown.OWN_ARM_SECONDS) {
+            insider.seconds(1)
+            assertTrue(insider.vals.revoke != RevokeState.Ready, "the tile said READY $second s after an arm whose contact landed")
+            if (second >= PublicCooldown.ARM_WINDOW_SECONDS) assertEquals(RevokeState.Cooldown, insider.vals.revoke)
+        }
+        insider.seconds(1)
+        assertEquals(RevokeState.Ready, insider.vals.revoke, "the contact restarted the arm's own cooldown")
+    }
+
+    /**
+     * **GUARD (the owner's 2026-11-18 ruling, D-286): SURGE, STATIC and ISOLATE dim on the Insider
+     * while the Access pool runs, and EGRESS while the house-wide Egress clock runs; a Resident's
+     * BUS, THERMAL, CACHE and SUBSYS never do.**
+     */
+    @Test
+    fun tier2AndEgressDimOnOnlyTheInsiderAndOnlyWhileTheirClocksRun() {
+        val insider = Phone(insider = true)
+        val resident = Phone(insider = false)
+        val both = listOf(insider, resident)
+        fun residentBaseline(moment: String) {
+            assertEquals(Ramp.Mid, resident.vals.tier2Ink, "a Resident's Tier-2 names moved at $moment")
+            assertEquals(Ramp.Ink, resident.vals.secondInk, "a Resident's SUBSYS moved at $moment")
+        }
+
+        both.forEach { it.said(opening) }
+        assertEquals(Ramp.Dim, insider.vals.tier2Ink, "the Insider's Tier-2 names were not dimmed while the Access half ran")
+        assertEquals(Ramp.Dim, insider.vals.secondInk, "the Insider's EGRESS was not dimmed while the Egress half ran")
+        residentBaseline("LIGHTS OUT")
+
+        both.forEach { it.seconds(PublicCooldown.Access.seconds) }
+        assertEquals(Ramp.Mid, insider.vals.tier2Ink, "the Insider's Tier-2 names stayed dim after the Access half ran out")
+        assertEquals(Ramp.Dim, insider.vals.secondInk, "EGRESS lit before its own clock ran out")
+        residentBaseline("the Access half's end")
+
+        both.forEach { it.seconds(PublicCooldown.EgressOpening.seconds - PublicCooldown.Access.seconds) }
+        assertEquals(Ramp.Ink, insider.vals.secondInk, "the Insider's EGRESS stayed dim after the Egress half ran out")
+        residentBaseline("the Egress half's end")
+
+        insider.flow.fireSurge(0)
+        insider.said(RoundMessage.AbilityFired(cooldownStarted = true))
+        assertEquals(Ramp.Dim, insider.vals.tier2Ink, "the Insider's Tier-2 names were not dimmed after its own Surge")
+        residentBaseline("the Insider's Surge")
+        insider.seconds(insider.flow.state.accessClock!!.seconds)
+        resident.seconds(insider.flow.state.accessClock!!.seconds)
+        assertEquals(Ramp.Mid, insider.vals.tier2Ink, "the Tier-2 names stayed dim after the Surge's pool ran out")
+
+        both.forEach { it.said(egressOpened) }
+        assertEquals(Ramp.Dim, insider.vals.secondInk, "the Insider's EGRESS was not dimmed after an Egress fired")
+        residentBaseline("an Egress")
+        // The REVOKE and the tile frames are not this ruling's: unchanged on both.
+        assertEquals(Ramp.Ink, insider.vals.tileInk)
+        assertEquals(Ramp.Line, insider.vals.tileBorder)
+    }
+
+    /**
+     * **GUARD (D-286: a Resident's page is unchanged): every word, ink and bar on a Resident's page 2
+     * is what the code before D-286 drew, at every second of a shift in which an Insider armed,
+     * touched, was rung to a meeting, fired a Surge and an Egress.** [before] is that code's
+     * arithmetic, written out; the Resident's phone is sent every push the Insider's is.
+     */
+    @Test
+    fun aResidentsPage2IsWhatItWasBeforeD286() {
+        fun before(s: PanelState): List<Any> {
+            val revoke = when {
+                s.revoke == RevokeState.Armed -> RevokeState.Armed
+                s.revokeClock?.running == true -> RevokeState.Cooldown
+                else -> s.revoke
+            }
+            return listOf(
+                "POWER",
+                when (revoke) {
+                    RevokeState.Armed -> "ARMED . TOUCH THEIR PHONE"
+                    RevokeState.Cooldown -> "COOLING DOWN"
+                    RevokeState.Ready -> "READY . ALL NOMINAL"
+                },
+                if (revoke == RevokeState.Armed) Ramp.Ink else Ramp.Line,
+                if (revoke == RevokeState.Armed) Ramp.Fill else androidx.compose.ui.graphics.Color.Transparent,
+                if (revoke == RevokeState.Cooldown) Ramp.Dim else Ramp.Ink,
+                if (revoke == RevokeState.Armed) Ramp.Ink else Ramp.Dim,
+                if (revoke == RevokeState.Cooldown) s.revokeClock?.fraction ?: 0.38f else 1f,
+                if (revoke == RevokeState.Cooldown) Ramp.Line else Ramp.Ink,
+                "SUBSYS", "ALL SYSTEMS RESPONDING", Ramp.Line, Ramp.Ink,
+                s.egressClock?.fraction ?: 0.64f,
+                if (s.egressClock?.running == false) Ramp.Ink else Ramp.Line,
+                "BUS", "THERMAL", "CACHE", Ramp.Mid,
+                s.accessClock?.fraction ?: 0.82f, Ramp.Mid,
+                "BUS, THERMAL AND CACHE NOMINAL",
+            )
+        }
+        fun PanelVals.now(): List<Any> = listOf(
+            abilityName, abilitySub, revokeBorder, revokeFill, revokeInk, revokeSubInk, revokeBar, revokeBarInk,
+            secondName, secondSub, tileBorder, secondInk, secondBar, secondBarInk,
+            tier2A, tier2B, tier2C, tier2Ink, tier2Bar, tier2BarInk, tier2Note,
+        )
+
+        val insider = Phone(insider = true)
+        val resident = Phone(insider = false)
+        val both = listOf(insider, resident)
+        var checked = 0
+        fun check(moment: String) {
+            assertEquals(before(resident.flow.state), resident.vals.now(), "a Resident's page 2 changed at $moment")
+            checked++
+        }
+        fun seconds(count: Int, what: String) = repeat(count) { i ->
+            both.forEach { it.seconds(1) }
+            check("$what +${i + 1} s")
+        }
+
+        both.forEach { it.said(opening) }
+        check("LIGHTS OUT")
+        seconds(PublicCooldown.Revoke.seconds, "LIGHTS OUT")
+        insider.flow.armRevoke()
+        check("the Insider's arm")
+        seconds(5, "the arm")
+        insider.said(RoundMessage.AbilityFired(cooldownStarted = true))
+        seconds(PublicCooldown.OWN_ARM_SECONDS, "the touch")
+        insider.flow.fireSurge(0)
+        insider.said(RoundMessage.AbilityFired(cooldownStarted = true))
+        seconds(10, "the Surge")
+        insider.flow.armRevoke()
+        seconds(3, "a second arm")
+        val ring = RoundMessage.MeetingOpened(caller = home.someoneshome.model.Seat(0), trigger = home.someoneshome.model.MeetingTrigger.MeetingCard, haptic = Haptic.Long)
+        both.forEach { it.said(ring) }
+        check("the ring")
+        both.forEach { it.said(meetingEnded) }
+        seconds(PublicCooldown.EgressOpening.seconds, "the meeting's end")
+        both.forEach { it.said(egressOpened) }
+        seconds(30, "the Egress")
+        assertTrue(checked > 200, "the walk checked too few moments: $checked")
     }
 
     /** The phone's clocks are the house's halves, from `Balance`, plus the pad, and nothing else. */

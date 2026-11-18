@@ -238,7 +238,7 @@ fun Page2Screen(vals: PanelVals) {
                 sub = vals.secondSub,
                 border = vals.tileBorder,
                 fill = Color.Transparent,
-                nameInk = vals.tileInk,
+                nameInk = vals.secondInk,
                 subInk = Ramp.Dim,
                 bar = vals.secondBar,
                 barInk = vals.secondBarInk,

@@ -8828,6 +8828,85 @@ the line was.
 couch; they asserted the count before. *The line put back:* both red, `Did not expect any node but
 found '1' node that satisfies: (Text ... contains 'VOTES CAST' ... as substring)`.
 
+### D-286 · **Page 2 parity is the same structure, not the same content: the Insider's REVOKE never reads READY while its own arm is spending, and the Insider's EGRESS and Tier-2 names dim while their clocks run — built; nothing on the wire or on a Resident's phone changed**
+
+**The ruling** (owner, 2026-11-18, recorded under *Owner rulings, 2026-11-18, later* in
+`owner-decisions-2026-11-17.md`): *I know we said the second screen should be pretty much the same
+for both non-insiders and insiders, but I think we're pushing this idea too far. What I meant was
+that structurally they would be the same, but of course they should be different in text and
+functionality. The insider's second page should not show "ready" when the skill is not ready. The
+colors should be dimmed as well for the insider after they use a skill showing that it is in
+cooldown.* This narrows D-142's *not shorter, dimmer or otherwise distinguishable* to page 2's
+layout, frames and wire. It answers D-280's 20–60 s gap, where the Insider's tile read READY, the
+public clock, over a Revoke the house refuses.
+
+**Now, on the Insider's phone only.**
+
+1. **REVOKE.** The hold that echoes ARMED also starts `PanelState.ownArmClock`, a
+   `PublicCooldown(OWN_ARM_SECONDS)` (the house's 60 s plus the 1 s pad), read in `clocksRead`
+   from the hold's own stamp (`stamps.armed`) and dropped with that stamp at each shift's start.
+   `revokeShown` is ARMED first, then COOLING DOWN while the public clock **or** the own-arm clock
+   runs, then READY. The bar fills over whichever of the two ends later (`revokeCooling`). So after
+   ARMED comes down (20 s, or the ring) the tile reads the existing COOLING DOWN in the existing
+   `Ramp.Dim`, and reads READY at 61 s from the hold, when a hold echoes ARMED again. `ticking` and
+   `untilNextSecond` count the own-arm clock, so `FlowHost` wakes for it.
+2. **A contact while armed, checked in `core`.** `revokeArmed` spends the full cooldown at the arm
+   (`withCooldown(cooldown.restartedAt(event.at, Balance.REVOKE_COOLDOWN))`); `contact` clears the
+   arm (`revokeArms.filterNot { … }`), answers the armed phone `AbilityFired(cooldownStarted =
+   true)`, and restarts no cooldown. So the own-arm clock from the hold is the whole of the arm's
+   cooldown whether or not a touch landed, and the tile reads COOLING DOWN from ARMED's end to 61 s
+   after a landed Revoke as after a botched one. At a meeting's end `openingCooldowns` puts every
+   seat's Revoke back to half, the arm's included, which is why the own-arm clock is dropped there.
+3. **EGRESS and SURGE, STATIC, ISOLATE.** The Insider's EGRESS name (`PanelVals.secondInk`) is
+   `Ramp.Dim` while the house-wide Egress clock runs, and the three Tier-2 names (`tier2Ink`) are
+   `Ramp.Dim` while the Access pool runs, its public half or the actor's own restart (D-262). Both
+   are the ink REVOKE already uses for COOLING DOWN; no new colour or brightness value, and no new
+   words: COOLING DOWN appears only where REVOKE already used it.
+
+**Unchanged.** Nothing on the wire: the same `ArmRevoke` on every hold, no new message, field or
+schema row, and no recording moved. **A Resident's page 2 is unchanged**: `ownArmClock` is only
+started by a hold, which a Resident's tile cannot make, and both new inks read the role. No light,
+timing or other copy moved.
+
+**Still open, raised rather than built.** ARMED after a contact: the house has cleared the arm, but
+the tile keeps ARMED until 20 s from the hold, as before (D-239's open item in `ownFireAnswered`).
+Dropping it at the contact's `AbilityFired` would misread an Egress fired while ARMED, whose
+answer is the same message with no Tier-2 fire in flight; owner to rule.
+
+**Proved, each red against the injected bug first** (`PublicCooldownTest`, ui).
+
+- *theInsiderInTheArmsGapReadsCoolingDownDimmedAndNeverReady*, second by second from the hold, and
+  *aContactWhileArmedLeavesTheArmsOwnCooldownRunningFromTheArm*. *`revokeShown` reading the public
+  clock alone:* `the Insider's tile said READY 20 s after its own arm` and `the tile said READY 20 s
+  after an arm whose contact landed`; *armedComesDownAtTwentySecondsAndTheTileReadsCoolingDown*:
+  `ARMED outlived its 20 s window, or its close read READY expected:<Cooldown> but was:<Ready>`;
+  *aMeetingCallEndsArmed*: `ARMED survived a meeting call, or the arm's cooldown read READY
+  expected:<Cooldown> but was:<Ready>`.
+- *aMeetingCallEndsArmed*, which now walks on to the public clock's end after the meeting. *The
+  shift's start keeping `ownArmClock`:* `page 2 differed by role at a meeting's end after an arm`.
+- *tier2AndEgressDimOnOnlyTheInsiderAndOnlyWhileTheirClocksRun*. *The Insider's two inks left at
+  the baseline:* `the Insider's Tier-2 names were not dimmed while the Access half ran
+  expected:<Color(0.7529412, …)> but was:<Color(0.8901961, …)>`.
+- *aResidentsPage2IsWhatItWasBeforeD286*: every word, ink and bar on a Resident's page 2 against
+  the pre-D-286 arithmetic written out, at every second of a shift in which an Insider armed,
+  touched, was rung, fired a Surge and an Egress. *The dim on both roles (the `insider` check
+  dropped):* `a Resident's page 2 changed at LIGHTS OUT`, and the ink test's `a Resident's Tier-2
+  names moved at LIGHTS OUT`.
+
+Three older assertions held the D-142 reading this narrows and now assert the ruling:
+`anInsidersPage2AndAResidentsAreTheSameAtEveryPublicMoment` no longer compares the EGRESS and Tier-2
+name inks across roles; *armedComesDownAtTwentySeconds…* and *aMeetingCallEndsArmed* expected READY
+in the gap. `AccessBarParityTest`'s pixel parity is untouched: it masks every text whose string
+differs by role, and the dimmed names are such texts.
+
+**Looked at.** Rendered page 2 at 600×1300 through the render harness for an Insider 30 s into
+the gap (REVOKE and COOLING DOWN dimmed, bar half full in `Ramp.Line`), the same Insider at 61 s
+(READY . HOLD TO ARM, full bright bar), the Insider 20 s after a Surge (SURGE, STATIC, ISOLATE in
+`Ramp.Dim`, the pool bar short), and a Resident at each of those moments (POWER, SUBSYS and BUS,
+THERMAL, CACHE at their usual inks, full bars).
+
+**Not on a phone.**
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

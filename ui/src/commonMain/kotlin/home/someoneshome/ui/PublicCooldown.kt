@@ -105,11 +105,29 @@ data class PublicCooldown(val seconds: Int, val elapsed: Int = 0) {
  * item and overriding its *the house holds an arm across a meeting*): `FlowModel` writes it back
  * to READY at either moment, silently, and this then draws the public clock like every phone's.
  *
+ * ### Never READY while this phone's own arm is still spending (the owner's 2026-11-18 ruling, D-286)
+ *
+ * After ARMED comes down the house's cooldown from that arm runs on to 60 s and refuses a hold, so
+ * until D-286 the Insider's tile read READY over a Revoke that was not ready. Now COOLING DOWN
+ * holds while [PanelState.ownArmClock] runs as well as while the public clock does, and the bar
+ * follows whichever ends later ([revokeCooling]). Only an Insider's tile can hold, so a
+ * Resident's tile reads exactly what it read before. *Parity is structure, not content*: the two
+ * roles' page 2 keep one layout and one wire, and the Insider's says what its own Revoke is doing.
+ *
  * Public, so the bench reads its tile the way a person does: it holds once, when this says READY.
  */
 val PanelState.revokeShown: RevokeState
     get() = when {
         revoke == RevokeState.Armed -> RevokeState.Armed
-        revokeClock?.running == true -> RevokeState.Cooldown
+        revokeCooling != null -> RevokeState.Cooldown
         else -> revoke
     }
+
+/**
+ * **The Revoke clock the tile's bar draws while it is COOLING DOWN**: of the public clock and this
+ * phone's own arm (D-286), whichever is running and ends later, or null when neither runs.
+ */
+val PanelState.revokeCooling: PublicCooldown?
+    get() = listOfNotNull(revokeClock, ownArmClock)
+        .filter { it.running }
+        .maxByOrNull { it.seconds - it.elapsed }

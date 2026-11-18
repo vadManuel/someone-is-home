@@ -1518,8 +1518,15 @@ class FlowModel(
      * its own window off the arm's tick, in silence. **The echo also waits for this phone's own
      * arm** ([PublicCooldown.OWN_ARM_SECONDS]): the house spent a full cooldown at the arm, so a
      * hold between the window's end and that cooldown's is refused there, and an ARMED over it
-     * would be D-237's ARMED over nothing. The tile meanwhile reads the public clock like every
-     * other phone's; only whether a hold echoes reads this phone's own input.
+     * would be D-237's ARMED over nothing.
+     *
+     * ### The tile says COOLING DOWN for the rest of that cooldown (the owner's 2026-11-18 ruling, D-286)
+     *
+     * Until D-286 the tile read the public clock in that span, READY, exactly as a Resident's does,
+     * over a Revoke the house would refuse. The echo now also starts [PanelState.ownArmClock], read
+     * from the same stamp, so the tile reads COOLING DOWN, dimmed, from ARMED's end to
+     * [PublicCooldown.OWN_ARM_SECONDS] (`revokeShown`). Nothing more is sent and nothing arrives:
+     * the request above is the same on every hold, and the clock is this phone's own input.
      */
     fun armRevoke() {
         send(IntentMessage.ArmRevoke)
@@ -1527,14 +1534,15 @@ class FlowModel(
         val ownArmSpent = stamps.armed?.let { now - it < PublicCooldown.OWN_ARM_SECONDS * 1_000L } == true
         if (state.revokeClock?.running != true && !ownArmSpent) {
             stamps.armed = now
-            state = state.copy(revoke = RevokeState.Armed)
+            state = state.copy(revoke = RevokeState.Armed, ownArmClock = PublicCooldown(PublicCooldown.OWN_ARM_SECONDS))
         }
     }
 
     /**
      * **ARMED comes down: the window closed on this phone's clock, or a meeting was called** (the
-     * owner's 2026-11-18 ruling). The tile goes back to the public clock ([revokeShown]); nothing
-     * is sent. The stamp is kept, because the cooldown the arm spent is still running at the house.
+     * owner's 2026-11-18 ruling). The tile goes to COOLING DOWN while the arm's own cooldown runs
+     * ([PanelState.ownArmClock], D-286), then to the public clock ([revokeShown]); nothing is sent.
+     * The stamp is kept, because the cooldown the arm spent is still running at the house.
      */
     private fun armEnded() {
         if (state.revoke == RevokeState.Armed) state = state.copy(revoke = RevokeState.Ready)
@@ -1572,6 +1580,8 @@ class FlowModel(
             accessClock = s.accessClock?.at(elapsed(stamps.access)),
             // Held with its Egress (D-282): see `EgressHeld`.
             egressClock = if (s.egressHeld) s.egressClock else s.egressClock?.at(elapsed(stamps.egress)),
+            // This phone's own arm (D-286), from the hold's own stamp: no push restarts it.
+            ownArmClock = s.ownArmClock?.at(elapsed(stamps.armed)),
             secondsLeft = s.secondsLeft?.let { (stamps.phaseFrom - elapsed(stamps.phase)).coerceAtLeast(0) },
             egressLeft = s.egressLeft?.let { left ->
                 if (s.egressHeld) left else left.copy(secondsLeft = (stamps.egressLeftFrom - elapsed(stamps.egressLeft)).coerceAtLeast(0))
@@ -1609,7 +1619,7 @@ class FlowModel(
             stamps.egress.takeIf { !s.egressHeld && s.egressClock?.running == true },
             stamps.phase.takeIf { (s.secondsLeft ?: 0) > 0 },
             stamps.egressLeft.takeIf { !s.egressHeld && (s.egressLeft?.secondsLeft ?: 0) > 0 },
-            stamps.armed.takeIf { s.revoke == RevokeState.Armed },
+            stamps.armed.takeIf { s.revoke == RevokeState.Armed || s.ownArmClock?.running == true },
         )
         return running.minOfOrNull { at -> 1_000L - (now - at).coerceAtLeast(0) % 1_000L }
     }
@@ -1691,6 +1701,7 @@ class FlowModel(
     val ticking: Boolean
         get() = state.revokeClock?.running == true ||
             state.revoke == RevokeState.Armed ||
+            state.ownArmClock?.running == true ||
             state.accessClock?.running == true ||
             state.egressClock?.running == true ||
             (state.secondsLeft ?: 0) > 0 ||
@@ -1726,9 +1737,11 @@ class FlowModel(
         // answer still owed from before belongs to no bar.
         awaitingFire = null
         // **The house's clocks are all public again from here** (D-132, D-184): its Revoke clock is
-        // back at half whatever this phone armed, so its own arm no longer holds the echo back.
+        // back at half whatever this phone armed, so its own arm no longer holds the echo back, nor
+        // keeps the tile at COOLING DOWN (D-286).
         stamps.armed = null
         state = state.copy(
+            ownArmClock = null,
             // No arm survives into a shift: a new round holds none, and a meeting's call ended
             // every arm in the house (the owner's 2026-11-18 ruling, which overrides D-239's
             // *the house keeps the arm across a meeting*). The ring already took ARMED down; this

@@ -609,6 +609,18 @@ data class PanelState(
     val accessClock: PublicCooldown? = null,
     val egressClock: PublicCooldown? = null,
     /**
+     * **The cooldown this phone's own Revoke arm spent at the house, or null** (the owner's
+     * 2026-11-18 ruling, *page 2 parity is structure, not content*; D-286).
+     *
+     * Not a public clock: it is input echo, started by `FlowModel.armRevoke` at the hold that echoed
+     * ARMED and read from that hold's stamp, at [PublicCooldown.OWN_ARM_SECONDS] (the 60 s the house
+     * spent at the arm, plus the pad). The house spends that cooldown at the arm and a contact does
+     * not restart it (`core` `revokeArmed`, `contact`), so this is the whole of what the arm cost.
+     * Dropped at each shift's start, where the house puts every seat's Revoke back to half. Only an
+     * Insider's tile can hold, so on a Resident's phone this is always null.
+     */
+    val ownArmClock: PublicCooldown? = null,
+    /**
      * **What this phone is carrying, or nothing** (D-168).
      *
      * *Carrying blocks every other entry*, so the state and the list it blocks are one surface: the
@@ -1199,10 +1211,17 @@ class PanelVals(
      * A dimmer page 2 for Residents would read across a room as *"this one has nothing to tap"*,
      * which is the tell the whole parity discipline exists to prevent. The Resident sees this
      * page lit exactly as an Insider does; nothing here answers them.
+     *
+     * **The Insider's names dim while their own clock runs** (the owner's 2026-11-18 ruling, D-286:
+     * page 2 parity is the same structure, not the same content). EGRESS ([secondInk]) dims while
+     * the house-wide Egress clock runs, and SURGE, STATIC and ISOLATE ([tier2Ink]) while the Access
+     * pool does, in the ink REVOKE already uses for COOLING DOWN. A Resident's names keep these
+     * baselines at every moment.
      */
     val tileBorder: Color = Ramp.Line
     val tileInk: Color = Ramp.Ink
-    val tier2Ink: Color = Ramp.Mid
+    val secondInk: Color = if (insider && state.egressClock?.running == true) Ramp.Dim else tileInk
+    val tier2Ink: Color = if (insider && state.accessClock?.running == true) Ramp.Dim else Ramp.Mid
 
     val abilityName: String = if (insider) "REVOKE" else "POWER"
 
@@ -1221,8 +1240,8 @@ class PanelVals(
      * sentence about a control is exactly what a Resident is not entitled to.
      */
     /**
-     * **The state the REVOKE tile is drawn in** ([revokeShown], D-239): ARMED if this phone held it,
-     * COOLING DOWN while the public clock runs, READY after. Read by every line below, so the
+     * **The state the REVOKE tile is drawn in** ([revokeShown], D-239, D-286): ARMED if this phone
+     * held it, COOLING DOWN while the public clock or this phone's own arm runs, READY after. Read by every line below, so the
      * tile's words, ink and bar cannot disagree about which state it is in.
      */
     val revoke: RevokeState = state.revokeShown
@@ -1242,9 +1261,11 @@ class PanelVals(
      * **The three bars are the house's public clocks now, not the mockup's 0.38, 0.64 and 0.82**
      * (D-239). Each is [PublicCooldown.fraction], restarted by a push every seat gets, so both roles
      * draw the same length at the same moment. The drawn values stay as the port's fixture for a
-     * phone no house has armed, which is what the render harness shows.
+     * phone no house has armed, which is what the render harness shows. The one bar that is not
+     * public is the Insider's own arm's (D-286): while it ends later than the public clock, the
+     * REVOKE bar fills over it ([revokeCooling]).
      */
-    val revokeBar: Float = if (revoke == RevokeState.Cooldown) state.revokeClock?.fraction ?: 0.38f else 1f
+    val revokeBar: Float = if (revoke == RevokeState.Cooldown) state.revokeCooling?.fraction ?: 0.38f else 1f
     val revokeBarInk: Color = if (revoke == RevokeState.Cooldown) Ramp.Line else Ramp.Ink
 
     val secondName: String = if (insider) "EGRESS" else "SUBSYS"
