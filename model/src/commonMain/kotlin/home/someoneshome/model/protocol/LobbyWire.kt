@@ -129,6 +129,16 @@ sealed class LobbyBody {
      * the standing is the one body every seating is sent. A phone that reads a higher number than it
      * holds missed the round's end, and ends its own there, before it says anything else. 0 is
      * unmarked, a body from no house.
+     *
+     * ### While a round runs, the standing is the round's, and [waitingForNextRound] is per phone (D-273)
+     *
+     * A seat's token returns that seat at any time (D-225), so a phone relaunched after LIGHTS OUT is
+     * seated in a house playing a round it is not in. The desk counted it, and its lobby read 5 JOINED
+     * beside a round of four. So from arming to NEW ROUND [joined], [linesIn] and [names] are the
+     * round's seats, as armed, and the phone the house is speaking to is told whether it is one of
+     * them. True only on a phone seated outside the running round; it joins at the next NEW ROUND.
+     * It answers one question about the phone it is sent to and names no seat (D-191's shape). Who is
+     * in a round is not a secret: the room watched the lights go out.
      */
     @ClientFacing
     @kotlinx.serialization.Serializable
@@ -139,6 +149,7 @@ sealed class LobbyBody {
         val names: List<String> = emptyList(),
         val insiders: Int? = null,
         val round: Int = 0,
+        val waitingForNextRound: Boolean = false,
     ) : LobbyBody()
 
     /**

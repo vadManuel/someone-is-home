@@ -413,6 +413,20 @@ class LobbyHouse(
     private var round = 1
 
     /**
+     * **The seats of the round the house is playing, with their names, from its arming to NEW ROUND**
+     * (D-273), or null while the house is between rounds.
+     *
+     * A token returns its seat at any time (D-225), so a phone relaunched after LIGHTS OUT is seated
+     * on the desk while a round it is not in runs. The standing counted the desk, and that phone's
+     * lobby read 5 JOINED beside a round of four. While this is set the standing every phone is sent
+     * counts these seats, and a phone not among them is told it waits for the next round. Taken from
+     * the state the round's first push is emitted with (the seats it was armed with, and their names
+     * before the ending empties them), so it is the round's own list and not a second reading of the
+     * desk. Written and read on [scope], with the desk.
+     */
+    private var playing: List<SeatNamed>? = null
+
+    /**
      * **The round's inbound half, on the same server the outbound half is on.**
      *
      * Beside [effects] for [effects]'s reason: there is one house, one ledger deciding who is
@@ -636,7 +650,20 @@ class LobbyHouse(
      * `armingFor` still has no production caller, exactly as W1 left it. The escalation's first
      * half, *there is no host→client effect push for any effect*, is closed here.
      */
-    suspend fun emit(effect: Effect, state: GameState) = effects.emit(effect, state)
+    suspend fun emit(effect: Effect, state: GameState) {
+        // **The round's seats, once, from the first push of a running round** (D-273). Not from an
+        // ended round's: its late pushes must not take a lobby NEW ROUND has already reopened.
+        if (state.armed && !state.ended) {
+            val seats = state.seats.sortedBy { it.index }.map { SeatNamed(it, state.nameOf(it).orEmpty()) }
+            atTheDesk {
+                if (playing == null) {
+                    playing = seats
+                    publish()
+                }
+            }
+        }
+        effects.emit(effect, state)
+    }
 
     /**
      * **Everything the lobby holds that a round is armed out of**, in one call rather than as a
@@ -699,6 +726,8 @@ class LobbyHouse(
     /** **Deleted when the round ends** — the host's half of the promise. */
     fun roundEnded() {
         desk.roundEnded()
+        // The round is over and the lobby is the desk's again: every seated phone is in the next one.
+        playing = null
         // **The next round's number, before anything is said** (V1, D-267): the standing below
         // carries it, and the effect wire marks every push of the next round with it.
         round += 1
@@ -731,6 +760,7 @@ class LobbyHouse(
         host = null
         port = null
         away = false
+        playing = null
         // The house is down, so this phone is hosting nothing — and a stale home here would let a
         // later arming draw from a house that is no longer on the air.
         hosted = null
@@ -986,8 +1016,37 @@ class LobbyHouse(
         }
     }
 
-    /** The standing, with the round of the evening the house is on (V1, D-267). */
-    private fun publish() = announce(TransportFrame.Carry(LobbyWire.encode(desk.standing().copy(round = round))))
+    /**
+     * **The standing, with the round of the evening the house is on** (V1, D-267).
+     *
+     * **While a round runs it is the round's, and each phone is told whether it is in it** (D-273).
+     * Between rounds it is the desk's, the same body to every phone. From arming to NEW ROUND the
+     * counts and the names are [playing]'s: every seat in a round handed its line over (the arming
+     * gate), and a seat that dropped and came back is still in it. A phone seated outside that list
+     * (relaunched by its token after LIGHTS OUT, D-225) is sent the same body with
+     * [LobbyBody.Standing.waitingForNextRound] set, and nothing else differs. Built here, on [scope],
+     * and sent from the copies made here.
+     */
+    private fun publish() {
+        val server = host ?: return
+        val inRound = playing
+        val standing = if (inRound == null) desk.standing() else LobbyBody.Standing(
+            joined = inRound.size,
+            linesIn = inRound.size,
+            names = inRound.map { it.name },
+            insiders = desk.insiders,
+        )
+        val body = TransportFrame.Carry(LobbyWire.encode(standing.copy(round = round)))
+        if (inRound == null) return announce(body)
+        val waiting = TransportFrame.Carry(LobbyWire.encode(standing.copy(round = round, waitingForNextRound = true)))
+        scope.launch {
+            for (seat in server.connectedSeats()) {
+                val out = inRound.none { it.seat.index == seat.index }
+                // A phone gone between the list and the send comes back by its token and is sent this again.
+                runCatching { server.send(seat, if (out) waiting else body) }
+            }
+        }
+    }
 
     /**
      * **"I have your report of [onset]"**, to the one seat that sent it (`RoundBody.FaultHeard`,

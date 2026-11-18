@@ -227,7 +227,8 @@ class ReplayPacingTest {
         val guest = room.phones.last()
         val seat = room.seatOf(guest)
         guest.job.cancel()
-        until("the house lost the guest's connection") { room.host.model.standing.joined == room.phones.size - 1 }
+        // The desk, not the standing: mid-round the standing counts the round (D-273).
+        until("the house lost the guest's connection") { room.host.link.house.armingInputs().seats.size == room.phones.size - 1 }
 
         room.backlog(BACKLOG, room.phones.filter { it !== guest })
         val owed = room.owed.getValue(seat.index)

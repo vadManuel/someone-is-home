@@ -601,6 +601,13 @@ class LobbyModel(
      */
     val residents: List<String> get() = standing.names
 
+    /**
+     * **A round is running in this house and this phone is not in it** (D-273): it was seated by its
+     * token after LIGHTS OUT (D-225), and joins at the next NEW ROUND. The house's word, off the
+     * standing, never this phone's guess; while it holds, [standing] counts the running round.
+     */
+    val waitingForNextRound: Boolean get() = standing.waitingForNextRound
+
     /** The last refusal, in the player's own words, or none. Cleared by the next thing they do. */
     var refusal: String? by mutableStateOf(null)
         private set

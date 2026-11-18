@@ -228,7 +228,8 @@ class MissedRoundEndTest {
                 away.link.backgrounded()
                 assertEquals(1, away.round.round.owing, "the guest did not mark its leave")
                 unplug.unplug()
-                until("the house lost the guest") { host.model.standing.joined == phones.size - 1 }
+                // The desk, not the standing: mid-round the standing counts the round (D-273).
+                until("the house lost the guest") { host.link.house.armingInputs().seats.size == phones.size - 1 }
 
                 // **Round one ends without it**: Revoke, Revoke, and parity.
                 suspend fun revoke(target: Seat) {

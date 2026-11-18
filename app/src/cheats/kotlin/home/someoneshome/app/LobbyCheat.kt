@@ -94,6 +94,7 @@ class LobbyCheat(
         // Seated, or still trying. `joined` moving off zero is the house counting this phone, and
         // it is the first thing on this path that could not have happened locally.
         awaitSeat()
+        awaitTheNextRound()
 
         handOverLine()
         cycleInsiders()
@@ -256,6 +257,17 @@ class LobbyCheat(
     }
 
     /**
+     * **Seated while a round this phone is not in runs** (D-273): its screen offers no line, so the
+     * bench types none until the house's NEW ROUND brings it into the next lobby, as a person would.
+     */
+    private suspend fun awaitTheNextRound() {
+        if (!lobby.waitingForNextRound) return
+        note("A ROUND IS RUNNING WITHOUT THIS PHONE — ${standing()} · WAITING FOR THE NEXT ONE")
+        while (lobby.waitingForNextRound) delay(STEP_MILLIS)
+        note("THE NEXT ROUND'S LOBBY — ${standing()}")
+    }
+
+    /**
      * YOUR ONE LINE, then HAND IT OVER — through the screen that asks for it.
      *
      * The length is printed and the text is not. That is not squeamishness about a bench: the two
@@ -393,6 +405,8 @@ class LobbyCheat(
     private fun standing(): String {
         val s = lobby.standing
         val who = s.names.map { it.ifBlank { "UNNAMED" } }
+        // The waiting phone's own header (D-273): the round's count, said as the round's.
+        if (s.waitingForNextRound) return "${s.joined} IN THIS ROUND · ROUND IN PROGRESS · $who"
         return "${s.joined} JOINED · ${s.linesIn} OF ${s.joined} HANDED THEIRS OVER · " +
             "INSIDERS ${lobby.insidersLabel} · SUBROUTINES EACH ${lobby.orderSizeLabel} · $who"
     }

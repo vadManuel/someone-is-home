@@ -1231,6 +1231,7 @@ fun LobbyScreen(vals: PanelVals) {
     // The hosted home, and only on the phone hosting it. A client has never been sent this home's
     // marker count and must not draw a number it would be guessing at.
     val hosted = if (lobby.hosting) LocalHomes.current.open else null
+    if (lobby.waitingForNextRound) return RoundUnderWay(lobby, actions)
     KitScreen(gap = 8.dp) {
         // The home this phone is in: the one it attached to over the air, or — on the host's own
         // device, which attached to nothing — the one they chose on the way in.
@@ -1286,6 +1287,32 @@ fun LobbyScreen(vals: PanelVals) {
             )
             LobbyExit(hosting = lobby.hosting, actions = actions)
         }
+    }
+}
+
+/**
+ * **The lobby of a phone seated while a round it is not in runs** (D-273, copy PROVISIONAL).
+ *
+ * A token returns its seat at any time (D-225), so a phone relaunched after LIGHTS OUT is seated
+ * in a house that is playing without it. It used to be drawn the ordinary lobby, counting itself:
+ * 5 JOINED over a round of four, a line row asking for a line the next NEW ROUND deletes. Now the
+ * count and the names are the round's, said as the round's, with the one fact and the one way
+ * out. No settings and no line: neither is this phone's to act on until the round ends, and the
+ * house walks it into the next lobby by the push every phone gets (D-157).
+ */
+@Composable
+private fun RoundUnderWay(lobby: LobbyModel, actions: PanelActions) {
+    KitScreen(gap = 8.dp) {
+        KitHeader(
+            lobby.attached?.name ?: LocalHomes.current.open?.name ?: HomeEditorModel.BUNGALOW,
+            P, meta = "${lobby.standing.joined} IN THIS ROUND",
+        )
+        ResidentStrip(lobby.residents, lobby::isMine)
+        KitSpacer()
+        Words("ROUND IN PROGRESS", size = 40, color = P.ink, lineHeight = 0.95)
+        KitCaption("YOU JOIN THE NEXT ONE", P, size = 22)
+        KitSpacer()
+        LobbyExit(hosting = false, actions = actions)
     }
 }
 

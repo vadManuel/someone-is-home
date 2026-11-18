@@ -8023,6 +8023,85 @@ code that runs an HMAC, so it is discarded as the under-read that counter's own 
 
 **Checked for this revision** (`:model:check :core:check :harness:check :app:check`, both variant sweeps, `:ui:compileKotlinDesktop`, `:ui:vocabularyLint`; every test XML read): model 300 JVM and 298 iOS Simulator, core 323, harness 127, app 199, 0 failures; `vocabularyLint`, `redactionLint`, the cordons and the boundary checks clean. The `ui` tests were not run: `ui` reads none of this. **Not on a phone; no RSSI is calibrated for a room; nothing is drawn.**
 
+### D-273 · **A phone seated while a round it is not in runs is shown the round's count and ROUND IN PROGRESS, and NEW ROUND seats it like everybody — built (provisional copy, owner to confirm)**
+
+**What broke** (raised in D-267; `hunt.sh --relaunch-guest 2`, `/tmp/someones-home-hunt/t1-r5b`). A
+guest stopped at round one's ending and relaunched after round two armed with four is seated by its
+token (D-225: a token returns *that* seat at any time). The desk counted it, and the standing is the
+desk's, so its lobby read **5 JOINED** over five names (its own among them) beside a round of four,
+asked it for a line the next NEW ROUND deletes, and the bench typed one: `5 OF 5 HANDED THEIRS OVER`.
+The round itself was right: the seat was pushed nothing, and the arming had read the desk once.
+
+**The docs are silent.** D-097 (re-assertion), D-225/226 (the token, the host's empty room), D-252,
+D-259 and D-267 say how a phone *in* a round comes back, and D-267 raised this case without ruling;
+neither the GDD nor the epics name a mid-round arrival. So this is the minimal honest state, flagged:
+**it is not in this round, and the count is the round's.**
+
+**Now.**
+
+1. **The house knows the round's seats** (`LobbyHouse.playing`): taken from the state the round's
+   first push is emitted with (its seats and their names, before the ending empties them), held to
+   NEW ROUND (`roundEnded`) or the house's stop. From the emit rather than the arming call so nothing
+   in `RoundAuthority` changes; an ended round's late push cannot set it.
+2. **While it is set, the standing is the round's** (`publish`): `joined`, `linesIn` and `names` are
+   the round's seats as armed (every one handed a line over, the arming gate), so a seat that dropped
+   and came back is still counted and a seat outside it never is. **Each phone is told whether it is
+   one of them**: `LobbyBody.Standing.waitingForNextRound`, true only on a phone seated outside the
+   running round. It answers one question about the phone it is sent to and names no seat (D-191's
+   shape); who is in a round is public, the room watched the lights go out. It differs in length
+   between an in-round phone and a waiting one, which says only that.
+3. **The waiting phone's lobby** (`RoundUnderWay`, `ui`): the home's name with `4 IN THIS ROUND`, the
+   round's names, **ROUND IN PROGRESS**, **YOU JOIN THE NEXT ONE**, and LEAVE THIS HOUSE. No settings
+   and no line row: neither is its to act on, and a line typed now would be deleted at NEW ROUND.
+   *Copy provisional.* Screens say little: the headline and the one way out.
+4. **NEW ROUND seats it like everybody**: the house clears the round's seats before it publishes, so
+   the next standing is the desk's again; the phone already gets `RoundEnded` and the standing as any
+   seated phone does. The bench waits out the flag before typing a line (`awaitTheNextRound`), as a
+   person would, having no line row to type into.
+
+**Guards, each proven by breaking it.**
+
+- `RoundUnderWayTest` (app cheats; five phones over loopback as `CheatRoot` builds them): round one
+  to its ending with five, a guest stopped there (its socket closes), NEW ROUND, round two armed with
+  four, the guest relaunched (a new process, the same stored token) mid-round two: it is told it waits,
+  counts 4, lists the round's four names without its own, stands on its lobby and is pushed no role or
+  roster; the host is told 4 and not told to wait; round two ends and the guest still waits (an ending
+  is not NEW ROUND); NEW ROUND seats it with 5, and round three arms with five, the guest holding its
+  role and a roster of five. *Injected (the standing ignores the round's seats, the old behaviour):*
+  `never happened: the relaunched guest was told a round is under way without it Standing(joined=5,
+  linesIn=4, names=[ALBA, BRUNO, CYRUS, DEVI, ENZO], insiders=1, round=2, waitingForNextRound=false)`.
+  *Injected (the round's seats kept across NEW ROUND):* `never happened: every line reached the house
+  Standing(joined=5, linesIn=5, names=[ALBA, BRUNO, CYRUS, DEVI, ENZO], insiders=1, round=2,
+  waitingForNextRound=false)`.
+- `RoundUnderWayScreenTest` (ui desktop): the flag draws `4 IN THIS ROUND`, ROUND IN PROGRESS, the
+  four names and LEAVE THIS HOUSE, and no JOINED, YOUR ONE LINE or INSIDERS; the same standing
+  without it draws the ordinary lobby. *Injected (the waiting branch removed):* `the round's count is
+  not on the waiting phone`.
+- `tools/sim-hunt/hunt.sh --seats 5 --tail 180 --relaunch-guest 2` (wire-only Simulator seats, seed
+  20261150; `/tmp/someones-home-hunt/d271-r5`). Seat 2 stopped at round one's ENDING, relaunched at
+  AGAIN-ARMED: `SEATED — 4 IN THIS ROUND · ROUND IN PROGRESS · [KESTREL, OSPREY, HERON, FINCH]`,
+  waited through round two typing nothing, then `THE NEXT ROUND'S LOBBY — 5 JOINED`, handed its line
+  over, and was armed into and played round three (ARMED, its Subroutines). Looked at:
+  `shots/20-AGAIN-MEETING-RINGING--seat2.png` reads HUNT HOME · 4 IN THIS ROUND, the four names,
+  ROUND IN PROGRESS, YOU JOIN THE NEXT ONE, LEAVE THIS HOUSE; `shots/28-AGAIN-ARMED--seat2.png` is
+  round three's ARMED Subroutine screen. (t1-r5b's shot 20 was the ordinary lobby with 5 JOINED.)
+
+**Two tests read the standing as a count of connections mid-round** (`MissedRoundEndTest`,
+`ReplayPacingTest`, waiting for the house to lose a guest). Mid-round it is the round's count now, by
+design, so they read the desk (`armingInputs().seats`) instead.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `model/protocol` `LobbyBody.Standing` | counts, names, setting, round | and `waitingForNextRound` |
+| `app` `LobbyHouse` | the standing is the desk's, one body to every phone | `playing` from the round's first push to NEW ROUND; the round's counts, and the flag per phone |
+| `ui` `LobbyModel.waitingForNextRound`, `RoundUnderWay` | the ordinary lobby | the round's count, ROUND IN PROGRESS, LEAVE THIS HOUSE |
+| `app` cheats `LobbyCheat` | a line typed at the seating | `awaitTheNextRound`; the waiting header in its standing line |
+
+**Checked for this revision** (every test XML read, on top of D-271/D-272): app 200 (debug), the
+release sweep 127 and the playtest sweep 200, ui desktop 659, ui iOS Simulator 312, 0 failures; every
+`vocabularyLint`, `armingCordon`, `benchSeedCordon`, `seedSourceCordon` and `redactionLint` clean.
+**Not on a phone.**
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).
