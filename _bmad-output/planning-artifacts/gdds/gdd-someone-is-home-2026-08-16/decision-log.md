@@ -7878,6 +7878,151 @@ iOS Simulator 312, app 198 (debug), the release sweep 127 and the playtest sweep
 `:ui:vocabularyLint` clean. **Not on a phone.**
 
 
+## Revision 81 — the house holds the plan again and builds the spectator map's input; no phone is sent anything new
+
+*2026-11-17, overnight run, unit O24: the decision-free core of the occupancy spec
+(`_bmad-output/implementation-artifacts/occupancy-spec-2026-11-17.md`, O2 and O4, with O6's capture).
+O3, O5, O6's view and wire, and O7 wait on the owner's Q1-Q5. **Nothing here reaches any client.** Every
+number in it is provisional and named for playtest (Q5). Checked in core, harness and the real
+`RoundAuthority` on the iOS-Simulator unit-test target and the JVM; nothing here has been on a phone, and
+no RSSI value has been measured for a room.*
+
+### D-271 · **The home's plan is a recorded round input again, as a narrow `HomePlanView` with no card in it, and it crosses to no client — built (recording 31)**
+
+**What was missing** (the spec's §0). The host holds the plan for the round (`RoundAuthority.home`) and the
+rules had no copy, so nothing they decide could know which rooms touch which. D-186 took the plan off the
+arming event with the Spoof picker.
+
+**What is built.**
+
+1. **`HomePlanView`** (`model`): storeys in plan order, each a name, a bounding box and one cell per square
+   (a room's index or unpainted); rooms in plan order as a name and a kind. **No card, terminal, meeting
+   card, station, active marker or seat**: rule 3, the type is the field list. Cells rather than strokes, as
+   `4cefbf5` chose. Built only by `HousePlan.toView()`; `adjacency` is `Floor.neighboursOf`'s rule read off
+   the cells (four-neighbourhood, one storey), computed once per round.
+2. **It is NOT `@Serializable` and NOT `@ClientFacing`.** Whether the plan may reach any phone is the
+   owner's Q1 (D-186 and EP:292 against M11/M12). No `RoundMessage` carries it and no `Effect` names it, so
+   the emit schema has nothing to permit; the unit that answers Q1 adds the marker, the message and the row
+   together. **D-186's sentence stands: the plan crosses to no client.**
+3. **`Event.RoundArmed.plan` and `.terminalRoom`**, held as `GameState.plan` and `GameState.terminalRoom`.
+   The T card's room is the house's own copy, so a seat placed at the station is placed in a room. D-199's
+   *the station's room is the host's to say aloud* stands for every phone: no effect carries it.
+   `RoundAuthority.armWith` passes `hosted.plan.toView()` and `hosted.map.terminal?.room?.name`.
+4. **Nothing in the rules decides from the plan but the spectator map's error** (D-272), which asks one
+   question of it: *do these two rooms touch*.
+5. **Recording 31.** `RoundArmed` gains `rooms=`, `storeys=` and `terminalRoom=` (`none` or `some:` and the
+   name, so a room called NONE cannot vanish); the parser defaults nothing and refuses a plan the model
+   refuses.
+
+### D-272 · **The house builds D-136's placements from the uploads it already gets, and captures each room's count with its error rolled once; nothing is sent — built, every tunable provisional, owner to confirm (Q5)**
+
+**What was missing.** `RoundAuthority.sight` handed each upload to the contact resolver alone.
+`Placement.Inferred` and `Observation` had no producer. And **`GameState.placementOf` returned `Known` off
+the presence row's card whether or not the window was open** (the spec's finding): it could not tell a seat
+mid-Subroutine from one that walked away ten minutes ago, and it placed every seat at the last card it read
+for the rest of the round.
+
+**What is built.**
+
+1. **`resolvePlacements`** (`core`, beside `resolveContacts`, one unpack and the resolver's own token book).
+   An upload mints **`Event.Sensed(at, sensor, room, heard)`** when its sender is a **sensor**: living,
+   placed at a card this shift, and performing (a window open or a Subroutine armed, D-136) or within the
+   **3 s sweep on scan** of the scan or close that placed it (`gdd.md:776`). `room` is where the house
+   already knows the sensor stands; `heard` is every living seat whose token it carried at **−75 dBm or
+   stronger**, in seat order, possibly none. Nothing is sensed at a meeting (and a `Sensed` that arrives
+   during one is refused at the gate, R5's shape), before arming, after the end, from an out seat (D-155;
+   R8's filler is the first denial), or at a card the house's map cannot put in a room. Only an upload the
+   resolver took as new senses (`ContactResolution.taken`), so a transport's repeat is one capture. After
+   the contacts, so a seat a Revoke just put out senses nothing.
+2. **The rules (`sensed`)** write one `Placement.Inferred(seat, room, at)` per heard living seat into
+   **`GameState.sightings`, a different collection from the presence plane** (D-136, D-186's kept shape),
+   newest wins; and capture one **`Observation`** of the sensor's room. **It emits nothing on any path.**
+3. **`placementOf(seat, at)`**, as D-136 reads: an out seat or any seat during a meeting is unplaced; **work
+   in progress (window open or Subroutine armed) is Known and nothing relocates it**; a check-in is Known for
+   **10 s**; otherwise the newest of the closed Known and the latest sighting, each for **45 s**, knowledge
+   on a tie; then unplaced (a coverage hole). Nothing from before the shift counts: `shiftStartedAt` is the
+   arming or the last meeting's end, where the sightings and observations are emptied (`gdd.md:1050`,
+   `:1070`). `Presence` gains `since`, the last tick the house knew the seat stood at its card.
+4. **`Observation`** is reshaped for capture (1.8 #5 and #6 of the spec, authority side only): `id`, `room`
+   as a plan room name, `seenAt`, `trueCount` (the living seats `placementOf` puts there), and
+   **`reportedCount` and `ageJitter`, rolled once at capture under `SeedPurpose.Occupancy` keyed on the
+   capture's own number, never on a seat or a role, and stored** (rule 4, `gdd.md:484`, `:492`). The error:
+   **15 % a missed occupant**, only in a room with somebody in it (F-007's lean to under-counting);
+   otherwise **5 % a phantom**, only where a room sharing an edge on the plan has somebody in it
+   (*plausible, not random*, `gdd.md:491`). **±5 s** jitter. Bands are `stalenessAt(now)`: fresh under
+   15 s, stale under 45 s, cold after, a pure function of the stored capture. `ObservationView` is
+   unchanged and no message carries it; its shape is O6's.
+5. **The unreliability is the design** (D-136; the occupancy spec's O4): bleed at the floor, holes where
+   nobody performs, expiry, and the error. None of it is to be tuned away.
+6. **Not built, read as specified in the spec but left out:** the Terminal reader as a sensor (the spec's
+   1.7 #6; the 3 s sweep covers the check-in only), F-007's hold beyond the 45 s expiry, observation
+   history for the timelapse, and a check-in that captures without an upload.
+
+**What reaches a phone: nothing new.** `Sensed` has no effect, so no schema row was added or asked for; the
+plan and the map are held in the authority's state and its recording only.
+
+**Allocation** (rule 7), estimated by counting objects, **not measured**: an upload from a seat that is not
+a sensor adds about 40 B (the resolver's `taken` list); a sensor's upload adds about 4 KB, of which about
+1.5 KB is the capture's one HMAC and the rest the `Sensed`, two `GameState` copies, the sightings and
+observations lists and one `placementOf` per seat. **Every living phone a sensor at once: about 32 KB/s at
+8 seats and 72 KB/s at 18**, 6 % and 14 % of the 0.5 MB/s budget; half performing, half that. A Kotlin/Native
+measurement through `allocatedBytesSinceStart` read 32-78 B per sensor upload, which cannot be right for
+code that runs an HMAC, so it is discarded as the under-read that counter's own KDoc warns of.
+
+**Guards, each proven by breaking it** (the injected failure quoted).
+
+- `HomePlanViewFieldsTest` (model JVM, reflection): the three classes' fields exactly, and no serializer.
+  *Injected `val terminal: MarkerId?` on the view:* `expected:<[storeys: …, rooms: …]> but was:<[…]>`.
+- `HomePlanViewTest`: an L-shaped room is one room; stairs stay stairs; adjacency equals
+  `Floor.neighboursOf` on every room.
+- `PlacementTest` (core, the real pipeline: a packed upload, the resolver's book, the gate):
+  - a performer hears seat 4 at −60: `Inferred` in its room, observed with both counted, no effect;
+  - *injected (a newer sighting beats an open window):* `scan, then heard, at 111: an inference relocated a
+    performer. Expected … Known, actual … Inferred`;
+  - *injected (`placementOf` without the work-in-progress arm):* `a seat ten minutes into an open
+    Subroutine was not placed at it. Expected <Known(…)>, actual <null>`;
+  - *injected (out seats heard):* `an out seat was heard into a room. Expected <[Seat(4)]>, actual <[Seat(3),
+    Seat(4), Seat(5)]>`;
+  - *injected (sensing at a meeting):* `a Sensed was minted at a meeting`; *(no wipe at meeting end):* `the
+    sightings outlived the meeting`;
+  - *injected (every held observation re-captured on each capture):* `the first capture was re-captured by
+    the second. Expected <1>, actual <2>`;
+  - *injected (the error reads a role):* `insiders [Seat(0)]: the error moved with a role`;
+  - over 3 000 captures: an occupied room missed 469 (15.6 %), a phantom beside it 122 (4.1 %), an
+    isolated empty room never wrong.
+- `OccupancyRecordingTest` (harness): the plan and every `Sensed` round-trip the text form and replay
+  Identical; a row missing `rooms`, `storeys`, `terminalRoom` or `heard`, or a cell naming a room the plan
+  lacks, is fatal; **every seat's per-client transcript (`recordPerClient`, the allowlist's own deliveries)
+  is byte-identical with and without the plan and the map**, and so is the effect stream; a role exchange
+  (seats 1 and 3) gives the same diff with the map as without, nothing unexplained, and the same map.
+  *Injected (`Sensed` emits a `LampSet` to the sensor):* `seat 0 was sent something new`. *Injected
+  (`Sensed` emits a `PresenceChanged`, which has no row):* every per-client transcript still identical —
+  the schema failed closed — and `the authority produced an effect for the plan or the map`.
+- `PlacementWiringTest` (app, the real `RoundAuthority` in the bench's home): the hosted plan is the rules'
+  plan; a performer's upload places what it heard and **pushes nothing**; a repeat is not captured again; a
+  non-sensor's upload observes nothing. *Injected (the `taken` check off):* `a transport's repeat was
+  captured again. Expected <2>, actual <3>`. *Injected (the authority never senses):* `seat 3 was not placed
+  by seat 0's upload`.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `model` `HomePlanView`, `StoreyView`, `RoomView`, `HousePlan.toView` | (new) | the narrow plan; not serialisable |
+| `model` `Event.RoundArmed` | no plan | `plan`, `terminalRoom` |
+| `model` `Event.Sensed` | (new) | sensor, room, heard |
+| `model` `GameState` | `placementOf(seat)` | `placementOf(seat, at)`, `placedRoomOf`, `roomOfCard`; `plan`, `terminalRoom`, `shiftStartedAt`, `sightings`, `observations`, `nextObservation` |
+| `model` `Presence` | seat, card, open | and `since` |
+| `model` `Placement.Inferred` | seat, room | and `at`; `PlacementTiming` (10 s, 45 s) |
+| `model` `Observation` | room as a card, a precomputed staleness | id, plan room, seenAt, true, reported, ageJitter; `stalenessAt(now)`; `toView(now)` |
+| `core` `Placements.kt` | (new) | `SensingGate`, `resolvePlacements`, `sensed`, `capture` |
+| `core` `SeedPurpose` | | `Occupancy` |
+| `core` `ContactResolution` | memory, events | and `taken` |
+| `core` `Admission` | | `Sensed` at a meeting refused |
+| `core` `Rules` lights out | | a new shift; sightings and observations emptied |
+| `app` `RoundAuthority` | the plan stays on the lobby; uploads to contacts only | the plan and station room at arming; each new upload then to `resolvePlacements` |
+| `harness` `Transcript`, `RecordingText`, `Recording.HEADER` | `recording/30` | `recording/31`; `Sensed` rows; the state row's map |
+
+**Checked for this revision** (`:model:check :core:check :harness:check :app:check`, both variant sweeps, `:ui:compileKotlinDesktop`, `:ui:vocabularyLint`; every test XML read): model 300 JVM and 298 iOS Simulator, core 323, harness 127, app 199, 0 failures; `vocabularyLint`, `redactionLint`, the cordons and the boundary checks clean. The `ui` tests were not run: `ui` reads none of this. **Not on a phone; no RSSI is calibrated for a room; nothing is drawn.**
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

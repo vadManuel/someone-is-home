@@ -50,6 +50,23 @@ class Recording(
     }
 
     companion object {
+        // 31: the house holds the plan again and builds the spectator map's input (O2, O4). Rows
+        // changed shape in three places, and none could have been a tolerant read:
+        //
+        // **`RoundArmed` gains `rooms=`, `storeys=` and `terminalRoom=`**: the home's plan,
+        // narrowed to storeys, cells and room names with no card in it (`HomePlanView`), and the
+        // house's copy of the T card's room. Version 14 dropped the plan; the spectator map's error
+        // asks which rooms touch which, so it is back as an input, and a row without it is fatal.
+        //
+        // **One event a version 30 build cannot construct, `Sensed`** (D-136, D-212): a sensor's
+        // upload, the room the house knows it is in, and every seat heard there. It emits nothing,
+        // so the effect transcripts of the same rounds are unchanged; what it changes is the state.
+        //
+        // **The state row gains the plan, the station's room, the shift's start, the sightings,
+        // the observations with their once-rolled error, and the capture counter**, and every
+        // `presence=` entry gains its time (`Presence.since`), which `placementOf` measures expiry
+        // from. A version 30 state row is missing all of them.
+        //
         // 30: the Sync Pulse on the host's clock (C2). `EgressFired` carries `pulseFrom`, the host's
         // monotonic millisecond the first pulse lands at, read at the edge -- an input, and a row
         // without one is fatal. `SyncPulseReturned.taps` are milliseconds on that clock, not ticks.
@@ -252,7 +269,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/30"
+        const val HEADER = "someone-is-home/recording/31"
     }
 }
 

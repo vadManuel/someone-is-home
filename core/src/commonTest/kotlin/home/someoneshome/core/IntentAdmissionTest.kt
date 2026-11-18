@@ -222,6 +222,9 @@ class IntentAdmissionTest {
         }
 
         is Event.ContactMade -> Origin.ContactResolved
+        // The spectator map's input (O4): resolved from the radio by the house, as a contact is,
+        // and naming a room the house knows rather than one any phone said.
+        is Event.Sensed -> Origin.ContactResolved
         is Event.EgressFired -> Origin.HouseComposed
         is Event.RadioFaulted -> Origin.RadioReported
 

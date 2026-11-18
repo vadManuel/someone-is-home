@@ -77,6 +77,8 @@ private fun dispatch(state: GameState, event: Event): Reduction<GameState, Effec
     is Event.EgressFired -> egressFired(state, event)
     is Event.SyncPulseReturned -> pulseReturned(state, event)
     is Event.EgressExpired -> withEgress(state) { egressExpired(state) }
+
+    is Event.Sensed -> sensed(state, event)
 }
 
 // =================================================================================================
@@ -351,6 +353,11 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
         voteWindowSeconds = event.voteWindowSeconds,
         // The station's card, so that a scan of it is answered as the station (D-199).
         terminal = event.terminal,
+        // The plan and the station's room, carried across arming for O4's map (O2). Nothing in
+        // this function reads either; the spectator map's error reads the plan's adjacency.
+        plan = event.plan,
+        terminalRoom = event.terminalRoom,
+        shiftStartedAt = event.at,
     )
 
     // **The round's names, in seat order, one slot per seat** (D-115). A seat whose phone never
@@ -504,7 +511,7 @@ private fun stationScanned(state: GameState, event: Event.MarkerScanned): Reduct
     val reading = !state.isOut(event.actor) && state.meeting == null &&
         (holder == null || holder.index == event.actor.index)
     val next = spend(state, event.actor)
-        .withPresence(Presence(event.actor, event.marker, open = false))
+        .withPresence(Presence(event.actor, event.marker, open = false, since = event.at))
         .let { if (reading) it.withReader(event.actor) else it }
     // Both constructed once, outside the decision above.
     val answered = Effect.TerminalAnswered(seat = event.actor, reading = reading)
@@ -559,7 +566,7 @@ private fun markerScanned(state: GameState, event: Event.MarkerScanned): Reducti
         spend(minted, event.actor)
     } else {
         minted.withOpenSubroutine(instance)
-    }.withPresence(Presence(event.actor, event.marker, open = instance != null))
+    }.withPresence(Presence(event.actor, event.marker, open = instance != null, since = event.at))
 
     // Both constructed once, outside the branch above. Deliberately not inside it.
     //
@@ -604,7 +611,7 @@ private fun performanceEnded(
 ): Reduction<GameState, Effect> {
     val where = state.presenceFor(event.actor)?.at
     val next = spend(state, event.actor)
-        .withPresence(Presence(event.actor, where, open = false))
+        .withPresence(Presence(event.actor, where, open = false, since = event.at))
     return Reduction(next, listOf(Effect.PresenceChanged(event.actor, where, open = false)))
 }
 
@@ -1244,7 +1251,7 @@ private fun returned(
     // client's claim about where it is standing, and `open.accepts` is already the only thing
     // entitled to an opinion about that.
     val where = state.presenceFor(event.actor)?.at
-    val next = banked.withPresence(Presence(event.actor, where, open = false))
+    val next = banked.withPresence(Presence(event.actor, where, open = false, since = event.at))
 
     // All three constructed once, outside every branch above. Deliberately not inside them.
     //
@@ -1756,6 +1763,12 @@ private fun lightsOut(state: GameState, event: Event.MeetingClosed): Reduction<G
             egress = running,
             cooldowns = reopened,
             egressReadyAt = egressReopened,
+            // **The map is wiped** (`gdd.md:1050`, `:1070`): a new shift starts here, nothing the
+            // house heard or observed before the meeting counts after it, and a place it knew before
+            // the meeting is older than the shift (`GameState.placementOf`).
+            shiftStartedAt = event.at,
+            sightings = emptyList(),
+            observations = emptyList(),
         ),
         listOf(Effect.MeetingEnded(Haptic.Long)) + restarted,
     )

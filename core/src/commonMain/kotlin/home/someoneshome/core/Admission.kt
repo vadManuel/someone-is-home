@@ -180,6 +180,13 @@ fun admit(state: GameState, event: Event): Admission = when {
     event is Event.ContactMade && state.meeting != null ->
         Admission.Refused(RefusalReason.MeetingAlreadyRunning)
 
+    // **Nothing is sensed at a meeting** (O4), for R5's reason one gesture over: everybody alive is
+    // standing in one room and the presence plane is frozen, so a room count taken there would be a
+    // count of the meeting. The house mints no `Sensed` while one runs; this refuses one that
+    // arrives anyway (a replay, a forged frame), recorded, symmetric across every seat and role.
+    event is Event.Sensed && state.meeting != null ->
+        Admission.Refused(RefusalReason.MeetingAlreadyRunning)
+
     // Everyone in the house is on the same phase of the same meeting, so this tells a client
     // nothing it could not read off the room (D-068).
     phaseOf(event) != null && state.meeting?.phase != phaseOf(event) ->
@@ -239,6 +246,8 @@ private fun firedBy(event: Event): Seat? = when (event) {
     is Event.VoteSelected, is Event.VoteLocked, is Event.VoteWindowClosed,
     is Event.TallyHalfwayReached, is Event.MeetingClosed,
     is Event.SyncPulseReturned, is Event.EgressExpired, is Event.TerminalLeft,
+    // The radio's conclusion, like ContactMade: a fact the house is told, never an ability.
+    is Event.Sensed,
     -> null
 }
 
@@ -277,6 +286,9 @@ private fun phaseOf(event: Event): MeetingPhase? = when (event) {
     // meeting this changes nothing -- which is the harmless direction.
     is Event.TerminalLeft -> null
 
+    // Not a meeting event. Refused at a meeting outright, above, rather than by a phase here.
+    is Event.Sensed -> null
+
     is Event.MeetingCheckedIn -> MeetingPhase.CheckIn
     is Event.ReadyToVoteDeclared, is Event.DiscussionClosed -> MeetingPhase.Discussion
     is Event.VoteSelected, is Event.VoteLocked, is Event.VoteWindowClosed -> MeetingPhase.Vote
@@ -309,7 +321,7 @@ private fun isTierTwo(event: Event): Boolean = when (event) {
     is Event.DiscussionClosed, is Event.VoteSelected, is Event.VoteLocked,
     is Event.VoteWindowClosed, is Event.TallyHalfwayReached, is Event.MeetingClosed,
     is Event.EgressFired, is Event.SyncPulseReturned, is Event.EgressExpired,
-    is Event.TerminalLeft,
+    is Event.TerminalLeft, is Event.Sensed,
     -> false
 }
 
@@ -343,5 +355,7 @@ private fun needsEgress(event: Event): Boolean = when (event) {
     // nothing here for it to need, and a gate would refuse every Static in every quiet round.
     is Event.StaticFired,
     is Event.TerminalLeft,
+    // The map is sensed whether or not the house is on fire.
+    is Event.Sensed,
     -> false
 }

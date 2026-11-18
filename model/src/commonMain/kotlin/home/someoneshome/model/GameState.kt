@@ -300,6 +300,45 @@ class GameState private constructor(
      * Never reaches a client as itself. What a scanner is told is a boolean about themselves.
      */
     val reader: Seat?,
+    /**
+     * **The home's plan, narrowed to storeys, cells and room names** (O2). See [HomePlanView].
+     *
+     * Recorded input, off the arming event, and held to [destinations]' sentence with one stated
+     * exception: **nothing in the rules decides from it except the spectator map's error**, which
+     * asks one question of it, *do these two rooms touch* (O4; `gdd.md:491`, a phantom is
+     * plausible only beside an occupied room). No draw reads it, no outcome depends on it, and no
+     * effect carries it, so it reaches no client.
+     */
+    val plan: HomePlanView,
+    /**
+     * **The T card's room, the house's copy, or null** (O2). See [Event.RoundArmed.terminalRoom].
+     * Read by one thing: resolving a seat placed at the station to a room. Reaches no client.
+     */
+    val terminalRoom: String?,
+    /**
+     * **When the current shift began**: the arming, or the end of the last meeting (`gdd.md:509`,
+     * the vocabulary's *shift*). The spectator map is wiped at every meeting's end (`gdd.md:1050`,
+     * `:1070`), and this is how a place the house knew before the meeting stops counting after it.
+     */
+    val shiftStartedAt: Tick,
+    /**
+     * **The spectator map's sightings: one [Placement.Inferred] per seat heard, newest wins**
+     * (D-136, O4).
+     *
+     * **A different collection from [presence], and it must stay one.** A sighting written into the
+     * presence plane would be one line of last-write-wins away from an inference erasing the house's
+     * own knowledge; kept here, the two are ordered in exactly one place, [placementOf]. In seat
+     * order, like everything here; emptied when a meeting ends. Reaches no client.
+     */
+    val sightings: List<Placement.Inferred>,
+    /**
+     * **The latest [Observation] of each room this shift, in the order rooms were first observed**
+     * (O4). Each carries its error, rolled once at capture. A room nobody senses in has no row,
+     * which is a coverage hole (`gdd.md:524`). Emptied when a meeting ends. Reaches no client.
+     */
+    val observations: List<Observation>,
+    /** The next capture's number: seeded, recorded and monotonic, like [nextEntity] but its own. */
+    val nextObservation: Long,
 ) {
     /**
      * The reader the lock is held by, or null if the station is free. A seat that is out holds
@@ -525,33 +564,92 @@ class GameState private constructor(
     }
 
     /**
-     * **Where the house thinks this seat is, and knowledge beats inference** (D-136).
+     * **Where the house thinks this seat is at [at], and knowledge beats inference** (D-136).
      *
      * *The dedup rule only runs one way: a performer's own scan placement is ground truth, and no
-     * other phone's sighting may relocate them. **Inference never overrides knowledge.*** This
-     * function is that sentence, and it is the only place in the game where the two planes meet.
+     * other phone's sighting may relocate them. **Inference never overrides knowledge.** Every
+     * other placement is a sighting and may be overwritten by the next one.* This function is
+     * that paragraph, and it is the only place in the game where the two planes meet.
      *
-     * A presence row with a card is [Placement.Known] and wins outright. **Nothing else can win**,
-     * which is the whole of the ordering: the answer is a scan or it is nothing.
+     * In order:
      *
-     * ### ⚠️ The inference arm was DELETED with the ability that produced it, and this is not the
-     * rule being dropped
+     * 1. **A seat that is out is never placed** (D-155): the filter is seat state, at the source.
+     *    **Nobody is placed while a meeting runs**: everybody alive is in one room, the presence
+     *    plane is frozen, and the house senses nothing (D-217 R5's shape).
+     * 2. **Work in progress is knowledge that nothing relocates**: a presence row whose window is
+     *    open, *or* a Subroutine armed at a card (the performance itself, D-110). The old version of
+     *    this function read only the row's card and so placed a seat at the last card it ever
+     *    scanned for the rest of the round, open or not; it could not tell somebody mid-Subroutine
+     *    from somebody who walked away ten minutes ago (the occupancy spec's finding).
+     * 3. **A check-in is knowledge for [PlacementTiming.KNOWN_HOLD]**, window or none.
+     * 4. **Otherwise the newest of the closed knowledge and the latest sighting wins**, each for
+     *    [PlacementTiming.EXPIRY]; on a tie, knowledge. Past that the seat is unplaced, which is a
+     *    coverage hole and a feature (`gdd.md:524`).
      *
-     * There used to be a second arm here reading a phantom occupant, and D-186 replaced the ability
-     * that manufactured phantoms with one that has no target at all. **The ruling is explicit that
-     * D-136 survives the sweep**: *inference never overrides knowledge is a rule about the spectator
-     * map, which is still unbuilt and still needs it; what falls is only the phantom's arm of it.*
-     *
-     * So this function is the ordering with one grade currently constructible, and the day the
-     * spectator map's BLE sightings land they belong **below** the presence row and are read here.
-     * [Placement.Inferred] is kept for them. Writing a sighting into [presence] instead would be one
-     * line of last-write-wins away from an inference erasing the house's own knowledge, and that is
-     * the mistake this function exists to make impossible rather than merely discouraged.
-     *
-     * Nothing in `core` calls this today.
+     * Nothing from before the current shift counts ([shiftStartedAt]): the map is wiped at every
+     * meeting's end. Pure: [at] is an argument, and nothing here reads a clock (rule 4).
      */
-    fun placementOf(seat: Seat): Placement? =
-        presenceFor(seat)?.at?.let { Placement.Known(seat, it) }
+    fun placementOf(seat: Seat, at: Tick): Placement? {
+        if (isOut(seat) || meeting != null) return null
+        val heard = sightingOf(seat)?.takeIf {
+            it.at >= shiftStartedAt && at.step - it.at.step < PlacementTiming.EXPIRY
+        }
+        val row = presenceFor(seat)
+        val card = row?.at
+        if (row == null || card == null || row.since < shiftStartedAt) return heard
+        val age = at.step - row.since.step
+        val working = row.open || openSubroutineFor(seat)?.armed == true
+        return when {
+            working || age < PlacementTiming.KNOWN_HOLD -> Placement.Known(seat, card)
+            age < PlacementTiming.EXPIRY && (heard == null || row.since >= heard.at) -> Placement.Known(seat, card)
+            else -> heard
+        }
+    }
+
+    /**
+     * **The room [placementOf] puts this seat in at [at], or null.** A Known placement resolves
+     * through the house's own map: an ordinary card's [destinations] row, or the station's
+     * [terminalRoom]. A card the map does not hold resolves to nothing, the fail-closed direction.
+     */
+    fun placedRoomOf(seat: Seat, at: Tick): String? = when (val placed = placementOf(seat, at)) {
+        is Placement.Known -> roomOfCard(placed.at)
+        is Placement.Inferred -> placed.room
+        null -> null
+    }
+
+    /** The room a card is in on the house's own map, the T card included, or null. */
+    fun roomOfCard(card: MarkerId): String? =
+        if (isTerminal(card)) terminalRoom else destinationOf(card)?.room
+
+    /** This seat's latest sighting, or null for a seat no sensor has heard this shift. */
+    fun sightingOf(seat: Seat): Placement.Inferred? = sightings.firstOrNull { it.seat.index == seat.index }
+
+    /** Replace one seat's sighting, newest wins, leaving every other row and the order alone. */
+    fun withSighting(replacement: Placement.Inferred): GameState {
+        val held = sightings.any { it.seat.index == replacement.seat.index }
+        return copy(
+            sightings =
+                if (held) {
+                    sightings.map { if (it.seat.index == replacement.seat.index) replacement else it }
+                } else {
+                    (sightings + replacement).sortedBy { it.seat.index }
+                },
+        )
+    }
+
+    /** Replace one room's observation with a newer capture, or add the room's first. */
+    fun withObservation(capture: Observation): GameState {
+        val held = observations.any { it.room == capture.room }
+        return copy(
+            observations =
+                if (held) observations.map { if (it.room == capture.room) capture else it }
+                else observations + capture,
+            nextObservation = nextObservation + 1,
+        )
+    }
+
+    /** This room's latest observation this shift, or null for a room nobody has sensed in. */
+    fun observationOf(room: String): Observation? = observations.firstOrNull { it.room == room }
 
     /** Seeded, recorded, monotonic. Never `Uuid.random()` — replay would mint different ids. */
     fun mintId(): Pair<EntityId, GameState> =
@@ -604,11 +702,18 @@ class GameState private constructor(
         seed: Long = this.seed,
         terminal: MarkerId? = this.terminal,
         reader: Seat? = this.reader,
+        plan: HomePlanView = this.plan,
+        terminalRoom: String? = this.terminalRoom,
+        shiftStartedAt: Tick = this.shiftStartedAt,
+        sightings: List<Placement.Inferred> = this.sightings,
+        observations: List<Observation> = this.observations,
+        nextObservation: Long = this.nextObservation,
     ) = GameState(
         armed, outcome, seats, insiderSeats, revoked, newlyRevoked, reported, restrained, cooldownArmed,
         touches, unreachable, cooldowns, isolated, systemIntegrity, openSubroutines, workOrders, stations,
         activeMarkers, destinations, presence, staticUntil, meeting, egress, egressReadyAt, oneLines,
-        names, voteWindowSeconds, nextEntity, seed, terminal, reader,
+        names, voteWindowSeconds, nextEntity, seed, terminal, reader, plan, terminalRoom, shiftStartedAt,
+        sightings, observations, nextObservation,
     )
 
     companion object {
@@ -687,6 +792,12 @@ class GameState private constructor(
              * to exercise something else has no station, and every scan in it is work.
              */
             terminal: MarkerId? = null,
+            /** The home's plan, narrowed (O2). Empty for [destinations]' reason. */
+            plan: HomePlanView = HomePlanView.EMPTY,
+            /** The T card's room, the house's copy (O2). Null for [terminal]'s reason. */
+            terminalRoom: String? = null,
+            /** The arming's tick: the first shift starts here. */
+            shiftStartedAt: Tick = Tick(0),
         ) = GameState(
             armed = true,
             outcome = null,
@@ -727,6 +838,13 @@ class GameState private constructor(
             // Nobody is reading. The station is claimed by a scan of the T card, and a round has
             // had none at the moment it is armed.
             reader = null,
+            plan = plan,
+            terminalRoom = terminalRoom,
+            shiftStartedAt = shiftStartedAt,
+            // Nobody has been heard and no room observed: the map starts empty, as every shift does.
+            sightings = emptyList(),
+            observations = emptyList(),
+            nextObservation = 1L,
         )
 
         val EMPTY = GameState(
@@ -761,6 +879,12 @@ class GameState private constructor(
             seed = 0L,
             terminal = null,
             reader = null,
+            plan = HomePlanView.EMPTY,
+            terminalRoom = null,
+            shiftStartedAt = Tick(0),
+            sightings = emptyList(),
+            observations = emptyList(),
+            nextObservation = 1L,
         )
     }
 }

@@ -4,11 +4,15 @@ import home.someoneshome.model.Destination
 import home.someoneshome.model.EgressType
 import home.someoneshome.model.RadioCause
 import home.someoneshome.model.Event
+import home.someoneshome.model.HomePlanView
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.OneLineHeld
+import home.someoneshome.model.RoomKind
+import home.someoneshome.model.RoomView
 import home.someoneshome.model.Seat
 import home.someoneshome.model.SeatNamed
+import home.someoneshome.model.StoreyView
 import home.someoneshome.model.Tick
 
 /** A recording that could not be read. Never recovered from — a half-read recording is worse. */
@@ -215,6 +219,49 @@ object RecordingText {
          */
         fun chosen(key: String): Int? = if (req(key) == "none") null else int(key)
 
+        /** `none`, or `some:` and escaped text (`Transcript.optionalText`). Anything else is fatal. */
+        fun optionalText(key: String): String? {
+            val raw = req(key)
+            if (raw == "none") return null
+            if (!raw.startsWith("some:")) throw MalformedRecording(line, "$key='$raw' is neither none nor some:")
+            return unescape(raw.removePrefix("some:"), line)
+        }
+
+        /**
+         * **The home's plan, narrowed** (O2): `rooms=` and `storeys=`, both required, and a plan the
+         * model refuses (a cell naming a room the plan lacks, a box that holds the wrong number of
+         * cells) is fatal rather than repaired. A guessed plan would replay a different adjacency,
+         * and so a different error on every count.
+         */
+        fun plan(line: Int): HomePlanView {
+            try {
+                val rooms = req("rooms").let { raw ->
+                    if (raw.isEmpty()) emptyList() else raw.split(',').map { part ->
+                        val bits = part.split(':')
+                        if (bits.size != 2) throw MalformedRecording(line, "'$part' in rooms is not name:kind")
+                        val kind = RoomKind.entries.firstOrNull { it.toString() == bits[1] }
+                            ?: throw MalformedRecording(line, "'${bits[1]}' is not a room kind")
+                        RoomView(unescape(bits[0], line), kind)
+                    }
+                }
+                val storeys = req("storeys").let { raw ->
+                    if (raw.isEmpty()) emptyList() else raw.split(',').map { part ->
+                        val bits = part.split(':')
+                        if (bits.size != 4) throw MalformedRecording(line, "'$part' in storeys is not name:cols:rows:cells")
+                        fun n(s: String) = s.toIntOrNull() ?: throw MalformedRecording(line, "'$s' in storeys is not a number")
+                        val cells = if (bits[3].isEmpty()) emptyList() else bits[3].split('.').map {
+                            if (it == "x") StoreyView.UNPAINTED else n(it)
+                        }
+                        StoreyView(unescape(bits[0], line), n(bits[1]), n(bits[2]), cells)
+                    }
+                }
+                return HomePlanView(storeys, rooms)
+            } catch (refused: IllegalArgumentException) {
+                if (refused is MalformedRecording) throw refused
+                throw MalformedRecording(line, "the plan is not one: ${refused.message}")
+            }
+        }
+
         val at = Tick(long("at"))
         val event = when (name) {
             "RoundArmed" -> Event.RoundArmed(
@@ -225,7 +272,10 @@ object RecordingText {
                 // a missing one cannot be read as none, because a replay that lost the T card
                 // answers every scan of it as an empty marker.
                 if (req("terminal") == "none") null else marker("terminal"),
+                plan(line),
+                optionalText("terminalRoom"),
             )
+            "Sensed" -> Event.Sensed(at, seat("sensor"), unescape(req("room"), line), seats("heard"))
             "MarkerScanned" -> Event.MarkerScanned(at, seat("actor"), marker("marker"))
             "SubroutineReturned" ->
                 Event.SubroutineReturned(at, seat("actor"), marker("marker"), ints("entered"))
@@ -276,8 +326,9 @@ object RecordingText {
         "RoundArmed" ->
             setOf(
                 "at", "seed", "seats", "insiders", "chosen", "markers", "voteWindow", "names",
-                "lines", "terminal",
+                "lines", "terminal", "rooms", "storeys", "terminalRoom",
             )
+        "Sensed" -> setOf("at", "sensor", "room", "heard")
         "MarkerScanned" -> setOf("at", "actor", "marker")
         "SubroutineReturned" -> setOf("at", "actor", "marker", "entered")
         "PerformanceEnded" -> setOf("at", "actor")

@@ -5,6 +5,7 @@ import home.someoneshome.core.ContactMemory
 import home.someoneshome.core.ContactUpload
 import home.someoneshome.core.admit
 import home.someoneshome.core.resolveContacts
+import home.someoneshome.core.resolvePlacements
 import home.someoneshome.core.armingFor
 import home.someoneshome.core.egressFor
 import home.someoneshome.core.namedByTheNotice
@@ -19,6 +20,7 @@ import home.someoneshome.model.RefusalReason
 import home.someoneshome.model.SavedHome
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
+import home.someoneshome.model.toView
 import home.someoneshome.model.protocol.RoundBody
 import home.someoneshome.model.protocol.SightingUpload
 import home.someoneshome.platform.monotonicMillis
@@ -290,6 +292,13 @@ class RoundAuthority(
             // The station's card, so that a scan of it opens the map (D-199). The id alone: the
             // room the host put it in is the host's to say aloud.
             terminal = hosted.map.terminal?.card?.id,
+            // The plan, narrowed to storeys, cells and room names (O2): the rules' only copy of
+            // which rooms touch which, for the spectator map's error. No card is in it, and no
+            // effect carries it, so it reaches no phone (D-186; whether it may is the owner's Q1).
+            plan = hosted.plan.toView(),
+            // The house's own copy of the station's room, so a seat placed at the T card is placed
+            // in a room (O2). Still never said to a phone: that is the host's, aloud.
+            terminalRoom = hosted.map.terminal?.room?.name,
         ).copy(oneLines = inputs.oneLines)
         home = hosted
         // A new round's radios start from nothing: last round's halves and debounces are about
@@ -418,11 +427,20 @@ class RoundAuthority(
             note("AN UPLOAD THAT IS NOT ONE — SEAT ${seat.index}")
             return
         }
-        val resolution = resolveContacts(
-            contactMemory, stamp(), contactWindow(), listOf(ContactUpload(seat, slots)), state,
-        )
+        val at = stamp()
+        val arrival = ContactUpload(seat, slots)
+        val resolution = resolveContacts(contactMemory, at, contactWindow(), listOf(arrival), state)
         contactMemory = resolution.memory
         for (event in resolution.events) concluded(event)
+        // **The same upload, read a second time as the spectator map's input** (O4, D-136, D-212).
+        // After the contacts, so a Revoke this upload just landed is already in the state and the
+        // seat it put out senses nothing. Only an upload the resolver took as new: a transport's
+        // second delivery is one capture, and its error is rolled once. One unpack, one token
+        // book. `Sensed` emits nothing, so nothing about this reaches any phone; a refusal of one
+        // is the radio's, recorded and answered with nothing, like a contact's.
+        if (resolution.taken.any { it.index == seat.index }) {
+            resolvePlacements(at, contactMemory.book, arrival, state)?.let { concluded(it) }
+        }
     }
 
     /**

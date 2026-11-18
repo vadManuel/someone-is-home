@@ -6,6 +6,7 @@ import home.someoneshome.model.ContactSeed
 import home.someoneshome.model.Destination
 import home.someoneshome.model.Event
 import home.someoneshome.model.Hmac
+import home.someoneshome.model.HomePlanView
 import home.someoneshome.model.InsiderBand
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.OrderEntry
@@ -74,6 +75,10 @@ fun armingFor(
      * exercise something else has no station, and every scan in it is work.
      */
     terminal: MarkerId? = null,
+    /** The home's plan, narrowed (O2). Defaulted empty for [names]' reason. */
+    plan: HomePlanView = HomePlanView.EMPTY,
+    /** The T card's room, the house's copy (O2). Defaulted null for [terminal]'s reason. */
+    terminalRoom: String? = null,
 ): Event.RoundArmed {
     require(seats.size >= Balance.MINIMUM_SEATS) {
         "a round cannot be armed for ${seats.size} seats: the minimum party is " +
@@ -91,6 +96,8 @@ fun armingFor(
         voteWindowSeconds = voteWindowSeconds,
         names = names,
         terminal = terminal,
+        plan = plan,
+        terminalRoom = terminalRoom,
     )
 }
 
@@ -289,6 +296,13 @@ internal enum class SeedPurpose(val label: String) {
      * and anybody who guessed the tick could divide it back out.
      */
     StaticNoise("someone-is-home/static-noise/1"),
+
+    /**
+     * One captured [home.someoneshome.model.Observation]'s error and age jitter, indexed by the
+     * capture's own number (O4). Keyed on the capture and **never on a seat or a role**, so a
+     * role-swapped round rolls byte-identical errors. Reaches no phone today (O6 waits on the owner).
+     */
+    Occupancy("someone-is-home/draw/occupancy/1"),
 }
 
 /**

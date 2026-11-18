@@ -5,10 +5,12 @@ import home.someoneshome.model.Destination
 import home.someoneshome.model.Effect
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
+import home.someoneshome.model.HomePlanView
 import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.OrderLine
 import home.someoneshome.model.RefusalReason
 import home.someoneshome.model.Seat
+import home.someoneshome.model.StoreyView
 
 /**
  * Canonical rendering of events and effects.
@@ -68,7 +70,23 @@ object Transcript {
                 "lines" to event.oneLines.joinToString(",") { num(it.seat.index) },
                 // **The T card's id, or none** (D-199). An id and no room: the rules need only
                 // recognise the paper, and the station's room is the host's to say aloud.
-                "terminal" to (event.terminal?.let { text(it.value) } ?: "none"))
+                "terminal" to (event.terminal?.let { text(it.value) } ?: "none"),
+                // **The home's plan is back on this row, narrowed** (O2). Version 14 dropped it
+                // with the Spoof picker; the spectator map's error asks which rooms touch which,
+                // so the rules hold the plan again -- as storeys, cells and room names, with no
+                // card of any kind in it (HomePlanView). An input, so a replay knows the same
+                // adjacency the evening did.
+                "rooms" to rooms(event.plan),
+                "storeys" to storeys(event.plan),
+                // The house's copy of the T card's room (O2), `some:` before a name so that a room
+                // a host called NONE cannot read as no room.
+                "terminalRoom" to optionalText(event.terminalRoom))
+        // **The spectator map's input** (O4): who sensed, in which room, and every seat heard
+        // there. An input drawn above the rules from the radio, exactly as a contact is, so it is
+        // on the row in full and a replay places the same seats without a radio.
+        is Event.Sensed ->
+            row("Sensed", event.at, "sensor" to num(event.sensor.index), "room" to text(event.room),
+                "heard" to event.heard.joinToString(",") { num(it.index) })
         is Event.MarkerScanned ->
             row("MarkerScanned", event.at, "actor" to num(event.actor.index), "marker" to text(event.marker.value))
         is Event.SubroutineReturned ->
@@ -157,6 +175,24 @@ object Transcript {
      */
     private fun destination(at: Destination): String =
         "${text(at.marker.value)}:${text(at.shape)}:${text(at.room)}"
+
+    /** The plan's rooms in plan order, `name:Room` or `name:Stairs`, the name escaped. */
+    internal fun rooms(plan: HomePlanView): String =
+        plan.rooms.joinToString(",") { "${text(it.name)}:${it.kind}" }
+
+    /**
+     * The plan's storeys in plan order, `name:cols:rows:cells`, the cells row-major and joined by
+     * `.`, a room's index or `x` for a square nobody painted. The name is escaped, so it holds no
+     * raw `:` or `,`, and the split back is unambiguous.
+     */
+    internal fun storeys(plan: HomePlanView): String =
+        plan.storeys.joinToString(",") { storey ->
+            "${text(storey.name)}:${num(storey.cols)}:${num(storey.rows)}:" +
+                storey.cells.joinToString(".") { if (it == StoreyView.UNPAINTED) "x" else num(it) }
+        }
+
+    /** `none`, or `some:` and the escaped text: a room can be called NONE and must not vanish. */
+    internal fun optionalText(value: String?): String = value?.let { "some:${text(it)}" } ?: "none"
 
     /**
      * What one line of a work order is, as one token.
@@ -578,7 +614,7 @@ object Transcript {
         append("|presence=").append(
             state.presence.joinToString(",") {
                 "${num(it.seat.index)}:${it.at?.let { m -> text(m.value) } ?: "none"}" +
-                    ":${if (it.open) "open" else "shut"}"
+                    ":${if (it.open) "open" else "shut"}:${num(it.since.step)}"
             }
         )
         // **The jam's deadline, and never who set it** (D-186). The presence rows above are here
@@ -593,6 +629,25 @@ object Transcript {
         // whose station never came free.
         append("|terminal=").append(state.terminal?.let { text(it.value) } ?: "none")
         append("|reader=").append(seatOrNone(state.reader))
+        // **The plan, the station's room and the spectator map** (O2, O4). None of it reaches a
+        // client -- no effect carries a placement, an observation or the plan -- so a state row is
+        // the only artifact that holds them, as it is the presence plane's. The observations carry
+        // their true count beside the reported one and the stored jitter: a replay that rolled a
+        // different error, or rolled it twice, stops matching here.
+        append("|rooms=").append(rooms(state.plan))
+        append("|storeys=").append(storeys(state.plan))
+        append("|terminalRoom=").append(optionalText(state.terminalRoom))
+        append("|shift=").append(num(state.shiftStartedAt.step))
+        append("|sightings=").append(
+            state.sightings.joinToString(",") { "${num(it.seat.index)}:${text(it.room)}:${num(it.at.step)}" }
+        )
+        append("|observations=").append(
+            state.observations.joinToString(",") {
+                "${num(it.id)}:${text(it.room)}:${num(it.seenAt.step)}:${num(it.trueCount)}" +
+                    ":${num(it.reportedCount)}:${num(it.ageJitter)}"
+            }
+        )
+        append("|nextObservation=").append(num(state.nextObservation))
         // **The meeting, ballots and all.** Live selections are the one thing at a meeting that
         // only a player outside the system may read (D-075), which is exactly why they belong in
         // an authority-side state row: a recording that stopped short of them could not tell a

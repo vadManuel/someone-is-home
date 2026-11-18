@@ -60,8 +60,18 @@ import home.someoneshome.model.Tick
  */
 data class ContactUpload(val seat: Seat, val sightings: List<Sighting>)
 
-/** What a resolution produced: the memory to carry to the next one, and the events to admit. */
-data class ContactResolution(val memory: ContactMemory, val events: List<Event>)
+/**
+ * What a resolution produced: the memory to carry to the next one, and the events to admit.
+ *
+ * [taken] is every seat whose upload this arrival took as new, in seat order: not a second
+ * delivery and from a seat of the round. The spectator map senses from those uploads alone (O4),
+ * so a transport's repeat is one capture and not two, and its error is rolled once.
+ */
+data class ContactResolution(
+    val memory: ContactMemory,
+    val events: List<Event>,
+    val taken: List<Seat> = emptyList(),
+)
 
 /**
  * **What the resolver remembers between arrivals**, as values, so the resolver is a pure function
@@ -305,10 +315,12 @@ fun resolveContacts(
     val received = ArrayList<ContactReceived>(memory.received.size + uploads.size)
     memory.received.filterTo(received) { at.step - it.at.step <= ContactGate.DUPLICATE_TICKS }
     val fresh = mutableListOf<ContactHeard>()
+    val taken = ArrayList<Seat>(uploads.size)
     for (upload in uploads.sortedWith(compareBy<ContactUpload> { it.seat.index }.thenBy { slotsKey(it.sightings) })) {
         val repeat = received.any { it.seat.index == upload.seat.index && it.sightings == upload.sightings }
         if (repeat || !house.holds(upload.seat)) continue
         received += ContactReceived(upload.seat, at, upload.sightings)
+        taken += upload.seat
         upload.sightings
             .filter { ContactGate.atContact(it.rssi) }
             .mapNotNull { book.seatOf[it.token] }
@@ -363,6 +375,7 @@ fun resolveContacts(
             book = book,
         ),
         events = inSeatOrder(events),
+        taken = taken,
     )
 }
 

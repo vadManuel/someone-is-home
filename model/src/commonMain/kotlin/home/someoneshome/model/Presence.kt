@@ -51,4 +51,15 @@ class Presence(
     val at: MarkerId?,
     /** Whether a performance window is open right now. The whole of what the map may expire on. */
     val open: Boolean,
+    /**
+     * **The last moment the house knew this seat stood at [at]** (O4): the tick of the scan that
+     * wrote the row, or of the window closing at the same card. The spectator map's expiry is
+     * measured from here (D-136: *the map has to know when a performance window opened and closed
+     * in order to expire placements*).
+     *
+     * Defaulted to the start of the round so that a row built by hand in a test is as old as it can
+     * be, which is the fail-closed direction: a closed row with no time on it has expired. Every
+     * writer in the rules passes its event's tick.
+     */
+    val since: Tick = Tick(0),
 )

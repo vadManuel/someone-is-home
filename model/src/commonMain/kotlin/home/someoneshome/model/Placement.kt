@@ -4,25 +4,20 @@ package home.someoneshome.model
  * **Where the house thinks a seat is, and how it came to think so** (D-136).
  *
  * The two grades of placement the design names, as two types rather than one type with a flag,
- * because a flag is a thing a caller can ignore and a type is a thing a caller must handle. The
- * spectator map is the only consumer this will ever have and it is unbuilt, hardware-dependent and
- * frozen — so this exists now, resolved and tested, for one reason: **the dedup rule is the easiest
- * thing in this system to get wrong later**, and it is much cheaper to write down while somebody is
- * thinking about it than to retrofit onto a map that already ships a wrong answer.
+ * because a flag is a thing a caller can ignore and a type is a thing a caller must handle.
  *
- * ### ⚠️ This survived the ability that was built to exercise it, and it survived DELIBERATELY
+ * ### The spectator map's producer exists now, house-side only (O4)
  *
- * D-186 replaced Spoof with Static, and with Spoof went the phantom occupant — the only thing that
- * has ever constructed an [Inferred]. **D-186 says so explicitly and says this is not swept with
- * it**: *inference never overrides knowledge is a rule about the spectator map, which is still
- * unbuilt and still needs it; what falls is only the phantom's arm of it.*
+ * D-186 took the phantom occupant, the only thing that had ever constructed an [Inferred], and
+ * kept the grade on purpose: *inference never overrides knowledge is a rule about the spectator
+ * map, which is still unbuilt and still needs it.* O4 builds that map's input. A performer's
+ * phone hears the phones near it, the house mints `Event.Sensed`, and the rules write one
+ * [Inferred] per heard seat into `GameState.sightings` — **a different collection from the
+ * presence plane**, which is the separation this file was kept for.
  *
- * So [Inferred] has no constructor caller anywhere in the game today, and that is the honest state
- * of a grade whose only producer will be a BLE sighting on a map nobody has built. Deleting it
- * would delete the shape of the ruling along with the ability, and the next person to write that
- * map would have to derive D-136 from the log rather than find it in the type.
- *
- * Nothing in `core` branches on this. Nothing in `ui` can see it. See [GameState.placementOf].
+ * Nothing reaches any client from here: no effect carries a placement, so the emit schema has
+ * nothing to permit. Nothing in `ui` can see it. See [GameState.placementOf], the one place the two
+ * grades are ordered.
  */
 sealed interface Placement {
 
@@ -56,5 +51,33 @@ sealed interface Placement {
      * making; it is a thing the code cannot express, and [GameState.placementOf] is the one place
      * the two grades are ever ordered.
      */
-    data class Inferred(override val seat: Seat, val room: String) : Placement
+    data class Inferred(
+        override val seat: Seat,
+        val room: String,
+        /** When the house heard it: the tick of the sensor's upload (O4). Expiry runs from here. */
+        val at: Tick,
+    ) : Placement
+}
+
+/**
+ * **How long each grade of placement lasts** (O4). ⚠️ **Every number here is provisional**: the
+ * occupancy spec's Q5 and `gdd.md` A-7/A-8 leave all of them to playtest, and nothing in the design
+ * names one. They are named once so a playtest changes one line each.
+ *
+ * In ticks of the house's clock, which the tick driver keeps to real time (D-269).
+ */
+object PlacementTiming {
+
+    /**
+     * ⚠️ **Provisional, 10 s.** A check-in that opened no window (NOTHING FOR YOU HERE, the T card)
+     * still put the seat at a card, and is knowledge for this long: no sighting relocates them
+     * inside it, exactly as an open window holds (D-136).
+     */
+    const val KNOWN_HOLD: Long = 10L * Balance.TICKS_PER_SECOND
+
+    /**
+     * ⚠️ **Provisional, 45 s.** A closed window's last place, or a sighting, stands this long and
+     * then the seat is unplaced: a coverage hole, which is a feature (`gdd.md:524`).
+     */
+    const val EXPIRY: Long = 45L * Balance.TICKS_PER_SECOND
 }

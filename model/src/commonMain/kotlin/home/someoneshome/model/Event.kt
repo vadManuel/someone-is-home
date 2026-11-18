@@ -122,6 +122,55 @@ sealed interface Event {
          * station, and a scan in it can only be work.
          */
         val terminal: MarkerId? = null,
+        /**
+         * **The home's plan, narrowed: storeys, cells and room names, no card of any kind** (O2).
+         *
+         * A recorded input, like [markers], and for the same reason: the house holds the plan for
+         * the round (`RoundAuthority.home`) and the rules had no copy, so nothing they decide could
+         * know which rooms touch which. The one thing that reads it is the spectator map's error
+         * (O4: a phantom lands only beside an occupied room, `gdd.md:491`). See [HomePlanView] for
+         * why it is the narrow type and why it reaches no client.
+         *
+         * Defaulted empty for [markers]' reason. **The recording's parser defaults nothing.**
+         */
+        val plan: HomePlanView = HomePlanView.EMPTY,
+        /**
+         * **The room the host put the T card in, or null** (O2). So that a seat placed at the
+         * station resolves to a room on the house's own map, as every ordinary card already does
+         * through [markers].
+         *
+         * [terminal] still carries the id alone, and that sentence about it stands for every
+         * phone: *the station's room is the host's to say aloud*. This is the house's copy, held
+         * in the rules and reaching no client (no effect names it). Defaulted null for
+         * [terminal]'s reason.
+         */
+        val terminalRoom: String? = null,
+    ) : Event
+
+    /**
+     * **A performer's phone heard these phones nearby, so the house places them in its room**
+     * (D-136, D-212, O4).
+     *
+     * *While a player scans and performs a Subroutine, their phone BLE-scans for nearby phones and
+     * places those players in that room.* This is that sentence as a fact. The house mints it above
+     * the rules from a sighting upload, exactly as it mints [ContactMade] (D-213): the sensor is the
+     * uploading seat, [room] is where the house already *knows* the sensor stands (the card it
+     * scanned, resolved on the house's own map), and [heard] is every living seat whose token the
+     * upload carried at room range, in seat order. A recorded input, so a replay places the same
+     * seats in the same rooms without a radio.
+     *
+     * [heard] may be empty: the sensor's own room is still observed, and an empty room is a fact.
+     *
+     * **It emits nothing, to anybody, ever.** The rules write it into the spectator map's own
+     * collection and capture one [Observation]; no effect carries either, so no schema row is
+     * asked for. Nothing about it reads a role, so a role-swapped round mints the same stream.
+     */
+    data class Sensed(
+        override val at: Tick,
+        val sensor: Seat,
+        val room: String,
+        /** A List, not a Set, in seat order: recorded input. */
+        val heard: List<Seat>,
     ) : Event
 
     /**
