@@ -1034,8 +1034,13 @@ class LobbyHouse(
             }
             // The name does go back down, to every phone, which is the whole of D-115 — and it
             // goes down as part of the standing, never as an echo of the body that brought it.
+            //
+            // **A name another seat already has is refused, and that phone alone is told** (D-288).
+            // Never a seat in the running round: its name is the round's, and it is not walked out
+            // of the dark over the lobby's list. (The desk does not keep the name either way.)
             is LobbyBody.Naming -> atTheDesk {
-                desk.named(seat, body.name)
+                val kept = desk.named(seat, body.name)
+                if (!kept && playing?.none { it.seat.index == seat.index } != false) nameTaken(seat)
                 publish()
             }
             // The standing is the host's to send, never to receive. A client that sent one is
@@ -1051,6 +1056,21 @@ class LobbyHouse(
             // walked into. CLOSE THE HOUSE is the host's control and reaches the rest as the
             // broadcast in [houseClosed].
             is LobbyBody.HouseClosed -> Unit
+            // The house's to send, to one phone, never to receive (D-288).
+            is LobbyBody.NameTaken -> Unit
+        }
+    }
+
+    /**
+     * **"That name is taken"**, to the one seat whose name the desk refused (D-288). Queued on that
+     * seat's own connection and never waited on (R12); a phone gone by now sends its name again
+     * when it is seated again, and is answered again.
+     */
+    private fun nameTaken(seat: Seat) {
+        val server = host ?: return
+        onEvent("A NAME WAS REFUSED, ALREADY TAKEN — SEAT ${seat.index}")
+        scope.launch {
+            runCatching { server.send(seat, TransportFrame.Carry(LobbyWire.encode(LobbyBody.NameTaken))) }
         }
     }
 
@@ -1337,6 +1357,12 @@ class LobbyOverTransport(
      */
     private val onRoundInProgress: () -> Unit = {},
     /**
+     * **The house refused this phone's name: another seat here already has it** (D-288, the owner's
+     * ruling 9d). [onRoundInProgress]'s sibling and wired the same way; the client has already hung
+     * up, and the app root walks the phone to JOIN, where the name is typed, with NAME TAKEN on it.
+     */
+    private val onNameTaken: () -> Unit = {},
+    /**
      * **The house has been out of reach for [houseGoneAfterMillis]** (H4 of the 2026-11-17 hunt,
      * D-253). [onHouseClosed]'s sibling for the house that could not say goodbye: the host's phone
      * failed, crashed or walked out of range, so no `HouseClosed` came down and this phone's socket
@@ -1534,6 +1560,21 @@ class LobbyOverTransport(
                         round?.roundEnded()
                         hangUp()
                         onHouseClosed()
+                    }
+                    // **The name this phone sent is another seat's here** (D-288). The person types
+                    // another, and the field is on JOIN: this phone hangs up (its token is kept, so the
+                    // next JOIN is its own seat again) and the app root walks it there, saying so.
+                    //
+                    // **Not on the host's own phone**, whose house runs here: hanging up would take the
+                    // house down with it. The host is the first seat of its own lobby, so its name is
+                    // taken only in a race (its own link dropping while a guest walks in under it); the
+                    // house then lists it UNNAMED, as any blank, and it is logged here.
+                    is LobbyBody.NameTaken -> if (house.up) {
+                        onEvent("THE HOST'S OWN NAME WAS REFUSED, ALREADY TAKEN — LISTED UNNAMED")
+                    } else {
+                        onEvent("THE HOUSE REFUSED THIS PHONE'S NAME — ALREADY TAKEN")
+                        hangUp()
+                        onNameTaken()
                     }
                     // Either upward body arriving at a client would be the house sending one
                     // phone's text to another, which nothing on the host side does — and if it ever

@@ -2193,6 +2193,17 @@ class FlowModel(
     }
 
     /**
+     * **The house refused this phone's name: another seat here already has it** (D-288, the owner's
+     * ruling 9d). The person types another on JOIN, where the field is, with NAME TAKEN under it;
+     * [roundInProgress]'s landing. The house never says it to a seat in a running round.
+     */
+    fun nameTaken() {
+        lobby.nameTaken()
+        roundForgotten()
+        push(ScreenId.Join)
+    }
+
+    /**
      * **D-161's gate, asked once and answered in the host's own words** (E-PAY-5).
      *
      * False leaves a refusal on the lobby, naming the rows — *the whole Perms set, camera

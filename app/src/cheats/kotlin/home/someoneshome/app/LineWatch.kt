@@ -99,6 +99,8 @@ class LineWatch(private val note: (String) -> Unit) {
             // A probe that reported them as one kind could not tell a second round from a party
             // that ended.
             is LobbyBody.HouseClosed -> "HOUSE CLOSED"
+            // A refused name (D-288): downward, to one phone, carrying nothing.
+            is LobbyBody.NameTaken -> "NAME TAKEN"
             // **A round body is not an undecodable one**, and telling them apart is the difference
             // between a probe and an alarm nobody reads. This class was written when the lobby's
             // socket carried only the lobby; it carries the round now, and on its first five-seat

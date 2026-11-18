@@ -22,6 +22,8 @@ import kotlinx.serialization.json.Json
  * - [LobbyBody.Naming] goes **client → host**. It carries what to call this phone's owner.
  * - [LobbyBody.Standing] goes **host → client**. It carries the counts, the host's setting, and
  *   the names.
+ * - [LobbyBody.RoundEnded], [LobbyBody.HouseClosed] and [LobbyBody.NameTaken] go **host → client**
+ *   and carry nothing: each is a moment, and the whole message is that it arrived.
  *
  * A single body with a nullable `line` would have been the obvious shape and it is exactly the
  * shape rule 3 forbids: a nulled field still exists, and someone makes it non-null later for an
@@ -218,6 +220,25 @@ sealed class LobbyBody {
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("houseClosed")
     data object HouseClosed : LobbyBody()
+
+    /**
+     * **Host → one client. The name this phone sent is already another seat's here** (D-288, the
+     * owner's ruling 9d: refused, case-insensitively, and the person types another).
+     *
+     * Sent to the one phone whose [Naming] the desk refused, and to no other. **It carries nothing**:
+     * the phone knows the name it sent, and the name it collided with is on every lobby screen
+     * already, so a field here could only repeat something or name somebody. It is a moment and not
+     * a state, so it is a body of its own rather than a flag on [Standing], for [RoundEnded]'s reason.
+     *
+     * Never sent to a seat in a running round: that seat's name is the round's, fixed at arming, and
+     * a phone in the dark is not walked back to JOIN over a lobby's bookkeeping.
+     *
+     * Downward only. The house ignores one arriving from a phone, as it ignores [RoundEnded].
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("nameTaken")
+    data object NameTaken : LobbyBody()
 }
 
 /**

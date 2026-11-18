@@ -233,6 +233,8 @@ fun CheatRoot() {
             // **A round is under way and this phone is not in it** (D-287): refused at the door, and
             // walked to the join screen with ROUND IN PROGRESS / YOU JOIN THE NEXT ONE on it.
             onRoundInProgress = { panel.value?.roundInProgress() },
+            // **The name this phone sent is another seat's** (D-288): walked to JOIN, NAME TAKEN.
+            onNameTaken = { panel.value?.nameTaken() },
             // **The host's phone went without a word** (H4, D-253): it failed, crashed or left range,
             // so no `HouseClosed` came. After the link has been down long enough that it is not a
             // lock the host comes straight back from (D-225), every guest is walked to the

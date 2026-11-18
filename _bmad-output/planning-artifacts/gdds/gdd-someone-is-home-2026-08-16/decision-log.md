@@ -8988,6 +8988,67 @@ was about, a seated phone on the paper-coloured lobby for the whole round, no lo
 **Checked** (every test XML read): platform 208, app 212 (debug), ui desktop 674, 0 failures. **Not on
 a phone.**
 
+### D-288 · **The lobby refuses a name another seat already has, trimmed and case-insensitively; the phone is walked to JOIN with NAME TAKEN and its person types another — built**
+
+**The ruling** (owner, 2026-11-18, decision pack 9d option a): *the lobby refuses a name already
+taken, case-insensitively, and the player types another.* **Wording approved the same day:** "NAME
+TAKEN", with no second line. D-278 made votes reach the right seat whatever the names; this stops the
+room seeing two identical rows.
+
+**Where the check lives: the desk, with an answer back.** Only the house sees every name, so only
+the house can say one is taken; a phone checking the standing it was sent would race the phone that
+named itself a moment earlier. `LobbyDesk.named` now answers whether it kept the name: the name as it
+would be kept (trimmed, bounded at `Naming.LIMIT`) is compared, ignoring case, with every **other**
+seat's, so a seat re-sending its own name on a resume is never refused by itself. **A blank is never
+taken** (D-277): it is a seat with no name, kept as UNNAMED, and two blanks are two seats (D-278). A
+refused name is not kept, and the seat's earlier name goes with it.
+
+**Now.**
+
+1. **`LobbyBody.NameTaken`**, host → one client, carrying nothing (the phone knows what it sent; the
+   name it met is on every lobby screen already). A moment, so a body of its own and not a flag on
+   the standing, for `RoundEnded`'s reason. No transport protocol bump: lobby bodies ride `Carry`
+   opaquely (the file's own rule); pinned in `LobbyWireTest` and `ForeignBodyTest`. No effect, no
+   schema row and no recording change: the lobby is not the round.
+2. **The house tells that seat alone** (`LobbyHouse.onFrame`), and logs `A NAME WAS REFUSED, ALREADY
+   TAKEN — SEAT n`. **Never a seat in the running round**: its name is the round's, fixed at arming,
+   and a phone in the dark is not walked back to JOIN over the lobby's list.
+3. **The phone** (`LobbyOverTransport`) hangs up, keeping its token, and reports `onNameTaken`, wired
+   in `CheatRoot` to `FlowModel.nameTaken`, D-287's landing: `LobbyModel.nameTaken` leaves and puts
+   `NAME TAKEN` in JOIN's refusal slot, under the RESIDENT field that still holds the name. The next
+   keystroke clears it and tapping the home walks back in under the new name, to the same seat.
+   **Not on the host's own phone**, whose house runs there: hanging up would take the house down. The
+   host is the first seat of its own lobby, so its name is taken only in a race (its link dropping
+   while a guest walks in under it); it is then listed UNNAMED, as any blank, and logged.
+4. **A phone holding no house holds no standing.** The house's standing follows the refusal down the
+   same socket, and the phone took it after walking out, so JOIN's model held a lobby of three (the
+   end-to-end test below caught it: `the refused phone still holds a lobby. Expected <0>, actual
+   <3>`). `LobbyModel.attachTo`'s callback now drops a standing while nothing is attached, which also
+   covers a straggler after LEAVE or HOUSE CLOSED.
+
+**Light, copy.** No new screen or light level: JOIN's existing refusal slot, `KitBody` at 22, the
+approved two words.
+
+**Proved, each red against the injected bug first.**
+
+- `LobbyDeskTest` (platform), *a name another seat already has is refused whatever its case*: Sam
+  then "  sAM " refused and not listed, a seat's own SAM again kept, PRIYA after it kept, two blanks
+  kept, "priya" refused while PRIYA is here and kept once she leaves. *The check skipped:* `a second
+  SAM was kept beside the first`.
+- `NameTakenTest` (app, three phones over loopback: the host's real `LobbyOverTransport`, two guests
+  wired as `CheatRoot` wires them): " sam" after SAM is walked to JOIN with NAME TAKEN, holds no house
+  and no lobby, the house lists one SAM and logs the refusal, the first SAM stays in its lobby; typing
+  SAMMY clears it and SAMMY is seated. *The house never answering:* `never happened: the second sam was
+  refused Lobby null []`.
+- `RoundUnderWayScreenTest.aRefusedNameStandsOnJoinSayingNameTaken` (ui desktop). *The refusal not set:*
+  `the join screen does not say the name is taken … could not find any node that satisfies: (Text …
+  contains 'NAME TAKEN')`.
+- `LobbyRefusalRender` writes `build/screens/refusal-name-taken.png` (600×1300). Looked at: NAME TAKEN
+  on one line above HOST A HOME INSTEAD, ELLIOT still in the field.
+
+**Checked** (every test XML read): model 313 (JVM) and 303 (iOS Simulator), platform 209, app 213
+(debug), ui desktop 675, 0 failures. **Not on a phone.**
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

@@ -774,7 +774,10 @@ class LobbyModel(
         }
         attached = home
         refusal = null
-        link.join(home, residentName) { standing = it }
+        // **A phone holding no house holds no standing** (D-288): the house's next standing can be
+        // in flight behind the refusal that walked this phone out, and must not fill the counts back
+        // in under JOIN.
+        link.join(home, residentName) { if (attached != null) standing = it }
     }
 
     fun typeLine(next: String) {
@@ -1026,6 +1029,18 @@ class LobbyModel(
         refusal = "$ROUND_IN_PROGRESS\n$YOU_JOIN_THE_NEXT_ONE"
     }
 
+    /**
+     * **The house refused this phone's name: another seat here already has it** (D-288, the owner's
+     * ruling 9d). The person types another, and the RESIDENT field is on JOIN, so this lands where
+     * [roundInProgress] lands: nothing attached, the name still in the field to be changed, and
+     * [NAME_TAKEN] in the refusal slot under it. The next keystroke clears it ([nameResident]), and
+     * tapping the home walks back in under the new name.
+     */
+    fun nameTaken() {
+        leaveLobby()
+        refusal = NAME_TAKEN
+    }
+
     companion object {
         const val UNKNOWN: String = "UNKNOWN"
 
@@ -1038,6 +1053,12 @@ class LobbyModel(
 
         /** The second line under [ROUND_IN_PROGRESS], and under WAITING FOR THE HOST (D-273, D-274). */
         const val YOU_JOIN_THE_NEXT_ONE: String = "YOU JOIN THE NEXT ONE"
+
+        /**
+         * **Another seat in this lobby already has the name this phone sent** (D-288). The owner's
+         * approved words, 2026-11-18, with no second line: the field it is about is right above it.
+         */
+        const val NAME_TAKEN: String = "NAME TAKEN"
 
         /**
          * ⚠️ **PROPOSED COPY, NOT RATIFIED.** The owner asked for *an honest line* and did not write

@@ -23,6 +23,7 @@ class ForeignBodyTest {
         LobbyBody.Standing(joined = 6, linesIn = 4, names = listOf("ROSE", "TOMAS"), insiders = 2),
         LobbyBody.RoundEnded,
         LobbyBody.HouseClosed,
+        LobbyBody.NameTaken,
     )
 
     private val round: List<RoundBody> = listOf(

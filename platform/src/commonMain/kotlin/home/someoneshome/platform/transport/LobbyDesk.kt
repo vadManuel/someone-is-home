@@ -108,10 +108,28 @@ class LobbyDesk {
      * likes, and a lobby screen is not the place to find out that one of them sent a paragraph.
      *
      * Refused from a seat that is not in the lobby, loudly, for [handedOver]'s reason.
+     *
+     * ### A name another seat here already has is refused, and the answer is false (D-288)
+     *
+     * The owner's ruling 9d: *the lobby refuses a name already taken, case-insensitively, and the
+     * player types another.* Compared as it would be kept (trimmed, bounded) against every **other**
+     * seat's name, ignoring case, so a seat re-sending its own name on a resume is never refused by
+     * itself. **A blank is never taken** (D-277): it is a seat with no name, it keeps its row as
+     * UNNAMED, and two of them are two seats (D-278). A refused name is not kept, and whatever this
+     * seat was called before goes with it: the phone is told and walks back to type another, so the
+     * row is a blank until it says something else. The house tells the phone; this only answers.
      */
-    fun named(seat: Seat, name: String) {
+    fun named(seat: Seat, name: String): Boolean {
         require(seat in seats) { "a name arrived from $seat, which is not in this lobby" }
-        names[seat] = name.trim().take(LobbyBody.Naming.LIMIT)
+        val kept = name.trim().take(LobbyBody.Naming.LIMIT)
+        val taken = kept.isNotEmpty() &&
+            names.any { (other, held) -> other != seat && held.equals(kept, ignoreCase = true) }
+        if (taken) {
+            names -= seat
+            return false
+        }
+        names[seat] = kept
+        return true
     }
 
     /**

@@ -153,6 +153,31 @@ class LobbyDeskTest {
         )
     }
 
+    /**
+     * **GUARD (D-288, the owner's ruling 9d): a name another seat already has is refused,
+     * case-insensitively, after trimming**, and is not kept. The seat's own name sent again is not
+     * taken by itself, two blanks are two seats (D-277), and a name freed by a leaver is free.
+     */
+    @Test
+    fun `a name another seat already has is refused whatever its case`() {
+        val desk = deskOfThree()
+        assertTrue(desk.named(elliot, "Sam"), "the first SAM was refused")
+        assertFalse(desk.named(priya, "  sAM "), "a second SAM was kept beside the first")
+        assertEquals(listOf("Sam", "", ""), desk.standing().names, "the refused name reached the lobby")
+        assertTrue(desk.named(elliot, "SAM"), "a seat's own name, sent again on a resume, was taken by itself")
+        assertTrue(desk.named(priya, "PRIYA"), "the person who typed another was refused again")
+
+        assertTrue(desk.named(marcus, "  "), "a blank was refused")
+        val fourth = Seat(3)
+        desk.seated(fourth)
+        assertTrue(desk.named(fourth, ""), "a second blank was refused: two blanks are two seats (D-277)")
+
+        assertFalse(desk.named(marcus, "priya"), "PRIYA was taken twice")
+        assertEquals(listOf("SAM", "PRIYA", "", ""), desk.standing().names)
+        desk.left(priya)
+        assertTrue(desk.named(marcus, "priya"), "a name its owner took out of the lobby was still taken")
+    }
+
     @Test
     fun `a name from a seat that is not in the lobby is refused loudly`() {
         assertFailsWith<IllegalArgumentException> { LobbyDesk().named(elliot, "ELLIOT") }

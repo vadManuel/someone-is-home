@@ -26,6 +26,8 @@ class LobbyWireTest {
         // things about whether there is still a house on the other end of the socket, and a client
         // that read them as one kind could not tell a second round from a party that ended.
         "houseClosed" to LobbyBody.HouseClosed,
+        // **A refused name** (D-288): downward, to one phone, carrying nothing.
+        "nameTaken" to LobbyBody.NameTaken,
     )
 
     @Test
@@ -57,9 +59,10 @@ class LobbyWireTest {
             is LobbyBody.Standing -> "standing"
             is LobbyBody.RoundEnded -> "roundEnded"
             is LobbyBody.HouseClosed -> "houseClosed"
+            is LobbyBody.NameTaken -> "nameTaken"
         }
         for ((wireName, body) in everyBody) assertEquals(wireName, wireNameOf(body))
-        assertEquals(everyBody.size, 5, "a lobby body was added without pinning its discriminator")
+        assertEquals(everyBody.size, 6, "a lobby body was added without pinning its discriminator")
     }
 
     /**

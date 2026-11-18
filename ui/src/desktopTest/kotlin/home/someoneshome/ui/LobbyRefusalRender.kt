@@ -20,7 +20,7 @@ import javax.imageio.ImageIO
 import kotlin.test.Test
 
 /**
- * **A viewer, not an assertion: the join screen when the house turned this phone away** (D-287).
+ * **A viewer, not an assertion: the join screen when the house turned this phone away** (D-287), or its name (D-288).
  * Writes `build/screens/refusal-*.png` at a phone's 600×1300, so the refusal slot can be looked at
  * with the field, the network rows and HOST A HOME INSTEAD around it.
  */
@@ -77,5 +77,10 @@ class LobbyRefusalRender {
         val locked = attached()
         locked.roundInProgress()
         render("refusal-round-in-progress", locked)
+
+        // Its name is another seat's (D-288).
+        val taken = attached()
+        taken.nameTaken()
+        render("refusal-name-taken", taken)
     }
 }

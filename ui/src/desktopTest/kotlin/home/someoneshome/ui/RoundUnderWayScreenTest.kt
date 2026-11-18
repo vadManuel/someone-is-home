@@ -106,6 +106,24 @@ class RoundUnderWayScreenTest {
         assertEquals(0, count("ROUND IN PROGRESS"), "typing did not clear the refusal")
     }
 
+    /**
+     * **GUARD (D-288): a refused name walks the phone to JOIN with NAME TAKEN, one line, under the
+     * field that still holds it**; typing another clears it.
+     */
+    @Test
+    fun aRefusedNameStandsOnJoinSayingNameTaken() = runDesktopComposeUiTest(width = 300, height = 650) {
+        val model = lobbyFor(waiting = false)
+        model.nameTaken()
+        assertEquals(ScreenId.Join, model.state.screen, "the refused phone was not walked to the join screen")
+        assertEquals(null, model.lobby.attached, "the refused phone still holds the house")
+        show(model)
+        onNodeWithText("NAME TAKEN").assertExists("the join screen does not say the name is taken")
+        onNodeWithText("ELLIOT").assertExists("the field no longer holds the name to be changed")
+        model.lobby.nameResident("ELLIOTT")
+        waitForIdle()
+        assertEquals(0, count("NAME TAKEN"), "typing another did not clear NAME TAKEN")
+    }
+
     /** The same standing without the flag is the ordinary lobby, so the flag alone draws the above. */
     @Test
     fun aPhoneInTheRoundIsShownTheOrdinaryLobby() = runDesktopComposeUiTest(width = 300, height = 650) {
