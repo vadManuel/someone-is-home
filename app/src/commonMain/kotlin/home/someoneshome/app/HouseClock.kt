@@ -107,12 +107,15 @@ class HouseClock private constructor(
      * before the Egress's — because two events reduced at one tick are two events the recording
      * cannot order, and the recording is the only debugging instrument this game has.
      *
+     * [offAir]: the house is off the air, or back on it with the gap not yet recorded. See the
+     * Egress's line below.
+     *
      * **At most one meeting transition per pump**, because each of them is what *opens* the phase
      * the next one ends: minting `DiscussionClosed` and `VoteWindowClosed` off one pump would end a
      * ballot that had not been open for a single tick. The Egress's is independent of all of them
      * and rides along in the same list.
      */
-    fun turned(elapsedNanos: Long, state: GameState): Turned {
+    fun turned(elapsedNanos: Long, state: GameState, offAir: Boolean = false): Turned {
         val pumped = timestep.pump(elapsedNanos)
         val at = pumped.next.now
 
@@ -127,8 +130,15 @@ class HouseClock private constructor(
         }
 
         val meetingDue = opened?.let { dueAt(state, it, at) }
+        // **Never while the house is off the air, nor on the step it comes back** (the owner's
+        // 2026-11-18 ruling, Q4 option A). The Egress is paused for the gap, and the pause is the
+        // `OffAirEnded` the driver mints on the return; until the rules have reduced it, the
+        // deadline on [state] is the one from before the gap, and an expiry judged against it
+        // would hand the round to the Insiders for the host's lock. The next step reads the moved
+        // deadline. [offAir] is true from the moment the house went off the air until that event
+        // has been minted, so a step the driver ran during the gap is covered too.
         val egressDue = state.egress
-            ?.takeIf { it.pausedAt == null && at.step >= it.deadline.step }
+            ?.takeIf { !offAir && it.pausedAt == null && at.step >= it.deadline.step }
             ?.let { Event.EgressExpired(at) }
 
         return Turned(

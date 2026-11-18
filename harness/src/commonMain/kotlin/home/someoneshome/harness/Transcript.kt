@@ -164,6 +164,9 @@ object Transcript {
                 "taps" to event.taps.joinToString(",") { num(it) })
         is Event.EgressExpired ->
             row("EgressExpired", event.at)
+        // Both ticks, because the gap between them is the whole of what the event moves.
+        is Event.OffAirEnded ->
+            row("OffAirEnded", event.at, "since" to num(event.since.step))
     }
 
     /**

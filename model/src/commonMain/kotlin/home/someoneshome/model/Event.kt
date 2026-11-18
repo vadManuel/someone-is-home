@@ -505,4 +505,23 @@ sealed interface Event {
      * the last one does not stop this arriving.
      */
     data class EgressExpired(override val at: Tick) : Event
+
+    /**
+     * **The house is back on the air, after being off it since [since]** (the owner's 2026-11-18
+     * ruling, Q4 option A).
+     *
+     * The host's phone left the foreground (a lock, the side button, a swipe home) and the house went
+     * off the air with it (D-225): no phone could report, contain or call anything, and the tick
+     * driver skips forward to wall time at the return (D-230). Under D-230 alone an Egress whose
+     * deadline fell inside the gap expired on the first step after the return, which handed the
+     * round to the Insiders for a host's lock. **The Egress pauses while the house is off the air,
+     * as a meeting pauses it** (D-133): this event is that pause, recorded, so a replay moves the
+     * deadline by exactly the gap the room lived through. **No other clock is touched** (D-230
+     * stands for meetings and cooldowns).
+     *
+     * Both ticks are the house's own, read at the edge like every other: [since] is the tick the
+     * house stood at when it went off the air, [at] the step it came back on. Minted by the house
+     * and never requestable; a fact, not a request (rule 10).
+     */
+    data class OffAirEnded(override val at: Tick, val since: Tick) : Event
 }

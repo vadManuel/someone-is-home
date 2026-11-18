@@ -50,6 +50,10 @@ class Recording(
     }
 
     companion object {
+        // 35: one event a version 34 build cannot construct, `OffAirEnded` (the owner's 2026-11-18
+        // ruling, D-281): the house came back on the air, with the tick it went off it. A running
+        // Egress is paused across the gap and every phone is sent `EgressHeld`. No row changed shape.
+        //
         // 34: the Revoke arm window (the owner's 2026-11-18 ruling, D-280). The state row's
         // `armedRevoke=` entries carry the tick each arm's window closes (`seat@tick`), and the same
         // events reduce differently twice over: a contact past the window is an unarmed touch, and a
@@ -289,7 +293,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/34"
+        const val HEADER = "someone-is-home/recording/35"
     }
 }
 

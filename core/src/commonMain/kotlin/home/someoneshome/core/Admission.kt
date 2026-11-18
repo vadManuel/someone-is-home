@@ -281,6 +281,8 @@ private fun firedBy(event: Event): Seat? = when (event) {
     is Event.SyncPulseReturned, is Event.EgressExpired, is Event.TerminalLeft,
     // The radio's conclusion, like ContactMade: a fact the house is told, never an ability.
     is Event.Sensed,
+    // The house's own fact about its own air, never an ability.
+    is Event.OffAirEnded,
     -> null
 }
 
@@ -323,6 +325,10 @@ private fun phaseOf(event: Event): MeetingPhase? = when (event) {
     // Not a meeting event. Refused at a meeting outright, above, rather than by a phase here.
     is Event.Sensed -> null
 
+    // Not a meeting event, and not refused at one: a host can lock during a meeting, and the
+    // meeting's own pause already holds the Egress then, so the rules move nothing.
+    is Event.OffAirEnded -> null
+
     is Event.MeetingCheckedIn -> MeetingPhase.CheckIn
     is Event.ReadyToVoteDeclared, is Event.DiscussionClosed -> MeetingPhase.Discussion
     is Event.VoteSelected, is Event.VoteLocked, is Event.VoteWindowClosed -> MeetingPhase.Vote
@@ -357,7 +363,7 @@ private fun isTierTwo(event: Event): Boolean = when (event) {
     is Event.DiscussionClosed, is Event.VoteSelected, is Event.VoteLocked,
     is Event.VoteWindowClosed, is Event.TallyHalfwayReached, is Event.MeetingClosed,
     is Event.EgressFired, is Event.SyncPulseReturned, is Event.EgressExpired,
-    is Event.TerminalLeft, is Event.Sensed,
+    is Event.TerminalLeft, is Event.Sensed, is Event.OffAirEnded,
     -> false
 }
 
@@ -393,5 +399,8 @@ private fun needsEgress(event: Event): Boolean = when (event) {
     is Event.TerminalLeft,
     // The map is sensed whether or not the house is on fire.
     is Event.Sensed,
+    // **The house's return reads the Egress and does not need one.** A lock with no Egress running
+    // is the ordinary case, and the rules then move nothing.
+    is Event.OffAirEnded,
     -> false
 }

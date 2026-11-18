@@ -142,6 +142,26 @@ class RoundAuthority(
     /** [HouseHandle.state]. The round as it stands, for the tick driver to read deadlines off. */
     override fun state(): GameState = state
 
+    /** When the house went off the air, and whether it is back (the owner's 2026-11-18 ruling). */
+    private val offAirMark = OffAirMark()
+
+    /**
+     * **The house went off the air** (D-225): the host's phone left the foreground. Marked at the
+     * tick the house stands at, in a round that is running and nowhere else; a guest's authority is
+     * never armed, so the call is the same on every phone and changes nothing there. The Egress is
+     * paused across the gap when the house is back ([OffAirMark], [Event.OffAirEnded]).
+     */
+    fun wentOffAir() {
+        if (state.armed && !state.ended) offAirMark.went(stamp())
+    }
+
+    /** **The house is back on the air** (D-225). The driver records the gap on its next pump. */
+    fun cameBackOnAir() = offAirMark.returned()
+
+    override fun offAir(): Boolean = offAirMark.off
+
+    override fun backOnAir(at: Tick): Event.OffAirEnded? = offAirMark.ended(at)
+
     /** Every effect the rules produced, in order — the authority's own record. */
     val emitted: MutableList<Effect> = mutableListOf()
 

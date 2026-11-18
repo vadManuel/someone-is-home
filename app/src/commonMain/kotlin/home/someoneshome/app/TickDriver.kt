@@ -33,6 +33,60 @@ interface HouseHandle {
 
     /** One event the house minted itself, put to the same gate every request goes through. */
     suspend fun mint(event: Event)
+
+    /**
+     * **Whether the house is off the air, or back on it with the gap not yet recorded** (the
+     * owner's 2026-11-18 ruling, Q4 option A). See [OffAirMark]. False on a handle that never goes
+     * off the air, which is every bench that does not ask.
+     */
+    fun offAir(): Boolean = false
+
+    /**
+     * **The house is back: the gap, as the event that records it, once**, stamped [at] — or null
+     * while it is still off the air or was never off it. See [OffAirMark.ended].
+     */
+    fun backOnAir(at: Tick): Event.OffAirEnded? = null
+}
+
+/**
+ * **When the house went off the air, and whether it is back** (the owner's 2026-11-18 ruling, Q4
+ * option A; D-225, D-230).
+ *
+ * The host's lock is marked here **synchronously, at the moment it happens**, rather than noticed by
+ * the driver: iOS suspends the app with the driver mid-sleep, so the first pump after the return is
+ * the first the driver runs at all, and by then the clock has skipped the whole gap. [went] reads
+ * the house's tick as it stood; [ended] closes the mark on the first pump after [returned] and hands
+ * back the one event that records the gap. The house's ticks on both ends, so a replay moves the
+ * Egress by exactly what this recorded, and no clock is read here.
+ */
+class OffAirMark {
+    private var since: Tick? = null
+    private var back: Boolean = false
+
+    /** Off the air from [at]. A second call while off changes nothing: the gap began at the first. */
+    fun went(at: Tick) {
+        if (since == null) {
+            since = at
+            back = false
+        }
+    }
+
+    /** Back on the air. The gap is recorded on the driver's next pump. */
+    fun returned() {
+        if (since != null) back = true
+    }
+
+    /** Off the air, or back with the gap not yet recorded. */
+    val off: Boolean get() = since != null
+
+    /** The gap, once, when back: [Event.OffAirEnded] from the tick it went off to [at]. */
+    fun ended(at: Tick): Event.OffAirEnded? {
+        val from = since ?: return null
+        if (!back) return null
+        since = null
+        back = false
+        return Event.OffAirEnded(at, from)
+    }
 }
 
 /**
@@ -91,19 +145,35 @@ suspend fun tickHouse(
         val elapsed = now - last
         last = now
 
-        val turned = clock.turned(elapsed, house.state())
-        clock = turned.next
-
-        // The clock moves whether or not anything fell due. A house whose tick only advanced when
-        // it minted something would stamp every request with the moment of the last transition.
-        house.advanceTo(clock.now)
-        for (event in turned.due) house.mint(event)
+        clock = pumped(house, clock, elapsed)
 
         if (clock.abandonedSteps > reported) {
             note("THE HOUSE CLOCK SKIPPED ${clock.abandonedSteps - reported} STEP(S)")
             reported = clock.abandonedSteps
         }
     }
+}
+
+/**
+ * **One pump of [tickHouse]**: [elapsedNanos] of real time handed to [clock], the house moved to the
+ * new tick, and whatever fell due minted, in a fixed order. Its own function so a test can drive the
+ * order with a clock it made up, as `HouseClockTest` drives [HouseClock].
+ *
+ * **The house's return is minted first** (the owner's 2026-11-18 ruling, Q4 option A): an
+ * [Event.OffAirEnded] reaches the rules before anything this pump owes, so the Egress it pauses is
+ * paused before the clock is asked about it again. [HouseClock.turned] is told the house is off the
+ * air for this pump too, and owes no expiry; the next pump judges the moved deadline.
+ */
+internal suspend fun pumped(house: HouseHandle, clock: HouseClock, elapsedNanos: Long): HouseClock {
+    val turned = clock.turned(elapsedNanos, house.state(), offAir = house.offAir())
+    val next = turned.next
+
+    // The clock moves whether or not anything fell due. A house whose tick only advanced when
+    // it minted something would stamp every request with the moment of the last transition.
+    house.advanceTo(next.now)
+    house.backOnAir(next.now)?.let { house.mint(it) }
+    for (event in turned.due) house.mint(event)
+    return next
 }
 
 /**

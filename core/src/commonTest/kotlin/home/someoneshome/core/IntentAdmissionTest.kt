@@ -243,6 +243,8 @@ class IntentAdmissionTest {
 
         is Event.RoundArmed, is Event.DiscussionClosed, is Event.VoteWindowClosed,
         is Event.TallyHalfwayReached, is Event.MeetingClosed, is Event.EgressExpired,
+        // The house's return to the air, off its own clock (the owner's 2026-11-18 ruling, D-281).
+        is Event.OffAirEnded,
         -> Origin.HouseClock
     }
 
@@ -278,6 +280,7 @@ class IntentAdmissionTest {
         Event.EgressFired(at, Seat(1), EgressType.Beacon, listOf(marker), pulseFrom = 4_000_000L),
         Event.SyncPulseReturned(at, Seat(2), listOf(1L)),
         Event.EgressExpired(at),
+        Event.OffAirEnded(at, since = at),
     )
 
     /**

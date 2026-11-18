@@ -62,7 +62,7 @@ class RecordingTextTest {
         )
 
         assertTrue(
-            text.startsWith("someone-is-home/recording/34"),
+            text.startsWith("someone-is-home/recording/35"),
             "the format changed shape twice and the version did not move with it",
         )
     }
@@ -167,7 +167,10 @@ class RecordingTextTest {
                 ),
                 Event.EgressFired(Tick(3600), Seat(1), type, listOf(MARKERS[0], MARKERS[4]), pulseFrom = 12_345_678L),
                 Event.SyncPulseReturned(Tick(3700), Seat(2), listOf(3640L, 3670L, 3700L, 3730L)),
-                Event.EgressExpired(Tick(6100)),
+                // The house off the air and back (the owner's 2026-11-18 ruling, D-281): both ticks
+                // must survive, because the gap between them is what the event moves.
+                Event.OffAirEnded(Tick(4000), since = Tick(3800)),
+                Event.EgressExpired(Tick(6300)),
             )
             val reparsed = RecordingText.parse(record(GameState.EMPTY, events).second.toText())
             assertEquals(events, reparsed.events, "a $type Egress did not survive its own recording")

@@ -255,8 +255,17 @@ fun CheatRoot() {
     // phone's own socket. The host's goes over loopback once its house is listening again.
     DisposableEffect(link) {
         val unwatch = deviceForeground().watch(
-            onBackground = link::backgrounded,
-            onForeground = link::foregrounded,
+            // **And the house's clock is told it went off the air, and came back** (the owner's
+            // 2026-11-18 ruling, Q4 option A): an Egress running through the gap is paused for it.
+            // The authority marks it only in a round it is running, so on a guest this is nothing.
+            onBackground = {
+                link.backgrounded()
+                rules.value?.wentOffAir()
+            },
+            onForeground = {
+                link.foregrounded()
+                rules.value?.cameBackOnAir()
+            },
         )
         onDispose { unwatch() }
     }

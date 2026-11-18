@@ -8642,6 +8642,62 @@ its touch.
 
 **Not on a phone.**
 
+### D-281 · **The Egress pauses while the house is off the air, and every phone is told its number again on the return — built (recording 35), amends D-230 for the Egress alone**
+
+**The ruling** (owner, 2026-11-18, Q4 option A). D-230 kept wall time across the host's absence:
+the tick driver skips forward at the return, and every deadline that fell inside the gap fires on
+the first step after it. For the Egress that was the round: `HouseClock` minted `EgressExpired` the
+moment the host's phone came back, while nobody had been able to report or contain anything, and the
+Insiders won for a lock, an Insider host's on purpose or a Resident host's by accident. The Egress
+now pauses for the gap, as a meeting pauses it (D-133). **D-230 stands for every other clock**:
+meetings, cooldowns and the Static window keep wall time, and the host is still named at the next
+meeting.
+
+**Now.**
+
+1. **The gap is a recorded event, `Event.OffAirEnded(at, since)`**: the house's tick when it went off
+   the air and the tick it came back on. Minted by the house, never requestable, admitted in any
+   phase. The rules (`backOnAir`) pause a running, unpaused Egress at `since` (never before its
+   fire) and resume it at `at`, with `Egress.pausedAt`/`resumedAt`, the meeting's own arithmetic, and
+   send `EgressHeld(remaining, running = true, Short)`, the meeting resume's effect and buzz, so
+   every phone's widget goes back to the house's number at one moment (each counted down locally
+   through the gap, D-243). An Egress a meeting holds stays held; with no Egress running nothing
+   moves and nothing is sent. Both branches are on a fact on every widget in the building.
+2. **The lock is marked synchronously** (`OffAirMark`, held by `RoundAuthority`): `wentOffAir()` at
+   the host's background reads the tick the house stands at, in an armed round only, so on a guest
+   it is nothing; `cameBackOnAir()` at the foreground. Wired beside `link.backgrounded`/
+   `foregrounded` in `Cheats.kt`. Marked at the moment rather than noticed by the driver, because iOS
+   suspends the app with the driver asleep and its first pump after the return has already skipped
+   the gap.
+3. **The driver mints the return first** (`pumped`, now its own function): on the first pump after
+   the return, `OffAirEnded` reaches the rules before anything that pump owes. `HouseClock.turned`
+   takes `offAir` and owes no `EgressExpired` while the house is off the air or back with the gap
+   unrecorded, which covers a driver that kept running through a lock iOS did not suspend at once;
+   the next pump judges the moved deadline.
+
+**Recording 35**: one event a version 34 build cannot construct. No row changed shape.
+
+**No light, copy or other timing moved.** The buzz on the return is the existing `EgressHeld`'s
+short one, to every phone alike.
+
+**Proved, each red against the injected bug first.**
+
+- `OffAirEgressTest` (core), *a running Egress is held for the whole gap and every phone is told the
+  number again* and *a gap that began before the Egress counts only from its fire*. *The rules
+  ignoring the event:* `the deadline did not move by exactly the gap the house was off the air.
+  Expected <Tick(step=8400)>, actual <Tick(step=2400)>` and `Expected <Tick(step=3600)>, actual
+  <Tick(step=3400)>`. Its third case (a meeting's pause and a quiet house are left alone) holds either
+  way, as a negative should.
+- `OffAirDriverTest` (app), the driver's own pump against a clock that skips five minutes in one
+  step, *aHostLockedThroughTheDeadlineDoesNotHandTheRoundToTheInsiders*, and a driver that kept
+  running through the gap, *aDriverThatRanThroughTheGapMintsNoExpiryWhileTheHouseIsOff*. *`HouseClock`
+  ignoring `offAir`:* `the Egress expired on the first step after the host came back` and `the Egress
+  expired while the house was off the air`. *The rules ignoring the event:* `the Egress expired
+  before its own time had run` and `the Egress lost time to the gap`.
+
+**Not on a phone.** The lock path (`deviceForeground`, the suspension) is device behaviour; what is
+proved here is the pump against a clock that skips the gap in one step, as a suspension does.
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

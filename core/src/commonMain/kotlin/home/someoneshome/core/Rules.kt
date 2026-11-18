@@ -78,6 +78,7 @@ private fun dispatch(state: GameState, event: Event): Reduction<GameState, Effec
     is Event.EgressFired -> egressFired(state, event)
     is Event.SyncPulseReturned -> pulseReturned(state, event)
     is Event.EgressExpired -> withEgress(state) { egressExpired(state) }
+    is Event.OffAirEnded -> backOnAir(state, event)
 
     is Event.Sensed -> sensed(state, event)
 }
@@ -2048,6 +2049,34 @@ private fun pulseReturned(
         listOf(Effect.EgressContained(Haptic.Short)) + isolateOffers(next)
     }
     Reduction(next, answered + contained)
+}
+
+/**
+ * **The house is back on the air, and an Egress that was running while it was off is held for the
+ * gap** (the owner's 2026-11-18 ruling, Q4 option A).
+ *
+ * D-133's pause applied to the host's absence: the Egress is paused at [Event.OffAirEnded.since]
+ * and resumed at [Event.OffAirEnded.at], with [Egress.pausedAt] and [Egress.resumedAt], the same
+ * arithmetic a meeting uses, so the remaining time across the gap is exactly what it was when the
+ * house went off the air. Never earlier than the fire, because the countdown cannot have been
+ * running before it started. **Every phone is told the number again**, [Effect.EgressHeld] with
+ * `running = true` and the meeting resume's short buzz: each phone counted down locally through the
+ * gap (D-243), and this puts every widget back on the house's number at one moment.
+ *
+ * **Only an Egress that is running and not already paused.** One held by a meeting stays held, and
+ * the meeting's close resumes it across the whole stretch, the gap included; with no Egress running
+ * nothing moves and nothing is said. Both branches are on a fact on every widget in the building,
+ * which is the only kind rule 1 lets a client-visible path read. **No other clock is touched**:
+ * cooldowns, a meeting's phase and the Static window keep wall time (D-230).
+ */
+private fun backOnAir(state: GameState, event: Event.OffAirEnded): Reduction<GameState, Effect> {
+    val resumed = state.egress?.takeIf { it.pausedAt == null }?.let {
+        it.pausedAt(minOf(maxOf(event.since, it.firedAt), event.at)).resumedAt(event.at)
+    }
+    val restarted = resumed?.let {
+        listOf(Effect.EgressHeld(it.remainingAt(event.at), running = true, haptic = Haptic.Short))
+    } ?: emptyList()
+    return Reduction(if (resumed == null) state else state.copy(egress = resumed), restarted)
 }
 
 /**
