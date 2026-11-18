@@ -8290,6 +8290,147 @@ sweep 130, core 326, harness 127, model 300 (iOS Simulator) and 302 (JVM), platf
 every `vocabularyLint`, `armingCordon`, `benchSeedCordon`, `seedSourceCordon`, `redactionLint` and
 `boundaryCheck` clean. **Not on a phone.**
 
+### D-276 · **What the app allocates, measured per seat and per call site, and the biggest sources cut without moving a byte on the wire; the in-app allocation counter is gone because it could not be honest — built, rule 7 still not met on the host**
+
+**How it was measured.** A measurement build of the app, never committed: objects from malloc
+(`-Xallocator=std`), collections only when asked, a worker forcing one every second and logging the
+Kotlin heap's own byte count either side, validated within 2 % by a known allocation (1 000 ×
+`ByteArray(1024)` read as 1.25 × its payload, the std allocator's own sizes). Run on every seat of a
+scripted hunt round (`hunt.sh --all-env`), the round window being the host's ARMED to ENDING. **The
+Simulators are wire-only seats**: no radio, torch, camera or motor, so nothing here measures the radio's
+callbacks (D-217's 10 to 16 KB/s estimate stands beside these figures, not inside them). **Call sites**
+by full malloc stack logging (`MallocStackLoggingNoCompact`, every allocation event streamed through
+`malloc_history -allEvents` and summed by Kotlin frame, 40 s from ARMED + 5 s), keeping only events
+that went through the Kotlin allocator; the collector's own buffers, which the forced collection
+makes, are left out. **Per operation** on Kotlin/Native by the same heap count around 500 calls, and
+on the JVM by the thread's exact allocation counter.
+
+**What it found, on D-275's code** (6 seats, round 1; 3 seats in brackets):
+
+| seat | before | after |
+|---|---|---|
+| host | **1.98 MB/s** (1.25) | **1.48 MB/s** (0.94) |
+| guests, mean (range) | 0.84 (0.66–0.97) (0.62) | 0.66 (0.48–0.83) (0.47) |
+
+Where the host's went (Kotlin heap, 6 seats, ≈ 1.66 MB/s in that window, before): the socket layer
+(Ktor over kotlinx-io, a fresh 8 KB segment for most frames in and out) **≈ 450 KB/s**; the house taking
+each upload (unpack, slot, contacts) ≈ 210; reading frames off the socket ≈ 180; composition ≈ 170
+and drawing ≈ 100; the host's own upload ≈ 120; the bench and its watchers, which a release build
+does not carry (`ParityCheckScreen`, `RoundCheat`, `ContactAct`, `ScreenLedger`, `LineWatch`) ≈ 200.
+A guest's (≈ 0.51 MB/s in its window): composition ≈ 130 and drawing ≈ 55, its own upload ≈ 115, the
+socket ≈ 60, the client transport ≈ 65, the bench's watchers ≈ 40. That is the ≈ 0.8 MB/s the first
+measurement could not place.
+
+The same window, before → after, KB/s of Kotlin heap by where the work started (6 seats):
+
+| component | host | guest |
+|---|---|---|
+| socket layer (Ktor, kotlinx-io) | 449 → 464 | 58 → 60 |
+| the house taking each upload (`LobbyHouse.attend`) | 211 → 82 | — |
+| frames read off the socket (`TransportHost` / `TransportClient`) | 181 → 62 | 53 → 15 |
+| composition (`CheatRoot` → `FlowHost`) | 170 → 111 | 131 → 110 |
+| this phone's own upload (`RoundOverTransport.upload`) | 118 → 23 | 116 → 23 |
+| drawing (the display link) | 104 → 102 | 56 → 56 |
+| pushes applied (`RoundOverTransport.run`) | 23 → 6 | 23 → 6 |
+| the bench and its watchers | ≈ 200 → ≈ 95 | ≈ 27 → ≈ 27 |
+| **total** | **1 659 → 1 085** | **513 → 338** |
+
+No UI code changed, so composition's 20 to 60 KB/s fall is the two windows not showing the same
+screens for the same seconds, not a saving; read it as the size of that variation.
+
+**Per call, Kotlin/Native, before → after:**
+
+| call | who, how often | before | after |
+|---|---|---|---|
+| `SightingUpload.pack` | every phone, a beat | 120.0 KB | 9.6 KB |
+| `LobbyWire.decodeOrNull` on a round body | every phone, every push and every upload's answer | 14–15 KB (it threw) | 0.06 KB |
+| `SightingUpload.unpack` | the host, a seat a beat | 24.1 KB | 3.9 KB |
+| `TransportWire.decodeOrNull`, an upload's frame | the host, a seat a beat | 11.1 KB | 7.2 KB |
+| `RequestSlot.read`, an empty slot | the host, a seat a beat | 2.3 KB | 0.1 KB |
+| a frame's text off the socket | everybody, every frame | Ktor's `readText` | one strict UTF-8 decode |
+
+**What changed, and why none of it moves a byte, a frame, a beat or a light.**
+
+1. **`Hmac.Keyed` and a reusable SHA-256 engine.** The pads are derived once per key and the engine's
+   three arrays are reused, so a MAC under a held key allocates nothing; `Hmac.sha256` and
+   `Sha256.digest` are those, built once per call. Pinned by RFC 4231 as before.
+2. **`hexBytes` reads characters in place** instead of a two-character substring per byte (a seed's
+   sixteen bytes were seventeen objects, every token and every filler).
+3. **`pack` writes every slot straight into one array** (one keyed MAC for the whole filler) and
+   sorts slot indices by their text; **`unpack` reads off the body in place.** Pinned to an outside
+   computation (Python's `hmac`, the same filler, sorted and joined) and compared, over 48 spreads of
+   seed, window, counter and readings, with the code as it was before (kept in the test).
+4. **A body is turned away by its leading `"type"` when it is plainly the other family's**
+   (`ForeignBody`). Every phone offered every round frame to the lobby's decoder first, and the host
+   every lobby body to the round's: the answer was null either way, and it was reached by throwing.
+   Exact: only `{"type":"NAME"` with NAME not one of the family's serial names (read off its own
+   descriptor) is decided; anything else is decoded in full as before.
+5. **A `Carry` exactly as `encode` writes one is read by hand**, unescaping only `\"` and `\\`; any
+   other escape, whitespace, key or control character goes to the general decoder. Into a `CharArray`:
+   the same loop into a pre-sized `StringBuilder` measured **60 KB** for one upload on Kotlin/Native,
+   five times the general decoder, and on the JVM it was the cheapest of the three. **A JVM figure
+   says nothing about this runtime's builders**; every change here was measured on Kotlin/Native too.
+6. **An empty request slot is recognised without decoding** (384 zero bytes are exactly 512 `A`s in
+   unpadded base64, and nothing else spells them) and **built from a tail encoded once**.
+7. **A frame's text is the standard library's strict UTF-8 decode of its bytes**; a fragment or bytes
+   that are not valid UTF-8 go to Ktor's `readText` as before, so they get its answer.
+
+Not taken: a hand-written `Carry` encoder (3.3 KB a frame saved on Kotlin/Native, worse on the JVM, so
+no JVM guard could hold it, and a wire-exactness risk for 1 % of the budget).
+
+**Guards, each proven red on the code before D-276** (JVM, exact per-thread counter; the injected
+failure quoted):
+
+- `UploadAllocationTest`: unpack ≤ 4 KB (*old:* `unpacking one upload allocates 18136 bytes, over its
+  ceiling of 4096`); pack ≤ 12 KB (*old:* `packing an upload that heard nothing allocates 59122 bytes`);
+  a seed's bytes ≤ 64 B (*old:* `800 bytes`); a keyed MAC into a held array 0 B (*injected an engine per
+  call:* `440 bytes, over its ceiling of 0`); an empty slot built ≤ 1.25 KB (*old:* `2128 bytes`) and
+  read ≤ 256 B (*old:* `1672 bytes`).
+- `WireDecodeAllocationTest`: a round body to the lobby's decoder, and a standing to the round's,
+  ≤ 64 B (*shortcut off:* `10537 bytes` and `10473 bytes`); an upload's frame ≤ 10 KB with a body
+  holding one character past Latin-1, so the JVM keeps two bytes a character as Kotlin/Native does
+  (*general decoder:* `12894 bytes`).
+- Equivalence, each run on iOS and the JVM: `SightingUploadTest` (above), `ForeignBodyTest` (both
+  decoders against the plain decode on both families and on texts the shortcut must not decide),
+  `CarryReadTest` (*injected: any escape taken verbatim:* `expected Carry(body=a\nb) but was
+  Carry(body=anb)`), `RequestSlotTest` (an empty slot with any one character changed reads as
+  nothing), `FrameTextTest` (iOS: the strict decode against `readText`, multi-byte and invalid bytes).
+
+**`AllocationBudget`'s counter is removed.** `allocatedBytesSinceStart()` rebuilt a total from the
+collector's heap-before minus heap-after-the-last-collection. Under the allocator the app ships with
+that moves in the allocator's pages (64 to 256 KiB) and misses blocks reused between collections: one
+kilobyte of arrays read as 1.31 MB, the same work read 52 to 437 KB/s, and D-272's sensor upload read
+32 to 78 B. It had no caller. Kotlin/Native has no honest per-object count for the shipping allocator,
+and the std allocator that gives one changes the collector being budgeted, so nothing replaces it in
+the app; D-063's *asserted continuously* is not met in-app and is held by the per-call guards and
+the measurement build instead. The radio's TODO says so.
+
+⚠️ **Raised, not decided: the budget's own figures were read with that counter.** `FINDINGS.md`'s
+*measured MB/s* (0.54, 1.46, 3.00) came from the same GC-epoch reconstruction. At a steady high
+rate of large arrays, pages fill and the count is probably near the truth, but that is unverified. The
+cliff should be re-read on a phone with the validated method before 0.5 MB/s is treated as a number
+in the same units as the table above.
+
+**Rule 7 is still not met on the host, and here is what it would take.** Extrapolated linearly
+through 3 and 6 seats (the 3-seat bench round is a shorter script, so take it as rough): **host 18
+seats ≈ 4.9 MB/s before, ≈ 3.6 MB/s after**; a guest stays near 0.5–0.7. What is left, largest first:
+
+- **The socket layer, ≈ 450 KB/s at 6 seats and growing with them.** Ktor's websocket writes and
+  reads each frame through kotlinx-io buffers, and on Kotlin/Native a segment is a fresh 8 KB array.
+  The fix is below this code: pooled segments in kotlinx-io, or a transport that reads and writes
+  frames from held buffers. Either is a dependency or transport change, which this unit did not make.
+- **Composition and drawing, ≈ 270 KB/s on the host and ≈ 185 on a guest.** Every state change
+  rebuilds `PanelVals` and recomposes the screen it reaches, and `FlowHost` provides a fresh
+  `PanelActions` on each. Narrowing that is a UI restructure next to the light rules (D-077, D-093,
+  D-118), not an allocation fix, and is left for a unit that can render every family before and after.
+- **The bench**, ≈ 200 KB/s on the host, ≈ 40 on a guest: playtest and debug only.
+- Smaller: encoding the upload (21 KB a beat a phone: 10.4 body, 10.7 frame), the round body's
+  decode (4.7 KB a seat a beat), the answer (1.7 KB), the rules' contacts (≈ 35 KB/s).
+
+**No wire, frame count, size, cadence, timing, light or rule moved**: every frame is the bytes it was
+(compared character for character where it is built, and decoded to the same value where it is read),
+and the same uploads, answers and pushes go at the same moments to the same seats.
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).
