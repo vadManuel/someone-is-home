@@ -397,7 +397,20 @@ class LobbyHouse(
         // The seat keeps its place in the stream and collects the message when it asks, so this is
         // a report of a delay rather than of a loss.
         onUnreachable = { seat -> onEvent("A SEAT COULD NOT BE REACHED — ${seat.index}") },
+        // **A replay waits for the phone's socket, and never fills its live queue** (V2, D-268).
+        resend = { seat, frame ->
+            val server = host ?: error("the house is not up — the frame was not said again")
+            server.resend(seat, frame)
+        },
     )
+
+    /**
+     * **Which round of the evening this house is on** (V1, D-267): 1 at the start, one more at every
+     * [roundEnded]. Every push is marked with it and the standing carries it, so a phone that was
+     * off the air when a round ended knows it the moment it is seated again. Written and read on
+     * [scope], with the desk.
+     */
+    private var round = 1
 
     /**
      * **The round's inbound half, on the same server the outbound half is on.**
@@ -686,6 +699,10 @@ class LobbyHouse(
     /** **Deleted when the round ends** — the host's half of the promise. */
     fun roundEnded() {
         desk.roundEnded()
+        // **The next round's number, before anything is said** (V1, D-267): the standing below
+        // carries it, and the effect wire marks every push of the next round with it.
+        round += 1
+        val next = round
         // **And every other phone is told**, which is what E-R2-10 / E-P3-5 was: the wipe below is
         // this desk's, the walk back to the lobby is each phone's, and nothing joined them. Sent
         // BEFORE `publish`, so a client acts on the moment and then receives the standing that
@@ -695,7 +712,7 @@ class LobbyHouse(
         // The retained streams are a round's worth of one house's messages and outlive nothing.
         // Wiped in the same method the lines are, so what the house holds about an evening ends
         // when the evening does rather than when somebody remembers.
-        scope.launch { effects.roundEnded() }
+        scope.launch { effects.roundEnded(next) }
         publish()
     }
 
@@ -906,7 +923,8 @@ class LobbyHouse(
         // right, and every frame it waits is a frame the player is reading something stale.
         RoundWire.decodeOrNull(carried)?.let { round ->
             when (round) {
-                is RoundBody.Gap -> scope.launch { effects.reassert(seat, round.held) }
+                // One replay per seat, from the latest point asked, paced by the phone (V2, D-268).
+                is RoundBody.Gap -> scope.launch { effects.reassert(seat, round.held, round.round) }
                 // The house's to send, never to receive. A client that pushed one is claiming to be
                 // the authority, and it is told nothing at all.
                 is RoundBody.Push -> Unit
@@ -968,7 +986,8 @@ class LobbyHouse(
         }
     }
 
-    private fun publish() = announce(TransportFrame.Carry(LobbyWire.encode(desk.standing())))
+    /** The standing, with the round of the evening the house is on (V1, D-267). */
+    private fun publish() = announce(TransportFrame.Carry(LobbyWire.encode(desk.standing().copy(round = round))))
 
     /**
      * **"I have your report of [onset]"**, to the one seat that sent it (`RoundBody.FaultHeard`,
@@ -1343,34 +1362,31 @@ class LobbyOverTransport(
                 round?.arrived(frame)
                 val body = carried?.let(LobbyWire::decodeOrNull)
                 when (body) {
-                    is LobbyBody.Standing -> onStanding(body)
-                    // **The evening turned over** (D-157). The round's inbox goes first and
-                    // unconditionally — it holds a sequence for a round that no longer exists, and
-                    // a phone carrying it into the next one would refuse that round's opening
-                    // pushes as frames it already had. Then the panel is told, which is the half
-                    // this class cannot do itself.
-                    //
-                    // **Answering it ends nothing** (H1 of the 2026-11-17 hunt). The panel's answer
-                    // is `FlowModel.newRound`, the same call the host's NEW ROUND makes, and that
-                    // call comes back into [roundEnded] below. Taken there as a new end, the host's
-                    // own phone, which hears its broadcast over loopback like everybody, broadcast
-                    // it again, heard it again, and so on: hundreds of RoundEnded a second, every
-                    // pass wiping the desk's names, until the host crashed. So [roundEnded] is told
-                    // that this is the house's push being answered, and keeps only its local half.
-                    //
-                    // **The name goes back up from here, once**: the desk dropped every name with
-                    // the lines (D-115), and this is the one moment every phone, the host's
-                    // included, knows the desk has done it.
-                    is LobbyBody.RoundEnded -> {
-                        handedLine = null
-                        round?.roundEnded()
-                        answeringTheHouse = true
-                        try {
-                            onRoundEnded()
-                        } finally {
-                            answeringTheHouse = false
+                    // **The standing says which round the house is on** (V1, D-267). Higher than the
+                    // round this phone holds, and this phone missed the round's end while it was off
+                    // the air (`RoundEnded` is sent once and never again): it ends its own here, as
+                    // if the push had reached it, before anything else. Then, on the first standing
+                    // after a seating, the line goes back up if this phone still holds one, which it
+                    // does only if the round it was handed over for is still this one.
+                    is LobbyBody.Standing -> {
+                        val held = houseRound
+                        if (body.round > 0) houseRound = body.round
+                        if (held != null && body.round > held) {
+                            onEvent("THE HOUSE IS ON ROUND ${body.round} AND THIS PHONE WAS ON $held — ITS END WAS MISSED, AND IS TAKEN HERE")
+                            houseEndedTheRound()
                         }
-                        client?.let { live -> scope.launch { live.send(naming(residentName)) } }
+                        if (lineOwed) {
+                            lineOwed = false
+                            handedLine?.let { line -> client?.let { live -> scope.launch { live.send(handover(line)) } } }
+                        }
+                        onStanding(body)
+                    }
+                    // **The evening turned over** (D-157): see [houseEndedTheRound], which is also
+                    // what a standing naming a later round does (V1, D-267). The standing that
+                    // follows this push names the next round, and this phone takes it as it stands.
+                    is LobbyBody.RoundEnded -> {
+                        houseRound = null
+                        houseEndedTheRound()
                     }
                     // **The host closed the house** (E-PAY-6). The round's inbox goes first and
                     // unconditionally for `RoundEnded`'s reason, and then this phone hangs up: the
@@ -1411,12 +1427,14 @@ class LobbyOverTransport(
                         // **And the line, for the same reason** (H2, D-225): the desk dropped it
                         // with the connection, and the screen still says HANDED OVER. Sent after
                         // the name, on the same socket, by the same one body that always carries it.
-                        client?.let { live ->
-                            scope.launch {
-                                live.send(naming(name))
-                                handedLine?.let { live.send(handover(it)) }
-                            }
-                        }
+                        //
+                        // **But not before the house has said which round it is on** (V1, D-267).
+                        // The standing every seating is sent comes first: a phone that was off the
+                        // air across NEW ROUND still held the last round's line, sent it back up,
+                        // and the desk filed it as this round's, so the house armed a round with a
+                        // line its owner typed for the one before. Owed here, sent on that standing.
+                        client?.let { live -> scope.launch { live.send(naming(name)) } }
+                        lineOwed = true
                         // **On every seating, exactly as the name is re-sent on every seating**,
                         // and for the mirror of that reason: the name is what the house has to be
                         // told again, and the pushes are what this phone has to ask for again. A
@@ -1555,6 +1573,45 @@ class LobbyOverTransport(
     private var answeringTheHouse = false
 
     /**
+     * **The house ended the round: this phone ends its own** (D-157), whether `RoundEnded` reached
+     * it or the standing said so later (V1, D-267). The round's inbox goes first and unconditionally
+     * (it holds a sequence for a round that no longer exists); the line typed for it goes; the panel
+     * is told, which is the half this class cannot do; and the name goes back up, because the desk
+     * dropped it with the lines (D-115).
+     *
+     * **Answering it ends nothing** (H1 of the 2026-11-17 hunt). The panel's answer is
+     * `FlowModel.newRound`, the same call the host's NEW ROUND makes, and that call comes back into
+     * [roundEnded]. Taken there as a new end, the host's own phone, which hears its broadcast over
+     * loopback like everybody, broadcast it again, heard it again, and so on until it crashed. So
+     * [roundEnded] is told that this is the house's end being answered, and keeps only its local half.
+     */
+    private fun houseEndedTheRound() {
+        handedLine = null
+        round?.roundEnded()
+        answeringTheHouse = true
+        try {
+            onRoundEnded()
+        } finally {
+            answeringTheHouse = false
+        }
+        client?.let { live -> scope.launch { live.send(naming(residentName)) } }
+    }
+
+    /**
+     * **The round of the evening this phone last heard the house say it was on** (V1, D-267), off
+     * the standing; null before the first standing, and from a `RoundEnded` until the next one names
+     * the round that follows. Kept across reconnects, which is the whole of its use.
+     */
+    private var houseRound: Int? = null
+
+    /**
+     * **A seating that has not yet sent this phone's line back up** (V1, D-267): set at every
+     * seating and spent on the standing that follows it, after that standing has had its say about
+     * the round.
+     */
+    private var lineOwed = false
+
+    /**
      * **This phone stands up and walks out.**
      *
      * The socket goes down and the *host's* desk does the arithmetic: `TransportHost.onLost` calls
@@ -1672,6 +1729,9 @@ class LobbyOverTransport(
         // its screen may sleep (T4, D-221). Harmless when it already holds nothing.
         round?.left()
         handedLine = null
+        // A phone that walked out holds no house's round: the next house it joins is taken as it is.
+        houseRound = null
+        lineOwed = false
         clientJob?.cancel()
         clientJob = null
         client = null

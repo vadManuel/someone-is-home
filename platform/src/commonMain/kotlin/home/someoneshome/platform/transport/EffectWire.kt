@@ -61,16 +61,41 @@ class EffectWire(
      * detect* — so the one thing that may never happen here is a swallowed write.
      */
     private val onUnreachable: (Seat) -> Unit = {},
+    /**
+     * **Host → one seat, for a frame said again** (V2, D-268). In production `TransportHost::resend`:
+     * it waits until that seat's own writer takes the frame, so a replay is paced by the phone's
+     * socket, never fills the live queue every other frame shares, and never counts against that
+     * queue's cap (`OUTBOUND_FRAMES`). Throws, as [send] does, when no connection holds the seat. By
+     * default [send], for a construction with no socket under it.
+     */
+    private val resend: suspend (Seat, TransportFrame) -> Unit = send,
 ) {
 
-    /** One seat's stream: where its numbering is, and what it has been sent. */
+    /**
+     * One seat's stream: where its numbering is, and what it has been sent.
+     *
+     * [held] is in sequence order from 1 with no hole, so push `n` is `held[n - 1]`.
+     *
+     * [replaying] is true while [reassert] is saying the stream again, and then [emit] files a new
+     * push here without writing it: the replay writes it, in order, when it gets there (V2, D-268).
+     * [wanted] is the latest point a phone asked to be replayed from that the replay has not yet
+     * taken up.
+     */
     private class Stream {
         var seq: Long = 0
         val held = mutableListOf<RoundBody.Push>()
+        var replaying = false
+        var wanted: Long? = null
     }
 
     private val gate = Mutex()
     private val streams = HashMap<Int, Stream>()
+
+    /**
+     * **Which round of the evening every push is marked with** (V1, D-267): from 1, moved by
+     * [roundEnded] to the house's next. Read and written under [gate].
+     */
+    private var round: Int = 1
 
     /**
      * **Resolve one effect through the emit boundary and push it to every seat it is permitted to.**
@@ -84,9 +109,12 @@ class EffectWire(
         gate.withLock {
             for (delivery in EmitSchema.deliveries(effect, state)) {
                 val stream = streams.getOrPut(delivery.seat.index) { Stream() }
-                val push = RoundBody.Push(seq = ++stream.seq, message = message)
+                val push = RoundBody.Push(seq = ++stream.seq, message = message, round = round)
                 stream.held += push
-                write(delivery.seat, push)
+                // A seat being caught up gets this from its replay, after everything before it
+                // (V2, D-268). Written now, it would land ahead of the frames the phone is still
+                // waiting for, and each of those would open a gap the phone asks about again.
+                if (!stream.replaying) write(delivery.seat, push)
             }
         }
     }
@@ -116,13 +144,73 @@ class EffectWire(
      * The other half of D-097's requirement, and it is kept on the client: [RoundInbox] drops any
      * sequence it already holds, so a re-assertion that overlaps what a phone has is bytes it
      * discards rather than state it applies twice.
+     *
+     * ### One replay per seat, paced by the phone, from the latest point asked (V2, D-268)
+     *
+     * Until D-268 every ask was answered with its own full copy, written under [gate] onto the
+     * seat's one live queue. A phone that asked five times was queued five copies, and a seat's
+     * queue holds `OUTBOUND_FRAMES` (512) before the house drops the link (D-244): a lagging phone
+     * was dropped, came back, asked, and was dropped again, and a relaunched phone (holding nothing)
+     * in a seat with more than 511 pushes could never be caught up at all.
+     *
+     * So a seat has at most one replay. An ask that arrives while one is running is not answered
+     * separately: it moves the running replay to the point it names, which is where that phone now
+     * is (a new connection's ask), and the replay carries on from there. The replay writes one frame
+     * at a time through [resend], outside [gate], waiting for the phone's socket each time, so it is
+     * never more than a frame ahead of what the phone is taking. While it runs, a new push for the
+     * seat is filed and left to the replay ([emit]), so the phone sees one stream in order and no
+     * gap opens behind it. At the end of the stream, found under [gate], the seat is live again.
+     *
+     * [round] is the round [held] belongs to (V1, D-267). Held in another round, it says nothing
+     * about this one, and the replay starts from the beginning of this round's stream. 0 is
+     * unmarked and [held] is taken as it stands.
      */
-    suspend fun reassert(seat: Seat, held: Long) {
-        gate.withLock {
-            val stream = streams[seat.index] ?: return@withLock
-            for (push in stream.held) {
-                if (push.seq > held) write(seat, push)
+    suspend fun reassert(seat: Seat, held: Long, round: Int = 0) {
+        val stream = gate.withLock {
+            val stream = streams[seat.index] ?: return
+            stream.wanted = if (round != 0 && round != this.round) 0L else held
+            // Merged: the replay already running takes the latest point up before its next frame.
+            if (stream.replaying) return
+            stream.replaying = true
+            stream
+        }
+        replay(seat, stream)
+    }
+
+    /**
+     * **The one replay of [stream], from the point last asked, to its end** (V2, D-268). Each frame
+     * is read under [gate] and written outside it; the end of the stream is found under [gate],
+     * which is where the seat goes back to live writes, so no push [emit] files between the two is
+     * missed.
+     */
+    private suspend fun replay(seat: Seat, stream: Stream) {
+        var at = 0L
+        while (true) {
+            val next = gate.withLock {
+                // The round ended under the replay: these pushes are nobody's any more.
+                if (streams[seat.index] !== stream) {
+                    stream.replaying = false
+                    return
+                }
+                stream.wanted?.let { from ->
+                    at = from
+                    stream.wanted = null
+                }
+                val push = stream.held.getOrNull(at.toInt())
+                if (push == null) stream.replaying = false
+                push
+            } ?: return
+            if (rewrite(seat, next)) {
+                at = next.seq
+                continue
             }
+            // The phone is gone. Stop, unless it has already asked again on a new connection; that
+            // ask is then where the replay goes on from.
+            val askedAgain = gate.withLock {
+                if (stream.wanted == null) stream.replaying = false
+                stream.wanted != null
+            }
+            if (!askedAgain) return
         }
     }
 
@@ -135,9 +223,15 @@ class EffectWire(
      * They are a round's worth of one house's messages and they outlive nothing. Called from the
      * same place `LobbyDesk.roundEnded` is called from, so that what the house is holding about an
      * evening ends when the evening does.
+     *
+     * [next] is the round every push is marked with from here (V1, D-267): the house's own count,
+     * which the lobby's standing carries too, so the two say the same number.
      */
-    suspend fun roundEnded() {
-        gate.withLock { streams.clear() }
+    suspend fun roundEnded(next: Int = round + 1) {
+        gate.withLock {
+            streams.clear()
+            round = next
+        }
     }
 
     /**
@@ -154,6 +248,20 @@ class EffectWire(
             throw cancelled
         } catch (_: Exception) {
             onUnreachable(seat)
+        }
+    }
+
+    /** [write] for a replay, through [resend]. False when the phone is not there to take it. */
+    private suspend fun rewrite(seat: Seat, push: RoundBody.Push): Boolean {
+        val frame = TransportFrame.Carry(RoundWire.encode(push))
+        return try {
+            resend(seat, frame)
+            true
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            onUnreachable(seat)
+            false
         }
     }
 }
@@ -182,6 +290,24 @@ class RoundInbox {
     var held: Long = 0
         private set
 
+    /**
+     * **The round [held] belongs to** (V1, D-267), off the pushes' own marker: 0 until a marked push
+     * has arrived.
+     */
+    var round: Int = 0
+        private set
+
+    /** True once this phone has ended [round] itself: anything still arriving for it is stale. */
+    private var closed = false
+
+    /**
+     * **Whether [push] belongs to a round after the one this phone is still in** (V1, D-267): the
+     * house ended a round while this phone was not there to hear it. The caller ends its own round
+     * then, before the push is applied. A phone holding no round (fresh, or one that has ended its
+     * own already) has nothing to end, and the push simply starts the new one.
+     */
+    fun turns(push: RoundBody.Push): Boolean = push.round > round && round > 0 && !closed
+
     /** What the caller should do with a push. */
     sealed interface Landing {
 
@@ -199,23 +325,49 @@ class RoundInbox {
         data class Gap(val held: Long) : Landing
     }
 
-    fun arrived(push: RoundBody.Push): Landing = when {
-        push.seq == held + 1 -> {
-            held = push.seq
-            Landing.Apply(push.message)
+    fun arrived(push: RoundBody.Push): Landing {
+        // **The round first** (V1, D-267). An older round's push, or one of a round this phone has
+        // already ended, is stale whatever its number: a replay still in flight when the round
+        // ended. A newer round's starts this phone from nothing.
+        if (push.round < round || (push.round == round && closed && round > 0)) return Landing.Duplicate
+        if (push.round > round) {
+            round = push.round
+            held = 0
+            closed = false
         }
-        push.seq <= held -> Landing.Duplicate
-        else -> Landing.Gap(held)
+        return when {
+            push.seq == held + 1 -> {
+                held = push.seq
+                Landing.Apply(push.message)
+            }
+            push.seq <= held -> Landing.Duplicate
+            else -> Landing.Gap(held)
+        }
     }
 
     /**
      * The socket came back. The phone still holds what it held, so this is the same request a gap
      * makes — D-097's one mechanism, arriving by its other trigger.
      */
-    fun askAgain(): RoundBody.Gap = RoundBody.Gap(held)
+    fun askAgain(): RoundBody.Gap = RoundBody.Gap(held, round)
 
-    /** A new round: this phone holds nothing of it. */
+    /**
+     * **The house ended the round: this phone holds nothing of it, and anything still arriving for
+     * it is stale** (V1, D-267). The next round's pushes carry a higher number and start afresh.
+     */
     fun roundEnded() {
         held = 0
+        closed = true
+    }
+
+    /**
+     * **This phone walked out** (LEAVE, or a house it could not reach): it holds nothing, and no
+     * round is closed to it. The house's round goes on without this phone, and a phone that comes
+     * back to it by its token is told it again from the start (D-097).
+     */
+    fun left() {
+        held = 0
+        round = 0
+        closed = false
     }
 }

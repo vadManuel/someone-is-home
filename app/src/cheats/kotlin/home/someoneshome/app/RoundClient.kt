@@ -167,6 +167,11 @@ class RoundClient(
         // in memory, which is the harder direction of the same question.
         onOutbound = { body -> watch.saw(body) },
         kept = kept,
+        // A later round's push ended this phone's round (V1, D-267): the bench's copy goes too.
+        onRoundTurned = {
+            note("A LATER ROUND'S PUSH — THE ROUND'S END WAS MISSED, AND THIS PHONE HOLDS NOTHING OF IT")
+            forgetTheBench()
+        },
     )
 
     init {
@@ -212,20 +217,21 @@ class RoundClient(
 
     override fun left() {
         note("THIS PHONE HUNG UP — IT HOLDS NOTHING OF THE ROUND, AND THE SCREEN MAY SLEEP")
-        forget()
+        round.left()
+        forgetTheBench()
     }
 
     override fun roundEnded() {
         note("THE HOUSE ENDED THE ROUND — THIS PHONE HOLDS NOTHING OF IT")
-        forget()
+        round.roundEnded()
+        forgetTheBench()
     }
 
     override fun leftTheForeground() = round.leftTheForeground()
 
     override fun backInTheForeground() = round.backInTheForeground()
 
-    private fun forget() {
-        round.roundEnded()
+    private fun forgetTheBench() {
         kinds.clear()
         order = emptyList()
         open = null

@@ -119,6 +119,16 @@ sealed class LobbyBody {
      * the nth name against the nth filled mark — asserts *who* has handed a line over, which is a
      * thing the house never said and this body cannot say. The count is a count; the names are a
      * set of people. See `LobbyScreen`, where that separation is drawn.
+     *
+     * ### [round] is which round of the evening the house is on (V1, D-267)
+     *
+     * A count from 1, one more at every NEW ROUND, and the same on every phone. It is a number and
+     * not a flag, which is the distinction [RoundEnded]'s note draws: read twice, it says the same
+     * thing twice. It is here because [RoundEnded] is sent once and never again: a phone that was off
+     * the air at that moment came back to a house on the next round still holding the last one, and
+     * the standing is the one body every seating is sent. A phone that reads a higher number than it
+     * holds missed the round's end, and ends its own there, before it says anything else. 0 is
+     * unmarked, a body from no house.
      */
     @ClientFacing
     @kotlinx.serialization.Serializable
@@ -128,6 +138,7 @@ sealed class LobbyBody {
         val linesIn: Int,
         val names: List<String> = emptyList(),
         val insiders: Int? = null,
+        val round: Int = 0,
     ) : LobbyBody()
 
     /**

@@ -45,6 +45,15 @@ data class PublicCooldown(val seconds: Int, val elapsed: Int = 0) {
     /** One second later. A clock that has run out stays run out. */
     fun secondPassed(): PublicCooldown = if (running) copy(elapsed = elapsed + 1) else this
 
+    /**
+     * **This clock, [whole] seconds after it started** (V4, D-269): read against the moment its push
+     * arrived rather than counted up a second at a time. It never reads past its end.
+     */
+    fun at(whole: Int): PublicCooldown {
+        val clamped = whole.coerceIn(0, seconds.coerceAtLeast(0))
+        return if (clamped == elapsed) this else copy(elapsed = clamped)
+    }
+
     companion object {
         /** See the class note: the phone may finish late, never early. */
         const val PAD_SECONDS: Int = 1

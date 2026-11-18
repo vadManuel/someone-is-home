@@ -94,6 +94,9 @@ kotlin {
         if (variant != "release") kotlin.srcDir("src/cheatsTest/kotlin")
         dependencies {
             implementation(kotlin("test"))
+            // Tests only: `Unplug`, a loopback relay a test can take one phone's network away with
+            // (V1, D-267). The app itself reaches sockets through `platform` alone.
+            implementation(libs.ktor.network)
         }
     }
 }

@@ -1186,6 +1186,15 @@ class FlowModel(
      * phone with no house draws the design's times whatever this says.
      */
     private val wallClock: () -> WallTime? = { null },
+    /**
+     * **This phone's monotonic clock, in milliseconds** (V4, D-269): what every clock the house
+     * starts here is stamped with when its push arrives, and read against. [wallClock]'s shape, and
+     * for its reason: `platform` holds the clock and `ui` may not see it.
+     *
+     * Null is the model's own clock, which only [secondPassed] moves: every render, and every test
+     * that stands in for `FlowHost`'s second hand.
+     */
+    private val monotonicMillis: (() -> Long)? = null,
 ) {
 
     var state: PanelState by mutableStateOf(initial)
@@ -1492,25 +1501,140 @@ class FlowModel(
     }
 
     /**
-     * **One second of every clock the house started on this phone** (D-239, D-243). Called by
-     * `FlowHost` once a second while [ticking], and by a test standing in for it. It counts from
-     * the push; see [PublicCooldown].
+     * **Every clock the house started on this phone, read against the moment its push arrived**
+     * (D-239, D-243; V4, D-269). Called by `FlowHost` at each whole second of a running clock. It
+     * counts from the push; see [PublicCooldown].
      *
      * Page 2's three public clocks fill; the meeting phase's clock ([PanelState.secondsLeft]) and
      * the Egress's ([PanelState.egressLeft]) drain, the Egress's only while the house has not held
      * it (D-133). Each stops at its end and none of them moves a screen or a light when it gets
      * there: the house does that, by a push, on its own clock (rule 5).
+     *
+     * ### A deadline, not a count of ticks (V4, D-269)
+     *
+     * Until D-269 each clock was a count of `FlowHost`'s one-second waits, and the wait restarted on
+     * any change to any clock: a push that restarted one clock threw away the part-second every
+     * other clock had run, and every wait ran a little long. An Insider's own `AbilityFired` restarts
+     * its Access bar and no other phone's, so the Insider's Revoke bar fell behind a Resident's at
+     * every fire, which is page 2 differing by role (D-142). Now each clock is stamped, at the push
+     * that started it, with this phone's monotonic time ([clocksStamped]), and a reading is the
+     * whole seconds since then. Nothing accumulates: two phones sent the same pushes agree to within
+     * the difference in when those pushes reached them, however often either redraws.
      */
-    fun secondPassed() {
-        state = state.copy(
-            revokeClock = state.revokeClock?.secondPassed(),
-            accessClock = state.accessClock?.secondPassed(),
-            egressClock = state.egressClock?.secondPassed(),
-            secondsLeft = state.secondsLeft?.let { (it - 1).coerceAtLeast(0) },
-            egressLeft = state.egressLeft?.let { left ->
-                if (state.egressHeld) left else left.copy(secondsLeft = (left.secondsLeft - 1).coerceAtLeast(0))
+    fun clocksRead() {
+        clocksStamped()
+        val now = monotonicNow()
+        val s = state
+        fun elapsed(at: Long?): Int = if (at == null) 0 else ((now - at).coerceAtLeast(0) / 1_000L).toInt()
+        val next = s.copy(
+            revokeClock = s.revokeClock?.at(elapsed(stamps.revoke)),
+            accessClock = s.accessClock?.at(elapsed(stamps.access)),
+            egressClock = s.egressClock?.at(elapsed(stamps.egress)),
+            secondsLeft = s.secondsLeft?.let { (stamps.phaseFrom - elapsed(stamps.phase)).coerceAtLeast(0) },
+            egressLeft = s.egressLeft?.let { left ->
+                if (s.egressHeld) left else left.copy(secondsLeft = (stamps.egressLeftFrom - elapsed(stamps.egressLeft)).coerceAtLeast(0))
             },
         )
+        if (next != s) {
+            state = next
+            stamps.seen(next)
+        }
+    }
+
+    /**
+     * **One second later, on a phone whose clock is the model's own** (no `monotonicMillis` handed
+     * down: every test that stands in for `FlowHost`, and every render). The model's clock moves a
+     * second and the clocks are read against it, by the same arithmetic a phone uses.
+     */
+    fun secondPassed() {
+        check(monotonicMillis == null) { "this phone reads its own clock; a second cannot be handed to it" }
+        ownMillis += 1_000L
+        clocksRead()
+    }
+
+    /**
+     * **How long until a running clock next shows a different whole second**, in milliseconds, or
+     * null when none is running. `FlowHost` waits this long between [clocksRead]s, so a clock's
+     * number turns over at its own second rather than at some other clock's.
+     */
+    fun untilNextSecond(): Long? {
+        clocksStamped()
+        val now = monotonicNow()
+        val s = state
+        val running = listOfNotNull(
+            stamps.revoke.takeIf { s.revokeClock?.running == true },
+            stamps.access.takeIf { s.accessClock?.running == true },
+            stamps.egress.takeIf { s.egressClock?.running == true },
+            stamps.phase.takeIf { (s.secondsLeft ?: 0) > 0 },
+            stamps.egressLeft.takeIf { !s.egressHeld && (s.egressLeft?.secondsLeft ?: 0) > 0 },
+        )
+        return running.minOfOrNull { at -> 1_000L - (now - at).coerceAtLeast(0) % 1_000L }
+    }
+
+    /** Whether this phone reads a monotonic clock of its own (a phone), or the model's (tests). */
+    val readsItsOwnClock: Boolean get() = monotonicMillis != null
+
+    /** The model's own clock, for a phone handed none: moved only by [secondPassed]. */
+    private var ownMillis = 0L
+
+    private fun monotonicNow(): Long = monotonicMillis?.invoke() ?: ownMillis
+
+    /**
+     * **When each clock last started, on this phone's monotonic clock** (V4, D-269), and what it
+     * started from. Not on [PanelState]: it is when this phone heard a push, which no screen draws
+     * and no other phone shares. Each is found by [clocksStamped] from the value a push wrote.
+     */
+    private class ClockStamps {
+        var revoke: Long? = null
+        var access: Long? = null
+        var egress: Long? = null
+        var phase: Long? = null
+        var phaseFrom: Int = 0
+        var egressLeft: Long? = null
+        var egressLeftFrom: Int = 0
+
+        /** The values last stamped or last read; a value other than these is a push's restart. */
+        var seenRevoke: PublicCooldown? = null
+        var seenAccess: PublicCooldown? = null
+        var seenEgress: PublicCooldown? = null
+        var seenSeconds: Int? = null
+        var seenPhase: MeetingPhase? = null
+        var seenEgressLeft: Countdown? = null
+
+        fun seen(s: PanelState) {
+            seenRevoke = s.revokeClock
+            seenAccess = s.accessClock
+            seenEgress = s.egressClock
+            seenSeconds = s.secondsLeft
+            seenPhase = s.meetingPhase
+            seenEgressLeft = s.egressLeft
+        }
+    }
+
+    private val stamps = ClockStamps()
+
+    /**
+     * **Stamp every clock a push has just (re)started with now** (V4, D-269). A page 2 clock is a new
+     * value object whenever a push restarts it (never the one [clocksRead] last wrote), the meeting's
+     * clock restarts with its phase, and the Egress's countdown is a new value at its fire, each pause
+     * and each restart. Found by comparing with what was last seen, so no push's branch has to
+     * remember to stamp anything.
+     */
+    private fun clocksStamped() {
+        val s = state
+        val now = monotonicNow()
+        if (s.revokeClock !== stamps.seenRevoke) stamps.revoke = s.revokeClock?.let { now - it.elapsed * 1_000L }
+        if (s.accessClock !== stamps.seenAccess) stamps.access = s.accessClock?.let { now - it.elapsed * 1_000L }
+        if (s.egressClock !== stamps.seenEgress) stamps.egress = s.egressClock?.let { now - it.elapsed * 1_000L }
+        if (s.secondsLeft != stamps.seenSeconds || s.meetingPhase != stamps.seenPhase) {
+            stamps.phase = s.secondsLeft?.let { now }
+            stamps.phaseFrom = s.secondsLeft ?: 0
+        }
+        if (s.egressLeft !== stamps.seenEgressLeft) {
+            stamps.egressLeft = s.egressLeft?.let { now }
+            stamps.egressLeftFrom = s.egressLeft?.secondsLeft ?: 0
+        }
+        stamps.seen(s)
     }
 
     /** Whether any clock [secondPassed] counts still has a second to count. */
@@ -2084,6 +2208,20 @@ class FlowModel(
     }
 
     /**
+     * **A later round's push reached a phone still in an earlier one** (V1, D-267): the house ended a
+     * round while this phone was off the air, and the push that says so is sent once. [newRound]'s
+     * every reset on this phone, and the walk to the lobby, so the new round's opening push walks it
+     * to ARMED as it does every seated phone (D-234). **It tells the house nothing**: the line this
+     * phone typed goes from here only ([LobbyModel.line]), never through the link, because the house
+     * ended that round long ago and a link told it again would end the one now running (D-252).
+     */
+    fun houseBeganAnotherRound() {
+        lobby.line.roundEnded()
+        roundForgotten()
+        push(ScreenId.Lobby)
+    }
+
+    /**
      * **Everything this phone holds about the round, gone; everything it holds about the evening,
      * kept** (D-259). The round boundary, on the panel side.
      *
@@ -2357,6 +2495,12 @@ class FlowModel(
      * branches that do nothing are the honest map of what the surfaces still owe.
      */
     fun houseSaid(message: RoundMessage) {
+        said(message)
+        // Every clock this push started is stamped with the moment it arrived (V4, D-269).
+        clocksStamped()
+    }
+
+    private fun said(message: RoundMessage) {
         when (message) {
             // **The lamp is not on [PanelState]** — it is `ui/Lamp.kt`'s, written from the effect
             // rather than copied into a field, so that nothing here can be stale at the one moment
@@ -3432,17 +3576,25 @@ fun FlowHost(
         }
     }
 
-    // **Every clock the house started, a second at a time** (D-239: page 2's three; D-243: the
-    // meeting phase's and the Egress's). Keyed on the values, so each second relaunches the wait
-    // and a restart (a push) begins a fresh second rather than finishing somebody else's: a partial
-    // second is dropped, which is the late direction [PublicCooldown] asks for. Nothing runs once
-    // every one of them has run out, and nothing here moves a screen or the lamp.
-    val s = model.state
-    val clocks = listOf(s.revokeClock, s.accessClock, s.egressClock, s.secondsLeft, s.egressLeft, s.egressHeld)
-    LaunchedEffect(clocks) {
-        if (model.ticking) {
-            delay(1_000L)
-            model.secondPassed()
+    // **Every clock the house started, read against the moment its push arrived** (D-239: page 2's
+    // three; D-243: the meeting phase's and the Egress's; V4, D-269). One loop for the life of the
+    // model, keyed on nothing that changes: it was keyed on the clocks' values, so every second and
+    // every push relaunched it, a push that restarted one clock threw away every other clock's part
+    // second, and the waits ran long. Each read is the whole seconds since that clock's push
+    // ([FlowModel.clocksRead]), and the loop wakes at the next whole second of whichever running
+    // clock turns over first. Nothing here moves a screen or the lamp.
+    //
+    // A model handed no clock of its own (a render, a bench with no house) is moved a second at a
+    // time instead, which is the same arithmetic on the model's own clock.
+    LaunchedEffect(model) {
+        while (true) {
+            if (model.readsItsOwnClock) {
+                model.clocksRead()
+                delay((model.untilNextSecond() ?: IDLE_CLOCK_MILLIS).coerceIn(MIN_CLOCK_MILLIS, IDLE_CLOCK_MILLIS))
+            } else {
+                delay(1_000L)
+                if (model.ticking) model.secondPassed()
+            }
         }
     }
 
@@ -3502,3 +3654,13 @@ const val SURGE_BOOT_MS: Long = 2_500L
  * somebody looking at layout on a bench can get past the check-in screen.
  */
 const val HOUSE_STAND_IN_MS: Long = 4_000L
+
+/**
+ * **How often `FlowHost` looks at the clocks when none of them is running**, and the longest it
+ * ever waits (V4, D-269): a push that starts one is read within this. A quarter second, so a bar
+ * that starts is drawn moving inside the second it started in.
+ */
+private const val IDLE_CLOCK_MILLIS: Long = 250L
+
+/** The shortest wait between two reads, so a clock that turns over now is not read twice in a frame. */
+private const val MIN_CLOCK_MILLIS: Long = 16L

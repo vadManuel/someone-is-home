@@ -10,7 +10,11 @@ import home.someoneshome.model.protocol.RoundBody
 import home.someoneshome.model.protocol.RoundMessage
 import home.someoneshome.model.protocol.RoundWire
 import home.someoneshome.model.protocol.TransportFrame
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -287,6 +291,84 @@ class EffectWireTest {
         assertEquals(emptyList(), sockets.written, "last round's messages are still on the house's desk")
         assertEquals(0L, wire.sequenceOf(Seat(0)), "the numbering carried over from a finished round")
     }
+
+    // ---- 4 · The round on every push, and one replay per seat (V1 D-267, V2 D-268) ------------------
+
+    /**
+     * **GUARD (V1, D-267): every push carries the house's round, the same on every seat, and the next
+     * round's carries the next number.** An ask holding a sequence from another round is answered
+     * from the start of this one.
+     */
+    @Test
+    fun everyPushCarriesTheRoundAndAnAskFromAnotherRoundStartsAtTheBeginning() = runBlocking<Unit> {
+        val sockets = Sockets()
+        val wire = EffectWire(sockets.wire)
+        val state = round(insiders = listOf(Seat(1)))
+
+        wire.emit(Effect.SystemIntegrityBatched(87), state)
+        assertEquals(setOf(1), sockets.written.map { it.second.round }.toSet(), "round one's pushes are not marked round one")
+        wire.roundEnded(next = 2)
+        sockets.written.clear()
+        repeat(3) { wire.emit(Effect.SystemIntegrityBatched(80 + it), state) }
+        assertEquals(setOf(2), sockets.written.map { it.second.round }.toSet(), "round two's pushes are not marked round two")
+
+        // A phone holding round one's sequence 3 asks: its 3 is not round two's.
+        sockets.written.clear()
+        wire.reassert(Seat(2), held = 3, round = 1)
+        assertEquals(listOf(1L, 2L, 3L), sockets.streamOf(Seat(2)).map { it.seq }, "round two was replayed from round one's place")
+        // Unmarked, the point is taken as it stands.
+        sockets.written.clear()
+        wire.reassert(Seat(2), held = 2)
+        assertEquals(listOf(3L), sockets.streamOf(Seat(2)).map { it.seq })
+    }
+
+    /**
+     * **GUARD (V2, D-268): a seat has one replay. An ask while it runs moves it rather than starting
+     * a second copy, and a push made while it runs waits for it, so the phone is sent one stream, in
+     * order.** The replay is held a frame at a time ([EffectWire]'s `resend`, as `TransportHost.resend`
+     * waits on the phone's socket).
+     */
+    @Test
+    fun aSeatHasOneReplayAndPushesMadeDuringItArriveAfterIt() = runBlocking<Unit> {
+        val sockets = Sockets()
+        val taken = Channel<Unit>(Channel.UNLIMITED)
+        val wire = EffectWire(sockets.wire, resend = { seat, frame ->
+            taken.receive()
+            sockets.wire(seat, frame)
+        })
+        val state = round(insiders = listOf(Seat(1)))
+        repeat(5) { wire.emit(Effect.SystemIntegrityBatched(it), state) }
+        sockets.written.clear()
+
+        val replay = launch { wire.reassert(Seat(2), held = 0) }
+        repeat(2) { taken.send(Unit) }
+        until { sockets.streamOf(Seat(2)).size == 2 }
+
+        // A push mid-replay: every other seat is written to now, seat 2 is not.
+        wire.emit(Effect.SystemIntegrityBatched(80), state)
+        assertEquals(listOf(6L), sockets.streamOf(Seat(0)).map { it.seq }, "a seat not being replayed waited on another's replay")
+        assertEquals(2, sockets.streamOf(Seat(2)).size, "a push overtook the replay it belongs behind")
+
+        // A second ask (a new connection holding 1) merges: no second copy is started.
+        val second = launch { wire.reassert(Seat(2), held = 1) }
+        second.join()
+        repeat(20) { taken.send(Unit) }
+        replay.join()
+
+        assertEquals(
+            // Frame 3 was already on its way when the second ask came; then the replay went on from 1.
+            listOf(1L, 2L, 3L, 2L, 3L, 4L, 5L, 6L), sockets.streamOf(Seat(2)).map { it.seq },
+            "the replay was not one stream from each point asked, ending with the push made during it",
+        )
+        // The replay is over: the seat is live again.
+        wire.emit(Effect.SystemIntegrityBatched(81), state)
+        assertEquals(7L, sockets.streamOf(Seat(2)).last().seq, "the seat stayed in replay after its replay ended")
+        taken.close()
+    }
+
+    private suspend fun until(condition: () -> Boolean) {
+        withTimeout(5_000) { while (!condition()) delay(1) }
+    }
 }
 
 /**
@@ -350,5 +432,32 @@ class RoundInboxTest {
         assertEquals(RoundBody.Gap(held = 1), inbox.askAgain())
         inbox.roundEnded()
         assertEquals(RoundBody.Gap(held = 0), inbox.askAgain())
+    }
+
+    /**
+     * **GUARD (V1, D-267): the round on the push decides before the sequence does.** A round the house
+     * ended is stale on this phone whatever its numbers; a later round starts from nothing; and a
+     * phone that walked out (LEAVE, D-260) is told the round it left again from the start.
+     */
+    @Test
+    fun theRoundOnThePushDecidesBeforeTheSequence() {
+        fun push(round: Int, seq: Long) = RoundBody.Push(seq, RoundMessage.SystemIntegrityBatched(seq.toInt()), round)
+        val inbox = RoundInbox()
+        inbox.arrived(push(2, 1))
+        inbox.arrived(push(2, 2))
+        assertEquals(RoundBody.Gap(held = 2, round = 2), inbox.askAgain())
+        assertTrue(inbox.turns(push(3, 1)), "a later round's push does not end the round this phone is in")
+
+        inbox.roundEnded()
+        assertTrue(!inbox.turns(push(3, 1)), "a phone that ended its round is asked to end it again")
+        assertEquals(RoundInbox.Landing.Duplicate, inbox.arrived(push(2, 3)), "a push of the round the house ended was applied")
+        assertEquals(RoundInbox.Landing.Apply(push(3, 1).message), inbox.arrived(push(3, 1)))
+        assertEquals(RoundInbox.Landing.Duplicate, inbox.arrived(push(2, 9)), "an earlier round's push was applied")
+
+        inbox.left()
+        assertEquals(
+            RoundInbox.Landing.Apply(push(3, 1).message), inbox.arrived(push(3, 1)),
+            "a phone that walked out cannot be told its round again",
+        )
     }
 }

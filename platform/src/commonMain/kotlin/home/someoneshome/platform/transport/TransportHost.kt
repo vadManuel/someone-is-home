@@ -27,12 +27,15 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
+import kotlinx.coroutines.channels.ClosedSendChannelException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** The one websocket route. Part of the wire contract, beside [TransportWire]'s JSON. */
 const val TRANSPORT_PATH: String = "/round"
@@ -43,6 +46,15 @@ const val TRANSPORT_PATH: String = "/round"
  * reading, and holding more for it is memory spent on a socket that is not coming back as it is.
  */
 const val OUTBOUND_FRAMES: Int = 512
+
+/**
+ * **How long one frame of a replay may wait for the phone before its link is dropped** (V2, D-268).
+ * A replay is paced by the socket rather than queued (`TransportHost.resend`), so [OUTBOUND_FRAMES]
+ * can no longer say a phone has stopped reading while it is being caught up; this does. Ten seconds
+ * is far past any phone that is reading, and it ends the same way a full queue does: the link goes
+ * and the phone comes back by its token.
+ */
+const val REPLAY_STALL_MILLIS: Long = 10_000
 
 /**
  * D1's host half: the embedded Ktor server that turns websockets into seats.
@@ -97,6 +109,11 @@ class TransportHost(
      * by its token and asks for what it missed (D-097). [OUTBOUND_FRAMES] in production.
      */
     private val outboundFrames: Int = OUTBOUND_FRAMES,
+    /**
+     * **How long one frame of a replay may wait for a seat's writer before the link is dropped**
+     * (V2, D-268). [REPLAY_STALL_MILLIS] in production.
+     */
+    private val stalledMillis: Long = REPLAY_STALL_MILLIS,
 ) {
 
     /**
@@ -111,6 +128,20 @@ class TransportHost(
      */
     private class Link(val id: Long, val ws: DefaultWebSocketServerSession, val job: Job?, capacity: Int) {
         val outbound = Channel<Frame>(capacity)
+
+        /**
+         * **Frames said again, handed to the writer one at a time** (V2, D-268). Rendezvous: [resend]
+         * returns when this connection's writer has taken the frame, so a replay is paced by the
+         * socket and never sits in [outbound], whose cap is for the frames the house is making now.
+         * And because the writer has taken it, anything queued after [resend] returns is written
+         * after it.
+         */
+        val again = Channel<Frame>(Channel.RENDEZVOUS)
+
+        fun close() {
+            outbound.close()
+            again.close()
+        }
     }
 
     private val gate = Mutex()
@@ -205,6 +236,31 @@ class TransportHost(
     }
 
     /**
+     * **Host → one seat, a frame said again** (V2, D-268): the effect wire's replay of what a phone
+     * missed. It waits until this seat's writer takes the frame, so a replay of a thousand pushes
+     * goes out at the pace the phone reads it and is never in the live queue, and so never counts
+     * against [OUTBOUND_FRAMES]. Until D-268 a replay went into that queue whole, and a seat with
+     * more than 511 pushes dropped every phone that asked for them, which then asked again.
+     *
+     * A phone that takes nothing for [stalledMillis] is not reading: its link is dropped, as a full
+     * live queue's is, and this throws. It throws as [send] does when no connection holds the seat.
+     */
+    suspend fun resend(seat: Seat, frame: TransportFrame) {
+        val text = Frame.Text(TransportWire.encode(frame))
+        val link = gate.withLock { links[seat] }
+            ?: error("no connection holds ${seat} — the frame was not said again")
+        val taken = try {
+            withTimeoutOrNull(stalledMillis) { link.again.send(text) }
+        } catch (_: ClosedSendChannelException) {
+            error("${seat}'s connection closed under the replay — the frame was not said again")
+        }
+        if (taken == null) {
+            dropLink(link)
+            error("${seat}'s connection took no frame of its replay in ${stalledMillis} ms — dropped")
+        }
+    }
+
+    /**
      * **End [seat]'s connection as a lost one** (D-245): its queued frames go with it, `onLost`
      * reports it, and the phone comes back by its token and asks for what it missed. What [send]
      * does to a seat that stopped draining; a test stands a socket that failed under a suspended phone
@@ -216,7 +272,7 @@ class TransportHost(
     }
 
     private fun dropLink(link: Link) {
-        link.outbound.close()
+        link.close()
         link.job?.cancel()
     }
 
@@ -261,7 +317,7 @@ class TransportHost(
         // A resume raced the old socket's end: the token owns the seat, so the newer
         // connection wins and the stale one is closed without ceremony (outside the lock —
         // closing suspends). Its queue goes with it: this phone asks for what it missed.
-        replaced?.outbound?.close()
+        replaced?.close()
         replaced?.ws?.close(CloseReason(CloseReason.Codes.GOING_AWAY, "resumed elsewhere"))
 
         onSeated(seat)
@@ -272,7 +328,18 @@ class TransportHost(
                 // coroutine. A socket that stops draining stops this and nothing else.
                 val writer = launch {
                     try {
-                        for (out in link.outbound) socketWrite(seat) { ws.send(out) }
+                        // The live queue first whenever both hold a frame (a biased select): a
+                        // replay waits on this socket, the round's frames do not wait on a replay.
+                        // Their order against each other does not matter: the live queue holds no
+                        // push for a seat being replayed (`EffectWire.emit`), only the lobby's
+                        // bodies and the upload answers.
+                        while (true) {
+                            val out = select<Frame?> {
+                                link.outbound.onReceiveCatching { it.getOrNull() }
+                                link.again.onReceiveCatching { it.getOrNull() }
+                            } ?: break
+                            socketWrite(seat) { ws.send(out) }
+                        }
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (_: Throwable) {
@@ -295,7 +362,7 @@ class TransportHost(
                         onFrame(seat, frame)
                     }
                 } finally {
-                    link.outbound.close()
+                    link.close()
                     writer.cancel()
                 }
             }

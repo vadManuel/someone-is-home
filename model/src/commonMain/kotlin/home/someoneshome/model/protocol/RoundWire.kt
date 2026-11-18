@@ -933,11 +933,24 @@ sealed class RoundBody {
      * [seq] is per seat and starts at 1. It is transport bookkeeping and nothing else: it counts
      * frames this phone was sent, so it can say nothing about how much work the house is doing or
      * how many phones there are — two seats in the same round hold entirely different numbers.
+     *
+     * ### [round] says which round the stream belongs to (V1, D-267)
+     *
+     * [seq] starts again at 1 every round, so on its own it cannot tell round 2's push 7 from round
+     * 1's. A phone that was off the air when the house ended a round never heard
+     * `LobbyBody.RoundEnded`, which is sent once and never replayed, and came back holding round 1's
+     * sequence: round 2's opening pushes all landed as duplicates (no role, no seed, no roster) and
+     * the phone stayed in round 1. With the round on every push, a phone that sees a newer one ends
+     * its own round there and then, and starts the new one from nothing.
+     *
+     * The house's round count for the evening, from 1, and the same number on every seat's push at
+     * the same moment, so it says nothing about a seat. **0 is unmarked**: no house sends it, and a
+     * stream of unmarked pushes is judged by [seq] alone, as before.
      */
     @ClientFacing
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("push")
-    data class Push(val seq: Long, val message: RoundMessage) : RoundBody()
+    data class Push(val seq: Long, val message: RoundMessage, val round: Int = 0) : RoundBody()
 
     /**
      * **Client → host. "I hold everything up to [held]; say the rest again."**
@@ -946,11 +959,15 @@ sealed class RoundBody {
      * request with different causes (D-097: *one mechanism, two triggers*). A phone that has never
      * held anything sends zero and is told the whole round it was permitted, which is what a
      * mid-round reconnect is.
+     *
+     * [round] is the round [held] belongs to (V1, D-267). A house on a later round answers from the
+     * start of its own, because a sequence held in another round says nothing about this one. 0 is
+     * unmarked, and [held] is taken as it stands.
      */
     @ClientFacing
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("gap")
-    data class Gap(val held: Long) : RoundBody()
+    data class Gap(val held: Long, val round: Int = 0) : RoundBody()
 
     /**
      * **Client → host. "I am asking for this, and it is the [seq]th thing I have asked for."**

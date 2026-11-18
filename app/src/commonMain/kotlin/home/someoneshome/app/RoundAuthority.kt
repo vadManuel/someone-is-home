@@ -152,10 +152,24 @@ class RoundAuthority(
     /**
      * The house's clock, in ticks, sampled where a request arrives.
      *
-     * It only ever moves forward: two events reduced at one tick are two events the recording
-     * cannot order, and the recording is the only debugging instrument this game has.
+     * It only ever moves forward, so no event is stamped before one reduced ahead of it.
+     *
+     * ### Only the driver moves it in a round; an arrival reads it (V4, D-269)
+     *
+     * Every arrival (a request, an upload, a radio fault, the Egress tile) used to be stamped
+     * `tick++`, one tick on top of the driver's twenty a second. At eighteen seats the uploads alone
+     * are eighteen a second, so the house's clock ran nearly twice as fast as the room's: cooldowns
+     * ended early, D-236's 2.5 s contact window was about 1.3 s, and a deadline the driver judged on
+     * its own clock (an Egress) was stamped on this one. Now an arrival is stamped with the tick the
+     * driver last set ([stamp]): arrivals in one fifty-millisecond step share it, which the rules
+     * accept (both halves of a touch already did), and the recording orders them by its own rows,
+     * where they are written in the order they were reduced. Rule 4 holds: `core` reads no clock, the
+     * stamp is the driver's, and it rides the recorded event.
      */
     private var tick: Long = 0L
+
+    /** **The tick an arrival is stamped with**: the driver's, unmoved (V4, D-269). */
+    private fun stamp(): Tick = Tick(tick)
 
     /**
      * **The home this round is being played in**, taken off the lobby at [arm] and held for the
@@ -317,7 +331,7 @@ class RoundAuthority(
     private suspend fun hear(intent: Intent) {
         heard += intent
         val before = state
-        val at = Tick(tick++)
+        val at = stamp()
         val admission = admit(state, intent, at)
         when (admission) {
             is Admission.Admitted -> {
@@ -405,7 +419,7 @@ class RoundAuthority(
             return
         }
         val resolution = resolveContacts(
-            contactMemory, Tick(tick++), contactWindow(), listOf(ContactUpload(seat, slots)), state,
+            contactMemory, stamp(), contactWindow(), listOf(ContactUpload(seat, slots)), state,
         )
         contactMemory = resolution.memory
         for (event in resolution.events) concluded(event)
@@ -435,7 +449,7 @@ class RoundAuthority(
         }
         val fate = if (namedByTheNotice(cause)) "NAMED AT THE NEXT MEETING" else "RECORDED · NAMED BY NO NOTICE (D-187)"
         note("RADIO FAULT — SEAT ${seat.index} · ${cause.name.uppercase()} · $fate")
-        concluded(Event.RadioFaulted(Tick(tick++), seat, cause))
+        concluded(Event.RadioFaulted(stamp(), seat, cause))
     }
 
     /** One event the resolver minted, admitted; refused, it is recorded and answered with nothing. */
@@ -482,7 +496,7 @@ class RoundAuthority(
             abilityLog(abilityLineDeclined(AbilityRequest.Egress, actor, "NO HOME TO DRAW ONE IN", namesSeats))
             return false
         }
-        val fired = egressFor(now(), actor, state, here.map, here.plan, anchorMillis = hostMillis())
+        val fired = egressFor(stamp(), actor, state, here.map, here.plan, anchorMillis = hostMillis())
         if (fired == null) {
             note("NO EGRESS — THE HOUSE DECLINED TO DRAW ONE")
             abilityLog(abilityLineDeclined(AbilityRequest.Egress, actor, "THE HOUSE DREW NO EGRESS", namesSeats))

@@ -7392,16 +7392,6 @@ whose upload was lost, **2 008 ms**. Checked against what is time-critical:
 | `ui` `Flow`, `app` `HouseBuzzer`, `harness` `Transcript` | (new) | a named no-op, silent, one transcript row |
 | `harness` `Recording.HEADER` | `recording/28` | `recording/29` |
 
-
-## Revision 79 — every phone measures the house's clock, and the Sync Pulse is scheduled on it
-
-*2026-11-17, overnight run, unit C12: the decision-free half of the containment spec
-(`_bmad-output/implementation-artifacts/containment-spec-2026-11-17.md`, C1, C2 and the
-`SyncPulseAnswered` width). C3 (the screen), C4 (the felt pulse) and C5 (the bench through the screen)
-wait for the owner's O1-O5 and the pack's Q4. **No screen reads any of this yet, so no Egress can be
-contained on real phones yet either.** Desktop, loopback and the iOS-Simulator unit-test target only;
-nothing here has been on a phone.*
-
 ### D-264 · **Every phone measures the house's clock on its one socket, on one schedule whatever its role — built**
 
 **What was missing.** The host has answered `TimeProbe` with its monotonic milliseconds since
@@ -7609,6 +7599,202 @@ iOS Simulator), core 313, harness 123, platform 203, app 192, ui desktop 651, ui
 `redactionLint`, the cordons and the boundary checks clean. The unsigned Playtest device build
 compiles. **Not on a phone; no screen, haptic or bench uses the clock or the grid yet.**
 
+### D-267 · **Every push carries the round it belongs to, and the standing names the round the house is on: a phone that was off the air when a round ended ends its own the moment it is seated again — built**
+
+**What broke** (V1 of the second review). `RoundBody.Push.seq` starts again at 1 every round and
+`LobbyBody.RoundEnded` is sent once, to the phones connected at that moment, and never replayed. A
+guest whose network went during round one (locked, out of range) came back after NEW ROUND still in
+round one: its inbox held round one's sequence, so round two's opening pushes, numbered from 1, were
+dropped as duplicates (no role, no seed, no roster); its radio stayed on round one's seed; a report it
+owed from round one (D-245) went up into round two; and **at its seating it sent the line typed for
+round one back up, which the desk filed as round two's** (`LobbyOverTransport` re-sends the line on
+every seating, H2/D-225), so the house could arm round two with a line its owner wrote for round one,
+with that phone still on round one's screen. `MissedRoundEndTest` reproduced it over loopback: with
+the fix disabled the guest stays on round one's HOME screen.
+
+**The fix, two markers, one decision each:**
+
+1. **`LobbyBody.Standing.round`**: the house's round of the evening, from 1, one more at every
+   NEW ROUND (`LobbyHouse.round`, written with the desk). The standing is the one body every seating
+   is sent, so a phone reads it before anything else of the new connection. A number, not a flag:
+   read twice it says the same thing, which is the objection `RoundEnded`'s note raises against a flag.
+   **A phone that reads a higher number than it last heard missed the round's end, and ends its own
+   there** (`houseEndedTheRound`, the same steps `RoundEnded` takes: the round half, the typed line,
+   `FlowModel.newRound` under D-252's guard, the name back up). **The line a seating owes the house
+   now goes up on the first standing after the seating, not at the seating**, so it is sent only if
+   it was typed for the round the house is on.
+2. **`RoundBody.Push.round`**, the same number, on every push, the same for every seat at a moment
+   (no size differs by seat). `RoundInbox` judges the round before the sequence: an older round's
+   push, or one of a round this phone ended, is stale; a later round's starts it from nothing. **A
+   phone still in an earlier round when a later round's push arrives ends its round there first**
+   (`RoundOverTransport`: its own reset, then `FlowModel.houseBeganAnotherRound`, which is
+   `newRound`'s panel reset and walk to the lobby **without telling the link**, so a host's phone can
+   never re-end a round over loopback, D-252). Over loopback the standing gets there first, so this is
+   the second defence; it is proven on its own (`RoundMarkerTest`).
+3. **`RoundBody.Gap.round`**: the round the phone's sequence is in. A house on another round
+   replays from the start of its own.
+4. **Leaving is not ending** (`RoundInbox.left`, `RoundOverTransport.left`): a phone that walked out
+   (LEAVE, D-260's exit) holds nothing and no round is closed to it, so coming back to the same round
+   by its token it is told that round again from the start (D-097).
+5. **Owed reports** were already scoped to a round by the seed's fingerprint on a relaunch (D-245);
+   in a living process the boundary above now drops them, so none crosses into the next round.
+
+**Guards, each proven by breaking it.**
+
+- `MissedRoundEndTest` (app cheats; five phones over loopback as `CheatRoot` builds them; one guest
+  reaches the house through `Unplug`, a loopback relay the test unplugs, so the house really loses
+  the socket and the guest's reconnects are really refused). The guest locks mid-round one (it owes
+  the leave), its network goes, round one is played to the Insiders' ending and NEW ROUND pressed
+  without it; its network comes back. It is walked to the lobby with a panel equal to a fresh
+  lobby's, owes nothing, uploads nothing, and the desk counts no line from it; round two arms with
+  its new line, it holds its role, seed and roster, and round two's first notice names nobody.
+  *Injected (the standing check disabled):* `never happened: the guest was walked to the lobby on
+  Home`.
+- `RoundMarkerTest.aLaterRoundsPushEndsTheRoundThePhoneIsStillIn` (a real `RoundOverTransport` and
+  `FlowModel`; fifty round-one pushes held and a leave owed, then round two from 1). *Injected (the
+  inbox ignores the round):* `never happened: round two's opening was applied`. *Injected (the turn
+  in `RoundOverTransport` removed):* `round one's line is still typed`.
+- `RoundInboxTest.theRoundOnThePushDecidesBeforeTheSequence`,
+  `EffectWireTest.everyPushCarriesTheRoundAndAnAskFromAnotherRoundStartsAtTheBeginning` (platform).
+- `tools/sim-hunt/hunt.sh --seats 5 --tail 180 --relaunch-guest 2` (wire-only Simulator seats, seed
+  20261150; `/tmp/someones-home-hunt/t1-r5`). Round one to ENDING (Insiders by an uncontained
+  Egress), seat 2 stopped there; round two armed with four seats and played to its ENDING (Insiders by
+  parity); seat 2 relaunched at AGAIN-ARMED, resumed its seat by its token, sat in the lobby with a
+  clean panel, was pushed nothing of round two, and was named by no notice. No seat logged a missed
+  frame or a crash; each seat's radio reported once per round it was in (seat 2 once).
+
+**Not built, raised:** a phone relaunched (or seated) while a round it is not in is running sits in
+the lobby, which counts it ("5 JOINED") beside a round of four. A mid-round arrival has no screen of
+its own yet.
+
+**No recording change**: no event or state row moved.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `model/protocol` `RoundBody.Push`, `RoundBody.Gap` | `seq`, `message`; `held` | and `round` (0 unmarked) |
+| `model/protocol` `LobbyBody.Standing` | counts, names, setting | and `round` |
+| `platform` `EffectWire` | unmarked pushes | every push marked; `roundEnded(next)`; a `Gap` from another round replays from 1 |
+| `platform` `RoundInbox` | the sequence only | the round first; `turns`; `left` |
+| `app` `LobbyHouse.roundEnded`, `publish` | | the round counted, carried on the standing and the wire |
+| `app` `LobbyOverTransport` client | the line re-sent at every seating | the standing's round checked first; the line on that standing |
+| `app` `RoundOverTransport`, `RoundClient` | | a later round's push ends this phone's round first; `left` |
+| `ui` `FlowModel.houseBeganAnotherRound` | (new) | `newRound` without the link |
+| `app` cheats `LobbyCheat` | | `SOMEONES_HOME_LOBBY_SEATS_AGAIN`, the party for later rounds |
+| `tools/sim-hunt/hunt.sh` | | `--relaunch-guest K` |
+
+### D-268 · **A seat has one replay, paced by the phone's socket and outside the live queue's cap, and a phone asks once per point — built**
+
+**What broke** (V2). Every `Gap` was answered by `EffectWire.reassert` writing a full copy of the
+stream after it, under the wire's lock, onto the seat's one live queue, which holds
+`OUTBOUND_FRAMES` (512) before the house drops the link (D-244). And a phone asked again on **every**
+push after a hole. So a phone behind a hole during a burst was queued a copy per push, the queue
+overflowed, the link dropped, the phone came back and asked, and it went round again; and a phone
+relaunched (holding nothing) into a seat with more than 511 pushes could never be caught up at all.
+Measured with the old host code under `ReplayPacingTest`: the relaunched phone was dropped and
+reseated 58 times in 30 s and held 174 of 1 107; the lagging phone held 124 of 707 after dozens of asks.
+
+**The fix.**
+
+1. **One replay per seat** (`EffectWire.reassert`). An ask while a replay runs moves it to the point
+   asked (a new connection's) instead of starting a second copy. Each frame is read under the lock
+   and written outside it. **While a seat is being replayed, a new push for it is filed and not
+   written live**; the replay writes it in order, and the seat goes back to live writes at the end of
+   its stream, found under the lock, so the phone sees one stream and no hole opens behind the replay.
+2. **Paced, and outside the cap** (`TransportHost.resend`). A replayed frame is handed to the seat's
+   own writer through a rendezvous channel: it returns when the writer has taken the frame, so a
+   replay goes at the pace the phone reads it, never sits in the live queue and never counts against
+   its 512. The writer prefers the live queue when both hold a frame (only lobby bodies and upload
+   answers can be there for a seat being replayed). A replayed frame that waits more than
+   `REPLAY_STALL_MILLIS` (10 s) drops the link, as a full live queue does.
+3. **The phone asks once per point** (`RoundOverTransport`): a hole at the point it last asked from on
+   this connection asks nothing. A new connection asks once. **Safety net:** a hole still open after
+   `GAP_PATIENCE_BEATS` (5) beats with nothing applied asks again, so an answer that failed with a
+   socket cannot leave a phone holding for the rest of the round. No gap, no extra frame: an idle
+   phone sends no `Gap`.
+
+**Guards, each proven by breaking it.**
+
+- `ReplayPacingTest` (app; four phones over loopback, the real server and effect wire).
+  `aRelaunchedPhoneAThousandPushesBehindIsCaughtUpOnce`: a guest's process ends, 1 100 pushes go on
+  its stream, the app is opened again over the same token behind a 1 ms-a-frame socket; it holds all
+  1 107 from one ask on one connection, each sent once. `aLaggingPhoneUnderAVoteBurstIsSentEachPushOnce`:
+  a 2 ms-a-frame guest's link drops, 400 pushes are filed while it is away, and 300 `VoteProgressed`
+  go to every seat during its replay; it needed 700, was sent 700, asked once, and was not dropped.
+  *Injected (the old `reassert`):* `never happened within 30000 ms: the relaunched phone holds its
+  whole stream held 174 of 1107 · 58 seating(s) · 58 ask(s)` and `... MARCUS 124/707 · lagging asks
+  [7, 20, 21, 21, 21, ...`.
+- `RoundMarkerTest.aHoleIsAskedAboutOncePerPoint`. *Injected (ask on every hole):* `the phone asked
+  more than once for one hole. Expected <[Gap(held=1, round=3)]>, actual <[Gap(held=1, round=3),
+  Gap(held=1, round=3), ...`.
+- `EffectWireTest.aSeatHasOneReplayAndPushesMadeDuringItArriveAfterIt` (platform: a second ask
+  merges, a push made mid-replay reaches every other seat at once and this seat after the replay).
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `platform` `EffectWire.reassert` | a full copy per ask, under the lock, on the live queue | one replay per seat, merged, paced, a new push held behind it |
+| `platform` `TransportHost` | one queue per link | and `again`, a rendezvous channel; `resend`; `REPLAY_STALL_MILLIS` |
+| `app` `RoundOverTransport` | a `Gap` on every hole | once per point per connection; again after 5 beats with a hole open |
+| `app` `LobbyHouse` | `reassert(seat, held)` | `reassert(seat, held, round)`, `resend` wired |
+
+### D-269 · **The phones' clocks count to a stamped deadline, and the house's clock is the driver's alone — built**
+
+**What broke** (V4). (a) **Phone.** `FlowHost` counted every clock a second at a time in a
+`LaunchedEffect` keyed on the clocks' own values, so every second and every push relaunched it: a push
+that restarted one clock threw away the part-second every other clock had run, and each wait ran a
+little long. An Insider's own `AbilityFired` (D-262) restarts its Access bar and no other phone's, so
+**the Insider's Revoke bar fell behind a Resident's at every fire: page 2 differing by role** (D-142,
+D-239). Measured under `ClockParityTest` with the old ticker: after four fires answered mid-second the
+Insider read 11 s where the Resident read 13 s. (b) **House.** Every arrival (request, upload, radio
+fault, the Egress tile) was stamped `tick++`, on top of the driver's twenty a second. At eighteen seats
+the uploads alone are eighteen a second, so the house's clock ran nearly twice as fast as the room's:
+cooldowns ended early, D-236's 2.5 s contact window was about 1.3 s, and an Egress was stamped on this
+clock and judged on the driver's.
+
+**The fix.**
+
+1. **Phone** (`FlowModel.clocksRead`, `clocksStamped`; `FlowHost`). Each clock is stamped, at the push
+   that (re)started it, with the phone's monotonic time (`monotonicMillis`, handed down by the app
+   root as the wall clock is), and a reading is the whole seconds since then. Found by comparing with
+   what was last seen, so no push's branch stamps anything itself. `FlowHost` runs one loop for the
+   life of the model, waking at the next whole second of whichever running clock turns over first
+   (at most 250 ms when none runs). Nothing accumulates, and D-239 parity holds: two phones sent the
+   same pushes differ by when the pushes reached them, however often either redraws. A model handed no
+   clock (renders, tests) keeps its own, moved by `secondPassed`, with the same arithmetic.
+2. **House** (`RoundAuthority.stamp`). An arrival is stamped with the tick the driver last set and does
+   not move it. Arrivals in one 50 ms step share a tick, which the rules accept (both halves of a touch
+   already did), and the recording orders them by its rows. Rule 4: `core` reads no clock, the stamp is
+   the driver's and rides the recorded event. `now()` (benches and tests minting their own events) is
+   unchanged.
+
+**Guards, each proven by breaking it.**
+
+- `ClockParityTest` (ui desktop; two real `FlowModel`s each in a real `FlowHost` in one composition,
+  the composition's clock as the monotonic clock). An Insider and a Resident sent the same pushes; the
+  Insider's four fires answered half way through a second. **Worst gap 0 s** at every reading; and a
+  clock runs out within 200 ms of its seconds. *Injected (the old keyed ticker):* `the Insider's
+  Revoke clock and the Resident's read different seconds: [... fire 4: 11s/12s, after fire 4:
+  11s/13s ...` and `the Revoke clock was still running after its 31s`.
+- `HouseTimeTest` (app cheats; the real authority armed with eighteen seats; ten driver seconds, every
+  seat uploading on its seed each second, half pressing something refused, one radio fault).
+  200 ticks in ten seconds. *Injected (`tick++` back):* `second 1: the arrivals moved the house's
+  clock past the driver's. Expected <20>, actual <47>.`
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `ui` `FlowModel` | `secondPassed` counts | `monotonicMillis`; `clocksRead`, `untilNextSecond`; `secondPassed` for a model with no clock |
+| `ui` `PublicCooldown.at` | (new) | a clock read at a whole second |
+| `ui` `FlowHost` | `LaunchedEffect(clocks)` | one loop keyed on the model |
+| `app` cheats `CheatRoot` | | the monotonic clock handed down |
+| `app` `RoundAuthority` | `Tick(tick++)` per arrival | `stamp()`, the driver's tick |
+
+## Revision 79 — every phone measures the house's clock, and the Sync Pulse is scheduled on it
+
+*2026-11-17, overnight run, unit C12: the decision-free half of the containment spec
+(`_bmad-output/implementation-artifacts/containment-spec-2026-11-17.md`, C1, C2 and the
+`SyncPulseAnswered` width). C3 (the screen), C4 (the felt pulse) and C5 (the bench through the screen)
+wait for the owner's O1-O5 and the pack's Q4. **No screen reads any of this yet, so no Egress can be
+contained on real phones yet either.** Desktop, loopback and the iOS-Simulator unit-test target only;
+nothing here has been on a phone.*
 
 ## State after revision 12
 

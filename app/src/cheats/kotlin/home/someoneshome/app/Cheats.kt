@@ -373,6 +373,9 @@ fun CheatRoot() {
             onScreen = buzzer::showing,
             // The phone's own wall clock, for the strip, the lantern and each message's time (D-243).
             wallClock = ::deviceWallTime,
+            // **The monotonic clock every countdown is stamped and read with** (V4, D-269): each
+            // clock counts to the moment its push arrived plus its length, never a pile of waits.
+            monotonicMillis = { monotonicNanos() / 1_000_000L },
         ).also { panel.value = it }
     }
     // The deck that stands in for a camera, kept now that there IS a camera. It is a tour of the

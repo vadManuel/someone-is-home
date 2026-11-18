@@ -326,7 +326,8 @@ class LobbyCheat(
         }
         // A host waiting for the whole party rather than the minimum: the button is live at three,
         // and a thumb that pressed it then would arm a round the fourth phone never sat down in.
-        val party = launchValue(SEATS_SWITCH)?.toIntOrNull()
+        val party = (if (roundsPlayed > 0) launchValue(SEATS_AGAIN_SWITCH) else null)?.toIntOrNull()
+            ?: launchValue(SEATS_SWITCH)?.toIntOrNull()
         if (party != null && lobby.standing.joined < party) {
             note("THE BUTTON IS LIVE — WAITING FOR $party SEATED, ${lobby.standing.joined} SO FAR")
             return false
@@ -347,6 +348,9 @@ class LobbyCheat(
      * Only changes are printed. A line per second for twenty minutes is a log nobody reads, and the
      * whole question being asked of this one is *what moved, and when*.
      */
+    /** Rounds this phone has played and come back to the lobby from. See [SEATS_AGAIN_SWITCH]. */
+    private var roundsPlayed = 0
+
     private suspend fun watch(armed: Boolean) {
         var lit = armed
         var last = ""
@@ -360,6 +364,7 @@ class LobbyCheat(
             // again, and the host's thumb goes back over LIGHTS OUT.
             if (again && played && flow.state.screen == ScreenId.Lobby && !lobby.line.handedOver) {
                 played = false
+                roundsPlayed++
                 note("BACK IN THE LOBBY AFTER A ROUND — HANDING THE LINE OVER AGAIN")
                 handOverLine()
                 lit = false
@@ -435,6 +440,12 @@ class LobbyCheat(
          * presses as soon as the button is live, which is at `Balance.MINIMUM_SEATS`.
          */
         const val SEATS_SWITCH = "SOMEONES_HOME_LOBBY_SEATS"
+
+        /**
+         * With [AGAIN_SWITCH]: [SEATS_SWITCH] for every round after the first. How a hunt arms a
+         * second round without a guest it stopped at the first one's ending (V1, D-267).
+         */
+        const val SEATS_AGAIN_SWITCH = "SOMEONES_HOME_LOBBY_SEATS_AGAIN"
 
         /**
          * **Drop the stored seat token before anything is built. The rig's FORGET, as a switch.**

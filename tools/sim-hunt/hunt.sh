@@ -2,7 +2,7 @@
 # A whole scripted round on 3 to 6 iOS Simulators, with every seat's log and a screenshot of every
 # seat at every beat the bench announces, plus one every few seconds in between.
 #
-#   tools/sim-hunt/hunt.sh [--seats N] [--seed S] [--out DIR] [--nodes] [--no-build] [--tail SECS]
+#   tools/sim-hunt/hunt.sh [--seats N] [--seed S] [--out DIR] [--nodes] [--no-build] [--tail SECS] [--relaunch-guest K]
 #   tools/sim-hunt/hunt.sh stop [--out DIR]
 #
 # WHAT THIS IS FOR: finding what a person would find broken on a screen, the wire, the flow and the
@@ -28,6 +28,12 @@
 # every seat plays that round as it played the first; its beats are named AGAIN-<beat> (D-259).
 # A second round needs about a minute after the first one's ENDING to reach its first meeting,
 # so pass --tail 150 or so to photograph it.
+#
+# --relaunch-guest K (V1, D-267): seat K (a guest, 1..N-1) is stopped at the first ENDING beat, the
+# app ended with no goodbye as iOS ends it; the host arms the second round with the seats still there
+# (SOMEONES_HOME_LOBBY_SEATS_AGAIN); and once the second round's first beat is in the host's log,
+# seat K is launched again over the same files WITHOUT forgetting its seat token, so it comes back to
+# its own seat by the token. Its second process logs to seat-K-relaunch.log; relaunch.txt says when.
 set -o pipefail
 
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -39,6 +45,7 @@ SEED=20261150
 NODES=""
 BUILD=1
 TAIL=45
+RELAUNCH=""
 EVERY=3
 OUT=""
 BUNDLE_ID="home.someoneshome.app"
@@ -59,10 +66,14 @@ while [ $# -gt 0 ]; do
         --nodes) NODES=1; shift ;;
         --no-build) BUILD=""; shift ;;
         --tail) TAIL="$2"; shift 2 ;;
+        --relaunch-guest) RELAUNCH="$2"; shift 2 ;;
         *) echo "unknown option '$1' — see the top of $0" >&2; exit 64 ;;
     esac
 done
 case "$SEATS" in 3|4|5|6) ;; *) echo "--seats takes 3 to 6" >&2; exit 64 ;; esac
+if [ -n "${RELAUNCH:-}" ] && { [ "$RELAUNCH" -lt 1 ] || [ "$RELAUNCH" -ge "$SEATS" ]; }; then
+    echo "--relaunch-guest takes a guest's seat, 1 to $((SEATS - 1))" >&2; exit 64
+fi
 [ -n "$OUT" ] || OUT="/tmp/someones-home-hunt/run-$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$OUT/shots" "$OUT/periodic"
 
@@ -131,26 +142,35 @@ printf '%s\n' "${UDIDS[@]}" >"$OUT/udids.txt"
 : >"$OUT/pids"
 : >"$OUT/beats.txt"
 launch_seat() {
-    local i="$1" u="${UDIDS[$1]}"
+    # A second argument of "again" is a relaunch: the seat keeps its stored token (no FORGET) and
+    # logs to its own file.
+    local i="$1" u="${UDIDS[$1]}" again="${2:-}"
+    local log="$OUT/seat-$i.log"
     local env=(
         "SIMCTL_CHILD_SOMEONES_HOME_LOBBY_NAME=${SEAT_NAMES[$i]}"
         "SIMCTL_CHILD_SOMEONES_HOME_LOBBY_LINE=SEAT $i WROTE THIS AND NOBODY MAY SEE IT"
-        "SIMCTL_CHILD_SOMEONES_HOME_LOBBY_FORGET=1"
         "SIMCTL_CHILD_SOMEONES_HOME_LOBBY_AGAIN=1"
         "SIMCTL_CHILD_SOMEONES_HOME_ROUND=1"
         "SIMCTL_CHILD_SOMEONES_HOME_ROUND_SEED=$SEED"
     )
+    if [ -z "$again" ]; then
+        env+=("SIMCTL_CHILD_SOMEONES_HOME_LOBBY_FORGET=1")
+    else
+        log="$OUT/seat-$i-relaunch.log"
+    fi
     if [ "$i" -eq 0 ]; then
         env+=("SIMCTL_CHILD_SOMEONES_HOME_LOBBY_HOST=$HOME_NAME"
               "SIMCTL_CHILD_SOMEONES_HOME_LOBBY_INSIDERS=0"
               "SIMCTL_CHILD_SOMEONES_HOME_LOBBY_LIGHTS_OUT=1"
               "SIMCTL_CHILD_SOMEONES_HOME_LOBBY_SEATS=$SEATS")
+        # A guest stopped at the ending is not back when the second round arms (--relaunch-guest).
+        [ -n "${RELAUNCH:-}" ] && env+=("SIMCTL_CHILD_SOMEONES_HOME_LOBBY_SEATS_AGAIN=$((SEATS - 1))")
     else
         env+=("SIMCTL_CHILD_SOMEONES_HOME_LOBBY_JOIN=$HOME_NAME")
     fi
     # Alternate Egress nodes so a crisis has walkers at both ends (rehearse.sh's SEAT_NODES).
     [ -n "$NODES" ] && env+=("SIMCTL_CHILD_SOMEONES_HOME_ROUND_NODE=$((i % 2))")
-    env "${env[@]}" xcrun simctl launch --console-pty "$u" "$BUNDLE_ID" >>"$OUT/seat-$i.log" 2>&1 &
+    env "${env[@]}" xcrun simctl launch --console-pty "$u" "$BUNDLE_ID" >>"$log" 2>&1 &
     echo $! >>"$OUT/pids"
 }
 
@@ -176,6 +196,8 @@ start=$(date +%s)
 n=0
 seen=0
 ended_at=""
+stopped=""
+relaunched=""
 last_periodic=0
 lobby_shot=""
 while true; do
@@ -196,6 +218,17 @@ while true; do
         shoot shots "$tag"
         say "beat $name (+$((now - start))s)"
         [ "$name" = "ENDING" ] && [ -z "$ended_at" ] && ended_at=$now
+        # --relaunch-guest: stopped at the first ending, launched again at the second round's first beat.
+        if [ -n "${RELAUNCH:-}" ] && [ "$name" = "ENDING" ] && [ -z "$stopped" ]; then
+            xcrun simctl terminate "${UDIDS[$RELAUNCH]}" "$BUNDLE_ID" 2>/dev/null || true
+            stopped=$now
+            printf 'stopped seat %s at +%ss (the ENDING beat)\n' "$RELAUNCH" "$((now - start))" | tee -a "$OUT/relaunch.txt" "$OUT/driver.log"
+        fi
+        if [ -n "$stopped" ] && [ -z "$relaunched" ] && [ "${name#AGAIN-}" != "$name" ]; then
+            launch_seat "$RELAUNCH" again
+            relaunched=$now
+            printf 'relaunched seat %s at +%ss (beat %s, the second round armed)\n' "$RELAUNCH" "$((now - start))" "$name" | tee -a "$OUT/relaunch.txt" "$OUT/driver.log"
+        fi
     done
     if [ $((now - last_periodic)) -ge "$EVERY" ]; then
         shoot periodic "$(printf '%04d' $((now - start)))"

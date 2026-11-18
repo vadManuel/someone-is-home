@@ -119,6 +119,11 @@ class RoundOverTransport(
      * with it, as every report did before D-245.
      */
     private val kept: SeatStore = MemorySeat(),
+    /**
+     * **This phone ended its round on a later round's push** (V1, D-267), after its own half and
+     * before the panel's. `RoundClient` forgets its bench's copy of the round here; empty otherwise.
+     */
+    private val onRoundTurned: () -> Unit = {},
 ) {
 
     private val inbox = RoundInbox()
@@ -192,6 +197,16 @@ class RoundOverTransport(
         val carried = (frame as? TransportFrame.Carry)?.body ?: return
         onInbound(carried)
         val body = RoundWire.decodeOrNull(carried) ?: return
+        // **A later round's push to a phone still in an earlier one** (V1, D-267): the house ended a
+        // round while this phone was off the air, and `LobbyBody.RoundEnded` is said once. This
+        // phone ends its own round here, everything the round's end does on it, before the push is
+        // applied, so round 2's role, seed and roster land on a phone that holds nothing of round 1.
+        if (body is RoundBody.Push && inbox.turns(body)) {
+            onEvent("A PUSH OF ROUND ${body.round} ON A PHONE STILL IN ROUND ${inbox.round} — THE ROUND'S END WAS MISSED, AND IS TAKEN HERE")
+            roundEnded()
+            onRoundTurned()
+            flow.houseBeganAnotherRound()
+        }
         when (body) {
             is RoundBody.Push -> when (val landing = inbox.arrived(body)) {
                 // **The motor first, then the screen, and the order is load-bearing.** A message
@@ -206,6 +221,7 @@ class RoundOverTransport(
                 // of times a phone goes off cannot drift from the count of things it was told,
                 // which is the channel D-156 closed.
                 is RoundInbox.Landing.Apply -> {
+                    gapBeats = null
                     buzzer.heard(landing.message)
                     flow.houseSaid(landing.message)
                     // The radio last: nothing it does can move a screen, and the seed and the
@@ -226,10 +242,20 @@ class RoundOverTransport(
                 // there is nothing for a player to do about it and nothing for them to see.
                 is RoundInbox.Landing.Duplicate -> Unit
                 is RoundInbox.Landing.Gap -> {
-                    // Loud to the authority, invisible to the player (rule 6). The screen keeps
-                    // saying what it last legitimately said until the house has caught it up.
-                    onEvent("A FRAME WAS MISSED — HOLDING AT ${landing.held}")
-                    ask(RoundBody.Gap(landing.held))
+                    // **Once per point, per connection** (V2, D-268). Every push after a hole is a
+                    // gap at the same point until the replay arrives, and each used to ask again:
+                    // a burst behind one lost frame was that many full replays queued on this
+                    // seat, past the cap, and the link dropped in a loop. The house answers one
+                    // ask with everything after it; the next ask waits for a new point, or a new
+                    // connection, or [GAP_PATIENCE_BEATS] beats with nothing applied.
+                    if (gapBeats == null) gapBeats = 0
+                    if (askedFrom != landing.held) {
+                        askedFrom = landing.held
+                        // Loud to the authority, invisible to the player (rule 6). The screen keeps
+                        // saying what it last legitimately said until the house has caught it up.
+                        onEvent("A FRAME WAS MISSED — HOLDING AT ${landing.held}")
+                        ask(RoundBody.Gap(landing.held, inbox.round))
+                    }
                 }
             }
             // The house's to send, never to receive. A client asking another client for its stream
@@ -279,7 +305,38 @@ class RoundOverTransport(
         // the house hears each onset once, so it goes up again on this connection. On [scope],
         // where [run] and the beat read the uploader: a seating arrives on the socket's thread.
         scope.launch { contacts.reseated() }
-        ask(inbox.askAgain())
+        // On [scope] too, where [run] reads the inbox (V2, D-268): a new connection asks once, from
+        // where this phone is, and the point it asked from is this connection's.
+        scope.launch {
+            askedFrom = inbox.held
+            ask(inbox.askAgain())
+        }
+    }
+
+    /**
+     * **The point this connection last asked the house to replay from** (V2, D-268), or null. A gap
+     * at that same point does not ask again. Read and written on [scope] only.
+     */
+    private var askedFrom: Long? = null
+
+    /**
+     * **Beats since a gap was seen with nothing applied after it** (V2, D-268), or null when no gap
+     * is open. At [GAP_PATIENCE_BEATS] the ask goes up again: an answer that never came (a replay
+     * that met a failing socket) must not leave a phone holding at one point for the rest of the round.
+     */
+    private var gapBeats: Int? = null
+
+    /** One beat's look at an open gap (V2, D-268): see [gapBeats]. */
+    private fun gapWatch() {
+        val beats = gapBeats ?: return
+        if (beats + 1 < GAP_PATIENCE_BEATS) {
+            gapBeats = beats + 1
+            return
+        }
+        gapBeats = 0
+        askedFrom = inbox.held
+        onEvent("A GAP STILL OPEN AT ${inbox.held} AFTER $GAP_PATIENCE_BEATS BEATS — ASKING AGAIN")
+        ask(RoundBody.Gap(inbox.held, inbox.round))
     }
 
     /**
@@ -323,9 +380,28 @@ class RoundOverTransport(
         if (contacts.inRound) requests.ask(Asked.Fire) else up(RoundWire.encode(outbox.fire()))
     }
 
-    /** A new round, or this phone has left: it holds nothing of the last one, and lets the screen sleep. */
+    /**
+     * **The house ended the round**: this phone holds nothing of it, and lets the screen sleep. What
+     * the round's sequence still brings is stale (V1, D-267); the next round's starts afresh.
+     */
     fun roundEnded() {
         inbox.roundEnded()
+        forgetTheRound()
+    }
+
+    /**
+     * **This phone walked out** (LEAVE, or a house it gave up on): [roundEnded]'s every reset, and no
+     * round closed to it, so a phone that comes back to the same round by its token is told it again
+     * from the start (D-097, D-260).
+     */
+    fun left() {
+        inbox.left()
+        forgetTheRound()
+    }
+
+    private fun forgetTheRound() {
+        askedFrom = null
+        gapBeats = null
         contacts.roundEnded()
         requests.clear()
         wake.release()
@@ -335,7 +411,10 @@ class RoundOverTransport(
      * **One beat of the contact upload** (D-212 ruling 3, R8, D-217): one `RoundBody.Sighted`, at one
      * size, while this phone is in a round, whatever it is and whether or not it is out.
      */
-    fun beat() = contacts.beat()
+    fun beat() {
+        contacts.beat()
+        gapWatch()
+    }
 
     /**
      * **This phone left the foreground** (D-187, D-229): a lock, the side button or a swipe home. In
@@ -375,6 +454,13 @@ class RoundOverTransport(
         scope.launch { send(TransportFrame.Carry(body)) }
     }
 }
+
+/**
+ * **Beats a gap may stay open with nothing applied before the phone asks again** (V2, D-268). Five
+ * seconds at the upload's cadence: far past a replay in flight, short enough that a phone whose
+ * answer was lost is not left holding for long.
+ */
+internal const val GAP_PATIENCE_BEATS: Int = 5
 
 /**
  * **Whether a push starts or ends the screen being kept awake** (T4, D-221): true at arming, false
