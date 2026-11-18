@@ -266,6 +266,12 @@ class RoundUnderWayTest {
                 // **Round two ends, NEW ROUND: the guest is seated like everybody.**
                 playToTheEnd(2)
                 assertTrue(back.model.waitingForNextRound, "the round's ending is not NEW ROUND, and the guest stopped waiting at it")
+                // **And it is told the round it waits on is over** (D-274): ROUND IN PROGRESS over an
+                // ending was the hunt's seat 2. The phones in the round are not sent the flag.
+                until("the waiting guest was told round two is over", detail = { "${back.model.standing}" }) {
+                    back.model.standing.roundOver
+                }
+                assertFalse(host.model.standing.roundOver, "a phone in the round was sent the waiting phone's flag")
                 alive += back
                 newRound()
                 until("the guest was seated in the next round's lobby", detail = { "${back.model.standing}" }) {

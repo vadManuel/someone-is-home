@@ -1309,7 +1309,13 @@ private fun RoundUnderWay(lobby: LobbyModel, actions: PanelActions) {
         )
         ResidentStrip(lobby.residents, lobby::isMine)
         KitSpacer()
-        Words("ROUND IN PROGRESS", size = 40, color = P.ink, lineHeight = 0.95)
+        // **Once the round it waits on has ended, it is not in progress** (D-274). The ending is
+        // not NEW ROUND, so the phone still waits, and what it waits for is the host: the lobby's
+        // own words for a guest waiting on NEW ROUND's thumb, not new copy.
+        Words(
+            if (lobby.standing.roundOver) "WAITING FOR THE HOST" else "ROUND IN PROGRESS",
+            size = 40, color = P.ink, lineHeight = 0.95,
+        )
         KitCaption("YOU JOIN THE NEXT ONE", P, size = 22)
         KitSpacer()
         LobbyExit(hosting = false, actions = actions)

@@ -294,7 +294,8 @@ class MeetingModel(
      * **The round's roster, from the house** (`Effect.RosterIssued`, D-115).
      *
      * One entry per seat, in seat order, blank where a phone never said what to call its owner —
-     * the shape [names] indexes into in both directions. Written by the one branch in `FlowModel`
+     * the shape [names] indexes into in both directions. **Blank, too, at a seat index nobody holds**
+     * (D-274): the index is the seat even across a hole, and the ballot draws no row for a blank. Written by the one branch in `FlowModel`
      * that receives it, so the ballot and `PanelState.roster` cannot come to hold different lists.
      */
     fun houseNamed(roster: List<String>) {

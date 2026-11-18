@@ -564,6 +564,13 @@ sealed interface Effect {
      * and **fire an ability at somebody else**. A blank is a seat that said nothing; there is no
      * shorter list.
      *
+     * **One slot per seat INDEX, and null where no seat sits** (D-274). A round need not be armed
+     * with seats `0..n-1`: a guest who was away at LIGHTS OUT leaves a hole in the numbering, and a
+     * list packed over the hole moved every later seat onto the next person's name — the house
+     * restrained HERON while every screen said FINCH. So the list runs to the highest seat in the
+     * round, and an index no seat holds is null rather than blank: a blank is somebody who gave no
+     * name, a null is nobody, and the count of seats in the round is the count of non-nulls.
+     *
      * ### It says nothing about which seat is reading it
      *
      * Byte-identical on all six phones, which is the property that keeps it safe: a phone still
@@ -575,7 +582,7 @@ sealed interface Effect {
      * [InsidersRevealed] do (D-115: names are round-scoped and do not survive into the one artefact
      * of this game that outlives the evening). A replayed round rebuilds blanks of the same length.
      */
-    data class RosterIssued(val seat: Seat, val roster: List<String>) : Effect
+    data class RosterIssued(val seat: Seat, val roster: List<String?>) : Effect
 
     /**
      * **This seat's contact seed, said once, at arming, to the one phone it belongs to** (D-212).

@@ -180,6 +180,38 @@ class MeterPushTest {
     }
 
     /**
+     * **A phone put out before the meter ever moved is told it at the meeting** (D-274).
+     *
+     * The out are sent the meter when it moves, and the batch above is the living's. A seat Revoked
+     * before anybody banked anything was told neither: it was not out when nothing moved, and it is
+     * not living when the batch goes. Its ending drew SYSTEM INTEGRITY as no reading beside every
+     * living phone's 100%. So the meeting hands the out the same number, on their own kind.
+     */
+    @Test
+    fun `calling a meeting hands the out the meter too even when it never moved`() {
+        val walk = Walk(armed())
+            .revoke(actor = Seat(1), target = Seat(5), at = Balance.REVOKE_COOLDOWN)
+        assertTrue(walk.state.isOut(Seat(5)), "nobody is out, so no out class exists to deliver to")
+        walk.emitted.clear()
+        walk.step(
+            Event.MeetingCalled(Tick(Balance.REVOKE_COOLDOWN + 400), Seat(2), MeetingTrigger.MeetingCard),
+        )
+
+        val live = walk.emitted.filterIsInstance<Effect.SystemIntegrityLive>()
+        assertEquals(1, live.size, "the out seat was never told the meter, so its ending reads no number")
+        assertEquals(100, live.single().percent, "the out seat was told a number the living were not")
+        assertEquals(
+            walk.emitted.filterIsInstance<Effect.SystemIntegrityBatched>().single().percent, live.single().percent,
+            "the out and the living were told two different numbers at one meeting",
+        )
+        assertEquals(
+            listOf(ClientClass(Role.Resident, RoundState.Out)),
+            deliveredTo(walk, EmitSchema.SYSTEM_INTEGRITY_LIVE),
+            "the meeting's meter for the out reached a class other than the seat outside the system",
+        )
+    }
+
+    /**
      * **The batch is sent whether or not the meter moved, and that is rule 1 at a shift boundary.**
      *
      * A meeting with no push on it would tell the whole room that nobody banked anything all shift —

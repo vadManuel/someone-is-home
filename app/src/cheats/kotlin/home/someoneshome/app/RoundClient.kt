@@ -336,8 +336,8 @@ class RoundClient(
         // scopes a name to the round. What a rehearsal needs is that the list arrived and how long
         // it was, which is what makes *this phone can name a seat* checkable at all.
         is RoundMessage.RosterIssued ->
-            "THE ROSTER — ${m.roster.size} SEAT(S) · " +
-                "${m.roster.count { it.isNotBlank() }} NAMED · NONE PRINTED HERE"
+            "THE ROSTER — ${m.roster.count { it != null }} SEAT(S) · " +
+                "${m.roster.count { !it.isNullOrBlank() }} NAMED · NONE PRINTED HERE"
         is RoundMessage.RevokeLanded -> "THE HOUSE WITHDREW MY LAMP"
         is RoundMessage.WorkOrderIssued ->
             "WORK ORDER · ${m.lines.size} LINE(S) · " +

@@ -2787,8 +2787,8 @@ class FlowModel(
             // **The seat total rides the same list** (C3·4). `PanelState.seats` is the denominator
             // `SubroutineProgressed` turns a raw count into a percentage against, and it arrived
             // only at the first meeting on `CheckInProgressed` — so a player put outside the system
-            // before one had a bar that did not move. The roster is one entry per seat, so its
-            // LENGTH is that number, it is a public lobby fact, and it now arrives at arming. Written
+            // before one had a bar that did not move. The roster is one slot per seat, so its
+            // non-null slots are that number, it is a public lobby fact, and it now arrives at arming. Written
             // in the same assignment as the roster for `CheckInProgressed`'s reason exactly: one
             // branch writes both, so they cannot drift.
             //
@@ -2802,8 +2802,16 @@ class FlowModel(
                 // and [PanelState.roster] cannot come to hold two different orderings of the room.
                 // `MeetingModel.houseHolds` resolves a seat through it by index, so a second copy
                 // that drifted would light a row against somebody else's ballot.
-                meeting.houseNamed(message.roster)
-                state = state.copy(roster = message.roster, seats = message.roster.size)
+                //
+                // **A null slot is a seat index nobody holds, and it becomes a blank here** (D-274).
+                // The list is indexed by seat, so a round armed without seat 2 sends a null at 2;
+                // every reader below already treats a blank as nobody — no ballot row, no Surge row,
+                // no Resident on the ending — and keeps the index, which is the seat. The seat total
+                // is the non-null slots, and never the length: with a hole in the numbering the
+                // length is the highest seat plus one, not the number of people in the round.
+                val roster = message.roster.map { it.orEmpty() }
+                meeting.houseNamed(roster)
+                state = state.copy(roster = roster, seats = message.roster.count { it != null })
             }
 
             // **The ring — and this is the push that makes a round visible at all** (the owner's

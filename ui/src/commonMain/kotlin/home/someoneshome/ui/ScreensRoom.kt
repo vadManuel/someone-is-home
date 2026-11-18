@@ -392,7 +392,12 @@ fun VoteScreen(vals: PanelVals) {
         }
 
         Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            // **A blank is nobody, and nobody is not a row** (D-274). The ballot is indexed by
+            // seat, so a seat not in the round is a blank slot; a row for it would be a vote cast
+            // at a seat that is not in the house. Skipped rather than filtered out of the list:
+            // the list's index is the seat, and `asMessage` turns a name back into it.
             for (name in meeting.names) {
+                if (name.isBlank()) continue
                 VoteRow(
                     label = name,
                     held = meeting.holds(name),

@@ -8102,6 +8102,69 @@ release sweep 127 and the playtest sweep 200, ui desktop 659, ui iOS Simulator 3
 `vocabularyLint`, `armingCordon`, `benchSeedCordon`, `seedSourceCordon` and `redactionLint` clean.
 **Not on a phone.**
 
+### D-274 · **The roster is indexed by seat across a hole; the out are told the meter at every meeting; a phone waiting on an ended round says WAITING FOR THE HOST — built (recording 32)**
+
+**What broke** (`hunt.sh`, six seats, seat 2 relaunched and sat out round two;
+`/tmp/someones-home-hunt/r6-final/a6/sheets`). Round two armed with seats 0, 1, 3, 4 and 5.
+
+1. **Names shifted past the hole.** `Rules.armed` built the roster by mapping the seats it was armed
+   with, so with seat 2 absent entry 2 was seat 3's name — and every phone reads the roster *by seat
+   index* (`nameOf`, the ballot's row → seat, the Surge row → seat). The couch named seats 1, 3, 4, 5
+   OSPREY, FINCH, PLOVER, UNNAMED, and an older run restrained HERON while every screen said FINCH.
+   D-115's own comment said a blank holds the gap; the code did not.
+2. **The out phone's ending drew SYSTEM INTEGRITY as no reading** beside every living phone's 100%.
+   The out are sent the meter when it moves (`SystemIntegrityLive`), and the batch at a meeting is the
+   living's; a seat Revoked before the meter ever moved was told neither, ever.
+3. **The relaunched guest said ROUND IN PROGRESS over the ending.** D-273 keeps it waiting through the
+   ending (an ending is not NEW ROUND), and nothing told it the round had ended.
+
+**Now.**
+
+1. **`RosterIssued.roster` is `List<String?>`, one slot per seat index up to the highest seat, null
+   where no seat sits** (a blank stays *a seat that gave no name*). Still one list, byte-identical to
+   every phone, so the frame is role-independent; that seat 2 is empty is no more than the room saw at
+   LIGHTS OUT. The phone turns null into a blank on the way in, and **a blank is not a row**: the ballot
+   and the Surge picker skip it, keeping the index, which is the seat. `PanelState.seats` is the
+   non-null count, never the length. The transcript's `RosterIssued|seats=` counts non-nulls, the same
+   number as before for every round armed `0..n-1`.
+2. **Every meeting call emits `SystemIntegrityLive` beside the batch, with the batch's percentage.**
+   Its row is unchanged (the out classes only), it is silent (`HouseBuzzer`), unconditional like the
+   batch, and it reaches nobody when nobody is out; the out are being walked in at that instant and
+   are entitled to the number all round (D-134). It makes true what `SYSTEM_INTEGRITY_BATCHED`'s row
+   already said — *the out have had the same number all along*. One more effect per meeting, so
+   **recording 32**.
+3. **`LobbyBody.Standing.roundOver`**, set on the waiting phone's body only, from the round's first
+   ended push to NEW ROUND (`LobbyHouse.playingOver`). The waiting screen then draws **WAITING FOR THE
+   HOST** — the lobby's own caption for a guest waiting on the host — in place of ROUND IN PROGRESS;
+   YOU JOIN THE NEXT ONE and LEAVE THIS HOUSE stay. No new copy. Still provisional with D-273's.
+
+**Not done: the couch's VOTES CAST** (the same sheet: `VOTES CAST 4 OF 4` on the couch while every
+living phone read `0 OF 4 VOTED`). The couch counts the selections it is shown, and every selection is
+an un-cast pick — by design (D-117, D-134: the couch sees selections). It is not fed anything the house
+did not hold. Counting *cast* ballots needs the locked count, which reaches the living only
+(`VOTE_PROGRESSED to LIVING`); widening that row, or relabelling the couch's count, is the owner's.
+
+**Guards, each run red against the old code first.**
+
+- `RosterBySeatTest` (core): seats 0, 1, 3, 4. *Old code:* `seat 3's name is not at index 3:
+  [NAME-0, NAME-1, NAME-3, NAME-4]`.
+- `MeterPushTest` — *calling a meeting hands the out the meter too*. *Old code:* `the out seat was
+  never told the meter, so its ending reads no number. Expected <1>, actual <0>`.
+- `RosterGapTest` (ui desktop): the ballot and the Surge picker draw no row for the hole, and DANI's
+  rows send seat 3. *Old code:* `the ballot drew a row for the seat that is not in the round
+  expected:<0> but was:<1>`; `found '1' node that satisfies: (TestTag = 'target-row-2')`.
+- `RoundUnderWayScreenTest` and `RoundUnderWayTest`: the waiting phone over an ended round.
+  *Injected (the ending not published):* `never happened: the waiting guest was told round two is
+  over Standing(joined=4, …, waitingForNextRound=true, roundOver=false)`. *Injected (the screen ignores
+  the flag):* `the waiting phone says a round is in progress over its ending expected:<0> but was:<1>`.
+- `RosterGapRender` (ui desktop, a viewer): `build/screens/gap-*.png`, looked at — the ballot and the
+  Surge picker list five names with no blank row, the couch names seats 1, 3, 4, 5 OSPREY, HERON,
+  FINCH, PLOVER, the couch's ending reads 100%, the waiting phone reads WAITING FOR THE HOST on one line.
+
+**Checked** (every test XML read): model 298 (iOS Simulator) and 300 (JVM), core 326, harness 127, app
+200, ui desktop 663 (+1 viewer), 0 failures; `vocabularyLint`, `redactionLint`, `armingCordon`,
+`benchSeedCordon` and `seedSourceCordon` clean. **Not on a phone.**
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

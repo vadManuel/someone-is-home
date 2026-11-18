@@ -50,6 +50,13 @@ class Recording(
     }
 
     companion object {
+        // 32: every meeting call emits one more effect (D-274) -- `SystemIntegrityLive`, the same
+        // percentage as the living's batch, so a seat put out before the meter moved is told it.
+        // No row changed shape and no kind is new; the same events replay to a longer effect
+        // transcript, so it is a bump for version 15's reason. `RosterIssued|seats=` now counts the
+        // roster's non-null slots, which is the same number for every round armed with seats
+        // `0..n-1` and the true seat count for one armed around a hole.
+        //
         // 31: the house holds the plan again and builds the spectator map's input (O2, O4). Rows
         // changed shape in three places, and none could have been a tolerant read:
         //
@@ -269,7 +276,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/31"
+        const val HEADER = "someone-is-home/recording/32"
     }
 }
 

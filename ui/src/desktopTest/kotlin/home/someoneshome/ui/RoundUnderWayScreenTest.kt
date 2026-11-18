@@ -34,10 +34,12 @@ class RoundUnderWayScreenTest {
 
     private val round = listOf("PRIYA", "MARCUS", "DANI", "ROSE")
 
-    private fun lobbyFor(waiting: Boolean): FlowModel {
+    private fun lobbyFor(waiting: Boolean, over: Boolean = false): FlowModel {
         val lobby = LobbyModel(
             MemoryHomeFinder(listOf(NearbyHome("THE BUNGALOW", "192.168.1.24", 47747))),
-            Answering(LobbyBody.Standing(4, 4, round, insiders = null, round = 2, waitingForNextRound = waiting)),
+            Answering(
+                LobbyBody.Standing(4, 4, round, insiders = null, round = 2, waitingForNextRound = waiting, roundOver = over),
+            ),
         )
         lobby.look()
         lobby.nameResident("ELLIOT")
@@ -67,6 +69,20 @@ class RoundUnderWayScreenTest {
         assertEquals(0, count("JOINED"), "the waiting phone still says JOINED")
         assertEquals(0, count("YOUR ONE LINE"), "the waiting phone is asked for a line the next NEW ROUND deletes")
         assertEquals(0, count("INSIDERS"), "the waiting phone draws the lobby's settings")
+    }
+
+    /**
+     * **The round it waits on has ended, and it no longer says it is in progress** (D-274). The
+     * ending is not NEW ROUND, so it still waits — on the host, in the lobby's own words.
+     */
+    @Test
+    fun aPhoneWaitingOnAnEndedRoundIsNotToldItIsInProgress() = runDesktopComposeUiTest(width = 300, height = 650) {
+        show(lobbyFor(waiting = true, over = true))
+        assertEquals(0, count("ROUND IN PROGRESS"), "the waiting phone says a round is in progress over its ending")
+        onNodeWithText("WAITING FOR THE HOST").assertExists("the waiting phone does not say what it waits on")
+        onNodeWithText("YOU JOIN THE NEXT ONE").assertExists()
+        onNodeWithText("LEAVE THIS HOUSE").assertExists("the waiting phone has no way out")
+        assertEquals(0, count("YOUR ONE LINE"), "the waiting phone is asked for a line the next NEW ROUND deletes")
     }
 
     /** The same standing without the flag is the ordinary lobby, so the flag alone draws the above. */

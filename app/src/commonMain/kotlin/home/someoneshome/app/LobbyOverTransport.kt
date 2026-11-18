@@ -427,6 +427,14 @@ class LobbyHouse(
     private var playing: List<SeatNamed>? = null
 
     /**
+     * **The round in [playing] has reached its ending** (D-274), from its first ended push to NEW
+     * ROUND. The ending is not NEW ROUND, so a phone outside the round still waits; this is what
+     * lets it stop saying ROUND IN PROGRESS over a room standing in the lights. Written and read on
+     * [scope], with [playing].
+     */
+    private var playingOver = false
+
+    /**
      * **The round's inbound half, on the same server the outbound half is on.**
      *
      * Beside [effects] for [effects]'s reason: there is one house, one ledger deciding who is
@@ -661,6 +669,16 @@ class LobbyHouse(
                     publish()
                 }
             }
+        } else if (state.armed && state.ended) {
+            // **The same round's ending, once** (D-274): the phones waiting on it are told it is over.
+            // Only the round [playing] holds — a late push after NEW ROUND finds nothing to mark.
+            val seats = state.seats.map { it.index }.sorted()
+            atTheDesk {
+                if (!playingOver && playing?.map { it.seat.index } == seats) {
+                    playingOver = true
+                    publish()
+                }
+            }
         }
         effects.emit(effect, state)
     }
@@ -728,6 +746,7 @@ class LobbyHouse(
         desk.roundEnded()
         // The round is over and the lobby is the desk's again: every seated phone is in the next one.
         playing = null
+        playingOver = false
         // **The next round's number, before anything is said** (V1, D-267): the standing below
         // carries it, and the effect wire marks every push of the next round with it.
         round += 1
@@ -761,6 +780,7 @@ class LobbyHouse(
         port = null
         away = false
         playing = null
+        playingOver = false
         // The house is down, so this phone is hosting nothing — and a stale home here would let a
         // later arming draw from a house that is no longer on the air.
         hosted = null
@@ -1038,7 +1058,10 @@ class LobbyHouse(
         )
         val body = TransportFrame.Carry(LobbyWire.encode(standing.copy(round = round)))
         if (inRound == null) return announce(body)
-        val waiting = TransportFrame.Carry(LobbyWire.encode(standing.copy(round = round, waitingForNextRound = true)))
+        // The waiting phone's body, and only it, says whether the round it waits on has ended (D-274).
+        val waiting = TransportFrame.Carry(
+            LobbyWire.encode(standing.copy(round = round, waitingForNextRound = true, roundOver = playingOver)),
+        )
         scope.launch {
             for (seat in server.connectedSeats()) {
                 val out = inRound.none { it.seat.index == seat.index }

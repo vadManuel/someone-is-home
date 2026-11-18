@@ -360,12 +360,20 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
         shiftStartedAt = event.at,
     )
 
-    // **The round's names, in seat order, one slot per seat** (D-115). A seat whose phone never
+    // **The round's names, one slot per seat INDEX** (D-115, D-274). A seat whose phone never
     // said what to call its owner is a **blank** rather than a missing row: the client reads this
     // by index, so a shorter list would move every seat after the gap and the Surge picker would
     // fire at the wrong person. `nameOf` returns null for exactly that seat and the blank is what
     // a screen draws for it.
-    val roster = seats.map { state.nameOf(it) ?: "" }
+    //
+    // **And a seat index nobody holds is a null slot, for the same reason** (D-274). The seats are
+    // not always `0..n-1`: a guest away at LIGHTS OUT leaves a hole, and mapping over `seats` packed
+    // the list over it — with seats 0, 1, 3, 4 and 5 entry 2 was seat 3's name, and the room
+    // restrained HERON while every screen said FINCH. So the list runs to the highest seat and is
+    // indexed by it; null is nobody, which no phone may draw as a row.
+    val roster = (0..(seats.maxOfOrNull { it.index } ?: -1)).map { index ->
+        seats.firstOrNull { it.index == index }?.let { state.nameOf(it) ?: "" }
+    }
 
     return Reduction(
         state,
@@ -382,7 +390,7 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
             //
             // **`state.nameOf` and never `event.names` directly**, so the blank for a phone that
             // never said what to call its owner comes out of the same lookup the ending's reveal
-            // uses. The list is `seats`-long by construction, in seat order, which is the property
+            // uses. The list is indexed by seat, a null where no seat sits, which is the property
             // the client indexes into in both directions.
             roster.let { list -> seats.map { Effect.RosterIssued(it, list) } } +
             // **The reveal, one per seat, behind the message above** (`gdd.md:923`, E-R2-2). The
@@ -1387,6 +1395,15 @@ private fun meetingCalled(
     val batched = Effect.SystemIntegrityBatched(
         Balance.integrityPercent(state.systemIntegrity, state.seats.size),
     )
+    // **The same number to the out, on their own kind, at the same moment** (D-274). The out are
+    // sent the meter when it moves, so a seat put out before it ever moved — or after the last
+    // movement — was told nothing, and the batch above is the living's alone: its ending drew
+    // SYSTEM INTEGRITY as no reading beside every living phone's 100%. The live kind already goes to
+    // the out and to nobody else, the out are already being walked in at this instant, and the
+    // number is the one they are entitled to all round (D-134), so this says nothing new to anyone.
+    // Unconditional like the batch, so its presence is never the news; with nobody out it reaches
+    // nobody.
+    val outsideMeter = Effect.SystemIntegrityLive(batched.percent)
 
     // **The Access pool's pause mark is gone, and this is where it used to be set** (the owner's
     // 2026-08-24 ruling). The pool stopped with the shift and picked up where it stopped at lights
@@ -1438,7 +1455,7 @@ private fun meetingCalled(
             // meeting now, and the next scan of the T card finds the station free.
             reader = null,
         ),
-        listOf(ring, calling) + walkIn + gateCount(state, meeting) + batched + stopped,
+        listOf(ring, calling) + walkIn + gateCount(state, meeting) + batched + outsideMeter + stopped,
     )
 }
 

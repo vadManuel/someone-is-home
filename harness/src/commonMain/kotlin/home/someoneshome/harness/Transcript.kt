@@ -325,9 +325,10 @@ object Transcript {
         // gone when it ends, and a recording outlives the evening. What a replay needs is that the
         // list was this long and reached this seat -- a rebuilt roster of blanks of the same length
         // renders this row byte-identically, which is what keeps a differential run across a
-        // recording honest without the transcript holding anybody's name.
+        // recording honest without the transcript holding anybody's name. The seats are the
+        // non-null slots: the list is indexed by seat, null where no seat sits (D-274).
         is Effect.RosterIssued ->
-            "RosterIssued|seat=${effect.seat.index}|seats=${num(effect.roster.size)}"
+            "RosterIssued|seat=${effect.seat.index}|seats=${num(effect.roster.count { it != null })}"
         // **The seat and the seed itself** (D-212). The recording is the authority's artifact and
         // already holds the round's seed every contact seed is derived from, so the hex adds nothing
         // a replay could not re-derive -- and rendering it is what lets the differential harness see

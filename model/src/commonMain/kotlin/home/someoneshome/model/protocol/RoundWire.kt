@@ -485,11 +485,14 @@ sealed class RoundMessage {
      * ring, and a tapped row back to a `Seat` for the Surge picker and the ballot -- so a list that
      * omitted the unnamed would shift every index after the gap and fire an ability at the wrong
      * person. `LobbyBody.Standing.names` keeps the same rule for the same reason one channel over.
+     *
+     * **The index is the seat's, so a seat not in the round is a null slot** (D-274): a round armed
+     * with seats 0, 1, 3 and 4 sends five entries with null at 2. See [Effect.RosterIssued].
      */
     @ClientFacing
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("RosterIssued")
-    data class RosterIssued(val roster: List<String>) : RoundMessage()
+    data class RosterIssued(val roster: List<String?>) : RoundMessage()
 
     /**
      * **This phone's contact seed, and nothing else** (D-212, [Effect.ContactSeedIssued]).

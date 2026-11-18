@@ -139,6 +139,11 @@ sealed class LobbyBody {
      * them. True only on a phone seated outside the running round; it joins at the next NEW ROUND.
      * It answers one question about the phone it is sent to and names no seat (D-191's shape). Who is
      * in a round is not a secret: the room watched the lights go out.
+     *
+     * **[roundOver]: the round it waits on has reached its ending** (D-274). The ending is not NEW
+     * ROUND, so the phone still waits — but a phone told only that it waits said ROUND IN PROGRESS
+     * over a room standing in the lights at the ending. Set on the waiting phone's body from the
+     * round's ending to NEW ROUND, and nowhere else; the room watched the lights come on.
      */
     @ClientFacing
     @kotlinx.serialization.Serializable
@@ -150,6 +155,7 @@ sealed class LobbyBody {
         val insiders: Int? = null,
         val round: Int = 0,
         val waitingForNextRound: Boolean = false,
+        val roundOver: Boolean = false,
     ) : LobbyBody()
 
     /**
