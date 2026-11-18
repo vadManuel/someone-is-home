@@ -188,8 +188,15 @@ class MeetingModel(
         send(MeetingRequest.LockVote)
     }
 
-    /** Whether [name]'s row is the one holding this phone's vote. */
-    fun holds(name: String): Boolean = choice == VoteChoice.Named(name)
+    /**
+     * Whether the row for [name] at [seat] is the one holding this phone's vote. **By seat when the
+     * choice knows it** (D-278): two people may give one name, and only one of their rows is lit.
+     */
+    fun holds(name: String, seat: Int): Boolean = (choice as? VoteChoice.Named)
+        ?.let { it.name == name && (it.seat ?: names.indexOf(name)) == seat } == true
+
+    /** Whether a row named [name] holds this phone's vote, whichever seat it is at. */
+    fun holds(name: String): Boolean = (choice as? VoteChoice.Named)?.name == name
 
     /** Whether SKIP is the one holding it. */
     val skipping: Boolean get() = choice == VoteChoice.Skip
@@ -307,7 +314,7 @@ class MeetingModel(
     fun houseHolds(selection: Seat?, locked: Boolean) {
         choice = when {
             selection == null -> if (this.locked || choice == VoteChoice.Skip) VoteChoice.Skip else choice
-            else -> names.getOrNull(selection.index)?.let(VoteChoice::Named) ?: choice
+            else -> names.getOrNull(selection.index)?.let { VoteChoice.Named(it, selection.index) } ?: choice
         }
         this.locked = locked
     }
@@ -417,7 +424,11 @@ fun MeetingRequest.asMessage(names: List<String?>): IntentMessage = when (this) 
         val picked = choice
         val target = when (picked) {
             is VoteChoice.Skip -> null
-            is VoteChoice.Named -> names.indexOf(picked.name).takeIf { it >= 0 }?.let { Seat(it) }
+            // **The row's own seat, when it carries one and the roster still names it there**
+            // (D-278): two people who gave one name are two rows, and `indexOf` would send both
+            // to the first. Only a choice that knows no seat falls back to the name.
+            is VoteChoice.Named -> picked.seat?.takeIf { names.getOrNull(it) == picked.name }?.let { Seat(it) }
+                ?: names.indexOf(picked.name).takeIf { it >= 0 }?.let { Seat(it) }
         }
         IntentMessage.SelectVote(target = target)
     }
@@ -437,8 +448,12 @@ fun MeetingRequest.asMessage(names: List<String?>): IntentMessage = when (this) 
  */
 sealed interface VoteChoice {
 
-    /** Restrain this resident. */
-    data class Named(val name: String) : VoteChoice
+    /**
+     * Restrain this resident: the row's name, and the seat it was drawn at (D-278). The seat is
+     * what goes to the house, because a name need not be unique in a room; a choice built from a
+     * name alone (a fixture, a test) reaches the first seat that bears it.
+     */
+    data class Named(val name: String, val seat: Int? = null) : VoteChoice
 
     /** Restrain nobody. */
     data object Skip : VoteChoice

@@ -202,12 +202,13 @@ class RoutingTest {
 
         model.houseSaid(RoundMessage.VoteHeld(selection = Seat(1), locked = true))
         assertTrue(model.meeting.locked, "the house cast this seat's vote and the phone did not lock")
-        assertEquals(VoteChoice.Named("MARCUS"), model.meeting.choice, "the house's row is not the lit one")
+        // The house names a seat, so the row it lights carries that seat (D-278).
+        assertEquals(VoteChoice.Named("MARCUS", 1), model.meeting.choice, "the house's row is not the lit one")
 
         // A tap after the lock changes nothing, which is what the lock is for.
         model.chooseVote(VoteChoice.Named("ROSE"))
         assertEquals(
-            VoteChoice.Named("MARCUS"), model.meeting.choice,
+            VoteChoice.Named("MARCUS", 1), model.meeting.choice,
             "a locked ballot went on echoing taps the house refuses",
         )
     }

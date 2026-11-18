@@ -8462,7 +8462,28 @@ has no row for seat 2.
 
 **Still open, older than D-274:** two seats in the round with the *same* name (two blanks included)
 share one ballot row's identity, because the ballot reaches a seat by name. The Surge picker reaches
-it by index and is unaffected.
+it by index and is unaffected. **Closed by D-278.**
+
+### D-278 · **A ballot row carries the seat it was drawn at, and that seat is what is sent; two people who gave one name are two rows that reach two seats — built**
+
+**The defect.** The lobby desk does not make names unique (`LobbyDesk.named` trims and caps, nothing
+more), and the ballot turned a row back into a seat by name: `asMessage` sent
+`names.indexOf(picked.name)`. With two players who both typed SAM, a vote for the second SAM was sent
+as a vote for the first, and the room restrained the wrong person while every screen showed the row
+it meant. Two blanks (D-277) collided the same way. Found by the orchestrator while checking D-277.
+
+**Now.** `VoteChoice.Named` carries `seat` beside `name`. The ballot builds each row's choice with its
+own index, the house's echo (`houseHolds`) builds it with the seat the house named, and `asMessage`
+sends that seat — but only while the roster still bears that name there, so a stale choice fails
+closed rather than reaching whoever now sits at the index. A choice made from a name alone (a fixture
+or a test) still reaches the first seat that bears it. `holds(name, seat)` lights one row of two that
+share a name. No wire, frame, light, timing or rule moved, and nothing about the names themselves:
+whether the lobby should refuse or mark a repeated name is the owner's (copy).
+
+**Proved.** `RosterGapTest.twoPeopleWithOneNameAreTwoRowsAndEachIsItsOwnSeat` draws
+`["SAM", "PRIYA", "SAM", "DANI"]`, taps the second SAM and expects `SelectVote(Seat(2))`, with only
+that row lit. With `asMessage` put back to send by name, it goes red: `SelectVote(Seat(0))`.
+`RoutingTest`'s re-assertion case now expects the house's echo to carry seat 1.
 
 ## State after revision 12
 

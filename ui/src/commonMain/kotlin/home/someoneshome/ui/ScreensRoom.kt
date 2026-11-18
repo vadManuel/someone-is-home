@@ -398,12 +398,12 @@ fun VoteScreen(vals: PanelVals) {
             // the list's index is the seat, and `asMessage` turns a name back into it. **A blank
             // is somebody** (D-277) — in the round, with no name — and is a row like any other,
             // drawn as UNNAMED and sent as the blank it is, which `asMessage` finds at its seat.
-            for (name in meeting.names) {
+            for ((seat, name) in meeting.names.withIndex()) {
                 if (name == null) continue
                 VoteRow(
                     label = name.ifBlank { UNNAMED },
-                    held = meeting.holds(name),
-                    onPick = { actions.chooseVote(VoteChoice.Named(name)) },
+                    held = meeting.holds(name, seat),
+                    onPick = { actions.chooseVote(VoteChoice.Named(name, seat)) },
                 )
             }
             // Restraining nobody is a vote, so it is a row like the others — dashed, because it is

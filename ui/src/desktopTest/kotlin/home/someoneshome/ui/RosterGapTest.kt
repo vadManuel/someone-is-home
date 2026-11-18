@@ -16,6 +16,8 @@ import home.someoneshome.model.protocol.IntentMessage
 import home.someoneshome.model.protocol.RoundMessage
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 /**
  * **A round armed without seat 2: the roster holds a null at index 2, and nothing offers it**
@@ -166,5 +168,34 @@ class RosterGapTest {
                 listOf<IntentMessage>(IntentMessage.FireSurge(Seat(2))), sent.toList(),
                 "the unnamed seat's row fired at somebody other than seat 2",
             )
+        }
+
+    /**
+     * **Two people who gave one name are two rows, and each reaches its own seat** (D-278). The
+     * desk does not make names unique, and the ballot once turned a row back into a seat by name,
+     * so a vote for the second SAM restrained the first.
+     */
+    @Test
+    fun twoPeopleWithOneNameAreTwoRowsAndEachIsItsOwnSeat() =
+        runDesktopComposeUiTest(width = 300, height = 650) {
+            val sent = mutableListOf<IntentMessage>()
+            lateinit var meeting: MeetingModel
+            meeting = MeetingModel(send = { sent += it.asMessage(meeting.names) })
+            val model = FlowModel(PanelState(screen = ScreenId.Home), meeting = meeting)
+            model.houseSaid(RoundMessage.RosterIssued(listOf("SAM", "PRIYA", "SAM", "DANI")))
+            model.push(ScreenId.Vote)
+            show(model)
+
+            val sams = onAllNodes(hasText("SAM") and hasClickAction())
+            assertEquals(2, sams.fetchSemanticsNodes().size, "the ballot did not draw both SAMs")
+            sams[1].performClick()
+            waitForIdle()
+            assertEquals(
+                listOf<IntentMessage>(IntentMessage.SelectVote(Seat(2))),
+                sent.filterIsInstance<IntentMessage.SelectVote>(),
+                "the second SAM's row asked for somebody other than seat 2",
+            )
+            assertTrue(meeting.holds("SAM", 2), "the second SAM's row is not the one lit")
+            assertFalse(meeting.holds("SAM", 0), "the first SAM's row is lit for the second SAM's vote")
         }
 }
