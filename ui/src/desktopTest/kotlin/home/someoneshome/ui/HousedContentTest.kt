@@ -243,8 +243,10 @@ class HousedContentTest {
         )
         // **The port's bungalow, on every screen of the round** (D-257, unit 4d): its rooms and
         // floors on the couch and the Terminal, the playback's offset, FILES' standing destination.
-        // Not on the setup screens: the host's editor starts from the bungalow on purpose, in the
-        // light, before any house exists, and those words are the host's to paint over.
+        // Not swept on the setup screens, because there these words are the editor's own controls:
+        // the room panel's preset chips (KITCHEN, LIVING, GARAGE), its STAIRS type and the empty
+        // storey's GROUND. Whether a real phone's editor opens on the bungalow is EditorOpeningTest's
+        // to hold (D-270): it opens empty.
         val bungalow = Regex(
             listOf("KITCHEN", "LIVING", "HALL", "STAIRS", "STUDY", "GARAGE", "GROUND", "UPPER", "-1:12", "RACK")
                 .joinToString("|", prefix = "(?<![\\w-])(", postfix = ")\\b") { Regex.escape(it) },

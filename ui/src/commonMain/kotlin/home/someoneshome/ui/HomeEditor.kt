@@ -561,7 +561,7 @@ class HomeEditorModel(
      * host's first drag would be refused for a reason that is not their fault.
      */
     fun startNewHome(name: String) {
-        plan = HousePlan.EMPTY.withFloor(GROUND)
+        plan = emptyPlan()
         map = HouseMap.EMPTY
         lastScan = null
         this.name = name
@@ -658,6 +658,30 @@ class HomeEditorModel(
          * are the rooms every house has. Everything else is typed.
          */
         val PRESETS: List<String> = listOf("KITCHEN", "LIVING", "GARAGE", "BATH 1", "BED 1")
+
+        /**
+         * **What a real phone's editor holds before the host has painted anything: one empty
+         * storey, no rooms, no cards** (D-270). The state MAP A NEW HOME opens on, and the same
+         * plan [startNewHome] builds, because the GDD's walk starts *"with Floor 0 (renameable),
+         * add more as you go. Nothing fixed"* (gdd:822, EP 4.3) and the app never has an opinion
+         * about what a home is (D-125).
+         */
+        fun empty(): HomeEditorModel = HomeEditorModel(plan = emptyPlan(), floorName = GROUND)
+
+        /**
+         * **The editor a model opens on when nobody handed it one, and the one place that decides
+         * it** (D-270).
+         *
+         * The render harness — the phone handed no clock and no house, [PanelVals.isRenderHarness]
+         * (D-255) — gets [bungalow], so its pictures still compare to the mockup. **Anything else is
+         * a real phone and gets [empty]**: a host who reached the editor by any route that did not
+         * load a home (MAP A NEW HOME, EDIT THE PLAN) must find nothing painted, never rooms and
+         * cards their house does not have.
+         */
+        fun opening(renderHarness: Boolean): HomeEditorModel =
+            if (renderHarness) bungalow() else empty()
+
+        private fun emptyPlan(): HousePlan = HousePlan.EMPTY.withFloor(GROUND)
 
         /**
          * The bungalow — **the same rooms the live map draws, converted rather than restated.**
@@ -887,9 +911,13 @@ infix fun CellRect.overlaps(other: CellRect): Boolean =
  * Provided by [Screen], so a screen reads the plan the same way it reads its actions, and a test
  * that renders one screen gets its own editor rather than sharing a global one that the previous
  * test painted over.
+ *
+ * **The default is the empty home, not the bungalow** (D-270): a composable that reads this with no
+ * [Screen] above it has no way to know whether it is the harness, so it fails closed and draws no
+ * rooms. [Screen] always provides one, chosen by [HomeEditorModel.opening].
  */
 val LocalEditor: ProvidableCompositionLocal<HomeEditorModel> =
-    staticCompositionLocalOf { HomeEditorModel.bungalow() }
+    staticCompositionLocalOf { HomeEditorModel.empty() }
 
 /**
  * **The grid under the finger: drag two corners to add a room, tap a room to open it.**

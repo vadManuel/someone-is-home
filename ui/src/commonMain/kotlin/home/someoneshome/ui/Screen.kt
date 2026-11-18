@@ -29,8 +29,11 @@ fun Screen(
      * then gets its own, so a test that fires every control on the editor cannot leave a
      * half-deleted house behind for the next one. In the app [FlowHost] passes the one the round
      * is being set up with.
+     *
+     * The default is chosen by the one rule the model uses (D-270): the bungalow for the render
+     * harness, the empty home for a state that is a real phone's.
      */
-    editor: HomeEditorModel = remember { HomeEditorModel.bungalow() },
+    editor: HomeEditorModel = remember { HomeEditorModel.opening(PanelVals.isRenderHarness(state)) },
     /**
      * The homes this phone holds.
      *

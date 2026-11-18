@@ -7796,6 +7796,88 @@ wait for the owner's O1-O5 and the pack's Q4. **No screen reads any of this yet,
 contained on real phones yet either.** Desktop, loopback and the iOS-Simulator unit-test target only;
 nothing here has been on a phone.*
 
+## Revision 80 — the home editor opens on nothing on a real phone
+
+*2026-11-17, overnight run, unit O1 of the occupancy spec
+(`_bmad-output/implementation-artifacts/occupancy-spec-2026-11-17.md`). `ui` only. Desktop and
+simulator unit tests only; nothing here has been on a phone.*
+
+### D-270 · **A real phone's home editor opens on one empty storey, no rooms and no cards; the design's bungalow is the render harness's alone — built**
+
+**What was fixture.** `FlowModel.editor`, `Screen`'s default editor and `LocalEditor` all started
+from `HomeEditorModel.bungalow()`: the design's two storeys, nine rooms, two stairs, nine markers, the T card in
+HALL and the meeting card in LIVING. MAP A NEW HOME already cleared it (`startNewHome`), and EDIT THE
+PLAN loads the saved home, but **any route into the editor that did neither** (the playtest picker,
+EDIT THE PLAN with no home open) showed a host rooms and cards their house does not have. The only
+claim it was "on purpose" was a test comment (`HousedContentTest`, D-257's exemption).
+
+**The docs.** gdd:822 and EP 4.3: *"start with Floor 0 (renameable), add more as you go. Nothing
+fixed"*; gdd:895: *"The host paints **Floor 0**"*; D-125: *"The app never has an opinion about what a
+home is."* No entry asks for a template.
+
+**Now.** One rule, in one function: `HomeEditorModel.opening(renderHarness)` gives the bungalow to the
+render harness and `HomeEditorModel.empty()` (the plan `startNewHome` builds: one storey called
+`GROUND`, no rooms, no cards, no name) to anything else. The harness is D-255's, asked of a state by
+the new `PanelVals.isRenderHarness(state)` (no house **and** no device clock), which `renderHarness`
+now calls, so the clock and the editor cannot disagree about which phone is the harness.
+`FlowModel`'s `editor` parameter is nullable (*choose for me*) and the property is chosen after
+`init` has read the clock; `Screen`'s default uses the same rule; `LocalEditor`'s default, which has no
+state to ask, is `empty()`, failing closed. The app always hands a clock (`deviceWallTime`), so every
+real phone opens empty; every render and test that hands none still draws the mockup.
+
+**Saved homes are unchanged.** EDIT THE PLAN and RENAME load the open home whole (`load`: plan, cards,
+terminal, meeting card, name). The one-phone rig's `ONE PHONE` home is seeded through
+`SavedHomesModel.save` (`LobbyCheat.seedTheHome`) and never touches the editor, so the rig is
+unaffected.
+
+**An empty home is not saved, and SAVE HOME is not where that is decided.** `saveHome` refuses only
+a blank name, a name another home holds, or a failed write; it has no rule about rooms (D-125). The
+editor's only way to SAVE HOME is REVIEW HOME, which goes to SAVE HOME only when the home passes
+D-127's one gate (a terminal, a meeting card, eight ordinary markers) and otherwise to the screen that
+names what is missing (D-126: *every gate lives at REVIEW*). An empty plan has no room to hold a card,
+so it is short all three: REVIEW HOME . 3 THINGS MISSING, then THIS HOME NEEDS 3 MORE THINGS, and the
+file is untouched. Rendered and looked at (300×650): the empty editor reads `HOME 1`, `0 ROOMS . 0
+MARKERS`, one `GROUND` block and an empty grid; FLOORS reads `1 IN THIS HOME`.
+
+**Not changed, flagged.** The storey is named `GROUND`, the GDD says *Floor 0*; both are renameable.
+The spec recommends keeping `GROUND` and sweeping gdd:822/895; neither is done here. The spec's other
+suggestion, dropping `HousedContentTest`'s setup-screen exemption, does not work: on those screens
+KITCHEN, LIVING and GARAGE are the room panel's preset chips, STAIRS its type control and GROUND the
+empty storey's name. The exemption stays, its comment corrected, and `EditorOpeningTest` holds the
+editor instead.
+
+**Guards (`EditorOpeningTest`), each proven by breaking it.**
+
+- `aNewHomeOnARealPhoneOpensEmpty`: a phone handed a clock opens empty before any route, after EDIT
+  THE PLAN with nothing open, after MAP A NEW HOME, and after MAP A NEW HOME following a saved home;
+  drawn through the model's editor and through `Screen`'s default, it counts `0 ROOMS . 0 MARKERS` and
+  draws no bungalow room. **Broken by `opening` always returning the bungalow**: *a fresh real phone:
+  not one storey expected:<1> but was:<2>*. **Broken by `Screen`'s default alone put back to the
+  bungalow**: *Screen's default did not count an empty storey: [, 23:46, THE BUNGALOW, 5 ROOMS . 5
+  MARKERS, GROUND, UPPER, KITCHEN, …]*.
+- `theHarnessStillDrawsTheMockup`: a model handed no clock holds the bungalow, and both routes draw
+  THE BUNGALOW and `5 ROOMS . 5 MARKERS`. **Broken by `opening` always returning empty**: *the harness
+  lost its bungalow expected:<[THE BUNGALOW]> but was:<[]>*.
+- `aSavedHomeRoundTrips`: a home read off the file opens in a real phone's editor as saved, and SAVE
+  HOME writes back exactly that. **Broken by `load` keeping the previous cards**: *EDIT THE PLAN did
+  not open the home as saved expected:<SavedHome(SOMEWHERE KEPT, 2fl, 9rm, 9mk, terminal=HALL,
+  meeting=LIVING)> but was:<…>*.
+- `anEmptyHomeGoesToReviewAndIsNotSaved` (through the real screens): MAP A NEW HOME, then REVIEW HOME
+  . 3 THINGS MISSING, lands on ReviewNeeds and the file stays empty. **Broken by REVIEW HOME always
+  going to SAVE HOME**: *an empty home went on to SAVE HOME expected:<ReviewNeeds> but was:<SaveName>*.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `ui` `HomeEditorModel` | `bungalow()` only | `empty()`, `opening(renderHarness)`; `startNewHome` builds `empty()`'s plan |
+| `ui` `FlowModel.editor` | `bungalow()` default | `opening(isRenderHarness(state))`, chosen after `init` reads the clock |
+| `ui` `Screen` `editor`, `LocalEditor` | `bungalow()` | `opening(…)`; `empty()` |
+| `ui` `PanelVals` | `renderHarness` inline | `isRenderHarness(state)`, shared |
+
+**Checked for this revision** (every test XML read, on top of D-267 to D-269): ui desktop 657, ui
+iOS Simulator 312, app 198 (debug), the release sweep 127 and the playtest sweep 198, 0 failures;
+`:ui:vocabularyLint` clean. **Not on a phone.**
+
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

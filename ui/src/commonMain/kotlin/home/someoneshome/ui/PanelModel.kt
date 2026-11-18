@@ -975,7 +975,7 @@ class PanelVals(
      * `FlowHost` every second after, housed or not. A render or a test that hands none down is the
      * harness; anything with a clock is a phone.
      */
-    val renderHarness: Boolean = !state.houseAttached && state.wallTime == null
+    val renderHarness: Boolean = isRenderHarness(state)
 
     /**
      * **The strip's clock: the phone's own, on any real phone, housed or not** (D-243, D-255), and
@@ -1995,6 +1995,14 @@ class PanelVals(
     val votesCast: Int = ballots.count { it.forWhom != null }
 
     companion object {
+
+        /**
+         * [renderHarness], asked of a state rather than of a whole [PanelVals] (D-255), for a
+         * caller that holds no panel yet: [FlowModel] and [Screen] choosing which editor to open
+         * on (D-270). One rule, so the editor and the clock can never disagree about which phone
+         * is the harness.
+         */
+        fun isRenderHarness(state: PanelState): Boolean = !state.houseAttached && state.wallTime == null
 
         /** The house thread's two opening rows, the same words housed or not (see [houseThread]). */
         private val OPENING_THREAD = listOf(

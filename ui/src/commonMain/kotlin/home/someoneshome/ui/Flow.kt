@@ -994,8 +994,11 @@ class FlowModel(
      * — into the room panel, the marker sheet, the floors list — and a plan that lived in a
      * screen's own `remember` would be repainted from scratch every time they did. Fifteen
      * minutes of walking a house is the thing being protected.
+     *
+     * Null means *choose for me*, and [HomeEditorModel.opening] does (D-270): the empty home on a
+     * real phone, the bungalow in the render harness alone. See the [editor] property.
      */
-    val editor: HomeEditorModel = HomeEditorModel.bungalow(),
+    editor: HomeEditorModel? = null,
     /**
      * The homes this phone holds.
      *
@@ -1224,6 +1227,18 @@ class FlowModel(
         if (initial.houseAttached) meeting.houseAttached()
         wallClockRead()
     }
+
+    /**
+     * **The plan the host is painting** — the one handed in, or, with none, the one
+     * [HomeEditorModel.opening] chooses (D-270).
+     *
+     * Declared after `init` on purpose: the choice asks [PanelVals.isRenderHarness] of [state], and
+     * the phone's clock is only on [state] once `init` has read it. A real phone (one the app
+     * handed a clock) therefore opens on **one empty storey, no rooms and no cards**, whichever
+     * route reaches the editor; the design's bungalow is left to the harness, so its pictures still
+     * compare to the mockup.
+     */
+    val editor: HomeEditorModel = editor ?: HomeEditorModel.opening(PanelVals.isRenderHarness(state))
 
     /**
      * **The lamp, and it is deliberately not a field of [state]** (rule 7, D-182).
