@@ -8743,6 +8743,31 @@ every round with a meeting (or a lock) during an Egress.
 
 **Not on a phone.**
 
+### D-283 · **The evasion notice draws a seat with no name as UNNAMED — built; the out host named on the notice — NOT built, the house does not know which seat is the host (raised)**
+
+**The ruling** (owner, 2026-11-18, Q6 on D-242): an out player who goes dark is not named, but an
+out *host* who locks or leaves is, because the whole house goes off the air with them. The owner
+also asked that the notice name the player, not the seat; the screen already does (`noticeBody`),
+and found while checking: a seat with a blank name read *Resident  was unreachable*.
+
+**Built: UNNAMED.** `noticeBody` draws a blank name as `UNNAMED`, D-277's word, the one the ballot,
+the couch and the lobby already use for the same seat. The notice's caller already turns a seat the
+roster does not hold into a blank, so that reads UNNAMED too, which is that word's stated fail-closed
+use. No wire, light or timing moved; the only copy change is the word in place of nothing.
+
+**Not built: the out host.** `Rules.onTheNotice` keeps an out seat off the list (R7, D-242) and the
+exception needs the rules to know which seat is the host's. **Nothing in the house knows it.**
+`GameState` carries no host seat and no event names one; the host's lock reaches the rules as the
+host phone's own `RadioFaulted(Person)` up its own loopback socket, the same body a guest sends
+(D-229, D-230), and neither `LobbyHouse`, the seat ledger nor `TransportHost` records which seat its
+own loopback client took. Adding it means choosing where the fact enters and how it is recorded
+(an arming input, `RoundArmed.host`, a recording bump, a schema question about who may ever be told
+it), which is a decision rather than a fix, so it is raised rather than invented. The out-host
+exception was not built and `onTheNotice` is unchanged.
+
+**Proved.** `HouseNoticeTest.aSeatWithNoNameIsNamedUnnamed`. *The mapping removed:* `expected:<Resident
+[UNNAMED] was unreachable thi...> but was:<Resident [] was unreachable thi...>`.
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

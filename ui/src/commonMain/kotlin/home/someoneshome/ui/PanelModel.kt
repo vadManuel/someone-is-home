@@ -2688,10 +2688,15 @@ fun Plan.mapCells(): List<MapCell> =
  * every screen is a fixture. So the sentence cannot be reused unchanged, and a new one is the
  * owner's. Proposed, in its voice and shape: *Resident MARCUS was unreachable this shift. Occupancy
  * data for this interval is incomplete.* When it is ruled, this function is the whole change.
+ *
+ * **A seat with no name is named [UNNAMED]** (the owner's 2026-11-18 ruling on D-242; D-277's word):
+ * a blank read *Resident  was unreachable*, a sentence with a hole where a person goes. The ballot
+ * and the couch already draw the same word for the same seat, so the notice names it the way the
+ * room has seen it named.
  */
 fun noticeBody(names: List<String>): String? = when {
     names.isEmpty() -> NOTHING
-    else -> "${residents(names)} unreachable this shift. Occupancy data for this interval is incomplete."
+    else -> "${residents(names.map { it.ifBlank { UNNAMED } })} unreachable this shift. Occupancy data for this interval is incomplete."
 }
 
 /** A meeting where nobody evaded: no words, and no box to put them in. */

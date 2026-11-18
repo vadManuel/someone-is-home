@@ -84,6 +84,22 @@ class HouseNoticeTest {
         )
     }
 
+    /**
+     * **GUARD (the owner's 2026-11-18 ruling, D-283): a seat with no name is named UNNAMED, as the
+     * ballot names it (D-277), and never as a blank.**
+     */
+    @Test
+    fun aSeatWithNoNameIsNamedUnnamed() {
+        assertEquals(
+            "Resident UNNAMED was unreachable this shift. Occupancy data for this interval is incomplete.",
+            noticeBody(listOf("")),
+        )
+        assertEquals(
+            "Residents ROSE and UNNAMED were unreachable this shift. Occupancy data for this interval is incomplete.",
+            noticeBody(listOf("ROSE", " ")),
+        )
+    }
+
     /** A housed phone the house has told nothing yet is not shown the design's MARCUS either. */
     @Test
     fun aHousedPhoneIsNeverShownTheFixture() {
