@@ -427,3 +427,7 @@ Results: `uwb-spike-results-2026-11-18.md`.
 - **U2: 6.7 readings a second is enough.**
 - **U3: the walls are part of the game.** UWB cannot tell rooms apart, and a body in the way reads long. The owner's original intent stands: the technology's uncertainty is part of the game, not something to work around.
 - **U4: direction is dropped.** Rules use distance only.
+- **U5: iPhone first.** The owner has no Android phone, so Android stays on the roadmap and nothing is built for it now.
+  - Cross-platform UWB is possible on paper: Android 16's Ranging module ranges with an iPhone through Apple's Nearby Interaction Accessory Protocol.
+  - It is unproven for a full mesh, because an Android responder serves one initiator at a time.
+  - The one thing to keep: the house brokers each pair's UWB setup over the existing connection rather than through an iOS-only channel, so an Android path can be added later.
