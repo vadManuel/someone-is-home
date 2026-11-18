@@ -516,8 +516,9 @@ sealed interface Event {
      * deadline fell inside the gap expired on the first step after the return, which handed the
      * round to the Insiders for a host's lock. **The Egress pauses while the house is off the air,
      * as a meeting pauses it** (D-133): this event is that pause, recorded, so a replay moves the
-     * deadline by exactly the gap the room lived through. **No other clock is touched** (D-230
-     * stands for meetings and cooldowns).
+     * deadline by exactly the gap the room lived through, and the Egress's own cooldown with it so
+     * it outlives its Egress (D-282). **No other clock is touched** (D-230 stands for meetings and
+     * the per-seat cooldowns).
      *
      * Both ticks are the house's own, read at the edge like every other: [since] is the tick the
      * house stood at when it went off the air, [at] the step it came back on. Minted by the house

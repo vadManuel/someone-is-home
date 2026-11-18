@@ -54,9 +54,9 @@ class OffAirEgressTest {
             back.effects,
             "every phone was not told the Egress's number again on the house's return",
         )
-        // Nothing else moved: the cooldowns, the Egress's own clock and the meter keep wall time (D-230).
+        // The per-seat cooldowns keep wall time (D-230); the Egress's own moves with it (D-282).
         assertEquals(state.cooldowns.map { it.readyAt }, back.state.cooldowns.map { it.readyAt })
-        assertEquals(state.egressReadyAt, back.state.egressReadyAt)
+        assertEquals(state.egressReadyAt + 300 * second, back.state.egressReadyAt, "the Egress cooldown did not move by the gap")
     }
 
     /** A gap that began before the fire counts only from the fire. */

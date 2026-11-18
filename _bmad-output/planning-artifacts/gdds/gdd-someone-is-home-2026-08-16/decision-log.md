@@ -8698,6 +8698,51 @@ short one, to every phone alike.
 **Not on a phone.** The lock path (`deviceForeground`, the suspension) is device behaviour; what is
 proved here is the pump against a clock that skips the gap in one step, as a suspension does.
 
+### D-282 · **When a paused Egress resumes, the Egress cooldown is pushed back by the length of the pause, so it always outlives its Egress — built (recording 36), closes D-279's F4**
+
+**The ruling** (owner, 2026-11-18, decision pack 9f option a). The cooldown (180 s) ran from the
+fire on wall time, and a meeting paused the Egress's 120 s timer but not the cooldown. The pack's
+example: fired at 0 s, so the next is ready at 180 s; a report meeting runs 10–190 s; the Egress
+resumes with 110 s left and is contained at 250 s; a second Egress could fire at 251 s. The meeting
+funded the next Egress, which D-184's exemption (the Egress clock is frozen out of the reset while
+its Egress runs) meant to stop, and `egressFired`'s KDoc claimed the cooldown *outlives the timer by
+construction*, which it did not.
+
+**Now.** At a meeting's close (`lightsOut`) a running Egress's `egressReadyAt` moves back by
+`pausedFor(egress, at)`, the same length `Egress.resumedAt` moves its deadline by; at the house's
+return (`backOnAir`, D-281) it moves by exactly what the deadline moved. So the cooldown's margin over
+its own Egress (60 s at the fire) never shrinks. The `egressFired` KDoc now says why the cooldown
+outlives the timer, and that it used not to. With no Egress running a meeting's end resets the
+clock to half as before (D-184). No per-seat cooldown, phase or other clock moved.
+
+**On every phone, the same.** Page 2's Egress bar is each phone's copy of this cooldown (D-239),
+and it kept running through the hold, so it would have read READY a pause-length before the house
+would take an Egress: D-237's silent no-op, one tile over. It now mirrors the house off two pushes
+every phone gets: it does not run while `EgressHeld(running = false)` holds the countdown, and at an
+`EgressHeld(running = true)` that ends no hold (the house's return, D-281, whose start no phone was
+told) it gives back what the phone counted down that the house's number says it did not. No role is
+read; the cooldown reaches no client as itself.
+
+**Recording 36**: no row changed shape; the same events reduce to a different `egressReady=` for
+every round with a meeting (or a lock) during an Egress.
+
+**Proved, each red against the injected bug first.**
+
+- `EgressCooldownPauseTest` (core, the pack's own example), *a meeting during an Egress pushes the
+  Egress cooldown back by its length* and *the meeting does not fund the next Egress*. *The push at
+  the meeting's close removed:* `the Egress cooldown kept wall time while its Egress was held.
+  Expected <Tick(step=7200)>, actual <Tick(step=3600)>` and `a second Egress fired the moment the
+  first was contained: the meeting funded it`. `MeetingRulesTest`'s D-184 case, which asserted the
+  clock exactly frozen and now asserts it frozen and pushed by the pause, went red with it.
+- `OffAirEgressTest` (core). *The push at the return removed:* `the Egress cooldown did not move by
+  the gap. Expected <Tick(step=7800)>, actual <Tick(step=1800)>`.
+- `PublicCooldownTest` (ui), *theEgressClockWaitsWithItsEgress*. *The hold's freeze removed:* `page
+  2's Egress clock ran while a meeting held its Egress expected:<30> but was:<130>`. *The give-back
+  at the return removed:* `page 2's Egress clock kept the gap the house was off the air
+  expected:<40> but was:<90>`.
+
+**Not on a phone.**
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

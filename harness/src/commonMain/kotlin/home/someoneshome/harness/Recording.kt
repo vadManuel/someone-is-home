@@ -50,6 +50,11 @@ class Recording(
     }
 
     companion object {
+        // 36: no row changed shape, and the same events reduce differently (decision pack 9f option
+        // a, D-282): when a paused Egress resumes, at a meeting's close or at the house's return,
+        // `egressReadyAt` moves back by the length of the pause, so the state row's `egressReady=`
+        // differs for every round with a meeting during an Egress.
+        //
         // 35: one event a version 34 build cannot construct, `OffAirEnded` (the owner's 2026-11-18
         // ruling, D-281): the house came back on the air, with the tick it went off it. A running
         // Egress is paused across the gap and every phone is sent `EgressHeld`. No row changed shape.
@@ -293,7 +298,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/35"
+        const val HEADER = "someone-is-home/recording/36"
     }
 }
 

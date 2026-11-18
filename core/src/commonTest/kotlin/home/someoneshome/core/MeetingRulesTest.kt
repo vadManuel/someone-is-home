@@ -322,10 +322,12 @@ class MeetingRulesTest {
         val after = reduce(crisis, Event.MeetingClosed(out)).state
 
         assertNotNull(after.egress, "the Egress did not survive the meeting")
+        // Not reset, and pushed back by exactly the meeting's length, 200 to 400 (decision pack 9f
+        // option a, D-282): the cooldown outlives its own Egress however long the meeting held it.
         assertEquals(
-            frozen, after.egressReadyAt,
-            "a meeting reset the shared Egress clock while an Egress was still running — the " +
-                "Insiders were handed a second one on top of the first",
+            Tick(frozen.step + (out.step - 200)), after.egressReadyAt,
+            "a meeting reset the shared Egress clock while an Egress was still running, or did not " +
+                "push it back by the pause — the Insiders were handed a second one on top of the first",
         )
     }
 

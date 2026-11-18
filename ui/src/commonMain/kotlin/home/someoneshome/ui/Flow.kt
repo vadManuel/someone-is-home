@@ -1570,7 +1570,8 @@ class FlowModel(
         val next = s.copy(
             revokeClock = s.revokeClock?.at(elapsed(stamps.revoke)),
             accessClock = s.accessClock?.at(elapsed(stamps.access)),
-            egressClock = s.egressClock?.at(elapsed(stamps.egress)),
+            // Held with its Egress (D-282): see `EgressHeld`.
+            egressClock = if (s.egressHeld) s.egressClock else s.egressClock?.at(elapsed(stamps.egress)),
             secondsLeft = s.secondsLeft?.let { (stamps.phaseFrom - elapsed(stamps.phase)).coerceAtLeast(0) },
             egressLeft = s.egressLeft?.let { left ->
                 if (s.egressHeld) left else left.copy(secondsLeft = (stamps.egressLeftFrom - elapsed(stamps.egressLeft)).coerceAtLeast(0))
@@ -1605,7 +1606,7 @@ class FlowModel(
         val running = listOfNotNull(
             stamps.revoke.takeIf { s.revokeClock?.running == true },
             stamps.access.takeIf { s.accessClock?.running == true },
-            stamps.egress.takeIf { s.egressClock?.running == true },
+            stamps.egress.takeIf { !s.egressHeld && s.egressClock?.running == true },
             stamps.phase.takeIf { (s.secondsLeft ?: 0) > 0 },
             stamps.egressLeft.takeIf { !s.egressHeld && (s.egressLeft?.secondsLeft ?: 0) > 0 },
             stamps.armed.takeIf { s.revoke == RevokeState.Armed },
@@ -3160,12 +3161,32 @@ class FlowModel(
             // rounds up so the phone never reads less than the house holds. The length stays the
             // one the Egress fired with; a phone that missed the fire falls back to the house's
             // timer.
-            is RoundMessage.EgressHeld -> state = state.copy(
-                egressHeld = !message.running,
-                egressLeft = Balance.wholeSeconds(message.remaining).let { left ->
-                    Countdown(left, state.egressLeft?.ofSeconds ?: maxOf(left, Balance.wholeSeconds(Balance.EGRESS_TIMER)))
-                },
-            )
+            //
+            // **And page 2's Egress clock waits with its Egress** (decision pack 9f option a, D-282):
+            // the house pushes the Egress cooldown back by however long the Egress was held, so this
+            // phone's copy of it does not run while the countdown is held, and at a restart it gives
+            // back whatever the house's number shows this phone counted down that the house did not
+            // (the gap the house was off the air, D-281, which no phone was told the start of). Read
+            // off two pushes every phone gets, so every phone's tile moves alike.
+            is RoundMessage.EgressHeld -> {
+                if (!message.running) clocksRead()
+                val left = Balance.wholeSeconds(message.remaining)
+                val gaveBack = if (message.running && !state.egressHeld) {
+                    (left - (state.egressLeft?.secondsLeft ?: left)).coerceAtLeast(0)
+                } else {
+                    0
+                }
+                state = state.copy(
+                    egressHeld = !message.running,
+                    egressLeft = Countdown(left, state.egressLeft?.ofSeconds ?: maxOf(left, Balance.wholeSeconds(Balance.EGRESS_TIMER))),
+                    // A new value at a restart, so it is stamped again from now (`clocksStamped`).
+                    egressClock = if (message.running) {
+                        state.egressClock?.let { it.copy(elapsed = (it.elapsed - gaveBack).coerceAtLeast(0)) }
+                    } else {
+                        state.egressClock
+                    },
+                )
+            }
 
             // **The house's answer to one beat, and it is the same answer either way** (`gdd.md:355`,
             // rule 1). `held` is true when the house is now holding this seat's beat, waiting for

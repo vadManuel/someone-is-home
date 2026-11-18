@@ -186,6 +186,37 @@ class PublicCooldownTest {
     }
 
     /**
+     * **GUARD (decision pack 9f option a, D-282): page 2's Egress clock waits with its Egress.** The
+     * house pushes the Egress cooldown back by however long the Egress was held, so the phone's copy
+     * does not run while a meeting holds it, and at the house's return from off the air (D-281) it
+     * gives back what this phone counted down that the house did not.
+     */
+    @Test
+    fun theEgressClockWaitsWithItsEgress() {
+        val phone = Phone(insider = false)
+        phone.said(opening)
+        phone.seconds(PublicCooldown.EgressOpening.seconds)
+        phone.said(egressOpened)
+        phone.seconds(30)
+        fun elapsed() = phone.flow.state.egressClock!!.elapsed
+        assertEquals(30, elapsed(), "the fixture's Egress clock did not run")
+
+        val ticks = Balance.TICKS_PER_SECOND
+        phone.said(RoundMessage.EgressHeld(remaining = 90 * ticks, running = false, haptic = Haptic.Short))
+        phone.seconds(100)
+        assertEquals(30, elapsed(), "page 2's Egress clock ran while a meeting held its Egress")
+        phone.said(RoundMessage.EgressHeld(remaining = 90 * ticks, running = true, haptic = Haptic.Short))
+        phone.seconds(10)
+        assertEquals(40, elapsed(), "page 2's Egress clock did not run again after the meeting")
+
+        // Off the air: no hold arrives, the phone counts on, and the return says 80 s are left where
+        // this phone had counted down to 30. The 50 s it counted that the house did not come back.
+        phone.seconds(50)
+        phone.said(RoundMessage.EgressHeld(remaining = 80 * ticks, running = true, haptic = Haptic.Short))
+        assertEquals(40, elapsed(), "page 2's Egress clock kept the gap the house was off the air")
+    }
+
+    /**
      * **GUARD (D-262, review #2's V3): after a Surge the actor's own Access bar shows the pool
      * cooling, and a fire during it shows not-ready.**
      *

@@ -1794,7 +1794,18 @@ private fun lightsOut(state: GameState, event: Event.MeetingClosed): Reduction<G
     // already makes a running Egress outlive its Insiders, so the two together would put the round
     // beyond the Residents on a rule about cooldowns. With no Egress running it resets like the
     // rest, because then it is an ordinary cooldown and the ruling says every cooldown.
-    val egressReopened = if (running != null) state.egressReadyAt else event.at + Balance.EGRESS_OPENING
+    //
+    // **And while it runs it is pushed back by the length of the pause** (the owner's 2026-11-18
+    // ruling, decision pack 9f option a; D-282). The cooldown started at the fire and the meeting
+    // held the Egress but not the cooldown, so a meeting of a minute or more let the cooldown run
+    // out under a paused Egress, and a second could be fired the moment the first was contained:
+    // the meeting funded the next Egress, which D-184's exemption is there to stop. The cooldown
+    // now moves by exactly what the deadline moves by, so it outlives its own Egress always.
+    val egressReopened = if (running != null) {
+        state.egressReadyAt + pausedFor(state.egress, event.at)
+    } else {
+        event.at + Balance.EGRESS_OPENING
+    }
 
     return Reduction(
         state.copy(
@@ -1813,6 +1824,14 @@ private fun lightsOut(state: GameState, event: Event.MeetingClosed): Reduction<G
         listOf(Effect.MeetingEnded(Haptic.Long)) + restarted,
     )
 }
+
+/**
+ * **How long [egress] has been held, at [at]**: from its pause mark to now, or nothing for an Egress
+ * that is not paused. What a resume moves the deadline by ([Egress.resumedAt]), and so what the
+ * house-wide Egress cooldown is moved by beside it (decision pack 9f option a; D-282).
+ */
+private fun pausedFor(egress: Egress?, at: Tick): Long =
+    egress?.pausedAt?.let { (at.step - it.step).coerceAtLeast(0L) } ?: 0L
 
 /** How many seated players are standing at the meeting area. An empty seat counts for nobody. */
 private fun present(state: GameState, meeting: Meeting): Int =
@@ -1870,8 +1889,13 @@ private inline fun withEgress(
  * ### A second Egress cannot start on top of a first
  *
  * Not because it is refused — that would be a refusal about a running Egress, which is the gate's
- * job and is already there for the meeting card — but because the cooldown outlives the timer by
- * construction. The check is written anyway, and it is on state that is on every widget.
+ * job and is already there for the meeting card — but because the cooldown outlives the timer:
+ * [Balance.EGRESS_COOLDOWN] is longer than [Balance.EGRESS_TIMER], and **every pause of the Egress
+ * pushes the cooldown back by the same length**, at a meeting's close and at the house's return
+ * (decision pack 9f option a; D-282). Until then this said *by construction*, and it was not: the
+ * cooldown kept wall time while a meeting held the Egress, so a long enough meeting let a second
+ * Egress fire the moment the first was contained. The check is written anyway, and it is on state
+ * that is on every widget.
  *
  * ### The nodes arrive already chosen
  *
@@ -2066,8 +2090,9 @@ private fun pulseReturned(
  * **Only an Egress that is running and not already paused.** One held by a meeting stays held, and
  * the meeting's close resumes it across the whole stretch, the gap included; with no Egress running
  * nothing moves and nothing is said. Both branches are on a fact on every widget in the building,
- * which is the only kind rule 1 lets a client-visible path read. **No other clock is touched**:
- * cooldowns, a meeting's phase and the Static window keep wall time (D-230).
+ * which is the only kind rule 1 lets a client-visible path read. **No other clock is touched** but
+ * the Egress's own cooldown, which moves by the same gap so it outlives its Egress (D-282): the
+ * per-seat cooldowns, a meeting's phase and the Static window keep wall time (D-230).
  */
 private fun backOnAir(state: GameState, event: Event.OffAirEnded): Reduction<GameState, Effect> {
     val resumed = state.egress?.takeIf { it.pausedAt == null }?.let {
@@ -2076,7 +2101,19 @@ private fun backOnAir(state: GameState, event: Event.OffAirEnded): Reduction<Gam
     val restarted = resumed?.let {
         listOf(Effect.EgressHeld(it.remainingAt(event.at), running = true, haptic = Haptic.Short))
     } ?: emptyList()
-    return Reduction(if (resumed == null) state else state.copy(egress = resumed), restarted)
+    // **The Egress cooldown moves with it** (decision pack 9f option a; D-282), by exactly what the
+    // deadline moved, so the house's return cannot fund the next Egress any more than a meeting can.
+    return Reduction(
+        if (resumed == null) {
+            state
+        } else {
+            state.copy(
+                egress = resumed,
+                egressReadyAt = state.egressReadyAt + (resumed.deadline.step - state.egress!!.deadline.step),
+            )
+        },
+        restarted,
+    )
 }
 
 /**
