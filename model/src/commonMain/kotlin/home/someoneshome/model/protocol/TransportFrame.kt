@@ -48,7 +48,10 @@ value class SeatToken(val value: String)
 @ClientFacing
 @kotlinx.serialization.Serializable
 enum class TransportRefusal {
-    /** The round is armed. Joining ended when the lights went out; only resume readmits. */
+    /**
+     * The round is armed. Joining ended when the lights went out; only resume readmits, and only
+     * a seat that was in the round at LIGHTS OUT (D-287). The phone is told ROUND IN PROGRESS.
+     */
     RoundLocked,
 
     /** The presented token matches no seat. The connection is nobody the ledger knows. */

@@ -1313,10 +1313,10 @@ private fun RoundUnderWay(lobby: LobbyModel, actions: PanelActions) {
         // not NEW ROUND, so the phone still waits, and what it waits for is the host: the lobby's
         // own words for a guest waiting on NEW ROUND's thumb, not new copy.
         Words(
-            if (lobby.standing.roundOver) "WAITING FOR THE HOST" else "ROUND IN PROGRESS",
+            if (lobby.standing.roundOver) "WAITING FOR THE HOST" else LobbyModel.ROUND_IN_PROGRESS,
             size = 40, color = P.ink, lineHeight = 0.95,
         )
-        KitCaption("YOU JOIN THE NEXT ONE", P, size = 22)
+        KitCaption(LobbyModel.YOU_JOIN_THE_NEXT_ONE, P, size = 22)
         KitSpacer()
         LobbyExit(hosting = false, actions = actions)
     }

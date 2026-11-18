@@ -50,9 +50,31 @@ class SeatLedger(
     var locked: Boolean = false
         private set
 
+    /**
+     * **The seats of the round under way, from LIGHTS OUT to its ending, or null between rounds**
+     * (D-287, the owner's ruling 9c: *a round in progress cannot be joined*).
+     *
+     * [lock]'s reversible sibling, for an evening of many rounds (D-157): [lock] is forever, and the
+     * house plays a second round in the same lobby. While this is set, a stranger's [join] is refused
+     * [TransportRefusal.RoundLocked], and so is a [resume] whose seat is not one of these: a phone
+     * that was not seated at LIGHTS OUT is not in the round, whatever token it holds. A seat that is
+     * one of these comes back to it at any time (D-225), which is a rejoin and not a join.
+     */
+    private var underWay: List<Seat>? = null
+
+    /** LIGHTS OUT: from here until [roundOver], only [seats] are admitted, and only by their tokens. */
+    fun roundUnderWay(seats: List<Seat>) {
+        underWay = seats.sortedBy { it.index }
+    }
+
+    /** The round reached its ending, or NEW ROUND: the door is open again, as it is in a lobby. */
+    fun roundOver() {
+        underWay = null
+    }
+
     /** A fresh connection gets the next free seat and a newly minted token — or a refusal. */
     fun join(): Admission {
-        if (locked) return Admission.Refused(TransportRefusal.RoundLocked)
+        if (locked || underWay != null) return Admission.Refused(TransportRefusal.RoundLocked)
         val seat = free.removeFirstOrNull() ?: return Admission.Refused(TransportRefusal.NoFreeSeat)
         val token = mint()
         // A colliding mint is a broken mint, and this is host-side, pre-arm, in the light —
@@ -62,10 +84,22 @@ class SeatLedger(
         return Admission.Seated(seat, token)
     }
 
-    /** A returning connection gets exactly the seat its token owns — or a refusal. */
-    fun resume(token: SeatToken): Admission =
-        held[token]?.let { Admission.Seated(it, token) }
-            ?: Admission.Refused(TransportRefusal.UnknownToken)
+    /**
+     * A returning connection gets exactly the seat its token owns — or a refusal.
+     *
+     * **While a round is under way, only a seat in it** (D-287). A token this ledger never issued is
+     * still [TransportRefusal.UnknownToken] first, so the phone starts over as a stranger and is then
+     * told the round is locked; a token for a seat outside the round is told so at once.
+     */
+    fun resume(token: SeatToken): Admission {
+        val seat = held[token] ?: return Admission.Refused(TransportRefusal.UnknownToken)
+        val round = underWay
+        return if (round != null && round.none { it.index == seat.index }) {
+            Admission.Refused(TransportRefusal.RoundLocked)
+        } else {
+            Admission.Seated(seat, token)
+        }
+    }
 
     /**
      * A player leaves the lobby and the seat returns to the pool. **Pre-arm only.** After [lock]

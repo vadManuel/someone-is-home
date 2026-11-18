@@ -31,19 +31,22 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * **A phone seated while a round it is not in runs waits for the next one, and its lobby counts the
- * round** (D-273, raised in D-267).
+ * **A round in progress cannot be joined: a phone not seated at LIGHTS OUT is refused at the door,
+ * and a seat in the round that drops and relaunches still comes back** (D-287, the owner's ruling 9c;
+ * it replaces D-273's waiting lobby, raised in D-267).
  *
  * A token returns its seat at any time (D-225). The 5-seat hunt (`hunt.sh --relaunch-guest 2`,
  * `/tmp/someones-home-hunt/t1-r5b`) stopped a guest at round one's ending and relaunched it after round
- * two armed with four: it was seated, and its lobby read 5 JOINED beside a round of four, with a line
- * row asking for a line the next NEW ROUND deletes.
+ * two armed with four: it was seated, and its lobby read 5 JOINED beside a round of four. D-273 made it
+ * a waiting lobby, which stood lit for the whole dark round; the owner ruled it refused instead.
  *
  * Five phones over real loopback sockets, built as `CheatRoot` builds them (the real
- * [LobbyOverTransport] with `onRoundEnded` wired to `FlowModel.newRound`, a real [RoundClient], the
- * real [RoundAuthority]). Round one is played to its ending by all five; one guest is stopped there;
- * NEW ROUND, and round two arms with the four left; the guest is relaunched (a new process, the same
- * stored token) mid-round two; then round two ends, NEW ROUND, and round three arms with all five.
+ * [LobbyOverTransport] with `onRoundEnded` wired to `FlowModel.newRound` and `onRoundInProgress` to
+ * `FlowModel.roundInProgress`, a real [RoundClient], the real [RoundAuthority]). Round one is played
+ * to its ending by all five; one guest is stopped there; NEW ROUND, and round two arms with the four
+ * left; the guest is relaunched (a new process, the same stored token) mid-round two and refused, a
+ * stranger is refused, and a round guest drops, relaunches and is seated again; round two ends, the
+ * guest taps the home again and waits on the host, NEW ROUND, and round three arms with all five.
  */
 class RoundUnderWayTest {
 
@@ -103,6 +106,8 @@ class RoundUnderWayTest {
             onRadioFaulted = HouseDoors(house)::faulted,
             round = seam,
             onRoundEnded = { flow.newRound() },
+            // As `CheatRoot` wires it (D-287): refused at the door, walked to JOIN.
+            onRoundInProgress = { flow.roundInProgress() },
             wake = wake, advertising = bonjour,
         )
         val model: LobbyModel = LobbyModel(link = link).also { it.nameResident(name) }
@@ -127,6 +132,9 @@ class RoundUnderWayTest {
     }
 
     private companion object {
+        /** The join screen's refusal, the waiting screen's two lines (D-287). */
+        val ROUND_IN_PROGRESS = "${LobbyModel.ROUND_IN_PROGRESS}\n${LobbyModel.YOU_JOIN_THE_NEXT_ONE}"
+
         val CLOCK = WallTime(hour = 21, minute = 7, weekday = 6, day = 16, month = 8)
         const val SEED = 20261117L
     }
@@ -143,12 +151,14 @@ class RoundUnderWayTest {
     }
 
     /**
-     * **GUARD (D-273): a guest relaunched mid-round two is told the round is under way, is shown the
-     * round's count and names (four, without its own), is pushed nothing of the round, and is seated
-     * like everybody at NEW ROUND and armed into round three.**
+     * **GUARD (D-287): a guest relaunched mid-round two whose seat sat the round out, and a stranger,
+     * are refused at JOIN and land on the join screen saying ROUND IN PROGRESS / YOU JOIN THE NEXT
+     * ONE, seated nowhere and pushed nothing; a round guest that drops and relaunches is seated again
+     * and handed its round; after the ending the refused guest is seated, and is armed into round
+     * three.**
      */
     @Test
-    fun aPhoneSeatedDuringARoundItIsNotInWaitsForTheNextAndCountsTheRound() = runBlocking<Unit> {
+    fun aRoundInProgressRefusesAPhoneNotInItAndReadmitsOneThatIs() = runBlocking<Unit> {
         val job = SupervisorJob(coroutineContext[kotlinx.coroutines.Job])
         val scope = CoroutineScope(coroutineContext + job)
         val alive = mutableListOf<Phone>()
@@ -236,41 +246,79 @@ class RoundUnderWayTest {
                 assertEquals(4, house.state.seats.size, "round two did not arm with four")
                 val roundTwoNames = house.state.seats.sortedBy { it.index }.map { house.state.nameOf(it).orEmpty() }
 
-                // **The guest is relaunched mid-round two**: a new process, the same stored token.
+                // **The guest is relaunched mid-round two**: a new process, the same stored token. Its
+                // seat sat the round out, so it was not seated at LIGHTS OUT: it is refused at the door
+                // (D-287), and lands on JOIN with the waiting screen's two lines, seated nowhere.
                 val back = phone(stopped.name, Seat(4), kept = stopped.kept)
                 alive.remove(back)
                 back.model.attachTo(dial)
                 // Where the join row's tap walks a phone, as the bench walks it.
                 back.flow.go(ScreenId.Lobby)
-                until("the relaunched guest was seated", detail = { back.log.takeLast(5).toString() }) {
-                    host.link.house.armingInputs().seats.size == 5 && back.model.standing.joined > 0
+                until("the relaunched guest was turned away at the door", detail = { "${back.flow.state.screen} ${back.model.refusal} ${back.log.takeLast(5)}" }) {
+                    back.flow.state.screen == ScreenId.Join && back.model.refusal != null
                 }
-                until("the relaunched guest was told a round is under way without it", detail = { "${back.model.standing}" }) {
-                    back.model.waitingForNextRound
+                assertEquals(ROUND_IN_PROGRESS, back.model.refusal, "the refused guest was not told the round is in progress")
+                assertTrue(back.log.any { it == "REFUSED BY THE HOUSE — RoundLocked" }, "the refusal was not the door's: ${back.log}")
+                assertEquals(null, back.model.attached, "the refused guest still holds the house")
+                assertEquals(0, back.model.standing.joined, "the refused guest holds a lobby")
+                assertFalse(back.model.waitingForNextRound, "the refused guest stands on a waiting lobby")
+                assertEquals(4, host.link.house.armingInputs().seats.size, "the house seated the refused guest on its desk")
+                assertTrue(host.log.any { it == "A CONNECTION WAS REFUSED — RoundLocked" }, "the house recorded no refusal: ${host.log.takeLast(5)}")
+                assertEquals(stopped.kept.token, back.kept.token, "the refusal cost the guest its seat's token")
+
+                // **A stranger, never seated anywhere, is refused the same way.**
+                val stranger = phone("FREYA", Seat(5))
+                alive.remove(stranger)
+                stranger.model.attachTo(dial)
+                stranger.flow.go(ScreenId.Lobby)
+                until("the stranger was turned away at the door", detail = { "${stranger.flow.state.screen} ${stranger.log.takeLast(5)}" }) {
+                    stranger.flow.state.screen == ScreenId.Join && stranger.model.refusal == ROUND_IN_PROGRESS
                 }
-                assertEquals(4, back.model.standing.joined, "the waiting guest's lobby counts ${back.model.standing.joined} beside a round of four")
-                assertEquals(roundTwoNames, back.model.residents, "the waiting guest's lobby lists other than the round's names")
-                assertFalse(stopped.name in back.model.residents, "the waiting guest is listed in a round it is not in")
-                assertEquals(ScreenId.Lobby, back.flow.state.screen, "the waiting guest is not on its lobby")
-                // A few beats: anything of round two meant for it would have arrived by now.
+                assertEquals(null, stranger.kept.token, "the stranger was handed a seat's token")
+
+                // **A seat in the round drops and relaunches mid-round: that is a rejoin, and it works.**
+                val dropped = alive[1]
+                dropped.link.leave()
+                until("the house lost the dropped guest") { host.link.house.armingInputs().seats.size == 3 }
+                val rejoined = phone(dropped.name, Seat(1), kept = dropped.kept)
+                alive.remove(rejoined)
+                alive[1] = rejoined
+                rejoined.model.attachTo(dial)
+                rejoined.flow.go(ScreenId.Lobby)
+                until("the relaunched round guest was seated again", detail = { "${rejoined.log.takeLast(5)}" }) {
+                    host.link.house.armingInputs().seats.size == 4 && rejoined.model.standing.joined == 4
+                }
+                assertEquals(null, rejoined.model.refusal, "a seat in the round was refused its own chair")
+                assertFalse(rejoined.model.waitingForNextRound, "a seat in the round was told to wait for the next one")
+                withTimeout(30_000) {
+                    while (!(rejoined.pushed.any { it is RoundMessage.RoleRevealed } && rejoined.flow.state.screen != ScreenId.Lobby)) {
+                        alive.forEach { it.round.round.beat() }
+                        delay(150)
+                    }
+                }
+
+                // A few beats: anything of round two meant for the refused phones would have arrived.
                 repeat(3) {
-                    (alive + back).forEach { it.round.round.beat() }
+                    (alive + back + stranger).forEach { it.round.round.beat() }
                     delay(200)
                 }
-                assertTrue(back.pushed.none { it is RoundMessage.RoleRevealed || it is RoundMessage.RosterIssued }, "the waiting guest was pushed round two: ${back.pushed}")
-                // The phones in the round are told the same count and are not told to wait.
+                assertTrue(back.pushed.none { it is RoundMessage.RoleRevealed || it is RoundMessage.RosterIssued }, "the refused guest was pushed round two: ${back.pushed}")
+                assertTrue(stranger.pushed.isEmpty(), "the refused stranger was pushed round two: ${stranger.pushed}")
+                // The phones in the round are told the round's count and are not told to wait.
                 until("the host's standing counts the round", detail = { "${host.model.standing}" }) {
                     host.model.standing.joined == 4 && !host.model.waitingForNextRound
                 }
 
-                // **Round two ends, NEW ROUND: the guest is seated like everybody.**
+                // **Round two ends: the door opens, and the guest taps the home again.** The room is
+                // in the light; it waits for NEW ROUND on WAITING FOR THE HOST (D-274).
                 playToTheEnd(2)
-                assertTrue(back.model.waitingForNextRound, "the round's ending is not NEW ROUND, and the guest stopped waiting at it")
-                // **And it is told the round it waits on is over** (D-274): ROUND IN PROGRESS over an
-                // ending was the hunt's seat 2. The phones in the round are not sent the flag.
-                until("the waiting guest was told round two is over", detail = { "${back.model.standing}" }) {
-                    back.model.standing.roundOver
+                back.model.attachTo(dial)
+                back.flow.go(ScreenId.Lobby)
+                until("the guest was seated at the round's ending", detail = { "${back.model.standing} ${back.log.takeLast(5)}" }) {
+                    back.model.waitingForNextRound && back.model.standing.roundOver
                 }
+                assertEquals(null, back.model.refusal, "the guest was refused at the ending")
+                assertEquals(roundTwoNames, back.model.residents, "the waiting guest's lobby lists other than the round's names")
                 assertFalse(host.model.standing.roundOver, "a phone in the round was sent the waiting phone's flag")
                 alive += back
                 newRound()

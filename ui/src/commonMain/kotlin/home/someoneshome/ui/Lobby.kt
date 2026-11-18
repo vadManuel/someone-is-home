@@ -1011,8 +1011,33 @@ class LobbyModel(
         refusal = HOUSE_CLOSED
     }
 
+    /**
+     * **The house turned this phone away at JOIN: a round is under way and it is not in it** (D-287,
+     * the owner's ruling 9c).
+     *
+     * [houseClosed]'s shape: the state a leaver is in, with the reason on it, on the join screen the
+     * flow walks it to. The words are the waiting screen's, unchanged (the owner, 2026-11-18: *keep
+     * today's*), in the join screen's one refusal slot rather than on a lobby the phone would stand
+     * on, lit, for the whole round. Typing or tapping clears it, as every refusal here is cleared,
+     * and tapping the home again after the round is the way in.
+     */
+    fun roundInProgress() {
+        leaveLobby()
+        refusal = "$ROUND_IN_PROGRESS\n$YOU_JOIN_THE_NEXT_ONE"
+    }
+
     companion object {
         const val UNKNOWN: String = "UNKNOWN"
+
+        /**
+         * **A round is running and this phone is not in it** (D-273's words; the owner kept them for
+         * the JOIN refusal, 2026-11-18). Drawn on the join screen when the house refuses this phone
+         * at the door (D-287), and by the waiting lobby of a phone seated outside a round.
+         */
+        const val ROUND_IN_PROGRESS: String = "ROUND IN PROGRESS"
+
+        /** The second line under [ROUND_IN_PROGRESS], and under WAITING FOR THE HOST (D-273, D-274). */
+        const val YOU_JOIN_THE_NEXT_ONE: String = "YOU JOIN THE NEXT ONE"
 
         /**
          * ⚠️ **PROPOSED COPY, NOT RATIFIED.** The owner asked for *an honest line* and did not write

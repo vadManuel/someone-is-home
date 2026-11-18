@@ -423,6 +423,10 @@ class LobbyHouse(
      * the state the round's first push is emitted with (the seats it was armed with, and their names
      * before the ending empties them), so it is the round's own list and not a second reading of the
      * desk. Written and read on [scope], with the desk.
+     *
+     * **Since D-287 that phone is refused at the door** while the round runs ([closeTheDoor]), so a
+     * phone outside the round is seated only once the round has reached its ending, and is told it
+     * waits on the host (D-274).
      */
     private var playing: List<SeatNamed>? = null
 
@@ -666,6 +670,10 @@ class LobbyHouse(
             atTheDesk {
                 if (playing == null) {
                     playing = seats
+                    // **And the door closes on everybody else** (D-287, the owner's ruling 9c): a
+                    // phone not seated at LIGHTS OUT is refused at JOIN until the round's ending,
+                    // and a seat in the round still comes back by its token.
+                    closeTheDoor(seats.map { it.seat })
                     publish()
                 }
             }
@@ -676,6 +684,9 @@ class LobbyHouse(
             atTheDesk {
                 if (!playingOver && playing?.map { it.seat.index } == seats) {
                     playingOver = true
+                    // The round is over and the room is in the light: a phone may join and wait for
+                    // NEW ROUND, on WAITING FOR THE HOST (D-274), as it could in any lobby.
+                    openTheDoor()
                     publish()
                 }
             }
@@ -747,6 +758,9 @@ class LobbyHouse(
         // The round is over and the lobby is the desk's again: every seated phone is in the next one.
         playing = null
         playingOver = false
+        // And anybody may walk in (D-287). Already open from the ending; NEW ROUND says it again,
+        // for a round ended without one (a house that stopped, a host who left).
+        openTheDoor()
         // **The next round's number, before anything is said** (V1, D-267): the standing below
         // carries it, and the effect wire marks every push of the next round with it.
         round += 1
@@ -1160,6 +1174,28 @@ class LobbyHouse(
     }
 
     /**
+     * **The door closes at LIGHTS OUT: only [seats] come back, and only by their tokens** (D-287).
+     *
+     * The owner's ruling 9c: *a round in progress cannot be joined.* It replaced D-273's answer, where
+     * a phone seated by its token after LIGHTS OUT sat on the lit lobby screen for the whole round.
+     * The ledger is the place: it is where a connection is answered, so the refused phone hears a
+     * definite `Refused(RoundLocked)` at the door and is never seated, counted or published to. A
+     * seat in the round that dropped and relaunched is a rejoin, and its token still opens it.
+     *
+     * Launched on [scope] in the order it was asked for, after the standing that set [playing].
+     */
+    private fun closeTheDoor(seats: List<Seat>) {
+        val server = host ?: return
+        scope.launch { server.roundUnderWay(seats) }
+    }
+
+    /** **The door opens again at the round's ending and at NEW ROUND** (D-287). */
+    private fun openTheDoor() {
+        val server = host ?: return
+        scope.launch { server.roundOver() }
+    }
+
+    /**
      * One frame, to every phone attached to this house.
      *
      * Shared by the standing and by the round's ending so there is one loop over the seats rather
@@ -1294,6 +1330,13 @@ class LobbyOverTransport(
      */
     private val onHouseClosed: () -> Unit = {},
     /**
+     * **The house turned this phone away at the door: a round is under way and it is not in it**
+     * (D-287, the owner's ruling 9c). [onHouseClosed]'s sibling and wired the same way: the transport
+     * reports it and the app root answers it on the screen, which neither this class nor `platform`
+     * can reach. The client has already hung up; the stored token is kept for the next JOIN.
+     */
+    private val onRoundInProgress: () -> Unit = {},
+    /**
      * **The house has been out of reach for [houseGoneAfterMillis]** (H4 of the 2026-11-17 hunt,
      * D-253). [onHouseClosed]'s sibling for the house that could not say goodbye: the host's phone
      * failed, crashed or walked out of range, so no `HouseClosed` came down and this phone's socket
@@ -1415,7 +1458,14 @@ class LobbyOverTransport(
     override fun join(home: NearbyHome, name: String, onStanding: (LobbyBody.Standing) -> Unit) {
         residentName = name
         if (clientJob?.isActive == true) return
-        connect(home, name, onStanding, session ?: ClientSession(), mayStartOver = true)
+        // **A dismissed session opens nothing** (`ClientSession.opening`), so a phone the house
+        // turned away is not sent back with it. It knocks again as the phone it is: its stored
+        // seat's token if it holds one, or a stranger (D-287: refused while a round ran, tapping
+        // JOIN again after it).
+        val s = session?.takeUnless { it.phase is ClientSession.Phase.Dismissed }
+            ?: seat.stored()?.let { ClientSession(SeatToken(it)) }
+            ?: ClientSession()
+        connect(home, name, onStanding, s, mayStartOver = true)
     }
 
     /**
@@ -1536,6 +1586,12 @@ class LobbyOverTransport(
                         onEvent("REFUSED BY THE HOUSE — ${phase.reason}")
                         if (mayStartOver && phase.reason == TransportRefusal.UnknownToken) {
                             startOver(home, name, onStanding)
+                        } else if (phase.reason == TransportRefusal.RoundLocked) {
+                            // **A round is under way and this phone is not in it** (D-287). The
+                            // screen answer is the app root's: the join screen, saying so. The token
+                            // is kept, so the next JOIN, after the round, is this seat's again.
+                            hangUp()
+                            onRoundInProgress()
                         }
                     }
                     // **The host's own link is down, so its standing is not the house's any more**

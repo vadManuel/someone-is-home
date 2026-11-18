@@ -102,6 +102,34 @@ class SeatLedgerTest {
         assertEquals(TransportRefusal.UnknownToken, refused.reason)
     }
 
+    /**
+     * **GUARD (D-287, the owner's ruling 9c): a round under way cannot be joined.** A stranger is
+     * refused, a token whose seat sat the round out is refused, a seat in the round comes back by its
+     * token (a rejoin, not a join), a forged token is still a stranger first, and the round's ending
+     * opens the door again.
+     */
+    @Test
+    fun aRoundUnderWayAdmitsOnlyItsOwnSeatsByTheirTokens() {
+        val ledger = ledger(seats = 5)
+        val inRound = List(3) { assertIs<Admission.Seated>(ledger.join()) }
+        val satOut = assertIs<Admission.Seated>(ledger.join())
+        ledger.roundUnderWay(inRound.map { it.seat })
+
+        val stranger = assertIs<Admission.Refused>(ledger.join(), "a stranger was seated in a round under way")
+        assertEquals(TransportRefusal.RoundLocked, stranger.reason)
+        val outside = assertIs<Admission.Refused>(ledger.resume(satOut.token), "a seat outside the round was seated in it")
+        assertEquals(TransportRefusal.RoundLocked, outside.reason)
+        assertEquals(TransportRefusal.UnknownToken, assertIs<Admission.Refused>(ledger.resume(SeatToken("forged"))).reason)
+        for (seat in inRound) {
+            val back = assertIs<Admission.Seated>(ledger.resume(seat.token), "a seat in the round was refused its own chair")
+            assertEquals(seat.seat, back.seat)
+        }
+
+        ledger.roundOver()
+        assertIs<Admission.Seated>(ledger.resume(satOut.token), "the ending did not open the door to a held seat")
+        assertIs<Admission.Seated>(ledger.join(), "the ending did not open the door to a stranger")
+    }
+
     @Test
     fun aCollidingMintFailsLoud() {
         val ledger = SeatLedger(List(2) { Seat(it) }, mint = { SeatToken("same") })

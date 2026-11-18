@@ -277,6 +277,17 @@ class TransportHost(
 
     suspend fun connectedSeats(): Set<Seat> = gate.withLock { links.keys.toSet() }
 
+    /**
+     * **LIGHTS OUT: from now until [roundOver], only [seats] are admitted, and only by their tokens**
+     * (D-287). See [SeatLedger.roundUnderWay]. Under the lock every admission is decided under, so a
+     * connection is answered by the door as it stood when it knocked. A connection already seated
+     * stays seated: closing the door turns nobody out.
+     */
+    suspend fun roundUnderWay(seats: List<Seat>) = gate.withLock { ledger.roundUnderWay(seats) }
+
+    /** **The round reached its ending, or NEW ROUND: the door is open again** (D-287). */
+    suspend fun roundOver() = gate.withLock { ledger.roundOver() }
+
     /** Messages that were not frames. Zero is the only healthy number. */
     suspend fun malformedCount(): Int = gate.withLock { malformed }
 

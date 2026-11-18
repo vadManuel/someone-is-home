@@ -8907,6 +8907,87 @@ THERMAL, CACHE at their usual inks, full bars).
 
 **Not on a phone.**
 
+### D-287 · **A round in progress cannot be joined: a phone not seated at LIGHTS OUT is refused at the door and stands on JOIN saying ROUND IN PROGRESS / YOU JOIN THE NEXT ONE; a seat in the round still rejoins — built, replaces D-273's waiting lobby while a round runs**
+
+**The ruling** (owner, 2026-11-18, decision pack 9c, replacing the lit-waiting-screen question): *a
+round in progress cannot be joined.* A phone that was not seated at LIGHTS OUT is refused at JOIN
+while a round runs, instead of being seated to wait for the next one; a phone seated at LIGHTS OUT
+that drops and relaunches still reconnects, since that is a rejoin. **Wording approved the same day:
+keep today's** "ROUND IN PROGRESS" / "YOU JOIN THE NEXT ONE".
+
+**Where the refusal lives, and why there.** D-273 seated such a phone (a token returns its seat at
+any time, D-225) and drew it a waiting lobby, lit, for the whole dark round. The refusal belongs
+where a connection is answered: the seat ledger, under `TransportHost`'s lock. There the refused
+phone hears a definite `Refused(RoundLocked)` at the door and is never seated, never counted on the
+desk and never published to. `TransportRefusal.RoundLocked` has been on the wire since story 0.8 for
+exactly this (*joining ended when the lights went out; only resume readmits*), and D-068 is why a
+round-state reason is safe to send: everybody in the house watched the lights go out. So **no new
+message, no `TRANSPORT_PROTOCOL` bump, no schema row and no recording change**: the frame is below the
+effect boundary, the refusal is not an `Event`, and the rules never learn the phone knocked.
+
+**Now.**
+
+1. **`SeatLedger.roundUnderWay(seats)` / `roundOver()`**, `lock`'s reversible sibling for an evening
+   of many rounds (D-157; `lock` is forever and nothing in production calls it). While set, `join`
+   is refused `RoundLocked`, and so is a `resume` whose seat is not in the round. A token the ledger
+   never issued is still `UnknownToken` first, so that phone starts over as a stranger and is then
+   refused `RoundLocked`. A seat in the round resumes at any time. `TransportHost` takes both under
+   its lock.
+2. **The house closes the door when it learns the round's seats** (`LobbyHouse.emit`, the round's
+   first push, the moment D-273 already sets `playing`) and **opens it at the round's ending**
+   (`playingOver`) and again at NEW ROUND. At the ending the room is in the light and the round is
+   over, so ROUND IN PROGRESS would be false: a phone may walk in and wait on the host, which is
+   D-274's existing WAITING FOR THE HOST / YOU JOIN THE NEXT ONE. That, and the instant between the
+   arming and the first push, is all that is left of D-273's waiting lobby.
+3. **The refused phone** (`LobbyOverTransport`): on `Dismissed(RoundLocked)` it hangs up and reports
+   `onRoundInProgress`, wired in `CheatRoot` beside `onHouseClosed` to `FlowModel.roundInProgress`,
+   which is `houseClosed`'s shape: `LobbyModel.roundInProgress` leaves (nothing attached, no counts)
+   and puts `ROUND IN PROGRESS\nYOU JOIN THE NEXT ONE` in the join screen's one refusal slot (the
+   slot HOUSE CLOSED uses, `KitBody` at 22), and the flow pushes JOIN. Typing clears it, as every
+   refusal there is cleared; tapping the home again after the round is the way in. **The stored
+   token is kept**, so a phone whose seat sat the round out gets that seat back.
+4. **A dismissed session is no longer reused.** `join` handed a refused phone its dismissed
+   `ClientSession`, whose client returns at once (`opening` is an error on `Dismissed`), so a second
+   tap on the home did nothing at all, for any refusal. It now knocks again as the phone it is: its
+   stored token, or a stranger.
+5. The two lines are one pair of constants (`LobbyModel.ROUND_IN_PROGRESS`, `YOU_JOIN_THE_NEXT_ONE`),
+   read by the join refusal and by the waiting lobby, so the wording has one home. The bench
+   (`LobbyCheat.awaitSeat`) taps the home again every 5 s while it reads that refusal, as a person told
+   *you join the next one* would; `hunt.sh --relaunch-guest` was not re-run.
+
+**Light.** No new screen, light level or copy. The refused phone is on JOIN, the screen it tapped
+from, holding nothing; it is lit as JOIN always is, and its owner can lock it. What the owner's 9c
+was about, a seated phone on the paper-coloured lobby for the whole round, no longer happens.
+
+**Proved, each red against the injected bug first.**
+
+- `SeatLedgerTest.aRoundUnderWayAdmitsOnlyItsOwnSeatsByTheirTokens` (platform): a stranger and a seat
+  that sat out are refused `RoundLocked`, a forged token is `UnknownToken`, every seat in the round
+  resumes its own chair, and `roundOver` opens the door to both. *`join` without the round check:*
+  `a stranger was seated in a round under way. Expected value to be of type <…Admission.Refused>,
+  actual <class …Admission.Seated>`.
+- `RoundUnderWayTest.aRoundInProgressRefusesAPhoneNotInItAndReadmitsOneThatIs` (app cheats; five
+  phones over loopback as `CheatRoot` builds them, rewritten from D-273's case): round one's stopped
+  guest relaunched mid-round two by its stored token is refused (the house logs `A CONNECTION WAS
+  REFUSED — RoundLocked`), stands on JOIN with the two lines, holds no house, is not on the desk,
+  keeps its token and is pushed nothing; a stranger is refused the same way and handed no token; a
+  round guest that drops and relaunches is seated again, is not told to wait, and is replayed its
+  role and leaves the lobby; round two ends, the refused guest taps the home and waits on the host
+  with the round's names, NEW ROUND seats it, and round three arms with five and hands it its role.
+  *The house never closing the door:* `never happened: the relaunched guest was turned away at the
+  door Lobby null [A HOUSE IS ATTACHED — …, SEATED ON THIS CONNECTION — ASKING FOR WHAT WAS SAID WHILE
+  IT WAS GONE]`.
+- `RoundUnderWayScreenTest.aPhoneRefusedAtTheDoorStandsOnJoinSayingTheRoundIsInProgress` (ui desktop):
+  JOIN, nothing attached, no LEAVE THIS HOUSE, the two lines in the slot, cleared by typing. *The
+  refusal line not set:* `the join screen does not say why the phone is on it … could not find any node
+  that satisfies: (Text … contains 'ROUND IN PROGRESS⏎YOU JOIN THE NEXT ONE')`.
+- `LobbyRefusalRender` (ui desktop, a viewer) writes `build/screens/refusal-round-in-progress.png` at
+  600×1300. Looked at: JOIN A HOME, the RESIDENT field, the network rows, and the two lines above HOST
+  A HOME INSTEAD, centred against each other and inside the margins, as HOUSE CLOSED sits.
+
+**Checked** (every test XML read): platform 208, app 212 (debug), ui desktop 674, 0 failures. **Not on
+a phone.**
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

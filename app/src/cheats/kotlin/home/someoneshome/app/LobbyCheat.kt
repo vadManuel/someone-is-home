@@ -3,6 +3,7 @@ package home.someoneshome.app
 import home.someoneshome.platform.launchSwitch
 import home.someoneshome.platform.launchValue
 import home.someoneshome.ui.FlowModel
+import home.someoneshome.ui.LobbyModel
 import home.someoneshome.ui.NearbyHome
 import home.someoneshome.ui.ScreenId
 import kotlinx.coroutines.delay
@@ -74,6 +75,7 @@ class LobbyCheat(
         // The fifth thing a finger would have supplied. See [walkSetup].
         walkSetup()
 
+        var joining: NearbyHome? = null
         if (hosting != null) {
             if (!seedTheHome(hosting)) return
             // HOST WITH THIS HOME, through the action the button calls — which now walks to the
@@ -86,6 +88,7 @@ class LobbyCheat(
         } else {
             val wanted = launchValue(JOIN_SWITCH).orEmpty()
             val home = waitForHome(wanted)
+            joining = home
             note("ATTACHING TO '${home.name}' AT ${home.address}:${home.port}")
             flow.attachToHome(home)
             flow.go(ScreenId.Lobby)
@@ -93,7 +96,7 @@ class LobbyCheat(
 
         // Seated, or still trying. `joined` moving off zero is the house counting this phone, and
         // it is the first thing on this path that could not have happened locally.
-        awaitSeat()
+        awaitSeat(joining)
         awaitTheNextRound()
 
         handOverLine()
@@ -245,11 +248,26 @@ class LobbyCheat(
         }
     }
 
-    /** The house counting this phone. Until then the lobby says NOBODY HAS JOINED YET, truthfully. */
-    private suspend fun awaitSeat() {
+    /**
+     * The house counting this phone. Until then the lobby says NOBODY HAS JOINED YET, truthfully.
+     *
+     * **Refused at the door while a round runs** (D-287), the phone stands on JOIN saying ROUND IN
+     * PROGRESS, and the bench taps the home again every [PATIENCE_MILLIS], as a person told *you
+     * join the next one* would look up now and then; the round's ending opens the door.
+     */
+    private suspend fun awaitSeat(home: NearbyHome?) {
         var waited = 0L
         while (lobby.standing.joined == 0) {
-            if (waited > 0 && waited % PATIENCE_MILLIS == 0L) note("NOT SEATED YET — ${waited / 1000}S")
+            if (waited > 0 && waited % PATIENCE_MILLIS == 0L) {
+                val refused = lobby.refusal
+                if (home != null && lobby.attached == null && refused?.startsWith(LobbyModel.ROUND_IN_PROGRESS) == true) {
+                    note("REFUSED AT THE DOOR — ${refused.replace('\n', ' ')} · TAPPING THE HOME AGAIN")
+                    flow.attachToHome(home)
+                    flow.go(ScreenId.Lobby)
+                } else {
+                    note("NOT SEATED YET — ${waited / 1000}S${refused?.let { " · ${it.replace('\n', ' ')}" }.orEmpty()}")
+                }
+            }
             delay(STEP_MILLIS)
             waited += STEP_MILLIS
         }

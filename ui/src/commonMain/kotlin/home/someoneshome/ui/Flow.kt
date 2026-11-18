@@ -2181,6 +2181,18 @@ class FlowModel(
     }
 
     /**
+     * **The house refused this phone at JOIN: a round is under way and it is not in it** (D-287,
+     * the owner's ruling 9c). [houseClosed]'s shape and landing: the join screen, with the waiting
+     * screen's own two lines in its refusal slot, so the phone is not left on a lit lobby for the
+     * whole round. Reached by the transport's report, never by a control.
+     */
+    fun roundInProgress() {
+        lobby.roundInProgress()
+        roundForgotten()
+        push(ScreenId.Join)
+    }
+
+    /**
      * **D-161's gate, asked once and answered in the host's own words** (E-PAY-5).
      *
      * False leaves a refusal on the lobby, naming the rows — *the whole Perms set, camera

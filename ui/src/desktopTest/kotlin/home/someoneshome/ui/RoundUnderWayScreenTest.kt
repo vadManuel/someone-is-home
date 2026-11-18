@@ -85,6 +85,27 @@ class RoundUnderWayScreenTest {
         assertEquals(0, count("YOUR ONE LINE"), "the waiting phone is asked for a line the next NEW ROUND deletes")
     }
 
+    /**
+     * **GUARD (D-287): refused at the door while a round runs, the phone stands on JOIN with the
+     * waiting screen's own two lines in the refusal slot**, holds no house and no lobby, and is not on
+     * a waiting lobby. Typing a name clears the line, as every refusal on that screen is cleared.
+     */
+    @Test
+    fun aPhoneRefusedAtTheDoorStandsOnJoinSayingTheRoundIsInProgress() = runDesktopComposeUiTest(width = 300, height = 650) {
+        val model = lobbyFor(waiting = false)
+        model.roundInProgress()
+        assertEquals(ScreenId.Join, model.state.screen, "the refused phone was not walked to the join screen")
+        assertEquals(null, model.lobby.attached, "the refused phone still holds the house")
+        assertEquals(0, model.lobby.standing.joined, "the refused phone still holds a lobby")
+        show(model)
+        onNodeWithText("ROUND IN PROGRESS\nYOU JOIN THE NEXT ONE").assertExists("the join screen does not say why the phone is on it")
+        onNodeWithText("NETWORKS NEARBY").assertExists()
+        assertEquals(0, count("LEAVE THIS HOUSE"), "the refused phone is drawn a lobby's way out")
+        model.lobby.nameResident("ELLIOTT")
+        waitForIdle()
+        assertEquals(0, count("ROUND IN PROGRESS"), "typing did not clear the refusal")
+    }
+
     /** The same standing without the flag is the ordinary lobby, so the flag alone draws the above. */
     @Test
     fun aPhoneInTheRoundIsShownTheOrdinaryLobby() = runDesktopComposeUiTest(width = 300, height = 650) {
