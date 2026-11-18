@@ -172,6 +172,28 @@ class ContactRadioBenchTest {
 
         val act get() = ContactAct(air, beat = { beat() }, note = { said += it })
 
+        /**
+         * **Every seat's push count, once nothing is still on its way.** A snapshot taken straight
+         * after arming could catch one seat a frame behind the rest — that frame was already in
+         * flight, and landing during the act made a clean run read as "a frame reached a phone"
+         * under a loaded machine. So the count is read only after it has held still for three
+         * settle windows running; what the act then adds is the act's alone.
+         */
+        suspend fun settledFrames(): Map<Int, Int> {
+            fun counts() = seats.associate { it.index to pushed.getValue(it.index).size }
+            var last = counts()
+            var still = 0
+            withTimeout(30_000) {
+                while (still < 3) {
+                    delay(SETTLE_MILLIS)
+                    val now = counts()
+                    still = if (now == last) still + 1 else 0
+                    last = now
+                }
+            }
+            return last
+        }
+
         /** LIGHTS OUT through production's own arming path, its log lines into [said]. */
         suspend fun armed(seed: Long = SEED) {
             assertTrue(armAtLightsOut(house, hosting = true, seed = seed, note = { said += it }), "the bench never armed a round")
@@ -334,7 +356,7 @@ class ContactRadioBenchTest {
         assertEquals(null, house.state.meeting, "the meeting never closed")
         assertFalse(house.ended, "the round ended at the meeting, so every refusal below would be that one")
 
-        val framesBefore = seats.associate { it.index to pushed.getValue(it.index).size }
+        val framesBefore = settledFrames()
         val refusedBefore = house.contactRefusals.size
         // Past D-213's debounce, so the resolver mints the report again rather than swallowing it.
         house.advanceTo(Tick(house.clock + ContactGate.DEBOUNCE_TICKS + 1))
@@ -395,7 +417,7 @@ class ContactRadioBenchTest {
         assertNotNull(house.state.meeting, "the fixture called no meeting")
         delay(SETTLE_MILLIS)
 
-        val framesBefore = seats.associate { it.index to pushed.getValue(it.index).size }
+        val framesBefore = settledFrames()
         val refusedBefore = house.contactRefusals.size
         act.touch(insider, target)
 
@@ -425,7 +447,7 @@ class ContactRadioBenchTest {
         house.mint(Event.MeetingCalled(house.now(), insider, MeetingTrigger.MeetingCard))
         delay(SETTLE_MILLIS)
 
-        val framesBefore = seats.associate { it.index to pushed.getValue(it.index).size }
+        val framesBefore = settledFrames()
         val refusedBefore = house.contactRefusals.size
         act.touch(reporter, target)
         val refused = house.contactRefusals.drop(refusedBefore)
@@ -447,7 +469,7 @@ class ContactRadioBenchTest {
     private suspend fun Rig.outageThenMeeting(cause: RadioCause): Pair<Seat, Map<Int, List<String>>> {
         armed()
         val insider = house.state.livingInsiders.single()
-        val framesBefore = seats.associate { it.index to pushed.getValue(it.index).size }
+        val framesBefore = settledFrames()
         air.radioFor(insider).fail(cause)
         beat()
         withTimeout(30_000) { while (faultsTaken < 1) delay(5) }
