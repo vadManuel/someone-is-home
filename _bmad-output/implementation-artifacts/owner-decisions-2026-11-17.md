@@ -351,3 +351,21 @@ Before you start, know where to cut:
 **Caveats (not run while writing this):**
 - Step 10 mixes the scripted bench with a person's phone in seat 3. If the gate waits on B, check B in promptly. If the bench stalls, treat 10a/10b as passing on their log lines alone.
 - Without a printed meeting card, step 10c is the only meeting where B is still living. After step 8, D-242 means B is never named.
+
+## 9. Added 2026-11-18, after the regression runs and review #3
+
+Fixed and pushed since this pack was written (all with tests that fail on the old code, full check green, not yet on a phone):
+- **Names shifted after a seat sat out** (D-274): in a round armed without one seat, every later name moved up one, and a vote for "FINCH" restrained someone else. The roster is now indexed by seat.
+- **An unnamed seat could not be voted for** (D-277), and **two people who typed the same name** sent every vote for the second to the first (D-278).
+- **Subroutine entries took 9 s on average, up to 24 s,** to reach the house, because one request rode each 1 s upload. Several now ride together in the same fixed slot (D-275); entries arrive in about 1 s. **Owner to confirm** with D-263.
+- **Allocation** (D-276): host 1.98 → 1.48 MB/s and guest 0.84 → 0.66 MB/s at 6 seats, nothing on the wire moved. Still above rule 7's 0.5 MB/s; see 9e.
+
+**9a. Out players' vote count.** The out phone shows "VOTES CAST 4 OF 4" while the voters read "0 OF 4 VOTED": it counts the live selections it is shown (D-117/D-134) and calls them cast. Options: **(a, recommended)** also send the out the locked count (`VOTE_PROGRESSED`) and draw it against the living count, which also mends the short denominator flagged in `Flow.kt`; (b) keep the wire and relabel the line (new copy); (c) hide the count until the vote resolves.
+
+**9b. The ending's System Integrity when no meeting happened.** At 3 seats a round can end by parity at the first Revoke, before any meeting, and every phone's ending shows SYSTEM INTEGRITY "–", because the meter is only told at meetings. Should the ending always carry the final meter? (Recommended: yes, one value to every phone with the ending.)
+
+**9c. The waiting phone is lit during a dark round (LIGHT).** A phone that joins while a round runs sits on the bright paper-coloured lobby screen ("ROUND IN PROGRESS / YOU JOIN THE NEXT ONE", then "WAITING FOR THE HOST" over the ending) for the whole round. In a dark house it is probably the brightest thing in the room. The light rules are yours.
+
+**9d. Repeated names in the lobby (copy).** The desk accepts two people typing the same name. Votes now reach the right seat either way (D-278), but the room sees two identical rows. Refuse the second ("NAME TAKEN"?), mark it ("SAM 2"?), or leave it?
+
+**9e. Rule 7 on the host.** What remains is mostly outside the game code: Ktor over kotlinx-io allocates a fresh 8 KB segment for most frames (~450 KB/s on the host at 6 seats, growing with seats), and every state change recomposes the screen (~270 KB/s). Both need a structural change (pooled transport buffers, or narrowing recomposition near the light rules). The 0.5 MB/s figure and the stack-gate cliff (1.5–3.0 MB/s) were themselves read with the in-app counter now shown to be wrong (D-276), so the first step is re-measuring the cliff on a phone with the validated method.
