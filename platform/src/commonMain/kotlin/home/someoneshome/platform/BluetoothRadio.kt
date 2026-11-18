@@ -531,10 +531,9 @@ class SwitchboardRadio(
     /**
      * Every ten seconds, in the device log: the callback rate is the radio's allocation rate.
      *
-     * TODO(unit 8): `AllocationBudget`'s counter is not wired here. It counts the whole process, it
-     * only advances when a collection runs, and reading it allocates a `GCInfo`, so sampled from this
-     * queue it would cost more than the radio and still not say what the radio spent. The radio's own
-     * share is callbacks × bytes per callback, and unit 8 measures the second factor on a phone.
+     * TODO(unit 8): the radio's own share is callbacks × bytes per callback, and unit 8 measures the
+     * second factor on a phone. There is no in-app allocation counter to read here (D-276): the one
+     * that was declared counted the allocator's pages, not objects, and is gone.
      */
     private fun tally() {
         val seconds = ContactAdvertisement.SCAN_CYCLE_MILLIS * ContactAdvertisement.TALLY_CYCLES / 1_000

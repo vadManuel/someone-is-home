@@ -38,11 +38,22 @@ object AllocationBudget {
     const val OBSERVED_FAILING_AT: Double = 3.00
 }
 
-/**
- * Bytes allocated since process start, derived from the collector's own accounting.
+/*
+ * **There is no in-app allocation counter, on purpose** (D-276).
  *
- * Reading this ALLOCATES, so it must never be called on the blackout path — sample it from a
- * monitor thread. That is not a theoretical caution: it is how the spike's GC probe had to be
- * built, because an instrument that allocates becomes a cause of the pause it is measuring.
+ * `allocatedBytesSinceStart()` used to be declared here, reconstructed from the collector's
+ * heap-before minus heap-after-the-last-collection. Under the allocator the app ships with, that
+ * figure moves in the allocator's pages (64 to 256 KiB), not in objects, and misses blocks reused
+ * between collections: one kilobyte of arrays read as 1.31 MB, and the same work read anywhere from
+ * 52 to 437 KB/s. It had no caller, and a figure that wrong would be believed by the first one.
+ * Kotlin/Native offers nothing honest in its place for the shipping allocator, so nothing replaces it
+ * here.
+ *
+ * **Where the number comes from instead** (D-276):
+ * - **A whole-app rate, per seat, on a round:** a measurement build of the app (objects from
+ *   malloc, collections only when asked, one forced every second and the heap's own byte count read
+ *   either side), validated within 2% by a known allocation, run on every seat of a hunt round
+ *   (`tools/sim-hunt/hunt.sh --all-env`). It changes the allocator, so it is never the shipping app.
+ * - **Per operation, as a regression guard:** the JVM's exact per-thread counter
+ *   (`UploadAllocationTest` and its kind), with ceilings proven red on the code before D-276.
  */
-expect fun allocatedBytesSinceStart(): Long
