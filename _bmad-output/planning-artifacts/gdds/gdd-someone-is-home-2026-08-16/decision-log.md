@@ -7267,6 +7267,11 @@ loopback and simulator only; nothing here has been on a phone.*
 
 ### D-263 · **Every request a player makes in a round rides inside the fixed-cadence upload, retried under one id until the house answers; every living phone but the actor is sent a blank of the actor's answer — built, provisional, owner to confirm (including the cost)**
 
+> **Amended by D-275:** the slot carries every waiting request that fits, in order, under one id,
+> rather than one a beat (items 1, 2 and 4 below), as URL-safe base64 of 384 bytes in the same 532
+> characters rather than 256 bytes of hex. The upload is still 1 808 bytes and nothing on the wire
+> moved.
+
 **What leaked.** (a) **Up.** `ArmRevoke`, the Egress tile (`RoundBody.Fire`), Surge, Isolate and
 Static each went up as a frame of its own at the moment it was pressed. Residents never send them, so
 anybody measuring the Wi-Fi saw which phones put a frame on the air between their beats, and those
@@ -8164,6 +8169,126 @@ did not hold. Counting *cast* ballots needs the locked count, which reaches the 
 **Checked** (every test XML read): model 298 (iOS Simulator) and 300 (JVM), core 326, harness 127, app
 200, ui desktop 663 (+1 viewer), 0 failures; `vocabularyLint`, `redactionLint`, `armingCordon`,
 `benchSeedCordon` and `seedSourceCordon` clean. **Not on a phone.**
+
+### D-275 · **A beat's request slot carries every waiting request that fits, under one id, in the order made; the slot stays 532 characters and the upload 1 808 bytes — built, provisional, owner to confirm**
+
+**What was slow** (D-263's cost, measured; `hunt.sh --seats 6`, `/tmp/someones-home-hunt/r6-final/b6-base*`,
+`[slot-measure]` lines). D-263 drained a phone's requests **one a beat**, and every Subroutine entry,
+BEGIN and STOP NOW is a request of its own. A burst of them queued up to 25 deep: `HandOverEntry`
+p50 ≈ 9 s and max 24 s from press to the house's hearing it, BEGIN p50 ≈ 2.6 s and max 5 s, Static
+≈ 3 s. Check-in, READY, the vote and the arm stayed within a beat. Nothing was lost; a Subroutine
+that takes nine to twenty-four seconds to register is not playable.
+
+**Options weighed.**
+
+- **Coalescing entries** (one `HandOverEntry` carrying the entries so far): refused. Each
+  `HandOverEntry` is a separate fact, `Event.SubroutineReturned`, graded once against the work the
+  card opened (D-109); merging them changes what the rules are handed and what a recording holds,
+  which is game behaviour, not latency. And it would fix one kind while BEGIN, STOP NOW and Static
+  kept queueing behind it.
+- **Packing the slot** (taken): as many queued requests as fit go up in one beat, inside the width
+  the slot already has. Nothing about the wire's count, size or cadence moves.
+
+**Now.**
+
+1. **The slot holds a list** (`RequestSlot`). `id` · `length` · `payload` as before, the payload now
+   the JSON of a **list** of `Asked`, in the order made; an empty slot is an empty payload. **The width
+   is unchanged at 532 characters, so every upload is still 1 808 bytes**, measured on the encoded
+   frame for lists of 0 to every request that fits.
+2. **URL-safe base64 instead of hex for the payload**, for the reason D-263 chose hex: no layer of the
+   wire escapes a letter, a digit, `-` or `_`, so the width is still the length. The same 512
+   characters now carry **384 bytes** where hex carried 256, which is what lets four typical entries
+   (≈ 89 bytes each) share a beat rather than two. The id and the length stay hex. A slot whose
+   payload is outside the alphabet, or whose padding is not zeros, reads as nothing.
+3. **The phone** (`SlotRequests`). Each beat with no slot out, the oldest requests waiting are taken
+   **in order, for as long as the next still fits**, under one fresh id; the first that does not fit
+   stops the list, so nothing is ever sent ahead of a request made before it (D-117: a lock never
+   overtakes its selection). **A slot out keeps its id and exactly its list** on every resend until
+   `UploadHeard` names it; a request made meanwhile waits for the next slot, because one added to a
+   list the house may already have put would be dropped with the resend. A `SelectVote` not yet in
+   a slot is still replaced by the next. A request too long for a slot **on its own** (384 bytes of
+   JSON, less the list's brackets) is said in the phone's log and not queued (rule 6).
+4. **The house** (`IntentDesk.slotted`, `LobbyHouse.attend`). The id is the dedup key, as before, and
+   now names the list: the first time a seat's id is heard **every request under it is put to the
+   rules, one at a time, in the slot's order, each awaited** (D-241 unchanged); every later time it is
+   one `Duplicate` and nothing under it is put again. Then the sightings, then one `UploadHeard`.
+   64 ids kept per seat across connections, unchanged.
+
+**What an observer on the wire can count — checked, nothing moved.**
+
+- **Up:** one upload a beat per phone, 1 808 bytes, whatever the slot holds — none, one, or as many
+  as fit; the Insider's Static among four entries and a Resident's five entries included
+  (`RequestSlotTest`, `UplinkFrameTest`).
+- **Down, the answer:** one `UploadHeard` per upload, one length, unchanged.
+- **Down, the rules' answers:** each request makes what it made before, to the seats it made it for;
+  only *when* moves, earlier. An ability is still answered by `AbilityFired` to the actor and
+  `AbilityBlanked` to every other living seat (D-263 item 8), so a Static that shares its beat with
+  entries is one frame of one length on every living phone (`UplinkFrameTest` 3b). Entries are
+  answered to the actor alone exactly as before, and an Insider's fake is graded identically, so two
+  entries answered in one beat say nothing a Resident's two would not. A beat can now carry two
+  abilities, and every living phone is sent two frames for it rather than one in each of two beats;
+  every phone sees the same, and the count over the round is the same.
+- **Timing:** D-263's raised item (the answer's burst follows the actor's upload) is unchanged, not
+  widened: the burst still follows one upload, now sooner.
+
+**Measured** (`hunt.sh`, wire-only Simulator seats, seed 20261150; press to `UploadHeard`, from
+`[slot-measure]` lines a measurement build logged and this commit does not carry; the "one a beat"
+column at three seats is the same build with the packing switched off by a launch value, so the
+wire and everything else are identical):
+
+| | one a beat | as many as fit |
+|---|---|---|
+| 3 seats, `HandOverEntry` | n 56 · p50 7.1 s · max 17.2 s | n 31 · p50 0.98 s · max 2.2 s |
+| 3 seats, BEGIN | n 36 · p50 1.9 s · max 4.2 s | n 36 · p50 0.59 s · max 1.0 s |
+| 3 seats, all | 114 asked, **21 never heard** before the round ended; p50 4.2 s · max 17.2 s · depth 18 | 68 asked, 68 heard; p50 0.61 s · max 2.2 s · depth 11 |
+| 6 seats, `HandOverEntry` | (b6-base, b6-base2, D-263's code) p50 8.8 / 9.0 s · max 21.8 / 24.3 s | n 45 · p50 0.98 s · max 2.9 s |
+| 6 seats, BEGIN · Static · Egress | p50 2.6 s · 2.8 s · 1.3 s; max 5.0 · 3.3 · 2.3 s | p50 0.53 · 1.0 · 1.0 s; max 1.0 · 1.0 · 1.0 s |
+| 6 seats, check-in, READY, select, lock | within a beat | within a beat, unchanged |
+| 6 seats, all | 145 asked, p50 4.6 s · max 21.8 s · depth 22 | 161 asked, 161 heard; p50 0.75 s · max 2.9 s · depth 9 |
+
+The six-seat round reached ENDING on the same beats (+110 s and +111 s). A bench whose entries are
+answered sooner hands over fewer of them and begins more work, which is why the counts differ. No
+seat logged a slot it could not read or a request too long for one. **Not on a phone.**
+
+**Guards, each proven by breaking it.**
+
+- `SlotRequestsTest` (app): ten entries handed over at once are all heard, in order, once, within
+  three beats; a request made while a slot is out waits and the resend is unchanged; a request that
+  does not fit waits and nothing behind it goes first; the lock rides with its selection.
+  *Injected (one a beat, D-263's drain):* `ten entries took 10 beats`, and three more failures.
+  *Injected (the slot read by filter, so a smaller request behind one that does not fit goes first):*
+  `two that do not fit together went together, or the small one jumped`.
+- `UplinkFrameTest` 3b (app cheats; five real phones over loopback): the Insider presses Static and
+  four entries, a Resident five entries, at once. All ten reach the house in **1 710 and 1 721 ms** (two runs) and are each
+  heard once; every upload of the round is still 1 808 bytes on every phone, in every four-second
+  window the phones' counts differ by at most one, every upload is answered by one frame of one
+  length; every entry is graded once on either role, the grades one length; and the Static's frames
+  are the same on every living phone (`AbilityFired` or `AbilityBlanked`, then `StaticOpened`: 128
+  and 151 bytes net of the sequence digits). *Injected (one a beat):* `five requests from each of two
+  phones took 4730 ms to reach the house`.
+- `RequestSlotTest` (model): every prefix of a long run of requests that fits is one width and one
+  1 808-byte upload beside an empty slot, and reads back in order; `fits` agrees with what `of`
+  packs at every size around the edge; a payload outside the alphabet or with dirty padding reads as
+  nothing. *Injected (the payload not padded):* `the upload's length says how many were asked: {0=1299,
+  1=1358, ... 7=1808}`.
+
+**Raised, not decided:** the work orders a seat is answered with differ in length by the seat's draw
+(2 129 and 2 137 bytes in the test above), as D-258's table already records; batching does not touch
+it.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `model/protocol` `RequestSlot` | one `Asked` in 256 bytes of hex | a list of `Asked` in 384 bytes of URL-safe base64, 532 characters still; `bytesOf`, `fits`, `fitsAlone` |
+| `platform` `IntentDesk.slotted` | one landing per id | every request under a new id, in order; one `Duplicate` for an id heard before |
+| `app` `SlotRequests` | the head, one a beat | every waiting request that fits, in order, under one id, frozen until answered |
+| `app` `LobbyHouse.attend` | one request from the slot | each request in the slot, in order, each awaited |
+
+**No recording change**: the slot is not recorded; the intents it carries are, as before.
+
+**Checked for this revision** (every test XML read, on top of D-274): app 203 (debug) and the release
+sweep 130, core 326, harness 127, model 300 (iOS Simulator) and 302 (JVM), platform 206, 0 failures;
+every `vocabularyLint`, `armingCordon`, `benchSeedCordon`, `seedSourceCordon`, `redactionLint` and
+`boundaryCheck` clean. **Not on a phone.**
 
 ## State after revision 12
 
