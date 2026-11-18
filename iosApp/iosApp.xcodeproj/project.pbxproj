@@ -86,6 +86,7 @@
 				B1000000000000000000070 /* Sources */,
 				B1000000000000000000030 /* Frameworks */,
 				B1000000000000000000080 /* Resources */,
+				B1000000000000000000076 /* Nearby Interaction string (Debug and Playtest only) */,
 			);
 			buildRules = (
 			);
@@ -203,6 +204,22 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "# Builds SomeoneIsHomeKit and copies Compose resources into the bundle, so an Xcode\n# build is never one revision behind the Kotlin it claims to contain.\n#\n# THE SECOND STEP IS NOT OPTIONAL. Linking the framework alone produces an app that\n# builds, installs, launches, and then fails on its first frame with\n# MissingResourceException on Silkscreen-Regular.ttf -- the pixel fonts live in :ui's\n# composeResources and a static framework does not carry them. The fonts ARE the\n# interface; substituting a system face does not degrade the look, it deletes it.\nset -e\ncd \"$SRCROOT/..\"\n# The Gradle wrapper needs a JDK on PATH; Xcode's build environment does not inherit\n# the user's shell.\nexport PATH=\"$HOME/.local/share/mise/shims:$PATH\"\n# Three configurations, three variants (story 0.10b). Playtest links the RELEASE-kind\n# framework -- the monthly session measures the numbers the anonymity guarantee rests\n# on, and an unoptimised build would measure a phone nobody plays.\ncase \"$CONFIGURATION\" in\n  Release) KIND=Release; VARIANT=release ;;\n  Playtest) KIND=Release; VARIANT=playtest ;;\n  *) KIND=Debug; VARIANT=debug ;;\nesac\ncase \"$SDK_NAME\" in\n  iphonesimulator*) KTARGET=IosSimulatorArm64 ;;\n  *) KTARGET=IosArm64 ;;\nesac\n./gradlew --quiet \":app:link${KIND}Framework${KTARGET}\" \"-Pvariant=$VARIANT\"\nexport KOTLIN_FRAMEWORK_BUILD_TYPE=\"$(echo \"$KIND\" | tr '[:upper:]' '[:lower:]')\"\n./gradlew --quiet \":app:syncComposeResourcesForIos\" \"-Pvariant=$VARIANT\"\n";
+		};
+		B1000000000000000000076 /* Nearby Interaction string (Debug and Playtest only) */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)",
+			);
+			name = "Nearby Interaction string (Debug and Playtest only)";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# The UWB ranging spike (tools/uwb-spike) runs an NISession, and iOS ends an app that does\n# that without NSNearbyInteractionUsageDescription. The spike is a cheat, which Release does not\n# compile, so the string goes into the BUILT Info.plist of Debug and Playtest only and the source\n# Info.plist is untouched: a Release app carries no prompt text for a radio it never opens.\n# Ordered after the Info.plist is processed by its input path; it runs before code signing.\nset -e\ncase \"$CONFIGURATION\" in\n  Release) exit 0 ;;\nesac\nPLIST=\"$TARGET_BUILD_DIR/$INFOPLIST_PATH\"\n/usr/libexec/PlistBuddy -c \"Delete :NSNearbyInteractionUsageDescription\" \"$PLIST\" >/dev/null 2>&1 || true\n/usr/libexec/PlistBuddy -c \"Add :NSNearbyInteractionUsageDescription string This test build measures the distance between two test phones. Nothing leaves the room.\" \"$PLIST\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 

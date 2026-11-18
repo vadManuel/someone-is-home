@@ -96,6 +96,13 @@ private enum class CheatView { Panel, Picker, Transport, Haptics, Camera }
 
 @Composable
 fun CheatRoot() {
+    // **The UWB ranging spike** (`tools/uwb-spike`). Launched with its switch, the phone is the
+    // spike's and nothing below is built: no lobby, no radio, no house, no round. Launched any other
+    // way this line is a read of an unset variable and the build is the playtest build it was.
+    if (UwbSpike.launched) {
+        UwbSpikeRoot()
+        return
+    }
     // ONE model for the whole session, held above the view switch. Dropping into the picker and
     // back must not restart the round the phone is walking, and rebuilding it here would do
     // exactly that — silently, because a screen that resets to boot looks like a screen that was
