@@ -431,3 +431,13 @@ Results: `uwb-spike-results-2026-11-18.md`.
   - Cross-platform UWB is possible on paper: Android 16's Ranging module ranges with an iPhone through Apple's Nearby Interaction Accessory Protocol.
   - It is unproven for a full mesh, because an Android responder serves one initiator at a time.
   - The one thing to keep: the house brokers each pair's UWB setup over the existing connection rather than through an iOS-only channel, so an Android path can be added later.
+
+## Owner rulings, 2026-11-18, later
+
+- **D-283 out host: record the host's seat.** The house notes which seat the host took at LIGHTS OUT, and uses it only so the unreachable notice can name an out host. Everyone in the room already knows who the host is.
+- **D-281 return buzz: keep it.** One short buzz on every phone when the house comes back on the air during an Egress.
+- **Page 2 parity means the same structure, not the same content.** The owner's words: the second page should be *structurally* the same for Insiders and Residents, but different in text and function. Two changes follow:
+  - The Insider's page never says READY when the Insider's own ability is not ready.
+  - The Insider's tiles dim while an ability the Insider used is cooling down.
+
+  This narrows D-142's *not shorter, dimmer or otherwise distinguishable* to the page's layout, frames and wire. A Resident's page is unchanged. It answers the 20–60 s arm gap: the Insider sees COOLING DOWN, dimmed, instead of READY.
