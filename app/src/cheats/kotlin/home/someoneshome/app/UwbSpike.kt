@@ -336,7 +336,11 @@ private class UwbPeerSession(
     }
 
     private fun current(s: NISession, what: String): Boolean {
-        if (s === session) return true
+        // `==`, not `===`: the session a delegate callback hands back is a fresh Kotlin wrapper
+        // around the same Objective-C object, so reference identity said every callback was stale
+        // and dropped every reading (first two-phone run, 2026-11-18). `==` is `isEqual:`, which
+        // for an NISession is the object's own identity.
+        if (s == session) return true
         say("S$index STALE $what (an older session) t=${fmt(nowMs(), 3)}")
         return false
     }
