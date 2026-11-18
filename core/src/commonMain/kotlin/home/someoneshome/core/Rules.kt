@@ -18,6 +18,7 @@ import home.someoneshome.model.Outcome
 import home.someoneshome.model.Presence
 import home.someoneshome.model.PulseOffer
 import home.someoneshome.model.RadioCause
+import home.someoneshome.model.RevokeArm
 import home.someoneshome.model.Role
 import home.someoneshome.model.Tick
 import home.someoneshome.model.Touch
@@ -270,7 +271,7 @@ private fun signOff(winner: Winner): String = when (winner) {
  * **LIGHTS OUT — the round is constructed here, and everything about it is drawn from one seed.**
  *
  * Arming CONSTRUCTS the round rather than copying whatever was there. Carrying `revoked` or
- * `cooldownArmed` across an arming means a round can begin with a player already revoked and
+ * `revokeArms` across an arming means a round can begin with a player already revoked and
  * nothing announcing it — and it is what let a recording replay from a different starting state
  * and still be certified identical.
  *
@@ -642,14 +643,26 @@ private fun spend(state: GameState, seat: Seat): GameState =
  * A seat with no cooldown row has no ability to arm. That is the fail-closed direction: a round
  * armed without cooldowns (an empty home, a hand-built state) grants nobody a Revoke rather than
  * granting everybody one.
+ *
+ * ### The arm lasts [Balance.REVOKE_ARM_WINDOW], or until a meeting is called (2026-11-18)
+ *
+ * The owner's ruling, Q1/Q2 option C with window option a: *20 s, or until a meeting is called,
+ * whichever comes first*, and the lapse is silent. The window's close is written here, as a tick
+ * off the arm's own ([RevokeArm.lapsesAt]); [contact] asks [GameState.armedAt] and nothing else,
+ * so a touch after the close is an unarmed touch, answered `ContactAnswered` like any other. The
+ * cooldown spent here still runs its full sixty seconds: a botched stalk costs a full one.
  */
 private fun revokeArmed(state: GameState, event: Event.RevokeArmed): Reduction<GameState, Effect> {
     val cooldown = state.cooldownFor(event.actor, InsiderAbility.Revoke)
     val next = if (cooldown == null || !cooldown.readyBy(event.at)) {
         state
     } else {
+        val arm = RevokeArm(event.actor, event.at + Balance.REVOKE_ARM_WINDOW)
         state
-            .copy(cooldownArmed = (state.cooldownArmed + event.actor).sortedBy { it.index })
+            .copy(
+                revokeArms = (state.revokeArms.filterNot { it.seat.index == event.actor.index } + arm)
+                    .sortedBy { it.seat.index },
+            )
             .withCooldown(cooldown.restartedAt(event.at, Balance.REVOKE_COOLDOWN))
     }
     return Reduction(next, emptyList())
@@ -1066,8 +1079,10 @@ private fun contact(state: GameState, event: Event.ContactMade): Reduction<GameS
     // arrival, both halves always being minted, and never about a role or an arm.
     val echo = !self && current.any { it.joins(event.at, actor, target) }
 
-    val actorArmed = !echo && state.cooldownArmed.any { it.index == actor.index }
-    val targetArmed = !echo && !self && state.cooldownArmed.any { it.index == target.index }
+    // **An arm whose window has closed is no arm** (the owner's 2026-11-18 ruling): `armedAt` asks
+    // the window as well as the list, so a touch past it is answered as an unarmed one.
+    val actorArmed = !echo && state.armedAt(actor, event.at)
+    val targetArmed = !echo && !self && state.armedAt(target, event.at)
     // A touch is one gesture between two phones, so an armed Revoke lands whichever half carries
     // it in first. The actor's is read first, so two armed Insiders touching resolve as they always
     // did when the lower seat's half came first: the actor's lands, and the target, now Revoked,
@@ -1097,7 +1112,7 @@ private fun contact(state: GameState, event: Event.ContactMade): Reduction<GameS
             // Every armed phone that touched spends its Revoke, landed or not: a botched stalk costs
             // a full cooldown. **R2: being Revoked disarms an armed Revoke** (D-217) falls out of the
             // same line, because the Revoked seat is one of the two.
-            cooldownArmed = state.cooldownArmed.filterNot { it.index == actor.index || it.index == target.index },
+            revokeArms = state.revokeArms.filterNot { it.seat.index == actor.index || it.seat.index == target.index },
             touches = if (self) current else current + Touch(event.at, actor, target),
         )
     }
@@ -1454,6 +1469,13 @@ private fun meetingCalled(
             // be reading when it rang. Nothing is emitted: the reader's own phone is on the
             // meeting now, and the next scan of the T card finds the station free.
             reader = null,
+            // **Every armed Revoke ends at the call** (the owner's 2026-11-18 ruling, window option
+            // a; this overrides D-239 item 4, which kept the arm across a meeting). It is D-185's
+            // argument for every running effect: an arm that outlived the call would land on the
+            // next shift with no traceable cause. Every seat, read without a role, and silent: the
+            // Insider's phone drops its ARMED at the ring it is sent like everybody (`Flow`), and
+            // the cooldown spent at arming is reset to half at lights out with everybody's (D-184).
+            revokeArms = emptyList(),
         ),
         listOf(ring, calling) + walkIn + gateCount(state, meeting) + batched + outsideMeter + stopped,
     )
@@ -1727,7 +1749,7 @@ private fun takeover(state: GameState, meeting: Meeting): Reduction<GameState, E
         // it was holding a Revoke is not a fact anybody may be told.
         state.copy(
             restrained = held,
-            cooldownArmed = state.cooldownArmed.filterNot { it.index == losing.index },
+            revokeArms = state.revokeArms.filterNot { it.seat.index == losing.index },
         ),
         listOf(Effect.RestrainedTakeover(losing, Haptic.Long)),
     )

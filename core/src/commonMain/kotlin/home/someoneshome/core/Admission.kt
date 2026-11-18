@@ -255,7 +255,7 @@ fun admit(state: GameState, event: Event): Admission = when {
  * It is a physical act reported by hardware — `factOf` has no intent that makes one, and a phone
  * touched to a phone is a fact the house is told rather than a request it may refuse. It needs no
  * gate here because it can no longer do anything: a contact revokes only from a seat holding an
- * armed Revoke, and the only way into `cooldownArmed` is [Event.RevokeArmed], which this function
+ * armed Revoke, and the only way into `revokeArms` is [Event.RevokeArmed], which this function
  * names. **Gating it would also be the wrong shape** — a report refused above the rules is a report
  * the recording never holds, and D-066's whole reason for recording refusals is that an unrecorded
  * drop is an invisible one.

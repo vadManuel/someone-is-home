@@ -83,3 +83,23 @@ class Cooldown(val seat: Seat, val ability: InsiderAbility, val readyAt: Tick) {
     fun restartedAt(at: Tick, duration: Long): Cooldown =
         Cooldown(seat, ability, Tick(at.step + duration))
 }
+
+/**
+ * **One seat's armed Revoke, and the tick its window closes** (the owner's 2026-11-18 ruling, Q1/Q2
+ * option C with window option a).
+ *
+ * *An armed Revoke lasts [Balance.REVOKE_ARM_WINDOW], or until a meeting is called, whichever comes
+ * first.* The window opens at the arm's own tick, so [lapsesAt] is a fact about the round and
+ * replays; a remaining count would be a fact about the moment somebody asked, for [Cooldown]'s
+ * reason. **The lapse is silent**: nothing is sent to anybody when the window closes, and nothing
+ * here can be, because a row reaching no effect has no schema entry. The house simply stops
+ * treating the seat as armed ([GameState.armedAt]).
+ *
+ * Not `@Serializable` and not client-facing. The Insider's own phone counts the same window from
+ * its own hold, which is input echo.
+ */
+class RevokeArm(val seat: Seat, val lapsesAt: Tick) {
+
+    /** Whether the window is still open at [at]: the tick it closes is already outside it. */
+    fun openAt(at: Tick): Boolean = at < lapsesAt
+}

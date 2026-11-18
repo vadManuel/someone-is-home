@@ -512,7 +512,11 @@ object Transcript {
         // together would replay a round in which the distinction had never existed.
         append("|newlyRevoked=").append(state.newlyRevoked.joinToString(",") { num(it.index) })
         append("|restrained=").append(state.restrained.joinToString(",") { num(it.index) })
-        append("|armedRevoke=").append(state.cooldownArmed.joinToString(",") { num(it.index) })
+        // Each arm with the tick its window closes (the owner's 2026-11-18 ruling), so a replay that
+        // opened a different window does not match one that opened this one.
+        append("|armedRevoke=").append(
+            state.revokeArms.joinToString(",") { "${num(it.seat.index)}@${num(it.lapsesAt.step)}" }
+        )
         // S4's list (D-219), which this row had left out: a replay that reported a seat twice must
         // not match one that refused the second report.
         append("|reported=").append(state.reported.joinToString(",") { num(it.index) })

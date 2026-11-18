@@ -121,12 +121,68 @@ class PublicCooldownTest {
         assertEquals(listOf<IntentMessage>(IntentMessage.ArmRevoke, IntentMessage.ArmRevoke), insider.sent, "the two holds were not sent alike")
         assertEquals(RevokeState.Armed, insider.vals.revoke, "a hold after the clock did not say ARMED")
 
-        // The house keeps an arm across a meeting (D-184 resets the clock, not the arm), so does the tile.
-        insider.said(meetingEnded)
-        assertEquals(RevokeState.Armed, insider.vals.revoke, "a meeting's end dropped an arm the house still holds")
         // A new round holds no arm.
         insider.said(opening)
         assertEquals(RevokeState.Cooldown, insider.vals.revoke, "an earlier round's ARMED survived LIGHTS OUT")
+    }
+
+    /**
+     * **GUARD (the owner's 2026-11-18 ruling, D-280): ARMED comes down 20 s after the hold, on this
+     * phone's own clock, and the tile reads the public clock again; nothing is sent.** A hold after
+     * that, while the cooldown the arm spent is still running at the house, sends the same request
+     * and echoes nothing, because the house refuses it (D-237's ARMED over nothing).
+     */
+    @Test
+    fun armedComesDownAtTwentySecondsAndTheTileReadsThePublicClock() {
+        val insider = Phone(insider = true)
+        val resident = Phone(insider = false)
+        listOf(insider, resident).forEach {
+            it.said(opening)
+            it.seconds(PublicCooldown.Revoke.seconds)
+        }
+        insider.flow.armRevoke()
+        assertEquals(RevokeState.Armed, insider.vals.revoke, "the fixture's hold did not echo ARMED")
+
+        listOf(insider, resident).forEach { it.seconds(PublicCooldown.ARM_WINDOW_SECONDS - 1) }
+        assertEquals(RevokeState.Armed, insider.vals.revoke, "ARMED came down before the 20 s window closed")
+        listOf(insider, resident).forEach { it.seconds(1) }
+        assertEquals(RevokeState.Ready, insider.vals.revoke, "ARMED outlived its 20 s window")
+        assertSameTiles(insider, resident, "the window's close")
+        assertEquals(listOf<IntentMessage>(IntentMessage.ArmRevoke), insider.sent, "the window's close sent something")
+
+        // A hold while the arm's own cooldown runs at the house: sent, and no echo.
+        insider.flow.armRevoke()
+        assertEquals(2, insider.sent.size, "the hold after the window was not sent")
+        assertEquals(RevokeState.Ready, insider.vals.revoke, "a hold into the arm's own cooldown said ARMED over nothing")
+        // Past that cooldown, and its pad, the next hold echoes again.
+        insider.seconds(PublicCooldown.OWN_ARM_SECONDS - PublicCooldown.ARM_WINDOW_SECONDS)
+        insider.flow.armRevoke()
+        assertEquals(RevokeState.Armed, insider.vals.revoke, "a hold after the arm's cooldown did not echo ARMED")
+    }
+
+    /**
+     * **GUARD (the owner's 2026-11-18 ruling, D-280; overrides D-239 item 4): a meeting call ends
+     * ARMED at the ring, and the meeting's end does not bring it back.**
+     */
+    @Test
+    fun aMeetingCallEndsArmed() {
+        val insider = Phone(insider = true)
+        val resident = Phone(insider = false)
+        listOf(insider, resident).forEach {
+            it.said(opening)
+            it.seconds(PublicCooldown.Revoke.seconds)
+        }
+        insider.flow.armRevoke()
+        insider.seconds(3)
+        resident.seconds(3)
+        assertEquals(RevokeState.Armed, insider.vals.revoke, "the fixture's hold did not echo ARMED")
+
+        val ring = RoundMessage.MeetingOpened(caller = home.someoneshome.model.Seat(0), trigger = home.someoneshome.model.MeetingTrigger.MeetingCard, haptic = Haptic.Long)
+        listOf(insider, resident).forEach { it.said(ring) }
+        assertEquals(RevokeState.Ready, insider.vals.revoke, "ARMED survived a meeting call")
+        listOf(insider, resident).forEach { it.said(meetingEnded) }
+        assertEquals(RevokeState.Cooldown, insider.vals.revoke, "the meeting's end did not restart the public clock")
+        assertSameTiles(insider, resident, "a meeting's end after an arm")
     }
 
     /**

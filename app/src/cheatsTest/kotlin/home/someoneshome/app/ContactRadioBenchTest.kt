@@ -431,7 +431,10 @@ class ContactRadioBenchTest {
         assertTrue(refused.all { it.first is Event.ContactMade })
         val framesAfter = seats.associate { it.index to pushed.getValue(it.index).size }
         assertEquals(framesBefore, framesAfter, "R4: a refused contact put frames on a socket")
-        assertTrue(house.state.cooldownArmed.any { it.index == insider.index }, "a refused touch spent the armed Revoke")
+        // The arm is gone, and not by the touch: a meeting call ends every armed Revoke (the owner's
+        // 2026-11-18 ruling, D-280). Until then it survived the call and this line checked that the
+        // refusal had not spent it; the refusals above are what R5 is.
+        assertFalse(house.state.cooldownArmed.any { it.index == insider.index }, "a meeting call left an armed Revoke standing (2026-11-18)")
     }
 
     /** R4 for the report: a second meeting from the radio is refused and answered with nothing. */

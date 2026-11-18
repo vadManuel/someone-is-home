@@ -1509,10 +1509,35 @@ class FlowModel(
      * **Reached only from an Insider's tile.** Not by a branch inside it: a Resident's tile takes
      * no pointer input at all, so this is not something a Resident's phone declines to do — it is
      * something a Resident's phone has no way to ask for.
+     *
+     * ### ARMED lasts 20 s, or until a meeting is called (the owner's 2026-11-18 ruling)
+     *
+     * The echo is stamped with this phone's own clock ([ClockStamps.armed]) and comes down at
+     * [PublicCooldown.ARM_WINDOW_SECONDS] by [clocksRead], or at the ring (`MeetingOpened`), and
+     * the tile goes back to the public clock. Nothing is sent and nothing arrives: the house closes
+     * its own window off the arm's tick, in silence. **The echo also waits for this phone's own
+     * arm** ([PublicCooldown.OWN_ARM_SECONDS]): the house spent a full cooldown at the arm, so a
+     * hold between the window's end and that cooldown's is refused there, and an ARMED over it
+     * would be D-237's ARMED over nothing. The tile meanwhile reads the public clock like every
+     * other phone's; only whether a hold echoes reads this phone's own input.
      */
     fun armRevoke() {
         send(IntentMessage.ArmRevoke)
-        if (state.revokeClock?.running != true) state = state.copy(revoke = RevokeState.Armed)
+        val now = monotonicNow()
+        val ownArmSpent = stamps.armed?.let { now - it < PublicCooldown.OWN_ARM_SECONDS * 1_000L } == true
+        if (state.revokeClock?.running != true && !ownArmSpent) {
+            stamps.armed = now
+            state = state.copy(revoke = RevokeState.Armed)
+        }
+    }
+
+    /**
+     * **ARMED comes down: the window closed on this phone's clock, or a meeting was called** (the
+     * owner's 2026-11-18 ruling). The tile goes back to the public clock ([revokeShown]); nothing
+     * is sent. The stamp is kept, because the cooldown the arm spent is still running at the house.
+     */
+    private fun armEnded() {
+        if (state.revoke == RevokeState.Armed) state = state.copy(revoke = RevokeState.Ready)
     }
 
     /**
@@ -1539,6 +1564,7 @@ class FlowModel(
     fun clocksRead() {
         clocksStamped()
         val now = monotonicNow()
+        if (stamps.armed?.let { now - it >= PublicCooldown.ARM_WINDOW_SECONDS * 1_000L } == true) armEnded()
         val s = state
         fun elapsed(at: Long?): Int = if (at == null) 0 else ((now - at).coerceAtLeast(0) / 1_000L).toInt()
         val next = s.copy(
@@ -1582,6 +1608,7 @@ class FlowModel(
             stamps.egress.takeIf { s.egressClock?.running == true },
             stamps.phase.takeIf { (s.secondsLeft ?: 0) > 0 },
             stamps.egressLeft.takeIf { !s.egressHeld && (s.egressLeft?.secondsLeft ?: 0) > 0 },
+            stamps.armed.takeIf { s.revoke == RevokeState.Armed },
         )
         return running.minOfOrNull { at -> 1_000L - (now - at).coerceAtLeast(0) % 1_000L }
     }
@@ -1607,6 +1634,13 @@ class FlowModel(
         var phaseFrom: Int = 0
         var egressLeft: Long? = null
         var egressLeftFrom: Int = 0
+
+        /**
+         * **When this phone's REVOKE hold last echoed ARMED** (the owner's 2026-11-18 ruling), or
+         * null since the shift began. Input echo: the moment of this phone's own thumb, which no
+         * push carries. See [armRevoke].
+         */
+        var armed: Long? = null
 
         /** The values last stamped or last read; a value other than these is a push's restart. */
         var seenRevoke: PublicCooldown? = null
@@ -1655,6 +1689,7 @@ class FlowModel(
     /** Whether any clock [secondPassed] counts still has a second to count. */
     val ticking: Boolean
         get() = state.revokeClock?.running == true ||
+            state.revoke == RevokeState.Armed ||
             state.accessClock?.running == true ||
             state.egressClock?.running == true ||
             (state.secondsLeft ?: 0) > 0 ||
@@ -1689,10 +1724,15 @@ class FlowModel(
         // The house resets the pool to half here whatever the actor last fired (D-184), so an
         // answer still owed from before belongs to no bar.
         awaitingFire = null
+        // **The house's clocks are all public again from here** (D-132, D-184): its Revoke clock is
+        // back at half whatever this phone armed, so its own arm no longer holds the echo back.
+        stamps.armed = null
         state = state.copy(
-            // A new round holds no arm, so an earlier round's echo does not survive into it. A
-            // meeting's end keeps it: the house keeps the arm across a meeting.
-            revoke = if (opening) RevokeState.Ready else state.revoke,
+            // No arm survives into a shift: a new round holds none, and a meeting's call ended
+            // every arm in the house (the owner's 2026-11-18 ruling, which overrides D-239's
+            // *the house keeps the arm across a meeting*). The ring already took ARMED down; this
+            // is the same answer for a phone that missed it.
+            revoke = if (opening || state.revoke == RevokeState.Armed) RevokeState.Ready else state.revoke,
             revokeClock = PublicCooldown.Revoke,
             accessClock = PublicCooldown.Access,
             egressClock = if (frozen) state.egressClock else PublicCooldown.EgressOpening,
@@ -2847,6 +2887,11 @@ class FlowModel(
                 // readable at one. This is the phone's copy of a window the house has ended, thrown
                 // away in the frame it is told why.
                 state = state.copy(caller = nameOf(message.caller), staticJam = null)
+                // **And every armed Revoke ends at the call** (the owner's 2026-11-18 ruling): the
+                // house has already cleared every seat's arm in silence, and this is the Insider's
+                // tile dropping its own echo at the moment every phone is rung. No role is read:
+                // a Resident's tile was never ARMED, so it changes nothing there.
+                armEnded()
                 // **A new meeting's counts start unsaid** (D-247), before the gate's first count,
                 // which follows in the same burst. Never the last meeting's, never the design's.
                 if (state.houseAttached) meeting.houseOpenedMeeting()

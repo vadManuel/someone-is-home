@@ -58,6 +58,20 @@ data class PublicCooldown(val seconds: Int, val elapsed: Int = 0) {
         /** See the class note: the phone may finish late, never early. */
         const val PAD_SECONDS: Int = 1
 
+        /**
+         * **How long the REVOKE tile says ARMED after the hold that echoed it** (the owner's
+         * 2026-11-18 ruling): [Balance.REVOKE_ARM_WINDOW], on this phone's own clock from its own
+         * hold. No pad: the hold is before the house stamps the arm, so the tile comes down no
+         * later than the house's window closes.
+         */
+        val ARM_WINDOW_SECONDS: Int = Balance.wholeSeconds(Balance.REVOKE_ARM_WINDOW)
+
+        /**
+         * **How long this phone's own arm holds the next echo back**: the full cooldown the house
+         * spent at that arm, plus the pad, so the echo errs late like every clock here.
+         */
+        val OWN_ARM_SECONDS: Int = Balance.wholeSeconds(Balance.REVOKE_COOLDOWN) + PAD_SECONDS
+
         private fun restarted(ticks: Long) = PublicCooldown(Balance.wholeSeconds(ticks) + PAD_SECONDS)
 
         /** The Revoke at half, per seat in the house and the same on every phone (D-132, D-184). */
@@ -86,9 +100,10 @@ data class PublicCooldown(val seconds: Int, val elapsed: Int = 0) {
  * **What the REVOKE tile draws: the echo if this phone held it, the public clock if that is
  * running, and READY otherwise** (D-231, D-239).
  *
- * ARMED wins, because it is this phone's own input and the house holds an arm across a meeting
- * (D-184 resets the clock, not the arm). When ARMED comes back down is not decided here and is
- * the owner's (D-239's open item): today it stays until the round ends, as it did.
+ * ARMED wins, because it is this phone's own input. **It comes down 20 s after the hold, or at a
+ * meeting's call, whichever comes first** (the owner's 2026-11-18 ruling, closing D-239's open
+ * item and overriding its *the house holds an arm across a meeting*): `FlowModel` writes it back
+ * to READY at either moment, silently, and this then draws the public clock like every phone's.
  *
  * Public, so the bench reads its tile the way a person does: it holds once, when this says READY.
  */

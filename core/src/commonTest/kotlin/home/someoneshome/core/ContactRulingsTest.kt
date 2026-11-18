@@ -75,7 +75,10 @@ class ContactRulingsTest {
         if (s.meeting?.phase == home.someoneshome.model.MeetingPhase.Vote) {
             s = put(s, Event.VoteWindowClosed(Tick(ready + 5)))
         }
-        assertTrue(armed(s, first), "the meeting disarmed the Insider before anybody was Restrained")
+        // **The call has already disarmed them** (the owner's 2026-11-18 ruling: an armed Revoke ends
+        // at a meeting call). Until then the arm survived the meeting and R2's line at the takeover
+        // was what took it; it is still there, as the second of two walls.
+        assertFalse(armed(s, first), "a meeting call left an armed Revoke standing (2026-11-18)")
         s = put(s, Event.TallyHalfwayReached(Tick(ready + 6)))
         assertTrue(s.isRestrained(first), "the fixture restrained nobody")
         assertFalse(armed(s, first), "R2: a Restrained seat kept its armed Revoke")
@@ -181,7 +184,10 @@ class ContactRulingsTest {
                 "R5: a touch between ${a.index} and ${b.index} was admitted at a meeting",
             )
         }
-        assertTrue(armed(s, first), "the refusal spent the armed Revoke")
+        // A refusal has no state to spend anything with. The arm itself is gone already: a meeting
+        // call ends every armed Revoke (the owner's 2026-11-18 ruling, D-280), which until then
+        // survived the meeting and was what this line checked.
+        assertFalse(armed(s, first), "a meeting call left an armed Revoke standing (2026-11-18)")
     }
 
     /** Outside a meeting the same touch is admitted, which is what makes the refusal above R5's. */

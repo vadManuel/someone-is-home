@@ -85,8 +85,8 @@ private fun outcome(
     }
     if (request == AbilityRequest.Revoke) {
         // The arm is silent in both outcomes (D-009, D-142), so the answer is in the state alone.
-        val wasArmed = before.cooldownArmed.any { it.index == actor.index }
-        val isArmed = admitted.state.cooldownArmed.any { it.index == actor.index }
+        val wasArmed = before.armedAt(actor, at)
+        val isArmed = admitted.state.armedAt(actor, at)
         val clock = before.cooldownFor(actor, InsiderAbility.Revoke)
         return when {
             isArmed && !wasArmed -> "ARMED"

@@ -188,6 +188,16 @@ internal fun round(insiders: List<Seat> = INSIDERS): List<Event> {
                 add(walk(Event.RevokeArmed(Tick(t++), actor(state, insiders))))
             }
             if (i % 9 == 4) {
+                // **An arm lasts 20 s, or until a meeting is called** (the owner's 2026-11-18 ruling,
+                // D-280). Pass 30's Tier-2 fires push the clock past the window pass 27 opened, so
+                // an arm that has lapsed is made again, at the moment the house says it may be, and
+                // the touch below still lands rather than becoming an unarmed one.
+                val insider = actor(state, insiders)
+                if (state.cooldownArmed.any { it.index == insider.index } && !state.armedAt(insider, Tick(t))) {
+                    val ready = state.cooldownFor(insider, InsiderAbility.Revoke)?.readyAt?.step ?: 0L
+                    t = maxOf(t, ready)
+                    add(walk(Event.RevokeArmed(Tick(t++), insider)))
+                }
                 add(
                     walk(
                         Event.ContactMade(

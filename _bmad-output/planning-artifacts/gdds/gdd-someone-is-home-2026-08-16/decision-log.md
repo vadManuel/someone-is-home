@@ -8572,6 +8572,76 @@ the report meeting and pulsed after it without scanning again, which is F3 exact
 app 203, 0 failures; `vocabularyLint`, `redactionLint`, `armingCordon`, `benchSeedCordon` and
 `seedSourceCordon` clean. **Not on a phone.**
 
+### D-280 · **An armed Revoke lasts 20 s, or until a meeting is called, whichever comes first; the lapse is silent, and the REVOKE tile goes back to the public clock — built (recording 34), overrides D-239 item 4**
+
+**The ruling** (owner, 2026-11-18: Q1 option C and Q2 window option a of
+`owner-decisions-2026-11-17.md`, with 20 s in place of 45 s). Until now nothing expired an arm: it
+cleared only on a contact or the seat leaving the round, it survived a meeting (D-239 item 4), and
+the Insider's tile said ARMED until the round ended. This overrides the 45 s window of
+`gdd.md:323`/`:1155` and D-142, and D-239's *the house keeps an arm across a meeting*. The GDD
+wording is the owner's build item 13 and is not touched here.
+
+**Now, at the house.**
+
+1. **`Balance.REVOKE_ARM_WINDOW` = 20 s**, one constant. An arm the cooldown allows writes a
+   `RevokeArm(seat, lapsesAt = at + window)` into `GameState.revokeArms` (was `cooldownArmed:
+   List<Seat>`; `cooldownArmed` stays as a read-only list of the seats, for logs and the bench). A
+   second arm by the same seat replaces its row rather than adding one.
+2. **The contact asks `GameState.armedAt(seat, at)`**, which is the list *and* the window. A touch at
+   or past `lapsesAt` is an unarmed touch, answered `ContactAnswered` like a Resident's. The lapse
+   writes nothing and emits nothing: there is no event for it, so there is nothing to send and
+   nothing whose absence could be read (rule 1). The cooldown spent at the arm still runs its full
+   60 s. `AbilityLog` asks the same question, so a stale arm is not logged ALREADY ARMED.
+3. **A meeting call clears every seat's arm** (`meetingCalled`: `revokeArms = emptyList()`), read
+   without a role and silent; D-185's argument, that an effect which outlived the call would land on
+   the next shift with no traceable cause. R2's clear at the takeover (D-217) stays as a second
+   wall; the call has already done its work by then.
+
+**Now, on the Insider's phone.** `FlowModel.armRevoke` stamps the echo with the phone's own
+monotonic clock. `clocksRead` takes ARMED down at `PublicCooldown.ARM_WINDOW_SECONDS` (20, no pad:
+the hold precedes the house's stamp, so the tile comes down no later than the house's window
+closes), and `MeetingOpened` takes it down at the ring. The tile then draws the public clock like
+every other phone's (`revokeShown`). Nothing is sent. `ticking` and `untilNextSecond` count the
+arm, so `FlowHost` wakes for it when no public clock is running.
+
+**One consequence that had to be built with it.** With ARMED down at 20 s while the house's
+cooldown from that arm runs to 60 s, a hold in between would have echoed ARMED over a house that
+refuses it: D-237's ARMED over nothing. So the echo also waits for this phone's own arm
+(`PublicCooldown.OWN_ARM_SECONDS`, the 60 s plus the 1 s pad, from the hold). The tile meanwhile
+reads READY, the public clock, exactly as a Resident's does; only whether a hold echoes reads the
+phone's own input. This is the pack's option C as written (*a hold in that span fills and echoes
+nothing*). The stamp is dropped at each shift's start, where the house resets every clock to half.
+
+**Recording 34**: `armedRevoke=` entries carry `seat@lapsesAt`, and the same events reduce
+differently (a contact past the window, a meeting call). No event or effect row changed shape.
+
+**No light, copy or other timing moved.**
+
+**Proved, each red against the injected bug first.**
+
+- `RevokeArmWindowTest` (core), *a touch inside the window lands and a touch at its close is an
+  unarmed touch*. *The contact asking the list alone:* `an arm landed after its 20 s window closed`.
+- `RevokeArmWindowTest`, *a meeting call ends every armed Revoke in silence* and *an arm from before
+  a meeting lands nothing after it*. *The call's clear removed:* `a meeting call left an armed Revoke
+  standing. Expected <[]>, actual <[Seat(index=1), Seat(index=4)]>` and `an arm survived a meeting
+  call and landed after it`.
+- `PublicCooldownTest` (ui), *armedComesDownAtTwentySecondsAndTheTileReadsThePublicClock*. *The
+  lapse in `clocksRead` removed:* `ARMED outlived its 20 s window expected:<Ready> but was:<Armed>`.
+  *The own-arm wait removed:* `a hold into the arm's own cooldown said ARMED over nothing`.
+- `PublicCooldownTest`, *aMeetingCallEndsArmed*. *The drop at `MeetingOpened` removed:* `ARMED
+  survived a meeting call expected:<Ready> but was:<Armed>`.
+
+Three older assertions held what this overrides and now assert the ruling: `ContactRulingsTest`'s
+R2 Restrain case and R5 case (both checked the arm survived the call), and `PublicCooldownTest`'s
+*a meeting's end dropped an arm the house still holds*; so did `ContactRadioBenchTest`'s R5 rig
+(*a refused touch spent the armed Revoke*). **The harness fixture leaned on the old rule once**: its
+pass-27 arm was touched at pass 31, after pass 30's Tier-2 fires had pushed the clock past 20 s, so
+the touch became an unarmed one and `DifferentialTest`'s *the exchange really does end one round and
+not the other* went red. The fixture now re-arms a lapsed arm at the moment the house allows before
+its touch.
+
+**Not on a phone.**
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

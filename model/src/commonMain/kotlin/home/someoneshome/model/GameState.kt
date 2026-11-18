@@ -60,7 +60,17 @@ class GameState private constructor(
      * and it closes it the way that comment said it had to be closed.
      */
     val restrained: List<Seat>,
-    val cooldownArmed: List<Seat>,
+    /**
+     * **Every armed Revoke, with the tick its window closes, in seat order** (D-142; the owner's
+     * 2026-11-18 ruling). See [RevokeArm].
+     *
+     * Written by an arm the cooldown allowed, and cleared four ways: a contact by either phone of
+     * the touch, the seat leaving the round (R2, D-217), and **every seat at a meeting call**, which
+     * overrides D-239's *the arm survives a meeting*. The fourth way is the window closing, and it
+     * writes nothing: a row past its [RevokeArm.lapsesAt] is one [armedAt] no longer answers for,
+     * so the lapse is the same silence in the state that it is on the wire.
+     */
+    val revokeArms: List<RevokeArm>,
     /**
      * **The touches already answered at the tick being reduced** (T1 of the owner's 2026-11-15
      * rulings, D-220).
@@ -372,6 +382,19 @@ class GameState private constructor(
     fun isOut(seat: Seat): Boolean = isRevoked(seat) || isRestrained(seat)
 
     /**
+     * **The seats holding an arm**, window open or not, in seat order. For a reader that only asks
+     * *who armed* (a log line, a bench waiting for its own arm); the rules ask [armedAt].
+     */
+    val cooldownArmed: List<Seat> get() = revokeArms.map { it.seat }
+
+    /**
+     * **Whether [seat] holds an armed Revoke at [at]**: armed, and its window still open (the
+     * owner's 2026-11-18 ruling). The one question the contact asks, so a lapsed arm lands nothing.
+     */
+    fun armedAt(seat: Seat, at: Tick): Boolean =
+        revokeArms.any { it.seat.index == seat.index && it.openAt(at) }
+
+    /**
      * **The round is over.** Derived rather than stored — see [outcome].
      *
      * It feeds [roundStateOf], so it decides what every client is permitted to receive. That is
@@ -679,7 +702,7 @@ class GameState private constructor(
         newlyRevoked: List<Seat> = this.newlyRevoked,
         reported: List<Seat> = this.reported,
         restrained: List<Seat> = this.restrained,
-        cooldownArmed: List<Seat> = this.cooldownArmed,
+        revokeArms: List<RevokeArm> = this.revokeArms,
         touches: List<Touch> = this.touches,
         unreachable: List<Seat> = this.unreachable,
         cooldowns: List<Cooldown> = this.cooldowns,
@@ -709,7 +732,7 @@ class GameState private constructor(
         observations: List<Observation> = this.observations,
         nextObservation: Long = this.nextObservation,
     ) = GameState(
-        armed, outcome, seats, insiderSeats, revoked, newlyRevoked, reported, restrained, cooldownArmed,
+        armed, outcome, seats, insiderSeats, revoked, newlyRevoked, reported, restrained, revokeArms,
         touches, unreachable, cooldowns, isolated, systemIntegrity, openSubroutines, workOrders, stations,
         activeMarkers, destinations, presence, staticUntil, meeting, egress, egressReadyAt, oneLines,
         names, voteWindowSeconds, nextEntity, seed, terminal, reader, plan, terminalRoom, shiftStartedAt,
@@ -807,7 +830,7 @@ class GameState private constructor(
             newlyRevoked = emptyList(),
             reported = emptyList(),
             restrained = emptyList(),
-            cooldownArmed = emptyList(),
+            revokeArms = emptyList(),
             touches = emptyList(),
             unreachable = emptyList(),
             cooldowns = cooldowns,
@@ -856,7 +879,7 @@ class GameState private constructor(
             newlyRevoked = emptyList(),
             reported = emptyList(),
             restrained = emptyList(),
-            cooldownArmed = emptyList(),
+            revokeArms = emptyList(),
             touches = emptyList(),
             unreachable = emptyList(),
             cooldowns = emptyList(),

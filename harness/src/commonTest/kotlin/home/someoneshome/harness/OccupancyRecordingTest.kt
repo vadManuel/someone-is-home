@@ -82,7 +82,7 @@ class OccupancyRecordingTest {
         assertTrue(end.observations.isNotEmpty() && end.sightings.isNotEmpty(), "the round placed and observed nothing")
 
         val text = recording.toText()
-        assertTrue(text.startsWith("someone-is-home/recording/33\n"), "the format was not bumped: ${text.lineSequence().first()}")
+        assertTrue(text.startsWith("someone-is-home/recording/34\n"), "the format was not bumped: ${text.lineSequence().first()}")
         val parsed = RecordingText.parse(text)
         assertEquals(sensing, parsed.events, "an event did not survive the text form")
         assertEquals(plan, (parsed.events.first() as Event.RoundArmed).plan)

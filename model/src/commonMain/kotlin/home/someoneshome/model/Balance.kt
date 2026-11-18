@@ -143,6 +143,18 @@ object Balance {
     const val REVOKE_COOLDOWN: Long = 60L * TICKS_PER_SECOND
 
     /**
+     * **How long an armed Revoke stays armed: 20 s, or until a meeting is called, whichever comes
+     * first** (the owner's 2026-11-18 ruling, which overrides the 45 s of `gdd.md:323`/`:1155` and
+     * D-142).
+     *
+     * Counted by the house from the arm's own tick ([RevokeArm.lapsesAt]) and by the Insider's
+     * phone from its own hold, and both end in silence: nothing is sent to anybody, the house stops
+     * treating the seat as armed, and the REVOKE tile goes back to the public clock. Shorter than
+     * [REVOKE_COOLDOWN], so the cooldown spent at arming always outlives the window it bought.
+     */
+    const val REVOKE_ARM_WINDOW: Long = 20L * TICKS_PER_SECOND
+
+    /**
      * **The Egress countdown — 120s, and a placeholder for a lobby setting** (`gdd.md:353`, F-009).
      *
      * The design is explicit that this *is not a constant*: it has to cover two Residents reading

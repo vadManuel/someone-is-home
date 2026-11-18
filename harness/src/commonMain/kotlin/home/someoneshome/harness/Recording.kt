@@ -50,6 +50,11 @@ class Recording(
     }
 
     companion object {
+        // 34: the Revoke arm window (the owner's 2026-11-18 ruling, D-280). The state row's
+        // `armedRevoke=` entries carry the tick each arm's window closes (`seat@tick`), and the same
+        // events reduce differently twice over: a contact past the window is an unarmed touch, and a
+        // meeting call clears every arm. No event or effect row changed shape.
+        //
         // 33: one refusal reason a version 32 build cannot name -- `CallerOut` (review r4 F5, D-279):
         // a meeting card call from an out seat is refused at the gate -- and three rule changes that
         // reduce the same events differently (D-279). An `EgressFired` during a meeting is refused
@@ -284,7 +289,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/33"
+        const val HEADER = "someone-is-home/recording/34"
     }
 }
 
