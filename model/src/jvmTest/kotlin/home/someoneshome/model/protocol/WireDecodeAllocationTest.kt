@@ -1,0 +1,66 @@
+package home.someoneshome.model.protocol
+
+import java.lang.management.ManagementFactory
+import kotlin.test.Test
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+/**
+ * **GUARD (rule 7, D-276): turning away the other family's body costs nothing.**
+ *
+ * Every phone offers every round frame (each push, each upload's answer) to the lobby's decoder
+ * before the round's, and the host offers every lobby body to the round's decoder first. That
+ * decode used to fail by throwing, and a thrown exception captures a stack and formats a message:
+ * kilobytes, several times a second, on every phone, for an answer that was always null. JVM
+ * per-thread allocation, exact; see `UploadAllocationTest` for why the JVM and what the ceilings
+ * mean.
+ */
+class WireDecodeAllocationTest {
+
+    private val threads = ManagementFactory.getThreadMXBean() as com.sun.management.ThreadMXBean
+
+    @Volatile
+    private var sink: Any? = null
+
+    private fun perCall(times: Int = 2_000, block: () -> Any?): Long {
+        repeat(times) { sink = block() }
+        val id = Thread.currentThread().id
+        val before = threads.getThreadAllocatedBytes(id)
+        repeat(times) { sink = block() }
+        return (threads.getThreadAllocatedBytes(id) - before) / times
+    }
+
+    private fun assertUnder(ceiling: Long, measured: Long, what: String) =
+        assertTrue(measured <= ceiling, "$what allocates $measured bytes, over its ceiling of $ceiling (rule 7, D-276)")
+
+    @Test
+    fun `a round body offered to the lobby's decoder is turned away without allocating`() {
+        val answer = RoundWire.encode(RoundBody.UploadHeard("0123456789abcdef"))
+        val push = RoundWire.encode(RoundBody.Push(9, RoundMessage.MeetingCalling, round = 1))
+        assertNull(LobbyWire.decodeOrNull(answer))
+        assertUnder(64, perCall { LobbyWire.decodeOrNull(answer) }, "the lobby's decode of an upload's answer")
+        assertUnder(64, perCall { LobbyWire.decodeOrNull(push) }, "the lobby's decode of a push")
+    }
+
+    /**
+     * The host reads one of these per seat per beat. The body is an upload's JSON with one character
+     * past Latin-1 on the end, so the JVM holds its strings at two bytes a character, as Kotlin/Native
+     * always does; with plain ASCII the JVM halves its strings and the two ways of reading come within
+     * a few hundred bytes of each other. 12.9 KB a call through the general decoder (before D-276),
+     * 9.0 KB now: the body once as characters and once as its string. On Kotlin/Native, measured
+     * with the std allocator, the plain upload frame went from 11.1 KB to 7.2 KB.
+     */
+    @Test
+    fun `reading an upload's frame allocates its body and little else`() {
+        val body = RoundWire.encode(RoundBody.Sighted("0".repeat(SightingUpload.BODY_CHARS), SightingUpload.EMPTY_ASK)) + "李"
+        val frame = TransportWire.encode(TransportFrame.Carry(body))
+        assertUnder(10_240, perCall { TransportWire.decodeOrNull(frame) }, "reading an upload's frame")
+    }
+
+    @Test
+    fun `a lobby body offered to the round's decoder is turned away without allocating`() {
+        val standing = LobbyWire.encode(LobbyBody.Standing(joined = 6, linesIn = 4, names = listOf("ROSE", "TOMAS"), insiders = 2))
+        assertNull(RoundWire.decodeOrNull(standing))
+        assertUnder(64, perCall { RoundWire.decodeOrNull(standing) }, "the round's decode of a standing")
+    }
+}

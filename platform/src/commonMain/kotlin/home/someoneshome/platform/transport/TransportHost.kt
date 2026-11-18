@@ -16,7 +16,6 @@ import io.ktor.server.websocket.webSocket
 import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
-import io.ktor.websocket.readText
 import io.ktor.network.selector.SelectorManager
 import io.ktor.network.sockets.aSocket
 import io.ktor.utils.io.core.use
@@ -401,7 +400,7 @@ class TransportHost(
             } catch (_: ClosedReceiveChannelException) {
                 return null
             }
-            val text = (msg as? Frame.Text)?.readText() ?: continue
+            val text = (msg as? Frame.Text)?.text() ?: continue
             val frame = TransportWire.decodeOrNull(text)
             if (frame == null) {
                 gate.withLock { malformed++ }

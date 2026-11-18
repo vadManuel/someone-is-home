@@ -8,7 +8,6 @@ import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.webSocket
 import io.ktor.websocket.Frame
-import io.ktor.websocket.readText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
@@ -220,7 +219,7 @@ class TransportClient(
             } catch (_: ClosedReceiveChannelException) {
                 return null
             }
-            val text = (msg as? Frame.Text)?.readText() ?: continue
+            val text = (msg as? Frame.Text)?.text() ?: continue
             return TransportWire.decodeOrNull(text) ?: continue
         }
     }

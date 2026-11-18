@@ -150,8 +150,16 @@ object ContactTokens {
 
 internal fun String.isLowerHex(): Boolean = all { it in '0'..'9' || it in 'a'..'f' }
 
+/**
+ * The bytes this hex spells, read off the characters in place (rule 7, D-276): the array is the only
+ * allocation. It once cut a two-character substring per byte, which made a seed's sixteen bytes
+ * cost seventeen objects every time a token or an upload's filler was computed.
+ */
 internal fun String.hexBytes(): ByteArray =
-    ByteArray(length / 2) { i -> substring(2 * i, 2 * i + 2).toInt(16).toByte() }
+    ByteArray(length / 2) { i -> hexByteAt(2 * i).toByte() }
+
+/** The byte the two hex characters at [at] spell, 0 to 255. Allocates nothing. */
+internal fun CharSequence.hexByteAt(at: Int): Int = (this[at].digitToInt(16) shl 4) or this[at + 1].digitToInt(16)
 
 internal fun ByteArray.toLowerHex(bytes: Int = size): String = buildString(bytes * 2) {
     for (i in 0 until bytes) {

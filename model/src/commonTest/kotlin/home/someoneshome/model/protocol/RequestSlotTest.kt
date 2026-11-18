@@ -83,6 +83,15 @@ class RequestSlotTest {
         assertNull(RequestSlot.read(good.dropLast(1) + "+"), "a payload outside the alphabet was read")
         val dirty = "[]".encodeToByteArray().copyOf(RequestSlot.PAYLOAD_BYTES).also { it[RequestSlot.PAYLOAD_BYTES - 1] = 1 }
         assertNull(RequestSlot.read("0123456789abcdef" + "0002" + payloadOf(dirty)), "padding that was not zeros was read")
+        // An empty slot is read without decoding (D-276), and only one that is all zeros is empty.
+        val empty = RequestSlot.empty("0123456789abcdef")
+        assertEquals("0123456789abcdef" + "0000" + payloadOf(ByteArray(0)), empty)
+        for (at in listOf(20, 21, 300, RequestSlot.CHARS - 1)) {
+            for (c in listOf('B', 'g', '-', '_', '+', '=')) {
+                val nearly = empty.substring(0, at) + c + empty.substring(at + 1)
+                assertNull(RequestSlot.read(nearly), "an empty slot with '$c' at $at was read")
+            }
+        }
     }
 
     @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)

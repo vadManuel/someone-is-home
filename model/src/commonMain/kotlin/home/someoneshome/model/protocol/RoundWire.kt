@@ -1171,11 +1171,18 @@ object RoundWire {
      * decode must become a fact the shell can report, never an exception on an I/O thread taking a
      * player's connection down with it.
      */
-    fun decodeOrNull(text: String): RoundBody? = try {
-        json.decodeFromString(RoundBody.serializer(), text)
-    } catch (_: IllegalArgumentException) {
+    fun decodeOrNull(text: String): RoundBody? = if (foreign.isForeign(text)) {
+        // A lobby body, by its leading type: what the decode below would have thrown over (D-276).
         null
+    } else {
+        try {
+            json.decodeFromString(RoundBody.serializer(), text)
+        } catch (_: IllegalArgumentException) {
+            null
+        }
     }
+
+    private val foreign = ForeignBody(RoundBody.serializer().descriptor)
 
     /**
      * **The projection: one [Effect], one [RoundMessage], no decisions.**
@@ -1306,4 +1313,43 @@ internal object WireHex {
     }
 
     fun isHex(text: String): Boolean = text.all { it in '0'..'9' || it in 'a'..'f' }
+}
+
+/**
+ * **Whether a body is plainly another family's, read off its leading `"type"` without decoding it**
+ * (rule 7, D-276).
+ *
+ * One `Carry` holds a lobby body or a round body, and each side asks both decoders in turn: every
+ * phone hands every round frame to `LobbyWire` first, and the host hands every lobby body to
+ * `RoundWire` first. The losing decode used to find out by throwing, and an exception on Kotlin/Native
+ * captures its stack and builds a long message: a few kilobytes for every push and every upload's
+ * answer, on every phone, all round.
+ *
+ * Exact, not a heuristic: it answers true only for a body that begins `{"type":"NAME"` where NAME is
+ * not one of [family]'s serial names, read off its own descriptor so it cannot fall behind a new
+ * member. That body's decode is a polymorphic lookup of NAME in [family], which fails, so the answer
+ * was null either way. Anything else, whitespace, another key first, an escape in the name, is
+ * decoded in full as it always was.
+ */
+internal class ForeignBody(family: kotlinx.serialization.descriptors.SerialDescriptor) {
+    private val names: List<String> = family.getElementDescriptor(1).let { members ->
+        List(members.elementsCount) { members.getElementName(it) }
+    }
+
+    fun isForeign(text: String): Boolean {
+        if (!text.startsWith(LEAD)) return false
+        val end = text.indexOf('"', LEAD.length)
+        if (end < 0) return false
+        val length = end - LEAD.length
+        for (name in names) {
+            if (name.length == length && text.regionMatches(LEAD.length, name, 0, length)) return false
+        }
+        // An escape inside the name is decoded in full, whatever it spells.
+        for (i in LEAD.length until end) if (text[i] == '\\') return false
+        return true
+    }
+
+    private companion object {
+        const val LEAD = "{\"type\":\""
+    }
 }

@@ -133,6 +133,79 @@ class SightingUploadTest {
         assertTrue(a != SightingUpload.pack(seedOf(6), now, 42, emptyList()))
     }
 
+    /**
+     * **D-276 changed how an upload is built and read, and nothing it puts on the wire** (rule 7).
+     *
+     * Pinned to a computation outside this codebase (Python's `hmac`, the same filler, sorted and
+     * joined), and compared, case by case and over a spread of seeds, windows, counters and
+     * readings, with the packing and reading exactly as they were written before D-276 ([legacyPack],
+     * [legacyUnpack]). A packing that saved its allocations by changing a character fails here.
+     */
+    @Test
+    fun `packing and reading are the text and the readings they were before D-276`() {
+        val nothing = SightingUpload.pack(seedOf(6), now, 41, emptyList())
+        assertEquals(
+            "f2a5a9d66128074753443d3507195a6b2fd8ce96d56fc14e3263687d32222471",
+            home.someoneshome.model.Sha256.digest(nothing.slots.encodeToByteArray()).toHexString(),
+        )
+        val bodies = cases().values.toMutableList()
+        for (seat in 0 until 8) for (upload in listOf(0L, 1L, 255L, 256L, 1L shl 40, Long.MAX_VALUE)) {
+            val window = ContactWindow(now.index + seat * 7 - 20)
+            val heard = (0 until seat * 3).map { i ->
+                heard((seat + i) % 8, -20 - 9 * i + (i % 3) * 200 - 150, if (i % 2 == 0) window else ContactWindow(window.index - 1))
+            }
+            val ask = RequestSlot.empty("0123456789abcd" + seat.toString(16).padStart(2, '0'))
+            val body = SightingUpload.pack(seedOf(seat), window, upload, heard, ask)
+            assertEquals(legacyPack(seedOf(seat), window, upload, heard, ask), body, "seat $seat, upload $upload")
+            bodies += body
+        }
+        for (body in bodies) assertEquals(legacyUnpack(body), SightingUpload.unpack(body))
+    }
+
+    private fun ByteArray.toHexString(): String = joinToString("") { (it.toInt() and 0xff).toString(16).padStart(2, '0') }
+
+    /** [SightingUpload.pack] as it was written before D-276, kept only to be compared with. */
+    private fun legacyPack(seed: ContactSeed, window: ContactWindow, upload: Long, heard: List<Sighting>, ask: String): RoundBody.Sighted {
+        fun hex(bytes: ByteArray, n: Int = bytes.size) = bytes.copyOf(n).toHexString()
+        fun slotOf(s: Sighting): String {
+            val rssi = s.rssi.coerceIn(Byte.MIN_VALUE.toInt(), Byte.MAX_VALUE.toInt()).toByte()
+            return s.token.hex + hex(byteArrayOf(rssi)) + hex(ByteArray(8) { i -> (s.window.index ushr (56 - 8 * i)).toByte() })
+        }
+        fun filler(slot: Int): Sighting {
+            val key = ByteArray(16) { i -> seed.hex.substring(2 * i, 2 * i + 2).toInt(16).toByte() }
+            val mac = Hmac.sha256(
+                key,
+                byteArrayOf('P'.code.toByte()) +
+                    ByteArray(8) { i -> (window.index ushr (56 - 8 * i)).toByte() } +
+                    ByteArray(8) { i -> (upload ushr (56 - 8 * i)).toByte() } +
+                    byteArrayOf(slot.toByte()),
+            )
+            val rssi = -100 + (mac[ContactTokens.TOKEN_BYTES].toInt() and 0xff) % 61
+            return Sighting(ContactToken(hex(mac, ContactTokens.TOKEN_BYTES)), rssi, window)
+        }
+        val kept = heard
+            .groupBy { it.token.hex to it.window.index }
+            .map { (_, same) -> same.maxWith(compareBy<Sighting> { it.rssi }.thenBy { it.token.hex }) }
+            .sortedWith(compareByDescending<Sighting> { it.rssi }.thenBy { it.token.hex }.thenBy { it.window.index })
+            .take(SightingUpload.SLOTS)
+        val filler = (kept.size until SightingUpload.SLOTS).map { filler(it) }
+        return RoundBody.Sighted((kept + filler).map { slotOf(it) }.sorted().joinToString(""), ask)
+    }
+
+    /** [SightingUpload.unpack] as it was written before D-276, kept only to be compared with. */
+    private fun legacyUnpack(body: RoundBody.Sighted): List<Sighting> {
+        fun bytes(hex: String) = ByteArray(hex.length / 2) { i -> hex.substring(2 * i, 2 * i + 2).toInt(16).toByte() }
+        val chars = 50
+        return (0 until SightingUpload.SLOTS).map { i ->
+            val slot = body.slots.substring(i * chars, (i + 1) * chars)
+            Sighting(
+                token = ContactToken(slot.substring(0, 32)),
+                rssi = bytes(slot.substring(32, 34))[0].toInt(),
+                window = ContactWindow(bytes(slot.substring(34)).fold(0L) { acc, b -> (acc shl 8) or (b.toLong() and 0xff) }),
+            )
+        }
+    }
+
     @Test
     fun `a body that is not a packed upload is unreadable rather than half read`() {
         assertNull(SightingUpload.unpack(RoundBody.Sighted("00", SightingUpload.EMPTY_ASK)))

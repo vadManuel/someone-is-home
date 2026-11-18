@@ -106,8 +106,11 @@ object RequestSlot {
     /** An empty slot under [id]: nothing asked, the same width as a full one. */
     fun empty(id: String): String {
         requireId(id)
-        return id + "0".repeat(LENGTH_CHARS) + base64.encode(ByteArray(PAYLOAD_BYTES))
+        return id + emptyTail
     }
+
+    /** What follows the id in every empty slot, encoded once rather than every beat (D-276). */
+    private val emptyTail: String = "0".repeat(LENGTH_CHARS) + base64.encode(ByteArray(PAYLOAD_BYTES))
 
     /** [asked], in order, in a slot under [id], or null when their JSON is longer than [PAYLOAD_BYTES]. */
     fun of(id: String, asked: List<Asked>): String? {
@@ -141,11 +144,16 @@ object RequestSlot {
      */
     fun read(slot: String): Read? {
         if (slot.length != CHARS) return null
-        val head = slot.substring(0, ID_CHARS + LENGTH_CHARS)
-        if (!WireHex.isHex(head)) return null
-        val id = head.substring(0, ID_CHARS)
-        val length = head.substring(ID_CHARS).toInt(16)
+        for (i in 0 until ID_CHARS + LENGTH_CHARS) if (!isLowerHex(slot[i])) return null
+        val id = slot.substring(0, ID_CHARS)
+        var length = 0
+        for (i in ID_CHARS until ID_CHARS + LENGTH_CHARS) length = (length shl 4) or slot[i].digitToInt(16)
         if (length > PAYLOAD_BYTES) return null
+        // **An empty slot, which is most beats of every phone** (rule 7, D-276): its payload is
+        // [PAYLOAD_BYTES] zeros, and in unpadded base64 that is exactly [PAYLOAD_CHARS] `A`s and
+        // nothing else spells it, so it is recognised without decoding. Anything else goes the long
+        // way below, which is what this did for every slot until D-276.
+        if (length == 0 && isEmptyPayload(slot)) return Read(id, emptyList())
         val payload = slot.substring(ID_CHARS + LENGTH_CHARS)
         if (!payload.all(::isBase64UrlSafe)) return null
         val bytes = try {
@@ -168,6 +176,13 @@ object RequestSlot {
     fun isId(id: String): Boolean = id.length == ID_CHARS && WireHex.isHex(id)
 
     private const val ZERO: Byte = 0
+
+    private fun isLowerHex(c: Char) = c in '0'..'9' || c in 'a'..'f'
+
+    private fun isEmptyPayload(slot: String): Boolean {
+        for (i in ID_CHARS + LENGTH_CHARS until CHARS) if (slot[i] != 'A') return false
+        return true
+    }
 
     private fun isBase64UrlSafe(c: Char) = c in 'A'..'Z' || c in 'a'..'z' || c in '0'..'9' || c == '-' || c == '_'
 

@@ -235,9 +235,15 @@ object LobbyWire {
      * hold. A body that does not decode must become a fact the shell can report, never an
      * exception on an I/O thread taking a player's connection down with it.
      */
-    fun decodeOrNull(text: String): LobbyBody? = try {
+    fun decodeOrNull(text: String): LobbyBody? = if (foreign.isForeign(text)) {
+        // A round body, by its leading type: what the decode below would have thrown over. Every
+        // push and every upload's answer reaches here on every phone (D-276).
+        null
+    } else try {
         json.decodeFromString(LobbyBody.serializer(), text)
     } catch (_: IllegalArgumentException) {
         null
     }
+
+    private val foreign = ForeignBody(LobbyBody.serializer().descriptor)
 }

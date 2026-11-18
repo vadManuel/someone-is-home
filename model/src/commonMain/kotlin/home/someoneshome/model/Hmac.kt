@@ -9,8 +9,9 @@ package home.someoneshome.model
  * no platform, and a digest that differed between the iOS build and the host's would be a token the
  * house could never resolve, failing silently in a dark room.
  *
- * It allocates. It runs once per window per seat on the host and once per window on a phone, which
- * is a few kilobytes a minute against rule 7's budget, and it never runs on the blackout path.
+ * It runs once per window per seat on the host, once per window on a phone, and twenty-four times a
+ * beat on every phone for an upload's filler, so what it allocates is rule 7's business: [Hmac.Keyed]
+ * holds one key's pads and one engine for many messages (D-276). It never runs on the blackout path.
  *
  * `HmacTest` pins it to RFC 4231's vectors, so a slip in the rounds is a red build rather than a
  * token nobody can resolve.
@@ -18,11 +19,51 @@ package home.someoneshome.model
 object Hmac {
 
     /** HMAC-SHA-256 of [message] under [key]. 32 bytes. */
-    fun sha256(key: ByteArray, message: ByteArray): ByteArray {
-        val block = if (key.size > BLOCK) Sha256.digest(key) else key
-        val inner = ByteArray(BLOCK) { i -> ((block.getOrElse(i) { 0 }.toInt()) xor 0x36).toByte() }
-        val outer = ByteArray(BLOCK) { i -> ((block.getOrElse(i) { 0 }.toInt()) xor 0x5c).toByte() }
-        return Sha256.digest(outer + Sha256.digest(inner + message))
+    fun sha256(key: ByteArray, message: ByteArray): ByteArray = Keyed(key).mac(message)
+
+    /**
+     * **One key's HMAC, for as many messages as the caller has** (rule 7, D-276).
+     *
+     * The pads are derived once, at construction, and one digest engine is reused for every
+     * [mac], so a message costs its 32-byte answer and nothing else, or nothing at all into the
+     * caller's own array. An upload's filler is twenty-four MACs under one seed every beat, on every
+     * phone; computed through [sha256] each one built the pads, two concatenations and two
+     * schedules afresh, about two kilobytes apiece.
+     *
+     * **Not thread-safe, and never shared.** It holds the engine's working state between the two
+     * halves of a MAC. Make one where it is used and let it go there.
+     */
+    class Keyed(key: ByteArray) {
+        private val inner = ByteArray(BLOCK)
+        private val outer = ByteArray(BLOCK)
+        private val innerDigest = ByteArray(Sha256.DIGEST_BYTES)
+        private val engine = Sha256.Engine()
+
+        init {
+            val block = if (key.size > BLOCK) Sha256.digest(key) else key
+            for (i in 0 until BLOCK) {
+                val k = if (i < block.size) block[i].toInt() else 0
+                inner[i] = (k xor 0x36).toByte()
+                outer[i] = (k xor 0x5c).toByte()
+            }
+        }
+
+        /** HMAC-SHA-256 of [message]'s first [length] bytes, written into [into] and returned. */
+        fun mac(
+            message: ByteArray,
+            length: Int = message.size,
+            into: ByteArray = ByteArray(Sha256.DIGEST_BYTES),
+        ): ByteArray {
+            engine.reset()
+            engine.update(inner, 0, BLOCK)
+            engine.update(message, 0, length)
+            engine.finish(innerDigest)
+            engine.reset()
+            engine.update(outer, 0, BLOCK)
+            engine.update(innerDigest, 0, Sha256.DIGEST_BYTES)
+            engine.finish(into)
+            return into
+        }
     }
 
     private const val BLOCK = 64
@@ -31,25 +72,60 @@ object Hmac {
 /** SHA-256 (FIPS 180-4). Only [Hmac] reads it. */
 internal object Sha256 {
 
-    fun digest(message: ByteArray): ByteArray {
-        val h = intArrayOf(
-            0x6a09e667L.toInt(), 0xbb67ae85L.toInt(), 0x3c6ef372L.toInt(), 0xa54ff53aL.toInt(),
-            0x510e527fL.toInt(), 0x9b05688cL.toInt(), 0x1f83d9abL.toInt(), 0x5be0cd19L.toInt(),
-        )
-        val bitLength = message.size.toLong() * 8
-        val padded = ((message.size + 9 + 63) / 64) * 64
-        val data = ByteArray(padded)
-        message.copyInto(data)
-        data[message.size] = 0x80.toByte()
-        for (i in 0 until 8) data[padded - 1 - i] = (bitLength ushr (8 * i)).toByte()
+    const val DIGEST_BYTES: Int = 32
 
-        val w = IntArray(64)
-        // Bounded by the padded length, which is a multiple of 64 by construction.
-        for (chunk in 0 until padded / 64) {
+    fun digest(message: ByteArray): ByteArray {
+        val engine = Engine()
+        engine.reset()
+        engine.update(message, 0, message.size)
+        return engine.finish(ByteArray(DIGEST_BYTES))
+    }
+
+    /**
+     * **One running digest, reusable**: [reset], [update] any number of times, [finish]. Its three
+     * arrays are allocated once, with it, and nothing after (rule 7, D-276). Not thread-safe.
+     */
+    class Engine {
+        private val h = IntArray(8)
+        private val w = IntArray(64)
+        private val block = ByteArray(64)
+        private var buffered = 0
+        private var total = 0L
+
+        fun reset() {
+            INITIAL.copyInto(h)
+            buffered = 0
+            total = 0L
+        }
+
+        fun update(bytes: ByteArray, offset: Int, length: Int) {
+            for (i in offset until offset + length) push(bytes[i])
+            total += length
+        }
+
+        /** The padding and the length, then the digest into [out], which is returned. */
+        fun finish(out: ByteArray): ByteArray {
+            val bitLength = total * 8
+            push(0x80.toByte())
+            while (buffered != 56) push(0)
+            for (i in 7 downTo 0) push((bitLength ushr (8 * i)).toByte())
+            for (i in 0 until DIGEST_BYTES) out[i] = (h[i / 4] ushr (24 - 8 * (i % 4))).toByte()
+            return out
+        }
+
+        private fun push(b: Byte) {
+            block[buffered++] = b
+            if (buffered == 64) {
+                compress()
+                buffered = 0
+            }
+        }
+
+        private fun compress() {
             for (t in 0 until 16) {
-                val o = chunk * 64 + t * 4
-                w[t] = ((data[o].toInt() and 0xff) shl 24) or ((data[o + 1].toInt() and 0xff) shl 16) or
-                    ((data[o + 2].toInt() and 0xff) shl 8) or (data[o + 3].toInt() and 0xff)
+                val o = t * 4
+                w[t] = ((block[o].toInt() and 0xff) shl 24) or ((block[o + 1].toInt() and 0xff) shl 16) or
+                    ((block[o + 2].toInt() and 0xff) shl 8) or (block[o + 3].toInt() and 0xff)
             }
             for (t in 16 until 64) {
                 val s0 = w[t - 15].rotateRight(7) xor w[t - 15].rotateRight(18) xor (w[t - 15] ushr 3)
@@ -70,8 +146,12 @@ internal object Sha256 {
             h[0] += a; h[1] += b; h[2] += c; h[3] += d
             h[4] += e; h[5] += f; h[6] += g; h[7] += hh
         }
-        return ByteArray(32) { i -> (h[i / 4] ushr (24 - 8 * (i % 4))).toByte() }
     }
+
+    private val INITIAL = intArrayOf(
+        0x6a09e667L.toInt(), 0xbb67ae85L.toInt(), 0x3c6ef372L.toInt(), 0xa54ff53aL.toInt(),
+        0x510e527fL.toInt(), 0x9b05688cL.toInt(), 0x1f83d9abL.toInt(), 0x5be0cd19L.toInt(),
+    )
 
     private val K = intArrayOf(
         0x428a2f98L.toInt(), 0x71374491L.toInt(), 0xb5c0fbcfL.toInt(), 0xe9b5dba5L.toInt(),

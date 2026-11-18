@@ -6,9 +6,8 @@ import home.someoneshome.model.ContactTokens
 import home.someoneshome.model.ContactWindow
 import home.someoneshome.model.Hmac
 import home.someoneshome.model.Sighting
-import home.someoneshome.model.hexBytes
+import home.someoneshome.model.hexByteAt
 import home.someoneshome.model.isLowerHex
-import home.someoneshome.model.toLowerHex
 
 /**
  * **The sighting upload: one fixed-size message, on one cadence, from every live phone** (D-212).
@@ -93,14 +92,31 @@ object SightingUpload {
         ask: String = EMPTY_ASK,
     ): RoundBody.Sighted {
         require(ask.length == RequestSlot.CHARS) { "a request slot is ${RequestSlot.CHARS} characters" }
-        val kept = heard
+        val kept = if (heard.isEmpty()) emptyList() else heard
             .groupBy { it.token.hex to it.window.index }
             .map { (_, same) -> same.maxWith(compareBy<Sighting> { it.rssi }.thenBy { it.token.hex }) }
             .sortedWith(compareByDescending<Sighting> { it.rssi }.thenBy { it.token.hex }.thenBy { it.window.index })
             .take(SLOTS)
-        val filler = (kept.size until SLOTS).map { slot -> filler(seed, window, upload, slot) }
-        val slots = (kept + filler).map { slotOf(it) }.sorted()
-        return RoundBody.Sighted(slots.joinToString(""), ask)
+        // **Every slot written straight into one array, then sorted by its own text** (rule 7, D-276).
+        // The text is the text it always was, slot for slot; what went is an object per slot and per
+        // hex pair, and two kilobytes per MAC: one keyed MAC serves the whole filler.
+        val text = CharArray(BODY_CHARS)
+        for ((slot, s) in kept.withIndex()) writeSlot(text, slot, s.token.hex, s.rssi, s.window.index)
+        if (kept.size < SLOTS) {
+            val mac = Hmac.Keyed(seed.bytes())
+            val message = ByteArray(FILLER_MESSAGE_BYTES)
+            message[0] = DOMAIN_FILLER
+            putLong(message, 1, window.index)
+            putLong(message, 9, upload)
+            val tag = ByteArray(MAC_BYTES)
+            for (slot in kept.size until SLOTS) {
+                message[FILLER_MESSAGE_BYTES - 1] = slot.toByte()
+                mac.mac(message, into = tag)
+                val rssi = FILLER_RSSI_FLOOR + (tag[ContactTokens.TOKEN_BYTES].toInt() and 0xff) % FILLER_RSSI_SPAN
+                writeSlot(text, slot, tag, rssi, window.index)
+            }
+        }
+        return RoundBody.Sighted(sortedSlots(text), ask)
     }
 
     /**
@@ -112,34 +128,90 @@ object SightingUpload {
     fun unpack(body: RoundBody.Sighted): List<Sighting>? {
         val text = body.slots
         if (text.length != BODY_CHARS || !text.isLowerHex()) return null
-        return (0 until SLOTS).map { i ->
-            val slot = text.substring(i * SLOT_CHARS, (i + 1) * SLOT_CHARS)
-            Sighting(
-                token = ContactToken(slot.substring(0, TOKEN_CHARS)),
-                rssi = slot.substring(TOKEN_CHARS, TOKEN_CHARS + RSSI_CHARS).hexBytes()[0].toInt(),
-                window = ContactWindow(
-                    slot.substring(TOKEN_CHARS + RSSI_CHARS).hexBytes()
-                        .fold(0L) { acc, b -> (acc shl 8) or (b.toLong() and 0xff) },
-                ),
+        // Read off the body's characters in place (rule 7, D-276): a slot costs its token's text and
+        // its `Sighting`, where it once cost eleven substrings and two arrays besides.
+        val slots = ArrayList<Sighting>(SLOTS)
+        for (i in 0 until SLOTS) {
+            val at = i * SLOT_CHARS
+            var window = 0L
+            for (b in 0 until 8) {
+                window = (window shl 8) or text.hexByteAt(at + TOKEN_CHARS + RSSI_CHARS + 2 * b).toLong()
+            }
+            slots += Sighting(
+                token = ContactToken(text.substring(at, at + TOKEN_CHARS)),
+                rssi = text.hexByteAt(at + TOKEN_CHARS).toByte().toInt(),
+                window = ContactWindow(window),
             )
+        }
+        return slots
+    }
+
+    /** The filler's MAC input: the domain byte, the window, the upload's counter and the slot. */
+    private const val FILLER_MESSAGE_BYTES = 1 + 8 + 8 + 1
+
+    private const val MAC_BYTES = 32
+
+    /** Slot [slot] of [text]: [token]'s hex, then [rssi] clamped to a signed byte, then [window], big-endian. */
+    private fun writeSlot(text: CharArray, slot: Int, token: String, rssi: Int, window: Long) {
+        val at = slot * SLOT_CHARS
+        for (i in 0 until TOKEN_CHARS) text[at + i] = token[i]
+        writeTail(text, at, rssi, window)
+    }
+
+    /** [writeSlot] for a token that is still bytes: the first [ContactTokens.TOKEN_BYTES] of [token]. */
+    private fun writeSlot(text: CharArray, slot: Int, token: ByteArray, rssi: Int, window: Long) {
+        val at = slot * SLOT_CHARS
+        for (i in 0 until ContactTokens.TOKEN_BYTES) writeHex(text, at + 2 * i, token[i].toInt() and 0xff)
+        writeTail(text, at, rssi, window)
+    }
+
+    private fun writeTail(text: CharArray, at: Int, rssi: Int, window: Long) {
+        val clamped = rssi.coerceIn(Byte.MIN_VALUE.toInt(), Byte.MAX_VALUE.toInt())
+        writeHex(text, at + TOKEN_CHARS, clamped and 0xff)
+        for (i in 0 until 8) {
+            writeHex(text, at + TOKEN_CHARS + RSSI_CHARS + 2 * i, (window ushr (56 - 8 * i)).toInt() and 0xff)
         }
     }
 
-    private fun slotOf(s: Sighting): String {
-        val rssi = s.rssi.coerceIn(Byte.MIN_VALUE.toInt(), Byte.MAX_VALUE.toInt()).toByte()
-        val window = ByteArray(8) { i -> (s.window.index ushr (56 - 8 * i)).toByte() }
-        return s.token.hex + byteArrayOf(rssi).toLowerHex() + window.toLowerHex()
+    private fun writeHex(text: CharArray, at: Int, v: Int) {
+        text[at] = HEX[v ushr 4]
+        text[at + 1] = HEX[v and 0xf]
     }
 
-    private fun filler(seed: ContactSeed, window: ContactWindow, upload: Long, slot: Int): Sighting {
-        val mac = Hmac.sha256(
-            seed.bytes(),
-            byteArrayOf(DOMAIN_FILLER) +
-                ByteArray(8) { i -> (window.index ushr (56 - 8 * i)).toByte() } +
-                ByteArray(8) { i -> (upload ushr (56 - 8 * i)).toByte() } +
-                byteArrayOf(slot.toByte()),
-        )
-        val rssi = FILLER_RSSI_FLOOR + (mac[ContactTokens.TOKEN_BYTES].toInt() and 0xff) % FILLER_RSSI_SPAN
-        return Sighting(ContactToken(mac.toLowerHex(ContactTokens.TOKEN_BYTES)), rssi, window)
+    private fun putLong(into: ByteArray, at: Int, value: Long) {
+        for (i in 0 until 8) into[at + i] = (value ushr (56 - 8 * i)).toByte()
     }
+
+    /**
+     * **[text]'s slots in the order their own text sorts, joined**: what sorting the slots as
+     * strings and joining them gave, by an insertion sort over [SLOTS] indices instead of over
+     * strings. Two equal slots are equal text, so which of them goes first cannot show.
+     */
+    private fun sortedSlots(text: CharArray): String {
+        val order = IntArray(SLOTS) { it }
+        for (i in 1 until SLOTS) {
+            val moving = order[i]
+            var j = i - 1
+            while (j >= 0 && compareSlots(text, order[j], moving) > 0) {
+                order[j + 1] = order[j]
+                j--
+            }
+            order[j + 1] = moving
+        }
+        val out = StringBuilder(BODY_CHARS)
+        for (slot in order) out.appendRange(text, slot * SLOT_CHARS, (slot + 1) * SLOT_CHARS)
+        return out.toString()
+    }
+
+    private fun compareSlots(text: CharArray, a: Int, b: Int): Int {
+        val x = a * SLOT_CHARS
+        val y = b * SLOT_CHARS
+        for (i in 0 until SLOT_CHARS) {
+            val c = text[x + i].compareTo(text[y + i])
+            if (c != 0) return c
+        }
+        return 0
+    }
+
+    private const val HEX = "0123456789abcdef"
 }
