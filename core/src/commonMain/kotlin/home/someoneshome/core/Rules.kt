@@ -1833,7 +1833,7 @@ private fun egressFired(state: GameState, event: Event.EgressFired): Reduction<G
     val started = if (!ready) {
         null
     } else {
-        Egress.fired(event.at, event.type, event.nodes, Balance.EGRESS_TIMER)
+        Egress.fired(event.at, event.type, event.nodes, Balance.EGRESS_TIMER, event.pulseFrom)
             .takeIf { it.namesTwoNodes }
     }
 
@@ -1879,6 +1879,8 @@ private fun egressFired(state: GameState, event: Event.EgressFired): Reduction<G
                 remaining = egress.remainingAt(event.at),
                 // D-135's first of five. The Egress is named at the head of that closed set.
                 haptic = Haptic.Long,
+                // The pulse grid, on the host's clock (C2): one number for every phone.
+                pulseFrom = egress.pulseFrom,
             )
         }
     } ?: emptyList()
@@ -1935,7 +1937,7 @@ private fun pulseReturned(
         standing != null &&
         egress.isNode(standing)
     val locked = egress.lockedAt(event.actor, event.at)
-    val good = atNode && !locked && onTheBeat(egress.firedAt, event.taps)
+    val good = atNode && !locked && onThePulse(egress.pulseFrom, event.taps)
 
     val partner = if (!good || standing == null) {
         null
@@ -1963,8 +1965,16 @@ private fun pulseReturned(
         else -> state
     }
 
-    // Constructed once, outside the branch above. Deliberately not inside it.
-    val answered = Effect.SyncPulseAnswered(seat = event.actor, held = good && partner == null)
+    // Constructed once, outside the branch above. Deliberately not inside it. **And one blank for
+    // every other seat, seat by seat at the same place** (C2, D-263's pattern): the answer reaches
+    // the tapper alone, so without them the one living phone sent a frame at this moment was the
+    // one standing at a node with its taps in. No role is read; the allowlist narrows to the living.
+    val answer = Effect.SyncPulseAnswered(seat = event.actor, held = good && partner == null)
+    val answered = if (state.seats.none { it.index == event.actor.index }) {
+        listOf(answer) + state.seats.map { Effect.SyncPulseBlanked(it) }
+    } else {
+        state.seats.map { if (it.index == event.actor.index) answer else Effect.SyncPulseBlanked(it) }
+    }
     val contained = if (partner == null) {
         emptyList()
     } else {
@@ -1977,7 +1987,7 @@ private fun pulseReturned(
         // round — there is nobody left to offer a list to.
         listOf(Effect.EgressContained(Haptic.Short)) + isolateOffers(next)
     }
-    Reduction(next, listOf(answered) + contained)
+    Reduction(next, answered + contained)
 }
 
 /**

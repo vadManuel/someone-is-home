@@ -105,7 +105,7 @@ class GhostEgressWidgetTest {
     @Test
     fun containmentEmptiesTheWidgetAndKeepsWhichEgressItWas() {
         val model = FlowModel(couch(running = false))
-        model.houseSaid(RoundMessage.EgressOpened(EgressType.Beacon, emptyList(), 120L, Haptic.Long))
+        model.houseSaid(RoundMessage.EgressOpened(EgressType.Beacon, emptyList(), 120L, Haptic.Long, pulseFrom = 86_402_000L))
         assertTrue(model.state.egressRunning, "an opened Egress did not reach the couch's widget")
 
         model.houseSaid(RoundMessage.EgressContained(Haptic.Short))

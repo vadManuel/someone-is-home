@@ -43,4 +43,7 @@ internal class ConsoleLines(
 
     /** The house's tick driver. Console only, with the house it drives. */
     fun clock(line: String) = console("[house-clock] $line")
+
+    /** This phone's estimate of the house's clock, at each round of probes (C1). Console only. */
+    fun offset(line: String) = console("[clock] $line")
 }

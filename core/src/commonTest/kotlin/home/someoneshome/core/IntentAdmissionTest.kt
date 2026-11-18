@@ -272,7 +272,7 @@ class IntentAdmissionTest {
         Event.VoteWindowClosed(at),
         Event.TallyHalfwayReached(at),
         Event.MeetingClosed(at),
-        Event.EgressFired(at, Seat(1), EgressType.Beacon, listOf(marker)),
+        Event.EgressFired(at, Seat(1), EgressType.Beacon, listOf(marker), pulseFrom = 4_000_000L),
         Event.SyncPulseReturned(at, Seat(2), listOf(1L)),
         Event.EgressExpired(at),
     )

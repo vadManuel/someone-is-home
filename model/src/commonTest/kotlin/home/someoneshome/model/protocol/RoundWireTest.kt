@@ -108,9 +108,11 @@ class RoundWireTest {
                 Destination(MarkerId("M-2"), "square", "LANDING"),
             ),
             remaining = 900, haptic = Haptic.Long,
+            pulseFrom = 86_402_000L,
         ),
         Effect.EgressHeld(remaining = 400, running = false, haptic = Haptic.Short),
         Effect.SyncPulseAnswered(Seat(3), held = true),
+        Effect.SyncPulseBlanked(Seat(3)),
         Effect.EgressContained(Haptic.Short),
         Effect.EgressSucceeded(Haptic.Short),
         Effect.RoundEnded(Seat(3), Winner.Residents, WinRoute.SystemIntegrityCleared, Haptic.Short),
@@ -204,8 +206,9 @@ class RoundWireTest {
         // if the seat rode inside the payload as well, the routing that answers the escalation would
         // have handed every phone the number the wire is built never to hand it.
         bothWays { Effect.MeetingCalling(it) }
-        bothWays { Effect.EgressOpened(it, EgressType.Beacon, emptyList(), 1, Haptic.Long) }
+        bothWays { Effect.EgressOpened(it, EgressType.Beacon, emptyList(), 1, Haptic.Long, pulseFrom = 86_402_000L) }
         bothWays { Effect.SyncPulseAnswered(it, held = true) }
+        bothWays { Effect.SyncPulseBlanked(it) }
         bothWays { Effect.RoundEnded(it, Winner.Insiders, WinRoute.Parity, Haptic.Short) }
         bothWays { Effect.HouseSignedOff(it, body = "x") }
     }

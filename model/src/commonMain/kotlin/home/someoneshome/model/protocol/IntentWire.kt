@@ -211,6 +211,9 @@ sealed class IntentMessage {
      * schedule and grades [taps] against it; there is nothing on the phone to compare them with, so
      * this frame could not carry a verdict even if somebody wanted it to.
      *
+     * **[taps] are milliseconds of the host's monotonic clock**, as this phone measured it (C1),
+     * on the grid `EgressOpened.pulseFrom` names (C2). Not ticks: no phone knows the house's tick.
+     *
      * **No node**, for [BeginSubroutine]'s reason taken one step further: a phone naming its own
      * node would be the cheapest cheat in the game — sit on the couch, claim the Landing, and
      * contain an Egress from a chair. Where the player is standing is what the house recorded when

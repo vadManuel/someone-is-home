@@ -212,7 +212,7 @@ class MeetingTest {
     @Test
     fun `an Egress makes the card inert and leaves the report alone`() {
         val burning = armed().withEgress(
-            Egress.fired(t(), EgressType.Beacon, listOf(MarkerId("a"), MarkerId("b")), timer = 120L),
+            Egress.fired(t(), EgressType.Beacon, listOf(MarkerId("a"), MarkerId("b")), timer = 120L, pulseFrom = 4_000_000L),
         )
 
         val card = Walk(burning).feed(Event.MeetingCalled(t(), Seat(0), MeetingTrigger.MeetingCard))

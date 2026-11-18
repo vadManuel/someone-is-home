@@ -83,6 +83,14 @@ data class Egress(
     val nodes: List<MarkerId>,
     val firedAt: Tick,
     /**
+     * **The Sync Pulse's first pulse, on the host's monotonic clock, in milliseconds** (C2) — off
+     * [Event.EgressFired.pulseFrom], which the house read at the edge. Pulse `n` lands at
+     * `pulseFrom + n · SYNC_PULSE_INTERVAL_MILLIS`. **A pause does not move it**: a meeting stops the
+     * countdown (D-133), not the grid, and a grid that shifted under a pause would put the pulse
+     * somewhere no phone could compute from what it was told.
+     */
+    val pulseFrom: Long,
+    /**
      * When it succeeds if nobody contains it. **Moved by a pause, never by a reset** (D-133).
      */
     val deadline: Tick,
@@ -210,10 +218,11 @@ data class Egress(
 
     companion object {
         /** An Egress the instant it fires: full timer, running, nobody at a node yet. */
-        fun fired(at: Tick, type: EgressType, nodes: List<MarkerId>, timer: Long): Egress = Egress(
+        fun fired(at: Tick, type: EgressType, nodes: List<MarkerId>, timer: Long, pulseFrom: Long): Egress = Egress(
             type = type,
             nodes = nodes,
             firedAt = at,
+            pulseFrom = pulseFrom,
             deadline = Tick(at.step + timer),
             pausedAt = null,
             offers = emptyList(),

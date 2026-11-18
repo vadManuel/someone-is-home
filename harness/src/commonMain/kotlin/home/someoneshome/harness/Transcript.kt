@@ -135,7 +135,9 @@ object Transcript {
         is Event.EgressFired ->
             row("EgressFired", event.at, "actor" to num(event.actor.index),
                 "type" to event.type.toString(),
-                "nodes" to event.nodes.joinToString(",") { text(it.value) })
+                "nodes" to event.nodes.joinToString(",") { text(it.value) },
+                // The pulse grid's anchor on the host's clock (C2): read at the edge, so an input.
+                "pulseFrom" to num(event.pulseFrom))
         // The taps and NOT the node. The event carries no node -- where this player was standing is
         // what the house recorded when they scanned -- and a recording that invented one would be
         // the first place a phone's claim about its own position could grow.
@@ -351,12 +353,15 @@ object Transcript {
                 "|nodes=" + effect.nodes.joinToString(",") {
                     "${text(it.marker.value)}:${text(it.shape)}:${text(it.room)}"
                 } +
-                "|remaining=${num(effect.remaining)}|haptic=${effect.haptic}"
+                "|remaining=${num(effect.remaining)}|haptic=${effect.haptic}" +
+                "|pulseFrom=${num(effect.pulseFrom)}"
         is Effect.EgressHeld ->
             "EgressHeld|remaining=${num(effect.remaining)}|running=${effect.running}" +
                 "|haptic=${effect.haptic}"
         is Effect.SyncPulseAnswered ->
             "SyncPulseAnswered|seat=${effect.seat.index}|held=${effect.held}"
+        // Every seat but the tapper's, beside its `SyncPulseAnswered` (C2): who it was built for.
+        is Effect.SyncPulseBlanked -> "SyncPulseBlanked|seat=${effect.seat.index}"
         // No seats and no node, because the effect has none -- see Effect.EgressContained. The
         // transcript is exactly as narrow here as the wire is, so an attribution could not hide in
         // the recording's own formatting.
@@ -509,6 +514,8 @@ object Transcript {
         append("|egress=").append(state.egress?.let { egress ->
             "${egress.type}:${egress.nodes.joinToString(".") { text(it.value) }}" +
                 ":fired=${num(egress.firedAt.step)}:deadline=${num(egress.deadline.step)}" +
+                // The pulse grid on the host's clock (C2), which a pause never moves.
+                ":pulse=${num(egress.pulseFrom)}" +
                 // The pause mark, because D-133's arithmetic is the whole of the rule: a recording
                 // that held only the deadline could not tell a paused timer from a moved one.
                 ":paused=${egress.pausedAt?.let { p -> num(p.step) } ?: "none"}" +

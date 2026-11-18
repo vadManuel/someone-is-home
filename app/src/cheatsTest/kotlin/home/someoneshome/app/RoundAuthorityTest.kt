@@ -1,5 +1,6 @@
 package home.someoneshome.app
 
+import home.someoneshome.model.Balance
 import home.someoneshome.model.Effect
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
@@ -7,6 +8,7 @@ import home.someoneshome.model.Intent
 import home.someoneshome.model.OneLineHeld
 import home.someoneshome.model.Seat
 import home.someoneshome.model.SeatNamed
+import home.someoneshome.platform.monotonicMillis
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -50,14 +52,39 @@ class RoundAuthorityTest {
     )
 
     /** The authority, with the two seams as recorders. */
-    private class Bench(inputs: ArmingInputs) {
+    private class Bench(inputs: ArmingInputs, hostMillis: () -> Long = ::monotonicMillis) {
         val pushed = mutableListOf<Pair<Effect, GameState>>()
         val said = mutableListOf<String>()
         val house = RoundAuthority(
             inputs = { inputs },
             emit = { effect, state -> pushed += effect to state },
+            hostMillis = hostMillis,
             note = { said += it },
         )
+    }
+
+    // ---- C2 · The pulse is anchored on the host's clock, not the house's ticks ----------------
+
+    /**
+     * **The Egress's pulse grid is the host clock at the draw plus the lead, whatever tick the house
+     * is at** (C2). The host clock here reads one fixed millisecond; the house's ticks are jumped a
+     * long way past it. The grid follows the first and ignores the second, and every phone is told it.
+     */
+    @Test
+    fun theEgressPulseIsAnchoredOnTheHostClockAndNotTheTicks() = runBlocking<Unit> {
+        val hostNow = 7_777_123L
+        val bench = Bench(inputs(), hostMillis = { hostNow })
+        assertTrue(bench.house.arm(SEED))
+        // Far past the shared cooldown, so the tick and the host clock have nothing in common.
+        bench.house.at(5_000)
+        val actor = bench.house.state.livingInsiders.first()
+        assertTrue(bench.house.fireEgress(actor), "the Egress did not start, so this measured nothing")
+
+        val expected = hostNow + Balance.SYNC_PULSE_LEAD_MILLIS
+        assertEquals(expected, bench.house.state.egress?.pulseFrom, "the grid is not the host clock plus the lead")
+        val opened = bench.pushed.map { it.first }.filterIsInstance<Effect.EgressOpened>()
+        assertEquals(seats, opened.map { it.seat }, "EgressOpened did not reach every seat once")
+        assertEquals(setOf(expected), opened.map { it.pulseFrom }.toSet(), "the seats were told another grid")
     }
 
     // ---- 1 · Arming reads the lobby, and every seat is told ------------------------------------

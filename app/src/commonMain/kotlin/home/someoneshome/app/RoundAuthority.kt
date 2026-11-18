@@ -21,6 +21,7 @@ import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
 import home.someoneshome.model.protocol.RoundBody
 import home.someoneshome.model.protocol.SightingUpload
+import home.someoneshome.platform.monotonicMillis
 import home.someoneshome.platform.wallClockMillis
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -104,6 +105,14 @@ class RoundAuthority(
      * ability, so a seat in the line names an Insider in a file. See [abilityLine].
      */
     private val namesSeats: Boolean = false,
+    /**
+     * **The host's monotonic clock in milliseconds: the Sync Pulse's anchor** (C2). It must be the
+     * clock `TransportHost` answers every phone's probe with, [monotonicMillis], because that is the
+     * clock every phone has measured its offset to (C1). **Never the tick driver's clock**: the
+     * house's ticks drift from wall time (one extra per arrival, D-230's skip, the bench's skew),
+     * and a pulse in two hands has to land at one moment of real time. A test hands a fixed one.
+     */
+    private val hostMillis: () -> Long = ::monotonicMillis,
     private val note: (String) -> Unit,
 ) : HouseHandle {
 
@@ -473,7 +482,7 @@ class RoundAuthority(
             abilityLog(abilityLineDeclined(AbilityRequest.Egress, actor, "NO HOME TO DRAW ONE IN", namesSeats))
             return false
         }
-        val fired = egressFor(now(), actor, state, here.map, here.plan)
+        val fired = egressFor(now(), actor, state, here.map, here.plan, anchorMillis = hostMillis())
         if (fired == null) {
             note("NO EGRESS — THE HOUSE DECLINED TO DRAW ONE")
             abilityLog(abilityLineDeclined(AbilityRequest.Egress, actor, "THE HOUSE DREW NO EGRESS", namesSeats))

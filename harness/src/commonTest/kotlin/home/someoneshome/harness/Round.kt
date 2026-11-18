@@ -283,7 +283,7 @@ internal fun round(insiders: List<Seat> = INSIDERS): List<Event> {
                 t = maxOf(t, state.egressReadyAt.step)
                 val nodes = state.activeMarkers.distinctBy { it.value }.take(2)
                 val firedAt = Tick(t++)
-                add(walk(Event.EgressFired(firedAt, actor(state, insiders), EgressType.Beacon, nodes)))
+                add(walk(Event.EgressFired(firedAt, actor(state, insiders), EgressType.Beacon, nodes, FIXTURE_PULSE_FROM)))
 
                 // The two who go. Read off the state, because who is still in the round by this
                 // point is a consequence of the fixture rather than something it can name.
@@ -302,18 +302,25 @@ internal fun round(insiders: List<Seat> = INSIDERS): List<Event> {
                 add(walk(Event.TallyHalfwayReached(Tick(t++))))
                 add(walk(Event.MeetingClosed(Tick(t++))))
 
-                // Both hit the same four beats off the house schedule, which runs from the moment
-                // the Egress fired and is untouched by the pause.
+                // Both hit the same four pulses off the house schedule, which runs from the anchor
+                // the Egress was fired with, on the host's clock (C2), and is untouched by the pause.
                 val beats = (0 until Balance.SYNC_PULSE_BEATS).map {
-                    firedAt.step + Balance.SYNC_PULSE_LEAD + it * Balance.SYNC_PULSE_INTERVAL
+                    FIXTURE_PULSE_FROM + it * Balance.SYNC_PULSE_INTERVAL_MILLIS
                 }
-                t = maxOf(t, beats.last() + 1)
+                // They arrive after the fourth pulse, which is a house tick, not a tap time.
+                t = maxOf(t, firedAt.step + Balance.SYNC_PULSE_LEAD + Balance.SYNC_PULSE_BEATS * Balance.SYNC_PULSE_INTERVAL)
                 add(walk(Event.SyncPulseReturned(Tick(t++), pair[0], beats)))
                 add(walk(Event.SyncPulseReturned(Tick(t++), pair[1], beats)))
             }
         }
     }
 }
+
+/**
+ * **The fixture's pulse grid, on the host's clock in milliseconds** (C2): what `egressFor` would
+ * have computed from the host's clock at the draw. Nothing like any tick in the fixture.
+ */
+internal const val FIXTURE_PULSE_FROM: Long = 86_402_000L
 
 /**
  * Late enough that the shared Egress cooldown has run down on its own, and after the fixture's
@@ -355,6 +362,6 @@ internal fun roundThatEnds(): List<Event> {
     val nodes = after.activeMarkers.distinctBy { it.value }.take(2)
     val firedAt = maxOf(after.egressReadyAt.step, base.last().at.step + 1)
     return base +
-        Event.EgressFired(Tick(firedAt), actor, EgressType.Tether, nodes) +
+        Event.EgressFired(Tick(firedAt), actor, EgressType.Tether, nodes, FIXTURE_PULSE_FROM + 600_000L) +
         Event.EgressExpired(Tick(firedAt + Balance.EGRESS_TIMER))
 }

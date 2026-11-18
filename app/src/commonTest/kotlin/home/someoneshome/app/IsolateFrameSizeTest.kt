@@ -239,7 +239,7 @@ class IsolateFrameSizeTest {
 
                 suspend fun fire(at: Tick): Map<Int, Got> {
                     val nodes = listOf(state.activeMarkers.first(), state.activeMarkers.last())
-                    val admission = admit(state, Event.EgressFired(at, actor, EgressType.Beacon, nodes))
+                    val admission = admit(state, Event.EgressFired(at, actor, EgressType.Beacon, nodes, pulseFrom = 86_402_000L))
                     check(admission is Admission.Admitted) { "the fixture's Egress was refused: $admission" }
                     state = admission.reduction.state
                     for (effect in admission.reduction.effects) wire.emit(effect, state)

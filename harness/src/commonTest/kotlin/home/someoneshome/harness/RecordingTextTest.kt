@@ -62,7 +62,7 @@ class RecordingTextTest {
         )
 
         assertTrue(
-            text.startsWith("someone-is-home/recording/29"),
+            text.startsWith("someone-is-home/recording/30"),
             "the format changed shape twice and the version did not move with it",
         )
     }
@@ -165,7 +165,7 @@ class RecordingTextTest {
                 Event.RoundArmed(
                     Tick(0), seed = 5L, seats = SEATS, insiders = INSIDERS, markers = placed(MARKERS),
                 ),
-                Event.EgressFired(Tick(3600), Seat(1), type, listOf(MARKERS[0], MARKERS[4])),
+                Event.EgressFired(Tick(3600), Seat(1), type, listOf(MARKERS[0], MARKERS[4]), pulseFrom = 12_345_678L),
                 Event.SyncPulseReturned(Tick(3700), Seat(2), listOf(3640L, 3670L, 3700L, 3730L)),
                 Event.EgressExpired(Tick(6100)),
             )

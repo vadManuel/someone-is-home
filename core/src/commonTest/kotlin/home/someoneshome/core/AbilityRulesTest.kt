@@ -145,7 +145,7 @@ private val EVERY_ABILITY = listOf(
  * It is still walked by every rule below; it is just walked separately and said so.
  */
 private fun egressFire(at: Tick): Event =
-    Event.EgressFired(at, K_INSIDER, EgressType.Tether, listOf(K_GARAGE, K_STUDY))
+    Event.EgressFired(at, K_INSIDER, EgressType.Tether, listOf(K_GARAGE, K_STUDY), pulseFrom = 4_000_000L)
 
 class AbilityRulesTest {
 
@@ -631,7 +631,7 @@ private fun everyRequestFrom(actor: Seat, at: Tick): List<Pair<String, Event>> =
     "a Surge" to Event.SurgeFired(at, actor, K_RESIDENT),
     "a Static" to Event.StaticFired(at, actor),
     "an Isolate" to Event.IsolateFired(at, actor, K_HALL),
-    "an Egress" to Event.EgressFired(at, actor, EgressType.Tether, listOf(K_GARAGE, K_STUDY)),
+    "an Egress" to Event.EgressFired(at, actor, EgressType.Tether, listOf(K_GARAGE, K_STUDY), pulseFrom = 4_000_000L),
 )
 
 /**

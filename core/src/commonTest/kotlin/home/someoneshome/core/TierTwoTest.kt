@@ -106,9 +106,12 @@ private fun t2Arming(): List<Effect> = reduce(
     armingFor(Tick(1), 20260823L, T2_SEATS, null, placed(ACTIVE)),
 ).effects
 
-/** Four taps landing exactly on four consecutive beats of the house schedule. `EgressTest`'s. */
-private fun t2OnBeat(firedAt: Tick): List<Long> =
-    (0 until Balance.SYNC_PULSE_BEATS).map { beatAt(firedAt, it.toLong()) }
+/** The pulse grid's anchor in these tests, host ms (C2): nothing like any tick here. */
+private const val T2_PULSE_FROM = 9_100_000L
+
+/** Four taps landing exactly on four consecutive pulses of the house schedule. `EgressTest`'s. */
+private fun t2OnBeat(): List<Long> =
+    (0 until Balance.SYNC_PULSE_BEATS).map { pulseAt(T2_PULSE_FROM, it.toLong()) }
 
 /** The list this seat was last offered, or null if the house never offered it one. */
 private fun t2Offered(effects: List<Effect>, seat: Seat): List<String>? =
@@ -512,7 +515,7 @@ class IsolateTest {
 
         val fired = Tick(10)
         val walk = T2Walk(t2Armed())
-            .feed(Event.EgressFired(fired, INSIDER, EgressType.Beacon, listOf(HALL, STUDY)))
+            .feed(Event.EgressFired(fired, INSIDER, EgressType.Beacon, listOf(HALL, STUDY), pulseFrom = T2_PULSE_FROM))
 
         val during = assertNotNull(
             t2Offered(walk.drain(), OTHER_INSIDER),
@@ -544,10 +547,10 @@ class IsolateTest {
                 .withPresence(home.someoneshome.model.Presence(Seat(0), HALL, open = false))
                 .withPresence(home.someoneshome.model.Presence(Seat(2), STUDY, open = false)),
         )
-        val at = Tick(beatAt(fired, 3))
+        val at = Tick(fired.step + Balance.SYNC_PULSE_LEAD + 3 * Balance.SYNC_PULSE_INTERVAL)
         walk.feed(
-            Event.SyncPulseReturned(at, Seat(0), t2OnBeat(fired)),
-            Event.SyncPulseReturned(at, Seat(2), t2OnBeat(fired)),
+            Event.SyncPulseReturned(at, Seat(0), t2OnBeat()),
+            Event.SyncPulseReturned(at, Seat(2), t2OnBeat()),
         )
         assertNull(walk.state.egress, "the Egress was not contained; the rest of this proves nothing")
         assertEquals(

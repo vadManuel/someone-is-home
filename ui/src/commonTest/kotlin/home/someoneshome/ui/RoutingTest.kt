@@ -720,6 +720,7 @@ class RoutingTest {
                 ),
                 remaining = 2_400,
                 haptic = Haptic.Long,
+                pulseFrom = 86_402_000L,
             ),
         )
         assertEquals(
@@ -868,6 +869,7 @@ class RoutingTest {
         ),
         remaining = 2_400,
         haptic = Haptic.Long,
+        pulseFrom = 86_402_000L,
     )
 
     /** This seat's own order: six lines, one of them blocked, so an unplaceable entry really is one. */

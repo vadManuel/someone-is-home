@@ -253,7 +253,7 @@ object RecordingText {
             "TallyHalfwayReached" -> Event.TallyHalfwayReached(at)
             "MeetingClosed" -> Event.MeetingClosed(at)
             "EgressFired" -> Event.EgressFired(
-                at, seat("actor"), egressType(req("type"), line), markers("nodes"),
+                at, seat("actor"), egressType(req("type"), line), markers("nodes"), long("pulseFrom"),
             )
             "SyncPulseReturned" -> Event.SyncPulseReturned(at, seat("actor"), longs("taps"))
             "EgressExpired" -> Event.EgressExpired(at)
@@ -307,7 +307,7 @@ object RecordingText {
         "VoteWindowClosed" -> setOf("at")
         "TallyHalfwayReached" -> setOf("at")
         "MeetingClosed" -> setOf("at")
-        "EgressFired" -> setOf("at", "actor", "type", "nodes")
+        "EgressFired" -> setOf("at", "actor", "type", "nodes", "pulseFrom")
         "SyncPulseReturned" -> setOf("at", "actor", "taps")
         "EgressExpired" -> setOf("at")
         else -> emptySet()

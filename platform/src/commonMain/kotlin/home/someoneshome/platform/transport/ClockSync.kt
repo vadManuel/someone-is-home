@@ -55,11 +55,15 @@ class ClockSync {
     private var round: Round? = null
     private var lastRoundStartedMillis: Long? = null
 
-    // The applied offset slews from `base` (fixed at `slewFromMillis`) toward `target`.
-    private var hasFix = false
-    private var baseOffsetMillis: Long = 0
-    private var targetOffsetMillis: Long = 0
-    private var slewFromMillis: Long = 0
+    /**
+     * **The estimate in force, as one immutable value**, or null before the first fix.
+     *
+     * A value rather than three fields so that a reader on another thread can be handed the whole
+     * of it at once: [TransportClient] publishes it after every mark and reads the house's clock
+     * off it from any thread, without ever touching this object, which stays single-threaded.
+     */
+    var fix: ClockFix? = null
+        private set
 
     /** Probe ids to put on the wire right now. A burst at each round's start; nothing between. */
     fun dueProbes(nowMillis: Long): List<Long> {
@@ -100,21 +104,54 @@ class ClockSync {
         round = null
         if (current.bestRttMillis == Long.MAX_VALUE) return // nothing came back at all
         lastRttMillis = current.bestRttMillis
-        if (!hasFix) {
-            hasFix = true
-            baseOffsetMillis = current.bestOffsetMillis
-            targetOffsetMillis = current.bestOffsetMillis
-            slewFromMillis = nowMillis
-        } else {
-            baseOffsetMillis = appliedOffsetMillis(nowMillis)!!
-            targetOffsetMillis = current.bestOffsetMillis
-            slewFromMillis = nowMillis
-        }
+        // The first fix is applied whole; every later one slews from wherever the applied offset
+        // has got to, toward the new estimate.
+        val base = fix?.offsetAt(nowMillis) ?: current.bestOffsetMillis
+        fix = ClockFix(
+            baseOffsetMillis = base,
+            targetOffsetMillis = current.bestOffsetMillis,
+            slewFromMillis = nowMillis,
+            rttMillis = current.bestRttMillis,
+        )
+    }
+
+    /**
+     * **A new connection: the round in flight is abandoned, and the fix is kept** (C1).
+     *
+     * Marks for probes sent on the old socket will never come, so a round waiting for them would
+     * only sit out its [ROUND_TIMEOUT_MILLIS]; and a phone that has just reconnected is exactly the
+     * phone whose estimate most wants refreshing. So the next [dueProbes] starts a round at once.
+     * The fix stays: the house's clock did not change because a socket did. Anything the abandoned
+     * round heard still counts, as it does for a round that timed out.
+     */
+    fun reconnected(nowMillis: Long) {
+        round?.let { finishRound(it, nowMillis) }
+        lastRoundStartedMillis = null
     }
 
     /** The offset in force at [nowMillis] — base moved toward target at the bounded rate. */
-    fun appliedOffsetMillis(nowMillis: Long): Long? {
-        if (!hasFix) return null
+    fun appliedOffsetMillis(nowMillis: Long): Long? = fix?.offsetAt(nowMillis)
+
+    /** Local time mapped onto the authority's timeline. Null until the first fix. */
+    fun hostNowMillis(nowMillis: Long): Long? = fix?.hostNowMillis(nowMillis)
+}
+
+/**
+ * **One estimate of the house's clock: where the applied offset slews from, to, since when.**
+ *
+ * Immutable, so it can be read on any thread. [offsetAt] is the slew as arithmetic: the base,
+ * moved toward the target at [SLEW_RATE_MILLIS_PER_SECOND] and stopping there — so the mapped
+ * timeline can slow or hurry, and never runs backward.
+ */
+data class ClockFix(
+    val baseOffsetMillis: Long,
+    val targetOffsetMillis: Long,
+    val slewFromMillis: Long,
+    /** The round trip behind the newest estimate. For a log line, never for a screen. */
+    val rttMillis: Long,
+) {
+    /** The offset in force at [nowMillis], local monotonic milliseconds. */
+    fun offsetAt(nowMillis: Long): Long {
         val travelled = (nowMillis - slewFromMillis) * SLEW_RATE_MILLIS_PER_SECOND / 1_000
         val distance = targetOffsetMillis - baseOffsetMillis
         return when {
@@ -123,6 +160,6 @@ class ClockSync {
         }
     }
 
-    /** Local time mapped onto the authority's timeline. Null until the first fix. */
-    fun hostNowMillis(nowMillis: Long): Long? = appliedOffsetMillis(nowMillis)?.let { nowMillis + it }
+    /** [nowMillis] on this phone, as the house's monotonic milliseconds. */
+    fun hostNowMillis(nowMillis: Long): Long = nowMillis + offsetAt(nowMillis)
 }

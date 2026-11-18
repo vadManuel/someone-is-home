@@ -20,6 +20,7 @@ import home.someoneshome.platform.clearOwedReports
 import home.someoneshome.platform.clearSeatToken
 import home.someoneshome.platform.loadOwedReports
 import home.someoneshome.platform.loadSeatToken
+import home.someoneshome.platform.monotonicMillis
 import home.someoneshome.platform.monotonicNanos
 import home.someoneshome.platform.saveHostAddress
 import home.someoneshome.platform.saveOwedReports
@@ -33,6 +34,7 @@ import home.someoneshome.platform.transport.HostBrowser
 import home.someoneshome.platform.transport.IntentDesk
 import home.someoneshome.platform.transport.LobbyDesk
 import home.someoneshome.platform.transport.SeatLedger
+import home.someoneshome.platform.transport.ClockFix
 import home.someoneshome.platform.transport.TransportClient
 import home.someoneshome.platform.transport.TransportHost
 import home.someoneshome.ui.HomeFinder
@@ -1214,7 +1216,28 @@ class LobbyOverTransport(
     private val wake: ScreenWake,
     /** What puts a hosted home on the air. [DeviceAdvertising] in every production construction. */
     private val advertising: Advertising = DeviceAdvertising,
+    /**
+     * **This phone's own monotonic milliseconds, as its client reads them** (C1). [monotonicMillis]
+     * in production. The bench adds a constant (`SOMEONES_HOME_CLOCK_SKEW_MS`), because phones on
+     * one Mac share one monotonic base and a client that never measured its offset would read the
+     * house's clock correctly by accident; a test does the same.
+     */
+    private val clientMillis: () -> Long = ::monotonicMillis,
+    /**
+     * **Each new estimate of the house's clock** as a round of probes finishes (C1): for the device
+     * console only (rule 6). Silent by default.
+     */
+    private val onClockFix: (ClockFix) -> Unit = {},
 ) : LobbyLink {
+
+    /**
+     * **Now, on the house's clock**, in the house's monotonic milliseconds — the timeline the Sync
+     * Pulse is scheduled on (C2) — or null before this phone is seated and its first round of
+     * probes is answered (C1). Measured on this phone's one socket, the host's own phone included:
+     * it reaches its own house over loopback like everybody, so it measures it like everybody.
+     * Nothing draws it yet; it is here for the containment screen and its pulse (C3, C4).
+     */
+    fun houseNow(): Long? = client?.hostNowMillis()
 
     /**
      * **Internal rather than private**, so that the thing which arms a round can reach the house
@@ -1308,7 +1331,8 @@ class LobbyOverTransport(
         session = s
         val c = TransportClient(
             s, home.address, home.port,
-            nowMillis = { monotonicNanos() / 1_000_000 },
+            nowMillis = clientMillis,
+            onFix = onClockFix,
             onFrame = { frame ->
                 val carried = (frame as? TransportFrame.Carry)?.body
                 carried?.let(onInbound)

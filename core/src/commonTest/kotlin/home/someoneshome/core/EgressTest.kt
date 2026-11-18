@@ -150,25 +150,49 @@ private class EgressWalk(start: GameState) {
     fun drain(): List<Effect> = emitted.toList().also { emitted.clear() }
 }
 
-/** Four taps landing exactly on four consecutive beats of the house schedule. */
-private fun onBeat(firedAt: Tick, from: Long = 0L): List<Long> =
-    (0 until Balance.SYNC_PULSE_BEATS).map { beatAt(firedAt, from + it) }
+/**
+ * **The pulse grid's anchor in these tests: the host's monotonic millisecond of pulse 0** (C2).
+ *
+ * Deliberately nothing like any tick in this file, and half a pulse off the grid a tick-reading
+ * grader would build from the ticks here (60 + a lead of 40 is 100, and 7 340 350 − 100 is 750 past a
+ * multiple of 1 500), so a grader that read the tick the Egress fired
+ * at instead of this would grade every tap here as a miss.
+ */
+private const val PULSE_FROM = 7_340_350L
+
+/** The anchor `egressFor` is handed: the host's clock at the draw, a lead before pulse 0. */
+private const val ANCHOR = PULSE_FROM - Balance.SYNC_PULSE_LEAD_MILLIS
 
 /**
- * Four taps a hair outside the window, on four consecutive beats.
- *
- * One tick past generous, which is the honest failure to write: a build with no grading at all and
- * a build whose window is a whole beat wide both pass a test that taps halfway between two beats.
+ * The house TICK that pulse [n] lands on, had the house's ticks kept wall time. Only for stamping
+ * when an event arrives; taps are never ticks any more (C2).
  */
-private fun offBeat(firedAt: Tick, from: Long = 0L): List<Long> =
-    onBeat(firedAt, from).map { it + Balance.SYNC_PULSE_WINDOW + 1 }
+private fun pulseTick(firedAt: Tick, n: Long): Long =
+    firedAt.step + Balance.SYNC_PULSE_LEAD + n * Balance.SYNC_PULSE_INTERVAL
+
+/** Four taps landing exactly on four consecutive pulses of the house schedule, in host ms. */
+private fun onBeat(from: Long = 0L): List<Long> =
+    (0 until Balance.SYNC_PULSE_BEATS).map { pulseAt(PULSE_FROM, from + it) }
+
+/**
+ * Four taps a hair outside the window, on four consecutive pulses.
+ *
+ * One millisecond past generous, which is the honest failure to write: a build with no grading at
+ * all and a build whose window is a whole pulse wide both pass a test that taps halfway between.
+ */
+private fun offBeat(from: Long = 0L): List<Long> =
+    onBeat(from).map { it + Balance.SYNC_PULSE_WINDOW_MILLIS + 1 }
+
+/** What a return answers: the tapper's own answer, and every other seat's blank, seat by seat. */
+private fun answered(seat: Seat, held: Boolean): List<Effect> =
+    SEATS.map { if (it == seat) Effect.SyncPulseAnswered(seat, held) else Effect.SyncPulseBlanked(it) }
 
 /** A round already on fire, with both nodes named and two seats standing at them. */
 private fun burning(
     at: Tick = Tick(60),
     nodes: List<MarkerId> = listOf(WEST, EAST),
 ): GameState = armed()
-    .withEgress(Egress.fired(at, EgressType.Beacon, nodes, Balance.EGRESS_TIMER))
+    .withEgress(Egress.fired(at, EgressType.Beacon, nodes, Balance.EGRESS_TIMER, pulseFrom = PULSE_FROM))
     .withPresence(Presence(Seat(0), nodes[0], open = false))
     .withPresence(Presence(Seat(2), nodes[1], open = false))
 
@@ -190,7 +214,7 @@ class EgressTest {
     fun `the house names two markers in non-adjacent rooms`() {
         val strip = armed().copy(activeMarkers = listOf(WEST, MIDDLE, EAST))
         for (at in 60L..90L) {
-            val fired = egressFor(Tick(at), Seat(1), strip, map(), plan())
+            val fired = egressFor(Tick(at), Seat(1), strip, map(), plan(), anchorMillis = ANCHOR)
             assertNotNull(fired, "a three-room home could not supply an Egress")
             assertEquals(
                 listOf(EAST.value, WEST.value),
@@ -211,7 +235,7 @@ class EgressTest {
     @Test
     fun `a home with no non-adjacent pair still fires at the farthest it has`() {
         val small = armed().copy(activeMarkers = listOf(WEST, MIDDLE))
-        val fired = egressFor(Tick(60), Seat(1), small, map(), plan())
+        val fired = egressFor(Tick(60), Seat(1), small, map(), plan(), anchorMillis = ANCHOR)
         assertNotNull(fired, "a two-room home refused to fire; small homes are lawful")
         assertEquals(2, fired.nodes.distinctBy { it.value }.size, "the pair collapsed to one marker")
     }
@@ -227,8 +251,8 @@ class EgressTest {
     @Test
     fun `a round with fewer than two markers cannot hold an Egress`() {
         val bare = armed().copy(activeMarkers = listOf(WEST))
-        assertNull(egressFor(Tick(60), Seat(1), bare, map(), plan()))
-        assertNull(egressFor(Tick(60), Seat(1), armed().copy(activeMarkers = emptyList()), map(), plan()))
+        assertNull(egressFor(Tick(60), Seat(1), bare, map(), plan(), anchorMillis = ANCHOR))
+        assertNull(egressFor(Tick(60), Seat(1), armed().copy(activeMarkers = emptyList()), map(), plan(), anchorMillis = ANCHOR))
     }
 
     /**
@@ -240,8 +264,8 @@ class EgressTest {
      */
     @Test
     fun `the type and the nodes are drawn deterministically`() {
-        val a = egressFor(Tick(60), Seat(1), armed(), map(), plan())
-        val b = egressFor(Tick(60), Seat(1), armed(), map(), plan())
+        val a = egressFor(Tick(60), Seat(1), armed(), map(), plan(), anchorMillis = ANCHOR)
+        val b = egressFor(Tick(60), Seat(1), armed(), map(), plan(), anchorMillis = ANCHOR)
         assertNotNull(a)
         assertNotNull(b)
         assertEquals(a.nodes.map { it.value }, b.nodes.map { it.value })
@@ -258,7 +282,7 @@ class EgressTest {
     @Test
     fun `both types are drawn over a run of Egresses`() {
         val drawn = (60L..120L).mapNotNull {
-            egressFor(Tick(it), Seat(1), armed(), map(), plan())?.type
+            egressFor(Tick(it), Seat(1), armed(), map(), plan(), anchorMillis = ANCHOR)?.type
         }.distinct()
         assertEquals(
             listOf(EgressType.Beacon, EgressType.Tether).sortedBy { it.name },
@@ -282,14 +306,14 @@ class EgressTest {
     fun `one Egress cooldown is shared by every Insider`() {
         val start = armed()
         val walk = EgressWalk(start).feed(
-            Event.EgressFired(readyToFire(start), Seat(1), EgressType.Beacon, listOf(WEST, EAST)),
+            Event.EgressFired(readyToFire(start), Seat(1), EgressType.Beacon, listOf(WEST, EAST), pulseFrom = PULSE_FROM),
         )
         val first = walk.drain()
         assertNotNull(walk.state.egress, "the first fire did not start an Egress")
         assertTrue(first.any { it is Effect.EgressOpened }, "the house did not catch fire")
 
         walk.feed(
-            Event.EgressFired(readyToFire(start) + 1, Seat(4), EgressType.Tether, listOf(MIDDLE, LANDING)),
+            Event.EgressFired(readyToFire(start) + 1, Seat(4), EgressType.Tether, listOf(MIDDLE, LANDING), pulseFrom = PULSE_FROM),
         )
         val second = walk.drain()
         assertEquals(
@@ -340,22 +364,22 @@ class EgressTest {
         val start = armed()
         val firedAt = readyToFire(start)
         val walk = EgressWalk(start).feed(
-            Event.EgressFired(firedAt, Seat(1), EgressType.Beacon, listOf(WEST, EAST)),
+            Event.EgressFired(firedAt, Seat(1), EgressType.Beacon, listOf(WEST, EAST), pulseFrom = PULSE_FROM),
         )
         // Both go to the nodes and keep time. The Egress is contained.
         walk.feed(
             Event.MarkerScanned(Tick(firedAt.step + 1), Seat(0), WEST),
             Event.MarkerScanned(Tick(firedAt.step + 1), Seat(2), EAST),
-            Event.SyncPulseReturned(Tick(beatAt(firedAt, 3)), Seat(0), onBeat(firedAt)),
-            Event.SyncPulseReturned(Tick(beatAt(firedAt, 3)), Seat(2), onBeat(firedAt)),
+            Event.SyncPulseReturned(Tick(pulseTick(firedAt, 3)), Seat(0), onBeat()),
+            Event.SyncPulseReturned(Tick(pulseTick(firedAt, 3)), Seat(2), onBeat()),
         )
         assertNull(walk.state.egress, "the fixture did not actually contain the Egress")
         walk.drain()
 
         // And the very next tick cannot hold another one.
         walk.feed(
-            Event.EgressFired(Tick(beatAt(firedAt, 3) + 1), Seat(4), EgressType.Tether,
-                listOf(MIDDLE, LANDING)),
+            Event.EgressFired(Tick(pulseTick(firedAt, 3) + 1), Seat(4), EgressType.Tether,
+                listOf(MIDDLE, LANDING), pulseFrom = PULSE_FROM),
         )
         assertNull(
             walk.state.egress,
@@ -389,7 +413,7 @@ class EgressTest {
         // And it is enforced: a fire one tick early starts nothing and is answered identically.
         val early = EgressWalk(state).feed(
             Event.EgressFired(Tick(Balance.EGRESS_COOLDOWN / 2 - 1), Seat(1), EgressType.Beacon,
-                listOf(WEST, EAST)),
+                listOf(WEST, EAST), pulseFrom = PULSE_FROM),
         )
         assertNull(early.state.egress, "an Egress fired inside the opening cooldown")
         assertEquals(
@@ -410,7 +434,7 @@ class EgressTest {
     fun `an Egress whose two nodes are one marker does not start`() {
         val start = armed()
         val walk = EgressWalk(start).feed(
-            Event.EgressFired(readyToFire(start), Seat(1), EgressType.Beacon, listOf(WEST, WEST)),
+            Event.EgressFired(readyToFire(start), Seat(1), EgressType.Beacon, listOf(WEST, WEST), pulseFrom = PULSE_FROM),
         )
         assertNull(walk.state.egress, "an uncontainable Egress started")
         assertTrue(walk.drain().none { it is Effect.EgressOpened })
@@ -428,7 +452,7 @@ class EgressTest {
     fun `the alert names both nodes to everybody including the actor`() {
         val start = armed()
         val opened = EgressWalk(start).feed(
-            Event.EgressFired(readyToFire(start), Seat(1), EgressType.Tether, listOf(WEST, EAST)),
+            Event.EgressFired(readyToFire(start), Seat(1), EgressType.Tether, listOf(WEST, EAST), pulseFrom = PULSE_FROM),
         ).drain().filterIsInstance<Effect.EgressOpened>()
 
         assertEquals(SEATS, opened.map { it.seat }, "the Egress alert missed a phone")
@@ -469,14 +493,14 @@ class EgressTest {
     fun `a pair at the same node does not contain`() {
         val fired = Tick(60)
         val together = armed()
-            .withEgress(Egress.fired(fired, EgressType.Beacon, listOf(WEST, EAST), Balance.EGRESS_TIMER))
+            .withEgress(Egress.fired(fired, EgressType.Beacon, listOf(WEST, EAST), Balance.EGRESS_TIMER, pulseFrom = PULSE_FROM))
             .withPresence(Presence(Seat(0), WEST, open = false))
             .withPresence(Presence(Seat(2), WEST, open = false))
 
-        val at = beatAt(fired, 3)
+        val at = pulseTick(fired, 3)
         val walk = EgressWalk(together).feed(
-            Event.SyncPulseReturned(Tick(at), Seat(0), onBeat(fired)),
-            Event.SyncPulseReturned(Tick(at), Seat(2), onBeat(fired)),
+            Event.SyncPulseReturned(Tick(at), Seat(0), onBeat()),
+            Event.SyncPulseReturned(Tick(at), Seat(2), onBeat()),
         )
         assertNotNull(walk.state.egress, "two people at ONE marker contained an Egress")
         assertTrue(
@@ -489,10 +513,10 @@ class EgressTest {
     @Test
     fun `a pair at the two nodes contains it`() {
         val fired = Tick(60)
-        val at = beatAt(fired, 3)
+        val at = pulseTick(fired, 3)
         val walk = EgressWalk(burning(fired)).feed(
-            Event.SyncPulseReturned(Tick(at), Seat(0), onBeat(fired)),
-            Event.SyncPulseReturned(Tick(at), Seat(2), onBeat(fired)),
+            Event.SyncPulseReturned(Tick(at), Seat(0), onBeat()),
+            Event.SyncPulseReturned(Tick(at), Seat(2), onBeat()),
         )
         assertNull(walk.state.egress, "two people at two nodes did not contain it")
         val effects = walk.drain()
@@ -512,10 +536,10 @@ class EgressTest {
     @Test
     fun `containment attributes nothing to the pair that did it`() {
         val fired = Tick(60)
-        val at = beatAt(fired, 3)
+        val at = pulseTick(fired, 3)
         val effects = EgressWalk(burning(fired)).feed(
-            Event.SyncPulseReturned(Tick(at), Seat(0), onBeat(fired)),
-            Event.SyncPulseReturned(Tick(at), Seat(2), onBeat(fired)),
+            Event.SyncPulseReturned(Tick(at), Seat(0), onBeat()),
+            Event.SyncPulseReturned(Tick(at), Seat(2), onBeat()),
         ).drain()
 
         // Nothing but the two beat answers and the containment. Any third kind here would be the
@@ -529,6 +553,8 @@ class EgressTest {
         // would be identical if the Egress had expired instead.
         val unexpected = effects.filterNot {
             it is Effect.SyncPulseAnswered ||
+                // Every other seat's blank of the answer (C2): it carries nothing at all.
+                it is Effect.SyncPulseBlanked ||
                 it is Effect.EgressContained ||
                 it is Effect.IsolateTargetsOffered ||
                 // Its other half, on a Resident's phone (D-258): one frame each, and it carries
@@ -537,7 +563,7 @@ class EgressTest {
         }
         assertEquals(
             emptyList(), unexpected,
-            "an effect other than the beat answer and the containment reached a phone",
+            "an effect other than the beat answer, its blanks and the containment reached a phone",
         )
         // Both participants were answered, and the answers say only what their own tap did.
         assertEquals(
@@ -556,10 +582,10 @@ class EgressTest {
     fun `a good beat with no partner is held`() {
         val fired = Tick(60)
         val walk = EgressWalk(burning(fired)).feed(
-            Event.SyncPulseReturned(Tick(beatAt(fired, 3)), Seat(0), onBeat(fired)),
+            Event.SyncPulseReturned(Tick(pulseTick(fired, 3)), Seat(0), onBeat()),
         )
         assertEquals(
-            listOf(Effect.SyncPulseAnswered(Seat(0), held = true)), walk.drain(),
+            answered(Seat(0), held = true), walk.drain(),
         )
         assertEquals(listOf(Seat(0)), walk.state.egress?.offers?.map { it.seat })
     }
@@ -579,9 +605,9 @@ class EgressTest {
         val start = burning(fired).withPresence(Presence(Seat(3), MIDDLE, open = false))
 
         // Off the beat, from somebody actually standing at a node.
-        val missed = Tick(beatAt(fired, 3) + 1)
-        val walk = EgressWalk(start).feed(Event.SyncPulseReturned(missed, Seat(0), offBeat(fired)))
-        assertEquals(listOf(Effect.SyncPulseAnswered(Seat(0), held = false)), walk.drain())
+        val missed = Tick(pulseTick(fired, 3) + 1)
+        val walk = EgressWalk(start).feed(Event.SyncPulseReturned(missed, Seat(0), offBeat()))
+        assertEquals(answered(Seat(0), held = false), walk.drain())
         assertEquals(
             listOf(Seat(0)), walk.state.egress?.lockouts?.map { it.seat },
             "a missed beat cost nothing; stalling at a node is free",
@@ -594,8 +620,8 @@ class EgressTest {
         // Perfect taps, one tick into the lockout: still refused, still the same shape, and NOT
         // re-locked -- an extension would turn a mistimed retry into a permanent exclusion.
         val during = Tick(missed.step + 1)
-        walk.feed(Event.SyncPulseReturned(during, Seat(0), onBeat(fired, from = 10)))
-        assertEquals(listOf(Effect.SyncPulseAnswered(Seat(0), held = false)), walk.drain())
+        walk.feed(Event.SyncPulseReturned(during, Seat(0), onBeat(from = 10)))
+        assertEquals(answered(Seat(0), held = false), walk.drain())
         assertEquals(
             listOf(Tick(missed.step + Balance.SYNC_PULSE_LOCKOUT)),
             walk.state.egress?.lockouts?.map { it.until },
@@ -605,14 +631,14 @@ class EgressTest {
 
         // Standing at MIDDLE, which is not a node. Same shape, and no lockout: this seat attempted
         // nothing, so there is nothing to price.
-        walk.feed(Event.SyncPulseReturned(Tick(beatAt(fired, 20)), Seat(3), onBeat(fired, from = 20)))
-        assertEquals(listOf(Effect.SyncPulseAnswered(Seat(3), held = false)), walk.drain())
+        walk.feed(Event.SyncPulseReturned(Tick(pulseTick(fired, 20)), Seat(3), onBeat(from = 20)))
+        assertEquals(answered(Seat(3), held = false), walk.drain())
         assertTrue(walk.state.egress?.lockouts.orEmpty().none { it.seat.index == 3 })
 
         // Outside the system, standing at a node. Same shape again.
         val out = EgressWalk(start.copy(revoked = listOf(Seat(0))))
-            .feed(Event.SyncPulseReturned(Tick(beatAt(fired, 3)), Seat(0), onBeat(fired)))
-        assertEquals(listOf(Effect.SyncPulseAnswered(Seat(0), held = false)), out.drain())
+            .feed(Event.SyncPulseReturned(Tick(pulseTick(fired, 3)), Seat(0), onBeat()))
+        assertEquals(answered(Seat(0), held = false), out.drain())
         assertTrue(out.state.egress?.offers.orEmpty().isEmpty())
     }
 
@@ -626,11 +652,11 @@ class EgressTest {
     @Test
     fun `four taps on one beat is not a Sync Pulse`() {
         val fired = Tick(60)
-        val single = beatAt(fired, 3)
-        assertFalse(onTheBeat(fired, List(Balance.SYNC_PULSE_BEATS) { single }))
-        assertTrue(onTheBeat(fired, onBeat(fired)), "four consecutive beats were graded as a miss")
-        assertFalse(onTheBeat(fired, onBeat(fired).drop(1)), "three taps were graded as four")
-        assertFalse(onTheBeat(fired, offBeat(fired)), "four taps outside the window were accepted")
+        val single = pulseAt(PULSE_FROM, 3)
+        assertFalse(onThePulse(PULSE_FROM, List(Balance.SYNC_PULSE_BEATS) { single }))
+        assertTrue(onThePulse(PULSE_FROM, onBeat()), "four consecutive beats were graded as a miss")
+        assertFalse(onThePulse(PULSE_FROM, onBeat().drop(1)), "three taps were graded as four")
+        assertFalse(onThePulse(PULSE_FROM, offBeat()), "four taps outside the window were accepted")
     }
 
     /**
@@ -655,9 +681,130 @@ class EgressTest {
         // Demonstrated rather than only computed: a tap right between two beats must fail.
         val fired = Tick(60)
         val between = (0 until Balance.SYNC_PULSE_BEATS).map {
-            beatAt(fired, it.toLong()) + Balance.SYNC_PULSE_INTERVAL / 2
+            pulseAt(PULSE_FROM, it.toLong()) + Balance.SYNC_PULSE_INTERVAL_MILLIS / 2
         }
-        assertFalse(onTheBeat(fired, between), "a tap halfway between two beats was graded good")
+        assertFalse(onThePulse(PULSE_FROM, between), "a tap halfway between two beats was graded good")
+        assertTrue(Balance.syncPulseIsGradeableInMillis(), "the millisecond window swallows the whole pulse")
+        assertEquals(
+            Balance.SYNC_PULSE_WINDOW * 1_000 / Balance.TICKS_PER_SECOND, Balance.SYNC_PULSE_WINDOW_MILLIS,
+            "the millisecond window is not the tick window",
+        )
+    }
+
+    // ---- C2: the pulse on the host's clock ---------------------------------------------------
+
+    /**
+     * **The draw puts the first pulse a lead after the host's clock, and every phone is told it**
+     * (C2). The anchor is handed in; the event carries the result; `EgressOpened` carries it to
+     * every seat, the same number on each.
+     */
+    @Test
+    fun `the pulse grid is anchored on the host clock and named to every seat`() {
+        val anchor = 3_000_017L
+        val start = armed()
+        val fired = assertNotNull(egressFor(readyToFire(start), Seat(1), start, map(), plan(), anchorMillis = anchor))
+        assertEquals(anchor + Balance.SYNC_PULSE_LEAD_MILLIS, fired.pulseFrom, "pulse 0 is not a lead after the draw")
+        assertEquals(2_000L, Balance.SYNC_PULSE_LEAD_MILLIS)
+        assertEquals(1_500L, Balance.SYNC_PULSE_INTERVAL_MILLIS)
+        assertEquals(400L, Balance.SYNC_PULSE_WINDOW_MILLIS)
+
+        val walk = EgressWalk(start).feed(fired)
+        assertEquals(fired.pulseFrom, walk.state.egress?.pulseFrom)
+        val opened = walk.drain().filterIsInstance<Effect.EgressOpened>()
+        assertEquals(SEATS, opened.map { it.seat }, "EgressOpened did not reach every seat once")
+        assertEquals(setOf(fired.pulseFrom), opened.map { it.pulseFrom }.toSet(), "the seats were told different grids")
+    }
+
+    /**
+     * **The grid is the host clock's and not the house's ticks** (C2). The same taps, on the same
+     * host-clock grid, are graded the same for an Egress that fired at tick 60 and one that fired at
+     * tick 60 000 — the house's ticks drift from wall time, and a phone has no way to know them —
+     * and taps on the old tick grid miss. **Whatever tick each return arrives at.**
+     */
+    @Test
+    fun `taps are graded on the host clock whatever tick the house is at`() {
+        for (firedAt in listOf(Tick(60), Tick(60_000))) {
+            for (arrival in listOf(0L, 7L, 90L)) {
+                val at = Tick(pulseTick(firedAt, 3) + arrival)
+                val walk = EgressWalk(burning(firedAt)).feed(
+                    Event.SyncPulseReturned(at, Seat(0), onBeat()),
+                    Event.SyncPulseReturned(at, Seat(2), onBeat()),
+                )
+                assertNull(walk.state.egress, "fired at $firedAt, arriving +$arrival: the pair on the host grid did not contain")
+            }
+            val onTicks = (0 until Balance.SYNC_PULSE_BEATS).map { pulseTick(firedAt, it.toLong()) }
+            assertFalse(onThePulse(PULSE_FROM, onTicks), "fired at $firedAt: taps on the house's ticks were graded good")
+        }
+    }
+
+    /** **A pause does not move the grid** (C2, D-133): the countdown stops, the pulse does not. */
+    @Test
+    fun `a pause does not move the pulse grid`() {
+        val fired = Tick(60)
+        val before = burning(fired)
+        val egress = assertNotNull(before.egress)
+        val resumed = egress.pausedAt(Tick(400)).resumedAt(Tick(4_000))
+        assertEquals(egress.pulseFrom, resumed.pulseFrom, "the meeting moved the pulse grid")
+        assertTrue(resumed.deadline.step > egress.deadline.step, "the fixture's pause moved nothing")
+        val at = Tick(4_100)
+        val walk = EgressWalk(before.withEgress(resumed)).feed(
+            Event.SyncPulseReturned(at, Seat(0), onBeat(from = 40)),
+            Event.SyncPulseReturned(at, Seat(2), onBeat(from = 40)),
+        )
+        assertNull(walk.state.egress, "after the pause, taps on the unmoved grid did not contain")
+    }
+
+    /**
+     * **Every living seat gets one pulse frame of one length whenever a return is answered** (C2;
+     * D-263's pattern). Through the gate, the allowlist and the real encoders, with seat 3 Revoked:
+     * a held beat, a missed one, a return from nowhere near a node, an Insider's held beat, and the
+     * return that contains. Whatever the outcome and whoever tapped, every living phone is sent one
+     * `SyncPulseAnswered` or `SyncPulseBlanked`, and they are all one length.
+     */
+    @Test
+    fun `every living seat gets one pulse frame of one length whenever a return is answered`() {
+        fun pulseFrames(effects: List<Effect>, state: GameState): Map<Int, List<Int>> = effects
+            .filter { it is Effect.SyncPulseAnswered || it is Effect.SyncPulseBlanked }
+            .flatMap { effect ->
+                EmitSchema.deliveries(effect, state).map { delivery ->
+                    val push = RoundWire.encode(RoundBody.Push(1, RoundWire.project(effect)))
+                    delivery.seat.index to TransportWire.encode(TransportFrame.Carry(push)).length
+                }
+            }
+            .groupBy({ it.first }, { it.second })
+
+        val living = (SEATS.map { it.index } - 3).toSet()
+        val fired = Tick(60)
+        val at = Tick(pulseTick(fired, 3))
+        val start = burning(fired)
+            .withPresence(Presence(Seat(1), WEST, open = false))
+            .withPresence(Presence(Seat(5), MIDDLE, open = false))
+            .copy(revoked = listOf(Seat(3)))
+        val moments = listOf(
+            "a Resident's held beat" to listOf(Event.SyncPulseReturned(at, Seat(0), onBeat())),
+            "a Resident's missed beat" to listOf(Event.SyncPulseReturned(at, Seat(0), offBeat())),
+            "a return from no node" to listOf(Event.SyncPulseReturned(at, Seat(5), onBeat())),
+            "an Insider's held beat" to listOf(Event.SyncPulseReturned(at, Seat(1), onBeat())),
+            "an Insider's missed beat" to listOf(Event.SyncPulseReturned(at, Seat(1), offBeat())),
+        )
+        val lengths = mutableSetOf<Int>()
+        for ((moment, events) in moments) {
+            val walk = EgressWalk(start).feed(*events.toTypedArray())
+            assertTrue(walk.refusals.isEmpty(), "$moment was refused, so this measured nothing: ${walk.refusals}")
+            val frames = pulseFrames(walk.drain(), walk.state)
+            assertEquals(living, frames.keys, "$moment: the pulse frames reached another set of seats: $frames")
+            for ((seat, got) in frames) assertEquals(1, got.size, "$moment: seat $seat got ${got.size} pulse frames")
+            lengths += frames.values.flatten()
+        }
+        // And the return that contains: the second of a pair, after the first was held.
+        val pair = EgressWalk(start).feed(Event.SyncPulseReturned(at, Seat(1), onBeat()))
+        pair.drain()
+        pair.feed(Event.SyncPulseReturned(at, Seat(2), onBeat()))
+        assertNull(pair.state.egress, "an Insider and a Resident at the two nodes did not contain")
+        val containing = pulseFrames(pair.drain(), pair.state)
+        assertEquals(living, containing.keys, "containment: the pulse frames reached another set of seats: $containing")
+        lengths += containing.values.flatten()
+        assertEquals(1, lengths.size, "the pulse frame's length follows the outcome or the seat: $lengths")
     }
 
     // ---- D-133: the pause ---------------------------------------------------------------------
@@ -731,7 +878,7 @@ class EgressTest {
     fun `a called meeting is refused during an Egress while the report still works`() {
         val start = armed()
         val walk = EgressWalk(start).feed(
-            Event.EgressFired(readyToFire(start), Seat(1), EgressType.Beacon, listOf(WEST, EAST)),
+            Event.EgressFired(readyToFire(start), Seat(1), EgressType.Beacon, listOf(WEST, EAST), pulseFrom = PULSE_FROM),
         )
         walk.drain()
 
@@ -754,7 +901,7 @@ class EgressTest {
     @Test
     fun `an Egress event is refused when there is no Egress or it is held`() {
         val quiet = EgressWalk(armed()).feed(
-            Event.SyncPulseReturned(Tick(60), Seat(0), onBeat(Tick(60))),
+            Event.SyncPulseReturned(Tick(60), Seat(0), onBeat()),
             Event.EgressExpired(Tick(61)),
         )
         assertEquals(
@@ -768,7 +915,7 @@ class EgressTest {
             Event.MeetingCalled(Tick(80), Seat(0), MeetingTrigger.RevokeReported(Seat(5))),
         )
         held.drain()
-        held.feed(Event.SyncPulseReturned(Tick(90), Seat(0), onBeat(fired, from = 30)))
+        held.feed(Event.SyncPulseReturned(Tick(90), Seat(0), onBeat(from = 30)))
         assertEquals(listOf(RefusalReason.EgressNotRunning), held.refusals)
         assertEquals(emptyList(), held.drain())
     }
@@ -850,11 +997,11 @@ class EgressTest {
         val start = burning(fired).copy(restrained = INSIDERS)
 
         val walk = EgressWalk(start)
-        walk.feed(Event.SyncPulseReturned(Tick(beatAt(fired, 3)), Seat(0), onBeat(fired)))
+        walk.feed(Event.SyncPulseReturned(Tick(pulseTick(fired, 3)), Seat(0), onBeat()))
         assertNull(walk.state.outcome, "a held offer ended the round on its own")
 
         walk.drain()
-        walk.feed(Event.SyncPulseReturned(Tick(beatAt(fired, 3)), Seat(2), onBeat(fired)))
+        walk.feed(Event.SyncPulseReturned(Tick(pulseTick(fired, 3)), Seat(2), onBeat()))
         val emitted = walk.drain()
 
         assertTrue(
@@ -879,15 +1026,15 @@ class EgressTest {
     fun `an offer older than the pair window cannot contain`() {
         val fired = Tick(60)
         val walk = EgressWalk(burning(fired)).feed(
-            Event.SyncPulseReturned(Tick(beatAt(fired, 3)), Seat(0), onBeat(fired)),
+            Event.SyncPulseReturned(Tick(pulseTick(fired, 3)), Seat(0), onBeat()),
         )
         walk.drain()
 
-        val late = beatAt(fired, 3) + Balance.SYNC_PULSE_PAIR_WINDOW + 1
-        walk.feed(Event.SyncPulseReturned(Tick(late), Seat(2), onBeat(fired, from = late)))
+        val late = pulseTick(fired, 3) + Balance.SYNC_PULSE_PAIR_WINDOW + 1
+        walk.feed(Event.SyncPulseReturned(Tick(late), Seat(2), onBeat(from = late)))
         assertNotNull(walk.state.egress, "a stale offer contained an Egress")
         assertEquals(
-            listOf(Effect.SyncPulseAnswered(Seat(2), held = true)), walk.drain(),
+            answered(Seat(2), held = true), walk.drain(),
             "the late arrival was not held for a partner of its own",
         )
     }
@@ -926,8 +1073,8 @@ class EgressTest {
                 "a Surge by $actor" to Event.SurgeFired(late, actor, Seat(2)),
                 "an Isolate by $actor" to Event.IsolateFired(late, actor, MIDDLE),
                 "a Static by $actor" to Event.StaticFired(late, actor),
-                "an Egress by $actor" to Event.EgressFired(late, actor, EgressType.Beacon, listOf(WEST, EAST)),
-                "an early Egress by $actor" to Event.EgressFired(Tick(1), actor, EgressType.Beacon, listOf(WEST, EAST)),
+                "an Egress by $actor" to Event.EgressFired(late, actor, EgressType.Beacon, listOf(WEST, EAST), pulseFrom = PULSE_FROM),
+                "an early Egress by $actor" to Event.EgressFired(Tick(1), actor, EgressType.Beacon, listOf(WEST, EAST), pulseFrom = PULSE_FROM),
             )
         }
         for ((moment, event) in moments) {
@@ -967,16 +1114,16 @@ class EgressTest {
 
         val start = armed().copy(revoked = listOf(Seat(3)))
         val walk = EgressWalk(start).feed(
-            Event.EgressFired(readyToFire(start), Seat(1), EgressType.Beacon, listOf(WEST, EAST)),
+            Event.EgressFired(readyToFire(start), Seat(1), EgressType.Beacon, listOf(WEST, EAST), pulseFrom = PULSE_FROM),
         )
         assertNotNull(walk.state.egress, "the Egress never started, so this measured nothing")
         holds("an Egress starting", isolateFrames(walk.drain(), walk.state))
 
         val fired = Tick(60)
-        val at = beatAt(fired, 3)
+        val at = pulseTick(fired, 3)
         val contained = EgressWalk(burning(fired).copy(revoked = listOf(Seat(3)))).feed(
-            Event.SyncPulseReturned(Tick(at), Seat(0), onBeat(fired)),
-            Event.SyncPulseReturned(Tick(at), Seat(2), onBeat(fired)),
+            Event.SyncPulseReturned(Tick(at), Seat(0), onBeat()),
+            Event.SyncPulseReturned(Tick(at), Seat(2), onBeat()),
         )
         assertNull(contained.state.egress, "the Egress was not contained, so this measured nothing")
         holds("containment", isolateFrames(contained.drain(), contained.state))

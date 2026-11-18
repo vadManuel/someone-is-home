@@ -78,9 +78,11 @@ class HouseBuzzTest {
             Effect.MeetingEnded(haptic),
             Effect.EgressOpened(
                 seat, EgressType.Beacon, NODES, 180, haptic,
+                pulseFrom = 86_402_000L,
             ),
             Effect.EgressOpened(
                 seat, EgressType.Tether, OTHER_NODES, 180, haptic,
+                pulseFrom = 86_402_000L,
             ),
             Effect.EgressHeld(90, running = true, haptic = haptic),
             Effect.EgressHeld(90, running = false, haptic = haptic),
@@ -152,6 +154,7 @@ class HouseBuzzTest {
         listOf(
             Effect.EgressOpened(
                 Seat(0), EgressType.Beacon, NODES, 180, Haptic.Long,
+                pulseFrom = 86_402_000L,
             ),
             Effect.StandAndWalkIn(Seat(0), Haptic.Long),
             Effect.RestrainedTakeover(Seat(0), Haptic.Long),
@@ -288,6 +291,7 @@ class HouseBuzzTest {
             Effect.MeetingResolved(restrained = seat, attribution = emptyList()),
             Effect.SyncPulseAnswered(seat, held = true),
             Effect.SyncPulseAnswered(seat, held = false),
+            Effect.SyncPulseBlanked(seat),
             Effect.InsidersRevealed(emptyList()),
             Effect.HouseSignedOff(seat, "one last thing"),
         )
@@ -474,7 +478,7 @@ class HouseBuzzTest {
             "CheckInProgressed", "MeetingPhaseOpened", "ReadyProgressed", "VoteHeld",
             "VoteSelectionShown", "VoteProgressed", "MeetingResult", "MeetingResolved",
             "RestrainedTakeover", "MeetingEnded", "EgressOpened", "EgressHeld",
-            "SyncPulseAnswered", "EgressContained", "EgressSucceeded", "RoundEnded",
+            "SyncPulseAnswered", "SyncPulseBlanked", "EgressContained", "EgressSucceeded", "RoundEnded",
             "InsidersRevealed", "HouseSignedOff",
             "RoleRevealed", "MeetingCalling", "RosterIssued", "RevokeLanded",
             "ContactSeedIssued",
@@ -703,7 +707,7 @@ class HouseBuzzTest {
         // The Egress: one Long, then the alert it opens. The Long must still be the last thing said.
         motor.clear()
         buzzer.heard(
-            Effect.EgressOpened(Seat(0), EgressType.Beacon, NODES, 180, Haptic.Long),
+            Effect.EgressOpened(Seat(0), EgressType.Beacon, NODES, 180, Haptic.Long, pulseFrom = 86_402_000L),
         )
         buzzer.showing(ScreenId.Banner)
         assertEquals(0, motor.stopped, "the screen the Egress opened cut the Egress's own long buzz")

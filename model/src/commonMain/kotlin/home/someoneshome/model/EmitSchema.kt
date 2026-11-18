@@ -103,6 +103,7 @@ object EmitSchema {
         is Effect.EgressOpened -> EGRESS_OPENED
         is Effect.EgressHeld -> EGRESS_HELD
         is Effect.SyncPulseAnswered -> SYNC_PULSE_ANSWERED
+        is Effect.SyncPulseBlanked -> SYNC_PULSE_BLANKED
         is Effect.EgressContained -> EGRESS_CONTAINED
         is Effect.EgressSucceeded -> EGRESS_SUCCEEDED
         is Effect.RoundEnded -> ROUND_ENDED
@@ -156,6 +157,7 @@ object EmitSchema {
     val EGRESS_OPENED = MessageKind("EgressOpened")
     val EGRESS_HELD = MessageKind("EgressHeld")
     val SYNC_PULSE_ANSWERED = MessageKind("SyncPulseAnswered")
+    val SYNC_PULSE_BLANKED = MessageKind("SyncPulseBlanked")
     val EGRESS_CONTAINED = MessageKind("EgressContained")
     val EGRESS_SUCCEEDED = MessageKind("EgressSucceeded")
     val ROUND_ENDED = MessageKind("RoundEnded")
@@ -579,6 +581,16 @@ object EmitSchema {
         // (D-068).
         SYNC_PULSE_ANSWERED to LIVING,
 
+        // **The blank of a Sync Pulse answer, to every living phone that did not tap** (C2, D-263's
+        // pattern). SYNC_PULSE_ANSWERED's own row, and it must stay that row: each living phone is
+        // sent exactly one of the two at every return, so the phone that tapped is not the one
+        // phone that got a frame. Narrowed to either role it would make the other the silent one.
+        // Written out as the two-class set ABILITY_BLANKED is, for that row's reason.
+        SYNC_PULSE_BLANKED to setOf(
+            ClientClass(Role.Resident, RoundState.Live),
+            ClientClass(Role.Insider, RoundState.Live),
+        ),
+
         // **It stopped, and nobody learns anything about anybody** (gdd.md:987). To everyone,
         // because every widget in the building reverts at the same moment. The effect carries no
         // seats and no node -- see the type -- so widening it costs nothing and narrowing it would
@@ -791,6 +803,8 @@ object EmitSchema {
             // publish who is standing at a node and tapping, live, to the whole house -- which is
             // the presence read D-111 split the two planes to close, arriving one beat at a time.
             is Effect.SyncPulseAnswered -> listOf(effect.seat)
+            // Its own seat: built once for every seat but the tapper's (C2).
+            is Effect.SyncPulseBlanked -> listOf(effect.seat)
             // Broadcast, and left to the allowlist to narrow. Three facts about the house rather
             // than about anybody in it: the timer stopped, it was contained, it was not.
             is Effect.EgressHeld -> state.seats

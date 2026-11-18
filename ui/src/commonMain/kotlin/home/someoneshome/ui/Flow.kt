@@ -2388,6 +2388,10 @@ class FlowModel(
             // asked. It carries nothing, and a phone that moved on it would be announcing that an
             // ability had fired somewhere: a named no-op, and it stays one.
             is RoundMessage.AbilityBlanked -> Unit
+            // **Somebody else's Sync Pulse, answered** (C2). AbilityBlanked's reason one system
+            // over: every living phone but the tapper's is sent one, so the frame count never says
+            // who is at a node with their taps in. A named no-op, and it stays one.
+            is RoundMessage.SyncPulseBlanked -> Unit
 
             // **The house notice** (D-187, D-223). It arrives on every phone at every meeting, just
             // before the push that opens the notices, and it is what the notices screen draws: the

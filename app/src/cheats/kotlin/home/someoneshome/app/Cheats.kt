@@ -230,6 +230,10 @@ fun CheatRoot() {
             onHouseLost = gone::lost,
             onHouseBack = gone::back,
             wake = wake,
+            // **This phone's clock, wrong on purpose when the bench says so** (C1): see
+            // CLOCK_SKEW_SWITCH. And every estimate of the house's clock, to the console only.
+            clientMillis = benchClientMillis(),
+            onClockFix = { lines.offset(fixLine(it)) },
         )
     }
     // **THE HOST'S PHONE LEAVING THE FOREGROUND, AND COMING BACK** (H2, D-225). A lock, the side

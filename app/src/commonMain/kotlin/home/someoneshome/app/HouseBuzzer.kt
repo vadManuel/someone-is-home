@@ -300,7 +300,7 @@ internal fun Effect.ringing(): Boolean = when (this) {
     is Effect.PresenceChanged,
     is Effect.CheckInProgressed, is Effect.ReadyProgressed, is Effect.VoteProgressed,
     is Effect.VoteHeld, is Effect.VoteSelectionShown, is Effect.MeetingResolved,
-    is Effect.SyncPulseAnswered, is Effect.InsidersRevealed, is Effect.RoleRevealed,
+    is Effect.SyncPulseAnswered, is Effect.SyncPulseBlanked, is Effect.InsidersRevealed, is Effect.RoleRevealed,
     // **The Surge is the loudest thing in the game and it does NOT ring**, which is worth stating
     // rather than lumping in. Ringing means *until answered* (D-160), and a Surge has nothing to
     // answer: it is one moment, and its noise is the speaker's rather than the motor's. A phone
@@ -436,6 +436,8 @@ internal fun Effect.haptic(): Haptic? = when (this) {
     is Effect.MeetingResolved -> null
     // The house's answer to one beat of the Sync Pulse, at a terminal, in a hand.
     is Effect.SyncPulseAnswered -> null
+    // Somebody else's Sync Pulse, answered (C2): AbilityBlanked's reason, and it must feel like nothing.
+    is Effect.SyncPulseBlanked -> null
     // A target list arriving. It buzzes exactly as much as the work order it sits beside, which is
     // not at all: a phone that went off when the Egress-node exclusion changed its picker would be
     // announcing an Insider's own tooling to a pocket in a silent house.
@@ -486,7 +488,7 @@ internal fun RoundMessage.ringing(): Boolean = when (this) {
     is RoundMessage.CheckInProgressed, is RoundMessage.ReadyProgressed,
     is RoundMessage.VoteProgressed, is RoundMessage.VoteHeld,
     is RoundMessage.VoteSelectionShown, is RoundMessage.MeetingResolved,
-    is RoundMessage.SyncPulseAnswered, is RoundMessage.InsidersRevealed,
+    is RoundMessage.SyncPulseAnswered, is RoundMessage.SyncPulseBlanked, is RoundMessage.InsidersRevealed,
     is RoundMessage.RoleRevealed, is RoundMessage.RevokeLanded, is RoundMessage.RosterIssued,
     is RoundMessage.ContactSeedIssued,
     is RoundMessage.Surged, is RoundMessage.IsolateTargetsOffered, is RoundMessage.IsolateTargetsBlanked,
@@ -557,6 +559,7 @@ internal fun RoundMessage.haptic(): Haptic? = when (this) {
     is RoundMessage.VoteSelectionShown -> null
     is RoundMessage.MeetingResolved -> null
     is RoundMessage.SyncPulseAnswered -> null
+    is RoundMessage.SyncPulseBlanked -> null
     is RoundMessage.IsolateTargetsOffered -> null
     is RoundMessage.IsolateTargetsBlanked -> null
     is RoundMessage.StaticOpened -> null

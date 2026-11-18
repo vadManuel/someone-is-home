@@ -209,7 +209,7 @@ class MeetingRulesTest {
         val at = Tick(100)
         val fired = reduce(
             ready(at),
-            Event.EgressFired(at, insider, EgressType.Beacon, listOf(card, MarkerId("CARD-12"))),
+            Event.EgressFired(at, insider, EgressType.Beacon, listOf(card, MarkerId("CARD-12")), pulseFrom = 4_000_000L),
         ).state
         // Measured at the CALL and not at the fire: the countdown legitimately ran for the hundred
         // ticks of shift in between, and comparing against the fire would assert that a meeting
@@ -314,7 +314,7 @@ class MeetingRulesTest {
         // House on fire: frozen until containment.
         val fired = reduce(
             ready(Tick(100)),
-            Event.EgressFired(Tick(100), insider, EgressType.Beacon, listOf(card, MarkerId("CARD-12"))),
+            Event.EgressFired(Tick(100), insider, EgressType.Beacon, listOf(card, MarkerId("CARD-12")), pulseFrom = 4_000_000L),
         ).state
         val frozen = fired.egressReadyAt
         var crisis = calling(fired, Tick(200))
@@ -345,7 +345,7 @@ class MeetingRulesTest {
         val at = Tick(100)
         val first = reduce(
             ready(at),
-            Event.EgressFired(at, insider, EgressType.Beacon, listOf(card, MarkerId("CARD-12"))),
+            Event.EgressFired(at, insider, EgressType.Beacon, listOf(card, MarkerId("CARD-12")), pulseFrom = 4_000_000L),
         )
         assertEquals(
             listOf(true),
@@ -355,7 +355,7 @@ class MeetingRulesTest {
 
         val second = reduce(
             first.state,
-            Event.EgressFired(Tick(200), insider, EgressType.Tether, listOf(card, MarkerId("CARD-12"))),
+            Event.EgressFired(Tick(200), insider, EgressType.Tether, listOf(card, MarkerId("CARD-12")), pulseFrom = 4_000_000L),
         )
         val answered = second.effects.filterIsInstance<Effect.AbilityFired>()
         assertEquals(

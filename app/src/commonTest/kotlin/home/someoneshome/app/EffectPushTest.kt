@@ -463,7 +463,7 @@ class EffectPushTest {
             say(Effect.MeetingEnded(Haptic.Long))
             assertEquals(null, flow.state.secondsLeft, "a meeting's clock outlived the meeting")
 
-            say(Effect.EgressOpened(Seat(0), EgressType.Tether, emptyList(), remaining = 2_400, haptic = Haptic.Long))
+            say(Effect.EgressOpened(Seat(0), EgressType.Tether, emptyList(), remaining = 2_400, haptic = Haptic.Long, pulseFrom = 86_402_000L))
             assertEquals(Countdown(120, 120), flow.state.egressLeft, "the Egress did not start at the house's remaining")
             repeat(20) { flow.secondPassed() }
             assertEquals("1:40", PanelVals(flow.state).egressLeftText)

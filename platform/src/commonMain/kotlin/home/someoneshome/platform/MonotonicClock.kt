@@ -19,3 +19,13 @@ package home.someoneshome.platform
  * compare one across phones.
  */
 expect fun monotonicNanos(): Long
+
+/**
+ * [monotonicNanos] in whole milliseconds: **the house's clock, the one the phones measure** (C1).
+ *
+ * The host answers every [home.someoneshome.model.protocol.TransportFrame.TimeProbe] with this, and
+ * the house anchors the Sync Pulse's schedule on it (C2), so a phone that has measured its offset to
+ * one has measured it to the other. Two different functions there would be two clocks that happen
+ * to agree, until one of them is changed.
+ */
+fun monotonicMillis(): Long = monotonicNanos() / 1_000_000

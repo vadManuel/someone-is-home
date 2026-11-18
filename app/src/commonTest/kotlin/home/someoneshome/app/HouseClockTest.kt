@@ -152,6 +152,7 @@ class HouseClockTest {
     fun `the Egress expires at its deadline`() {
         val fired = Egress.fired(
             Tick(0), EgressType.Beacon, listOf(MarkerId("A"), MarkerId("B")), Balance.EGRESS_TIMER,
+            pulseFrom = 86_402_000L,
         )
         val state = armed().copy(egress = fired)
 
@@ -177,6 +178,7 @@ class HouseClockTest {
     fun `a paused Egress does not expire`() {
         val fired = Egress.fired(
             Tick(0), EgressType.Beacon, listOf(MarkerId("A"), MarkerId("B")), Balance.EGRESS_TIMER,
+            pulseFrom = 86_402_000L,
         )
         val state = armed().copy(egress = fired.pausedAt(Tick(10)))
 

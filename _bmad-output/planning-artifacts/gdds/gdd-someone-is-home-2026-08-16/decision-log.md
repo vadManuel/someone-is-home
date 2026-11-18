@@ -7393,6 +7393,223 @@ whose upload was lost, **2 008 ms**. Checked against what is time-critical:
 | `harness` `Recording.HEADER` | `recording/28` | `recording/29` |
 
 
+## Revision 79 — every phone measures the house's clock, and the Sync Pulse is scheduled on it
+
+*2026-11-17, overnight run, unit C12: the decision-free half of the containment spec
+(`_bmad-output/implementation-artifacts/containment-spec-2026-11-17.md`, C1, C2 and the
+`SyncPulseAnswered` width). C3 (the screen), C4 (the felt pulse) and C5 (the bench through the screen)
+wait for the owner's O1-O5 and the pack's Q4. **No screen reads any of this yet, so no Egress can be
+contained on real phones yet either.** Desktop, loopback and the iOS-Simulator unit-test target only;
+nothing here has been on a phone.*
+
+### D-264 · **Every phone measures the house's clock on its one socket, on one schedule whatever its role — built**
+
+**What was missing.** The host has answered `TimeProbe` with its monotonic milliseconds since
+protocol 2, and `ClockSync` (ARCH D5: minimum-RTT sample, a round every 30 s, slew never jump) was
+built and unit-tested, but the real client sent no probes and dropped every `TimeMark`. Only the PING
+rig used the estimator. So no phone knew the house's time, and the Sync Pulse could not be put at one
+moment in two hands.
+
+**Now.**
+
+1. **`TransportClient` probes on every seated connection.** A coroutine beside the pump asks its own
+   `ClockSync` every 250 ms what is due and writes those `TimeProbe`s straight onto the socket: five at
+   seating, five every 30 s after. Each `TimeMark` is stamped on arrival and fed to the estimator
+   **before and instead of** `onFrame`; nothing above the transport sees a mark. A new connection
+   abandons the round in flight (its marks will never come) and probes at once; **the fix is kept**,
+   because the house's clock did not change with the socket.
+2. **The estimate is published as one immutable value** (`ClockFix`: base, target, slew start, RTT),
+   so `hostNowMillis()` can be read from any thread without touching the single-threaded estimator.
+   Never backward (the slew is unchanged).
+3. **`LobbyOverTransport.houseNow()`** exposes it: null before seating and before the first fix. The
+   host's own phone reaches its house over loopback like every guest, so it measures it the same way.
+   **No screen reads it yet** (C3, C4 will).
+4. **`monotonicMillis()`** (platform) names the house's clock once: what the host answers probes with,
+   and what the pulse is anchored on (D-265).
+5. **Bench and log.** `SOMEONES_HOME_CLOCK_SKEW_MS` adds a constant to a cheats build's client clock
+   (Simulators on one Mac share one monotonic base, so an unmeasured offset would read right by
+   accident). Each new estimate is logged `[clock] FIX rtt=… offset=… applied=…`, console only
+   (rule 6). The PING rig now reads the client's own estimate instead of running a second one, whose
+   probe numbers would have collided with the client's.
+
+**Probes stay transport frames, outside D-263's request slot** (the spec's call): waiting for the
+next beat would add up to a second of round trip, and round trip is the offset's noise floor.
+
+**Leak and parity.** The schedule reads nothing but the connection's own clock; `TransportClient`
+knows no seat and no role. Every phone sends the same five probes at the same offsets from its own
+seating, and each mark goes only to the phone that asked. Their widths follow the probe counter and
+the host's uptime digits, the same for every phone. No `Effect`, so no schema row; `TimeProbe` and
+`TimeMark` were already `@ClientFacing`.
+
+**R12's concern (the spec's).** `TransportHost` writes a `TimeMark` directly from the read loop while
+the connection's writer sends pushes; Ktor's outgoing side is a channel, so whole frames interleave.
+Now tested rather than argued (below). `TransportHost` itself is unchanged.
+
+**Guards, each proven by breaking it.**
+
+- `ClockProbeLoopbackTest` (platform; a real `TransportHost`, real clients over loopback):
+  - two phones whose clocks are **3 s ahead and 2 s behind** each read the house's clock to within
+    20 ms within a second of seating (measured: **0 ms off both**); no mark reaches the client's app
+    and no probe the host's. *Broken by dropping the `onMark` call*: `phone 0 (skew 3000) had no fix a
+    second after seating`, and all three tests fail. *Broken by reading the phone's own clock instead
+    of the offset*: `phone 0 (its clock 3000 ms off) reads the house's clock 3000 ms wrong`.
+  - three phones over 72 s of their own clocks (run ten times fast) send **15, 15, 15** probes: three
+    bursts each. *Broken by a phone that doubles some bursts*: `Expected [15, 15, 15], actual [25, 25,
+    15]`.
+  - a push a millisecond for 1.5 s while the phone re-probes: all 1 103 pushes arrive whole and in
+    order beside 30 probes' marks.
+- `PulseFrameTest` (app; D-265): six phones with clocks off by +3 s, −2 s, 0, +1 s, −0.5 s and
+  +0.25 s each put pulse 0 within **1 ms** of the house's moment, and every phone, Insider or Resident,
+  sent **5** probes. *Broken by a zero offset*: `seat 0 (clock 3000 ms off) would feel pulse 0 -3000
+  ms from the house's moment`.
+- `TransportLoopbackTest` now checks the client's own probes instead of a hand-sent one; `ClockSyncTest`
+  unchanged and green.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `platform` `TransportClient` | sends no probes; marks reach `onFrame` | probes on `ClockSync`'s schedule; marks to the estimator only; `hostNowMillis()`, `clockFix()`, `probesSent`, `onFix` |
+| `platform` `ClockSync` | three private offset fields | `ClockFix`, one immutable value; `reconnected()` |
+| `platform` `monotonicMillis` | (none) | the house's clock in ms |
+| `app` `LobbyOverTransport` | client clock fixed | `clientMillis`, `onClockFix`, `houseNow()` |
+| `app` cheats `TransportCheat`, `Cheats`, `ConsoleLines` | the rig's own estimator | the client's; `CLOCK_SKEW_SWITCH`; `[clock]` console lines |
+
+### D-265 · **The Sync Pulse is scheduled and graded in the host's milliseconds, and every phone is told the grid — built (recording 30)**
+
+**What was wrong.** The house graded taps against `firedAt + LEAD + n · INTERVAL` **in house
+ticks**, and `EgressOpened` carried only a countdown. No phone knows the house's tick, and the ticks do
+not keep wall time (one extra per arrival, D-230's skip-forward, the bench's skew), so a tap could not
+be put on the grid by anybody: every Egress on real phones was an Insider win.
+
+**Now** (the spec's own call, *pulse times are host-monotonic milliseconds, recorded as payload*):
+
+1. **`Balance`**: `SYNC_PULSE_LEAD_MILLIS` (2 000), `SYNC_PULSE_INTERVAL_MILLIS` (1 500) and
+   `SYNC_PULSE_WINDOW_MILLIS` (400), derived from the tick constants so there is one number of each;
+   `syncPulseIsGradeableInMillis()` beside `syncPulseIsGradeable()`.
+2. **`Event.EgressFired.pulseFrom`**: the host's millisecond of pulse 0. `egressFor` takes
+   `anchorMillis` and sets `pulseFrom = anchor + LEAD_MILLIS`; **core reads no clock**.
+   `RoundAuthority` hands it its new `hostMillis` seam, which is `monotonicMillis` — the clock
+   `TransportHost` answers probes with — and **never the tick driver's**. The event's `at` stays a
+   tick (ARCH D5). The anchor is a recorded input, so a replay grades the same taps the same way.
+3. **`Egress.pulseFrom`**; **a pause does not move it** (D-133 stops the countdown, not the grid).
+4. **`SyncPulseReturned.taps` and `ReturnSyncPulse.taps` are the host's milliseconds** as the phone
+   measured them (KDoc only; the type is unchanged).
+5. **`pulseNear`, `pulseAt`, `onThePulse`** (were `beatNear`, `beatAt`, `onTheBeat`; the spec asks new
+   containment names to say *pulse*, since U1's uploads are "beats") grade on `pulseFrom` in integer
+   milliseconds. **The rule is unchanged**: any four distinct pulses, each within ±400 ms; pairing
+   still by arrival within `SYNC_PULSE_PAIR_WINDOW`. Consecutive pulses and pairing on the grid are
+   **O3, the owner's**, and are not built. Nor is the Revoked-partner fix, which the spec puts in the
+   same O3 change.
+6. **`EgressOpened.pulseFrom`** (effect and wire): the same number for every seat.
+
+**Leak and parity.** `EgressOpened` grows by `,"pulseFrom":N` on every phone alike; its width
+follows the host's uptime digits, never the seat. No new kind here (D-266 adds one).
+
+**Guards, each proven by breaking it.**
+
+- `EgressTest` (core), every containment case ported to millisecond taps, plus:
+  - *the pulse grid is anchored on the host clock and named to every seat*;
+  - *taps are graded on the host clock whatever tick the house is at*: the same taps contain for an
+    Egress fired at tick 60 and at tick 60 000, arriving 0, 7 or 90 ticks late, and taps on the tick
+    grid miss;
+  - *a pause does not move the pulse grid*.
+  - **Broken by grading against the fire tick** (`firedAt + LEAD`): 10 of 30 fail, among them `two
+    people at two nodes did not contain it`. The test anchor is set half a pulse off the grid that
+    break would build, after a first anchor happened to sit exactly on the 400 ms window edge and let
+    most cases pass under the break.
+- `RoundAuthorityTest.theEgressPulseIsAnchoredOnTheHostClockAndNotTheTicks` (app cheats): the host
+  clock fixed, the ticks jumped 5 000 s. **Broken by anchoring on the tick**: `the grid is not the
+  host clock plus the lead. Expected <7779123>, actual <92000>`.
+- `PulseFrameTest` (app; a real `TransportHost` on `monotonicMillis`, six real clients with skewed
+  clocks, the real `EffectWire`, the rules' own arming and admission, run twice with seats 1 and 2
+  exchanging roles): every phone, the Revoked one included, decodes the same `pulseFrom` from
+  `EgressOpened`, and through its own measured offset puts pulse 0 within 1 ms of the house's moment.
+  **Broken by a grid per seat**: `the phones were told different grids`.
+- `SyncPulseAnsweredWireSizeTest` (model): `EgressOpened.pulseFrom` survives the wire and the frame is
+  one length for every seat.
+- `RecordingTextTest`: an Egress with its anchor survives its own recording; the fixture round's Egress
+  is fired, paused, resumed and contained on the millisecond grid (`EgressFixtureTest`), and the
+  differential harness replays it with roles exchanged.
+
+**Recording format 30**: `EgressFired` carries `pulseFrom` (a row without one is fatal), taps are
+milliseconds, `EgressOpened` carries `pulseFrom`, the state row's `egress` gains `pulse=`, and one
+effect a version 29 build cannot name (D-266).
+
+**Not changed, and why.** `RoundCheat.reachNodeAndPulse` still sends unanchored taps and still always
+misses (D-232): rewriting it to tap on the grid through a screen is C5, which waits for the screen.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `model` `Balance` | tick timings only | and their millisecond twins |
+| `model` `Event.EgressFired`, `Egress`, `Effect.EgressOpened`, `RoundMessage.EgressOpened` | no anchor | `pulseFrom`, host ms |
+| `core` `egressFor` | no clock | `anchorMillis`, handed in |
+| `core` `beatNear`, `beatAt`, `onTheBeat` | ticks off `firedAt` | `pulseNear`, `pulseAt`, `onThePulse`, ms off `pulseFrom` |
+| `app` `RoundAuthority` | the tick only | `hostMillis` seam, `monotonicMillis` |
+| `harness` `Recording.HEADER` | `recording/29` | `recording/30` |
+
+### D-266 · **A Sync Pulse answer is one digit wide, and every other living phone is sent a blank of it — built, provisional, owner to confirm (it closes the spec's O5 rather than accepting it)**
+
+**What leaked.** `RoundMessage.SyncPulseAnswered(held: Boolean)` serialised `true` or `false`, so the
+answer to a return at a node was **one byte longer when the beat was missed** (114 and 115 bytes at
+sequence 1, computed from the frame now measured at 111): whether a pair was forming was readable off
+the Wi-Fi (D-258's audit, "S2"). And the answer reached the tapper alone, so the one living phone that
+got a frame at that moment was the one standing at a node with its taps in. The request itself already
+rides the fixed-cadence upload (D-263), so the downward frame was the whole tell.
+
+**Now, the width** (D-258's `AbilityFired` fix, copied): the wire member is `answer: Int`, serialised
+under the old name `held` as one digit (1 held, 0 not); call sites keep `SyncPulseAnswered(held = …)`
+and read `.held`; any other value does not construct or decode.
+
+**Now, the blank** (D-263's downward pattern, as the brief asked): a new effect and kind
+`SyncPulseBlanked(seat)`. `pulseReturned` builds the tapper's answer and one blank for every other
+seat, seat by seat, at every return, held, missed, locked out, from nowhere near a node, or the one
+that contains. No role is read. Its row is both living classes, written out as `ABILITY_BLANKED`'s is,
+the same classes as the answer's, so every living phone is sent exactly one of the two and the out
+neither. `RoundMessage.SyncPulseBlanked` carries one zero digit under a name one character shorter and a
+field one longer, so **answer and blank are 111 bytes at sequence 1, held or not**. `Flow` and
+`HouseBuzzer` name it as a no-op; `Transcript` gives it a row.
+
+**⚠️ For the owner.** The spec's O5 recommended *accepting* the extra frame for v1. This builds the
+blank instead, at a cost of one ~110-byte frame per living phone per return (a return is four taps,
+so at most one every six seconds per person at a node). Reverting it is deleting the blank's
+construction in `pulseReturned`; the width fix stands either way.
+
+**Guards, each proven by breaking it.**
+
+- `SyncPulseAnsweredWireSizeTest` (model): held, not held and the blank are one length at sequences 1
+  to a million; anything but one digit does not decode; the blank's row is the answer's; one frame per
+  living seat for an Insider's and a Resident's return, held or not, and none for the out. **Broken by
+  a two-digit "not held"**: `at seq 1 a held beat's answer is not a missed one's length`, and `held:10`
+  decoded.
+- `EgressTest."every living seat gets one pulse frame of one length whenever a return is answered"`
+  (core; through the gate, the allowlist and the real encoders, seat 3 Revoked): a Resident's held and
+  missed beats, a return from no node, an Insider's held and missed beats, and an Insider and a Resident
+  containing. **Broken by answering the tapper only**: `a Resident's held beat: the pulse frames reached
+  another set of seats: {0=[111]}`.
+- `PulseFrameTest` (app, over sockets, roles exchanged): at a held beat, a miss and containment, every
+  living phone is sent the same frames, byte for byte net of the sequence number's digits (110 bytes for
+  the pulse frame on all of them), and each seat's frames are the same whichever role it holds; the
+  Revoked phone gets no pulse frame. **The fail-closed check**: with the blank's schema row deleted,
+  `A HELD BEAT: seat 1 got []` — the blank shipped to nobody.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `model/protocol` `RoundMessage.SyncPulseAnswered` | `held: Boolean` | `answer: Int`, one digit, under the name `held` |
+| `model` `Effect.SyncPulseBlanked`, `EmitSchema`, `RoundMessage.SyncPulseBlanked` | (new) | every seat but the tapper; row: both living classes; one zero digit, 111 bytes |
+| `core` `pulseReturned` | the answer, to the tapper | the answer and every other seat's blank, seat by seat |
+| `ui` `Flow`, `app` `HouseBuzzer`, `harness` `Transcript` | (new) | a named no-op, silent, one transcript row |
+
+**Two completeness guards caught the new kind on the first full run, as they exist to:**
+`EmitSchemaTest."every Egress kind is permitted to somebody"` (`an Egress kind exists that this test
+does not name`) and `HouseBuzzTest` (`the emit schema knows a kind this file's fixtures have never
+built. Expected <[]>, actual <[SyncPulseBlanked]>`). Both now name it.
+
+**Checked for this revision** (`./gradlew check --continue`, every test XML read): model 294 (JVM and
+iOS Simulator), core 313, harness 123, platform 203, app 192, ui desktop 651, ui iOS Simulator 312,
+0 failures; both variant sweeps (release, playtest), `vocabularyLint` in every module,
+`redactionLint`, the cordons and the boundary checks clean. The unsigned Playtest device build
+compiles. **Not on a phone; no screen, haptic or bench uses the clock or the grid yet.**
+
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

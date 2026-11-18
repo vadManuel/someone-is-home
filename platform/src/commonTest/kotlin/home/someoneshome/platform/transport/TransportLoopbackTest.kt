@@ -7,6 +7,7 @@ import home.someoneshome.model.protocol.TransportRefusal
 import home.someoneshome.platform.monotonicNanos
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -61,11 +62,12 @@ class TransportLoopbackTest {
                 host.send(seatA, TransportFrame.Carry("to A"))
                 assertEquals(TransportFrame.Carry("to A"), aFrames.receive())
 
-                // --- a clock probe is answered below the app --------------------------------
-                clientA.send(TransportFrame.TimeProbe(probe = 7))
-                val mark = aFrames.receive()
-                check(mark is TransportFrame.TimeMark && mark.probe == 7L) { "expected a TimeMark for probe 7, got $mark" }
-                check(hostFrames.tryReceive().getOrNull() == null) { "the probe leaked up to the host's onFrame" }
+                // --- the client's own clock probes are answered below the app, both ends -------
+                // (C1): the host never hands a probe up, and the client never hands a mark up.
+                while (clientA.hostNowMillis() == null) delay(10)
+                check(clientA.probesSent >= PROBES_PER_ROUND) { "the client sent ${clientA.probesSent} probes" }
+                check(hostFrames.tryReceive().getOrNull() == null) { "a probe leaked up to the host's onFrame" }
+                check(aFrames.tryReceive().getOrNull() == null) { "a mark leaked up to the client's onFrame" }
 
                 // --- arming: strangers are refused with a frame, terminally ---------------
                 ledger.lock()

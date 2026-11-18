@@ -50,6 +50,13 @@ class Recording(
     }
 
     companion object {
+        // 30: the Sync Pulse on the host's clock (C2). `EgressFired` carries `pulseFrom`, the host's
+        // monotonic millisecond the first pulse lands at, read at the edge -- an input, and a row
+        // without one is fatal. `SyncPulseReturned.taps` are milliseconds on that clock, not ticks.
+        // `EgressOpened` carries `pulseFrom`, the state row's `egress` gains `pulse=`, and one effect
+        // a version 29 build cannot name -- `SyncPulseBlanked`, built for every seat but the tapper
+        // beside each `SyncPulseAnswered`.
+        //
         // 29: one effect a version 28 build cannot name -- `AbilityBlanked` (D-263), built for every
         // seat but the actor beside each `AbilityFired` a Surge, an Isolate, a Static or an Egress
         // answers. No event and no state row changed; the same events replay to a longer effect
@@ -245,7 +252,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/29"
+        const val HEADER = "someone-is-home/recording/30"
     }
 }
 

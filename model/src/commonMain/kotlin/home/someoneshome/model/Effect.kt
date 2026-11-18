@@ -953,6 +953,14 @@ sealed interface Effect {
         /** Ticks on the clock at the moment it started. The device holds no opinion of its own. */
         val remaining: Long,
         val haptic: Haptic,
+        /**
+         * **The Sync Pulse's grid: the first pulse, in the host's monotonic milliseconds** (C2).
+         *
+         * The same number on every phone, whoever fired and whatever their role, and a phone that has
+         * measured its offset to the host's clock (C1) can put each pulse at one moment of real time
+         * in every hand. Its width follows the host's uptime, never the seat.
+         */
+        val pulseFrom: Long,
     ) : Effect
 
     /**
@@ -999,6 +1007,23 @@ sealed interface Effect {
      * player, which is the leak the whole presence plane is denied a schema row to close.
      */
     data class SyncPulseAnswered(val seat: Seat, val held: Boolean) : Effect
+
+    /**
+     * **Somebody's Sync Pulse was answered at this moment, and this seat is sent a frame of the
+     * answer's length** (C2, D-263's pattern).
+     *
+     * [SyncPulseAnswered] reaches the seat that tapped and nobody else, so each return put one
+     * frame on that phone's socket and none on anybody else's: on a Wi-Fi that can be measured, the
+     * one phone that got a frame was the one standing at a node with its taps in. The request
+     * already rides the fixed-cadence upload (D-263), so the downward frame was the whole tell. The
+     * rules now build one of these for **every other seat**, seat by seat at the same place, and the
+     * row sends it to both living classes, exactly as [SyncPulseAnswered]'s is: every living phone
+     * is sent one frame of one length, the tapper its answer and the rest this.
+     *
+     * Built without a read of any role. It carries the seat and nothing else, and the seat comes off
+     * on the wire. Nothing reads it on a phone.
+     */
+    data class SyncPulseBlanked(val seat: Seat) : Effect
 
     /**
      * **Contained. The widget reverts and nobody learns anything about anybody** (`gdd.md:987`).

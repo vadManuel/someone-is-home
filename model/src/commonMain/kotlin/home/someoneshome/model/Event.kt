@@ -398,6 +398,19 @@ sealed interface Event {
         val type: EgressType,
         /** Two ordinary registered markers in non-adjacent rooms, in draw order (F-001). */
         val nodes: List<MarkerId>,
+        /**
+         * **When the Sync Pulse's first pulse lands, on the host's monotonic clock, in
+         * milliseconds** (C2): the moment the house drew the Egress plus
+         * [Balance.SYNC_PULSE_LEAD_MILLIS], every later pulse [Balance.SYNC_PULSE_INTERVAL_MILLIS]
+         * after it.
+         *
+         * Milliseconds of the host's clock and not a tick, because ticks do not keep wall time
+         * (see [Balance.SYNC_PULSE_LEAD_MILLIS]) and a haptic beat in two hands has to; it is the
+         * clock every phone measures its offset to (C1). [at] stays a tick (ARCH D5). **It is a
+         * recorded input, read at the edge** like the nodes, so a replay grades the same taps
+         * against the same grid without anybody reading a clock.
+         */
+        val pulseFrom: Long,
     ) : Event
 
     /**
@@ -416,11 +429,13 @@ sealed interface Event {
      * the couch, claim the Landing, and contain an Egress from a chair. [PerformanceEnded] carries
      * no marker for exactly this reason and this is the same decision.
      *
-     * ### The taps are ticks, not a verdict
+     * ### The taps are times on the house's clock, not a verdict
      *
-     * [taps] is when the finger landed, sampled at the edge like every other timestamp. A boolean
-     * *"I was on the beat"* would be the phone grading its own work, which is the one thing the
-     * whole Subroutine treatment is built to keep off the device.
+     * [taps] is when the finger landed, **in milliseconds of the host's monotonic clock** as this
+     * phone measured it (C1, C2) — the timeline [EgressFired.pulseFrom] is on — sampled at the edge
+     * like every other timestamp. Not ticks: no phone knows the house's tick. A boolean *"I was on
+     * the beat"* would be the phone grading its own work, which is the one thing the whole
+     * Subroutine treatment is built to keep off the device.
      */
     data class SyncPulseReturned(
         override val at: Tick,

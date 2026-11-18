@@ -93,6 +93,8 @@ class HapticCheat(private val haptics: Haptics) {
                     ),
                     remaining = 180,
                     haptic = Haptic.Long,
+                    // Only the buzz is played here; nothing reads the pulse grid (C2).
+                    pulseFrom = 0L,
                 ),
             )
         },

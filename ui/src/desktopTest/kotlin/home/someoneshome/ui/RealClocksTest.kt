@@ -141,7 +141,7 @@ class RealClocksTest {
         val phone = housed()
         // The sign-off is the house's word to the people it owned, so it is drawn on an Insider's.
         phone.houseSaid(RoundMessage.RoleRevealed(insider = true))
-        phone.houseSaid(RoundMessage.EgressOpened(EgressType.Tether, NODES, remaining = 2_400, haptic = Haptic.Long))
+        phone.houseSaid(RoundMessage.EgressOpened(EgressType.Tether, NODES, remaining = 2_400, haptic = Haptic.Long, pulseFrom = 86_402_000L))
         now = now.copy(hour = 22, minute = 30)
         phone.houseSaid(RoundMessage.RoundEnded(Winner.Insiders, WinRoute.EgressUncontained, Haptic.Long))
         phone.houseSaid(RoundMessage.HouseSignedOff("Unfortunate."))
@@ -198,7 +198,7 @@ class RealClocksTest {
     @Test
     fun theEgressCountdownFollowsTheHousesRemaining() {
         val phone = housed()
-        phone.houseSaid(RoundMessage.EgressOpened(EgressType.Beacon, NODES, remaining = 2_400, haptic = Haptic.Long))
+        phone.houseSaid(RoundMessage.EgressOpened(EgressType.Beacon, NODES, remaining = 2_400, haptic = Haptic.Long, pulseFrom = 86_402_000L))
         assertEquals(Countdown(120, 120), phone.state.egressLeft)
         repeat(30) { phone.secondPassed() }
         val running = PanelVals(phone.state)

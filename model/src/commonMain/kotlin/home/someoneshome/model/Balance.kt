@@ -347,6 +347,23 @@ object Balance {
     fun syncPulseIsGradeable(): Boolean = SYNC_PULSE_WINDOW * 2 < SYNC_PULSE_INTERVAL
 
     /**
+     * **The pulse's three timings on the house's millisecond clock** (C2), derived from the tick
+     * constants above so there is still one number of each.
+     *
+     * The schedule is graded in milliseconds of the host's monotonic clock and not in ticks because
+     * the house's ticks do not keep wall time: the tick driver adds one per arrival on top of its
+     * twenty a second, skips forward after the host's phone has been away (D-230), and a bench can
+     * skew it. A haptic beat in two hands has to land at one moment of real time, and a phone can
+     * measure its offset to the host's clock (C1, ARCH D5); it has no way to know the house's tick.
+     */
+    const val SYNC_PULSE_LEAD_MILLIS: Long = SYNC_PULSE_LEAD * 1_000L / TICKS_PER_SECOND
+    const val SYNC_PULSE_INTERVAL_MILLIS: Long = SYNC_PULSE_INTERVAL * 1_000L / TICKS_PER_SECOND
+    const val SYNC_PULSE_WINDOW_MILLIS: Long = SYNC_PULSE_WINDOW * 1_000L / TICKS_PER_SECOND
+
+    /** [syncPulseIsGradeable] for the millisecond timings the house actually grades on. */
+    fun syncPulseIsGradeableInMillis(): Boolean = SYNC_PULSE_WINDOW_MILLIS * 2 < SYNC_PULSE_INTERVAL_MILLIS
+
+    /**
      * **What a missed beat costs — the design's 2–3s** (`gdd.md:359`).
      *
      * *Makes stalling meaningfully more expensive and stops spam-retry from being optimal.* Three,

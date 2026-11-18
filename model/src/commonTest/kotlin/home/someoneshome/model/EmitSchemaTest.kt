@@ -849,6 +849,7 @@ class EmitSchemaTest {
             EmitSchema.EGRESS_OPENED,
             EmitSchema.EGRESS_HELD,
             EmitSchema.SYNC_PULSE_ANSWERED,
+            EmitSchema.SYNC_PULSE_BLANKED,
             EmitSchema.EGRESS_CONTAINED,
         )
         for (kind in egress) {

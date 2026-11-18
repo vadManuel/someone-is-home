@@ -27,11 +27,13 @@ import home.someoneshome.model.protocol.TransportFrame
 import home.someoneshome.platform.clearSeatToken
 import home.someoneshome.platform.loadHostAddress
 import home.someoneshome.platform.loadSeatToken
+import home.someoneshome.platform.launchValue
+import home.someoneshome.platform.monotonicMillis
 import home.someoneshome.platform.monotonicNanos
 import home.someoneshome.platform.saveHostAddress
 import home.someoneshome.platform.saveSeatToken
 import home.someoneshome.platform.transport.ClientSession
-import home.someoneshome.platform.transport.ClockSync
+import home.someoneshome.platform.transport.ClockFix
 import home.someoneshome.platform.transport.HostAdvertiser
 import home.someoneshome.platform.transport.HostBrowser
 import home.someoneshome.platform.transport.SeatLedger
@@ -50,6 +52,25 @@ import kotlinx.coroutines.launch
 
 /** The cheat's fixed port. Not part of the wire contract — mDNS will advertise the real one. */
 const val CHEAT_TRANSPORT_PORT: Int = 47747
+
+/**
+ * **A constant, in milliseconds, added to this phone's own clock** (C1). Simulators on one Mac share
+ * one monotonic base, so a bench seat that never measured its offset would read the house's clock
+ * correctly by accident and a containment run would pass for the wrong reason. Set per seat (the
+ * sim-hunt's skew option, C5), it makes the offset something the phone has to measure. Unset or
+ * unreadable is no skew.
+ */
+const val CLOCK_SKEW_SWITCH: String = "SOMEONES_HOME_CLOCK_SKEW_MS"
+
+/** This phone's client clock: [monotonicMillis], plus [CLOCK_SKEW_SWITCH] when the bench sets it. */
+internal fun benchClientMillis(): () -> Long {
+    val skew = launchValue(CLOCK_SKEW_SWITCH)?.trim()?.toLongOrNull() ?: 0L
+    return if (skew == 0L) ::monotonicMillis else { { monotonicMillis() + skew } }
+}
+
+/** The console's line for one estimate of the house's clock: round trip and offset, in ms. */
+internal fun fixLine(fix: ClockFix): String =
+    "FIX rtt=${fix.rttMillis} offset=${fix.targetOffsetMillis} applied=${fix.baseOffsetMillis}"
 
 /**
  * The two-phone evening's driver — a cheat surface over the 0.8 machinery, nothing more.
@@ -87,8 +108,7 @@ class TransportCheat(private val scope: CoroutineScope) {
     private var session: ClientSession? = null
     private var client: TransportClient? = null
     private var clientJob: Job? = null
-    private var sync: ClockSync? = null
-    private var probeJob: Job? = null
+    private var clockJob: Job? = null
     private var pings = 0
 
     init {
@@ -175,21 +195,8 @@ class TransportCheat(private val scope: CoroutineScope) {
         val s = session ?: ClientSession().also { session = it }
         val c = TransportClient(
             s, address, port, ::nowMillis,
-            onFrame = { frame ->
-                // Clock marks feed the estimator and the display, not the log — five arrive
-                // every thirty seconds and would scroll everything else away.
-                if (frame is TransportFrame.TimeMark) {
-                    val now = nowMillis()
-                    sync?.let { est ->
-                        est.onMark(frame.probe, frame.hostMillis, now)
-                        val offset = est.appliedOffsetMillis(now)
-                        val rtt = est.lastRttMillis
-                        if (offset != null && rtt != null) clock = "OFFSET ${offset}MS · RTT ${rtt}MS"
-                    }
-                } else {
-                    note("ME < ${frame.brief()}")
-                }
-            },
+            // Clock marks never reach here: the client feeds them to its own estimator (C1).
+            onFrame = { frame -> note("ME < ${frame.brief()}") },
             onPhase = { phase ->
                 clientPhase = phase.brief()
                 // The log is the record; the phase line is only the present tense. A seating
@@ -214,15 +221,14 @@ class TransportCheat(private val scope: CoroutineScope) {
         )
         client = c
         clientJob = scope.launch { c.run() }
-        // D5's discipline rides the same socket: a burst of probes at join, another every 30 s,
-        // the minimum-RTT sample believed, corrections slewed. The loop just asks the estimator
-        // what is due and puts it on the wire.
-        val est = sync ?: ClockSync().also { sync = it }
-        probeJob?.cancel()
-        probeJob = scope.launch {
+        // D5's discipline rides the same socket, and since C1 it is the client's own: a burst of
+        // probes at seating, another every 30 s, the minimum-RTT sample believed, corrections
+        // slewed. The rig only reads the estimate for its display.
+        clockJob?.cancel()
+        clockJob = scope.launch {
             while (true) {
-                if (session?.phase is ClientSession.Phase.Seated) {
-                    est.dueProbes(nowMillis()).forEach { c.send(TransportFrame.TimeProbe(it)) }
+                c.clockFix()?.let { fix ->
+                    clock = "OFFSET ${fix.offsetAt(nowMillis())}MS · RTT ${fix.rttMillis}MS"
                 }
                 kotlinx.coroutines.delay(500)
             }
@@ -238,8 +244,7 @@ class TransportCheat(private val scope: CoroutineScope) {
     /** Discard the stored token and become a stranger. The one deliberate way to lose a seat. */
     fun forget() {
         clientJob?.cancel()
-        probeJob?.cancel()
-        sync = null
+        clockJob?.cancel()
         clock = "NO FIX"
         session = null
         client = null

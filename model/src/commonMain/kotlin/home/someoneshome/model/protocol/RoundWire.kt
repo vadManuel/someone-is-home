@@ -704,6 +704,12 @@ sealed class RoundMessage {
         val nodes: List<Destination>,
         val remaining: Long,
         val haptic: Haptic,
+        /**
+         * **The Sync Pulse's first pulse, in the host's monotonic milliseconds** (C2): pulse `n`
+         * lands at `pulseFrom + n · Balance.SYNC_PULSE_INTERVAL_MILLIS` of the house's clock, which
+         * this phone reads through its measured offset (C1). The same number on every phone.
+         */
+        val pulseFrom: Long,
     ) : RoundMessage()
 
     /** The countdown stopped, or started again (D-133). */
@@ -712,11 +718,68 @@ sealed class RoundMessage {
     @kotlinx.serialization.SerialName("EgressHeld")
     data class EgressHeld(val remaining: Long, val running: Boolean, val haptic: Haptic) : RoundMessage()
 
-    /** One participant's own beat, and the same answer either way (rule 1). */
+    /**
+     * One participant's own beat, and the same answer either way (rule 1).
+     *
+     * ### One digit, so the frame does not say whether the beat was held (C2, D-258's fix)
+     *
+     * As a Boolean the field was `true` or `false`, four characters or five, so the frame's size
+     * told anybody measuring the Wi-Fi whether a return at a node had been held or missed. On the
+     * wire it is now [answer], one digit ([HELD] or [NOT_HELD]), still under the name `held`; the
+     * call sites keep `SyncPulseAnswered(held = …)` and read [held]. A value of any other width
+     * cannot be constructed or decoded. [SyncPulseBlanked] is this frame's length.
+     */
     @ClientFacing
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("SyncPulseAnswered")
-    data class SyncPulseAnswered(val held: Boolean) : RoundMessage()
+    data class SyncPulseAnswered(
+        @kotlinx.serialization.SerialName("held") val answer: Int,
+    ) : RoundMessage() {
+
+        /** The answer for this phone: whether the house is holding its beat. */
+        constructor(held: Boolean) : this(if (held) HELD else NOT_HELD)
+
+        init {
+            require(answer == HELD || answer == NOT_HELD) { "an answer is $HELD or $NOT_HELD" }
+        }
+
+        /** Whether the house is holding this phone's beat for a partner. */
+        val held: Boolean get() = answer == HELD
+
+        override fun toString(): String = "SyncPulseAnswered(held=$held)"
+
+        companion object {
+            const val HELD: Int = 1
+            const val NOT_HELD: Int = 0
+        }
+    }
+
+    /**
+     * **Somebody's Sync Pulse was answered, and this phone is sent a frame of [SyncPulseAnswered]'s
+     * length at the same moment** (C2, [Effect.SyncPulseBlanked]; D-263's pattern).
+     *
+     * Every living phone but the tapper's is sent this where the tapper is sent its answer, so a
+     * reader of the Wi-Fi sees one frame of one length land on every living phone. It says nothing:
+     * [blank] is always [ZERO], one digit, and a value of any other width cannot be constructed or
+     * decoded. The serial name is one character shorter than `SyncPulseAnswered` and the field one
+     * longer than `held`, so the two frames are the same number of bytes at every sequence number.
+     * Nothing reads it: `Flow` and `HouseBuzzer` name it as a no-op.
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("SyncPulseBlanked")
+    data class SyncPulseBlanked(val blank: Int) : RoundMessage() {
+        init {
+            require(blank == ZERO) { "the blank carries $ZERO and nothing else" }
+        }
+
+        companion object {
+            const val ZERO: Int = 0
+
+            /** The one blank there is. */
+            val Padded: SyncPulseBlanked = SyncPulseBlanked(ZERO)
+        }
+    }
 
     /** Contained, and nobody learns anything about anybody (`gdd.md:987`). */
     @ClientFacing
@@ -816,6 +879,7 @@ sealed class RoundMessage {
             is EgressOpened -> EmitSchema.EGRESS_OPENED
             is EgressHeld -> EmitSchema.EGRESS_HELD
             is SyncPulseAnswered -> EmitSchema.SYNC_PULSE_ANSWERED
+            is SyncPulseBlanked -> EmitSchema.SYNC_PULSE_BLANKED
             is EgressContained -> EmitSchema.EGRESS_CONTAINED
             is EgressSucceeded -> EmitSchema.EGRESS_SUCCEEDED
             is RoundEnded -> EmitSchema.ROUND_ENDED
@@ -1167,10 +1231,12 @@ object RoundWire {
         is Effect.RevokeLanded -> RoundMessage.RevokeLanded.Padded
         is Effect.MeetingEnded -> RoundMessage.MeetingEnded(effect.haptic)
         is Effect.EgressOpened ->
-            RoundMessage.EgressOpened(effect.type, effect.nodes, effect.remaining, effect.haptic)
+            RoundMessage.EgressOpened(effect.type, effect.nodes, effect.remaining, effect.haptic, effect.pulseFrom)
         is Effect.EgressHeld ->
             RoundMessage.EgressHeld(effect.remaining, effect.running, effect.haptic)
         is Effect.SyncPulseAnswered -> RoundMessage.SyncPulseAnswered(effect.held)
+        // The seat comes off and only the padding is left: SyncPulseAnswered's length (C2).
+        is Effect.SyncPulseBlanked -> RoundMessage.SyncPulseBlanked.Padded
         is Effect.EgressContained -> RoundMessage.EgressContained(effect.haptic)
         is Effect.EgressSucceeded -> RoundMessage.EgressSucceeded(effect.haptic)
         is Effect.RoundEnded -> RoundMessage.RoundEnded(effect.winner, effect.by, effect.haptic)
