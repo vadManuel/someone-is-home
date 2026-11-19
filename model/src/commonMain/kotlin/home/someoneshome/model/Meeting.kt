@@ -29,7 +29,10 @@ enum class Haptic {
     /** The default, and D-160's *yes*. Every screen that arrives unasked; every read that caught. */
     Short,
 
-    /** One of D-135's five. Adding a sixth is a decision, not a parameter. */
+    /**
+     * One of D-135's five, and the sixth the owner added (D-290): a landed Revoke, on the Revoked
+     * phone and the phone whose Revoke it was. Adding a seventh is a decision, not a parameter.
+     */
     Long,
 
     /**

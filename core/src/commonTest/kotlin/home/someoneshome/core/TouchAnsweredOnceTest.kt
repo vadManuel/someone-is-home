@@ -1,10 +1,12 @@
 package home.someoneshome.core
 
+import home.someoneshome.model.ArmedTouch
 import home.someoneshome.model.Balance
 import home.someoneshome.model.Effect
 import home.someoneshome.model.EmitSchema
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
+import home.someoneshome.model.Haptic
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
 import kotlin.test.Test
@@ -60,11 +62,11 @@ class TouchAnsweredOnceTest {
             val (after, got) = touch(armedAt(round(insider), insider), ready + 1L, insider.index to target.index)
             assertTrue(after.isRevoked(target), "$order: the armed touch revoked nobody, so it measured nothing")
             assertEquals(
-                listOf<Effect>(Effect.RevokeLanded(target)), got.getValue(target.index),
+                listOf<Effect>(Effect.RevokeLanded(target, Haptic.Long)), got.getValue(target.index),
                 "$order: the Revoked target was delivered something other than exactly its Revoke landing",
             )
             assertEquals(
-                listOf<Effect>(Effect.AbilityFired(insider, cooldownStarted = true)), got.getValue(insider.index),
+                listOf<Effect>(Effect.AbilityFired(insider, cooldownStarted = true, touch = ArmedTouch.Landed)), got.getValue(insider.index),
                 "$order: the armed Insider was delivered something other than exactly its spent Revoke",
             )
             for (bystander in seats.filter { it != insider && it != target }) {
@@ -101,7 +103,7 @@ class TouchAnsweredOnceTest {
         for (seat in listOf(0, 1, 2)) {
             assertEquals(2, got.getValue(seat).size, "seat $seat was in two touches and was delivered ${got.getValue(seat)}")
         }
-        assertEquals(listOf<Effect>(Effect.ContactAnswered(Seat(0)), Effect.RevokeLanded(Seat(0))), got.getValue(0))
+        assertEquals(listOf<Effect>(Effect.ContactAnswered(Seat(0)), Effect.RevokeLanded(Seat(0), Haptic.Long)), got.getValue(0))
     }
 
     /** The touch memory is the current tick's: the same pair touching at the next tick is a new touch. */

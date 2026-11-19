@@ -9115,6 +9115,149 @@ failures; the debug app run and the release sweep passed; every `vocabularyLint`
 `TransportHost.start`'s KDoc names; nothing here touches the server's start or stop); re-run alone,
 the playtest sweep passed, app 214, 0 failures. **Not on a phone.**
 
+### D-290 · **A landed Revoke takes ARMED down at once, and both phones buzz Long: the armed phone's one answer says whether its Revoke landed, and the Revoked phone's landing carries the Long — built (recording 39), amends D-135, D-156 and D-216**
+
+**The ruling** (owner, 2026-11-18, *Owner rulings, 2026-11-18, on D-286's questions and Q5* in
+`owner-decisions-2026-11-17.md`): *at the hit, the Insider's tile goes straight from ARMED to COOLING
+DOWN, instead of holding ARMED until 20 s from the arm. The Revoked phone and the Insider's phone both
+give the Long buzz.* The Long is for a landed Revoke only. This answers D-286's open item: the house
+clears the arm at the touch, but the armed phone was answered `AbilityFired(cooldownStarted = true)`,
+the same frame as an Egress into a ready clock, so its tile could not take ARMED down, and
+`HouseBuzzer` gave `RevokeLanded` no buzz (D-156).
+
+**Now, at the house** (`Rules.contact`). The same four effects are built for every touch, and the
+boundary narrows each phone to one as before (D-134, D-216, D-219, D-220). Two contents change:
+
+1. **The armed phone's answer says what the touch did with its Revoke**: `Effect.AbilityFired` gains
+   `touch: ArmedTouch`, `Landed` when this phone's Revoke landed on the other phone, `Spent` when the
+   touch spent it on nobody (the other phone was already out, or a forged self-touch), and `None` on
+   every Surge, Isolate, Static and Egress answer. Between two armed phones the lower seat's lands
+   (D-220); the other is Revoked and is sent `RevokeLanded` in its `Spent`'s place.
+2. **The landing carries the Long on the touch that Revoked its seat**: `Effect.RevokeLanded` gains
+   `haptic`, `Long` on the seat `landed` names and `null` on every other, so a couch phone touched
+   again stays silent (D-156's reason holds for the re-assertion). Only `null` or `Long` can be
+   constructed.
+
+Both are decided in `Rules.kt` and read off the effect by `HouseBuzzer` (`AbilityFired -> haptic`,
+`RevokeLanded -> haptic`), D-134's *the buzz rides the effect*. This is a sixth Long beside D-135's five,
+by the owner's ruling; `Haptic.Long`'s KDoc says so.
+
+**What it tells whom.** The armed phone learns whether its own Revoke connected, which the owner
+accepted (*the Insider learns from their own screen that the Revoke connected*). `Spent` therefore
+tells an Insider the phone it touched was already out, which that player's defunct lamp in the room
+already shows. `landed` names one of the touch's two phones or nobody: no third seat is read (pinned
+below), and only an armed phone is ever told it, as only an armed phone was ever sent
+`AbilityFired` (D-216). The Revoked phone learns it was just Revoked, which its lamp told it first
+(rule 7). The *unarmed* side of a touch that revoked nobody gets `ContactAnswered` and no buzz, as
+before. Rule 1 holds where it was written: no answer is absent and no frame is shorter; the branch is
+in what an effect says, never in which effects exist or who they reach.
+
+**The wire: one frame of one size, still.** `RoundMessage.AbilityFired`'s one digit (D-258) gains two
+values, `SPENT_AT_A_TOUCH` (2) and `LANDED_AT_A_TOUCH` (3), still under the name `cooldownStarted`,
+with `touch` and `haptic` read off it. `RoundMessage.RevokeLanded`'s nine-character pad becomes one
+digit, `hapticAtLanding` (0 or 1), a fifteen-character name, `cooldownStarted`'s length, so the frame
+is `AbilityFired`'s to the byte. No kind, row, class or schema entry changed: `ABILITY_FIRED` still
+reaches the living Insider who acted, `REVOKE_LANDED` still the two out classes. **Every answer a
+touch can put on a phone is 117 bytes at seq 1**, landed, spent, unarmed, just Revoked or already
+out, and the same as each other at every sequence number from 1 to a million
+(`ContactAnswerSizeTest`).
+
+**Now, on the armed phone** (`FlowModel`). An `AbilityFired` whose `touch` is `Spent` or `Landed`
+goes to `armSpentAtATouch`, which takes ARMED down (`armEnded`); D-286's `ownArmClock` keeps running
+from the hold, so the tile reads COOLING DOWN, in `Ramp.Dim`, at once, and READY at the hold's 61 s
+exactly as without a touch. Landed or not, the tile does the same; only the motor tells the two apart.
+A touch's answer no longer reaches `ownFireAnswered`, which closes D-262's noted limit (an armed
+contact read as an in-flight Tier-2 fire's answer). Nothing is sent. A Resident's phone is unchanged:
+no Resident is armed, so none is ever sent `AbilityFired`.
+
+**Recording 39**: the `AbilityFired` effect row gains `touch=` and the `RevokeLanded` row gains
+`haptic=`. No event or state row moved. `HouseAir` (the bench's stand-in hop) tells an out seat
+`RevokeLanded.Silent`.
+
+**No light, copy or other timing moved.** The tile's words and inks are D-286's.
+
+**Proved, each red against the injected bug first.**
+
+- `LandedRevokeTest` (core, new): a landed Revoke in both seat orders and with the arm on the
+  higher seat, an armed touch on a seat already out (spent, silent), two armed phones, an unarmed touch
+  and a couch phone re-touched (silent), and *the armed answer reads only the touch's two phones*
+  (a third seat out, armed, or an Insider changes nothing). *The answer always `Spent`:* `Insider
+  below: the armed phone was not told its Revoke landed. Expected <[AbilityFired(actor=Seat(index=1),
+  cooldownStarted=true, touch=Landed)]>, actual <[…touch=Spent)]>`. *The landing never buzzing:*
+  `Insider below. Expected <[RevokeLanded(seat=Seat(index=3), haptic=Long)]>, actual
+  <[RevokeLanded(seat=Seat(index=3), haptic=null)]>`. *The answer reading whether any other seat is
+  out* (`&& state.revoked.isEmpty()`): `case 0: a third seat's state reached the touch's answers`.
+- `AbsentEffectIsTheLeakTest` (core), *contacting a revoked target is indistinguishable from
+  contacting a live one*: it compared the two streams line for line, and now compares the effect
+  classes in order, the deliveries per effect, and every line with the two ruled fields set aside,
+  then pins those two. *Always `Spent`:* `the armed phone was not told whether its own Revoke landed.
+  Expected <[Landed, Spent]>, actual <[Spent, Spent]>`; *no landing buzz:* `the touch buzzed a phone
+  that was already out, or did not buzz the one it put out. Expected <[Long, null]>, actual <[null,
+  null]>`. `TouchAnsweredOnceTest` went red with both.
+- `ContactAnswerSizeTest` (model), *every answer a touch can send is one length on the wire whatever
+  it says*, and *the touch's digit survives the wire*. *The landing's wire name shortened to `haptic`:*
+  `at seq 1 an armed touch is 117 bytes and the Revoked target's (Long) 108`.
+- `HouseBuzzTest` (app), *aLandedRevokeBuzzesLongOnBothPhonesAndNoOtherTouchDoes*, in process and off
+  the wire. *The wire's `AbilityFired` silenced:* `off the wire, AbilityFired(…touch=Landed). Expected
+  <[[Buzz(millis=750)]]>, actual <[]>`, with *theWireBuzzesWhateverTheEffectBuzzed* (`AbilityFired
+  buzzes differently off the wire than it does in process. Expected <Long>, actual <null>`) and the app
+  root sweep. That sweep counted per kind and went red on the change itself (a silent `AbilityFired`
+  overwrote the buzzing one's count); it now counts per effect.
+- `PublicCooldownTest` (ui), *aTouchThatSpentTheArmTakesArmedDownAtOnce* (landed and spent) and
+  *aTouchsAnswerIsNotATier2FiresAnswer*. *The touch's answer routed to `ownFireAnswered` as before:*
+  `Landed: ARMED outlived the touch that spent it expected:<Cooldown> but was:<Armed>` and `the touch's
+  answer restarted the Access bar expected:<PublicCooldown(seconds=46, elapsed=31)> but
+  was:<PublicCooldown(seconds=121, elapsed=0)>`. *aContactWhileArmedLeavesTheArmsOwnCooldownRunning…*
+  now asserts COOLING DOWN from the touch, not from 20 s.
+- `ContactRadioBenchTest` (app cheats, real sockets), *aLandedRevokeIsOneFrameOnEachPhoneAndBothSayLong*:
+  the Insider's socket gets exactly `AbilityFired(touch=Landed)`, the target's exactly the buzzing
+  landing, both decode to `Long` through `HouseBuzzer`'s own mapping, and no other socket moves.
+
+Older assertions that held the pre-ruling frames now assert the ruling: `RulesTest`'s R1 case,
+`ArmingTest`, `RevokeArmWindowTest`, `TouchFrameSizeTest`, `AbilityWiringTest`, `ReplayTest` (the
+target's landing compared as *one landing*), `ClientTranscriptTest` (rows gained `|touch=`) and
+`RoundWireTest` (every effect, and seat-free).
+
+**Looked at.** The Insider's page 2 through the render harness at 600×1300, 3 s after a hold and
+then just after the house's `LANDED_AT_A_TOUCH`: REVOKE reads ARMED . TOUCH THEIR PHONE with a full
+bright bar before, and COOLING DOWN in `Ramp.Dim` with the bar just started after. The chip at the top
+right reads ARMED in both; that is the perimeter chip, the same on every phone, not the Revoke.
+
+**Not on a phone.** The Long's feel and its audibility beside the target are for the two-phone pass.
+
+### D-291 · **The five-second grace after a touch is a named rule: the Revoking Insider's phone cannot report its target for 5 s, and can after; a phone not in the touch can at once — built; nothing on the wire moved**
+
+**The ruling** (owner, 2026-11-18, same section, option a): *the house's 5 s debounce between the
+same two phones becomes a deliberate rule: a grace after a Revoke during which neither phone of the
+pair can report the other. After the grace, anyone can report, the Insider included, and their circle
+warns them first. A neighbour already within 30 cm of the Revoked player can report at once. That is
+accepted under U3.*
+
+**Now.** `ContactGate.DEBOUNCE_TICKS` is `ContactGate.PAIR_GRACE_TICKS`, still five seconds, with a
+KDoc citing the ruling, and the question it answers is one named function, `inPairGrace(minted,
+at)`: under five seconds since a pair last minted, the pair mints nothing, contact or report, either
+way; at five seconds it may again. It reads the pair alone (`ContactHouse` carries no role, arm or
+Revoke), so the grace after a Revoke is the grace after any touch, and a third phone is never in it.
+The value, the report's readings and span, and the RSSI floor are unchanged; the report's distance and
+hold move with UWB (Q5), not here. No event, effect, frame or recording moved.
+
+**Proved, each red against the injected bug first** (*`inPairGrace` always false*).
+
+- `PairGraceTest` (core, new: the resolver and the rules together, one arrival a second): *the
+  Revoking Insider's phone does not report inside the grace and does at its end*, *one tick before the
+  grace ends is still inside it* (`the Insider's phone reported a tick before the grace ended.
+  Expected <[]>, actual <[MeetingCalled(at=Tick(step=799), caller=Seat(index=1),
+  trigger=RevokeReported(reported=Seat(index=3)))]>`), and *a neighbour who was not in the touch
+  reports as soon as its own readings count*, one second after the hit, while the Insider's phone is
+  still held. Its fourth case pins the five seconds.
+- `ContactRadioBenchTest` (app cheats, real sockets, the fake radio):
+  *theRevokingInsidersPhoneReportsItsTargetOnlyAfterTheGrace* (`the Insider's phone reported 20 ticks
+  after the hit, inside the grace`) and *aNeighbourWhoWasNotInTheTouchReportsInsideTheGrace*. Three
+  older bench cases and D-290's bench case went red with it: the Insider's phone reported its target at the touch.
+- `ContactResolverTest`'s two debounce cases (`re-minted inside five seconds`).
+
+**Not on a phone.**
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

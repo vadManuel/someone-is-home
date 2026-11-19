@@ -223,6 +223,12 @@ class RecordingTest {
      * target's `RevokeLanded`, must still be identical. Whether the contact landed on the target is
      * `AbsentEffectIsTheLeakTest`'s comparison, where both runs are armed and the streams are equal
      * line for line.
+     *
+     * **And one more since D-290** (the owner's 2026-11-18 ruling): the target's `RevokeLanded` is
+     * `haptic=Long` where the Revoke landed and `haptic=none` where it did not. In the second run the
+     * target is still Live, so that line reaches no phone at all; in the first it reaches the one phone
+     * the touch put out. Its haptic is compared as *one landing*, and every other line still must be
+     * identical.
      */
     @Test
     fun `order changes the state but never the visible effect stream`() {
@@ -243,21 +249,33 @@ class RecordingTest {
         assertEquals(listOf(3), stateA.revoked.map { it.index }, "arming before contact must land")
         assertEquals(emptyList(), stateB.revoked.map { it.index }, "contact before arming must not")
 
+        val armedAnswer = "AbilityFired|actor=1|cooldownStarted=true|touch=Landed"
+        val landings = setOf("RevokeLanded|seat=3|haptic=Long", "RevokeLanded|seat=3|haptic=none")
         fun answeredAsOne(transcript: List<String>): List<String> = transcript.map { line ->
-            if (line == "AbilityFired|actor=1|cooldownStarted=true" || line == "ContactAnswered|seat=1") {
-                "THE ACTOR'S ONE ANSWER"
-            } else {
-                line
+            when (line) {
+                armedAnswer, "ContactAnswered|seat=1" -> "THE ACTOR'S ONE ANSWER"
+                in landings -> "THE TARGET'S ONE LANDING"
+                else -> line
             }
         }
         // The actor's answer lines only: since T1 (D-220) the touch also answers its target, seat 3,
         // and that line is the same in both runs and is compared below with everything else.
         fun actorAnswers(transcript: List<String>) =
-            transcript.filter { it == "AbilityFired|actor=1|cooldownStarted=true" || it == "ContactAnswered|seat=1" }
+            transcript.filter { it == armedAnswer || it == "ContactAnswered|seat=1" }
         assertEquals(
-            listOf("AbilityFired|actor=1|cooldownStarted=true"),
+            listOf(armedAnswer),
             actorAnswers(recordingA.effectTranscript),
-            "an armed touch was not answered as a spent Revoke, exactly once",
+            "an armed touch was not answered as a landed Revoke, exactly once",
+        )
+        assertEquals(
+            listOf("RevokeLanded|seat=3|haptic=Long"),
+            recordingA.effectTranscript.filter { it in landings },
+            "the landed Revoke did not buzz the phone it put out (D-290)",
+        )
+        assertEquals(
+            listOf("RevokeLanded|seat=3|haptic=none"),
+            recordingB.effectTranscript.filter { it in landings },
+            "a touch that landed nothing buzzed its target",
         )
         assertEquals(
             listOf("ContactAnswered|seat=1"),

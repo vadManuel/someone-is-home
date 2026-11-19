@@ -50,6 +50,12 @@ class Recording(
     }
 
     companion object {
+        // 39: two effect rows gain a field (the owner's 2026-11-18 ruling, D-290). `AbilityFired`
+        // gains `touch=`, what an armed touch did with the actor's Revoke (`Landed`, `Spent`, or
+        // `None` on every other fire), and `RevokeLanded` gains `haptic=`, `Long` on the touch that
+        // Revoked its seat and `none` on every other. A version 38 effect row is missing both. No
+        // event or state row moved.
+        //
         // 38: the host's own seat (the owner's 2026-11-18 ruling, D-289). `RoundArmed` gains `host=`
         // (a seat or `none`) and the state row gains `host=`: the notice names an out host who goes
         // dark and no other out seat (D-283), so a replay that lost the seat would name nobody where
@@ -309,7 +315,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/38"
+        const val HEADER = "someone-is-home/recording/39"
     }
 }
 

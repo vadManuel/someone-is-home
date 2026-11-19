@@ -161,7 +161,7 @@ class TouchFrameSizeTest {
             // Content: the armed one is the spent Revoke, the rest are the padded answer.
             fun messageOf(frame: String): RoundMessage? = (TransportWire.decodeOrNull(frame) as? TransportFrame.Carry)
                 ?.let { (RoundWire.decodeOrNull(it.body) as? RoundBody.Push)?.message }
-            assertEquals(RoundMessage.AbilityFired(cooldownStarted = true), messageOf(armedInsider.single()))
+            assertEquals(RoundMessage.AbilityFired(RoundMessage.AbilityFired.LANDED_AT_A_TOUCH), messageOf(armedInsider.single()))
             for (frame in unarmedInsider + unarmedPartner + residentA + residentB) {
                 assertEquals(RoundMessage.ContactAnswered(RoundMessage.ContactAnswered.PAD), messageOf(frame))
             }
@@ -174,8 +174,8 @@ class TouchFrameSizeTest {
             }
 
             // The Revoked partner's one frame is the Revoke landing, padded to the touch's size (S1).
-            assertEquals(listOf<RoundMessage?>(RoundMessage.RevokeLanded.Padded), revoked.map(::messageOf))
-            println("S1 REVOKED PARTNER — ${revoked.single().length} BYTES (RevokeLanded, padded)")
+            assertEquals(listOf<RoundMessage?>(RoundMessage.RevokeLanded.Buzzing), revoked.map(::messageOf))
+            println("S1 REVOKED PARTNER — ${revoked.single().length} BYTES (RevokeLanded, buzzing)")
 
             // **Both seat orders, armed and unarmed: one frame per touching socket** (T1, D-220).
             // Until T1, when the target sat below the Insider the resolver's first half was the
@@ -207,11 +207,11 @@ class TouchFrameSizeTest {
                 }
             }
             assertEquals(
-                listOf<RoundMessage?>(RoundMessage.RevokeLanded.Padded), armedAbove.getValue(0).map(::messageOf),
+                listOf<RoundMessage?>(RoundMessage.RevokeLanded.Buzzing), armedAbove.getValue(0).map(::messageOf),
                 "the lower-seated target was not sent exactly its Revoke landing",
             )
             assertEquals(
-                listOf<RoundMessage?>(RoundMessage.AbilityFired(cooldownStarted = true)), armedAbove.getValue(1).map(::messageOf),
+                listOf<RoundMessage?>(RoundMessage.AbilityFired(RoundMessage.AbilityFired.LANDED_AT_A_TOUCH)), armedAbove.getValue(1).map(::messageOf),
                 "the higher-seated armed Insider was not sent exactly its spent Revoke",
             )
             for (frame in unarmedAbove.getValue(0) + unarmedAbove.getValue(1)) {

@@ -1,5 +1,6 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.ArmedTouch
 import home.someoneshome.model.SubroutineInstance
 import home.someoneshome.model.SubroutineQuestion
 import home.someoneshome.model.MalformedSubroutineParameters
@@ -1212,11 +1213,9 @@ class FlowModel(
      *
      * `AbilityFired` does not name the ability (D-239 (b)), so this is how the phone knows which
      * request an answer is for: its own last one. A hold takes two seconds and the answer comes
-     * back well inside that, so at most one fire is ever in flight. ⚠️ **The limit:** an armed
-     * Revoke's contact is answered with the same `AbilityFired(true)`, and one that lands inside the
-     * round trip of a Tier-2 fire is read as that fire's answer; the Access bar then restarts a round
-     * trip early, or, if the fire fell into a running pool, restarts when it should not have (late,
-     * the safe direction). A wire answer that named the ability would close it.
+     * back well inside that, so at most one fire is ever in flight. An armed Revoke's contact used
+     * to be answered with the same `AbilityFired(true)` and could be read as a Tier-2 fire's answer;
+     * since D-290 it says it is a touch's ([ArmedTouch]), and never reaches [ownFireAnswered].
      */
     private var awaitingFire: Long? = null
 
@@ -1549,6 +1548,18 @@ class FlowModel(
     }
 
     /**
+     * **The house spent this phone's armed Revoke at a touch, so ARMED comes down now** (the
+     * owner's 2026-11-18 ruling, D-290). Until D-290 the touch's answer could not be told from an
+     * Egress's and the tile held ARMED until 20 s from the hold, over an arm the house had already
+     * cleared. Now the answer says it was a touch's, and the tile goes straight to COOLING DOWN:
+     * [armEnded], with the arm's own clock ([PanelState.ownArmClock], D-286) still running from the
+     * hold, because the house spent the cooldown at the arm and restarts none at the touch. Landed or
+     * not, the tile does the same; only the motor tells the two apart (a Long on a landed one).
+     * Nothing is sent, and no other clock moves.
+     */
+    private fun armSpentAtATouch() = armEnded()
+
+    /**
      * **Every clock the house started on this phone, read against the moment its push arrived**
      * (D-239, D-243; V4, D-269). Called by `FlowHost` at each whole second of a running clock. It
      * counts from the push; see [PublicCooldown].
@@ -1864,8 +1875,8 @@ class FlowModel(
      *
      * **A fire into a running pool restarts nothing**: the house spent nothing (`cooldownStarted =
      * false`), so the bar keeps counting. **An answer with no fire of this phone's in flight moves
-     * nothing either**: that is an armed Revoke's contact, and the REVOKE tile's ARMED is D-239's
-     * open question, untouched here.
+     * nothing either**: that is an Egress's. An armed Revoke's contact no longer comes here (D-290):
+     * it says it is a touch's, and [armSpentAtATouch] takes it.
      */
     private fun ownFireAnswered(cooldownStarted: Boolean) {
         val weight = awaitingFire
@@ -2611,7 +2622,15 @@ class FlowModel(
             // only thing a Tier-2 fire sends back to the actor (`gdd.md:398`), and what it moves is
             // the actor's own Access bar: *same cooldown spent* (`gdd.md:357`), never a light, a
             // sound, a screen or anything about the target. See [ownFireAnswered].
-            is RoundMessage.AbilityFired -> ownFireAnswered(message.cooldownStarted)
+            //
+            // **An armed touch's answer takes ARMED down instead** (the owner's 2026-11-18 ruling,
+            // D-290): the house spent the arm at the touch, landed or not, so the tile goes to
+            // COOLING DOWN at once ([armSpentAtATouch]). The Long buzz on a landed one is the
+            // motor's, off the same message (`HouseBuzzer`); the tile does the same for both.
+            is RoundMessage.AbilityFired -> when (message.touch) {
+                ArmedTouch.None -> ownFireAnswered(message.cooldownStarted)
+                ArmedTouch.Spent, ArmedTouch.Landed -> armSpentAtATouch()
+            }
 
             // **A touch, answered, and the screen does not move** (R1, D-216). Every touch puts one
             // of these, or an armed Insider's `AbilityFired`, on each phone that touched, so that the

@@ -86,7 +86,7 @@ data class ContactMemory(
      * of [ContactGate.MUTUAL_TICKS] and [ContactGate.REPORT_SPAN_TICKS] (D-236: a report counts them).
      */
     val heard: List<ContactHeard>,
-    /** The last contact minted per unordered pair, younger than [ContactGate.DEBOUNCE_TICKS]. */
+    /** The last contact or report minted per unordered pair, younger than [ContactGate.PAIR_GRACE_TICKS]. */
     val minted: List<ContactMinted>,
     /** Uploads already taken, younger than [ContactGate.DUPLICATE_TICKS], so a second delivery is recognised. */
     val received: List<ContactReceived>,
@@ -213,8 +213,26 @@ object ContactGate {
      */
     const val MUTUAL_TICKS: Long = 2L * Balance.TICKS_PER_SECOND
 
-    /** **Ruled: one contact per pair per five seconds** (D-212's scoping, ruling 4). */
-    const val DEBOUNCE_TICKS: Long = 5L * Balance.TICKS_PER_SECOND
+    /**
+     * **The pair's grace: five seconds after two phones mint anything, they mint nothing more
+     * between them** (D-212's scoping, ruling 4; named a rule by the owner's 2026-11-18 ruling,
+     * option a, D-291).
+     *
+     * It began as a debounce, one contact per pair per five seconds, so that one held touch is one
+     * touch. It is also, and deliberately, **the grace after a Revoke**: for five seconds after the
+     * touch that Revokes a phone, neither phone of that pair can report the other. Without it the
+     * Insider's own phone, still within reach of the player it just Revoked, would report them on its
+     * next two uploads and ring the house at the very touch. **After the grace anyone can report,
+     * the Insider who did the Revoke included**: the owner ruled that the Insider may report the
+     * player they Revoked, and that the reporter's own circle warns them first.
+     *
+     * It is a fact about the pair and never about who is in it: no role, no arm, no Revoke is read
+     * ([ContactHouse] carries none). **A third phone is not in the pair**, so a neighbour already
+     * within reach of the Revoked player can report at once; the owner accepted that under U3.
+     *
+     * Ruled at five seconds; the report's own distance and hold move with UWB, not this.
+     */
+    const val PAIR_GRACE_TICKS: Long = 5L * Balance.TICKS_PER_SECOND
 
     /**
      * **One upload interval, in ticks: one second**, the same value as `SightingUpload.CADENCE_MILLIS`
@@ -296,8 +314,8 @@ internal class ContactHouse private constructor(
  * 4. **Each pair heard this arrival is judged:** a contact if each side has heard the other within
  *    [ContactGate.MUTUAL_TICKS]; a report for each side that heard a Revoked seat in
  *    [ContactGate.REPORT_READINGS] uploads within [ContactGate.REPORT_SPAN_TICKS].
- * 5. **A pair minted within [ContactGate.DEBOUNCE_TICKS] mints nothing**; otherwise everything that
- *    applies to it is minted at [at] and the pair is stamped once.
+ * 5. **A pair inside its grace mints nothing** ([inPairGrace], [ContactGate.PAIR_GRACE_TICKS],
+ *    D-291); otherwise everything that applies to it is minted at [at] and the pair is stamped once.
  */
 fun resolveContacts(
     memory: ContactMemory,
@@ -338,7 +356,7 @@ fun resolveContacts(
         it.observer.index == observer.index && it.target.index == target.index && at.step - it.at.step <= ticks
     }
 
-    var minted = memory.minted.filter { at.step - it.at.step < ContactGate.DEBOUNCE_TICKS }
+    var minted = memory.minted.filter { inPairGrace(it, at) }
     val events = mutableListOf<Event>()
     val pairs = fresh
         .map { if (it.observer.index < it.target.index) it.observer to it.target else it.target to it.observer }
@@ -361,8 +379,8 @@ fun resolveContacts(
                 add(Event.MeetingCalled(at, high, MeetingTrigger.RevokeReported(low)))
             }
         }
-        val debounced = minted.any { it.low.index == low.index && it.high.index == high.index }
-        if (applies.isEmpty() || debounced) continue
+        val graced = minted.any { it.low.index == low.index && it.high.index == high.index }
+        if (applies.isEmpty() || graced) continue
         events += applies
         minted = minted + ContactMinted(low, high, at)
     }
@@ -378,6 +396,16 @@ fun resolveContacts(
         taken = taken,
     )
 }
+
+/**
+ * **Whether a pair minted at [minted] is still inside its grace at [at]** (D-291, the owner's
+ * 2026-11-18 ruling, option a). The one question [ContactGate.PAIR_GRACE_TICKS] answers: under five
+ * seconds since the pair last minted, the pair mints nothing, neither a contact nor a report either
+ * way, and at five seconds it may again. Asked of the pair alone, never of a role, an arm or a
+ * Revoke, so the grace after a Revoke is the same grace as after any touch.
+ */
+internal fun inPairGrace(minted: ContactMinted, at: Tick): Boolean =
+    at.step - minted.at.step < ContactGate.PAIR_GRACE_TICKS
 
 /**
  * **Seat order, across every pair minted on one arrival**: by the seat that acts or calls, then by

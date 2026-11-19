@@ -62,7 +62,7 @@ class RosterGapRender {
 
         val couch = FlowModel(PanelState(screen = ScreenId.Home, houseAttached = true), meeting = MeetingModel())
         couch.houseSaid(RoundMessage.RosterIssued(roster))
-        couch.houseSaid(RoundMessage.RevokeLanded.Padded)
+        couch.houseSaid(RoundMessage.RevokeLanded.Buzzing)
         for (voter in listOf(1, 3, 4, 5)) {
             couch.houseSaid(RoundMessage.VoteSelectionShown(voter = Seat(voter), selection = Seat(1)))
         }

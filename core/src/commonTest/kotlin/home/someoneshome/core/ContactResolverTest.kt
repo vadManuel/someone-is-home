@@ -190,7 +190,7 @@ class ContactResolverTest {
 
         val once = Feed()
         assertEquals(emptyList(), once.at(t0, up(2, hears(6))), "one reading reported a Revoked seat")
-        for (tick in (t0 + 1)..(t0 + ContactGate.DEBOUNCE_TICKS * 2) step 10) {
+        for (tick in (t0 + 1)..(t0 + ContactGate.PAIR_GRACE_TICKS * 2) step 10) {
             assertEquals(emptyList(), once.at(tick, up(2)), "one reading reported a Revoked seat later, at $tick")
         }
 
@@ -342,7 +342,7 @@ class ContactResolverTest {
 
     @Test
     fun `one contact per pair per five seconds - in either direction and whatever it was`() {
-        val gap = ContactGate.DEBOUNCE_TICKS
+        val gap = ContactGate.PAIR_GRACE_TICKS
         assertEquals(100L, gap)
         val f = Feed()
         assertEquals(contacts(2, 3), shape(f.at(t0, up(2, hears(3)), up(3, hears(2)))))
@@ -382,8 +382,8 @@ class ContactResolverTest {
         f.at(t0, up(2, hears(6)))
         val second = up(2, hears(6))
         assertEquals(listOf(report(2, 6)), shape(f.at(t0 + ContactGate.UPLOAD_TICKS, second)))
-        assertEquals(emptyList(), f.at(t0 + ContactGate.DEBOUNCE_TICKS + 20, second), "the duplicate reported again")
-        assertEquals(emptyList(), f.at(t0 + ContactGate.DEBOUNCE_TICKS + 30, second), "two duplicates counted as two readings")
+        assertEquals(emptyList(), f.at(t0 + ContactGate.PAIR_GRACE_TICKS + 20, second), "the duplicate reported again")
+        assertEquals(emptyList(), f.at(t0 + ContactGate.PAIR_GRACE_TICKS + 30, second), "two duplicates counted as two readings")
     }
 
     // ----------------------------------------------------------------------------------------------

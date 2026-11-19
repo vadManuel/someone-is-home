@@ -535,9 +535,9 @@ class OpeningCooldownTest {
         assertEquals(
             listOf(
                 Effect.ContactAnswered(Seat(1)),
-                Effect.RevokeLanded(Seat(1)),
+                Effect.RevokeLanded(Seat(1), haptic = null),
                 Effect.ContactAnswered(Seat(3)),
-                Effect.RevokeLanded(Seat(3)),
+                Effect.RevokeLanded(Seat(3), haptic = null),
             ),
             contact.effects,
             "an ability that fired on a spent cooldown said something different",

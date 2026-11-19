@@ -68,7 +68,7 @@ class ContactUploaderTest {
     /** R8, for both ways out: the cadence and the size hold, scanning stops, nothing heard goes up. */
     @Test
     fun anOutPhoneKeepsUploadingOnTheBeatAtOneSizeAndReportsNothing() {
-        for (out in listOf<RoundMessage>(RoundMessage.RevokeLanded.Padded, RoundMessage.RestrainedTakeover(Haptic.Long))) {
+        for (out in listOf<RoundMessage>(RoundMessage.RevokeLanded.Buzzing, RoundMessage.RestrainedTakeover(Haptic.Long))) {
             val (up, radio, sent) = rig()
             up.heard(RoundMessage.ContactSeedIssued(seed))
             up.beat()
@@ -89,7 +89,7 @@ class ContactUploaderTest {
         val (up, radio, _) = rig(window = { ContactWindow(w) })
         up.heard(RoundMessage.ContactSeedIssued(seed))
         up.beat(); up.beat()
-        up.heard(RoundMessage.RevokeLanded.Padded)
+        up.heard(RoundMessage.RevokeLanded.Buzzing)
         w = 11L
         up.beat()
         assertEquals(
@@ -126,7 +126,7 @@ class ContactUploaderTest {
             up.beat()
             assertEquals(emptyList(), faults, "a fault went up before the phone was in a round")
             up.heard(RoundMessage.ContactSeedIssued(seed))
-            if (out) up.heard(RoundMessage.RevokeLanded.Padded)
+            if (out) up.heard(RoundMessage.RevokeLanded.Buzzing)
             repeat(3) { up.beat() }
             assertEquals(listOf(cause), faults, "out=$out, $cause: one onset did not go up exactly once, as itself")
         }
@@ -152,7 +152,7 @@ class ContactUploaderTest {
         for (out in listOf(false, true)) {
             val (up, _, faults) = evader()
             up.heard(RoundMessage.ContactSeedIssued(seed))
-            if (out) up.heard(RoundMessage.RevokeLanded.Padded)
+            if (out) up.heard(RoundMessage.RevokeLanded.Buzzing)
             up.beat()
             assertTrue(up.leftTheForeground(), "out=$out: leaving in a round did not count")
             up.beat()

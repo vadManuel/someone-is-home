@@ -280,9 +280,9 @@ class AbilityWiringTest {
         room.touch(insider, target)
         until("the touch Revoked the target", { "refusals=${room.house.contactRefusals} said=${room.said.takeLast(25)} insider=${insider.log.takeLast(10)}" }) { room.house.state.isRevoked(room.target) }
         until("the Insider's phone was told its Revoke fired") {
-            RoundMessage.AbilityFired(cooldownStarted = true) in insider.pushed
+            RoundMessage.AbilityFired(RoundMessage.AbilityFired.LANDED_AT_A_TOUCH) in insider.pushed
         }
-        until("the target's phone was told") { RoundMessage.RevokeLanded.Padded in target.pushed }
+        until("the target's phone was told") { RoundMessage.RevokeLanded.Buzzing in target.pushed }
         until("the target's phone went to the Revoked screen") { target.flow.state.screen == ScreenId.Revoked }
         assertTrue(
             room.house.emitted.any { it is Effect.AbilityFired && it.actor.index == room.insider.index && it.cooldownStarted },
@@ -371,8 +371,8 @@ class AbilityWiringTest {
             until("the host's touch Revoked the target", { "refusals=${room.house.contactRefusals} said=${room.said.takeLast(25)}" }) {
                 room.house.state.isRevoked(room.target)
             }
-            until("the host's phone was told its Revoke fired") { RoundMessage.AbilityFired(cooldownStarted = true) in host.pushed }
-            until("the target's phone was told") { RoundMessage.RevokeLanded.Padded in target.pushed }
+            until("the host's phone was told its Revoke fired") { RoundMessage.AbilityFired(RoundMessage.AbilityFired.LANDED_AT_A_TOUCH) in host.pushed }
+            until("the target's phone was told") { RoundMessage.RevokeLanded.Buzzing in target.pushed }
             until("the target's phone went to the Revoked screen") { target.flow.state.screen == ScreenId.Revoked }
         }
 
@@ -397,7 +397,7 @@ class AbilityWiringTest {
             host.flow.actions().armRevoke()
             until("the house armed the host's own Revoke") { room.house.state.cooldownArmed.any { it.index == room.insider.index } }
             room.touch(host, target)
-            until("the target's phone was told") { RoundMessage.RevokeLanded.Padded in target.pushed }
+            until("the target's phone was told") { RoundMessage.RevokeLanded.Buzzing in target.pushed }
             room.phones.forEach { it.ledger.beat("AFTER-THE-REVOKE") }
 
             // The lines exist, on the console.

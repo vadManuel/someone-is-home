@@ -1,6 +1,7 @@
 package home.someoneshome.app
 
 import home.someoneshome.platform.NoRadio
+import home.someoneshome.model.ArmedTouch
 import home.someoneshome.model.AssignedWork
 import home.someoneshome.model.ContactSeed
 import home.someoneshome.model.Destination
@@ -336,7 +337,11 @@ class HouseBuzzTest {
         Effect.MeetingCalling(Seat(1)),
         Effect.RosterIssued(Seat(1), emptyList()),
         Effect.ContactSeedIssued(Seat(1), ContactSeed("0123456789abcdef0123456789abcdef")),
-        Effect.RevokeLanded(Seat(1)),
+        Effect.RevokeLanded(Seat(1), haptic = null),
+        // D-290: the two halves of a landed Revoke, which buzz Long, and the armed answer that does not.
+        Effect.RevokeLanded(Seat(1), Haptic.Long),
+        Effect.AbilityFired(Seat(1), cooldownStarted = true, touch = ArmedTouch.Landed),
+        Effect.AbilityFired(Seat(1), cooldownStarted = true, touch = ArmedTouch.Spent),
         // A touch, answered (R1, D-216): silent, because every touch in the house sends one.
         Effect.ContactAnswered(Seat(1)),
         // The house notice (D-187, D-223): silent, because the gate's own push beside it buzzes.
@@ -380,6 +385,37 @@ class HouseBuzzTest {
             emptySet(), walked - known,
             "this file builds a kind the emit schema has never heard of",
         )
+    }
+
+    /**
+     * **D-290: a landed Revoke buzzes Long on both phones, and no other answer to a touch buzzes**
+     * (the owner's 2026-11-18 ruling). In process and off the wire alike: the armed phone's answer
+     * that says its Revoke landed, and the Revoked phone's landing. An arm spent on nobody, a Tier-2
+     * or Egress answer, an unarmed touch's answer and a couch phone's re-assertion stay silent.
+     */
+    @Test
+    fun aLandedRevokeBuzzesLongOnBothPhonesAndNoOtherTouchDoes() {
+        val long = listOf(HouseBuzz.script(Haptic.Long))
+        val landed = listOf(
+            Effect.AbilityFired(Seat(1), cooldownStarted = true, touch = ArmedTouch.Landed),
+            Effect.RevokeLanded(Seat(3), Haptic.Long),
+        )
+        val silent = listOf(
+            Effect.AbilityFired(Seat(1), cooldownStarted = true, touch = ArmedTouch.Spent),
+            Effect.AbilityFired(Seat(1), cooldownStarted = true),
+            Effect.AbilityFired(Seat(1), cooldownStarted = false),
+            Effect.ContactAnswered(Seat(1)),
+            Effect.RevokeLanded(Seat(3), haptic = null),
+        )
+        for (effect in landed + silent) {
+            val expected = if (effect in landed) long else emptyList()
+            val motor = RecordingHaptics()
+            HouseBuzzer(motor).heard(effect)
+            assertEquals(expected, motor.played, "in process, $effect")
+            val wire = RecordingHaptics()
+            HouseBuzzer(wire).heard(RoundWire.project(effect))
+            assertEquals(expected, wire.played, "off the wire, $effect")
+        }
     }
 
     /**
@@ -573,27 +609,29 @@ class HouseBuzzTest {
         )
         val draining = launch { round.run() }
 
-        val played = mutableMapOf<String, Int>()
+        // Counted per effect, not per kind: since D-290 one kind (`AbilityFired`, `RevokeLanded`)
+        // arrives buzzing in one value and silent in another, and both are walked.
+        val played = mutableListOf<Int>()
         kinds.forEachIndexed { index, effect ->
             val before = motor.count
             val push = RoundBody.Push(seq = index + 1L, message = RoundWire.project(effect))
             round.frameArrived(TransportFrame.Carry(RoundWire.encode(push)))
             withTimeout(5_000) { while (round.held < index + 1L) delay(1) }
-            played[EmitSchema.kindOf(effect).name] = motor.count - before
+            played += motor.count - before
         }
         draining.cancel()
 
-        val owed = kinds.filter { it.haptic() != null || it.ringing() }
-            .map { EmitSchema.kindOf(it).name }.toSet()
-        val silent = kinds.map { EmitSchema.kindOf(it).name }.toSet() - owed
+        val owed = kinds.indices.filter { kinds[it].haptic() != null || kinds[it].ringing() }.toSet()
+        val silent = kinds.indices.toSet() - owed
+        fun named(indices: Iterable<Int>) = indices.map { kinds[it] }.toSet()
 
         assertEquals(
-            emptySet(), owed.filter { played[it] == 0 }.toSet(),
+            emptySet(), named(owed.filter { played[it] == 0 }),
             "these kinds carry a haptic and the app root played nothing when one arrived — " +
                 "E-D1-1 exactly: a buzz nobody has a caller for is a buzz no player ever feels",
         )
         assertEquals(
-            emptySet(), silent.filter { (played[it] ?: 0) > 0 }.toSet(),
+            emptySet(), named(silent.filter { played[it] > 0 }),
             "these kinds carry no haptic and the phone went off anyway",
         )
         // And the sweep really did reach the motor, so a rig that silently delivered nothing

@@ -1,10 +1,12 @@
 package home.someoneshome.core
 
+import home.someoneshome.model.ArmedTouch
 import home.someoneshome.model.Balance
 import home.someoneshome.model.EmitSchema
 import home.someoneshome.model.Effect
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
+import home.someoneshome.model.Haptic
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
 import kotlin.test.Test
@@ -90,7 +92,7 @@ class AbsentEffectIsTheLeakTest {
         val base = armed()
 
         // A live target.
-        val (_, live) = run(base, listOf(
+        val (liveAfter, live) = run(base, listOf(
             Event.RevokeArmed(Tick(READY + 1), Seat(1)),
             Event.ContactMade(Tick(READY + 2), Seat(1), Seat(3)),
         ))
@@ -105,13 +107,43 @@ class AbsentEffectIsTheLeakTest {
         // revoked" case never revoked, and the differential below would compare two identical
         // live targets and pass for the one reason that means nothing.
         assertTrue(pre.isRevoked(Seat(3)), "the fixture never actually revoked anybody")
-        val (_, defunct) = run(pre, listOf(
+        val (defunctAfter, defunct) = run(pre, listOf(
             Event.RevokeArmed(Tick(READY + 1), Seat(1)),
             Event.ContactMade(Tick(READY + 2), Seat(1), Seat(3)),
         ))
 
-        assertEquals(live.toString(), defunct.toString(),
+        // **The same effects, in the same order, to the same phones**: nothing is absent, nothing is
+        // extra, and every phone that touched gets its one frame in both.
+        assertEquals(live.map { it::class.simpleName }, defunct.map { it::class.simpleName },
             "the effect stream differs, so the absence of an effect reveals the target was already revoked")
+        assertEquals(
+            live.map { e -> EmitSchema.deliveries(e, liveAfter).map { it.seat.index } },
+            defunct.map { e -> EmitSchema.deliveries(e, defunctAfter).map { it.seat.index } },
+            "the two touches were delivered to different phones",
+        )
+        // **D-290: two contents differ, each on one of the touch's own phones, and nothing else.**
+        // The owner ruled that the armed phone learns whether its Revoke landed and that a landed
+        // Revoke buzzes Long on both phones. With those two fields set aside the streams are the
+        // same line for line, so any other difference still fails here.
+        assertEquals(live.map(::ruledContentSetAside).toString(), defunct.map(::ruledContentSetAside).toString(),
+            "the streams differ in something other than the two contents the owner ruled on")
+        assertEquals(
+            listOf(ArmedTouch.Landed, ArmedTouch.Spent),
+            listOf(live, defunct).map { stream -> stream.filterIsInstance<Effect.AbilityFired>().single().touch },
+            "the armed phone was not told whether its own Revoke landed",
+        )
+        assertEquals(
+            listOf<Haptic?>(Haptic.Long, null),
+            listOf(live, defunct).map { stream -> stream.filterIsInstance<Effect.RevokeLanded>().single { it.seat == Seat(3) }.haptic },
+            "the touch buzzed a phone that was already out, or did not buzz the one it put out",
+        )
+    }
+
+    /** The two fields D-290 lets differ between a landed Revoke and one on a seat already out. */
+    private fun ruledContentSetAside(effect: Effect): Effect = when (effect) {
+        is Effect.AbilityFired -> effect.copy(touch = ArmedTouch.Spent)
+        is Effect.RevokeLanded -> effect.copy(haptic = null)
+        else -> effect
     }
 
     /**
@@ -134,9 +166,9 @@ class AbsentEffectIsTheLeakTest {
                 // landed, hit somebody already out, was fired at the actor, or was never armed. Since
                 // T1 (D-220) the first half of a touch answers both of its phones, so the pair is
                 // written once for each.
-                Effect.RevokeLanded(Seat(1)),
+                Effect.RevokeLanded(Seat(1), haptic = null),
                 Effect.ContactAnswered(Seat(3)),
-                Effect.RevokeLanded(Seat(3)),
+                Effect.RevokeLanded(Seat(3), haptic = null),
             ).toString(),
             unarmed.toString(),
         )
@@ -148,7 +180,7 @@ class AbsentEffectIsTheLeakTest {
         assertFalse(after.isRevoked(Seat(3)), "the fixture revoked somebody it should not have")
         assertEquals(
             emptyList(),
-            EmitSchema.deliveries(Effect.RevokeLanded(Seat(3)), after),
+            EmitSchema.deliveries(Effect.RevokeLanded(Seat(3), haptic = null), after),
             "a Revoke that landed on nobody was delivered to somebody",
         )
     }
@@ -169,7 +201,7 @@ class AbsentEffectIsTheLeakTest {
         assertTrue(after.isRevoked(Seat(3)), "the fixture never actually revoked anybody")
         assertEquals(
             listOf(Seat(3)),
-            EmitSchema.deliveries(Effect.RevokeLanded(Seat(3)), after).map { it.seat },
+            EmitSchema.deliveries(Effect.RevokeLanded(Seat(3), Haptic.Long), after).map { it.seat },
             "the Revoke landing reached the wrong phones",
         )
     }
@@ -193,7 +225,10 @@ class AbsentEffectIsTheLeakTest {
         }
 
         val armedState = reduce(base, Event.RevokeArmed(Tick(READY + 1), Seat(1))).state
-        assertEquals(listOf<Effect>(Effect.AbilityFired(Seat(1), cooldownStarted = true)), answerTo(armedState, Seat(1)))
+        assertEquals(
+            listOf<Effect>(Effect.AbilityFired(Seat(1), cooldownStarted = true, touch = ArmedTouch.Landed)),
+            answerTo(armedState, Seat(1)),
+        )
         assertEquals(listOf<Effect>(Effect.ContactAnswered(Seat(5))), answerTo(base, Seat(5)), "an unarmed Insider")
         assertEquals(listOf<Effect>(Effect.ContactAnswered(Seat(2))), answerTo(base, Seat(2)), "a Resident")
 

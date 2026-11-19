@@ -1,5 +1,6 @@
 package home.someoneshome.core
 
+import home.someoneshome.model.ArmedTouch
 import home.someoneshome.model.Balance
 import home.someoneshome.model.Ballot
 import home.someoneshome.model.Cooldown
@@ -1058,10 +1059,20 @@ private fun isolateOffers(state: GameState): List<Effect> {
  * the same length. The resolver mints both halves of every touch, so both phones are answered.
  *
  * Until R1 every actor was told `AbilityFired`, and the row ships that to living Insiders only: an
- * unarmed Insider's touch put a frame on their socket and a Resident's put nothing on theirs. The
- * branch below is on the **actor's own** armed state, which their phone already knows because they
- * held the tile down. It never reads the target, so nothing about what the touch did can reach the
- * frame.
+ * unarmed Insider's touch put a frame on their socket and a Resident's put nothing on theirs. Which
+ * *effect* a phone is answered with is still the **phone's own** armed state and nothing else, which
+ * its phone already knows because it held the tile down.
+ *
+ * ### What is inside the armed answer, and the Long buzz (the owner's 2026-11-18 ruling, D-290)
+ *
+ * The armed phone's `AbilityFired` says what the touch did with its Revoke: [ArmedTouch.Landed] or
+ * [ArmedTouch.Spent], one digit on the wire either way. The phone takes ARMED down at once on
+ * either, and buzzes Long on `Landed`; the phone the Revoke landed on is sent `RevokeLanded` with
+ * [Haptic.Long], and every other `RevokeLanded` carries none. **This is the one place the answer
+ * reads past the actor's own arm**, by the owner's ruling (*the Insider learns from their own screen
+ * that the Revoke connected*): `landed` is a fact about the touch's two phones, and it reaches only
+ * those two. It never changes which effects are built, who they are delivered to, or how long their
+ * frames are, so rule 1 holds where it was written: no answer is absent and no frame is shorter.
  *
  * ### One touch, answered once, by whichever half arrives first (T1, D-220)
  *
@@ -1136,10 +1147,26 @@ private fun contact(state: GameState, event: Event.ContactMade): Reduction<GameS
     // refused it immediately and was right to: the authority's stream then differed between a
     // Revoke that took and one that hit a seat already out.
     //
-    // The answer reads one thing, the phone's **own** armed state, which that phone already knows
-    // because it held the tile down. Nothing reads the other phone's.
-    fun answer(seat: Seat, armed: Boolean): Effect =
-        if (armed) Effect.AbilityFired(actor = seat, cooldownStarted = true) else Effect.ContactAnswered(seat = seat)
+    // Which effect answers a phone reads one thing, the phone's **own** armed state, which that phone
+    // already knows because it held the tile down. Nothing reads the other phone's.
+    //
+    // **D-290: what the armed answer says, and which landing buzzes** (the owner's 2026-11-18
+    // ruling). An armed phone is told whether its own Revoke landed, so its tile drops ARMED at once
+    // and its motor gives the Long buzz on a hit; the phone the Revoke landed on gets the Long on its
+    // `RevokeLanded`. Both are contents of effects built in every case, never a choice of which
+    // effects exist, and `landed` names one of these two seats or nobody.
+    fun answer(seat: Seat, armed: Boolean): Effect = if (armed) {
+        Effect.AbilityFired(
+            actor = seat,
+            cooldownStarted = true,
+            touch = if (landed != null && !sameSeat(landed, seat)) ArmedTouch.Landed else ArmedTouch.Spent,
+        )
+    } else {
+        Effect.ContactAnswered(seat = seat)
+    }
+
+    fun landing(seat: Seat): Effect =
+        Effect.RevokeLanded(seat = seat, haptic = if (landed != null && sameSeat(landed, seat)) Haptic.Long else null)
 
     // **A touch on oneself keeps the same four** (`gdd.md:393`): a self-target must come back the
     // shape of an other-target. A phone never hears itself (the resolver drops it), so only a forged
@@ -1149,9 +1176,9 @@ private fun contact(state: GameState, event: Event.ContactMade): Reduction<GameS
     } else {
         listOf(
             answer(actor, actorArmed),
-            Effect.RevokeLanded(seat = actor),
+            landing(actor),
             answer(target, targetArmed),
-            Effect.RevokeLanded(seat = target),
+            landing(target),
         )
     }
     return Reduction(next, effects)

@@ -199,3 +199,33 @@ enum class RadioCause {
     @kotlinx.serialization.SerialName("device")
     Device,
 }
+
+/**
+ * **What a touch did with an armed phone's Revoke, on that phone's own answer** (the owner's
+ * 2026-11-18 ruling, D-290). Carried by `Effect.AbilityFired.touch`.
+ *
+ * A touch spends an armed Revoke whether or not it lands (`Rules.contact`'s `revokeArms` filter), and
+ * until D-290 the armed phone was told only `AbilityFired(cooldownStarted = true)`, the same answer as
+ * an Egress fired into a ready clock, so its tile held ARMED until 20 s from the hold over an arm the
+ * house had already cleared. The three values are one digit each on the wire, so the frame keeps the
+ * touch's one length (D-216, D-219).
+ */
+enum class ArmedTouch(
+    /** The buzz the answer carries: Long when the Revoke landed (D-290), nothing otherwise. */
+    val haptic: Haptic?,
+) {
+    /** Not a touch's answer: a Surge, an Isolate, a Static or an Egress. */
+    None(null),
+
+    /**
+     * **A touch spent this phone's armed Revoke and it landed on nobody**: the other phone was
+     * already Revoked, or the touch was this phone's own. Between two armed phones the one whose
+     * Revoke did not land is the one Revoked, so its `Spent` is declined at the boundary and it is
+     * sent `RevokeLanded` in its place (D-220). No buzz: the owner ruled the Long for a landed
+     * Revoke only.
+     */
+    Spent(null),
+
+    /** **This phone's armed Revoke landed on the other phone of the touch.** The Long buzz (D-290). */
+    Landed(Haptic.Long),
+}

@@ -56,9 +56,9 @@ class RevokeArmWindowTest {
         assertEquals(
             listOf(
                 Effect.ContactAnswered(first),
-                Effect.RevokeLanded(first),
+                Effect.RevokeLanded(first, haptic = null),
                 Effect.ContactAnswered(Seat(2)),
-                Effect.RevokeLanded(Seat(2)),
+                Effect.RevokeLanded(Seat(2), haptic = null),
             ),
             after.reduction.effects,
             "a touch after the window was answered as anything but an unarmed touch",

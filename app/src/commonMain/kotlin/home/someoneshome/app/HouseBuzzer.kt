@@ -293,8 +293,9 @@ internal fun Effect.ringing(): Boolean = when (this) {
     is Effect.ContactAnswered, is Effect.AbilityBlanked, is Effect.NoticeIssued,
     is Effect.SubroutineGraded, is Effect.SubroutineProgressed, is Effect.SystemIntegrityLive,
     is Effect.SystemIntegrityBatched, is Effect.MessageDelivered, is Effect.HouseSignedOff,
-    // The Revoke landing says its thing once, like the takeover it mirrors; the roster is silent
-    // entirely and is one of the `null` rows in [haptic] below.
+    // The Revoke landing says its thing once, like the takeover it mirrors: a single Long on the
+    // touch that Revoked this phone (D-290), and the armed phone's answer says its single Long the
+    // same way. The roster is silent entirely and is one of the `null` rows in [haptic] below.
     is Effect.RevokeLanded, is Effect.RosterIssued, is Effect.ContactSeedIssued,
     is Effect.WorkOrderIssued, is Effect.ScanAnswered, is Effect.TerminalAnswered,
     is Effect.PresenceChanged,
@@ -331,7 +332,9 @@ internal fun Effect.ringing(): Boolean = when (this) {
  * The value is read off the effect and never computed: the house constructed it in the same
  * reduction that constructed the push (D-134), so there is nothing to decide here. Twelve kinds
  * carry one; the rest are counts, progress and content that update a screen already on the phone.
- * (Thirteen, since the Surge — see its branch, and D-135, which the Surge does *not* join.)
+ * (Thirteen, since the Surge — see its branch, and D-135, which the Surge does *not* join. Fifteen,
+ * since D-290: the armed phone's answer and the Revoke landing each carry a Long on a landed Revoke
+ * and nothing otherwise.)
  *
  * ### D-135's five, and where they are
  *
@@ -366,13 +369,20 @@ internal fun Effect.haptic(): Haptic? = when (this) {
     // meaning of the five that already mean something. The value is `Rules.kt`'s, like every other
     // one on this list; nothing is decided here.
     is Effect.Surged -> haptic
+    // **A landed Revoke buzzes Long on both phones of the touch** (the owner's 2026-11-18 ruling,
+    // D-290, the sixth Long beside D-135's five). The armed phone's answer carries it when its
+    // Revoke landed and nothing otherwise: a Surge, Isolate, Static or Egress answer is input echo,
+    // the phone in the hand that pressed the control, and a touch that spent the arm on nobody
+    // stays quiet by the same ruling (*on a landed Revoke only*).
+    is Effect.AbilityFired -> haptic
+    // The Revoked phone's half: Long on the touch that put it out, and nothing on every touch after
+    // (D-156, see the effect). Both values are `Rules.kt`'s; nothing is decided here.
+    is Effect.RevokeLanded -> haptic
 
     // ---- The rest arrive quietly, each for its own reason -------------------------------------
     // The lamp is a pure function of state (rule 5) and a buzz on every luminance change would be
     // a phone that vibrates through a whole round.
     is Effect.LampSet -> null
-    // Input echo. The phone that fired it is the phone in the hand that pressed the control.
-    is Effect.AbilityFired -> null
     // **A touch that changed nothing, and it must feel like nothing** (R1, D-216). Every touch in
     // the house sends one of these or an armed Insider's `AbilityFired`; a buzz on it would be a phone
     // going off in a dark room every time somebody brushed it.
@@ -399,11 +409,6 @@ internal fun Effect.haptic(): Haptic? = when (this) {
     // **Silent, for the roster's reason** (D-212). The radio's key rides the same arming burst, and
     // a buzz here is a second vibration on every phone at the one moment nobody has dispersed.
     is Effect.ContactSeedIssued -> null
-    // **Silent, and D-156 is why rather than taste** (see the effect). It is constructed on every
-    // contact so the authority's stream cannot report whether one landed, which means a buzz here
-    // would go off in the pocket of somebody already sitting out every time an Insider fired at
-    // them again. The signal the player actually gets is their lamp going dark in their hand (rule 7).
-    is Effect.RevokeLanded -> null
     is Effect.SubroutineGraded -> null
     is Effect.SubroutineProgressed -> null
     // **The meter never buzzes, in either form.** The live one moves whenever anybody in the house
@@ -528,10 +533,12 @@ internal fun RoundMessage.haptic(): Haptic? = when (this) {
     is RoundMessage.EgressSucceeded -> haptic
     is RoundMessage.RoundEnded -> haptic
     is RoundMessage.Surged -> haptic
+    // D-290: both phones of a landed Revoke, one digit each on the wire.
+    is RoundMessage.AbilityFired -> haptic
+    is RoundMessage.RevokeLanded -> haptic
 
     // ---- The rest arrive quietly. Each reason is on the effect-side branch it mirrors ---------
     is RoundMessage.LampSet -> null
-    is RoundMessage.AbilityFired -> null
     is RoundMessage.ContactAnswered -> null
     is RoundMessage.AbilityBlanked -> null
     is RoundMessage.NoticeIssued -> null
@@ -539,7 +546,6 @@ internal fun RoundMessage.haptic(): Haptic? = when (this) {
     is RoundMessage.RoleRevealed -> null
     is RoundMessage.RosterIssued -> null
     is RoundMessage.ContactSeedIssued -> null
-    is RoundMessage.RevokeLanded -> null
     is RoundMessage.SubroutineGraded -> null
     is RoundMessage.SubroutineProgressed -> null
     is RoundMessage.SystemIntegrityLive -> null

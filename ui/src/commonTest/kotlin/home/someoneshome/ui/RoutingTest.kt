@@ -806,7 +806,7 @@ class RoutingTest {
     @Test
     fun `the Revoke landing reaches the Revoked screen with the cause on it`() {
         val model = living(ScreenId.Page2)
-        model.houseSaid(RoundMessage.RevokeLanded.Padded)
+        model.houseSaid(RoundMessage.RevokeLanded.Buzzing)
         assertEquals(ScreenId.Revoked, model.state.screen, "the house took this player out and said nothing")
         assertEquals(OutBy.Revoked, model.state.outBy, "the screen blamed the room for the house's act")
 

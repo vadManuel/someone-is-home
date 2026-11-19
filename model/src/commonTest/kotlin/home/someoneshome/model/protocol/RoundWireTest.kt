@@ -1,5 +1,6 @@
 package home.someoneshome.model.protocol
 
+import home.someoneshome.model.ArmedTouch
 import home.someoneshome.model.AssignedWork
 import home.someoneshome.model.ContactSeed
 import home.someoneshome.model.Destination
@@ -96,7 +97,7 @@ class RoundWireTest {
         Effect.MeetingResult(restrained = Seat(2), voted = 6, living = 6, haptic = Haptic.Short),
         Effect.MeetingResolved(restrained = Seat(2), attribution = listOf(Seat(3) to Seat(2), Seat(4) to null)),
         Effect.RestrainedTakeover(Seat(3), Haptic.Long),
-        Effect.RevokeLanded(Seat(4)),
+        Effect.RevokeLanded(Seat(4), Haptic.Long),
         Effect.NoticeIssued(listOf(Seat(2), Seat(5))),
         Effect.MeetingEnded(Haptic.Long),
         Effect.EgressOpened(
@@ -202,6 +203,10 @@ class RoundWireTest {
         bothWays { Effect.StandAndWalkIn(it, Haptic.Long) }
         bothWays { Effect.VoteHeld(it, selection = Seat(2), locked = true) }
         bothWays { Effect.RestrainedTakeover(it, Haptic.Long) }
+        // D-290: what a touch did with the arm, and the landing's buzz, say nothing about the seat.
+        bothWays { Effect.AbilityFired(it, cooldownStarted = true, touch = ArmedTouch.Landed) }
+        bothWays { Effect.RevokeLanded(it, Haptic.Long) }
+        bothWays { Effect.RevokeLanded(it, haptic = null) }
         // **E-R1-1's whole safety.** The house says *you are the one calling* by choosing a socket;
         // if the seat rode inside the payload as well, the routing that answers the escalation would
         // have handed every phone the number the wire is built never to hand it.

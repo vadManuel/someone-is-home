@@ -241,7 +241,8 @@ object Transcript {
         is Effect.LampSet ->
             "LampSet|seat=${effect.seat.index}|luminance=${effect.luminance}"
         is Effect.AbilityFired ->
-            "AbilityFired|actor=${effect.actor.index}|cooldownStarted=${effect.cooldownStarted}"
+            // `touch=` (D-290): what an armed touch did with the actor's Revoke, `None` on every other fire.
+            "AbilityFired|actor=${effect.actor.index}|cooldownStarted=${effect.cooldownStarted}|touch=${effect.touch}"
         is Effect.ContactAnswered -> "ContactAnswered|seat=${effect.seat.index}"
         // Every seat but the actor's, beside its `AbilityFired` (D-263): who it was built for.
         is Effect.AbilityBlanked -> "AbilityBlanked|seat=${effect.seat.index}"
@@ -385,8 +386,9 @@ object Transcript {
         // The seat, because the recording is the authority's artifact and the authority is what
         // addressed it — `MeetingCalling`'s row, and the same one place these two deliberately
         // differ from their wire members.
+        // `haptic=` (D-290): `Long` on the touch that Revoked this seat, `none` on every other.
         is Effect.RevokeLanded ->
-            "RevokeLanded|seat=${effect.seat.index}"
+            "RevokeLanded|seat=${effect.seat.index}|haptic=${effect.haptic ?: "none"}"
         is Effect.MeetingEnded ->
             "MeetingEnded|haptic=${effect.haptic}"
         is Effect.EgressOpened ->

@@ -1,5 +1,6 @@
 package home.someoneshome.model.protocol
 
+import home.someoneshome.model.ArmedTouch
 import home.someoneshome.model.AssignedWork
 import home.someoneshome.model.ClientFacing
 import home.someoneshome.model.ContactSeed
@@ -82,6 +83,15 @@ sealed class RoundMessage {
      * `AbilityFired(cooldownStarted = …)` and read [cooldownStarted]. A value of any other width
      * cannot be constructed or decoded. [ContactAnswered] and [RevokeLanded] are padded to this
      * frame's one length (D-216, D-219).
+     *
+     * ### Two more digits, for an armed phone's touch (the owner's 2026-11-18 ruling, D-290)
+     *
+     * An armed phone's answer to a touch is this message, and until D-290 it was `STARTED`, the
+     * same frame an Egress into a ready clock is answered with, so the phone could not take ARMED
+     * down at the touch. It is now [SPENT_AT_A_TOUCH] or [LANDED_AT_A_TOUCH]: still one digit, so
+     * the frame is the touch's one length whichever it says, and still under the name
+     * `cooldownStarted`, because the touch's cooldown was started at the arm. [cooldownStarted] is
+     * true for both; [touch] says which, and [haptic] is the buzz the house put on it.
      */
     @ClientFacing
     @kotlinx.serialization.Serializable
@@ -90,21 +100,49 @@ sealed class RoundMessage {
         @kotlinx.serialization.SerialName("cooldownStarted") val cooldown: Int,
     ) : RoundMessage() {
 
-        /** The message for this phone: whether its cooldown started. */
+        /** The message for this phone: whether its cooldown started. Not a touch's answer. */
         constructor(cooldownStarted: Boolean) : this(if (cooldownStarted) STARTED else NOT_STARTED)
 
         init {
-            require(cooldown == STARTED || cooldown == NOT_STARTED) { "a cooldown is $STARTED or $NOT_STARTED" }
+            require(cooldown in NOT_STARTED..LANDED_AT_A_TOUCH) {
+                "a cooldown is $NOT_STARTED, $STARTED, $SPENT_AT_A_TOUCH or $LANDED_AT_A_TOUCH"
+            }
         }
 
-        /** Whether the ability spent its cooldown. */
-        val cooldownStarted: Boolean get() = cooldown == STARTED
+        /** Whether the ability spent its cooldown: every answer but [NOT_STARTED]. */
+        val cooldownStarted: Boolean get() = cooldown != NOT_STARTED
 
-        override fun toString(): String = "AbilityFired(cooldownStarted=$cooldownStarted)"
+        /** What a touch did with this phone's armed Revoke, or [ArmedTouch.None] for every other fire. */
+        val touch: ArmedTouch
+            get() = when (cooldown) {
+                SPENT_AT_A_TOUCH -> ArmedTouch.Spent
+                LANDED_AT_A_TOUCH -> ArmedTouch.Landed
+                else -> ArmedTouch.None
+            }
+
+        /** The buzz the house put on it: Long when this phone's Revoke landed (D-290), nothing otherwise. */
+        val haptic: Haptic? get() = touch.haptic
+
+        override fun toString(): String = "AbilityFired(cooldownStarted=$cooldownStarted, touch=$touch)"
 
         companion object {
             const val STARTED: Int = 1
             const val NOT_STARTED: Int = 0
+
+            /** An armed phone's touch spent its Revoke and it landed on nobody (D-290). */
+            const val SPENT_AT_A_TOUCH: Int = 2
+
+            /** An armed phone's touch landed its Revoke (D-290). */
+            const val LANDED_AT_A_TOUCH: Int = 3
+
+            /** The house's answer, as one digit: a touch's own value, or whether the cooldown started. */
+            fun of(cooldownStarted: Boolean, touch: ArmedTouch): AbilityFired = AbilityFired(
+                when (touch) {
+                    ArmedTouch.Landed -> LANDED_AT_A_TOUCH
+                    ArmedTouch.Spent -> SPENT_AT_A_TOUCH
+                    ArmedTouch.None -> if (cooldownStarted) STARTED else NOT_STARTED
+                },
+            )
         }
     }
 
@@ -652,29 +690,57 @@ sealed class RoundMessage {
      * naming the Insider would be the alignment reveal, delivered to the one player with the
      * strongest possible motive to say it out loud and no rule left stopping them.
      *
-     * **No haptic**, unlike [RestrainedTakeover] — see [Effect.RevokeLanded], where D-156 carries
-     * it: the effect is constructed on every contact, so a buzz would fire again each time somebody
-     * touched a player who was already out.
+     * **A haptic on the touch that put this phone out, and none on any other** (D-290; see
+     * [Effect.RevokeLanded], where D-156 carries the second half): the effect is constructed on
+     * every contact, so a buzz on every one would fire again each time somebody touched a player who
+     * was already out.
      *
      * ### Padded to the touch's one frame size (S1 of the owner's 2026-11-15 rulings, D-219)
      *
      * This is the one frame the Revoked target's phone receives for the touch that put it out, and
      * every other phone that touched is sent [AbilityFired] or [ContactAnswered], 120 bytes carried.
      * Empty, this was 95: on a Wi-Fi that can be read or merely measured, the phone that had just
-     * been Revoked was the one whose touch came back short. [pad] carries nothing and is always
-     * [PAD], so that pushed, encoded and carried this is exactly `AbilityFired(true)`'s length —
-     * [ContactAnswered]'s arrangement, and `ContactAnswerSizeTest` pins all three together.
+     * been Revoked was the one whose touch came back short. It was padded to `AbilityFired(true)`'s
+     * length by a nine-character constant, [ContactAnswered]'s arrangement.
+     *
+     * ### One digit in place of the pad (the owner's 2026-11-18 ruling, D-290)
+     *
+     * The touch that Revokes this phone now buzzes it Long, and a re-assertion on a phone already
+     * out does not, so the message carries the buzz, as [buzz]: [LONG] or [SILENT], one digit
+     * either way. Its wire name, `hapticAtLanding`, is fifteen characters, `cooldownStarted`'s
+     * length, so `"RevokeLanded","hapticAtLanding":1` is `"AbilityFired","cooldownStarted":1` to
+     * the byte, pushed, encoded and carried, whichever digit it holds. `ContactAnswerSizeTest`
+     * pins all of them together.
      */
     @ClientFacing
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("RevokeLanded")
-    data class RevokeLanded(val pad: String) : RoundMessage() {
-        companion object {
-            /** Nine characters: `"RevokeLanded","pad":"…"` against `"AbilityFired","cooldownStarted":1` (D-258). */
-            const val PAD: String = "000000000"
+    data class RevokeLanded(
+        @kotlinx.serialization.SerialName("hapticAtLanding") val buzz: Int,
+    ) : RoundMessage() {
+        init {
+            require(buzz == SILENT || buzz == LONG) { "a Revoke landing is $SILENT or $LONG" }
+        }
 
-            /** The one value this message ever takes. */
-            val Padded: RevokeLanded = RevokeLanded(PAD)
+        /** The buzz the house put on it: Long on the touch that Revoked this phone, nothing otherwise. */
+        val haptic: Haptic? get() = if (buzz == LONG) Haptic.Long else null
+
+        companion object {
+            const val SILENT: Int = 0
+            const val LONG: Int = 1
+
+            /** A touch on a phone already out: the frame, and no buzz (D-156). */
+            val Silent: RevokeLanded = RevokeLanded(SILENT)
+
+            /** The touch that Revoked this phone: the frame, and the Long buzz (D-290). */
+            val Buzzing: RevokeLanded = RevokeLanded(LONG)
+
+            /** The message for the haptic the rules put on the effect, which is Long or nothing. */
+            fun of(haptic: Haptic?): RevokeLanded = when (haptic) {
+                Haptic.Long -> Buzzing
+                null -> Silent
+                Haptic.Short, Haptic.Double -> error("a Revoke landing buzzes Long or not at all, never $haptic")
+            }
         }
     }
 
@@ -1202,7 +1268,7 @@ object RoundWire {
      */
     fun project(effect: Effect): RoundMessage = when (effect) {
         is Effect.LampSet -> RoundMessage.LampSet(effect.luminance)
-        is Effect.AbilityFired -> RoundMessage.AbilityFired(effect.cooldownStarted)
+        is Effect.AbilityFired -> RoundMessage.AbilityFired.of(effect.cooldownStarted, effect.touch)
         // The seat comes off and only the padding is left: AbilityFired's length (D-263).
         is Effect.AbilityBlanked -> RoundMessage.AbilityBlanked.Padded
         // The seat comes off; the pad is what makes this frame an armed Insider's length.
@@ -1258,7 +1324,7 @@ object RoundWire {
         )
         is Effect.RestrainedTakeover -> RoundMessage.RestrainedTakeover(effect.haptic)
         // The seat comes off and only the pad is left: the touch's one frame size (S1, D-219).
-        is Effect.RevokeLanded -> RoundMessage.RevokeLanded.Padded
+        is Effect.RevokeLanded -> RoundMessage.RevokeLanded.of(effect.haptic)
         is Effect.MeetingEnded -> RoundMessage.MeetingEnded(effect.haptic)
         is Effect.EgressOpened ->
             RoundMessage.EgressOpened(effect.type, effect.nodes, effect.remaining, effect.haptic, effect.pulseFrom)

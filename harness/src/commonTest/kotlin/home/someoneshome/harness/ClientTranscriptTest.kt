@@ -182,7 +182,7 @@ class ClientTranscriptTest {
         assertEquals(listOf(actor.index), receivers)
         assertTrue(actor in INSIDERS)
         val notStarted = transcripts.perClient.first { it.seat.index == actor.index }
-            .lines.filter { it.startsWith("AbilityFired") && !it.endsWith("|cooldownStarted=true") }
+            .lines.filter { it.startsWith("AbilityFired") && !it.contains("|cooldownStarted=true|") }
         assertEquals(
             emptyList(), notStarted,
             "rule 1: the effect must be identical whether the revoke landed",

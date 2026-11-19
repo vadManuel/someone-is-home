@@ -4,6 +4,7 @@ import home.someoneshome.core.ContactGate
 import home.someoneshome.core.contactSeedFor
 import home.someoneshome.model.ContactWindow
 import home.someoneshome.model.Event
+import home.someoneshome.model.Haptic
 import home.someoneshome.model.InsiderAbility
 import home.someoneshome.model.Intent
 import home.someoneshome.model.MeetingPhase
@@ -252,8 +253,8 @@ class ContactRadioBenchTest {
         armRevoke(insider)
         act.touch(insider, target)
         assertTrue(state().isRevoked(target), "the touch did not Revoke the target: ${house.refusals}")
-        assertTrue(RoundMessage.AbilityFired(cooldownStarted = true) in pushed.getValue(insider.index), "the Insider's phone was never told its Revoke fired")
-        assertTrue(RoundMessage.RevokeLanded.Padded in pushed.getValue(target.index), "the target's phone was never told")
+        assertTrue(RoundMessage.AbilityFired(RoundMessage.AbilityFired.LANDED_AT_A_TOUCH) in pushed.getValue(insider.index), "the Insider's phone was never told its Revoke fired")
+        assertTrue(RoundMessage.RevokeLanded.Buzzing in pushed.getValue(target.index), "the target's phone was never told")
         assertTrue(phones.getValue(target.index).outOfTheRound, "the Revoked phone does not know it is out")
 
         // The report: a living phone finds the Revoked one.
@@ -285,6 +286,86 @@ class ContactRadioBenchTest {
             )
         }
         assertTrue(said.any { it.startsWith("THE RADIO — SEAT ${insider.index} WALKS TO") }, "the act never walked")
+    }
+
+    // ---- D-290 / D-291: the hit, on the sockets, and the pair's grace ----------------------------
+
+    /**
+     * **D-290 on real sockets: a landed Revoke is one frame each, and both say Long.** The Insider's
+     * phone is sent its answer saying the Revoke landed, the Revoked phone its landing with the Long,
+     * each buzzed by the phone's own `HouseBuzzer` off that one frame; nobody else is sent anything.
+     */
+    @Test
+    fun aLandedRevokeIsOneFrameOnEachPhoneAndBothSayLong() = rig {
+        armed()
+        val insider = house.state.livingInsiders.single()
+        val target = house.state.livingPlainResidents.first()
+        armRevoke(insider)
+        act.idle(beats = 1)
+        val before = settledFrames()
+        act.touch(insider, target)
+        assertTrue(house.state.isRevoked(target), "the touch revoked nobody: ${house.refusals}")
+        val after = settledFrames()
+        val got = seats.associate { it.index to pushed.getValue(it.index).drop(before.getValue(it.index)) }
+        assertEquals(
+            listOf<RoundMessage>(RoundMessage.AbilityFired(RoundMessage.AbilityFired.LANDED_AT_A_TOUCH)),
+            got.getValue(insider.index),
+            "the Insider's phone was not sent exactly one answer saying its Revoke landed",
+        )
+        assertEquals(listOf<RoundMessage>(RoundMessage.RevokeLanded.Buzzing), got.getValue(target.index))
+        assertEquals(Haptic.Long, got.getValue(insider.index).single().haptic(), "the Insider's phone would not buzz Long")
+        assertEquals(Haptic.Long, got.getValue(target.index).single().haptic(), "the Revoked phone would not buzz Long")
+        for (seat in seats.filter { it != insider && it != target }) {
+            assertEquals(before.getValue(seat.index), after.getValue(seat.index), "seat ${seat.index} did not touch and was sent a frame")
+        }
+    }
+
+    /**
+     * **D-291 on the bench: the Revoking Insider's phone, held where it Revoked, reports only once
+     * the pair's grace is over.** One upload a second; the house's clock moves a second per beat.
+     */
+    @Test
+    fun theRevokingInsidersPhoneReportsItsTargetOnlyAfterTheGrace() = rig {
+        armed()
+        val insider = house.state.livingInsiders.single()
+        val target = house.state.livingPlainResidents.first()
+        armRevoke(insider)
+        act.touch(insider, target)
+        assertTrue(house.state.isRevoked(target), "the touch revoked nobody: ${house.refusals}")
+        val hit = house.clock
+        air.touch(insider, target)
+        while (house.clock + ContactGate.UPLOAD_TICKS < hit + ContactGate.PAIR_GRACE_TICKS) {
+            house.advanceTo(Tick(house.clock + ContactGate.UPLOAD_TICKS))
+            beat()
+            assertEquals(null, house.state.meeting, "the Insider's phone reported ${house.clock - hit} ticks after the hit, inside the grace")
+        }
+        house.advanceTo(Tick(hit + ContactGate.PAIR_GRACE_TICKS))
+        beat()
+        val meeting = assertNotNull(house.state.meeting, "the Insider's phone did not report at the grace's end: ${house.refusals}")
+        assertEquals(insider, meeting.caller, "the meeting was called by somebody else")
+        assertEquals(MeetingTrigger.RevokeReported(target), meeting.trigger)
+    }
+
+    /** D-291, accepted under U3: a phone that was not in the touch reports inside the grace. */
+    @Test
+    fun aNeighbourWhoWasNotInTheTouchReportsInsideTheGrace() = rig {
+        armed()
+        val insider = house.state.livingInsiders.single()
+        val target = house.state.livingPlainResidents.first()
+        val neighbour = house.state.livingPlainResidents.first { it.index != target.index }
+        armRevoke(insider)
+        act.touch(insider, target)
+        assertTrue(house.state.isRevoked(target), "the touch revoked nobody: ${house.refusals}")
+        val hit = house.clock
+        air.touch(neighbour, target)
+        repeat(2) {
+            house.advanceTo(Tick(house.clock + ContactGate.UPLOAD_TICKS))
+            beat()
+        }
+        assertTrue(house.clock < hit + ContactGate.PAIR_GRACE_TICKS, "the walk left the grace, so it proves nothing")
+        val meeting = assertNotNull(house.state.meeting, "the neighbour was held by the Insider's grace: ${house.refusals}")
+        assertEquals(neighbour, meeting.caller)
+        assertEquals(MeetingTrigger.RevokeReported(target), meeting.trigger)
     }
 
     // ---- S3: the host log carries no seed, token or key ------------------------------------------
@@ -358,8 +439,8 @@ class ContactRadioBenchTest {
 
         val framesBefore = settledFrames()
         val refusedBefore = house.contactRefusals.size
-        // Past D-213's debounce, so the resolver mints the report again rather than swallowing it.
-        house.advanceTo(Tick(house.clock + ContactGate.DEBOUNCE_TICKS + 1))
+        // Past the pair's grace (D-213's debounce, named by D-291), so the resolver mints the report again.
+        house.advanceTo(Tick(house.clock + ContactGate.PAIR_GRACE_TICKS + 1))
         act.touch(reporter, target)
         val refused = house.contactRefusals.drop(refusedBefore)
         assertTrue(

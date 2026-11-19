@@ -104,6 +104,8 @@ data class PublicCooldown(val seconds: Int, val elapsed: Int = 0) {
  * meeting's call, whichever comes first** (the owner's 2026-11-18 ruling, closing D-239's open
  * item and overriding its *the house holds an arm across a meeting*): `FlowModel` writes it back
  * to READY at either moment, silently, and this then draws the public clock like every phone's.
+ * **It also comes down at a touch that spent it** (the owner's 2026-11-18 ruling, D-290): the
+ * armed phone's answer says so, and the tile goes straight to COOLING DOWN below.
  *
  * ### Never READY while this phone's own arm is still spending (the owner's 2026-11-18 ruling, D-286)
  *

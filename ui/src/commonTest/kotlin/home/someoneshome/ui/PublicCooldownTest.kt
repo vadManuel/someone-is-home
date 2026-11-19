@@ -282,8 +282,9 @@ class PublicCooldownTest {
 
     /**
      * **GUARD (D-262): an answer that is not to this phone's own Tier-2 fire moves no Access bar.**
-     * An armed Revoke's contact is answered with the same `AbilityFired(true)`, and REVOKE's ARMED
-     * is D-239's open question, so neither tile moves; an Egress fire's answer is not the pool's.
+     * An answer with no fire in flight moves neither tile; an Egress fire's answer is not the pool's.
+     * (An armed Revoke's contact used to be answered with this same `AbilityFired(true)`; since D-290
+     * it says it is a touch's, and [aTouchThatSpentTheArmTakesArmedDownAtOnce] owns it.)
      */
     @Test
     fun anAnswerToNoTier2FireMovesNothing() {
@@ -362,14 +363,59 @@ class PublicCooldownTest {
     fun aContactWhileArmedLeavesTheArmsOwnCooldownRunningFromTheArm() {
         val (insider, _) = armedPair()
         insider.seconds(5)
-        insider.said(RoundMessage.AbilityFired(cooldownStarted = true))
+        insider.said(landed)
         for (second in 6 until PublicCooldown.OWN_ARM_SECONDS) {
             insider.seconds(1)
             assertTrue(insider.vals.revoke != RevokeState.Ready, "the tile said READY $second s after an arm whose contact landed")
-            if (second >= PublicCooldown.ARM_WINDOW_SECONDS) assertEquals(RevokeState.Cooldown, insider.vals.revoke)
+            assertEquals(RevokeState.Cooldown, insider.vals.revoke, "not COOLING DOWN $second s after an arm whose contact landed")
         }
         insider.seconds(1)
         assertEquals(RevokeState.Ready, insider.vals.revoke, "the contact restarted the arm's own cooldown")
+    }
+
+    /** The armed phone's answer to a touch that landed its Revoke (D-290). */
+    private val landed = RoundMessage.AbilityFired(RoundMessage.AbilityFired.LANDED_AT_A_TOUCH)
+
+    /** The armed phone's answer to a touch that spent its Revoke on nobody (D-290). */
+    private val spent = RoundMessage.AbilityFired(RoundMessage.AbilityFired.SPENT_AT_A_TOUCH)
+
+    /**
+     * **GUARD (the owner's 2026-11-18 ruling, D-290): a touch that spent the arm takes ARMED down at
+     * once**, landed or not, and the tile reads COOLING DOWN, dimmed, over the arm's own cooldown from
+     * the hold, then READY at its 61 s exactly as without a touch. Until D-290 ARMED held to 20 s from
+     * the hold over an arm the house had already cleared.
+     */
+    @Test
+    fun aTouchThatSpentTheArmTakesArmedDownAtOnce() {
+        for (answer in listOf(landed, spent)) {
+            val (insider, _) = armedPair()
+            insider.seconds(3)
+            assertEquals(RevokeState.Armed, insider.vals.revoke, "${answer.touch}: the fixture lost ARMED before the touch")
+            insider.said(answer)
+            assertEquals(RevokeState.Cooldown, insider.vals.revoke, "${answer.touch}: ARMED outlived the touch that spent it")
+            assertEquals("COOLING DOWN", insider.vals.abilitySub)
+            assertEquals(Ramp.Dim, insider.vals.revokeInk, "${answer.touch}: REVOKE was not dimmed after the touch")
+            insider.seconds(PublicCooldown.OWN_ARM_SECONDS - 3 - 1)
+            assertEquals(RevokeState.Cooldown, insider.vals.revoke, "${answer.touch}: READY before the arm's own cooldown ran out")
+            insider.seconds(1)
+            assertEquals(RevokeState.Ready, insider.vals.revoke, "${answer.touch}: the touch moved the arm's own cooldown")
+            assertTrue(insider.sent.count { it == IntentMessage.ArmRevoke } == 1, "the touch's answer sent something")
+        }
+    }
+
+    /**
+     * **GUARD (D-290 closes D-262's limit): a touch's answer is never read as a Tier-2 fire's.** A
+     * Static in flight when the touch lands keeps its Access bar for its own answer.
+     */
+    @Test
+    fun aTouchsAnswerIsNotATier2FiresAnswer() {
+        val (insider, _) = armedPair()
+        insider.flow.fireStatic()
+        val before = insider.flow.state.accessClock
+        insider.said(landed)
+        assertEquals(before, insider.flow.state.accessClock, "the touch's answer restarted the Access bar")
+        insider.said(RoundMessage.AbilityFired(cooldownStarted = true))
+        assertEquals(PublicCooldown.fired(Balance.STATIC_COOLDOWN), insider.flow.state.accessClock, "the Static's own answer was lost to the touch")
     }
 
     /**

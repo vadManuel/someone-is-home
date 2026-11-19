@@ -24,8 +24,25 @@ sealed interface Effect {
      * This is the shape rule 1 demands: firing at an already-revoked target must produce the
      * same effect, with the same cooldown, as firing at a live one. An absent effect is a
      * revoke-detector.
+     *
+     * ### [touch]: what an armed touch did with this phone's Revoke (the owner's 2026-11-18 ruling, D-290)
+     *
+     * [ArmedTouch.None] on every Surge, Isolate, Static and Egress answer. An armed phone's answer
+     * to a touch says the touch spent its Revoke ([ArmedTouch.Spent]) or that the Revoke landed
+     * ([ArmedTouch.Landed]), so the phone takes ARMED down at once rather than holding it until 20 s
+     * from the hold, and an answer to a touch can no longer be read as an Egress's. **It is still one
+     * frame of one size**: the three values are one digit on the wire. The owner accepted what the
+     * second value tells the armed phone: whether its own Revoke connected. It reads the touch's two
+     * phones and nothing else, and only an armed phone is ever told it.
      */
-    data class AbilityFired(val actor: Seat, val cooldownStarted: Boolean) : Effect
+    data class AbilityFired(
+        val actor: Seat,
+        val cooldownStarted: Boolean,
+        val touch: ArmedTouch = ArmedTouch.None,
+    ) : Effect {
+        /** **Long when this phone's Revoke landed** (D-290), and nothing otherwise; [ArmedTouch.haptic]. */
+        val haptic: Haptic? get() = touch.haptic
+    }
 
     /**
      * **Somebody else's ability was answered at this moment, and this seat is sent a frame of its
@@ -842,9 +859,11 @@ sealed interface Effect {
      * ### It reaches the target and nobody else, least of all the actor
      *
      * *No actor-side feedback on firing any ability* (`gdd.md:398`). The Insider who armed the
-     * Revoke is told [AbilityFired] and their own cooldown, identically whether the contact landed
-     * on a live player, an already-Revoked one, a fellow Insider or themselves — `Rules.contact`
-     * constructs that one effect outside every branch and this one changes nothing about it.
+     * Revoke is told [AbilityFired], one frame whether the contact landed on a live player, an
+     * already-Revoked one, a fellow Insider or themselves — `Rules.contact` constructs that one
+     * effect outside every branch and this one changes nothing about it. Since D-290 its one digit
+     * says whether the Revoke landed ([ArmedTouch]), by the owner's ruling, which narrows
+     * `gdd.md:398` for the armed phone's own tile and motor.
      *
      * ### It is constructed on EVERY contact, and the allowlist is what decides who gets one
      *
@@ -863,21 +882,31 @@ sealed interface Effect {
      * Four cases and one shape. A contact that lands reaches a seat that is now Out. A contact on
      * an already-Revoked seat reaches a phone already standing on this screen and changes nothing
      * on it. A self-contact and an unarmed one both name a seat that is still Live and reach
-     * nobody. **No client's stream differs between any two of them.**
+     * nobody. **No client's stream differs between any two of them in its frames**: the same
+     * effects, the same deliveries, the same lengths. Since D-290 two contents differ, each on one
+     * of the touch's own two phones and each by the owner's ruling: the phone just Revoked is sent
+     * [haptic] Long, and the armed phone's [AbilityFired] says whether its Revoke landed.
      *
-     * ### It carries no haptic, and that is the half that makes the re-assertion safe (D-156)
+     * ### [haptic]: Long on the touch that Revoked this phone, and nothing on any other (D-290, D-156)
      *
-     * *The underlying message count never drives the buzz count.* A buzz here would fire again
-     * every time an Insider touched a player who was already out — a phone going off in the hand of
-     * somebody sitting silently on a couch, in a dark room, reporting that an Insider is nearby and
-     * has just fired. [HouseSignedOff] carries no haptic for this reason and this is the same one.
+     * *The underlying message count never drives the buzz count.* A buzz on every one of these
+     * would fire again every time anybody touched a player who was already out — a phone going off
+     * in the hand of somebody sitting silently on a couch, in a dark room. So the re-assertion
+     * carries `null`, as it always did.
      *
-     * **The player is not left unaware**: their lamp is already defunct in their hand. Rule 7 puts
-     * that on the device's own contact path rather than on a pushed field, so the light is out
-     * before this frame arrives — which is the loudest signal this game has and the only one the
-     * design ever asked for here.
+     * **The touch that put this phone out carries [Haptic.Long]** (the owner's 2026-11-18 ruling:
+     * *the Revoked phone and the Insider's phone both give the Long buzz*). Its lamp is already defunct
+     * in the player's hand by rule 7; the buzz is the motor saying the same thing. The rules set it
+     * on the one seat the touch Revoked, so the only phone it ever reaches is a phone that has just
+     * gone out, and it says nothing that phone's own dark lamp has not. Nothing else is possible:
+     * a value other than `null` or `Long` cannot be constructed, and the wire carries it as one digit
+     * so the frame stays the touch's one length (D-219).
      */
-    data class RevokeLanded(val seat: Seat) : Effect
+    data class RevokeLanded(val seat: Seat, val haptic: Haptic?) : Effect {
+        init {
+            require(haptic == null || haptic == Haptic.Long) { "a Revoke landing buzzes Long or not at all" }
+        }
+    }
 
     /**
      * **The house notice, at the top of the meeting: who was unreachable on purpose since the last

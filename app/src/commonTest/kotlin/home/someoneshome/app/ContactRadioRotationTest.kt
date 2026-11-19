@@ -101,7 +101,7 @@ class ContactRadioRotationTest {
         up.heard(RoundMessage.ContactSeedIssued(seed))
         assertTrue(air.scanning, "a living phone in a round is not scanning")
         up.beat()
-        up.heard(RoundMessage.RevokeLanded.Padded)
+        up.heard(RoundMessage.RevokeLanded.Buzzing)
         assertFalse(air.scanning, "a Revoked phone kept scanning")
         repeat(30) {
             air.now += SightingUpload.CADENCE_MILLIS
