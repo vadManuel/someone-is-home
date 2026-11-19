@@ -93,7 +93,7 @@ Each unit is its own commit, with tests, a broken-guard proof and, where a scree
   - re-run when a suspension ends, which the spike measured as recovering within 0.5 s with no new token;
   - when a session is invalidated, it gets a new session and a new token, offered in the next upload;
   - a fixed table of the nearest reading per handle, drained once a second.
-- The spike's `UwbPeerSession` is the starting point. It already has the `==` delegate fix (cff978e).
+- The spike's `UwbPeerSession` is the starting point. It already has the `==` delegate fix (2c323e9).
 
 ### 5. The bench (harness and cheats tests)
 - `SimulatedAir`'s distance-to-RSSI curve becomes a distance model built from the spike:

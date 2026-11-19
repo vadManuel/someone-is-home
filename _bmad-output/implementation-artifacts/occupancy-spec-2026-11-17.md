@@ -1,12 +1,12 @@
 # Someone's Home: the occupancy map and the home plan on phones — build spec
 
-*Read-only research, 2026-11-17, at `cd575db`. Nothing here is built. Unit 9 of the overnight
+*Read-only research, 2026-11-17, at `4b64f90`. Nothing here is built. Unit 9 of the overnight
 queue. Paths are relative to the repo root. `gdd` = `.../gdds/gdd-someone-is-home-2026-08-16/gdd.md`,
 `DL` = the decision log beside it, `EP` = `epics.md` beside it.*
 
 ## 0. The problem in four lines
 
-- `c02f094` (D-257) took the fixture bungalow and its counts off every housed Terminal, playback
+- `d077b41` (D-257) took the fixture bungalow and its counts off every housed Terminal, playback
   and couch. They now draw an empty frame with a dash. That is honest, and it is also an empty game
   layer: M11 and M12 have nothing to show.
 - **No client has a plan to draw.** D-186 rolled the plan back to crossing to no client.
@@ -120,7 +120,7 @@ queue. Paths are relative to the repo root. `gdd` = `.../gdds/gdd-someone-is-hom
 - **D-175 (DL:3309-3313)**, the original crossing: *"A phone cannot draw a plan it was never sent, so
   the home's plan rides the arming event and reaches a living Insider — the largest single
   disclosure in the emit table, one class wide, and it must never be widened by one."* The plan then
-  was rooms, names, stairs and cells with no markers (`git show 4cefbf5`, `HomePlanView`).
+  was rooms, names, stairs and cells with no markers (`git show fddd6d0`, `HomePlanView`).
 - **D-186 (DL:3694-3700)**, the rollback: *"**The home plan returns to crossing to NO client** … a
   row that existed only because a phone cannot draw a plan it was never sent. **Static has no plan
   to draw.** The row goes, and `Destination`'s own warning about the whole map reaching every
@@ -185,7 +185,7 @@ queue. Paths are relative to the repo root. `gdd` = `.../gdds/gdd-someone-is-hom
 
 ---
 
-## 2. What exists in code (at `cd575db`)
+## 2. What exists in code (at `4b64f90`)
 
 ### 2.1 The authority/client split, and its lack of a producer
 
@@ -210,7 +210,7 @@ queue. Paths are relative to the repo root. `gdd` = `.../gdds/gdd-someone-is-hom
 | `Event.RoundArmed.markers: List<Destination>` | `Event.kt:49-67` | the only geography on the arming event. **No plan** |
 | `RoundArmed.terminal` / `GameState.terminal` | `RoundAuthority.kt:276-278`, `GameState.kt:286` | the T card **id only**. *"The room the host put it in is the host's to say aloud."* The T card's room is not in `GameState` |
 | `GameState.destinations` | `GameState.kt:151-167` | card, glyph, room for ordinary markers. *"Nothing derives anything from it."* A client gets only its own work order's rows (`WorkOrder.asLines`) |
-| prior art | `git show 4cefbf5` (added `HomePlanView` + `HomePlanOffered`, Insider-only) and `7713c56` (removed them) | cells rather than strokes; rode `RoundArmed.plan`, passed through `reduce` without being stored; four client plan types |
+| prior art | `git show fddd6d0` (added `HomePlanView` + `HomePlanOffered`, Insider-only) and `673ba33` (removed them) | cells rather than strokes; rode `RoundArmed.plan`, passed through `reduce` without being stored; four client plan types |
 
 ### 2.3 The radio side: the inputs already exist
 
@@ -324,7 +324,7 @@ sweeping gdd:822/895.
   - rooms in plan order as (name, `Room`/`Stairs`).
   - **No cards, no terminal, no meeting card, no stations, no active markers, no seats.** The type
     *is* the field list (rule 3): a card cannot be expressed in it.
-  - Cells rather than strokes, as 4cefbf5 chose: strokes are the host's gestures.
+  - Cells rather than strokes, as fddd6d0 chose: strokes are the host's gestures.
   - Bound each storey to the editor's viewport (10×12 today, since panning is unbuilt). A plan
     outside it is refused at REVIEW (D-126), never at arming.
 - `Event.RoundArmed.plan: HomePlanView` (the parser defaults nothing, per the `markers` KDoc) and

@@ -1673,7 +1673,7 @@ with the discussion's READY TO VOTE; final copy is a build-time call.
   who do.
 
 The vote window's default is **45 seconds**, host-changeable in lobby settings — already landed in
-code (`fcfefd6`).
+code (`241b69a`).
 
 
 ---
@@ -2110,7 +2110,7 @@ is again a fresh judgment. Both are single taps, so constraint 5 (`gdd.md:596`) 
 
 ### The roster is fully specced, and where the GDD is now wrong
 
-**All ten roster Subroutines are specified.** Six are built as of `14d502d` — Replay, Parity Check,
+**All ten roster Subroutines are specified.** Six are built as of `9b63972` — Replay, Parity Check,
 Short, Signal Trace, Jam, Handshake — and **these four are now buildable**, which was the last thing
 standing between the roster and a complete set of interactions.
 
@@ -2433,7 +2433,7 @@ version of rule 1: the absent effect is the leak, and here the absent effect is 
 Non-adjacency is a *preference with a fallback*, not a precondition — it buys the containment run
 its distance, and where the house cannot supply distance it supplies what it has.
 
-Built in **L5** (`7f2c1c1`).
+Built in **L5** (`0487700`).
 
 ### D-149 · **Beacon and Tether are a label in v1, drawn at fire time — decided**
 
@@ -2699,7 +2699,7 @@ three inches from their hand. Auto-open is not a convenience: **it is the only w
 the player's favour**, because the surface that would say *got it* is the surface doing the reading.
 
 The **ten-second window is the ported one and was always right** — the design's final number, and
-the KDoc that had it at seven was corrected on 2026-08-19 (`3319bfe`). What changes here is only
+the KDoc that had it at seven was corrected on 2026-08-19 (`259a956`). What changes here is only
 what the window is *counting down to*: it now bounds an unattended read rather than a held button.
 
 Superseded sites, swept below: `gdd.md`'s M1 mechanic, the *Scan a marker* control row, the
@@ -4429,7 +4429,7 @@ without the clock, which the lantern draws large.
 
 ## Revision 45 — what the 360 canvas left open
 
-*Ruled by the owner 2026-11-13, when Step 3 of the mockup port finished at `b9c9e0b`. Moving the
+*Ruled by the owner 2026-11-13, when Step 3 of the mockup port finished at `bb5aa87`. Moving the
 canvas from 300 to 360 units kept every restyled screen pixel for pixel, and left six values that
 were either written in the old units or that D-202 had sent back to the owner. Each was settled on
 the recommendation put to the owner.*
@@ -5931,7 +5931,7 @@ the owner's to rule.
 
 ## Revision 63 — a report is heard twice, and a phone running ahead is still mapped
 
-*2026-11-16, overnight run, from findings R5 and R8 of the read-only review of `67f3313..HEAD`. A
+*2026-11-16, overnight run, from findings R5 and R8 of the read-only review of `e3ebcb0..HEAD`. A
 provisional call made without the owner: **owner to confirm.** Desktop tests only; nothing here has
 been on a phone.*
 
@@ -6017,7 +6017,7 @@ small but real, and a phone further off loses more.
 
 ## Revision 64 — why the two-phone Revoke did not land, and three things a person's phone did by itself
 
-*2026-11-16. Two iPhones (`bfdc404`, run `20261116-214533`): A hosted and was the only Insider (seat
+*2026-11-16. Two iPhones (`985ec2a`, run `20261116-214533`): A hosted and was the only Insider (seat
 0), held REVOKE (the tile said ARMED) and touched B. The house answered three touches, all as plain
 `ContactAnswered`. The house logged nothing about the arm.*
 
@@ -6214,7 +6214,7 @@ rehearsal with the bench's single hold has not been run.
 
 ## Revision 67 — three review findings: the bench's seed on a person's press, the arrival queue's order, and the out named for evasion
 
-*2026-11-16. Findings R4, R6 and R7 of the read-only review of `67f3313..b35bba3`.*
+*2026-11-16. Findings R4, R6 and R7 of the read-only review of `e3ebcb0..fa46a2a`.*
 
 ### D-240 · **A person's LIGHTS OUT never reads the bench's seed; the seed switch is honoured only beside a bench switch — built**
 
@@ -6385,8 +6385,8 @@ cheat picker or a backgrounded app pauses it, which errs late). Nothing here has
 
 ## Revision 69 — no socket write under the house's lock, every report kept until the house has it, and D-227's guard proven
 
-*2026-11-16. Finding R12 of the review of `67f3313..b35bba3` (raised in D-241), the two limits D-229
-left open, and the guard `1d16974` could not break.*
+*2026-11-16. Finding R12 of the review of `e3ebcb0..fa46a2a` (raised in D-241), the two limits D-229
+left open, and the guard `96a4c2e` could not break.*
 
 ### D-244 · **A push queues on its seat's own connection and returns; nothing the house holds a lock for waits on a socket — built**
 
@@ -6473,7 +6473,7 @@ store), not iOS ending one.
 
 ### D-246 · **D-227's loss ordering is proven by breaking it — built (a test, no behaviour change)**
 
-`1d16974` reported a seat's loss under `TransportHost`'s lock, so a loss is always reported before a
+`96a4c2e` reported a seat's loss under `TransportHost`'s lock, so a loss is always reported before a
 later resume of the same seat, and took that lock uncancellably, so a stopping server reports every
 loss. Neither could be made to fail by reverting it: on loopback each window is microseconds wide.
 `LossOrderTest` holds the window open on purpose, with an `onLost` that takes 400 ms (a thread
@@ -6481,7 +6481,7 @@ descheduled at the wrong moment, or a slow desk):
 
 1. **Loss before resume.** A phone drops; while the loss is still being reported it resumes by its
    token. The caller must hear `lost` before `seated`. With the loss reported after the lock (the code
-   before `1d16974`): *Expected <[lost 0, seated 0]>, actual <[seated 0, lost 0]>*.
+   before `96a4c2e`): *Expected <[lost 0, seated 0]>, actual <[seated 0, lost 0]>*.
 2. **Every loss reported.** Four phones seated; the first loss is slow, so the other three are waiting
    for the lock when the stopping server cancels them. Without `NonCancellable`: *a stopping server
    reported 1 of 4 losses: [0]*.
@@ -6723,7 +6723,7 @@ the frame clock. With the entry removed: *the house opened the talk and the phon
 
 **What was red.** `everyMeetingScreenParksAHousedPhoneUntilTheHouseSpeaks` failed with *the test body
 did not run to completion* after one minute, then passed on a quiet machine. **No commit broke it.**
-Its time, filtered, per commit: `a6b0164` 25.1 s, `765adf3` 28.2 s, `0cde8e0` 25.5 s, `74e2df8` 32.6 s
+Its time, filtered, per commit: `71a9a71` 25.1 s, `a4c14cb` 28.2 s, `cd98f58` 25.5 s, `087e8ef` 32.6 s
 (39.5 s inside the full suite). Under three agents' builds it crossed 60 s.
 
 **Why it took that long.** It advanced eight screens 30 s each, and the compose test clock steps every
@@ -6940,7 +6940,7 @@ bungalow on a housed phone: [… GROUND, UPPER, KITCHEN, LIVING, HALL, STAIRS, S
 fixture: *an empty FILES did not say so: [… 1 ITEM, DISK 01, IN HAND | DESTINATION . RACK …]*.
 
 **H7 (the meeting counts) needed no code.** D-247 already made them nullable and reset them at
-every meeting. The `r5` hunt that found them started a minute after `74e2df8` landed; which build it
+every meeting. The `r5` hunt that found them started a minute after `087e8ef` landed; which build it
 ran is not recorded. On this build the counts are the house's or nothing (below).
 
 **On the Simulators (D-254 to D-257 together).** `tools/sim-hunt/hunt.sh --seats 5 --seed 20260822`
@@ -7903,7 +7903,7 @@ arming event with the Spoof picker.
 1. **`HomePlanView`** (`model`): storeys in plan order, each a name, a bounding box and one cell per square
    (a room's index or unpainted); rooms in plan order as a name and a kind. **No card, terminal, meeting
    card, station, active marker or seat**: rule 3, the type is the field list. Cells rather than strokes, as
-   `4cefbf5` chose. Built only by `HousePlan.toView()`; `adjacency` is `Floor.neighboursOf`'s rule read off
+   `fddd6d0` chose. Built only by `HousePlan.toView()`; `adjacency` is `Floor.neighboursOf`'s rule read off
    the cells (four-neighbourhood, one storey), computed once per round.
 2. **It is NOT `@Serializable` and NOT `@ClientFacing`.** Whether the plan may reach any phone is the
    owner's Q1 (D-186 and EP:292 against M11/M12). No `RoundMessage` carries it and no `Effect` names it, so
@@ -8440,7 +8440,7 @@ the Surge picker then skipped every blank — so a seat in the round with no nam
 The desk still admits such a seat (`LobbyDesk.namedSeats` reads `names[it].orEmpty()`, `readyToArm`
 checks lines, not names; D-227 and D-252 have both lost names before), and an unnamed Insider could
 then never be Restrained. Before D-274 that seat had a row with no words on it and could be voted for,
-so this was a regression. Found by the read-only review of `a1ec986..423e328`; the cause was the
+so this was a regression. Found by the read-only review of `6048d4e..9f7377f`; the cause was the
 orchestrator's own brief to D-274's unit ("an empty name must not be a votable row").
 
 **Second trap behind the first.** The ballot turns a row back into a seat by name
@@ -8487,7 +8487,7 @@ that row lit. With `asMessage` put back to send by name, it goes red: `SelectVot
 
 ### D-279 · **An Egress is refused during a meeting; an out partner's held beat does not pair; a node scanned before the meeting places nobody after it; an out seat's card call is refused — built (recording 33)**
 
-**What was wrong** (the read-only rule engine review r4 at `0c3473d`, findings F1, F2, F3 and F5).
+**What was wrong** (the read-only rule engine review r4 at `894f4df`, findings F1, F2, F3 and F5).
 
 1. **F1, an Egress could start inside a meeting.** `admit` had no branch for `EgressFired` while a
    meeting ran; `isTierTwo`'s KDoc said `gdd.md:373` blocked it already, and no code did. The race is
@@ -9636,7 +9636,7 @@ for pixel.
 and misses (D-232): driving the bench through this control is the spec's C5. Not on a phone: the
 felt pulse in two hands, filmed at 240 fps against GDD:1291's ±150 ms, is the spec's C6.
 
-**Checked** (`./gradlew check --continue` on main at `312142a` with D-296, every test XML read): model 322 (JVM) and 312 (iOS Simulator), core 363, platform 213, ui 697 (desktop) and 328 (iOS Simulator), harness 131, app 230; `vocabularyLint`, `redactionLint`, `boundaryCheck`, `armingCordon`, `benchSeedCordon` and `seedSourceCordon` clean. One failure, in `OutboundQueueTest`, a host-side send-queue timing test this unit does not touch (`Seat(index=1)'s connection is not draining (8 frames waiting)`, the seat whose writes are not held, under another agent's concurrent build): rerun alone three times it passed, failed, passed. Raised, not fixed. **Not on a phone.**
+**Checked** (`./gradlew check --continue` on main at `57274ee` with D-296, every test XML read): model 322 (JVM) and 312 (iOS Simulator), core 363, platform 213, ui 697 (desktop) and 328 (iOS Simulator), harness 131, app 230; `vocabularyLint`, `redactionLint`, `boundaryCheck`, `armingCordon`, `benchSeedCordon` and `seedSourceCordon` clean. One failure, in `OutboundQueueTest`, a host-side send-queue timing test this unit does not touch (`Seat(index=1)'s connection is not draining (8 frames waiting)`, the seat whose writes are not held, under another agent's concurrent build): rerun alone three times it passed, failed, passed. Raised, not fixed. **Not on a phone.**
 
 | site | what it says now | what replaces it |
 |---|---|---|
@@ -9893,7 +9893,7 @@ calls* in `owner-decisions-2026-11-17.md`):
   put to the owner as three options (A: pairing by upload arrival within 6 s, unchanged; B: the
   containment spec's recommendation, the two runs share at least one pulse; C: the same four
   pulses). **Owner ruling 2026-11-18, option B.**
-- **O4** (as amended in `1bc10f9`): *no words during the 3 s lockout, and the tapping phone
+- **O4** (as amended in `35943b2`): *no words during the 3 s lockout, and the tapping phone
   vibrates for the whole 3 s … continuously for the full 3 s of the lockout, from the moment the
   attempt fails. … a new haptic pattern, a sixth beside D-135's five, ruled by the owner.*
 
@@ -10045,7 +10045,7 @@ reads as *the lockout* and how it sits with the pulse that resumes after it. The
 haptics. Inside the 3 s the pulse is not felt and taps count for nothing, so a person loses up to two
 pulses to a failed attempt; that is the lockout the house already charged, now felt, not a new rule.
 
-**Checked** (`./gradlew check --continue` in a worktree at `1bc10f9`, exit 0, every test XML read
+**Checked** (`./gradlew check --continue` in a worktree at `35943b2`, exit 0, every test XML read
 and counted): model 322 (JVM) and 312 (iOS Simulator), core 368, platform 213, ui 703 (desktop) and
 334 (iOS Simulator), harness 131, app 235, no failures; `vocabularyLint`, `redactionLint`,
 `boundaryCheck`, `armingCordon`, `benchSeedCordon` and `seedSourceCordon` clean. `OutboundQueueTest`'s
@@ -10161,7 +10161,7 @@ two vibrates (*no*) behind the Egress buzz, and the person at the card had to ta
   expected:<Scan> but was:<Banner>`, and through the house `Resident: no alert over the briefing`.
   8 of 10 ui cases and 1 of 3 app cases red; restored, all green.
 
-**Checked** (`./gradlew check --continue` in a worktree on `5e829e3`, exit 0, every test XML read
+**Checked** (`./gradlew check --continue` in a worktree on `7e91206`, exit 0, every test XML read
 and counted): 2 668 tests, 0 failures: model 322 (JVM) and 312 (iOS Simulator), cards 17, core 372,
 platform 213, ui 719 (desktop) and 344 (iOS Simulator), harness 131, app 238; `vocabularyLint`,
 `redactionLint`, `boundaryCheck`, `armingCordon`, `benchSeedCordon` and `seedSourceCordon` clean.
@@ -10418,7 +10418,7 @@ touches either. Three slots halves both. (1) and (2) are both done.
   `CarryReadTest`, `ForeignBodyTest`, `UploadProbeTest`, `UploadClockTest`, `ContainmentDriftTest`,
   which pass `NO_REPORT`/`NO_PLAN`.
 
-**Checked** (rebased onto main at `bf06bf5`, above `774e8e9`; `./gradlew check --continue`, exit 0,
+**Checked** (rebased onto main at `ecb2b68`, above `4e20575`; `./gradlew check --continue`, exit 0,
 every result XML read and counted with a python glob): model 334 (JVM) and 320 (iOS Simulator),
 core 383 (JVM) and 382 (iOS Simulator; `RangingAllocationTest` runs on the JVM only), platform 213,
 harness 131, cards 17, ui 719 (desktop) and 344 (iOS Simulator), app 255: 3 098 tests, no failures.
@@ -10846,7 +10846,7 @@ was +173 because fewer phones near the Revoked seat were ranged).
 Every quote above was taken again against the final code (displacement, margin, silence and both
 hand-back breaks), not only when each guard was first written.
 
-**Checked** (`./gradlew check --continue` in the worktree on `2b5b285` plus this change, exit 0,
+**Checked** (`./gradlew check --continue` in the worktree on `3cac2df` plus this change, exit 0,
 every result XML counted with a python glob): model 335 (JVM) and 321 (iOS Simulator), cards 17,
 core 411 (JVM) and 409 (iOS Simulator; `RangingAllocationTest` is JVM-only), platform 213, harness
 137, ui 719 (desktop) and 344 (iOS Simulator), app 263: **3 169 tests, no failures**.
@@ -10896,7 +10896,7 @@ Bluetooth and nothing here touches them.
 (`uwb-replacement-plan-2026-11-18.md`, *The plan under U6*, which supersedes sections 4 and 6 where
 they differ); D-294 *the row reads NEARBY DEVICES*; the NameDrop step rejected (the plan's unit 6).
 The radio follows the spike (`uwb-spike-results-2026-11-18.md`) and starts from its
-`UwbPeerSession` with the `==` fix (cff978e).
+`UwbPeerSession` with the `==` fix (2c323e9).
 
 **Now, the radio** (unit 4).
 
@@ -11024,7 +11024,7 @@ the delegate walks it by index, with no iterator.
   SUCCEEDED **`); the built binary carries `SOMEONES_HOME_UWB`, `NEARBY DEVICES` and the probe's
   defaults key, and no NameDrop string.
 
-**Checked** (`./gradlew check --continue` in the worktree on `4bd88b9` plus this change, exit 0,
+**Checked** (`./gradlew check --continue` in the worktree on `0af2395` plus this change, exit 0,
 every result XML counted with a python glob): model 352 (JVM) and 336 (iOS Simulator), cards 17,
 core 411 (JVM) and 409 (iOS Simulator), platform 210 (three fewer: `NameDropStoreTest` is gone),
 harness 137, ui 714 (desktop; `NameDropStepTest`'s six gone, `PermsWalkRender` one new) and 344 (iOS
@@ -11237,7 +11237,7 @@ screen, never a count; D-138 a Deallocate tap removes a dot and level is the sho
 the Interrupt sweep bounces forever until tapped, with the house sending band, speed and phase and
 the client rendering them deterministically; D-140 Drift grades a tap against a house-authored
 haptic *now*, reusing D-139's pattern. The roster lines at `gdd.md:566`, `:568`, `:569` and `:570`
-are superseded. All ten are specced; six built as of `14d502d`, these four now buildable.
+are superseded. All ten are specced; six built as of `9b63972`, these four now buildable.
 
 **Revision 32 named the hold and closed the loop run** — D-121 **corrected**: the report is the
 contact handshake (`gdd.md:543`), never a claim button, and *from anywhere* means only *not at the

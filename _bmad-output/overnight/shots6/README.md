@@ -5,7 +5,7 @@ directory photographs a round: `shots5/` is fifteen beats across five phones. **
 armed on this build**, so there were no beats to photograph, and what is here instead is the three
 states a phone really reaches tonight — plus the refusal that is where every evening now stops.
 
-Four iOS Simulator seats, real device aspect, `Playtest` at `a1d66c0`.
+Four iOS Simulator seats, real device aspect, `Playtest` at `3f41958`.
 
 | tag | what it is |
 |---|---|

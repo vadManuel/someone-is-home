@@ -17,7 +17,7 @@ package home.someoneshome.model
  * room is the answer key to every work order (`Destination.kt`); it cannot be expressed in this
  * type, so it cannot leak through it.
  *
- * Cells rather than strokes, as the plan view in `4cefbf5` chose: strokes are the host's gestures,
+ * Cells rather than strokes, as the plan view in `fddd6d0` chose: strokes are the host's gestures,
  * and a cell grid is what any reader of the plan needs.
  *
  * ### ⚠️ It reaches NO client, and it is deliberately not `@Serializable` or `@ClientFacing`

@@ -1,6 +1,6 @@
 # Someone's Home: decisions waiting for the owner (2026-11-17)
 
-Main is at `a0cb0aa`. This pack is read-only: nothing was edited or built while writing it.
+Main is at `6ded618`. This pack is read-only: nothing was edited or built while writing it.
 Paths are shortened: **GDD** = `_bmad-output/planning-artifacts/gdds/gdd-someone-is-home-2026-08-16/gdd.md`, **DL** = `decision-log.md` and **EP** = `epics.md` in the same folder.
 Code paths are relative to the repo root.
 
@@ -21,7 +21,7 @@ Code paths are relative to the repo root.
 
 ---
 
-## 1. When the REVOKE tile leaves ARMED (D-239, `765adf3`)
+## 1. When the REVOKE tile leaves ARMED (D-239, `a4c14cb`)
 
 **What the docs say**
 - GDD:322: *"Insider arms a Revoke in-app. Silent and invisible; nothing changes on screen for anyone."*
@@ -94,7 +94,7 @@ Code paths are relative to the repo root.
 
 ---
 
-## 3. Egress progress for living players (D-243, `0cde8e0`)
+## 3. Egress progress for living players (D-243, `cd98f58`)
 
 **What the docs say: they contradict each other**
 - GDD:545: the couch gets *"Both bars — Resident System Integrity *and* the real Egress progress, which no living player of either role can see."* GDD:1052 says the same.
@@ -131,7 +131,7 @@ Code paths are relative to the repo root.
 - **The docs are silent** on an Egress while the house is off the air.
 
 **What the code does now**
-- The host's lock stops the server: `app/.../LobbyOverTransport.kt:743-751`, from `4d2cb2b`/D-225.
+- The host's lock stops the server: `app/.../LobbyOverTransport.kt:743-751`, from `59ab53c`/D-225.
 - `app/.../TickDriver.kt:72-105` drops the backlog and skips forward to wall time.
 - `app/.../HouseClock.kt:130-132` mints `EgressExpired` on the first step after the return. The Insiders win (`Rules.kt:182`).
 - While the house is off the air nobody can report or contain, and the evasion notice that would name the host never arrives because the round is already over.
@@ -149,7 +149,7 @@ Code paths are relative to the repo root.
 
 ---
 
-## 5. A report now takes about 2 s held (D-236, `523c460`)
+## 5. A report now takes about 2 s held (D-236, `189b991`)
 
 **What the docs say**
 - GDD:563: *"Report a deactivation | **Touch your phone to the revoked player's phone** | Same gesture, different outcome by state."*
@@ -178,13 +178,13 @@ Code paths are relative to the repo root.
 
 | Call | Docs | Code | Options | Recommendation |
 |---|---|---|---|---|
-| **D-242: an out seat is never named for evasion** | D-187 says evasion is about the living hiding from the house. EP:322 says the notice names *"locking the phone, backgrounding… mid-round"*. **The docs are silent on out seats.** | `core/.../Rules.kt:1130` (`onTheNotice`), `:1444` (the gate filters out out seats), `326f3ed`. The out phone still sends the same bytes (rule 1). | (a) Confirm. (b) Name a seat that evaded while living even if it is out by the meeting. (c) Name every seat. None of these leaks a role, because the room already knows who is out (D-134). | **Confirm (a).** |
-| **D-247: the inbox backlog is removed, and Notes have no names** | D-156 (DL:2563, :2574) refuses fake deliveries. `inboxSeed` was never set, so every phone was identical. | `ui/.../PanelModel.kt:1043-1050` (no backlog when housed), `:2176` `HOUSED_NOTE = "somebody was already at the marker"`, `74e2df8`. | (a) Confirm. (b) Seed a backlog per player (it disguises, but it is fake deliveries, against D-156). (c) Name a real seat in Notes (the app making the room's read). | **Confirm (a).** ⚠️ Separate from this: the orchestrator found that `RoleRevealed`'s size varies by role (the `line` field). Unit F1 is fixing it and has **not landed** at `a0cb0aa`. |
-| **D-248: the NameDrop copy and flow, and JOIN's back arrow** | D-161 puts setup in the light. **The docs say nothing about NameDrop.** | `ui/.../NameDrop.kt:73` (`pastPerms`), `ScreensColdStart.kt:225`, `:308`, `:319` (the path rows), `:367` (JOIN's back arrow is always shown and goes to Perms), `a0cb0aa`. | (a) Confirm the copy and the flow. (b) Change the copy. (c) Also add a lobby reminder. | **Confirm (a).** Check during step 2 below that the four path rows match your phones' iOS wording. |
-| **D-237: the house log names seats only when ROUND_SEED is set** | GDD:33 says the role is never confirmed, and the arming note refuses to name an Insider in a file. | `app/.../RoundAuthority.kt:106` `namesSeats = false` by default; `CheatRoot` sets it only when `benchSeed() != null`. `b35bba3`/`765adf3`. | (a) Confirm. (b) Never name a seat (always `A SEAT`). (c) Always name seats (console only). | **Confirm (a).** The Mac already knows the seed in a seeded round, and real rounds say `A SEAT`. |
-| **D-240: `round.sh --by-hand` still gets the README's Insider seat** | DL:6235-6240 | `app/src/cheats/.../RoundCheat.kt:1003` `benchSeed`; `tools/one-phone/round.sh:260` (`ROUND_BY_HAND`); `326f3ed`. | (a) Confirm: seat 0 is always the Insider, and `ble-peer` can derive tokens. (b) Draw a secure seed with `--by-hand`, which is realistic but makes the Insider unknown and `ble-peer` useless. (c) Add a `--secure-seed` flag. | **Confirm (a).** The two-phone script depends on it. |
-| **D-238: Replay flash timing 0.8 / 0.6 / 0.9 s** | GDD:592 says *"3–5 dots flash in order"*, with Bright light. GDD:624 says *"No twitch timing."* **The docs give no timing.** | `ui/.../ScreensSubroutines.kt:860-862`, `20409e3`. One pass lasts 3.2 s (3 dots) to 5.0 s (5 dots). | (a) Confirm. (b) Slower, about 1.0/0.8/1.2, for arm's length in the dark (a longer bright light signature). (c) Faster. | **Confirm provisionally** and feel it on a phone. |
-| **D-234: the opening banner no longer shows at arming** | D-118 (DL:1686): *"Exactly two events dim the house"*, and one of them is the opening text. D-119: a swipe acknowledges it. | `ui/.../Flow.kt:2906-2907` `roundOpened`: a phone in the lobby goes to ARMED; the banner shows only elsewhere. `c5ab6ed`. | (a) Accept: no opening banner or dim; the role arrives in the Messages thread only. **This quietly removes one of D-118's two light events.** (b) After ARMED, the house pushes the opening banner to every phone at one moment, which brings back D-118's dim. (c) Show the banner on a CONTINUE tap (D-102: no buzz), at different moments per phone. | **(b)**. It keeps D-118's closed light vocabulary and is the same on every phone. Light is the owner's call. |
+| **D-242: an out seat is never named for evasion** | D-187 says evasion is about the living hiding from the house. EP:322 says the notice names *"locking the phone, backgrounding… mid-round"*. **The docs are silent on out seats.** | `core/.../Rules.kt:1130` (`onTheNotice`), `:1444` (the gate filters out out seats), `0ff69d0`. The out phone still sends the same bytes (rule 1). | (a) Confirm. (b) Name a seat that evaded while living even if it is out by the meeting. (c) Name every seat. None of these leaks a role, because the room already knows who is out (D-134). | **Confirm (a).** |
+| **D-247: the inbox backlog is removed, and Notes have no names** | D-156 (DL:2563, :2574) refuses fake deliveries. `inboxSeed` was never set, so every phone was identical. | `ui/.../PanelModel.kt:1043-1050` (no backlog when housed), `:2176` `HOUSED_NOTE = "somebody was already at the marker"`, `087e8ef`. | (a) Confirm. (b) Seed a backlog per player (it disguises, but it is fake deliveries, against D-156). (c) Name a real seat in Notes (the app making the room's read). | **Confirm (a).** ⚠️ Separate from this: the orchestrator found that `RoleRevealed`'s size varies by role (the `line` field). Unit F1 is fixing it and has **not landed** at `6ded618`. |
+| **D-248: the NameDrop copy and flow, and JOIN's back arrow** | D-161 puts setup in the light. **The docs say nothing about NameDrop.** | `ui/.../NameDrop.kt:73` (`pastPerms`), `ScreensColdStart.kt:225`, `:308`, `:319` (the path rows), `:367` (JOIN's back arrow is always shown and goes to Perms), `6ded618`. | (a) Confirm the copy and the flow. (b) Change the copy. (c) Also add a lobby reminder. | **Confirm (a).** Check during step 2 below that the four path rows match your phones' iOS wording. |
+| **D-237: the house log names seats only when ROUND_SEED is set** | GDD:33 says the role is never confirmed, and the arming note refuses to name an Insider in a file. | `app/.../RoundAuthority.kt:106` `namesSeats = false` by default; `CheatRoot` sets it only when `benchSeed() != null`. `fa46a2a`/`a4c14cb`. | (a) Confirm. (b) Never name a seat (always `A SEAT`). (c) Always name seats (console only). | **Confirm (a).** The Mac already knows the seed in a seeded round, and real rounds say `A SEAT`. |
+| **D-240: `round.sh --by-hand` still gets the README's Insider seat** | DL:6235-6240 | `app/src/cheats/.../RoundCheat.kt:1003` `benchSeed`; `tools/one-phone/round.sh:260` (`ROUND_BY_HAND`); `0ff69d0`. | (a) Confirm: seat 0 is always the Insider, and `ble-peer` can derive tokens. (b) Draw a secure seed with `--by-hand`, which is realistic but makes the Insider unknown and `ble-peer` useless. (c) Add a `--secure-seed` flag. | **Confirm (a).** The two-phone script depends on it. |
+| **D-238: Replay flash timing 0.8 / 0.6 / 0.9 s** | GDD:592 says *"3–5 dots flash in order"*, with Bright light. GDD:624 says *"No twitch timing."* **The docs give no timing.** | `ui/.../ScreensSubroutines.kt:860-862`, `c47dedd`. One pass lasts 3.2 s (3 dots) to 5.0 s (5 dots). | (a) Confirm. (b) Slower, about 1.0/0.8/1.2, for arm's length in the dark (a longer bright light signature). (c) Faster. | **Confirm provisionally** and feel it on a phone. |
+| **D-234: the opening banner no longer shows at arming** | D-118 (DL:1686): *"Exactly two events dim the house"*, and one of them is the opening text. D-119: a swipe acknowledges it. | `ui/.../Flow.kt:2906-2907` `roundOpened`: a phone in the lobby goes to ARMED; the banner shows only elsewhere. `0b10498`. | (a) Accept: no opening banner or dim; the role arrives in the Messages thread only. **This quietly removes one of D-118's two light events.** (b) After ARMED, the house pushes the opening banner to every phone at one moment, which brings back D-118's dim. (c) Show the banner on a CONTINUE tap (D-102: no buzz), at different moments per phone. | **(b)**. It keeps D-118's closed light vocabulary and is the same on every phone. Light is the owner's call. |
 
 ---
 

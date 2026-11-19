@@ -1,6 +1,6 @@
 # Someone's Home: Egress containment build spec
 
-Read-only research, written 2026-11-17 against main `f914022`. Nothing was edited, built or committed.
+Read-only research, written 2026-11-17 against main `6cff01a`. Nothing was edited, built or committed.
 U1 (uplink cover, WIP `384f8cb` in worktree `agent-a64289e2b1632afbf`) is assumed landed: every round request rides a `RequestSlot` inside the fixed-cadence padded upload, with exactly-once ids.
 
 Short paths: **GDD** = `_bmad-output/planning-artifacts/gdds/gdd-someone-is-home-2026-08-16/gdd.md`, **DL** = `decision-log.md` and **EP** = `epics.md` in the same folder, **ARCH** = `_bmad-output/planning-artifacts/game-architecture.md`, **PACK** = `_bmad-output/implementation-artifacts/owner-decisions-2026-11-17.md`. Code paths are relative to the repo root; `…/` stands for `src/commonMain/kotlin/home/someoneshome/<module>/`.

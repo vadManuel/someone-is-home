@@ -28,7 +28,7 @@ enum class SessionEnd {
  *
  * A session is named by its slot and the [generation] it was opened with, so a callback from a
  * session the pool has already closed or replaced carries an old generation and is nothing (the
- * spike's `==` fix, cff978e, solved the same staleness by comparing sessions).
+ * spike's `==` fix, 2c323e9, solved the same staleness by comparing sessions).
  */
 interface RangingSessions {
     /** Open a fresh idle session in [slot]: its archived discovery token, or null if it gave none. */

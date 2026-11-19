@@ -21,7 +21,7 @@ import kotlin.test.assertTrue
  * **A seat's loss is always reported, and always before a later resume of the same seat** (D-227, D-246).
  *
  * `TransportHost` reports [TransportHost]'s `onLost` under its lock, and takes that lock
- * uncancellably. Two properties, one test each. `1d16974` built both and could not make either fail
+ * uncancellably. Two properties, one test each. `96a4c2e` built both and could not make either fail
  * by breaking it, because on loopback the window each closes is microseconds wide. Here the window
  * is held open on purpose: the caller's `onLost` takes [SLOW_LOSS_MILLIS] (a thread descheduled at
  * the wrong moment, or a slow desk), and what may or may not get past it while it runs is the test.

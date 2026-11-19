@@ -52,7 +52,7 @@ private fun randomKey(): Long {
  *   carries an old generation, which the pool ignores.
  *
  * Each session gets its own delegate, which knows its slot and generation: the spike's `==` check
- * (cff978e) answered *is this callback from the session I hold?*, and the generation answers it
+ * (2c323e9) answered *is this callback from the session I hold?*, and the generation answers it
  * without comparing Kotlin wrappers at all. No `delegateQueue` is set, so every callback arrives on
  * the main queue, where the uploader beats and applies the plan: nothing here is shared across
  * threads.
