@@ -466,3 +466,12 @@ Results: `uwb-spike-results-2026-11-18.md`.
   - **`NSNearbyInteractionUsageDescription`** (iOS's one-time prompt): "Someone's Home measures the distance between phones in the room. It is how the game sees who is close to whom."
   - **The setup walk's permission row** that replaces BLUETOOTH reads **NEARBY DEVICES**.
 - **D-292, the simulator answers "UWB supported":** proposed so the desktop tools keep working. It applies only to the simulator source set, and the owner did not object.
+
+## Owner rulings, 2026-11-18: the Egress and a Subroutine in progress
+
+Today an Egress's opening pushes its alert over a Subroutine screen. The person is taken to the springboard and loses the work, and a rescan deals a fresh question. This contradicts the code's own comment at `Flow.kt:3160` and GDD:374/:623.
+
+- **E1: stay in it.** When an Egress opens, the alert drops over a Subroutine in progress as a banner the person can swipe away, or that clears itself. The person stays on the Subroutine and can finish or abandon it. They can also keep scanning other cards and doing Subroutines while the Egress runs, as today.
+- **E2: rescan to switch.** If the card someone is working at becomes one of the Egress's two cards, nothing changes on their screen by itself. To help contain, they scan that card again, which brings up the tap control.
+  - On that rescan the house must not open a Subroutine the phone cannot reach. Today it quietly does.
+  - E2 settles D-295's provisional O1: a node card scanned during a running Egress shows the tap control, not the work.
