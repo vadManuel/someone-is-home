@@ -2,68 +2,81 @@
   <img src="iosApp/iosApp/Assets.xcassets/AppIcon.appiconset/icon-1024.png" alt="Someone's Home: the lit door" width="180">
 </p>
 
-# Someone's Home
+<h1 align="center">Someone's Home</h1>
 
-A co-located social deduction game played in the host's real house, in the dark, in enforced
-silence, with phones as the only light.
+<p align="center"><i>The lights are off. The doors are locked. The house would like a word.</i></p>
+
+---
+
+**Someone's Home** is a social deduction game you play in a real house, in the dark, in silence,
+with your phones as the only light.
 
 The smart home has turned. The perimeter is armed and nobody leaves. Everyone in the building is a
-**Resident**; some of them are secretly also **Insiders**, blackmailed into working for the house.
-It is a race between two progress bars, not a war of attrition — nobody is eliminated, access is revoked.
+**Resident**, and a few of you are *also* **Insiders**, quietly working for the house.
 
-Residents walk to paper markers around the home and complete **Subroutines** there, driving the
-**System Integrity** meter down. Reach zero and the perimeter disarms and they walk out.
+Nobody is eliminated. Access is **revoked**.
 
-Insiders shadow that loop for cover. They sabotage, they take **Override** routes Residents cannot
-use, and they **Revoke** a Resident by bringing their phone to that player's phone — a physical act
-at arm's length, silent and unattributed. They can also trigger an **Egress**, a house-wide crisis
-that has to be contained at two markers at once or the house wins outright.
+## How a round goes
 
-Meetings are called by walking to the meeting card and physically scanning it — never from a chair.
-Every lamp snaps to white, the masking audio cuts out, every phone rings, and speech is permitted
-for as long as the meeting lasts. The group talks, votes, and can **Restrain** someone. Nothing is
-confirmed: no alignment is ever revealed, on removal or at the tally or at any other point. A round
-runs from lobby to victory and contains many shifts of work between meetings.
+🔦 **Lights out.** Everyone spreads through the house with their phone. No talking. Not a word.
 
-## How it is actually played
+🗂️ **Residents work.** Paper cards are hidden around the home. Walk to one, scan it, and complete the
+**Subroutine** it gives you. Each one drives the house's **System Integrity** down. Reach zero and the
+perimeter opens and everyone walks out.
 
-Real house, lights off. One phone per player, one of them hosting. No speaking outside meetings.
-The markers are QR cards printed at home and placed around the building; the host maps their own
-home once in a roughly fifteen-minute setup walk, and that map is reused every round after. Don't
-run, don't dodge when someone brings their phone to yours, and keep your phone held out — those are
-social contract, and the app never checks any of them.
+🫥 **Insiders pretend to work.** They sabotage, slip between rooms by routes nobody else can take, and
+**Revoke** a Resident by passing their phone close to that person's phone. It's silent and
+unattributed, and it happens at arm's length in the dark. Or they trigger an **Egress**, a house-wide
+crisis that two people have to contain at two cards at once, or the house wins outright.
 
-## Tech
+📞 **Someone calls a meeting.** Walk to the meeting card and scan it. Every lamp snaps to white,
+every phone rings, and *now* you may speak. Argue, accuse, vote. **Restrain** someone if you're
+brave. The house never confirms who anyone was: not when they're restrained, not at the vote, not
+ever.
 
-Kotlin Multiplatform and Compose Multiplatform, iPhone first with Android on the roadmap. The game
-core is server-authoritative, deterministic and replayable, and everything a client receives is
-redacted per seat by a schema that fails closed. The iOS Simulator cannot run the real game — it has
-no camera, BLE, torch or haptics, which is every input this game has, so anything that touches them
-is only ever verified on physical devices.
+🔁 Then the lights go out again, and the next shift begins.
 
-## Building
+## House rules (the ones the app can't check)
 
-```
-PATH="$HOME/.local/share/mise/shims:$PATH" ./gradlew check
-./run-app.sh simulator playtest
-```
+- Don't run.
+- Don't dodge when someone brings their phone towards yours.
+- Keep your phone held out where it can be seen.
+- Silence outside meetings is the whole game. Honour it.
 
-The simulator run is a layout-only playtest: it shows that screens lay out correctly on a
-phone-shaped panel, and nothing about the game.
-
-## Documentation
-
-- `CLAUDE.md` — the closed vocabulary and the rules that override normal instincts here.
-- `_bmad-output/project-context.md` — the implementation rules, deliberately short.
-- `_bmad-output/planning-artifacts/game-architecture.md` — architecture.
-- `_bmad-output/planning-artifacts/gdds/gdd-someone-is-home-2026-08-16/gdd.md` — the design.
-- `.../epics.md` and `.../decision-log.md` — the work, and why anything is the way it is.
+You need **5 to 18 people**, **one UWB iPhone each** (iPhone 11 or later, not SE), a home with a few
+rooms, and about fifteen minutes for the host to walk the house once and place the cards. The house
+remembers your home after that.
 
 ## Status
 
-In active development. The design is still moving; the decision log is the record of what changed
-and why.
+🚧 In active development, and not ready for a game night yet. The design still moves, and the
+[decision log](_bmad-output/planning-artifacts/gdds/gdd-someone-is-home-2026-08-16/decision-log.md)
+records every change and why.
+
+## Run it yourself
+
+You'll need a Mac with Xcode, [mise](https://mise.jdx.dev) (it provides the right JDK), and an Apple
+developer Team ID for signing to a phone.
+
+```sh
+# the tests
+PATH="$HOME/.local/share/mise/shims:$PATH" ./gradlew check
+
+# every phone plugged into this Mac, playtest build
+SOMEONES_HOME_DEVELOPMENT_TEAM=<your team id> ./run-app.sh device playtest
+
+# layout only: the simulator has no UWB, camera, torch or haptics, so it can't play the game
+./run-app.sh simulator playtest
+```
+
+It's Kotlin Multiplatform and Compose Multiplatform, iPhone first. The game is decided by one phone
+acting as the house: it holds the whole state of the round, it is deterministic and replayable, and
+it tells each phone only what that phone is allowed to know.
+
+If you're reading the code, start with [`CLAUDE.md`](CLAUDE.md) (the vocabulary is
+closed, and it's enforced) and [`_bmad-output/project-context.md`](_bmad-output/project-context.md).
 
 ## Licence
 
-All rights reserved. This repository is public to be read, not reused: see [LICENSE](LICENSE).
+All rights reserved, except one: you may build it and play it privately on your own phones. You
+may not share builds, sell it or reuse any part of it. See [LICENSE](LICENSE) for the details.

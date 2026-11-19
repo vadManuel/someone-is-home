@@ -1,14 +1,31 @@
 Copyright (c) 2026 Manuel Vasquez Dickson. All rights reserved.
 
 Someone's Home, including its source code, art, text, sound, game design documents and
-every other file in this repository, is the exclusive property of the copyright holder.
+every other file in this repository (together, "the Work"), is the exclusive property of the
+copyright holder.
 
-This repository is public so that it can be read. No licence is granted. You may not use,
-copy, modify, merge, publish, distribute, sublicense, sell, or create derivative works from
-any part of it, in whole or in part, without the prior written permission of the copyright
-holder.
+PERSONAL PLAY
+
+You may clone this repository, build the Work, and install and run the resulting app on your
+own devices and on the devices of the people you play with, solely to play the game privately
+and without charge to anyone. Any modification you make for that purpose must stay on those
+devices.
+
+EVERYTHING ELSE IS RESERVED
+
+No other right is granted. Without the prior written permission of the copyright holder you
+may not:
+
+  - distribute, publish, sublicense, sell, rent or lend the Work, any build of it, or any
+    modified version of it, in whole or in part, by any means, including app stores, test
+    distribution services and public or shared repositories other than a GitHub fork;
+  - use the Work, or any part of it, for any commercial purpose, including charging for
+    entry to a game or event where it is played;
+  - copy any part of the Work, including its code, art, text or design, into another work;
+  - use the name "Someone's Home", or the Work's icon or art, for anything.
 
 GitHub's Terms of Service let GitHub users view and fork public repositories on GitHub.
-Nothing in this repository grants any right beyond that.
+Nothing in this licence grants any right beyond that and the personal-play permission above.
 
-The name "Someone's Home" is not licensed for any use.
+The Work is provided "as is", without warranty of any kind. The copyright holder is not liable
+for any claim, damage or other liability arising from its use.
