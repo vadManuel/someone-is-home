@@ -480,6 +480,7 @@ Today an Egress's opening pushes its alert over a Subroutine screen. The person 
 
 - **O2: only those tapping feel the pulse.** Only a phone with a live tap control buzzes on each pulse of the house's grid. This confirms what D-295 built.
 - **O3: four in a row.** A containment needs four consecutive pulses with no miss, and a miss starts the count again. This replaces "any four distinct pulses".
-- **O4: no words during the 3 s lockout, but a Long buzz when the attempt fails.** The lockout shows no WAIT. The tapping phone gives one `Haptic.Long` at the moment its attempt fails, as the 3 s lockout begins.
-  - Read as one Long buzz, D-135's Long.
-  - If the owner meant a vibration lasting the whole 3 s, that is a new pattern and goes back to the owner.
+- **O4: no words during the 3 s lockout, and the tapping phone vibrates for the whole 3 s.**
+  - The lockout shows no WAIT.
+  - The phone whose attempt failed vibrates continuously for the full 3 s of the lockout, from the moment the attempt fails.
+  - The owner confirmed this exact reading on 2026-11-18. It is a new haptic pattern, a sixth beside D-135's five, ruled by the owner.
