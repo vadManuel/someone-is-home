@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="iosApp/iosApp/Assets.xcassets/AppIcon.appiconset/icon-1024.png" alt="Someone's Home: the lit door" width="180">
+</p>
+
 # Someone's Home
 
 A co-located social deduction game played in the host's real house, in the dark, in enforced
