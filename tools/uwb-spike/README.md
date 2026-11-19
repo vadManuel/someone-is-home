@@ -187,16 +187,122 @@ ranges with B as usual. Sessions 2 to 8 are opened only to see whether iOS allow
 - This only tests one phone's limit. Sessions 2 to 8 have no real peer, so this says nothing about
   how well seven live sessions range together.
 
+## Three phones
+
+This answers three questions the two-phone run could not:
+
+1. With two live peers, does each pair keep 6.7 readings a second, or is the rate split?
+2. How many sessions, live and idle, does each phone hold before iOS refuses one?
+3. Does any session option raise the rate above 6.7 a second?
+
+In a three-phone run every phone ranges with both others, so each phone holds two live sessions.
+Each session has its own token, and `run.sh` gives each phone the right two.
+
+### Before you start (5 minutes)
+
+1. All three phones charged, **unlocked**, and plugged into this Mac. Developer Mode on.
+2. In T1: `UWB_PHONE_C=<part of the third phone's name> tools/uwb-spike/run.sh start`. The first
+   time, this builds and installs on all three. After that, add `--no-install`. Phone B is the
+   phone left over once A and C are named; set `UWB_PHONE_B=…` if more than three are plugged in.
+3. Press **Allow** on the phone that has never run the spike.
+4. Wait until T1 shows six `read …'s token` lines, for example `phone A read C's token`.
+
+Each screen now shows one line per other phone: its letter, the distance, and the readings per
+second. T2's `sample.sh` sees the third phone without being told. It prints one block per
+direction (`A sees B`, `A sees C`, `B sees A`, and so on), and one line per phone:
+`A in all, across 2 peer(s): … /s`.
+
+### 1. Rate with two live peers (30 s)
+
+Put the three phones on a shelf or a table edge in a triangle, about 50 cm apart. Prop them
+upright, not lying flat (step 2 of the two-phone run). Nobody moves.
+
+`sample.sh "three-still" 30`
+
+- **Record:** the rate, the `longest gap` and the `median gap` for all six directions, and the
+  three `in all` lines.
+- **What it means:**
+  - Each direction near 6.7/s, and each `in all` near 13/s: the rate holds per pair.
+  - Each direction near 3.3/s, and each `in all` near 6.7/s: the phone splits one rate between
+    its peers. Then 7 peers would get under 1 reading a second each.
+  - Anything else: write down the numbers, and say which phone was slower.
+
+### 2. One phone passes another (15 s)
+
+Leave B and C where they are. Hold A and start `sample.sh "three-pass" 15`. Bring A slowly to
+10 cm from B, press **MARK** on A, then take it back to where it was.
+
+- **Record:** `A sees B` and `B sees A`: `nearest`, the `longest gap`, and the `MARK` line. Also
+  record the rate for `A sees C` and `B sees C`, to check that the pass did not slow the other
+  pairs.
+- **Expected:** `nearest` close to 0.10, and no gap much over 150 ms in any direction.
+
+### 3. How many sessions each phone holds (about 1 minute per phone)
+
+Ctrl-C in T1. Probe one phone at a time, with the phones left as they were in step 1:
+
+`UWB_PHONE_C=… tools/uwb-spike/run.sh start --no-install --probe A`
+
+Once the tokens are read, start `sample.sh "probe-A" 50` in T2. Phone A opens one more idle
+session every 2 seconds. It stops when iOS refuses one, or when it holds 20. When it stops, A's
+screen and T1 show a line like this:
+
+`A: [uwb] LIMIT live=2 idle=5 total=7 model=iPhone17,1 os=iOS-26.6.2 stop=ActiveSessionsLimitExceeded`
+
+Then do the same with `--probe B` and `--probe C`.
+
+- **Record:** the `LIMIT` line from each phone.
+  - `total` is how many sessions the phone held when it stopped.
+  - `stop=cap-20` means iOS never refused one, so that phone's limit is at least 20.
+- **Also record:**
+  - any `INVALIDATED` line in T1 that ends in `peer=B` or `peer=C` rather than `peer=-`, which
+    means iOS ended a *live* session to make room;
+  - whether `A sees B` and `A sees C` kept their step 1 rate in T2 as the idle sessions were
+    added.
+
+### 4. The session options, one at a time (15 s each)
+
+Ctrl-C in T1. These use **two phones**: leave `UWB_PHONE_C` unset. Hold A and B 1 m apart,
+upright, and keep them still. Each line below is one T1 start and one T2 sample. Ctrl-C T1
+between them.
+
+| T1: `tools/uwb-spike/run.sh start --no-install …` | T2: `sample.sh … 15` |
+|---|---|
+| nothing extra (the baseline) | `"opt-none"` |
+| `--camera-assist` | `"opt-camera"` |
+| `--extended-distance` | `"opt-extended"` |
+| `--delegate-queue` | `"opt-queue"` |
+
+- **Check first:** at start, T1 prints each phone's `CONFIG` line with the option set to `true`.
+  Once the token is read, it prints `S1 CONFIGURED …=true`. That is the option as iOS holds it.
+- **`--camera-assist`** turns the camera on. The first time, iOS asks for the camera: press
+  **Allow**. Keep the lights on and the back cameras uncovered. Also record `direction: in`: the
+  16 Pro gave no direction without the camera.
+- **`--extended-distance`** only does anything if **both** phones said `extended_distance=true` in
+  their `CAPABILITY` line. The 13 Pro says `false`. If the third phone says `true`, use it and the
+  16 Pro for this row: `UWB_PHONE_B=<the third phone's name>`.
+- **`--delegate-queue`** is not an Apple option for rate. It only moves the readings off the
+  phone's busy screen thread, to rule that thread out as the cause.
+- **Record:** each row's rate and `longest gap`, against the baseline.
+  - **A rate clearly above 6.7/s on any row is the finding:** write down which option.
+  - If an option is refused, the `INVALIDATED` line names why. Record that too.
+
+**No option sets the rate.** iOS 26's `NINearbyPeerConfiguration` has exactly two settings,
+camera assistance and extended distance, and nothing about rate. The 55 Hz paper (arXiv
+2511.03534) measured an iPhone 11 against an iPhone 12 Pro Max and an Apple Watch. So if no row
+beats 6.7/s, the rate is set by iOS or the hardware, not by the spike.
+
 ## Afterwards
 
 Ctrl-C in T1 (or `tools/uwb-spike/run.sh stop`). Send:
 
 - the run folder, `/tmp/someones-home-one-phone/runs/uwb-<date-time>/`, which holds `phone.log`,
-  `phoneB.log` and `uwb-relay.log`;
+  `phoneB.log` (and `phoneC.log` for a three-phone run) and `uwb-relay.log`;
 - `/tmp/someones-home-one-phone/uwb-samples.txt`;
 - the PASS/FAIL notes.
 
-To re-read a whole run later: `tools/uwb-spike/sample.sh --file <run>/phone.log <run>/phoneB.log`.
+To re-read a whole run later: `tools/uwb-spike/sample.sh --file <run>/phone.log <run>/phoneB.log`,
+with `<run>/phoneC.log` on the end for a three-phone run.
 
 ## What the log lines are
 
@@ -219,4 +325,9 @@ phone.
 | `S1 CONVERGENCE status=… reasons=…` | What the direction estimate is still waiting for. |
 | `S1 TALLY` | Every 10 s: how many readings arrived. |
 | `APP …` | The app lost or regained the foreground: `RESIGN-ACTIVE`, `BACKGROUND`, `FOREGROUND`, `ACTIVE`. `LOCKING` and `UNLOCKED` appear only on a phone with a passcode. |
-| `MARK n d=…` | MARK was pressed, and the distance at that moment. |
+| `MARK n d=…` | MARK was pressed, and the distance at that moment. With three phones: `d_B=… d_C=…`, one per peer. |
+| `CONFIG …` | The session options this launch was given, and whether it probes. |
+| `S1 CONFIGURED …` | An option as the session's configuration reports it, after the spike set it. |
+| `… peer=B` | Three phones only: the line belongs to the session for phone B. `peer=-` is an idle session. |
+| `PEERS me=A peers=B,C` | Three phones only: which phone this is, and which it ranges with. |
+| `PROBE START` / `LIMIT …` | The limit probe started, and where it stopped. `LIMIT` gives the live, idle and total sessions, and `stop=` gives the error that refused one, or `cap-20`. |
