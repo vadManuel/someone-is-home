@@ -11081,6 +11081,53 @@ fake, and the iOS code is proved to compile and link.
 
 The GDD now says what D-300 to D-303 built, and nothing more. Bluetooth ranks who is near; the house pairs phones for Ultra Wideband within each phone's capacity; a Revoke is a 10 cm pass both phones read; a report is a non-Revoked phone holding a Revoked one within 30 cm for 2 s, filling a circle, after D-291's 5 s grace; and the map places within 1.5 m. The 1.5 m, the per-round fallback chosen at arming, the report's timing slack, and a Revoked phone that keeps measuring with none of it read are marked provisional; the circle's look is not described (overnight decision 17). Sections changed: *Background and Rationale* (the platform-layer list), *M6* (the Revoke's step 3), *M12* (ghost phase 1's radio), *Controls and Input* (the report row), *The contact primitive* (rewritten: the pairing, the fallback, the 30 cm hold and the grace), *Vulnerability and detection* (what a sweep counts, the Revoked phone's table and its closing line), *The loop* and *F-011* in the round trace (the Revoked phone's radio, and a note on the report), and *Platform capabilities required* (the radios, NEARBY DEVICES beside BLUETOOTH, and no NameDrop step).
 
+### D-305 · **The PERMISSIONS screen scrolls between its header and its buttons, and the buttons stay pinned at the bottom — built (D-303's raised item 1)**
+
+**The ruling** (owner, 2026-11-19): *scroll.* The line under the header, the rows and the words
+under them scroll; the buttons (CONTINUE, OPEN SETTINGS, REQUEST WHAT IS MISSING, whichever the
+state shows) stay at the bottom, always on the glass. Type sizes, spacing, light levels, wording,
+the header and the status row (D-078) do not move.
+
+**What changed** (`PermsScreen`, `ScreensColdStart.kt`). Under the header, one column takes the
+space the spacer took: a scrolling part (`PERMS_SCROLL`) holding the line, the rows, the spacer and
+the gate's words with Local Network's caption, then the buttons, 10 under it as they always were.
+The spacer still pushes the gate's words down onto the buttons, because a scroll's content is at
+least as tall as the space it is given. The scroll is the one `TargetList` already uses
+(`verticalScroll(rememberScrollState())` on a weighted column), the only other scroll in `ui`.
+
+**What the renders showed** (`PermsWalkRender`, 720×1520 with the camera band, pixel-compared with
+the same renders from `fa07102`):
+
+- **Unchanged, pixel for pixel**: NEARBY DEVICES unasked, all granted, and CONTINUE pressed (JOIN A
+  HOME); and `ScreenshotTest`'s mockup-size `screens-mockup/perms.png`.
+- **The 3:4 sweep** (`ScreenshotTest`, 600×800, every row granted): on `fa07102` CONTINUE was below
+  the edge entirely and the last row was cut off; now CONTINUE is pinned and the rows scroll above it.
+  That canvas is not a phone, but the screen now behaves the same on any height.
+- **The tallest state**: OPEN SETTINGS and REQUEST WHAT IS MISSING on the glass at full height;
+  THIS PHONE CANNOT TAKE A SEAT YET shows above them, and the rows it names and the caption are
+  under the scroll's edge (`perms-tallest-scrolled.png` is the same state scrolled to its end).
+- **Two states that looked as if they fit did not.** On `fa07102` the screen's column squeezed what
+  ran past the bottom instead of letting it fall off: with NEARBY DEVICES refused, REQUEST WHAT IS
+  MISSING was drawn 51 tall where it is 64, and on a fresh phone the gaps around the gate's
+  sentence closed by 8. With the scroll both buttons are their own height again, and the last line
+  of the gate's sentence (NEARBY DEVICES; NOTIFICATIONS on a fresh phone) is under the scroll's
+  edge until the screen is scrolled.
+
+**Proved** (`PermsPinnedActionsTest`, ui desktop, new): in the tallest state the caption ends below
+the scrolling part (so the state really needs the scroll), and each button's whole box, measured
+unclipped, lies inside the screen. *The pinning removed* (the buttons moved back inside the scroll):
+`OPEN SETTINGS runs off the screen in the tallest state: it spans 1527.0..1639.0 on a screen 1520
+tall`.
+
+**Checked**: `:ui:check --continue` in the worktree on `fa07102` plus this change, exit 0, every
+result XML counted with a python glob: ui 715 (desktop; 714 and `PermsPinnedActionsTest`'s one)
+and 344 (iOS Simulator), **1 059 tests, no failures, none skipped**. The rest of the repo was not
+run here.
+
+**Raised, not built.** Nothing on the screen says there is more under the edge. On a phone with one
+row refused, the row that names the refusal is the part a host does not see until they scroll; the
+row itself still reads REFUSED. A scroll hint, or opening the scroll at its end, is the owner's call.
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

@@ -9,9 +9,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.unit.dp
 import home.someoneshome.model.DevicePermission
@@ -25,7 +28,8 @@ import kotlin.test.assertEquals
  * **A viewer, not an assertion: the PERMISSIONS walk with its NEARBY DEVICES row** (D-303), in the
  * row's states, and the screen CONTINUE reaches now the NameDrop step is gone. Writes
  * `build/screens/perms-*.png` at the mockup's 720×1520 with its camera band, so the row can be laid
- * beside BLUETOOTH and the rest.
+ * beside BLUETOOTH and the rest. The tallest state is drawn twice, at the top of its scroll and at
+ * the end of it (D-305).
  */
 class PermsWalkRender {
 
@@ -66,6 +70,11 @@ class PermsWalkRender {
             this[DevicePermission.NearbyDevices] = Grant.Refused
         }
         render("perms-tallest", at(ScreenId.Perms, PermsModel(read = { tallest.getValue(it) }).also { it.refresh() }))
+        // The same state scrolled to its end (D-305): the gate's words and the caption reached, the
+        // buttons where they were.
+        render("perms-tallest-scrolled", at(ScreenId.Perms, PermsModel(read = { tallest.getValue(it) }).also { it.refresh() })) {
+            onNodeWithTag(PERMS_SCROLL).performScrollToNode(hasText("the house finds out", substring = true))
+        }
         // CONTINUE on a phone that has granted everything: straight to JOIN A HOME, no step between.
         val walked = at(ScreenId.Perms, perms(Grant.Granted))
         render("perms-continue", walked) { onNodeWithText("CONTINUE").performClick() }

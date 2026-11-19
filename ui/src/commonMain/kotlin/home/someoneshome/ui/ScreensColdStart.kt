@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -193,67 +195,88 @@ fun PermsScreen() {
     LaunchedEffect(perms) { perms.refresh() }
     KitScreen {
         KitHeader("PERMISSIONS", p, trail = true)
-        KitBody("Grant these now, while the lights are on.", p)
-        KitRules(p) {
-            DevicePermission.entries.forEach { permission ->
-                val grant = perms.grant(permission)
-                // **The row's own rule, not [Grant]'s** — a row iOS will never confirm is done at
-                // ASKED, and drawing it as outstanding beside four done ones is the screen agreeing
-                // with the gate that something is still owed when nothing is. An open row's state is
-                // an outline; one still owed is the filled tag, which is the mockup's TAP TO GRANT.
-                val open = permission.opensTheGate(grant)
-                Row(
-                    Modifier.fillMaxWidth().heightIn(min = 56.dp)
-                        .edgeLine(PanelSide.Bottom, p.line, 1.dp)
-                        .tap { actions.requestGrant(permission) }
-                        .padding(horizontal = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Words(permission.label, Modifier.weight(1f), size = 24, color = p.ink, lineHeight = 1.0)
-                    Box(
-                        Modifier.border(1.dp, if (open) p.dim else p.ink)
-                            .background(if (open) Color.Transparent else p.ink)
-                            .padding(1.dp).padding(horizontal = 6.dp, vertical = 5.dp)
-                    ) {
-                        Tag(grant.label, if (open) p.ink else Amber.Bone, Modifier.height(12.dp))
+        // **The words and rows scroll; the buttons under them do not** (D-305). One row refused,
+        // the rest owed and Local Network's caption showing put OPEN SETTINGS and REQUEST WHAT IS
+        // MISSING below the edge, where nothing could tap them. The gap between the two parts is
+        // the 10 the button column always had, so a screen that fits draws as it did.
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(
+                Modifier.fillMaxWidth().weight(1f).testTag(PERMS_SCROLL)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                KitBody("Grant these now, while the lights are on.", p)
+                KitRules(p) {
+                    DevicePermission.entries.forEach { permission ->
+                        val grant = perms.grant(permission)
+                        // **The row's own rule, not [Grant]'s** — a row iOS will never confirm is
+                        // done at ASKED, and drawing it as outstanding beside four done ones is the
+                        // screen agreeing with the gate that something is still owed when nothing
+                        // is. An open row's state is an outline; one still owed is the filled tag,
+                        // which is the mockup's TAP TO GRANT.
+                        val open = permission.opensTheGate(grant)
+                        Row(
+                            Modifier.fillMaxWidth().heightIn(min = 56.dp)
+                                .edgeLine(PanelSide.Bottom, p.line, 1.dp)
+                                .tap { actions.requestGrant(permission) }
+                                .padding(horizontal = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Words(permission.label, Modifier.weight(1f), size = 24, color = p.ink, lineHeight = 1.0)
+                            Box(
+                                Modifier.border(1.dp, if (open) p.dim else p.ink)
+                                    .background(if (open) Color.Transparent else p.ink)
+                                    .padding(1.dp).padding(horizontal = 6.dp, vertical = 5.dp)
+                            ) {
+                                Tag(grant.label, if (open) p.ink else Amber.Bone, Modifier.height(12.dp))
+                            }
+                        }
+                    }
+                }
+                // Inside the scroll the column's height is at least the space it was given, so this
+                // still pushes the gate's words down onto the buttons when everything fits.
+                KitSpacer()
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    // What the last tap was refused with, or what the gate is still waiting for.
+                    // Never both, and never an invented sentence: a complete phone has nothing here
+                    // at all.
+                    (perms.refusal ?: perms.gateRefusal())?.let { KitBody(it, p, size = 22) }
+                    // **The sentence the value column cannot hold** (the owner's 2026-08-25
+                    // report). ASKED is the end state of that row and iOS has no call that will
+                    // ever move it — so without this line a host who has granted the permission is
+                    // reading a word that looks like a countdown to an answer that is not coming.
+                    // It appears only on the phone that is really in that state.
+                    if (DevicePermission.entries.any { !it.confirmable && perms.grant(it) == Grant.Asked }) {
+                        KitCaption(
+                            "iOS never reports the local network grant. ASKED is all this phone can know; " +
+                                "the house finds out when it goes on the air.",
+                            p, size = 20,
+                        )
                     }
                 }
             }
-        }
-        KitSpacer()
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            // What the last tap was refused with, or what the gate is still waiting for. Never
-            // both, and never an invented sentence: a complete phone has nothing here at all.
-            (perms.refusal ?: perms.gateRefusal())?.let { KitBody(it, p, size = 22) }
-            // **The sentence the value column cannot hold** (the owner's 2026-08-25 report). ASKED
-            // is the end state of that row and iOS has no call that will ever move it — so without
-            // this line a host who has granted the permission is reading a word that looks like a
-            // countdown to an answer that is not coming. It appears only on the phone that is
-            // really in that state.
-            if (DevicePermission.entries.any { !it.confirmable && perms.grant(it) == Grant.Asked }) {
-                KitCaption(
-                    "iOS never reports the local network grant. ASKED is all this phone can know; " +
-                        "the house finds out when it goes on the air.",
-                    p, size = 20,
-                )
-            }
-            // **A refused row cannot be un-refused from in here** — iOS asks once, ever, and the
-            // second ask raises nothing. So the control appears exactly where its fix is outside
-            // the app, which is [LobbyModel.offersTheGrant]'s rule read on this screen.
-            if (perms.states.values.any { it == Grant.Refused }) {
-                KitSecondary("OPEN SETTINGS", p, onClick = actions.openSystemSettings)
-            }
-            if (perms.complete) {
-                KitPrimary("CONTINUE", p) { go(ScreenId.Join) }
-            } else {
-                // It asks, and it stays here. The one screen where a control that navigated
-                // without doing anything cost an evening.
-                KitPrimary("REQUEST WHAT IS MISSING", p, size = 28, onClick = actions.requestMissingGrants)
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                // **A refused row cannot be un-refused from in here** — iOS asks once, ever, and
+                // the second ask raises nothing. So the control appears exactly where its fix is
+                // outside the app, which is [LobbyModel.offersTheGrant]'s rule read on this screen.
+                if (perms.states.values.any { it == Grant.Refused }) {
+                    KitSecondary("OPEN SETTINGS", p, onClick = actions.openSystemSettings)
+                }
+                if (perms.complete) {
+                    KitPrimary("CONTINUE", p) { go(ScreenId.Join) }
+                } else {
+                    // It asks, and it stays here. The one screen where a control that navigated
+                    // without doing anything cost an evening.
+                    KitPrimary("REQUEST WHAT IS MISSING", p, size = 28, onClick = actions.requestMissingGrants)
+                }
             }
         }
     }
 }
+
+/** The PERMISSIONS screen's scrolling part: the line under the header, the rows and the gate's words. */
+const val PERMS_SCROLL: String = "perms-scroll"
 
 /**
  * **What the RESIDENT field answers to, from inside a Compose test and from outside the process.**
