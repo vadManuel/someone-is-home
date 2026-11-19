@@ -462,3 +462,7 @@ Results: `uwb-spike-results-2026-11-18.md`.
   - After the grace, anyone can report, the Insider included, and their circle warns them first.
   - A neighbour already within 30 cm of the victim can report at once. That is accepted under U3.
 - **D-287, the door at the ending: confirmed.** Once the ending screen shows, the round is over, so a new phone may join again and waits on WAITING FOR THE HOST until NEW ROUND.
+- **The Nearby Interaction wording is approved:**
+  - **`NSNearbyInteractionUsageDescription`** (iOS's one-time prompt): "Someone's Home measures the distance between phones in the room. It is how the game sees who is close to whom."
+  - **The setup walk's permission row** that replaces BLUETOOTH reads **NEARBY DEVICES**.
+- **D-292, the simulator answers "UWB supported":** proposed so the desktop tools keep working. It applies only to the simulator source set, and the owner did not object.
