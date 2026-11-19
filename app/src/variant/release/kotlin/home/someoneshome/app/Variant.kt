@@ -25,8 +25,14 @@ object BuildVariant {
 /**
  * What the app shows: the device, at boot. Nothing can advance it yet — the transport and the
  * loop do not exist — and this root does not pretend otherwise.
+ *
+ * **A phone without Ultra Wideband never reaches the boot screen** (D-292): [uwb] is read once at
+ * launch, and [launchAs] sends that phone to the gate instead.
  */
 @Composable
-fun VariantRoot() {
-    Screen(PanelState(screen = ScreenId.Boot))
+fun VariantRoot(uwb: Boolean) {
+    when (launchAs(uwb)) {
+        Launch.Gate -> LaunchGate()
+        Launch.Play -> Screen(PanelState(screen = ScreenId.Boot))
+    }
 }

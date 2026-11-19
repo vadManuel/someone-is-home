@@ -9258,6 +9258,86 @@ hold move with UWB (Q5), not here. No event, effect, frame or recording moved.
 
 **Not on a phone.**
 
+### D-292 · **A phone without Ultra Wideband is told at launch that it cannot play: THIS PHONE CAN'T PLAY, and nothing after it, in every variant — built (UWB plan unit 1, without the Info.plist string)**
+
+**The ruling** (owner, 2026-11-17, *UWB phones only; no Bluetooth fallback* and *Wording approved* in
+`owner-decisions-2026-11-17.md`): *a phone without UWB must be told at launch that it cannot play
+because its hardware is insufficient. Detect it with Nearby Interaction's capability check
+(`NISession.deviceCapabilities.supportsPreciseDistanceMeasurement`).* The words, approved verbatim:
+"THIS PHONE CAN'T PLAY" / "Someone's Home needs Ultra Wideband: iPhone 11 or later, not iPhone SE."
+This is unit 1 of `uwb-replacement-plan-2026-11-18.md`.
+
+**Now.**
+
+1. **`platform`: `expect fun uwbSupported(): Boolean`** (`UltraWideband.kt`). On a phone
+   (`iosArm64Main`) it is `NISession.deviceCapabilities.supportsPreciseDistanceMeasurement`, wrapped so
+   that anything thrown reads as false, the gate's closed side. The deployment target is 18, so the
+   iOS 16 API is always there. **The simulator build (`iosSimulatorArm64Main`) answers true.** The
+   simulator has no UWB, and an honest false would put the gate in front of `run-app.sh`,
+   `rehearse.sh`, `e2e.sh` and the sim hunt, which sign nothing about the game off. A device build
+   cannot carry that answer, because it is compiled into the simulator's source set alone. `platform`
+   has no desktop target; the desktop render harness never asks.
+2. **`ui`: `ScreenId.NoUwb`, drawn by `NoUwbScreen`** in `ScreensColdStart.kt`: light-field
+   (`Palette.BONE`), the headline in the self-test's title type (48, ink) and the line under it in
+   `KitBody` (24, ink). There is no control, timer, action or swipe back: `ScreenGraph.exitsOf` is
+   empty, it is in `PanelVals.PRE` and in `Flow.houseDriving` (so not `Flow.backable`), and it has no
+   `autoAdvance` row. No new type style, colour, light level or buzz. The words are the approved
+   ones; the line breaks are the layout's.
+3. **`app`: asked once, at launch, and routed in every root.** `Entry.mainViewController` reads
+   `uwbSupported()` when the shell builds the root view controller and passes it to
+   `VariantRoot(uwb)`. Every root routes it through `launchAs(uwb)` (`LaunchGate.kt`): `Gate` draws
+   `LaunchGate()`, the bare gate panel, and builds nothing behind it. The release root draws the
+   gate or the boot screen. `CheatRoot` (debug and playtest) checks the gate before it builds
+   anything (no lobby, radio, house or round). **The UWB spike's own launch (`UwbSpike.launched`)
+   stays ahead of the gate**: `run.sh` launches it to measure, and on a phone without UWB the
+   capability line is the finding. Nothing asks again during a round.
+
+**Not built, on purpose.** `NSNearbyInteractionUsageDescription` in the source Info.plist (its
+wording is not yet approved; the Debug/Playtest build phase that injects the spike's string is
+untouched), any Nearby Interaction session, and any removal of Bluetooth. The capability check opens
+no session and raises no prompt.
+
+**Proved, red against the injected bug first.**
+
+- `LaunchGateTest` (app, run in each variant by `variantSweep*`): *aPhoneWithoutUwbIsSentToTheGate*,
+  *aPhoneWithUwbPlays*, *theGateHasNoWayForward* and *nothingWalksToTheGate*. *`launchAs` letting
+  every phone play:* `a phone without UWB was let past the launch gate. Expected <Gate>, actual
+  <Play>.` *The gate given a way on to the self-test (`exitsOf(NoUwb) = {Boot}`):* `the gate publishes
+  a control that goes somewhere. Expected <[]>, actual <[Boot]>.`
+- `NoUwbScreenTest` (ui): *theWordsAreTheApprovedOnes* against literals typed into the test, and
+  *theGateDrawsTheTwoLinesAndNothingElse* (the drawn text is the two lines, the status bar's clock
+  aside), and *theGateHasNothingToTap* (no click, text or scroll node). *The body's full stop
+  dropped:* `expected:<...later, not iPhone SE[.]> but was:<...later, not iPhone SE[]>`.
+- `FlowTest` (ui) pins three sets by name, and all three went red on the new screen until they named
+  it: *everyScreenEitherOffersAWayOnwardOrIsWaitingForTheHouse* (`unexpectedly stuck [NoUwb]`; the
+  gate is now its own `stopsByDesign`, not one of the screens awaiting the house),
+  *everyScreenIsReachedByWalkingOrIsOneTheHouseMustPush* (`orphaned screens … [NoUwb]`; the walk now
+  starts at both launch screens, the gate and Boot) and *theHousesScreensAreExactlyTheOnesNamed* (the
+  no-back set gains the gate, with its reason). The other `ScreenId.entries` sweeps
+  (`ScreenGraphTest`, `ScreenshotTest`, `DeviceLayoutTest`, `LightSignatureTest` and the rest) took it
+  in unchanged.
+
+**`./gradlew check --continue`**, test XML counted: app 222 (playtest, the last variant sweep to
+write; the release sweep re-run alone: 139, `LaunchGateTest` and `BuildVariantTest` among them),
+cards 17, core 354, harness 131, model 305 (iOS) and 315 (JVM), platform 209, ui 685 (desktop) and
+321 (iOS); no failures after `FlowTest`'s three pins were updated. **The Release app builds for a
+device** (`xcodebuild … -configuration Release -destination 'generic/platform=iOS'
+CODE_SIGNING_ALLOWED=NO`): the binary links `NearbyInteraction.framework` with no project change
+(Kotlin's static framework autolinks it, as it already did for the spike in Playtest), references
+`NISession`, and its Info.plist has no `NSNearbyInteractionUsageDescription`.
+
+**Looked at.** The gate through the render harness at 600×1300 (`build/screens/no-uwb.png`): the bone
+light field with the status bar, THIS PHONE CAN'T / PLAY in the self-test's 48 black pixel type at
+the top left, and the line under it at reading size across three lines, then nothing: no button,
+bar or chevron.
+
+**Not on a phone.** The gate's answer on a phone without UWB (an iPhone SE, or anything before the
+iPhone 11) and on the two test phones, which have it, is for the owner's phones. So is one open
+risk: the Release build now reads `NISession.deviceCapabilities` at launch with no Nearby Interaction
+usage string in its plist. A capability read opens no session, so it should not need one, but that
+is untested until a Release build launches on a phone; if it does, the usage string (unit 1's third
+line, wording with the owner) has to land before the next Release goes on a phone.
+
 ### D-293 · **PERIMETER ARMED's CONTINUE raises the house's opening banner and its dim on that phone, at its own tap, and buzzes nothing; the opening push lands plain ARMED on every phone — built (the owner's Q6 on D-234, option c); amends D-254, nothing on the wire moved**
 
 **The ruling** (owner, recorded in `owner-decisions-2026-11-17.md` as *Q6 D-234: option (c)*):

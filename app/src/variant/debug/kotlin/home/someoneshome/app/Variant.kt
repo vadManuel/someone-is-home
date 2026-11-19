@@ -16,7 +16,8 @@ object BuildVariant {
     const val MARKER: String = "DEBUG"
 }
 
+/** The cheats root, behind the launch gate (D-292): see [CheatRoot]. */
 @Composable
-fun VariantRoot() {
-    CheatRoot()
+fun VariantRoot(uwb: Boolean) {
+    CheatRoot(uwb)
 }

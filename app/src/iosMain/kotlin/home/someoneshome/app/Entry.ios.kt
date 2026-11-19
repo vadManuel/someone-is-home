@@ -2,6 +2,7 @@ package home.someoneshome.app
 
 import androidx.compose.ui.uikit.OnFocusBehavior
 import androidx.compose.ui.window.ComposeUIViewController
+import home.someoneshome.platform.uwbSupported
 import home.someoneshome.ui.DeviceCanvas
 import platform.UIKit.UIViewController
 
@@ -31,16 +32,26 @@ import platform.UIKit.UIViewController
  * haptics — which is every input this game has.** Nothing touching those may be signed off from
  * here, and the day this shell grows a lamp it stops being verifiable anywhere but on plural
  * physical devices in a dark room.
+ *
+ * ### The launch gate is asked here, once (D-292)
+ *
+ * Whether this phone has Ultra Wideband is read when the shell builds this view controller, which
+ * is once per launch, and handed to the variant's root. Every root routes on it through
+ * [launchAs] before it builds anything, so no variant lets a phone without UWB past. Nothing asks
+ * again during a round.
  */
-fun mainViewController(): UIViewController = ComposeUIViewController(
-    // **The keyboard is the panel's to lay out around, not the view controller's to slide away
-    // from** (D-235). The panel reads the keyboard's height as an inset (`PanelInsets.keyboard`) and
-    // ends its content there, which the desktop renders can show; the built-in nudge toward the
-    // focused field is switched off so that one rule moves the screen rather than two, and so that
-    // the layout a test rendered is the layout the phone draws.
-    configure = { onFocusBehavior = OnFocusBehavior.DoNothing },
-) {
-    DeviceCanvas {
-        VariantRoot()
+fun mainViewController(): UIViewController {
+    val uwb = uwbSupported()
+    return ComposeUIViewController(
+        // **The keyboard is the panel's to lay out around, not the view controller's to slide away
+        // from** (D-235). The panel reads the keyboard's height as an inset (`PanelInsets.keyboard`) and
+        // ends its content there, which the desktop renders can show; the built-in nudge toward the
+        // focused field is switched off so that one rule moves the screen rather than two, and so that
+        // the layout a test rendered is the layout the phone draws.
+        configure = { onFocusBehavior = OnFocusBehavior.DoNothing },
+    ) {
+        DeviceCanvas {
+            VariantRoot(uwb)
+        }
     }
 }

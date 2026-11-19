@@ -95,12 +95,23 @@ import home.someoneshome.ui.u
 private enum class CheatView { Panel, Picker, Transport, Haptics, Camera }
 
 @Composable
-fun CheatRoot() {
+fun CheatRoot(uwb: Boolean) {
     // **The UWB ranging spike** (`tools/uwb-spike`). Launched with its switch, the phone is the
     // spike's and nothing below is built: no lobby, no radio, no house, no round. Launched any other
     // way this line is a read of an unset variable and the build is the playtest build it was.
+    //
+    // It is ahead of the launch gate on purpose: the spike is a measuring tool `run.sh` launches,
+    // and its first line is the phone's own capability, which on a phone without UWB is the
+    // finding.
     if (UwbSpike.launched) {
         UwbSpikeRoot()
+        return
+    }
+    // **The launch gate** (D-292). A phone without Ultra Wideband is told it cannot play, and
+    // nothing below is built: no lobby, no radio, no house, no round. [uwb] was read once, at
+    // launch; nothing asks again.
+    if (launchAs(uwb) == Launch.Gate) {
+        LaunchGate()
         return
     }
     // ONE model for the whole session, held above the view switch. Dropping into the picker and

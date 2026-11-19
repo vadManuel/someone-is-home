@@ -28,10 +28,41 @@ import home.someoneshome.model.Grant
 import home.someoneshome.model.opensTheGate
 
 /**
- * Cold start: the four screens before anyone has joined anything.
+ * Cold start: the screens before anyone has joined anything, and the launch gate before them.
  *
  * Light-field, because the house lights are still on.
  */
+
+/** **The launch gate's headline** (D-292), in the owner's approved words. */
+const val NO_UWB_HEADLINE: String = "THIS PHONE CAN'T PLAY"
+
+/** **The launch gate's one line** (D-292), in the owner's approved words. */
+const val NO_UWB_BODY: String = "Someone's Home needs Ultra Wideband: iPhone 11 or later, not iPhone SE."
+
+/**
+ * **A phone without Ultra Wideband, told at launch that it cannot play** (D-292).
+ *
+ * UWB phones only, with no Bluetooth fallback: contact, the report and presence are measured over
+ * Nearby Interaction, and a phone that cannot range would be a seat the house cannot see. So the
+ * phone is told, before the self-test and instead of everything after it, and the reason is its
+ * hardware rather than anything its player did.
+ *
+ * **There is no way forward and nothing to tap.** No button, no back, no fall-through: nothing a
+ * finger does here leads anywhere, because nothing could. The app roots choose this screen once,
+ * at launch, and never come back to the question.
+ *
+ * Light-field and drawn like the self-test it replaces: the headline in the self-test's title
+ * type, and the one line under it at reading size. The words are the owner's, verbatim; the line
+ * breaks are the layout's.
+ */
+@Composable
+fun NoUwbScreen() {
+    val p = Palette.BONE
+    KitScreen(padding = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 24.dp), gap = 16.dp) {
+        Words(NO_UWB_HEADLINE, Modifier.padding(top = 16.dp), size = 48, color = p.ink, lineHeight = 0.9)
+        KitBody(NO_UWB_BODY, p, Modifier.padding(top = 8.dp))
+    }
+}
 
 /**
  * Self-test on power-up. Falls through on its own.

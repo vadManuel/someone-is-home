@@ -57,6 +57,15 @@ class FlowTest {
     )
 
     /**
+     * **The one screen that stops on purpose, with no house behind it: the launch gate** (D-292).
+     *
+     * A phone without Ultra Wideband is told it cannot play and has no way forward. It is not in
+     * [awaitingTheHouse], because no house exists to move it: the app root draws it at launch and
+     * builds nothing else.
+     */
+    private val stopsByDesign = setOf(ScreenId.NoUwb)
+
+    /**
      * Every way off a screen: what its own controls reach, what the actions layer reaches for the
      * one chip that hands over its decision, what the screen does on its own, **and what the house
      * does to it**.
@@ -87,11 +96,12 @@ class FlowTest {
     @Test
     fun everyScreenEitherOffersAWayOnwardOrIsWaitingForTheHouse() {
         val stuck = ScreenId.entries.filter { onward(it).isEmpty() }.toSet()
+        val expected = awaitingTheHouse + stopsByDesign
         assertEquals(
-            awaitingTheHouse, stuck,
+            expected, stuck,
             "screens with no exit and no fall-through must be exactly the ones the house has to " +
-                "move: unexpectedly stuck ${stuck - awaitingTheHouse}, " +
-                "unexpectedly moving ${awaitingTheHouse - stuck}",
+                "move, and the launch gate: unexpectedly stuck ${stuck - expected}, " +
+                "unexpectedly moving ${expected - stuck}",
         )
     }
 
@@ -105,7 +115,8 @@ class FlowTest {
     /**
      * **The whole screen list is accounted for.**
      *
-     * Start at [ScreenId.Boot] and walk every tap and every fall-through; then start again at each
+     * Start at the two screens a launch can open on, [ScreenId.Boot] and the launch gate
+     * [ScreenId.NoUwb] (D-292), and walk every tap and every fall-through; then start again at each
      * screen only the house can push, and at the two the port cannot route to. Between them, every
      * screen in the game must be covered.
      *
@@ -117,7 +128,7 @@ class FlowTest {
     fun everyScreenIsReachedByWalkingOrIsOneTheHouseMustPush() {
         val seen = mutableSetOf<ScreenId>()
         val queue = ArrayDeque(
-            listOf(ScreenId.Boot) + Flow.housePushed + Flow.unrouted + Flow.houseOpened,
+            listOf(ScreenId.NoUwb, ScreenId.Boot) + Flow.housePushed + Flow.unrouted + Flow.houseOpened,
         )
         seen += queue
         while (queue.isNotEmpty()) {
@@ -344,7 +355,8 @@ class FlowTest {
     @Test
     fun theHousesScreensAreExactlyTheOnesNamed() {
         val arrivedUnasked = PanelVals.BUZZING - ScreenId.ScanMarker
-        val andTheseSeven = setOf(
+        val andTheseEight = setOf(
+            ScreenId.NoUwb,       // the launch gate (D-292); nothing is behind it and nothing ahead
             ScreenId.Boot,        // the app just started; nothing is behind it
             ScreenId.Calling,     // you called the meeting and are now waiting like everyone else
             ScreenId.Discussion,  // mid-meeting, on the room's clock
@@ -354,7 +366,7 @@ class FlowTest {
             ScreenId.Disconnect,  // the house is gone; every screen behind assumes it is not
         )
         assertEquals(
-            arrivedUnasked + andTheseSeven, Flow.houseDriving,
+            arrivedUnasked + andTheseEight, Flow.houseDriving,
             "the no-back set changed. Widening it strands a player on a screen they opened; " +
                 "narrowing it lets a phone walk backwards out of a meeting. Neither is a tidy-up",
         )

@@ -24,7 +24,9 @@ import androidx.compose.ui.graphics.Color
 enum class ScreenId {
     // Cold start — light-field, because the house lights are still on. `NameDrop` is the one
     // setting the OS will not let the app read or change (D-248): asked once, in the light.
-    Boot, Perms, NameDrop, Join,
+    // `NoUwb` is the launch gate (D-292): a phone without Ultra Wideband is told it cannot play,
+    // before Boot and instead of everything else, and has no way forward.
+    NoUwb, Boot, Perms, NameDrop, Join,
 
     // Host setup — once per house, in the light. The two reserved cards each have the same pair
     // of screens, because each raises the same two questions: this home already has one, and
@@ -2201,7 +2203,7 @@ class PanelVals(
          * so the exclusion is stated once, where the reason for it lives.
          */
         val PRE: Set<ScreenId> = setOf(
-            ScreenId.Boot, ScreenId.Join, ScreenId.Maps, ScreenId.Editor, ScreenId.SaveName,
+            ScreenId.NoUwb, ScreenId.Boot, ScreenId.Join, ScreenId.Maps, ScreenId.Editor, ScreenId.SaveName,
             ScreenId.HomeDetail, ScreenId.Delete, ScreenId.Secret, ScreenId.RoomEdit,
             ScreenId.MarkerSheet, ScreenId.ScanMarker, ScreenId.StairsWarn, ScreenId.TermTaken,
             ScreenId.TermRemove, ScreenId.MeetTaken, ScreenId.MeetRemove,

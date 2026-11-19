@@ -149,6 +149,7 @@ fun Screen(
                 arrival?.presentation == Presentation.Banner,
         ) {
             when (state.screen) {
+                ScreenId.NoUwb -> NoUwbScreen()
                 ScreenId.Boot -> BootScreen(vals)
                 ScreenId.Perms -> PermsScreen()
                 ScreenId.NameDrop -> NameDropScreen()

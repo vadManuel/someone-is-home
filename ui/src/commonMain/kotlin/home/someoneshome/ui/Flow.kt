@@ -68,6 +68,9 @@ object ScreenGraph {
      * place that shows up here as an edge one role cannot walk.
      */
     fun exitsOf(id: ScreenId): Set<ScreenId> = when (id) {
+        // The launch gate (D-292): a phone without Ultra Wideband cannot play, and the screen that
+        // says so publishes no control and falls through to nothing. There is no way forward.
+        ScreenId.NoUwb -> emptySet()
         // Cold start. Boot publishes no control at all — it falls through (see Flow.autoAdvance).
         ScreenId.Boot -> emptySet()
         // CONTINUE goes wherever [NameDropModel.pastPerms] says (the join screen on a rendered,
@@ -609,6 +612,9 @@ object Flow {
 
         // Nothing is behind the self-test: the app has just started.
         add(ScreenId.Boot)
+        // Nor behind the launch gate (D-292), which comes before the self-test and is the last
+        // screen a phone without Ultra Wideband shows. A swipe back off it must reach nothing.
+        add(ScreenId.NoUwb)
         // You called the meeting. You are now waiting with everybody else, and the house has the
         // room — the same position as everyone who answered, which is the point.
         add(ScreenId.Calling)
