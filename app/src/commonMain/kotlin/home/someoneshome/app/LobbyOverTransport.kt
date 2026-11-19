@@ -439,6 +439,25 @@ class LobbyHouse(
     private var playingOver = false
 
     /**
+     * **The seat this phone's own loopback client holds: the host's seat** (D-289), or null before it
+     * is seated. The host joins its own house like everybody (D-229), so nothing else marks it; its
+     * client says which token it was handed ([hostHolds]) and the ledger answers which seat that is.
+     * Read once, at arming ([armingInputs]), and used by the house for one thing: the notice may name
+     * an out host who goes dark (D-283). **It goes down no wire**: no lobby body, effect or push
+     * carries it. Written and read on [scope], with the desk.
+     */
+    private var hostSeat: Seat? = null
+
+    /**
+     * **This phone's own client was seated under [token]** (D-289): the house looks up which seat
+     * that is. Called on every seating of the host's own client, so a resume after a lock keeps it.
+     */
+    fun hostHolds(token: SeatToken) {
+        val server = host ?: return
+        scope.launch { server.seatOf(token)?.let { hostSeat = it } }
+    }
+
+    /**
      * **The round's inbound half, on the same server the outbound half is on.**
      *
      * Beside [effects] for [effects]'s reason: there is one house, one ledger deciding who is
@@ -723,6 +742,9 @@ class LobbyHouse(
             // reason: the home is what the work orders are drawn from, and a home read a moment
             // later would be a house that could have been taken down in between.
             home = hosted,
+            // **The host's seat, if it is one of this round's** (D-289). House-only: the rules read
+            // it for the notice and nothing reaches a phone.
+            host = hostSeat?.takeIf { h -> named.any { it.seat.index == h.index } },
         )
     }
 
@@ -795,6 +817,8 @@ class LobbyHouse(
         away = false
         playing = null
         playingOver = false
+        // A new house mints new seats; the host's is learned again from its own client (D-289).
+        hostSeat = null
         // The house is down, so this phone is hosting nothing — and a stale home here would let a
         // later arming draw from a house that is no longer on the air.
         hosted = null
@@ -1272,6 +1296,13 @@ data class ArmingInputs(
      * arrangement and carries a card, a glyph and a room name.
      */
     val home: SavedHome?,
+    /**
+     * **The seat the host's own phone holds, when it is one of [seats]** (D-289; the owner, 2026-11-18:
+     * *record the host seat*). It reaches `Event.RoundArmed.host` and is read by the rules for one
+     * exception: an out host who goes dark is named on the notice (D-283), because the house goes off
+     * the air with them. Null when the house never learned it, which names no out seat (R7, D-242).
+     */
+    val host: Seat? = null,
 )
 
 /**
@@ -1621,6 +1652,8 @@ class LobbyOverTransport(
                         // missed, so the screen this phone was on is restored first and whatever
                         // the house re-pushes lands on top of it.
                         houseReached()
+                        // **On the host's phone, the house learns which seat is its own** (D-289).
+                        if (house.up) house.hostHolds(phase.token)
                         round?.seated()
                     }
                     is ClientSession.Phase.Dismissed -> {

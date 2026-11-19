@@ -145,6 +145,16 @@ sealed interface Event {
          * [terminal]'s reason.
          */
         val terminalRoom: String? = null,
+        /**
+         * **The seat the host's own phone holds, or null** (D-289; the owner, 2026-11-18: *record the
+         * host seat*). The host joins its own house over loopback like everybody (D-229), so nothing
+         * else in the round marks it. Read by one rule: an out seat that goes dark is named on the
+         * notice only if it is this one (D-283), because the whole house goes off the air with the
+         * host. **The house's alone**: no effect carries it and no phone is sent it, though everybody
+         * in the room knows who the host is. Defaulted null for [terminal]'s reason; null names no
+         * out seat, which is R7 (D-242) unchanged. **The recording's parser defaults nothing.**
+         */
+        val host: Seat? = null,
     ) : Event
 
     /**

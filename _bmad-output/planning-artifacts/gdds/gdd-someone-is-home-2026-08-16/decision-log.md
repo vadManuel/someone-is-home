@@ -9049,6 +9049,72 @@ approved two words.
 **Checked** (every test XML read): model 313 (JVM) and 303 (iOS Simulator), platform 209, app 213
 (debug), ui desktop 675, 0 failures. **Not on a phone.**
 
+### D-289 · **The house records the host's seat at arming, and the notice names an out host who goes dark; every other out seat stays off — built (recording 38), completes D-283**
+
+**The ruling** (owner, 2026-11-18, later): *record the host seat.* The house notes which seat the
+host took at LIGHTS OUT and uses it only so the unreachable notice can name an out host (D-283's
+exception to R7/D-242: the whole house goes off the air with the host). *Everyone in the room already
+knows who the host is.*
+
+**Where the fact enters.** D-283 found that nothing in the house knew it: the host joins its own
+house over loopback like everybody (D-229), and its lock reaches the rules as its own
+`RadioFaulted(Person)` up that socket (D-230). The one thing that ties a seat to the host's phone is
+the token its own client is handed. So:
+
+1. **`LobbyHouse.hostHolds(token)`**, called by the host phone's own `LobbyOverTransport` on every
+   seating of its client while the house is up; the house asks the ledger (`SeatLedger.seatOf`, under
+   `TransportHost`'s lock) which seat that token holds and keeps it on its scope (`hostSeat`), cleared
+   when the house stops. A resume after a lock lands on the same seat.
+2. **`ArmingInputs.host`**, read in the same instant as the seats, and kept only if it is one of
+   them; **`armingFor(host)`** and **`Event.RoundArmed.host`** (defaulted null), and
+   **`GameState.host`** with `isHost`, set from the arming only for a seat in the round.
+3. **The rule** (`Rules.onTheNotice`): an out seat that goes dark is listed only if it is the host's;
+   and the meeting gate's filter (D-242's *out by the meeting*) keeps the host too. A null host names
+   no out seat, which is R7 unchanged. `radioFaulted` still emits nothing to anybody (rule 1).
+
+**Who may be told it: nobody, by the house.** No `Effect`, no `RoundMessage`, no lobby body carries
+the seat; no schema row was added or widened. What reaches phones is the notice they were already
+sent, which names the seat once the host has gone dark, exactly as it names any living seat. The
+harness proves the field alone moves no byte on any client's wire.
+
+**Recording 38**, for D-281's and D-284's reason: a row changed shape. `RoundArmed` gains `host=` (a
+seat or `none`) and the state row gains `host=`. The parser defaults nothing (`expectedFields`
+includes it, `seatOrNone` reads it), so a version 37 arming row is refused by its header, as every
+earlier version is: this format has never read an older version, and the bump keeps that rule
+rather than inventing a tolerant read. No effect row changed.
+
+**Proved, each red against the injected bug first.**
+
+- `RadioFaultTest` (core), *an out host who goes dark is named and no other out seat is* (host seat
+  4 and seat 2 both Revoked, both lock: the list is `[4]` and every phone's notice names seat 4),
+  *a host listed while living and out by the meeting is named*, and *a host seat outside the round is
+  not kept*. *The listing's exception removed:* `the out host was not listed, or another out seat
+  was. Expected <[4]>, actual <[]>`. *The gate's exception removed:* `seat 0 was not told exactly the
+  out host. Expected <[NoticeIssued(unreachable=[Seat(index=4)])]>, actual
+  <[NoticeIssued(unreachable=[])]>`, and the same in the second case. `aSeatThatIsOutIsNamedByNobody`
+  and its R7 siblings are unchanged and green.
+- `HostSeatRecordingTest` (harness, the shared fixture round): the seat is on the arming and state
+  rows, survives the text form, the round replays `Identical`; an arming row without `host=` is
+  fatal; every seat's client transcript is byte-identical with and without the host's seat, and the
+  effect rows are equal; a role exchange's diff is unchanged. *The parser dropping the field:* `the
+  host did not survive the text form. Expected <Seat(index=0)>, actual <null>`.
+- `EvasionNoticeTest.anOutHostWhoLocksIsNamedAndAnOutGuestIsNot` (app, six phones over loopback, the
+  real link, ledger, desk and authority): the arming records the host's own seat; the host and a
+  guest are Revoked; the host locks (its house goes off the air and comes back) and the guest locks;
+  the house lists only the host, and every phone's one notice names the host's seat. *The house never
+  learning its seat:* `the house did not record its own seat at arming. Expected <Seat(index=0)>,
+  actual <null>`; *the listing's exception removed:* `the house did not list exactly the out host.
+  Expected <[Seat(index=0)]>, actual <[]>`.
+
+**Checked** (`./gradlew check --continue`, every test XML read): model 313 (JVM) and 303 (iOS
+Simulator), core 344, platform 209, harness 131, ui 675 (desktop) and 315 (iOS Simulator), 0
+failures; the debug app run and the release sweep passed; every `vocabularyLint`, `armingCordon`,
+`benchSeedCordon` and `seedSourceCordon` clean. **The playtest sweep's test process failed once** in
+`HostForegroundTest.everySeatComesBackUnderItsOwnNameHoweverOftenTheHouseLocks` with an uncaught
+`EADDRINUSE` from Ktor's own bind coroutine while the host reopened its port (the hazard
+`TransportHost.start`'s KDoc names; nothing here touches the server's start or stop); re-run alone,
+the playtest sweep passed, app 214, 0 failures. **Not on a phone.**
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

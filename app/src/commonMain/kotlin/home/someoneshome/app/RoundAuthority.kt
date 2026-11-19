@@ -319,6 +319,8 @@ class RoundAuthority(
             // The house's own copy of the station's room, so a seat placed at the T card is placed
             // in a room (O2). Still never said to a phone: that is the host's, aloud.
             terminalRoom = hosted.map.terminal?.room?.name,
+            // The host's own seat (D-289), for the notice's one exception (D-283). No phone is told it.
+            host = inputs.host,
         ).copy(oneLines = inputs.oneLines)
         home = hosted
         // A new round's radios start from nothing: last round's halves and debounces are about

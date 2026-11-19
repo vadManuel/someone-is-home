@@ -102,6 +102,12 @@ class SeatLedger(
     }
 
     /**
+     * **The seat [token] holds, or null** (D-289): how the house learns which seat its own phone
+     * took, from the token its own loopback client was handed. A read; it seats nobody.
+     */
+    fun seatOf(token: SeatToken): Seat? = held[token]
+
+    /**
      * A player leaves the lobby and the seat returns to the pool. **Pre-arm only.** After [lock]
      * this throws rather than refusing quietly: nothing legitimate calls it then, and a release
      * that "just returns false" is a Boolean somebody drops (D-087) on the exact path that

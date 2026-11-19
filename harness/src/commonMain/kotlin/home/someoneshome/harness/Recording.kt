@@ -50,6 +50,13 @@ class Recording(
     }
 
     companion object {
+        // 38: the host's own seat (the owner's 2026-11-18 ruling, D-289). `RoundArmed` gains `host=`
+        // (a seat or `none`) and the state row gains `host=`: the notice names an out host who goes
+        // dark and no other out seat (D-283), so a replay that lost the seat would name nobody where
+        // the evening named the host. A version 37 arming row is missing the field, and the parser
+        // defaults nothing, so a version 37 recording is refused here as every older one is. No
+        // effect row changed shape; no phone is sent the seat.
+        //
         // 37: the `RoundEnded` effect row gains `integrity=` (decision pack 9b option a, D-284): the
         // final System Integrity, one percentage to every seat, so an ending with no meeting behind
         // it no longer draws "–". A version 36 effect row is missing it. No event or state row moved.
@@ -302,7 +309,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/37"
+        const val HEADER = "someone-is-home/recording/38"
     }
 }
 

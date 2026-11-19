@@ -534,6 +534,52 @@ class EvasionNoticeTest {
         room.assertNoticeNames(listOf(seat))
     }
 
+    /**
+     * **GUARD (D-283, built by D-289): the house records its own seat at arming, and an out HOST who
+     * locks is named at the next meeting, while an out guest who locks is not.** The host's seat comes
+     * from the token its own loopback client was handed; it reaches the arming and no phone. Six seats,
+     * so two Revokes leave the round running.
+     */
+    @Test
+    fun anOutHostWhoLocksIsNamedAndAnOutGuestIsNot() = evening(listOf("ROSE", "DANI", "MARCUS", "TOMAS", "PRIYA")) { room ->
+        room.lightsOut()
+        room.beats(1)
+        val house = room.house
+        val hostSeat = room.seatOf(room.host)
+        assertEquals(hostSeat, house.state.host, "the house did not record its own seat at arming")
+        val insider = house.state.insiderSeats.single()
+        assertTrue(insider != hostSeat, "the fixture's draw made the host the Insider, so it cannot be Revoked")
+        val guestSeat = house.state.livingPlainResidents.first { it != hostSeat }
+        val guest = room.all.single { room.seatOf(it) == guestSeat }
+
+        for (target in listOf(hostSeat, guestSeat)) {
+            house.advanceTo(house.state.cooldownFor(insider, InsiderAbility.Revoke)?.readyAt ?: Tick(0))
+            house.mint(Event.RevokeArmed(house.now(), insider))
+            val at = house.now()
+            house.mint(Event.ContactMade(at, insider, target))
+            house.mint(Event.ContactMade(at, target, insider))
+            assertTrue(house.state.isRevoked(target), "the fixture never put seat ${target.index} out")
+        }
+        assertTrue(!house.state.ended, "the Revokes ended the round, so nothing after them is measured")
+
+        room.host.link.backgrounded()
+        until("every seat dropped with the house") { room.host.link.house.armingInputs().seats.isEmpty() }
+        room.host.link.foregrounded()
+        room.beats(1)
+        until("every seat came back") { room.host.link.house.armingInputs().seats.size == 6 }
+        guest.link.backgrounded()
+        room.beats(1)
+        guest.link.foregrounded()
+        room.beats()
+        until("the house heard both reports") {
+            listOf(hostSeat, guestSeat).all { seat -> room.said.any { it.startsWith("RADIO FAULT — SEAT ${seat.index} · PERSON") } }
+        }
+        assertEquals(listOf(hostSeat), house.state.unreachable, "the house did not list exactly the out host")
+
+        room.meeting()
+        room.assertNoticeNames(listOf(hostSeat))
+    }
+
     // ---- Before arming ---------------------------------------------------------------------------------
 
     /** **GUARD: before arming, nothing is named** — a host and a guest that leave in the lobby. */

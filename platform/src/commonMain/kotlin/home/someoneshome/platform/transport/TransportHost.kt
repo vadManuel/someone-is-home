@@ -1,6 +1,7 @@
 package home.someoneshome.platform.transport
 
 import home.someoneshome.model.Seat
+import home.someoneshome.model.protocol.SeatToken
 import home.someoneshome.model.protocol.TransportFrame
 import home.someoneshome.model.protocol.TransportRefusal
 import home.someoneshome.model.protocol.TransportWire
@@ -287,6 +288,9 @@ class TransportHost(
 
     /** **The round reached its ending, or NEW ROUND: the door is open again** (D-287). */
     suspend fun roundOver() = gate.withLock { ledger.roundOver() }
+
+    /** **The seat [token] holds, or null** (D-289). See [SeatLedger.seatOf]. */
+    suspend fun seatOf(token: SeatToken): Seat? = gate.withLock { ledger.seatOf(token) }
 
     /** Messages that were not frames. Zero is the only healthy number. */
     suspend fun malformedCount(): Int = gate.withLock { malformed }

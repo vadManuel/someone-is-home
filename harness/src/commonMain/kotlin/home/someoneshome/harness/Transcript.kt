@@ -80,7 +80,11 @@ object Transcript {
                 "storeys" to storeys(event.plan),
                 // The house's copy of the T card's room (O2), `some:` before a name so that a room
                 // a host called NONE cannot read as no room.
-                "terminalRoom" to optionalText(event.terminalRoom))
+                "terminalRoom" to optionalText(event.terminalRoom),
+                // **The host's own seat, or none** (D-289): an input, because the notice names an
+                // out host who goes dark and no other out seat (D-283), so a replay that lost it
+                // would name nobody where the evening named the host.
+                "host" to (event.host?.let { num(it.index) } ?: "none"))
         // **The spectator map's input** (O4): who sensed, in which room, and every seat heard
         // there. An input drawn above the rules from the radio, exactly as a contact is, so it is
         // on the row in full and a replay places the same seats without a radio.
@@ -681,6 +685,8 @@ object Transcript {
         // The ballot's length, locked at arming. A state row that omitted it would replay a meeting
         // whose window came from this build's default rather than from the evening's host.
         append("|voteWindow=").append(num(state.voteWindowSeconds))
+        // The host's own seat (D-289), locked at arming: the notice's one exception (D-283).
+        append("|host=").append(state.host?.let { num(it.index) } ?: "none")
         append("|nextEntity=").append(num(state.nextEntity))
         append("|seed=").append(num(state.seed))
     }

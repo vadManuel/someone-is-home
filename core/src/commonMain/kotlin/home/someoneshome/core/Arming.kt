@@ -79,6 +79,11 @@ fun armingFor(
     plan: HomePlanView = HomePlanView.EMPTY,
     /** The T card's room, the house's copy (O2). Defaulted null for [terminal]'s reason. */
     terminalRoom: String? = null,
+    /**
+     * The seat the host's own phone holds (D-289). Kept only if it is one of [seats]; defaulted null,
+     * which names no out seat on the notice (R7, D-242).
+     */
+    host: Seat? = null,
 ): Event.RoundArmed {
     require(seats.size >= Balance.MINIMUM_SEATS) {
         "a round cannot be armed for ${seats.size} seats: the minimum party is " +
@@ -98,6 +103,7 @@ fun armingFor(
         terminal = terminal,
         plan = plan,
         terminalRoom = terminalRoom,
+        host = host?.takeIf { h -> seats.any { it.index == h.index } },
     )
 }
 

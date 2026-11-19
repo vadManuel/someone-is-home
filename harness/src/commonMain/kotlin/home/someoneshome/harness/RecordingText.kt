@@ -274,6 +274,9 @@ object RecordingText {
                 if (req("terminal") == "none") null else marker("terminal"),
                 plan(line),
                 optionalText("terminalRoom"),
+                // Required like the T card, and for the same kind of reason (D-289): a replay that
+                // lost the host would name nobody where the evening named an out host who went dark.
+                seatOrNone("host"),
             )
             "Sensed" -> Event.Sensed(at, seat("sensor"), unescape(req("room"), line), seats("heard"))
             "MarkerScanned" -> Event.MarkerScanned(at, seat("actor"), marker("marker"))
@@ -327,7 +330,7 @@ object RecordingText {
         "RoundArmed" ->
             setOf(
                 "at", "seed", "seats", "insiders", "chosen", "markers", "voteWindow", "names",
-                "lines", "terminal", "rooms", "storeys", "terminalRoom",
+                "lines", "terminal", "rooms", "storeys", "terminalRoom", "host",
             )
         "Sensed" -> setOf("at", "sensor", "room", "heard")
         "MarkerScanned" -> setOf("at", "actor", "marker")

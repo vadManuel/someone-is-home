@@ -182,6 +182,67 @@ class RadioFaultTest {
         }
     }
 
+    /**
+     * **GUARD (D-283, built by D-289): an out HOST who goes dark is named; every other out seat is
+     * still not.** The host's lock takes the whole house off the air, so the owner made it R7's one
+     * exception. Seat 4 is the host and is Revoked; seat 2, also out, locks too and stays off.
+     */
+    @Test
+    fun anOutHostWhoGoesDarkIsNamedAndNoOtherOutSeatIs() {
+        tick = 0
+        val armed = reduce(
+            GameState.EMPTY,
+            Event.RoundArmed(t(), seed = 11L, seats = seats, insiders = listOf(Seat(1)), host = Seat(4)),
+        ).state
+        assertEquals(Seat(4), armed.host, "the arming did not record the host's seat")
+        val outHost = revokeFour(armed)
+        val insider = Seat(1)
+        tick += Balance.REVOKE_COOLDOWN + 1L
+        val (bothOut, _) = feed(outHost, Event.RevokeArmed(t(), insider), Event.ContactMade(t(), insider, Seat(2)))
+        assertTrue(bothOut.isRevoked(Seat(2)), "the fixture never put a second seat out")
+
+        val (listed, quiet) = feed(
+            bothOut,
+            Event.RadioFaulted(t(), Seat(4), RadioCause.Person),
+            Event.RadioFaulted(t(), Seat(2), RadioCause.Person),
+        )
+        assertEquals(nobody, quiet, "a report reached a phone before the meeting")
+        assertEquals(listOf(4), listed.unreachable.map { it.index }, "the out host was not listed, or another out seat was")
+        val (_, got) = feed(listed, *meeting())
+        for (seat in seats) {
+            assertEquals(
+                listOf(Effect.NoticeIssued(listOf(Seat(4)))), notices(got).getValue(seat.index),
+                "seat ${seat.index} was not told exactly the out host",
+            )
+        }
+    }
+
+    /** **GUARD (D-289): the host listed while living and out by the meeting is still named.** */
+    @Test
+    fun aHostListedWhileLivingAndOutByTheMeetingIsNamed() {
+        tick = 0
+        val armed = reduce(
+            GameState.EMPTY,
+            Event.RoundArmed(t(), seed = 11L, seats = seats, insiders = listOf(Seat(1)), host = Seat(4)),
+        ).state
+        val (listed, _) = feed(armed, Event.RadioFaulted(t(), Seat(4), RadioCause.Person))
+        val (_, got) = feed(revokeFour(listed), *meeting())
+        for (seat in seats) {
+            assertEquals(listOf(Effect.NoticeIssued(listOf(Seat(4)))), notices(got).getValue(seat.index))
+        }
+    }
+
+    /** A host seat that is not one of the round's is not kept: it could name nobody, and names nobody. */
+    @Test
+    fun aHostSeatOutsideTheRoundIsNotKept() {
+        tick = 0
+        val armed = reduce(
+            GameState.EMPTY,
+            Event.RoundArmed(t(), seed = 11L, seats = seats, insiders = listOf(Seat(1)), host = Seat(9)),
+        ).state
+        assertEquals(null, armed.host)
+    }
+
     /** Rule 1: the notice is in every meeting's stream, so its presence is not the news. */
     @Test
     fun aMeetingWithNobodyUnreachableStillSendsTheNoticeEmpty() {

@@ -363,6 +363,9 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
         plan = event.plan,
         terminalRoom = event.terminalRoom,
         shiftStartedAt = event.at,
+        // The host's own seat (D-289), and only if it is one of this round's: read by the notice's
+        // one exception (D-283) and by nothing that emits.
+        host = event.host?.takeIf { h -> seats.any { it.index == h.index } },
     )
 
     // **The round's names, one slot per seat INDEX** (D-115, D-274). A seat whose phone never
@@ -1167,7 +1170,7 @@ private fun contact(state: GameState, event: Event.ContactMade): Reduction<GameS
  * (rule 1): the phone's own screen does not move (rule 6), no other phone hears of it until the
  * room does, and the same is true whoever reported it. A seat not in the round, one already on the
  * list, or one that is out (R7, D-242) changes nothing: the list is the house's living seats, each
- * once, in seat order.
+ * once, in seat order, and the host's seat out or not (D-283, D-289).
  */
 private fun radioFaulted(state: GameState, event: Event.RadioFaulted): Reduction<GameState, Effect> {
     val next = if (namedByTheNotice(event.cause)) onTheNotice(state, event.seat) else state
@@ -1190,11 +1193,15 @@ fun namedByTheNotice(cause: RadioCause): Boolean = when (cause) {
  * player who hides from the house; a Revoked or Restrained player has nothing left to hide from it.
  * Their phone still sends the same body when it locks (rule 1: what goes up does not change with
  * being out), and the house keeps the seat off the list here, where nobody but the house can see.
+ *
+ * **Except the host** (D-283, the owner's ruling, built by D-289). An out host who locks or leaves
+ * takes the whole house off the air with them, so they are named like a living seat. The house knows
+ * which seat is the host's from the arming ([GameState.host]); every other out seat stays off.
  */
 private fun onTheNotice(state: GameState, seat: Seat): GameState {
     val seated = state.seats.any { it.index == seat.index }
     val listed = state.unreachable.any { it.index == seat.index }
-    return if (seated && !listed && !state.isOut(seat)) {
+    return if (seated && !listed && (!state.isOut(seat) || state.isHost(seat))) {
         state.copy(unreachable = (state.unreachable + seat).sortedBy { it.index })
     } else {
         state
@@ -1523,8 +1530,9 @@ private fun checkedIn(state: GameState, event: Event.MeetingCheckedIn): Reductio
                 // same on every phone. Ahead of the phase push so that a phone is holding it when
                 // that push moves it to the notices screen.
                 // **And nobody who is out by now** (R7, D-242, provisional): a seat listed while it
-                // was living and Revoked or Restrained since is not named either.
-                Effect.NoticeIssued(unreachable = state.unreachable.filterNot { state.isOut(it) }),
+                // was living and Revoked or Restrained since is not named either. **Bar the host**
+                // (D-283, D-289), who is named out or not: the house went off the air with them.
+                Effect.NoticeIssued(unreachable = state.unreachable.filterNot { state.isOut(it) && !state.isHost(it) }),
                 Effect.MeetingPhaseOpened(
                     MeetingPhase.Discussion,
                     voteWindowSeconds = null,

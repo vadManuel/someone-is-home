@@ -349,7 +349,16 @@ class GameState private constructor(
     val observations: List<Observation>,
     /** The next capture's number: seeded, recorded and monotonic, like [nextEntity] but its own. */
     val nextObservation: Long,
+    /**
+     * **The seat the host's own phone holds, off the arming event, or null** (D-289). See
+     * [Event.RoundArmed.host]. Read by one rule, the notice's: an out seat that goes dark is named
+     * only if it is this one (D-283). Never reaches a client: no effect carries it.
+     */
+    val host: Seat?,
 ) {
+    /** **Whether [seat] is the host's** (D-289): the notice's one exception to R7 (D-283). */
+    fun isHost(seat: Seat): Boolean = host?.index == seat.index
+
     /**
      * The reader the lock is held by, or null if the station is free. A seat that is out holds
      * nothing (D-203) -- see [reader].
@@ -731,12 +740,13 @@ class GameState private constructor(
         sightings: List<Placement.Inferred> = this.sightings,
         observations: List<Observation> = this.observations,
         nextObservation: Long = this.nextObservation,
+        host: Seat? = this.host,
     ) = GameState(
         armed, outcome, seats, insiderSeats, revoked, newlyRevoked, reported, restrained, revokeArms,
         touches, unreachable, cooldowns, isolated, systemIntegrity, openSubroutines, workOrders, stations,
         activeMarkers, destinations, presence, staticUntil, meeting, egress, egressReadyAt, oneLines,
         names, voteWindowSeconds, nextEntity, seed, terminal, reader, plan, terminalRoom, shiftStartedAt,
-        sightings, observations, nextObservation,
+        sightings, observations, nextObservation, host,
     )
 
     companion object {
@@ -821,6 +831,8 @@ class GameState private constructor(
             terminalRoom: String? = null,
             /** The arming's tick: the first shift starts here. */
             shiftStartedAt: Tick = Tick(0),
+            /** The host's own seat (D-289). Null for [terminal]'s reason: it names no out seat. */
+            host: Seat? = null,
         ) = GameState(
             armed = true,
             outcome = null,
@@ -868,6 +880,7 @@ class GameState private constructor(
             sightings = emptyList(),
             observations = emptyList(),
             nextObservation = 1L,
+            host = host,
         )
 
         val EMPTY = GameState(
@@ -908,6 +921,7 @@ class GameState private constructor(
             sightings = emptyList(),
             observations = emptyList(),
             nextObservation = 1L,
+            host = null,
         )
     }
 }
