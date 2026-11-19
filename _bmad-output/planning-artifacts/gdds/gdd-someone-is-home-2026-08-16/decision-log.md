@@ -14,7 +14,7 @@ Every decision, change, and version transition, in real time.
 |---|---|
 | `_bmad-output/brainstorming/brainstorm-engine-selection-2026-08-15/brainstorm-intent.md` | Decisions from the 2026-08-15/16 session. Authoritative. |
 | `_bmad-output/brainstorming/brainstorm-engine-selection-2026-08-15/design-doc-revisions.md` | Scoped MoSCoW against the design record. Names what is stale. |
-| The base design record (1908 lines, since retired) | Reasoning source. **Stale wherever the revisions file says so** — it still described ends, spaceship subsystems, and synthetic replacements. |
+| The base design record (1908 lines, since retired) | Reasoning source. **Stale wherever the revisions file says so** — it still described eliminations, spaceship subsystems, and synthetic replacements. |
 | A legacy-project context dossier (since deleted) | Consulted for the original physical-task list only. Otherwise ignored per instruction. |
 
 **Standing rule for this GDD:** where the design record and `brainstorm-intent.md` disagreed, the brainstorm won. The design record's sections on end, the Capgras frame, and conversion mode are superseded, not merged. Both source documents were retired on 2026-08-17; the GDD is now self-contained.

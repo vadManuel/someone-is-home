@@ -91,6 +91,11 @@ class VocabularyRulesTest {
     }
 
     @Test
+    fun `the stem spelled in halves still catches the joined word`() {
+        assertTrue(caught("val " + "cor" + "pseSeat = 3"))
+    }
+
+    @Test
     fun `a slash-star inside a string literal does not blank real code`() {
         assertTrue(caught("""val re = "a/*b"; val victimSeat = 3; val re2 = "c*/d""""))
     }
@@ -98,7 +103,7 @@ class VocabularyRulesTest {
     @Test
     fun `prose in comments is exempt`() {
         assertTrue(!caught("// never say victim or murder here"))
-        assertTrue(!caught("/**\n * Not a victim. Not a Revoked seat.\n */\nclass Ok"))
+        assertTrue(!caught("/**\n * Not a victim. Not a " + "cor" + "pse.\n */\nclass Ok"))
     }
 
     @Test

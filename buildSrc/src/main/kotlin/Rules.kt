@@ -125,7 +125,9 @@ object VocabularyRules {
         "evict" to "use Restrain",
         "task" to "use Subroutine",
         "murder" to "use Revoke",
-        "Revoked seat" to "nobody is eliminated — there is no body",
+        // Spelled in two halves on purpose: the owner wants no end word anywhere in the repo,
+        // the lint's own list included, and the stem still matches the joined word.
+        "cor" + "pse" to "there is no such thing here — say the Revoked seat",
         "victim" to "use target, or revoked player",
         "deactivat" to "use Revoke — the state is REVOKED, on screen as well as in code",
         // **Spoof left the vocabulary and Static entered it** (D-186). The ability was replaced

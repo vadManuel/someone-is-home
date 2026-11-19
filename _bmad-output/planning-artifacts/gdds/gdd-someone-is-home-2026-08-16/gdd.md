@@ -12,7 +12,7 @@ updated: 2026-08-16
 **Game Type:** Party Game (social deduction), physically co-located, with Horror atmosphere and fear-mechanic systems
 **Target Platform(s):** iPhone first, Android on the roadmap. **Kotlin Multiplatform + Compose Multiplatform** — see `game-architecture.md` → Engine & Framework, which reverses the original native-Swift decision.
 
-> **Source precedence.** This GDD is the sole source of truth for the design. The earlier design record it was built from described ends, spaceship subsystems, and synthetic replacements; all three were replaced in the 2026-08-15/16 session, and that record has been retired. Everything load-bearing from it has been carried forward here.
+> **Source precedence.** This GDD is the sole source of truth for the design. The earlier design record it was built from described eliminations, spaceship subsystems, and synthetic replacements; all three were replaced in the 2026-08-15/16 session, and that record has been retired. Everything load-bearing from it has been carried forward here.
 
 ---
 
@@ -560,7 +560,7 @@ The whole game is operated **one-handed, in the dark, without looking.** Every c
 | **Fire an ability** | **Springboard page 2, in place — select the tile, then a two-second hold** | Accidentally firing an Egress in front of someone is a game-ending misclick and it *will* happen in the dark, and two seconds of continued intent is the one thing an accident cannot supply. Nothing opens; the hold *is* the second confirm (D-141, D-142) |
 | **Navigate the springboard** | Horizontal swipe between two pages; tap an icon | Standard, muscle-memory, and identical for both roles |
 | **Revoke a player** (Insider) | **Arm on springboard page 2 with a two-second hold**, then **touch your phone to theirs** | Contact *is* the proximity gate. No confirmation step exists on either device. Both roles' page 2 is identical at rest; a Resident's tiles are **entirely disabled** — no press feedback, no hold that fills and then declines (D-142) |
-| **Report a deactivation** | **Hold your phone within 30 cm of the revoked player's phone for two seconds.** The phone fills a circle over the two seconds; leaving 30 cm first cancels the report (owner ruling Q5, 2026-11-18; D-301) | A hold rather than a pass, so walking by never reports. No button means no enabled/disabled state to read, so it cannot be used as a proximity radar for revoked players |
+| **Report a Revoke** | **Hold your phone within 30 cm of the revoked player's phone for two seconds.** The phone fills a circle over the two seconds; leaving 30 cm first cancels the report (owner ruling Q5, 2026-11-18; D-301) | A hold rather than a pass, so walking by never reports. No button means no enabled/disabled state to read from across a room. The circle does tell its holder that a Revoked phone is within 30 cm, through a wall too, but only once they are already close enough to touch it, so it confirms someone beside you rather than finding anyone (owner, 2026-11-19) |
 | **Carry something** | Nothing to press. **Carry state lives on the work-order widget**, which says so and says that it blocks every other entry | There is no lamp dial and no panel to put one in — **the house sets the light level, always** (D-168). The one piece of state that used to justify a panel now sits on the surface that already lists your work |
 
 *Rejected gestures and why:* **swipe up** (iOS home gesture), **edge swipe** (back-navigation conflict), **two-finger tap** (hard one-handed in the dark), **shake** (visible arm movement, and accidentally discoverable).
@@ -1203,7 +1203,7 @@ Every tunable in the game, and what each one does. **Nothing else should become 
 
 **This was already latent in the design.** Array Wipe, Degauss, Memory Dump, Parity Check, Sniff, Handshake, Sync Pulse are all vintage sysadmin vocabulary. The subroutine set named the aesthetic before the aesthetic was chosen.
 
-**Two constraints failed with this decision, and both are worth recording:** "no hue discrimination" is now moot (monochrome cannot depend on hue), and low-brightness colour banding is moot (there are no gradients left).
+**Two constraints ended with this decision, and both are worth recording:** "no hue discrimination" is now moot (monochrome cannot depend on hue), and low-brightness colour banding is moot (there are no gradients left).
 
 **One constraint was created:** the reversal from deep red to amber weakens the scotopic-vision argument underpinning Tier 0. See the Fear Mechanics open risk.
 
