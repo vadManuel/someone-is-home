@@ -10067,6 +10067,142 @@ known flake did not fire. **Not on a phone.**
 | `app` cheats `Cheats` | `PulseBuzzer` reads the control | reads `flow::pulseFelt` |
 | recording | 40 | 41; offers carry `#firstPulse` |
 
+### D-299 · **The caught scan and the scan keep their screen when an Egress opens, with the alert over them as over a Subroutine; a card read under the alert is answered as any other — built (the owner's 2026-11-19 ruling on D-297's questions), nothing recorded moved**
+
+**The ruling** (owner, 2026-11-19, *Owner rulings, 2026-11-19, on D-297's questions* in
+`owner-decisions-2026-11-17.md`): *the caught-scan briefing (`ScanCaught`, before BEGIN) and the
+camera (`Scan`) also keep their screen, with the alert over them, as E1 does for a Subroutine. The
+design's reason is that the alert must never take the camera away from someone standing at a card.*
+The same ruling keeps **a tap on the alert opening the Egress widget** (today's behaviour, leaving
+the screen) and **a question cut by the Egress buzz stays cut** (no replay). Neither of those two
+needed code: the tap was already `Notification.opens`, and nothing replays a script.
+
+**What the two screens did before this, read off the code rather than off D-297.** D-297's open
+item 3 said both *still take the push*. That was true of the scan and not of the caught scan:
+`ScanCaught` is in `PanelVals.BUZZING`, so it is house-driving (`Flow.houseDriving`), and
+`FlowModel.arrived` returns early on a house-driving screen. **An Egress over the briefing drew no
+alert and no dim at all**; the phone stayed on the briefing at full light while every other phone in
+the house dropped to `NOTIFIED_DIM`. The scan took the push: `Banner`, the springboard, which
+disposed the scan screen, so the app root's `DisposableEffect` closed the camera and played D-160's
+two vibrates (*no*) behind the Egress buzz, and the person at the card had to tap SCAN again.
+
+**Now.**
+
+1. **One list, `Flow.keepsItsScreenUnderTheEgress(screen)`**: the ten Subroutine screens, the caught
+   scan and the scan. `FlowModel.egressAlerted` asks it where it asked `Subroutine.on(screen) != null`.
+   On any of the twelve, `EgressOpened` sets `PanelState.egressAlertUp` and does not navigate; on any
+   other screen it is `arrived(Banner)` as before. Only the screen is asked, and both screens are the
+   same screen for a Resident and an Insider, so both roles take one path.
+2. **Everything else is D-297's mechanism, unchanged**: `PanelVals.arrival` draws the same
+   `Notifications.egressFor` pair with `under` = the screen, `Screen` dims by asking the arrival
+   (`Notifications.dims(arrival)`), so the light is `NOTIFIED_DIM` by `alpha`, a step. The swipe
+   clears the field and stays; `FlowHost`'s `HEAVY_HOLD` clears it; any arrival clears it. No new
+   light value, timing or copy.
+3. **The camera.** There is no camera picture on the in-round scan to cover or to block. D-159 and
+   `CameraCardScanner` (`platform`, iOS): `ScanUse.InRound` builds a capture session with an
+   `AVCaptureMetadataOutput` and **no `AVCaptureVideoPreviewLayer`**, and `LocalViewfinder` is filled
+   on the registration screen only. The lit screen is the light the card is read by, and the decode
+   happens in AVFoundation on the session's own frames, which no Compose layer is part of. The session
+   is held by the app root's `DisposableEffect(scan)` in `Cheats.kt`, composed while
+   `flow.state.screen == ScreenId.Scan`; the alert changes no screen, so the session stays open, the
+   read callback stays attached, and a card read under the alert goes up as any other. **So nothing
+   native sits under the dim**: the dim is the same `alpha` over the same Compose panel as everywhere
+   else, and it is measured below.
+4. **The scan's window is the scan's.** D-159's ten seconds run from the tap on SCAN, in `FlowHost`'s
+   fall-through and in `localWindow`, both keyed on the screen, which does not change. The alert
+   neither restarts nor extends it.
+5. **A scan answered while the alert is up proceeds normally.** The answer is a push (to the caught
+   scan, NOTHING FOR YOU HERE, or the tap control at a node, D-295), and a push is an arrival, so the
+   alert comes down with the screen it stood over, as finishing or STOP does under D-297. BEGIN, NOT
+   THIS ONE and STOP NOW are arrivals the same way.
+
+**Decided here, provisional (overnight).**
+
+- **A move off the screen takes the alert down, the scan's answer included.** The brief allowed
+  either; D-297's *any arrival clears it* is kept because the alert was about the moment it arrived,
+  the widget holds the countdown, and the ruling asks only that the alert not take the screen away.
+  The person landing on the briefing from a read under the alert sees the briefing at full light.
+  **Provisional (overnight).**
+- **On the scan, the alert's ten seconds are never reached.** The scan's window opened first and is
+  no longer, so it always ends first: the phone falls through to the springboard with the alert and
+  the dim gone, possibly well under ten seconds after the Egress. The safety window (D-159) is kept
+  as it is rather than stretched to hold the alert. So the dim on a scanning phone lasts whatever is
+  left of its scan, which is the same rule for both roles and depends on when the person tapped SCAN.
+  **Provisional (overnight).**
+
+**Proved, each red against the injected bug first.**
+
+- `EgressOverScanTest` (ui, 6): *the alert drops over the scan and the caught scan and the screen
+  stays for either role* (row, card, arrival, `under`, dim; the panels equal across roles); *a swipe
+  and the ten seconds take the alert down and leave the screen*; *a tap on the alert opens the Egress
+  widget for either role*; *a card read under the alert is answered as any other and the briefing
+  opens the work* (the read lands on the briefing, an empty card on NOTHING FOR YOU HERE, a node on
+  the live tap control, and BEGIN under the alert opens the Jam whose entry files against the card);
+  *the springboard still takes the banner and a refusal is left as it was*; *the screens the alert
+  keeps are the ten Subroutines, the caught scan and the scan*.
+- `EgressOverScanRender` (ui, desktop, 4), through `FlowHost` at 600×1300 with a 16 Pro's insets:
+  the Insider's pixels equal the Resident's, up and cleared, on both screens; the light below the
+  banner is `NOTIFIED_DIM` within 0.05 (**0.321 on the scan, 0.321 on the caught scan**; D-297's
+  banner over Home measures 0.350); the cleared screen equals, pixel for pixel, the same phone whose
+  alert came down in the frame it arrived (on the scan that is the window's bar, checked to be
+  moving, so the window was not restarted); the scan still falls through to the springboard at its
+  own ten seconds with the alert up; a real finger's swipe up keeps each screen; a real finger's tap
+  opens the widget.
+- `EgressOverWorkLoopTest` (app, the real rules, allowlist, projection and phones without a socket,
+  +1): a Resident and the Insider on the briefing when the Insider's Egress fires keep it, swipe, and
+  BEGIN opens their Subroutine; on the scan when it fires they keep it, read a card off the Egress's
+  nodes through the house, land on the briefing with the alert down, and BEGIN opens the work; no
+  refusal.
+- **The guard broken** (`keepsItsScreenUnderTheEgress` put back to the Subroutines alone, which is
+  the push restored for the scan and nothing for the briefing): `Resident: the Egress took the phone
+  off the Scan expected:<Scan> but was:<Banner>`, `Resident: the swipe left the Scan
+  expected:<Scan> but was:<Home>`, `Resident: the alert over the ScanCaught is not a door`,
+  `Resident/Scan: the alert is not up`, `Resident: the scan closed early under the alert
+  expected:<Scan> but was:<Banner>`, and through the house `Resident: no alert over the briefing`.
+  8 of 10 ui cases and 1 of 3 app cases red; restored, all green.
+
+**Checked** (`./gradlew check --continue` in a worktree on `5e829e3`, exit 0, every test XML read
+and counted): 2 668 tests, 0 failures: model 322 (JVM) and 312 (iOS Simulator), cards 17, core 372,
+platform 213, ui 719 (desktop) and 344 (iOS Simulator), harness 131, app 238; `vocabularyLint`,
+`redactionLint`, `boundaryCheck`, `armingCordon`, `benchSeedCordon` and `seedSourceCordon` clean.
+`OutboundQueueTest`'s known flake did not fire. Nothing in `core`, `model` or the recording moved.
+
+**Looked at.** `/tmp/someones-home-d299/egress-over-scan-<role>-up.png`, `-cleared.png`,
+`egress-over-scancaught-<role>-up.png`, `-cleared.png`, the two `-resident-control.png` and
+`egress-over-scan-resident-window-ended.png`. Scan, up: the amber HOUSE · NOW / EGRESS ATTEMPT IN
+PROGRESS / CONTAIN AT UTILITY AND LANDING block at the top, the amber field below it at the dim, the
+rings, TURN THE SCREEN TO THE MARKER, the bar (18 of 20) and STOP NOW where they were. Scan, cleared
+by the swipe two seconds later: the full amber field, SCANNING · ARMED back, the bar at 14 of 20, the
+same as the control. Caught scan, up: the block under the status strip over CAUGHT, the diamond,
+STUDY, SUBROUTINE 1 OF 1, the briefing, BEGIN and NOT THIS ONE behind it at the dim. Cleared after
+ten seconds: the briefing at full light. Window ended: the springboard at full light, no banner. The
+Insider's frames are the Resident's.
+
+**Still open, raised rather than built.**
+
+1. **The refusals still draw nothing.** NOTHING FOR YOU HERE (`ScanBad`), its two twins
+   (`ScanUnknown`, `TermBusy`) are house-driving like the briefing was, so an Egress over one draws no
+   alert and no dim, and that phone stays lit while the house dims. The ruling names the briefing and
+   the camera only, so this is pinned by a test as it is and not changed. Owner to say whether they
+   take the banner, the alert in place, or nothing.
+2. **The alert over the scan covers the scan's own strip.** The scan is an inverted screen and draws
+   SCANNING · ARMED itself, so `PanelFrame` places the overlay at the safe area's top, over that strip,
+   where on every other screen it sits below the status bar. Not changed (a layout change the ruling
+   does not ask for).
+3. **A scanning phone dims the light the card is read by.** Below the banner the amber field is at
+   `NOTIFIED_DIM`; the banner block itself is at full. Before this the Egress closed the scan outright,
+   so a read can only be likelier than it was; whether the front camera reads a card at that light is
+   a phone question.
+
+**Not on a phone.** The read under the alert, the light it is read by, and how the swipe sits on a
+phone held face-to-card all need hands and cards; the iOS Simulator has no camera.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `ui` `Flow` | (new) | `keepsItsScreenUnderTheEgress`: the ten Subroutines, `ScanCaught`, `Scan` |
+| `ui` `FlowModel.egressAlerted` | `Subroutine.on(screen) != null` | `Flow.keepsItsScreenUnderTheEgress(screen)` |
+| `ui` `PanelState.egressAlertUp` | set on a Subroutine screen | and on the caught scan and the scan |
+
 
 ## State after revision 12
 

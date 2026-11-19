@@ -294,8 +294,10 @@ data class PanelState(
      * same alert, the same dim and the same ten seconds ([HEAVY_HOLD]), drawn by [PanelVals.arrival]
      * over whatever Subroutine screen is under it.
      *
-     * Set by `EgressOpened` on a Subroutine screen and on no other, for either role: which screen is
-     * up is the only thing asked. Cleared by the swipe, by [HEAVY_HOLD] (`FlowHost`) and by any
+     * Set by `EgressOpened` on a Subroutine screen, the caught scan or the scan (D-299: the alert
+     * must never take the camera away from someone standing at a card) and on no other, for either
+     * role: which screen is up is the only thing asked ([Flow.keepsItsScreenUnderTheEgress]).
+     * Cleared by the swipe, by [HEAVY_HOLD] (`FlowHost`) and by any
      * arrival anywhere ([arrivingAt]), so it can never outlive the screen it was raised over.
      */
     val egressAlertUp: Boolean = false,

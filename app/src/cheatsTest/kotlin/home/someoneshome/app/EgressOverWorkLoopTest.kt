@@ -152,6 +152,71 @@ class EgressOverWorkLoopTest {
     }
 
     /**
+     * **The caught scan and the scan keep their screens through the Egress, and a card read under
+     * the alert is answered as any other** (the owner's 2026-11-19 ruling, D-299), for a Resident and
+     * the Insider through the real house.
+     */
+    @Test
+    fun theBriefingAndTheScanKeepTheirScreensThroughTheEgressAndTheReadStillLands() = runBlocking {
+        // On the briefing when it fires: the screen stays, and BEGIN after the swipe opens the work.
+        run {
+            val bench = Bench(inputs)
+            assertTrue(bench.house.arm(RoundCheat.SEED), "the bench never armed a round")
+            val insider = bench.house.state.livingInsiders.first()
+            val resident = seats.first { it !in bench.house.state.insiderSeats && bench.phones.getValue(it).firstCard() != null }
+            val working = listOf(resident to "Resident", insider to "Insider")
+            for ((seat, role) in working) {
+                val phone = bench.phones.getValue(seat)
+                phone.go(ScreenId.Scan)
+                bench.scan(seat, assertNotNull(phone.firstCard(), "$role has no card"))
+                assertEquals(ScreenId.ScanCaught, phone.state.screen, "$role: the scan caught nothing")
+            }
+            bench.house.at(5_000)
+            assertTrue(bench.house.fireEgress(insider), "the Egress did not start, so this measured nothing")
+            for ((seat, role) in working) {
+                val phone = bench.phones.getValue(seat)
+                assertEquals(ScreenId.ScanCaught, phone.state.screen, "$role: the Egress took the phone off the briefing")
+                assertTrue(phone.state.egressAlertUp, "$role: no alert over the briefing")
+                phone.actions().dismissNotification()
+                assertEquals(ScreenId.ScanCaught, phone.state.screen, "$role: the swipe moved the phone")
+                phone.actions().beginSubroutine()
+                assertNotNull(Subroutine.on(phone.state.screen), "$role: BEGIN after the Egress opened no Subroutine")
+            }
+            assertTrue(bench.house.refusals.isEmpty(), "the house refused something the screens did: ${bench.house.refusals}")
+        }
+
+        // On the scan when it fires: the screen stays with the alert over it, and the read lands.
+        run {
+            val bench = Bench(inputs)
+            assertTrue(bench.house.arm(RoundCheat.SEED), "the bench never armed a round")
+            val insider = bench.house.state.livingInsiders.first()
+            val resident = seats.first { it !in bench.house.state.insiderSeats && bench.phones.getValue(it).firstCard() != null }
+            val working = listOf(resident to "Resident", insider to "Insider")
+            working.forEach { (seat, _) -> bench.phones.getValue(seat).go(ScreenId.Scan) }
+            bench.house.at(5_000)
+            assertTrue(bench.house.fireEgress(insider), "the Egress did not start, so this measured nothing")
+            val nodes = bench.house.state.egress!!.nodes
+            for ((seat, role) in working) {
+                val phone = bench.phones.getValue(seat)
+                assertEquals(ScreenId.Scan, phone.state.screen, "$role: the Egress took the camera away")
+                assertTrue(phone.state.egressAlertUp, "$role: no alert over the scan")
+                val card = assertNotNull(
+                    phone.state.order.orEmpty().filterIsInstance<OrderLine.Known>()
+                        .firstOrNull { !it.done && it.at.any { d -> d.marker !in nodes } }
+                        ?.at?.first { it.marker !in nodes }?.marker,
+                    "$role has no card off the Egress's nodes",
+                )
+                bench.scan(seat, card)
+                assertEquals(ScreenId.ScanCaught, phone.state.screen, "$role: the read under the alert reached no briefing")
+                assertTrue(!phone.state.egressAlertUp, "$role: the alert followed the phone onto the briefing")
+                phone.actions().beginSubroutine()
+                assertNotNull(Subroutine.on(phone.state.screen), "$role: BEGIN after a read under the alert opened no Subroutine")
+            }
+            assertTrue(bench.house.refusals.isEmpty(), "the house refused something the screens did: ${bench.house.refusals}")
+        }
+    }
+
+    /**
      * **E2 end to end**: a seat whose own work is at one of the Egress's two cards scans it, lands on
      * the tap control, and the house opens nothing there. Searched over pinned seeds for a round in
      * which some seat's order holds a node card, because the draw decides both.

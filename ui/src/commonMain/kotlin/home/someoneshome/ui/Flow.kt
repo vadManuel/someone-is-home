@@ -434,6 +434,23 @@ object Flow {
     )
 
     /**
+     * **The screens an Egress alert drops over in place**, rather than walking the phone to
+     * [ScreenId.Banner] (the owner's E1, D-297, and the owner's 2026-11-19 ruling, D-299).
+     *
+     * The ten Subroutine screens, and the two that stand between a card and its work: the caught
+     * scan (the briefing before BEGIN, with the house's instance already open) and the scan itself,
+     * whose lit screen is the light the card is read by. *The alert must never take the camera away
+     * from someone standing at a card.* On each of them the alert is [PanelState.egressAlertUp] and
+     * the screen stays; everywhere else the alert is the banner over the springboard, as it was.
+     *
+     * Only the screen is asked. Every one of these is the same screen for a Resident and an Insider,
+     * so the alert takes one path for both roles. The refusals (NOTHING FOR YOU HERE and its two
+     * twins) are not here: they hold no card and no camera, and the ruling names neither.
+     */
+    fun keepsItsScreenUnderTheEgress(screen: ScreenId): Boolean =
+        Subroutine.on(screen) != null || screen == ScreenId.ScanCaught || screen == ScreenId.Scan
+
+    /**
      * **The rows in [autoAdvance] that are the phone's own only once the house has opened a phase**
      * (D-250, provisional, owner to confirm).
      *
@@ -3298,7 +3315,9 @@ class FlowModel(
             //
             // **And a phone in a Subroutine keeps the Subroutine** (the owner's E1, D-297): the
             // alert drops over the work rather than walking the phone to `Banner`, which is the
-            // springboard and so took the person off their work. See [egressAlerted].
+            // springboard and so took the person off their work. **So does a phone on the caught
+            // scan or on the scan itself** (the owner's 2026-11-19 ruling, D-299): the alert must
+            // never take the camera away from someone standing at a card. See [egressAlerted].
             //
             // **The nodes land as rooms and the pair is stored before the banner.** *The widget
             // takes over and names the two nodes*, and the alert and the widget read the same two
@@ -3549,12 +3568,19 @@ class FlowModel(
      * in its own composition (`screenMillis`), which a navigation would have disposed. The person
      * can finish it, STOP it, or swipe the alert away, and the widget holds the countdown.
      *
+     * **The caught scan and the scan keep theirs too** (the owner's 2026-11-19 ruling on D-297's
+     * questions, D-299), and [Flow.keepsItsScreenUnderTheEgress] is the one list. On the caught scan
+     * nothing is touched, so BEGIN still opens the work the card dealt. On the scan the screen does
+     * not change, so its ten-second window runs on from where it was, the camera the app root holds
+     * open for that screen stays open, and a card read under the alert is answered as any other:
+     * the answer is an arrival, and the alert goes down with the screen it stood over.
+     *
      * Everywhere else it is [arrived], as it always was. **The one question is which screen is up**,
      * and a Subroutine screen is the same screen for a Resident's real work and an Insider's fake
-     * (rule 8), so the two take one path.
+     * (rule 8), as the scan and the caught scan are, so the two take one path.
      */
     private fun egressAlerted() {
-        if (Subroutine.on(state.screen) != null) {
+        if (Flow.keepsItsScreenUnderTheEgress(state.screen)) {
             state = state.copy(egressAlertUp = true)
         } else {
             arrived(ScreenId.Banner)
@@ -3562,7 +3588,8 @@ class FlowModel(
     }
 
     /**
-     * **D-119's ten seconds ran out on an alert over a Subroutine**, and it goes the way the
+     * **D-119's ten seconds ran out on an alert over a Subroutine** (or over the caught scan or the
+     * scan, D-299, though the scan's own window is never longer and ends first), and it goes the way the
      * `Banner` row in [Flow.autoAdvance] goes: the dim lifts in the same step, and the person is on
      * the work they never left. Called by [FlowHost] on a housed phone and an unhoused one alike,
      * because nothing outside this phone could push it (the reason [Flow.ownTimers] holds `Banner`).
