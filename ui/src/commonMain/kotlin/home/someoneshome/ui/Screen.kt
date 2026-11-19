@@ -172,9 +172,8 @@ fun Screen(
                 ScreenId.Lobby -> LobbyScreen(vals)
 
                 ScreenId.Secret -> SecretScreen()
-                // ARMED, and ARMED with the house's opening text over it (D-254): the banner is the
-                // frame's overlay, so the screen under it is the one ARMED draws.
-                ScreenId.Armed, ScreenId.ArmedNotify -> ArmedScreen(vals)
+                // ARMED. Its CONTINUE raises the opening banner over the springboard (D-293).
+                ScreenId.Armed -> ArmedScreen(vals)
                 // Every banner screen draws the springboard it interrupted and hands the banner
                 // itself up as an overlay. "A banner, not a takeover" is only true if what was
                 // underneath is still visible and still recognisable — which is also why only the

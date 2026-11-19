@@ -137,10 +137,14 @@ fun ArmedScreen(vals: PanelVals) {
                 align = TextAlign.Center,
             )
             // Outline only: the lights have just gone out, and nothing here may flare.
+            //
+            // **The tap raises the house's opening banner, with its dim, on this phone** (D-293,
+            // the owner's Q6 on D-234): the springboard with the opening text over it, at the
+            // moment this player taps. It sends nothing and buzzes nothing (D-102).
             KitSecondary(
                 "CONTINUE", Palette.DARK.copy(ink = Ramp.Mid),
                 Modifier.padding(top = 20.dp).width(200.dp),
-            ) { go(ScreenId.Home) }
+            ) { go(ScreenId.Notify) }
         }
     }
 }

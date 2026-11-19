@@ -33,6 +33,7 @@ import home.someoneshome.model.Winner
 import home.someoneshome.platform.RecordingHaptics
 import home.someoneshome.ui.FlowModel
 import home.someoneshome.ui.PanelState
+import home.someoneshome.ui.ScreenGraph
 import home.someoneshome.ui.ScreenId
 import home.someoneshome.ui.Subroutine
 import home.someoneshome.ui.SubroutineModel
@@ -886,6 +887,39 @@ class HouseBuzzTest {
             listOf(HandshakeRhythm.of(dealt).script), motor.played,
             "the Handshake still does not vibrate — the owner's payoff-run report, unchanged",
         )
+    }
+
+    /**
+     * **GUARD (D-293, D-102): PERIMETER ARMED's CONTINUE raises the opening banner and buzzes
+     * nothing, and the two roles feel the same thing.**
+     *
+     * The opening push is the buzz: it arrives unasked and walks the phone to ARMED. The tap that
+     * raises the banner and its dim is a screen the player tapped into, so the motor stays still.
+     * A real [FlowModel] reporting its own arrivals to a real [HouseBuzzer], as `CheatRoot` wires it.
+     */
+    @Test
+    fun continueOnArmedRaisesTheBannerAndBuzzesNothing() {
+        val felt = listOf(false, true).map { insider ->
+            val motor = RecordingHaptics()
+            val buzzer = HouseBuzzer(motor)
+            val flow = FlowModel(PanelState(screen = ScreenId.Lobby), onScreen = buzzer::showing)
+            flow.houseAttached(true)
+            fun said(message: RoundMessage) {
+                buzzer.heard(message)
+                flow.houseSaid(message)
+            }
+            said(RoundMessage.OpeningMessage(Haptic.Short))
+            said(RoundMessage.RoleRevealed(insider = insider, line = if (insider) "a line" else ""))
+            assertEquals(ScreenId.Armed, flow.state.screen, "the opening push did not land ARMED (insider=$insider)")
+            val atArmed = motor.played
+
+            flow.go(ScreenGraph.exitsOf(ScreenId.Armed).single())
+            assertEquals(ScreenId.Notify, flow.state.screen, "CONTINUE did not raise the opening banner (insider=$insider)")
+            assertEquals(atArmed, motor.played, "CONTINUE buzzed (insider=$insider): a screen tapped into does not (D-102)")
+            assertEquals(1, motor.count, "the arming was not one buzz (insider=$insider)")
+            motor.played
+        }
+        assertEquals(felt.first(), felt.last(), "a Resident and an Insider felt different things at arming and CONTINUE")
     }
 
     /** The house's own answer, opened on this phone, without going near a screen id by hand. */

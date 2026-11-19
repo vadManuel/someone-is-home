@@ -132,11 +132,13 @@ object ScreenGraph {
         // arrow's target here is the *fallback* the graph transcribes — on a phone the trail decides
         // — but the lobby is the only screen this one is ever reached from, so the two agree.
         ScreenId.Secret -> setOf(ScreenId.Lobby)
-        ScreenId.Armed -> setOf(ScreenId.Home)
-        // The opening banner over ARMED (D-254): CONTINUE is still under the thumb, and a tap on the
-        // banner opens what it says, the reveal, as it does over the springboard. The swipe that
-        // clears it is a gesture, declared in [Flow.viaActions].
-        ScreenId.ArmedNotify -> setOf(ScreenId.Home, ScreenId.Reveal)
+        // **CONTINUE raises the house's opening banner, with its dim, on this phone at this tap**
+        // (D-293, the owner's Q6 on D-234). It lands where CONTINUE always went, the springboard,
+        // with the opening text over it: [ScreenId.Notify], which clears itself to the springboard
+        // after D-119's ten seconds. Nothing goes to the house, and nothing buzzes (D-102: a screen
+        // you tapped into does not). There is no way back to ARMED from there, so a phone raises
+        // the banner once per round.
+        ScreenId.Armed -> setOf(ScreenId.Notify)
 
         // The springboard, and the screens that ARE the springboard with something on top.
         // `Quiet`'s banner opens the Subroutines list, which the springboard already reaches, so
@@ -344,9 +346,6 @@ object Flow {
         ScreenId.Notify to AutoAdvance(
             ScreenId.Home, HEAVY_HOLD, "the house's opening message clears itself and the light comes back",
         ),
-        ScreenId.ArmedNotify to AutoAdvance(
-            ScreenId.Armed, HEAVY_HOLD, "the same opening message, over PERIMETER ARMED, clears itself (D-254)",
-        ),
         ScreenId.Banner to AutoAdvance(
             ScreenId.Home, HEAVY_HOLD, "the Egress alert clears itself; the countdown is on the widget",
         ),
@@ -425,7 +424,6 @@ object Flow {
         ScreenId.Boot,
         ScreenId.Scan,
         ScreenId.Notify,
-        ScreenId.ArmedNotify,
         ScreenId.Banner,
         ScreenId.LockNotify,
     )
@@ -627,18 +625,18 @@ object Flow {
 
     /**
      * **Where a seated phone stands when the lights go out**: the lobby, and the one-line screen it
-     * opens. The house's opening push walks a phone on either to [ScreenId.Armed] (D-234), with the
-     * opening banner over it ([ScreenId.ArmedNotify], D-254).
+     * opens. The house's opening push walks a phone on either to [ScreenId.Armed] (D-234), and the
+     * opening banner waits for that phone's CONTINUE (D-293).
      */
     val seatedBeforeArming: Set<ScreenId> = setOf(ScreenId.Lobby, ScreenId.Secret)
 
     /**
-     * **Where that push lands a seated phone: PERIMETER ARMED, under the opening banner and once it
-     * has cleared** (D-234, D-254). Anything that waits for a phone to have armed asks this set
-     * rather than one id: the banner stands for [HEAVY_HOLD], so a wait on plain ARMED alone would
-     * start ten seconds late, or never, if a thumb takes CONTINUE from under the banner.
+     * **Where that push lands a seated phone, and where its CONTINUE takes it: PERIMETER ARMED, and
+     * the opening banner over the springboard** (D-234, D-293). Anything that waits for a phone to
+     * have armed asks this set rather than one id: a thumb quick enough on CONTINUE leaves ARMED
+     * before a poll sees it, and a wait on plain ARMED alone would then never end.
      */
-    val armedOn: Set<ScreenId> = setOf(ScreenId.ArmedNotify, ScreenId.Armed)
+    val armedOn: Set<ScreenId> = setOf(ScreenId.Armed, ScreenId.Notify)
 
     /**
      * The screens no tap and no fall-through reaches: **in play, the house puts you there.**
@@ -649,16 +647,16 @@ object Flow {
      * of them are the authority pushing a screen, and none of them can be a client-side rule.
      */
     val housePushed: Set<ScreenId> = setOf(
-        // The three notifications nothing on this phone can produce: the house's opening text
-        // over the springboard, the same text under the clock on a phone lying face down, and a
-        // Subroutine coming unblocked by somebody else's work. **And the Egress alert** (D-231): it
-        // used to be walked to from the Insider's own page 2, the one role-asymmetric edge in the
-        // game, and a hold that walked there told the house nothing. It is `EgressOpened`'s now, on
-        // every phone alike, the actor's included.
-        ScreenId.Notify, ScreenId.LockNotify, ScreenId.Quiet, ScreenId.Banner,
-        // The same opening text over PERIMETER ARMED, where a seated phone stands when it lands
-        // (D-254).
-        ScreenId.ArmedNotify,
+        // The two notifications nothing on this phone can produce: the house's opening text under
+        // the clock on a phone lying face down, and a Subroutine coming unblocked by somebody
+        // else's work. **And the Egress alert** (D-231): it used to be walked to from the Insider's
+        // own page 2, the one role-asymmetric edge in the game, and a hold that walked there told
+        // the house nothing. It is `EgressOpened`'s now, on every phone alike, the actor's included.
+        //
+        // **The opening text over the springboard ([ScreenId.Notify]) left this set with D-293**:
+        // PERIMETER ARMED's CONTINUE walks to it, on every phone alike. The house still pushes it
+        // to a phone it catches up after a gap ([FlowModel.roundOpened]'s other branch).
+        ScreenId.LockNotify, ScreenId.Quiet, ScreenId.Banner,
         ScreenId.Call, ScreenId.Found,
         // **The caller's own ring, and it is here because D-121 says a meeting is a WALK** (N5b).
         // The springboard drew a PHONE tile that went straight to this screen, which is the remote
@@ -908,9 +906,6 @@ object Flow {
         ScreenId.Home to setOf(ScreenId.Page2),
         ScreenId.EgressWidget to setOf(ScreenId.Page2),
         ScreenId.Notify to setOf(ScreenId.Home, ScreenId.Page2),
-        // The opening banner over ARMED, swiped up: ARMED is left standing (D-254). No page swipe,
-        // because there is no springboard under it.
-        ScreenId.ArmedNotify to setOf(ScreenId.Armed),
         ScreenId.Banner to setOf(ScreenId.Home, ScreenId.Page2),
         ScreenId.Quiet to setOf(ScreenId.Home, ScreenId.Page2),
         ScreenId.LockNotify to setOf(ScreenId.Lock),
@@ -2825,8 +2820,8 @@ class FlowModel(
             // what the banner says and the message's job is to say *now*. A body on this kind would
             // be a second copy of one sentence.
             //
-            // **And it is what walks every phone in the lobby to PERIMETER ARMED** (D-234), with
-            // this banner over it on every phone (D-254). See [roundOpened].
+            // **And it is what walks every phone in the lobby to PERIMETER ARMED** (D-234). The
+            // banner waits there for that phone's own CONTINUE (D-293). See [roundOpened].
             //
             // **And it is the first shift beginning, on every phone at once** (D-132, D-239): page
             // 2's clocks start here, at half, the same on an Insider's phone and a Resident's.
@@ -3408,19 +3403,20 @@ class FlowModel(
      * it opens, which is where a seated phone stands when the lights go out. Anywhere else (a phone
      * the house is catching up after a gap) the message is what it always was, the banner.
      *
-     * ### And the banner lands with ARMED, on every phone (D-254, restoring D-118)
+     * ### And the banner waits for the phone's own CONTINUE (D-293, the owner's Q6 on D-234)
      *
-     * D-234 walked the seated phone to plain ARMED, and ARMED is a screen the house drives, so the
-     * opening banner, one of D-118's only two heavy notifications, was drawn at arming on no phone
-     * at all: one of the two events allowed to dim the house had quietly stopped dimming it.
-     * D-118 ties the dim to the opening text's arrival (*a dim during the opening message is the
-     * round starting*) and D-119 has every phone dim and undim on the same ten seconds, so the
-     * banner lands over ARMED in the frame ARMED does: [ScreenId.ArmedNotify], the opening text
-     * over PERIMETER ARMED, which a swipe or [HEAVY_HOLD] takes back to ARMED. One message, one
-     * screen, the same frame on every phone, whatever its role (D-142's parity).
+     * D-254 landed the opening banner over ARMED in the frame ARMED did, one dim on every phone at
+     * one moment. The owner ruled otherwise: PERIMETER ARMED's CONTINUE raises the opening banner
+     * with its dim (D-118, D-119) on that phone, at whatever moment its player taps, and the tap
+     * does not buzz (D-102). The room sees separate dims, and the owner chose that knowing it. So
+     * the push lands plain ARMED on every phone, whatever its role, and the edge that raises the
+     * banner is ARMED's CONTINUE ([ScreenGraph]), a walk on this phone that sends nothing.
+     *
+     * A second opening on a phone already on ARMED, or already past it on the banner, moves
+     * nothing: both are screens the house drives, and [arrived] lands nothing on one.
      */
     private fun roundOpened() {
-        if (state.screen in Flow.seatedBeforeArming) push(ScreenId.ArmedNotify) else arrived(ScreenId.Notify)
+        if (state.screen in Flow.seatedBeforeArming) push(ScreenId.Armed) else arrived(ScreenId.Notify)
     }
 
     /**

@@ -38,12 +38,9 @@ enum class ScreenId {
 
     // Arming — the host turns the lights off and the house does the rest.
     //
-    // `ArmedNotify` is PERIMETER ARMED with the house's opening text over it (D-118, D-254): the
-    // one message every seat gets at arming walks a seated phone to ARMED and lands the heavy
-    // banner on it in the same frame, so the house dims at one moment on every phone. Its own id
-    // for `Notify`'s reason below: the dim is a property of a drawn panel and every sweep walks
-    // `ScreenId.entries`.
-    Secret, Armed, ArmedNotify, Notify, Reveal, RevealThread,
+    // PERIMETER ARMED's CONTINUE walks to `Notify`, the house's opening text over the springboard
+    // (D-293): the heavy banner and its dim arrive on that phone at its own tap.
+    Secret, Armed, Notify, Reveal, RevealThread,
 
     // The springboard — identical for both roles.
     //
@@ -2249,14 +2246,14 @@ class PanelVals(
          * here ships with the band that made the owner file the report.
          */
         val AMBER_BLOCKS: Set<ScreenId> = setOf(
-            ScreenId.Tally, ScreenId.WinInsiders, ScreenId.Notify, ScreenId.ArmedNotify, ScreenId.Banner,
+            ScreenId.Tally, ScreenId.WinInsiders, ScreenId.Notify, ScreenId.Banner,
             ScreenId.Work, ScreenId.ScanCaught,
             ScreenId.Call, ScreenId.Found, ScreenId.Assemble, ScreenId.Ghost2,
             ScreenId.Notice, ScreenId.Discussion, ScreenId.Vote,
         )
 
         val BUZZING: Set<ScreenId> = setOf(
-            ScreenId.Armed, ScreenId.ArmedNotify, ScreenId.Notify, ScreenId.Banner, ScreenId.LockNotify,
+            ScreenId.Armed, ScreenId.Notify, ScreenId.Banner, ScreenId.LockNotify,
             ScreenId.Call, ScreenId.Found,
             ScreenId.Assemble, ScreenId.Notice, ScreenId.Tally, ScreenId.Revoked,
             ScreenId.Restrained, ScreenId.ScanMarker, ScreenId.ScanCaught, ScreenId.ScanBad,

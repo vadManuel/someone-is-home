@@ -6832,7 +6832,7 @@ delays the decision to its end; the Simulators refuse at once. Not run on a phon
 | `app` `HouseGone` (new), cheats `CheatRoot` | (nothing) | the walk to `Disconnect` and back |
 | `HouseGoneTest` (new) | | a host that fails: every guest on the disconnect screen after the window and not before; a lock inside the window walks nobody; a long lock walks them there and back |
 
-### D-254 · **The house's opening text lands over PERIMETER ARMED, on every phone, in the frame ARMED does: D-118's banner and dim restored — built (amends D-234)**
+### D-254 · **(Amended by D-293: the push lands plain ARMED, and the banner and its dim arrive at each phone's own CONTINUE.)** **The house's opening text lands over PERIMETER ARMED, on every phone, in the frame ARMED does: D-118's banner and dim restored — built (amends D-234)**
 
 **What D-234 broke.** D-234 made `OpeningMessage` walk a seated phone to plain ARMED, and ARMED is a
 screen the house drives (`Flow.houseDriving`), so `arrived()` dropped the banner. The opening text,
@@ -9255,6 +9255,103 @@ hold move with UWB (Q5), not here. No event, effect, frame or recording moved.
   after the hit, inside the grace`) and *aNeighbourWhoWasNotInTheTouchReportsInsideTheGrace*. Three
   older bench cases and D-290's bench case went red with it: the Insider's phone reported its target at the touch.
 - `ContactResolverTest`'s two debounce cases (`re-minted inside five seconds`).
+
+**Not on a phone.**
+
+### D-293 · **PERIMETER ARMED's CONTINUE raises the house's opening banner and its dim on that phone, at its own tap, and buzzes nothing; the opening push lands plain ARMED on every phone — built (the owner's Q6 on D-234, option c); amends D-254, nothing on the wire moved**
+
+**The ruling** (owner, recorded in `owner-decisions-2026-11-17.md` as *Q6 D-234: option (c)*):
+*PERIMETER ARMED gains a CONTINUE tap. The tap raises the opening banner with its dim (D-118/D-119)
+on that phone, at whatever moment its player taps, and does not buzz (D-102). The owner chose this
+over one simultaneous dim, knowing the room sees separate dims.* It replaces D-254, which landed the
+banner over ARMED in the same frame as the push, so every phone dimmed at the same moment. D-118's
+closed light vocabulary is unchanged: the same opening text, the same heavy banner, the same dim
+and D-119's same ten seconds. Only the moment moved, from the push to each phone's tap.
+
+**What was already there.** PERIMETER ARMED already drew a CONTINUE, its one control (outlined,
+`KitSecondary`), and it walked to the springboard. That control is the owner's CONTINUE. No new
+control, style or copy.
+
+**Now.**
+
+1. `FlowModel.roundOpened`: the opening push walks a phone on the lobby or the one-line screen to
+   plain `Armed`, with no banner and no dim. Anywhere else the push still raises the springboard
+   banner, as before (D-234's other branch, unchanged; see *Raised*).
+2. ARMED's CONTINUE walks to `Notify` (`ScreenGraph`, `ArmedScreen`) where it used to walk to
+   `Home`. `Notify` is the springboard with the house's opening text over it, dimmed by the existing
+   `Notifications.dims` rule. It clears to the springboard by the swipe or D-119's ten seconds
+   (`Flow.autoAdvance`; it is in `Flow.ownTimers`, so a housed phone runs that timer itself).
+   Nothing walks back to ARMED, so a phone raises the banner once per round.
+3. `ScreenId.ArmedNotify` (D-254's banner over ARMED) is deleted. Nothing lands on it any more.
+4. `Notify` leaves `Flow.housePushed`, because a tap now reaches it, and
+   `FlowTest.nothingWalksToAScreenOnlyTheHouseCanPush` holds that set to screens no tap reaches. It
+   stays in `PanelVals.BUZZING`, so it is still a screen the house drives and has no way back. No
+   motor reads that set (D-134).
+5. `Flow.armedOn` is now `Armed` and `Notify`. The bench's script and the host's tick driver wait on
+   it, and a quick thumb on CONTINUE could leave ARMED between two of their polls.
+
+**Nothing goes to the house.** The tap is a walk on this phone. It sends no intent, presses no
+Egress and sends no lobby body. There is no new message, field, effect, schema row or recording.
+The house has no use for the moment a phone saw its banner, so it is never told, and no per-phone
+message at a per-person moment exists. The opening push is still the one message every seat gets
+(D-234).
+
+**No buzz on the tap.** `HouseBuzzer.showing` only stops a ring and plays a Subroutine's question.
+The arming's one buzz is the push's (D-102, D-156).
+
+**The cases.**
+
+- **The push before the tap** is the only order a housed phone can have. ARMED is reached by the push
+  alone (D-234), and CONTINUE is ARMED's control. A second opening on ARMED or under the banner
+  moves nothing, because `arrived` lands nothing on a screen the house drives. With no house behind
+  the model (renders, the desktop preview), the seam walks to ARMED at once and no push follows.
+- **A relaunch on ARMED.** The fresh process is seated by its token and replayed the round from its
+  first push (D-268). The opening walks it from the lobby to plain ARMED, undimmed, with CONTINUE to
+  tap again: its player gets the banner again, on that phone. **A rejoin** (same process, link back)
+  is replayed from the point it held, so no second opening reaches it and the phone stays where it
+  was.
+- **NEW ROUND** (D-157). Every phone walks to the lobby. The second opening lands plain ARMED, and
+  CONTINUE raises the banner and the dim again. Nothing from the first tap is kept.
+- **Every role, one path.** A Resident and an Insider get the same push, the same screen, the same
+  tap and the same banner, and the frames are compared to the pixel.
+
+**Raised, not decided.** D-234's other branch still puts the opening banner up *at the push* on a
+phone the house catches up anywhere but the lobby or the one-line screen: for example, a relaunched
+phone whose replay arrives before it is back on its lobby. That is a dim at the push's moment, not
+at a tap. It is role-blind and rare. The owner should say whether such a phone should land on ARMED
+instead.
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `ui` `FlowModel.roundOpened` | lobby or one-line screen → `ArmedNotify` | → `Armed`; elsewhere the banner, as before |
+| `ui` `ScreenGraph` / `ArmedScreen` | CONTINUE → `Home` | CONTINUE → `Notify` |
+| `ui` `ScreenId.ArmedNotify` | the banner over ARMED, its ten seconds, its swipe | deleted, with its rows in `autoAdvance`, `ownTimers`, `viaActions`, `Notifications.arrivals`, `AMBER_BLOCKS`, `BUZZING` |
+| `ui` `Flow.housePushed` | `Notify`, `ArmedNotify` among them | neither: a tap reaches `Notify` |
+| `ui` `Flow.armedOn` | `ArmedNotify`, `Armed` | `Armed`, `Notify` |
+| `ArmedContinueTest` (ui, was `ArmedBannerTest`) | the banner lands over ARMED on every phone | the push lands plain ARMED; CONTINUE on the drawn screen raises the banner and the dim, sends nothing, and draws the same pixels for both roles; the banner clears to the springboard; a second opening moves nothing; a relaunch stands on ARMED again; a second round's CONTINUE raises it again |
+| `ArmedForEveryPhoneTest` (app, loopback) | banner and dim on every phone at the push | plain ARMED on every phone; three phones tap one at a time, and only those that have tapped are dimmed; nothing reaches any phone's round client |
+| `HouseBuzzTest` (app) | (none) | the push is the one buzz and CONTINUE adds none, the same for both roles |
+| `HostArmingTest` | the host's push → `ArmedNotify` | → `Armed` |
+
+**Proved, each red against the injected bug first** (`ArmedContinueTest`, ui).
+
+- *CONTINUE walking to the springboard, as before:*
+  `CONTINUE did not raise the opening banner on Resident in the lobby's phone expected:<Notify> but
+  was:<Home>`.
+- *The push raising the banner itself* (`roundOpened` → `Notify`, which is D-254's single dim
+  again): `the opening push did not land ARMED: Resident in the lobby expected:<Armed> but
+  was:<Notify>`. Five of the six cases went red.
+- *A send on arriving at the banner:* `Resident in the lobby's CONTINUE sent something outward
+  expected:<[]> but was:<[intent LeaveTerminal]>`.
+- *A buzz on arriving at the banner* (`HouseBuzzer.showing` buzzing on `Notify`; `HouseBuzzTest`,
+  app): `CONTINUE buzzed (insider=false): a screen tapped into does not (D-102). Expected
+  <[[Buzz(millis=90)]]>, actual <[[Buzz(millis=90)], [Buzz(millis=90)]]>`.
+
+**Looked at.** Rendered at 600×1300 through the render harness (`DeviceCanvas`). PERIMETER ARMED:
+the two-line headline, the rule, 5 RESIDENTS ACCOUNTED FOR and the outlined CONTINUE, at full
+amber, undimmed. The frame after the tap: the springboard with the HOUSE / NOW card,
+*Regarding this evening. Please read.*, bright amber at the top, and everything under it, status
+strip included, dimmed.
 
 **Not on a phone.**
 

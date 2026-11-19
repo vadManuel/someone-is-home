@@ -528,8 +528,8 @@ fun CheatRoot() {
     // Two coroutines and they are not the same job. Every seat walks the house when its own work
     // order arrives, which is a reaction to a push and runs on all five. The *script* runs on one
     // phone, and the test for which one is the lobby's: the house's opening push walks every phone
-    // to ARMED (D-234), under the opening banner (D-254, `Flow.armedOn`), and the one standing
-    // there that is hosting is the phone holding the house.
+    // to ARMED (D-234), whose CONTINUE raises the opening banner (D-293, `Flow.armedOn`), and the
+    // one standing there that is hosting is the phone holding the house.
     LaunchedEffect(round) {
         // **Nothing here arms anything any more, and that is the unit.** Arming is production's —
         // it hangs off `onLightsOut` where the `FlowModel` is built, reached by a thumb on a live

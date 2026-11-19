@@ -14,6 +14,7 @@ import home.someoneshome.ui.Notifications
 import home.someoneshome.ui.PanelVals
 import home.someoneshome.ui.PanelState
 import home.someoneshome.ui.SavedHomesModel
+import home.someoneshome.ui.ScreenGraph
 import home.someoneshome.ui.ScreenId
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -24,6 +25,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -96,10 +98,16 @@ class ArmedForEveryPhoneTest {
         )
         val model = LobbyModel(link = link).also { it.nameResident(name) }
 
-        /** `CheatRoot`'s LIGHTS OUT, exactly: the press reaches the house; the seam's walk is not called. */
-        val flow = FlowModel(
+        /**
+         * `CheatRoot`'s LIGHTS OUT, exactly: the press reaches the house; the seam's walk is not
+         * called. And `CheatRoot`'s two ways up the socket, a control's intent and the Egress tile,
+         * reach this phone's [round] as they do there, where [RoundClient] logs each as PRESSED.
+         */
+        val flow: FlowModel = FlowModel(
             PanelState(screen = ScreenId.Lobby),
             lobby = model,
+            send = { intent -> round.act(intent) },
+            fireEgress = { round.fireEgress() },
             onLightsOut = { _ ->
                 val rules = house()
                 scope.launch {
@@ -181,9 +189,8 @@ class ArmedForEveryPhoneTest {
      * One guest is on the one-line screen when the lights go out (it reopened it to hand its line
      * over again), which is the other place a seated phone stands.
      *
-     * **And it lands with the house's opening banner over it, on every phone** (D-254, restoring
-     * D-118): the one push is ARMED and the heavy banner in the same frame, so the dim is the same
-     * on every phone, host and guests, whatever the role the burst then reveals.
+     * **And it lands plain ARMED, undimmed, on every phone** (D-293): the opening banner and its
+     * dim wait for each phone's own CONTINUE, whatever the role the burst then reveals.
      */
     @Test
     fun lightsOutWalksEveryPhoneToArmedByTheHousesPush() = lobby(listOf("ROSE", "DANI")) { room ->
@@ -198,23 +205,71 @@ class ArmedForEveryPhoneTest {
             until(
                 "${phone.name}'s phone reached PERIMETER ARMED",
                 { "screen=${phone.flow.state.screen} pushed=${phone.pushed.map { it::class.simpleName }}" },
-            ) { phone.flow.state.screen == ScreenId.ArmedNotify }
+            ) { phone.flow.state.screen == ScreenId.Armed }
             assertTrue(
                 phone.pushed.any { it is RoundMessage.OpeningMessage },
                 "${phone.name} reached ARMED with no opening push from the house",
             )
         }
         // The burst after the opening (the roster, the role, the seed, the work order) moves nobody
-        // off it: ARMED is the house's screen, and the next thing that moves a phone is its thumb,
-        // or the banner's own ten seconds.
+        // off it: ARMED is the house's screen, and the next thing that moves a phone is its thumb.
         delay(SETTLE_MILLIS)
         for (phone in room.phones) {
-            assertEquals(ScreenId.ArmedNotify, phone.flow.state.screen, "${phone.name} was walked off ARMED by the rest of the burst")
+            assertEquals(ScreenId.Armed, phone.flow.state.screen, "${phone.name} was walked off ARMED by the rest of the burst")
+            assertEquals(null, PanelVals(phone.flow.state).arrival, "${phone.name}'s phone drew a banner before its CONTINUE")
+            assertFalse(Notifications.dims(phone.flow.state.screen), "${phone.name}'s phone dimmed before its CONTINUE")
+        }
+    }
+
+    /**
+     * **GUARD (D-293): each phone's CONTINUE raises the opening banner and its dim on that phone, at
+     * its tap, and sends nothing up its socket.**
+     *
+     * The phones tap one at a time, over the real link, with the house's clock running. After each
+     * tap the phone that tapped stands under the opening banner, dimmed, and every phone that has not
+     * tapped is still on ARMED, undimmed: the banner is no longer one moment for the whole house.
+     * Neither a control's intent nor the Egress tile reached the round client on any phone
+     * (`RoundClient` logs both as PRESSED), so the house heard nothing it could time.
+     */
+    @Test
+    fun eachPhonesContinueRaisesTheBannerOnThatPhoneAlone() = lobby(listOf("ROSE", "DANI")) { room ->
+        until("every lobby read READY") { room.host.model.readyToArm }
+        room.host.flow.lightsOut()
+        for (phone in room.phones) {
+            until("${phone.name} reached ARMED", { "screen=${phone.flow.state.screen}" }) { phone.flow.state.screen == ScreenId.Armed }
+        }
+        delay(SETTLE_MILLIS)
+        val before = room.phones.associateWith { it.log.size }
+
+        // ARMED's one control, which is CONTINUE (`ScreenGraph`; `ScreenGraphTest` taps it on the
+        // rendered screen and holds the graph to what it does).
+        val continueTo = ScreenGraph.exitsOf(ScreenId.Armed).single()
+        val tapped = mutableListOf<Phone>()
+        for (phone in listOf(room.guests.first(), room.host, room.guests.last())) {
+            phone.flow.go(continueTo)
+            tapped += phone
+            delay(SETTLE_MILLIS)
+            for (other in room.phones) {
+                val screen = other.flow.state.screen
+                if (other in tapped) {
+                    assertEquals(ScreenId.Notify, screen, "${other.name}'s CONTINUE did not raise the opening banner")
+                    assertEquals(
+                        NotificationKind.Opening, PanelVals(other.flow.state).arrival?.notification?.kind,
+                        "${other.name}'s banner is not the house's opening text",
+                    )
+                    assertTrue(Notifications.dims(screen), "${other.name}'s opening banner did not dim (D-118)")
+                } else {
+                    assertEquals(ScreenId.Armed, screen, "${phone.name}'s CONTINUE moved ${other.name}")
+                    assertFalse(Notifications.dims(screen), "${phone.name}'s CONTINUE dimmed ${other.name}")
+                }
+            }
+        }
+        for (phone in room.phones) {
+            val after = phone.log.drop(before.getValue(phone))
             assertEquals(
-                NotificationKind.Opening, PanelVals(phone.flow.state).arrival?.notification?.kind,
-                "${phone.name}'s phone drew no opening banner at arming",
+                emptyList(), after.filter { "PRESSED" in it },
+                "${phone.name}'s CONTINUE went up the socket",
             )
-            assertTrue(Notifications.dims(phone.flow.state.screen), "${phone.name}'s phone did not dim for the opening text")
         }
     }
 
