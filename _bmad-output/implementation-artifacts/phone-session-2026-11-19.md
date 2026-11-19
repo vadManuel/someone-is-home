@@ -28,6 +28,11 @@ What the answers change:
 Install the Playtest build on two phones (`./run-app.sh device playtest`) and play a short round
 over Bluetooth, which is still the radio. Tick each line as you see it.
 
+**Setup**
+- [ ] PERMISSIONS has a NEARBY DEVICES row under BLUETOOTH. Tapping it raises iOS's question,
+      and the row then reads GRANTED. CONTINUE goes straight to JOIN A HOME, with no NameDrop
+      step. (D-303)
+
 **Lobby and start**
 - [ ] A third phone joining **during** a round is refused, and reads "ROUND IN PROGRESS / YOU JOIN
       THE NEXT ONE". (D-287)
