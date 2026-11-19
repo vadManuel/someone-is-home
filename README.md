@@ -14,7 +14,7 @@ with your phones as the only light.
 The smart home has turned. The perimeter is armed and nobody leaves. Everyone in the building is a
 **Resident**, and a few of you are *also* **Insiders**, quietly working for the house.
 
-Nobody is eliminated. Access is **revoked**.
+And when the house is done with you, your access is **revoked**.
 
 ## How a round goes
 
