@@ -461,3 +461,4 @@ Results: `uwb-spike-results-2026-11-18.md`.
   - The house's 5 s debounce between the same two phones (`ContactGate.DEBOUNCE_TICKS`) becomes a deliberate rule: a grace after a Revoke during which neither phone of the pair can report the other.
   - After the grace, anyone can report, the Insider included, and their circle warns them first.
   - A neighbour already within 30 cm of the victim can report at once. That is accepted under U3.
+- **D-287, the door at the ending: confirmed.** Once the ending screen shows, the round is over, so a new phone may join again and waits on WAITING FOR THE HOST until NEW ROUND.
