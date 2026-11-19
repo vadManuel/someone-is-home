@@ -390,7 +390,14 @@ object Notifications {
      * *deliberately* different questions with one answer each. They used to be the same question,
      * which is the reading D-118 corrected.
      */
-    fun dims(screen: ScreenId): Boolean = onScreen(screen)?.kind?.heavy == true
+    fun dims(screen: ScreenId): Boolean = dims(arrivals[screen])
+
+    /**
+     * **The same question, of an arrival that is up**, which is what the panel asks: the Egress
+     * alert over a Subroutine (E1, D-297) is not a screen in [arrivals], and it is the same heavy
+     * notification as the one that is, so it dims the same.
+     */
+    fun dims(arrival: Arrival?): Boolean = arrival?.notification?.kind?.heavy == true
 }
 
 /**

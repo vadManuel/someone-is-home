@@ -9732,6 +9732,155 @@ not compared against a pre-change render.
 **Not on a phone.** Whether ±40 % reads as *by feel* or as *twitch timing* (GDD:624) is for a hand
 on a phone; the owner chose C knowing section 7 flagged that risk.
 
+### D-297 · **The Egress alert drops over a Subroutine in progress and the work stays; a node card scanned during an Egress, paused or not, opens no Subroutine at the house — built (recording 42), the owner's E1 and E2; settles D-295's O1**
+
+**The ruling** (owner, 2026-11-18, *Owner rulings, 2026-11-18: the Egress and a Subroutine in
+progress* in `owner-decisions-2026-11-17.md`). **E1:** *when an Egress opens, the alert drops over
+a Subroutine in progress as a banner the person can swipe away, or that clears itself. The person
+stays on the Subroutine and can finish or abandon it.* **E2:** *if the card someone is working at
+becomes one of the Egress's two cards, nothing changes on their screen by itself. To help contain,
+they scan that card again, which brings up the tap control. On that rescan the house must not open a
+Subroutine the phone cannot reach.* Before this, `EgressOpened` called `arrived(Banner)`, a push:
+the trail was cleared, `Banner` fell through to Home after `HEAVY_HOLD`, and the Subroutine's entry
+and its on-screen clock were left behind with no way back; a rescan dealt a new question. And a node
+scan answered with the seat's work while every phone routed it to the tap control (D-295).
+
+**Now, on the phone (E1).**
+
+1. **The alert is a field, not a screen, over a Subroutine.** `EgressOpened` on any of the ten
+   Subroutine screens (`Subroutine.on(screen) != null`) sets `PanelState.egressAlertUp` and does not
+   navigate. Everywhere else it is `arrived(Banner)` as before (Lock gets `LockNotify`, the house's
+   screens keep theirs). The screen is the only thing asked, and the Insider's fake is the same
+   screen, so both roles take one path.
+2. **It is drawn by the existing mechanism.** `PanelVals.arrival` returns the same
+   `Notifications.egressFor(type, nodes)` with `under` = the Subroutine screen, and `Screen` hands
+   it to `PanelFrame`'s overlay exactly as it does for `Banner`. The dim is asked of the arrival
+   (`Notifications.dims(arrival)`, the same heavy-kind test `dims(screen)` now delegates to), so it
+   is `NOTIFIED_DIM` by `alpha`, a step, as over the springboard. The buzz rides `EgressOpened`
+   (`HouseBuzzer.heard`) and did not move. No new light value, timing or copy.
+3. **What survives.** Nothing navigates, so the Subroutine's entry in `SubroutineModel`,
+   `PanelState.current`, `scannedAt`, the verdict and the composition's own clock (`screenMillis`)
+   are untouched.
+4. **How it clears.** The swipe (`dismissNotification`): over a Subroutine it clears the field and
+   does not `go(under)`, which would be an arrival and drop the verdict. D-119's ten seconds:
+   `FlowHost` runs `HEAVY_HOLD` on the field, housed or not, for `Flow.ownTimers`' reason (nothing
+   outside the phone can push it), then `egressAlertLapsed()`. And any arrival anywhere
+   (`arrivingAt`) clears it, so finishing, STOP, a meeting's ring or a Surge takes it down with the
+   screen it stood over. After it, the person is on the work; when they finish or STOP they land
+   where they would anyway, and the Egress widget is on the springboard.
+
+**Now, at the house (E2).** `markerScanned` adds `node = state.egress?.isNode(event.marker)` to the
+two existing gates (out, Isolated): a node of the running Egress opens no instance for anybody, and
+answers exactly as a registered card holding nothing for you does (D-124): the same
+`ScanAnswered(opened = null)` and `PresenceChanged(open = false)`, constructed outside the branch.
+The scan still places the seat at the node (`Presence(seat, node, since = at)`), which is what
+`pulseReturned` grades a pair by. Work the seat had open at another card is spent by D-110/D-136's
+existing rule for a scan that opens nothing, which is what any rescan does today and does not touch
+E1 (the phone has already left that Subroutine to scan). The branch reads a fact every phone was
+told (`EgressOpened` names both cards) and no role. D-295's phone path is unchanged: the node scan
+lands on the widget with a live tap control.
+
+**Decided here: paused or not.** E2 applies whether or not the Egress is paused. A pause is a
+meeting, and no honest phone scans during one; the case that matters is the edge into it, a scan in
+flight from a phone that has not yet heard `EgressHeld(running = false)`. That phone routes the
+answer to the tap control (it still believes the Egress is running), so a house that opened work
+there because it had just paused would be the bug E2 closes. Asking the one public fact, *is this a
+node of the Egress*, also keeps a node card meaning one thing for the Egress's whole life. During a
+pause a phone that does scan a node is answered NOTHING FOR YOU HERE (`ScanBad`), the empty card's
+answer, until the lights go out and the control is live again.
+
+**A Subroutine open at a card that became a node** (the brief's third case) is graded as any other:
+nothing in `egressFired` or `returned` reads the nodes, and `returned` grades against the instance
+armed at the scan before.
+
+**On the wire, the same.** A node scan's answer is byte-identical to an empty card's for both roles:
+114 bytes at sequence 4 321 through `RoundWire` and `TransportWire`. No message, field or schema row
+was added; `ScanAnswered` already reached only the scanning seat.
+
+**Recording 42** (41 when written; renumbered when combined with D-298, which also took 41). No row changed shape, and the same events reduce differently (D-282's case): a
+node scan during an Egress records `opened=none` and leaves no fresh `open` instance where version 40
+opened the seat's work. Refused at the header. `RecordingTextTest`, `HostSeatRecordingTest` and
+`OccupancyRecordingTest` assert the new header.
+
+**Proved, each red against the injected bug first.**
+
+- `EgressOverSubroutineTest` (ui, 4): *the alert drops over every Subroutine and the screen and the
+  work stay for either role* (all ten kinds, both roles, the panels equal across roles); *the swipe
+  takes the alert down and leaves the work and the entry is handed over and filed* (the tap made
+  before the Egress survives, the `HandOverEntry` names the scanned card, the verdict lands on the
+  Jam); *the ten seconds take it down and leaving the work by any route takes it down*; *off a
+  Subroutine the alert is still the banner over the springboard*. *Today's push restored
+  (`egressAlerted` always `arrived(Banner)`):* `Resident: the Egress took the phone off the Replay
+  expected:<SubReplay> but was:<Banner>`, `Resident: the swipe left the Jam expected:<SubJam> but
+  was:<Home>`, `Resident: the hold walked the phone off the Jam expected:<SubJam> but was:<Banner>`.
+- `EgressOverSubroutineRender` (ui, desktop, 2), through `FlowHost` at 600×1300 with a 16 Pro's
+  insets: for every kind and both roles, the alert up and the screen 10.5 s later. The Insider's
+  pixels equal the Resident's, up and cleared; the cleared screen equals, pixel for pixel, the same
+  phone whose alert came down in the frame it arrived (the Interrupt's sweep is checked to be
+  moving); the light left below the banner is `NOTIFIED_DIM` within 0.05 (0.311 to 0.320 over the
+  nine lit kinds; Sniff draws nothing to dim; today's banner over Home measures 0.350); and a real
+  finger's swipe up takes it off the Jam. *Push restored:* `Resident/Replay: the alert is not up`
+  and `Resident: the swipe took the phone off the Jam expected:<SubJam> but was:<Home>`. *The
+  Subroutine recomposed under the alert (`key(overlay != null)` on `PanelFrame`'s content):*
+  `Interrupt: after the alert the screen is not what it would have been without it`, the same for
+  Drift, and `Replay: the alert over the work leaves 0.163 of the light`. *The dim asked of the
+  screen again:* `Jam: the alert over the work leaves 1.000 of the light, the banner over Home
+  0.350`, and the same for each lit kind. *`FlowHost`'s lapse removed:* `Resident/Replay: the alert
+  outlived its ten seconds`.
+- `EgressNodeScanTest` (core, 4): *a node scan opens nothing at the house and answers as an empty
+  card does for either role* (the same card opens work with no Egress; the answer's effects, frame
+  bytes and delivery equal the empty card's; the seat is placed at the node at this scan's tick);
+  *…while the Egress is paused and the card is itself again once it ends*; *work open at a card that
+  becomes a node is handed over and graded normally* (accepted, line done, a Resident banks and the
+  fake does not); *a node scan from a seat with work open at another card spends it as an empty card
+  would*. *The node gate removed:* `Resident: a node scan during an Egress opened a Subroutine the
+  phone cannot reach. Expected value to be null, but was: <SubroutineInstance(entry=0,
+  subroutine=Short, parameters=[4])>` and `Resident: a node scan during a paused Egress opened work.
+  …`. *An Egress fire that spends work armed at a node:* `Resident: the Egress took the open work
+  away. Expected <MarkerId(value=m17)>, actual <null>`.
+- `EgressOverWorkLoopTest` (app, the real rules, allowlist, projection and phones without a socket,
+  2): a Resident and the Insider at work when the Insider's Egress fires keep their screens with the
+  alert over them, swipe it, hand over, and the house grades each with no refusal; across ten pinned
+  seeds, a seat whose order holds a node card scans it, lands on the live tap control, and is sent
+  `ScanAnswered(null)` and nothing else while the house holds no instance armed there and places the
+  seat at the node. *Push restored:* `Resident: the Egress took the phone off its work. Expected
+  value to be not null.` *Node gate removed:* `Resident: the house opened work at a node card the
+  phone cannot reach. Expected value to be null, but was: <MarkerId(value=BENCH-I)>`.
+
+`./gradlew check --continue`, read off the result XML: 2 629 tests, 0 failures (app 232, cards 17,
+core 367, harness 131, model 312 + 322, platform 213, ui 703 desktop + 332 native).
+
+**Looked at.** `/tmp/someones-home-d297/egress-over-<kind>-<role>-up.png`, `-cleared.png` and
+`-resident-control.png`, ten kinds. Up: the amber HOUSE · NOW / EGRESS ATTEMPT IN PROGRESS /
+CONTAIN AT UTILITY AND LANDING block under the status strip, the Subroutine behind it at the dim,
+its controls, MOTION BUDGET and STOP NOW where they were. Cleared: the Subroutine at full light,
+title and pips back, the same as the control.
+
+**Still open, raised rather than built.**
+
+1. **The Egress buzz over a question the motor is asking.** Handshake, Sniff and Drift play their
+   question as a haptic script when the work opens; `HouseBuzzer.buzz` replaces whatever the motor
+   is playing, so an Egress landing mid-script cuts the question short, and nothing replays it.
+   Before E1 the phone left the screen, so this could not be met. The buzz is as ruled and was not
+   touched; owner to rule whether the script plays again after the alert, or not.
+2. **What the alert covers for its ten seconds.** It lies over the top of the Subroutine (D-202's
+   arrangement): the title and pips on every screen, the top edge of Parity Check's grid and Signal
+   Trace's top row of nodes. **A tap on the banner opens the Egress widget** (`Notification.opens`,
+   as over the springboard), which over a Subroutine leaves the work by a tap rather than a swipe.
+   Not changed; owner to say whether the tap should be inert over a Subroutine.
+3. **The caught scan and the scan itself still take the push.** The ruling names a Subroutine in
+   progress, so `ScanCaught` (the briefing before BEGIN, with the house's instance already open) and
+   `Scan` (the camera) are as before: the banner over the springboard, and a rescan deals a fresh
+   question.
+4. **A scan answer's length still says whether it opened work**, as it has since D-124: the opened
+   instance is longer than `null` and varies by kind, on the scanner's own socket. E2 adds no new
+   length (a node scan is the empty card's bytes), so this is recorded, not changed.
+5. **The dim now multiplies whatever Subroutine is under it** rather than always the springboard,
+   so the light a phone gives off for those ten seconds depends on the work it was on. The same
+   `alpha`, the same for both roles, and no new value; named because the room can see it.
+
+**Not on a phone.**
+
 
 ### D-298 · **A containment needs four pulses in a row, and two runs pair when they share a pulse of the grid; a failed attempt vibrates the tapping phone for the whole 3 s lockout, a new pattern; only a tapping phone feels the pulse — built (recording 41), ends D-295's provisional O2–O4**
 

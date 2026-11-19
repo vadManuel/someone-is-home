@@ -145,7 +145,9 @@ fun Screen(
         PanelFrame(
             vals,
             overlay = bannerFor(vals),
-            dimmed = Notifications.dims(state.screen) &&
+            // Asked of the arrival rather than of the screen, so the Egress alert over a Subroutine
+            // (E1, D-297) dims exactly as the same alert over the springboard does.
+            dimmed = Notifications.dims(arrival) &&
                 arrival?.presentation == Presentation.Banner,
         ) {
             when (state.screen) {

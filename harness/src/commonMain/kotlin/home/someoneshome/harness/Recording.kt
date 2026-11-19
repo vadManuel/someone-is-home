@@ -50,6 +50,13 @@ class Recording(
     }
 
     companion object {
+        // 42: no row changed shape, and the same events reduce differently (the owner's E2 ruling,
+        // D-297), version 36's case. A scan of a node of the running Egress, paused or not, opens no
+        // Subroutine: the effect row's `ScanAnswered` says `opened=none` where a version 41 build
+        // opened the seat's work there, and the state row's `open` holds the spent instance (or
+        // nothing) instead of a fresh one. A version 41 recording with such a scan would replay to a
+        // different round, so it is refused here.
+        //
         // 41: the same events reduce differently (the owner's O3 and O4 rulings, D-298). A Sync
         // Pulse return is good only on four consecutive pulses, so a version 40 return on four
         // scattered pulses would replay to a miss where the evening held it; two runs pair when they
@@ -330,7 +337,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/41"
+        const val HEADER = "someone-is-home/recording/42"
     }
 }
 

@@ -565,7 +565,18 @@ private fun markerScanned(state: GameState, event: Event.MarkerScanned): Reducti
     // dark card too. A card that went offline for Residents and kept opening fakes for Insiders
     // would be a role oracle at every Isolated marker in the house.
     val offline = state.isIsolated(event.marker, event.at)
-    val entry = if (state.isOut(event.actor) || offline) {
+    // **A node of the running Egress opens nothing either, and answers exactly as an empty card
+    // does** (the owner's E2 ruling, D-297). Every phone routes a scan of a node to the tap control
+    // (D-295), so work the house opened here would be work no phone can reach: an open instance
+    // nobody can hand over, sitting where the scan's spend should have been. The branch is on a
+    // fact every phone in the house was told (`EgressOpened` names both cards), the role is not
+    // read, and the two effects below do not move.
+    //
+    // **Paused or not.** A pause is a meeting, and no honest phone scans during one; but the edge
+    // into it is a scan in flight from a phone that has not yet heard `EgressHeld`, and that phone
+    // routes the answer to the control. Opening work for it there would be the bug this closes.
+    val node = state.egress?.isNode(event.marker) == true
+    val entry = if (state.isOut(event.actor) || offline || node) {
         null
     } else {
         state.workOrderFor(event.actor)?.openAt(event.marker)

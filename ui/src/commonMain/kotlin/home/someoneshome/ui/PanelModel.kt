@@ -284,6 +284,22 @@ data class PanelState(
      */
     val egressHeld: Boolean = false,
     /**
+     * **The Egress alert is standing over the Subroutine this phone is on** (the owner's E1 ruling,
+     * D-297).
+     *
+     * An Egress opening on a phone whose person is in a Subroutine does not walk the phone to
+     * [ScreenId.Banner]: the alert drops over the work, and the work stays. Today's banner is a
+     * screen, so it could only ever be drawn over the springboard, and a person mid-Subroutine was
+     * taken off it with the entry they had made and the clock the screen was running. This is the
+     * same alert, the same dim and the same ten seconds ([HEAVY_HOLD]), drawn by [PanelVals.arrival]
+     * over whatever Subroutine screen is under it.
+     *
+     * Set by `EgressOpened` on a Subroutine screen and on no other, for either role: which screen is
+     * up is the only thing asked. Cleared by the swipe, by [HEAVY_HOLD] (`FlowHost`) and by any
+     * arrival anywhere ([arrivingAt]), so it can never outlive the screen it was raised over.
+     */
+    val egressAlertUp: Boolean = false,
+    /**
      * **The Egress countdown: what is left of it and how long it ran from** (D-243).
      *
      * From the house's own number, already on the wire: `EgressOpened.remaining` starts it (and is
@@ -1868,7 +1884,11 @@ class PanelVals(
     // house text lands, and the static table's entry for it is the design's `you're up` from
     // NUMBER WITHHELD at 21:03, so every text the house sent arrived under somebody else's words
     // and a drawn time. Nothing yet sent draws no banner.
+    //
+    // **And the Egress alert over a Subroutine is the house's pair over the screen it arrived on**
+    // (E1, D-297): `under` is the Subroutine itself, so a swipe leaves the person where they were.
     val arrival: Arrival? = when {
+        state.egressAlertUp -> Arrival(Notifications.egressFor(egressType, egressNodes), under = state.screen)
         state.houseAttached && state.screen == ScreenId.Quiet -> state.houseTexts.lastOrNull()
             ?.let { Arrival(Notifications.houseText(it), under = ScreenId.Home) }
         else -> Notifications.arrivalOn(state.screen, egressType, egressNodes)

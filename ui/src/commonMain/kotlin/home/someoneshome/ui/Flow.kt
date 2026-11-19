@@ -944,9 +944,13 @@ fun PanelState.arrivingAt(id: ScreenId): PanelState = when (id) {
     // The verdict is dropped on every arrival, this one included. It belongs to one instance of
     // one Subroutine: carried across a navigation it would sit under the next piece of work, and
     // carried into a re-scan it would be the phone answering an entry nobody has made yet.
-    ScreenId.Revoked -> copy(screen = id, outBy = OutBy.Revoked, verdict = null)
-    ScreenId.Restrained -> copy(screen = id, outBy = OutBy.Restrained, verdict = null)
-    else -> copy(screen = id, verdict = null)
+    //
+    // **And the Egress alert over a Subroutine goes with the screen it stood over** (E1, D-297):
+    // finishing, STOP, a meeting's ring or a Surge all land somewhere else, and the alert was about
+    // the moment it arrived, not about the next screen. The widget holds what is still running.
+    ScreenId.Revoked -> copy(screen = id, outBy = OutBy.Revoked, verdict = null, egressAlertUp = false)
+    ScreenId.Restrained -> copy(screen = id, outBy = OutBy.Restrained, verdict = null, egressAlertUp = false)
+    else -> copy(screen = id, verdict = null, egressAlertUp = false)
 }
 
 /**
@@ -3292,6 +3296,10 @@ class FlowModel(
             // already on a house-driving screen keeps it — a banner raised over the tally would
             // take the room's result off the screen it is being read from.
             //
+            // **And a phone in a Subroutine keeps the Subroutine** (the owner's E1, D-297): the
+            // alert drops over the work rather than walking the phone to `Banner`, which is the
+            // springboard and so took the person off their work. See [egressAlerted].
+            //
             // **The nodes land as rooms and the pair is stored before the banner.** *The widget
             // takes over and names the two nodes*, and the alert and the widget read the same two
             // strings out of [PanelState] (`Notifications.arrivalOn`) so they cannot send two people
@@ -3325,7 +3333,7 @@ class FlowModel(
                     egressLeft = Balance.wholeSeconds(message.remaining).let { Countdown(it, it) },
                     egressHeld = false,
                 )
-                arrived(ScreenId.Banner)
+                egressAlerted()
             }
 
             // **The countdown stopping and starting again, on the containment screen** (D-133).
@@ -3531,6 +3539,39 @@ class FlowModel(
     }
 
     /**
+     * **The Egress alert, over whatever this phone is doing** (E1, the owner's 2026-11-18 ruling,
+     * D-297).
+     *
+     * On a Subroutine screen the alert is raised over the work and the phone stays where it is:
+     * [PanelState.egressAlertUp], drawn by [PanelVals.arrival] with the work as its `under`. The
+     * screen does not change, so nothing the Subroutine holds is touched: its entry in
+     * [SubroutineModel], [PanelState.current], [PanelState.scannedAt], and the clock its screen runs
+     * in its own composition (`screenMillis`), which a navigation would have disposed. The person
+     * can finish it, STOP it, or swipe the alert away, and the widget holds the countdown.
+     *
+     * Everywhere else it is [arrived], as it always was. **The one question is which screen is up**,
+     * and a Subroutine screen is the same screen for a Resident's real work and an Insider's fake
+     * (rule 8), so the two take one path.
+     */
+    private fun egressAlerted() {
+        if (Subroutine.on(state.screen) != null) {
+            state = state.copy(egressAlertUp = true)
+        } else {
+            arrived(ScreenId.Banner)
+        }
+    }
+
+    /**
+     * **D-119's ten seconds ran out on an alert over a Subroutine**, and it goes the way the
+     * `Banner` row in [Flow.autoAdvance] goes: the dim lifts in the same step, and the person is on
+     * the work they never left. Called by [FlowHost] on a housed phone and an unhoused one alike,
+     * because nothing outside this phone could push it (the reason [Flow.ownTimers] holds `Banner`).
+     */
+    fun egressAlertLapsed() {
+        if (state.egressAlertUp) state = state.copy(egressAlertUp = false)
+    }
+
+    /**
      * **The house armed, and every phone still standing in the lobby goes to PERIMETER ARMED**
      * (D-234).
      *
@@ -3657,7 +3698,10 @@ class FlowModel(
         // The banner the panel drew, which on a housed phone is the house's own text (D-247).
         val arrival = PanelVals(state).arrival ?: return
         notifications.dismiss(arrival.notification)
-        go(arrival.under)
+        // **Over a Subroutine there is nowhere to go** (E1, D-297): `under` is the screen the phone
+        // is already on, and a walk to it would be an arrival, which drops the verdict and restarts
+        // nothing the person asked to restart. The alert comes down and the work is where it was.
+        if (state.egressAlertUp) state = state.copy(egressAlertUp = false) else go(arrival.under)
     }
 
     /**
@@ -3847,6 +3891,18 @@ fun FlowHost(
     // sent with it, which is the ring's six seconds one message over. It is keyed on the jam, so a
     // second Static arriving mid-window restarts the wait on the new one rather than ending both
     // early.
+    // **D-119's ten seconds for the Egress alert over a Subroutine** (E1, D-297). The `Banner` row
+    // in [Flow.autoAdvance] is a screen's timer and this alert is not a screen, so it is run here,
+    // housed or not, for [Flow.ownTimers]' reason: nothing outside the phone can push it. Keyed on
+    // the flag, so a swipe or any arrival (both clear it) ends the wait with nothing left to fire.
+    val alertUp = model.state.egressAlertUp
+    LaunchedEffect(alertUp) {
+        if (alertUp) {
+            delay(HEAVY_HOLD.toLong())
+            model.egressAlertLapsed()
+        }
+    }
+
     val jam = model.state.staticJam
     LaunchedEffect(jam) {
         if (jam != null) {
