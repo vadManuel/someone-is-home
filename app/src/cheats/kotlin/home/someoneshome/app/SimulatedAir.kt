@@ -3,7 +3,14 @@ package home.someoneshome.app
 import home.someoneshome.model.ContactToken
 import home.someoneshome.model.RadioCause
 import home.someoneshome.model.Seat
+import home.someoneshome.model.protocol.RangingHandle
+import home.someoneshome.model.protocol.RangingReading
+import home.someoneshome.model.protocol.RangingSpare
+import home.someoneshome.model.protocol.RangingToken
+import home.someoneshome.model.protocol.RangingWire
+import home.someoneshome.model.protocol.SpareKey
 import home.someoneshome.platform.ContactRadio
+import home.someoneshome.platform.RangingRadio
 import home.someoneshome.platform.RadioReading
 import kotlin.math.log10
 import kotlin.math.roundToInt
@@ -60,6 +67,43 @@ class SimulatedAir {
     /** Where [seat] is standing, or null for a seat nobody placed. */
     fun spotOf(seat: Seat): Spot? = spots[seat.index]
 
+    // ---- UWB (U6, D-300) ------------------------------------------------------------------------
+
+    private val rangings = mutableListOf<SimulatedRanging>()
+    private val bodies = mutableSetOf<Pair<Int, Int>>()
+
+    /**
+     * **The noise the UWB model draws from**, one stream for the whole air, seeded, so a bench run is
+     * the same run every time (the bench is not the rules, but a flaky bench proves nothing).
+     */
+    internal val noise = BenchNoise(NOISE_SEED)
+
+    /** This seat's UWB radio, its pool at [capacity]. One per seat; asking twice returns the same one. */
+    fun rangingFor(seat: Seat, capacity: Int = RangingWire.STARTING_CAPACITY): SimulatedRanging =
+        rangings.firstOrNull { it.seat.index == seat.index }
+            ?: SimulatedRanging(seat, this, capacity).also { rangings += it }
+
+    /** **A body stands between [a] and [b]** ([on]), or no longer does: their readings come out long. */
+    fun bodyBetween(a: Seat, b: Seat, on: Boolean = true) {
+        val key = minOf(a.index, b.index) to maxOf(a.index, b.index)
+        if (on) bodies += key else bodies -= key
+    }
+
+    internal fun blocked(a: Seat, b: Seat): Boolean = (minOf(a.index, b.index) to maxOf(a.index, b.index)) in bodies
+
+    /** The session, on any radio in this air, whose own token is [token], and the radio it is on. */
+    internal fun sessionWith(token: RangingToken): Pair<SimulatedRanging, SimulatedRanging.Session>? {
+        for (r in rangings) r.sessionWith(token)?.let { return r to it }
+        return null
+    }
+
+    /** The distance between two seats, in metres, or null if either is nowhere. */
+    internal fun metresBetween(a: Seat, b: Seat): Double? {
+        val here = spots[a.index] ?: return null
+        val there = spots[b.index] ?: return null
+        return distance(here, there)
+    }
+
     /** What [listener] hears right now: every other advertising radio, at its distance's strength. */
     internal fun heardBy(listener: SimulatedRadio): List<RadioReading> {
         val here = spots[listener.seat.index] ?: return emptyList()
@@ -88,6 +132,38 @@ class SimulatedAir {
         fun rssiAt(metres: Double): Int {
             val d = if (metres < REFERENCE_METRES) REFERENCE_METRES else metres
             return (REFERENCE_DBM - 20.0 * log10(d / REFERENCE_METRES)).roundToInt().coerceAtLeast(FLOOR_DBM)
+        }
+
+        /**
+         * **UWB readings arrive every 150 ms: 6.7 a second** (the spike, step 5). The model counts a
+         * second's readings as the whole number of 150 ms ticks that fell in it: 6, 7, 7, 6, 7, 7, …
+         */
+        const val UWB_READING_MILLIS: Long = 150L
+
+        /** **±3 cm on a clear line** (the spike, step 2: held 15 cm read 12–13, touching 2 cm). */
+        const val UWB_CLEAR_NOISE_CM: Int = 3
+
+        /**
+         * **A body in the way reads 3 to 5 m long, and never short** (the spike, step 3: 4.6 m at 1 m
+         * with a back between). Added to the true distance, so it can only lengthen a reading.
+         */
+        const val UWB_BODY_LONG_MIN_CM: Int = 300
+        const val UWB_BODY_LONG_MAX_CM: Int = 500
+
+        private const val NOISE_SEED = 20261118L
+
+        /**
+         * **One UWB reading of [metres], in centimetres**: the true distance, ±3 cm of noise on a clear
+         * line, or 3 to 5 m long through a body. Minimal by design (D-300): a later unit tunes it
+         * against more of the spike (the 0.5 s recovery after a lock, dropouts mid-touch).
+         */
+        fun uwbReadingCm(metres: Double, blocked: Boolean, noise: BenchNoise): Int {
+            val trueCm = (metres * 100.0).roundToInt()
+            return if (blocked) {
+                trueCm + noise.nextInt(UWB_BODY_LONG_MIN_CM, UWB_BODY_LONG_MAX_CM + 1)
+            } else {
+                trueCm + noise.nextInt(-UWB_CLEAR_NOISE_CM, UWB_CLEAR_NOISE_CM + 1)
+            }
         }
 
         private fun distance(a: Spot, b: Spot): Double {
@@ -140,4 +216,142 @@ class SimulatedRadio internal constructor(val seat: Seat, private val air: Simul
     }
 
     override fun faultBegan(): RadioCause? = down.also { down = null }
+}
+
+/**
+ * **One seat's simulated UWB radio** (U6, D-300): a pool of sessions in [SimulatedAir], kept the way
+ * the Nearby Interaction radio will keep them, and read with the spike's distance model.
+ *
+ * The pool holds up to [capacity] sessions, each with a key and a token of its own (random, 312 to
+ * 345 bytes, the measured sizes). An idle session is offered as a spare. [start] runs the idle
+ * session the house named against the peer's token; [stop] ends it and opens a fresh idle one with a
+ * new key and token. **A pair reads only when both phones run it**, each against the other's token,
+ * as UWB's two-way exchange needs; a phone that started alone reads nothing. Then [drain] gives,
+ * for each pair, the nearest of that second's readings ([SimulatedAir.uwbReadingCm]) and how many.
+ *
+ * Like [SimulatedRadio] it holds no buffer: a second's readings are drawn at the moment of the
+ * upload. It never learns a seat from a handle; only the air, which knows where everybody stands,
+ * does.
+ */
+class SimulatedRanging internal constructor(
+    val seat: Seat,
+    private val air: SimulatedAir,
+    private var limit: Int,
+) : RangingRadio {
+
+    /** One session: its own key and token, and, once ranging, the pair's handle and the peer's token. */
+    class Session(val key: SpareKey, val token: RangingToken) {
+        var handle: RangingHandle? = null
+        var peer: RangingToken? = null
+    }
+
+    private val sessions = mutableListOf<Session>()
+    private var drains = 0L
+
+    /** The pairs this radio is ranging, by handle. For the bench. */
+    val ranging: List<RangingHandle> get() = sessions.mapNotNull { it.handle }
+
+    /** The seat at the other end of [handle], as only the air could say: for the bench's assertions. */
+    fun peerOf(handle: RangingHandle): Seat? {
+        val peer = sessions.firstOrNull { it.handle == handle }?.peer ?: return null
+        return air.sessionWith(peer)?.first?.seat
+    }
+
+    internal fun sessionWith(token: RangingToken): Session? = sessions.firstOrNull { it.token == token }
+
+    /** **iOS refused a session** (`activeSessionsLimitExceeded`): the capacity drops by one. */
+    fun refused() {
+        if (limit > 0) limit--
+        while (sessions.size > limit) {
+            val idle = sessions.lastOrNull { it.handle == null } ?: sessions.last()
+            sessions.remove(idle)
+        }
+    }
+
+    override fun capacity(): Int = limit
+
+    override fun spares(): List<RangingSpare> =
+        sessions.filter { it.handle == null }.map { RangingSpare(it.key, it.token) }
+
+    override fun drain(): List<RangingReading> {
+        // 6.7 a second: the 150 ms ticks that fell in this second, 6 or 7.
+        val from = drains * 1_000L / SimulatedAir.UWB_READING_MILLIS
+        drains++
+        val count = (drains * 1_000L / SimulatedAir.UWB_READING_MILLIS - from).toInt()
+        return sessions.mapNotNull { s ->
+            val handle = s.handle ?: return@mapNotNull null
+            val other = s.peer?.let(air::sessionWith)
+            val peerSeat = if (other != null && other.second.peer == s.token && other.second.handle != null) other.first.seat else null
+            val metres = peerSeat?.let { air.metresBetween(seat, it) }
+            if (peerSeat == null || metres == null) {
+                RangingReading(handle, null, 0)
+            } else {
+                val blocked = air.blocked(seat, peerSeat)
+                val nearest = (0 until count).minOf { SimulatedAir.uwbReadingCm(metres, blocked, air.noise) }
+                RangingReading(handle, nearest, count)
+            }
+        }
+    }
+
+    override fun start(handle: RangingHandle, own: SpareKey, peer: RangingToken) {
+        if (sessions.any { it.handle == handle }) return
+        val idle = sessions.firstOrNull { it.key == own && it.handle == null } ?: return
+        idle.handle = handle
+        idle.peer = peer
+    }
+
+    override fun stop(handle: RangingHandle) {
+        val s = sessions.firstOrNull { it.handle == handle } ?: return
+        sessions.remove(s)
+        fill()
+    }
+
+    override fun open() {
+        sessions.clear()
+        fill()
+    }
+
+    override fun silence() {
+        sessions.clear()
+    }
+
+    private fun fill() {
+        while (sessions.size < limit) sessions += fresh()
+    }
+
+    private fun fresh(): Session {
+        val key = SpareKey(hex(air.noise.nextBytes(RangingWire.KEY_BYTES)))
+        val token = RangingToken(hex(air.noise.nextBytes(air.noise.nextInt(312, 346))))
+        return Session(key, token)
+    }
+
+    private fun hex(bytes: ByteArray): String = bytes.joinToString("") { (it.toInt() and 0xff).toString(16).padStart(2, '0') }
+}
+
+/**
+ * **The bench's noise: a seeded SplitMix64 stream** (D-300). Written out rather than borrowed, for
+ * `seedSourceCordon`'s reason: nothing in the app draws from `kotlin.random`, so a seed or a seat
+ * token can never be one. This draws only a fake radio's jitter and its fake session tokens, never
+ * a round's secret, and is seeded so that a bench run is the same run every time.
+ */
+class BenchNoise(seed: Long) {
+    private var state = seed
+
+    private fun next(): Long {
+        state += -0x61c8864680b583ebL
+        var z = state
+        z = (z xor (z ushr 30)) * -0x40a7b892e31b1a47L
+        z = (z xor (z ushr 27)) * -0x6b2fb644ecceee15L
+        return z xor (z ushr 31)
+    }
+
+    /** A value in [from] until [until]. */
+    fun nextInt(from: Int, until: Int): Int {
+        require(until > from) { "an empty range" }
+        val span = (until - from).toLong()
+        return from + ((next() ushr 1) % span).toInt()
+    }
+
+    /** [count] bytes. */
+    fun nextBytes(count: Int): ByteArray = ByteArray(count) { next().toByte() }
 }

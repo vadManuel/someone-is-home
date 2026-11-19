@@ -10,6 +10,7 @@ import home.someoneshome.model.Seat
 import home.someoneshome.model.SeatNamed
 import home.someoneshome.model.protocol.LobbyBody
 import home.someoneshome.model.protocol.LobbyWire
+import home.someoneshome.model.protocol.RangingWire
 import home.someoneshome.model.protocol.RequestSlot
 import home.someoneshome.model.protocol.RoundBody
 import home.someoneshome.model.protocol.RoundWire
@@ -26,6 +27,7 @@ import home.someoneshome.platform.monotonicNanos
 import home.someoneshome.platform.saveHostAddress
 import home.someoneshome.platform.saveOwedReports
 import home.someoneshome.platform.saveSeatToken
+import home.someoneshome.platform.secureRandomBytes
 import home.someoneshome.platform.ScreenWake
 import home.someoneshome.platform.transport.AdvertiseFailure
 import home.someoneshome.platform.transport.ClientSession
@@ -337,7 +339,7 @@ class LobbyHouse(
      * holds. `RoundAuthority.sighted` is what fills it. The seat is the connection's, exactly as a
      * request's actor is; the upload carries none and has nowhere to put one.
      */
-    private val onSighted: suspend (Seat, RoundBody.Sighted) -> Unit = { _, _ -> },
+    private val onSighted: suspend (Seat, RoundBody.Sighted) -> String? = { _, _ -> null },
     /**
      * **A phone saying its radio went down, and why** ([RoundBody.RadioFaulted], T2, D-222; D-223).
      *
@@ -991,8 +993,9 @@ class LobbyHouse(
                             }
                         }
                     }
-                    onSighted(arrival.seat, arrival.upload)
-                    if (slot != null) answerUpload(arrival.seat, slot.id, arrival.upload.probe, arrival.heardAtMillis)
+                    // The house's ranging plan for this phone comes back from the same door (D-300).
+                    val plan = onSighted(arrival.seat, arrival.upload)
+                    if (slot != null) answerUpload(arrival.seat, slot.id, arrival.upload.probe, arrival.heardAtMillis, plan)
                 }
                 // **The radio fault, to the rules, then answered** (T2, D-222; D-245). Not through
                 // the desk: the body has no sequence. A phone keeps a report until it is answered
@@ -1168,12 +1171,17 @@ class LobbyHouse(
      * **And the house's clock, twice** (D-295): [probe] echoed, the moment the upload arrived
      * ([heardAtMillis]) and the moment of this answer, both on [houseMillis]. A probe that does not
      * read is answered as `UploadProbe.NONE`, in the same frame at the same width (rule 1).
+     *
+     * **And the house's ranging plan for this phone** (D-300): [plan] as the authority sealed it, or,
+     * when there is none (no authority, or one that answered something that is not a plan's shape), a
+     * blank of random bytes at the same width, which opens on no phone. Every answer carries one.
      */
-    private suspend fun answerUpload(seat: Seat, id: String, probe: String, heardAtMillis: Long) {
+    private suspend fun answerUpload(seat: Seat, id: String, probe: String, heardAtMillis: Long, plan: String?) {
         val server = host ?: return
         val echoed = if (UploadProbe.isProbe(probe)) probe else UploadProbe.NONE
+        val sealed = plan?.takeIf(RangingWire::isPlanField) ?: RangingWire.blankPlan(secureRandomBytes(RangingWire.PLAN_FIELD_BYTES))
         try {
-            val answer = RoundBody.UploadHeard.of(id, echoed, heardAtMillis, houseMillis())
+            val answer = RoundBody.UploadHeard.of(id, echoed, heardAtMillis, houseMillis(), sealed)
             server.send(seat, TransportFrame.Carry(RoundWire.encode(answer)))
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
             throw cancelled
@@ -1362,7 +1370,7 @@ class LobbyOverTransport(
      */
     private val onEgressFired: suspend (Seat) -> Unit = {},
     /** [LobbyHouse.onSighted], threaded through: what another phone's radio heard (D-217). */
-    private val onSighted: suspend (Seat, RoundBody.Sighted) -> Unit = { _, _ -> },
+    private val onSighted: suspend (Seat, RoundBody.Sighted) -> String? = { _, _ -> null },
     /** [LobbyHouse.onRadioFaulted], threaded through: another phone's radio went down (T2, D-222; D-223). */
     private val onRadioFaulted: suspend (Seat, RoundBody.RadioFaulted) -> Unit = { _, _ -> },
     /**

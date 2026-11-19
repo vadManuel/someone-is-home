@@ -77,6 +77,45 @@ class UploadAllocationTest {
         assertUnder(256, perCall { RequestSlot.read(slot) }, "reading an empty slot")
     }
 
+    private val fullReport = RangingReport(
+        6,
+        (0 until 3).map { RangingSpare(SpareKey("00000000000000a$it"), RangingToken("ab".repeat(345))) },
+        (0 until 3).map { RangingReading(RangingHandle("00000000000000b$it"), 40 + it, 6) },
+    )
+    private val fullPlan = RangingPlan(
+        (0 until 3).map { RangingStep.Start(RangingHandle("00000000000000c$it"), SpareKey("00000000000000d$it"), RangingToken("cd".repeat(345))) } +
+            (0 until 3).map { RangingStep.Keep(RangingHandle("00000000000000e$it")) },
+    )
+    private val nonce = ByteArray(RangingWire.NONCE_BYTES) { 5 }
+
+    /**
+     * **D-300: the ranging report, packed on every phone a beat and opened by the host per seat a
+     * beat.** Sealing is one digest per 32 bytes into one held block, in place in the field's one
+     * array; what is left is that array and the base64 string. Measured on the JVM at first landing:
+     * 11.9 KB to pack and 18.0 KB to open a report, 11.8 and 17.5 KB a plan (half of it the base64
+     * string and the three tokens as hex). The ceilings are that with headroom.
+     */
+    @Test
+    fun `the ranging report costs its bytes to pack and to open`() {
+        val packed = perCall(500) { RangingWire.packReport(seeds[0], nonce, fullReport) }
+        val field = RangingWire.packReport(seeds[0], nonce, fullReport)
+        val opened = perCall(500) { RangingWire.unpackReport(seeds[0], field) }
+        println("D-300 RANGING REPORT — pack $packed B, open $opened B")
+        assertUnder(16_384, packed, "packing a ranging report")
+        assertUnder(24_576, opened, "opening a ranging report")
+    }
+
+    /** **D-300: the plan, sealed by the host per seat a beat and opened by every phone a beat.** */
+    @Test
+    fun `the ranging plan costs its bytes to pack and to open`() {
+        val packed = perCall(500) { RangingWire.packPlan(seeds[0], nonce, fullPlan) }
+        val field = RangingWire.packPlan(seeds[0], nonce, fullPlan)
+        val opened = perCall(500) { RangingWire.unpackPlan(seeds[0], field) }
+        println("D-300 RANGING PLAN — pack $packed B, open $opened B")
+        assertUnder(16_384, packed, "packing a ranging plan")
+        assertUnder(24_576, opened, "opening a ranging plan")
+    }
+
     /** A keyed MAC into the caller's array allocates nothing at all; a seed's bytes are its array. */
     @Test
     fun `a MAC under a held key allocates nothing and a seed's bytes are one array`() {

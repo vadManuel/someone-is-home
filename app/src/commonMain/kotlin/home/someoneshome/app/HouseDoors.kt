@@ -32,10 +32,11 @@ class HouseDoors(private val rules: () -> RoundAuthority?) {
         rules()?.fireEgress(actor)
     }
 
-    /** What a phone's radio heard, to the resolver. */
-    suspend fun sighted(seat: Seat, upload: RoundBody.Sighted) {
-        rules()?.sighted(seat, upload)
-    }
+    /**
+     * What a phone's radio heard, to the resolver; and the house's ranging plan for that phone, to
+     * ride the upload's answer (D-300). Null when there is no authority to ask.
+     */
+    suspend fun sighted(seat: Seat, upload: RoundBody.Sighted): String? = rules()?.sighted(seat, upload)
 
     /** A phone's radio went down, and why; heard once per onset (D-245). */
     suspend fun faulted(seat: Seat, report: RoundBody.RadioFaulted) {

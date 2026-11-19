@@ -16,6 +16,7 @@ import home.someoneshome.model.MarkerShapes
 import home.someoneshome.model.Seat
 import home.someoneshome.model.SyncPulseGrid
 import home.someoneshome.model.Tick
+import home.someoneshome.model.protocol.RangingWire
 import home.someoneshome.model.protocol.RoundBody
 import home.someoneshome.model.protocol.RoundWire
 import home.someoneshome.model.protocol.SightingUpload
@@ -106,7 +107,7 @@ class ContainmentDriftTest {
             val answeredAt = heardAt + bench.random.nextLong(0, 61)
             bench.at(answeredAt) {
                 val down = RoundWire.encode(
-                    RoundBody.UploadHeard.of("0123456789abcdef", heard.probe, house(heardAt), house(answeredAt)),
+                    RoundBody.UploadHeard.of("0123456789abcdef", heard.probe, house(heardAt), house(answeredAt), RangingWire.NO_PLAN),
                 )
                 bench.at(answeredAt + bench.hop()) {
                     val answer = RoundWire.decodeOrNull(down) as RoundBody.UploadHeard

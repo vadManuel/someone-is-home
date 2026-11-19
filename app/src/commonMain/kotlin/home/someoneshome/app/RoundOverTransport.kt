@@ -9,6 +9,8 @@ import home.someoneshome.model.protocol.RoundWire
 import home.someoneshome.model.protocol.SightingUpload
 import home.someoneshome.model.protocol.TransportFrame
 import home.someoneshome.platform.ContactRadio
+import home.someoneshome.platform.NoRanging
+import home.someoneshome.platform.RangingRadio
 import home.someoneshome.platform.ScreenWake
 import home.someoneshome.platform.monotonicMillis
 import home.someoneshome.platform.wallClockMillis
@@ -139,6 +141,12 @@ class RoundOverTransport(
      */
     private val clock: suspend (sentAtMillis: Long, heardAtMillis: Long, answeredAtMillis: Long, receivedAtMillis: Long) -> Unit =
         { _, _, _, _ -> },
+    /**
+     * **This phone's UWB radio** (U6, D-300), handed to the uploader. Defaulted to [NoRanging],
+     * unlike [radio], because no root has a UWB radio to pass yet: the Nearby Interaction radio is a
+     * later unit, and when it lands this default goes and every root must say what it ranges with.
+     */
+    private val ranging: RangingRadio = NoRanging,
 ) {
 
     private val inbox = RoundInbox()
@@ -166,6 +174,8 @@ class RoundOverTransport(
         ask = requests::slot,
         // **And the house's clock rides the beat too** (D-295): one probe an upload, every phone alike.
         probe = uploadClock::stamp,
+        // **And the UWB report** (D-300): capacity, spare tokens, nearest distances, one width.
+        ranging = ranging,
     )
 
     /** How many requests this phone has made in the round that the house has not answered. For tests. */
@@ -313,6 +323,8 @@ class RoundOverTransport(
             // probe, handed to the socket's estimator. Every answer to every upload, on every phone.
             is RoundBody.UploadHeard -> {
                 requests.heard(body.id)
+                // **And the house's ranging plan for this second** (D-300): to the radio, nowhere else.
+                contacts.planned(body.plan)
                 uploadClock.answered(body, arrivedAtMillis) { sent, heard, answered, received ->
                     clock(sent, heard, answered, received)
                 }

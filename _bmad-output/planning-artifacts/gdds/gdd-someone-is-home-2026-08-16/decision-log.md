@@ -10204,6 +10204,234 @@ phone held face-to-card all need hands and cards; the iOS Simulator has no camer
 | `ui` `PanelState.egressAlertUp` | set on a Subroutine screen | and on the caught scan and the scan |
 
 
+### D-300 · **The UWB wire and the house's pairing (the U6 plan's first unit): every upload carries a sealed ranging report, every upload's answer a sealed plan, both one width from every seat; the house pairs phones from Bluetooth, symmetric, within each phone's capacity, slow to churn, by handles drawn from the round's seed — built; no rule reads a distance yet, nothing in play changes, nothing recorded moved (recording stays 42)**
+
+**The ruling** (owner, 2026-11-18, *Owner ruling U6* in `owner-decisions-2026-11-17.md`): *Bluetooth
+stays, to find who is near. UWB measures those few precisely. No device test of the limit first.*
+Built consequence: *each phone learns its own [limit]. It opens a conservative number of sessions,
+lowers it when iOS answers `activeSessionsLimitExceeded`, and reports the number it can hold.* The
+plan (`uwb-replacement-plan-2026-11-18.md`, *The plan under U6*) puts the wire and the house's
+pairing first, on the bench, before the rules and the radio. This is that unit. **No radio code**
+(no `NISession`) and **no rule change**: contact (D-233), the report (D-236, D-291) and the spectator
+map (D-272) still read RSSI exactly as before, so nothing a player sees, hears or feels moves.
+
+**Now, the wire** (model, `protocol/RangingWire.kt`).
+
+1. **Up, in every upload:** `RoundBody.Sighted.ranging`, its own field beside the 24 Bluetooth slots
+   (unchanged), the request slot (D-263/D-275, unchanged) and D-295's `probe` (unchanged). It holds
+   a **capacity** (one byte), **`MAX_PEERS` = 6 token slots** (present, the phone's own key for the
+   idle session, length, the archived `NIDiscoveryToken` padded to **384 bytes**), and **6 distance
+   slots** (present, handle, nearest centimetres this second as a signed 16-bit count, readings this
+   second). `MAX_PEERS` is one named constant (`RangingWire.MAX_PEERS`), and the plan's 3 is
+   `RangingWire.STARTING_CAPACITY`. 3 279 characters, always.
+2. **Down, in every upload's answer:** `RoundBody.UploadHeard.plan`, **6 step slots** of (kind,
+   handle, own key, length, peer token padded to 384): `Start` (range this handle on your idle
+   session *key* against this peer token), `Keep` (the plan's *unchanged*), `Stop`. 3 245
+   characters, always; `UploadHeard`'s `init` refuses any other width.
+3. **Sealed under the seat's contact seed** (provisional (overnight), below): the field is XORed with
+   a keystream: one HMAC under that seat's seed of the domain byte and a fresh 8-byte nonce (sent in
+   the clear) gives the field's stream key, and each 32-byte block is SHA-256 of that key and the
+   block's index. An 8-byte tag under a key derived from the same seed closes it. An empty slot is
+   zeros before sealing, so on the wire it is the keystream, keyed off the seed under its own
+   domain byte: *keyed filler, as `SightingUpload` uses*, and a full slot and an empty one are the
+   same uniform bytes to anybody without the seed. Domains `U`/`u` (report) and `R`/`r` (plan),
+   apart from the token's `T` and the upload filler's `P`. The first draft took one HMAC per block
+   (four compressions where one does); see *Checked* for what that cost.
+4. **Fail closed.** `unpackReport` / `unpackPlan` return null for the wrong width, a character
+   outside URL-safe base64, a tag that does not check (a flipped character anywhere, another seat's
+   seed, the bench's all-zero `NO_REPORT`/`NO_PLAN`), and, under a good tag, a capacity past 6, a
+   flag or kind out of range, a token of 0 or more than 384 bytes, a pad or empty slot with a byte in
+   it, a repeated key or handle, or a distance with no reading behind it. A field that does not read
+   is *nothing*, never part of one. A token longer than 384 bytes cannot be built (`RangingToken`),
+   so it can never become a short frame.
+
+**Now, the house's pairing** (core, `Ranging.kt`, `pairForRanging`), beside `resolveContacts` and
+for its reason: above the rules, pure, mints no `Event`.
+
+1. **Rank** each seat's peers by Bluetooth: the 24 RSSI slots of every upload, resolved through the
+   contact resolver's own token book. A pair's strength is its strongest reading *either way round*
+   within `HEARD_TICKS` (3 s).
+2. **Keep** a pair while each phone is in the other's strongest *capacity + `KEEP_MARGIN` (2)*,
+   both phones keep listing its handle (`HOLD_GRACE_TICKS`, 3 s; a new pair counts from its forming,
+   so a lost Start is sent again for 3 s), and neither phone's degree passes its capacity
+   (strongest kept first).
+3. **Form** greedily, strongest first then by seat, only between two phones each in the other's
+   strongest *capacity*, both under capacity, both with an undealt spare. Entry stricter than
+   staying is the hysteresis.
+4. **Handles**: `oneWaySeed(roundSeed, SeedPurpose.RangingHandle, formed)`, the round's count of
+   pairs formed, under a new label `someone-is-home/draw/ranging-handle/1`. No seat is an input; a
+   pair formed again gets a new handle; nothing already drawn moved.
+5. **The plan** for the uploading phone: `Stop` every handle it lists that the house no longer keeps,
+   `Start` every kept pair it does not list (its own spare's key, the peer's spare token), `Keep`
+   the rest; stops first, at most 6.
+6. **Never a role**: `RangingHouse` holds the round's seed and its seats, nothing else.
+
+**Out seats range like any** (decided here, provisional (overnight)). The pairing does not read the
+out list at all: a Revoked phone must stay measurable for the report (the plan: *a Revoked phone
+keeps ranging*), and it is ranked by the phones that hear it, since it advertises and never scans
+(D-008). Its phone keeps its sessions and **keeps reporting its distances**, unlike its Bluetooth
+sightings (R8, which is unchanged): a phone that went quiet on the handles it was dealt would be a
+difference anybody holding its seed could read, and the house will read only the living side of a
+report (unit 3).
+
+**Now, the phone** (platform, app). `platform.RangingRadio`: `capacity`, `spares`, `drain`,
+`start`, `stop`, `open`, `silence`; `NoRanging` reports nothing at the same width. `ContactUploader`
+packs the report every beat, out or not, opens the pool at the seed and silences it at the round's
+end; `planned(plan)` applies a plan that opens under this phone's seed, stops then starts, and a plan
+that does not open (a blank, another seat's, damaged) moves nothing. `RoundOverTransport` hands each
+`UploadHeard.plan` to it. `RoundAuthority.sighted` now returns the seat's sealed plan (a blank of
+random bytes when the upload does not read or the house holds no seed for the seat);
+`HouseDoors.sighted` and `LobbyHouse.onSighted` pass it to `answerUpload`, which answers a blank
+when there is none. Every answer carries one plan, of one width.
+
+**The bench's UWB** (cheats): `SimulatedAir.rangingFor(seat, capacity)` gives a `SimulatedRanging`:
+a pool of sessions with keys and 312–345-byte tokens drawn from a seeded SplitMix64 stream
+(`BenchNoise`: `kotlin.random` is cordoned out of the app by `seedSourceCordon`, which caught the
+first draft); a pair reads only when both phones run
+it, each against the other's token; ±3 cm on a clear line; a body in the way (`bodyBetween`) reads
+3–5 m long and never short; 6 or 7 readings a second (150 ms); `refused()` lowers the capacity. A
+minimal model, as asked: the 0.5 s recovery after a lock and mid-touch dropouts are a later unit's.
+
+**Recording: no change, 42 stays.** The pairing is reduced from the uploads, which are not
+recorded (the contact resolver's inputs are not either), and it mints no event and changes no state
+the rules hold, so no row changed shape and the same events reduce the same way. A new seed label
+moves no existing draw.
+
+**Rules unchanged, said plainly.** Contact, the report and the spectator map read RSSI exactly as
+before (`resolveContacts`, `resolvePlacements` untouched). No distance reaches a rule. No light,
+timing, copy or haptic changed. Nothing reaches a screen.
+
+**Leak and parity.** Every upload and every answer is one length from and to every phone, Insider
+or Resident, living or out, whatever its capacity, tokens, distances or plan (tested to the byte,
+model and bench). The only new client-visible values are sealed under the receiving seat's own
+seed. The pairing reads no role and no out list (a role-swapped round and a round with a seat out
+give byte-identical plans). The handle is the house's draw from the round's seed and a count, never
+a seat.
+
+**Proved** (each red against the injected break first, then restored):
+
+- **The wire** (`RangingWireTest`, model, 8): every report one width over no UWB, idle, full, the
+  longest and shortest tokens and clamped distances, and every upload carrying one the same bytes
+  through `TransportWire` from two seats; the same for plans and `UploadHeard`; a round trip; the
+  filler and the real values the same without the seed (an empty report and a full one: byte mean
+  125–130.5, zeros under 0.6 %, no byte position constant over 64 uploads, the first token's region
+  within 4 of the empty slot's); every malformation above read as nothing; a 385-byte token cannot
+  be built. *Empty spare slots left off the wire:* `a report's width moved with what it carried
+  expected:<[3279]> but was:<[119, 1699, 3279, 646]>`. *The keystream removed (filler as zeros):*
+  `the empty report's bytes are not uniform: mean 0.4127843227254182` and `the plan
+  RangingPlan(steps=[]) reads 0.4231760098928277 on average`. *The tag check removed:* `a field with
+  character 200 changed still read expected null, but was:<RangingReport(capacity=6, …`.
+- **The pairing** (`RangingPairsTest`, core, 10): two phones paired and each handed the other's
+  spare token, then told only to keep; a crowd of twelve with capacities 0–6 walking for a minute
+  (one dropping to 1 halfway), every pair held by both phones with each other's tokens, no phone in
+  more pairs than its capacity, a phone with no UWB paired with nobody; the same uploads twice give
+  equal memories and plans; a kept pair outlives a peer walking in just ahead of it and goes once
+  three phones are nearer; a pair one phone never takes up is let go after the grace and the other
+  phone told to stop, and a handle nobody keeps is stopped; a phone offering a spare past its
+  capacity is held to its capacity upload by upload; the first pair's handle is the same whichever
+  seats form it, differs between rounds, 400 formings never repeat one, and no character position is
+  shared across a seat's handles; a role-swapped round and a round with a seat Revoked give equal
+  plans; an out phone that hears nobody is paired by the phone that hears it; a second delivery moves
+  nothing. *An Insider never paired:* `the plans moved with who the Insiders are. Expected <[(0,
+  RangingPlan(steps=[])), …`. *Out seats left out:* `the plans moved with who is out. Expected <[…`.
+  *No degree check at forming:* `seat 0, capacity 1, is in 2 pairs after seat 0's upload` (checked
+  per beat it stayed green, because a later upload's keep trims the pair; the test now checks every
+  upload, since the phone had already been sent a Start it had no room for). *Keep margin 0:* `a peer
+  just ahead of the kept one displaced it. Expected <RangingHandle(hex=e4355252977e8c8a)>, actual
+  <RangingHandle(hex=37a3eae245764dc1)>`. *The handle drawn from the seats:* `a handle depends on
+  which seats are in the pair. Expected <RangingHandle(hex=e4355252977e8c8a)>, actual
+  <RangingHandle(hex=bbd4d56fc8bd230d)>`. *Each phone handed its own token:* `seat 0 was not handed
+  seat 2's token` and `seat 3 is not ranging 7's token`.
+- **The phone** (`RangingUploaderTest`, app, 4): every upload carries what the radio says at one
+  width; an out phone's report is the same as when it was living; a plan reaches the radio as stops
+  then starts, and nothing before the seed, under another seat's seed, blank, all-zero or damaged
+  does; the round's end silences the radio. *An out phone dropping its distances:* `an out phone's
+  ranging report changed. Expected <RangingReport(capacity=3, …`.
+- **The fake** (`SimulatedRangingTest`, app, 3): ±3 cm at 2 cm to 4 m, 200 readings in 30 s, 6 or 7 a
+  second; through a body 400–600 cm at 1 m, back to 97–103 when it steps away; one phone alone reads
+  nothing; a stop opens a fresh spare; a refusal lowers the capacity.
+- **The bench over real sockets** (`RangingBenchTest`, app, 1): five phones, real `LobbyOverTransport`,
+  `RoundClient`, `RoundAuthority`, loopback, the real one-second beat, capacity 1 each. Within a few
+  beats the two close pairs range each other and the lone phone nobody; the house keeps exactly those
+  two pairs; each phone's distance reaches the house at 80 and 60 cm ±3 with 6 or 7 readings; a
+  Revoke puts one of the first pair out, and 3 s later it still ranges the same pair and both its
+  distance and its partner's still arrive; every upload was 5 135 bytes and every answer 3 436 bytes
+  on every phone all round. *The plan never applied on the phone:* `never happened: both close pairs
+  are ranging each other 0→[], 1→[], 2→[], 3→[], 4→[]`. *An out phone dropping its distances:*
+  `NoSuchElementException` where the Revoked phone's reading was looked for.
+- Existing tests that moved with the wire: `SightingUploadTest` (the body's keys gain `ranging`),
+  `WireDecodeAllocationTest` (ceiling, below), and the `UploadHeard`/`Sighted` constructions in
+  `RequestSlotTest`, `CarryReadTest`, `ForeignBodyTest`, `UploadProbeTest`, `UploadClockTest`,
+  `ContainmentDriftTest`, which pass `NO_REPORT`/`NO_PLAN`.
+
+**Checked** (`./gradlew check --continue` in the worktree, every result XML read and counted with a
+python glob): model 332 (JVM) and 320 (iOS Simulator), core 382, platform 213, harness 131, cards 17,
+ui 709 (desktop) and 338 (iOS Simulator), app 245, 2 687 tests. One failure, `RealClocksTest
+.flowHostCountsTheHousesClockDown` (ui, desktop): `After waiting for 1m, the test body did not run to
+completion`, under the full run's load; ui is untouched by this unit, it passed in the run before,
+and run alone it is 11 of 11. `vocabularyLint`, `redactionLint`, `boundaryCheck`, `armingCordon`,
+`benchSeedCordon` and `seedSourceCordon` clean, and the playtest and release variant sweeps green.
+
+Two things the full runs caught. **`seedSourceCordon`** refused the first fake, which drew its
+noise from `kotlin.random`; it is `BenchNoise` now. **`UplinkFrameTest`** in the playtest variant
+failed twice, the same way both times: `in the window from 0 ms the phones sent different numbers
+of frames: {HOST=4, ROSE=4, DANI=2, MARCUS=3, PRIYA=3}`. Five phones and the house share one test
+process, and the first keystream took an HMAC (four SHA-256 compressions) per 32-byte block, about
+1 440 compressions a phone a second between packing, opening, sealing and reading; on a debug
+build that was CPU enough to push a phone's beat late. The keystream now derives one stream key
+per field and takes one compression a block; the playtest `UplinkFrameTest` passed alone and in the
+last full run. On a phone this was never seconds, but the house does it for every seat, so the
+cheaper stream stays.
+
+**Measured, and raised (rule 7).** On the JVM (`UploadAllocationTest`): a report costs 11.9 KB to
+pack and 18.0 KB to open, a plan 11.8 KB and 17.5 KB; reading an upload's frame went from 9.0 KB to
+25.6 KB (`WireDecodeAllocationTest`'s ceiling moved with the body, to 28 KB). On an 18-seat host
+that is roughly 18 × (25.6 + 18.0 + 11.8) ≈ 1 MB/s of allocation for the uploads and plans alone,
+twice the whole-app budget of 0.5 MB/s, and it is the plan's fixed six 384-byte token slots each way
+every second that cost it. Not changed here, since the plan names the width; **owner to rule** (see
+the questions).
+
+**Still open, raised rather than built.**
+
+1. **The frames grew.** An upload frame went from about 1.8 KB to 5 135 bytes, an upload's answer
+   from about 0.2 KB to 3 436 bytes, on every phone every second. On the Wi-Fi that is about 150 KB/s
+   for 18 phones, which is nothing; the cost is the allocation above.
+2. **A house clock that jumps more than 3 s lets every pair go** (the grace is measured on the
+   house's ticks): the first run of the bench jumped the clock to the Revoke's readiness and every
+   pair re-formed under a new handle a beat later. A house coming back on the air (D-225) does this;
+   the pairs re-form within a beat or two, and no rule reads them yet.
+3. **What iOS does with a token handed to two peers** cannot happen here (each spare is dealt once
+   and remembered), but a phone that reuses a key across sessions is the radio unit's to refuse.
+
+**Decisions for the owner** (each marked provisional (overnight)):
+
+1. **Sealing the two fields under the seat's contact seed**, rather than padding them with keyed
+   filler alone. An archived token is a property list a reader of the Wi-Fi can recognise, and a
+   handle in the clear shows which two sockets are ranged together, which is who stands near whom.
+   Sealing makes "filler indistinguishable without the seed" true of the real tokens too.
+2. **A plan's Start names the phone's own idle session** (`own`, its key), beside the handle and the
+   peer's token. The plan's three-part slot cannot say which of a phone's idle sessions the peer was
+   handed; without it the phone cannot range.
+3. **The phone lists every pair it holds in its distance slots every second**, readings 0 if none;
+   the house resends a Start until the handle is listed and Stops any handle listed that it does not
+   keep. This is the reconciliation that survives a lost answer.
+4. **The pairing's numbers**: 3 s of Bluetooth readings, a keep margin of 2, a 3 s grace for a pair
+   nobody lists, a 3 s life for a report; strength the strongest reading either way.
+5. **Out seats are paired, and out phones report real distances** (above).
+6. **Handles are fresh at every forming**, not one per pair per round, so a modified phone cannot
+   tell it has met the same person again.
+7. **Not recorded; recording stays 42** (above).
+8. **`ranging` defaults to `NoRanging`** on `RoundOverTransport` and `RoundClient`, unlike the
+   Bluetooth radio, because no root has a UWB radio to pass yet; the default should go when the
+   Nearby Interaction radio lands.
+9. **URL-safe base64, not hex**, for the two fields (the request slot's precedent, D-275): a third
+   fewer characters on the wire and in memory.
+10. **Allocation**: the fields cost about 1 MB/s on an 18-seat host. Options: fewer token slots (3
+    or 4), one spare token per upload rotating through the pool (ranging starts a few seconds later),
+    or accept and measure on phones.
+
+**Not on a phone.** Nothing here touches a radio.
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

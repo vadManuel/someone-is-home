@@ -3,6 +3,9 @@ package home.someoneshome.app
 import home.someoneshome.core.Admission
 import home.someoneshome.core.ContactMemory
 import home.someoneshome.core.ContactUpload
+import home.someoneshome.core.RangingMemory
+import home.someoneshome.core.contactSeedFor
+import home.someoneshome.core.pairForRanging
 import home.someoneshome.core.admit
 import home.someoneshome.core.resolveContacts
 import home.someoneshome.core.resolvePlacements
@@ -21,9 +24,11 @@ import home.someoneshome.model.SavedHome
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
 import home.someoneshome.model.toView
+import home.someoneshome.model.protocol.RangingWire
 import home.someoneshome.model.protocol.RoundBody
 import home.someoneshome.model.protocol.SightingUpload
 import home.someoneshome.platform.monotonicMillis
+import home.someoneshome.platform.secureRandomBytes
 import home.someoneshome.platform.wallClockMillis
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -115,6 +120,11 @@ class RoundAuthority(
      * and a pulse in two hands has to land at one moment of real time. A test hands a fixed one.
      */
     private val hostMillis: () -> Long = ::monotonicMillis,
+    /**
+     * **Random bytes for the ranging plans** (D-300): each plan's nonce, and a blank plan's whole
+     * width. The secure source in production; a test may hand a fixed one. Never a seed or a seat.
+     */
+    private val rangingRandom: (Int) -> ByteArray = ::secureRandomBytes,
     private val note: (String) -> Unit,
 ) : HouseHandle {
 
@@ -205,6 +215,14 @@ class RoundAuthority(
 
     /** What the contact resolver remembers between arrivals (D-213). A value, carried here. */
     private var contactMemory: ContactMemory = ContactMemory.EMPTY
+
+    /**
+     * **What the UWB pairing remembers between arrivals** (U6, D-300): who heard whom, each phone's
+     * last report, the pairs and their handles. A value, carried here like [contactMemory]; read by
+     * the bench and the tests, written only by [sighted].
+     */
+    var ranging: RangingMemory = RangingMemory.EMPTY
+        private set
 
     /**
      * **Every contact event the rules refused, in order** (R4, D-217). Also in [refusals], with the
@@ -326,6 +344,8 @@ class RoundAuthority(
         // A new round's radios start from nothing: last round's halves and debounces are about
         // seats and tokens that no longer exist.
         contactMemory = ContactMemory.EMPTY
+        // Nor last round's pairs, handles and tokens: they ranged sessions that no longer exist (D-300).
+        ranging = RangingMemory.EMPTY
         // And no onset of last round's is one of this round's (D-245).
         onsetsHeard.clear()
 
@@ -440,14 +460,23 @@ class RoundAuthority(
      * anything else. D-097 answers a phone that asked for something stale; nobody here asked. This
      * is a separate door from [heard] for exactly that reason: whatever [heard] one day does about
      * a refused request, it cannot reach a contact.
+     *
+     * ### And the phone's ranging plan comes back out (U6, D-300)
+     *
+     * Last, after the rules are done with the upload, the same upload is read a third time, by the
+     * UWB pairing ([pairForRanging]): its Bluetooth slots rank who is near whom, its ranging report
+     * says what the phone can hold and offers, and the phone's plan for this second is returned,
+     * sealed under its seed, to ride the upload's answer. **Every call returns a plan of one width**:
+     * an upload that does not read, or a seat the house holds no seed for, is answered with a blank
+     * of random bytes, which opens on no phone. The pairing reads no role and mints nothing.
      */
-    suspend fun sighted(seat: Seat, upload: RoundBody.Sighted): Unit = turn.withLock { sight(seat, upload) }
+    suspend fun sighted(seat: Seat, upload: RoundBody.Sighted): String = turn.withLock { sight(seat, upload) }
 
-    private suspend fun sight(seat: Seat, upload: RoundBody.Sighted) {
+    private suspend fun sight(seat: Seat, upload: RoundBody.Sighted): String {
         val slots = SightingUpload.unpack(upload)
         if (slots == null) {
             note("AN UPLOAD THAT IS NOT ONE — SEAT ${seat.index}")
-            return
+            return blankPlan()
         }
         val at = stamp()
         val arrival = ContactUpload(seat, slots)
@@ -460,10 +489,32 @@ class RoundAuthority(
         // second delivery is one capture, and its error is rolled once. One unpack, one token
         // book. `Sensed` emits nothing, so nothing about this reaches any phone; a refusal of one
         // is the radio's, recorded and answered with nothing, like a contact's.
-        if (resolution.taken.any { it.index == seat.index }) {
+        val taken = resolution.taken.any { it.index == seat.index }
+        if (taken) {
             resolvePlacements(at, contactMemory.book, arrival, state)?.let { concluded(it) }
         }
+        return planFor(seat, at, arrival, upload.ranging, taken)
     }
+
+    /**
+     * **[seat]'s ranging plan for this second, sealed** (D-300). The upload's Bluetooth slots,
+     * resolved through the contact book the resolver just used, and its report opened under the
+     * seat's seed, go to the pairing; the plan comes back and is sealed under the same seed. A seat
+     * the round does not hold, or a round not armed, has no seed here: a blank of the same width.
+     */
+    private fun planFor(seat: Seat, at: Tick, arrival: ContactUpload, field: String, taken: Boolean): String {
+        if (!state.armed || state.seats.none { it.index == seat.index }) return blankPlan()
+        val seed = contactSeedFor(state.seed, seat)
+        val book = contactMemory.book
+        val heard = arrival.sightings.mapNotNull { s -> book?.seatOf?.get(s.token)?.let { it to s.rssi } }
+        val report = RangingWire.unpackReport(seed, field)
+        val ranged = pairForRanging(ranging, at, seat, heard, report, taken, state)
+        ranging = ranged.memory
+        return RangingWire.packPlan(seed, rangingRandom(RangingWire.NONCE_BYTES), ranged.plan)
+    }
+
+    /** A plan's width of random bytes: opens on no phone, and looks like every sealed plan (D-300). */
+    private fun blankPlan(): String = RangingWire.blankPlan(rangingRandom(RangingWire.PLAN_FIELD_BYTES))
 
     /**
      * **A phone's radio went down** (T2, D-222; D-223). Loud here, in the house's log, whatever the

@@ -309,6 +309,13 @@ internal enum class SeedPurpose(val label: String) {
      * role-swapped round rolls byte-identical errors. Reaches no phone today (O6 waits on the owner).
      */
     Occupancy("someone-is-home/draw/occupancy/1"),
+
+    /**
+     * A UWB pair's handle, indexed by how many pairs the round has formed (U6, D-300). Keyed on that
+     * count and **never on a seat or a role**, so a phone handed one cannot tell whom it ranges, and a
+     * role-swapped round deals byte-identical handles. Reaches the two phones of the pair, sealed.
+     */
+    RangingHandle("someone-is-home/draw/ranging-handle/1"),
 }
 
 /**

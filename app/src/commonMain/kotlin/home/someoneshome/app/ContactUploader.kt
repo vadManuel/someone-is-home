@@ -5,11 +5,16 @@ import home.someoneshome.model.ContactTokens
 import home.someoneshome.model.ContactWindow
 import home.someoneshome.model.RadioCause
 import home.someoneshome.model.Sighting
+import home.someoneshome.model.protocol.RangingReport
+import home.someoneshome.model.protocol.RangingStep
+import home.someoneshome.model.protocol.RangingWire
 import home.someoneshome.model.protocol.RoundBody
 import home.someoneshome.model.protocol.RoundMessage
 import home.someoneshome.model.protocol.SightingUpload
 import home.someoneshome.model.protocol.UploadProbe
 import home.someoneshome.platform.ContactRadio
+import home.someoneshome.platform.NoRanging
+import home.someoneshome.platform.RangingRadio
 import home.someoneshome.platform.secureRandomBytes
 
 /**
@@ -70,6 +75,16 @@ import home.someoneshome.platform.secureRandomBytes
  * suspended, so a relaunched process reads it back when the round's seed arrives on its resume and
  * owes it still. A crash in the foreground writes nothing, so D-036 holds.
  *
+ * ### UWB rides the same beat (U6, D-300)
+ *
+ * Every upload also carries this phone's ranging report ([ranging]): its capacity, its idle
+ * sessions' tokens and, for each pair it ranges, the nearest distance this second, sealed under the
+ * seed to one width. The house's answer carries the plan back, and [planned] applies it: stops
+ * first, then starts. **A phone that is out keeps ranging and keeps reporting its distances**, unlike
+ * its Bluetooth sightings (R8): a Revoked phone must stay measurable for the report, and a phone
+ * that dropped its readings would leave the handles it was dealt unanswered in its uploads, a
+ * difference anybody holding its seed could read. No rule reads a distance yet.
+ *
  * ### Why the one early exit here is not rule 1's
  *
  * [beat] sends nothing before a seed has arrived, which is before arming and after the round has
@@ -108,6 +123,14 @@ class ContactUploader(
      * construction with no clock to refresh; the width is the same either way.
      */
     private val probe: () -> String = { UploadProbe.NONE },
+    /**
+     * **This phone's UWB radio** (U6, D-300): its pool's capacity and spare tokens and its nearest
+     * distances go up in every upload, and the house's plan comes back to it. [NoRanging] by
+     * default, which reports nothing at the same width.
+     */
+    private val ranging: RangingRadio = NoRanging,
+    /** A fresh nonce for each upload's ranging report: `RangingWire.NONCE_BYTES` secure random bytes. */
+    private val rangingNonce: () -> ByteArray = { secureRandomBytes(RangingWire.NONCE_BYTES) },
     /** Up this phone's own socket. */
     private val send: (RoundBody.Sighted) -> Unit,
 ) {
@@ -159,6 +182,7 @@ class ContactUploader(
                 owed += restore(message.seed)
                 if (owed.isNotEmpty()) onEvent("${owed.size} REPORT(S) OWED FROM BEFORE THIS PROCESS — THE NEXT BEATS TELL THE HOUSE (D-245)")
                 radio.scan(true)
+                ranging.open()
             }
             // **Out, by the house's word and by nothing else.** Stop listening; keep advertising
             // (D-008), so a living phone can still find this one and report it.
@@ -181,7 +205,7 @@ class ContactUploader(
         }
         val readings = radio.drain()
         val heard = if (out) emptyList() else readings.map { Sighting(it.token, it.rssi, window) }
-        send(SightingUpload.pack(key, window, uploads++, heard, ask(), probe()))
+        send(SightingUpload.pack(key, window, uploads++, heard, ask(), probe(), rangingReport(key)))
         // **Rule 6: silent here, loud at the house** (T2, D-222). The radio reports each fault once,
         // at its onset; nothing on this phone's screen, lamp or motor hears of it. A return from
         // leaving the foreground is a person's act and wins the beat (D-229): the radio's onset is
@@ -200,6 +224,30 @@ class ContactUploader(
         val next = owed.firstOrNull { it.due && it.sentOn != connection } ?: return
         next.sentOn = connection
         faulted(RoundBody.RadioFaulted(next.cause, next.onset))
+    }
+
+    /**
+     * **This beat's ranging report, sealed** (D-300): what the radio says now, out or not. Whatever
+     * the radio hands over past the wire's width is cut, never a longer field.
+     */
+    private fun rangingReport(key: ContactSeed): String {
+        val capacity = ranging.capacity().coerceIn(0, RangingWire.MAX_PEERS)
+        val spares = ranging.spares().distinctBy { it.key }.take(RangingWire.MAX_PEERS)
+        val readings = ranging.drain().distinctBy { it.handle }.take(RangingWire.MAX_PEERS)
+        return RangingWire.packReport(key, rangingNonce(), RangingReport(capacity, spares, readings))
+    }
+
+    /**
+     * **The house's plan for this second** (`RoundBody.UploadHeard.plan`, D-300), applied to the
+     * radio: every stop, then every start; a keep changes nothing. A plan that does not open under
+     * this phone's seed (a blank, another round's, a field damaged on the way) is nothing, and the
+     * radio goes on as it was. Before a seed and after the round there is no plan to apply.
+     */
+    fun planned(plan: String) {
+        val key = seed ?: return
+        val steps = RangingWire.unpackPlan(key, plan)?.steps ?: return
+        for (step in steps) if (step is RangingStep.Stop) ranging.stop(step.handle)
+        for (step in steps) if (step is RangingStep.Start) ranging.start(step.handle, step.own, step.peer)
     }
 
     /**
@@ -270,6 +318,7 @@ class ContactUploader(
         uploads = 0L
         forgetTheRound()
         radio.silence()
+        ranging.silence()
     }
 
     /** This round is over for this phone: nothing is owed in it, here or in [kept]. */

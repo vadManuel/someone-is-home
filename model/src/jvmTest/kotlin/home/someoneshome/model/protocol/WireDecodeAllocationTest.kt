@@ -35,7 +35,7 @@ class WireDecodeAllocationTest {
 
     @Test
     fun `a round body offered to the lobby's decoder is turned away without allocating`() {
-        val answer = RoundWire.encode(RoundBody.UploadHeard.of("0123456789abcdef", UploadProbe.NONE, 0L, 0L))
+        val answer = RoundWire.encode(RoundBody.UploadHeard.of("0123456789abcdef", UploadProbe.NONE, 0L, 0L, RangingWire.NO_PLAN))
         val push = RoundWire.encode(RoundBody.Push(9, RoundMessage.MeetingCalling, round = 1))
         assertNull(LobbyWire.decodeOrNull(answer))
         assertUnder(64, perCall { LobbyWire.decodeOrNull(answer) }, "the lobby's decode of an upload's answer")
@@ -49,12 +49,16 @@ class WireDecodeAllocationTest {
      * a few hundred bytes of each other. 12.9 KB a call through the general decoder (before D-276),
      * 9.0 KB now: the body once as characters and once as its string. On Kotlin/Native, measured
      * with the std allocator, the plain upload frame went from 11.1 KB to 7.2 KB.
+     *
+     * **D-300 grew the frame by its ranging report**, 3 279 characters of every upload from every
+     * phone (six 384-byte token slots and six distance slots, sealed). The read is still the body
+     * twice and little else, so the ceiling moved with the body: 25.6 KB measured, 28 KB allowed.
      */
     @Test
     fun `reading an upload's frame allocates its body and little else`() {
-        val body = RoundWire.encode(RoundBody.Sighted("0".repeat(SightingUpload.BODY_CHARS), SightingUpload.EMPTY_ASK, UploadProbe.NONE)) + "李"
+        val body = RoundWire.encode(RoundBody.Sighted("0".repeat(SightingUpload.BODY_CHARS), SightingUpload.EMPTY_ASK, UploadProbe.NONE, RangingWire.NO_REPORT)) + "李"
         val frame = TransportWire.encode(TransportFrame.Carry(body))
-        assertUnder(10_240, perCall { TransportWire.decodeOrNull(frame) }, "reading an upload's frame")
+        assertUnder(28_672, perCall { TransportWire.decodeOrNull(frame) }, "reading an upload's frame")
     }
 
     @Test

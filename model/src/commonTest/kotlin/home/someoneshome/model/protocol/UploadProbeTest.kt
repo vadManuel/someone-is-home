@@ -59,7 +59,7 @@ class UploadProbeTest {
     fun `the answer is one length at every moment of the house's clock and carries both readings back`() {
         val lengths = readings.flatMap { heard ->
             listOf(UploadProbe.NONE, "fedcba9876543210").map { probe ->
-                val answer = RoundBody.UploadHeard.of("0123456789abcdef", probe, heard, heard + 17)
+                val answer = RoundBody.UploadHeard.of("0123456789abcdef", probe, heard, heard + 17, RangingWire.NO_PLAN)
                 val back = RoundWire.decodeOrNull(RoundWire.encode(answer)) as RoundBody.UploadHeard
                 assertEquals(heard, back.heardAtMillis)
                 assertEquals(heard + 17, back.answeredAtMillis)
@@ -73,10 +73,10 @@ class UploadProbeTest {
     @Test
     fun `an answer whose probe or readings are not sixteen hex characters does not construct or decode`() {
         val id = "0123456789abcdef"
-        assertFailsWith<IllegalArgumentException> { RoundBody.UploadHeard(id, "123", UploadProbe.NONE, UploadProbe.NONE) }
-        assertFailsWith<IllegalArgumentException> { RoundBody.UploadHeard(id, UploadProbe.NONE, "1000", UploadProbe.NONE) }
-        assertFailsWith<IllegalArgumentException> { RoundBody.UploadHeard(id, UploadProbe.NONE, UploadProbe.NONE, "-1") }
-        val decimal = RoundWire.encode(RoundBody.UploadHeard.of(id, UploadProbe.NONE, 5L, 6L))
+        assertFailsWith<IllegalArgumentException> { RoundBody.UploadHeard(id, "123", UploadProbe.NONE, UploadProbe.NONE, RangingWire.NO_PLAN) }
+        assertFailsWith<IllegalArgumentException> { RoundBody.UploadHeard(id, UploadProbe.NONE, "1000", UploadProbe.NONE, RangingWire.NO_PLAN) }
+        assertFailsWith<IllegalArgumentException> { RoundBody.UploadHeard(id, UploadProbe.NONE, UploadProbe.NONE, "-1", RangingWire.NO_PLAN) }
+        val decimal = RoundWire.encode(RoundBody.UploadHeard.of(id, UploadProbe.NONE, 5L, 6L, RangingWire.NO_PLAN))
             .replace(UploadProbe.hexOf(5L), "5")
         assertEquals(null, RoundWire.decodeOrNull(decimal), "an answer with a decimal reading decoded")
     }

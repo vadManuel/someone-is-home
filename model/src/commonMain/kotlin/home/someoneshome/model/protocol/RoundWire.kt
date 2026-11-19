@@ -1158,11 +1158,21 @@ sealed class RoundBody {
      * rather than inside either, so the sightings body can be replaced (the UWB plan's
      * `DistanceUpload`) without touching it. One width from every seat, out seats included (D-217).
      * No default, for [ask]'s reason.
+     *
+     * ### [ranging]: what this phone's UWB radio can hold, offers and read (U6, D-300)
+     *
+     * [RangingWire.REPORT_CHARS] characters from every phone in every upload, built by
+     * [RangingWire.packReport] and sealed under this seat's contact seed: its capacity, its idle
+     * sessions' tokens and the nearest distance per pair this second, padded to
+     * [RangingWire.MAX_PEERS] of each. A phone with no UWB sends the same width. **Its own field**,
+     * beside [slots], which keeps Bluetooth's 24 slots exactly as they were (U6: Bluetooth ranks who
+     * is near). No rule reads it yet: the house's pairing does, and only to choose which phones range
+     * which. No default, for [ask]'s reason.
      */
     @ClientFacing
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("sighted")
-    data class Sighted(val slots: String, val ask: String, val probe: String) : RoundBody()
+    data class Sighted(val slots: String, val ask: String, val probe: String, val ranging: String) : RoundBody()
 
     /**
      * **Host → the one phone whose upload this answers. "I have the slot named [id]."** (D-263)
@@ -1183,17 +1193,26 @@ sealed class RoundBody {
      * which the house's queue and rules are not counted as round trip. All three are
      * [UploadProbe.CHARS] hex characters, never decimal digits, so the frame is one length on every
      * phone at every moment. A probe that did not read is answered as [UploadProbe.NONE], all the same.
+     *
+     * ### And the house's ranging plan for this phone (U6, D-300)
+     *
+     * [plan] is [RangingWire.PLAN_CHARS] characters in every answer to every upload: for each pair
+     * this phone is in, start it (on one of its idle sessions, against the peer's token), keep it, or
+     * stop it, padded to [RangingWire.MAX_PEERS] steps and sealed under this seat's contact seed. A
+     * phone the house has nothing to say to is sent the same width, so every phone gets one plan a
+     * second, of one length, whatever changed. A handle names a pair and never a seat.
      */
     @ClientFacing
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("uploadHeard")
-    data class UploadHeard(val id: String, val probe: String, val heard: String, val answered: String) : RoundBody() {
+    data class UploadHeard(val id: String, val probe: String, val heard: String, val answered: String, val plan: String) : RoundBody() {
         init {
             require(RequestSlot.isId(id)) { "an upload's id is ${RequestSlot.ID_CHARS} lowercase hex characters" }
             require(UploadProbe.isProbe(probe)) { "an upload's probe is ${UploadProbe.CHARS} lowercase hex characters" }
             require(UploadProbe.isProbe(heard) && UploadProbe.isProbe(answered)) {
                 "the house's clock is ${UploadProbe.CHARS} lowercase hex characters"
             }
+            require(RangingWire.isPlanField(plan)) { "a ranging plan is ${RangingWire.PLAN_CHARS} characters of URL-safe base64" }
         }
 
         /** [heard], as the house's monotonic milliseconds. */
@@ -1203,9 +1222,9 @@ sealed class RoundBody {
         val answeredAtMillis: Long get() = UploadProbe.millisOf(answered)
 
         companion object {
-            /** The answer to the upload whose slot was [id] and whose probe was [probe], stamped. */
-            fun of(id: String, probe: String, heardAtMillis: Long, answeredAtMillis: Long): UploadHeard =
-                UploadHeard(id, probe, UploadProbe.hexOf(heardAtMillis), UploadProbe.hexOf(answeredAtMillis))
+            /** The answer to the upload whose slot was [id] and whose probe was [probe], stamped, with [plan]. */
+            fun of(id: String, probe: String, heardAtMillis: Long, answeredAtMillis: Long, plan: String): UploadHeard =
+                UploadHeard(id, probe, UploadProbe.hexOf(heardAtMillis), UploadProbe.hexOf(answeredAtMillis), plan)
         }
     }
 

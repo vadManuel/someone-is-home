@@ -1,6 +1,8 @@
 package home.someoneshome.app
 
 import home.someoneshome.platform.ContactRadio
+import home.someoneshome.platform.NoRanging
+import home.someoneshome.platform.RangingRadio
 import home.someoneshome.platform.ScreenWake
 import home.someoneshome.platform.monotonicMillis
 import home.someoneshome.model.MarkerId
@@ -132,6 +134,11 @@ class RoundClient(
     private val clientMillis: () -> Long = ::monotonicMillis,
     private val clock: suspend (sentAtMillis: Long, heardAtMillis: Long, answeredAtMillis: Long, receivedAtMillis: Long) -> Unit =
         { _, _, _, _ -> },
+    /**
+     * **This seat's UWB radio** (U6, D-300), handed straight down to [RoundOverTransport]. A
+     * `SimulatedRanging` on a bench; nothing on a phone yet, until the Nearby Interaction radio.
+     */
+    private val ranging: RangingRadio = NoRanging,
     private val note: (String) -> Unit,
 ) : RoundSeam {
 
@@ -178,6 +185,7 @@ class RoundClient(
         kept = kept,
         clientMillis = clientMillis,
         clock = clock,
+        ranging = ranging,
         // A later round's push ended this phone's round (V1, D-267): the bench's copy goes too.
         onRoundTurned = {
             note("A LATER ROUND'S PUSH — THE ROUND'S END WAS MISSED, AND THIS PHONE HOLDS NOTHING OF IT")

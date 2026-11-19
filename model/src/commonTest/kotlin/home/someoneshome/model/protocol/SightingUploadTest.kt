@@ -83,7 +83,8 @@ class SightingUploadTest {
         for ((name, body) in cases()) {
             val keys = Json.parseToJsonElement(RoundWire.encode(body)).jsonObject.keys
             // The probe is random and fresh every upload (D-295): a number, never a seat or a time.
-            assertEquals(setOf("type", "slots", "ask", "probe"), keys, name)
+            // The ranging report is sealed under the seat's seed and one width from every seat (D-300).
+            assertEquals(setOf("type", "slots", "ask", "probe", "ranging"), keys, name)
         }
     }
 
@@ -190,7 +191,7 @@ class SightingUploadTest {
             .sortedWith(compareByDescending<Sighting> { it.rssi }.thenBy { it.token.hex }.thenBy { it.window.index })
             .take(SightingUpload.SLOTS)
         val filler = (kept.size until SightingUpload.SLOTS).map { filler(it) }
-        return RoundBody.Sighted((kept + filler).map { slotOf(it) }.sorted().joinToString(""), ask, UploadProbe.NONE)
+        return RoundBody.Sighted((kept + filler).map { slotOf(it) }.sorted().joinToString(""), ask, UploadProbe.NONE, RangingWire.NO_REPORT)
     }
 
     /** [SightingUpload.unpack] as it was written before D-276, kept only to be compared with. */
@@ -209,7 +210,7 @@ class SightingUploadTest {
 
     @Test
     fun `a body that is not a packed upload is unreadable rather than half read`() {
-        assertNull(SightingUpload.unpack(RoundBody.Sighted("00", SightingUpload.EMPTY_ASK, UploadProbe.NONE)))
-        assertNull(SightingUpload.unpack(RoundBody.Sighted("Z".repeat(SightingUpload.BODY_CHARS), SightingUpload.EMPTY_ASK, UploadProbe.NONE)))
+        assertNull(SightingUpload.unpack(RoundBody.Sighted("00", SightingUpload.EMPTY_ASK, UploadProbe.NONE, RangingWire.NO_REPORT)))
+        assertNull(SightingUpload.unpack(RoundBody.Sighted("Z".repeat(SightingUpload.BODY_CHARS), SightingUpload.EMPTY_ASK, UploadProbe.NONE, RangingWire.NO_REPORT)))
     }
 }

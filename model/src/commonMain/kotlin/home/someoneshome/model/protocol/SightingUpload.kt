@@ -96,9 +96,16 @@ object SightingUpload {
          * own field, so a replacement for the sightings above it leaves it where it is.
          */
         probe: String = UploadProbe.NONE,
+        /**
+         * This upload's ranging report (U6, D-300): [RangingWire.REPORT_CHARS] characters, sealed by
+         * [RangingWire.packReport] on the phone's own uploader, and [RangingWire.NO_REPORT] for every
+         * other caller. Its own field, beside the 24 Bluetooth slots, which it does not touch.
+         */
+        ranging: String = RangingWire.NO_REPORT,
     ): RoundBody.Sighted {
         require(ask.length == RequestSlot.CHARS) { "a request slot is ${RequestSlot.CHARS} characters" }
         require(UploadProbe.isProbe(probe)) { "a clock probe is ${UploadProbe.CHARS} lowercase hex characters" }
+        require(RangingWire.isReportField(ranging)) { "a ranging report is ${RangingWire.REPORT_CHARS} characters of URL-safe base64" }
         val kept = if (heard.isEmpty()) emptyList() else heard
             .groupBy { it.token.hex to it.window.index }
             .map { (_, same) -> same.maxWith(compareBy<Sighting> { it.rssi }.thenBy { it.token.hex }) }
@@ -123,7 +130,7 @@ object SightingUpload {
                 writeSlot(text, slot, tag, rssi, window.index)
             }
         }
-        return RoundBody.Sighted(sortedSlots(text), ask, probe)
+        return RoundBody.Sighted(sortedSlots(text), ask, probe, ranging)
     }
 
     /**
