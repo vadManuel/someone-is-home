@@ -77,7 +77,8 @@ import home.someoneshome.model.SignalGraph
  * - **Replay's dots flash in order**, played by [ReplayScreen] off the house's pattern and the
  *   screen's own clock — D-139's arrangement, with no Effect on the wire.
  * - **Handshake's rhythm is buzzed**, by `HouseBuzzer` off the same instance. Built: the return,
- *   with as many beats as the house dealt.
+ *   with as many beats as the house dealt, each tap timed on this phone's monotonic clock and the
+ *   gaps graded by the house (D-296).
  * - **Short's asked-for count is the house's**, drawn as the ASKS row. The *gesture* is whole:
  *   several fingers, two seconds, and a hand-over.
  * - **Sniff's two groups are buzzed**, for Handshake's reason and with Handshake's consequence: on
@@ -149,7 +150,7 @@ fun HandshakeScreen(verdict: SubroutineVerdict? = null) {
                 .then(if (entry.handedOver) Modifier else Modifier.border(1.dp, p.faint))
                 .then(
                     if (entry.handedOver) Modifier
-                    else Modifier.tap { actions.tapSubroutine(Subroutine.Handshake, entry.entered.size) }
+                    else Modifier.tap { actions.tapSubroutine(Subroutine.Handshake, entry.taps) }
                 ),
             contentAlignment = Alignment.Center,
         ) {
@@ -1217,13 +1218,14 @@ private fun Cell(width: Dp, height: Dp, edge: Color, fill: Color?) {
  * carry only *how many* beats have gone back, which is the player's own input.
  *
  * **It counts and it does not judge.** A cell lights because a finger landed, not because the
- * finger landed at the right moment -- see [SequenceEntry].
+ * finger landed at the right moment -- see [RhythmEntry], which holds when each one landed and no
+ * gap to compare it with (D-296).
  */
 @Composable
-private fun BeatCells(entry: SequenceEntry) {
+private fun BeatCells(entry: RhythmEntry) {
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         repeat(entry.length) { at ->
-            val lit = at < entry.entered.size
+            val lit = at < entry.taps
             Cell(30.dp, 14.dp, edge = if (lit) Ramp.Line else Ramp.Faint, fill = if (lit) Ramp.Line else null)
         }
     }

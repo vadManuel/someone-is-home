@@ -3,6 +3,7 @@ package home.someoneshome.core
 import home.someoneshome.model.DotColumns
 import home.someoneshome.model.DriftPath
 import home.someoneshome.model.HandshakeRhythm
+import home.someoneshome.model.HandshakeTaps
 import home.someoneshome.model.InterruptSweep
 import home.someoneshome.model.JamRings
 import home.someoneshome.model.MarkerId
@@ -200,23 +201,24 @@ internal fun answerTo(kind: SubroutineKind, parameters: List<Int>): List<Int> = 
     // What closes the gap: the opposite of the opening, because the entry is net steps pressed.
     SubroutineKind.Jam -> listOf(-JamRings.of(parameters).opening)
 
-    // The ordinals of the taps owed. What the phone sends is how far through it is on each tap, so
-    // a rhythm returned is 0, 1, 2 ... and the timing of those taps is not in the entry at all.
-    SubroutineKind.Handshake -> List(HandshakeRhythm.of(parameters).beats) { it }
+    // The entry that returns the dealt gaps exactly (D-296): each silence in milliseconds, padded
+    // to the longest Handshake any rule can deal. [grades] is what knows how far off each may be.
+    SubroutineKind.Handshake -> HandshakeTaps.ofGaps(HandshakeRhythm.of(parameters).gapsMillis)
 }
 
 /**
  * **Was this the entry the house asked for** — equality where the answer is discrete, and the
  * question's own tolerance where it is a position (E-L4-3).
  *
- * Eight of the ten are a choice, a count, a sequence or a final state, and for those *right* is
+ * Seven of the ten are a choice, a count, a sequence or a final state, and for those *right* is
  * exactly right: there is no near-miss in tapping the wrong cell. Signal Trace's route is exactly
  * right **in either direction** (D-211): the screen marks two ends alike and the briefing says
  * *from one to the other*, so the house's route and its reverse are the same answer, and nothing
  * else is. Two of them are a **place on a
  * moving picture**, and D-139 and D-140 both rule a tolerance rather than a point — *inside the
  * band*, *within the hit radius* — because a blind one-handed tap at a bouncing sweep is not a
- * claim about an integer.
+ * claim about an integer. **Handshake is a rhythm returned by feel**, and the owner's Q7 ruling
+ * grades each gap between its taps to within ±40 % of the gap dealt (D-296).
  *
  * **The tolerance is read out of the question**, never out of a constant here: the band the house
  * grades is the band the phone drew, because they are the same number (E-S2-1, closed). A copy of
@@ -234,7 +236,6 @@ internal fun grades(open: OpenSubroutine, marker: MarkerId, entered: List<Int>):
         SubroutineKind.Deallocate,
         SubroutineKind.Short,
         SubroutineKind.Jam,
-        SubroutineKind.Handshake,
         -> open.expected == entered
 
         // D-211: the route traced from either end. Both ends are drawn alike, so which one the
@@ -247,8 +248,44 @@ internal fun grades(open: OpenSubroutine, marker: MarkerId, entered: List<Int>):
 
         SubroutineKind.Drift ->
             within(entered, open.expected, DriftPath.of(open.parameters).hitRadius)
+
+        // D-296, the owner's Q7 ruling: every gap within the question's own tolerance of its own
+        // dealt gap. One function, for every role: the Insider's fake comes through here too.
+        SubroutineKind.Handshake ->
+            inRhythm(entered, open.expected, HandshakeRhythm.TOLERANCE_PERCENT)
     }
 }
+
+/**
+ * **Every gap returned within [percent] of the gap dealt, and a tap for exactly the gaps dealt**
+ * (the owner's Q7 ruling, option C, D-296).
+ *
+ * [expected] and [entered] are both `HandshakeTaps` entries, read by the one reader the phone
+ * wrote them with. Each dealt gap needs a returned gap no further from it than [percent] of it,
+ * exactly [percent] included, in whole milliseconds and integer arithmetic (rule 4). A gap where
+ * the rhythm dealt none, which is an extra tap, and no gap where it dealt one, which is a missing
+ * tap, are both a miss: there is nothing to compare the one with and nothing to grade in the
+ * other. An entry that is not an entry at all is a miss, as [within] says of a wrong shape.
+ */
+private fun inRhythm(entered: List<Int>, expected: List<Int>, percent: Int): Boolean {
+    val dealt = HandshakeTaps.gapsIn(expected) ?: return false
+    val tapped = HandshakeTaps.gapsIn(entered) ?: return false
+    return dealt.indices.all { at ->
+        val asked = dealt[at]
+        val gap = tapped[at]
+        when {
+            asked == null -> gap == null
+            gap == null -> false
+            else -> {
+                val off = gap - asked
+                (if (off < 0) -off else off) * PERCENT <= percent * asked
+            }
+        }
+    }
+}
+
+/** A whole, as a percentage. */
+private const val PERCENT = 100
 
 /**
  * One number, no further from the one asked for than [tolerance].

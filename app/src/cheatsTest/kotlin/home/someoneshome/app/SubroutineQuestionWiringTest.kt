@@ -123,10 +123,13 @@ class SubroutineQuestionWiringTest {
         private var client: RoundClient? = null
         private val buzzer = HouseBuzzer(motor)
 
+        /** The phone's monotonic clock, as `CheatRoot` hands it down; this one moves when a finger waits. */
+        var now: Long = 52_118_904L
+
         /** `CheatRoot`'s seams: the Subroutine's `send`, the panel's `send`, and the motor on `onScreen`. */
         val flow = FlowModel(
             PanelState(screen = ScreenId.Home),
-            subroutines = SubroutineModel(send = { intent -> client?.act(intent) }),
+            subroutines = SubroutineModel(send = { intent -> client?.act(intent) }, monotonicMillis = { now }),
             send = { intent -> client?.act(intent) },
             fireEgress = { client?.fireEgress() },
             onScreen = buzzer::showing,
@@ -259,8 +262,8 @@ class SubroutineQuestionWiringTest {
     /**
      * **Work [subroutine] on the phone's own screens, rightly or wrongly, from what the phone holds.**
      *
-     * Returns false where the screen offers no wrong answer at all — Handshake, whose entry is the
-     * ordinal of each tap and whose timing is not graded (the gap `HandshakeRhythm` names).
+     * Returns false where the screen offers no wrong answer at all. Since D-296 there is none:
+     * Handshake's wrong answer is its rhythm returned with every gap half again too long.
      */
     private fun Phone.work(subroutine: Subroutine, right: Boolean): Boolean {
         val a = flow.actions()
@@ -272,11 +275,17 @@ class SubroutineQuestionWiringTest {
                 (if (right) order else order.reversed()).forEach { a.tapSubroutine(s, it) }
             }
             Subroutine.Handshake -> {
-                // What the motor buzzed is what the screen owes: one tap per beat.
-                val beats = motor.played.last().count { it is HapticStep.Buzz }
+                // What the motor buzzed is what the screen owes: one tap per beat, and the rests
+                // between the buzzes are the gaps the finger returns (D-296). Wrong is every gap
+                // half again as long, outside the ±40 % the house grades within.
+                val script = motor.played.last()
+                val beats = script.count { it is HapticStep.Buzz }
                 assertEquals(beats, m.handshake.length, "the motor buzzed $beats beats and the screen owes ${m.handshake.length}")
-                if (!right) return false
-                repeat(m.handshake.length) { a.tapSubroutine(s, it) }
+                val rests = script.filterIsInstance<HapticStep.Rest>().map { it.millis.toLong() }
+                repeat(m.handshake.length) { at ->
+                    if (at > 0) now += if (right) rests[at - 1] else rests[at - 1] * 3 / 2
+                    a.tapSubroutine(s, at)
+                }
             }
             Subroutine.ParityCheck -> {
                 val g = m.grid
@@ -431,7 +440,7 @@ class SubroutineQuestionWiringTest {
      * a Resident's right answer writes anything.**
      *
      * The seeds are pinned, and chosen so that between them every kind is dealt to an Insider and to
-     * a Resident. Handshake has no wrong answer a screen can give, so only its right one is graded.
+     * a Resident. Every kind is graded right and wrong for both, Handshake too since D-296.
      */
     @Test
     fun theHousesQuestionIsTheOneOnThePhoneAndTheOneItGrades() {
@@ -445,7 +454,7 @@ class SubroutineQuestionWiringTest {
         for (role in listOf(Role.Resident, Role.Insider)) {
             for (right in listOf(true, false)) {
                 val reached = attempts.filter { it.role == role && it.right == right }.map { it.kind }.toSet()
-                val owed = if (right) SubroutineKind.entries.toSet() else SubroutineKind.entries.toSet() - SubroutineKind.Handshake
+                val owed = SubroutineKind.entries.toSet()
                 assertEquals(
                     owed, reached,
                     "these were never graded ${if (right) "right" else "wrong"} for a $role: ${owed - reached}",

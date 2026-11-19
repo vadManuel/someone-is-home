@@ -7,6 +7,7 @@ import home.someoneshome.model.Effect
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
 import home.someoneshome.model.HandshakeRhythm
+import home.someoneshome.model.HandshakeTaps
 import home.someoneshome.model.InterruptSweep
 import home.someoneshome.model.JamRings
 import home.someoneshome.model.MalformedSubroutineParameters
@@ -270,10 +271,11 @@ class TheAnswerIsTheAnswerToTheQuestionTest {
             assertEquals(0, walked, "the answer does not close the gap the house opened")
         }
         for (parameters in dealt(SubroutineKind.Handshake, many = 40)) {
+            val gaps = HandshakeRhythm.of(parameters).gapsMillis
             assertEquals(
-                List(HandshakeRhythm.of(parameters).beats) { it },
-                answerTo(SubroutineKind.Handshake, parameters),
-                "the taps owed are one per beat of the rhythm",
+                gaps + List(HandshakeTaps.GAPS - gaps.size) { null },
+                HandshakeTaps.gapsIn(answerTo(SubroutineKind.Handshake, parameters)),
+                "the answer is not the dealt gaps, one per gap between beats, padded (D-296)",
             )
         }
         for (parameters in dealt(SubroutineKind.Interrupt, many = 60)) {
@@ -401,23 +403,26 @@ class TheToleranceIsRealAndItIsTheHousesTest {
     }
 
     /**
-     * **The eight discrete kinds are graded by equality, and a near miss is a miss.**
+     * **The seven discrete kinds are graded by equality, and a near miss is a miss.**
      *
      * Stated as a differential against the two above: the same off-by-one that Interrupt and Drift
      * forgive has to be refused everywhere else, or *tolerance* has quietly become the rule rather
-     * than the exception D-139 and D-140 carved out.
+     * than the exception D-139 and D-140 carved out. Handshake left this list at D-296: its gaps
+     * are graded within ±40 % (`HandshakeGradingTest`).
      */
     @Test
     fun `a near miss on a discrete kind is a miss`() {
         val discrete = listOf(
             SubroutineKind.Replay, SubroutineKind.ParityCheck, SubroutineKind.Sniff,
             SubroutineKind.Deallocate, SubroutineKind.Short, SubroutineKind.SignalTrace,
-            SubroutineKind.Jam, SubroutineKind.Handshake,
+            SubroutineKind.Jam,
         )
         assertEquals(
-            SubroutineKind.entries - setOf(SubroutineKind.Interrupt, SubroutineKind.Drift),
+            SubroutineKind.entries -
+                setOf(SubroutineKind.Interrupt, SubroutineKind.Drift, SubroutineKind.Handshake),
             discrete,
-            "the two graded by tolerance are exactly Interrupt and Drift, and this list disagrees",
+            "the three graded by tolerance are exactly Interrupt, Drift and Handshake, and this " +
+                "list disagrees",
         )
         for (kind in discrete) {
             dealt(kind, many = 40).forEach { parameters ->

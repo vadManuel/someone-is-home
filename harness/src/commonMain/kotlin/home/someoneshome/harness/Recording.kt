@@ -50,6 +50,13 @@ class Recording(
     }
 
     companion object {
+        // 40: no row gained or lost a field, and a Handshake's two lists changed what they hold
+        // (the owner's Q7 ruling, D-296), version 36's case. `SubroutineReturned`'s `entered` for a
+        // Handshake was one ordinal per tap and is now `HandshakeTaps.GAPS` gaps between taps, and
+        // the state row's `open` answer key for one is the dealt gaps in the same encoding. Graded
+        // each gap within ±40 %, a version 39 Handshake return would replay to a refusal where the
+        // evening accepted it, so a version 39 recording is refused here instead.
+        //
         // 39: two effect rows gain a field (the owner's 2026-11-18 ruling, D-290). `AbilityFired`
         // gains `touch=`, what an armed touch did with the actor's Revoke (`Landed`, `Spent`, or
         // `None` on every other fire), and `RevokeLanded` gains `haptic=`, `Long` on the touch that
@@ -315,7 +322,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/39"
+        const val HEADER = "someone-is-home/recording/40"
     }
 }
 

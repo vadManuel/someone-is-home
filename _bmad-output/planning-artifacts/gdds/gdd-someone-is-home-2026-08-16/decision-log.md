@@ -9456,6 +9456,84 @@ strip included, dimmed.
 - A Release device build (`CODE_SIGNING_ALLOWED=NO`) carries the string in its built `Info.plist`.
 - Not on a phone.
 
+### D-296 · **Handshake grades each gap between taps to within ±40 % of the dealt gap; the entry carries the gaps at one length for every role, and the Insider's fake is graded by the same function — built (recording 40), ends D-238's count-only grading**
+
+**The ruling** (owner, 2026-11-18, *Owner rulings, 2026-11-18* in `owner-decisions-2026-11-17.md`,
+Q7: option C): *Handshake grades each gap between taps to within ±40 % of the dealt gap. The entry
+must carry tap timings at the same length for every role, and the Insider's fake is graded
+identically.* Section 7 of that pack recorded the gap: the entry was one ordinal per tap, graded by
+equality, so any completed Handshake passed for a Resident and for the fake alike (D-238).
+
+**Now.**
+
+1. **The phone stamps each tap on its own monotonic clock.** `RhythmEntry` (ui) replaces
+   `SequenceEntry` behind the Handshake screen: told how many taps are owed, handed over on the last,
+   inert after, as before; each tap is stamped with `SubroutineModel.monotonicMillis`, which `Cheats`
+   hands down as the same `monotonicNanos() / 1_000_000` every countdown reads (D-269). A model
+   handed none reads the standard library's monotonic clock. Never a wall clock.
+2. **The entry is the gaps, at one length.** `HandshakeTaps` (model) writes the gaps between the
+   stamps as `GAPS` = 5 numbers, enough for the longest Handshake any rule deals (`MOST_BEATS` 6),
+   each five digits: 10 000 plus the gap in ms (a gap over 9 998 ms is written as 9 998, nearly
+   eight times the longest gap the house accepts, 1 260 ms), and 19 999 where a shorter rhythm has no gap. Every
+   Handshake hand-over is the same bytes on the wire: 3 beats or 6, on time or wild, Resident or
+   Insider. The same `HandOverEntry.entered: List<Int>`; no message, field or schema row was added.
+3. **The house grades each gap.** `answerTo(Handshake)` is the entry that returns the dealt gaps
+   exactly. `grades` reads both through `HandshakeTaps.gapsIn` and asks, per gap,
+   `|returned − dealt| × 100 ≤ 40 × dealt`, in integers (rule 4). `TOLERANCE_PERCENT = 40` sits on
+   `HandshakeRhythm`, beside the question, as Interrupt's band and Drift's radius do.
+   **Exactly 40 % is within.**
+4. **A missing tap and an extra tap fail.** Neither the ruling nor section 7 says otherwise, and
+   option C grades gaps: a missing tap leaves a dealt gap with nothing to grade, an extra tap puts a
+   gap where none was dealt. The screen cannot make either (it hands over on the last owed beat and
+   goes inert), so this is the house refusing a client that does. More than six taps is written as
+   no gaps at all, which every rhythm refuses, never cut down to a rhythm that would pass. An entry
+   that is not one (the old ordinals, the wrong length, a stray number) is a miss, never an exception.
+5. **The Insider's fake.** It was already the same screen, the same deal and the same `grades` call;
+   only `returned` reads the role, and only to bank nothing (D-109). Nothing in this change takes a
+   role. `RhythmEntry` and `HandshakeTaps` have no role input, and `grades` has none.
+
+**What a failed Handshake looks like.** The existing path: `SubroutineGraded(accepted = false)`
+draws the existing Rejected verdict on the Handshake screen, as on every graded Subroutine. No new
+copy, light or timing.
+
+**Recording 40.** No row gained a field, but a Handshake's `SubroutineReturned.entered` and the
+state row's `open` answer key now hold gaps, and a version 39 Handshake return would replay to a
+refusal where the evening accepted it. Version 36's case (D-282): refused at the header instead.
+
+**Proved, each red against the injected bug first.**
+
+- `HandshakeGradingTest` (core, 7): *each gap passes at 39 percent off and fails at 41 early and
+  late*, over 200 dealt rhythms, every gap, both signs; *exactly 40 percent off is within…*; *the
+  right number of taps at the wrong tempo is refused*; *a missing tap and an extra tap are both
+  refused*; *what is not an entry is refused*; *the house's own answer passes…*; *the Insider's fake
+  is graded exactly as a Resident's Handshake is*, through `reduce` on a Handshake really opened by a
+  scan for each role: the same seven verdicts, `[true, true, true, false, false, false, false]`, and
+  the fake banks nothing.
+  *Grading put back to count-only (the number of gaps returned equal to the number dealt):*
+  `gap 0 of [400, 700, 800, 800, 400] returned 41 % off was accepted: [564, 700, 800, 800, 400]`,
+  `all at once passed`, and the role walk's `Expected <[true, true, true, false, false, false,
+  false]>, actual <[true, true, true, true, true, false, false]>`. Restored, all seven green.
+- `HandshakeEntrySizeTest` (model): every entry from no tap to seven, 3 to 6 beats, gaps of 0 ms to an
+  hour, is 5 five-digit numbers and 111 bytes in the request slot.
+- `HandshakeTimingTest` (ui): a Resident's phone and an Insider's, tapped through `PanelActions` at
+  five timings, send the gaps they tapped, the Insider's entry equal to the Resident's for the same
+  timing, every hand-over the same length.
+- `SubroutineQuestionWiringTest` (app, real sockets): Handshake is now graded wrong as well as right,
+  for a Resident and for the fake, timed off the motor's own rests (wrong is every gap ×1.5).
+
+Older assertions that held count-only grading now assert the ruling: `SubroutineDrawTest`'s answer
+check and its discrete-kinds list (Handshake left it), and the recording header in
+`RecordingTextTest`, `HostSeatRecordingTest` and `OccupancyRecordingTest`.
+
+**Looked at.** The Handshake screen through the render harness at 600×1300: three of five beat
+cells lit under TAP for a Resident and for an Insider (the two PNGs are the same size, and
+`SubroutineParityTest` compares their pixels), and handed over with REJECTED . RESCAN THE MARKER,
+the existing line. The screen reads `RhythmEntry.taps` where it read `entered.size`, the same count;
+not compared against a pre-change render.
+
+**Not on a phone.** Whether ±40 % reads as *by feel* or as *twitch timing* (GDD:624) is for a hand
+on a phone; the owner chose C knowing section 7 flagged that risk.
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

@@ -8,6 +8,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import home.someoneshome.model.DotColumns
 import home.someoneshome.model.DriftPath
 import home.someoneshome.model.HandshakeRhythm
+import home.someoneshome.model.HandshakeTaps
 import home.someoneshome.model.InterruptSweep
 import home.someoneshome.model.JamRings
 import home.someoneshome.model.MarkerId
@@ -19,6 +20,7 @@ import home.someoneshome.model.SignalGraph
 import home.someoneshome.model.SniffGroups
 import home.someoneshome.model.SubroutineKind
 import home.someoneshome.model.protocol.IntentMessage
+import kotlin.time.TimeSource
 
 /**
  * **The design's roster of ten, as data rather than as ten strings typed onto screens.**
@@ -292,8 +294,8 @@ class SequenceEntry(length: Int) : SubroutineEntry {
      * converging shape has no finishing line, and a route ends when the player says it does.
      *
      * **The house's on a housed phone, and the port's fixture on a bench** (D-238). Replay's dots
-     * and Handshake's beats are drawn per scan, so the count arrives with the question and
-     * [resize] is how it lands. It was a constructor `val` fixed at the port's four and five, and a
+     * are drawn per scan, so the count arrives with the question and [resize] is how it lands
+     * (Handshake's beats too, on [RhythmEntry] since D-296). It was a constructor `val` fixed at the port's four and five, and a
      * five-dot Replay then took four taps and handed the house a sequence one short of its own.
      */
     var length: Int by mutableStateOf(length)
@@ -345,6 +347,71 @@ class SequenceEntry(length: Int) : SubroutineEntry {
 
     override fun restart() {
         entered = emptyList()
+        handedOver = false
+    }
+}
+
+/**
+ * **Handshake's entry: when each tap landed, and nothing about the rhythm it was answering**
+ * (the owner's Q7 ruling, D-296).
+ *
+ * [SequenceEntry]'s shape — told how many taps are owed, handed over on the last of them, inert
+ * after — with one difference: a tap is a **moment** rather than an element. Each is stamped on
+ * this phone's own monotonic clock as it lands, and [entered] is the silences between them as a
+ * `HandshakeTaps` entry: [HandshakeTaps.GAPS] five-digit numbers whatever the rhythm, the role or
+ * the timing, so the hand-over is the same bytes long for every player. The house grades each gap
+ * against the gap it dealt; nothing here holds a dealt gap, so nothing here can say whether a tap
+ * was on time, and the screen echoes only how many have gone back ([taps]).
+ *
+ * The Insider's fake is this entry on this screen: the same stamps, the same encoding, graded by
+ * the same function with the same tolerance (rule 8).
+ */
+class RhythmEntry(length: Int) : SubroutineEntry {
+
+    /** How many taps the house asked for: the rhythm's beats. [SequenceEntry.length]'s reason. */
+    var length: Int by mutableStateOf(length)
+        private set
+
+    /** The house dealt a rhythm of [to] beats. Cleared, because it is a different question. */
+    internal fun resize(to: Int) {
+        length = to
+        restart()
+    }
+
+    /** When each tap landed, in milliseconds of this phone's monotonic clock, in order. Never drawn. */
+    private var stamps: List<Long> by mutableStateOf(emptyList())
+
+    /** How many taps have gone back: the one thing the screen echoes. */
+    val taps: Int get() = stamps.size
+
+    /** True once the rhythm has gone to the house. Nothing on this device answers it. */
+    var handedOver: Boolean by mutableStateOf(false)
+        private set
+
+    override val touched: Boolean get() = stamps.isNotEmpty()
+
+    override val gone: Boolean get() = handedOver
+
+    val complete: Boolean get() = taps >= length
+
+    /** How many taps are still owed. */
+    val remaining: Int get() = (length - taps).coerceAtLeast(0)
+
+    /** The gaps between the taps, as the one fixed-length entry every Handshake sends (D-296). */
+    override val entered: List<Int> get() = if (stamps.isEmpty()) emptyList() else HandshakeTaps.of(stamps)
+
+    /**
+     * A tap, landing at [atMillis] on this phone's monotonic clock. Refused once the rhythm has gone,
+     * for [SequenceEntry.enter]'s reason.
+     */
+    fun enter(atMillis: Long) {
+        if (handedOver) return
+        stamps = stamps + atMillis
+        if (complete) handedOver = true
+    }
+
+    override fun restart() {
+        stamps = emptyList()
         handedOver = false
     }
 }
@@ -715,7 +782,7 @@ class ColumnEntry(columns: Int) : SubroutineEntry {
  * something that can fail.
  */
 class SubroutineModel(
-    val handshake: SequenceEntry = SequenceEntry(HANDSHAKE_BEATS),
+    val handshake: RhythmEntry = RhythmEntry(HANDSHAKE_BEATS),
     val replay: SequenceEntry = SequenceEntry(REPLAY_DOTS),
     val parity: ChoiceEntry = ChoiceEntry(),
     val short: HoldEntry = HoldEntry(),
@@ -779,6 +846,16 @@ class SubroutineModel(
      * real and whose entries reach nobody. That is the honest state of a bench.
      */
     val send: (IntentMessage) -> Unit = {},
+    /**
+     * **This phone's monotonic clock, in milliseconds: what each Handshake tap is stamped with**
+     * (D-296). `FlowModel.monotonicMillis`' shape and reason: `platform` holds the clock and `ui`
+     * may not see it, so the app root hands it down. Only differences between two readings are
+     * ever sent, so where it starts counting from is nobody's business.
+     *
+     * Defaulted to the standard library's monotonic clock, so a model nobody handed one to still
+     * times a rhythm truly. Never a wall clock: a wall clock steps, and a step is a gap nobody tapped.
+     */
+    private val monotonicMillis: () -> Long = ::unhandedMillis,
 ) {
 
     // ---- The question, as this phone was dealt it (D-238) --------------------------------------
@@ -945,7 +1022,9 @@ class SubroutineModel(
      */
     fun tap(subroutine: Subroutine, at: Int) {
         when (subroutine) {
-            Subroutine.Handshake -> handshake.enter(at)
+            // A moment, not an element (D-296): [at] is the screen's count and the stamp is the
+            // clock's. The house grades the gaps between the stamps.
+            Subroutine.Handshake -> handshake.enter(monotonicMillis())
             Subroutine.Replay -> replay.enter(at)
             Subroutine.ParityCheck -> parity.choose(at)
             Subroutine.Short -> short.press(at)
@@ -1289,9 +1368,10 @@ class SubroutineModel(
          * finger that landed before the house asked.
          */
         fun sample(): SubroutineModel = SubroutineModel().apply {
+            // Three taps on the fixture's own first two gaps, so the frame holds a rhythm in time.
             handshake.enter(0)
-            handshake.enter(1)
-            handshake.enter(2)
+            handshake.enter(HANDSHAKE.gapsMillis[0].toLong())
+            handshake.enter((HANDSHAKE.gapsMillis[0] + HANDSHAKE.gapsMillis[1]).toLong())
             replay.enter(2)
             replay.enter(0)
             parity.choose(14)
@@ -1330,3 +1410,9 @@ class SubroutineModel(
  */
 val LocalSubroutine: ProvidableCompositionLocal<SubroutineModel> =
     staticCompositionLocalOf { SubroutineModel.sample() }
+
+/** Where [unhandedMillis] counts from: the first time anything in this file asked. */
+private val unhandedOrigin = TimeSource.Monotonic.markNow()
+
+/** The standard library's monotonic clock, in milliseconds, for a [SubroutineModel] handed none. */
+private fun unhandedMillis(): Long = unhandedOrigin.elapsedNow().inWholeMilliseconds

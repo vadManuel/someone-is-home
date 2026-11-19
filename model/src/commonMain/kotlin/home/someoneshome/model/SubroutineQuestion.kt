@@ -933,13 +933,13 @@ class ReplayPattern private constructor(
  * the silences do, and the buzzes are all one length for [SniffGroups]' reason (there is one short
  * buzz in this app, not one per Subroutine).
  *
- * ### What comes back is the count, and that is a gap in the entry rather than in this type
+ * ### What comes back is the gaps, and each is graded to within [TOLERANCE_PERCENT] (D-296)
  *
- * The screen sends the ordinal of each tap and nothing about when it landed, so what the house can
- * grade today is *how many* — a rhythm returned at any tempo passes. The timing of a tap is not in
- * the entry and cannot be graded until it is. Flagged in the worklog; the rhythm is drawn, sent and
- * played regardless, because the question being felt is what makes the Subroutine the one the design
- * describes.
+ * The owner's Q7 ruling, option C: *each gap between taps within ±40 % of the dealt gap.* The phone
+ * times its own taps on its own monotonic clock and sends the silences between them as a
+ * [HandshakeTaps] entry, one length for every rhythm, every role and every outcome; the house reads
+ * them back with the same object and grades each against the gap it dealt. Until D-296 the entry
+ * was the ordinal of each tap and a rhythm returned at any tempo passed (D-238).
  */
 class HandshakeRhythm private constructor(
     /** The silence before each beat after the first, in milliseconds, in order. */
@@ -978,6 +978,16 @@ class HandshakeRhythm private constructor(
         const val GAP_MOST: Int = 9
 
         /**
+         * **How far a returned gap may sit from the dealt one, as a percentage of the dealt one**
+         * (the owner's Q7 ruling, option C, D-296): ±40 %, and exactly 40 % is within.
+         *
+         * Here beside the question for [InterruptSweep.bandHalf]'s reason: the house grades with
+         * the number the question carries, not with a copy of its own. It is a rule every phone
+         * plays under, the same for every role, so a screen that could read it learns nothing.
+         */
+        const val TOLERANCE_PERCENT: Int = 40
+
+        /**
          * Read a scan's parameters as a rhythm, or refuse them by name.
          *
          * **A Handshake instance is one number per gap**, so it is [ReplayPattern]'s arrangement:
@@ -1002,6 +1012,74 @@ class HandshakeRhythm private constructor(
             }
             return HandshakeRhythm(parameters.map { it * GAP_TENTHS })
         }
+    }
+}
+
+/**
+ * **Handshake's entry: the silences between the player's taps, at one length whatever was tapped**
+ * (the owner's Q7 ruling, D-296).
+ *
+ * The phone stamps each tap on its own monotonic clock and [of] turns the stamps into the entry
+ * `HandOverEntry.entered` carries. The house reads it back with [gapsIn] and grades each gap
+ * against the one it dealt (`grades` in `core`). Both ends use this object, so they cannot disagree
+ * about what a number in the entry means — [SubroutineQuestion]'s reason, one step along.
+ *
+ * ### One length and one width, for every role and every outcome
+ *
+ * Encryption hides what a frame says and not how long it is (D-263). So an entry is always
+ * [GAPS] numbers, enough for the longest Handshake any rule can deal ([HandshakeRhythm.MOST_BEATS]
+ * beats), and every number is five digits: [FLOOR] plus the gap in milliseconds, with [NONE] where
+ * a shorter rhythm has no gap. A three-beat entry and a six-beat one, a rhythm returned perfectly
+ * and one tapped at random, a Resident's and an Insider's fake: the same [GAPS] five-digit numbers,
+ * the same bytes long. A gap longer than [LONGEST] is written as [LONGEST]; any gap that long is
+ * already several times past the tolerance of the longest gap the house deals, so the cap moves
+ * no verdict.
+ *
+ * ### Nothing here grades
+ *
+ * This is an encoding, and it holds no dealt gap and no tolerance test. Whether a gap is near the
+ * one asked for is decided in `core`, which `ui` cannot see.
+ */
+object HandshakeTaps {
+
+    /** How many gaps every entry carries: those of the longest Handshake any rule can deal. */
+    const val GAPS: Int = HandshakeRhythm.MOST_BEATS - 1
+
+    /** What every number in an entry starts from, so that each is five digits long. */
+    const val FLOOR: Int = 10_000
+
+    /** The longest gap an entry can say, in milliseconds. A longer one is written as this. */
+    const val LONGEST: Int = 9_998
+
+    /** A gap the entry has no tap for: the padding after a rhythm shorter than the longest. */
+    const val NONE: Int = FLOOR + LONGEST + 1
+
+    /**
+     * **The entry for taps stamped at [tapMillis]**, in the order they landed, on one monotonic
+     * clock. The gaps between neighbours, padded with [NONE] to [GAPS]. No tap and one tap are
+     * entries with no gap at all. The screen hands a rhythm over on its last owed beat, so it never
+     * has more than [HandshakeRhythm.MOST_BEATS] stamps; more than that is not a Handshake, and is
+     * written as no gap at all, which every rhythm refuses — never cut down to one that would pass.
+     */
+    fun of(tapMillis: List<Long>): List<Int> =
+        if (tapMillis.size > GAPS + 1) {
+            ofGaps(emptyList())
+        } else {
+            ofGaps(tapMillis.zipWithNext { a, b -> (b - a).coerceIn(0L, LONGEST.toLong()).toInt() })
+        }
+
+    /** **The entry that returns exactly [gapsMillis]**: what the house expects for a dealt rhythm. */
+    fun ofGaps(gapsMillis: List<Int>): List<Int> =
+        List(GAPS) { at -> gapsMillis.getOrNull(at)?.let { FLOOR + it.coerceIn(0, LONGEST) } ?: NONE }
+
+    /**
+     * **The gaps in [entered], or null when it is not an entry at all**: the wrong length, or a
+     * number that is neither a gap nor [NONE]. A null in the list is a [NONE]: no tap there.
+     */
+    fun gapsIn(entered: List<Int>): List<Int?>? {
+        if (entered.size != GAPS) return null
+        if (entered.any { it != NONE && it !in FLOOR..FLOOR + LONGEST }) return null
+        return entered.map { if (it == NONE) null else it - FLOOR }
     }
 }
 

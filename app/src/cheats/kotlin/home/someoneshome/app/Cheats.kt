@@ -346,8 +346,12 @@ fun CheatRoot(uwb: Boolean) {
                 press.value?.act(request.asMessage(panel.value?.meeting?.names.orEmpty()))
             }),
             // The Subroutine's own upward seam, the same shape and the same holder. It publishes an
-            // `IntentMessage` directly, which cannot name an actor at all.
-            subroutines = SubroutineModel(send = { intent -> press.value?.act(intent) }),
+            // `IntentMessage` directly, which cannot name an actor at all. Handshake's taps are
+            // stamped on the phone's own monotonic clock, the one every countdown reads (D-296).
+            subroutines = SubroutineModel(
+                send = { intent -> press.value?.act(intent) },
+                monotonicMillis = { monotonicNanos() / 1_000_000L },
+            ),
             // Page 2's two Tier-2 fires. `IntentMessage` again, and the seats that ride it are
             // CONTENT — who the Surge is aimed at, off the roster the house drew and published to
             // this phone — which is the same rule the ballot's target travels under.
