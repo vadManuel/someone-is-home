@@ -484,3 +484,4 @@ Today an Egress's opening pushes its alert over a Subroutine screen. The person 
   - The lockout shows no WAIT.
   - The phone whose attempt failed vibrates continuously for the full 3 s of the lockout, from the moment the attempt fails.
   - The owner confirmed this exact reading on 2026-11-18. It is a new haptic pattern, a sixth beside D-135's five, ruled by the owner.
+- **O3, the two nodes' pairing: option B, the runs overlap.** The two phones' runs of four consecutive pulses must share at least one pulse of the house's grid. Pairing no longer depends on when the uploads arrive. The owner chose this over "within about 6 s" and "the same four pulses".
