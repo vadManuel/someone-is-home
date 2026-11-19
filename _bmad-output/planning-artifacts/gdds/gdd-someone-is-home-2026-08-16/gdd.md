@@ -115,7 +115,7 @@ The art direction resolves what looked like the project's central contradiction 
 
 **The original visual argument does not survive scrutiny.** It held that the retro phone-OS springboard — status bar, banners, incoming-call screens, app grid — *is a description of UIKit*, so the OS vocabulary comes free. **But this is a fake retro OS, not iOS.** Every one of those elements is drawn custom to look like a 2001 PDA, and iOS 26's Liquid Glass overhaul makes stock controls read as actively broken inside the aesthetic. The custom control layer was always going to be built. UIKit contributes gestures, view lifecycle and Core Animation — real, but not a free springboard.
 
-**What actually decided the original call still stands, and points the same way:** the platform layer is the hard part. Torch *level* (not binary), brightness override, preview-less capture, NFC sessions, simultaneous BLE advertise *and* scan, 100 Hz motion, haptics, contact-range RSSI. **None of that is shareable on any stack** — it is written per platform regardless, which is exactly why a cross-platform *game engine* was the wrong answer and a cross-platform *application* framework is the right one.
+**What actually decided the original call still stands, and points the same way:** the platform layer is the hard part. Torch *level* (not binary), brightness override, preview-less capture, NFC sessions, simultaneous BLE advertise *and* scan, 100 Hz motion, haptics, contact-range distance by Ultra Wideband. **None of that is shareable on any stack** — it is written per platform regardless, which is exactly why a cross-platform *game engine* was the wrong answer and a cross-platform *application* framework is the right one.
 
 **What changed is Android.** It is a real milestone rather than an aspiration, and the original plan — "Android becomes a separate native app" — means building the entire fake phone OS **twice**. That is the worst option available, because **screen parity is leak-critical**: same pages, same page-dot count, same panel furniture, since a difference is a tell from across a room. With mixed-platform play that invariant must hold across four role/platform combinations, maintained by two independently-written codebases that drift on every OS update. **One rendering engine collapses it to one implementation and one test.**
 
@@ -321,7 +321,7 @@ The binding constraint is not balance — it is that a Insider operates the pane
 
 1. Insider arms a Revoke in-app. Silent and invisible; nothing changes on screen for anyone.
 2. Arming opens a **20s window** in which the contact must land. A meeting call closes it early. The lapse is silent (owner ruling, 2026-11-18; D-280).
-3. **The Insider brings their phone within 10 cm of the target's phone. A pass is enough; they do not have to stop.** The phones measure the distance between them by Ultra Wideband, and the house resolves the contact. The target's lamp goes dark at that instant (owner rulings U1, 2026-11-18; D-290).
+3. **The Insider brings their phone within 10 cm of the target's phone. A pass is enough; they do not have to stop.** The phones measure the distance between them by Ultra Wideband, **both phones must read the 10 cm**, and the house resolves the contact. The target's lamp goes dark at that instant (owner rulings U1, 2026-11-18; D-290, D-301). Which phones measure each other, and the round that falls back to Bluetooth, are under *The contact primitive*.
 4. **Both phones give one Long buzz when the Revoke lands**, and the Insider's REVOKE tile drops from ARMED to COOLING DOWN. There is no sound and no animation, and the Insider's screen gives nobody else anything to see (owner ruling, 2026-11-18; D-290). *Until 2026-11-18 the Insider's device gave no feedback at all.*
 
 **There is no target confirmation step and no self-deactivate control anywhere in the game.** Contact *is* the revocation. This closes four things at once that a self-confirm model could not:
@@ -532,7 +532,7 @@ Viewing is treated as an **uncompletable task**, so the motion budget applies: s
 
 **Three phases. The sequencing is the design.**
 
-1. **Revoked mid-round, not yet found.** The device is dark and inert to the player — lamp out, nothing to interact with. **The radio stays up: it advertises so it can be found, and it never scans.** You sit where you were, phone in your lap and reachable. Findable in the dark and leaking nothing, because you genuinely have nothing.
+1. **Revoked mid-round, not yet found.** The device is dark and inert to the player — lamp out, nothing to interact with. **The radio stays up so it can be found, and nothing it senses counts.** In a round on Bluetooth it advertises and never scans. In a round on Ultra Wideband it keeps measuring like every other phone, because a phone that went quiet would give itself away, and the house reads none of its distances (provisional, D-300, D-301). You sit where you were, phone in your lap and reachable. Findable in the dark and leaking nothing, because you genuinely have nothing.
 2. **A meeting is called.** You stand and walk to the couch. Phone still defunct.
 3. **The meeting ends.** You stay on the couch, and **only now does ghost mode appear.**
 
@@ -560,18 +560,20 @@ The whole game is operated **one-handed, in the dark, without looking.** Every c
 | **Fire an ability** | **Springboard page 2, in place — select the tile, then a two-second hold** | Accidentally firing an Egress in front of someone is a game-ending misclick and it *will* happen in the dark, and two seconds of continued intent is the one thing an accident cannot supply. Nothing opens; the hold *is* the second confirm (D-141, D-142) |
 | **Navigate the springboard** | Horizontal swipe between two pages; tap an icon | Standard, muscle-memory, and identical for both roles |
 | **Revoke a player** (Insider) | **Arm on springboard page 2 with a two-second hold**, then **touch your phone to theirs** | Contact *is* the proximity gate. No confirmation step exists on either device. Both roles' page 2 is identical at rest; a Resident's tiles are **entirely disabled** — no press feedback, no hold that fills and then declines (D-142) |
-| **Report a deactivation** | **Touch your phone to the revoked player's phone** | Same gesture, different outcome by state. No button means no enabled/disabled state to read, so it cannot be used as a proximity radar for revoked players |
+| **Report a deactivation** | **Hold your phone within 30 cm of the revoked player's phone for two seconds.** The phone fills a circle over the two seconds; leaving 30 cm first cancels the report (owner ruling Q5, 2026-11-18; D-301) | A hold rather than a pass, so walking by never reports. No button means no enabled/disabled state to read, so it cannot be used as a proximity radar for revoked players |
 | **Carry something** | Nothing to press. **Carry state lives on the work-order widget**, which says so and says that it blocks every other entry | There is no lamp dial and no panel to put one in — **the house sets the light level, always** (D-168). The one piece of state that used to justify a panel now sits on the surface that already lists your work |
 
 *Rejected gestures and why:* **swipe up** (iOS home gesture), **edge swipe** (back-navigation conflict), **two-finger tap** (hard one-handed in the dark), **shake** (visible arm movement, and accidentally discoverable).
 
 #### The contact primitive
 
-**One short-range device-to-device handshake serves both the Revoke and the deactivation report.** The outcome is determined entirely by the state of the two devices: armed Insider + live player → revocation; any player + revoked player → deactivation report; anything else → nothing at all, silently, with no feedback on either device.
+**One short-range measurement serves both the Revoke and the deactivation report.** The outcome is determined entirely by the state of the two devices and the distance between them: armed Insider + live player, both phones reading 10 cm → revocation; a player who is not revoked holding a revoked player's phone within 30 cm for 2 s → deactivation report; anything else → nothing at all, silently, with no feedback on either device.
 
-> **It is presented to the player as touching phones. It is not NFC.** iOS exposes no phone-to-phone NFC — Core NFC reads tags, and card emulation is scoped to payment-style contactless with special entitlements. **Build it as a very-tight-RSSI BLE handshake**, with UWB (Nearby Interaction, ~10 cm and direction, iPhone 11+) as an optional precision upgrade. The physical gesture is what makes the tight radius feel deliberate rather than fiddly, and 1–2s latency is acceptable for an intentional two-handed action.
+> **It is presented to the player as touching phones. It is not NFC.** iOS exposes no phone-to-phone NFC — Core NFC reads tags, and card emulation is scoped to payment-style contactless with special entitlements. **Bluetooth picks, Ultra Wideband measures** (owner ruling U6, 2026-11-18). Every phone's Bluetooth ranks who is near it; from those rankings the house pairs phones for Ultra Wideband (Nearby Interaction, iPhone 11+), never giving a phone more pairs than it says it can hold, and the rules read only the distance each pair measures (D-300, D-301). **A pair the house is not measuring can neither revoke nor report**, so a crowd larger than a phone's capacity can miss a pass; that is accepted (U3, U6). Direction is not read (U4). The physical gesture is what makes the tight radius feel deliberate rather than fiddly, and 1–2s latency is acceptable for an intentional two-handed action.
 
-**The radius is a hard constraint, not a tuning value.** BLE penetrates walls and is noisy at range; if the gate fires at "nearby" rather than at contact, the deactivation report becomes a **through-wall detector for revoked players** and *you can walk past a revoked player and never notice* stops being true. Gate it at contact.
+**A round falls back to Bluetooth's rules when any phone cannot measure** (provisional, D-301). The house chooses once, at arming: Ultra Wideband when every phone has said it can measure at least one peer, and otherwise the tight-RSSI Bluetooth gate the game used before (D-233, D-236). The choice is recorded and never told to any phone.
+
+**The reach is a hard constraint, not a tuning value.** Radio passes through walls, and Ultra Wideband cannot tell rooms apart (U3); if the report fired at "nearby" rather than at arm's length, it would become a **through-wall detector for revoked players** and *you can walk past a revoked player and never notice* would stop being true. **So the report is a hold, not a pass:** within **30 cm for 2 s**, with the reporting phone filling a circle over those two seconds, and leaving 30 cm before it is full cancels the report (owner ruling Q5, 2026-11-18; D-301). The house judges the two seconds on the once-a-second uploads, with half a second of slack, and a missed upload breaks the hold (provisional, D-301). Only the reporter's measurement counts; the revoked phone's own measurement of the pair is ignored. **The two phones of a Revoke cannot report each other for 5 s after it**, so the Insider can report their own target only once that grace ends, and a phone that was not in the touch can report at once (D-291).
 
 **Why a gesture beats a button, beyond removing the radar.** Reporting a revocation now means kneeling down in the dark beside the revoked player — stationary, both hands occupied, exposed. That is the vulnerability this game is built on, and it creates a decision the button version never had: **report it now, or walk away and come back when it suits you.** It also means **a Insider can camp a player they revoked** — chains-are-bait, applied to the revoked.
 
@@ -776,19 +778,22 @@ All positions are relative and inherit the scanner's ground truth. Room-level gr
 2. **Sweep on scan** — when anyone scans, their phone sweeps for nearby devices. **You cannot stay off the map by refusing to scan**; someone else's scan counts you where you are.
 3. **Sweep every 5s during a motion-restricted task** — a player doing a long task becomes a stationary sensor.
 
+**What a sweep counts depends on the round's radio.** In a round on Ultra Wideband, a phone at a marker places in its room every player it measures within **1.5 m** (provisional, D-301); its Bluetooth places nobody. In a round that fell back to Bluetooth, the sweep is Bluetooth's, as before (D-272).
+
 **Revoked players are excluded from every rendered count — but their phones stay on the air.** This is a rendering rule, not a radio rule, and conflating the two is a mistake worth naming: *what the system knows* and *what a player is shown* are separate questions everywhere in this design.
 
 | | Revoked phone |
 |---|---|
 | **Advertises** | **Yes** — this is what makes the deactivation report verifiable, so the report is not a fakeable signal |
-| **Scans** | **No** — see below |
+| **Scans** | **No**, in a round on Bluetooth — see below |
+| **Measures by Ultra Wideband** | **Yes, and none of it is read** — it keeps measuring like every other phone, because a phone that went quiet would give itself away; the house reads none of its distances (provisional, D-300, D-301) |
 | **Appears in rendered counts** | **No** |
 
-**A revoked phone must never contribute sweep observations.** If it kept scanning, a player sitting revoked in a dark room would become an invisible sensor generating fresh occupancy data for a room nobody is scanning in — and **a room with suspiciously fresh counts and no one scanning there implies a hidden sensor, which means a revoked player is sitting in it.** That inverts the rule that coverage holes correlate with where people are not going. **Advertise, never scan.**
+**A revoked phone must never contribute sweep observations.** If what it sensed still counted, a player sitting revoked in a dark room would become an invisible sensor generating fresh occupancy data for a room nobody is scanning in — and **a room with suspiciously fresh counts and no one scanning there implies a hidden sensor, which means a revoked player is sitting in it.** That inverts the rule that coverage holes correlate with where people are not going. **Stay findable, never count.**
 
 The meeting/couch area is a **mapping blind zone**, producing no data — without this, a sweep near the couch would place a cluster there, and under a count-based system a cluster at the couch *is* a count of the revoked. With both rules, absence stays ambiguous between *revoked*, *alone*, and *missed*, so a Insider working quietly in an empty wing looks identical to someone sitting revoked.
 
-**Live positional tracking would damage the game.** The tension comes from not knowing where people are. ARKit visual positioning is out — it needs visual features and fails in darkness. BLE RSSI is a proximity gate, never a map. UWB is a premium enhancement, never the foundation.
+**Live positional tracking would damage the game.** The tension comes from not knowing where people are. ARKit visual positioning is out — it needs visual features and fails in darkness. Bluetooth ranks who is near and Ultra Wideband measures how near, by distance alone and never direction (U4); both feed gates, never a map.
 
 #### Resource scarcity
 
@@ -981,7 +986,7 @@ The target's lamp goes dark at the instant of contact. **No confirmation is aske
 
 **The cooldown started when they armed, not when it landed.** A botched stalk costs a full cooldown, which is the entire reason the two-step is interesting.
 
-The revoked player's device goes dark and inert **to them** — but **the radio stays up, advertising and never scanning.** They sit down where they are, phone in their lap. **Ghost phase 1**: findable in the dark, leaking nothing, because they genuinely have nothing.
+The revoked player's device goes dark and inert **to them** — but **the radio stays up so they can be found, and nothing it senses counts** (see Ghost mode). They sit down where they are, phone in their lap. **Ghost phase 1**: findable in the dark, leaking nothing, because they genuinely have nothing.
 
 **Around T+3:00 a Resident camps the Terminal.** The station **locks exclusively**. The live count view is free, limited only by the motion budget; their own room is outlined as an anchor; counts dim through three staleness bands. Their arrival **generates its own check-in**, so using the surveillance system is itself surveilled. They trigger the **timelapse**: 2:00 of history at 6×, twenty seconds, oldest→newest, plays once.
 
@@ -1025,7 +1030,7 @@ A player calls it. The trigger renders as an **incoming call with the caller nam
 >
 > **The premise was wrong, and the error is instructive enough to record.** "Revoked phones become fully invisible" is a **rendering** decision, not a **radio** decision. Excluding a revoked player from displayed counts is what the design needs; switching their transmitter off is not, and nothing ever required it. **The system may know things it never shows** — that separation holds everywhere in this design, and the trace collapsed it in one place.
 >
-> **With the radio up, the report is verifiable by physical contact, and both meeting triggers survive untouched.** The rule holds unamended. Two rules fall out and are recorded in the body of this document: the revoked phone **advertises but never scans** (or a revoked player becomes an invisible sensor, and a room with fresh counts and nobody scanning in it gives them away), and the contact gate is **hard-limited to contact range** (or the report becomes a through-wall detector for revoked players).
+> **With the radio up, the report is verifiable by physical contact, and both meeting triggers survive untouched.** The rule holds unamended. Two rules fall out and are recorded in the body of this document: the revoked phone **advertises but never scans** (or a revoked player becomes an invisible sensor, and a room with fresh counts and nobody scanning in it gives them away), and the contact gate is **hard-limited to contact range** (or the report becomes a through-wall detector for revoked players). *(Since D-301, in a round on Ultra Wideband, the report is read from distance: 30 cm held for 2 s, on the reporter's side, and a revoked phone keeps measuring with none of it read. See The contact primitive.)*
 
 Three things fire on the same scheduled timestamp: the **masking track cuts to total silence**, every lamp **snaps to full white**, and **every phone starts vibrating** — LONG–pause–LONG, repeating until answered (D-160).
 
@@ -1280,7 +1285,9 @@ Everything else in this design — anonymous counts, injected error, staleness b
 
 Every one of these is OS work, and every one is needed for **precisely the things that make the game good** — not for peripheral features. This list is why the engine question resolved the way it did.
 
-Torch **level** control (not binary) · screen brightness override · keep-awake · a **preview-less** camera session · NFC tag sessions · BLE advertising *and* scanning simultaneously · motion sensing at 100 Hz · haptics · contact-range proximity (tight RSSI, optionally UWB) · local network transport · AirPlay 2 · smart home (v2).
+Torch **level** control (not binary) · screen brightness override · keep-awake · a **preview-less** camera session · NFC tag sessions · BLE advertising *and* scanning simultaneously, to rank who is near · Ultra Wideband ranging (Nearby Interaction) for contact-range distance · motion sensing at 100 Hz · haptics · local network transport · AirPlay 2 · smart home (v2).
+
+**Every permission these need is asked at setup, in the light, before a player may take a seat (D-161).** NEARBY DEVICES, the name iOS gives the Ultra Wideband permission, sits beside BLUETOOTH, since both radios run (D-294, D-303). **Setup no longer asks anyone to switch NameDrop off**: a 10 cm pass does not need the held top-to-top touch that raises it (D-303).
 
 **Every one of these is written per platform behind `expect`/`actual`** — none of it is shareable on any stack, which is why the choice of framework is about the *other* 60–70% of the build.
 

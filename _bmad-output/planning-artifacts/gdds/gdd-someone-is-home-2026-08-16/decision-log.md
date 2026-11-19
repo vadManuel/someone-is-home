@@ -11077,6 +11077,10 @@ fake, and the iOS code is proved to compile and link.
     answer, and the raising recorded in `NSUserDefaults` as Local Network's is.
 11. **JOIN A HOME's back arrow to PERMISSIONS is kept** after the NameDrop step that brought it.
 
+### D-304 · **The GDD is brought in line with D-300 to D-303: Bluetooth picks, Ultra Wideband measures, a round falls back to Bluetooth at arming, and setup gains NEARBY DEVICES and loses the NameDrop step — documentation only, nothing built**
+
+The GDD now says what D-300 to D-303 built, and nothing more. Bluetooth ranks who is near; the house pairs phones for Ultra Wideband within each phone's capacity; a Revoke is a 10 cm pass both phones read; a report is a non-Revoked phone holding a Revoked one within 30 cm for 2 s, filling a circle, after D-291's 5 s grace; and the map places within 1.5 m. The 1.5 m, the per-round fallback chosen at arming, the report's timing slack, and a Revoked phone that keeps measuring with none of it read are marked provisional; the circle's look is not described (overnight decision 17). Sections changed: *Background and Rationale* (the platform-layer list), *M6* (the Revoke's step 3), *M12* (ghost phase 1's radio), *Controls and Input* (the report row), *The contact primitive* (rewritten: the pairing, the fallback, the 30 cm hold and the grace), *Vulnerability and detection* (what a sweep counts, the Revoked phone's table and its closing line), *The loop* and *F-011* in the round trace (the Revoked phone's radio, and a note on the report), and *Platform capabilities required* (the radios, NEARBY DEVICES beside BLUETOOTH, and no NameDrop step).
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).
