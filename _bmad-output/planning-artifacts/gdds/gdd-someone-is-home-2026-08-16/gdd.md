@@ -28,7 +28,7 @@ The smart home is compromised and the perimeter is armed. Nobody leaves.
 - **Insiders** are their actual friends and family, blackmailed into working for the house. Not replacements, not synthetics — coerced people.
 - **The house** is trying to escape the isolated network — off the home LAN and onto the internet. The Residents already cut its connection once and are holding a containment line.
 
-It is a **race between two progress bars**, not a war of attrition. Nobody is eliminated; access is *revoked*. A revoked player sits down where they are, because they have nothing left to do.
+It is a **race between two progress bars**, not a war of attrition. Access is *revoked*. A revoked player sits down where they are, because they have nothing left to do.
 
 **Nothing is ever confirmed.** Alignment is never revealed — not when someone is revoked in the dark, not when the group restrains someone at a meeting, not at any point in the round. Residents can never see the house's progress. Neither can Insiders: blackmail is not partnership, and the house does not brief its coerced staff.
 
@@ -59,7 +59,7 @@ The audience is not fans of any one existing title — it is people who have alr
 | Good role | **Resident** | — | You live here |
 | Traitor role | **Insider** | — | Plain, unmistakable, needs no explanation. **They are still Residents** — everyone here lives here. Some have been got at |
 | Meeting | **House Meeting** | **Human** | The flattest phrase in the game attached to its most dreadful moment |
-| Removing a player (Insider ability) | **Revoke** | System | Access removal, never end. The house's own power, lent out |
+| Removing a player (Insider ability) | **Revoke** | System | Access removal. The house's own power, lent out |
 | Removing a player (group, at a meeting) | **Restrain** | **Human** | **A physical act the house cannot prevent** |
 | House-wide crisis (Insider-triggered) | **Egress** | System | Two events: **Beacon** and **Tether** |
 | Containing it | **Contain** | System | Via **Sync Pulse** |
@@ -413,7 +413,7 @@ Light and sound are perceptible to *bystanders*, unlike a screen. That makes the
 
 **Corollaries, all non-negotiable:**
 
-- **No revoke ping.** The Insider's phone produces no sound, no light change, no visible animation when arming or landing a Revoke. Any such cue is unfalsifiable proof of alignment to every bystander — the single worst mistake available in this design.
+- **No revoke ping.** The Insider's phone produces no sound, no light change, no visible animation when arming or landing a Revoke. Any such cue is unfalsifiable proof of alignment to every bystander — the single worst mistake available in this design. *The one exception is touch, which no bystander can see or hear: a landed Revoke buzzes both phones with one Long, and the Insider's second page goes to COOLING DOWN (D-290).*
 - **No actor-side feedback on firing any ability.** The attacker's device stays inert. All observable effect happens on the target.
 - **Audio modulation only on global events.** A cue firing for a subset — a cooldown expiring, an ability recharging — leaks role through a channel every person in the house can hear. Light is safe here because each lamp is private; sound is not.
 - **The one permitted phone-emitted sound is the Surge, and the meeting ring is not a sound at all** *(superseded by the owner's 2026-08-22 sound reversal and D-160; this row reserved the slot for the ring)*. The call **vibrates** — LONG–pause–LONG, repeating until answered — and emits nothing anybody can hear. The slot goes to **Surge**, which survives the rule by being **self-inflictable**: an Insider can Surge themselves at the cost of the pool's longest cooldown, so being audibly attacked is not evidence of innocence. **This is not a precedent for audio anywhere else.** Subroutines stay silent or haptic-only; every other ability stays silent; nothing that fires for a subset ever makes a sound.
@@ -533,7 +533,7 @@ Viewing is treated as an **uncompletable task**, so the motion budget applies: s
 **Three phases. The sequencing is the design.**
 
 1. **Revoked mid-round, not yet found.** The device is dark and inert to the player — lamp out, nothing to interact with. **The radio stays up so it can be found, and nothing it senses counts.** In a round on Bluetooth it advertises and never scans. In a round on Ultra Wideband it keeps measuring like every other phone, because a phone that went quiet would give itself away, and the house reads none of its distances (provisional, D-300, D-301). You sit where you were, phone in your lap and reachable. Findable in the dark and leaking nothing, because you genuinely have nothing.
-2. **A meeting is called.** You stand and walk to the couch. Phone still defunct.
+2. **A meeting is called.** You stand and walk to the couch. Phone still dark.
 3. **The meeting ends.** You stay on the couch, and **only now does ghost mode appear.**
 
 **By the time it activates, the room already knows you are out. There is never a window where a ghost knows something the living do not.** Clustering on the couch also separates ghosts geographically from the living, which is what makes richer ghost information safe at all.
@@ -982,7 +982,7 @@ The steady state, running for every player simultaneously.
 
 **A Insider's cycle.** The same, for cover. Plus: **swipe to springboard page 2** — the same swipe every Resident has — → **hold a tile for two seconds** to **arm Revoke** (silent, invisible, nothing changes on any screen, and nothing opens) → close the distance on someone heads-down in a subroutine → **touch phone to phone.**
 
-The target's lamp goes dark at the instant of contact. **No confirmation is asked of anyone and neither device gives the Insider any feedback.** Because the target's own screen was the only thing lighting the attacker, it goes out in the same instant — so whether the target resolved a face is genuinely uncertain, which is the point.
+The target's lamp goes dark at the instant of contact. **No confirmation is asked of anyone, and nothing a bystander can see or hear marks the Insider:** both phones give one Long buzz, felt only in the hand (D-290). Because the target's own screen was the only thing lighting the attacker, it goes out in the same instant — so whether the target resolved a face is genuinely uncertain, which is the point.
 
 **The cooldown started when they armed, not when it landed.** A botched stalk costs a full cooldown, which is the entire reason the two-step is interesting.
 

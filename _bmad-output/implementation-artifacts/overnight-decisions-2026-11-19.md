@@ -36,6 +36,13 @@ Every call made without the owner is listed below: what was decided, why, and ho
 | 28 | **How the radio handles failures** (D-303). If you refuse UWB, it is your fault, not the phone's. The session limit and an unsupported phone are the phone's fault. An idle spare session that iOS closes is replaced quietly. A refused or unsupported phone measures 0 peers until the next round. A slot that fails 3 times in a row stays empty for the round. | Uses the existing fault report, which every phone sends at the same size. | `RangingPool`, `NearbyRadio.ios.kt` | Change the mapping. |
 | 29 | **A spare session offered twice is used, not thrown away** (D-303, settles decision 20). The house only offers it again after the phone reports it still idle, so it has never run. | Simpler, with nothing wasted. | `RangingPool` | Retire it and open a fresh one. |
 | 30 | **Found, not fixed: the PERMISSIONS screen runs off the bottom in its tallest state.** With a row refused, others still owed, and the Local Network caption showing, OPEN SETTINGS and REQUEST WHAT IS MISSING fall below the edge. Refusing the camera partway through the walk gets you there. Main already had this before tonight. | It needs a layout call: scroll, or tighter rows. | Perms screen | Your call. |
+| 31 | **The GDD was brought in line with the UWB work** (D-304). Overnight calls are marked provisional in it. The GDD's "no revoke ping" rule and its round trace now record your D-290 ruling: both phones buzz Long. That buzz is touch only, so no bystander sees or hears it. | They contradicted your ruling. | `gdd.md` | None. |
+| 32 | **End words removed from the GDD where they describe players, lamps or a Revoked phone.** "Nobody is eliminated", "never end", the lamp that "fails" at contact, "dark rectangle" and "Phone still defunct" now read revoked, dark or goes dark. **Left alone:** figures of speech such as "total silence", "mapping blind zone", "ghost idle time", "the app must be able to stop it" and "both prior attempts failed of calendar". | Your rule is about the game's story. A sweep of every figure of speech would reword about 25 design lines you never asked about. | `gdd.md` | Tell me if you want those swept too. |
+| 33 | **GDD contradictions found but not fixed** (from D-304's pass). They need your call: | | | |
+|  | 1. The report row says the gesture "cannot be used as a proximity radar" for Revoked players. Your filling circle tells the person holding it that a Revoked phone is within 30 cm, even through a wall. | | | |
+|  | 2. "Sweep every 5 s" predates the once-a-second uploads. | | | |
+|  | 3. The battery target counts only Bluetooth, not UWB sessions. | | | |
+|  | 4. The GDD never mentions D-292's launch refusal of phones without UWB. | | | |
 
 ## Built and pushed overnight
 
@@ -54,5 +61,7 @@ Every call made without the owner is listed below: what was decided, why, and ho
 - **D-302** (`107c02d`): the pairing fixes above. The full check on this exact tree passed: 3 169 tests, 0 failures. I reran the core module's 411 JVM tests myself, and all passed.
 
 - **D-303** (`2a0235b`): the iPhone UWB code (off by default), the NEARBY DEVICES row, and the NameDrop step removed. Full check on this exact tree: 3 194 tests, 0 failures. The Playtest build compiles for iPhone ("BUILD SUCCEEDED"). **Not seen on a phone:** whether sessions start, what iOS says at the session limit, and whether the row raises iOS's question. Part 3 of the phone-session checklist covers it.
+
+- **D-304** (`f0fdf79`): the GDD pass.
 
 (More as work lands.)
