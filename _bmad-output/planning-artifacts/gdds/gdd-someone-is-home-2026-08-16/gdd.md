@@ -320,9 +320,9 @@ The binding constraint is not balance — it is that a Insider operates the pane
 **Revoke — the two-step:**
 
 1. Insider arms a Revoke in-app. Silent and invisible; nothing changes on screen for anyone.
-2. Arming opens a **45s window** in which the contact must land.
-3. **The Insider touches their phone to the target's phone.** The handshake resolves device-to-device at very short range; the target's lamp goes dark at the instant of contact.
-4. The Insider's device gives **no feedback whatsoever** — no sound, no light change, no animation. All observable effect happens on the target.
+2. Arming opens a **20s window** in which the contact must land. A meeting call closes it early. The lapse is silent (owner ruling, 2026-11-18; D-280).
+3. **The Insider brings their phone within 10 cm of the target's phone. A pass is enough; they do not have to stop.** The phones measure the distance between them by Ultra Wideband, and the house resolves the contact. The target's lamp goes dark at that instant (owner rulings U1, 2026-11-18; D-290).
+4. **Both phones give one Long buzz when the Revoke lands**, and the Insider's REVOKE tile drops from ARMED to COOLING DOWN. There is no sound and no animation, and the Insider's screen gives nobody else anything to see (owner ruling, 2026-11-18; D-290). *Until 2026-11-18 the Insider's device gave no feedback at all.*
 
 **There is no target confirmation step and no self-deactivate control anywhere in the game.** Contact *is* the revocation. This closes four things at once that a self-confirm model could not:
 
@@ -542,7 +542,7 @@ Viewing is treated as an **uncompletable task**, so the motion budget applies: s
 
 **So ghosts get what the whole house is denied:**
 
-- **Both bars** — Resident System Integrity *and* the real Egress progress, which no living player of either role can see.
+- **Both bars, as exact percentages** — Resident System Integrity *and* the Egress's progress. Living phones see the Egress as a countdown and a draining bar; the couch reads the exact number behind it (owner ruling Q3, 2026-11-18).
 - **True occupancy** — live, every storey, no injected error, no staleness bands. **Still counts, never identities.**
 - **Not alignments.** The tools to deduce, never the answer. A ghost is still solving, from outside.
 
@@ -1049,7 +1049,7 @@ The group holds them; **the house deauthorises them moments later**, because a r
 
 **Meeting ends. All lamps drop back to dim in unison — the "go" signal.** Masking resumes. **The timelapse history floor resets to now**, wiping everything. Any Insider who did something risky at T+5:30 has just had it erased, and calling the meeting was a real play with real odds.
 
-**Ghost mode appears — phase 3 — only now**, for everyone on the couch. Both bars, including **the real Egress progress that no living player of either role can see**. True occupancy, live, every storey, no injected error, no staleness. **Never alignments.** **No channel of any kind** — cannot act, cannot speak, cannot vote, cannot message each other. Several people watching the same truth side by side, unable to share one thought about it.
+**Ghost mode appears — phase 3 — only now**, for everyone on the couch. Both bars as exact percentages, the Egress's included (living phones see it as a countdown and a draining bar; owner ruling Q3, 2026-11-18). True occupancy, live, every storey, no injected error, no staleness. **Never alignments.** **No channel of any kind** — cannot act, cannot speak, cannot vote, cannot message each other. Several people watching the same truth side by side, unable to share one thought about it.
 
 > **`COMPOSES` F-012 — post-meeting Terminal blindness is intent, not a bug.** *A seam explicitly flagged as worth watching.* For the first two minutes after every meeting the timelapse has almost no history. Traced: the **cooldown scales to available history**, so a camper gets a short timelapse early rather than nothing, and the **live count view remains free**. More importantly, this window is *supposed* to be the most dangerous stretch of the round — the surveillance system is blind at exactly the moment everyone has just learned where everyone else is and dispersed from one place. **Record it as designed behaviour so nobody "fixes" it.**
 
@@ -1152,7 +1152,7 @@ Every tunable in the game, and what each one does. **Nothing else should become 
 | **`Known` / `Hidden`** | `Known` | Whether Insiders are shown to each other once at arming, never again | Decided |
 | **Subroutines per Resident** | **7** (1 circuit / 1 long / 3 medium / 2 short) | Round length. **The primary pacing lever** | Derived, not playtested |
 | **Revoke cooldown** | Own pool. Initial 45s | The win-condition clock | [ASSUMPTION] |
-| **Revoke arm window** | 45s | How much a botched stalk costs | Decided |
+| **Revoke arm window** | 20s, or until a meeting is called | How much a botched stalk costs | Decided (owner, 2026-11-18; D-280) |
 | **Egress cooldown** | Own pool | How often the house moves everybody | [ASSUMPTION] |
 | **Egress timer** | **120s default, host-configurable** | Must cover two Residents crossing *this* house. **Host-set, because house size varies more than any default can** | Default derived from travel arithmetic |
 | **Access pool** | One shared number | Governs Surge, Static, Isolate, **and all self-targeting** | [ASSUMPTION] |
