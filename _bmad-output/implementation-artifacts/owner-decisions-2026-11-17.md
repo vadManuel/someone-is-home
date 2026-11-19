@@ -498,3 +498,9 @@ The owner ruled:
 This amends U5 and "UWB replaces Bluetooth for everything": Bluetooth is no longer removed. It decides nothing in the game itself; it only chooses which pairs UWB measures. Every rule (the 10 cm Revoke, the 30 cm report, the spectator map) reads UWB distance.
 
 Built consequence: since the limit is unmeasured, each phone learns its own. It opens a conservative number of sessions, lowers it when iOS answers `activeSessionsLimitExceeded`, and reports the number it can hold. A crowd larger than that number can miss a flyby. Under U3, that is part of the game.
+
+## Owner rulings, 2026-11-19, on D-297's questions
+
+- **A question the Egress buzz cuts short stays cut.** Handshake, Sniff and Drift play their question on the vibration motor. An Egress buzz that cuts one off does not replay it. To feel it again the person stops and rescans.
+- **A tap on the Egress alert over a Subroutine still opens the Egress widget**, leaving the work. This is today's behaviour, kept. Only a swipe or the 10 s hold keeps the person on the Subroutine.
+- **The caught-scan briefing (`ScanCaught`, before BEGIN) and the camera (`Scan`) also keep their screen**, with the alert over them, as E1 does for a Subroutine. The design's reason is that the alert must never take the camera away from someone standing at a card.
