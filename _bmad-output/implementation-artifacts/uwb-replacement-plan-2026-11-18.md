@@ -130,3 +130,33 @@ Each unit is its own commit, with tests, a broken-guard proof and, where a scree
 ## Order
 
 Units 1 and 2 can start now. Unit 3 depends on 2. Unit 4 depends on 2, and on a phone to see it. Unit 5 goes with 3. Unit 6 comes last. Unit 7 runs whenever the owner has phones.
+
+## Risk found 2026-11-18: how many peers one iPhone can range at once
+
+A web search (Apple docs, Apple Developer Forums, WWDC, papers) found no published limit.
+
+What Apple says:
+- Docs for `activeSessionsLimitExceeded`: *"The maximum number of concurrent Nearby Interaction sessions varies across device type and platform."*
+- Staff on the forums: *"dynamic and may be limited by available system resources"* (forums thread 652180, Jun 2020), and *"not limitless … may vary depending on the devices and iOS versions"* (thread 700295, Feb 2022).
+
+The only figures are developer reports from 2021 (thread 692392):
+- iPhone 11: a limit of 2 sessions.
+- iPhone 12: four phones with 3 sessions each worked; a fifth phone failed.
+- Nothing is published for iPhone 13–17, the U2 chip, or iOS 16 and later.
+
+No one has published whether the rate per pair drops as peers are added. One paper (arXiv 2511.03534) reports about 55 Hz with one peer, against our 6.7 Hz. The cause of the difference is unknown and should be checked: a setting we could change would matter a great deal.
+
+Consequences:
+- An 18-seat round needs 17 sessions per phone, which is probably above the limit.
+- The spike's 8 sessions on the 16 Pro had no live peers, and iOS may count only sessions that are actually ranging.
+- A flyby (U1) needs the pair to be ranging at the moment of the pass.
+
+Proposed mitigation, **not ruled**:
+- Bluetooth, already built, picks roughly which peers are near, which it can do for any number of phones.
+- UWB ranges the nearest few precisely.
+- Bluetooth would then decide nothing in the game, only which peers to measure. This is the way Apple itself pairs the two.
+- **The owner must rule on it**, since U5 and the "replace Bluetooth for everything" ruling are both in play.
+
+**A device test comes before unit 4:** with 3 or more iPhones, open sessions one at a time until iOS refuses, and measure the rate at 1, 2, 4, 8 and 16 peers.
+
+Units 2, 3 and 5 can be built without knowing the limit.
