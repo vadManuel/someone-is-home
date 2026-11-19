@@ -65,3 +65,12 @@ Every call made without the owner is listed below: what was decided, why, and ho
 - **D-304** (`f0fdf79`): the GDD pass.
 
 (More as work lands.)
+
+## Owner's review, 2026-11-19 morning
+
+- **26, the hidden NEARBY DEVICES text:** keep it.
+- **30, PERMISSIONS running off the bottom:** scroll the rows, with the buttons pinned at the bottom (D-305).
+- **32, figures of speech:** sweep them all, from every file, and from history with a force push. Done in the current files, with one exception: the shell command that ends a process, where a script runs it, because it is the program's name. The lint's own list spells its word in two halves.
+- **33.1, the circle as a radar:** accept it and reword. The GDD now says the circle confirms someone you are already beside, rather than finding anyone.
+- **Still open:** 17 (how the report circle looks), and 33.2 to 33.4 (the 5 s sweep wording, the battery target, and the launch refusal in the GDD).
+
