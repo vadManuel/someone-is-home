@@ -187,7 +187,6 @@ fun PermsScreen() {
     val go = navigator()
     val actions = LocalActions.current
     val perms = LocalPerms.current
-    val nameDrop = LocalNameDrop.current
     val p = Palette.BONE
     // Read the OS when the screen arrives, and again on every return to it. A host who walked out
     // to Settings comes back here, and nothing else would move the rows.
@@ -221,12 +220,6 @@ fun PermsScreen() {
                     }
                 }
             }
-            // **The one setting the OS will not let the app read** (D-248), and the only way back
-            // to its step once it has been confirmed. Not a permission, and never part of the gate:
-            // nothing can check it, so nothing waits on it.
-            SetupRow("NAMEDROP", if (nameDrop.confirmed) "OFF" else "TURN OFF", nameDrop.confirmed, p) {
-                go(ScreenId.NameDrop)
-            }
         }
         KitSpacer()
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -252,8 +245,7 @@ fun PermsScreen() {
                 KitSecondary("OPEN SETTINGS", p, onClick = actions.openSystemSettings)
             }
             if (perms.complete) {
-                // To the NameDrop step on a fresh install and to the join screen after (D-248).
-                KitPrimary("CONTINUE", p) { go(nameDrop.pastPerms) }
+                KitPrimary("CONTINUE", p) { go(ScreenId.Join) }
             } else {
                 // It asks, and it stays here. The one screen where a control that navigated
                 // without doing anything cost an evening.
@@ -262,93 +254,6 @@ fun PermsScreen() {
         }
     }
 }
-
-/**
- * **One row of a setup list: a name, and its state in a small box** — filled while something is
- * still owed, an outline once it is done. The PERMISSIONS rows' look, for a row that is not one.
- */
-@Composable
-private fun SetupRow(name: String, state: String, done: Boolean, p: Palette, onClick: (() -> Unit)?) {
-    Row(
-        Modifier.fillMaxWidth().heightIn(min = 56.dp)
-            .edgeLine(PanelSide.Bottom, p.line, 1.dp)
-            .then(if (onClick != null) Modifier.tap(onClick) else Modifier)
-            .padding(horizontal = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Words(name, Modifier.weight(1f), size = 24, color = p.ink, lineHeight = 1.0)
-        Box(
-            Modifier.border(1.dp, if (done) p.dim else p.ink)
-                .background(if (done) Color.Transparent else p.ink)
-                .padding(1.dp).padding(horizontal = 6.dp, vertical = 5.dp)
-        ) {
-            Tag(state, if (done) p.ink else Amber.Bone, Modifier.height(12.dp))
-        }
-    }
-}
-
-/** What DONE on the NameDrop step answers to, from a Compose test and from outside the process. */
-const val NAMEDROP_DONE: String = "namedrop-done"
-
-/**
- * **NameDrop off, by the player's own hand** (D-248, provisional: owner to confirm the copy).
- *
- * Two unlocked iPhones held close offer to swap contacts, and the offer lights both screens: in
- * this game phones meet on purpose in the dark, so that is light the house never sent. The app can
- * neither switch it off nor read it, so this screen names the switch and takes the player's word.
- *
- * **There is no OPEN SETTINGS here, on purpose.** The one sanctioned link,
- * `UIApplication.openSettingsURLString`, opens this app's own page, which has no AirDrop switch on
- * it; the links that reach deeper (`App-Prefs:`, `prefs:root=`) are private, break between iOS
- * versions and are refused at App Store review. So the path is written out, one step a row.
- *
- * Light-field, like every setup screen: it is read with the house lights on, before a seat.
- */
-@Composable
-fun NameDropScreen() {
-    val go = navigator()
-    val nameDrop = LocalNameDrop.current
-    val p = Palette.BONE
-    KitScreen {
-        KitHeader("NAMEDROP", p, trail = true)
-        KitBody("iPhones brought together light up to share contacts. Turn that off now, while the lights are on.", p)
-        KitRules(p) {
-            NAMEDROP_PATH.forEachIndexed { i, step ->
-                val last = i == NAMEDROP_PATH.lastIndex
-                // The path, not controls: nothing here can be tapped, so nothing looks like it can.
-                Row(
-                    Modifier.fillMaxWidth().heightIn(min = 56.dp)
-                        .edgeLine(PanelSide.Bottom, p.line, 1.dp).padding(horizontal = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Words("${i + 1}", size = 24, color = p.dim, lineHeight = 1.0)
-                    Words(step, Modifier.weight(1f), size = 24, color = p.ink, lineHeight = 1.0)
-                    if (last) {
-                        Box(Modifier.border(1.dp, p.ink).padding(1.dp).padding(horizontal = 6.dp, vertical = 5.dp)) {
-                            Tag("OFF", p.ink, Modifier.height(12.dp))
-                        }
-                    }
-                }
-            }
-        }
-        KitSpacer()
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            // Why DONE is a promise rather than a check, said once.
-            KitCaption("This phone cannot see that switch.", p, size = 20)
-            KitPrimary("DONE", p, Modifier.testTag(NAMEDROP_DONE)) {
-                nameDrop.confirm()
-                go(ScreenId.Join)
-            }
-        }
-    }
-}
-
-/** **Settings, one row a step** — iOS 17's own words for the switch, as its Settings app spells them. */
-internal val NAMEDROP_PATH: List<String> = listOf(
-    "SETTINGS", "GENERAL", "AIRDROP", "BRINGING DEVICES TOGETHER",
-)
 
 /**
  * **What the RESIDENT field answers to, from inside a Compose test and from outside the process.**
@@ -393,8 +298,8 @@ fun JoinScreen() {
     KitScreen {
         // **The page name, and the way back to the permissions walk beside it** (E-PAY-6). CONTINUE
         // is a real `go` from `Perms`, so the trail is often there. **And PERMISSIONS is named as
-        // the fallback** (D-248): since D-235 a set-up phone skips that screen and arrives here with
-        // nothing behind it, and that screen is the one way back to the NameDrop step.
+        // the fallback** (D-248, kept by D-303): since D-235 a set-up phone skips that screen and
+        // arrives here with nothing behind it, and that screen is the way back to the permission walk.
         KitHeader("JOIN A HOME", p, back = ScreenId.Perms, trail = true)
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             KitLabel("RESIDENT", p, SILK_LINE)

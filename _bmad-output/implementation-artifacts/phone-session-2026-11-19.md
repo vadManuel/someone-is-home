@@ -61,5 +61,9 @@ over Bluetooth, which is still the radio. Tick each line as you see it.
       at launch, now that it asks iOS about UWB (D-292) and carries the Nearby Interaction line
       (D-294).
 
+## Part 3 (optional): a UWB round
+
+- [ ] Install with `SOMEONES_HOME_UWB=1 ./run-app.sh device playtest` and play a round: the host's log says `CONTACT BY UWB DISTANCE` at lights out, and phones held screen to screen Revoke. (D-303)
+
 Write anything that looks or feels wrong next to its line. The decision number shows where it was
 built.

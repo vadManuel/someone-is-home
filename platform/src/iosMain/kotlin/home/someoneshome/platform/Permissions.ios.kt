@@ -29,6 +29,7 @@ import platform.CoreMotion.CMAuthorizationStatusNotDetermined
 import platform.CoreMotion.CMAuthorizationStatusRestricted
 import platform.CoreMotion.CMMotionActivityManager
 import platform.Foundation.NSDate
+import platform.Foundation.NSError
 import platform.Foundation.NSNetService
 import platform.Foundation.NSNetServiceBrowser
 import platform.Foundation.NSNetServiceBrowserDelegateProtocol
@@ -37,6 +38,11 @@ import platform.Foundation.NSRunLoop
 import platform.Foundation.NSRunLoopCommonModes
 import platform.Foundation.NSUserDefaults
 import platform.Foundation.dateWithTimeIntervalSinceNow
+import platform.NearbyInteraction.NINearbyPeerConfiguration
+import platform.NearbyInteraction.NISession
+import platform.NearbyInteraction.NISessionDelegateProtocol
+import platform.UIKit.UIApplication
+import platform.UIKit.UIApplicationState
 import platform.UserNotifications.UNAuthorizationOptionAlert
 import platform.UserNotifications.UNAuthorizationOptionBadge
 import platform.UserNotifications.UNAuthorizationOptionSound
@@ -47,8 +53,11 @@ import platform.UserNotifications.UNAuthorizationStatusNotDetermined
 import platform.UserNotifications.UNAuthorizationStatusProvisional
 import platform.UserNotifications.UNUserNotificationCenter
 import platform.darwin.NSObject
+import platform.darwin.DISPATCH_TIME_NOW
+import platform.darwin.dispatch_after
 import platform.darwin.dispatch_async
 import platform.darwin.dispatch_get_main_queue
+import platform.darwin.dispatch_time
 
 /**
  * **iOS: five different frameworks, five different ways of being asked, one seam.**
@@ -180,6 +189,7 @@ private class IosPermissions(
         DevicePermission.Camera -> cameraGrant()
         DevicePermission.Motion -> motionGrant()
         DevicePermission.Bluetooth -> bluetoothGrant()
+        DevicePermission.NearbyDevices -> nearbyGrant()
         DevicePermission.LocalNetwork -> remembered[of] ?: localNetworkStanding()
         // The one that is genuinely callback-only: there is no synchronous notification status on
         // this platform. What is held is the last answer [refresh] heard, and [refresh] now has a
@@ -205,6 +215,10 @@ private class IosPermissions(
         // The Bluetooth manager reports its own state changes into `remembered` for as long as it
         // exists; asking it again means asking the one it already has.
         central?.let { bluetoothDelegate.centralManagerDidUpdateState(it) }
+        // Nearby Interaction has no status to read, so a phone that has already been asked is asked
+        // again the only way there is: a probe, which raises nothing once the prompt has been
+        // answered. Its answer lands late, and the rows are read again when it does.
+        if (defaults.boolForKey(NEARBY_RAISED)) probeNearby { then() }
     }
 
     override fun request(of: DevicePermission, then: (Grant) -> Unit) {
@@ -214,6 +228,7 @@ private class IosPermissions(
             DevicePermission.Motion -> requestMotion(then)
             DevicePermission.Notifications -> requestNotifications(then)
             DevicePermission.Bluetooth -> requestBluetooth(then)
+            DevicePermission.NearbyDevices -> requestNearby(then)
             DevicePermission.LocalNetwork -> requestLocalNetwork(then)
         }
     }
@@ -375,6 +390,103 @@ private class IosPermissions(
         answer(DevicePermission.Bluetooth, bluetoothGrantOf(manager.state), then)
     }
 
+    // ---- Nearby devices -------------------------------------------------------------------------
+
+    /**
+     * **NEARBY DEVICES, as last heard** (D-303). Nearby Interaction has no authorization status: the
+     * only answer iOS gives is what a running session does. So the row reads the last probe's
+     * answer, and before any probe in this process, [Grant.Asked] on an install that has raised the
+     * prompt (Local Network's honest floor, kept the same way) and [Grant.Unasked] on one that has not.
+     */
+    private fun nearbyGrant(): Grant =
+        remembered[DevicePermission.NearbyDevices] ?: if (defaults.boolForKey(NEARBY_RAISED)) Grant.Asked else Grant.Unasked
+
+    /**
+     * **Raise the prompt the way iOS raises it: by running a session** (D-161: asked at setup, in the
+     * light; D-303). A standing answer is reported as it is; anything else runs a probe.
+     */
+    private fun requestNearby(then: (Grant) -> Unit) {
+        val standing = remembered[DevicePermission.NearbyDevices]
+        if (standing == Grant.Granted || standing == Grant.Refused || standing == Grant.Unavailable) {
+            answer(DevicePermission.NearbyDevices, standing, then)
+            return
+        }
+        // Written before the answer, as Local Network's is: the prompt is on this install's glass.
+        defaults.setBool(true, NEARBY_RAISED)
+        probeNearby(then)
+    }
+
+    /** The probe in flight, and its delegate (held: the session holds it weakly). */
+    private var probe: NISession? = null
+    private var probeListener: NearbyProbe? = null
+    private val probeWaiting = mutableListOf<(Grant) -> Unit>()
+    private var probeActiveTicks = 0
+
+    /**
+     * **A short `NISession`, run against its own token, read for the permission and nothing else.**
+     * It has no peer, so it measures nothing; what it says is whether iOS let it run:
+     * - it starts running: [Grant.Granted];
+     * - `userDidNotAllow`: [Grant.Refused], the person's, as a refused Bluetooth is;
+     * - `unsupportedPlatform`: [Grant.Unavailable];
+     * - anything else, or nothing within [PROBE_ACTIVE_TICKS] half-seconds of the app being active
+     *   (the prompt keeps it inactive while it is up): [Grant.Asked], the most it then knows.
+     *
+     * Unverified until a phone runs it: that a session run against its own token raises the
+     * prompt, and which of the answers above it then gives.
+     */
+    private fun probeNearby(then: (Grant) -> Unit) {
+        probeWaiting += then
+        if (probe != null) return
+        val session = NISession()
+        val listener = NearbyProbe()
+        session.delegate = listener
+        probe = session
+        probeListener = listener
+        probeActiveTicks = 0
+        val own = session.discoveryToken
+        if (own == null) {
+            settleProbe(listener, Grant.Asked, "no discovery token")
+            return
+        }
+        log("$TAG NEARBY DEVICES probing")
+        session.runWithConfiguration(NINearbyPeerConfiguration(peerToken = own))
+        tickProbe(listener)
+    }
+
+    private fun tickProbe(listener: NearbyProbe) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, PROBE_TICK_NANOS), dispatch_get_main_queue()) {
+            if (probeListener === listener) {
+                if (UIApplication.sharedApplication.applicationState == UIApplicationState.UIApplicationStateActive) probeActiveTicks++
+                if (probeActiveTicks >= PROBE_ACTIVE_TICKS) settleProbe(listener, Grant.Asked, "no answer") else tickProbe(listener)
+            }
+        }
+    }
+
+    private fun settleProbe(listener: NearbyProbe, grant: Grant, why: String) {
+        if (probeListener !== listener) return
+        probe?.invalidate()
+        probe = null
+        probeListener = null
+        log("$TAG NEARBY DEVICES probe: $why")
+        val waiting = probeWaiting.toList()
+        probeWaiting.clear()
+        if (waiting.isEmpty()) remembered[DevicePermission.NearbyDevices] = grant
+        waiting.forEach { answer(DevicePermission.NearbyDevices, grant, it) }
+    }
+
+    private inner class NearbyProbe : NSObject(), NISessionDelegateProtocol {
+        override fun sessionDidStartRunning(session: NISession) = settleProbe(this, Grant.Granted, "it ran")
+
+        override fun session(session: NISession, didInvalidateWithError: NSError) {
+            val grant = when (didInvalidateWithError.code) {
+                -5884L -> Grant.Refused // userDidNotAllow
+                -5889L -> Grant.Unavailable // unsupportedPlatform
+                else -> Grant.Asked
+            }
+            settleProbe(this, grant, "invalidated, code ${didInvalidateWithError.code}")
+        }
+    }
+
     // ---- Local network ------------------------------------------------------------------------
 
     /**
@@ -457,6 +569,13 @@ private class IosPermissions(
 
         /** *The Local Network prompt has been put on this install's glass.* Nothing more. */
         const val LOCAL_NETWORK_RAISED = "home.someoneshome.perms.localNetworkRaised"
+
+        /** *The Nearby Interaction prompt has been put on this install's glass.* Nothing more. */
+        const val NEARBY_RAISED = "home.someoneshome.perms.nearbyRaised"
+
+        /** The probe's clock: half a second a tick, counted only while the app is active. */
+        const val PROBE_TICK_NANOS = 500_000_000L
+        const val PROBE_ACTIVE_TICKS = 4
 
         /** One second of activity history, read by nothing. The query is the prompt. */
         const val MOTION_HISTORY_SECONDS = 1.0

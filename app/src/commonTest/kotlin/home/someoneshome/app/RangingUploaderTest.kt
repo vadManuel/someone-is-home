@@ -1,8 +1,10 @@
 package home.someoneshome.app
 
 import home.someoneshome.model.ContactSeed
+import home.someoneshome.model.ContactToken
 import home.someoneshome.model.ContactWindow
 import home.someoneshome.model.Haptic
+import home.someoneshome.model.RadioCause
 import home.someoneshome.model.WinRoute
 import home.someoneshome.model.Winner
 import home.someoneshome.model.protocol.RangingHandle
@@ -16,7 +18,9 @@ import home.someoneshome.model.protocol.RangingWire
 import home.someoneshome.model.protocol.RoundBody
 import home.someoneshome.model.protocol.RoundMessage
 import home.someoneshome.model.protocol.SpareKey
+import home.someoneshome.platform.ContactRadio
 import home.someoneshome.platform.NoRadio
+import home.someoneshome.platform.RadioReading
 import home.someoneshome.platform.RangingRadio
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -37,6 +41,8 @@ class RangingUploaderTest {
         )
         var readings = listOf(RangingReading(RangingHandle.ofHex("00000000000000b1"), 7, 6))
         val did = mutableListOf<String>()
+        var fault: RadioCause? = null
+        override fun faultBegan(): RadioCause? = fault.also { fault = null }
         override fun capacity(): Int = capacity
         override fun spares(): List<RangingSpare> = spares
         override fun drain(): List<RangingReading> = readings
@@ -128,5 +134,53 @@ class RangingUploaderTest {
         up.heard(RoundMessage.ContactSeedIssued(seed))
         up.heard(RoundMessage.RoundEnded(Winner.Residents, WinRoute.SystemIntegrityCleared, Haptic.Short, integrity = 60))
         assertTrue("silence" in radio.did, "the round ended and the ranging radio kept its sessions")
+    }
+
+    /** A Bluetooth radio whose only act is the fault it is told to report. */
+    private class FaultingBluetooth : ContactRadio {
+        var fault: RadioCause? = null
+        override fun advertise(token: ContactToken) = Unit
+        override fun scan(on: Boolean) = Unit
+        override fun drain(): List<RadioReading> = emptyList()
+        override fun silence() = Unit
+        override fun faultBegan(): RadioCause? = fault.also { fault = null }
+    }
+
+    /**
+     * **D-303: the UWB radio's faults go up as the same fixed `RadioFaulted`**, once per onset, and a person's
+     * act wins a beat both radios went down in.
+     */
+    @Test
+    fun aUwbFaultGoesUpAsTheOneRadioFaultedBodyAndAPersonsActWinsTheBeat() {
+        val ranging = ToldRadio()
+        val bluetooth = FaultingBluetooth()
+        val faults = mutableListOf<RadioCause>()
+        var onsets = 0
+        val up = ContactUploader(
+            bluetooth, { ContactWindow(10) }, faulted = { faults += it.cause },
+            onsetName = { (onsets++).toString(16).padStart(RoundBody.RadioFaulted.ONSET_CHARS, '0') },
+            ranging = ranging, rangingNonce = ::nonce,
+        ) {}
+        up.heard(RoundMessage.ContactSeedIssued(seed))
+        ranging.fault = RadioCause.Person
+        up.beat()
+        assertEquals(listOf(RadioCause.Person), faults, "Nearby Interaction refused did not go up as the person's")
+        up.beat()
+        assertEquals(1, faults.size, "one onset went up twice")
+        ranging.fault = RadioCause.Device
+        up.beat()
+        assertEquals(RadioCause.Device, faults.last(), "the session limit did not go up as the device's")
+        // Both radios in one beat: one report, and the person's.
+        bluetooth.fault = RadioCause.Device
+        ranging.fault = RadioCause.Person
+        up.beat()
+        assertEquals(listOf(RadioCause.Person, RadioCause.Device, RadioCause.Person), faults)
+        bluetooth.fault = RadioCause.Person
+        ranging.fault = RadioCause.Device
+        up.beat()
+        assertEquals(listOf(RadioCause.Person, RadioCause.Device, RadioCause.Person, RadioCause.Person), faults)
+        // Neither radio holds an onset back for a later beat.
+        up.beat()
+        assertEquals(4, faults.size, "a radio's onset waited for a later beat")
     }
 }

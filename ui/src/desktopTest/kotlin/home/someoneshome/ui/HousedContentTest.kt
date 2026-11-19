@@ -294,7 +294,7 @@ class HousedContentTest {
      */
     @Test
     fun aPhoneWithNoHouseYetDrawsItsOwnClock() {
-        for (screen in listOf(ScreenId.Join, ScreenId.Perms, ScreenId.NameDrop, ScreenId.Maps, ScreenId.Lobby, ScreenId.Secret)) {
+        for (screen in listOf(ScreenId.Join, ScreenId.Perms, ScreenId.Maps, ScreenId.Lobby, ScreenId.Secret)) {
             val phone = FlowModel(PanelState(screen = screen), wallClock = { now })
             assertEquals(false, phone.state.houseAttached)
             val vals = PanelVals(phone.state)

@@ -75,20 +75,16 @@ object ScreenGraph {
         ScreenId.NoUwb -> emptySet()
         // Cold start. Boot publishes no control at all — it falls through (see Flow.autoAdvance).
         ScreenId.Boot -> emptySet()
-        // CONTINUE goes wherever [NameDropModel.pastPerms] says (the join screen on a rendered,
-        // set-up phone), and the NAMEDROP row is the one way back to that step (D-248).
-        ScreenId.Perms -> setOf(ScreenId.Join, ScreenId.NameDrop)
-        // DONE. The step is said to be finished and the phone goes on to join.
-        ScreenId.NameDrop -> setOf(ScreenId.Join)
+        ScreenId.Perms -> setOf(ScreenId.Join)
         // **Tapping a network row is not in here** (E-PAY-6). Attaching can be refused — D-161's
         // setup gate, and now a phone that has not said what to call its owner — and a refusal stays
         // on this screen with the reason on it. The row used to navigate unconditionally beside the
         // action, so a refused attach walked into a lobby this phone was not in and the counts sat
         // at nothing. Same shape as HOST WITH THIS HOME; see [Flow.viaActions].
         //
-        // The back arrow always reaches the PERMISSIONS screen, trail or no trail (D-248): D-235's
-        // skip means a set-up phone arrives here with nothing behind it, and that screen is where
-        // the NameDrop step is reached again.
+        // The back arrow always reaches the PERMISSIONS screen, trail or no trail (D-248, kept by
+        // D-303 when the NameDrop step went): D-235's skip means a set-up phone arrives here with
+        // nothing behind it, and that screen is the way back to the permission walk.
         ScreenId.Join -> setOf(ScreenId.Maps, ScreenId.Perms)
 
         // Host setup, in the light.
@@ -1083,14 +1079,6 @@ class FlowModel(
      */
     val perms: PermsModel = PermsModel(),
     /**
-     * **Whether this install has been told NameDrop is off** (D-248), held here for [perms]' reason:
-     * [fallThrough] asks it, nowhere near the screen that sets it.
-     *
-     * Defaulted to a phone that has not, which is a fresh install: the default fails toward
-     * showing the step, never toward a phone that skipped it.
-     */
-    val nameDrop: NameDropModel = NameDropModel(),
-    /**
      * **The torch beside the back lens, reached at last** (E-PAY-5).
      *
      * [onScreen]'s shape and its boundary: the LED is `platform`'s and `ui` may not see `platform`,
@@ -1323,12 +1311,9 @@ class FlowModel(
      * the self-test is drawn, because two rows answer through a callback that lands after launch.
      * **It fails toward the screen**: a row the OS has not answered yet is missing, so a phone that
      * cannot be sure is shown the screen, and a missing grant always is.
-     *
-     * **Skipped past to [NameDropModel.pastPerms], never to the join screen by name** (D-248): a
-     * fresh install's next step is NameDrop, and the skip must not walk it past that.
      */
     fun fallThrough(rule: AutoAdvance): ScreenId =
-        if (rule.to == ScreenId.Perms && perms.missingNow().isEmpty()) nameDrop.pastPerms else rule.to
+        if (rule.to == ScreenId.Perms && perms.missingNow().isEmpty()) ScreenId.Join else rule.to
 
     /** What the house will do to this screen, if anything. Nothing here fires it — see [FlowHost]. */
     val awaitingPush: HousePush? get() = Flow.housePushes[state.screen]
@@ -3986,7 +3971,6 @@ fun FlowHost(
         // reader would guess and a positional argument that lands one slot over is a screen drawn
         // with the wrong model and no compile error to say so.
         perms = model.perms,
-        nameDrop = model.nameDrop,
         lamp = model.lamp,
     )
 }

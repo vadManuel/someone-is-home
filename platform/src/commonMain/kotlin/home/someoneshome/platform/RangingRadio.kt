@@ -1,15 +1,17 @@
 package home.someoneshome.platform
 
+import home.someoneshome.model.RadioCause
 import home.someoneshome.model.protocol.RangingHandle
+import home.someoneshome.model.protocol.RangingPool
 import home.someoneshome.model.protocol.RangingReading
 import home.someoneshome.model.protocol.RangingSpare
 import home.someoneshome.model.protocol.RangingToken
 import home.someoneshome.model.protocol.SpareKey
 
 /**
- * **The UWB radio, as the app sees it** (U6, D-300). A phone will hold the Nearby Interaction one
- * (a later unit; there is no `NISession` code yet), the bench a simulated one, and the tests
- * [NoRanging].
+ * **The UWB radio, as the app sees it** (U6, D-300). A phone holds the Nearby Interaction one
+ * ([nearbyRangingRadio], D-303) when the developer switch turns it on and [NoRanging] otherwise, the
+ * bench a simulated one, and the tests [NoRanging].
  *
  * **A pool of sessions, and nothing that could carry a seat or a role.** The radio keeps up to
  * [capacity] sessions. A session that is not ranging is *idle*, and its discovery token is offered
@@ -56,7 +58,38 @@ interface RangingRadio {
 
     /** The round is over: close every session. */
     fun silence()
+
+    /**
+     * **Whether the radio went down since the last call, and on which side of D-187's line** (D-303,
+     * the plan's *Outages*): [RadioCause.Person] for Nearby Interaction refused, [RadioCause.Device]
+     * for the session limit, an unsupported phone or a ranging session that failed. Once per onset,
+     * as `ContactRadio.faultBegan`; the uploader sends it as the same fixed `RoundBody.RadioFaulted`.
+     * A radio that cannot fault says null, which is every one but the phone's.
+     */
+    fun faultBegan(): RadioCause? = null
 }
+
+/**
+ * **A [RangingPool] as the app's radio** (D-303): the pool is the whole of the radio's bookkeeping,
+ * and lives in `model` so that it runs on the JVM; this hands the app's calls to it.
+ */
+class PooledRanging(private val pool: RangingPool) : RangingRadio {
+    override fun capacity(): Int = pool.capacity()
+    override fun spares(): List<RangingSpare> = pool.spares()
+    override fun drain(): List<RangingReading> = pool.drain()
+    override fun start(handle: RangingHandle, own: SpareKey, peer: RangingToken) = pool.start(handle, own, peer)
+    override fun stop(handle: RangingHandle) = pool.stop(handle)
+    override fun open() = pool.open()
+    override fun silence() = pool.silence()
+    override fun faultBegan(): RadioCause? = pool.faultBegan()
+}
+
+/**
+ * **This phone's Nearby Interaction radio** (D-303): a [RangingPool] of `NISession`s. It opens no
+ * session until [RangingRadio.open], which is the round's seed (D-067: built at arming, not before),
+ * and every callback lands on the main thread, where the uploader runs. [log] is the device log.
+ */
+expect fun nearbyRangingRadio(log: (String) -> Unit): RangingRadio
 
 /**
  * **No UWB at all**: no capacity, nothing offered, nothing ranged (D-300). What every phone holds

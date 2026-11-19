@@ -20,7 +20,8 @@ package home.someoneshome.model
  *
  * **The order is the order the rows are drawn in**, and it is deliberate: Local Network and Camera
  * first because they are the two that end an evening, Notifications last because it is the one a
- * host will be least surprised to be asked for.
+ * host will be least surprised to be asked for. Nearby Devices sits under Bluetooth, the other half
+ * of how the house sees who is near whom (D-303).
  */
 enum class DevicePermission(
     /** The row's own words on the Perms screen. Screen copy, in the closed vocabulary. */
@@ -30,9 +31,9 @@ enum class DevicePermission(
     /**
      * ⚠️ **Whether the OS will ever confirm this grant — and therefore what a gate may demand.**
      *
-     * Four of the five answer for real: `AVCaptureDevice`, `CMMotionActivityManager`,
+     * Five of the six answer for real: `AVCaptureDevice`, `CMMotionActivityManager`,
      * `CBManager.authorization` and `UNUserNotificationCenter` each report a status this app can
-     * read back. **Local Network reports nothing, on any version this project targets** — see
+     * read back, and Nearby Interaction answers a short session run to ask (D-303). **Local Network reports nothing, on any version this project targets** — see
      * [Grant.Asked] — so [Grant.Granted] is a state that row can never reach and a gate that waits
      * for it is a gate that never opens. The owner met that gate holding two phones with the
      * permission switched on in Settings: *it still shows as REQUESTED and … it says this phone
@@ -59,6 +60,17 @@ enum class DevicePermission(
     Bluetooth(
         "BLUETOOTH",
         "THE HOUSE SEES WHICH PHONES ARE NEAR EACH OTHER",
+    ),
+
+    /**
+     * **Nearby Interaction: UWB distance** (D-294, D-303). Beside Bluetooth, not instead of it (U6:
+     * Bluetooth picks who is near, UWB measures them). The label is the owner's, the name iOS uses
+     * for the same permission in Settings. [need] is drawn nowhere, as no row's is; it paraphrases
+     * the owner's approved prompt (D-294).
+     */
+    NearbyDevices(
+        "NEARBY DEVICES",
+        "THE HOUSE MEASURES THE DISTANCE BETWEEN PHONES",
     ),
 
     Motion(

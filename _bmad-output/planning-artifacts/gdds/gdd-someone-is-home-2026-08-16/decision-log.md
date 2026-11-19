@@ -10890,6 +10890,193 @@ core 411 (JVM) and 409 (iOS Simulator; `RangingAllocationTest` is JVM-only), pla
 **Not on a phone.** The real phones still range nothing (`NoRanging`), so tomorrow's rounds arm on
 Bluetooth and nothing here touches them.
 
+### D-303 · **The Nearby Interaction radio is built, behind a developer switch that is off by default; the setup walk gains NEARBY DEVICES beside BLUETOOTH and loses the NameDrop step — built (the U6 plan's units 4 and 6; recording stays 43; not on a phone)**
+
+**The rulings** (owner, 2026-11-18): U6 *Bluetooth picks, UWB measures* and the plan under it
+(`uwb-replacement-plan-2026-11-18.md`, *The plan under U6*, which supersedes sections 4 and 6 where
+they differ); D-294 *the row reads NEARBY DEVICES*; the NameDrop step rejected (the plan's unit 6).
+The radio follows the spike (`uwb-spike-results-2026-11-18.md`) and starts from its
+`UwbPeerSession` with the `==` fix (cff978e).
+
+**Now, the radio** (unit 4).
+
+1. **The pool, with nothing iOS in it** (`model/protocol/RangingPool.kt`): the capacity, the spare
+   sessions, the plan applied to them, the readings table, the suspension and the faults, against
+   a `RangingSessions` seam (open a slot's session for its token, run it against a peer's token,
+   run it again, close it). It sits in `model` beside `RangingCodec` because `platform` has no JVM
+   target, and a JVM is where it can be tested with a fake and measured (D-276).
+   - **Capacity**: `RangingWire.STARTING_CAPACITY` (3) at every round's open, one less on each
+     `activeSessionsLimitExceeded` (and its extended-distance twin), never below 0.
+   - **Spares**: capacity's worth of sessions held; each idle one offered under a key drawn from
+     `secureRandomBytes` with its archived token. **A session runs against one peer, ever**: a stop
+     closes it and opens a fresh one with a new key and token; a session that fails is replaced the
+     same way. A start for a pair already held, or naming a key that is not idle, is nothing (the
+     house resends a start until it sees the pair listed, D-300).
+   - **D-302 decision 4, the spare dealt twice**: on this phone such a spare is a session that never
+     ran (the house deals a key again only once the phone offers it idle after the hand-back), so
+     its one run is the second peer's. Nothing is retired for it. *Chosen: accept, not retire.*
+   - **Readings**: the nearest centimetres and a count per slot in two fixed arrays; `drain` builds
+     the second's list once a beat and starts the second again. A pair with no reading is listed
+     with none. Not-available, NaN and infinite readings are dropped; a distance is clamped to the
+     wire's signed 16 bits and the count to 255.
+   - **Suspension**: nothing on the suspension; on its end the session is run again with the same
+     configuration and token (the spike: back within 0.5 s, no new token). A peer that times out is
+     run again; a peer that ended its own session waits for the house's stop.
+2. **The iOS sessions** (`platform/iosMain/NearbyRadio.ios.kt`, `nearbyRangingRadio(log)`): one
+   `NISession` per slot, its token archived with secure coding, run with an
+   `NINearbyPeerConfiguration`, closed with `invalidate()`. Each session has its own delegate that
+   knows its slot and generation, so a callback from a closed or replaced session is nothing without
+   comparing Kotlin wrappers. No `delegateQueue`: every callback lands on the main queue, where the
+   uploader beats. `RangingRadio` gains `faultBegan()` (null by default) and `PooledRanging` adapts
+   the pool to it.
+3. **Faults** (the plan's *Outages*, onto the one fixed `RoundBody.RadioFaulted`):
+   `userDidNotAllow` is the person's; the session limit, `unsupportedPlatform`, a token that does
+   not fit 384 bytes, and the failure of a session that was ranging are the device's. A refusal or
+   an unsupported phone closes every session and says capacity 0 until the next round. **An idle
+   spare that iOS ends is replaced and reported to nobody**: it measured nothing. A suspension is not
+   a fault here; leaving the foreground already is (D-229). Faults within two beats of the last are
+   one onset (Bluetooth's two-second settle, D-222), and a person's refusal is never folded into a
+   device's onset. `ContactUploader` asks both radios every beat; both down in one beat is one report,
+   and **a person's act wins it**. A slot whose sessions end within two beats of opening three times
+   running is left empty until the next round, so a phone that ends every session cannot loop.
+4. **The switch, off by default** (`Cheats.kt`, `UWB_SWITCH = "SOMEONES_HOME_UWB"`): set in the
+   app's environment, the cheat root holds `nearbyRangingRadio`, tells the lobby its capacity on
+   every seating (D-301) and hands it to `RoundClient`; absent, it holds `NoRanging` and says 0, so
+   every round arms on Bluetooth as before. `run-app.sh` passes it to the phones through devicectl's
+   `DEVICECTL_CHILD_` prefix when `SOMEONES_HOME_UWB=1` is set (device path only), and says so in its
+   help; the phone session's checklist has an optional Part 3, *a UWB round*. Release compiles none
+   of it. Building the radio opens no session: the pool opens at the round's seed (D-067).
+
+**Now, the setup walk** (unit 6).
+
+1. **NEARBY DEVICES**, `DevicePermission.NearbyDevices`, drawn by the same loop as every row, under
+   BLUETOOTH: the same row, light, tags and gate. No new words on any screen and no new light level.
+   Its `need` field, which no screen draws (no row's is), paraphrases D-294's approved prompt.
+2. **Warmed at setup, in the light** (D-161). Nearby Interaction has no authorization status, so
+   the iOS seam asks the only way there is: a short `NISession` run against its own token. It
+   answers GRANTED when the session starts running, REFUSED on `userDidNotAllow` (the person's, as a
+   refused Bluetooth is; OPEN SETTINGS appears as for any refused row), NOT ON THIS PHONE on
+   `unsupportedPlatform`, and ASKED for anything else or for no answer within two seconds of the app
+   being active (the prompt keeps it inactive while it is up). The raising is recorded in
+   `NSUserDefaults` exactly as Local Network's is, so a returning install reads ASKED until the
+   refresh's probe answers; a refresh probes again on an install that has been asked.
+3. **The NameDrop step is gone**: `NameDropScreen`, `ScreenId.NameDrop`, its `Flow` edges and skip,
+   `NameDropModel`/`NameDropStore`/`MemoryNameDropStore`/`LocalNameDrop`, the PERMISSIONS screen's
+   NAMEDROP row and the `SetupRow` only it used, `NameDropDocument`, the platform `NameDropStore`
+   and its test, and `NameDropStepTest`. CONTINUE and D-235's skip go to JOIN A HOME by name again.
+   **JOIN A HOME's back arrow to PERMISSIONS is kept**: D-248 added it for the NameDrop step, and it
+   is also the way back to the permission walk for a phone the skip brought straight to JOIN. The
+   install's old `namedrop-off.txt` is left where it is; nothing reads it.
+
+**Recording: no change, 43 stays.** Nothing recorded changed shape and nothing reduces differently:
+the radio is the phone's, the uploads it fills were already one width (D-300), and the setup walk is
+not recorded.
+
+**Leak and parity.** The radio has no input that names a role or whether this phone is out: it is
+told only the plan, which every phone is sent at one width (D-300), so an out phone keeps ranging and
+reporting as D-300 rules. Faults go up as the existing fixed `RadioFaulted` from every phone alike. The new
+permission row is the same on every phone; setup has no roles.
+
+**Allocation (rule 7)** (JVM, the thread's own counter, `RangingPoolAllocationTest`, new): three
+readings **0 B** (ceiling 0); a beat's drain of three pairs **160 B** (ceiling 256). What iOS
+allocates to hand over an update (the array of nearby objects and its wrapper) is outside this code;
+the delegate walks it by index, with no iterator.
+
+**Proved** (each red against its injected break first, then restored; quoted from the test XML):
+
+- **The pool** (`RangingPoolTest`, model, 15, JVM and iOS Simulator as Kotlin, against a fake of the
+  sessions). *The pool filling past its capacity:* `the pool held 4 sessions at once expected:<3> but
+  was:<4>`. *The limit not lowering it:* `theLimitLowers…: expected:<2> but was:<3>`. *The last
+  reading kept, not the nearest:* `the nearest of the second, in cm, and the count
+  expected:<[RangingReading(…, nearestCm=-8, readings=4)]> but was:<[RangingReading(…, nearestCm=10,
+  readings=4)]>`. *The generation not checked:* `a retired session's end lowered the capacity
+  expected:<3> but was:<2>`. *The suspension's end not running it again:* `the suspension's end did
+  not run the session again expected:<[0]> but was:<[]>`. *No settle:* `a failure inside the settle
+  was a new onset expected null, but was:<Device>`. *A refusal folded into a device onset:* `a refusal
+  was folded into a device fault expected:<Person> but was:<null>`. *An idle spare's end reported:*
+  `an idle spare's end was reported as a fault expected null, but was:<Device>`. *No bound on young
+  failures:* `a pool whose sessions all end young opened 203 sessions`. *A stopped session kept and
+  offered again:* `a session that had run was run again against another peer expected:<1> but
+  was:<2>` and `the stopped session was not closed`. *An oversized token offered:*
+  `IllegalArgumentException: a ranging token is 1 to 384 bytes`. *A refusal keeping its sessions:* `a
+  refused pool still offers 2 spares`.
+- **The allocation guard** (`RangingPoolAllocationTest`, model JVM, 2). *A reading that allocates
+  (one small list):* `three UWB readings allocate 175 bytes, over their ceiling of 0 (rule 7, D-303)`.
+- **The uploader** (`RangingUploaderTest.aUwbFaultGoesUpAsTheOneRadioFaultedBodyAndAPersonsActWinsTheBeat`,
+  app, new). *The UWB radio not asked:* `Nearby Interaction refused did not go up as the person's.
+  Expected <[Person]>, actual <[]>`. *The person not winning a shared beat:* `Expected <[Person,
+  Device, Person]>, actual <[Person, Device, Device]>`.
+- **The walk** (ui desktop). *NEARBY DEVICES left out of the gate:* `PermsSkipTest`: `NEARBY DEVICES
+  Unasked and the phone skipped the Perms screen expected:<Perms> but was:<Join>`;
+  `PermsScreenTest`: `NEARBY DEVICES reads Refused and the phone was seated anyway` and `the walk
+  skipped a row expected:<[LocalNetwork, Camera, Bluetooth, NearbyDevices, Motion, Notifications]>
+  but was:<[LocalNetwork, Camera, Bluetooth, Motion, Notifications]>`. *CONTINUE not to JOIN:*
+  `CONTINUE did not reach the join screen expected:<Join> but was:<Perms>` (`PermsWalkRender`, new)
+  and `a complete phone could not get off the screen expected:<[Join]> but was:<[Perms]>`. *The skip
+  not to JOIN:* `a fully granted phone was shown the Perms screen expected:<Join> but was:<Perms>`.
+- **Rendered and looked at** (`PermsWalkRender`, a viewer, 720×1520 with the mockup's camera band,
+  `ui/build/screens/perms-*.png`): fresh (every row TAP TO GRANT), NEARBY DEVICES unasked, refused
+  (REFUSED, the gate line naming it, OPEN SETTINGS), all granted (CONTINUE), CONTINUE pressed (JOIN A
+  HOME, no step between), and the tallest state (raised below).
+- **Builds for iOS**: `:platform:compileKotlinIosArm64`, `:app:compileKotlinIosArm64`,
+  `-Pvariant=playtest :app:linkDebugFrameworkIosArm64` (`BUILD SUCCESSFUL`), and `xcodebuild` of the
+  Playtest configuration for `generic/platform=iOS` with `CODE_SIGNING_ALLOWED=NO` (`** BUILD
+  SUCCEEDED **`); the built binary carries `SOMEONES_HOME_UWB`, `NEARBY DEVICES` and the probe's
+  defaults key, and no NameDrop string.
+
+**Checked** (`./gradlew check --continue` in the worktree on `4bd88b9` plus this change, exit 0,
+every result XML counted with a python glob): model 352 (JVM) and 336 (iOS Simulator), cards 17,
+core 411 (JVM) and 409 (iOS Simulator), platform 210 (three fewer: `NameDropStoreTest` is gone),
+harness 137, ui 714 (desktop; `NameDropStepTest`'s six gone, `PermsWalkRender` one new) and 344 (iOS
+Simulator), app 264: **3 194 tests, no failures**. `vocabularyLint`, `redactionLint`,
+`boundaryCheck`, `armingCordon`, `benchSeedCordon` and `seedSourceCordon` clean, and the release and
+playtest variant sweeps ran. Neither known load flake (`RealClocksTest`, `OutboundQueueTest`) fired.
+
+**Not on a phone, said plainly.** The iOS Simulator cannot run Nearby Interaction, and nothing about
+the radio or the row is verified until it runs on phones: that idle sessions hand over tokens and
+three of them run against real peers at once; that a suspension's end and a peer's timeout recover
+by running again; what iOS answers at the session limit and whether it ends idle sessions; that a
+session run against its own token raises the prompt, and which answer it then gives; that the
+delegate's callbacks arrive on the main queue. Only the shared logic is tested, on the JVM against a
+fake, and the iOS code is proved to compile and link.
+
+**Raised, not built.**
+
+1. **The PERMISSIONS screen's tallest state runs off the bottom**: Local Network ASKED (its caption),
+   one row refused (OPEN SETTINGS) and the rest owed puts OPEN SETTINGS and REQUEST WHAT IS MISSING
+   below the edge at 720×1520 (`perms-tallest.png`). A camera refused partway through REQUEST WHAT IS
+   MISSING reaches it. It was so on main as well, where the screen also had six rows (five
+   permissions and NAMEDROP); the gate's sentence now names one more row, a line taller. A scroll
+   or a tighter layout is a layout call for the owner, so it is not touched here.
+2. **A UWB refusal in a Bluetooth round** (the switch on, one phone that cannot range) still goes up
+   as the person's fault and is named at the next meeting (D-187), though distance decided nothing
+   that round.
+3. **Every install meets the new row**: a set-up phone's first launch of this build stops at
+   PERMISSIONS until NEARBY DEVICES is answered, switch or no switch (D-161's gate, as for any row).
+
+**Decisions for the owner** (each provisional (overnight)):
+
+1. **The pool lives in `model`**, beside `RangingCodec`, so it can be tested and measured on the
+   JVM; `platform` holds only the `NISession` half.
+2. **D-302 decision 4: accept, not retire.** A spare dealt to a second peer after a first that never
+   started runs once, with the second; a session that has run is never run with another peer.
+3. **The fault mapping**: refusal the person's; the limit, an unsupported phone, a token that does
+   not fit and a ranging session's failure the device's; **an idle spare's end reported to nobody**.
+4. **One onset per two beats**, a refusal never folded into a device's onset, and **a person's act
+   wins a beat both radios went down in**.
+5. **A refusal or an unsupported phone ranges nothing until the next round** (capacity 0), rather
+   than retrying mid-round.
+6. **A timed-out peer is run again; a peer that ended its own session waits for the house's stop.**
+7. **The young-failure bound**: three ends within two beats of opening leave a slot empty for the
+   round.
+8. **The switch**: an environment variable, `SOMEONES_HOME_UWB`, passed by `run-app.sh` on the device
+   path only; with it on, the lobby hears capacity 3 before the first round.
+9. **NEARBY DEVICES is in D-161's gate** like every row, under BLUETOOTH, with its undrawn `need`
+   paraphrasing D-294.
+10. **The probe and its answers** (above), including ASKED after two seconds of an active app with no
+    answer, and the raising recorded in `NSUserDefaults` as Local Network's is.
+11. **JOIN A HOME's back arrow to PERMISSIONS is kept** after the NameDrop step that brought it.
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

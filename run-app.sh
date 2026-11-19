@@ -7,6 +7,11 @@
 #   ./run-app.sh simulator playtest   simulator, playtest variant
 #   ./run-app.sh device playtest      EVERY phone plugged into this Mac, playtest variant
 #   APP_DEVICE_NAME=fiance ./run-app.sh device   just the phone whose name contains "fiance"
+#   SOMEONES_HOME_UWB=1 ./run-app.sh device playtest
+#                                     the same, with the UWB radio switched on (D-303). Off by
+#                                     default: every round arms on Bluetooth. On, a round arms on
+#                                     UWB distance when every phone in it was launched this way.
+#                                     Phones only, debug or playtest; the simulator ignores it.
 #
 # The second argument is story 0.10b's build variant and maps one-to-one onto an Xcode
 # configuration: debug -> Debug, playtest -> Playtest, release -> Release. Playtest and debug
@@ -102,7 +107,13 @@ for x in d['result']['devices']:
         assert_fonts "$APP"
 
         xcrun devicectl device install app --device "$core" "$APP" >/dev/null
-        xcrun devicectl device process launch --device "$core" "$BUNDLE_ID" >/dev/null
+        # The UWB switch reaches the app's environment through devicectl's DEVICECTL_CHILD_ prefix.
+        if [ -n "${SOMEONES_HOME_UWB:-}" ]; then
+            DEVICECTL_CHILD_SOMEONES_HOME_UWB=1 \
+                xcrun devicectl device process launch --device "$core" "$BUNDLE_ID" >/dev/null
+        else
+            xcrun devicectl device process launch --device "$core" "$BUNDLE_ID" >/dev/null
+        fi
 
         python3 -c 'import time; time.sleep(5)'
         procs="$(xcrun devicectl device info processes --device "$core" 2>/dev/null || true)"
@@ -115,6 +126,7 @@ $devices
 EOF
     [ "$failed" -eq 0 ] || exit 1
     count="$(printf '%s\n' "$devices" | grep -c .)"
+    [ -z "${SOMEONES_HOME_UWB:-}" ] || echo "the UWB radio is on (SOMEONES_HOME_UWB)."
     if [ "$count" -eq 1 ]; then echo "done. Look at the phone."; else echo "done. Look at the phones."; fi
     exit 0
 fi

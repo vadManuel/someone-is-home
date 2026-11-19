@@ -1,7 +1,9 @@
 package home.someoneshome.app
 
 import home.someoneshome.platform.ScreenWake
+import home.someoneshome.platform.NoRanging
 import home.someoneshome.platform.bluetoothContactRadio
+import home.someoneshome.platform.nearbyRangingRadio
 import home.someoneshome.platform.deviceForeground
 import home.someoneshome.platform.deviceIdleTimer
 import androidx.compose.foundation.background
@@ -49,7 +51,6 @@ import home.someoneshome.ui.FlowModel
 import home.someoneshome.ui.Label
 import home.someoneshome.ui.LobbyModel
 import home.someoneshome.ui.MeetingModel
-import home.someoneshome.ui.NameDropModel
 import home.someoneshome.ui.LocalPanelInsets
 import home.someoneshome.ui.LocalViewfinder
 import home.someoneshome.ui.PermsModel
@@ -213,6 +214,15 @@ fun CheatRoot(uwb: Boolean) {
     val doors = remember { HouseDoors { rules.value } }
     // The disconnect screen's walk there and back, reading the panel the line below it is promised.
     val gone = remember { HouseGone { panel.value } }
+    // **The UWB radio, behind a developer switch and OFF by default** (D-303). Off, this phone
+    // holds `NoRanging` and tells the lobby it can range nobody, so every round arms on Bluetooth
+    // (D-301's per-round choice) exactly as before. On (`SOMEONES_HOME_UWB=1 ./run-app.sh device
+    // playtest`), it holds the Nearby Interaction pool, says its capacity in the lobby, and a round
+    // whose every phone says the same arms on distance. Building it opens no session: the pool
+    // opens at the round's seed (D-067). Its lines go to stdout only, never to a screen (rule 6).
+    val ranging = remember {
+        if (launchSwitch(UWB_SWITCH)) nearbyRangingRadio { line -> println("[ranging] $line") } else NoRanging
+    }
     val link = remember {
         LobbyOverTransport(
             scope, onEvent = radio, onInbound = watch::saw,
@@ -257,6 +267,8 @@ fun CheatRoot(uwb: Boolean) {
             // CLOCK_SKEW_SWITCH. And every estimate of the house's clock, to the console only.
             clientMillis = benchClientMillis(),
             onClockFix = { lines.offset(fixLine(it)) },
+            // What this phone says it can range, on every seating (D-301): 0 with the switch off.
+            rangingCapacity = { ranging.capacity() },
         )
     }
     // **THE HOST'S PHONE LEAVING THE FOREGROUND, AND COMING BACK** (H2, D-225). A lock, the side
@@ -322,10 +334,6 @@ fun CheatRoot(uwb: Boolean) {
                 ask = permissions::request,
                 reread = permissions::refresh,
             ),
-            // **The NameDrop step's answer, on the phone's own file** (D-248). Shown once per
-            // install, before a seat; the OS has no API to read the switch, so the player's DONE is
-            // the whole of what is stored.
-            nameDrop = NameDropModel(NameDropDocument()),
             // **THE TORCH, REACHING THE LED** (E-PAY-5). `toggleTorch` moved a colour value in
             // `Amber` and nothing else; the owner's finding was a button that reaches no hardware.
             // The seam refuses on any scanner whose configuration says no torch, so this line
@@ -471,7 +479,7 @@ fun CheatRoot(uwb: Boolean) {
         // the socket's estimator, so the containment control's taps are stamped on a current offset.
         RoundClient(
             scope, flow, watch, buzzer, radio, wake, kept = DeviceSeat,
-            clientMillis = link::clientNow, clock = link::uploadAnswered, note = lines::round,
+            clientMillis = link::clientNow, clock = link::uploadAnswered, ranging = ranging, note = lines::round,
         )
             // Both knots tied in one place: the lobby gets the seam it was promised, and the four
             // meeting controls, the Subroutine's hand-over and page 2's two fires get the way up
@@ -1033,3 +1041,11 @@ private fun BoxScope.MarkerChip(onTap: () -> Unit) {
         Label(BuildVariant.MARKER, size = 6.6, color = Amber.Dim, tracking = 0.24)
     }
 }
+
+/**
+ * **The UWB radio's developer switch** (D-303): present in the environment, this phone ranges over
+ * Nearby Interaction; absent, which is every launch a person makes, it holds `NoRanging`.
+ * `run-app.sh` passes it to the phones when `SOMEONES_HOME_UWB=1` is set. Not the spike's
+ * `SOMEONES_HOME_UWB_SPIKE`, which hands the whole phone to the measurement tool.
+ */
+internal const val UWB_SWITCH = "SOMEONES_HOME_UWB"

@@ -46,7 +46,9 @@ import home.someoneshome.platform.secureRandomBytes
  *
  * ### A radio fault goes up on the beat after it begins (T2, D-222; D-223)
  *
- * The radio reports an onset once, with its cause ([ContactRadio.faultBegan]); the next beat sends
+ * The radio reports an onset once, with its cause ([ContactRadio.faultBegan]), and so does the UWB
+ * radio ([RangingRadio.faultBegan], D-303: Nearby Interaction refused is the person's, the session
+ * limit or a failed session the device's); the next beat sends
  * one `RoundBody.RadioFaulted` carrying that cause and the onset's name, the same from every phone
  * and the same length whichever the cause. Before arming and after the round nothing is beaten, so
  * nothing is sent.
@@ -213,7 +215,7 @@ class ContactUploader(
         // at its onset; nothing on this phone's screen, lamp or motor hears of it. A return from
         // leaving the foreground is a person's act and wins the beat (D-229): the radio's onset is
         // folded into a report not yet sent, and one beat never sends two bodies.
-        radio.faultBegan()?.let { cause ->
+        faultBegan()?.let { cause ->
             val unsent = owed.lastOrNull { it.due && it.sentOn == NEVER_SENT }
             if (unsent != null) {
                 if (cause == RadioCause.Person) unsent.cause = RadioCause.Person
@@ -227,6 +229,19 @@ class ContactUploader(
         val next = owed.firstOrNull { it.due && it.sentOn != connection } ?: return
         next.sentOn = connection
         faulted(RoundBody.RadioFaulted(next.cause, next.onset))
+    }
+
+    /**
+     * **Either radio's onset this beat, as one cause** (D-303). Both radios are asked every beat, so
+     * neither holds an onset back for a later one. Bluetooth and UWB going down in the same beat is
+     * one report, and **a person's act wins it**: a device fault that happened to coincide must not
+     * hide an evasion D-187 names (the uploader's own rule for a leave, D-229).
+     */
+    private fun faultBegan(): RadioCause? {
+        val bluetooth = radio.faultBegan()
+        val uwb = ranging.faultBegan()
+        if (bluetooth == RadioCause.Person || uwb == RadioCause.Person) return RadioCause.Person
+        return bluetooth ?: uwb
     }
 
     /**

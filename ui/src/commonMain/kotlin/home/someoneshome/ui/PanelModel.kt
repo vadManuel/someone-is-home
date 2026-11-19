@@ -22,11 +22,10 @@ import androidx.compose.ui.graphics.Color
  * follows the design's own grouping, which is a review convenience only.
  */
 enum class ScreenId {
-    // Cold start — light-field, because the house lights are still on. `NameDrop` is the one
-    // setting the OS will not let the app read or change (D-248): asked once, in the light.
+    // Cold start — light-field, because the house lights are still on.
     // `NoUwb` is the launch gate (D-292): a phone without Ultra Wideband is told it cannot play,
     // before Boot and instead of everything else, and has no way forward.
-    NoUwb, Boot, Perms, NameDrop, Join,
+    NoUwb, Boot, Perms, Join,
 
     // Host setup — once per house, in the light. The two reserved cards each have the same pair
     // of screens, because each raises the same two questions: this home already has one, and
@@ -2272,7 +2271,7 @@ class PanelVals(
             ScreenId.HomeDetail, ScreenId.Delete, ScreenId.Secret, ScreenId.RoomEdit,
             ScreenId.MarkerSheet, ScreenId.ScanMarker, ScreenId.StairsWarn, ScreenId.TermTaken,
             ScreenId.TermRemove, ScreenId.MeetTaken, ScreenId.MeetRemove,
-            ScreenId.Floors, ScreenId.ReviewNeeds, ScreenId.Perms, ScreenId.NameDrop,
+            ScreenId.Floors, ScreenId.ReviewNeeds, ScreenId.Perms,
             ScreenId.Lobby, ScreenId.WinResidents,
         )
 
