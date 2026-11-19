@@ -18,23 +18,23 @@ Nobody is eliminated. Access is **revoked**.
 
 ## How a round goes
 
-🔦 **Lights out.** Everyone spreads through the house with their phone. No talking. Not a word.
+**Lights out.** Everyone spreads through the house with their phone. No talking. Not a word.
 
-🗂️ **Residents work.** Paper cards are hidden around the home. Walk to one, scan it, and complete the
+**Residents work.** Paper cards are hidden around the home. Walk to one, scan it, and complete the
 **Subroutine** it gives you. Each one drives the house's **System Integrity** down. Reach zero and the
 perimeter opens and everyone walks out.
 
-🫥 **Insiders pretend to work.** They sabotage, slip between rooms by routes nobody else can take, and
+**Insiders pretend to work.** They sabotage, slip between rooms by routes nobody else can take, and
 **Revoke** a Resident by passing their phone close to that person's phone. It's silent and
 unattributed, and it happens at arm's length in the dark. Or they trigger an **Egress**, a house-wide
 crisis that two people have to contain at two cards at once, or the house wins outright.
 
-📞 **Someone calls a meeting.** Walk to the meeting card and scan it. Every lamp snaps to white,
+**Someone calls a meeting.** Walk to the meeting card and scan it. Every lamp snaps to white,
 every phone rings, and *now* you may speak. Argue, accuse, vote. **Restrain** someone if you're
 brave. The house never confirms who anyone was: not when they're restrained, not at the vote, not
 ever.
 
-🔁 Then the lights go out again, and the next shift begins.
+Then the lights go out again, and the next shift begins.
 
 ## House rules (the ones the app can't check)
 
@@ -49,7 +49,7 @@ remembers your home after that.
 
 ## Status
 
-🚧 In active development, and not ready for a game night yet. The design still moves, and the
+In active development, and not ready for a game night yet. The design still moves, and the
 [decision log](_bmad-output/planning-artifacts/gdds/gdd-someone-is-home-2026-08-16/decision-log.md)
 records every change and why.
 
