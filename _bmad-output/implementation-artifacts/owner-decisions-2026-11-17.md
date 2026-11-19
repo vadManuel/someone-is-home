@@ -475,3 +475,11 @@ Today an Egress's opening pushes its alert over a Subroutine screen. The person 
 - **E2: rescan to switch.** If the card someone is working at becomes one of the Egress's two cards, nothing changes on their screen by itself. To help contain, they scan that card again, which brings up the tap control.
   - On that rescan the house must not open a Subroutine the phone cannot reach. Today it quietly does.
   - E2 settles D-295's provisional O1: a node card scanned during a running Egress shows the tap control, not the work.
+
+## Owner rulings, 2026-11-18: D-295's provisional containment calls
+
+- **O2: only those tapping feel the pulse.** Only a phone with a live tap control buzzes on each pulse of the house's grid. This confirms what D-295 built.
+- **O3: four in a row.** A containment needs four consecutive pulses with no miss, and a miss starts the count again. This replaces "any four distinct pulses".
+- **O4: no words during the 3 s lockout, but a Long buzz when the attempt fails.** The lockout shows no WAIT. The tapping phone gives one `Haptic.Long` at the moment its attempt fails, as the 3 s lockout begins.
+  - Read as one Long buzz, D-135's Long.
+  - If the owner meant a vibration lasting the whole 3 s, that is a new pattern and goes back to the owner.
