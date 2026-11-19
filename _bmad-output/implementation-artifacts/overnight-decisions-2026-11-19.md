@@ -17,6 +17,13 @@ Every call made without the owner is listed below: what was decided, why, and ho
 | 9 | **The pairing numbers** (D-300): Bluetooth readings count for 3 s, a pair is kept while both phones stay in each other's top capacity + 2, and a pair nobody lists is dropped after 3 s. | Starting values to tune on phones. | `Ranging.kt` | Change the constants. |
 | 10 | **The pairing is not written into recordings; the format stays at 42** (D-300). | It creates no game event, the same as the contact resolver. | D-300 | Record it later if replays need it. |
 | 11 | **The frames that carry UWB still cost about 130 KB/s on an 18-phone host** (likely about 250 KB/s on a phone), on top of what came before. That is within the 0.5 MB/s budget, but it uses a real share of it. The next lever, one token slot each way, would mean a phone starts at most one new pair a second. Not built. | It changes how fast pairs form. That is yours to weigh after the phone test. | D-300, item 10 | Nothing to undo. |
+| 12 | **The game rules pick Bluetooth or UWB once per round, at arming** (D-301). They use UWB only when every phone says it can measure, and Bluetooth otherwise. The choice goes into the recording (format 43) and is never told to any phone. | Your phones have no UWB code yet, so tomorrow's retest runs on Bluetooth exactly as before. One phone that can't measure would otherwise blind the whole round. | `contactSourceFor` in `core/Arming.kt` | Once the iOS radio works, delete the Bluetooth branch. |
+| 13 | **Each phone tells the house its UWB capacity in the lobby** (D-301), in a new lobby message. | Phones upload nothing before arming, and the choice is made at arming. | `LobbyBody.Ranging` | None. |
+| 14 | **Report timing** (D-301): the 2 s hold allows half a second of slack. It breaks if the reader's phone misses an upload (1.5 s). No hold runs during a meeting or on a seat that has already been reported. If the held seat walks off while another Revoked seat is in reach, the hold restarts on that seat. | The phone uploads once a second, so 2 s can only be measured to the beat. | `Contacts.kt` | Change the constants. |
+| 15 | **A Revoked phone's own distances are not read for anything** (D-301). It still measures and uploads. | A Revoked phone cannot touch, report or place anyone. | `Contacts.kt` | None advised. |
+| 16 | **A phone at a card places someone in its room within 1.5 m** (D-301). | The plan's starting value; tune it on phones. | `SensingGate.ROOM_REACH_CM` | Change the constant. |
+| 17 | **The circle on the reporting phone was not drawn.** The house already tells the phone when to fill it and when to cancel, but the ui has no circular progress element. Where it sits on screen, its ink and light, and whether it fills smoothly or steps once a second are your calls. | Light levels and new screen elements are yours. | D-301 | For you to design in the morning. |
+| 18 | **Open problem in D-300's pairing, not fixed:** in a small round, a pair the house never picked may never be picked. A kept pair drops only when it falls past capacity + 2 in a phone's ranking, which never happens with 5 phones at capacity 3. An Insider then can never Revoke that peer, however long they hold. The benches use capacity 4 to avoid it. | Found by D-301's tests. Bluetooth rounds are unaffected. It must be fixed before UWB rounds are played. | `Ranging.kt` | Next unit tonight. |
 
 ## Built and pushed overnight
 
@@ -29,5 +36,7 @@ Every call made without the owner is listed below: what was decided, why, and ho
 - **D-300** (`9573d6f`, `7c3e515`): the UWB wire and the house's pairing, on the bench only. No UWB radio code yet, and no rule reads the distances, so nothing in play changes.
   - The full check on this exact tree passed: 3 098 tests, 0 failures.
   - The house's per-phone memory cost dropped from about 30 KB to 1.75 KB a second.
+
+- **D-301** (`3008dbc`): the game rules read UWB distance in a UWB round: a 10 cm touch, a 30 cm report held 2 s, and the map at 1.5 m. The simulated UWB radio now pauses on lock and recovers. Full check on this exact tree: 3 157 tests, 0 failures. Every new rule went red when broken on purpose.
 
 (More as work lands.)
