@@ -7,6 +7,8 @@ import home.someoneshome.model.MalformedSubroutineParameters
 import home.someoneshome.model.OrderLine
 import home.someoneshome.model.MarkerShapes
 import home.someoneshome.model.Balance
+import home.someoneshome.model.HouseBuzz
+import home.someoneshome.model.SyncPulseGrid
 import home.someoneshome.model.CardPayload
 import home.someoneshome.model.EmitSchema
 import home.someoneshome.model.MarkerId
@@ -1540,27 +1542,85 @@ class FlowModel(
      * the request above is the same on every hold, and the clock is this phone's own input.
      */
     /**
-     * **One tap on the Egress widget, at a node: the Sync Pulse, kept** (D-295; GDD:371, A-11).
+     * **One tap on the Egress widget, at a node: the Sync Pulse, kept** (D-295; GDD:371, A-11), **four
+     * in a row** (the owner's O3, D-298).
      *
-     * Stamped on the house's clock as this phone measures it ([houseNow]) and kept as input echo,
-     * one pip; the fourth sends all four up as one `ReturnSyncPulse`, which rides the next upload's
-     * slot (D-263), and the pips empty. **The house grades the taps**, on its own grid
-     * (`EgressOpened.pulseFrom`): this phone decides nothing about whether they were on the beat,
-     * and draws the house's ON or OFF THE BEAT when it comes.
+     * Stamped on the house's clock as this phone measures it ([houseNow]). The pips are this phone's
+     * **run**: the taps that hit consecutive pulses of the house's grid (`EgressOpened.pulseFrom`), read
+     * by [SyncPulseGrid.hit], the function the house grades with, on the stamp the house is sent. A tap
+     * that hits the pulse after the run's last lights one more pip; the fourth sends the four up as one
+     * `ReturnSyncPulse`, which rides the next upload's slot (D-263), and the pips empty.
+     *
+     * **A miss empties the pips and sends the run as it stood** (*a miss starts the count again*): a
+     * tap off the beat, a second tap on one pulse, or a pulse whose window closed untapped
+     * ([pulseRunRead], each second and before each tap). The run goes up with the tap that broke it, so
+     * **the house decides**: it grades every attempt it is sent, fails this one, starts its lockout, and
+     * the failed answer is what this phone vibrates for (O4). A pulse passing with no run under way is
+     * no attempt, and nothing is sent.
+     *
+     * **Inert through the lockout** ([lockingOut]): from the failed answer for 3 s nothing a tap does
+     * lights a pip or sends anything, so the pips stay empty and say nothing, as the lockout's no WAIT
+     * says nothing; the house would not grade an attempt in it anyway.
      *
      * Inert unless the control is live ([PanelVals.pulseLive]), which is a fact about where this
      * phone's person scanned and never about who they are: an Insider at a node taps the same
      * control into the same request (GDD:1014, the design intends it).
      */
     fun tapPulse() {
-        if (state.pulseAt == null || !state.egressRunning || state.egressHeld) return
-        val taps = state.pulseTaps + (houseNow() ?: NO_HOUSE_CLOCK)
-        if (taps.size < Balance.SYNC_PULSE_BEATS) {
+        if (state.pulseAt == null || !state.egressRunning || state.egressHeld || lockingOut()) return
+        val from = state.pulseFrom
+        pulseRunRead()
+        val tap = houseNow() ?: NO_HOUSE_CLOCK
+        val run = state.pulseTaps
+        val pulse = from?.let { SyncPulseGrid.hit(it, tap) }
+        val last = from?.let { f -> run.lastOrNull()?.let { SyncPulseGrid.hit(f, it) } }
+        val extends = pulse != null && (run.isEmpty() || (last != null && pulse == last + 1))
+        val taps = run + tap
+        if (extends && taps.size < Balance.SYNC_PULSE_BEATS) {
             state = state.copy(pulseTaps = taps)
             return
         }
         send(IntentMessage.ReturnSyncPulse(taps))
         state = state.copy(pulseTaps = emptyList())
+    }
+
+    /**
+     * **A run whose next pulse went by untapped is a miss** (O3, D-298): sent as it stands, for the
+     * house to fail, and the pips empty. Read each second ([clocksRead]) and before each tap, against
+     * the house's clock as this phone measures it; the pulse's window has to have closed, so a tap
+     * still inside it is never cut off. Nothing happens with no run under way or no estimate.
+     */
+    private fun pulseRunRead() {
+        val run = state.pulseTaps
+        val from = state.pulseFrom ?: return
+        if (run.isEmpty() || state.pulseAt == null) return
+        val now = houseNow() ?: return
+        val last = SyncPulseGrid.hit(from, run.last()) ?: return
+        if (now <= SyncPulseGrid.at(from, last + 1) + Balance.SYNC_PULSE_WINDOW_MILLIS) return
+        send(IntentMessage.ReturnSyncPulse(run))
+        state = state.copy(pulseTaps = emptyList())
+    }
+
+    /**
+     * **Whether this phone is inside the 3 s of a failed attempt** (the owner's O4, D-298): from the
+     * house's failed answer (`SyncPulseAnswered`, `held = false`) for [HouseBuzz.LOCKOUT_MILLIS], the
+     * same moment and the same length the motor vibrates for (`HouseBuzzer`). Input to the tap
+     * control and the felt pulse only; nothing on a screen reads it.
+     */
+    fun lockingOut(): Boolean =
+        stamps.lockedOut?.let { monotonicNow() - it < HouseBuzz.LOCKOUT_MILLIS } == true
+
+    /**
+     * **Pulse 0, while this phone should feel the pulse** (O2, D-298; D-295's felt pulse), or null.
+     *
+     * Only a phone whose tap control is live ([PanelVals.pulseLive]): O2, *only those tapping feel
+     * the pulse*. And not through a lockout's vibration ([lockingOut]): the motor replaces rather than
+     * queues, so a pulse's Short would cut the owner's 3 s short. Read by `PulseBuzzer` before every
+     * pulse, so a pulse after the 3 s is felt again.
+     */
+    fun pulseFelt(): Long? {
+        val s = state
+        return s.pulseFrom.takeIf { s.pulseAt != null && s.egressRunning && !s.egressHeld && !lockingOut() }
     }
 
     fun armRevoke() {
@@ -1620,6 +1680,8 @@ class FlowModel(
         clocksStamped()
         val now = monotonicNow()
         if (stamps.armed?.let { now - it >= PublicCooldown.ARM_WINDOW_SECONDS * 1_000L } == true) armEnded()
+        // A pulse that went by untapped breaks the run under way (O3, D-298).
+        pulseRunRead()
         val s = state
         fun elapsed(at: Long?): Int = if (at == null) 0 else ((now - at).coerceAtLeast(0) / 1_000L).toInt()
         val next = s.copy(
@@ -1692,6 +1754,12 @@ class FlowModel(
         var phaseFrom: Int = 0
         var egressLeft: Long? = null
         var egressLeftFrom: Int = 0
+
+        /**
+         * **When the house's last failed Sync Pulse answer reached this phone** (the owner's O4,
+         * D-298), or null. See [lockingOut].
+         */
+        var lockedOut: Long? = null
 
         /**
          * **When this phone's REVOKE hold last echoed ARMED** (the owner's 2026-11-18 ruling), or
@@ -3302,8 +3370,8 @@ class FlowModel(
             }
 
             // **The house's answer to one beat, and it is the same answer either way** (`gdd.md:355`,
-            // rule 1). `held` is true when the house is now holding this seat's beat, waiting for
-            // somebody at the other node — and false for a beat that missed, a seat serving a
+            // rule 1). `held` is true when this seat's run was good, four in a row, held for somebody
+            // at the other node or containing (D-298) — and false for a run that missed, a seat serving a
             // lockout, a seat not standing at a node and a seat outside the system. One shape, one
             // kind, one message per return, with only the value differing.
             //
@@ -3311,7 +3379,18 @@ class FlowModel(
             // a node* would have rebuilt the detector the single shape exists to prevent: an Insider
             // anywhere in the house could tap, read the screen, and learn what the house thinks of
             // where they are standing.
-            is RoundMessage.SyncPulseAnswered -> state = state.copy(beatHeld = message.held)
+            //
+            // **`false` starts the lockout's 3 s on this phone** (the owner's O4, D-298): the motor
+            // vibrates for them (`HouseBuzzer`, off the same message), the tap control is inert
+            // through them and the felt pulse waits ([lockingOut]), and the pips empty. Every `false`
+            // alike, so the hand feels no difference between the failures either.
+            is RoundMessage.SyncPulseAnswered -> {
+                if (!message.held) stamps.lockedOut = monotonicNow()
+                state = state.copy(
+                    beatHeld = message.held,
+                    pulseTaps = if (message.held) state.pulseTaps else emptyList(),
+                )
+            }
 
             // **The Egress came down, and the couch's widget goes dim and empty with it.** The type
             // is deliberately left standing: it says which Egress the house ran, and unsetting it

@@ -2026,15 +2026,18 @@ private fun egressFired(state: GameState, event: Event.EgressFired): Reduction<G
  * Outside the system, not standing at a node, standing at a node but serving a lockout, standing at
  * a node with a beat that missed, standing at a node with a good beat and nobody at the other one:
  * every one of them produces [Effect.SyncPulseAnswered] addressed to this seat, with `held` saying
- * only whether the house is now waiting on their behalf. Written the tempting way — say nothing
+ * only whether the run was good, four in a row (D-298), whether the house now waits on their behalf
+ * or the run contained. Every failure is the one `false`, and since the owner's O4 that `false` is
+ * what vibrates the tapping phone for the 3 s of the lockout (`Haptic.Lockout`), so a seat not at a
+ * node, a locked seat and a missed run feel the same in the hand. Written the tempting way — say nothing
  * unless the beat was good — the absence would be readable, and what it would report is a claim
  * about the presence plane delivered to a living phone.
  *
  * ### Containment says nothing about who contained it
  *
  * *Nobody learns anything about anybody* (`gdd.md:987`). [Effect.EgressContained] carries no seats
- * and no node; the pair that did it get exactly what the rest of the house gets, one tick after
- * they get their own `held = true`.
+ * and no node; the pair that did it get exactly what the rest of the house gets, in the frame after
+ * they get their own `held = true` (both runs were good).
  *
  * ### A missed beat costs a lockout and a locked seat is not re-graded
  *
@@ -2059,26 +2062,24 @@ private fun pulseReturned(
         standing != null &&
         egress.isNode(standing)
     val locked = egress.lockedAt(event.actor, event.at)
-    val good = atNode && !locked && onThePulse(egress.pulseFrom, event.taps)
+    // Four in a row (the owner's O3, D-298): the run's first pulse, or null for anything else.
+    val run = if (atNode && !locked) runFrom(egress.pulseFrom, event.taps) else null
+    val good = run != null
 
-    val partner = if (!good || standing == null) {
+    val partner = if (run == null || standing == null) {
         null
     } else {
-        // A partner who has gone out since their beat no longer pairs (F2, D-279): `partnerFor` asks.
-        egress.partnerFor(event.actor, standing, event.at, Balance.SYNC_PULSE_PAIR_WINDOW, state::isOut)
+        // Paired on the grid, not on arrival: the two runs share a pulse (option B, D-298). A
+        // partner who has gone out since their run no longer pairs (F2, D-279): `partnerFor` asks.
+        egress.partnerFor(event.actor, standing, run, state::isOut)
     }
 
     val next = when {
         // Contained. The Egress is over and there is nothing left to hold offers for.
         partner != null -> state.copy(egress = null)
-        // A good beat with nobody at the other node yet: the house holds it and waits.
-        good && standing != null ->
-            state.copy(
-                egress = egress.holding(
-                    PulseOffer(event.actor, standing, event.at),
-                    Balance.SYNC_PULSE_PAIR_WINDOW,
-                ),
-            )
+        // A good run with nobody at the other node yet: the house holds it and waits.
+        run != null && standing != null ->
+            state.copy(egress = egress.holding(PulseOffer(event.actor, standing, event.at, run)))
         // A beat that missed, from somebody actually standing at a node. That is what a lockout is
         // for. A seat that was never at a node has attempted nothing and pays nothing.
         atNode && !locked ->
@@ -2092,7 +2093,13 @@ private fun pulseReturned(
     // every other seat, seat by seat at the same place** (C2, D-263's pattern): the answer reaches
     // the tapper alone, so without them the one living phone sent a frame at this moment was the
     // one standing at a node with its taps in. No role is read; the allowlist narrows to the living.
-    val answer = Effect.SyncPulseAnswered(seat = event.actor, held = good && partner == null)
+    //
+    // **`held` is whether the run was good** (D-298): held for a partner or containing at once. Until
+    // D-298 the containing seat was told `held = false`, the failed answer, and since the owner's O4
+    // a failed answer vibrates its phone for the whole lockout; the containment is public a frame
+    // later (`EgressContained`), so telling the containing phone its own run was good tells it
+    // nothing the house is not about to tell everybody. Every failure is still one `false`.
+    val answer = Effect.SyncPulseAnswered(seat = event.actor, held = good)
     val answered = if (state.seats.none { it.index == event.actor.index }) {
         listOf(answer) + state.seats.map { Effect.SyncPulseBlanked(it) }
     } else {

@@ -50,6 +50,14 @@ class Recording(
     }
 
     companion object {
+        // 41: the same events reduce differently (the owner's O3 and O4 rulings, D-298). A Sync
+        // Pulse return is good only on four consecutive pulses, so a version 40 return on four
+        // scattered pulses would replay to a miss where the evening held it; two runs pair when they
+        // share a pulse of the grid, not when their uploads arrived within 6 s; `SyncPulseAnswered`'s
+        // `held` is the run being good, so the containing seat's answer reads `true` where it read
+        // `false`. The state row's held offers gain the run's first pulse (`#n`). A version 40
+        // recording is refused here instead.
+        //
         // 40: no row gained or lost a field, and a Handshake's two lists changed what they hold
         // (the owner's Q7 ruling, D-296), version 36's case. `SubroutineReturned`'s `entered` for a
         // Handshake was one ordinal per tap and is now `HandshakeTaps.GAPS` gaps between taps, and
@@ -322,7 +330,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/40"
+        const val HEADER = "someone-is-home/recording/41"
     }
 }
 

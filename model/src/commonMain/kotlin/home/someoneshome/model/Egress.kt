@@ -26,7 +26,17 @@ enum class EgressType { Beacon, Tether }
  * [node] is the house's own placement and never the phone's claim — see
  * [Event.SyncPulseReturned], which carries no node at all.
  */
-data class PulseOffer(val seat: Seat, val node: MarkerId, val at: Tick)
+data class PulseOffer(
+    val seat: Seat,
+    val node: MarkerId,
+    val at: Tick,
+    /**
+     * **The first of the four pulses this seat hit in a row** (the owner's O3 and its pairing
+     * ruling, option B, D-298): the pulse index on the house's grid, from the taps' own stamps.
+     * What [Egress.partnerFor] pairs on, so pairing reads the grid and not when the upload arrived.
+     */
+    val firstPulse: Long,
+)
 
 /**
  * **A seat that missed the beat, and the cost of having missed it** (`gdd.md:359`).
@@ -149,44 +159,46 @@ data class Egress(
         lockouts.any { it.seat.index == seat.index && at < it.until }
 
     /**
-     * A held offer from **another** seat at the **other** node, recent enough to be simultaneous.
+     * A held offer from **another** seat at the **other** node, whose run of four **shares at least
+     * one pulse** with this one (the owner's ruling on O3's pairing, 2026-11-18, option B, D-298).
      *
-     * Three conditions and every one of them is load-bearing. *Another seat*, or a single player
+     * Four conditions and every one of them is load-bearing. *Another seat*, or a single player
      * with a live offer would contain the Egress by tapping twice. *The other node* — this is
      * `gdd.md:352`'s **two people at two separate markers**, and a pair standing at the same node
-     * must not contain, or the whole geography of the containment is decoration. *Recent*, because
-     * the pulse is simultaneous by design and an offer that stood all round would let two people
-     * who were never in the house at the same moment pair with each other.
+     * must not contain, or the whole geography of the containment is decoration. *Simultaneous*:
+     * [pairs], the two runs overlap on the house's grid (`|a − b| < SYNC_PULSE_BEATS`), so two people
+     * kept time together through at least one pulse. **Read off the taps' stamps, never the upload's
+     * arrival** (until D-298 it was arrival within one run, 6 s): the uplink's delay, a second's
+     * cadence plus the Wi-Fi, cannot split a real pair or join two runs that never met.
      *
-     * **And a fourth: the partner is still in the round** ([isOut], the caller's `GameState.isOut`).
+     * **And the partner is still in the round** ([isOut], the caller's `GameState.isOut`).
      * *Two people at two separate markers* means two living people (`containment-spec-2026-11-17.md`,
-     * *a Revoked partner's held offer no longer pairs*; review r4 F2, D-279). An offer held a beat
-     * before its holder was Revoked stood in this list for the whole pair window, and a living tap
-     * at the other node paired with it, so an Insider's Revoke of a partner — *a stalling Insider
-     * removes a partner* (`gdd.md:380`) — did nothing inside the window. The out seat's offer is
+     * *a Revoked partner's held offer no longer pairs*; review r4 F2, D-279). The out seat's offer is
      * skipped rather than ending the search, so a live offer behind it still pairs.
      *
      * The first **live** match in arrival order wins, so *first success contains* is decided by
      * the recording's order rather than by a hash.
      */
-    fun partnerFor(seat: Seat, node: MarkerId, at: Tick, window: Long, isOut: (Seat) -> Boolean): PulseOffer? =
+    fun partnerFor(seat: Seat, node: MarkerId, firstPulse: Long, isOut: (Seat) -> Boolean): PulseOffer? =
         offers.firstOrNull {
             it.seat.index != seat.index &&
                 it.node.value != node.value &&
-                at.step - it.at.step <= window &&
+                pairs(it.firstPulse, firstPulse) &&
                 !isOut(it.seat)
         }
 
     /**
-     * Hold this seat's graded beat, dropping anything that has gone stale.
+     * Hold this seat's run, dropping every offer whose run cannot share a pulse with it.
      *
-     * One offer per seat: a second beat from a seat that is already waiting **replaces** the first
-     * rather than joining it, or a player could bank offers and pair with their own history.
+     * One offer per seat: a second run from a seat that is already waiting **replaces** the first
+     * rather than joining it, or a player could bank offers and pair with their own history. An
+     * offer [pairs] cannot join to this run is behind the grid the house is now on, so it is dropped:
+     * an honest run after this one starts no earlier than this one did.
      */
-    fun holding(offer: PulseOffer, window: Long): Egress = copy(
+    fun holding(offer: PulseOffer): Egress = copy(
         offers = offers
             .filterNot { it.seat.index == offer.seat.index }
-            .filter { offer.at.step - it.at.step <= window } + offer,
+            .filter { it.firstPulse > offer.firstPulse - Balance.SYNC_PULSE_BEATS } + offer,
     )
 
     /** Start this seat's lockout, replacing any earlier one. In seat order, like everything here. */
@@ -226,6 +238,15 @@ data class Egress(
     }
 
     companion object {
+        /**
+         * **Whether two runs of four share at least one pulse** (option B, D-298): the one question
+         * pairing asks of the grid, and the one function to change if the owner moves it.
+         */
+        fun pairs(firstA: Long, firstB: Long): Boolean {
+            val apart = firstA - firstB
+            return apart < Balance.SYNC_PULSE_BEATS && apart > -Balance.SYNC_PULSE_BEATS
+        }
+
         /** An Egress the instant it fires: full timer, running, nobody at a node yet. */
         fun fired(at: Tick, type: EgressType, nodes: List<MarkerId>, timer: Long, pulseFrom: Long): Egress = Egress(
             type = type,

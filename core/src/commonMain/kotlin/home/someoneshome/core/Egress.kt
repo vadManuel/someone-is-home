@@ -10,6 +10,7 @@ import home.someoneshome.model.HousePlan
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.PlanRoom
 import home.someoneshome.model.Seat
+import home.someoneshome.model.SyncPulseGrid
 import home.someoneshome.model.Tick
 
 /*
@@ -195,53 +196,30 @@ private fun walkFrom(from: PlanRoom, floor: Floor): Map<String, Int> {
  * gate refuses it -- and a schedule that shifted under a pause would put the pulse somewhere no
  * phone could compute from what it was told.
  */
-internal fun pulseNear(pulseFrom: Long, tap: Long): Long {
-    val offset = tap - pulseFrom
-    val interval = Balance.SYNC_PULSE_INTERVAL_MILLIS
-    // Integer division rounding to nearest, negatives included. `(offset + interval/2) / interval`
-    // truncates toward zero, so a tap before the first pulse would round the wrong way and a player
-    // who was early would be graded against a pulse that never happened.
-    return if (offset >= 0) {
-        (offset + interval / 2) / interval
-    } else {
-        -((-offset + interval / 2) / interval)
-    }
-}
+internal fun pulseNear(pulseFrom: Long, tap: Long): Long = SyncPulseGrid.near(pulseFrom, tap)
 
 /** When pulse [n] lands, in the host's monotonic milliseconds. */
-internal fun pulseAt(pulseFrom: Long, n: Long): Long =
-    pulseFrom + n * Balance.SYNC_PULSE_INTERVAL_MILLIS
+internal fun pulseAt(pulseFrom: Long, n: Long): Long = SyncPulseGrid.at(pulseFrom, n)
 
 /**
- * **Did this phone hit the pulse four times?** (`gdd.md:355`, A-11.)
+ * **Did this phone hit four pulses in a row?** (`gdd.md:355`, A-11; the owner's O3, D-298.)
  *
- * Three conditions and no more. There are exactly [Balance.SYNC_PULSE_BEATS] taps; each lands
- * within [Balance.SYNC_PULSE_WINDOW_MILLIS] of a scheduled pulse; and no two of them are the *same*
- * pulse -- four taps inside one pulse's window is a player hammering the screen, not a player
- * keeping time. **Whether the four must be consecutive is the owner's** (the containment spec's
- * O3); this grades any four distinct pulses, as it always has.
+ * Exactly [Balance.SYNC_PULSE_BEATS] taps, each within [Balance.SYNC_PULSE_WINDOW_MILLIS] of a
+ * pulse of the grid, on four **consecutive** pulses `n..n+3` in the order they landed: *a
+ * containment needs four consecutive pulses with no miss, and a miss starts the count again.* This
+ * replaced *any four distinct pulses* (D-295's provisional O3). The arithmetic is
+ * [SyncPulseGrid.inARow], the same function the phone keeps its pips with.
  *
  * **The window is generous and that is the architecture's own ruling**, not a tolerance somebody
  * picked: *twitch timing is forbidden, and a generous window absorbs device skew*
  * (game-architecture.md:249).
  *
- * Its early returns are an internal grader's, not a client-visible path: what the phone is told is
- * built once in `pulseReturned`, whatever this says (rule 1). Integer arithmetic throughout (rule 4).
+ * What the phone is told is built once in `pulseReturned`, whatever this says (rule 1).
  */
-internal fun onThePulse(pulseFrom: Long, taps: List<Long>): Boolean {
-    if (taps.size != Balance.SYNC_PULSE_BEATS) return false
-    val hit = mutableListOf<Long>()
-    for (tap in taps) {
-        val pulse = pulseNear(pulseFrom, tap)
-        val distance = tap - pulseAt(pulseFrom, pulse)
-        if (distance > Balance.SYNC_PULSE_WINDOW_MILLIS || distance < -Balance.SYNC_PULSE_WINDOW_MILLIS) {
-            return false
-        }
-        if (hit.contains(pulse)) return false
-        hit += pulse
-    }
-    return true
-}
+internal fun onThePulse(pulseFrom: Long, taps: List<Long>): Boolean = runFrom(pulseFrom, taps) != null
+
+/** The first pulse of the four in a row [taps] hit, or null: [SyncPulseGrid.inARow]. */
+internal fun runFrom(pulseFrom: Long, taps: List<Long>): Long? = SyncPulseGrid.inARow(pulseFrom, taps)
 
 /** Two storeys apart, or no path at all — ranked above every finite distance. See [separation]. */
 private const val UNREACHABLE = Int.MAX_VALUE

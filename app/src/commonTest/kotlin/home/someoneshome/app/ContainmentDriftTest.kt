@@ -14,6 +14,7 @@ import home.someoneshome.model.Hmac
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MarkerShapes
 import home.someoneshome.model.Seat
+import home.someoneshome.model.SyncPulseGrid
 import home.someoneshome.model.Tick
 import home.someoneshome.model.protocol.RoundBody
 import home.someoneshome.model.protocol.RoundWire
@@ -211,6 +212,12 @@ class ContainmentDriftTest {
             }
         }
         println("D-295 DRIFT BENCH — minute 30: A felt pulses ${felt.getValue(a)} ms from the house's moments, B ${felt.getValue(b)}")
+        // **Four in a row** (the owner's O3, D-298): each phone's four stamps are pulses 4 to 7 of the
+        // house's grid, consecutive, by the function the house grades with, and the two runs share
+        // every pulse (option B's pairing).
+        for (phone in phones) {
+            assertEquals(4L, SyncPulseGrid.inARow(pulseFrom, taps.getValue(phone)), "seat ${phone.seat.index}'s taps are not four in a row from pulse 4")
+        }
         tick = maxOf(tick, firedAt.step + Balance.SYNC_PULSE_LEAD + Balance.SYNC_PULSE_BEATS * Balance.SYNC_PULSE_INTERVAL)
         put(Event.SyncPulseReturned(Tick(tick++), a.seat, taps.getValue(a)))
         put(Event.SyncPulseReturned(Tick(tick++), b.seat, taps.getValue(b)))

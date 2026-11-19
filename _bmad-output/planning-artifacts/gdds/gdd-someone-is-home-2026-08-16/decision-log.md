@@ -9733,6 +9733,192 @@ not compared against a pre-change render.
 on a phone; the owner chose C knowing section 7 flagged that risk.
 
 
+### D-298 · **A containment needs four pulses in a row, and two runs pair when they share a pulse of the grid; a failed attempt vibrates the tapping phone for the whole 3 s lockout, a new pattern; only a tapping phone feels the pulse — built (recording 41), ends D-295's provisional O2–O4**
+
+**The rulings** (owner, 2026-11-18, *Owner rulings, 2026-11-18: D-295's provisional containment
+calls* in `owner-decisions-2026-11-17.md`):
+- **O2**: *only a phone with a live tap control buzzes on each pulse of the house's grid.* Confirms
+  what D-295 built.
+- **O3**: *a containment needs four consecutive pulses with no miss, and a miss starts the count
+  again. This replaces "any four distinct pulses".* The pairing half was left open by that text;
+  put to the owner as three options (A: pairing by upload arrival within 6 s, unchanged; B: the
+  containment spec's recommendation, the two runs share at least one pulse; C: the same four
+  pulses). **Owner ruling 2026-11-18, option B.**
+- **O4** (as amended in `1bc10f9`): *no words during the 3 s lockout, and the tapping phone
+  vibrates for the whole 3 s … continuously for the full 3 s of the lockout, from the moment the
+  attempt fails. … a new haptic pattern, a sixth beside D-135's five, ruled by the owner.*
+
+**Now, the house** (core, model).
+
+1. **Four in a row.** `SyncPulseGrid.inARow` (model, new) is the grader: exactly four taps, in the
+   order they landed, each within ±400 ms of a pulse (`SYNC_PULSE_WINDOW_MILLIS`, unchanged), on
+   pulses `n, n+1, n+2, n+3`, `n ≥ 0`. A pulse skipped, two taps on one pulse, taps out of order,
+   three taps or five: not four in a row. `n ≥ 0` because the lead before pulse 0 is silent on every
+   phone (`PulseBuzzer`); the grid starts at 0. Core's `onThePulse` is now `runFrom(...) != null`,
+   and `pulseNear` / `pulseAt` delegate to the same object, so the house and the phone read a tap by
+   one function.
+2. **Judged at the house, from the stamps.** `ReturnSyncPulse` in the request slot (D-263, D-275)
+   carries the taps as before; the house grades every attempt it is sent. A phone cannot claim a run:
+   it hands over stamps.
+3. **Pairing on the grid (option B).** `PulseOffer` gains `firstPulse`, the run's first pulse.
+   `Egress.partnerFor(seat, node, firstPulse, isOut)` pairs with another living seat at the other
+   node whose run **shares a pulse**, `Egress.pairs(a, b)`: `|a − b| < SYNC_PULSE_BEATS`. It no longer
+   reads the arrival tick; `SYNC_PULSE_PAIR_WINDOW` (one run, 6 s between uploads) is gone.
+   `holding` drops offers whose run is `SYNC_PULSE_BEATS` or more behind the new one, which no later
+   honest run can share a pulse with. `pairs` is the one function to change if the owner moves it.
+   Lockouts stay on arrival ticks, as before.
+4. **`SyncPulseAnswered.held` is now *the run was good*** (held for a partner, or containing). Until
+   now the containing seat was told `held = false`, the failed answer, and under O4 a failed answer
+   vibrates: the phone that contained would have buzzed for 3 s. Containment is public a frame later
+   (`EgressContained`, every phone), so the containing phone learns nothing new. Every failure is
+   still the one `false`: a missed run, a seat serving a lockout, a seat the house does not place at a
+   node, a seat out. One digit on the wire either way (D-258).
+
+**Now, the phone** (ui, app).
+
+1. **The pips are the run.** `FlowModel.tapPulse` reads each stamp with `SyncPulseGrid.hit`: a tap
+   on the pulse after the run's last lights one more pip, and the fourth sends the four
+   (`ReturnSyncPulse`) and empties the pips, as before.
+2. **A miss empties the pips and sends the run as it stood**: a tap off the beat, a second tap on a
+   pulse (sent with the tap that broke it), or a pulse whose window closed untapped (`pulseRunRead`,
+   each second from `clocksRead` and before each tap; the window must have closed, so a tap still
+   inside it is never cut off). The house fails it, which starts its lockout and the failed answer.
+   A pulse passing with no run under way is no attempt and sends nothing. Without this the house
+   would never see an honest miss, and O4's lockout would never be felt.
+3. **The lockout on the phone** (`FlowModel.lockingOut`): 3 s (`HouseBuzz.LOCKOUT_MILLIS`) from the
+   failed answer's arrival. The pips empty, taps are inert (nothing lit, nothing sent), and the felt
+   pulse waits (`FlowModel.pulseFelt`). It starts at the answer's arrival, after the house's own
+   lockout began, so it never ends before the house's. **No words**: the screen shows the existing
+   OFF THE BEAT and empty pips, no WAIT (O4).
+4. **The felt pulse** (O2): `PulseBuzzer` now reads `FlowModel.pulseFelt`: pulse 0 while the control
+   is live and the phone is not in a lockout, null otherwise. The lockout gap is needed, not chosen:
+   the motor replaces rather than queues (`Haptics`), so the next pulse's Short would cut the owner's
+   3 s short after at most 1.5 s.
+
+**Now, the pattern** (model, app, platform).
+
+- **`Haptic.Lockout`**, the owner's new pattern: `HouseBuzz.script` gives `[Buzz(3 000)]`, one
+  unbroken buzz. `LOCKOUT_MILLIS` is derived from `Balance.SYNC_PULSE_LOCKOUT` (60 ticks at 20 a
+  second), so the vibration and the lockout cannot drift apart. The iOS motor already plays every
+  `Buzz` as one `CHHapticEventTypeHapticContinuous` event with its duration (D-135's Long is one too),
+  and a continuous event may last up to 30 s, so 3 s is one event from one call, no train of steps.
+  Same intensity and sharpness constants as every other buzz. It is in `HouseBuzz.ALL` through
+  `KINDS`.
+- **Where it plays: the tapping phone, at the failed answer, and nowhere else.**
+  `Effect.SyncPulseAnswered.haptic` and `RoundMessage.SyncPulseAnswered.haptic` are `Lockout` on
+  `held = false` and nothing on `held = true`; `HouseBuzzer` maps both (they were `null`). The answer
+  reaches the tapper alone; every other phone is sent `SyncPulseBlanked`, which stays silent. Nothing
+  new on the wire: the haptic is read off the answer's one digit, so the failed answer is the same
+  frame, same length, as a good one and as the blank.
+
+**Leak and parity.** No new message, field or schema row; the request is the existing
+`ReturnSyncPulse` in the existing fixed-width slot (a run of one tap and a run of four are one slot
+width); the answer is D-258's one digit and the blank. `PulseOffer` is authority-only and never on
+the wire. Nothing added reads a role: `SyncPulseGrid`, `pairs`, `tapPulse`, `pulseRunRead`,
+`lockingOut` and `pulseFelt` take no role, and an Insider's control is a Resident's.
+
+**Recording 41.** The same events reduce differently: four scattered pulses that held now miss, runs
+pair on the grid not on arrival, and the containing seat's answer reads `true`. The state row's offers
+gain `#firstPulse`. A version 40 recording is refused at the header (D-282's precedent).
+
+**Not changed.** The ±400 ms window, the 1.5 s interval, the 2 s lead, the 3 s lockout, the four
+beats, the TAP word, the four pips, ON THE BEAT / OFF THE BEAT. No light, ramp or brightness value.
+No new copy. No buzz anywhere but the failed answer.
+
+**Proved, each red against the injected break first, then restored.**
+
+- **Four in a row** (`EgressTest`, core): *four taps hold only on four consecutive pulses* (pulses
+  0–3 and 37–40, at the window's edges; a pulse skipped in any place, out of order, every other
+  pulse, the lead's pulse −1 and five taps all miss); *four taps that are not in a row do not
+  contain* (pulses 4, 5, 6, 8 against a partner's held run: a miss, `held = false`, a lockout);
+  *three hits a miss and four hits contain only at the second run*, in both shapes a phone sends a
+  miss (three hits and the off-beat tap; three hits alone, the next pulse gone by), each a failed
+  attempt, then pulses 4–7 contain with the partner. *Grading put back to D-295's any four distinct
+  pulses:* `four taps that are not four in a row held: [7340350, 7341850, 7343350, 7346350]` and
+  `four taps with a pulse skipped contained the Egress`.
+- **Pairing, option B** (`EgressTest`, core): *two runs pair when they share a pulse and not
+  otherwise however close their uploads arrive*: both returns on the same tick, offsets −6 to +6
+  pulses; 0–3 either way contain, 4 or more do not. *Two runs on the same pulses pair however late
+  the second upload arrives* (12 s of ticks, twice the old window). *Holding a run drops the offers it
+  cannot share a pulse with.* *`pairs` made always true:* `runs offset by 0-3 pulses must contain and
+  runs 4 or more apart must not, whatever the arrival. Expected <[(-6, false), (-5, false), (-4,
+  false), (-3, true), …]>, actual <[(-6, true), (-5, true), (-4, true), (-3, true), …]>`. The
+  out-partner test (D-279 F2) now calls the grid `partnerFor`, and still passes.
+- **The pips** (`PulseControlTest`, ui, 6 new): a tap off the beat empties the pips and sends the
+  broken run with it; a second tap on one pulse is a miss; a pulse going by untapped empties the pips
+  at the next second and sends the run, not while its window is open, and nothing with no run under
+  way; three hits, a miss and four hits send the three and then the four; the failed answer holds the
+  control and the felt pulse for exactly 3 s and the count starts again after; a phone with no live
+  control (away, no Egress, paused, contained) has no felt pulse (O2); an Insider's run and a
+  Resident's send the same requests and hold the same pips `[1, 2, 0, 1, 2, 0, 1, 2, 3, 0]`. The old
+  *no estimate* case now sends each 0-stamped tap as its own miss. *Taps counted as D-295 did, the
+  untapped pulse ignored, the felt pulse not held:* `a pulse gone by untapped left the pips lit
+  expected:<0> but was:<2>`, `the felt pulse cut into the lockout at 0 s expected null, but
+  was:<86402000>`, `two taps on one pulse stood as a run of two expected:<0> but was:<2>`, `expected:<[1,
+  2, 0, 1, 2, 0, 1, 2, 3, 0]> but was:<[1, 2, 3, 0, 1, 0, 1, 2, 3, 0]>`, and the three-hits case sent
+  one request `[…, 86408000]` where it should send two.
+- **The 3 s, on that phone only** (`LockoutBuzzTest`, app, new, 5): the real rules, emit boundary,
+  projection and one `HouseBuzzer` per seat over a recording motor. The pattern is one `Buzz(3000)`,
+  equal to the house's lockout, and in `HouseBuzz.ALL`. A failed attempt plays it once, not
+  repeating, on the tapper and nothing on the five other phones, and an Insider tapper's motor plays
+  exactly what a Resident's does. A missed run, a locked seat's attempt and a seat not at a node all
+  feel the same; a held run is silent, and the containing phone feels only `EgressContained`'s
+  Short. The answer is one frame of one length on all six phones for a miss, a held run, a run four
+  pulses off its partner's and the containing run (`PulseOffer`'s new field never reaches the wire).
+  A phone whose `pulseFelt` is null buzzes no pulse (O2). *The blank made to buzz the lockout:* `seat
+  1, not tapping, felt seat 0's failed attempt. Expected <[]>, actual <[Play(script=[Buzz(millis=3000)],
+  repeating=false)]>`, and `HouseBuzzTest`'s `an effect with no kind on it reached the motor anyway …
+  actual <[[Buzz(millis=3000)]]>`. *`held` put back to `good && partner == null`:* `the containing phone
+  felt more than the containment every phone feels. Expected <[Play(script=[Buzz(millis=90)])]>,
+  actual <[Play(script=[Buzz(millis=3000)]), Play(script=[Buzz(millis=90)])]>`.
+  `HouseBuzzTest`'s fixtures moved the failed answer from the quiet list to `everyKind`, so the
+  wire-parity sweep and the app-root funnel walk it.
+- **The drift bench** (`ContainmentDriftTest`, app): unchanged taps, which were already pulses 4–7 on
+  both phones; it now also asserts each phone's four stamps are four in a row from pulse 4 by
+  `SyncPulseGrid.inARow`, and still contains at minute 30. *The window narrowed to ±200 ms in
+  `SyncPulseGrid.hit`:* `seat 0's taps are not four in a row from pulse 4. Expected <4>, actual
+  <null>`.
+- **The render** (`PulseControlRender`, ui): new states through a run (three pips), the miss (empty),
+  the failed answer (OFF THE BEAT, empty, no WAIT), a tap inside the lockout (still empty), a tap
+  after it (one pip), and a run of two whose next pulse went by (empty), flat and on the 16 Pro's
+  insets. The grid-label guard stays green on all of them; the Insider's control is still the
+  Resident's pixel for pixel. The D-295 states start on the grid now (pulse 3), since an off-grid
+  tap no longer lights a pip.
+
+**Looked at.** `/tmp/someones-home-d298/pulse-run-three.png` (TAP over three lit pips),
+`pulse-run-missed.png` (four empty pips, no beat line yet), `pulse-run-reset.png` (empty pips, YOUR
+BEAT / OFF THE BEAT, the existing line, nothing else), `pulse-run-again-16pro.png` (one pip after the
+lockout, the countdown at 1:57) and `pulse-run-pulse-passed.png` (empty): SETTINGS, CAMERA and the page
+dots above the dock in each.
+
+**Not on a phone.** The 3 s vibration needs a hand: whether one continuous CoreHaptics event of 3 s
+reads as *the lockout* and how it sits with the pulse that resumes after it. The iOS Simulator has no
+haptics. Inside the 3 s the pulse is not felt and taps count for nothing, so a person loses up to two
+pulses to a failed attempt; that is the lockout the house already charged, now felt, not a new rule.
+
+**Checked** (`./gradlew check --continue` in a worktree at `1bc10f9`, exit 0, every test XML read
+and counted): model 322 (JVM) and 312 (iOS Simulator), core 368, platform 213, ui 703 (desktop) and
+334 (iOS Simulator), harness 131, app 235, no failures; `vocabularyLint`, `redactionLint`,
+`boundaryCheck`, `armingCordon`, `benchSeedCordon` and `seedSourceCordon` clean. `OutboundQueueTest`'s
+known flake did not fire. **Not on a phone.**
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `model` `SyncPulseGrid` | (new) | `at`, `near`, `hit`, `inARow`: the grid, read once for the house and the phone |
+| `core` `onThePulse` | any four distinct pulses | four in a row (`runFrom`) |
+| `model` `PulseOffer` | seat, node, arrival | and `firstPulse` |
+| `model` `Egress.partnerFor`, `holding` | arrival within `SYNC_PULSE_PAIR_WINDOW` (6 s) | the runs share a pulse (`Egress.pairs`); offers behind the grid dropped |
+| `model` `Balance.SYNC_PULSE_PAIR_WINDOW` | one run between arrivals | removed |
+| `core` `pulseReturned` | `held = good && partner == null` | `held = good` |
+| `model` `Haptic`, `HouseBuzz` | Short, Long, Double | and `Lockout`, `[Buzz(3000)]`, `LOCKOUT_MILLIS` from `SYNC_PULSE_LOCKOUT` |
+| `model` `SyncPulseAnswered` (effect, wire) | no haptic | `haptic`: `Lockout` on `held = false` |
+| `app` `HouseBuzzer` | the answer silent | the answer's `haptic`; the blank silent |
+| `ui` `FlowModel.tapPulse` | count four taps | the run; a miss sends it; inert in the lockout |
+| `ui` `FlowModel` | | `pulseRunRead`, `lockingOut`, `pulseFelt` |
+| `app` cheats `Cheats` | `PulseBuzzer` reads the control | reads `flow::pulseFelt` |
+| recording | 40 | 41; offers carry `#firstPulse` |
+
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

@@ -30,8 +30,9 @@ import kotlin.test.assertTrue
  * **The tap control after the node scan, drawn, and the springboard under it still whole** (D-295).
  *
  * Writes PNGs of the Egress widget at a node (fresh, two pips, after ON THE BEAT, after OFF THE BEAT
- * with one pip, an Insider's) and on a phone not at a node, to `build/screens/pulse-*.png` and to
- * `/tmp/someones-home-d295/`, so they can be looked at. Checks two things a render can:
+ * with one pip, an Insider's), through a run of four in a row, a miss and the lockout's reset (D-298),
+ * and on a phone not at a node, to `build/screens/pulse-*.png` and to `/tmp/someones-home-d298/`, so
+ * they can be looked at. Checks two things a render can:
  *
  * - an Insider's control and a Resident's are the same pixels;
  * - **the app grid is whole under every state of the widget**: every app label is laid out at its
@@ -42,7 +43,7 @@ import kotlin.test.assertTrue
 class PulseControlRender {
 
     private val out = File("build/screens").apply { mkdirs() }
-    private val look = File("/tmp/someones-home-d295").apply { mkdirs() }
+    private val look = File("/tmp/someones-home-d298").apply { mkdirs() }
 
     /** No hardware insets, and an iPhone 16 Pro's, as `DeviceLayoutTest` measured them. */
     private val phones = listOf(
@@ -96,7 +97,8 @@ class PulseControlRender {
     )
 
     private fun atANode(role: PanelRole, taps: Int = 0, answer: Boolean? = null): FlowModel {
-        var now = 86_410_000L
+        // Pulse 4 of the grid, so each tap a pulse later is a run (D-298).
+        var now = 86_406_500L
         val model = FlowModel(
             PanelState(screen = ScreenId.Home, role = role, houseAttached = true),
             houseNow = { now },
@@ -109,6 +111,52 @@ class PulseControlRender {
             now += 1_500
             model.actions().tapPulse()
         }
+        return model
+    }
+
+    /**
+     * **A run, a miss and the reset** (the owner's O3 and O4, D-298), step by step on one phone:
+     * three pulses in a row ([RunStep.Three]); a fourth tap off the beat, which empties the pips and
+     * sends the run ([RunStep.Missed]); the house's failed answer, which starts the 3 s lockout, with
+     * OFF THE BEAT and nothing more ([RunStep.Reset]); a tap inside the lockout, which lights nothing
+     * ([RunStep.Locked]); and, the 3 s gone, a tap on the beat that starts the count again
+     * ([RunStep.Again]). And a run of two whose next pulse goes by untapped ([RunStep.Passed]).
+     */
+    private enum class RunStep { Three, Missed, Reset, Locked, Again, Passed }
+
+    private fun through(step: RunStep): FlowModel {
+        val pulseFrom = 86_402_000L
+        var now = pulseFrom + 4 * 1_500L
+        val model = FlowModel(
+            PanelState(screen = ScreenId.Home, role = PanelRole.Resident, houseAttached = true),
+            houseNow = { now },
+        )
+        model.houseSaid(egressOpened())
+        model.scanning(MarkerId("east-card"))
+        model.houseSaid(RoundMessage.ScanAnswered(null))
+        fun tap(at: Long) {
+            now = at
+            model.actions().tapPulse()
+        }
+        if (step == RunStep.Passed) {
+            tap(pulseFrom + 4 * 1_500L)
+            tap(pulseFrom + 5 * 1_500L)
+            now = pulseFrom + 6 * 1_500L + 401
+            model.secondPassed()
+            return model
+        }
+        tap(pulseFrom + 4 * 1_500L)
+        tap(pulseFrom + 5 * 1_500L + 120)
+        tap(pulseFrom + 6 * 1_500L - 200)
+        if (step == RunStep.Three) return model
+        tap(pulseFrom + 6 * 1_500L + 750)
+        if (step == RunStep.Missed) return model
+        model.houseSaid(RoundMessage.SyncPulseAnswered(held = false))
+        if (step == RunStep.Reset) return model
+        tap(pulseFrom + 8 * 1_500L)
+        if (step == RunStep.Locked) return model
+        repeat(3) { model.secondPassed() }
+        tap(pulseFrom + 10 * 1_500L)
         return model
     }
 
@@ -129,6 +177,12 @@ class PulseControlRender {
             "pulse-on-the-beat" to { atANode(PanelRole.Resident, answer = true) },
             "pulse-off-the-beat" to { atANode(PanelRole.Resident, answer = false, taps = 1) },
             "pulse-fresh-insider" to { atANode(PanelRole.Insider) },
+            "pulse-run-three" to { through(RunStep.Three) },
+            "pulse-run-missed" to { through(RunStep.Missed) },
+            "pulse-run-reset" to { through(RunStep.Reset) },
+            "pulse-run-locked" to { through(RunStep.Locked) },
+            "pulse-run-again" to { through(RunStep.Again) },
+            "pulse-run-pulse-passed" to { through(RunStep.Passed) },
             "pulse-not-at-a-node" to { away() },
             "pulse-not-at-a-node-with-beat" to { away(answer = false) },
             "pulse-baseline-home" to { FlowModel(PanelState(screen = ScreenId.Home, houseAttached = true)) },

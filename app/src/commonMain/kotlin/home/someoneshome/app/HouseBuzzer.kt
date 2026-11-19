@@ -347,7 +347,10 @@ internal fun Effect.ringing(): Boolean = when (this) {
  * and Short for the couch, which is a fact about round-state that only the authority holds.
  */
 internal fun Effect.haptic(): Haptic? = when (this) {
-    // ---- The twelve that buzz ----------------------------------------------------------------
+    // ---- The thirteen that buzz --------------------------------------------------------------
+    // The house's answer to this phone's run of the Sync Pulse: a failed attempt vibrates for the
+    // whole 3 s lockout, a good run is silent (the owner's O4, D-298). It reaches the tapper alone.
+    is Effect.SyncPulseAnswered -> haptic
     is Effect.OpeningMessage -> haptic
     is Effect.MeetingOpened -> haptic
     is Effect.StandAndWalkIn -> haptic
@@ -439,8 +442,6 @@ internal fun Effect.haptic(): Haptic? = when (this) {
     is Effect.VoteSelectionShown -> null
     // The attribution, on the screen MeetingResult already buzzed for.
     is Effect.MeetingResolved -> null
-    // The house's answer to one beat of the Sync Pulse, at a terminal, in a hand.
-    is Effect.SyncPulseAnswered -> null
     // Somebody else's Sync Pulse, answered (C2): AbilityBlanked's reason, and it must feel like nothing.
     is Effect.SyncPulseBlanked -> null
     // A target list arriving. It buzzes exactly as much as the work order it sits beside, which is
@@ -519,7 +520,9 @@ internal fun RoundMessage.ringing(): Boolean = when (this) {
  * what it received**, so the effect-side branch alone never closed it.
  */
 internal fun RoundMessage.haptic(): Haptic? = when (this) {
-    // ---- The thirteen that buzz --------------------------------------------------------------
+    // ---- The fourteen that buzz ------------------------------------------------------------
+    // The owner's O4 (D-298): the lockout's 3 s on a failed attempt, off the answer's one digit.
+    is RoundMessage.SyncPulseAnswered -> haptic
     is RoundMessage.OpeningMessage -> haptic
     is RoundMessage.MeetingOpened -> haptic
     is RoundMessage.StandAndWalkIn -> haptic
@@ -564,7 +567,6 @@ internal fun RoundMessage.haptic(): Haptic? = when (this) {
     is RoundMessage.VoteHeld -> null
     is RoundMessage.VoteSelectionShown -> null
     is RoundMessage.MeetingResolved -> null
-    is RoundMessage.SyncPulseAnswered -> null
     is RoundMessage.SyncPulseBlanked -> null
     is RoundMessage.IsolateTargetsOffered -> null
     is RoundMessage.IsolateTargetsBlanked -> null

@@ -335,10 +335,12 @@ data class PanelState(
      */
     val pulseAt: MarkerId? = null,
     /**
-     * **The taps this phone has made toward its next four, each on the house's clock** (D-295).
+     * **This phone's run toward four in a row, each tap on the house's clock** (D-295, D-298).
      *
      * Input echo (the gotcha *input echo is not game logic*): the pips light as the thumb lands,
-     * with no round trip. The fourth sends all four up as one `ReturnSyncPulse` and empties this.
+     * with no round trip. Only taps on consecutive pulses of the grid stay in it; the fourth sends
+     * all four up as one `ReturnSyncPulse`, and a miss sends the run as it stood; either empties
+     * this, as the house's failed answer does (`FlowModel.tapPulse`).
      */
     val pulseTaps: List<Long> = emptyList(),
     /**
@@ -1850,7 +1852,7 @@ class PanelVals(
      */
     val pulseLive: Boolean = state.pulseAt != null && state.egressRunning && !state.egressHeld
 
-    /** How many of the four taps this phone has made toward its next return. Input echo. */
+    /** How many pulses in a row this phone's run holds, of the four. Input echo (D-298). */
     val pulseTaps: Int = state.pulseTaps.size
 
     /**

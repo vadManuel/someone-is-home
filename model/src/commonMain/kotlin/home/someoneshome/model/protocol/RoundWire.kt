@@ -739,7 +739,7 @@ sealed class RoundMessage {
             fun of(haptic: Haptic?): RevokeLanded = when (haptic) {
                 Haptic.Long -> Buzzing
                 null -> Silent
-                Haptic.Short, Haptic.Double -> error("a Revoke landing buzzes Long or not at all, never $haptic")
+                Haptic.Short, Haptic.Double, Haptic.Lockout -> error("a Revoke landing buzzes Long or not at all, never $haptic")
             }
         }
     }
@@ -812,8 +812,11 @@ sealed class RoundMessage {
             require(answer == HELD || answer == NOT_HELD) { "an answer is $HELD or $NOT_HELD" }
         }
 
-        /** Whether the house is holding this phone's beat for a partner. */
+        /** Whether this phone's run was good, four in a row (D-298): held for a partner, or containing. */
         val held: Boolean get() = answer == HELD
+
+        /** The lockout's vibration on [NOT_HELD], nothing on [HELD]: [Effect.SyncPulseAnswered.haptic]. */
+        val haptic: Haptic? get() = if (held) null else Haptic.Lockout
 
         override fun toString(): String = "SyncPulseAnswered(held=$held)"
 

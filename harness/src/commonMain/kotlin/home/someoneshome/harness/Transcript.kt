@@ -570,7 +570,8 @@ object Transcript {
                 // that held only the deadline could not tell a paused timer from a moved one.
                 ":paused=${egress.pausedAt?.let { p -> num(p.step) } ?: "none"}" +
                 ":offers=${egress.offers.joinToString(".") {
-                    "${num(it.seat.index)}>${text(it.node.value)}@${num(it.at.step)}"
+                    // And the run's first pulse, which pairing reads (option B, D-298).
+                    "${num(it.seat.index)}>${text(it.node.value)}@${num(it.at.step)}#${num(it.firstPulse)}"
                 }}" +
                 ":lockouts=${egress.lockouts.joinToString(".") {
                     "${num(it.seat.index)}>${num(it.until.step)}"

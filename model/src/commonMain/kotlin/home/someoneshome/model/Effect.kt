@@ -1022,8 +1022,8 @@ sealed interface Effect {
      * **The house's answer to one participant's beat — and it is the same answer either way**
      * (`gdd.md:355`, rule 1).
      *
-     * [held] says whether the house is now holding this seat's beat, waiting for somebody at the
-     * other node. It is `false` for a beat that missed the schedule, for a seat serving a lockout,
+     * [held] says whether this seat's run was good, four in a row (D-298): the house now holds it
+     * for somebody at the other node, or it paired and contained. It is `false` for a beat that missed the schedule, for a seat serving a lockout,
      * for a seat that is not standing at a node, and for a seat outside the system — **one shape,
      * one kind, one message per return**, with only the value differing.
      *
@@ -1042,7 +1042,15 @@ sealed interface Effect {
      * anything finer here would be a live report of who is standing where, addressed to a living
      * player, which is the leak the whole presence plane is denied a schema row to close.
      */
-    data class SyncPulseAnswered(val seat: Seat, val held: Boolean) : Effect
+    data class SyncPulseAnswered(val seat: Seat, val held: Boolean) : Effect {
+        /**
+         * **The lockout's vibration on a failed attempt, and nothing on a good run** (the owner's
+         * O4, D-298). Read off [held] and nothing else, so every failure, a missed run, a locked
+         * seat, a seat the house does not place at a node, feels the same in the hand, and the
+         * frame is the one digit it always was.
+         */
+        val haptic: Haptic? get() = if (held) null else Haptic.Lockout
+    }
 
     /**
      * **Somebody's Sync Pulse was answered at this moment, and this seat is sent a frame of the

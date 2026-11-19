@@ -384,19 +384,10 @@ object Balance {
      */
     const val SYNC_PULSE_LOCKOUT: Long = 3L * TICKS_PER_SECOND
 
-    /**
-     * **How simultaneous *simultaneously* is** (`gdd.md:352`).
-     *
-     * Two people at two separate markers, at the same time — but the beats they hit are their own,
-     * and two phones will not hand over on the same tick. This is how long a graded beat waits for
-     * a partner before it goes stale.
-     *
-     * **One full run of the pulse**, derived rather than typed, which is what makes it mean
-     * something: two people who both kept time through overlapping runs always meet, and somebody
-     * who tapped and wandered off cannot be paired with by a stranger arriving later. A number
-     * chosen by hand would drift out of that relationship the first time the beat moved.
-     */
-    const val SYNC_PULSE_PAIR_WINDOW: Long = SYNC_PULSE_BEATS * SYNC_PULSE_INTERVAL
+    // **How simultaneous *simultaneously* is** (`gdd.md:352`) is no longer a time: two runs of four
+    // pair when they share at least one pulse of the house's grid (the owner's O3 pairing ruling,
+    // option B, D-298; `Egress.pairs`). Until then it was `SYNC_PULSE_PAIR_WINDOW`, one full run
+    // (6 s) between the two uploads' arrivals.
 
     /**
      * **The ballot's window, in seconds — the design's 45, and the host may move it** (D-117,

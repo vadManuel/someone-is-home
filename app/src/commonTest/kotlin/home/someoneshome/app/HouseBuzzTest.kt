@@ -291,8 +291,9 @@ class HouseBuzzTest {
             Effect.VoteSelectionShown(voter = seat, selection = Seat(2)),
             Effect.VoteProgressed(locked = 3, expected = 8),
             Effect.MeetingResolved(restrained = seat, attribution = emptyList()),
+            // A good run is silent; a failed one vibrates for the lockout (O4, D-298), and is in
+            // `everyKind` below rather than here, beside the other kinds that buzz.
             Effect.SyncPulseAnswered(seat, held = true),
-            Effect.SyncPulseAnswered(seat, held = false),
             Effect.SyncPulseBlanked(seat),
             Effect.InsidersRevealed(emptyList()),
             Effect.HouseSignedOff(seat, "one last thing"),
@@ -320,6 +321,8 @@ class HouseBuzzTest {
      * the same string, so a new effect is a missing entry rather than a passing test.
      */
     private fun everyKind(): List<Effect> = everyEffect() + listOf(
+        // The failed answer, which buzzes the lockout's 3 s (O4, D-298): walked by the wire sweep.
+        Effect.SyncPulseAnswered(Seat(1), held = false),
         Effect.Surged(Seat(1), peak = 100, black = 0, sound = Sound.Surge, haptic = Haptic.Short),
         Effect.IsolateTargetsOffered(Seat(1), emptyList()),
         Effect.IsolateTargetsBlanked(Seat(1), emptyList()),

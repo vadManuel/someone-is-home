@@ -90,7 +90,17 @@ object HouseBuzz {
     const val RING_PAUSE_MILLIS: Int = 350
     const val RING_GAP_MILLIS: Int = 1_400
 
+    /**
+     * **The lockout's length: the house's own lockout, in milliseconds** (the owner's O4, D-298).
+     * Derived from [Balance.SYNC_PULSE_LOCKOUT] rather than typed, so the vibration and the lockout
+     * it speaks for cannot drift apart: *the phone whose attempt failed vibrates continuously for the
+     * full 3 s of the lockout*. One continuous buzz, which CoreHaptics plays as one continuous event
+     * (one may last up to 30 s), so nothing in it can be felt as a train of buzzes.
+     */
+    const val LOCKOUT_MILLIS: Int = (Balance.SYNC_PULSE_LOCKOUT * 1_000L / Balance.TICKS_PER_SECOND).toInt()
+
     private val SHORT: List<HapticStep> = listOf(HapticStep.Buzz(SHORT_MILLIS))
+    private val LOCKOUT: List<HapticStep> = listOf(HapticStep.Buzz(LOCKOUT_MILLIS))
     private val LONG: List<HapticStep> = listOf(HapticStep.Buzz(LONG_MILLIS))
     private val DOUBLE: List<HapticStep> = listOf(
         HapticStep.Buzz(SHORT_MILLIS), HapticStep.Rest(DOUBLE_GAP_MILLIS), HapticStep.Buzz(SHORT_MILLIS),
@@ -125,6 +135,7 @@ object HouseBuzz {
         Haptic.Short -> SHORT
         Haptic.Long -> LONG
         Haptic.Double -> DOUBLE
+        Haptic.Lockout -> LOCKOUT
     }
 
     /** One pattern per kind, in the order the kinds are declared. */

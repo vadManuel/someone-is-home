@@ -418,11 +418,12 @@ fun CheatRoot(uwb: Boolean) {
         ).also { panel.value = it }
     }
     // **The Sync Pulse, felt** (D-295): one short buzz on each pulse of the house's grid, through
-    // this phone's own measured offset, while its tap control is live; nothing otherwise.
+    // this phone's own measured offset, while its tap control is live and not through a failed
+    // attempt's 3 s vibration (D-298); nothing otherwise.
     LaunchedEffect(flow) {
         PulseBuzzer(
             haptics,
-            pulseFrom = { flow.state.let { s -> s.pulseFrom.takeIf { s.pulseAt != null && s.egressRunning && !s.egressHeld } } },
+            pulseFrom = flow::pulseFelt,
             houseNow = link::houseNow,
         ).run()
     }

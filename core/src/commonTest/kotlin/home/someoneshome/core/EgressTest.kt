@@ -660,6 +660,85 @@ class EgressTest {
     }
 
     /**
+     * **Four in a row: four consecutive pulses, no miss between** (the owner's O3, D-298).
+     *
+     * Every one of these held under D-295's *any four distinct pulses*, and every one is now a miss:
+     * a pulse skipped anywhere in the four, pulses taken out of order, every other pulse. Four on
+     * consecutive pulses, each anywhere in its window, still hold, from pulse 0 and from deep in the
+     * grid; a tap in the silent lead before pulse 0 is no pulse of the grid.
+     */
+    @Test
+    fun `four taps hold only on four consecutive pulses`() {
+        fun on(vararg pulses: Long) = pulses.map { pulseAt(PULSE_FROM, it) }
+        assertTrue(onThePulse(PULSE_FROM, on(0, 1, 2, 3)), "four consecutive pulses were a miss")
+        assertTrue(onThePulse(PULSE_FROM, on(37, 38, 39, 40)), "four consecutive pulses deep in the grid were a miss")
+        val w = Balance.SYNC_PULSE_WINDOW_MILLIS
+        assertTrue(
+            onThePulse(PULSE_FROM, on(5, 6, 7, 8).zip(listOf(w, -w, w, -w)) { t, d -> t + d }),
+            "four consecutive pulses at the window's edges were a miss",
+        )
+        for (scattered in listOf(on(0, 1, 2, 4), on(0, 2, 3, 4), on(0, 1, 3, 4), on(0, 2, 4, 6), on(1, 0, 2, 3), on(3, 2, 1, 0))) {
+            assertFalse(onThePulse(PULSE_FROM, scattered), "four taps that are not four in a row held: $scattered")
+        }
+        assertFalse(onThePulse(PULSE_FROM, on(-1, 0, 1, 2)), "a tap in the lead before pulse 0 counted as a pulse")
+        assertFalse(onThePulse(PULSE_FROM, on(0, 1, 2, 3, 4)), "five taps were graded as four")
+    }
+
+    /**
+     * **Four non-consecutive taps do not contain**, through the rules (O3, D-298): seat 2 holds a
+     * good run at EAST, and seat 0's four taps at WEST on pulses 4, 5, 6 and 8 (one skipped) are a
+     * failed attempt: no containment, `held = false`, and a lockout.
+     */
+    @Test
+    fun `four taps that are not in a row do not contain`() {
+        val fired = Tick(60)
+        val walk = EgressWalk(burning(fired)).feed(
+            Event.SyncPulseReturned(Tick(pulseTick(fired, 7)), Seat(2), onBeat(from = 4)),
+        )
+        walk.drain()
+        val scattered = listOf(4L, 5L, 6L, 8L).map { pulseAt(PULSE_FROM, it) }
+        walk.feed(Event.SyncPulseReturned(Tick(pulseTick(fired, 8)), Seat(0), scattered))
+        assertNotNull(walk.state.egress, "four taps with a pulse skipped contained the Egress")
+        assertEquals(answered(Seat(0), held = false), walk.drain(), "the scattered taps were not answered as a miss")
+        assertTrue(walk.state.egress!!.lockedAt(Seat(0), Tick(pulseTick(fired, 8) + 1)), "a failed attempt cost no lockout")
+    }
+
+    /**
+     * **Three hits, a miss, then four hits: the Egress is contained by the second run, and only by
+     * it** (O3, *a miss starts the count again*; D-298).
+     *
+     * The phone sends a run when it breaks (`FlowModel.tapPulse`), so the house sees the miss as an
+     * attempt of its own, in both shapes a phone sends: three hits and the off-beat tap that broke
+     * them, and three hits alone, sent when the fourth pulse's window closed untapped. Either is a
+     * failed attempt and a lockout, and the Egress burns on. Seat 0's next four, on pulses 4 to 7,
+     * after the lockout, pair with seat 2's run on the same pulses and contain.
+     */
+    @Test
+    fun `three hits a miss and four hits contain only at the second run`() {
+        val fired = Tick(60)
+        val offBeatTap = pulseAt(PULSE_FROM, 3) + Balance.SYNC_PULSE_WINDOW_MILLIS + 1
+        val threeHits = listOf(0L, 1L, 2L).map { pulseAt(PULSE_FROM, it) }
+        for ((shape, broken) in listOf("an off-beat fourth tap" to threeHits + offBeatTap, "a pulse gone by untapped" to threeHits)) {
+            val walk = EgressWalk(burning(fired))
+            walk.feed(Event.SyncPulseReturned(Tick(pulseTick(fired, 3)), Seat(0), broken))
+            assertNotNull(walk.state.egress, "$shape: three hits and a miss contained")
+            assertEquals(answered(Seat(0), held = false), walk.drain(), "$shape: the miss was not answered as one")
+
+            walk.feed(Event.SyncPulseReturned(Tick(pulseTick(fired, 7)), Seat(2), onBeat(from = 4)))
+            walk.drain()
+            assertNotNull(walk.state.egress, "$shape: the partner's run contained alone")
+
+            walk.feed(Event.SyncPulseReturned(Tick(pulseTick(fired, 7) + 1), Seat(0), onBeat(from = 4)))
+            assertNull(walk.state.egress, "$shape: the second run of four did not contain")
+            assertEquals(
+                answered(Seat(0), held = true),
+                walk.drain().take(SEATS.size),
+                "$shape: the containing run was not answered held",
+            )
+        }
+    }
+
+    /**
      * **The beat has to be missable, and the window is what decides whether it is.**
      *
      * At half the interval every possible tap is inside *some* beat's window, and the grading stops
@@ -1087,27 +1166,65 @@ class EgressTest {
     }
 
     /**
-     * **A held offer goes stale**, so two people who were never in the house at the same moment
-     * cannot pair with each other.
+     * **Two runs pair when they share a pulse of the house's grid, and only then** (the owner's
+     * ruling on O3's pairing, 2026-11-18, option B, D-298).
      *
-     * The pulse is simultaneous by design. An offer that stood for the whole Egress would let
-     * somebody who tapped at the Utility and walked away be paired with a stranger arriving at the
-     * Landing a minute later, which is the opposite of what the two nodes are for.
+     * Seat 0's four in a row at WEST start on pulse 10; seat 2's at EAST start `apart` pulses later.
+     * Both returns arrive at the house on the **same tick**, well inside the old 6 s arrival window,
+     * so only the grid can tell them apart: offsets 0 to 3 share at least one pulse and contain;
+     * offsets of 4 or more share none and do not, and the later run is held for a partner of its own.
+     * The other direction (seat 2's run earlier) is walked too.
      */
     @Test
-    fun `an offer older than the pair window cannot contain`() {
+    fun `two runs pair when they share a pulse and not otherwise however close their uploads arrive`() {
+        val fired = Tick(60)
+        val first = 10L
+        val at = pulseTick(fired, first + 3)
+        val verdicts = (-6L..6L).map { apart ->
+            val walk = EgressWalk(burning(fired)).feed(
+                Event.SyncPulseReturned(Tick(at), Seat(0), onBeat(from = first + 6)),
+            )
+            walk.drain()
+            walk.feed(Event.SyncPulseReturned(Tick(at), Seat(2), onBeat(from = first + 6 + apart)))
+            apart to (walk.state.egress == null)
+        }
+        assertEquals(
+            (-6L..6L).map { it to (it > -4 && it < 4) }, verdicts,
+            "runs offset by 0-3 pulses must contain and runs 4 or more apart must not, whatever the arrival",
+        )
+    }
+
+    /**
+     * **Pairing does not read when the uploads arrived** (option B, D-298). Two runs on the same four
+     * pulses, the second reaching the house two full runs (12 s of ticks) after the first: under the
+     * old arrival window this was a stale offer; on the grid they kept time together and contain.
+     */
+    @Test
+    fun `two runs on the same pulses pair however late the second upload arrives`() {
         val fired = Tick(60)
         val walk = EgressWalk(burning(fired)).feed(
             Event.SyncPulseReturned(Tick(pulseTick(fired, 3)), Seat(0), onBeat()),
         )
         walk.drain()
+        val late = pulseTick(fired, 3) + 2 * Balance.SYNC_PULSE_BEATS * Balance.SYNC_PULSE_INTERVAL
+        walk.feed(Event.SyncPulseReturned(Tick(late), Seat(2), onBeat()))
+        assertNull(walk.state.egress, "two runs on the same four pulses did not contain because the upload was late")
+    }
 
-        val late = pulseTick(fired, 3) + Balance.SYNC_PULSE_PAIR_WINDOW + 1
-        walk.feed(Event.SyncPulseReturned(Tick(late), Seat(2), onBeat(from = late)))
-        assertNotNull(walk.state.egress, "a stale offer contained an Egress")
+    /**
+     * **An offer whose run the grid has moved past is dropped** when a later run is held (option B,
+     * D-298), so the house does not carry a run nobody can share a pulse with any more.
+     */
+    @Test
+    fun `holding a run drops the offers it cannot share a pulse with`() {
+        val fired = Tick(60)
+        val walk = EgressWalk(burning(fired).withPresence(Presence(Seat(3), WEST, open = false))).feed(
+            Event.SyncPulseReturned(Tick(pulseTick(fired, 3)), Seat(0), onBeat(from = 0)),
+            Event.SyncPulseReturned(Tick(pulseTick(fired, 7)), Seat(3), onBeat(from = 4)),
+        )
         assertEquals(
-            answered(Seat(2), held = true), walk.drain(),
-            "the late arrival was not held for a partner of its own",
+            listOf(Seat(3) to 4L), walk.state.egress?.offers?.map { it.seat to it.firstPulse },
+            "a run four pulses behind the newest was kept",
         )
     }
 
@@ -1150,7 +1267,7 @@ class EgressTest {
         )
         assertEquals(
             Seat(3),
-            held.partnerFor(Seat(2), EAST, Tick(at + 1), Balance.SYNC_PULSE_PAIR_WINDOW, behind::isOut)?.seat,
+            held.partnerFor(Seat(2), EAST, 0L, behind::isOut)?.seat,
             "the first live match in arrival order did not win",
         )
         val paired = EgressWalk(behind).feed(Event.SyncPulseReturned(Tick(at + 1), Seat(2), onBeat()))

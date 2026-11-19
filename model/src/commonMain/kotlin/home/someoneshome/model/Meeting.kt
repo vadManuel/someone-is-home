@@ -45,6 +45,17 @@ enum class Haptic {
      * the game: there is no way for a call site to compose two buzzes of its own.
      */
     Double,
+
+    /**
+     * **The lockout: one unbroken vibration for the whole 3 s a failed Sync Pulse costs** (the
+     * owner's O4, 2026-11-18, D-298). A new pattern, ruled by the owner, beside the Short, D-135's
+     * Long, D-160's *no* and its ring.
+     *
+     * Only on the phone whose containment attempt failed, from the moment the house's failed answer
+     * lands (`SyncPulseAnswered` with `held = false`), as the lockout begins. Never on the wire as
+     * itself: the answer's one digit already says it. No words go with it; the lockout shows no WAIT.
+     */
+    Lockout,
 }
 
 /**
