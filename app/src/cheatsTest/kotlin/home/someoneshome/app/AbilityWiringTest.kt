@@ -228,9 +228,10 @@ class AbilityWiringTest {
 
     /**
      * Hold the two phones together for five beats of the real cadence, then walk the mover back. The
-     * round reads UWB distance (D-301): a jump of the house's clock to a cooldown lets every pair go
-     * (D-300's open item 2), and the house pairs them again within a beat or three, so the hold
-     * outlasts that.
+     * round reads UWB distance (D-301) at the phones' three peers each, so the two may not be ranged
+     * when they meet; the pair both rank first displaces a kept pair and is read within about four
+     * beats (D-302), so the hold outlasts that. (A jump of the house's clock to a cooldown no longer
+     * lets the pairs go, D-302.)
      */
     private suspend fun Room.touch(mover: Phone, still: Phone) {
         val act = ContactAct(air, beat = { delay(SightingUpload.CADENCE_MILLIS + 250) }, note = { said += it })

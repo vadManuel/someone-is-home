@@ -102,13 +102,27 @@ class RangingAllocationTest {
         var tick = 0L
 
         // Settle: every phone uploads, takes its plan and acts on it, until nothing changes.
-        repeat(12) {
+        // Until the pairs have stood unchanged for three beats, every phone holding them (D-302: a
+        // pair formed on the last beat of a fixed count is one the measured seconds would see go).
+        var last: List<RangingHandle>? = null
+        var steady = 0
+        var settling = 0
+        // A beat is one second, as the phones upload: a pair's second phone lists it two beats after
+        // it forms, inside the pairing's three-second grace.
+        while (steady < 3 && settling < 60) {
+            val start = tick
             for (s in seats) {
                 val plan = desk.answer(Tick(tick++), s, sightings[s.index], book, phones[s.index].field(seeds[s.index], nonce), true, nonce)!!
                 phones[s.index].apply(plan, seeds[s.index])
             }
-            tick += 20
+            tick = start + ContactGate.UPLOAD_TICKS
+            settling++
+            val handles = desk.pairing.pairs().map { it.handle }
+            steady = if (handles == last) steady + 1 else 0
+            last = handles
         }
+        println("D-302 THE ALLOCATION ROOM SETTLED AFTER $settling BEATS")
+        assertTrue(steady >= 3, "the room never settled in $settling beats")
         val pairs = desk.pairing.pairs()
         assertTrue(pairs.size >= 9, "the room settled into only ${pairs.size} pairs")
         for (p in phones) assertEquals(p.held.keys, pairs.filter { it.has(Seat(p.seat)) }.map { it.handle }.toSet(), "seat ${p.seat} is not ranging what the house keeps")

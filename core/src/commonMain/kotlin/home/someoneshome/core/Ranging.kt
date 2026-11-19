@@ -43,13 +43,22 @@ import home.someoneshome.model.protocol.SpareKey
  *    among the other's strongest *capacity + [RangingGate.KEEP_MARGIN]* peers, both phones keep
  *    saying they hold it ([RangingGate.HOLD_GRACE_TICKS]), and neither phone's degree passes its
  *    capacity.
- * 3. **Forms new pairs greedily, strongest first**, each only between two phones that are each among
+ * 3. **Lets two phones that rank each other first displace a kept pair** (D-302): when the pair
+ *    both phones rank strongest is not kept and a phone of it is full, that phone's weakest kept
+ *    pair goes, if it sits past the phone's entry rank and is at least
+ *    [RangingGate.DISPLACE_MARGIN_DB] weaker. Without it a kept pair went only once it fell past
+ *    *capacity + 2*, which in a small round never happens, and a held touch with a peer the house
+ *    never picked could never land.
+ * 4. **Forms new pairs greedily, strongest first**, each only between two phones that are each among
  *    the other's strongest *capacity* peers, both under their capacity and both with a spare token
  *    the house has not dealt. Entry is stricter than staying, so a pair does not flap at the edge.
- * 4. **Deals each new pair a handle drawn from the round's seed** under its own label, indexed by
+ *    A pair both phones rank first that waits only on a spare holds both phones' room for itself.
+ *    A spare dealt into a pair that was let go before its phone ever listed it is handed back, and
+ *    dealt again once the phone's next report still offers it idle (D-302).
+ * 5. **Deals each new pair a handle drawn from the round's seed** under its own label, indexed by
  *    how many pairs the round has formed ([SeedPurpose.RangingHandle]). Never from a seat: no
  *    phone can tell from a handle who it is ranging, and a pair formed again gets a new one.
- * 5. **Plans the uploading phone's second**: stop every pair it holds that the house no longer
+ * 6. **Plans the uploading phone's second**: stop every pair it holds that the house no longer
  *    keeps, start every kept pair it does not yet hold (on its own spare, against the peer's; at most
  *    [RangingWire.TOKEN_SLOTS] a second), and keep the rest.
  *
@@ -70,7 +79,10 @@ import home.someoneshome.model.protocol.SpareKey
  * ### Deterministic (rule 4), and held rather than rebuilt (rule 7)
  *
  * Every step walks seats in seat order and pairs in forming order, so a replay feeding the same
- * uploads rebuilds the same pairs, handles and plans. It is not recorded: its inputs (the uploads)
+ * uploads rebuilds the same pairs, handles and plans. Its clock is the arrival ticks with every
+ * stretch in which no upload arrived at all closed up to one upload ([RangingGate.SILENCE_TICKS],
+ * D-302): a house off the air, or a clock that jumps, is not time the phones spent apart, so the
+ * pairs they still hold are not let go for it. It is not recorded: its inputs (the uploads)
  * are not, exactly as the contact resolver's are not, and nothing it produces reaches the rules.
  * Unlike the resolver its memory is held in arrays sized at arming and written in place: it runs
  * for every seat every second, and rebuilding its lists each time cost the host more than the
@@ -112,6 +124,30 @@ object RangingGate {
 
     /** Spare keys remembered as dealt per seat, so a stale upload's offer is not dealt twice. */
     const val DEALT_KEPT: Int = 4 * RangingWire.MAX_PEERS
+
+    /**
+     * **How much stronger, in dB, a pair both phones rank first must be than the kept pair it
+     * displaces: 10** (D-302). **Provisional (overnight).**
+     *
+     * Measured phone to phone (D-233): touching firmly −27, loosely −37, 30 cm −43 (−41 to −45),
+     * 1 m −57. Ten dB is more than twice the 4 dB spread at one distance, so jitter alone never
+     * displaces a pair, and taking it back needs a 20 dB swing the other way, a tenfold change of
+     * distance, so two nearly tied candidates cannot trade places beat by beat. It is small enough
+     * that a touch at the contact gate (−40) displaces anything at about half a metre or farther, and
+     * a firm touch anything not itself touching. And it leaves D-300's *a peer just ahead of the
+     * kept one*, twice as near (6 dB), unable to displace it.
+     */
+    const val DISPLACE_MARGIN_DB: Int = 10
+
+    /**
+     * **A stretch longer than this in which no upload arrived from any phone is the house off the
+     * air, not time passing between the phones: two uploads** (D-302). **Provisional (overnight).**
+     * Every phone uploads every second, so two seconds with nothing from any of them is no network
+     * or a jump of the house's clock (D-225), never a quiet room. The pairing closes such a stretch
+     * up to one upload: the phones still hold their sessions, and a pair is let go only once its
+     * phones stop listing it, by the grace above.
+     */
+    const val SILENCE_TICKS: Long = 2L * ContactGate.UPLOAD_TICKS
 }
 
 /**
@@ -185,6 +221,16 @@ class RangingPairing(private val roundSeed: Long, seats: List<Seat>) {
     private val dealtCount = IntArray(n)
     private val dealtNext = IntArray(n)
 
+    /** Whether each remembered key is still dealt: false once handed back ([undeal], D-302). */
+    private val dealtLive = BooleanArray(n * RangingGate.DEALT_KEPT)
+
+    /** The arrival each key was handed back at: it is dealable again only on a report taken after. */
+    private val dealtBack = LongArray(n * RangingGate.DEALT_KEPT)
+
+    /** Arrivals counted, and the arrival each seat's last report was taken at. */
+    private var arrivals = 0L
+    private val reportSeq = LongArray(n) { -1L }
+
     // ---- The pairs, in forming order -------------------------------------------------------------
     private val most = n * maxPeers / 2 + 1
     private val pLow = IntArray(most)
@@ -197,8 +243,16 @@ class RangingPairing(private val roundSeed: Long, seats: List<Seat>) {
     private val pOrdinal = LongArray(most)
     private val pLowHeld = LongArray(most)
     private val pHighHeld = LongArray(most)
+
+    /** Whether each phone has ever listed the pair: until it does, its spare is still idle on it. */
+    private val pLowListed = BooleanArray(most)
+    private val pHighListed = BooleanArray(most)
     private var pairCount = 0
     private var formed = 0L
+
+    // ---- The pairing's clock: arrival ticks with the house's silences closed up (D-302) -------------
+    private var lastArrival = NEVER
+    private var silent = 0L
 
     // ---- Scratch, held -----------------------------------------------------------------------------
     private val strength = IntArray(n * n)
@@ -207,6 +261,8 @@ class RangingPairing(private val roundSeed: Long, seats: List<Seat>) {
     private val keep = BooleanArray(most)
     private val candidates = IntArray(n * n)
     private val stopScratch = LongArray(maxPeers)
+    private val first = IntArray(n)
+    private val reserved = BooleanArray(n)
 
     // ---- The plan for the seat that just uploaded --------------------------------------------------
     private val stepKind = IntArray(maxPeers)
@@ -238,7 +294,8 @@ class RangingPairing(private val roundSeed: Long, seats: List<Seat>) {
      * holds. Afterwards [plan] is this seat's.
      */
     fun arrive(at: Tick, seat: Seat, report: RangingReportView?, taken: Boolean) {
-        val now = at.step
+        val now = clock(at.step)
+        arrivals++
         val s = slotOf(seat.index)
         if (taken && s >= 0) {
             for (p in 0 until n) {
@@ -255,9 +312,25 @@ class RangingPairing(private val roundSeed: Long, seats: List<Seat>) {
         hearing.fill(NONE)
 
         strengths(now)
+        rankFirst()
         keepPairs(now)
+        displacePairs(now)
         formPairs(now)
         planFor(s)
+    }
+
+    /**
+     * **The pairing's own tick for an arrival at [step]** (D-302): the house's, less every stretch in
+     * which no upload arrived for longer than [RangingGate.SILENCE_TICKS], each closed up to one
+     * upload. Every arrival counts, a second delivery or a seat not of the round included: any of
+     * them is the house on the air.
+     */
+    private fun clock(step: Long): Long {
+        if (lastArrival != NEVER && step - lastArrival > RangingGate.SILENCE_TICKS) {
+            silent += step - lastArrival - ContactGate.UPLOAD_TICKS
+        }
+        if (lastArrival == NEVER || step > lastArrival) lastArrival = step
+        return step - silent
     }
 
     /** [report] becomes seat [s]'s, and every pair it lists is held at [now]. */
@@ -292,10 +365,17 @@ class RangingPairing(private val roundSeed: Long, seats: List<Seat>) {
         heldCount[s] = readings
         capacity[s] = report.capacity.coerceIn(0, maxPeers)
         reportAt[s] = now
+        reportSeq[s] = arrivals
         for (q in 0 until pairCount) {
             if (!holdsHandle(s, pHandle[q])) continue
-            if (pLow[q] == s) pLowHeld[q] = now
-            if (pHigh[q] == s) pHighHeld[q] = now
+            if (pLow[q] == s) {
+                pLowHeld[q] = now
+                pLowListed[q] = true
+            }
+            if (pHigh[q] == s) {
+                pHighHeld[q] = now
+                pHighListed[q] = true
+            }
         }
     }
 
@@ -321,6 +401,27 @@ class RangingPairing(private val roundSeed: Long, seats: List<Seat>) {
             }
         }
     }
+
+    /** Each seat's strongest peer, as [within] ranks them (stronger, then the lower seat), or -1. */
+    private fun rankFirst() {
+        for (a in 0 until n) {
+            var best = -1
+            var bestStrength = NONE
+            for (c in 0 until n) {
+                if (c == a) continue
+                val sac = strength[a * n + c]
+                if (sac == NONE) continue
+                if (best < 0 || sac > bestStrength) {
+                    best = c
+                    bestStrength = sac
+                }
+            }
+            first[a] = best
+        }
+    }
+
+    /** Whether [a] and [b] each rank the other first. */
+    private fun mutuallyFirst(a: Int, b: Int): Boolean = first[a] == b && first[b] == a
 
     private fun capacityOf(s: Int, now: Long): Int =
         if (reportAt[s] != NEVER && now - reportAt[s] <= RangingGate.REPORT_TICKS) capacity[s] else 0
@@ -370,9 +471,19 @@ class RangingPairing(private val roundSeed: Long, seats: List<Seat>) {
             degree[low]++
             degree[high]++
         }
+        compact()
+    }
+
+    /** Drops every pair [keep] does not mark, keeping the rest in forming order. */
+    private fun compact() {
         var w = 0
         for (q in 0 until pairCount) {
-            if (!keep[q]) continue
+            if (!keep[q]) {
+                // A phone that never listed the pair never took up its spare: hand the key back.
+                if (!pLowListed[q]) undeal(pLow[q], pLowKey[q])
+                if (!pHighListed[q]) undeal(pHigh[q], pHighKey[q])
+                continue
+            }
             if (w != q) movePair(q, w)
             w++
         }
@@ -381,6 +492,72 @@ class RangingPairing(private val roundSeed: Long, seats: List<Seat>) {
             pHighToken[q] = null
         }
         pairCount = w
+    }
+
+    /**
+     * **Displace: a pair both phones rank first takes the room it needs** (D-302). For each such
+     * pair the house does not keep, both phones ranging at all: a phone of it that is full gives up
+     * its weakest kept pair, provided that pair is past the phone's entry rank and at least
+     * [RangingGate.DISPLACE_MARGIN_DB] weaker than the pair taking its place. Both phones' sides are
+     * judged before either is dropped, so a phone never loses a pair for a pair that cannot form.
+     * The new pair forms below, at once if both phones have a spare, or as soon as the dropped
+     * pairs' stops free one. Each seat ranks one peer first, so a seat gives up at most one pair an
+     * upload; and a pair both rank first is never the weakest of either, so it is never displaced.
+     */
+    private fun displacePairs(now: Long) {
+        for (q in 0 until pairCount) keep[q] = true
+        var dropped = false
+        for (a in 0 until n) {
+            val b = first[a]
+            if (b <= a || !mutuallyFirst(a, b) || paired(a, b)) continue
+            val capA = capacityOf(a, now)
+            val capB = capacityOf(b, now)
+            if (capA <= 0 || capB <= 0) continue
+            val s = strength[a * n + b]
+            val fromA = if (degree[a] < capA) ROOM else yielding(a, s, capA)
+            if (fromA == NO_PAIR) continue
+            val fromB = if (degree[b] < capB) ROOM else yielding(b, s, capB)
+            if (fromB == NO_PAIR) continue
+            if (fromA >= 0) drop(fromA)
+            if (fromB >= 0) drop(fromB)
+            if (fromA >= 0 || fromB >= 0) dropped = true
+        }
+        if (dropped) compact()
+    }
+
+    /**
+     * The kept pair [x] would give up for a pair of strength [s]: its weakest (the lowest in its
+     * ranking), if that is past its entry rank [cap] and [RangingGate.DISPLACE_MARGIN_DB] weaker
+     * than [s]; otherwise [NO_PAIR].
+     */
+    private fun yielding(x: Int, s: Int, cap: Int): Int {
+        var weakest = NO_PAIR
+        var weakestPeer = -1
+        var weakestStrength = NONE
+        for (q in 0 until pairCount) {
+            if (!keep[q]) continue
+            val peer = when (x) {
+                pLow[q] -> pHigh[q]
+                pHigh[q] -> pLow[q]
+                else -> continue
+            }
+            val sp = strength[x * n + peer]
+            if (weakest == NO_PAIR || sp < weakestStrength || (sp == weakestStrength && peer > weakestPeer)) {
+                weakest = q
+                weakestPeer = peer
+                weakestStrength = sp
+            }
+        }
+        if (weakest == NO_PAIR || weakestStrength == NONE) return NO_PAIR
+        if (s.toLong() - weakestStrength.toLong() < RangingGate.DISPLACE_MARGIN_DB) return NO_PAIR
+        if (within(x, weakestPeer, cap)) return NO_PAIR
+        return weakest
+    }
+
+    private fun drop(q: Int) {
+        keep[q] = false
+        degree[pLow[q]]--
+        degree[pHigh[q]]--
     }
 
     /** Whether pair [a] is judged before pair [b]: stronger, or as strong and formed earlier. */
@@ -396,6 +573,7 @@ class RangingPairing(private val roundSeed: Long, seats: List<Seat>) {
         pLowKey[to] = pLowKey[from]; pHighKey[to] = pHighKey[from]
         pLowToken[to] = pLowToken[from]; pHighToken[to] = pHighToken[from]
         pOrdinal[to] = pOrdinal[from]; pLowHeld[to] = pLowHeld[from]; pHighHeld[to] = pHighHeld[from]
+        pLowListed[to] = pLowListed[from]; pHighListed[to] = pHighListed[from]
     }
 
     private fun paired(a: Int, b: Int): Boolean {
@@ -403,7 +581,11 @@ class RangingPairing(private val roundSeed: Long, seats: List<Seat>) {
         return false
     }
 
-    /** Form: strongest first, then by seat; each spare dealt once. */
+    /**
+     * Form: strongest first, then by seat; each spare dealt once. A pair both phones rank first,
+     * with room on both but a spare missing on one (its stop not yet through, D-302), holds both
+     * phones' room for itself this upload, so a weaker pair cannot take the place it displaced for.
+     */
     private fun formPairs(now: Long) {
         var count = 0
         for (a in 0 until n) for (b in a + 1 until n) {
@@ -418,17 +600,24 @@ class RangingPairing(private val roundSeed: Long, seats: List<Seat>) {
             }
             candidates[j + 1] = moving
         }
+        reserved.fill(false)
         for (i in 0 until count) {
             val a = candidates[i] / n
             val b = candidates[i] % n
+            if (reserved[a] || reserved[b]) continue
             val capA = capacityOf(a, now)
             val capB = capacityOf(b, now)
             if (degree[a] >= capA || degree[b] >= capB) continue
             if (!within(a, b, capA) || !within(b, a, capB)) continue
             val sa = spareOf(a, now)
-            if (sa < 0) continue
             val sb = spareOf(b, now)
-            if (sb < 0) continue
+            if (sa < 0 || sb < 0) {
+                if (mutuallyFirst(a, b)) {
+                    reserved[a] = true
+                    reserved[b] = true
+                }
+                continue
+            }
             if (pairCount >= most) break
             var handle: Long
             do {
@@ -442,6 +631,7 @@ class RangingPairing(private val roundSeed: Long, seats: List<Seat>) {
             pLowKey[q] = spareKey[a * tokenSlots + sa]; pHighKey[q] = spareKey[b * tokenSlots + sb]
             pLowToken[q] = spareToken[a * tokenSlots + sa]; pHighToken[q] = spareToken[b * tokenSlots + sb]
             pOrdinal[q] = formed; pLowHeld[q] = now; pHighHeld[q] = now
+            pLowListed[q] = false; pHighListed[q] = false
             degree[a]++
             degree[b]++
         }
@@ -471,12 +661,38 @@ class RangingPairing(private val roundSeed: Long, seats: List<Seat>) {
         return best
     }
 
+    /**
+     * Whether [s]'s [key] is dealt: dealt and not handed back, or handed back but not yet offered
+     * again in a report taken after (the phone may have taken up the start late, and only its own
+     * next report, offering the key idle, says it did not).
+     */
     private fun wasDealt(s: Int, key: Long): Boolean {
-        for (i in 0 until dealtCount[s]) if (dealt[s * RangingGate.DEALT_KEPT + i] == key) return true
+        for (i in 0 until dealtCount[s]) {
+            val k = s * RangingGate.DEALT_KEPT + i
+            if (dealt[k] == key && (dealtLive[k] || reportSeq[s] <= dealtBack[k])) return true
+        }
         return false
     }
 
+    /**
+     * **[s]'s spare [key] is handed back** (D-302): the pair it was dealt into was let go before [s]
+     * ever listed it, so the session is still idle on the phone. Kept dealt, the phone would offer
+     * it every second and the house refuse it every second, and a phone whose every spare went
+     * that way could never be paired again in the round. It is dealable again once a report taken
+     * after this arrival still offers it.
+     */
+    private fun undeal(s: Int, key: Long) {
+        for (i in 0 until dealtCount[s]) {
+            val k = s * RangingGate.DEALT_KEPT + i
+            if (dealt[k] == key && dealtLive[k]) {
+                dealtLive[k] = false
+                dealtBack[k] = arrivals
+            }
+        }
+    }
+
     private fun deal(s: Int, key: Long) {
+        dealtLive[s * RangingGate.DEALT_KEPT + dealtNext[s]] = true
         dealt[s * RangingGate.DEALT_KEPT + dealtNext[s]] = key
         dealtNext[s] = (dealtNext[s] + 1) % RangingGate.DEALT_KEPT
         if (dealtCount[s] < RangingGate.DEALT_KEPT) dealtCount[s]++
@@ -547,8 +763,8 @@ class RangingPairing(private val roundSeed: Long, seats: List<Seat>) {
             lowSpare = RangingSpare(SpareKey(pLowKey[q]), pLowToken[q]!!),
             highSpare = RangingSpare(SpareKey(pHighKey[q]), pHighToken[q]!!),
             ordinal = pOrdinal[q],
-            lowHeldAt = Tick(pLowHeld[q]),
-            highHeldAt = Tick(pHighHeld[q]),
+            lowHeldAt = Tick(pLowHeld[q] + silent),
+            highHeldAt = Tick(pHighHeld[q] + silent),
         )
     }
 
@@ -596,6 +812,12 @@ class RangingPairing(private val roundSeed: Long, seats: List<Seat>) {
     private companion object {
         const val NONE = Int.MIN_VALUE
         const val NEVER = Long.MIN_VALUE
+
+        /** [yielding] was not asked: the phone has room, so gives up nothing. */
+        const val ROOM = -2
+
+        /** [yielding]: the phone has no pair it may give up. */
+        const val NO_PAIR = -1
     }
 }
 

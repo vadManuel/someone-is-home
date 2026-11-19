@@ -36,6 +36,9 @@ class RangingPairsTest {
 
     private val second = Balance.TICKS_PER_SECOND
 
+    /** How many beats a held pair the house never picked may take to be ranged (D-302). */
+    private val displaceBeats = 3
+
     private fun armed(seats: Int, insiders: List<Int> = listOf(1), seed: Long = 20261119L): GameState =
         reduce(GameState.EMPTY, Event.RoundArmed(Tick(0), seed = seed, seats = (0 until seats).map { Seat(it) }, insiders = insiders.map { Seat(it) })).state
 
@@ -239,6 +242,249 @@ class RangingPairsTest {
         repeat(4) { room.beat() }
         assertTrue(room.memory.pairs.none { it.handle == ab.handle }, "the pair outlived falling out of reach")
         assertTrue(room.plans.any { (s, p) -> s == 1 && RangingStep.Stop(ab.handle) in p.steps }, "seat 1 was never told to stop")
+    }
+
+    // ---- Displacement: a pair both phones rank first is never starved (D-302) ----------------------
+
+    /**
+     * **GUARD (D-302): five phones at the starting capacity of three, one pair the house never
+     * picked; the two phones are held together, and within [displaceBeats] beats both range each
+     * other.** Five phones at three hold at most seven of the ten pairs, so three are missing; under
+     * D-300's rule alone nothing ever falls past *capacity + 2* = rank five of four peers, so the
+     * missing pairs stayed missing for the whole round, and a held touch between them never landed.
+     *
+     * Why three beats: the touch's first upload makes the pair both phones' first, and each full
+     * phone gives up its weakest pair (its stop goes out in that answer); on the next beat each phone
+     * offers the spare the stop freed, and the pair forms on the second of the two uploads; on the
+     * third the first phone is handed its start. Readings follow a beat later on the radio.
+     */
+    @Test
+    fun aPairTheHouseNeverPickedIsPairedWithinThreeBeatsOfItsPhonesBeingHeldTogether() {
+        val phones = (0 until 5).map { Phone(it, capacity = RangingWire.STARTING_CAPACITY) }
+        val room = Room(armed(5), phones)
+        // A loose ring a few metres across, every phone at least a metre from every other: the house
+        // pairs as many as it can, seven, and four of the five phones are full.
+        val ring = listOf(Spot(0.2, 1.0), Spot(1.4, 1.5), Spot(1.4, 3.2), Spot(3.4, 2.8), Spot(3.3, 0.9))
+        ring.forEachIndexed { i, at -> room.spots[i] = at }
+        repeat(6) { room.beat() }
+        val missing = (0 until 5).flatMap { a -> (a + 1 until 5).map { b -> a to b } }
+            .filter { (a, b) -> room.memory.pairs.none { it.has(Seat(a)) && it.has(Seat(b)) } }
+        println("D-302 FIVE AT THREE — pairs ${room.memory.pairs.map { it.low.index to it.high.index }}, missing $missing")
+        assertEquals(7, room.memory.pairs.size, "five phones at three did not settle into seven pairs")
+        assertTrue(
+            missing.any { (a, b) -> room.pairs(a).size == 3 && room.pairs(b).size == 3 },
+            "no unranged pair is between two full phones: $missing",
+        )
+        // Left as it is, a missing pair stays missing: the room is still.
+        val settled = room.memory.pairs.map { it.handle }
+        repeat(20) { room.beat() }
+        assertEquals(settled, room.memory.pairs.map { it.handle }, "a still room changed its pairs")
+
+        // Three times, a pair the house is not ranging now with a full phone in it (both full first),
+        // never the same one twice: under D-300 alone each of them stayed unranged for good.
+        val tried = mutableSetOf<Pair<Int, Int>>()
+        repeat(3) {
+            val unranged = (0 until 5).flatMap { a -> (a + 1 until 5).map { b -> a to b } }
+                .filter { (a, b) -> (a to b) !in tried && room.memory.pairs.none { it.has(Seat(a)) && it.has(Seat(b)) } }
+                .filter { (a, b) -> room.pairs(a).size == 3 || room.pairs(b).size == 3 }
+            val (x, y) = unranged.firstOrNull { (a, b) -> room.pairs(a).size == 3 && room.pairs(b).size == 3 } ?: unranged.first()
+            tried += x to y
+            val full = listOf(x, y).filter { room.pairs(it).size == 3 }
+            val before = room.memory.pairs.map { it.handle }.toSet()
+            // Y is held against X.
+            room.spots[y] = Spot(room.spots.getValue(x).x + 0.04, room.spots.getValue(x).y)
+            var beats = 0
+            while (beats < 30 && !rangingEachOther(room, x, y)) {
+                room.beat()
+                beats++
+                for (p in phones) {
+                    assertTrue(room.pairs(p.seat).size <= p.capacity, "seat ${p.seat} is in ${room.pairs(p.seat).size} pairs at capacity ${p.capacity}")
+                    assertTrue(p.held.size <= p.capacity, "seat ${p.seat} was told to range ${p.held.size} at capacity ${p.capacity}")
+                }
+            }
+            println("D-302 A HELD PAIR THE HOUSE NEVER PICKED — seats $x and $y (full: $full) ranging each other after $beats beats")
+            assertTrue(beats <= displaceBeats, "seats $x and $y, held together, were not ranging each other within $displaceBeats beats (after $beats; pairs ${room.memory.pairs.map { it.low.index to it.high.index }})")
+            // Each full phone gave up one pair, no more.
+            val gone = before - room.memory.pairs.map { it.handle }.toSet()
+            assertTrue(gone.size <= 2, "holding $x and $y together let ${gone.size} pairs go")
+            // Back in the ring for the next pair.
+            room.spots[y] = ring[y]
+            repeat(6) { room.beat() }
+        }
+    }
+
+    /**
+     * **GUARD (D-302): the room a held pair displaced for is kept for it while it waits on a spare.**
+     * Seat 0 (capacity 2) ranges two phones a metre off; seat 2 stands nearer than either, but only
+     * by 2 to 3 dB, so it displaces neither and waits unpaired. Seat 1 is held against seat 0. Seat 0
+     * gives up its weaker pair and its stop frees a spare a beat before seat 1's does; in that beat
+     * the free place would go to seat 2, which has a spare and ranks seat 0 first, and seat 1 would
+     * wait for another displacement. Held for the pair that displaced for it, the touch is ranged in
+     * the same [displaceBeats] beats as anywhere else.
+     */
+    @Test
+    fun theRoomAHeldPairDisplacedForIsKeptForItWhileItWaitsOnASpare() {
+        val x = Phone(0, capacity = 2)
+        val y = Phone(1, capacity = 1)
+        val w = Phone(2, capacity = 1)
+        val c = Phone(3, capacity = 1)
+        val e = Phone(4, capacity = 1)
+        val d = Phone(5, capacity = 1)
+        val room = Room(armed(6), listOf(x, y, w, c, e, d))
+        room.spots[0] = Spot(0.0, 0.0)
+        room.spots[3] = Spot(1.0, 0.0)
+        room.spots[4] = Spot(0.0, 1.1)
+        room.spots[1] = Spot(5.0, 0.0)
+        room.spots[5] = Spot(5.5, 0.0)
+        room.spots[2] = Spot(12.0, 9.0)
+        repeat(4) { room.beat() }
+        // Seat 2 walks in, nearer seat 0 than seat 0's pairs, but not by the margin.
+        room.spots[2] = Spot(-0.8, 0.0)
+        repeat(5) { room.beat() }
+        assertEquals(setOf(3, 4), room.pairs(0).map { if (it.low.index == 0) it.high.index else it.low.index }.toSet(), "the fixture: seat 0 should range seats 3 and 4")
+        assertTrue(room.pairs(2).isEmpty(), "the fixture: seat 2 should be waiting unpaired")
+        room.spots[1] = Spot(0.04, 0.0)
+        var beats = 0
+        while (beats < 30 && !rangingEachOther(room, 0, 1)) {
+            room.beat()
+            beats++
+        }
+        println("D-302 THE ROOM KEPT FOR A HELD PAIR — seats 0 and 1 ranging each other after $beats beats")
+        assertTrue(beats <= displaceBeats, "seats 0 and 1, held together, were not ranging each other within $displaceBeats beats (after $beats): the room seat 0 gave up went elsewhere")
+    }
+
+    /**
+     * **GUARD (D-302): a spare dealt into a pair its phone never took up is dealt again.** A phone
+     * that does not act on its plans for twenty seconds (a lost answer, a phone behind) is dealt a
+     * pair on its lowest spare, which is let go after the grace, again and again. Under D-300 each
+     * such spare stayed dealt for the round while the phone kept offering it idle, so after three of
+     * them it could never be paired again; the touch the eight-phone bench held between two such
+     * phones never landed. Once it acts on its plans it is ranging its peer within three beats.
+     */
+    @Test
+    fun aSpareDealtIntoAPairItsPhoneNeverTookUpIsDealtAgain() {
+        val a = Phone(0)
+        val b = Phone(1).also { it.follows = false }
+        val room = Room(armed(2), listOf(a, b))
+        room.spots[0] = Spot(0.0, 0.0)
+        room.spots[1] = Spot(0.04, 0.0)
+        repeat(20) { room.beat() }
+        assertTrue(room.memory.formed >= 3, "the fixture: seat 1 should have been dealt its three spares in pairs it never took up, was dealt ${room.memory.formed}")
+        b.follows = true
+        var beats = 0
+        while (beats < 10 && !rangingEachOther(room, 0, 1)) {
+            room.beat()
+            beats++
+        }
+        assertTrue(beats <= displaceBeats, "seat 1, acting on its plans again, was not ranging seat 0 within $displaceBeats beats (after $beats): its spares stayed dealt")
+    }
+
+    /**
+     * **GUARD (D-302): a handed-back spare is dealt again only once its phone's own next report
+     * offers it idle.** The start may have reached the phone late, after the house let the pair go;
+     * then the session is busy, and only the phone's next report (listing the old pair, not offering
+     * the key) says so. Dealt again on the report from before the drop, it would be dealt into a
+     * second pair the phone cannot start.
+     */
+    @Test
+    fun aHandedBackSpareWaitsForItsPhonesNextReport() {
+        val a = Phone(0)
+        val b = Phone(1).also { it.follows = false }
+        val room = Room(armed(2), listOf(a, b))
+        room.spots[0] = Spot(0.0, 0.0)
+        room.spots[1] = Spot(0.04, 0.0)
+        room.beat()
+        val first = room.memory.pairs.single()
+        // Upload by upload, until the house lets the first pair go.
+        var uploads = 0
+        while (room.memory.pairs.any { it.handle == first.handle } && uploads < 40) {
+            val start = room.tick
+            for (p in room.phones) {
+                room.up(p)
+                room.tick++
+                uploads++
+                if (room.memory.pairs.none { it.handle == first.handle }) break
+            }
+            if (room.memory.pairs.any { it.handle == first.handle }) room.tick = start + second
+        }
+        assertTrue(room.memory.pairs.none { it.handle == first.handle }, "the fixture: the pair seat 1 never took up was never let go")
+        assertTrue(
+            room.memory.pairs.none { it.highSpare.key == first.highSpare.key },
+            "seat 1's spare was dealt again on the upload that let its pair go, before seat 1 said it was still idle",
+        )
+    }
+
+    private fun rangingEachOther(room: Room, x: Int, y: Int): Boolean {
+        val pair = room.memory.pairs.singleOrNull { it.has(Seat(x)) && it.has(Seat(y)) } ?: return false
+        return pair.handle in room.phones[x].held && pair.handle in room.phones[y].held
+    }
+
+    /**
+     * **GUARD (D-302): two candidates nearly tied for a full phone's first place do not trade the pair
+     * back and forth.** A phone of capacity one between two others, the two taking turns at being
+     * nearer by about 2 dB (0.9 m and 1.1 m), each turn four seconds, longer than a reading ranks a
+     * pair. Each in its turn is the phone's first and the phone theirs, but it is never
+     * [RangingGate.DISPLACE_MARGIN_DB] stronger than the kept pair, so the first pair formed stays
+     * for the minute.
+     */
+    @Test
+    fun twoNearlyTiedCandidatesDoNotTradeAPairBackAndForth() {
+        val a = Phone(0, capacity = 1)
+        val b = Phone(1, capacity = 1)
+        val c = Phone(2, capacity = 1)
+        val room = Room(armed(3), listOf(a, b, c))
+        room.spots[0] = Spot(0.0, 0.0)
+        room.spots[1] = Spot(-0.9, 0.0)
+        room.spots[2] = Spot(1.1, 0.0)
+        repeat(3) { room.beat() }
+        val first = room.memory.pairs.single().handle
+        assertTrue(room.memory.pairs.single().has(Seat(1)), "seat 0 should pair first with its nearest, seat 1")
+        val formedBefore = room.memory.formed
+        for (turn in 0 until 15) {
+            val bNearer = turn % 2 == 1
+            room.spots[1] = Spot(if (bNearer) -0.9 else -1.1, 0.0)
+            room.spots[2] = Spot(if (bNearer) 1.1 else 0.9, 0.0)
+            repeat(4) { room.beat() }
+        }
+        assertEquals(formedBefore, room.memory.formed, "the pair traded places: ${room.memory.formed - formedBefore} pairs formed in a minute of a near tie")
+        assertEquals(listOf(first), room.memory.pairs.map { it.handle }, "seat 0's pair changed in a near tie")
+        assertEquals(setOf(first), a.held.keys, "seat 0 is not ranging the pair it began with")
+    }
+
+    // ---- A house that goes quiet (D-302) ------------------------------------------------------------
+
+    /**
+     * **GUARD (D-302): the house's clock jumping lets no pair go that its phones still hold.** Before,
+     * any jump past three seconds aged every reading, report and hold at once, and every pair was let
+     * go and formed afresh under new handles, so nobody could touch or report for the beats that
+     * took. After the jump the phones list the same pairs, and the house keeps them all, telling each
+     * phone only to keep; a pair one phone then stops listing still goes, after the grace.
+     */
+    @Test
+    fun aJumpOfTheHousesClockKeepsEveryPairItsPhonesStillHold() {
+        val phones = (0 until 6).map { Phone(it, capacity = RangingWire.STARTING_CAPACITY) }
+        val room = Room(armed(6), phones)
+        listOf(Spot(0.0, 0.0), Spot(1.0, 0.2), Spot(2.2, 0.0), Spot(0.3, 1.4), Spot(1.6, 1.6), Spot(2.8, 1.2))
+            .forEachIndexed { i, at -> room.spots[i] = at }
+        repeat(6) { room.beat() }
+        val settled = room.memory.pairs.map { it.handle }
+        assertTrue(settled.size >= 6, "the fixture paired only ${settled.size}")
+        val formed = room.memory.formed
+        room.tick += 10 * second
+        val planned = room.plans.size
+        repeat(3) { room.beat() }
+        assertEquals(settled, room.memory.pairs.map { it.handle }, "a jump of the house's clock let pairs go")
+        assertEquals(formed, room.memory.formed, "a jump of the house's clock formed pairs afresh")
+        assertTrue(
+            room.plans.drop(planned).all { (_, p) -> p.steps.all { it is RangingStep.Keep } },
+            "after the jump a phone was told something other than keep: ${room.plans.drop(planned).filter { (_, p) -> p.steps.any { it !is RangingStep.Keep } }}",
+        )
+        // A pair one phone stops listing is still let go, after the grace.
+        val lost = room.pairs(0).first()
+        phones[0].follows = false
+        phones[0].held.remove(lost.handle)
+        repeat((RangingGate.HOLD_GRACE_TICKS / second).toInt() + 1) { room.beat() }
+        assertTrue(room.memory.pairs.none { it.handle == lost.handle }, "a pair seat 0 stopped listing outlived the grace")
     }
 
     @Test

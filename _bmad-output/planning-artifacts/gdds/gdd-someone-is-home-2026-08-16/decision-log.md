@@ -10683,6 +10683,213 @@ XML):
 **Not on a phone.** The real phones still range nothing, so tomorrow's rounds arm on Bluetooth and
 play exactly as D-233, D-236 and D-291 describe.
 
+### D-302 · **A pair both phones rank first displaces a kept pair, so a held touch is always ranged; a spare its phone never took up is dealt again; the house's silences no longer age the pairs; the benches range three a phone — built (recording stays 43; nothing on the wire moved)**
+
+**The gap** (D-301's raised items 1 and 2, D-300's open item 2). D-300's pairing let a kept pair go
+only once it fell past *capacity + 2* in a phone's ranking. With five phones at the starting
+capacity of three nothing ever falls past rank five of four peers, so a pair the house never picked
+stayed unpicked for the whole round. On distance, only pairs being ranged can touch or report (U6,
+D-301), so an Insider holding their phone against such a peer could never Revoke them, however long
+they held. That is a held touch failing, not U3's crowd missing a flyby. `ArrivalOrderTest` on
+distance showed it at eight phones (two touches of seven landed for the host's phone), and D-301
+kept that test on Bluetooth and gave the benches four a phone. Second: any stretch longer than three
+seconds on the house's clock with no upload aged every reading, report and hold at once, so a host
+coming back on the air (D-225), or a bench jumping the clock to a cooldown, let every pair go and
+nobody could touch or report for the beats it took to pair again.
+
+**Now, displacement** (core `Ranging.kt`, `RangingPairing.displacePairs`), between keeping and
+forming, on every upload:
+
+1. **Who may displace: a pair both phones rank first** (each the other's strongest peer, ties to
+   the lower seat, as the ranking already breaks them), not kept, both phones ranging at all.
+   Each seat ranks one peer first, so a seat gives up at most one pair an upload, and these pairs
+   form a matching: at most half the seats are in one.
+2. **What is given up: each full phone's weakest kept pair**, only if it is past that phone's entry
+   rank (not in its strongest *capacity*) and at least **`DISPLACE_MARGIN_DB` = 10 dB** weaker
+   than the pair taking its place. A phone with room gives up nothing. Both phones are judged
+   before either drops anything, so no phone loses a pair for a pair that cannot form.
+3. **The room is held** (`formPairs`): when such a pair has room on both phones but waits on a
+   spare (a full phone has none until its stop goes through), it holds both phones' room for itself
+   that upload, so a weaker pair cannot take the place it displaced for.
+4. **Unchanged**: the keep rule and its margin of 2, the entry rule, the grace, handles, plans,
+   symmetry (one record per pair), the capacity bound, and the inputs: uploads and their arrival
+   ticks only. `RangingPairing` still takes no state, so no role, armed state or out list can reach
+   it.
+
+**Why it cannot churn.** A pair both phones rank first is never the weakest of either (it is first
+on both), so it is never displaced itself. Taking a displaced pair back needs the margin the other
+way, a 20 dB swing between the two, a tenfold change of distance; jitter at one spot is 4 dB
+(D-233: 30 cm read −41 to −45), and the window's strongest-of-eight smooths it further. In a still
+room every displacement makes one more pair both phones rank first, and those are never undone, so
+a still room makes at most one displacement per two seats and then stops. No minimum hold was
+added: the margin alone stops a near tie trading places, and a hold time would only delay a touch.
+
+**Why 10 dB** (provisional (overnight)). The phone-to-phone readings (D-233): firm touch −27, loose
+touch −37, 30 cm −43, 1 m −57. Ten is more than twice the spread at one distance; a touch at the
+contact gate (−40) still displaces anything at about half a metre or farther, and a firm touch
+anything not itself touching; and D-300's *a peer just ahead of the kept one* (twice as near, 6 dB)
+still cannot displace it, so that test stands unchanged.
+
+**Why three beats** (the guard's N). The touch's first upload makes the pair both phones' first and
+each full phone's stop goes out in its answer; the next beat each phone offers the spare its stop
+freed, and the pair forms on the second of the two uploads, that phone handed its start; the third
+beat the first phone is handed its start. The radio reads a beat later, so a touch lands about four
+to five seconds after the phones meet, where it landed at once before only if the house happened to
+be ranging that pair.
+
+**Found on the way, and fixed: a spare dealt into a pair its phone never took up was burned for the
+round** (D-300's dealt ring). The house remembers every spare key it deals, so a stale offer is
+not dealt twice. But a pair can be let go before one of its phones ever lists it (formed on one
+phone's upload and dropped before the other's next answer, or never started within the grace),
+and that phone's session is then still idle and offered every second, and refused every second.
+A phone whose three spares went that way could not be paired again in the round. The eight-phone
+bench on distance showed it once displacement was in: IVY and SOL offered three idle spares each,
+HOST two, all marked dealt, and the house paired none of them while HOST and ROSE had room. So
+**a dropped pair hands back the spare of each phone that never listed it** (`undeal`), and the key
+is **dealable again only once a report from that phone, taken after the hand-back, still offers it
+idle** (`reportSeq` against `dealtBack`): a start that reached the phone late leaves the session
+busy, the phone's next report lists the old handle and does not offer the key, and the house stops
+it as any handle it no longer keeps. Held in two arrays sized at arming; nothing per upload.
+
+**Now, the house's silences** (`RangingPairing.clock`). The pairing runs on its own tick: the
+arrival tick less every stretch longer than **`SILENCE_TICKS` = 2 s** in which no upload arrived
+from any phone, each closed up to one upload. Every phone uploads every second, so two seconds of
+nothing from all of them is the house off the air or its clock jumping, never a quiet room; the
+phones hold their sessions throughout. Pairs, readings and reports therefore come through a jump
+as through one beat, and a pair is let go only once its phones stop listing it, by D-300's grace.
+Readouts (`pairs()`) add the silence back, so a time from before a jump reads as if the jump had
+lasted one upload. It fitted cleanly: one counter, one comparison per upload, no new state reaches
+anything but the pairing.
+
+**The benches range three a phone.** `SimulatedAir.BENCH_CAPACITY` is now
+`RangingWire.STARTING_CAPACITY` (3), and `ContactRadioBenchTest.UWB_CAPACITY` with it.
+`ArrivalOrderTest`'s socket case plays on distance at three, arming through the lobby on UWB: each
+round's four pairs are held until all four touches have landed (each within `TOUCH_LANDS_MILLIS`,
+8 s), then let go, inside the pair's five-second grace, so a touch is still one touch and the
+exactly-once and stream-order guards are unchanged. **Its house's clock now runs on real time**
+(`advanceTo` every 50 ms, nothing minted), as the app's tick driver runs it: it stood at tick 0 for
+the whole test, which held D-300's grace open for ever, so a pair one phone never took up was never
+let go. `RangingAllocationTest`'s settling now beats once a second (it beat every 1.9 s, longer
+than a new pair's second phone takes to list it inside the three-second grace, so pairs formed and
+dropped in a loop once spares were handed back) and settles until the pairs stand still three
+beats rather than for a fixed twelve: 4 beats. `ContactRadioBenchTest`'s distance cases wait
+for the pairing to settle (`ranged()`: every phone ranging exactly what the house keeps, unchanged
+two seconds running) instead of for every pair, which five phones at three cannot range, and give a
+held touch or report up to `HELD_SECONDS` (10) instead of three to five; the body-between case now
+also asserts the two phones are ranged, so its *no Revoke* is the distance refusing and not a pair
+never ranged. `AbilityWiringTest`'s five-beat hold stays; its comment now gives the displacement as
+the reason, not the clock jump.
+
+**Recording: no change, 43 stays.** The pairing is not recorded (D-300): its inputs are the uploads
+and their arrival, which are not, and it mints no event and changes no state the rules hold. Which
+pairs are ranged changes which distances reach the rules, exactly as the arrival of an upload
+does, and that was already outside the recording.
+
+**Wire and parity: nothing moved.** No field, slot or width changed; a plan is still 1 714
+characters and every answer one width on every phone, Insider or Resident, living or out (D-300's
+and D-301's width guards green).
+
+**Allocation (rule 7).** Displacement, the hand-back and the clock are arithmetic over arrays sized
+at arming (`first`, `reserved`, `reportSeq` per seat; `dealtLive`, `dealtBack` per remembered key;
+`pLowListed`, `pHighListed` per pair): nothing per upload. `RangingAllocationTest`: the house's
+ranging path **1 839 B** per seat per beat (was 1 802; ceiling 2 048, unmoved). The 37 bytes are
+not the pairing's: the room now settles until every phone holds its pairs, so each report lists
+more pairs and the desk resolves more distances (one `ContactDistance` each, D-301's cost). D-301's
+distance rules over Bluetooth −48 B and holding +285 B (ceilings 1 024 / 1 536, unmoved; holding
+was +173 because fewer phones near the Revoked seat were ranged).
+
+**Proved** (each red against its injected break first, then restored; quoted from the test XML):
+
+- **The starvation** (`RangingPairsTest.aPairTheHouseNeverPickedIsPairedWithinThreeBeatsOfItsPhonesBeingHeldTogether`,
+  core, new). Five phones at three in a still ring settle into seven pairs, `[(0, 1), (1, 2), (0, 2),
+  (2, 3), (1, 4), (3, 4), (0, 4)]`, missing `[(0, 3), (1, 3), (2, 4)]`, and hold them still for 20
+  beats; then three unranged pairs in turn are held together, the first between two full phones:
+  ranged after 3, 3 and 2 beats, at most two pairs let go each time, no phone past its capacity
+  upload by upload. *Displacement switched off:* `seats 2 and 4, held together, were not ranging
+  each other within 3 beats (after 30; pairs [(0, 1), (1, 2), (0, 2), (2, 3), (1, 4), (3, 4), (0, 4)])`,
+  and the held-room guard below with it (`… (after 30): the room seat 0 gave up went elsewhere`).
+- **The margin** (`twoNearlyTiedCandidatesDoNotTradeAPairBackAndForth`, new): a phone of capacity
+  one between two others that take turns at being nearer by about 2 dB, four seconds a turn, for a
+  minute: the first pair formed stays, nothing else forms. *Margin 0:* `the pair traded places: 7
+  pairs formed in a minute of a near tie expected:<1> but was:<8>`, and D-300's own guard went red
+  with it: `a peer just ahead of the kept one displaced it expected:<RangingHandle(e4355252977e8c8a)>
+  but was:<RangingHandle(37a3eae245764dc1)>`.
+- **The held room** (`theRoomAHeldPairDisplacedForIsKeptForItWhileItWaitsOnASpare`, new): a phone
+  of capacity two ranging two phones a metre off, a third nearer by 2 to 3 dB waiting unpaired, a
+  fourth held against it: ranged in 3 beats. *The room not held:* `seats 0 and 1, held together,
+  were not ranging each other within 3 beats (after 4): the room seat 0 gave up went elsewhere`.
+- **The clock** (`aJumpOfTheHousesClockKeepsEveryPairItsPhonesStillHold`, new): six phones
+  settled, the house's clock jumps ten seconds, and for three beats every pair keeps its handle,
+  nothing forms and every phone is told only to keep; a pair one phone then stops listing goes after
+  the grace. *The silence not closed up:* `a jump of the house's clock let pairs go
+  expected:<[RangingHandle(e4355252977e8c8a), …]> but was:<[RangingHandle(4aff15b79f23654f), …]>`
+  (all seven handles new).
+- **The hand-back** (`aSpareDealtIntoAPairItsPhoneNeverTookUpIsDealtAgain`, new): a phone that
+  ignores its plans for twenty seconds is dealt pair after pair on its spares; once it acts on them
+  it is ranging its peer within three beats. *Nothing handed back:* `seat 1, acting on its plans
+  again, was not ranging seat 0 within 3 beats (after 10): its spares stayed dealt` (and with the
+  fixture's check at four formings, the twenty seconds could deal only three: `was dealt 3`).
+- **The hand-back waits for the phone** (`aHandedBackSpareWaitsForItsPhonesNextReport`, new): on
+  the upload that lets the pair go, its spare is not dealt again. *Dealable at once:* `seat 1's
+  spare was dealt again on the upload that let its pair go, before seat 1 said it was still idle`.
+- **Eight phones on distance** (`ArrivalOrderTest`, app, real sockets, at three a phone): every
+  phone answered 7 times for 7 touches, `{HOST=7, ROSE=7, DANI=7, MARCUS=7, ADA=7, TEO=7, IVY=7,
+  SOL=7}`; each round's four touches all landed after `[3914, 2502, 4546, 3522, 4516, 4490, 4607]`
+  ms in the full run (2.5 to 4.6 s, against the 8 s bound); nothing went out against a newer state and every stream is the house's, in order.
+  *Displacement switched off:* `never happened: round 2: every held touch landed … SOL 2/3, MARCUS
+  2/3 …` (MARCUS full at three; the other three pairs, held through the 30 s wait, touched again
+  each grace). Before the hand-back and the clock, it failed on round 0 with HOST, SOL, ROSE and
+  IVY never answered, their idle spares all marked dealt and the house's clock at tick 0.
+- **The five-phone bench at three** (`ContactRadioBenchTest`, the five distance cases, app): green,
+  the body-between case with the two phones ranged.
+
+Every quote above was taken again against the final code (displacement, margin, silence and both
+hand-back breaks), not only when each guard was first written.
+
+**Checked** (`./gradlew check --continue` in the worktree on `2b5b285` plus this change, exit 0,
+every result XML counted with a python glob): model 335 (JVM) and 321 (iOS Simulator), cards 17,
+core 411 (JVM) and 409 (iOS Simulator; `RangingAllocationTest` is JVM-only), platform 213, harness
+137, ui 719 (desktop) and 344 (iOS Simulator), app 263: **3 169 tests, no failures**.
+`vocabularyLint`, `redactionLint`, `boundaryCheck`, `armingCordon`, `benchSeedCordon` and
+`seedSourceCordon` clean, and the variant sweeps ran. Neither known load flake (`RealClocksTest`,
+`OutboundQueueTest`) fired.
+
+**Still open, raised rather than built.**
+
+1. **A tight huddle can still starve a touch**: if every pair a full phone keeps is within 10 dB of
+   the touch (four other phones within about half a metre of it), nothing is displaced. That is the
+   crowd U3 accepts, but it is now the margin, not the rule, that decides it, and phones will set
+   the number.
+2. **A phone that never offers the spare it was freed** holds the other phone's room while the two
+   rank each other first (point 3): a held touch keeps it, walking away releases it. Not seen on any
+   bench; a modified or broken phone could do it to one peer at a time.
+
+**Decisions for the owner** (each provisional (overnight)):
+
+1. **The rule**: a pair both phones rank first displaces each full phone's weakest kept pair, if
+   that pair is past the phone's entry rank and 10 dB weaker; D-301's suggested rule with a margin.
+   Considered and not taken: any pair inside both phones' entry rank displacing (more churn in a
+   walking crowd, for pairs no touch needs), and a minimum hold time (a delay on every touch, where
+   the margin already stops a near tie trading places).
+2. **`DISPLACE_MARGIN_DB` = 10** (above).
+3. **The room held for a pair waiting on a spare**, one upload at a time.
+4. **A spare handed back and dealt again**, where D-300 dealt each once for the round: the phone's
+   token can now be handed to a second peer after a first peer was handed it and then told to
+   stop. D-300's open item 3 (what iOS does with a token handed to two peers) is therefore no
+   longer impossible here; it is sequential, never at once, and only for a session the phone never
+   started. The radio unit should confirm iOS accepts it, or the phone should retire such a
+   session and offer a fresh one.
+5. **`SILENCE_TICKS` = 2 s, closed up to one upload**: pairs come through the house going off the
+   air or its clock jumping; only phones that stop listing a pair lose it.
+6. **The benches range three a phone**, the phones' own start, `ContactRadioBenchTest` included;
+   D-301's decision 10 (four) is withdrawn.
+7. **The guard's numbers**: three beats for a held pair the house was not ranging (core), eight
+   seconds for a held touch on the eight-phone bench, ten for a held touch or report on the
+   five-phone bench.
+
+**Not on a phone.** The real phones still range nothing (`NoRanging`), so tomorrow's rounds arm on
+Bluetooth and nothing here touches them.
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

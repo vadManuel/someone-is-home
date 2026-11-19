@@ -125,12 +125,13 @@ class SimulatedAir {
         const val TOUCH_METRES = 0.04
 
         /**
-         * **The benches' phones range four peers each** (D-301): every bench that plays through this
-         * air plays on distance, its phones telling the house so in the lobby, and five phones at four
-         * a phone range every pair. The phones' own start is three (U6); at three, D-300's pairing
-         * can leave a pair of five unranged for good, which D-301 raises.
+         * **The benches' phones range three peers each, the phones' own start** (U6, D-302): every
+         * bench that plays through this air plays on distance, its phones telling the house so in the
+         * lobby. D-301 set four, so that five phones ranged every pair, because at three D-300's
+         * pairing could leave a pair of five unranged for good; since D-302 a pair both phones rank
+         * first displaces a kept pair, and the benches play at the phones' number.
          */
-        const val BENCH_CAPACITY = 4
+        const val BENCH_CAPACITY = RangingWire.STARTING_CAPACITY
 
         private const val REFERENCE_METRES = 0.05
         private const val REFERENCE_DBM = -30.0

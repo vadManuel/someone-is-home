@@ -17,6 +17,7 @@ import home.someoneshome.model.Seat
 import home.someoneshome.model.SeatNamed
 import home.someoneshome.model.Tick
 import home.someoneshome.model.Winner
+import home.someoneshome.model.protocol.RangingHandle
 import home.someoneshome.model.protocol.RoundBody
 import home.someoneshome.model.protocol.ReportSlot
 import home.someoneshome.model.protocol.RequestSlot
@@ -221,15 +222,28 @@ class ContactRadioBenchTest {
             beat()
         }
 
-        /** **Seconds until every phone ranges every peer it can** (D-300's pairing), and the house keeps those pairs. */
+        /**
+         * **Seconds until the pairing settles** (D-300, D-302): the house keeps pairs, every phone ranges
+         * exactly the pairs the house keeps with it in them, and nothing changed over the last two
+         * seconds. Five phones at three cannot range every pair; a touch or a hold between two phones
+         * the house is not ranging displaces a kept pair, inside [HELD_SECONDS].
+         */
         suspend fun ranged() {
             val ranging = seats.filter { it != without }
-            val pairs = ranging.size * (ranging.size - 1) / 2
+            var last: List<RangingHandle>? = null
+            var still = 0
             repeat(20) {
-                if (house.ranging?.pairs()?.size == pairs && ranging.all { air.rangingFor(it).ranging.size == ranging.size - 1 }) return
+                val kept = house.ranging?.pairs().orEmpty()
+                val held = kept.isNotEmpty() && ranging.all { seat ->
+                    air.rangingFor(seat).ranging.toSet() == kept.filter { it.has(seat) }.map { it.handle }.toSet()
+                }
+                val handles = kept.map { it.handle }
+                still = if (held && handles == last) still + 1 else 0
+                if (still >= 2) return
+                last = handles
                 second()
             }
-            fail("the phones never ranged every pair: ${house.ranging?.pairs()?.size} of $pairs")
+            fail("the phones never settled on the house's pairs: ${house.ranging?.pairs()?.size} kept")
         }
 
         val act get() = ContactAct(air, beat = { beat() }, note = { said += it })
@@ -374,7 +388,7 @@ class ContactRadioBenchTest {
 
         // The Revoke: held together, a second at a time, until the house concludes.
         air.touch(insider, target)
-        repeat(3) { if (!house.state.isRevoked(target)) second() }
+        repeat(HELD_SECONDS) { if (!house.state.isRevoked(target)) second() }
         assertTrue(house.state.isRevoked(target), "the touch did not Revoke the target by distance: ${house.refusals}")
         assertTrue(RoundMessage.AbilityFired(RoundMessage.AbilityFired.LANDED_AT_A_TOUCH) in pushed.getValue(insider.index), "the Insider's phone was never told its Revoke landed")
         air.spreadOut(seats)
@@ -385,7 +399,7 @@ class ContactRadioBenchTest {
         val near = air.spotOf(target)!!
         air.place(reporter, SimulatedAir.Spot(near.x + 0.20, near.y))
         val from = slots.getValue(reporter.index).size
-        repeat(5) { if (house.state.meeting == null) second() }
+        repeat(HELD_SECONDS) { if (house.state.meeting == null) second() }
         val meeting = assertNotNull(house.state.meeting, "two seconds held at 20 cm called no meeting: ${house.refusals}")
         assertEquals(reporter, meeting.caller, "the meeting was called by somebody else")
         assertEquals(MeetingTrigger.RevokeReported(target), meeting.trigger)
@@ -412,13 +426,13 @@ class ContactRadioBenchTest {
         armRevoke(insider)
         ranged()
         air.touch(insider, target)
-        repeat(3) { if (!house.state.isRevoked(target)) second() }
+        repeat(HELD_SECONDS) { if (!house.state.isRevoked(target)) second() }
         assertTrue(house.state.isRevoked(target), "the touch revoked nobody: ${house.refusals}")
         air.spreadOut(seats)
         repeat(5) { second() }
         val near = air.spotOf(target)!!
         air.place(reporter, SimulatedAir.Spot(near.x + 0.10, near.y))
-        repeat(5) { if (house.state.meeting == null) second() }
+        repeat(HELD_SECONDS) { if (house.state.meeting == null) second() }
         assertNotNull(house.state.meeting, "the hold called no meeting")
         delay(SETTLE_MILLIS)
         val widths = answers.mapValues { (_, w) -> w.toSet() }
@@ -443,13 +457,15 @@ class ContactRadioBenchTest {
         armRevoke(insider)
         ranged()
         air.touch(insider, target)
-        repeat(3) { if (!house.state.isRevoked(target)) second() }
+        repeat(HELD_SECONDS) { if (!house.state.isRevoked(target)) second() }
         air.spreadOut(seats)
         repeat(5) { second() }
         val home = air.spotOf(reporter)!!
         val near = air.spotOf(target)!!
         air.place(reporter, SimulatedAir.Spot(near.x + 0.25, near.y))
-        second()
+        // The first second the pair is ranged and in reach, the hold begins (D-302: a pair the house
+        // was not ranging is paired within a few seconds).
+        repeat(HELD_SECONDS) { if (phones.getValue(reporter.index).report == ReportSlot.Idle) second() }
         assertEquals(ReportSlot.Pending(0), phones.getValue(reporter.index).report, "the reader's phone was not told its hold began")
         air.place(reporter, home)
         second()
@@ -468,7 +484,7 @@ class ContactRadioBenchTest {
         armRevoke(insider)
         ranged()
         air.touch(insider, target)
-        repeat(3) { if (!house.state.isRevoked(target)) second() }
+        repeat(HELD_SECONDS) { if (!house.state.isRevoked(target)) second() }
         assertTrue(house.state.isRevoked(target), "the touch revoked nobody: ${house.refusals}")
         val hit = house.clock
         while (house.clock + ContactGate.UPLOAD_TICKS < hit + ContactGate.PAIR_GRACE_TICKS) {
@@ -476,7 +492,7 @@ class ContactRadioBenchTest {
             assertEquals(ReportSlot.Idle, phones.getValue(insider.index).report, "the Insider's circle started ${house.clock - hit} ticks after the hit, inside the grace")
             assertEquals(null, house.state.meeting, "the Insider's phone reported inside the grace")
         }
-        repeat(5) { if (house.state.meeting == null) second() }
+        repeat(HELD_SECONDS) { if (house.state.meeting == null) second() }
         val meeting = assertNotNull(house.state.meeting, "the Insider's phone did not report after the grace: ${house.refusals}")
         assertEquals(insider, meeting.caller)
         assertTrue(slots.getValue(insider.index).any { it is ReportSlot.Pending }, "the Insider's circle never warned them")
@@ -498,7 +514,12 @@ class ContactRadioBenchTest {
             ranged()
             air.bodyBetween(insider, target)
             air.touch(insider, target)
-            repeat(4) { second() }
+            repeat(HELD_SECONDS) { second() }
+            // Bluetooth still says touching, so the pair is ranged (D-302): what refuses is the distance.
+            assertTrue(
+                house.ranging?.pairs().orEmpty().any { it.has(insider) && it.has(target) },
+                "the two phones held together were never ranged, so the body was never read",
+            )
             assertFalse(house.state.isRevoked(target), "a round on distance Revoked through a body that reads metres long")
         }
         rig(uwb = true, without = Seat(4)) {
@@ -863,7 +884,19 @@ class ContactRadioBenchTest {
         const val SEED = RoundCheat.SEED
         const val SETTLE_MILLIS = 150L
 
-        /** Four peers a phone: five phones range every pair (D-301). */
-        const val UWB_CAPACITY = 4
+        /**
+         * **Three peers a phone, the phones' own start** (U6, D-302). D-301 ranged four so that five
+         * phones ranged every pair; since D-302 a touch or a hold between two phones the house is not
+         * ranging displaces a kept pair.
+         */
+        const val UWB_CAPACITY = SimulatedAir.BENCH_CAPACITY
+
+        /**
+         * **How long a held touch or a held report is given, in seconds: ten** (D-302). Between two
+         * phones the house is not ranging, three to pair (the stops, the second spare, the second
+         * start), one for both phones' readings, and for a report two more of the hold: six, with
+         * four to spare. A loop over it stops as soon as the touch or the call lands.
+         */
+        const val HELD_SECONDS = 10
     }
 }

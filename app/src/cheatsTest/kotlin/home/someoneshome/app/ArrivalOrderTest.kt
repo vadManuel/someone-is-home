@@ -1,6 +1,8 @@
 package home.someoneshome.app
 
 import home.someoneshome.core.contactSeedFor
+import home.someoneshome.model.Balance
+import home.someoneshome.model.ContactSource
 import home.someoneshome.model.ContactWindow
 import home.someoneshome.model.Effect
 import home.someoneshome.model.EmitSchema
@@ -8,6 +10,7 @@ import home.someoneshome.model.GameState
 import home.someoneshome.model.OneLineHeld
 import home.someoneshome.model.Seat
 import home.someoneshome.model.SeatNamed
+import home.someoneshome.model.Tick
 import home.someoneshome.model.protocol.RoundBody
 import home.someoneshome.model.protocol.RoundMessage
 import home.someoneshome.model.protocol.RoundWire
@@ -15,6 +18,7 @@ import home.someoneshome.model.protocol.SightingUpload
 import home.someoneshome.platform.NoIdleTimer
 import home.someoneshome.platform.ScreenWake
 import home.someoneshome.platform.SilentHaptics
+import home.someoneshome.platform.monotonicMillis
 import home.someoneshome.platform.transport.AdvertiseFailure
 import home.someoneshome.platform.wallClockMillis
 import home.someoneshome.ui.FlowModel
@@ -107,13 +111,14 @@ class ArrivalOrderTest {
 
         val round = RoundClient(
             scope, flow, LineWatch {}, HouseBuzzer(SilentHaptics), air.radioFor(radioSpot), wake,
+            ranging = air.rangingFor(radioSpot, SimulatedAir.BENCH_CAPACITY),
         ) {}.also { made ->
             client = made
             made.onMessage = { pushed += it }
         }
 
         val link = LobbyOverTransport(
-            scope, onEvent = {}, seat = Kept(),
+            scope, rangingCapacity = { SimulatedAir.BENCH_CAPACITY }, onEvent = {}, seat = Kept(),
             // `CheatRoot`'s doors, exactly.
             onIntent = HouseDoors(house)::heard,
             onEgressFired = HouseDoors(house)::fired,
@@ -185,11 +190,13 @@ class ArrivalOrderTest {
      * phone is answered exactly once per touch it was in, nothing goes out against a newer state, and
      * every phone's stream is exactly what the house sent it, in the house's order.
      *
-     * **Bluetooth, on purpose** (D-301): the one bench through [SimulatedAir] that does not play on
-     * distance. Eight phones each touching a partner drawn afresh every round need every pair
-     * touchable at once, and D-300's pairing ranges a phone's few nearest and keeps them, so most of
-     * these touches could never land on distance (D-301's raised item 1). The question here is the
-     * arrival order, which is the same under either source.
+     * **On distance, at the phones' starting capacity of three** (D-302). Each phone touches a
+     * partner drawn afresh every round, so most touches are between two phones the house is not
+     * ranging when they meet, and both are full. D-301 kept this bench on Bluetooth because under
+     * D-300's pairing such a pair was never ranged (two touches of seven landed for the host's
+     * phone). Now the pair both phones rank first displaces a kept pair, so **GUARD (D-302): every
+     * held touch lands, each round's within [TOUCH_LANDS_MILLIS]**; each pair is held until its
+     * touch has landed, then let go, inside the pair's five-second grace, so a touch is one touch.
      */
     @Test
     fun manyTouchesAtOnceOverTheSocketsAnswerEachToucherOncePerTouch() = runBlocking {
@@ -224,10 +231,24 @@ class ArrivalOrderTest {
                 until("every line reached the house") { host.model.standing.linesIn == phones.size }
                 air.spreadOut(phones.map { it.radioSpot })
                 assertTrue(armAtLightsOut(house, hosting = true, seed = SEED, note = { said += it }), "the round never armed: $said")
+                assertEquals(ContactSource.Uwb, house.state.contactSource, "every phone ranges and the round did not arm on distance")
                 until("every phone holds the round's seed") { phones.all { it.round.round.uploading } }
+                val seatOf = phones.associateWith { p -> house.state.names.single { it.name == p.name }.seat.index }
+                // The house's clock runs on real time, as the app's tick driver runs it; only the
+                // clock moves, nothing is minted. The pairing's grace (D-300) and the pair's grace
+                // after a touch are counted on it, and a clock that never moves holds both open.
+                val started = monotonicMillis()
+                val base = house.clock
+                scope.launch {
+                    while (true) {
+                        house.advanceTo(Tick(base + (monotonicMillis() - started) * Balance.TICKS_PER_SECOND / 1_000L))
+                        delay(CLOCK_STEP_MILLIS)
+                    }
+                }
 
                 val touches = IntArray(phones.size)
-                for (pairs in roundRobin(phones.size)) {
+                val landedAfter = mutableListOf<Long>()
+                for ((r, pairs) in roundRobin(phones.size).withIndex()) {
                     // Four pairs, each a room from the next, all held together at once.
                     pairs.forEachIndexed { k, (a, b) ->
                         air.place(phones[a].radioSpot, SimulatedAir.Spot(k * SimulatedAir.APART_METRES, 10.0))
@@ -235,13 +256,27 @@ class ArrivalOrderTest {
                         touches[a]++
                         touches[b]++
                     }
-                    repeat(ContactAct.HOLD_BEATS) { delay(SightingUpload.CADENCE_MILLIS + 250) }
+                    val heldAt = monotonicMillis()
+                    val toucher = pairs.flatMap { (a, b) -> listOf(a, b) }
+                    // Held until every touch of the round has landed, then let go.
+                    until("round $r: every held touch landed", {
+                        toucher.joinToString { "${phones[it].name} ${outbox.answersTo(seatOf.getValue(phones[it]))}/${touches[it]}" } +
+                            " · the house keeps ${house.ranging?.pairs()?.map { it.low.index to it.high.index }}" +
+                            " · the phones range ${phones.map { p -> seatOf.getValue(p) to air.rangingFor(p.radioSpot).ranging.size }}" +
+                            " · seats ${phones.map { it.name to seatOf.getValue(it) }}" +
+                            " · idle spares ${phones.map { p -> air.rangingFor(p.radioSpot).spares().size }}" +
+                            " · formed ${house.ranging?.pairsFormed} at tick ${house.clock}"
+                    }) { toucher.all { outbox.answersTo(seatOf.getValue(phones[it])) >= touches[it] } }
+                    landedAfter += monotonicMillis() - heldAt
                     air.spreadOut(phones.map { it.radioSpot })
                     delay(SightingUpload.CADENCE_MILLIS + 500)
                 }
                 assertTrue(!house.state.ended, "the round ended mid-test: $said")
+                println("D-302 EIGHT PHONES ON DISTANCE AT CAPACITY ${SimulatedAir.BENCH_CAPACITY} — each round's touches all landed after $landedAfter ms")
+                landedAfter.forEachIndexed { r, ms ->
+                    assertTrue(ms <= TOUCH_LANDS_MILLIS, "round $r's held touches took $ms ms to land, over $TOUCH_LANDS_MILLIS")
+                }
 
-                val seatOf = phones.associateWith { p -> house.state.names.single { it.name == p.name }.seat.index }
                 until("every phone holds what the house sent it", {
                     phones.joinToString { "${it.name} ${it.pushed.size}/${outbox.streamOf(seatOf.getValue(it)).size}" }
                 }) { phones.all { it.pushed.size >= outbox.streamOf(seatOf.getValue(it)).size } }
@@ -336,5 +371,17 @@ class ArrivalOrderTest {
         val GUESTS = listOf("ROSE", "DANI", "MARCUS", "ADA", "TEO", "IVY", "SOL")
         const val SEED = 20261150L
         const val SETTLE_MILLIS = 500L
+
+        /** How often the bench moves the house's clock to real time: a tick is 50 ms. */
+        const val CLOCK_STEP_MILLIS = 50L
+
+        /**
+         * **A held touch between two phones the house is not ranging lands within eight seconds**
+         * (D-302). The pairing needs three beats (the stops, the second spare, the second start) and
+         * the radio one more for both phones' readings: about five seconds on the bench's cadence,
+         * and a held touch is ranged before eight have passed, with three to spare for a loaded
+         * machine's late beat.
+         */
+        const val TOUCH_LANDS_MILLIS = 8_000L
     }
 }
