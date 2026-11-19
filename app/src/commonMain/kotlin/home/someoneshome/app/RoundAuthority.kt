@@ -3,9 +3,9 @@ package home.someoneshome.app
 import home.someoneshome.core.Admission
 import home.someoneshome.core.ContactMemory
 import home.someoneshome.core.ContactUpload
-import home.someoneshome.core.RangingMemory
-import home.someoneshome.core.contactSeedFor
-import home.someoneshome.core.pairForRanging
+import home.someoneshome.core.RangingDesk
+import home.someoneshome.core.RangingPairing
+import home.someoneshome.core.rangingDeskFor
 import home.someoneshome.core.admit
 import home.someoneshome.core.resolveContacts
 import home.someoneshome.core.resolvePlacements
@@ -217,12 +217,13 @@ class RoundAuthority(
     private var contactMemory: ContactMemory = ContactMemory.EMPTY
 
     /**
-     * **What the UWB pairing remembers between arrivals** (U6, D-300): who heard whom, each phone's
-     * last report, the pairs and their handles. A value, carried here like [contactMemory]; read by
-     * the bench and the tests, written only by [sighted].
+     * **The UWB pairing's desk for this round** (U6, D-300): who heard whom, each phone's last
+     * report, the pairs and their handles, held in place (rule 7). Built at [arm]; null before.
      */
-    var ranging: RangingMemory = RangingMemory.EMPTY
-        private set
+    private var rangingDesk: RangingDesk? = null
+
+    /** The round's UWB pairing, for the bench and the tests to read; null before arming. */
+    val ranging: RangingPairing? get() = rangingDesk?.pairing
 
     /**
      * **Every contact event the rules refused, in order** (R4, D-217). Also in [refusals], with the
@@ -345,7 +346,7 @@ class RoundAuthority(
         // seats and tokens that no longer exist.
         contactMemory = ContactMemory.EMPTY
         // Nor last round's pairs, handles and tokens: they ranged sessions that no longer exist (D-300).
-        ranging = RangingMemory.EMPTY
+        rangingDesk = null
         // And no onset of last round's is one of this round's (D-245).
         onsetsHeard.clear()
 
@@ -367,6 +368,8 @@ class RoundAuthority(
                 "IN '${hosted.name}' · ${markers.size} MARKER(S) · ${inputs.oneLines.size} LINE(S)"
         )
         gate(arming)
+        // The UWB pairing for this round, from its seed and seats alone (D-300).
+        if (state.armed) rangingDesk = rangingDeskFor(state)
         return armed
     }
 
@@ -464,7 +467,7 @@ class RoundAuthority(
      * ### And the phone's ranging plan comes back out (U6, D-300)
      *
      * Last, after the rules are done with the upload, the same upload is read a third time, by the
-     * UWB pairing ([pairForRanging]): its Bluetooth slots rank who is near whom, its ranging report
+     * UWB pairing ([RangingDesk]): its Bluetooth slots rank who is near whom, its ranging report
      * says what the phone can hold and offers, and the phone's plan for this second is returned,
      * sealed under its seed, to ride the upload's answer. **Every call returns a plan of one width**:
      * an upload that does not read, or a seat the house holds no seed for, is answered with a blank
@@ -503,14 +506,10 @@ class RoundAuthority(
      * the round does not hold, or a round not armed, has no seed here: a blank of the same width.
      */
     private fun planFor(seat: Seat, at: Tick, arrival: ContactUpload, field: String, taken: Boolean): String {
-        if (!state.armed || state.seats.none { it.index == seat.index }) return blankPlan()
-        val seed = contactSeedFor(state.seed, seat)
-        val book = contactMemory.book
-        val heard = arrival.sightings.mapNotNull { s -> book?.seatOf?.get(s.token)?.let { it to s.rssi } }
-        val report = RangingWire.unpackReport(seed, field)
-        val ranged = pairForRanging(ranging, at, seat, heard, report, taken, state)
-        ranging = ranged.memory
-        return RangingWire.packPlan(seed, rangingRandom(RangingWire.NONCE_BYTES), ranged.plan)
+        val desk = rangingDesk ?: return blankPlan()
+        if (!state.armed) return blankPlan()
+        return desk.answer(at, seat, arrival.sightings, contactMemory.book, field, taken, rangingRandom(RangingWire.NONCE_BYTES))
+            ?: blankPlan()
     }
 
     /** A plan's width of random bytes: opens on no phone, and looks like every sealed plan (D-300). */

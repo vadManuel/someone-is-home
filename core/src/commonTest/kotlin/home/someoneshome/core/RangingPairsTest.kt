@@ -13,6 +13,7 @@ import home.someoneshome.model.protocol.RangingReport
 import home.someoneshome.model.protocol.RangingSpare
 import home.someoneshome.model.protocol.RangingStep
 import home.someoneshome.model.protocol.RangingToken
+import home.someoneshome.model.protocol.RangingWire
 import home.someoneshome.model.protocol.SpareKey
 import kotlin.math.log10
 import kotlin.math.roundToInt
@@ -54,14 +55,15 @@ class RangingPairsTest {
 
         private fun fresh(): RangingSpare {
             val b = bytes(seat.toLong(), made++)
-            return RangingSpare(SpareKey(hex(b, 8)), RangingToken(hex(bytes(seat.toLong(), made, 7L), 32).repeat(10)))
+            return RangingSpare(SpareKey.ofHex(hex(b, 8)), RangingToken.ofHex(hex(bytes(seat.toLong(), made, 7L), 32).repeat(10)))
         }
 
         fun report(): RangingReport {
             val room = capacity + if (offersTooMany) 1 else 0
             while (spares.size + held.size < room) spares += fresh()
             while (spares.size + held.size > room && spares.isNotEmpty()) spares.removeAt(spares.lastIndex)
-            return RangingReport(capacity, spares.toList(), held.keys.sortedBy { it.hex }.map { RangingReading(it, 50, 6) })
+            // At most three idle sessions offered a second (D-300); the rest wait.
+            return RangingReport(capacity, spares.take(RangingWire.TOKEN_SLOTS), held.keys.sortedBy { it.hex }.map { RangingReading(it, 50, 6) })
         }
 
         fun apply(plan: RangingPlan) {
@@ -87,8 +89,12 @@ class RangingPairsTest {
     }
 
     /** One room: phones at spots, uploads fed one at a time, every plan applied and kept. */
+    /** What the pairing holds, read out: its pairs and how many it has formed. */
+    private data class Held(val pairs: List<RangingPair>, val formed: Long)
+
     private inner class Room(var state: GameState, val phones: List<Phone>) {
-        var memory = RangingMemory.EMPTY
+        val pairing = rangingDeskFor(state).pairing
+        val memory: Held get() = Held(pairing.pairs(), pairing.pairsFormed)
         val spots = HashMap<Int, Spot>()
         val deaf = HashSet<Int>()
         var tick = 0L
@@ -101,11 +107,12 @@ class RangingPairsTest {
         }
 
         fun up(phone: Phone, report: RangingReport? = phone.report(), taken: Boolean = true): RangingPlan {
-            val r = pairForRanging(memory, Tick(tick), Seat(phone.seat), heardBy(phone.seat), report, taken, state)
-            memory = r.memory
-            phone.apply(r.plan)
-            plans += phone.seat to r.plan
-            return r.plan
+            for ((seat, rssi) in heardBy(phone.seat)) pairing.hear(seat.index, rssi)
+            pairing.arrive(Tick(tick), Seat(phone.seat), report, taken)
+            val plan = pairing.planned()
+            phone.apply(plan)
+            plans += phone.seat to plan
+            return plan
         }
 
         /** One second: every phone uploads once, in seat order, a tick apart. */
@@ -249,7 +256,7 @@ class RangingPairsTest {
         // Seat 0 held it; the house no longer keeps it, so seat 0 was told to stop it.
         assertTrue(room.plans.any { (s, p) -> s == 0 && RangingStep.Stop(first) in p.steps }, "seat 0 was never told to stop the lost pair")
         // A handle a phone claims that the house never dealt is stopped too.
-        val stray = RangingHandle("00000000000000aa")
+        val stray = RangingHandle.ofHex("00000000000000aa")
         val plan = room.up(a, RangingReport(3, emptyList(), listOf(RangingReading(stray, 10, 3))))
         assertTrue(RangingStep.Stop(stray) in plan.steps, "a handle the house does not keep was not stopped")
     }

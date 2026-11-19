@@ -32,10 +32,10 @@ class RangingUploaderTest {
     private class ToldRadio : RangingRadio {
         var capacity = 3
         var spares = listOf(
-            RangingSpare(SpareKey("00000000000000a1"), RangingToken("ab".repeat(312))),
-            RangingSpare(SpareKey("00000000000000a2"), RangingToken("cd".repeat(345))),
+            RangingSpare(SpareKey.ofHex("00000000000000a1"), RangingToken.ofHex("ab".repeat(312))),
+            RangingSpare(SpareKey.ofHex("00000000000000a2"), RangingToken.ofHex("cd".repeat(345))),
         )
-        var readings = listOf(RangingReading(RangingHandle("00000000000000b1"), 7, 6))
+        var readings = listOf(RangingReading(RangingHandle.ofHex("00000000000000b1"), 7, 6))
         val did = mutableListOf<String>()
         override fun capacity(): Int = capacity
         override fun spares(): List<RangingSpare> = spares
@@ -70,14 +70,14 @@ class RangingUploaderTest {
         radio.readings = emptyList()
         up.beat()
         radio.capacity = 6
-        radio.spares = (1..6).map { RangingSpare(SpareKey("00000000000000c$it"), RangingToken("ee".repeat(384))) }
-        radio.readings = (1..6).map { RangingReading(RangingHandle("00000000000000d$it"), -9, 7) }
+        radio.spares = (1..6).map { RangingSpare(SpareKey.ofHex("00000000000000c$it"), RangingToken.ofHex("ee".repeat(384))) }
+        radio.readings = (1..6).map { RangingReading(RangingHandle.ofHex("00000000000000d$it"), -9, 7) }
         up.beat()
         assertEquals(setOf(RangingWire.REPORT_CHARS), sent.map { it.ranging.length }.toSet(), "the report's width moved")
         val reports = sent.map { RangingWire.unpackReport(seed, it.ranging) }
         assertEquals(3, reports[0]?.capacity)
         assertEquals(ToldRadio().spares, reports[0]?.spares)
-        assertEquals(listOf(RangingReading(RangingHandle("00000000000000b1"), 7, 6)), reports[0]?.readings)
+        assertEquals(listOf(RangingReading(RangingHandle.ofHex("00000000000000b1"), 7, 6)), reports[0]?.readings)
         assertEquals(RangingReport.NONE, reports[1])
         assertEquals(6, reports[2]?.readings?.size)
     }
@@ -100,9 +100,9 @@ class RangingUploaderTest {
         val (up, radio, _) = rig()
         val plan = RangingPlan(
             listOf(
-                RangingStep.Start(RangingHandle("00000000000000e1"), SpareKey("00000000000000a1"), RangingToken("12".repeat(320))),
-                RangingStep.Keep(RangingHandle("00000000000000e2")),
-                RangingStep.Stop(RangingHandle("00000000000000e3")),
+                RangingStep.Start(RangingHandle.ofHex("00000000000000e1"), SpareKey.ofHex("00000000000000a1"), RangingToken.ofHex("12".repeat(320))),
+                RangingStep.Keep(RangingHandle.ofHex("00000000000000e2")),
+                RangingStep.Stop(RangingHandle.ofHex("00000000000000e3")),
             ),
         )
         // Before the seed there is no plan to apply.

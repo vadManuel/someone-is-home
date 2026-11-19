@@ -50,15 +50,34 @@ class WireDecodeAllocationTest {
      * 9.0 KB now: the body once as characters and once as its string. On Kotlin/Native, measured
      * with the std allocator, the plain upload frame went from 11.1 KB to 7.2 KB.
      *
-     * **D-300 grew the frame by its ranging report**, 3 279 characters of every upload from every
-     * phone (six 384-byte token slots and six distance slots, sealed). The read is still the body
-     * twice and little else, so the ceiling moved with the body: 25.6 KB measured, 28 KB allowed.
+     * **D-300 grew the frame by its ranging report**, 1 699 characters of every upload from every
+     * phone (three 384-byte token slots and six distance slots, sealed). The read is still the body
+     * twice and little else, so the ceiling moved with the body: 17.7 KB measured, 20 KB allowed. Six
+     * token slots, D-300's first draft, measured 25.6 KB.
      */
     @Test
     fun `reading an upload's frame allocates its body and little else`() {
         val body = RoundWire.encode(RoundBody.Sighted("0".repeat(SightingUpload.BODY_CHARS), SightingUpload.EMPTY_ASK, UploadProbe.NONE, RangingWire.NO_REPORT)) + "李"
         val frame = TransportWire.encode(TransportFrame.Carry(body))
-        assertUnder(28_672, perCall { TransportWire.decodeOrNull(frame) }, "reading an upload's frame")
+        val read = perCall { TransportWire.decodeOrNull(frame) }
+        println("D-300 READING AN UPLOAD FRAME — $read B")
+        assertUnder(20_480, read, "reading an upload's frame")
+    }
+
+    /**
+     * **D-300: the house writes one of these per seat per beat**, an upload's answer carrying the
+     * seat's sealed plan, [RangingWire.PLAN_CHARS] characters. The body and the frame are each built
+     * and each the plan's width again: 4.4 KB measured, against 0.5 KB for an answer with no plan
+     * (a `FaultHeard`), and 7.3 KB for D-300's first draft's six token slots.
+     */
+    @Test
+    fun `writing an upload's answer costs the frame and little else`() {
+        val plan = RangingWire.NO_PLAN
+        val written = perCall {
+            TransportWire.encode(TransportFrame.Carry(RoundWire.encode(RoundBody.UploadHeard.of("0123456789abcdef", UploadProbe.NONE, 5L, 6L, plan))))
+        }
+        println("D-300 WRITING AN UPLOAD'S ANSWER — $written B")
+        assertUnder(5_120, written, "writing an upload's answer")
     }
 
     @Test

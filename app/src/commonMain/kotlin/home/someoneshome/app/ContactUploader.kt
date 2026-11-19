@@ -5,9 +5,10 @@ import home.someoneshome.model.ContactTokens
 import home.someoneshome.model.ContactWindow
 import home.someoneshome.model.RadioCause
 import home.someoneshome.model.Sighting
-import home.someoneshome.model.protocol.RangingReport
-import home.someoneshome.model.protocol.RangingStep
+import home.someoneshome.model.protocol.RangingCodec
+import home.someoneshome.model.protocol.RangingHandle
 import home.someoneshome.model.protocol.RangingWire
+import home.someoneshome.model.protocol.SpareKey
 import home.someoneshome.model.protocol.RoundBody
 import home.someoneshome.model.protocol.RoundMessage
 import home.someoneshome.model.protocol.SightingUpload
@@ -232,10 +233,15 @@ class ContactUploader(
      */
     private fun rangingReport(key: ContactSeed): String {
         val capacity = ranging.capacity().coerceIn(0, RangingWire.MAX_PEERS)
-        val spares = ranging.spares().distinctBy { it.key }.take(RangingWire.MAX_PEERS)
+        // At most three idle sessions offered a second (D-300): a phone that has more offers the
+        // rest on the seconds after.
+        val spares = ranging.spares().distinctBy { it.key }.take(RangingWire.TOKEN_SLOTS)
         val readings = ranging.drain().distinctBy { it.handle }.take(RangingWire.MAX_PEERS)
-        return RangingWire.packReport(key, rangingNonce(), RangingReport(capacity, spares, readings))
+        return codec.packReport(key, rangingNonce(), capacity, spares, readings)
     }
+
+    /** **This phone's ranging codec**: its buffers and its seed's keys, held (rule 7, D-300). */
+    private val codec = RangingCodec()
 
     /**
      * **The house's plan for this second** (`RoundBody.UploadHeard.plan`, D-300), applied to the
@@ -245,9 +251,15 @@ class ContactUploader(
      */
     fun planned(plan: String) {
         val key = seed ?: return
-        val steps = RangingWire.unpackPlan(key, plan)?.steps ?: return
-        for (step in steps) if (step is RangingStep.Stop) ranging.stop(step.handle)
-        for (step in steps) if (step is RangingStep.Start) ranging.start(step.handle, step.own, step.peer)
+        if (!codec.openPlan(key, plan)) return
+        for (i in 0 until codec.planSteps) {
+            if (codec.planKind(i) == RangingWire.STEP_STOP) ranging.stop(RangingHandle(codec.planHandle(i)))
+        }
+        for (i in 0 until codec.planSteps) {
+            if (codec.planKind(i) == RangingWire.STEP_START) {
+                ranging.start(RangingHandle(codec.planHandle(i)), SpareKey(codec.planOwn(i)), codec.planPeer(i))
+            }
+        }
     }
 
     /**

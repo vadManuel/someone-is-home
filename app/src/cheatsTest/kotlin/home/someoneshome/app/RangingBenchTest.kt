@@ -206,17 +206,17 @@ class RangingBenchTest {
                     }
                 }
                 assertTrue(phones[4].ranging.ranging.isEmpty(), "the phone standing alone was paired")
-                assertEquals(2, house.ranging.pairs.size, "the house keeps other pairs than the two close ones: ${house.ranging.pairs}")
+                assertEquals(2, house.ranging!!.pairs().size, "the house keeps other pairs than the two close ones: ${house.ranging!!.pairs()}")
 
                 // The distances come back: 0.8 m and 0.6 m, ±3 cm, 6 or 7 readings a second.
                 suspend fun distancesComeBack(p: Phone, expectedCm: Int) {
-                    until("${p.name}'s distance reached the house", { "${house.ranging.reports}" }) {
-                        house.ranging.reports.firstOrNull { it.seat == houseSeat(p) }?.report?.readings?.singleOrNull()?.readings in 6..7
+                    until("${p.name}'s distance reached the house", { "${house.ranging!!.readingsOf(houseSeat(p))}" }) {
+                        house.ranging!!.readingsOf(houseSeat(p)).singleOrNull()?.readings in 6..7
                     }
-                    val reading = house.ranging.reports.first { it.seat == houseSeat(p) }.report.readings.single()
+                    val reading = house.ranging!!.readingsOf(houseSeat(p)).single()
                     val cm = assertNotNull(reading.nearestCm)
                     assertTrue(abs(cm - expectedCm) <= SimulatedAir.UWB_CLEAR_NOISE_CM, "${p.name} read $cm cm at $expectedCm")
-                    val pair = house.ranging.pairs.single { it.handle == reading.handle }
+                    val pair = house.ranging!!.pairs().single { it.handle == reading.handle }
                     assertTrue(pair.has(houseSeat(p)), "${p.name} reported a pair the house did not deal it")
                 }
                 distancesComeBack(phones[0], 80)

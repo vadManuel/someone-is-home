@@ -13,7 +13,7 @@ import kotlin.test.assertTrue
  */
 class SimulatedRangingTest {
 
-    private val h = RangingHandle("0000000000000001")
+    private val h = RangingHandle.ofHex("0000000000000001")
 
     /** Two radios in one air, [metres] apart, paired by hand as the house's plan would pair them. */
     private fun paired(metres: Double, startBoth: Boolean = true): Triple<SimulatedAir, SimulatedRanging, SimulatedRanging> {

@@ -79,41 +79,71 @@ class UploadAllocationTest {
 
     private val fullReport = RangingReport(
         6,
-        (0 until 3).map { RangingSpare(SpareKey("00000000000000a$it"), RangingToken("ab".repeat(345))) },
-        (0 until 3).map { RangingReading(RangingHandle("00000000000000b$it"), 40 + it, 6) },
+        (0 until 3).map { RangingSpare(SpareKey(0xa0L + it), RangingToken.ofHex("ab".repeat(345))) },
+        (0 until 3).map { RangingReading(RangingHandle(0xb0L + it), 40 + it, 6) },
     )
     private val fullPlan = RangingPlan(
-        (0 until 3).map { RangingStep.Start(RangingHandle("00000000000000c$it"), SpareKey("00000000000000d$it"), RangingToken("cd".repeat(345))) } +
-            (0 until 3).map { RangingStep.Keep(RangingHandle("00000000000000e$it")) },
+        (0 until 3).map { RangingStep.Start(RangingHandle(0xc0L + it), SpareKey(0xd0L + it), RangingToken.ofHex("cd".repeat(345))) } +
+            (0 until 3).map { RangingStep.Keep(RangingHandle(0xe0L + it)) },
     )
     private val nonce = ByteArray(RangingWire.NONCE_BYTES) { 5 }
 
     /**
-     * **D-300: the ranging report, packed on every phone a beat and opened by the host per seat a
-     * beat.** Sealing is one digest per 32 bytes into one held block, in place in the field's one
-     * array; what is left is that array and the base64 string. Measured on the JVM at first landing:
-     * 11.9 KB to pack and 18.0 KB to open a report, 11.8 and 17.5 KB a plan (half of it the base64
-     * string and the three tokens as hex). The ceilings are that with headroom.
+     * **D-300: the ranging report, opened by the house for every seat every second, through its held
+     * codec.** Decoded into the held field, its tag checked and its keystream run in place, every
+     * slot validated, then read through the view: no allocation at all. Measured at first landing:
+     * 0 B (the codec before D-300's rule 7 rework, a fresh array per step and the tokens as hex
+     * strings, cost 18.0 KB).
      */
     @Test
-    fun `the ranging report costs its bytes to pack and to open`() {
-        val packed = perCall(500) { RangingWire.packReport(seeds[0], nonce, fullReport) }
-        val field = RangingWire.packReport(seeds[0], nonce, fullReport)
-        val opened = perCall(500) { RangingWire.unpackReport(seeds[0], field) }
-        println("D-300 RANGING REPORT — pack $packed B, open $opened B")
-        assertUnder(16_384, packed, "packing a ranging report")
-        assertUnder(24_576, opened, "opening a ranging report")
+    fun `the house opens a ranging report and reads it without allocating`() {
+        val codec = RangingCodec()
+        val field = codec.packReport(seeds[0], nonce, fullReport.capacity, fullReport.spares, fullReport.readings)
+        var sum = 0L
+        val opened = perCall {
+            check(codec.openReport(seeds[0], field))
+            for (i in 0 until codec.spareCount) sum += codec.spareKey(i) + if (codec.spareTokenIs(i, fullReport.spares[i].token)) 1 else 0
+            for (i in 0 until codec.readingCount) sum += codec.readingHandle(i) + codec.readingCm(i) + codec.readingReadings(i)
+            null
+        }
+        println("D-300 RANGING REPORT — the house opens and reads one: $opened B")
+        assertUnder(64, opened, "opening and reading a ranging report")
+        check(sum != 0L)
     }
 
-    /** **D-300: the plan, sealed by the host per seat a beat and opened by every phone a beat.** */
+    /**
+     * **D-300: the plan, sealed by the house for every seat every second.** Written into the held
+     * field, sealed in place and encoded from there: the one allocation is the plan's own string,
+     * [RangingWire.PLAN_CHARS] characters. Measured at first landing: 1 744 B (was 11.8 KB).
+     */
     @Test
-    fun `the ranging plan costs its bytes to pack and to open`() {
-        val packed = perCall(500) { RangingWire.packPlan(seeds[0], nonce, fullPlan) }
-        val field = RangingWire.packPlan(seeds[0], nonce, fullPlan)
-        val opened = perCall(500) { RangingWire.unpackPlan(seeds[0], field) }
-        println("D-300 RANGING PLAN — pack $packed B, open $opened B")
-        assertUnder(16_384, packed, "packing a ranging plan")
-        assertUnder(24_576, opened, "opening a ranging plan")
+    fun `the house seals a plan for the cost of its string`() {
+        val codec = RangingCodec()
+        val packed = perCall { codec.packPlan(seeds[0], nonce, fullPlan) }
+        println("D-300 RANGING PLAN — the house seals one: $packed B for ${RangingWire.PLAN_CHARS} characters")
+        assertUnder(2_048, packed, "sealing a ranging plan")
+    }
+
+    /**
+     * **D-300: the phone's side, once a beat**: packing its report costs the report's string, and
+     * opening its plan nothing until a start hands it a peer's token. Measured at first landing:
+     * 1 736 B and 0 B (were 11.9 and 17.5 KB).
+     */
+    @Test
+    fun `a phone packs its report for the cost of its string and opens its plan without allocating`() {
+        val codec = RangingCodec()
+        val packed = perCall { codec.packReport(seeds[0], nonce, fullReport.capacity, fullReport.spares, fullReport.readings) }
+        val plan = codec.packPlan(seeds[0], nonce, RangingPlan(fullPlan.steps.filterIsInstance<RangingStep.Keep>()))
+        var sum = 0L
+        val opened = perCall {
+            check(codec.openPlan(seeds[0], plan))
+            for (i in 0 until codec.planSteps) sum += codec.planHandle(i) + codec.planKind(i)
+            null
+        }
+        println("D-300 RANGING, A PHONE — packs its report: $packed B, opens a plan of keeps: $opened B")
+        assertUnder(2_048, packed, "packing a ranging report")
+        assertUnder(64, opened, "opening a plan")
+        check(sum != 0L)
     }
 
     /** A keyed MAC into the caller's array allocates nothing at all; a seed's bytes are its array. */

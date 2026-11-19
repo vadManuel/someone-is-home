@@ -320,12 +320,13 @@ class SimulatedRanging internal constructor(
     }
 
     private fun fresh(): Session {
-        val key = SpareKey(hex(air.noise.nextBytes(RangingWire.KEY_BYTES)))
-        val token = RangingToken(hex(air.noise.nextBytes(air.noise.nextInt(312, 346))))
+        val keyBytes = air.noise.nextBytes(RangingWire.KEY_BYTES)
+        var bits = 0L
+        for (b in keyBytes) bits = (bits shl 8) or (b.toLong() and 0xff)
+        val token = RangingToken.of(air.noise.nextBytes(air.noise.nextInt(312, 346)))
+        val key = SpareKey(bits)
         return Session(key, token)
     }
-
-    private fun hex(bytes: ByteArray): String = bytes.joinToString("") { (it.toInt() and 0xff).toString(16).padStart(2, '0') }
 }
 
 /**

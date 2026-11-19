@@ -31,8 +31,8 @@ class RangingWireTest {
 
     private fun hex(n: Int, bytes: Int) = Hmac.sha256(byteArrayOf(7), longBytes(n.toLong())).copyOf(bytes).let(WireHex::of)
 
-    private fun handle(n: Int) = RangingHandle(hex(n, RangingWire.HANDLE_BYTES))
-    private fun key(n: Int) = SpareKey(hex(1_000 + n, RangingWire.KEY_BYTES))
+    private fun handle(n: Int) = RangingHandle.ofHex(hex(n, RangingWire.HANDLE_BYTES))
+    private fun key(n: Int) = SpareKey.ofHex(hex(1_000 + n, RangingWire.KEY_BYTES))
 
     /**
      * **A token shaped like an archived `NIDiscoveryToken`**: a binary property list's magic, then
@@ -58,10 +58,10 @@ class RangingWireTest {
         RangingReport(1, emptyList(), listOf(reading(0, 21, 7))),
         RangingReport(
             6,
-            (0 until 6).map { RangingSpare(key(it), token(it, RangingWire.TOKEN_BYTES)) },
+            (0 until 3).map { RangingSpare(key(it), token(it, RangingWire.TOKEN_BYTES)) },
             (0 until 6).map { reading(it, -8 + it * 500, it + 1) },
         ),
-        RangingReport(6, (0 until 6).map { RangingSpare(key(it), token(it, 1)) }, (0 until 6).map { reading(it, null, 0) }),
+        RangingReport(6, (0 until 3).map { RangingSpare(key(it), token(it, 1)) }, (0 until 6).map { reading(it, null, 0) }),
         RangingReport(2, listOf(RangingSpare(key(9), token(9))), listOf(reading(3, 32_767, 255), reading(4, -32_768, 1))),
     )
 
@@ -71,7 +71,7 @@ class RangingWireTest {
         RangingPlan.EMPTY,
         RangingPlan(listOf(start(0))),
         RangingPlan(listOf(RangingStep.Keep(handle(1)))),
-        RangingPlan((0 until 6).map { start(it, RangingWire.TOKEN_BYTES) }),
+        RangingPlan((0 until 3).map { start(it, RangingWire.TOKEN_BYTES) } + (3 until 6).map { RangingStep.Keep(handle(it)) }),
         RangingPlan((0 until 6).map { RangingStep.Stop(handle(it)) }),
         RangingPlan(listOf(RangingStep.Stop(handle(0)), RangingStep.Keep(handle(1)), start(2, 1))),
     )
@@ -213,8 +213,14 @@ class RangingWireTest {
      */
     @Test
     fun aGoodlySealedFieldWithABadSlotReadsAsNothing() {
-        val reportBytes = 1 + 6 * (1 + 8 + 2 + 384) + 6 * (1 + 8 + 2 + 1)
-        val planBytes = 6 * (1 + 8 + 8 + 2 + 384)
+        // The layouts, as `RangingWire` lays them out: three spare slots of 395 bytes and six reading
+        // slots of 12 in a report; six step slots of 18 then three token slots of 386 in a plan.
+        val spareBytes = 1 + 8 + 2 + 384
+        val readingBytes = 1 + 8 + 2 + 1
+        val stepBytes = 1 + 8 + 8 + 1
+        val tokenBytes = 2 + 384
+        val reportBytes = 1 + 3 * spareBytes + 6 * readingBytes
+        val planBytes = 6 * stepBytes + 3 * tokenBytes
         val b64 = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT)
         fun report(edit: (ByteArray) -> Unit): RangingReport? {
             val plain = ByteArray(reportBytes).also(edit)
@@ -225,10 +231,12 @@ class RangingWireTest {
         fun plan(edit: (ByteArray) -> Unit): RangingPlan? {
             val plain = ByteArray(planBytes).also(edit)
             val field = b64.encode(RangingWire.seal(seed, nonce(), RangingWire.DOMAIN_PLAN, RangingWire.DOMAIN_PLAN_TAG, plain))
+            assertEquals(RangingWire.PLAN_CHARS, field.length)
             return RangingWire.unpackPlan(seed, field)
         }
         val spare = 1
-        val readings = 1 + 6 * (1 + 8 + 2 + 384)
+        val readings = 1 + 3 * spareBytes
+        val tokens = 6 * stepBytes
         assertEquals(RangingReport.NONE, report {}, "an all-empty report did not read")
         assertNull(report { it[0] = 7 }, "a capacity of 7 read")
         assertNull(report { it[spare] = 2 }, "a spare flag of 2 read")
@@ -237,20 +245,29 @@ class RangingWireTest {
         assertNull(report { it[spare] = 1; it[spare + 9] = 0x01; it[spare + 10] = 0x81.toByte() }, "a spare with a 385-byte token read")
         assertNull(report { it[spare] = 1; it[spare + 10] = 3; it[spare + 11 + 3] = 5 }, "a spare's pad with a byte in it read")
         assertNull(report { it[readings] = 1; it[readings + 10] = 4 }, "a distance with no reading behind it read")
-        assertNull(report { it[readings + 12 + 1] = 1 }, "an empty reading slot with a byte in it read")
+        assertNull(report { it[readings + readingBytes + 1] = 1 }, "an empty reading slot with a byte in it read")
         assertNull(report {
             it[readings] = 1; it[readings + 11] = 1
-            it[readings + 12] = 1; it[readings + 12 + 11] = 1
+            it[readings + readingBytes] = 1; it[readings + readingBytes + 11] = 1
         }, "two readings of one pair read")
         assertNull(report {
-            for (s in listOf(spare, spare + 395)) { it[s] = 1; it[s + 10] = 1; it[s + 11] = 9 }
+            for (s in listOf(spare, spare + spareBytes)) { it[s] = 1; it[s + 10] = 1; it[s + 11] = 9 }
         }, "two spares under one key read")
         assertEquals(RangingPlan.EMPTY, plan {}, "an all-empty plan did not read")
         assertNull(plan { it[0] = 4 }, "a step of kind 4 read")
         assertNull(plan { it[0] = 2; it[9] = 1 }, "a keep carrying a key read")
+        assertNull(plan { it[0] = 2; it[17] = 1 }, "a keep naming a token slot read")
         assertNull(plan { it[0] = 1 }, "a start with no token read")
-        assertNull(plan { it[0] = 3; it[403] = 3 }, "two steps for one pair read")
+        assertNull(plan { it[0] = 1; it[17] = 3; it[tokens + 1] = 1; it[tokens + 2] = 9 }, "a start naming token slot 3 read")
+        assertNull(plan {
+            it[0] = 1; it[1] = 1; it[tokens + 1] = 1; it[tokens + 2] = 9
+            it[stepBytes] = 1; it[stepBytes + 1] = 2
+        }, "two starts sharing a token slot read")
+        assertNull(plan { it[tokens + tokenBytes + 1] = 1 }, "a token slot no start names, with a byte in it, read")
+        assertNull(plan { it[0] = 3; it[stepBytes] = 3 }, "two steps for one pair read")
         assertNull(plan { it[1] = 1 }, "an empty step with a byte in it read")
+        val good = plan { it[0] = 1; it[1] = 1; it[tokens + 1] = 1; it[tokens + 2] = 9 }
+        assertEquals(1, good?.steps?.size, "a start with its token slot did not read")
     }
 
     @Test
