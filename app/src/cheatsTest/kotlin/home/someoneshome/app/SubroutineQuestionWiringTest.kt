@@ -138,14 +138,14 @@ class SubroutineQuestionWiringTest {
         val pushed = mutableListOf<RoundMessage>()
 
         val round = RoundClient(
-            scope, flow, LineWatch {}, buzzer, air.radioFor(radioSpot), wake,
+            scope, flow, LineWatch {}, buzzer, air.radioFor(radioSpot), wake, ranging = air.rangingFor(radioSpot, SimulatedAir.BENCH_CAPACITY),
         ) { log += it }.also { made ->
             client = made
             made.onMessage = { pushed += it }
         }
 
         val link = LobbyOverTransport(
-            scope, onEvent = { log += it }, seat = Kept(),
+            scope, rangingCapacity = { SimulatedAir.BENCH_CAPACITY }, onEvent = { log += it }, seat = Kept(),
             onIntent = HouseDoors(house)::heard,
             onEgressFired = HouseDoors(house)::fired,
             onSighted = HouseDoors(house)::sighted,

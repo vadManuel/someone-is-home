@@ -367,6 +367,9 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
         // The host's own seat (D-289), and only if it is one of this round's: read by the notice's
         // one exception (D-283) and by nothing that emits.
         host = event.host?.takeIf { h -> seats.any { it.index == h.index } },
+        // What the house's resolvers read a touch, a report and the map from (D-301). Read above
+        // the rules, by `resolveContacts` and `resolvePlacements`, and by nothing that emits.
+        contactSource = event.contactSource,
     )
 
     // **The round's names, one slot per seat INDEX** (D-115, D-274). A seat whose phone never

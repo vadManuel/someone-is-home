@@ -1,6 +1,7 @@
 package home.someoneshome.core
 
 import home.someoneshome.model.Balance
+import home.someoneshome.model.ContactSource
 import home.someoneshome.model.Effect
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
@@ -59,6 +60,15 @@ object SensingGate {
     const val ROOM_RSSI_FLOOR: Int = -75
 
     /**
+     * ⚠️ **Provisional (overnight), 1.5 m: the room reach by UWB** (D-301; the U6 plan's starting
+     * number, unit 3). In a round that reads distance, a performer places a seat in its room when its
+     * phone read that seat this near. A wall does not lengthen a UWB reading the way a body does, so
+     * the next room's bleed is still there (U3 accepts it), and only seats this phone is ranging can
+     * be placed, which is a performer's few nearest. The deliberate error (D-272) is unchanged.
+     */
+    const val ROOM_REACH_CM: Int = 150
+
+    /**
      * ⚠️ **Provisional, 3 s: the sweep on scan** (`gdd.md:776`). A seat is a sensor while its window
      * is open, and for this long after the house last placed it at a card, window or none.
      */
@@ -83,6 +93,9 @@ object SensingGate {
 
     /** Whether [rssi] is a room-range reading. Zero and above is no reading at all (CoreBluetooth's 127). */
     fun inRoom(rssi: Int): Boolean = rssi in ROOM_RSSI_FLOOR..ContactGate.RSSI_CEILING
+
+    /** Whether [cm] is a room-range distance (D-301). */
+    fun inRoomReach(cm: Int): Boolean = cm <= ROOM_REACH_CM
 }
 
 /**
@@ -101,7 +114,9 @@ object SensingGate {
  *
  * **Heard** is every living seat of the round, other than the sensor, whose token the upload carried
  * at [SensingGate.ROOM_RSSI_FLOOR] or stronger, once each, in seat order. Filler and strangers
- * resolve to nobody, as they do for contacts.
+ * resolve to nobody, as they do for contacts. **In a round that reads UWB** ([ContactSource.Uwb],
+ * D-301) it is every such seat the upload measured at [SensingGate.ROOM_REACH_CM] or nearer
+ * ([ContactUpload.distances]) instead, and the Bluetooth slots place nobody.
  *
  * **Allocation** (rule 7): an upload from a seat that is not a sensor costs one presence lookup and
  * allocates nothing; a sensor's costs one small list and the event.
@@ -118,11 +133,19 @@ fun resolvePlacements(at: Tick, book: ContactBook?, upload: ContactUpload, state
     val room = state.roomOfCard(card) ?: return null
 
     val heard = ArrayList<Seat>(4)
-    for (sighting in upload.sightings) {
-        if (!SensingGate.inRoom(sighting.rssi)) continue
-        val seat = book.seatOf[sighting.token] ?: continue
-        if (seat.index == sensor.index || state.isOut(seat)) continue
-        if (heard.none { it.index == seat.index }) heard += seat
+    when (state.contactSource) {
+        ContactSource.Rssi -> for (sighting in upload.sightings) {
+            if (!SensingGate.inRoom(sighting.rssi)) continue
+            val seat = book.seatOf[sighting.token] ?: continue
+            if (seat.index == sensor.index || state.isOut(seat)) continue
+            if (heard.none { it.index == seat.index }) heard += seat
+        }
+        ContactSource.Uwb -> for (distance in upload.distances) {
+            if (!SensingGate.inRoomReach(distance.cm)) continue
+            val seat = distance.target
+            if (seat.index == sensor.index || state.isOut(seat) || state.seats.none { it.index == seat.index }) continue
+            if (heard.none { it.index == seat.index }) heard += seat
+        }
     }
     heard.sortBy { it.index }
     return Event.Sensed(at, sensor, room, heard)

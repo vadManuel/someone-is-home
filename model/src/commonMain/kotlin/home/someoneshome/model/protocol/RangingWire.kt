@@ -21,7 +21,9 @@ import kotlin.jvm.JvmInline
  *   ([RangingReport.readings]).
  * - **The plan**, house to phone, in every upload's answer ([RoundBody.UploadHeard.plan]): for each
  *   pair, start it on one of this phone's idle sessions against the peer's token, keep it, or stop
- *   it ([RangingStep]); at most [RangingWire.TOKEN_SLOTS] starts a second.
+ *   it ([RangingStep]); at most [RangingWire.TOKEN_SLOTS] starts a second. **And the report's slot**
+ *   ([ReportSlot], D-301): whether this phone is filling the report's circle, how far in, or has
+ *   just left reach. Every plan carries it, sealed, at one width, whatever it says.
  *
  * ### One width, always
  *
@@ -242,6 +244,64 @@ sealed class RangingStep {
 }
 
 /**
+ * **The report's state for the one phone a plan is sealed for, this second** (D-301; the owner's
+ * ruling on Q5: *30 cm held 2 s, with a filling circle*).
+ *
+ * The phone does not know who is Revoked, so the house drives the circle: [Pending] from the first
+ * upload in which this phone read a Revoked seat within reach, with how long it has been held on the
+ * house's clock; [Cancelled] on the first upload out of reach before the hold was done; [Idle]
+ * otherwise, which is every phone almost all the time. A held report ends in the meeting's own call,
+ * which every phone is pushed as before, and the slot goes back to [Idle].
+ *
+ * **One slot, in every plan, sealed, at one width**: it rides the answer every phone is sent for
+ * every upload (D-300), so no frame exists that only a reporting phone receives (D-217), and to
+ * anybody without the seat's seed an [Idle] slot and a [Pending] one are the same uniform bytes.
+ * It says nothing about a role: it depends on standing near a Revoked seat, never on who stands.
+ */
+sealed class ReportSlot {
+    /** Nothing to draw. */
+    data object Idle : ReportSlot()
+
+    /** In reach and held for [elapsedMillis] on the house's clock, of `ContactGate`'s two seconds. */
+    data class Pending(val elapsedMillis: Int) : ReportSlot() {
+        init {
+            require(elapsedMillis in 0..RangingWire.MOST_REPORT_MILLIS) { "a held report's time is 0 to ${RangingWire.MOST_REPORT_MILLIS} ms" }
+        }
+    }
+
+    /** Out of reach before the hold was done: the circle stops. */
+    data object Cancelled : ReportSlot()
+
+    /** [RangingWire.REPORT_IDLE], [RangingWire.REPORT_PENDING] or [RangingWire.REPORT_CANCELLED]. */
+    val kind: Int
+        get() = when (this) {
+            Idle -> RangingWire.REPORT_IDLE
+            is Pending -> RangingWire.REPORT_PENDING
+            Cancelled -> RangingWire.REPORT_CANCELLED
+        }
+
+    /** A [Pending]'s held time; 0 for the others. */
+    val millis: Int get() = (this as? Pending)?.elapsedMillis ?: 0
+
+    companion object {
+        /** The slot [kind] and [millis] name, or null for a pair no packer builds. */
+        fun of(kind: Int, millis: Int): ReportSlot? = when {
+            kind == RangingWire.REPORT_IDLE && millis == 0 -> Idle
+            kind == RangingWire.REPORT_PENDING && millis in 0..RangingWire.MOST_REPORT_MILLIS -> Pending(millis)
+            kind == RangingWire.REPORT_CANCELLED && millis == 0 -> Cancelled
+            else -> null
+        }
+
+        /** Whether [kind] and [millis] name a slot. Allocates nothing. */
+        fun reads(kind: Int, millis: Int): Boolean = when (kind) {
+            RangingWire.REPORT_IDLE, RangingWire.REPORT_CANCELLED -> millis == 0
+            RangingWire.REPORT_PENDING -> millis in 0..RangingWire.MOST_REPORT_MILLIS
+            else -> false
+        }
+    }
+}
+
+/**
  * **A plan, to be sealed**: what the codec asks of one. [RangingPlan] is one; so is the house's
  * pairing, which answers from its held arrays.
  */
@@ -257,13 +317,19 @@ interface RangingPlanSource {
 
     /** A start's peer token; null for a keep or a stop. */
     fun stepPeer(i: Int): RangingToken?
+
+    /** The report's slot for this phone (D-301): [ReportSlot.kind]. Idle unless said. */
+    val reportKind: Int get() = RangingWire.REPORT_IDLE
+
+    /** The report's held time, [ReportSlot.millis]. */
+    val reportMillis: Int get() = 0
 }
 
 /**
  * **The house's plan to one phone, this second**: at most [RangingWire.MAX_PEERS] steps, of which at
  * most [RangingWire.TOKEN_SLOTS] start a pair.
  */
-data class RangingPlan(val steps: List<RangingStep>) : RangingPlanSource {
+data class RangingPlan(val steps: List<RangingStep>, val report: ReportSlot = ReportSlot.Idle) : RangingPlanSource {
     init {
         require(steps.size <= RangingWire.MAX_PEERS) { "a plan holds at most ${RangingWire.MAX_PEERS} steps" }
         require(steps.count { it is RangingStep.Start } <= RangingWire.TOKEN_SLOTS) {
@@ -281,6 +347,8 @@ data class RangingPlan(val steps: List<RangingStep>) : RangingPlanSource {
     override fun stepHandle(i: Int): Long = steps[i].handle.bits
     override fun stepOwn(i: Int): Long = (steps[i] as? RangingStep.Start)?.own?.bits ?: 0L
     override fun stepPeer(i: Int): RangingToken? = (steps[i] as? RangingStep.Start)?.peer
+    override val reportKind: Int get() = report.kind
+    override val reportMillis: Int get() = report.millis
 
     companion object {
         val EMPTY = RangingPlan(emptyList())
@@ -323,6 +391,14 @@ object RangingWire {
     const val STEP_KEEP: Int = 2
     const val STEP_STOP: Int = 3
 
+    /** The report slot's kinds (D-301): [ReportSlot.Idle], [ReportSlot.Pending], [ReportSlot.Cancelled]. */
+    const val REPORT_IDLE: Int = 0
+    const val REPORT_PENDING: Int = 1
+    const val REPORT_CANCELLED: Int = 2
+
+    /** The longest held time the slot carries: two bytes of milliseconds. */
+    const val MOST_REPORT_MILLIS: Int = 0xffff
+
     internal const val LENGTH_BYTES = 2
     internal const val CM_BYTES = 2
 
@@ -338,8 +414,14 @@ object RangingWire {
     /** A plan's token slot: length, token padded. */
     internal const val PLAN_TOKEN_BYTES = LENGTH_BYTES + TOKEN_BYTES
 
+    /** The plan's report slot (D-301): kind, held milliseconds. */
+    internal const val REPORT_SLOT_BYTES = 1 + 2
+
+    /** Where the report slot starts in a plan's plain bytes: after the steps and the token slots. */
+    internal const val REPORT_SLOT_AT = MAX_PEERS * STEP_BYTES + TOKEN_SLOTS * PLAN_TOKEN_BYTES
+
     internal const val REPORT_BYTES = 1 + TOKEN_SLOTS * SPARE_BYTES + MAX_PEERS * READING_BYTES
-    internal const val PLAN_BYTES = MAX_PEERS * STEP_BYTES + TOKEN_SLOTS * PLAN_TOKEN_BYTES
+    internal const val PLAN_BYTES = REPORT_SLOT_AT + REPORT_SLOT_BYTES
 
     /** A report field's bytes on the wire: nonce, sealed report, tag. */
     const val REPORT_FIELD_BYTES: Int = NONCE_BYTES + REPORT_BYTES + TAG_BYTES
@@ -684,6 +766,12 @@ class RangingCodec : RangingReportView {
                 tokens++
             }
         }
+        // The report's slot (D-301), after the token slots: every plan carries it, idle or not.
+        require(ReportSlot.reads(plan.reportKind, plan.reportMillis)) {
+            "a report slot is idle, held for 0 to ${RangingWire.MOST_REPORT_MILLIS} ms, or cancelled"
+        }
+        field[o + RangingWire.REPORT_SLOT_AT] = plan.reportKind.toByte()
+        putShort(o + RangingWire.REPORT_SLOT_AT + 1, plan.reportMillis)
         val keys = keysFor(seed)
         sealInPlace(keys.stream, keys.planTag, RangingWire.DOMAIN_PLAN, nonce, RangingWire.PLAN_BYTES)
         return Base64Url.encode(field, RangingWire.PLAN_FIELD_BYTES, chars)
@@ -727,9 +815,16 @@ class RangingCodec : RangingReportView {
             if (length !in 1..RangingWire.TOKEN_BYTES || !zeros(at + RangingWire.LENGTH_BYTES + length, RangingWire.TOKEN_BYTES - length)) return false
         }
         for (a in 0 until count) for (b in a + 1 until count) if (getLong(stepAt[a] + 1) == getLong(stepAt[b] + 1)) return false
+        if (!ReportSlot.reads(planReportKind, planReportMillis)) return false
         steps = count
         return true
     }
+
+    /** The report slot of the plan just opened (D-301): its kind. */
+    val planReportKind: Int get() = this.field[RangingWire.NONCE_BYTES + RangingWire.REPORT_SLOT_AT].toInt() and 0xff
+
+    /** The report slot of the plan just opened: its held milliseconds. */
+    val planReportMillis: Int get() = getShort(RangingWire.NONCE_BYTES + RangingWire.REPORT_SLOT_AT + 1)
 
     /** Steps in the plan just opened. */
     val planSteps: Int get() = steps
@@ -754,6 +849,7 @@ class RangingCodec : RangingReportView {
                 else -> RangingStep.Stop(handle)
             }
         },
+        ReportSlot.of(planReportKind, planReportMillis)!!,
     )
 
     // ---- Sealing ---------------------------------------------------------------------------------

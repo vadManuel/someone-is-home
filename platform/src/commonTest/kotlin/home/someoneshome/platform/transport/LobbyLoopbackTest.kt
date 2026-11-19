@@ -66,6 +66,8 @@ class LobbyLoopbackTest {
                         desk.named(seat, body.name)
                         namedSeats.trySend(seat)
                     }
+                    // What a phone can range (D-301): the house's arming reads it; this loop does not arm.
+                    is LobbyBody.Ranging -> Unit
                     // Every downward body is the host's to send, never to receive.
                     is LobbyBody.Standing, is LobbyBody.RoundEnded, is LobbyBody.HouseClosed, is LobbyBody.NameTaken,
                     null,

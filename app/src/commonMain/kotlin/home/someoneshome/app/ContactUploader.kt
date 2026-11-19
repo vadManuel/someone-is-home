@@ -8,6 +8,7 @@ import home.someoneshome.model.Sighting
 import home.someoneshome.model.protocol.RangingCodec
 import home.someoneshome.model.protocol.RangingHandle
 import home.someoneshome.model.protocol.RangingWire
+import home.someoneshome.model.protocol.ReportSlot
 import home.someoneshome.model.protocol.SpareKey
 import home.someoneshome.model.protocol.RoundBody
 import home.someoneshome.model.protocol.RoundMessage
@@ -175,6 +176,7 @@ class ContactUploader(
                 seed = message.seed
                 out = false
                 uploads = 0L
+                report = ReportSlot.Idle
                 advertising = null
                 away = false
                 // A relaunched process hears its round's seed again on its resume, and reads back
@@ -244,6 +246,15 @@ class ContactUploader(
     private val codec = RangingCodec()
 
     /**
+     * **The report's slot, as the house last said it in a plan that opened** (D-301): idle, held for
+     * so long, or cancelled. Every phone reads one off every answer, at one width; a phone holding a
+     * Revoked seat within report reach reads [ReportSlot.Pending]. Idle before a seed and after the
+     * round. The circle that draws it is the owner's to place, light and time, and is not built.
+     */
+    var report: ReportSlot = ReportSlot.Idle
+        private set
+
+    /**
      * **The house's plan for this second** (`RoundBody.UploadHeard.plan`, D-300), applied to the
      * radio: every stop, then every start; a keep changes nothing. A plan that does not open under
      * this phone's seed (a blank, another round's, a field damaged on the way) is nothing, and the
@@ -252,6 +263,9 @@ class ContactUploader(
     fun planned(plan: String) {
         val key = seed ?: return
         if (!codec.openPlan(key, plan)) return
+        // **The report's slot** (D-301): what the house says this phone's report circle is doing.
+        // Read off every plan that opens, out or not, and drawn by nothing yet (the owner's).
+        report = ReportSlot.of(codec.planReportKind, codec.planReportMillis) ?: ReportSlot.Idle
         for (i in 0 until codec.planSteps) {
             if (codec.planKind(i) == RangingWire.STEP_STOP) ranging.stop(RangingHandle(codec.planHandle(i)))
         }
@@ -328,6 +342,7 @@ class ContactUploader(
         advertising = null
         out = false
         uploads = 0L
+        report = ReportSlot.Idle
         forgetTheRound()
         radio.silence()
         ranging.silence()

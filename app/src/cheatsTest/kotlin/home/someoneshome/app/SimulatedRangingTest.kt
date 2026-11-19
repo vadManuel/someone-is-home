@@ -59,6 +59,34 @@ class SimulatedRangingTest {
         assertTrue(a.drain().single().nearestCm!! in 97..103, "the body stepped away and the reading stayed long")
     }
 
+    /**
+     * **D-301: a lock pauses the pair on both phones, and it recovers within half a second.** While
+     * one phone is locked both keep listing the pair with no reading; the first second back reads
+     * only the ticks after the recovery (at least three of 150 ms, at most six), and the next is whole.
+     */
+    @Test
+    fun aLockPausesThePairOnBothPhonesAndItRecoversWithinHalfASecond() {
+        repeat(20) {
+            val (_, a, b) = paired(0.2)
+            assertTrue(a.drain().single().readings in 6..7)
+            b.drain()
+            a.paused(true)
+            repeat(3) {
+                val ra = a.drain().single()
+                val rb = b.drain().single()
+                assertEquals(0, ra.readings, "a locked phone read its pair")
+                assertEquals(0, rb.readings, "a phone read a pair whose other phone is locked")
+                assertEquals(h, rb.handle, "the pair was not listed while the other phone was locked")
+            }
+            a.paused(false)
+            val back = a.drain().single()
+            assertTrue(back.readings in 3..6, "the first second back read ${back.readings}: a recovery is under 0.5 s and over 0")
+            assertTrue(kotlin.math.abs(back.nearestCm!! - 20) <= 3, "the recovered reading is not the distance: ${back.nearestCm}")
+            val next = a.drain().single()
+            assertTrue(next.readings in 6..7, "the second after the recovery was not whole: ${next.readings}")
+        }
+    }
+
     @Test
     fun aPairReadsOnlyWhenBothPhonesRunItAndAStopOpensAFreshSpare() {
         val (_, a, b) = paired(0.5, startBoth = false)

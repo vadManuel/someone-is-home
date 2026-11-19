@@ -98,7 +98,7 @@ class RoundUnderWayTest {
         private val buzzer = HouseBuzzer(Still)
         private val seam = DeferredRoundSeam()
         val link: LobbyOverTransport = LobbyOverTransport(
-            scope, onEvent = { log += it },
+            scope, rangingCapacity = { SimulatedAir.BENCH_CAPACITY }, onEvent = { log += it },
             seat = kept,
             onIntent = HouseDoors(house)::heard,
             onEgressFired = HouseDoors(house)::fired,
@@ -122,7 +122,7 @@ class RoundUnderWayTest {
             wallClock = { CLOCK },
         )
         val pushed = mutableListOf<RoundMessage>()
-        val round = RoundClient(scope, flow, LineWatch {}, buzzer, air.radioFor(spot), wake, note = { log += it }).also { made ->
+        val round = RoundClient(scope, flow, LineWatch {}, buzzer, air.radioFor(spot), wake, ranging = air.rangingFor(spot, SimulatedAir.BENCH_CAPACITY), note = { log += it }).also { made ->
             client = made
             made.onMessage = { pushed += it }
             seam.becomes(made)

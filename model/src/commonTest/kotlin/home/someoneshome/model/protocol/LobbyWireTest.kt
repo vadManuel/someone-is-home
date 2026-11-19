@@ -28,6 +28,8 @@ class LobbyWireTest {
         "houseClosed" to LobbyBody.HouseClosed,
         // **A refused name** (D-288): downward, to one phone, carrying nothing.
         "nameTaken" to LobbyBody.NameTaken,
+        // **What a phone can range** (D-301): upward, a number and nothing else.
+        "ranging" to LobbyBody.Ranging(3),
     )
 
     @Test
@@ -60,9 +62,10 @@ class LobbyWireTest {
             is LobbyBody.RoundEnded -> "roundEnded"
             is LobbyBody.HouseClosed -> "houseClosed"
             is LobbyBody.NameTaken -> "nameTaken"
+            is LobbyBody.Ranging -> "ranging"
         }
         for ((wireName, body) in everyBody) assertEquals(wireName, wireNameOf(body))
-        assertEquals(everyBody.size, 6, "a lobby body was added without pinning its discriminator")
+        assertEquals(everyBody.size, 7, "a lobby body was added without pinning its discriminator")
     }
 
     /**

@@ -124,6 +124,14 @@ class SimulatedAir {
         /** Four centimetres: two phones held together. */
         const val TOUCH_METRES = 0.04
 
+        /**
+         * **The benches' phones range four peers each** (D-301): every bench that plays through this
+         * air plays on distance, its phones telling the house so in the lobby, and five phones at four
+         * a phone range every pair. The phones' own start is three (U6); at three, D-300's pairing
+         * can leave a pair of five unranged for good, which D-301 raises.
+         */
+        const val BENCH_CAPACITY = 4
+
         private const val REFERENCE_METRES = 0.05
         private const val REFERENCE_DBM = -30.0
         private const val FLOOR_DBM = -100
@@ -153,9 +161,18 @@ class SimulatedAir {
         private const val NOISE_SEED = 20261118L
 
         /**
+         * **A lock or a trip to the background pauses UWB, and it recovers within half a second**
+         * (the spike, step 6; D-301). Recovery is drawn per resume from 100 ms to this, and the
+         * readings of the second it falls in start only after it: at worst three of that second's
+         * 150 ms ticks are left. No new token is needed, so the pair is still listed throughout.
+         */
+        const val UWB_RECOVER_MAX_MILLIS: Int = 500
+        const val UWB_RECOVER_MIN_MILLIS: Int = 100
+
+        /**
          * **One UWB reading of [metres], in centimetres**: the true distance, ±3 cm of noise on a clear
-         * line, or 3 to 5 m long through a body. Minimal by design (D-300): a later unit tunes it
-         * against more of the spike (the 0.5 s recovery after a lock, dropouts mid-touch).
+         * line, or 3 to 5 m long through a body. The pause on a lock and its recovery within 0.5 s
+         * are [SimulatedRanging.paused]'s (D-301); dropouts mid-touch are still a later unit's.
          */
         fun uwbReadingCm(metres: Double, blocked: Boolean, noise: BenchNoise): Int {
             val trueCm = (metres * 100.0).roundToInt()
@@ -248,6 +265,28 @@ class SimulatedRanging internal constructor(
     private val sessions = mutableListOf<Session>()
     private var drains = 0L
 
+    /** Locked or in the background now (D-301): no session reads, on this phone or against it. */
+    var paused: Boolean = false
+        private set
+
+    /** The milliseconds the next second loses to a recovery, until this radio's next drain. */
+    private var recovering = 0
+
+    /**
+     * **The phone locked or left the foreground** ([on]), **or came back** (D-301; the spike, step 6).
+     * While paused, every pair it is in is still listed, on both phones, with no reading: iOS
+     * suspends the session and keeps it. On the way back the first second loses a recovery of
+     * [SimulatedAir.UWB_RECOVER_MIN_MILLIS] to [SimulatedAir.UWB_RECOVER_MAX_MILLIS] before its
+     * readings start; the second after is whole.
+     */
+    fun paused(on: Boolean) {
+        if (paused && !on) recovering = air.noise.nextInt(SimulatedAir.UWB_RECOVER_MIN_MILLIS, SimulatedAir.UWB_RECOVER_MAX_MILLIS + 1)
+        paused = on
+    }
+
+    /** What the next drain loses to a recovery, for a peer's drain in the same second. */
+    internal val recoveringMillis: Int get() = recovering
+
     /** The pairs this radio is ranging, by handle. For the bench. */
     val ranging: List<RangingHandle> get() = sessions.mapNotNull { it.handle }
 
@@ -275,15 +314,23 @@ class SimulatedRanging internal constructor(
 
     override fun drain(): List<RangingReading> {
         // 6.7 a second: the 150 ms ticks that fell in this second, 6 or 7.
-        val from = drains * 1_000L / SimulatedAir.UWB_READING_MILLIS
+        val secondStarts = drains * 1_000L
+        val from = secondStarts / SimulatedAir.UWB_READING_MILLIS
         drains++
-        val count = (drains * 1_000L / SimulatedAir.UWB_READING_MILLIS - from).toInt()
+        val to = drains * 1_000L / SimulatedAir.UWB_READING_MILLIS
+        val own = recovering
+        recovering = 0
         return sessions.mapNotNull { s ->
             val handle = s.handle ?: return@mapNotNull null
             val other = s.peer?.let(air::sessionWith)
             val peerSeat = if (other != null && other.second.peer == s.token && other.second.handle != null) other.first.seat else null
             val metres = peerSeat?.let { air.metresBetween(seat, it) }
-            if (peerSeat == null || metres == null) {
+            // A pair reads only while both phones run it (D-301): a paused phone on either end, none.
+            val asleep = paused || other?.first?.paused == true
+            // A recovery on either end loses the start of the second: only the ticks after it read.
+            val lost = maxOf(own, other?.first?.recoveringMillis ?: 0)
+            val count = (from + 1..to).count { it * SimulatedAir.UWB_READING_MILLIS - secondStarts >= lost }
+            if (peerSeat == null || metres == null || asleep || count == 0) {
                 RangingReading(handle, null, 0)
             } else {
                 val blocked = air.blocked(seat, peerSeat)

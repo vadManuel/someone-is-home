@@ -78,7 +78,7 @@ class UploadClockWiringTest {
         private val seam = DeferredRoundSeam()
         val clientMillis: () -> Long = { monotonicMillis() + skew }
         val link: LobbyOverTransport = LobbyOverTransport(
-            scope, seat = Kept(),
+            scope, rangingCapacity = { SimulatedAir.BENCH_CAPACITY }, seat = Kept(),
             onIntent = HouseDoors(house)::heard,
             onEgressFired = HouseDoors(house)::fired,
             onSighted = HouseDoors(house)::sighted,
@@ -94,7 +94,7 @@ class UploadClockWiringTest {
             houseNow = link::houseNow,
         )
         val round = RoundClient(
-            scope, flow, LineWatch {}, HouseBuzzer(Still), air.radioFor(spot), wake,
+            scope, flow, LineWatch {}, HouseBuzzer(Still), air.radioFor(spot), wake, ranging = air.rangingFor(spot, SimulatedAir.BENCH_CAPACITY),
             clientMillis = link::clientNow, clock = link::uploadAnswered,
         ) {}.also { made ->
             client = made

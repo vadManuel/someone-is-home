@@ -92,12 +92,12 @@ class HousedContentWiringTest {
             onScreen = buzzer::showing,
         )
         val pushed = mutableListOf<RoundMessage>()
-        val round = RoundClient(scope, flow, LineWatch {}, buzzer, air.radioFor(radioSpot), wake) {}.also { made ->
+        val round = RoundClient(scope, flow, LineWatch {}, buzzer, air.radioFor(radioSpot), wake, ranging = air.rangingFor(radioSpot, SimulatedAir.BENCH_CAPACITY)) {}.also { made ->
             client = made
             made.onMessage = { pushed += it }
         }
         val link = LobbyOverTransport(
-            scope, onEvent = {}, seat = Kept(),
+            scope, rangingCapacity = { SimulatedAir.BENCH_CAPACITY }, onEvent = {}, seat = Kept(),
             onIntent = HouseDoors(house)::heard,
             onEgressFired = HouseDoors(house)::fired,
             onSighted = HouseDoors(house)::sighted,

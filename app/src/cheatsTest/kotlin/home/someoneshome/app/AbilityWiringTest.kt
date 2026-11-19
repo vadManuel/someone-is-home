@@ -114,7 +114,7 @@ class AbilityWiringTest {
         val pushed = mutableListOf<RoundMessage>()
 
         val round = RoundClient(
-            scope, flow, LineWatch {}, HouseBuzzer(SilentHaptics), air.radioFor(radioSpot), wake,
+            scope, flow, LineWatch {}, HouseBuzzer(SilentHaptics), air.radioFor(radioSpot), wake, ranging = air.rangingFor(radioSpot, SimulatedAir.BENCH_CAPACITY),
         ) { log += it; lines.round(it) }.also { made ->
             client = made
             made.onMessage = { pushed += it }
@@ -124,7 +124,7 @@ class AbilityWiringTest {
         val ledger = ScreenLedger(flow, lines::screen)
 
         val link = LobbyOverTransport(
-            scope, onEvent = { log += it; lines.lobby(it) }, seat = Kept(),
+            scope, rangingCapacity = { SimulatedAir.BENCH_CAPACITY }, onEvent = { log += it; lines.lobby(it) }, seat = Kept(),
             // `CheatRoot`'s doors, exactly: `HouseDoors`, awaited (D-241).
             onIntent = HouseDoors(house)::heard,
             onEgressFired = HouseDoors(house)::fired,
@@ -226,10 +226,15 @@ class AbilityWiringTest {
         }
     }
 
-    /** Hold the two phones together for two beats of the real cadence, then walk the mover back. */
+    /**
+     * Hold the two phones together for five beats of the real cadence, then walk the mover back. The
+     * round reads UWB distance (D-301): a jump of the house's clock to a cooldown lets every pair go
+     * (D-300's open item 2), and the house pairs them again within a beat or three, so the hold
+     * outlasts that.
+     */
     private suspend fun Room.touch(mover: Phone, still: Phone) {
         val act = ContactAct(air, beat = { delay(SightingUpload.CADENCE_MILLIS + 250) }, note = { said += it })
-        act.touch(mover.radioSpot, still.radioSpot)
+        act.touch(mover.radioSpot, still.radioSpot, beats = 5)
         delay(SETTLE_MILLIS)
     }
 

@@ -10477,6 +10477,212 @@ DANI=2, MARCUS=3, PRIYA=3}`), because the first keystream took an HMAC, four com
 
 **Not on a phone.** Nothing here touches a radio.
 
+### D-301 · **The rules read UWB distance in a round where every phone can range, and Bluetooth RSSI otherwise, chosen once at arming and recorded: a touch is both phones at 10 cm, a report is a living reader holding a Revoked seat at 30 cm for 2 s with its state in a sealed slot of every answer, and the map places within 1.5 m; the bench plays on distance — built (recording 43, the U6 plan's units 3 and 5); the circle on the reporting phone is NOT built (stopped: no circular progress element exists)**
+
+**The rulings** (owner, 2026-11-18, `owner-decisions-2026-11-17.md`): U1 *a 10 cm bubble, and a flyby
+counts*; Q5 *within 30 cm, held for 2 s; the reporting phone shows a circle that fills over the 2 s,
+and then the meeting's call; leaving 30 cm before the circle is full cancels the report*; option a on
+D-286's questions (D-291's grace stays); U3 *the walls are part of the game*; U6 *every rule reads UWB
+distance; a crowd larger than a phone's capacity can miss a flyby*. The plan:
+`uwb-replacement-plan-2026-11-18.md`, sections 3 and 5 and *The plan under U6*.
+
+**Why there are two sources.** The real phones carry no Nearby Interaction radio yet (`NoRanging`,
+capacity 0), and the next phone session retests the Revoke by touching phones over Bluetooth. So the
+house chooses the source **per round, at arming**, in one named function, and records it.
+
+**Now, the choice** (core `Arming.kt`).
+
+1. **`contactSourceFor(seats, capacityOf)`**: `ContactSource.Uwb` when every armed seat's phone said
+   it can range at least one peer, `ContactSource.Rssi` otherwise, a phone that never said
+   included. **A stopgap in a replaceable shape** (provisional (overnight)): when every phone
+   ranges it goes, and the round always reads distance.
+2. **Where the capacity comes from: the lobby.** Phones upload nothing before arming, so each phone
+   now sends `LobbyBody.Ranging(capacity)` on every seating, right after its name
+   (`LobbyOverTransport.rangingCapacity`, 0 by default, which is every real phone today). The house
+   keeps the round's seats' (`LobbyHouse.rangingBySeat`, bounded to 0..6, anything else is 0) and
+   hands them to the arming (`ArmingInputs.ranging`). Client to host only; no role exists yet when
+   it is sent; it names a phone's hardware, which the room can see. **New lobby body:
+   provisional (overnight).**
+3. **Recorded**: `Event.RoundArmed.contactSource` and `GameState.contactSource`. The house's log
+   line at arming ends `CONTACT BY UWB DISTANCE` or `CONTACT BY BLUETOOTH RSSI`. **No effect carries
+   it**: no phone is told it, whatever its role (`ContactSourceRecordingTest`: every seat's
+   per-client transcript is byte-identical between the two sources, and a role exchange's diff is
+   the same).
+
+**Now, the rules** (core `Contacts.kt`, `Placements.kt`). Under `Rssi` nothing moved: D-233,
+D-236 and D-272 exactly as before. Under `Uwb`:
+
+1. **The distances.** The house opens each upload's ranging report *first* (`RangingDesk.read`) and
+   resolves each listed pair with a reading this second to the seat at its other end, **only for a
+   pair the house keeps with that seat in it** (`RangingPairing.peerOf`): only pairs being ranged can
+   touch, report or place (U6). They ride `ContactUpload.distances` into `resolveContacts` and
+   `resolvePlacements`; then the pairing is told and the plan sealed, as in D-300.
+2. **The touch: both phones at `ContactGate.REVOKE_REACH_CM` = 10 cm or nearer**, within the
+   existing `MUTUAL_TICKS`. Same `ContactMade` both ways, same answers, debounce and grace; the
+   rules decide the outcome as before. A phone that is out keeps ranging (D-300) and **none of its
+   distances are read**, so an out phone is half of no touch, as an out phone that never scanned was
+   half of none under Bluetooth (D-008).
+3. **The report: a hold.** A living reader whose upload reads a Revoked seat (not already reported,
+   S4) at **`REPORT_REACH_CM` = 30 cm** or nearer, its pair with that seat outside **D-291's 5 s
+   grace**, no meeting running, starts a hold (`ContactMemory.held`). On each later upload still in
+   reach: at **`REPORT_HOLD_TICKS` = 2 s** (less half an upload of jitter slack) the house mints
+   `MeetingCalled(RevokeReported)`, the same event as Bluetooth's, and stamps the pair; sooner, the
+   hold runs. Out of reach first: cancelled. **The reader's side alone**: the Revoked phone's own
+   measurement of the pair is never read. The question asks no role (`ContactHouse` carries the
+   source, the out seats, who was reported and whether a meeting runs; no role, no arm).
+4. **The report's slot, sealed in every answer** (model `RangingWire`). The plan every phone is sent
+   for every upload (D-300) gains a fixed three-byte slot after its token slots: `ReportSlot.Idle`,
+   `Pending(elapsedMillis)` (the hold's age on the house's clock), or `Cancelled`. It is inside the
+   seal, under the receiving seat's seed and a fresh nonce, so idle and pending are the same uniform
+   bytes on the Wi-Fi. **No frame was added**: one answer per upload, one width, every phone, out
+   seats and Insiders included (D-217). The plan is now 1 714 characters (was 1 710) and the answer
+   1 904 bytes on the bench (was 1 900). A slot that does not read (kind 3, a time on an idle or
+   cancelled slot) sinks the whole plan, as every bad slot does. In a Bluetooth round every slot is
+   idle. The phone reads it off every plan that opens (`ContactUploader.report`,
+   `RoundOverTransport.report`); before a seed and after the round it is idle.
+5. **The map: `SensingGate.ROOM_REACH_CM` = 1.5 m** (provisional, the plan's start). A performer
+   places each living seat it measured that near; its Bluetooth places nobody. D-272's error is the
+   same capture, rolled once.
+
+**Now, the bench** (unit 5, cheats).
+
+1. **`SimulatedRanging.paused(on)`**: a lock or the background suspends the pair on both phones
+   (listed, no readings); on the way back the first second loses a recovery drawn from 100 to 500 ms
+   (the spike: *recovering within 0.5 s, no new token*) and the second after is whole.
+2. **Every bench that plays through `SimulatedAir` plays on distance**: each phone gets a
+   `SimulatedRanging` of `SimulatedAir.BENCH_CAPACITY` = 4 and tells the house so in the lobby, so
+   the round arms on UWB through the real lobby path (`NewRoundLoopTest`, `NoticeWalkWiringTest`,
+   `SubroutineQuestionWiringTest`, `RoundBoundaryTest`, `AbilityWiringTest`, `RoundUnderWayTest`,
+   `UploadClockWiringTest`, `HousedContentWiringTest`, `MissedRoundEndTest`, `UplinkFrameTest`,
+   `ArmedForEveryPhoneTest`, `RangingBenchTest`). **`ArrivalOrderTest` stays on Bluetooth**: retuned,
+   its eight phones touching partners drawn afresh each round failed (`the house answered HOST
+   (seat 0) other than once per touch. Expected <7>, actual <2>`), because D-300's pairing could
+   not range most of those pairs, which is raised item 1 below, not an ordering fault; its question
+   is the arrival order, the same under either source. `AbilityWiringTest`'s touch
+   holds five beats instead of two: its clock jump to the cooldown lets every pair go (D-300's open
+   item 2) and they take a beat or three to form again. `ContactRadioBenchTest` plays both sources:
+   its existing cases stay Bluetooth, and five new cases play on distance (below); its rig now
+   answers every upload as `LobbyHouse.answerUpload` does, so plans reach the phones. `HouseAir`
+   (the multi-process rehearsal's stand-in) stays Bluetooth: its phones are simulators with no radio.
+3. **The resolver's differential tests, rebuilt on distances**: `DistanceResolverDifferentialTest`
+   beside the Bluetooth one, which stays because both sources are live.
+
+**Not built: the circle on the reporting phone. Stopped, as instructed.** The task was to reuse an
+existing ring or progress element at its existing light level. There is none: every progress
+element in `ui` is a bar (`HoldToConfirm`'s two blocks, `KitMeter`'s segments, the scan's bar, the
+REVOKE tile's hold bar), and every circle is static (the scan screen's rings, `KitToken`, the
+perimeter chip, Jam's rings). A filling circle is a new drawn element, and where it sits (over
+whatever screen the reader is on: the springboard, a Subroutine, the lit scan or lantern), what ink
+and light it draws at, and whether it counts on the phone's clock from the slot (as the countdowns
+do, D-243/D-269) or only steps when the house answers (rule 5) are the owner's. Everything under it
+is built: the house drives the slot, every phone reads it, and the meeting's call follows the hold
+as every call does. Nothing was rendered, so there is no PNG.
+
+**Allocation (rule 7), measured** (JVM, the thread's own counter, `RangingAllocationTest`, 18 seats,
+settled, a fresh packed upload each beat so the resolver takes every one):
+
+| per seat per beat on the host | bytes |
+|---|---|
+| the house's path, Bluetooth rules (resolver, pairing, plan) | 5 925 |
+| the house's path, distance rules (report opened first, distances resolved, resolver, pairing, plan with the slot) | 5 784 (**−141**) |
+| the same, every phone ranging a Revoked seat holding a report | 6 098 (**+173**) |
+| D-300's ranging path alone (now with up to three resolved distances) | 1 802 (was 1 753; ceiling 2 048) |
+
+The distance rules cost nothing over Bluetooth's (they skip the slots' gate and token lookup); a
+held report adds its `Pending` and a hold's copy. New ceilings: distance over Bluetooth ≤ 1 024 B,
+holding ≤ 1 536 B. The plan's four more characters are in the 1 802. On the phone: one `Pending` a
+second while holding, nothing otherwise.
+
+**Proved** (each guard red against its injected break first, then restored; quoted from the test
+XML):
+
+- **The mutual touch** (`UwbContactTest`, core, 20 new). *One side enough (`||` for `&&`):* `one phone's
+  reading alone minted something expected:<[]> but was:<[ContactMade(at=Tick(step=700), actor=Seat(index=4),
+  target=Seat(index=6)), ContactMade(…)]>`, and `an out phone's own distance made half of a touch`.
+- **10 cm.** *The reach at 11:* `a pair read at 11 and 3 cm touched: […] expected:<[]> but was:<[(4, 6), (6, 4)]>`.
+- **The reader's side only.** *The Revoked phone's measurement of the reader read as the reader's:*
+  `the reader was told it holds a report it never measured expected:<Idle> but was:<Pending(elapsedMillis=0)>`.
+- **30 cm.** *The reach at 31:* `a reader at 31 cm was told it is holding a report expected:<Idle> but
+  was:<Pending(elapsedMillis=0)>`.
+- **The 2 s hold.** *Held one second:* `expected:<[]> but was:<[MeetingCalled(at=Tick(step=820),
+  caller=Seat(index=2), trigger=RevokeReported(reported=Seat(index=3)))]>` (a call on the second upload).
+- **The cancel.** *A hold kept when the seat leaves reach:* `leaving reach did not cancel the hold
+  expected:<Cancelled> but was:<Pending(elapsedMillis=1000)>`.
+- **The grace** (D-291). *The grace not asked:* `the Insider's phone started a hold 20 ticks into the grace
+  expected:<Idle> but was:<Pending(elapsedMillis=0)>`.
+- **The report slot's width** (`RangingWireTest`, model, 1 new and the plan cases widened). *An idle
+  slot left off the wire:* `the plan's width moved with the report slot expected:<[1714]> but was:<[1710,
+  1714]>`. **By role and by out seat, on real sockets** (`ContactRadioBenchTest.
+  everyAnswerIsOneWidthOnEveryPhoneWhileAReportIsHeld`): *a held report's plan four characters longer,
+  `UploadHeard`'s width check lifted to let it through:* `answers differ in width by seat or by moment:
+  {0=[1854], 1=[1854, 1858], 2=[1854], 3=[1854], 4=[1854]}` (the Insider's, the out seat's and every
+  Resident's stay at one width; only the reader's moves). Shortening the idle plan instead made every
+  plan fail to open on its phone (`the phones never ranged every pair: 0 of 10`), the codec failing closed.
+- **The per-round choice.** *UWB whenever there are seats:* `one phone that cannot range expected:<Rssi>
+  but was:<Uwb>` (core) and, on real sockets, `a phone that cannot range and the round still armed on
+  distance. Expected <Rssi>, actual <Uwb>`. *The parser reading every round as Bluetooth*
+  (`ContactSourceRecordingTest`, harness, 4 new): `the source did not survive the text form. Expected
+  <Uwb>, actual <Rssi>`.
+- **The map reach** (`PlacementTest`, 1 new). *1.51 m placed:* `the room's reach by distance is not 1.5 m,
+  or Bluetooth placed somebody expected:<Sensed(…heard=[Seat(index=4)])> but was:<Sensed(…heard=[Seat(index=4),
+  Seat(index=5)])>`.
+- **The lock's pause** (`SimulatedRangingTest`, 1 new). *A paused phone still reading:* `a locked phone
+  read its pair. Expected <0>, actual <7>`.
+- **Rule 7** (`RangingAllocationTest`, 1 new). *2 KB allocated on every reader's hold:* `reading the rules
+  from distance adds 1948 bytes per seat per beat, over its ceiling of 1024 (rule 7, D-301)`; *2 KB on every
+  report opened:* D-300's own guard, `the house's ranging path allocates 3866 bytes per seat per beat, over
+  its ceiling of 2048`.
+- **Also green, not injected:** `DistanceResolverDifferentialTest` (harness, 2: the same events, memory and
+  slots under six role exchanges and arms on distances, and the rules diverging downstream);
+  `LobbyRangingTest` (app, 2: three phones over real sockets tell the house their capacities in the lobby,
+  and one at 0 takes the round to Bluetooth); the five distance cases of `ContactRadioBenchTest` (a round
+  to an ending on distance, the width parity above, a cancelled hold, the Insider's hold after the grace,
+  the per-round choice with a body between two phones: no Revoke on distance, a Revoke on Bluetooth);
+  `RangingBenchTest` now arms on distance through the lobby.
+- Tests that moved with the change: `HostSeatRecordingTest`, `OccupancyRecordingTest`, `RecordingTextTest`
+  (recording 43; the arming row no longer ends at `host=`), `LobbyWireTest` (the new body pinned),
+  `RoundEndedPushTest` and `LineWatch` (the exhaustive `when`s), `AbilityWiringTest` (a five-beat hold).
+
+**Raised, not built.**
+
+1. **D-300's pairing can leave a pair unranged for good in a small round.** A kept pair is let go
+   only once it falls past *capacity + 2* in a phone's ranking; with five phones at the starting
+   capacity of three that never happens, every phone holds three of its four peers, and the missing
+   pairs stay missing. An Insider holding their phone against a peer they are not paired with can
+   then never Revoke them, however long they hold. `ArrivalOrderTest`, retuned to distance, showed it
+   at eight phones: two touches of seven landed for the host's phone. That is not U3's *a crowd larger than capacity
+   may miss a flyby*: it is a held touch in a five-person round. The benches use four a phone so
+   five phones range every pair. A fix (not built, it changes D-300's hysteresis, which its tests
+   pin): let a pair both phones rank first displace a kept pair that is past the entry rank.
+2. **A house clock that jumps lets every pair go** (D-300's item 2) now matters to play: after it,
+   nobody can touch or report for the beat or three it takes to pair again.
+3. **The circle** (above).
+
+**Decisions for the owner** (each provisional (overnight)):
+
+1. **The per-round choice**: UWB only when *every* armed phone reports capacity > 0; one phone that
+   cannot range, or never said, takes the round to Bluetooth.
+2. **The capacity reaches the house in the lobby**, as a new client-to-host body
+   `LobbyBody.Ranging(capacity)` sent on every seating after the name.
+3. **The report slot rides inside the sealed plan**, not as a separate field, so it costs three bytes
+   and no second seal; it carries the hold's age in milliseconds.
+4. **Half an upload (0.5 s) of slack on the 2 s hold**, judged on arrival ticks, so an honest hold is
+   called on its third upload; and **a hold breaks when its reader misses an upload**
+   (`REPORT_GAP_TICKS`, 1.5 s).
+5. **No hold starts or runs during a meeting, nor on a seat already reported** (S4): the reader's
+   circle would fill for a call the gate always refuses.
+6. **A hold whose seat leaves reach while another Revoked seat is in reach restarts on that one**
+   (pending from nothing) rather than saying cancelled.
+7. **An out phone's distances are not read at all** (not just for the report): the touch keeps
+   Bluetooth's *an out phone is half of no touch*.
+8. **`ROOM_REACH_CM` = 1.5 m**, the plan's starting number.
+9. **The lock's recovery is drawn from 100 to 500 ms**, applied to both ends of a pair for that
+   second.
+10. **The benches range four peers a phone** (`BENCH_CAPACITY`), not the phones' starting three.
+
+**Not on a phone.** The real phones still range nothing, so tomorrow's rounds arm on Bluetooth and
+play exactly as D-233, D-236 and D-291 describe.
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

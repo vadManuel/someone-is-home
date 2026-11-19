@@ -1,5 +1,6 @@
 package home.someoneshome.harness
 
+import home.someoneshome.model.ContactSource
 import home.someoneshome.model.AssignedWork
 import home.someoneshome.model.Destination
 import home.someoneshome.model.Effect
@@ -84,7 +85,11 @@ object Transcript {
                 // **The host's own seat, or none** (D-289): an input, because the notice names an
                 // out host who goes dark and no other out seat (D-283), so a replay that lost it
                 // would name nobody where the evening named the host.
-                "host" to (event.host?.let { num(it.index) } ?: "none"))
+                "host" to (event.host?.let { num(it.index) } ?: "none"),
+                // **What the round's rules read a touch, a report and the map from** (D-301): an
+                // input the house chose at arming from the phones' capacities, so a replay reads
+                // what the evening read.
+                "contacts" to contactSource(event.contactSource))
         // **The spectator map's input** (O4): who sensed, in which room, and every seat heard
         // there. An input drawn above the rules from the radio, exactly as a contact is, so it is
         // on the row in full and a replay places the same seats without a radio.
@@ -461,6 +466,12 @@ object Transcript {
     private fun num(n: Long): String = n.toString()
     private fun num(n: Int): String = n.toString()
 
+    /** The round's contact source as the recording writes it (D-301): `rssi` or `uwb`. */
+    private fun contactSource(source: ContactSource): String = when (source) {
+        ContactSource.Rssi -> "rssi"
+        ContactSource.Uwb -> "uwb"
+    }
+
     /**
      * Absence renders as a token, never as a sentinel integer.
      *
@@ -690,6 +701,8 @@ object Transcript {
         append("|voteWindow=").append(num(state.voteWindowSeconds))
         // The host's own seat (D-289), locked at arming: the notice's one exception (D-283).
         append("|host=").append(state.host?.let { num(it.index) } ?: "none")
+        // The round's contact source (D-301), locked at arming.
+        append("|contacts=").append(contactSource(state.contactSource))
         append("|nextEntity=").append(num(state.nextEntity))
         append("|seed=").append(num(state.seed))
     }

@@ -1,6 +1,7 @@
 package home.someoneshome.core
 
 import home.someoneshome.model.ContactTokens
+import home.someoneshome.model.ContactSource
 import home.someoneshome.model.ContactWindow
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
@@ -14,7 +15,9 @@ import home.someoneshome.model.protocol.RangingSpare
 import home.someoneshome.model.protocol.RangingStep
 import home.someoneshome.model.protocol.RangingToken
 import home.someoneshome.model.protocol.RangingWire
+import home.someoneshome.model.protocol.ReportSlot
 import home.someoneshome.model.protocol.SpareKey
+import home.someoneshome.model.protocol.SightingUpload
 import java.lang.management.ManagementFactory
 import kotlin.math.log10
 import kotlin.math.roundToInt
@@ -125,5 +128,84 @@ class RangingAllocationTest {
         assertEquals(pairs.map { it.handle }, desk.pairing.pairs().map { it.handle }, "the measured seconds changed the pairing, so they were not steady")
         println("D-300 THE HOUSE'S RANGING PATH — $perUpload B per seat per beat (the plan's string is ${RangingWire.PLAN_CHARS} characters)")
         assertTrue(perUpload <= 2_048, "the house's ranging path allocates $perUpload bytes per seat per beat, over its ceiling of 2048 (rule 7, D-300)")
+    }
+
+    /**
+     * **GUARD (rule 7, D-301): what reading the rules from distance adds to the house, per seat per
+     * beat.** The same eighteen-seat room, settled, two ways: a round that reads Bluetooth (the
+     * resolver over the upload's slots, then the pairing and the plan, as before) and one that reads
+     * distance (the report opened first and its distances resolved to seats, the resolver over them
+     * with the report's hold, then the pairing and the plan with the slot sealed in). Each upload is
+     * a fresh packed one, so the resolver takes every one as new, as it would on the air. What the
+     * distance path adds is measured as the difference.
+     */
+    @Test
+    fun `reading the rules from distance adds little to the house's path per seat per beat`() {
+        fun measure(source: ContactSource, holding: Boolean): Long {
+            val round = reduce(
+                GameState.EMPTY,
+                Event.RoundArmed(Tick(0), seed = 20261119L, seats = seats, insiders = listOf(Seat(2), Seat(9)), contactSource = source),
+            ).state.let { s -> if (holding) s.copy(revoked = listOf(Seat(4))) else s }
+            val desk = rangingDeskFor(round)
+            val phones = seats.map { Phone(it.index) }
+            val seeds = seats.map { contactSeedFor(round.seed, it) }
+            fun spot(i: Int) = Pair((i / 3) * 6.0 + (i % 3) * 0.7, (i % 3) * 0.4)
+            val slots = seats.map { me ->
+                seats.filter { it != me }.map { other ->
+                    val (x1, y1) = spot(me.index)
+                    val (x2, y2) = spot(other.index)
+                    val d = sqrt((x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2)).coerceAtLeast(0.05)
+                    Sighting(ContactTokens.of(contactSeedFor(round.seed, other), window), (-30.0 - 20.0 * log10(d / 0.05)).roundToInt().coerceAtLeast(-100), window)
+                }.take(17)
+            }
+            val nonce = ByteArray(RangingWire.NONCE_BYTES) { 3 }
+            var memory = ContactMemory.EMPTY
+            var tick = 0L
+            var counter = 0L
+            fun upload(s: Seat): List<Sighting> =
+                SightingUpload.unpack(SightingUpload.pack(seeds[s.index], window, counter++, slots[s.index]))!!
+            // One beat of the house's path for [s], as `RoundAuthority.sight` runs it.
+            fun beat(s: Seat, sightings: List<Sighting>, field: String): String? {
+                val at = Tick(tick++)
+                val distances = desk.read(s, field)
+                val arrival = ContactUpload(s, sightings, if (source == ContactSource.Uwb) distances else emptyList())
+                val r = resolveContacts(memory, at, window, listOf(arrival), round)
+                memory = r.memory
+                return desk.answer(at, s, sightings, memory.book, r.taken.isNotEmpty(), r.slotOf(s), nonce)
+            }
+            repeat(12) {
+                for (s in seats) {
+                    val plan = beat(s, upload(s), phones[s.index].field(seeds[s.index], nonce))!!
+                    phones[s.index].apply(plan, seeds[s.index])
+                }
+                tick += 20
+            }
+            // When holding, seat 4 is Revoked and every phone ranging it reads it at 20 cm.
+            val fields = seats.map { s ->
+                val p = phones[s.index]
+                val near = if (holding) desk.pairing.pairs().filter { it.has(s) && it.has(Seat(4)) }.map { it.handle }.toSet() else emptySet()
+                p.codec.packReport(
+                    seeds[s.index], nonce, RangingWire.STARTING_CAPACITY, p.spares.take(RangingWire.TOKEN_SLOTS),
+                    p.held.keys.map { RangingReading(it, if (it in near) 20 else 80, 6) },
+                )
+            }
+            val rounds = 40
+            val prepared = List(rounds + 4) { seats.map { upload(it) } }
+            var sink: String? = null
+            for (k in 0 until 4) { for (s in seats) sink = beat(s, prepared[k][s.index], fields[s.index]); tick += 20 }
+            val before = allocated()
+            for (k in 4 until rounds + 4) {
+                for (s in seats) sink = beat(s, prepared[k][s.index], fields[s.index])
+                tick += 20
+            }
+            check(sink != null)
+            return (allocated() - before) / (rounds * seats.size)
+        }
+        val rssi = measure(ContactSource.Rssi, holding = false)
+        val uwb = measure(ContactSource.Uwb, holding = false)
+        val held = measure(ContactSource.Uwb, holding = true)
+        println("D-301 THE HOUSE'S PATH PER SEAT PER BEAT — Bluetooth rules $rssi B · distance rules $uwb B (+${uwb - rssi}) · distance rules with every pair of a Revoked seat holding a report $held B (+${held - rssi})")
+        assertTrue(uwb - rssi <= 1_024, "reading the rules from distance adds ${uwb - rssi} bytes per seat per beat, over its ceiling of 1024 (rule 7, D-301)")
+        assertTrue(held - rssi <= 1_536, "holding reports adds ${held - rssi} bytes per seat per beat, over its ceiling of 1536 (rule 7, D-301)")
     }
 }

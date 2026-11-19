@@ -10,9 +10,11 @@ import home.someoneshome.core.admit
 import home.someoneshome.core.resolveContacts
 import home.someoneshome.core.resolvePlacements
 import home.someoneshome.core.armingFor
+import home.someoneshome.core.contactSourceFor
 import home.someoneshome.core.egressFor
 import home.someoneshome.core.namedByTheNotice
 import home.someoneshome.model.Balance
+import home.someoneshome.model.ContactSource
 import home.someoneshome.model.ContactWindow
 import home.someoneshome.model.Effect
 import home.someoneshome.model.Event
@@ -25,6 +27,7 @@ import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
 import home.someoneshome.model.toView
 import home.someoneshome.model.protocol.RangingWire
+import home.someoneshome.model.protocol.ReportSlot
 import home.someoneshome.model.protocol.RoundBody
 import home.someoneshome.model.protocol.SightingUpload
 import home.someoneshome.platform.monotonicMillis
@@ -340,6 +343,9 @@ class RoundAuthority(
             terminalRoom = hosted.map.terminal?.room?.name,
             // The host's own seat (D-289), for the notice's one exception (D-283). No phone is told it.
             host = inputs.host,
+            // **What the round's rules read a touch, a report and the map from** (D-301): UWB when
+            // every phone said it can range, Bluetooth otherwise. The one named choice, recorded.
+            contactSource = contactSourceFor(inputs.seats) { inputs.ranging[it.index] },
         ).copy(oneLines = inputs.oneLines)
         home = hosted
         // A new round's radios start from nothing: last round's halves and debounces are about
@@ -365,7 +371,8 @@ class RoundAuthority(
         note(
             "ARMING — ${inputs.seats.size} SEAT(S) · " +
                 "INSIDERS ${arming.insiders.size} (SETTING ${inputs.chosenInsiders ?: "UNKNOWN"}) · " +
-                "IN '${hosted.name}' · ${markers.size} MARKER(S) · ${inputs.oneLines.size} LINE(S)"
+                "IN '${hosted.name}' · ${markers.size} MARKER(S) · ${inputs.oneLines.size} LINE(S) · " +
+                "CONTACT BY ${if (arming.contactSource == ContactSource.Uwb) "UWB DISTANCE" else "BLUETOOTH RSSI"}"
         )
         gate(arming)
         // The UWB pairing for this round, from its seed and seats alone (D-300).
@@ -482,7 +489,12 @@ class RoundAuthority(
             return blankPlan()
         }
         val at = stamp()
-        val arrival = ContactUpload(seat, slots)
+        // **The ranging report first** (D-301): opened under the seat's seed, and each distance in
+        // it resolved to the seat at the other end of a pair the house keeps. The rules read them
+        // in a round that reads UWB, and only there; the pairing reads the report either way.
+        val desk = rangingDesk?.takeIf { state.armed }
+        val distances = desk?.read(seat, upload.ranging)
+        val arrival = ContactUpload(seat, slots, if (state.contactSource == ContactSource.Uwb && distances != null) distances else emptyList())
         val resolution = resolveContacts(contactMemory, at, contactWindow(), listOf(arrival), state)
         contactMemory = resolution.memory
         for (event in resolution.events) concluded(event)
@@ -496,19 +508,20 @@ class RoundAuthority(
         if (taken) {
             resolvePlacements(at, contactMemory.book, arrival, state)?.let { concluded(it) }
         }
-        return planFor(seat, at, arrival, upload.ranging, taken)
+        return planFor(seat, at, arrival, taken, resolution.slotOf(seat))
     }
 
     /**
      * **[seat]'s ranging plan for this second, sealed** (D-300). The upload's Bluetooth slots,
-     * resolved through the contact book the resolver just used, and its report opened under the
-     * seat's seed, go to the pairing; the plan comes back and is sealed under the same seed. A seat
-     * the round does not hold, or a round not armed, has no seed here: a blank of the same width.
+     * resolved through the contact book the resolver just used, and the report the desk opened,
+     * go to the pairing; the plan comes back with [report], the seat's report slot from the
+     * resolver (D-301), and is sealed under the same seed. A seat the round does not hold, or a
+     * round not armed, has no seed here: a blank of the same width.
      */
-    private fun planFor(seat: Seat, at: Tick, arrival: ContactUpload, field: String, taken: Boolean): String {
+    private fun planFor(seat: Seat, at: Tick, arrival: ContactUpload, taken: Boolean, report: ReportSlot): String {
         val desk = rangingDesk ?: return blankPlan()
         if (!state.armed) return blankPlan()
-        return desk.answer(at, seat, arrival.sightings, contactMemory.book, field, taken, rangingRandom(RangingWire.NONCE_BYTES))
+        return desk.answer(at, seat, arrival.sightings, contactMemory.book, taken, report, rangingRandom(RangingWire.NONCE_BYTES))
             ?: blankPlan()
     }
 

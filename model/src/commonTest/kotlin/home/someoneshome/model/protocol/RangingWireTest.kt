@@ -74,6 +74,11 @@ class RangingWireTest {
         RangingPlan((0 until 3).map { start(it, RangingWire.TOKEN_BYTES) } + (3 until 6).map { RangingStep.Keep(handle(it)) }),
         RangingPlan((0 until 6).map { RangingStep.Stop(handle(it)) }),
         RangingPlan(listOf(RangingStep.Stop(handle(0)), RangingStep.Keep(handle(1)), start(2, 1))),
+        // The report's slot (D-301): held, cancelled, and held with every step slot full.
+        RangingPlan(emptyList(), ReportSlot.Pending(0)),
+        RangingPlan(listOf(RangingStep.Keep(handle(1))), ReportSlot.Pending(1_950)),
+        RangingPlan(emptyList(), ReportSlot.Cancelled),
+        RangingPlan((0 until 3).map { start(it, RangingWire.TOKEN_BYTES) } + (3 until 6).map { RangingStep.Keep(handle(it)) }, ReportSlot.Pending(RangingWire.MOST_REPORT_MILLIS)),
     )
 
     // ---- One width -------------------------------------------------------------------------------
@@ -220,7 +225,7 @@ class RangingWireTest {
         val stepBytes = 1 + 8 + 8 + 1
         val tokenBytes = 2 + 384
         val reportBytes = 1 + 3 * spareBytes + 6 * readingBytes
-        val planBytes = 6 * stepBytes + 3 * tokenBytes
+        val planBytes = 6 * stepBytes + 3 * tokenBytes + 3
         val b64 = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT)
         fun report(edit: (ByteArray) -> Unit): RangingReport? {
             val plain = ByteArray(reportBytes).also(edit)
@@ -268,6 +273,35 @@ class RangingWireTest {
         assertNull(plan { it[1] = 1 }, "an empty step with a byte in it read")
         val good = plan { it[0] = 1; it[1] = 1; it[tokens + 1] = 1; it[tokens + 2] = 9 }
         assertEquals(1, good?.steps?.size, "a start with its token slot did not read")
+        // The report's slot (D-301): kind, then two bytes of milliseconds, after the token slots.
+        val slot = tokens + 3 * tokenBytes
+        assertEquals(RangingPlan(emptyList(), ReportSlot.Pending(0x0102)), plan { it[slot] = 1; it[slot + 1] = 1; it[slot + 2] = 2 })
+        assertEquals(RangingPlan(emptyList(), ReportSlot.Cancelled), plan { it[slot] = 2 })
+        assertNull(plan { it[slot] = 3 }, "a report slot of kind 3 read")
+        assertNull(plan { it[slot + 2] = 1 }, "an idle report slot carrying a time read")
+        assertNull(plan { it[slot] = 2; it[slot + 1] = 1 }, "a cancelled report slot carrying a time read")
+    }
+
+    /**
+     * **D-301: the report's slot is one width and one look whatever it says.** Every plan is the same
+     * width whether its phone is idle, holding a report or just cancelled, and to a reader of the
+     * Wi-Fi without the seat's seed a held report is as uniform as an idle one.
+     */
+    @Test
+    fun theReportSlotIsOneWidthAndOneLookWhateverItSays() {
+        assertEquals(1_714, RangingWire.PLAN_CHARS, "the plan's width moved: every answer on every phone moves with it")
+        val slots = listOf(ReportSlot.Idle, ReportSlot.Pending(0), ReportSlot.Pending(1_000), ReportSlot.Cancelled)
+        val widths = slots.map { RangingWire.packPlan(seed, nonce(), RangingPlan(emptyList(), it)).length }.toSet()
+        assertEquals(setOf(RangingWire.PLAN_CHARS), widths, "the plan's width moved with the report slot")
+        for (s in slots) {
+            val fields = List(64) { sealedOf(RangingWire.packPlan(seed, nonce(), RangingPlan(emptyList(), s))) }
+            val all = fields.flatMap { f -> f.map { it.toInt() and 0xff } }
+            assertTrue(all.average() in 125.0..130.5, "a plan whose slot is $s reads ${all.average()} on average")
+            val constant = (0 until fields[0].size).count { i -> fields.all { it[i] == fields[0][i] } }
+            assertEquals(0, constant, "a plan whose slot is $s has $constant byte positions that never change")
+        }
+        assertTrue(runCatching { ReportSlot.Pending(-1) }.isFailure, "a negative hold was built")
+        assertTrue(runCatching { ReportSlot.Pending(RangingWire.MOST_REPORT_MILLIS + 1) }.isFailure, "a hold past two bytes was built")
     }
 
     @Test

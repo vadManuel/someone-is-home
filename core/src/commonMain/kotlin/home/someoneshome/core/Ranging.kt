@@ -15,6 +15,7 @@ import home.someoneshome.model.protocol.RangingSpare
 import home.someoneshome.model.protocol.RangingStep
 import home.someoneshome.model.protocol.RangingToken
 import home.someoneshome.model.protocol.RangingWire
+import home.someoneshome.model.protocol.ReportSlot
 import home.someoneshome.model.protocol.SpareKey
 
 /*
@@ -25,6 +26,11 @@ import home.someoneshome.model.protocol.SpareKey
  * phone offered which token). It mints no `Event` and changes no state the rules hold. **No rule
  * reads its output in this unit**: contact, the report and the spectator map still read RSSI, so
  * nothing in play changes. What it decides is only which phones are told to range which.
+ *
+ * **Since D-301 the rules read its distances**, in a round whose contact source is UWB: the desk
+ * opens each upload's report first ([RangingDesk.read]) and resolves every distance to the seat at
+ * the other end of a pair the house keeps, for `resolveContacts` and `resolvePlacements`; then the
+ * pairing is told and the plan sealed, with the reader's report slot in it ([RangingDesk.answer]).
  *
  * ### What it does, once per upload ([RangingPairing.arrive])
  *
@@ -558,6 +564,22 @@ class RangingPairing(private val roundSeed: Long, seats: List<Seat>) {
         },
     )
 
+    /**
+     * **The seat at the other end of the pair [handle] that [seat] is in**, or null when the house
+     * keeps no such pair (D-301). Allocates nothing: the seat is the round's own value. A handle a
+     * phone lists that names no kept pair is not a pair being ranged, so it can touch nobody.
+     */
+    fun peerOf(seat: Seat, handle: Long): Seat? {
+        val s = slotOf(seat.index)
+        if (s < 0) return null
+        for (q in 0 until pairCount) {
+            if (pHandle[q] != handle) continue
+            if (pLow[q] == s) return seatsInOrder[pHigh[q]]
+            if (pHigh[q] == s) return seatsInOrder[pLow[q]]
+        }
+        return null
+    }
+
     /** What [seat] last said it ranges, with the distances, or nothing for a seat not of the round. */
     fun readingsOf(seat: Seat): List<RangingReading> {
         val s = slotOf(seat.index)
@@ -610,13 +632,54 @@ class RangingDesk(roundSeed: Long, seats: List<Seat>) {
     private var book: ContactBook? = null
     private val tokenSeats = HashMap<String, Int>()
 
+    /** The seat whose report [codec] holds open, from [read] until [answer]; null when none does. */
+    private var opened: Seat? = null
+
+    /** [read]'s answer, held and refilled (rule 7): nothing keeps it past the upload it was read for. */
+    private val distances = ArrayList<ContactDistance>(RangingWire.MAX_PEERS)
+
+    /** The plan [answer] seals: the pairing's steps for the seat that just arrived, and its report slot. */
+    private val sealing = object : RangingPlanSource {
+        var kind = RangingWire.REPORT_IDLE
+        var millis = 0
+        override val stepCount: Int get() = pairing.plan.stepCount
+        override fun stepKind(i: Int): Int = pairing.plan.stepKind(i)
+        override fun stepHandle(i: Int): Long = pairing.plan.stepHandle(i)
+        override fun stepOwn(i: Int): Long = pairing.plan.stepOwn(i)
+        override fun stepPeer(i: Int): RangingToken? = pairing.plan.stepPeer(i)
+        override val reportKind: Int get() = kind
+        override val reportMillis: Int get() = millis
+    }
+
+    /**
+     * **[seat]'s ranging report, opened, and its distances resolved to seats** (D-301): one
+     * [ContactDistance] for every pair it lists with a reading this second whose handle names a pair
+     * the house keeps with [seat] in it, in the order the phone listed them. Nothing for a field that
+     * does not read, a seat with no seed, or a handle no kept pair has. **Read it before the next
+     * call**: the list is held and refilled. Call [answer] for the same seat next.
+     */
+    fun read(seat: Seat, field: String): List<ContactDistance> {
+        distances.clear()
+        opened = null
+        val seed = seeds.getOrNull(seat.index) ?: return distances
+        if (!codec.openReport(seed, field)) return distances
+        opened = seat
+        for (i in 0 until codec.readingCount) {
+            if (codec.readingReadings(i) == 0) continue
+            val peer = pairing.peerOf(seat, codec.readingHandle(i)) ?: continue
+            distances += ContactDistance(peer, codec.readingCm(i))
+        }
+        return distances
+    }
+
     /**
      * **[seat]'s upload, through the pairing, and its plan sealed with [nonce]**: [sightings] are
      * every Bluetooth slot it carried, resolved through [book] (the contact resolver's, for this
-     * window); [field] is its ranging report. Null for a seat that is not the round's, which has no
-     * seed here.
+     * window); the report is the one [read] just opened for [seat], if it read; [report] is the
+     * seat's report slot from the resolver (D-301), sealed into the plan. Null for a seat that is
+     * not the round's, which has no seed here.
      */
-    fun answer(at: Tick, seat: Seat, sightings: List<Sighting>, book: ContactBook?, field: String, taken: Boolean, nonce: ByteArray): String? {
+    fun answer(at: Tick, seat: Seat, sightings: List<Sighting>, book: ContactBook?, taken: Boolean, report: ReportSlot, nonce: ByteArray): String? {
         val seed = seeds.getOrNull(seat.index) ?: return null
         if (book !== this.book) {
             this.book = book
@@ -628,8 +691,17 @@ class RangingDesk(roundSeed: Long, seats: List<Seat>) {
             val owner = tokenSeats[s.token.hex] ?: continue
             pairing.hear(owner, s.rssi)
         }
-        val report: RangingReportView? = if (codec.openReport(seed, field)) codec else null
-        pairing.arrive(at, seat, report, taken)
-        return codec.packPlan(seed, nonce, pairing.plan)
+        val view: RangingReportView? = if (opened?.index == seat.index) codec else null
+        opened = null
+        pairing.arrive(at, seat, view, taken)
+        sealing.kind = report.kind
+        sealing.millis = report.millis
+        return codec.packPlan(seed, nonce, sealing)
+    }
+
+    /** **[read] then [answer], with an idle report slot**: the whole path for a caller with no resolver between (D-300's). */
+    fun answer(at: Tick, seat: Seat, sightings: List<Sighting>, book: ContactBook?, field: String, taken: Boolean, nonce: ByteArray): String? {
+        read(seat, field)
+        return answer(at, seat, sightings, book, taken, ReportSlot.Idle, nonce)
     }
 }

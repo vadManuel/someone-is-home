@@ -187,6 +187,7 @@ class RoundEndedPushTest {
                 when ((frame as? TransportFrame.Carry)?.body?.let(LobbyWire::decodeOrNull)) {
                     is LobbyBody.Naming -> acted.trySend("naming")
                     is LobbyBody.Handover -> acted.trySend("handover")
+                    is LobbyBody.Ranging -> Unit
                     is LobbyBody.Standing, is LobbyBody.RoundEnded, is LobbyBody.HouseClosed, is LobbyBody.NameTaken,
                     null,
                     -> Unit

@@ -20,6 +20,7 @@ import kotlinx.serialization.json.Json
  *   text is the player's own, it is theirs to hand over, and the house is the only thing that
  *   ever reads it.
  * - [LobbyBody.Naming] goes **client → host**. It carries what to call this phone's owner.
+ * - [LobbyBody.Ranging] goes **client → host**. It carries how many peers this phone can range.
  * - [LobbyBody.Standing] goes **host → client**. It carries the counts, the host's setting, and
  *   the names.
  * - [LobbyBody.RoundEnded], [LobbyBody.HouseClosed] and [LobbyBody.NameTaken] go **host → client**
@@ -101,6 +102,25 @@ sealed class LobbyBody {
             const val LIMIT: Int = 14
         }
     }
+
+    /**
+     * **Client → host. How many peers this phone's UWB radio can range at once** (D-301).
+     *
+     * Sent on every seating, right after [Naming], so the house knows at LIGHTS OUT whether every
+     * phone in the round can range; its one named function (`contactSourceFor`) then chooses whether
+     * the round's rules read Bluetooth or UWB, and records the choice. A phone with no Nearby
+     * Interaction radio says 0, which is every phone until that radio exists (D-300's `NoRanging`).
+     *
+     * **It names no role and no seat**, and it is sent before any role exists. A phone's capacity is
+     * a fact about its hardware, the same kind of fact as its model, which anybody in the room can
+     * see. A body of its own rather than a field on [Naming], for this file's rule: two facts that
+     * arrive for different reasons are two bodies. Bounded by the house, not trusted: a capacity
+     * outside 0 to `RangingWire.MAX_PEERS` is read as 0.
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("ranging")
+    data class Ranging(val capacity: Int) : LobbyBody()
 
     /**
      * **Host → client. How the lobby stands: the counts, the setting, and who is here.**

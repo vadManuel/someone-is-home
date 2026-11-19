@@ -355,6 +355,12 @@ class GameState private constructor(
      * only if it is this one (D-283). Never reaches a client: no effect carries it.
      */
     val host: Seat?,
+    /**
+     * **What this round's rules read touches, reports and the map from, off the arming event**
+     * (D-301). See [Event.RoundArmed.contactSource]. Read by the house's resolvers above the rules,
+     * never by an effect: no phone is told it.
+     */
+    val contactSource: ContactSource,
 ) {
     /** **Whether [seat] is the host's** (D-289): the notice's one exception to R7 (D-283). */
     fun isHost(seat: Seat): Boolean = host?.index == seat.index
@@ -741,12 +747,13 @@ class GameState private constructor(
         observations: List<Observation> = this.observations,
         nextObservation: Long = this.nextObservation,
         host: Seat? = this.host,
+        contactSource: ContactSource = this.contactSource,
     ) = GameState(
         armed, outcome, seats, insiderSeats, revoked, newlyRevoked, reported, restrained, revokeArms,
         touches, unreachable, cooldowns, isolated, systemIntegrity, openSubroutines, workOrders, stations,
         activeMarkers, destinations, presence, staticUntil, meeting, egress, egressReadyAt, oneLines,
         names, voteWindowSeconds, nextEntity, seed, terminal, reader, plan, terminalRoom, shiftStartedAt,
-        sightings, observations, nextObservation, host,
+        sightings, observations, nextObservation, host, contactSource,
     )
 
     companion object {
@@ -833,6 +840,8 @@ class GameState private constructor(
             shiftStartedAt: Tick = Tick(0),
             /** The host's own seat (D-289). Null for [terminal]'s reason: it names no out seat. */
             host: Seat? = null,
+            /** What the rules read contact from (D-301). Today's Bluetooth rules by default. */
+            contactSource: ContactSource = ContactSource.Rssi,
         ) = GameState(
             armed = true,
             outcome = null,
@@ -881,6 +890,7 @@ class GameState private constructor(
             observations = emptyList(),
             nextObservation = 1L,
             host = host,
+            contactSource = contactSource,
         )
 
         val EMPTY = GameState(
@@ -922,6 +932,7 @@ class GameState private constructor(
             observations = emptyList(),
             nextObservation = 1L,
             host = null,
+            contactSource = ContactSource.Rssi,
         )
     }
 }

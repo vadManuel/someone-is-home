@@ -97,7 +97,7 @@ class MissedRoundEndTest {
         val radio = air.radioFor(spot)
         private val seam = DeferredRoundSeam()
         val link: LobbyOverTransport = LobbyOverTransport(
-            scope, onEvent = { log += it },
+            scope, rangingCapacity = { SimulatedAir.BENCH_CAPACITY }, onEvent = { log += it },
             seat = kept,
             onIntent = HouseDoors(house)::heard,
             onEgressFired = HouseDoors(house)::fired,
@@ -119,7 +119,7 @@ class MissedRoundEndTest {
             wallClock = { CLOCK },
         )
         val pushed = mutableListOf<RoundMessage>()
-        val round = RoundClient(scope, flow, LineWatch {}, buzzer, radio, wake, note = { log += it }).also { made ->
+        val round = RoundClient(scope, flow, LineWatch {}, buzzer, radio, wake, ranging = air.rangingFor(spot, SimulatedAir.BENCH_CAPACITY), note = { log += it }).also { made ->
             client = made
             made.onMessage = { pushed += it }
             seam.becomes(made)

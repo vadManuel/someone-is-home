@@ -179,14 +179,14 @@ class UplinkFrameTest {
             fireEgress = { client?.fireEgress() },
         )
         val pushed = mutableListOf<RoundMessage>()
-        val round = RoundClient(scope, flow, LineWatch {}, HouseBuzzer(SilentHaptics), air.radioFor(radioSpot), wake) {}
+        val round = RoundClient(scope, flow, LineWatch {}, HouseBuzzer(SilentHaptics), air.radioFor(radioSpot), wake, ranging = air.rangingFor(radioSpot, SimulatedAir.BENCH_CAPACITY)) {}
             .also { made ->
                 client = made
                 made.onMessage = { pushed += it }
             }
         val tap = Tap(round)
         val link = LobbyOverTransport(
-            scope, seat = Kept(),
+            scope, rangingCapacity = { SimulatedAir.BENCH_CAPACITY }, seat = Kept(),
             onIntent = HouseDoors(house)::heard,
             onEgressFired = HouseDoors(house)::fired,
             onSighted = HouseDoors(house)::sighted,

@@ -3,6 +3,7 @@ package home.someoneshome.core
 import home.someoneshome.model.AssignedWork
 import home.someoneshome.model.Balance
 import home.someoneshome.model.ContactSeed
+import home.someoneshome.model.ContactSource
 import home.someoneshome.model.Destination
 import home.someoneshome.model.Event
 import home.someoneshome.model.Hmac
@@ -84,6 +85,11 @@ fun armingFor(
      * which names no out seat on the notice (R7, D-242).
      */
     host: Seat? = null,
+    /**
+     * What this round's rules read contact from (D-301): [contactSourceFor]'s answer. Defaulted to
+     * today's Bluetooth rules for [names]' reason.
+     */
+    contactSource: ContactSource = ContactSource.Rssi,
 ): Event.RoundArmed {
     require(seats.size >= Balance.MINIMUM_SEATS) {
         "a round cannot be armed for ${seats.size} seats: the minimum party is " +
@@ -104,8 +110,29 @@ fun armingFor(
         plan = plan,
         terminalRoom = terminalRoom,
         host = host?.takeIf { h -> seats.any { it.index == h.index } },
+        contactSource = contactSource,
     )
 }
+
+/**
+ * **Which source this round's rules read a touch, a report and the map from: the one question,
+ * asked once, at arming** (D-301, provisional (overnight); a stopgap in a replaceable shape).
+ *
+ * **UWB distance when every armed phone said it can range at least one peer**
+ * ([capacityOf] > 0 for every one of [seats]); **Bluetooth RSSI, today's rules, otherwise**,
+ * including a seat whose phone never said (null). One phone that cannot range takes the whole round
+ * back to Bluetooth, because a pair can be measured only when both phones range, and a round in
+ * which one person could never be touched or found would be a round that cannot be played.
+ *
+ * Why it exists: the real phones carry no Nearby Interaction radio yet (`NoRanging`, capacity 0), and
+ * the owner's next session touches phones over Bluetooth; the bench's phones range. When every phone
+ * ranges, this goes, and the round always reads distance.
+ *
+ * **Never a role**: it reads each phone's capacity and nothing else, and its answer is recorded on
+ * [Event.RoundArmed.contactSource], so a replay reads what the evening read. No phone is told it.
+ */
+fun contactSourceFor(seats: List<Seat>, capacityOf: (Seat) -> Int?): ContactSource =
+    if (seats.isNotEmpty() && seats.all { (capacityOf(it) ?: 0) > 0 }) ContactSource.Uwb else ContactSource.Rssi
 
 /**
  * **The Insider draw, clamped by the band at the draw and not only at the setting** (D-103, as

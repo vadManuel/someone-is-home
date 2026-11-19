@@ -1,5 +1,6 @@
 package home.someoneshome.app
 
+import home.someoneshome.model.ContactSource
 import home.someoneshome.model.Event
 import home.someoneshome.model.InsiderAbility
 import home.someoneshome.model.Intent
@@ -121,7 +122,7 @@ class RangingBenchTest {
         ) {}
         val tap = Tap(round)
         val link = LobbyOverTransport(
-            scope, seat = Kept(),
+            scope, seat = Kept(), rangingCapacity = { ranging.capacity() },
             onIntent = HouseDoors(house)::heard,
             onEgressFired = HouseDoors(house)::fired,
             onSighted = HouseDoors(house)::sighted,
@@ -181,6 +182,8 @@ class RangingBenchTest {
                 fun houseSeat(p: Phone) = seatOf.getValue(p.name)
 
                 assertTrue(armAtLightsOut(house, hosting = true, seed = 20261119L, note = {}), "the round never armed")
+                // Every phone told the house in the lobby that it ranges, so the round reads distance (D-301).
+                assertEquals(ContactSource.Uwb, house.state.contactSource, "every phone ranges and the round did not arm on distance")
                 // The house's clock at real time, the tick driver's 20 a second, from the moment the
                 // Insider's Revoke is ready: one jump, before any pair forms, so no pair is aged past
                 // its grace by a jump no house's clock makes.

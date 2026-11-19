@@ -50,6 +50,14 @@ class Recording(
     }
 
     companion object {
+        // 43: the round's contact source (D-301). `RoundArmed` gains `contacts=` (`rssi` or `uwb`)
+        // and the state row gains `contacts=`: the house chooses at arming, from whether every phone
+        // can range, whether the rules read a touch, a report and the spectator map from Bluetooth
+        // RSSI or from UWB distance, and a replay that read the other would mint different touches,
+        // reports and placements. A version 42 arming row is missing the field, and the parser
+        // defaults nothing, so a version 42 recording is refused here as every older one is. No
+        // effect row changed shape; no phone is sent the source.
+        //
         // 42: no row changed shape, and the same events reduce differently (the owner's E2 ruling,
         // D-297), version 36's case. A scan of a node of the running Egress, paused or not, opens no
         // Subroutine: the effect row's `ScanAnswered` says `opened=none` where a version 41 build
@@ -337,7 +345,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/42"
+        const val HEADER = "someone-is-home/recording/43"
     }
 }
 

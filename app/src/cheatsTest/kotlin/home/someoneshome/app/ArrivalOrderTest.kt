@@ -184,6 +184,12 @@ class ArrivalOrderTest {
      * **GUARD (R6): eight phones, seven rounds of four simultaneous touches, over loopback.** Every
      * phone is answered exactly once per touch it was in, nothing goes out against a newer state, and
      * every phone's stream is exactly what the house sent it, in the house's order.
+     *
+     * **Bluetooth, on purpose** (D-301): the one bench through [SimulatedAir] that does not play on
+     * distance. Eight phones each touching a partner drawn afresh every round need every pair
+     * touchable at once, and D-300's pairing ranges a phone's few nearest and keeps them, so most of
+     * these touches could never land on distance (D-301's raised item 1). The question here is the
+     * arrival order, which is the same under either source.
      */
     @Test
     fun manyTouchesAtOnceOverTheSocketsAnswerEachToucherOncePerTouch() = runBlocking {

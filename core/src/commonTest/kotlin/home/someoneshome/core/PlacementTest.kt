@@ -2,6 +2,7 @@ package home.someoneshome.core
 
 import home.someoneshome.model.Balance
 import home.someoneshome.model.CellRect
+import home.someoneshome.model.ContactSource
 import home.someoneshome.model.ContactTokens
 import home.someoneshome.model.ContactWindow
 import home.someoneshome.model.Event
@@ -336,5 +337,36 @@ class PlacementTest {
             )
             assertEquals(state.sightings, otherState.sightings)
         }
+    }
+
+    /**
+     * **GUARD (D-301): in a round that reads distance, a performer places the seats it measured
+     * within 1.5 m, and its Bluetooth places nobody.** Seat 4 at 150 cm is placed; seat 5 at 151 cm
+     * is not; seat 6, heard at −40 dBm and never measured, is not.
+     */
+    @Test
+    fun `a performer in a round that reads distance places what it measured within the room's reach`() {
+        val uwb = reduce(
+            GameState.EMPTY,
+            Event.RoundArmed(
+                Tick(0), seed = seed, seats = seats, insiders = listOf(Seat(1)), markers = placed(cards),
+                terminal = station, plan = plan.toView(), terminalRoom = "ROOM 0", contactSource = ContactSource.Uwb,
+            ),
+        ).state
+        val state = perform(uwb, Seat(0), at = 100)
+        val room = roomOf(state, anchor(state, Seat(0)))
+        val slots = listOf(Sighting(ContactTokens.of(contactSeedFor(seed, Seat(6)), w), -40, w))
+        val upload = ContactUpload(
+            Seat(0),
+            SightingUpload.unpack(SightingUpload.pack(contactSeedFor(seed, Seat(0)), w, uploadCount++, slots))!!,
+            listOf(ContactDistance(Seat(5), 151), ContactDistance(Seat(4), 150)),
+        )
+        val resolution = resolveContacts(ContactMemory.EMPTY, Tick(110), w, listOf(upload), state)
+        val sensed = assertNotNull(resolvePlacements(Tick(110), resolution.memory.book, upload, state))
+        assertEquals(Event.Sensed(Tick(110), Seat(0), room, listOf(Seat(4))), sensed, "the room's reach by distance is not 1.5 m, or Bluetooth placed somebody")
+        // The deliberate error is the same capture: an observation with its error rolled once.
+        val after = admitted(state, sensed)
+        assertEquals(room, after.placedRoomOf(Seat(4), Tick(111)))
+        assertNotNull(after.observationOf(room))
     }
 }

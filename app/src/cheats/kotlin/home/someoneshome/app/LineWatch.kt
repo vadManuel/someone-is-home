@@ -88,6 +88,8 @@ class LineWatch(private val note: (String) -> Unit) {
             is LobbyBody.Standing -> "STANDING"
             is LobbyBody.Handover -> "HANDOVER"
             is LobbyBody.Naming -> "NAMING"
+            // Upward by design (D-301): a client's capacity, never a client's to receive.
+            is LobbyBody.Ranging -> "RANGING"
             // The host saying the evening turned over. It travels downward by design and carries
             // nothing, so it belongs with STANDING among the frames a client should see rather
             // than among the ones worth shouting about -- see the exemption below, where it is

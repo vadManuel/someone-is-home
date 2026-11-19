@@ -97,7 +97,7 @@ class NewRoundLoopTest {
         // seam, so the flow can be built over the lobby the link carries, and the round last.
         private val seam = DeferredRoundSeam()
         val link: LobbyOverTransport = LobbyOverTransport(
-            scope, onEvent = {},
+            scope, rangingCapacity = { SimulatedAir.BENCH_CAPACITY }, onEvent = {},
             onInbound = { body ->
                 if (LobbyWire.decodeOrNull(body) is LobbyBody.RoundEnded) {
                     counting.lock()
@@ -129,7 +129,7 @@ class NewRoundLoopTest {
             onScreen = buzzer::showing,
         )
         val pushed = mutableListOf<RoundMessage>()
-        val round = RoundClient(scope, flow, LineWatch {}, buzzer, air.radioFor(radioSpot), wake) {}.also { made ->
+        val round = RoundClient(scope, flow, LineWatch {}, buzzer, air.radioFor(radioSpot), wake, ranging = air.rangingFor(radioSpot, SimulatedAir.BENCH_CAPACITY)) {}.also { made ->
             client = made
             made.onMessage = { pushed += it }
             seam.becomes(made)

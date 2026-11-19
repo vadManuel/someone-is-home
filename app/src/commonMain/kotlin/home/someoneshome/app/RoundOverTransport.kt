@@ -336,6 +336,12 @@ class RoundOverTransport(
     val owing: Int get() = contacts.owing
 
     /**
+     * **The report's slot, as the house last said it to this phone** (D-301): idle, held for so
+     * long, or cancelled, off every answer's plan. Nothing draws it yet: the circle is the owner's.
+     */
+    val report: home.someoneshome.model.protocol.ReportSlot get() = contacts.report
+
+    /**
      * **The socket came back: ask for whatever was said while it was gone** (D-097, G3).
      *
      * The same request a gap makes, by its other trigger. Called on every seating and not only on

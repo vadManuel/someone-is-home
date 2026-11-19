@@ -458,6 +458,14 @@ class LobbyHouse(
     private var hostSeat: Seat? = null
 
     /**
+     * **How many peers each seat's phone said it can range, by seat index** (D-301), off its last
+     * [LobbyBody.Ranging]. Read once, at arming ([armingInputs]), by the house's one choice of what
+     * the round's rules read contact from. A phone that never said is absent, which counts as 0.
+     * Written and read on [scope], with the desk. **It goes down no wire.**
+     */
+    private val rangingBySeat = HashMap<Int, Int>()
+
+    /**
      * **This phone's own client was seated under [token]** (D-289): the house looks up which seat
      * that is. Called on every seating of the host's own client, so a resume after a lock keeps it.
      */
@@ -754,6 +762,9 @@ class LobbyHouse(
             // **The host's seat, if it is one of this round's** (D-289). House-only: the rules read
             // it for the notice and nothing reaches a phone.
             host = hostSeat?.takeIf { h -> named.any { it.seat.index == h.index } },
+            // **What each seat's phone said it can range** (D-301): the arming's choice of contact
+            // source reads it. The round's seats only.
+            ranging = named.mapNotNull { n -> rangingBySeat[n.seat.index]?.let { n.seat.index to it } }.toMap(),
         )
     }
 
@@ -828,6 +839,8 @@ class LobbyHouse(
         playingOver = false
         // A new house mints new seats; the host's is learned again from its own client (D-289).
         hostSeat = null
+        // And every phone's capacity: the seats are new, and each phone says it again (D-301).
+        rangingBySeat.clear()
         // The house is down, so this phone is hosting nothing — and a stale home here would let a
         // later arming draw from a house that is no longer on the air.
         hosted = null
@@ -1079,6 +1092,11 @@ class LobbyHouse(
                 if (!kept && playing?.none { it.seat.index == seat.index } != false) nameTaken(seat)
                 publish()
             }
+            // **What this phone can range** (D-301), kept for the arming's choice of contact source.
+            // Bounded here, not trusted: anything outside the wire's range is a phone that cannot.
+            is LobbyBody.Ranging -> atTheDesk {
+                rangingBySeat[seat.index] = body.capacity.takeIf { it in 0..RangingWire.MAX_PEERS } ?: 0
+            }
             // The standing is the host's to send, never to receive. A client that sent one is
             // saying nothing this house is obliged to hear.
             is LobbyBody.Standing -> Unit
@@ -1326,6 +1344,13 @@ data class ArmingInputs(
      * the air with them. Null when the house never learned it, which names no out seat (R7, D-242).
      */
     val host: Seat? = null,
+    /**
+     * **How many peers each seat's phone said it can range, by seat index** (D-301), off its
+     * [LobbyBody.Ranging]. Read by [RoundAuthority.arm]'s one choice of contact source
+     * (`contactSourceFor`): UWB when every seat's phone can range, Bluetooth otherwise. A seat
+     * missing here never said, and counts as 0.
+     */
+    val ranging: Map<Int, Int> = emptyMap(),
 )
 
 /**
@@ -1429,6 +1454,12 @@ class LobbyOverTransport(
     private val onHouseLost: () -> Unit = {},
     /** **And it is back**: this phone was seated again after [onHouseLost] fired. */
     private val onHouseBack: () -> Unit = {},
+    /**
+     * **How many peers this phone's UWB radio can range now** (D-301): told to the house on every
+     * seating ([LobbyBody.Ranging]), right after the name. 0 by default, which is every phone until
+     * the Nearby Interaction radio exists; the bench hands its simulated radio's.
+     */
+    private val rangingCapacity: () -> Int = { 0 },
     /**
      * **How long a guest's link to the house is down before the house is called gone** (D-253,
      * provisional, owner to confirm). Long enough that a host whose phone locked for a moment and
@@ -1649,7 +1680,7 @@ class LobbyOverTransport(
                     // Either upward body arriving at a client would be the house sending one
                     // phone's text to another, which nothing on the host side does — and if it ever
                     // did, ignoring it here is the fail-closed direction.
-                    is LobbyBody.Handover, is LobbyBody.Naming, null -> Unit
+                    is LobbyBody.Handover, is LobbyBody.Naming, is LobbyBody.Ranging, null -> Unit
                 }
             },
             onPhase = { phase ->
@@ -1680,7 +1711,14 @@ class LobbyOverTransport(
                         // air across NEW ROUND still held the last round's line, sent it back up,
                         // and the desk filed it as this round's, so the house armed a round with a
                         // line its owner typed for the one before. Owed here, sent on that standing.
-                        client?.let { live -> scope.launch { live.send(naming(name)) } }
+                        client?.let { live ->
+                            scope.launch {
+                                live.send(naming(name))
+                                // **And what this phone can range** (D-301), on the same socket, after
+                                // the name: the house reads it at LIGHTS OUT.
+                                live.send(rangingOffered())
+                            }
+                        }
                         lineOwed = true
                         // **On every seating, exactly as the name is re-sent on every seating**,
                         // and for the mirror of that reason: the name is what the house has to be
@@ -1785,6 +1823,9 @@ class LobbyOverTransport(
 
     private fun naming(name: String): TransportFrame =
         TransportFrame.Carry(LobbyWire.encode(LobbyBody.Naming(name)))
+
+    private fun rangingOffered(): TransportFrame =
+        TransportFrame.Carry(LobbyWire.encode(LobbyBody.Ranging(rangingCapacity().coerceIn(0, RangingWire.MAX_PEERS))))
 
     /** The host's setting. On a phone that is not hosting, [LobbyHouse] was never started. */
     override fun setInsiders(chosen: Int?) = house.setInsiders(chosen)
