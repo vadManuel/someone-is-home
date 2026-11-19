@@ -485,3 +485,16 @@ Today an Egress's opening pushes its alert over a Subroutine screen. The person 
   - The phone whose attempt failed vibrates continuously for the full 3 s of the lockout, from the moment the attempt fails.
   - The owner confirmed this exact reading on 2026-11-18. It is a new haptic pattern, a sixth beside D-135's five, ruled by the owner.
 - **O3, the two nodes' pairing: option B, the runs overlap.** The two phones' runs of four consecutive pulses must share at least one pulse of the house's grid. Pairing no longer depends on when the uploads arrive. The owner chose this over "within about 6 s" and "the same four pulses".
+
+## Owner ruling U6, 2026-11-18: Bluetooth picks who is near, UWB measures precisely
+
+The research found no published limit on how many peers one iPhone can range at once. Developer reports from 2021 put it at 2 or 3 per phone. An 18-seat round would need 17.
+
+The owner ruled:
+- **Bluetooth stays, to find who is near.**
+- **UWB measures those few precisely.**
+- **No device test of the limit first.**
+
+This amends U5 and "UWB replaces Bluetooth for everything": Bluetooth is no longer removed. It decides nothing in the game itself; it only chooses which pairs UWB measures. Every rule (the 10 cm Revoke, the 30 cm report, the spectator map) reads UWB distance.
+
+Built consequence: since the limit is unmeasured, each phone learns its own. It opens a conservative number of sessions, lowers it when iOS answers `activeSessionsLimitExceeded`, and reports the number it can hold. A crowd larger than that number can miss a flyby. Under U3, that is part of the game.
