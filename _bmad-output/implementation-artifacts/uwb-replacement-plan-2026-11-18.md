@@ -160,3 +160,45 @@ Proposed mitigation, **not ruled**:
 **A device test comes before unit 4:** with 3 or more iPhones, open sessions one at a time until iOS refuses, and measure the rate at 1, 2, 4, 8 and 16 peers.
 
 Units 2, 3 and 5 can be built without knowing the limit.
+
+## The plan under U6 (owner, 2026-11-18): Bluetooth picks, UWB measures
+
+U6 supersedes the parts of units 2, 4 and 6 that assumed a full UWB mesh and Bluetooth's removal. Everything else above stands: the house decides, uploads are fixed-size and once a second, phones never learn seats, and so on.
+
+**Bluetooth keeps the job it has today, minus the rules:**
+- Rotating HMAC tokens, the 24-slot RSSI upload, and only the house resolving a token to a seat (D-032, D-212).
+- RSSI no longer decides contact, report or placement. It only ranks who is near whom.
+
+**The house pairs phones for UWB.**
+- Once a second, from the Bluetooth sightings, it picks each seat's nearest peers by RSSI. It forms **symmetric pairs**, since UWB needs both phones' sessions, and no seat gets more pairs than its phone said it can hold.
+- A pair is kept while both phones are still among each other's candidates, so the pairing doesn't churn.
+- The choice is deterministic, from the uploads alone (rule 4), and never reads a role.
+
+**Phones learn their own limit.**
+- Each phone starts at a conservative capacity: **3**, the 2021 iPhone 12 report.
+- It drops by one whenever iOS answers `activeSessionsLimitExceeded`.
+- It reports its current capacity in every upload, in a fixed-width field.
+- Whether a phone should probe upwards after a quiet stretch is left for when phones are in hand.
+
+**A token pool, so ranging starts within about a second.**
+- An `NIDiscoveryToken` belongs to one session.
+- Each phone keeps its capacity's worth of idle sessions open, and their tokens ride up in the upload's fixed token slots, padded to 384 bytes each.
+- When the house pairs two phones, it hands each of them the other's spare token, then runs on that pairing. Both phones then range on sessions they already hold.
+- A used token is replaced by a fresh one in the next upload.
+
+**The house's plan to each phone, once a second.**
+- It rides in the existing per-upload answer (`UploadHeard`, already fixed-size).
+- It has a fixed number of slots of (handle, the peer's token or "unchanged" or "stop"), padded to the maximum capacity the wire allows. The proposal is **6**; it is easy to change.
+- Every phone gets one every second, the same size, whatever changed.
+
+**Distance upload** (unit 2 as planned, sized for the capacity):
+- Slots of (handle, nearest centimetres this second, readings this second), padded to the same maximum.
+
+**What the rules read:** UWB distance only, as unit 3 plans: the 10 cm flyby Revoke, the 30 cm report held 2 s, and the spectator map. A pair that isn't being ranged can't Revoke or report. A crowd larger than a phone's capacity can therefore miss a flyby, and U3 accepts that.
+
+**Unit 6 changes:**
+- Bluetooth is **not** removed. The BLUETOOTH permission row and its usage string stay.
+- NEARBY DEVICES is **added** beside them, not swapped in.
+- The NameDrop setup step still comes out.
+
+**Order:** the wire (units 2 and 6) and the house's pairing come first; both are buildable and testable on the bench. Then the rules (unit 3) and the bench's distance model (unit 5). The radio (unit 4) comes last; it needs phones only to be seen working.
