@@ -59,3 +59,7 @@ phone-shaped panel, and nothing about the game.
 
 In active development. The design is still moving; the decision log is the record of what changed
 and why.
+
+## Licence
+
+All rights reserved. This repository is public to be read, not reused: see [LICENSE](LICENSE).
