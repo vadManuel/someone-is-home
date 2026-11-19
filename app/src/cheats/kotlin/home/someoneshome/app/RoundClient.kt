@@ -2,6 +2,7 @@ package home.someoneshome.app
 
 import home.someoneshome.platform.ContactRadio
 import home.someoneshome.platform.ScreenWake
+import home.someoneshome.platform.monotonicMillis
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.OrderLine
 import home.someoneshome.model.SubroutineInstance
@@ -123,6 +124,14 @@ class RoundClient(
      * `CheatRoot` passes [DeviceSeat]; a test's phone keeps them in memory unless it names a store.
      */
     private val kept: SeatStore = MemorySeat(),
+    /**
+     * **This phone's clock, and where each upload's round trip goes** (D-295), handed straight down
+     * to [RoundOverTransport]: `LobbyOverTransport.clientNow` and `uploadAnswered` on a phone, so the
+     * offset the containment control stamps taps with is refreshed every second on the uploads.
+     */
+    private val clientMillis: () -> Long = ::monotonicMillis,
+    private val clock: suspend (sentAtMillis: Long, heardAtMillis: Long, answeredAtMillis: Long, receivedAtMillis: Long) -> Unit =
+        { _, _, _, _ -> },
     private val note: (String) -> Unit,
 ) : RoundSeam {
 
@@ -167,6 +176,8 @@ class RoundClient(
         // in memory, which is the harder direction of the same question.
         onOutbound = { body -> watch.saw(body) },
         kept = kept,
+        clientMillis = clientMillis,
+        clock = clock,
         // A later round's push ended this phone's round (V1, D-267): the bench's copy goes too.
         onRoundTurned = {
             note("A LATER ROUND'S PUSH — THE ROUND'S END WAS MISSED, AND THIS PHONE HOLDS NOTHING OF IT")

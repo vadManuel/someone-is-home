@@ -395,8 +395,8 @@ Core confined to a **single dispatcher**. The five I/O domains — BLE, motion, 
 | Parameter | Value |
 |---|---|
 | Local timebase | **Monotonic**, never wall clock |
-| Offset estimation | NTP-style round trips at join; **take the minimum-RTT sample**, not the mean |
-| Re-sync cadence | **Every 30 s** |
+| Offset estimation | NTP-style round trips; **take the minimum-RTT sample**, not the mean — of the last 16 samples (D-295) |
+| Re-sync cadence | **Every second, on the round's uploads** (D-295; was every 30 s). One probe burst at each seating |
 | Correction | **Slew, never jump.** A backward jump could skip an already-scheduled event |
 | Scheduled events | broadcast → ack → commit. `T = last_ack + 500 ms` |
 | Ack timeout | **2 s.** Proceed without the missing client; it flips on reconnect |

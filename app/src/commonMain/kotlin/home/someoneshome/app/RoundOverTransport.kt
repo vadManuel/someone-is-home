@@ -10,6 +10,7 @@ import home.someoneshome.model.protocol.SightingUpload
 import home.someoneshome.model.protocol.TransportFrame
 import home.someoneshome.platform.ContactRadio
 import home.someoneshome.platform.ScreenWake
+import home.someoneshome.platform.monotonicMillis
 import home.someoneshome.platform.wallClockMillis
 import home.someoneshome.platform.transport.IntentOutbox
 import home.someoneshome.platform.transport.RoundInbox
@@ -124,6 +125,20 @@ class RoundOverTransport(
      * before the panel's. `RoundClient` forgets its bench's copy of the round here; empty otherwise.
      */
     private val onRoundTurned: () -> Unit = {},
+    /**
+     * **This phone's monotonic milliseconds: the clock its socket's estimator is on** (D-295). The
+     * same function `LobbyOverTransport` hands its `TransportClient`, so a probe's send and its
+     * answer's arrival are read on the clock the offset is an offset of.
+     */
+    private val clientMillis: () -> Long = ::monotonicMillis,
+    /**
+     * **One upload's round trip on the house's clock, handed down to the socket's estimator**
+     * (D-295): `LobbyOverTransport.uploadAnswered` on a phone. Every answer to every upload this
+     * phone sends is one sample, so the offset is refreshed every second rather than measured once
+     * at join. Nothing by default, for a construction with no socket to refresh.
+     */
+    private val clock: suspend (sentAtMillis: Long, heardAtMillis: Long, answeredAtMillis: Long, receivedAtMillis: Long) -> Unit =
+        { _, _, _, _ -> },
 ) {
 
     private val inbox = RoundInbox()
@@ -134,6 +149,9 @@ class RoundOverTransport(
      * beat by the uploader; answered by `RoundBody.UploadHeard`; emptied when the round ends here.
      */
     private val requests = SlotRequests(onEvent = onEvent)
+
+    /** **Each upload's clock probe, and the answers matched to them** (D-295). On [scope], with the beat. */
+    private val uploadClock = UploadClock(clientMillis)
 
     /** This phone's half of the contact handshake (D-217). Fed every applied push; beaten by [upload]. */
     private val contacts = ContactUploader(
@@ -146,6 +164,8 @@ class RoundOverTransport(
         onEvent = onEvent,
         // **Every request rides the beat** (D-263): the slot is filled at the upload, never sent alone.
         ask = requests::slot,
+        // **And the house's clock rides the beat too** (D-295): one probe an upload, every phone alike.
+        probe = uploadClock::stamp,
     )
 
     /** How many requests this phone has made in the round that the house has not answered. For tests. */
@@ -165,7 +185,14 @@ class RoundOverTransport(
      * of them or two frames could be applied at once and land in either order. This is D4's *one
      * ordered event queue* at the client end, and [run] is the single consumer that drains it.
      */
-    private val inbound = Channel<TransportFrame>(Channel.UNLIMITED)
+    private val inbound = Channel<Arrived>(Channel.UNLIMITED)
+
+    /**
+     * **A frame, and when it reached this phone** (D-295). Stamped on the socket's thread, before
+     * the queue: a wait for the main thread is not round trip, and counted as one it would read as
+     * offset.
+     */
+    private class Arrived(val frame: TransportFrame, val atMillis: Long)
 
     /** How far this phone is, in its own stream. For the bench and the authority's log. */
     val held: Long get() = inbox.held
@@ -175,7 +202,7 @@ class RoundOverTransport(
      * nothing here touches a screen.
      */
     fun frameArrived(frame: TransportFrame) {
-        inbound.trySend(frame)
+        inbound.trySend(Arrived(frame, clientMillis()))
     }
 
     /**
@@ -183,7 +210,7 @@ class RoundOverTransport(
      * thread, which is where a screen may be written from and the only place it may be.
      */
     suspend fun run() {
-        for (frame in inbound) apply(frame)
+        for (arrived in inbound) apply(arrived.frame, arrived.atMillis)
     }
 
     /**
@@ -193,7 +220,7 @@ class RoundOverTransport(
      * and a round that treated an unrecognised body as an error would take a player's connection
      * down over a message meant for another part of the app.
      */
-    private fun apply(frame: TransportFrame) {
+    private suspend fun apply(frame: TransportFrame, arrivedAtMillis: Long) {
         val carried = (frame as? TransportFrame.Carry)?.body ?: return
         onInbound(carried)
         val body = RoundWire.decodeOrNull(carried) ?: return
@@ -281,7 +308,15 @@ class RoundOverTransport(
             is RoundBody.FaultHeard -> contacts.acknowledged(body.onset)
             // **The house has this beat's slot** (D-263, D-275): every request under that id is done. Every
             // upload is answered with one of these, so it says nothing, and it reaches no screen.
-            is RoundBody.UploadHeard -> requests.heard(body.id)
+            //
+            // **And it is the house's clock, read twice** (D-295): one round trip of this phone's
+            // probe, handed to the socket's estimator. Every answer to every upload, on every phone.
+            is RoundBody.UploadHeard -> {
+                requests.heard(body.id)
+                uploadClock.answered(body, arrivedAtMillis) { sent, heard, answered, received ->
+                    clock(sent, heard, answered, received)
+                }
+            }
         }
     }
 
@@ -404,6 +439,7 @@ class RoundOverTransport(
         gapBeats = null
         contacts.roundEnded()
         requests.clear()
+        uploadClock.forget()
         wake.release()
     }
 

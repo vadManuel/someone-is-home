@@ -23,8 +23,8 @@ class CarryReadTest {
     private val bodies = listOf(
         "",
         "x",
-        RoundWire.encode(RoundBody.Sighted("0".repeat(SightingUpload.BODY_CHARS), SightingUpload.EMPTY_ASK)),
-        RoundWire.encode(RoundBody.UploadHeard("0123456789abcdef")),
+        RoundWire.encode(RoundBody.Sighted("0".repeat(SightingUpload.BODY_CHARS), SightingUpload.EMPTY_ASK, UploadProbe.NONE)),
+        RoundWire.encode(RoundBody.UploadHeard.of("0123456789abcdef", UploadProbe.NONE, 0L, 0L)),
         RoundWire.encode(RoundBody.Push(9, RoundMessage.MeetingCalling, round = 1)),
         LobbyWire.encode(LobbyBody.Standing(joined = 6, linesIn = 4, names = listOf("ÉLODIE", "TOMÁS", "李"), insiders = 2)),
         LobbyWire.encode(LobbyBody.Handover("a line with \"quotes\", a back\\slash, a tab\t, a newline\n and \u0001")),

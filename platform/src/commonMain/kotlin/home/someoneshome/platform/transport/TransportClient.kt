@@ -22,8 +22,9 @@ import kotlinx.coroutines.sync.withLock
 const val PRESEAT_RETRY_MILLIS: Long = 500
 
 /**
- * How often a seated client asks its [ClockSync] whether probes are due (C1). Not the probe
- * cadence — that is D5's, a burst every [RESYNC_MILLIS] — only how late a due burst may leave.
+ * How often a seated client asks its [ClockSync] whether probes are due (C1). Not a probe cadence:
+ * there is one burst per connection, at its seating, and the uploads do the rest (D-295). Only how
+ * late a due burst, or an abandoned one's end, may be noticed.
  */
 const val PROBE_TICK_MILLIS: Long = 250
 
@@ -43,17 +44,20 @@ const val PROBE_TICK_MILLIS: Long = 250
  *
  * ### The house's clock rides the same socket (C1, ARCH D5)
  *
- * Every seated connection sends [TransportFrame.TimeProbe] bursts on [ClockSync]'s schedule — five
- * at seating, five every [RESYNC_MILLIS] after — and feeds each [TransportFrame.TimeMark] the host
- * answers with to the estimator, **before and instead of** [onFrame]: a mark is this layer's, and
- * nothing above it has a use for one. [hostNowMillis] is the result, readable from any thread.
+ * Every seated connection sends one burst of [TransportFrame.TimeProbe]s at its seating and feeds
+ * each [TransportFrame.TimeMark] the host answers with to the estimator, **before and instead of**
+ * [onFrame]: a mark is this layer's, and nothing above it has a use for one. **From then on the
+ * estimate is refreshed every second by the round's own uploads** ([uploadAnswered], D-295): the
+ * round half above stamps each upload's probe and hands each answer's two house readings down
+ * here. [hostNowMillis] is the result, readable from any thread.
  *
  * **The schedule reads nothing but this connection's own clock.** This class knows no seat and no
  * role, and every phone, the host's own included, runs this same loop from its own seating — so
  * an Insider's phone and a Resident's put the same probe frames on the air at the same offsets
- * from their connect (rule 1, D-263). Probes go straight onto the socket and **never into the
- * round's fixed-cadence upload** (D-263's request slot): waiting up to a second for a beat would
- * be up to a second of round trip, and round trip is the noise floor of the offset.
+ * from their connect (rule 1, D-263). The seating burst goes straight onto the socket and never
+ * into D-263's request slot, where a probe would wait up to a second for a beat. **The upload's
+ * own probe does not wait** (D-295): it is its own field, stamped when the upload is made, so its
+ * round trip is the network's and nothing else's.
  *
  * Callbacks fire on the client engine's threads.
  */
@@ -81,6 +85,7 @@ class TransportClient(
     /** [clock]'s newest fix, published for readers on any thread. */
     private val published = MutableStateFlow<ClockFix?>(null)
     private val probesOut = MutableStateFlow(0)
+    private val samplesIn = MutableStateFlow(0L)
 
     /** Hand [clock]'s fix to readers, and to [onFix] when it is a new one. Under [clockLock]. */
     private fun publish() {
@@ -105,6 +110,23 @@ class TransportClient(
 
     /** How many [TransportFrame.TimeProbe] this client has put on a socket. A diagnostic. */
     val probesSent: Int get() = probesOut.value
+
+    /** How many samples the estimate has taken: the seating burst's one, then one per answered upload (D-295). A diagnostic. */
+    val clockSamples: Long get() = samplesIn.value
+
+    /**
+     * **One upload's round trip, from the round half above** (D-295): the upload left this phone
+     * at [sentAtMillis] and its answer arrived at [receivedAtMillis], both on [nowMillis]'s clock;
+     * the house read it at [heardAtMillis] and answered at [answeredAtMillis] on its own. Into the
+     * same estimator the seating burst fed, under its lock, and published. Any thread.
+     */
+    suspend fun uploadAnswered(sentAtMillis: Long, heardAtMillis: Long, answeredAtMillis: Long, receivedAtMillis: Long) {
+        clockLock.withLock {
+            clock.onSample(sentAtMillis, heardAtMillis, answeredAtMillis, receivedAtMillis)
+            samplesIn.value = clock.sampleCount
+            publish()
+        }
+    }
 
     /**
      * Connect, pump, reconnect — until the session is dismissed or the caller cancels. Cancelling
@@ -157,8 +179,8 @@ class TransportClient(
                     val pump = launch {
                         for (frame in outbox) send(Frame.Text(TransportWire.encode(frame)))
                     }
-                    // **The clock's own loop, on this connection** (C1). A new socket starts a
-                    // fresh round at once and keeps the fix; then D5's cadence. Written straight to
+                    // **The clock's own loop, on this connection** (C1). A new socket bursts at
+                    // once and keeps the fix; nothing after (D-295: the uploads refresh it). Written straight to
                     // the socket beside the pump rather than queued behind it: Ktor's outgoing side
                     // is a channel, so two senders interleave whole frames.
                     // A round can finish inside either call (abandoned, or timed out), so each
@@ -188,6 +210,7 @@ class TransportClient(
                                 val heardAt = nowMillis()
                                 clockLock.withLock {
                                     clock.onMark(frame.probe, frame.hostMillis, heardAt)
+                                    samplesIn.value = clock.sampleCount
                                     publish()
                                 }
                                 continue

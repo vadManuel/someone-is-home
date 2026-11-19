@@ -90,8 +90,15 @@ object SightingUpload {
          * every caller but the phone's own uploader; the width is the same either way.
          */
         ask: String = EMPTY_ASK,
+        /**
+         * This upload's clock probe (D-295): [UploadProbe.CHARS] hex characters, fresh for every
+         * upload from the phone's own uploader, and [UploadProbe.NONE] for every other caller. Its
+         * own field, so a replacement for the sightings above it leaves it where it is.
+         */
+        probe: String = UploadProbe.NONE,
     ): RoundBody.Sighted {
         require(ask.length == RequestSlot.CHARS) { "a request slot is ${RequestSlot.CHARS} characters" }
+        require(UploadProbe.isProbe(probe)) { "a clock probe is ${UploadProbe.CHARS} lowercase hex characters" }
         val kept = if (heard.isEmpty()) emptyList() else heard
             .groupBy { it.token.hex to it.window.index }
             .map { (_, same) -> same.maxWith(compareBy<Sighting> { it.rssi }.thenBy { it.token.hex }) }
@@ -116,7 +123,7 @@ object SightingUpload {
                 writeSlot(text, slot, tag, rssi, window.index)
             }
         }
-        return RoundBody.Sighted(sortedSlots(text), ask)
+        return RoundBody.Sighted(sortedSlots(text), ask, probe)
     }
 
     /**

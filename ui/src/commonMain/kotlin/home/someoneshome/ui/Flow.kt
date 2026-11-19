@@ -1200,6 +1200,17 @@ class FlowModel(
      * that stands in for `FlowHost`'s second hand.
      */
     private val monotonicMillis: (() -> Long)? = null,
+    /**
+     * **Now on the house's clock, as this phone measures it** (D-295): the socket's estimate,
+     * refreshed every second by the round's own uploads (`LobbyOverTransport.houseNow`). What a
+     * Sync Pulse tap is stamped with. [wallClock]'s shape, for its reason: `platform` holds the
+     * clock and `ui` may not see it.
+     *
+     * Null before the first estimate, and in every render and every test that does not hand one
+     * down: a tap then is stamped [NO_HOUSE_CLOCK], which lands on no pulse, so the house answers
+     * OFF THE BEAT and nothing on this screen says why (rule 6).
+     */
+    private val houseNow: () -> Long? = { null },
 ) {
 
     var state: PanelState by mutableStateOf(initial)
@@ -1528,6 +1539,30 @@ class FlowModel(
      * [PublicCooldown.OWN_ARM_SECONDS] (`revokeShown`). Nothing more is sent and nothing arrives:
      * the request above is the same on every hold, and the clock is this phone's own input.
      */
+    /**
+     * **One tap on the Egress widget, at a node: the Sync Pulse, kept** (D-295; GDD:371, A-11).
+     *
+     * Stamped on the house's clock as this phone measures it ([houseNow]) and kept as input echo,
+     * one pip; the fourth sends all four up as one `ReturnSyncPulse`, which rides the next upload's
+     * slot (D-263), and the pips empty. **The house grades the taps**, on its own grid
+     * (`EgressOpened.pulseFrom`): this phone decides nothing about whether they were on the beat,
+     * and draws the house's ON or OFF THE BEAT when it comes.
+     *
+     * Inert unless the control is live ([PanelVals.pulseLive]), which is a fact about where this
+     * phone's person scanned and never about who they are: an Insider at a node taps the same
+     * control into the same request (GDD:1014, the design intends it).
+     */
+    fun tapPulse() {
+        if (state.pulseAt == null || !state.egressRunning || state.egressHeld) return
+        val taps = state.pulseTaps + (houseNow() ?: NO_HOUSE_CLOCK)
+        if (taps.size < Balance.SYNC_PULSE_BEATS) {
+            state = state.copy(pulseTaps = taps)
+            return
+        }
+        send(IntentMessage.ReturnSyncPulse(taps))
+        state = state.copy(pulseTaps = emptyList())
+    }
+
     fun armRevoke() {
         send(IntentMessage.ArmRevoke)
         val now = monotonicNow()
@@ -2797,11 +2832,24 @@ class FlowModel(
             is RoundMessage.TerminalAnswered ->
                 push(if (message.reading) ScreenId.TermLive else ScreenId.TermBusy)
 
-            is RoundMessage.ScanAnswered -> when (val opened = message.opened) {
-                null -> push(ScreenId.ScanBad)
-                else -> currentFrom(opened)?.let { current ->
-                    state = state.copy(current = current)
-                    push(ScreenId.ScanCaught)
+            // **A node of the running Egress: the tap control, whatever the card held** (D-295,
+            // the owner's Q2 ruling: *a tap control after the node scan*). Read off two public facts,
+            // the card this phone just read and the pair every phone was told, and never off the
+            // house's answer or the role: an Insider and a Resident at a node land on the same
+            // control, and a node card that also holds work for this phone shows the control, not
+            // the work (the containment spec's O1, provisional). The scan has already placed this
+            // seat there at the house (`PresenceChanged`), which is what the house grades a pair by.
+            is RoundMessage.ScanAnswered -> {
+                val node = state.scannedAt?.takeIf { it in state.egressCards && state.egressRunning && !state.egressHeld }
+                state = state.copy(pulseAt = node, pulseTaps = emptyList())
+                val opened = message.opened
+                when {
+                    node != null -> push(ScreenId.EgressWidget)
+                    opened == null -> push(ScreenId.ScanBad)
+                    else -> currentFrom(opened)?.let { current ->
+                        state = state.copy(current = current)
+                        push(ScreenId.ScanCaught)
+                    }
                 }
             }
 
@@ -3194,6 +3242,12 @@ class FlowModel(
                     // is read positionally by nothing, but two phones listing it differently would
                     // be rule 4 arriving as *the screens disagree*.
                     egressNodes = message.nodes.map { it.room },
+                    // **The cards and the grid, for the tap control** (D-295): the same two nodes
+                    // and the same pulse 0 on every phone. A new Egress starts no phone at a node.
+                    egressCards = message.nodes.map { it.marker },
+                    pulseFrom = message.pulseFrom,
+                    pulseAt = null,
+                    pulseTaps = emptyList(),
                     egressRunning = true,
                     // The house-wide clock restarts at full on the fire (D-151), and every phone is
                     // told it fired by this push, so the bar restarts on every phone (D-239).
@@ -3233,6 +3287,10 @@ class FlowModel(
                 }
                 state = state.copy(
                     egressHeld = !message.running,
+                    // **A pause ends this phone's place at its node** (D-295): the house reads no
+                    // scan from before a meeting after it (D-279 F3), so neither does the control.
+                    pulseAt = if (message.running) state.pulseAt else null,
+                    pulseTaps = if (message.running) state.pulseTaps else emptyList(),
                     egressLeft = Countdown(left, state.egressLeft?.ofSeconds ?: maxOf(left, Balance.wholeSeconds(Balance.EGRESS_TIMER))),
                     // A new value at a restart, so it is stamped again from now (`clocksStamped`).
                     egressClock = if (message.running) {
@@ -3262,6 +3320,7 @@ class FlowModel(
             // Counted for the Residents' ending (D-247): every Egress the house says was contained.
             is RoundMessage.EgressContained -> state = state.copy(
                 egressRunning = false, egressLeft = null,
+                pulseAt = null, pulseTaps = emptyList(),
                 egressesContained = (state.egressesContained ?: 0) + 1,
             )
 
@@ -3545,6 +3604,7 @@ class FlowModel(
         terminateHouse = ::terminateHouse,
         armRevoke = ::armRevoke,
         armEgress = ::armEgress,
+        tapPulse = ::tapPulse,
         fireSurge = ::fireSurge,
         fireIsolate = ::fireIsolate,
         fireStatic = ::fireStatic,
@@ -3794,6 +3854,13 @@ const val SURGE_BOOT_MS: Long = 2_500L
  * somebody looking at layout on a bench can get past the check-in screen.
  */
 const val HOUSE_STAND_IN_MS: Long = 4_000L
+
+/**
+ * **A Sync Pulse tap made before this phone has any estimate of the house's clock** (D-295). Zero:
+ * the house's grid starts at its own clock plus the lead, never near zero, so such a tap lands on no
+ * pulse and is answered OFF THE BEAT, like any other miss.
+ */
+const val NO_HOUSE_CLOCK: Long = 0L
 
 /**
  * **How often `FlowHost` looks at the clocks when none of them is running**, and the longest it

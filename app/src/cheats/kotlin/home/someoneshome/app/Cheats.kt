@@ -412,7 +412,19 @@ fun CheatRoot(uwb: Boolean) {
             // **The monotonic clock every countdown is stamped and read with** (V4, D-269): each
             // clock counts to the moment its push arrived plus its length, never a pile of waits.
             monotonicMillis = { monotonicNanos() / 1_000_000L },
+            // **The house's clock as this phone measures it** (D-295): what a Sync Pulse tap is
+            // stamped with, refreshed every second on the uploads.
+            houseNow = link::houseNow,
         ).also { panel.value = it }
+    }
+    // **The Sync Pulse, felt** (D-295): one short buzz on each pulse of the house's grid, through
+    // this phone's own measured offset, while its tap control is live; nothing otherwise.
+    LaunchedEffect(flow) {
+        PulseBuzzer(
+            haptics,
+            pulseFrom = { flow.state.let { s -> s.pulseFrom.takeIf { s.pulseAt != null && s.egressRunning && !s.egressHeld } } },
+            houseNow = link::houseNow,
+        ).run()
     }
     // The deck that stands in for a camera, kept now that there IS a camera. It is a tour of the
     // refusals in a fixed order — two cards that share a shape, two cards marked T, two meeting
@@ -454,7 +466,12 @@ fun CheatRoot(uwb: Boolean) {
         // wake the lobby holds for the host (H1, D-224), built once above.
         // **And the reports it owes kept beside its seat token** (D-245), so a report owed at a
         // leave survives iOS ending the process.
-        RoundClient(scope, flow, watch, buzzer, radio, wake, kept = DeviceSeat, note = lines::round)
+        // **And the house's clock, refreshed on every upload** (D-295): the client's own clock and
+        // the socket's estimator, so the containment control's taps are stamped on a current offset.
+        RoundClient(
+            scope, flow, watch, buzzer, radio, wake, kept = DeviceSeat,
+            clientMillis = link::clientNow, clock = link::uploadAnswered, note = lines::round,
+        )
             // Both knots tied in one place: the lobby gets the seam it was promised, and the four
             // meeting controls, the Subroutine's hand-over and page 2's two fires get the way up
             // they were promised (E-P2-3). Before this line every one of them reached nobody.

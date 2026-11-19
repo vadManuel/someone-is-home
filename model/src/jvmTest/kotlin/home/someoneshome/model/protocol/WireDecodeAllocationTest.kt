@@ -35,7 +35,7 @@ class WireDecodeAllocationTest {
 
     @Test
     fun `a round body offered to the lobby's decoder is turned away without allocating`() {
-        val answer = RoundWire.encode(RoundBody.UploadHeard("0123456789abcdef"))
+        val answer = RoundWire.encode(RoundBody.UploadHeard.of("0123456789abcdef", UploadProbe.NONE, 0L, 0L))
         val push = RoundWire.encode(RoundBody.Push(9, RoundMessage.MeetingCalling, round = 1))
         assertNull(LobbyWire.decodeOrNull(answer))
         assertUnder(64, perCall { LobbyWire.decodeOrNull(answer) }, "the lobby's decode of an upload's answer")
@@ -52,7 +52,7 @@ class WireDecodeAllocationTest {
      */
     @Test
     fun `reading an upload's frame allocates its body and little else`() {
-        val body = RoundWire.encode(RoundBody.Sighted("0".repeat(SightingUpload.BODY_CHARS), SightingUpload.EMPTY_ASK)) + "李"
+        val body = RoundWire.encode(RoundBody.Sighted("0".repeat(SightingUpload.BODY_CHARS), SightingUpload.EMPTY_ASK, UploadProbe.NONE)) + "李"
         val frame = TransportWire.encode(TransportFrame.Carry(body))
         assertUnder(10_240, perCall { TransportWire.decodeOrNull(frame) }, "reading an upload's frame")
     }

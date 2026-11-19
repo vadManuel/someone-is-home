@@ -41,7 +41,7 @@ class RequestSlotTest {
     )
 
     private fun frameOf(ask: String): Int =
-        TransportWire.encode(TransportFrame.Carry(RoundWire.encode(RoundBody.Sighted("0".repeat(SightingUpload.BODY_CHARS), ask))))
+        TransportWire.encode(TransportFrame.Carry(RoundWire.encode(RoundBody.Sighted("0".repeat(SightingUpload.BODY_CHARS), ask, UploadProbe.NONE))))
             .encodeToByteArray().size
 
     @Test
@@ -130,10 +130,10 @@ class RequestSlotTest {
     fun `an id is sixteen lowercase hex characters on the slot and on the answer`() {
         assertFailsWith<IllegalArgumentException> { RequestSlot.empty("0123") }
         assertFailsWith<IllegalArgumentException> { RequestSlot.empty("0123456789ABCDEF") }
-        assertFailsWith<IllegalArgumentException> { RoundBody.UploadHeard("xyz") }
+        assertFailsWith<IllegalArgumentException> { RoundBody.UploadHeard("xyz", UploadProbe.NONE, UploadProbe.NONE, UploadProbe.NONE) }
         // The answer is one length whatever id it carries.
         val answers = listOf("0000000000000000", "ffffffffffffffff", "0123456789abcdef").map {
-            TransportWire.encode(TransportFrame.Carry(RoundWire.encode(RoundBody.UploadHeard(it)))).encodeToByteArray().size
+            TransportWire.encode(TransportFrame.Carry(RoundWire.encode(RoundBody.UploadHeard.of(it, UploadProbe.NONE, 0L, 0L)))).encodeToByteArray().size
         }
         assertEquals(1, answers.toSet().size, "the answer's length follows its id: $answers")
     }

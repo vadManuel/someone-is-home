@@ -35,6 +35,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import home.someoneshome.model.Balance
 
 /**
  * Work — what Residents actually do, and what an Insider imitates.
@@ -898,14 +899,22 @@ fun EgressWidgetScreen(vals: PanelVals) {
  */
 @Composable
 private fun EgressWidget(vals: PanelVals) {
-    KitLegendBox("EGRESS . ${vals.egressType}", Ramp.Ink, Ramp.Ink, edgeWidth = 2.dp) {
+    val actions = LocalActions.current
+    // **At a node the whole widget is the tap target** (D-295): one target as large as the widget,
+    // pressed by somebody who is not looking at it, and not one pixel taller than the widget is
+    // without it, so the app grid below keeps every row on the smallest panel (`PulseControlRender`).
+    KitLegendBox(
+        "EGRESS . ${vals.egressType}", Ramp.Ink, Ramp.Ink, edgeWidth = 2.dp,
+        modifier = if (vals.pulseLive) Modifier.tap { actions.tapPulse() } else Modifier,
+    ) {
         // **HELD replaces the clock rather than sitting beside it** (`Effect.EgressHeld`, D-133). A
         // paused countdown drawn as a still number is indistinguishable from one the phone has
         // stopped receiving, so the pause dims the clock and the bar together.
         if (vals.egressHeld) {
             Words("HELD", size = 76, color = Ramp.Dim, lineHeight = 0.8)
-        } else {
-            Words(vals.egressLeftText, size = 76, lineHeight = 0.8)
+        } else Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Words(vals.egressLeftText, Modifier.weight(1f), size = 76, lineHeight = 0.8)
+            if (vals.pulseLive) PulseControl(vals.pulseTaps)
         }
         KitMeter(
             PanelVals.METER_SEGMENTS, vals.egressLit,
@@ -928,5 +937,27 @@ private fun EgressWidget(vals: PanelVals) {
                 )
             }
         }
+    }
+}
+
+/**
+ * **The tap control after the node scan** (D-295, the owner's Q2 ruling, option B).
+ *
+ * Drawn beside the countdown, on a phone whose person scanned one of the nodes while the Egress
+ * runs, and nowhere else: the same control for an Insider and a Resident, because which card is a
+ * node is public and the role is not read. The whole widget is the target (see [EgressWidget]);
+ * this is its face: Handshake's word (GDD:371: *both players tap*) and under it four pips, input
+ * echo, one per tap toward the next four. Beside the clock rather than under the rooms, because the
+ * springboard does not scroll and on an iPhone 16 Pro there is no height to spare below the widget.
+ *
+ * **The pulse is felt, not drawn** (rule 5): nothing here moves with the beat. The phone buzzes the
+ * house's grid through its measured offset (`PulseBuzzer`); the thumb answers it; the house grades
+ * it and says ON or OFF THE BEAT in the row above.
+ */
+@Composable
+private fun PulseControl(taps: Int) {
+    Column(Modifier.width(120.dp), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Words("TAP", size = 40, tracking = 0.2, lineHeight = 1.0)
+        KitMeter(Balance.SYNC_PULSE_BEATS, taps, Ramp.Ink, Ramp.Faint)
     }
 }

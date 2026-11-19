@@ -103,8 +103,9 @@ class ClockProbeLoopbackTest {
 
     /**
      * **The same probe frames from every phone, on the same schedule from its own seating** (rule
-     * 1, D-263). Over 72 s of each phone's own clock (run ten times fast), each sent exactly three
-     * bursts — at its seating, about 30 s and about 60 s — of [PROBES_PER_ROUND] probes each.
+     * 1, D-263). Over 72 s of each phone's own clock (run ten times fast), each sent exactly one
+     * burst of [PROBES_PER_ROUND] probes, at its seating: the round's uploads refresh the estimate
+     * from there (D-295), so there is no 30 s burst any more.
      * Nothing in the schedule reads anything but the phone's own clock, so the count is the same
      * for every phone; a phone that probed more or less often than its neighbours would show here.
      */
@@ -131,8 +132,8 @@ class ClockProbeLoopbackTest {
                 val sent = clients.map { it.probesSent }
                 println("C1 PROBES IN 72 S OF EACH PHONE'S CLOCK — $sent")
                 assertEquals(
-                    List(clients.size) { 3 * PROBES_PER_ROUND }, sent,
-                    "the phones did not each send three bursts of $PROBES_PER_ROUND probes",
+                    List(clients.size) { PROBES_PER_ROUND }, sent,
+                    "the phones did not each send one burst of $PROBES_PER_ROUND probes",
                 )
                 clients.forEach { assertTrue(it.hostNowMillis() != null, "a phone that probed had no fix") }
 
@@ -147,8 +148,10 @@ class ClockProbeLoopbackTest {
     /**
      * **A mark written beside a stream of pushes does not tear one** (C1's R12 check). The host
      * writes `TimeMark` straight onto the socket from the connection's read loop while that
-     * connection's writer is putting pushes on it; the client is probing the whole time. Every push
-     * arrives, whole and in order, and the phone has its fix.
+     * connection's writer is putting pushes on it. Since D-295 a connection probes in one burst, at
+     * its seating, so the marks meet only the head of the stream; the uploads' answers, which ride
+     * the writer like any frame, are what refresh the clock after that. Every push arrives, whole
+     * and in order, and the phone has its fix.
      */
     @Test
     fun marksAndPushesShareOneSocketWithoutTearing() = runBlocking {
@@ -157,7 +160,8 @@ class ClockProbeLoopbackTest {
         try {
             withTimeout(30_000) {
                 val got = Channel<TransportFrame>(Channel.UNLIMITED)
-                // Fast, so the client re-probes many times while the pushes are going down.
+                // Fast, as it was when the client re-probed every 30 s of its clock. Since D-295 it
+                // bursts once, at its seating, which is the moment the pushes below begin.
                 val origin = hostMillis()
                 val client = TransportClient(
                     ClientSession(), "127.0.0.1", house.port,
@@ -166,8 +170,8 @@ class ClockProbeLoopbackTest {
                 )
                 jobs += launch { client.run() }
                 val seat = house.seated.receive()
-                // A push every millisecond for a second and a half: the client re-probes every
-                // 150 ms of real time, so marks are written into the middle of the stream ~10 times.
+                // A push every millisecond for a second and a half, from the moment of seating:
+                // the burst's five marks are written into its head.
                 var pushes = 0
                 val until = hostMillis() + 1_500
                 while (hostMillis() < until) {
@@ -180,7 +184,7 @@ class ClockProbeLoopbackTest {
                 }
                 while (client.hostNowMillis() == null) delay(5)
                 println("C1 MARKS BESIDE $pushes PUSHES — ${client.probesSent} probes sent, fix ${client.clockFix()}")
-                assertTrue(client.probesSent >= 5 * PROBES_PER_ROUND, "the client did not re-probe during the pushes")
+                assertEquals(PROBES_PER_ROUND, client.probesSent, "the client did not burst once at its seating")
                 assertEquals(null, got.tryReceive().getOrNull(), "a frame arrived that was not a push")
                 jobs.forEach { it.cancel() }
             }

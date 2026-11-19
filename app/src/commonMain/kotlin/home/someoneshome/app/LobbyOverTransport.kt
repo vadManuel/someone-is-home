@@ -16,6 +16,7 @@ import home.someoneshome.model.protocol.RoundWire
 import home.someoneshome.model.protocol.SeatToken
 import home.someoneshome.model.protocol.TransportFrame
 import home.someoneshome.model.protocol.TransportRefusal
+import home.someoneshome.model.protocol.UploadProbe
 import home.someoneshome.platform.clearOwedReports
 import home.someoneshome.platform.clearSeatToken
 import home.someoneshome.platform.loadOwedReports
@@ -348,6 +349,12 @@ class LobbyHouse(
     private val onRadioFaulted: suspend (Seat, RoundBody.RadioFaulted) -> Unit = { _, _ -> },
     /** What puts the home on the air. [DeviceAdvertising] in every production construction. */
     private val advertising: Advertising = DeviceAdvertising,
+    /**
+     * **The house's clock, in milliseconds** (C1, D-295): [monotonicMillis], the clock the Sync
+     * Pulse is anchored on (`RoundAuthority.hostMillis`). What the server answers a seating probe
+     * with, and what every upload's answer is stamped with twice. A test may skew it.
+     */
+    private val houseMillis: () -> Long = ::monotonicMillis,
 ) {
 
     private val desk = LobbyDesk()
@@ -527,7 +534,7 @@ class LobbyHouse(
          * request, so a touch reaches the rules in the order it arrived relative to everything
          * else that phone did; launched separately it would land in the order it finished.
          */
-        data class Sighted(val seat: Seat, val upload: RoundBody.Sighted) : Arrival
+        data class Sighted(val seat: Seat, val upload: RoundBody.Sighted, val heardAtMillis: Long) : Arrival
 
         /** **A phone's radio went down** ([RoundBody.RadioFaulted], T2, D-222; D-223). On the ordered queue. */
         data class RadioFaulted(val seat: Seat, val report: RoundBody.RadioFaulted) : Arrival
@@ -597,7 +604,7 @@ class LobbyHouse(
         )
         val server = TransportHost(
             ledger,
-            nowMillis = { monotonicNanos() / 1_000_000 },
+            nowMillis = houseMillis,
             onFrame = ::onFrame,
             // The intent desk's mark is cleared on the same fact, because it is the same fact: a
             // phone on a new connection begins numbering its requests again, and a desk still
@@ -985,7 +992,7 @@ class LobbyHouse(
                         }
                     }
                     onSighted(arrival.seat, arrival.upload)
-                    if (slot != null) answerUpload(arrival.seat, slot.id)
+                    if (slot != null) answerUpload(arrival.seat, slot.id, arrival.upload.probe, arrival.heardAtMillis)
                 }
                 // **The radio fault, to the rules, then answered** (T2, D-222; D-245). Not through
                 // the desk: the body has no sequence. A phone keeps a report until it is answered
@@ -1038,7 +1045,9 @@ class LobbyHouse(
                 is RoundBody.Fire -> arriving.trySend(Arrival.Fired(seat, round))
                 // **What a phone's radio heard, onto the ordered queue** (D-217). The resolver
                 // judges it there; an upload the house cannot read resolves to nothing.
-                is RoundBody.Sighted -> arriving.trySend(Arrival.Sighted(seat, round))
+                // Stamped here, on arrival, before the queue (D-295): the house's wait is not round
+                // trip, and the answer says how long it was.
+                is RoundBody.Sighted -> arriving.trySend(Arrival.Sighted(seat, round, houseMillis()))
                 // **A phone saying its radio went down** (T2, D-222), onto the same ordered queue.
                 is RoundBody.RadioFaulted -> arriving.trySend(Arrival.RadioFaulted(seat, round))
                 // The house's to send, never to receive (D-245).
@@ -1155,11 +1164,17 @@ class LobbyHouse(
      * D-263). Sent for every upload, so it is one frame of one length a beat on every phone. A seat
      * whose connection has gone misses it and sends the request again on its next beat; the desk hears
      * the id once. Queued on the seat's own connection and never waited on (R12).
+     *
+     * **And the house's clock, twice** (D-295): [probe] echoed, the moment the upload arrived
+     * ([heardAtMillis]) and the moment of this answer, both on [houseMillis]. A probe that does not
+     * read is answered as `UploadProbe.NONE`, in the same frame at the same width (rule 1).
      */
-    private suspend fun answerUpload(seat: Seat, id: String) {
+    private suspend fun answerUpload(seat: Seat, id: String, probe: String, heardAtMillis: Long) {
         val server = host ?: return
+        val echoed = if (UploadProbe.isProbe(probe)) probe else UploadProbe.NONE
         try {
-            server.send(seat, TransportFrame.Carry(RoundWire.encode(RoundBody.UploadHeard(id))))
+            val answer = RoundBody.UploadHeard.of(id, echoed, heardAtMillis, houseMillis())
+            server.send(seat, TransportFrame.Carry(RoundWire.encode(answer)))
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
             throw cancelled
         } catch (_: Exception) {
@@ -1433,6 +1448,8 @@ class LobbyOverTransport(
      * console only (rule 6). Silent by default.
      */
     private val onClockFix: (ClockFix) -> Unit = {},
+    /** **The house's clock, when this phone hosts** (D-295): see [LobbyHouse.houseMillis]. */
+    private val houseMillis: () -> Long = ::monotonicMillis,
 ) : LobbyLink {
 
     /**
@@ -1444,6 +1461,20 @@ class LobbyOverTransport(
      */
     fun houseNow(): Long? = client?.hostNowMillis()
 
+    /** How many samples this phone's clock estimate has taken (D-295): a diagnostic for tests and the log. */
+    fun clockSamples(): Long = client?.clockSamples ?: 0L
+
+    /** **This phone's own monotonic milliseconds**, on the clock its client measures the house with (D-295). */
+    fun clientNow(): Long = clientMillis()
+
+    /**
+     * **One upload's round trip, into this phone's clock estimate** (D-295): the round half's
+     * `RoundOverTransport.clock`. Nothing before this phone has a client.
+     */
+    suspend fun uploadAnswered(sentAtMillis: Long, heardAtMillis: Long, answeredAtMillis: Long, receivedAtMillis: Long) {
+        client?.uploadAnswered(sentAtMillis, heardAtMillis, answeredAtMillis, receivedAtMillis)
+    }
+
     /**
      * **Internal rather than private**, so that the thing which arms a round can reach the house
      * that would carry it.
@@ -1453,7 +1484,7 @@ class LobbyOverTransport(
      * at all. `emit` and `armingInputs` are what it is reached for, and both are the authority's
      * own calls rather than a screen's.
      */
-    internal val house = LobbyHouse(scope, onEvent, onIntent, onEgressFired, onSighted, onRadioFaulted, advertising)
+    internal val house = LobbyHouse(scope, onEvent, onIntent, onEgressFired, onSighted, onRadioFaulted, advertising, houseMillis)
     private var session: ClientSession? = null
     private var client: TransportClient? = null
     private var clientJob: Job? = null

@@ -1143,11 +1143,23 @@ sealed class RoundBody {
      * answers [UploadHeard] with the slot's id.
      * No default, so a construction that forgot the slot does not compile: a field left at its
      * default is a field the encoder leaves out, and the upload would be shorter.
+     *
+     * ### [probe]: the house's clock is measured on every upload (D-295)
+     *
+     * [UploadProbe.CHARS] lowercase hex characters, drawn fresh at random by the phone for each
+     * upload and echoed back in this upload's [UploadHeard] with the house's clock at its arrival
+     * and at its answer. The phone keeps when it sent which probe, so every beat is one round trip
+     * on the house's clock: the offset is refreshed every second, on the frame every phone already
+     * sends, rather than measured once at join (the owner's ruling, 2026-11-18). A number, never a
+     * time: this phone's own clock does not leave it. **Its own field**, beside [slots] and [ask]
+     * rather than inside either, so the sightings body can be replaced (the UWB plan's
+     * `DistanceUpload`) without touching it. One width from every seat, out seats included (D-217).
+     * No default, for [ask]'s reason.
      */
     @ClientFacing
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("sighted")
-    data class Sighted(val slots: String, val ask: String) : RoundBody()
+    data class Sighted(val slots: String, val ask: String, val probe: String) : RoundBody()
 
     /**
      * **Host → the one phone whose upload this answers. "I have the slot named [id]."** (D-263)
@@ -1158,13 +1170,39 @@ sealed class RoundBody {
      * and it says nothing about whether the phone asked for anything or what the rules made of it
      * (rule 1). The phone stops sending a request once its id comes back. Not a [Push]: transport
      * bookkeeping like [FaultHeard], spends no sequence and reaches no screen.
+     *
+     * ### And the house's clock, twice (D-295)
+     *
+     * [probe] is the upload's own [Sighted.probe], echoed. [heard] is the house's monotonic
+     * milliseconds when the upload arrived, before it waited in the house's queue; [answered] is the
+     * same clock when this answer was made, after the rules were done with it. Both are on the clock
+     * the Sync Pulse is anchored on (D-265), so every beat gives the phone one NTP-style sample in
+     * which the house's queue and rules are not counted as round trip. All three are
+     * [UploadProbe.CHARS] hex characters, never decimal digits, so the frame is one length on every
+     * phone at every moment. A probe that did not read is answered as [UploadProbe.NONE], all the same.
      */
     @ClientFacing
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("uploadHeard")
-    data class UploadHeard(val id: String) : RoundBody() {
+    data class UploadHeard(val id: String, val probe: String, val heard: String, val answered: String) : RoundBody() {
         init {
             require(RequestSlot.isId(id)) { "an upload's id is ${RequestSlot.ID_CHARS} lowercase hex characters" }
+            require(UploadProbe.isProbe(probe)) { "an upload's probe is ${UploadProbe.CHARS} lowercase hex characters" }
+            require(UploadProbe.isProbe(heard) && UploadProbe.isProbe(answered)) {
+                "the house's clock is ${UploadProbe.CHARS} lowercase hex characters"
+            }
+        }
+
+        /** [heard], as the house's monotonic milliseconds. */
+        val heardAtMillis: Long get() = UploadProbe.millisOf(heard)
+
+        /** [answered], as the house's monotonic milliseconds. */
+        val answeredAtMillis: Long get() = UploadProbe.millisOf(answered)
+
+        companion object {
+            /** The answer to the upload whose slot was [id] and whose probe was [probe], stamped. */
+            fun of(id: String, probe: String, heardAtMillis: Long, answeredAtMillis: Long): UploadHeard =
+                UploadHeard(id, probe, UploadProbe.hexOf(heardAtMillis), UploadProbe.hexOf(answeredAtMillis))
         }
     }
 

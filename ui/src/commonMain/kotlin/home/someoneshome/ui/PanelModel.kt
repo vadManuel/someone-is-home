@@ -310,6 +310,38 @@ data class PanelState(
      */
     val beatHeld: Boolean? = null,
     /**
+     * **The two cards the Egress's nodes are** (D-295), as `EgressOpened` named them to every phone,
+     * beside [egressNodes]' rooms. What lets this phone know that a card it just scanned is a node:
+     * a public fact (every phone, living or out, was told the pair), never a guess about where
+     * anybody is. Empty with no Egress.
+     */
+    val egressCards: List<MarkerId> = emptyList(),
+    /**
+     * **Pulse 0 of the Sync Pulse, on the house's clock** (C2, D-265), from `EgressOpened.pulseFrom`:
+     * the house's monotonic milliseconds, the same number on every phone. The house decides it;
+     * this phone only puts its taps and its felt pulse on it, through its own measured offset
+     * (D-295). Null with no Egress.
+     */
+    val pulseFrom: Long? = null,
+    /**
+     * **The node this phone scanned in the running Egress, and so the tap control is live** (D-295,
+     * the owner's Q2 ruling: *a tap control after the node scan*).
+     *
+     * Set when the house answers a scan of one of [egressCards] while the Egress runs unpaused,
+     * whatever the answer held, on every phone alike: which card is a node is public, and the role
+     * is not read. Cleared by a scan of any other card, by a pause (a meeting: a scan from before
+     * one does not count after it, D-279 F3), by containment and by the round's end. Null otherwise,
+     * which is every moment but the ones a person spends at a node.
+     */
+    val pulseAt: MarkerId? = null,
+    /**
+     * **The taps this phone has made toward its next four, each on the house's clock** (D-295).
+     *
+     * Input echo (the gotcha *input echo is not game logic*): the pips light as the thumb lands,
+     * with no round trip. The fourth sends all four up as one `ReturnSyncPulse` and empties this.
+     */
+    val pulseTaps: List<Long> = emptyList(),
+    /**
      * **The work the scan opened, as the house answered it.**
      *
      * `Effect.ScanAnswered` carries a `SubroutineInstance` and **this is where it lands** — the
@@ -1811,6 +1843,15 @@ class PanelVals(
 
     /** This phone's own last beat, as the house answered it. See [PanelState.beatHeld]. */
     val beatHeld: Boolean? = state.beatHeld
+
+    /**
+     * **Whether the Egress widget is a tap control right now** (D-295): this phone scanned a node of
+     * the running, unpaused Egress. See [PanelState.pulseAt].
+     */
+    val pulseLive: Boolean = state.pulseAt != null && state.egressRunning && !state.egressHeld
+
+    /** How many of the four taps this phone has made toward its next return. Input echo. */
+    val pulseTaps: Int = state.pulseTaps.size
 
     /**
      * **What is standing over this screen, with the Egress alert naming this round's rooms.**

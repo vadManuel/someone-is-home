@@ -125,6 +125,12 @@ class PanelActions(
     val armRevoke: () -> Unit = {},
     val armEgress: () -> Unit = {},
     /**
+     * **One tap on the Egress widget at a node: the Sync Pulse** (D-295). Stamped on the house's
+     * clock and kept as a pip; every fourth goes up as one request. Attached only while the control
+     * is live, on any phone whose person scanned a node, whatever their role.
+     */
+    val tapPulse: () -> Unit = {},
+    /**
      * **Tier 2 firing, from a row of a list the house sent** (the 2026-08-22 targeting ruling).
      *
      * These are the only two actions in this class that carry a **target**, and both carry it in

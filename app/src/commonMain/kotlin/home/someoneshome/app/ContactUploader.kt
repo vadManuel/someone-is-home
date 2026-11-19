@@ -8,6 +8,7 @@ import home.someoneshome.model.Sighting
 import home.someoneshome.model.protocol.RoundBody
 import home.someoneshome.model.protocol.RoundMessage
 import home.someoneshome.model.protocol.SightingUpload
+import home.someoneshome.model.protocol.UploadProbe
 import home.someoneshome.platform.ContactRadio
 import home.someoneshome.platform.secureRandomBytes
 
@@ -101,6 +102,12 @@ class ContactUploader(
      * An empty slot by default, for a construction with nothing to ask.
      */
     private val ask: () -> String = { SightingUpload.EMPTY_ASK },
+    /**
+     * **This beat's clock probe** (D-295): `UploadClock.stamp` on a phone, drawn once per upload,
+     * so every upload is one round trip on the house's clock. No probe by default, for a
+     * construction with no clock to refresh; the width is the same either way.
+     */
+    private val probe: () -> String = { UploadProbe.NONE },
     /** Up this phone's own socket. */
     private val send: (RoundBody.Sighted) -> Unit,
 ) {
@@ -174,7 +181,7 @@ class ContactUploader(
         }
         val readings = radio.drain()
         val heard = if (out) emptyList() else readings.map { Sighting(it.token, it.rssi, window) }
-        send(SightingUpload.pack(key, window, uploads++, heard, ask()))
+        send(SightingUpload.pack(key, window, uploads++, heard, ask(), probe()))
         // **Rule 6: silent here, loud at the house** (T2, D-222). The radio reports each fault once,
         // at its onset; nothing on this phone's screen, lamp or motor hears of it. A return from
         // leaving the foreground is a person's act and wins the beat (D-229): the radio's onset is

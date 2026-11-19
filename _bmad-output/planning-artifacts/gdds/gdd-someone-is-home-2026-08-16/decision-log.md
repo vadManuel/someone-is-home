@@ -9456,6 +9456,204 @@ strip included, dimmed.
 - A Release device build (`CODE_SIGNING_ALLOWED=NO`) carries the string in its built `Info.plist`.
 - Not on a phone.
 
+### D-295 · **Containment's clock is refreshed every second on the uploads every phone already sends; the house's grid is absolute and the phones only play it; a node scan puts a tap control on the Egress widget — built (the owner's Q2 ruling, option B); amends D-264 and ARCH D5's re-sync cadence, nothing recorded moved**
+
+**The ruling** (owner, 2026-11-18, *Owner rulings, 2026-11-18* in `owner-decisions-2026-11-17.md`):
+*Q2 containment: option B, with the clock offset refreshed every second on the uploads every phone
+already sends, not measured once at join.* The owner asked *wouldn't clocksync at join drift enough
+to fail during the duration of a match?*; the pack's paper estimate was 0.05–0.1 s over 30 minutes
+against the 0.4 s window, so the offset is kept current. *Every phone does the same thing. The house
+sends absolute beat times.* Build list item 2: *a clock offset refreshed every second on the uploads,
+absolute beat times, and a tap control after the node scan.* Option B in the pack: *GDD:919's clock
+offset … then absolute beat times. Same tap control as A* (A: *add a tap control after the node
+scan … Haptic. The screen stays dark*).
+
+**What option B is in this codebase.** Two of its three parts already stood when the ruling was
+made (the pack predates them): D-264 measured the house's clock on every phone (a burst of five
+probes at seating and every 30 s), and D-265 put the Sync Pulse on the house's monotonic
+milliseconds and told every phone its pulse 0 (`EgressOpened.pulseFrom`). So: the refresh moves onto
+the uploads, the 30 s bursts go, the grid stays the house's, and the tap control and the felt pulse
+are built.
+
+**Now, the wire** (model). Each part is its own fixed-width field, so the UWB plan's `DistanceUpload`
+can replace the sightings without touching it.
+
+1. **`RoundBody.Sighted.probe`**: `UploadProbe.CHARS` (16) lowercase hex, drawn fresh at random by the
+   phone for every upload (never a counter or a time, D-245's reason: the phone's own clock does not
+   leave it). Beside `slots` and `ask`, not inside either. Every upload from every seat, out seats
+   included (D-217); `SightingUpload.pack` takes it, `UploadProbe.NONE` for every caller but a
+   phone's uploader.
+2. **`RoundBody.UploadHeard` gains `probe`, `heard` and `answered`**: the probe echoed, and the
+   house's monotonic milliseconds when the upload arrived (stamped in `onFrame`, before the house's
+   queue) and when the answer was made (after the rules). The clock is the one the pulse is anchored
+   on (`monotonicMillis`, D-265). All three are 16 hex characters of the value's 64 bits, never
+   decimal, so the answer is one length on every phone at every moment of the house's uptime. A
+   probe that does not read is echoed as `NONE`, in the same frame.
+
+**Now, the estimate** (platform `ClockSync`, app `UploadClock`). The method, as the brief asked:
+
+- Per upload: `rtt = (received − sent) − (answered − heard)` and `offset = ((heard − sent) +
+  (answered − received)) / 2`: NTP's four-timestamp form, so the house's own queue and rules are not
+  counted as round trip. `sent` is stamped when the probe is drawn (`UploadClock.stamp`), `received`
+  on the socket's thread before the main-thread queue (`RoundOverTransport.frameArrived`), both on
+  the clock the socket's estimator is on (`LobbyOverTransport.clientNow`).
+- **The estimate is the offset of the sample with the smallest round trip among the last 16**
+  (`SAMPLE_WINDOW`, sixteen seconds of uploads; ties go to the newer). A delayed packet lies about
+  the offset by up to half its delay, so the quietest beat is believed; sixteen is long enough that a
+  run of Wi-Fi retries still leaves a quiet beat in the window, and short enough that the believed
+  sample is at most 16 s old, under 2 ms of drift at 100 ppm. Counted in samples, so a phone whose
+  answers stop keeps its estimate. A sample with a negative round trip is counted stray, never
+  believed.
+- **Slew, never jump** (ARCH D5, unchanged at 50 ms/s): the first sample is applied whole, every
+  later change is walked to, so the house's timeline on a phone never runs backward.
+- **One burst of five probes at each seating stays**, so a phone in the lobby has an estimate before
+  any upload; **the 30 s bursts are gone** (D-264 amended): the uploads replace them. ARCH D5's table
+  now reads *every second, on the round's uploads*.
+- `UploadClock` keeps the last 8 probes with their send times and uses each answer once.
+  `RoundOverTransport` hands each sample to `LobbyOverTransport.uploadAnswered`, which feeds the
+  socket's `TransportClient`, the host's own phone included (it reaches its house over loopback).
+
+**Now, the beat times.** Unchanged from D-265 and the ruling's *absolute beat times*: the house draws
+pulse 0 on its own clock (`RoundAuthority.hostMillis` plus the 2 s lead) and every phone is told the
+same number. The house grades; a phone only plays the grid and stamps taps on it.
+
+**Now, the phone** (ui, app).
+
+1. **The tap control after the node scan.** `EgressOpened` now also keeps the two node cards
+   (`PanelState.egressCards`) and `pulseFrom`. When the house answers a scan of one of those cards
+   while the Egress runs unpaused, the phone goes to the Egress widget (`ScreenId.EgressWidget`,
+   already the banner's destination) and the widget is a tap control (`PanelState.pulseAt`), **whatever
+   the answer held and whatever the role**: which card is a node is public, the role is not read. A
+   scan of any other card, a pause (a meeting: D-279 F3's rule, a scan before it does not count after
+   it), containment and the round's end take it away.
+   - **The whole widget is the tap target**, and its face sits beside the countdown, in the clock's
+     own row: **TAP** (Handshake's word, and the ruling's) over four pips (`KitMeter` of
+     `SYNC_PULSE_BEATS`), input echo. So the widget is **not one pixel taller** with the control
+     than without it. The springboard does not scroll (nothing in `ScreensSpringboard.kt` does), and
+     on an iPhone 16 Pro's insets the Egress widget with its beat line already leaves no height
+     below the app grid. **No new copy** beyond TAP; ON THE BEAT / OFF THE BEAT is the existing line.
+   - `FlowModel.tapPulse` stamps each tap with `houseNow` (the socket's estimate, a new seam shaped
+     like `wallClock`); the fourth sends `ReturnSyncPulse(taps)`, which rides the next upload's slot
+     (D-263), and empties the pips. A tap before any estimate is stamped `NO_HOUSE_CLOCK` (0), lands
+     on no pulse, and is answered OFF THE BEAT with nothing on screen saying why (rule 6).
+2. **The felt pulse** (`PulseBuzzer`, app). While the control is live it buzzes `Haptic.Short`, the
+   one short buzz (D-140), on every pulse of the house's grid at the moment this phone's estimate
+   puts it, reading the offset again before each one. No pulse is drawn (rule 5); no new haptic
+   length. Off the control, nothing.
+
+**What the clock refresh buys, measured.** A phone stamps its taps with the same estimate it buzzed
+its pulses on, so **a stale offset cancels out of the grade**: a person who taps to their own phone's
+pulse is graded on that pulse whatever the offset's error. What the error moves is *when* each phone
+buzzes in real time, so two phones at two nodes drift out of unison: the GDD's own bound is
+**±150 ms between devices** (GDD:1291, *reads as one event*). The bench below shows both halves.
+
+**Leak and parity.**
+- The upload is one length whatever probe it carries; the answer is one length at every reading of
+  the house's clock (`UploadProbeTest`), and every phone sends one upload and is sent one answer a
+  beat, as before (D-212, D-263; `UplinkFrameTest`'s per-phone frame lengths still hold). Nothing in
+  `UploadClock`, `ClockSync` or the house's stamping reads a seat, a role or whether a seat is out.
+- The tap control is the same pixels for an Insider and a Resident (`PulseControlRender` compares
+  them); the request is the existing `ReturnSyncPulse` in the existing slot; the answer is D-266's
+  one-width answer and blank. The felt pulse is private to the hand and decided by where the person
+  scanned.
+- No new `Effect`, no new kind, no schema row. **No recording change**: uploads and their answers are
+  not recorded, and `SyncPulseReturned` keeps its shape; this unit moves no format (it is 40, D-296's).
+
+**Provisional calls, flagged for the owner** (the containment spec's O1–O4 were never ruled):
+- **O1**: a node card that also holds work for the scanner shows the control, not the work, while the
+  Egress runs unpaused. Phone-side only; the house still answers the scan as before.
+- **O2**: only a phone whose control is live feels the pulse.
+- **O3**: unchanged: any four distinct pulses, pairing by arrival within `SYNC_PULSE_PAIR_WINDOW`.
+- **O4**: the control is TAP and four pips on the widget, with no WAIT after a miss: the house's 3 s
+  lockout ends before a person can tap four more pulses (4.5 s at the 1.5 s interval).
+- **Light**: the control adds the TAP word and the pips' outline to a screen that was already lit
+  (the widget); no lamp, ramp or brightness value is new.
+
+**Proved, each red against the injected break first, then restored.**
+
+- **The drift bench** (`ContainmentDriftTest`, app; virtual time). Phone A's clock is 3 s ahead and
+  runs 100 ppm fast, phone B's 2 s behind and 100 ppm slow (360 ms apart by minute 30 on their own).
+  Every second each makes its real upload: the probe from the real `UploadClock`, packed by
+  `SightingUpload.pack`, through `RoundWire` both ways, stamped with `UploadHeard.of` at arrival and
+  answer, fed to the real `ClockSync`. The Wi-Fi is seeded jitter: 2–40 ms each way, one beat in
+  seven 50–400 ms late, one in fifty stalled 0.8–1.5 s, the house's queue and rules 0–60 ms. Checked
+  every ten seconds from minute 1: worst single-phone error **12 ms**, worst A−B **20 ms**, 1 795
+  samples each (minute 5: A −4, B +1; minute 30: A +3, B −6). At minute 30 an Egress fires on the
+  real rules; each phone buzzes pulses 4–7 where its estimate puts them (felt −15 to +9 ms from the
+  house's moments), a person taps 240 ms late, early, late, early, and the two returns **contain it**.
+  *Broken by taking the offset once at join only* (`ClockSync.onSample` ignoring every upload after
+  the seating burst): `at 250 s a phone puts the house's moment [19, -26] ms off (A, B); within 25 ms
+  is the bound`; with that bound lifted, `at 780 s the two phones pulse 151 ms apart, past GDD:1291's
+  ±150 ms`. The same break turns `ClockSyncTest` red in four places, among them `the estimate fell
+  180 ms behind a clock drifting 100 ppm`, and `UploadClockWiringTest` red: `the uploads did not reach
+  every phone's clock: {ALBA=0, BRUNO=0, CYRUS=0, DEVI=0} samples from uploads in five beats`.
+- **Over real sockets** (`UploadClockWiringTest`, app cheats): four phones as `CheatRoot` builds them,
+  client clocks −2 s (the host's own phone), +3 s, −1.5 s, +0.7 s, the round armed at LIGHTS OUT.
+  Five beats in, every phone has taken **5** samples from uploads (1 from its seating), the same
+  count on every phone, and reads the house's clock **0–1 ms** wrong.
+- **The estimator** (`ClockSyncTest`, platform): one burst per connection and none half an hour later;
+  the house's own time with an upload is not round trip; the window's quietest upload decides and is
+  forgotten after 16; a 100 ppm drift over 30 minutes followed to within 1 ms; an impossible sample is
+  not believed; slew never jumps and never runs backward. `ClockProbeLoopbackTest` now expects one
+  burst of five per phone over 72 s (was three).
+- **The width** (`UploadProbeTest`, model): a reading of the house's clock is 16 hex characters at 0,
+  a day, 2⁴⁰, `Long.MAX_VALUE` and negatives, and reads back; the upload is one length whatever probe
+  it carries; the answer is one length at every reading and either probe; a short or decimal field
+  does not construct or decode. *Broken by writing the readings without their leading zeros:* `the
+  answer's length follows the house's clock or the probe: [147, 150, 158, 166, 176, 162]`, and three
+  more. `SightingUploadTest`'s key list now includes `probe`.
+- **The control** (`PulseControlTest`, ui): a node scan during a running Egress lands on the widget
+  with the control live for both roles; another card, a node before the Egress and a node during a
+  pause land on NOTHING FOR YOU HERE as before; four taps send one `ReturnSyncPulse` with the four
+  house-clock stamps and the pips count them; a tap with no estimate is stamped 0; a pause, containment
+  and a scan elsewhere take the control away, and taps after send nothing. *Broken by giving the
+  control to Residents only:* `Insider: a node scan did not reach the control expected:<EgressWidget>
+  but was:<ScanBad>`, and `PulseControlRender`: `an Insider's tap control is not a Resident's, pixel
+  for pixel`.
+- **The grid late in a long round** (`PulseGridLongRoundTest`, core): the ±400 ms window is the same
+  at pulse 0 and pulse 1 160 on a house up 2 s, a day or 46 days; a person 240 ms off on a phone within
+  25 ms holds.
+- **The felt pulse** (`UploadClockTest`, app): the next pulse is on the house's grid, never before
+  pulse 0, never twice; probes are matched by echo not order, used once, forgotten at the round's end.
+
+- **The app grid stays whole under every state of the widget** (`PulseControlRender`, ui): every app
+  label is laid out at its full height and ends above the dock, for the widget fresh, at two pips,
+  after ON THE BEAT, after OFF THE BEAT, an Insider's, and a phone not at a node with and without a
+  beat line, each on a flat panel and on the iPhone 16 Pro's measured insets (`DeviceLayoutTest`'s;
+  every UWB iPhone has its aspect, and the harness scales by width). The first build of this unit put
+  an 84 dp target under the rooms, and the guard, added after the coordinator found SETTINGS and
+  CAMERA missing in the off-the-beat render, failed it: `pulse-on-the-beat: SETTINGS is 0.0 px tall,
+  its row's label is 33.0`, and the same for CAMERA, off the beat, and all five control states on the
+  16 Pro. *Broken again on the built control, an 84 dp box put back under the beat line:*
+  `pulse-on-the-beat: SETTINGS is 24.0 px tall, its row's label is 33.0`, then the 16 Pro states.
+
+**Looked at.** Every state above through the render harness (`DeviceCanvas`, 600×1300), flat and on
+the 16 Pro: the widget keeps its height, TAP and the pips sit right of 2:00, and SETTINGS, CAMERA
+and the page dots stand above the dock in every one; the Insider's control is the Resident's pixel
+for pixel.
+
+**Not changed, and why.** `RoundCheat.reachNodeAndPulse` still sends unanchored taps up the socket
+and misses (D-232): driving the bench through this control is the spec's C5. Not on a phone: the
+felt pulse in two hands, filmed at 240 fps against GDD:1291's ±150 ms, is the spec's C6.
+
+**Checked** (`./gradlew check --continue` on main at `312142a` with D-296, every test XML read): model 322 (JVM) and 312 (iOS Simulator), core 363, platform 213, ui 697 (desktop) and 328 (iOS Simulator), harness 131, app 230; `vocabularyLint`, `redactionLint`, `boundaryCheck`, `armingCordon`, `benchSeedCordon` and `seedSourceCordon` clean. One failure, in `OutboundQueueTest`, a host-side send-queue timing test this unit does not touch (`Seat(index=1)'s connection is not draining (8 frames waiting)`, the seat whose writes are not held, under another agent's concurrent build): rerun alone three times it passed, failed, passed. Raised, not fixed. **Not on a phone.**
+
+| site | what it says now | what replaces it |
+|---|---|---|
+| `model/protocol` `RoundBody.Sighted` | `slots`, `ask` | and `probe`, 16 hex |
+| `model/protocol` `RoundBody.UploadHeard` | `id` | and `probe`, `heard`, `answered`, 16 hex each |
+| `model/protocol` `UploadProbe` | (new) | the width, `NONE`, `hexOf`, `millisOf` |
+| `platform` `ClockSync` | min RTT per 5-probe round, a round every 30 s | min RTT of the last 16 samples; `onSample`; one burst per connection |
+| `platform` `TransportClient` | marks only | `uploadAnswered`, `clockSamples` |
+| `app` `UploadClock` | (new) | the probe ring |
+| `app` `ContactUploader`, `RoundOverTransport` | no probe | a probe per upload; answers stamped on arrival and fed to the clock |
+| `app` `LobbyHouse` | `UploadHeard(id)` | stamped at arrival and answer; `houseMillis` seam |
+| `app` `LobbyOverTransport` | `houseNow` | and `clientNow`, `uploadAnswered`, `clockSamples` |
+| `app` `PulseBuzzer` | (new) | the felt pulse |
+| `ui` `PanelState`, `FlowModel`, `EgressWidget` | no control | `egressCards`, `pulseFrom`, `pulseAt`, `pulseTaps`; `houseNow`, `tapPulse`; TAP and four pips |
+| `app` cheats `Cheats`, `RoundClient` | | wire `houseNow`, `clientNow`, `uploadAnswered`, `PulseBuzzer` |
+| ARCH D5 | re-sync every 30 s | every second, on the uploads |
+
 ### D-296 · **Handshake grades each gap between taps to within ±40 % of the dealt gap; the entry carries the gaps at one length for every role, and the Insider's fake is graded by the same function — built (recording 40), ends D-238's count-only grading**
 
 **The ruling** (owner, 2026-11-18, *Owner rulings, 2026-11-18* in `owner-decisions-2026-11-17.md`,
@@ -9533,6 +9731,7 @@ not compared against a pre-change render.
 
 **Not on a phone.** Whether ±40 % reads as *by feel* or as *twitch timing* (GDD:624) is for a hand
 on a phone; the owner chose C knowing section 7 flagged that risk.
+
 
 ## State after revision 12
 
