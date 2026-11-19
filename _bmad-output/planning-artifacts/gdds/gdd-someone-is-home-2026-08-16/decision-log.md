@@ -9435,6 +9435,27 @@ strip included, dimmed.
 
 **Not on a phone.**
 
+### D-294 · **The Nearby Interaction prompt ships in every build, in the owner's words; the setup walk's row will read NEARBY DEVICES — built (the string), decided (the row)**
+
+**The ruling** (owner, 2026-11-18):
+- **`NSNearbyInteractionUsageDescription`** is draft B: *"Someone's Home measures the distance between phones in the room. It is how the game sees who is close to whom."*
+- **The setup walk's permission row** that replaces BLUETOOTH reads **NEARBY DEVICES**, the name iOS uses for the same permission in Settings.
+
+**Now.**
+- The string is in the source `iosApp/iosApp/Info.plist`, so Debug, Playtest and Release all carry it.
+- The UWB spike's build phase is removed from the Xcode project. That phase wrote a test-only string into the built plist of Debug and Playtest, and it would have overwritten the owner's words in those builds.
+- `tools/uwb-spike/run.sh` still finds a string where it looks for one.
+- This also closes D-292's open risk: a Release build that reads `NISession.deviceCapabilities` at launch now has the string as well.
+
+**Not yet.**
+- The setup walk's row is not built. The BLUETOOTH row stays until Bluetooth comes out (UWB plan, unit 6).
+- `NSBluetoothAlwaysUsageDescription` stays until then too.
+
+**Proved.**
+- `plutil -lint` passes on both files.
+- A Release device build (`CODE_SIGNING_ALLOWED=NO`) carries the string in its built `Info.plist`.
+- Not on a phone.
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

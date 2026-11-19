@@ -92,6 +92,14 @@
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>The house senses which phones are near each other in the rooms. No connection leaves this house.</string>
 
+	<!-- Nearby Interaction (UWB), which replaces Bluetooth for contact, report and presence (the
+	     owner's 2026-11-18 rulings). iOS ends an app that runs an NISession without this string,
+	     so it ships in every configuration. The wording is the owner's (draft B, approved
+	     2026-11-18). Until the 2026-11-18 build it was injected into Debug and Playtest only, for
+	     the UWB spike. -->
+	<key>NSNearbyInteractionUsageDescription</key>
+	<string>Someone's Home measures the distance between phones in the room. It is how the game sees who is close to whom.</string>
+
 	<!-- Without this list, browsing for the host's service silently finds NOTHING on iOS 14+ --
 	     no error, no prompt, an empty result forever. A fail-closed OS behaviour worth a comment
 	     precisely because the failure has no symptom. -->
