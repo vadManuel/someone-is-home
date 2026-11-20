@@ -776,7 +776,7 @@ All positions are relative and inherit the scanner's ground truth. Room-level gr
 
 1. **Check-in / task scan** — self-reported, player-initiated, voluntary. Insiders can abstain or forge.
 2. **Sweep on scan** — when anyone scans, their phone sweeps for nearby devices. **You cannot stay off the map by refusing to scan**; someone else's scan counts you where you are.
-3. **Sweep every 5s during a motion-restricted task** — a player doing a long task becomes a stationary sensor.
+3. **Sweep once a second while performing** — a player performing a Subroutine at a card counts who is near with every upload, once a second (D-212), and becomes a stationary sensor.
 
 **What a sweep counts depends on the round's radio.** In a round on Ultra Wideband, a phone at a marker places in its room every player it measures within **1.5 m** (provisional, D-301); its Bluetooth places nobody. In a round that fell back to Bluetooth, the sweep is Bluetooth's, as before (D-272).
 
@@ -1277,6 +1277,7 @@ Everything else in this design — anonymous counts, injected error, staleness b
 ### Platform
 
 - **iPhone ships first. Android is on the roadmap.** Validation with a controlled friend group beats reach, but Android is a real milestone rather than an aspiration, and that changed the stack.
+- **A phone without Ultra Wideband cannot play** (D-292). At launch it shows THIS PHONE CAN'T PLAY / "Someone's Home needs Ultra Wideband: iPhone 11 or later, not iPhone SE." and nothing after it.
 - **Kotlin Multiplatform + Compose Multiplatform.** One UI and one simulation core across both platforms; the platform layer (radio, torch, camera, motion, haptics, NFC, audio) is written per side behind `expect`/`actual`. **The interface is never built twice**, which matters because screen parity is leak-critical and mixed-platform play would otherwise require the same invariant to hold across two independently-written codebases.
 - **No engine runtime**: instant launch, small binary, low battery for a round with camera, torch and BLE live.
 - **OLED strongly preferred** — the whole art direction assumes a black pixel emits nothing. The design does not *break* on LCD, but the darkness does.

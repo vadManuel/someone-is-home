@@ -74,3 +74,12 @@ Every call made without the owner is listed below: what was decided, why, and ho
 - **33.1, the circle as a radar:** accept it and reword. The GDD now says the circle confirms someone you are already beside, rather than finding anyone.
 - **Still open:** 17 (how the report circle looks), and 33.2 to 33.4 (the 5 s sweep wording, the battery target, and the launch refusal in the GDD).
 
+## Owner's review, 2026-11-20
+
+- **17, the report circle:** a report runs only from page 1 or 2, unlocked (not on the lantern); Control Centre or the Egress alert over the page does not stop it. It takes over the screen with the circle alone, at the page's own light, filling smoothly on the phone's clock (D-307, building).
+- **UWB runs only when the game needs it** (D-306, building): a pair is ranged only when Bluetooth says the phones are close and a Revoke, a report or the map could use it. Bluetooth runs the rest of the round.
+- **33.2:** applied. The GDD's sweep is once a second while performing a Subroutine at a card.
+- **33.4:** applied. The GDD's Platform section records D-292's launch refusal with the approved words.
+- **33.3, battery:** waits for D-306, so the line describes UWB running only for close pairs that need it.
+- **D-305's scroll hint:** none. Nothing that needs action is under the edge.
+
