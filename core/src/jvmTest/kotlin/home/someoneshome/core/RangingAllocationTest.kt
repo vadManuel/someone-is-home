@@ -32,7 +32,7 @@ import kotlin.test.assertTrue
  *
  * The house runs [RangingDesk.answer] for every seat's upload every second: the Bluetooth slots
  * resolved to seats, the report opened, the pairing told, the plan sealed. Eighteen seats, in a
- * steady room (every pair formed and held, every phone told to keep), each upload a real report
+ * steady room (every pair the game needs formed and held, every phone told to keep), each upload a real report
  * from a phone's own codec and the slots a real upload carries. Measured on the JVM, by the
  * thread's own allocation counter, as `UploadAllocationTest` measures `model`'s codecs (D-276).
  *
@@ -47,8 +47,17 @@ class RangingAllocationTest {
     private fun allocated(): Long = threads.getThreadAllocatedBytes(Thread.currentThread().id)
 
     private val seats = (0 until 18).map { Seat(it) }
+
+    /**
+     * A round that reads distance, the middle seat of every group of three Revoked and not yet
+     * reported: since D-306 the house pairs only close phones the game needs, and a Revoked seat's
+     * close living neighbours are needed for the report, so the room still holds twelve pairs.
+     */
     private val state: GameState =
-        reduce(GameState.EMPTY, Event.RoundArmed(Tick(0), seed = 20261119L, seats = seats, insiders = listOf(Seat(2), Seat(9)))).state
+        reduce(
+            GameState.EMPTY,
+            Event.RoundArmed(Tick(0), seed = 20261119L, seats = seats, insiders = listOf(Seat(2), Seat(9)), contactSource = ContactSource.Uwb),
+        ).state.let { s -> s.copy(revoked = seats.filter { it.index % 3 == 1 }) }
     private val window = ContactWindow(117_000L)
 
     /** A phone's pool: three sessions, the spares it offers and the pairs it holds. */
@@ -112,7 +121,7 @@ class RangingAllocationTest {
         while (steady < 3 && settling < 60) {
             val start = tick
             for (s in seats) {
-                val plan = desk.answer(Tick(tick++), s, sightings[s.index], book, phones[s.index].field(seeds[s.index], nonce), true, nonce)!!
+                val plan = desk.answer(state, Tick(tick++), s, sightings[s.index], book, phones[s.index].field(seeds[s.index], nonce), true, nonce)!!
                 phones[s.index].apply(plan, seeds[s.index])
             }
             tick = start + ContactGate.UPLOAD_TICKS
@@ -131,10 +140,10 @@ class RangingAllocationTest {
         val fields = seats.map { phones[it.index].field(seeds[it.index], nonce) }
         val rounds = 200
         var sink: String? = null
-        repeat(20) { for (s in seats) sink = desk.answer(Tick(tick++), s, sightings[s.index], book, fields[s.index], true, nonce) }
+        repeat(20) { for (s in seats) sink = desk.answer(state, Tick(tick++), s, sightings[s.index], book, fields[s.index], true, nonce) }
         val before = allocated()
         repeat(rounds) {
-            for (s in seats) sink = desk.answer(Tick(tick++), s, sightings[s.index], book, fields[s.index], true, nonce)
+            for (s in seats) sink = desk.answer(state, Tick(tick++), s, sightings[s.index], book, fields[s.index], true, nonce)
             tick += 20
         }
         val perUpload = (allocated() - before) / (rounds * seats.size)
@@ -152,6 +161,11 @@ class RangingAllocationTest {
      * with the report's hold, then the pairing and the plan with the slot sealed in). Each upload is
      * a fresh packed one, so the resolver takes every one as new, as it would on the air. What the
      * distance path adds is measured as the difference.
+     *
+     * Since D-306 the house pairs only close phones the game needs, and in a round that reads
+     * Bluetooth none: so every variant has the middle seat of each group of three Revoked, which the
+     * group's living phones are paired with in the round that reads distance, and the holding variant
+     * reads each of them at 20 cm.
      */
     @Test
     fun `reading the rules from distance adds little to the house's path per seat per beat`() {
@@ -159,7 +173,7 @@ class RangingAllocationTest {
             val round = reduce(
                 GameState.EMPTY,
                 Event.RoundArmed(Tick(0), seed = 20261119L, seats = seats, insiders = listOf(Seat(2), Seat(9)), contactSource = source),
-            ).state.let { s -> if (holding) s.copy(revoked = listOf(Seat(4))) else s }
+            ).state.let { s -> s.copy(revoked = seats.filter { it.index % 3 == 1 }) }
             val desk = rangingDeskFor(round)
             val phones = seats.map { Phone(it.index) }
             val seeds = seats.map { contactSeedFor(round.seed, it) }
@@ -185,7 +199,7 @@ class RangingAllocationTest {
                 val arrival = ContactUpload(s, sightings, if (source == ContactSource.Uwb) distances else emptyList())
                 val r = resolveContacts(memory, at, window, listOf(arrival), round)
                 memory = r.memory
-                return desk.answer(at, s, sightings, memory.book, r.taken.isNotEmpty(), r.slotOf(s), nonce)
+                return desk.answer(round, at, s, sightings, memory.book, r.taken.isNotEmpty(), r.slotOf(s), nonce)
             }
             repeat(12) {
                 for (s in seats) {
@@ -194,10 +208,10 @@ class RangingAllocationTest {
                 }
                 tick += 20
             }
-            // When holding, seat 4 is Revoked and every phone ranging it reads it at 20 cm.
+            // When holding, every phone ranging a Revoked seat reads it at 20 cm.
             val fields = seats.map { s ->
                 val p = phones[s.index]
-                val near = if (holding) desk.pairing.pairs().filter { it.has(s) && it.has(Seat(4)) }.map { it.handle }.toSet() else emptySet()
+                val near = if (holding) desk.pairing.pairs().filter { it.has(s) && (round.isRevoked(it.low) || round.isRevoked(it.high)) }.map { it.handle }.toSet() else emptySet()
                 p.codec.packReport(
                     seeds[s.index], nonce, RangingWire.STARTING_CAPACITY, p.spares.take(RangingWire.TOKEN_SLOTS),
                     p.held.keys.map { RangingReading(it, if (it in near) 20 else 80, 6) },

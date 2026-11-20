@@ -375,7 +375,8 @@ class RoundAuthority(
                 "CONTACT BY ${if (arming.contactSource == ContactSource.Uwb) "UWB DISTANCE" else "BLUETOOTH RSSI"}"
         )
         gate(arming)
-        // The UWB pairing for this round, from its seed and seats alone (D-300).
+        // The UWB pairing for this round, from its seed and seats (D-300); it is handed the state on
+        // each upload, for the need (D-306).
         if (state.armed) rangingDesk = rangingDeskFor(state)
         return armed
     }
@@ -478,7 +479,9 @@ class RoundAuthority(
      * says what the phone can hold and offers, and the phone's plan for this second is returned,
      * sealed under its seed, to ride the upload's answer. **Every call returns a plan of one width**:
      * an upload that does not read, or a seat the house holds no seed for, is answered with a blank
-     * of random bytes, which opens on no phone. The pairing reads no role and mints nothing.
+     * of random bytes, which opens on no phone. The pairing mints nothing; since D-306 it reads the
+     * round as it stands (after this upload's events), to pair only close phones the game needs
+     * ranged, by the owner's 2026-11-20 ruling.
      */
     suspend fun sighted(seat: Seat, upload: RoundBody.Sighted): String = turn.withLock { sight(seat, upload) }
 
@@ -521,7 +524,7 @@ class RoundAuthority(
     private fun planFor(seat: Seat, at: Tick, arrival: ContactUpload, taken: Boolean, report: ReportSlot): String {
         val desk = rangingDesk ?: return blankPlan()
         if (!state.armed) return blankPlan()
-        return desk.answer(at, seat, arrival.sightings, contactMemory.book, taken, report, rangingRandom(RangingWire.NONCE_BYTES))
+        return desk.answer(state, at, seat, arrival.sightings, contactMemory.book, taken, report, rangingRandom(RangingWire.NONCE_BYTES))
             ?: blankPlan()
     }
 

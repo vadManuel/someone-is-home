@@ -223,10 +223,12 @@ class ContactRadioBenchTest {
         }
 
         /**
-         * **Seconds until the pairing settles** (D-300, D-302): the house keeps pairs, every phone ranges
-         * exactly the pairs the house keeps with it in them, and nothing changed over the last two
-         * seconds. Five phones at three cannot range every pair; a touch or a hold between two phones
-         * the house is not ranging displaces a kept pair, inside [HELD_SECONDS].
+         * **Seconds until the pairing settles** (D-300, D-302): every phone ranges exactly the pairs
+         * the house keeps with it in them, and nothing changed over the last two seconds. Five phones
+         * at three cannot range every pair; a touch or a hold between two phones the house is not
+         * ranging displaces a kept pair, inside [HELD_SECONDS]. **Since D-306 a settled room may keep
+         * no pair at all**: spread out a room apart, no two phones are close, and the house pairs
+         * only close phones the game needs, so the touch or hold is what makes its pair.
          */
         suspend fun ranged() {
             val ranging = seats.filter { it != without }
@@ -234,7 +236,7 @@ class ContactRadioBenchTest {
             var still = 0
             repeat(20) {
                 val kept = house.ranging?.pairs().orEmpty()
-                val held = kept.isNotEmpty() && ranging.all { seat ->
+                val held = ranging.all { seat ->
                     air.rangingFor(seat).ranging.toSet() == kept.filter { it.has(seat) }.map { it.handle }.toSet()
                 }
                 val handles = kept.map { it.handle }

@@ -36,17 +36,18 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * **The UWB pairing over real sockets, through the fake radio (U6, D-300)**: phones with
+ * **The UWB pairing over real sockets, through the fake radio (U6, D-300, D-306)**: phones with
  * [SimulatedRanging] radios are handed plans in their uploads' answers, start ranging the right
- * peers, and their distances come back to the house; a Revoked phone keeps ranging; every answer and
- * every upload is one length on every phone throughout.
+ * peers, and their distances come back to the house; only close pairs the game needs are ranged; a
+ * Revoked phone that can still be reported keeps ranging; every answer and every upload is one
+ * length on every phone throughout.
  *
  * Five phones built as `CheatRoot` builds one: a real [LobbyOverTransport] and [RoundClient] over
  * loopback, a real [RoundAuthority] on the host armed at LIGHTS OUT, each phone's uploads on the
  * real one-second cadence. Each phone's Bluetooth is a [SimulatedRadio] and its UWB a
- * [SimulatedRanging] at capacity 1, in one [SimulatedAir]: two pairs of phones stand close, a room
- * apart from each other, and the fifth stands alone. Bluetooth decides nothing but who ranges whom;
- * the house's clock runs at real time on the driver's 20 ticks a second.
+ * [SimulatedRanging] at capacity 1, in one [SimulatedAir]: the Insider and one other phone stand
+ * close, two more stand close a room away, and the fifth stands alone. Bluetooth decides nothing but
+ * who ranges whom; the house's clock runs at real time on the driver's 20 ticks a second.
  */
 class RangingBenchTest {
 
@@ -172,12 +173,6 @@ class RangingBenchTest {
                     check(p.model.handOverLine()) { "${p.name}'s line was refused" }
                 }
                 until("every line reached the house") { host.model.standing.linesIn == phones.size }
-                // Two pairs of phones close together, a room apart, and one alone. Radios by spot.
-                air.place(Seat(0), SimulatedAir.Spot(0.0, 0.0))
-                air.place(Seat(1), SimulatedAir.Spot(0.8, 0.0))
-                air.place(Seat(2), SimulatedAir.Spot(10.0, 0.0))
-                air.place(Seat(3), SimulatedAir.Spot(10.0, 0.6))
-                air.place(Seat(4), SimulatedAir.Spot(25.0, 0.0))
                 val seatOf = host.link.house.armingInputs().names.associate { it.name to it.seat }
                 fun houseSeat(p: Phone) = seatOf.getValue(p.name)
 
@@ -188,6 +183,13 @@ class RangingBenchTest {
                 // Insider's Revoke is ready: one jump, before any pair forms, so no pair is aged past
                 // its grace by a jump no house's clock makes.
                 val insider = house.state.livingInsiders.single()
+                // The Insider and one other phone close together, two more close together a room
+                // away, and one alone. Radios by spot.
+                val layout = phones.sortedBy { if (houseSeat(it) == insider) 0 else 1 }
+                listOf(
+                    SimulatedAir.Spot(0.0, 0.0), SimulatedAir.Spot(0.8, 0.0), SimulatedAir.Spot(10.0, 0.0),
+                    SimulatedAir.Spot(10.0, 0.6), SimulatedAir.Spot(25.0, 0.0),
+                ).forEachIndexed { i, at -> air.place(layout[i].spot, at) }
                 val ready = house.state.cooldownFor(insider, InsiderAbility.Revoke)?.readyAt?.step ?: 0L
                 house.advanceTo(Tick(ready))
                 val started = monotonicMillis()
@@ -199,17 +201,26 @@ class RangingBenchTest {
                 }
                 until("every phone is uploading on its seed") { phones.all { it.round.round.uploading } }
 
-                // The plans: within a few beats each close pair is ranging, each phone the other.
-                until("both close pairs are ranging each other", {
-                    phones.joinToString { p -> "${p.spot.index}→${p.ranging.ranging.map { p.ranging.peerOf(it)?.index }}" }
-                }) {
-                    listOf(0 to 1, 1 to 0, 2 to 3, 3 to 2).all { (a, b) ->
-                        val r = phones[a].ranging
-                        r.ranging.size == 1 && r.peerOf(r.ranging.single()) == Seat(b)
+                fun ranging() = phones.joinToString { p -> "${p.spot.index}→${p.ranging.ranging.map { p.ranging.peerOf(it)?.index }}" }
+
+                // D-306: two close pairs, and the game needs neither: nobody is armed, Revoked or at a
+                // card. Four seconds of uploads, and nobody is told to range anybody.
+                delay(4_000)
+                assertTrue(phones.all { it.ranging.ranging.isEmpty() }, "a phone the game does not need was ranging: ${ranging()}")
+                assertEquals(emptyList(), house.ranging!!.pairs(), "the house kept a pair the game does not need")
+
+                // The Insider arms: its close pair is needed, and within a few beats each phone of it
+                // ranges the other. The other close pair is still not needed.
+                house.heard(Intent.ArmRevoke(insider))
+                assertTrue(house.state.armedAt(insider, house.now()), "the Revoke never armed: ${house.refusals}")
+                until("the Insider's close pair is ranging", ::ranging) {
+                    listOf(0 to 1, 1 to 0).all { (a, b) ->
+                        val r = layout[a].ranging
+                        r.ranging.size == 1 && r.peerOf(r.ranging.single()) == layout[b].spot
                     }
                 }
-                assertTrue(phones[4].ranging.ranging.isEmpty(), "the phone standing alone was paired")
-                assertEquals(2, house.ranging!!.pairs().size, "the house keeps other pairs than the two close ones: ${house.ranging!!.pairs()}")
+                assertTrue(layout.drop(2).all { it.ranging.ranging.isEmpty() }, "a phone the game does not need was paired: ${ranging()}")
+                assertEquals(1, house.ranging!!.pairs().size, "the house keeps other pairs than the one the game needs: ${house.ranging!!.pairs()}")
 
                 // The distances come back: 0.8 m and 0.6 m, ±3 cm, 6 or 7 readings a second.
                 suspend fun distancesComeBack(p: Phone, expectedCm: Int) {
@@ -222,14 +233,13 @@ class RangingBenchTest {
                     val pair = house.ranging!!.pairs().single { it.handle == reading.handle }
                     assertTrue(pair.has(houseSeat(p)), "${p.name} reported a pair the house did not deal it")
                 }
-                distancesComeBack(phones[0], 80)
-                distancesComeBack(phones[1], 80)
-                distancesComeBack(phones[2], 60)
-                distancesComeBack(phones[3], 60)
+                distancesComeBack(layout[0], 80)
+                distancesComeBack(layout[1], 80)
 
-                // A Revoke puts one of the first pair out; its phone keeps ranging and keeps reporting.
-                val target = listOf(phones[1], phones[0]).map(::houseSeat).first { it != insider }
-                house.heard(Intent.ArmRevoke(insider))
+                // A Revoke puts the Insider's partner out. The pair is still needed, now for the report
+                // (a living phone near a Revoked seat nobody has reported): its phone keeps ranging
+                // and keeps reporting.
+                val target = houseSeat(layout[1])
                 house.mint(Event.ContactMade(house.now(), insider, target))
                 assertTrue(house.state.isRevoked(target), "the fixture revoked nobody: ${house.refusals}")
                 val outPhone = phones.single { houseSeat(it) == target }

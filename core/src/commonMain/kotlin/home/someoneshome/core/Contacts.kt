@@ -372,6 +372,62 @@ object ContactGate {
 }
 
 /**
+ * **The facts the distance rules ask of the round**, and nothing else: no role, no armed state.
+ * [ContactHouse] answers them for the resolver; the house's UWB pairing answers them from the round
+ * as it stands (D-306), so that the pairing asks the resolver's own questions ([readsDistancesOf],
+ * [holdMayRun], [holdMayTarget]) and never a copy of them.
+ */
+internal interface ContactFacts {
+    /** What this round reads (D-301): chosen at arming from the phones' capacities, never a role. */
+    val source: ContactSource
+
+    /** Whether a meeting is running: no hold starts or runs at one, where everybody stands together. */
+    val inMeeting: Boolean
+
+    fun isRevoked(seat: Seat): Boolean
+
+    /** Out is Revoked or Restrained: its phone ranges, and the house reads none of it (D-301). */
+    fun isOut(seat: Seat): Boolean
+
+    /** Revoked seats a meeting was already called to report (S4, D-219): no hold starts on one. */
+    fun wasReported(seat: Seat): Boolean
+}
+
+/**
+ * **Whether the house reads [seat]'s distances at all** (D-301): only a living phone's. A phone that
+ * is out keeps ranging so that it stays measurable (D-300); what it measures is not read, as an out
+ * phone's Bluetooth never was (D-008). So a touch by distance needs both phones living.
+ */
+internal fun ContactFacts.readsDistancesOf(seat: Seat): Boolean = !isOut(seat)
+
+/**
+ * **Whether [reader] may hold a report at all on this upload** (D-301): a round that reads
+ * distance, a living reader (R3), no meeting running (D-301 decision 5).
+ */
+internal fun ContactFacts.holdMayRun(reader: Seat): Boolean =
+    source == ContactSource.Uwb && readsDistancesOf(reader) && !inMeeting
+
+/**
+ * **Whether [target] is a seat [reader] could hold a report on**, distance and grace aside: another
+ * seat, Revoked, and not already reported (S4).
+ */
+internal fun ContactFacts.holdMayTarget(reader: Seat, target: Seat): Boolean =
+    target.index != reader.index && isRevoked(target) && !wasReported(target)
+
+/**
+ * **The [ContactFacts] of the round as it stands**, for the house's UWB pairing (D-306): every
+ * answer read straight off [state], the same lists [ContactHouse.of] copies. Held and re-pointed per
+ * upload (rule 7): it allocates nothing.
+ */
+internal class RoundContactFacts(var state: GameState) : ContactFacts {
+    override val source: ContactSource get() = state.contactSource
+    override val inMeeting: Boolean get() = state.meeting != null
+    override fun isRevoked(seat: Seat): Boolean = state.isRevoked(seat)
+    override fun isOut(seat: Seat): Boolean = state.isOut(seat)
+    override fun wasReported(seat: Seat): Boolean = state.wasReported(seat)
+}
+
+/**
  * **The whole of what the resolver may know about the round**, and the field list is the
  * guarantee: no role, no armed state, no cooldown. A role swap or an arm cannot reach a function
  * that only ever sees this (D-213).
@@ -380,19 +436,15 @@ internal class ContactHouse private constructor(
     val roundSeed: Long,
     val seats: List<Seat>,
     val revoked: List<Seat>,
-    /** What this round reads (D-301): chosen at arming from the phones' capacities, never a role. */
-    val source: ContactSource,
-    /** Every seat that is out, Revoked or Restrained: its phone ranges, and the house reads none of it (D-301). */
+    override val source: ContactSource,
     val out: List<Seat>,
-    /** Revoked seats a meeting was already called to report (S4, D-219): no hold starts on one. */
     val reported: List<Seat>,
-    /** Whether a meeting is running: no hold starts or runs at one, where everybody stands together. */
-    val inMeeting: Boolean,
-) {
+    override val inMeeting: Boolean,
+) : ContactFacts {
     fun holds(seat: Seat): Boolean = seats.any { it.index == seat.index }
-    fun isRevoked(seat: Seat): Boolean = revoked.any { it.index == seat.index }
-    fun isOut(seat: Seat): Boolean = out.any { it.index == seat.index }
-    fun wasReported(seat: Seat): Boolean = reported.any { it.index == seat.index }
+    override fun isRevoked(seat: Seat): Boolean = revoked.any { it.index == seat.index }
+    override fun isOut(seat: Seat): Boolean = out.any { it.index == seat.index }
+    override fun wasReported(seat: Seat): Boolean = reported.any { it.index == seat.index }
 
     companion object {
         fun of(state: GameState) = ContactHouse(
@@ -467,7 +519,7 @@ fun resolveContacts(
             // **Distance, from a living phone only** (D-301). A phone that is out keeps ranging so
             // that it stays measurable (D-300); what it measures is not read, as an out phone's
             // Bluetooth never was (D-008).
-            ContactSource.Uwb -> if (!house.isOut(upload.seat)) {
+            ContactSource.Uwb -> if (house.readsDistancesOf(upload.seat)) {
                 upload.distances
                     .filter { ContactGate.atRevokeReach(it.cm) && house.holds(it.target) && it.target.index != upload.seat.index }
                     .distinctBy { it.target.index }
@@ -598,12 +650,9 @@ private fun heldReports(
             slots += ContactSlot(reader, running?.let { pending(at.step - it.since.step) } ?: ReportSlot.Idle)
             continue
         }
-        val reads = house.source == ContactSource.Uwb && !house.isOut(reader) && !house.inMeeting
+        val reads = house.holdMayRun(reader)
         val inReach = if (!reads) emptyList() else upload.distances
-            .filter {
-                ContactGate.atReportReach(it.cm) && it.target.index != reader.index && house.isRevoked(it.target) &&
-                    !house.wasReported(it.target) && !inGrace(reader, it.target)
-            }
+            .filter { ContactGate.atReportReach(it.cm) && house.holdMayTarget(reader, it.target) && !inGrace(reader, it.target) }
             .sortedWith(compareBy<ContactDistance> { it.cm }.thenBy { it.target.index })
         val still = running?.takeIf { r -> inReach.any { it.target.index == r.target.index } }
         val slot: ReportSlot = when {

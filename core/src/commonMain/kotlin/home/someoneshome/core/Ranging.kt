@@ -1,6 +1,7 @@
 package home.someoneshome.core
 
 import home.someoneshome.model.ContactSeed
+import home.someoneshome.model.ContactSource
 import home.someoneshome.model.GameState
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Sighting
@@ -32,13 +33,36 @@ import home.someoneshome.model.protocol.SpareKey
  * the other end of a pair the house keeps, for `resolveContacts` and `resolvePlacements`; then the
  * pairing is told and the plan sealed, with the reader's report slot in it ([RangingDesk.answer]).
  *
+ * ### Only close pairs the game needs (D-306)
+ *
+ * The owner's ruling (2026-11-20): *UWB only comes in play during precise measurement situations and
+ * Bluetooth is the one running most of the game.* So the house pairs two phones only while **both**
+ * hold: Bluetooth says they are close (the pair's strength at or above
+ * [RangingGate.NEAR_RSSI_FLOOR]), and **the game needs the pair** ([RangingNeed], asked of every pair
+ * heard on every upload): one of the rules that read a UWB distance could fire for it. The three, in
+ * [rangingNeeded], each asked through the rule's own predicate and never a copy:
+ *
+ * - **Revoke**: one seat holds an armed Revoke that a touch would land on the other
+ *   ([revokeLands], `Rules.contact`'s question), both phones living (a touch by distance reads only
+ *   living phones, [readsDistancesOf]).
+ * - **Report**: one seat may hold a report ([holdMayRun]: a round that reads distance, living, no
+ *   meeting) on the other ([holdMayTarget]: Revoked, not yet reported).
+ * - **Map**: one seat is a sensor ([sensingRoom]) and the other a seat it could place ([couldPlace]).
+ *
+ * Every other pair is ranked as if it were not heard: it is never formed, never ranks ahead of a
+ * needed one, and never displaces. A kept pair that stops being needed or close is kept
+ * [RangingGate.NEED_GRACE_TICKS] longer, so one noisy reading or one upload's gap does not end it, and
+ * then goes the way any pair goes: the house stops keeping it and each phone is told Stop. In a round
+ * that reads Bluetooth nothing is needed, so nothing is paired.
+ *
  * ### What it does, once per upload ([RangingPairing.arrive])
  *
  * 1. **Ranks each seat's peers by Bluetooth**, from the 24 RSSI slots every upload already carries,
  *    resolved through the contact resolver's own token book. A pair's strength is its strongest
  *    reading, either way round, among its last [RangingGate.HEARD_KEPT] inside
  *    [RangingGate.HEARD_TICKS]: one side is enough, so a phone that is out, which advertises and
- *    never scans (D-008), is still ranked by the phones that hear it.
+ *    never scans (D-008), is still ranked by the phones that hear it. **Only a pair that is close and
+ *    needed, or was within [RangingGate.NEED_GRACE_TICKS], is ranked at all** (D-306).
  * 2. **Keeps the pairs that are still candidates** (hysteresis): a pair stays while each phone is
  *    among the other's strongest *capacity + [RangingGate.KEEP_MARGIN]* peers, both phones keep
  *    saying they hold it ([RangingGate.HOLD_GRACE_TICKS]), and neither phone's degree passes its
@@ -49,9 +73,10 @@ import home.someoneshome.model.protocol.SpareKey
  *    [RangingGate.DISPLACE_MARGIN_DB] weaker. Without it a kept pair went only once it fell past
  *    *capacity + 2*, which in a small round never happens, and a held touch with a peer the house
  *    never picked could never land.
- * 4. **Forms new pairs greedily, strongest first**, each only between two phones that are each among
- *    the other's strongest *capacity* peers, both under their capacity and both with a spare token
- *    the house has not dealt. Entry is stricter than staying, so a pair does not flap at the edge.
+ * 4. **Forms new pairs greedily, strongest first**, each only between two phones that are close and
+ *    needed on this upload (D-306), each among the other's strongest *capacity* peers, both under
+ *    their capacity and both with a spare token the house has not dealt. Entry is stricter than
+ *    staying, so a pair does not flap at the edge.
  *    A pair both phones rank first that waits only on a spare holds both phones' room for itself.
  *    A spare dealt into a pair that was let go before its phone ever listed it is handed back, and
  *    dealt again once the phone's next report still offers it idle (D-302).
@@ -68,18 +93,28 @@ import home.someoneshome.model.protocol.SpareKey
  * records, so if one phone of a pair is told to start it, the other is told on its own next upload,
  * with the other's token.
  *
- * ### Never a role, and out seats range like any
+ * ### It reads the round's state, by the owner's ruling (D-306)
  *
- * [RangingPairing] is built from the round's seed and its seats, and takes nothing else, ever: no
- * role, no armed state, and **no out list either**. An out phone is paired exactly as a living one,
- * because a Revoked phone must stay measurable for the report (the UWB plan: *a Revoked phone keeps
- * ranging*), and a house that stopped pairing it would deal it no steps where every other phone gets
- * some, which the plan would show to anybody holding that phone's seed.
+ * Until D-306 the pairing took nothing but the round's seed and seats, *never a role, an armed state
+ * or an out list*, so that the plan a phone is dealt could say nothing about anybody to whoever held
+ * that phone's seed. **The owner ruled on 2026-11-20 that the pairing may read roles and game
+ * state**: a fact that lives only inside a player's own phone (its memory, its logs, a modified
+ * build) is not a leak and is not designed against. What still holds, and is not this file's to
+ * move: nothing a person can see, hear or feel changes, and the wire is one width and one cadence
+ * for every phone. Every upload is still answered with one sealed plan of
+ * [RangingWire.PLAN_CHARS] characters, a phone with no pairs included (D-217, D-300), and the
+ * uploads keep their width. So an armed Insider's phone is paired with the close phones its Revoke
+ * could land on, and a Revoked phone with the close living phones that could still report it, and a
+ * phone nobody needs is paired with nobody: all of it inside plans of one width.
+ *
+ * [RangingPairing] itself still takes no state: the need is asked through [RangingNeed], which the
+ * desk answers from the round as it stands ([rangingNeeded]).
  *
  * ### Deterministic (rule 4), and held rather than rebuilt (rule 7)
  *
  * Every step walks seats in seat order and pairs in forming order, so a replay feeding the same
- * uploads rebuilds the same pairs, handles and plans. Its clock is the arrival ticks with every
+ * uploads against the same states rebuilds the same pairs, handles and plans: the need is a function
+ * of the state, and the state of the recording. Its clock is the arrival ticks with every
  * stretch in which no upload arrived at all closed up to one upload ([RangingGate.SILENCE_TICKS],
  * D-302): a house off the air, or a clock that jumps, is not time the phones spent apart, so the
  * pairs they still hold are not let go for it. It is not recorded: its inputs (the uploads)
@@ -148,6 +183,92 @@ object RangingGate {
      * phones stop listing it, by the grace above.
      */
     const val SILENCE_TICKS: Long = 2L * ContactGate.UPLOAD_TICKS
+
+    /**
+     * ⚠️ **Provisional: −68 dBm, *Bluetooth says they are close*, about two and a half metres**
+     * (D-306). A pair is formed for UWB only at or above this, and only if the game needs it.
+     *
+     * The owner asked for roughly 2 to 3 m. Measured phone to phone (D-233): 30 cm −43, 1 m −57, which
+     * is about 27 dB a decade; carried on, 2 m reads about −65 and 3 m about −70, so −68 is about
+     * 2.6 m on that slope (and 4 m on the bench's 20 dB curve, so the bench's spread-out phones, 5 m
+     * apart at −70, are not close). It sits 28 dB under the contact floor (−40, D-233) and 7 dB
+     * over the room floor (−75, [SensingGate.ROOM_RSSI_FLOOR]); the map's 1.5 m reach reads about
+     * −62 on D-233's slope, 6 dB inside it, more than the 4 dB a reading jitters at one distance. A
+     * pair's strength is its strongest reading in the last three seconds, so a pair walking in is
+     * judged by its nearest moment, not its average.
+     *
+     * **The pace it allows, said plainly**: at a walk (about 1.4 m/s) 2.6 m to a touch is about two
+     * seconds, and from the first close reading the pair needs one to two uploads to be started on
+     * both phones and a beat for the radio to read. A deliberate approach is ranged well before it
+     * touches; a brisk pass from out of range is at the edge. Phones set the number.
+     */
+    const val NEAR_RSSI_FLOOR: Int = -68
+
+    /**
+     * ⚠️ **Provisional: two uploads, the grace on a pair the game stopped needing** (D-306). A kept
+     * pair whose need has ended (the Revoke spent or lapsed, the seat reported, the sensor no longer
+     * performing) or whose strength fell under [NEAR_RSSI_FLOOR] is kept this much longer before it
+     * goes the way any pair goes (its phones told Stop). Entry asks for the need and the floor on
+     * the upload itself, so this is the same entry-stricter-than-staying hysteresis as
+     * [KEEP_MARGIN]: one reading under the floor, or a state that flickers for one upload, does not
+     * stop a session the next second would start again under a new handle.
+     */
+    const val NEED_GRACE_TICKS: Long = 2L * ContactGate.UPLOAD_TICKS
+}
+
+/**
+ * **Whether the game needs [a] and [b] ranged at [at]** (D-306): asked by [RangingPairing] of every
+ * pair Bluetooth says is close, on every upload. [at] is the house's tick, as the rules read it. The
+ * house's answer is [rangingNeeded], from the round as it stands; a test of the pairing's mechanics
+ * alone may answer yes to everything.
+ */
+fun interface RangingNeed {
+    fun needs(a: Seat, b: Seat, at: Tick): Boolean
+}
+
+/**
+ * **Whether the round [state] needs [a] and [b] ranged at [at]** (D-306): at least one rule that
+ * reads a UWB distance could fire for the pair, either way round. Never in a round that reads
+ * Bluetooth (D-301), before arming or after the end. Each of the three is the rule's own predicate:
+ *
+ * 1. **A Revoke**: [revokeLands] (`Rules.contact`), both phones living ([readsDistancesOf]: a touch
+ *    by distance reads both phones, and none of an out phone's).
+ * 2. **A report**: [holdMayRun] and [holdMayTarget] (the resolver's hold), grace aside: the grace
+ *    after a touch (D-291) is five seconds and the pair is wanted at its end.
+ * 3. **The map**: [sensingRoom] (`resolvePlacements`'s sensor) and [couldPlace].
+ *
+ * [facts] are [state]'s ([RoundContactFacts]), passed in so that asking allocates nothing.
+ */
+internal fun rangingNeeded(state: GameState, facts: ContactFacts, a: Seat, b: Seat, at: Tick): Boolean {
+    if (state.contactSource != ContactSource.Uwb || !state.armed || state.ended) return false
+    return revokeNeeds(state, facts, a, b, at) || revokeNeeds(state, facts, b, a, at) ||
+        reportNeeds(facts, a, b) || reportNeeds(facts, b, a) ||
+        mapNeeds(state, a, b, at) || mapNeeds(state, b, a, at)
+}
+
+private fun revokeNeeds(state: GameState, facts: ContactFacts, actor: Seat, target: Seat, at: Tick): Boolean =
+    facts.readsDistancesOf(actor) && facts.readsDistancesOf(target) && state.revokeLands(actor, target, at)
+
+private fun reportNeeds(facts: ContactFacts, reader: Seat, target: Seat): Boolean =
+    facts.holdMayRun(reader) && facts.holdMayTarget(reader, target)
+
+private fun mapNeeds(state: GameState, sensor: Seat, seat: Seat, at: Tick): Boolean =
+    couldPlace(state, sensor, seat) && sensingRoom(state, sensor, at) != null
+
+/**
+ * **The house's [RangingNeed]: [rangingNeeded] for the round as it stands** (D-306). Held by the desk
+ * and pointed at the current state before each upload is paired, so asking allocates nothing.
+ */
+internal class RoundRangingNeed : RangingNeed {
+    private val facts = RoundContactFacts(GameState.EMPTY)
+
+    var state: GameState
+        get() = facts.state
+        set(value) {
+            facts.state = value
+        }
+
+    override fun needs(a: Seat, b: Seat, at: Tick): Boolean = rangingNeeded(facts.state, facts, a, b, at)
 }
 
 /**
@@ -174,9 +295,9 @@ data class RangingPair(
  * its seats, and handed every upload in arrival order.
  *
  * For each upload: [hear] each Bluetooth reading it carried (already resolved to a seat), then
- * [arrive] with its report; the uploading phone's plan for this second is then [plan], a
- * [RangingPlanSource] the codec seals from directly. **Not thread-safe**: the house calls it under
- * its one lock.
+ * [arrive] with its report and the game's [RangingNeed] (D-306); the uploading phone's plan for this
+ * second is then [plan], a [RangingPlanSource] the codec seals from directly. **Not thread-safe**:
+ * the house calls it under its one lock.
  */
 class RangingPairing(private val roundSeed: Long, seats: List<Seat>) {
 
@@ -202,6 +323,13 @@ class RangingPairing(private val roundSeed: Long, seats: List<Seat>) {
 
     /** This upload's readings, strongest per peer, until [arrive] takes them. */
     private val hearing = IntArray(n) { NONE }
+
+    // ---- The game's need, per unordered pair (D-306) -----------------------------------------------
+    /** Whether each pair is close and needed on this upload: entry asks for this. */
+    private val useful = BooleanArray(n * n)
+
+    /** The pairing's tick each pair was last close and needed, or [NEVER]: staying asks for its grace. */
+    private val usefulAt = LongArray(n * n) { NEVER }
 
     // ---- Each seat's last report -----------------------------------------------------------------
     private val capacity = IntArray(n)
@@ -291,9 +419,9 @@ class RangingPairing(private val roundSeed: Long, seats: List<Seat>) {
      * **[seat]'s upload, arriving at [at]**: the readings [hear]d for it, and its ranging [report]
      * (null when the field did not read). [taken] is false for a transport's second delivery or a
      * seat not of the round: nothing it carried is taken, and the plan is read off what the house
-     * holds. Afterwards [plan] is this seat's.
+     * holds. [need] is asked of every close pair, at [at] (D-306). Afterwards [plan] is this seat's.
      */
-    fun arrive(at: Tick, seat: Seat, report: RangingReportView?, taken: Boolean) {
+    fun arrive(at: Tick, seat: Seat, report: RangingReportView?, taken: Boolean, need: RangingNeed) {
         val now = clock(at.step)
         arrivals++
         val s = slotOf(seat.index)
@@ -311,7 +439,7 @@ class RangingPairing(private val roundSeed: Long, seats: List<Seat>) {
         }
         hearing.fill(NONE)
 
-        strengths(now)
+        strengths(now, at, need)
         rankFirst()
         keepPairs(now)
         displacePairs(now)
@@ -384,8 +512,13 @@ class RangingPairing(private val roundSeed: Long, seats: List<Seat>) {
         return false
     }
 
-    /** Every pair's strength now: its strongest reading inside the window, or [NONE]. */
-    private fun strengths(now: Long) {
+    /**
+     * Every pair's strength now: its strongest reading inside the window, or [NONE]; and **[NONE] for a
+     * pair the game does not want ranged** (D-306): one that is not close and needed now
+     * ([useful]) and has not been within [RangingGate.NEED_GRACE_TICKS]. Everything after reads
+     * strength alone, so an unwanted pair is ranked, kept, displaced and formed as one not heard.
+     */
+    private fun strengths(now: Long, at: Tick, need: RangingNeed) {
         for (a in 0 until n) {
             strength[a * n + a] = NONE
             for (b in a + 1 until n) {
@@ -396,8 +529,14 @@ class RangingPairing(private val roundSeed: Long, seats: List<Seat>) {
                     if (t == NEVER || now - t > RangingGate.HEARD_TICKS) continue
                     if (best == NONE || heardRssi[k] > best) best = heardRssi[k]
                 }
-                strength[pair] = best
-                strength[b * n + a] = best
+                val close = best != NONE && best >= RangingGate.NEAR_RSSI_FLOOR
+                val wantedNow = close && need.needs(seatsInOrder[a], seatsInOrder[b], at)
+                useful[pair] = wantedNow
+                if (wantedNow) usefulAt[pair] = now
+                val wanted = best != NONE && usefulAt[pair] != NEVER && now - usefulAt[pair] <= RangingGate.NEED_GRACE_TICKS
+                val s = if (wanted) best else NONE
+                strength[pair] = s
+                strength[b * n + a] = s
             }
         }
     }
@@ -509,7 +648,8 @@ class RangingPairing(private val roundSeed: Long, seats: List<Seat>) {
         var dropped = false
         for (a in 0 until n) {
             val b = first[a]
-            if (b <= a || !mutuallyFirst(a, b) || paired(a, b)) continue
+            // Only a pair that could form on this upload displaces (D-306): one in its need's grace could not.
+            if (b <= a || !mutuallyFirst(a, b) || paired(a, b) || !useful[a * n + b]) continue
             val capA = capacityOf(a, now)
             val capB = capacityOf(b, now)
             if (capA <= 0 || capB <= 0) continue
@@ -582,14 +722,16 @@ class RangingPairing(private val roundSeed: Long, seats: List<Seat>) {
     }
 
     /**
-     * Form: strongest first, then by seat; each spare dealt once. A pair both phones rank first,
-     * with room on both but a spare missing on one (its stop not yet through, D-302), holds both
-     * phones' room for itself this upload, so a weaker pair cannot take the place it displaced for.
+     * Form: strongest first, then by seat; each spare dealt once; only a pair close and needed on
+     * this upload ([useful], D-306), never one only inside its need's grace. A pair both phones rank
+     * first, with room on both but a spare missing on one (its stop not yet through, D-302), holds
+     * both phones' room for itself this upload, so a weaker pair cannot take the place it displaced
+     * for.
      */
     private fun formPairs(now: Long) {
         var count = 0
         for (a in 0 until n) for (b in a + 1 until n) {
-            if (strength[a * n + b] != NONE && !paired(a, b)) candidates[count++] = a * n + b
+            if (useful[a * n + b] && strength[a * n + b] != NONE && !paired(a, b)) candidates[count++] = a * n + b
         }
         for (i in 1 until count) {
             val moving = candidates[i]
@@ -829,9 +971,9 @@ internal fun rangingHandleFor(roundSeed: Long, formed: Long): RangingHandle =
     RangingHandle(oneWaySeed(roundSeed, SeedPurpose.RangingHandle, formed))
 
 /**
- * **The ranging desk for the round [state] arms**: built from its seed and its seats, and from
- * nothing else in it, so no role, armed state or out list can reach the pairing (D-300). The one
- * place a desk is made from a round.
+ * **The ranging desk for the round [state] arms**: built from its seed and its seats. The one place
+ * a desk is made from a round. The round's state as it stands reaches the pairing on each upload
+ * ([RangingDesk.answer]), for the need (D-306), and nowhere else.
  */
 fun rangingDeskFor(state: GameState): RangingDesk = RangingDesk(state.seed, state.seats)
 
@@ -856,6 +998,9 @@ class RangingDesk(roundSeed: Long, seats: List<Seat>) {
 
     /** The seat whose report [codec] holds open, from [read] until [answer]; null when none does. */
     private var opened: Seat? = null
+
+    /** The game's need (D-306), pointed at the round as it stands on each [answer]. */
+    private val need = RoundRangingNeed()
 
     /** [read]'s answer, held and refilled (rule 7): nothing keeps it past the upload it was read for. */
     private val distances = ArrayList<ContactDistance>(RangingWire.MAX_PEERS)
@@ -898,10 +1043,12 @@ class RangingDesk(roundSeed: Long, seats: List<Seat>) {
      * **[seat]'s upload, through the pairing, and its plan sealed with [nonce]**: [sightings] are
      * every Bluetooth slot it carried, resolved through [book] (the contact resolver's, for this
      * window); the report is the one [read] just opened for [seat], if it read; [report] is the
-     * seat's report slot from the resolver (D-301), sealed into the plan. Null for a seat that is
-     * not the round's, which has no seed here.
+     * seat's report slot from the resolver (D-301), sealed into the plan. [state] is the round as it
+     * stands after the rules took this upload, and the pairing asks it which close pairs the game
+     * needs ([rangingNeeded], D-306). Null for a seat that is not the round's, which has no seed
+     * here.
      */
-    fun answer(at: Tick, seat: Seat, sightings: List<Sighting>, book: ContactBook?, taken: Boolean, report: ReportSlot, nonce: ByteArray): String? {
+    fun answer(state: GameState, at: Tick, seat: Seat, sightings: List<Sighting>, book: ContactBook?, taken: Boolean, report: ReportSlot, nonce: ByteArray): String? {
         val seed = seeds.getOrNull(seat.index) ?: return null
         if (book !== this.book) {
             this.book = book
@@ -915,15 +1062,16 @@ class RangingDesk(roundSeed: Long, seats: List<Seat>) {
         }
         val view: RangingReportView? = if (opened?.index == seat.index) codec else null
         opened = null
-        pairing.arrive(at, seat, view, taken)
+        need.state = state
+        pairing.arrive(at, seat, view, taken, need)
         sealing.kind = report.kind
         sealing.millis = report.millis
         return codec.packPlan(seed, nonce, sealing)
     }
 
     /** **[read] then [answer], with an idle report slot**: the whole path for a caller with no resolver between (D-300's). */
-    fun answer(at: Tick, seat: Seat, sightings: List<Sighting>, book: ContactBook?, field: String, taken: Boolean, nonce: ByteArray): String? {
+    fun answer(state: GameState, at: Tick, seat: Seat, sightings: List<Sighting>, book: ContactBook?, field: String, taken: Boolean, nonce: ByteArray): String? {
         read(seat, field)
-        return answer(at, seat, sightings, book, taken, ReportSlot.Idle, nonce)
+        return answer(state, at, seat, sightings, book, taken, ReportSlot.Idle, nonce)
     }
 }

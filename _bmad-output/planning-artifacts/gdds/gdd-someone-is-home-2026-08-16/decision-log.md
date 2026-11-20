@@ -11128,6 +11128,212 @@ run here.
 row refused, the row that names the refusal is the part a host does not see until they scroll; the
 row itself still reads REFUSED. A scroll hint, or opening the scroll at its end, is the owner's call.
 
+### D-306 · **Ultra Wideband runs only for close pairs the game needs: the house pairs two phones only while Bluetooth says they are within about two and a half metres and a rule that reads a distance could fire between them (an armed Revoke, a report still to make, a sensor and a seat it could place); Bluetooth runs the rest of the game — built (recording stays 43; nothing on the wire moved)**
+
+**The ruling** (owner, 2026-11-20): *UWB only comes in play during precise measurement situations
+and Bluetooth is the one running most of the game.* With it, **the threat model, restated by the
+owner the same day**: the pairing may read roles and game state; a fact that lives only inside a
+player's own phone (its memory, its logs, a modified build) is not a leak and is not designed
+against. What still matters: nothing a person can see, hear or feel changes, and the wire stays one
+size and one cadence for every phone (D-217; uploads and `UploadHeard` keep their fixed widths, and a
+phone with no pairs still gets its full padded plan every second).
+
+**What it replaces.** D-300 paired every seat with its strongest Bluetooth peers up to its capacity,
+all round, however far apart, and read nothing but the seed and the seats, so that a plan could say
+nothing to whoever held that phone's seed. D-300's *Never a role* (its pairing item 6) and *Out seats
+range like any* are superseded. Everything D-302 added stands: displacement and its margin, the held
+room, the hand-back, the silence clock.
+
+**Now, the pairing** (core `Ranging.kt`). A pair is formed only while both hold:
+
+1. **Bluetooth says they are close**: the pair's strength (its strongest reading of the last three
+   seconds, either way round, D-300) at or above **`RangingGate.NEAR_RSSI_FLOOR` = −68 dBm**.
+2. **The game needs the pair** (`RangingNeed`, asked of every close pair on every upload at the
+   house's tick; the house's answer is `rangingNeeded`, read off the round as it stands after the
+   upload's own events). Never in a round that reads Bluetooth, before arming or after the end. Either
+   way round, one of:
+   - **A Revoke**: `revokeLands(actor, target, at)`, extracted from `Rules.contact`, which now asks it
+     of both halves of a touch: an open arm (`armedAt`), another seat, not already Revoked. And both
+     phones living (`readsDistancesOf`, extracted from the resolver's distance branch): a touch by
+     distance reads both phones and none of an out phone's.
+   - **A report**: `holdMayRun(reader)` and `holdMayTarget(reader, target)`, extracted from the
+     resolver's hold, which now calls them: a round that reads distance, a living reader, no meeting
+     running (D-301 decision 5); a Revoked seat not yet reported (S4). D-291's grace is not asked: it
+     lasts five seconds and the pair is wanted at its end.
+   - **The map**: `sensingRoom(state, sensor, at)`, extracted from `resolvePlacements`, which now
+     calls it, and `couldPlace`, extracted from `resolvePlacements` and `sensed`, which both call it.
+
+   The resolver's questions are read through `ContactFacts`, which `ContactHouse` (the resolver's
+   no-role view, unchanged in what it carries) and `RoundContactFacts` (the round as it stands) both
+   answer, so the pairing asks the rules' predicates and never a copy of them.
+3. **Every other pair is ranked as one not heard**: its strength is nothing, so it is never formed,
+   never ranks ahead of a needed pair (the entry rank, the keep rank and D-302's *ranked first* are
+   all among wanted pairs), and never displaces.
+4. **Entry is stricter than staying.** A pair forms, or displaces, only while close and needed on
+   that upload. A kept pair stays while it was close and needed within **`NEED_GRACE_TICKS` = 2 s**
+   (two uploads), then goes the way every pair goes: the house stops keeping it and each phone is
+   told Stop.
+5. **Unchanged**: one record per pair, both phones' tokens, the capacity bound, the keep margin, the
+   grace for a pair nobody lists, handles drawn from the seed, the plan's steps, the three-token pool,
+   and determinism (rule 4): the need is a function of the state, and the state of the recording.
+
+**Why −68** (provisional). The owner asked for roughly two to three metres. Measured phone to phone
+(D-233): 30 cm −43 and 1 m −57, about 27 dB a decade; carried on, 2 m reads about −65 and 3 m about
+−70, so −68 is about 2.6 m. It sits 28 dB under the contact floor (−40) and 7 dB over the room floor
+(−75); the map's 1.5 m reach reads about −62 on the same slope, 6 dB inside it, more than the 4 dB a
+reading jitters at one distance (D-302). On the bench's own curve (−30 at 5 cm, 20 dB a decade) it is
+four metres, so the benches' phones spread out a room apart (five metres, −70) are not close.
+
+**Why two seconds** (provisional). A pair's strength is already the strongest of three seconds of
+readings, so one weak reading does not push it under the floor; the grace covers the rest, a state
+that flickers for one upload or a reading that falls under the floor for one, so a session is not
+stopped one second and started again under a new handle the next. It is D-300's own shape: entry asks
+for more than staying does.
+
+**What changes in play, said plainly.**
+
+1. **A touch with no armed Revoke in it is, on distance, not measured** unless its pair is needed for
+   something else (a sensor beside a seat it could place): it mints nothing and answers nobody.
+   Before, D-216's padded `ContactAnswered` went to both phones of every measured touch. No phone
+   draws, lights or buzzes anything for `ContactAnswered` (D-216 item 4), so nothing a person can see,
+   hear or feel moves; and a touch after an early, refused arm reaches nobody exactly as a Resident's
+   touch does, so D-216's and D-239's parity holds (both now *nothing, for everybody*).
+2. **A Revoked phone is measured only while a living phone is close and it can still be reported.**
+   Once it is reported, it ranges nothing.
+3. **In a round that reads Bluetooth nothing is paired** (no rule reads a distance there, D-301).
+
+**The threat model, applied.** The KDoc that said the pairing never reads a role (`Ranging.kt`'s
+header, `rangingDeskFor`, `RoundAuthority.sight`) now gives D-306 and the ruling. The wire did not
+move: every upload is answered with one sealed plan of 1 714 characters, a phone with no pairs
+included, and the upload and `UploadHeard` widths are unchanged (the bench measures both, below). No
+other parity or redaction rule was touched; the resolver's `ContactHouse` still carries no role and
+no arm.
+
+**Rule 7.** The need is asked of every close pair on every upload, and the predicates' list scans
+(`any`, `firstOrNull`) each took an iterator, which the JVM did not always elide: the first measure
+read the house's ranging path at **2 371 B** per seat per beat (ceiling 2 048) and the holding variant
+at **+5 828 B** (ceiling 1 536). `GameState`'s seat lookups (`isRevoked`, `wasReported`,
+`isRestrained`, `armedAt`, `presenceFor`, `openSubroutineFor`, and a new `isSeated`) now walk their
+lists by index, with the same answers and nothing allocated. After (`RangingAllocationTest`, JVM,
+18 seats, ceilings unmoved): the ranging path **1 812 B** (was 1 839 at D-302; ceiling 2 048); the
+distance rules over Bluetooth's **−61 B** and holding **+130 B** (ceilings 1 024 and 1 536).
+
+**Recording: no change, 43 stays.** The pairing is still not recorded (D-300): it mints no event and
+changes no state the rules hold. Which pairs are ranged changes which distances reach the rules, as
+it did before.
+
+**Proved** (each red against its injected break first, then restored; quoted from the test XML):
+
+- **The need** (`RangingPairsTest`, core, 7 new, on the house's own need over a real round). A close
+  pair nobody needs, three phones within a metre for ten seconds with nobody armed, Revoked or at a
+  card: nothing formed, every plan empty; and in a round that reads Bluetooth, an armed Revoke
+  included, nothing. An armed Revoke: the Insider paired with exactly the three close phones it
+  could land on, and they not with each other. A Revoked seat not yet reported, whose phone hears
+  nobody: paired with exactly the two close living phones; once reported, both pairs still kept a
+  beat later and gone after the grace, each told Stop. A sensor at a card: paired with exactly the
+  two close phones it could place. A needed pair at 4.5 m (−69 on the bench): not paired; at 3.5 m
+  (−67): paired. An armed Revoke in a crowd of ten within a metre and a half, a Revoked seat among
+  them that nine phones want: the Insider ranged to its capacity of three, no phone past its
+  capacity beat by beat, every kept pair one the game needs. Two rounds with the same Revoked seat
+  and different Insiders, nobody armed: equal plans and pairs. *The need filter removed (a close
+  pair always wanted):* `three close phones the game does not need were paired expected:<[]> but
+  was:<[(0, 1), (0, 2), (1, 2)]>`; `the armed Insider is not paired with exactly the close phones its
+  Revoke could land on expected:<[(0, 1), (1, 2), (1, 3)]> but was:<[(0, 1), (0, 2), (1, 2), (1, 3),
+  (2, 3), (0, 3)]>`; `the Revoked seat is not paired with exactly the close living phones
+  expected:<[(0, 2), (1, 2)]> but was:<[(0, 1), (0, 2), (1, 2)]>`; `the sensor is not paired with
+  exactly the close phones it could place expected:<[(0, 1), (0, 2)]> but was:<[(0, 1), (0, 2), (1,
+  2)]>`; `a pair the game does not need was kept: [(0, 1), (1, 2), (2, 3), (0, 4), (4, 5), (1, 5), (5,
+  6), (2, 6), (6, 7), (3, 7), (4, 8), (8, 9)]`. *The need's grace at nothing:* `a pair whose need ended
+  went before its grace expected:<[RangingHandle(e4355252977e8c8a), RangingHandle(37a3eae245764dc1)]>
+  but was:<[]>`.
+- **Rule 7** (`RangingAllocationTest`, core JVM): the figures above. Before the lookups walked by
+  index: `the house's ranging path allocates 2371 bytes per seat per beat, over its ceiling of 2048
+  (rule 7, D-300)` and `holding reports adds 5828 bytes per seat per beat, over its ceiling of 1536
+  (rule 7, D-301)`.
+- **The bench over real sockets** (`RangingBenchTest`, app): five phones, real lobby and round
+  clients, the real beat. Four seconds with two close pairs and nobody armed: no phone ranging, the
+  house keeping nothing. The Insider arms: its close pair alone is ranged, each phone the other, and
+  the distances come back at 80 cm ±3 with 6 or 7 readings; a Revoke keeps the pair for the report,
+  the Revoked phone still ranging it 3 s later and both distances arriving; every upload 3 555 bytes
+  and every answer 1 904 bytes on every phone all round.
+- **UWB rounds still play to their end on the bench** (`ContactRadioBenchTest`'s five distance cases,
+  app): the touch of an armed Insider held against the target Revokes it by distance (the pair is
+  formed for the arm when the two phones come close), a living phone held 20 cm from the Revoked one
+  calls the meeting after two seconds with its slot filling on its own phone alone, and the round
+  plays to an ending; every answer one width on every phone while a report is held; a cancelled
+  hold; the Insider's own hold after D-291's grace; and a body between the two phones held together
+  still ranged (so it is the distance that refuses) and Revoking nobody. `AbilityWiringTest`'s armed
+  touches land through the phones' own REVOKE tiles.
+
+**Checked** (`./gradlew :model:check :core:check :harness:check :app:check --continue` in the worktree
+on `e15e300` plus this change, exit 0; every result XML counted with a python glob, the app's
+copied after each variant because the variant sweeps write into the same folder): model 352 (JVM)
+and 336 (iOS Simulator), core 416 (JVM) and 414 (iOS Simulator), harness 137, app 264 (debug), 157
+(release sweep) and 264 (playtest sweep): **no failures, none skipped**. `vocabularyLint` and
+`redactionLint` clean. Neither known load flake (`RealClocksTest`, `OutboundQueueTest`) fired. The
+eight-phone `ArrivalOrderTest` on Bluetooth: each round's touches landed after `[1850, 617, 518, 506,
+510, 494, 507]` ms. ui and platform were not run here; neither changed.
+
+**Tests changed, each deliberately.**
+
+- `RangingPairsTest` (core): the room asks a need that answers yes to every pair for the mechanics
+  (D-300, D-302), so those cases pin the pairing's arithmetic as before; the hysteresis case's
+  departing phone walks to 3.5 m instead of 7.5 m, so the keep margin and not the near floor is what
+  lets the pair go; `aRoleSwappedRoundAndARoundWithASeatOutPairExactlyAlike` is replaced by
+  `anUnarmedInsiderIsPairedExactlyAsAResidentIs` (the half about an out seat is now deliberately
+  untrue: a Revoked seat that can be reported is needed); `anOutPhoneThatHearsNobodyIsStillPairedByThePhonesThatHearIt`
+  is folded into the report case, whose Revoked phone hears nobody.
+- `RangingAllocationTest` (core JVM): both rooms read distance with the middle seat of each group
+  Revoked, so the room still holds twelve pairs the game needs (D-300's guard) and the distance and
+  holding variants still read distances (D-301's guard); the holding variant reads every Revoked
+  seat at 20 cm, not seat 4 alone.
+- `RangingBenchTest` (app, sockets): four seconds with two close pairs and nobody armed, and nobody is
+  told to range; the Insider arms, and its close pair alone is ranged, the other close pair not; the
+  Revoke then keeps that pair for the report, and the Revoked phone keeps ranging and reporting.
+- `ContactRadioBenchTest.ranged()` (app): a settled room may keep no pair at all, since phones spread
+  a room apart are not close; the touch or hold makes its own pair.
+- `ArrivalOrderTest`'s socket case (app) reads Bluetooth again: its eight phones' touches carry no
+  armed Revoke, so on distance none of them is measured. Its question, the arrival order, is the
+  same under either source (D-301); D-302's eight-phone proof of displacement goes with it, and
+  displacement stays pinned in core.
+- `AbilityWiringTest` (app), the two touches after an early, refused arm: they waited for a
+  `ContactAnswered`; on distance such a touch is not measured, so they now assert that it Revoked
+  nobody and that no frame reached any phone for it.
+
+**Decisions for the owner** (each provisional):
+
+1. **`NEAR_RSSI_FLOOR` = −68 dBm**, about 2.6 m on D-233's slope (above).
+2. **`NEED_GRACE_TICKS` = 2 s** (above).
+3. **In a round that reads Bluetooth nothing is paired**, the switch on or not.
+4. **The report's need does not ask D-291's grace**, so the Insider's phone stays paired with the
+   seat it just Revoked, ready for the report the owner allowed it after the grace.
+5. **A Revoke's need asks both phones living**, the resolver's own condition for a touch by distance.
+6. **An unarmed touch on distance is not measured** and answers nobody (above); `ArrivalOrderTest`
+   back on Bluetooth.
+7. **`GameState`'s seat lookups walk by index**, for rule 7.
+
+**Raised, not built.**
+
+1. **A brisk pass from out of range is at the edge.** At a walk (about 1.4 m/s) 2.6 m to a touch is
+   about two seconds; from the first close reading a pair needs one to two uploads to be started on
+   both phones and a beat for the radio to read. A deliberate approach is ranged well before it
+   touches. The floor, the cadence and the radio's start time are the phones' to measure (U1: *a
+   flyby counts*).
+2. **The radio now runs when the game needs it**, so an armed Insider's phone opens Nearby Interaction
+   sessions with the close phones it could land on, and a phone nobody needs opens none. The owner's
+   ruling covers what a phone itself holds and what a person perceives; two things only phones can
+   settle: **whether iOS shows anything on screen while a Nearby Interaction session runs** (if it
+   did, an armed phone would show it), and what a radio receiver in the room could read from the
+   sessions starting (the third leak surface, on-device radio sniffing).
+3. **On the Wi-Fi, a frame at a touch on distance now almost always is a landed Revoke**, because an
+   unarmed touch is no longer answered. A landed Revoke was already readable there (both phones'
+   frames, then the target's phone out) and is known to the target at once; nothing new is learned
+   about an Insider who does not Revoke. Raised because D-216 was written as *every touch puts one
+   frame on each phone that touched*.
+
+**Not on a phone.** The real phones range nothing yet (`NoRanging`, D-303's switch off by default),
+so the next phone session's rounds arm on Bluetooth and nothing here touches them.
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

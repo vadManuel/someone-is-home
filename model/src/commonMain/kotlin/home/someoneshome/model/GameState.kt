@@ -380,12 +380,17 @@ class GameState private constructor(
     fun roleOf(seat: Seat): Role =
         if (insiderSeats.any { it.index == seat.index }) Role.Insider else Role.Resident
 
-    fun isRevoked(seat: Seat): Boolean = revoked.any { it.index == seat.index }
+    /**
+     * **These lookups walk their lists by index** (rule 7, D-306): the house's UWB pairing asks them
+     * of every close pair on every upload, and an iterator per question, which the JVM did not always
+     * elide, cost the house about five kilobytes a seat a second. Same answers, no allocation.
+     */
+    fun isRevoked(seat: Seat): Boolean = holdsSeat(revoked, seat)
 
     /** Whether a meeting has already been called to report [seat] this round ([reported], S4). */
-    fun wasReported(seat: Seat): Boolean = reported.any { it.index == seat.index }
+    fun wasReported(seat: Seat): Boolean = holdsSeat(reported, seat)
 
-    fun isRestrained(seat: Seat): Boolean = restrained.any { it.index == seat.index }
+    fun isRestrained(seat: Seat): Boolean = holdsSeat(restrained, seat)
 
     /**
      * In the building, outside the system — Revoked or Restrained, said once.
@@ -406,8 +411,13 @@ class GameState private constructor(
      * **Whether [seat] holds an armed Revoke at [at]**: armed, and its window still open (the
      * owner's 2026-11-18 ruling). The one question the contact asks, so a lapsed arm lands nothing.
      */
-    fun armedAt(seat: Seat, at: Tick): Boolean =
-        revokeArms.any { it.seat.index == seat.index && it.openAt(at) }
+    fun armedAt(seat: Seat, at: Tick): Boolean {
+        for (i in 0 until revokeArms.size) {
+            val arm = revokeArms[i]
+            if (arm.seat.index == seat.index && arm.openAt(at)) return true
+        }
+        return false
+    }
 
     /**
      * **The round is over.** Derived rather than stored — see [outcome].
@@ -470,8 +480,10 @@ class GameState private constructor(
     fun withEgress(egress: Egress?): GameState = copy(egress = egress)
 
     /** What this seat has open, or null for a seat the house has assigned nothing. */
-    fun openSubroutineFor(seat: Seat): OpenSubroutine? =
-        openSubroutines.firstOrNull { it.seat.index == seat.index }
+    fun openSubroutineFor(seat: Seat): OpenSubroutine? {
+        for (i in 0 until openSubroutines.size) if (openSubroutines[i].seat.index == seat.index) return openSubroutines[i]
+        return null
+    }
 
     /** This seat's work order, or null for a seat that was never drawn one. */
     fun workOrderFor(seat: Seat): WorkOrder? =
@@ -562,7 +574,13 @@ class GameState private constructor(
     }
 
     /** This seat's performance window, or null for a seat the house has never placed. */
-    fun presenceFor(seat: Seat): Presence? = presence.firstOrNull { it.seat.index == seat.index }
+    fun presenceFor(seat: Seat): Presence? {
+        for (i in 0 until presence.size) if (presence[i].seat.index == seat.index) return presence[i]
+        return null
+    }
+
+    /** Whether [seat] is one of the round's [seats]. By index, as [isRevoked] (rule 7, D-306). */
+    fun isSeated(seat: Seat): Boolean = holdsSeat(seats, seat)
 
     /**
      * Replace one seat's presence row, leaving every other row and the list's order alone.
@@ -947,4 +965,10 @@ data class Touch(val at: Tick, val a: Seat, val b: Seat) {
     /** Whether a contact between [x] and [y] at [at] is this touch, in either order. */
     fun joins(at: Tick, x: Seat, y: Seat): Boolean = this.at == at &&
         ((a.index == x.index && b.index == y.index) || (a.index == y.index && b.index == x.index))
+}
+
+/** Whether [seats] holds [seat], by index, allocating nothing (rule 7, D-306). */
+private fun holdsSeat(seats: List<Seat>, seat: Seat): Boolean {
+    for (i in 0 until seats.size) if (seats[i].index == seat.index) return true
+    return false
 }

@@ -109,16 +109,16 @@ class ArrivalOrderTest {
         /** Every push this phone was sent, decoded, in arrival order. */
         val pushed = mutableListOf<RoundMessage>()
 
+        // No UWB radio, and capacity 0 in the lobby: the round reads Bluetooth (D-306, below).
         val round = RoundClient(
             scope, flow, LineWatch {}, HouseBuzzer(SilentHaptics), air.radioFor(radioSpot), wake,
-            ranging = air.rangingFor(radioSpot, SimulatedAir.BENCH_CAPACITY),
         ) {}.also { made ->
             client = made
             made.onMessage = { pushed += it }
         }
 
         val link = LobbyOverTransport(
-            scope, rangingCapacity = { SimulatedAir.BENCH_CAPACITY }, onEvent = {}, seat = Kept(),
+            scope, onEvent = {}, seat = Kept(),
             // `CheatRoot`'s doors, exactly.
             onIntent = HouseDoors(house)::heard,
             onEgressFired = HouseDoors(house)::fired,
@@ -190,13 +190,14 @@ class ArrivalOrderTest {
      * phone is answered exactly once per touch it was in, nothing goes out against a newer state, and
      * every phone's stream is exactly what the house sent it, in the house's order.
      *
-     * **On distance, at the phones' starting capacity of three** (D-302). Each phone touches a
-     * partner drawn afresh every round, so most touches are between two phones the house is not
-     * ranging when they meet, and both are full. D-301 kept this bench on Bluetooth because under
-     * D-300's pairing such a pair was never ranged (two touches of seven landed for the host's
-     * phone). Now the pair both phones rank first displaces a kept pair, so **GUARD (D-302): every
-     * held touch lands, each round's within [TOUCH_LANDS_MILLIS]**; each pair is held until its
-     * touch has landed, then let go, inside the pair's five-second grace, so a touch is one touch.
+     * **On Bluetooth** (D-306). D-302 played it on distance at three a phone, to show that a held
+     * touch between two phones the house was not ranging is ranged by displacement. Since D-306 the
+     * house ranges only close pairs the game needs, and a touch with no armed Revoke in it needs no
+     * pair, so on distance these touches are never measured and answer nobody: the question here,
+     * the arrival order, is the same under either source (D-301), so the bench reads Bluetooth again.
+     * D-302's displacement stays pinned in core (`RangingPairsTest`). Each pair is held until its
+     * touch has landed, each round's within [TOUCH_LANDS_MILLIS], then let go, inside the pair's
+     * five-second grace, so a touch is one touch.
      */
     @Test
     fun manyTouchesAtOnceOverTheSocketsAnswerEachToucherOncePerTouch() = runBlocking {
@@ -231,7 +232,7 @@ class ArrivalOrderTest {
                 until("every line reached the house") { host.model.standing.linesIn == phones.size }
                 air.spreadOut(phones.map { it.radioSpot })
                 assertTrue(armAtLightsOut(house, hosting = true, seed = SEED, note = { said += it }), "the round never armed: $said")
-                assertEquals(ContactSource.Uwb, house.state.contactSource, "every phone ranges and the round did not arm on distance")
+                assertEquals(ContactSource.Rssi, house.state.contactSource, "no phone ranges and the round did not arm on Bluetooth")
                 until("every phone holds the round's seed") { phones.all { it.round.round.uploading } }
                 val seatOf = phones.associateWith { p -> house.state.names.single { it.name == p.name }.seat.index }
                 // The house's clock runs on real time, as the app's tick driver runs it; only the
@@ -272,7 +273,7 @@ class ArrivalOrderTest {
                     delay(SightingUpload.CADENCE_MILLIS + 500)
                 }
                 assertTrue(!house.state.ended, "the round ended mid-test: $said")
-                println("D-302 EIGHT PHONES ON DISTANCE AT CAPACITY ${SimulatedAir.BENCH_CAPACITY} — each round's touches all landed after $landedAfter ms")
+                println("D-306 EIGHT PHONES ON BLUETOOTH — each round's touches all landed after $landedAfter ms")
                 landedAfter.forEachIndexed { r, ms ->
                     assertTrue(ms <= TOUCH_LANDS_MILLIS, "round $r's held touches took $ms ms to land, over $TOUCH_LANDS_MILLIS")
                 }
@@ -376,11 +377,9 @@ class ArrivalOrderTest {
         const val CLOCK_STEP_MILLIS = 50L
 
         /**
-         * **A held touch between two phones the house is not ranging lands within eight seconds**
-         * (D-302). The pairing needs three beats (the stops, the second spare, the second start) and
-         * the radio one more for both phones' readings: about five seconds on the bench's cadence,
-         * and a held touch is ranged before eight have passed, with three to spare for a loaded
-         * machine's late beat.
+         * **A held touch lands within eight seconds.** D-302's bound for a touch on distance between
+         * two phones the house was not ranging; on Bluetooth (D-306) a touch lands in about two
+         * beats, and the bound is kept as it was, with room for a loaded machine's late beat.
          */
         const val TOUCH_LANDS_MILLIS = 8_000L
     }

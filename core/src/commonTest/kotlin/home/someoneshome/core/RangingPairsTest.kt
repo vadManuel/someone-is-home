@@ -3,7 +3,10 @@ package home.someoneshome.core
 import home.someoneshome.model.Balance
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
+import home.someoneshome.model.ContactSource
 import home.someoneshome.model.Hmac
+import home.someoneshome.model.MarkerId
+import home.someoneshome.model.Presence
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
 import home.someoneshome.model.protocol.RangingHandle
@@ -24,23 +27,58 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 /**
- * **The house's UWB pairing (U6, D-300)**: symmetric, never past a phone's capacity, deterministic,
- * slow to churn, dealt handles that say nothing about a seat, and blind to roles and to who is out.
+ * **The house's UWB pairing (U6, D-300, D-306)**: symmetric, never past a phone's capacity,
+ * deterministic, slow to churn, dealt handles that say nothing about a seat, and, since D-306, only
+ * for close pairs the game needs.
  *
  * Phones here are small models of the radio's pool ([Phone]): they offer one spare per free session,
  * take a Start on the spare it names, drop a pair on a Stop and open a fresh spare in its place, and
  * list every pair they hold in the next report. Bluetooth is the bench curve, −30 dBm at 5 cm and
- * −20 dB a decade, heard by every phone that is not out.
+ * −20 dB a decade, heard by every phone that is not out: on it [RangingGate.NEAR_RSSI_FLOOR] (−68)
+ * is about four metres.
+ *
+ * **The need.** The mechanics (D-300, D-302) are tested with a need that answers yes to every pair
+ * ([every]), so that what they pin is the pairing's own arithmetic, as before D-306. The cases under
+ * *Only close pairs the game needs* run the house's own need ([RoundRangingNeed]) over a real round.
  */
 class RangingPairsTest {
+
+    private companion object {
+        val TERMINAL = MarkerId("T")
+    }
 
     private val second = Balance.TICKS_PER_SECOND
 
     /** How many beats a held pair the house never picked may take to be ranged (D-302). */
     private val displaceBeats = 3
 
-    private fun armed(seats: Int, insiders: List<Int> = listOf(1), seed: Long = 20261119L): GameState =
-        reduce(GameState.EMPTY, Event.RoundArmed(Tick(0), seed = seed, seats = (0 until seats).map { Seat(it) }, insiders = insiders.map { Seat(it) })).state
+    private fun armed(seats: Int, insiders: List<Int> = listOf(1), seed: Long = 20261119L, source: ContactSource = ContactSource.Rssi): GameState =
+        reduce(
+            GameState.EMPTY,
+            Event.RoundArmed(
+                Tick(0), seed = seed, seats = (0 until seats).map { Seat(it) }, insiders = insiders.map { Seat(it) },
+                contactSource = source, terminal = TERMINAL, terminalRoom = "ROOM 0",
+            ),
+        ).state
+
+    /** A round that reads distance (D-301), the only kind in which the game needs a pair (D-306). */
+    private fun onDistance(seats: Int, insiders: List<Int> = listOf(1)): GameState = armed(seats, insiders, source = ContactSource.Uwb)
+
+    /** The tick an Insider's Revoke can first be armed: the cooldown starts at half (D-132). */
+    private val ready = Balance.REVOKE_COOLDOWN / 2
+
+    /** [state] with [seat]'s Revoke armed at [at], through the rules. */
+    private fun withArm(state: GameState, seat: Int, at: Long): GameState =
+        reduce(state, Event.RevokeArmed(Tick(at), Seat(seat))).state.also {
+            assertTrue(it.armedAt(Seat(seat), Tick(at)), "the fixture: seat $seat's Revoke did not arm")
+        }
+
+    /** [state] with [seat] performing at the T card since [since]: a sensor ([sensingRoom]). */
+    private fun withSensor(state: GameState, seat: Int, since: Long): GameState =
+        state.copy(presence = state.presence.filter { it.seat.index != seat } + Presence(Seat(seat), TERMINAL, open = true, since = Tick(since)))
+
+    /** A need that answers yes to every pair: the mechanics alone, as before D-306. */
+    private val every = RangingNeed { _, _, _ -> true }
 
     private fun bytes(vararg v: Long): ByteArray = Hmac.sha256(byteArrayOf(3), ByteArray(8 * v.size) { i -> (v[i / 8] ushr (56 - 8 * (i % 8))).toByte() })
 
@@ -91,12 +129,16 @@ class RangingPairsTest {
         return (-30.0 - 20.0 * log10(d / 0.05)).roundToInt().coerceAtLeast(-100)
     }
 
-    /** One room: phones at spots, uploads fed one at a time, every plan applied and kept. */
     /** What the pairing holds, read out: its pairs and how many it has formed. */
     private data class Held(val pairs: List<RangingPair>, val formed: Long)
 
-    private inner class Room(var state: GameState, val phones: List<Phone>) {
+    /**
+     * One room: phones at spots, uploads fed one at a time, every plan applied and kept. [byTheGame]
+     * asks the house's own need of [state] as it stands on each upload; otherwise [every].
+     */
+    private inner class Room(var state: GameState, val phones: List<Phone>, val byTheGame: Boolean = false) {
         val pairing = rangingDeskFor(state).pairing
+        private val roundNeed = RoundRangingNeed()
         val memory: Held get() = Held(pairing.pairs(), pairing.pairsFormed)
         val spots = HashMap<Int, Spot>()
         val deaf = HashSet<Int>()
@@ -111,7 +153,8 @@ class RangingPairsTest {
 
         fun up(phone: Phone, report: RangingReport? = phone.report(), taken: Boolean = true): RangingPlan {
             for ((seat, rssi) in heardBy(phone.seat)) pairing.hear(seat.index, rssi)
-            pairing.arrive(Tick(tick), Seat(phone.seat), report, taken)
+            roundNeed.state = state
+            pairing.arrive(Tick(tick), Seat(phone.seat), report, taken, if (byTheGame) roundNeed else every)
             val plan = pairing.planned()
             phone.apply(plan)
             plans += phone.seat to plan
@@ -235,10 +278,11 @@ class RangingPairsTest {
         repeat(5) { room.beat() }
         assertEquals(ab.handle, room.memory.pairs.single { it.has(Seat(0)) }.handle, "a peer just ahead of the kept one displaced it")
         assertTrue(room.plans.takeLast(5).all { (s, p) -> s != 0 || p.steps == listOf(RangingStep.Keep(ab.handle)) }, "seat 0 was told anything but keep")
-        // B walks away, past the margin (three phones nearer to A than B is): the pair goes.
+        // B walks away, past the margin (three phones nearer to A than B is): the pair goes. B stays
+        // inside the near floor (3.5 m, −67 on the bench), so it is the margin that lets it go (D-306).
         room.spots[3] = Spot(0.3, 0.3)
         room.spots[4] = Spot(0.2, -0.4)
-        room.spots[1] = Spot(7.5, 0.0)
+        room.spots[1] = Spot(3.5, 0.0)
         repeat(4) { room.beat() }
         assertTrue(room.memory.pairs.none { it.handle == ab.handle }, "the pair outlived falling out of reach")
         assertTrue(room.plans.any { (s, p) -> s == 1 && RangingStep.Stop(ab.handle) in p.steps }, "seat 1 was never told to stop")
@@ -571,36 +615,171 @@ class RangingPairsTest {
         assertTrue(looked > 0, "no seat in the crowd was dealt five handles, so the check saw nothing")
     }
 
-    // ---- Never a role, and out seats range ------------------------------------------------------
+    // ---- Only close pairs the game needs (D-306) ---------------------------------------------------
 
-    @Test
-    fun aRoleSwappedRoundAndARoundWithASeatOutPairExactlyAlike() {
-        val caps = listOf(3, 2, 3, 1, 4, 3, 3, 2)
-        val base = crowd(caps, state = armed(caps.size, insiders = listOf(1)))
-        val swapped = crowd(caps, state = armed(caps.size, insiders = listOf(4, 6)))
-        assertEquals(base.plans, swapped.plans, "the plans moved with who the Insiders are")
-        assertEquals(base.memory, swapped.memory, "the pairs moved with who the Insiders are")
-        val ready = Balance.REVOKE_COOLDOWN / 2
-        val withOut = listOf(
-            Event.RevokeArmed(Tick(ready + 1), Seat(1)),
-            Event.ContactMade(Tick(ready + 2), Seat(1), Seat(5)),
-        ).fold(armed(caps.size, insiders = listOf(1))) { s, e -> reduce(s, e).state }
-        assertTrue(withOut.isOut(Seat(5)), "the fixture put nobody out")
-        val out = crowd(caps, state = withOut)
-        assertEquals(base.plans, out.plans, "the plans moved with who is out")
-    }
+    /** Every pair the house keeps, as (low, high) seat numbers. */
+    private fun Room.kept(): Set<Pair<Int, Int>> = memory.pairs.map { it.low.index to it.high.index }.toSet()
 
+    /** Whether every pair the house keeps is held by both its phones. */
+    private fun Room.allHeld(): Boolean = memory.pairs.all { it.handle in phones[it.low.index].held && it.handle in phones[it.high.index].held }
+
+    /**
+     * **GUARD (D-306): a close pair the game does not need is never paired.** Three phones within a
+     * metre of each other in a round that reads distance, nobody armed, nobody Revoked, nobody at a
+     * card: for ten seconds the house forms nothing and tells every phone nothing. And in a round
+     * that reads Bluetooth nothing is needed, an armed Revoke included (D-301: no rule reads a
+     * distance there).
+     */
     @Test
-    fun anOutPhoneThatHearsNobodyIsStillPairedByThePhonesThatHearIt() {
-        val living = Phone(0)
-        val out = Phone(1)
-        val room = Room(armed(2), listOf(living, out))
-        room.deaf += 1 // a Revoked phone advertises and never scans (D-008)
+    fun aClosePairTheGameDoesNotNeedIsNeverPaired() {
+        val phones = (0 until 3).map { Phone(it) }
+        val room = Room(onDistance(4), phones, byTheGame = true)
         room.spots[0] = Spot(0.0, 0.0)
         room.spots[1] = Spot(0.6, 0.0)
+        room.spots[2] = Spot(0.3, 0.5)
+        room.tick = ready
+        repeat(10) { room.beat() }
+        assertEquals(emptySet(), room.kept(), "three close phones the game does not need were paired")
+        assertEquals(0L, room.memory.formed, "a pair the game does not need was formed")
+        assertTrue(room.plans.all { (_, p) -> p.steps.isEmpty() }, "a phone the game does not need was told to range")
+
+        val onBluetooth = Room(withArm(armed(4), 1, ready + 1), (0 until 3).map { Phone(it) }, byTheGame = true)
+        onBluetooth.spots.putAll(room.spots)
+        onBluetooth.tick = ready
+        repeat(10) { onBluetooth.beat() }
+        assertEquals(emptySet(), onBluetooth.kept(), "a round that reads Bluetooth paired phones for UWB")
+    }
+
+    /**
+     * **GUARD (D-306): an armed Revoke pairs the Insider with the close phones it could land on**, and
+     * nothing else: the other close phones, with no need of their own, stay unpaired.
+     */
+    @Test
+    fun anArmedRevokePairsTheInsiderWithTheClosePhonesItCouldLandOn() {
+        val phones = (0 until 4).map { Phone(it) }
+        val room = Room(withArm(onDistance(4, insiders = listOf(1)), 1, ready + 1), phones, byTheGame = true)
+        room.spots[0] = Spot(0.0, 0.0)
+        room.spots[1] = Spot(0.8, 0.0)
+        room.spots[2] = Spot(0.4, 0.7)
+        room.spots[3] = Spot(1.2, 0.6)
+        room.tick = ready + 1
+        repeat(4) { room.beat() }
+        assertEquals(setOf(0 to 1, 1 to 2, 1 to 3), room.kept(), "the armed Insider is not paired with exactly the close phones its Revoke could land on")
+        assertTrue(room.allHeld(), "a pair the house keeps is not held by both its phones")
+    }
+
+    /**
+     * **GUARD (D-306): a Revoked seat that can still be reported is paired with the close living
+     * phones**, and they not with each other. The Revoked phone hears nobody (it advertises and never
+     * scans, D-008), and is ranked by the phones that hear it. Once the seat is reported (S4) the
+     * need ends: the pairs stay for [RangingGate.NEED_GRACE_TICKS] and then go, every phone told Stop.
+     */
+    @Test
+    fun aRevokedSeatThatCanStillBeReportedIsPairedAndLetGoAfterTheGraceOnceReported() {
+        val phones = (0 until 3).map { Phone(it) }
+        val room = Room(onDistance(3, insiders = listOf(0)).copy(revoked = listOf(Seat(2))), phones, byTheGame = true)
+        room.deaf += 2
+        room.spots[0] = Spot(0.0, 0.0)
+        room.spots[1] = Spot(0.7, 0.0)
+        room.spots[2] = Spot(0.3, 0.6)
+        repeat(4) { room.beat() }
+        assertEquals(setOf(0 to 2, 1 to 2), room.kept(), "the Revoked seat is not paired with exactly the close living phones")
+        assertTrue(room.allHeld(), "the Revoked phone is not ranging, so nobody can measure it")
+        val handles = room.memory.pairs.map { it.handle }
+
+        // Reported: no hold can start on it again, so the game needs neither pair.
+        room.state = room.state.copy(reported = listOf(Seat(2)))
+        room.beat()
+        assertEquals(handles, room.memory.pairs.map { it.handle }, "a pair whose need ended went before its grace")
+        repeat((RangingGate.NEED_GRACE_TICKS / second).toInt() + 1) { room.beat() }
+        assertEquals(emptySet(), room.kept(), "a pair whose need ended outlived its grace")
+        for (h in handles) {
+            assertTrue(room.plans.any { (_, p) -> RangingStep.Stop(h) in p.steps }, "the pair $h was never stopped")
+        }
+        assertTrue(phones.all { it.held.isEmpty() }, "a phone still ranges a pair the game no longer needs")
+    }
+
+    /** **GUARD (D-306): a sensor is paired with the close phones it could place**, and they not with each other. */
+    @Test
+    fun aSensorIsPairedWithTheClosePhonesItCouldPlace() {
+        val phones = (0 until 3).map { Phone(it) }
+        val room = Room(withSensor(onDistance(3), 0, since = 1), phones, byTheGame = true)
+        room.spots[0] = Spot(0.0, 0.0)
+        room.spots[1] = Spot(1.2, 0.0)
+        room.spots[2] = Spot(0.5, 1.0)
+        repeat(4) { room.beat() }
+        assertEquals(setOf(0 to 1, 0 to 2), room.kept(), "the sensor is not paired with exactly the close phones it could place")
+        assertTrue(room.allHeld(), "a pair the house keeps is not held by both its phones")
+    }
+
+    /**
+     * **GUARD (D-306): a needed pair below the near floor is not paired**, and is once it walks in.
+     * An armed Insider and a phone 4.5 m off (−69 on the bench, under −68): nothing. At 3.5 m (−67):
+     * paired.
+     */
+    @Test
+    fun aNeededPairBelowTheNearFloorIsNotPaired() {
+        val phones = (0 until 2).map { Phone(it) }
+        val room = Room(withArm(onDistance(3, insiders = listOf(1)), 1, ready + 1), phones, byTheGame = true)
+        room.spots[0] = Spot(0.0, 0.0)
+        room.spots[1] = Spot(4.5, 0.0)
+        room.tick = ready + 1
+        repeat(6) { room.beat() }
+        assertEquals(emptySet(), room.kept(), "a needed pair under the near floor was paired")
+        room.spots[1] = Spot(3.5, 0.0)
         repeat(3) { room.beat() }
-        val pair = room.memory.pairs.single()
-        assertTrue(pair.handle in out.held && pair.handle in living.held, "the out phone is not ranging, so nobody can measure it")
+        assertEquals(setOf(0 to 1), room.kept(), "a needed pair inside the near floor was not paired")
+    }
+
+    /**
+     * **GUARD (D-306): an armed Revoke in a crowd still pairs the Insider, within its capacity.** Ten
+     * phones within a metre and a half, every one of capacity three; seat 7 is Revoked, so nine
+     * living phones could report it and all want it. The Insider (seat 4) arms: it is paired to its
+     * capacity, every pair the house keeps is one the game needs, and no phone is past its capacity,
+     * beat by beat.
+     */
+    @Test
+    fun aRevokeArmedInACrowdStillPairsTheInsiderWithinItsCapacity() {
+        val phones = (0 until 10).map { Phone(it) }
+        val base = onDistance(10, insiders = listOf(4)).copy(revoked = listOf(Seat(7)))
+        val room = Room(base, phones, byTheGame = true)
+        room.deaf += 7
+        for (i in 0 until 10) room.spots[i] = Spot((i % 4) * 0.45, (i / 4) * 0.5)
+        room.tick = ready
+        repeat(4) { room.beat() }
+        room.state = withArm(room.state, 4, room.tick)
+        var beats = 0
+        while (beats < 10 && (room.pairs(4).size < 3 || !room.allHeld())) {
+            room.beat()
+            beats++
+            for (p in phones) assertTrue(room.pairs(p.seat).size <= p.capacity, "seat ${p.seat} is in ${room.pairs(p.seat).size} pairs at capacity ${p.capacity}")
+        }
+        println("D-306 AN ARMED REVOKE IN A CROWD — the Insider ranging ${room.pairs(4).size} after $beats beats; pairs ${room.kept()}")
+        assertEquals(3, room.pairs(4).size, "the armed Insider was not paired to its capacity in a crowd (pairs ${room.kept()})")
+        assertTrue(room.allHeld(), "a pair the house keeps is not held by both its phones")
+        assertTrue(room.kept().all { (a, b) -> a == 4 || b == 4 || a == 7 || b == 7 }, "a pair the game does not need was kept: ${room.kept()}")
+    }
+
+    /**
+     * **The need reads what the rules would act on, not a role** (D-306). Two rounds with the same
+     * Revoked seat and different Insiders, nobody armed, pair exactly alike: an unarmed Insider is
+     * paired as any Resident is.
+     */
+    @Test
+    fun anUnarmedInsiderIsPairedExactlyAsAResidentIs() {
+        val caps = listOf(3, 2, 3, 1, 4, 3, 3, 2)
+        fun round(insiders: List<Int>): Room {
+            val room = Room(onDistance(caps.size, insiders).copy(revoked = listOf(Seat(5))), caps.mapIndexed { i, c -> Phone(i, c) }, byTheGame = true)
+            room.deaf += 5
+            for (i in caps.indices) room.spots[i] = Spot((i % 3) * 0.9, (i / 3) * 0.8)
+            repeat(6) { room.beat() }
+            return room
+        }
+        val base = round(listOf(1))
+        val swapped = round(listOf(4, 6))
+        assertTrue(base.memory.pairs.isNotEmpty(), "the fixture paired nobody")
+        assertEquals(base.plans, swapped.plans, "the plans moved with who the Insiders are")
+        assertEquals(base.memory, swapped.memory, "the pairs moved with who the Insiders are")
     }
 
     // ---- A second delivery -----------------------------------------------------------------------

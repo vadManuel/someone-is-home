@@ -299,7 +299,9 @@ class AbilityWiringTest {
     /**
      * **GUARD (rule 1, D-239): an early hold is sent exactly the same way, arms nothing, and the tile
      * does not say ARMED.** The request is the same either way; the house answers nobody either way;
-     * the touch after it is an ordinary touch. Before D-239 this test asserted the tile said ARMED,
+     * the touch after it is an ordinary touch, which on distance nothing measures since D-306 (the
+     * house ranges only close pairs the game needs, and nothing is armed), so it reaches no phone, as
+     * a Resident's does not. Before D-239 this test asserted the tile said ARMED,
      * which is the owner's two-phone failure written down as correct: ARMED over a refused arm.
      */
     @Test
@@ -321,8 +323,8 @@ class AbilityWiringTest {
         assertEquals(before, room.frames(), "a refused arm was answered on a socket")
 
         room.touch(insider, target)
-        until("the touch was answered") { insider.pushed.any { it is RoundMessage.ContactAnswered } }
         assertFalse(room.house.state.isRevoked(room.target), "an unarmed touch Revoked the target")
+        assertEquals(before, room.frames(), "an unarmed touch on distance was answered on a socket; since D-306 nothing measures it")
     }
 
     /**
@@ -334,8 +336,9 @@ class AbilityWiringTest {
      * presses anything, so it cannot quietly drift back to a guest.
      *
      * It replays that session in order: an arm inside the opening half-cooldown (D-132), which the
-     * house refuses in silence and now says so in its log, and a touch that is answered as a plain
-     * touch; then an arm past the clock, which arms, and a touch that lands.
+     * house refuses in silence and now says so in its log, and a touch that lands nothing (on
+     * distance, since D-306, one nothing measures and no phone is answered for); then an arm past
+     * the clock, which arms, and a touch that lands.
      */
     @Test
     fun theHostsOwnRevokeTileArmsItsOwnHouseAndTheTouchAfterItLands() =
@@ -357,9 +360,10 @@ class AbilityWiringTest {
                 Regex("""REVOKE ARM — SEAT $seat · COOLING DOWN \(READY IN \d+S\)""").matches(early),
                 "the house did not say the early arm was cooling down: $early",
             )
+            val quiet = room.frames()
             room.touch(host, target)
-            until("the early touch was answered") { host.pushed.any { it is RoundMessage.ContactAnswered } }
             assertFalse(room.house.state.isRevoked(room.target), "a touch after a refused arm Revoked the target")
+            assertEquals(quiet, room.frames(), "a touch after a refused arm was answered on distance; since D-306 nothing measures it")
             assertTrue(host.pushed.none { it is RoundMessage.AbilityFired }, "a touch after a refused arm fired")
 
             // 2. Past the clock: the same press, the same way up, and this time it arms and says so.

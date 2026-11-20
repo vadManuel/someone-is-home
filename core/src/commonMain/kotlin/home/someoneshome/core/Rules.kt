@@ -1119,8 +1119,8 @@ private fun contact(state: GameState, event: Event.ContactMade): Reduction<GameS
     // it in first. The actor's is read first, so two armed Insiders touching resolve as they always
     // did when the lower seat's half came first: the actor's lands, and the target, now Revoked,
     // is disarmed (R2) and lands nothing.
-    val outward = actorArmed && !state.isRevoked(target) && !self
-    val inward = !outward && targetArmed && !state.isRevoked(actor)
+    val outward = !echo && state.revokeLands(actor, target, event.at)
+    val inward = !outward && !echo && state.revokeLands(target, actor, event.at)
     val landed: Seat? = when {
         outward -> target
         inward -> actor
@@ -1197,6 +1197,17 @@ private fun contact(state: GameState, event: Event.ContactMade): Reduction<GameS
     }
     return Reduction(next, effects)
 }
+
+/**
+ * **Whether a touch at [at] lands [actor]'s Revoke on [target]**: [actor] holds an armed Revoke
+ * whose window is open ([GameState.armedAt]), [target] is another seat and is not already Revoked.
+ * The one question [contact] asks of each half of a touch, asked of the actor's half first.
+ *
+ * **The house's UWB pairing asks it too** (D-306): a pair is worth ranging for a Revoke only while a
+ * touch between the two could land one, so the pairing reads this and never a copy of it.
+ */
+internal fun GameState.revokeLands(actor: Seat, target: Seat, at: Tick): Boolean =
+    !sameSeat(actor, target) && armedAt(actor, at) && !isRevoked(target)
 
 /**
  * **A phone's radio went down, and the house writes down what D-187 lets it say** (T2, D-222;

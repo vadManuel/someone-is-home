@@ -122,34 +122,57 @@ object SensingGate {
  * allocates nothing; a sensor's costs one small list and the event.
  */
 fun resolvePlacements(at: Tick, book: ContactBook?, upload: ContactUpload, state: GameState): Event.Sensed? {
-    if (!state.armed || state.ended || state.meeting != null || book == null) return null
+    if (book == null) return null
     val sensor = upload.seat
-    if (state.seats.none { it.index == sensor.index } || state.isOut(sensor)) return null
-    val row = state.presenceFor(sensor) ?: return null
-    val card = row.at ?: return null
-    if (row.since < state.shiftStartedAt) return null
-    val working = row.open || state.openSubroutineFor(sensor)?.armed == true
-    if (!working && at.step - row.since.step > SensingGate.SCAN_SWEEP) return null
-    val room = state.roomOfCard(card) ?: return null
+    val room = sensingRoom(state, sensor, at) ?: return null
 
     val heard = ArrayList<Seat>(4)
     when (state.contactSource) {
         ContactSource.Rssi -> for (sighting in upload.sightings) {
             if (!SensingGate.inRoom(sighting.rssi)) continue
             val seat = book.seatOf[sighting.token] ?: continue
-            if (seat.index == sensor.index || state.isOut(seat)) continue
+            if (!couldPlace(state, sensor, seat)) continue
             if (heard.none { it.index == seat.index }) heard += seat
         }
         ContactSource.Uwb -> for (distance in upload.distances) {
             if (!SensingGate.inRoomReach(distance.cm)) continue
             val seat = distance.target
-            if (seat.index == sensor.index || state.isOut(seat) || state.seats.none { it.index == seat.index }) continue
+            if (!couldPlace(state, sensor, seat)) continue
             if (heard.none { it.index == seat.index }) heard += seat
         }
     }
     heard.sortBy { it.index }
     return Event.Sensed(at, sensor, room, heard)
 }
+
+/**
+ * **The room [sensor] senses in at [at], or null when it is not a sensor** ([resolvePlacements]'s
+ * definition, one place): the round armed and not over, no meeting running, a living seat of the
+ * round, placed by the house at a card this shift, performing (a window open or a Subroutine armed)
+ * or within [SensingGate.SCAN_SWEEP] of the scan or close that put it there, at a card the house's
+ * own map can put in a room.
+ *
+ * **The house's UWB pairing asks it too** (D-306): a pair is worth ranging for the map only while
+ * one of its seats is a sensor. Allocates nothing.
+ */
+internal fun sensingRoom(state: GameState, sensor: Seat, at: Tick): String? {
+    if (!state.armed || state.ended || state.meeting != null) return null
+    if (!state.isSeated(sensor) || state.isOut(sensor)) return null
+    val row = state.presenceFor(sensor) ?: return null
+    val card = row.at ?: return null
+    if (row.since < state.shiftStartedAt) return null
+    val working = row.open || state.openSubroutineFor(sensor)?.armed == true
+    if (!working && at.step - row.since.step > SensingGate.SCAN_SWEEP) return null
+    return state.roomOfCard(card)
+}
+
+/**
+ * **Whether [sensor] may place [seat]**: another seat of the round, and living (D-155). What
+ * [resolvePlacements] asks of every seat an upload heard and [sensed] asks again of every seat it
+ * places, and what the house's UWB pairing asks of a sensor's peers (D-306).
+ */
+internal fun couldPlace(state: GameState, sensor: Seat, seat: Seat): Boolean =
+    seat.index != sensor.index && !state.isOut(seat) && state.isSeated(seat)
 
 /**
  * **The rules' half: place every seat heard, and observe the sensor's room** (D-136, O4).
@@ -169,9 +192,7 @@ fun resolvePlacements(at: Tick, book: ContactBook?, upload: ContactUpload, state
 internal fun sensed(state: GameState, event: Event.Sensed): Reduction<GameState, Effect> {
     val sightings = ArrayList(state.sightings)
     for (seat in event.heard) {
-        val lawful = seat.index != event.sensor.index && !state.isOut(seat) &&
-            state.seats.any { it.index == seat.index }
-        if (!lawful) continue
+        if (!couldPlace(state, event.sensor, seat)) continue
         val row = Placement.Inferred(seat, event.room, event.at)
         val held = sightings.indexOfFirst { it.seat.index == seat.index }
         if (held >= 0) sightings[held] = row else sightings += row
