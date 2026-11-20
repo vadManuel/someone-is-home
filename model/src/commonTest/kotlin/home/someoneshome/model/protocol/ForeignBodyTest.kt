@@ -32,7 +32,7 @@ class ForeignBodyTest {
         RoundBody.Gap(41, 2),
         RoundBody.Act(3, IntentMessage.ArmRevoke),
         RoundBody.Fire(4),
-        RoundBody.Sighted("0".repeat(SightingUpload.BODY_CHARS), SightingUpload.EMPTY_ASK, UploadProbe.NONE, RangingWire.NO_REPORT),
+        RoundBody.Sighted("0".repeat(SightingUpload.BODY_CHARS), SightingUpload.EMPTY_ASK, UploadProbe.NONE, RangingWire.NO_REPORT, MainViewField.OFF),
         RoundBody.UploadHeard.of("0123456789abcdef", UploadProbe.NONE, 0L, 0L, RangingWire.NO_PLAN),
         RoundBody.FaultHeard("0123456789abcdef"),
         RoundBody.RadioFaulted(RadioCause.Person, "0".repeat(RoundBody.RadioFaulted.ONSET_CHARS)),

@@ -1168,11 +1168,19 @@ sealed class RoundBody {
      * beside [slots], which keeps Bluetooth's 24 slots exactly as they were (U6: Bluetooth ranks who
      * is near). No rule reads it yet: the house's pairing does, and only to choose which phones range
      * which. No default, for [ask]'s reason.
+     *
+     * ### [view]: whether this phone is on the main view (D-307)
+     *
+     * [MainViewField.CHARS] character from every phone in every upload, [MainViewField.ON] or
+     * [MainViewField.OFF]: page 1 or 2, or the report screen. The house's
+     * report hold reads it (a reader off the main view starts no hold and cancels one), and nothing
+     * else does. One width from every seat, out seats included (D-217). No default, for [ask]'s
+     * reason.
      */
     @ClientFacing
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("sighted")
-    data class Sighted(val slots: String, val ask: String, val probe: String, val ranging: String) : RoundBody()
+    data class Sighted(val slots: String, val ask: String, val probe: String, val ranging: String, val view: String) : RoundBody()
 
     /**
      * **Host → the one phone whose upload this answers. "I have the slot named [id]."** (D-263)

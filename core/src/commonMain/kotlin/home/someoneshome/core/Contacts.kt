@@ -82,6 +82,15 @@ data class ContactUpload(
      * in a round whose [ContactSource] is [ContactSource.Uwb]; empty otherwise.
      */
     val distances: List<ContactDistance> = emptyList(),
+    /**
+     * **Whether the phone said it is on the main view** (D-307): on springboard page 1 or 2 (a
+     * banner over the page included) or the report screen, in no Subroutine, scan, briefing, Egress
+     * widget, meeting or lantern.
+     * Read off the upload's one-character field (`MainViewField`), and read only by the UWB report's
+     * hold ([heldReports]): a reader off the main view starts no hold, and one running is cancelled.
+     * False by default, so an upload built without saying starts nothing (it fails closed).
+     */
+    val onMainView: Boolean = false,
 )
 
 /** **[target] read at [cm] centimetres**, the nearest of a second's readings (D-301). A touch can read at or below zero. */
@@ -344,9 +353,10 @@ object ContactGate {
     /**
      * **...held for two seconds** (Q5). The reader's phone fills a circle over them, told by the
      * house in every answer ([ReportSlot.Pending]); still in reach on an upload two seconds after
-     * the hold began, the meeting is called; out of reach first, the hold is cancelled.
+     * the hold began, the meeting is called; out of reach first, the hold is cancelled. The two
+     * seconds are [Balance.REPORT_HOLD_MILLIS], the same number the circle fills over (D-307).
      */
-    const val REPORT_HOLD_TICKS: Long = 2L * Balance.TICKS_PER_SECOND
+    const val REPORT_HOLD_TICKS: Long = Balance.REPORT_HOLD_MILLIS * Balance.TICKS_PER_SECOND / 1_000L
 
     /**
      * ⚠️ **Provisional (overnight): half an upload of slack on the hold** (D-301). The hold is judged
@@ -391,6 +401,13 @@ internal interface ContactFacts {
 
     /** Revoked seats a meeting was already called to report (S4, D-219): no hold starts on one. */
     fun wasReported(seat: Seat): Boolean
+
+    /**
+     * **Whether [seat]'s phone said it is on the main view** (D-307): springboard page 1 or 2 (a
+     * banner over the page included) or the report screen, in its upload's one-character field. The
+     * resolver answers it from this arrival's uploads; the pairing from each seat's last upload.
+     */
+    fun onMainView(seat: Seat): Boolean
 }
 
 /**
@@ -402,10 +419,25 @@ internal fun ContactFacts.readsDistancesOf(seat: Seat): Boolean = !isOut(seat)
 
 /**
  * **Whether [reader] may hold a report at all on this upload** (D-301): a round that reads
- * distance, a living reader (R3), no meeting running (D-301 decision 5).
+ * distance, a living reader (R3), no meeting running (D-301 decision 5), and the reader's phone on
+ * the main view ([reportsFromWhereItIs], D-307). The pairing asks this same question (D-306), so a
+ * report pair is ranged only while the hold could run.
  */
 internal fun ContactFacts.holdMayRun(reader: Seat): Boolean =
-    source == ContactSource.Uwb && readsDistancesOf(reader) && !inMeeting
+    source == ContactSource.Uwb && readsDistancesOf(reader) && !inMeeting && reportsFromWhereItIs(reader)
+
+/**
+ * **Whether [reader] may report from where its phone is** (D-307, the owner's 2026-11-20 ruling:
+ * *in order to report a player you must not be in a minigame; you must just be in the main view,
+ * that being first or second page*). The phone says it in every upload ([ContactUpload.onMainView]);
+ * off the main view, [holdMayRun] is false, so nothing in reach is read, no hold begins, and a hold
+ * already running ends [ReportSlot.Cancelled] on that very upload, as leaving reach ends one.
+ *
+ * Asked of the reader alone: no role, no arm, never the Revoked phone. The house's own facts already
+ * cover the meeting ([ContactFacts.inMeeting]); this covers what only the phone knows, the screen
+ * it is on. One named question, so a ruling that moves the line moves this.
+ */
+internal fun ContactFacts.reportsFromWhereItIs(reader: Seat): Boolean = onMainView(reader)
 
 /**
  * **Whether [target] is a seat [reader] could hold a report on**, distance and grace aside: another
@@ -425,6 +457,23 @@ internal class RoundContactFacts(var state: GameState) : ContactFacts {
     override fun isRevoked(seat: Seat): Boolean = state.isRevoked(seat)
     override fun isOut(seat: Seat): Boolean = state.isOut(seat)
     override fun wasReported(seat: Seat): Boolean = state.wasReported(seat)
+
+    /**
+     * **Each seat's last word on the main view** (D-307), by index: true where its last upload said
+     * it was off. A seat not yet heard from is taken as on, so the pairing never holds back a pair the
+     * hold might need: the hold itself reads every upload's own field ([ContactUpload.onMainView]) and
+     * fails closed there. Grown only when a seat index is first seen past its end.
+     */
+    private var off = BooleanArray(0)
+
+    /** [seat]'s upload just said whether it is on the main view. */
+    fun sawMainView(seat: Seat, on: Boolean) {
+        if (seat.index < 0) return
+        if (seat.index >= off.size) off = off.copyOf(seat.index + 1)
+        off[seat.index] = !on
+    }
+
+    override fun onMainView(seat: Seat): Boolean = !(seat.index in off.indices && off[seat.index])
 }
 
 /**
@@ -440,14 +489,25 @@ internal class ContactHouse private constructor(
     val out: List<Seat>,
     val reported: List<Seat>,
     override val inMeeting: Boolean,
+    /** This arrival's uploads, read for the main view alone (D-307). */
+    private val uploads: List<ContactUpload>,
 ) : ContactFacts {
     fun holds(seat: Seat): Boolean = seats.any { it.index == seat.index }
+
+    /** Whether an upload of [seat]'s in this arrival said the main view (D-307). Allocates nothing. */
+    override fun onMainView(seat: Seat): Boolean {
+        for (i in uploads.indices) {
+            val upload = uploads[i]
+            if (upload.seat.index == seat.index && upload.onMainView) return true
+        }
+        return false
+    }
     override fun isRevoked(seat: Seat): Boolean = revoked.any { it.index == seat.index }
     override fun isOut(seat: Seat): Boolean = out.any { it.index == seat.index }
     override fun wasReported(seat: Seat): Boolean = reported.any { it.index == seat.index }
 
     companion object {
-        fun of(state: GameState) = ContactHouse(
+        fun of(state: GameState, uploads: List<ContactUpload> = emptyList()) = ContactHouse(
             roundSeed = state.seed,
             seats = state.seats.sortedBy { it.index },
             revoked = state.revoked.sortedBy { it.index },
@@ -455,6 +515,7 @@ internal class ContactHouse private constructor(
             out = (state.revoked + state.restrained).distinctBy { it.index }.sortedBy { it.index },
             reported = state.reported.sortedBy { it.index },
             inMeeting = state.meeting != null,
+            uploads = uploads,
         )
     }
 }
@@ -494,7 +555,7 @@ fun resolveContacts(
     uploads: List<ContactUpload>,
     state: GameState,
 ): ContactResolution {
-    val house = ContactHouse.of(state)
+    val house = ContactHouse.of(state, uploads)
     val book = memory.book?.takeIf { it.fits(house, window) } ?: ContactBook.of(house, window)
 
     // One list built per arrival, filtered into and then appended to, rather than a filter and a
@@ -604,8 +665,8 @@ private class Holds(
  * 1. **What it reads in reach**: every Revoked seat its upload measured at
  *    [ContactGate.REPORT_REACH_CM] or nearer, not already reported (S4), its pair with the reader
  *    not inside its grace ([inPairGrace], D-291), nearest first, then by seat. Nothing when the
- *    reader is out (R3: only a living phone reports), when a meeting is running, or in a round that
- *    reads Bluetooth.
+ *    reader is out (R3: only a living phone reports), when a meeting is running, when the reader's
+ *    phone is off the main view (D-307), or in a round that reads Bluetooth: [holdMayRun].
  * 2. **A hold already running on a seat still in reach**: two seconds since it began
  *    ([ContactGate.REPORT_HOLD_TICKS], less [ContactGate.REPORT_HOLD_SLACK_TICKS]), the report is
  *    minted, `MeetingCalled` with [MeetingTrigger.RevokeReported] exactly as Bluetooth's, and the

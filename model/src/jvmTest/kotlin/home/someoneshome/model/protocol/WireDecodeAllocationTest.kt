@@ -57,7 +57,7 @@ class WireDecodeAllocationTest {
      */
     @Test
     fun `reading an upload's frame allocates its body and little else`() {
-        val body = RoundWire.encode(RoundBody.Sighted("0".repeat(SightingUpload.BODY_CHARS), SightingUpload.EMPTY_ASK, UploadProbe.NONE, RangingWire.NO_REPORT)) + "李"
+        val body = RoundWire.encode(RoundBody.Sighted("0".repeat(SightingUpload.BODY_CHARS), SightingUpload.EMPTY_ASK, UploadProbe.NONE, RangingWire.NO_REPORT, MainViewField.OFF)) + "李"
         val frame = TransportWire.encode(TransportFrame.Carry(body))
         val read = perCall { TransportWire.decodeOrNull(frame) }
         println("D-300 READING AN UPLOAD FRAME — $read B")

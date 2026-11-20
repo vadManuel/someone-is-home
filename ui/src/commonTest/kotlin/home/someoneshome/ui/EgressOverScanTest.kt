@@ -231,9 +231,10 @@ class EgressOverScanTest {
     }
 
     @Test
-    fun `the screens the alert keeps are the ten Subroutines the caught scan and the scan`() {
+    fun `the screens the alert keeps are the ten Subroutines the caught scan the scan and the report`() {
         val kept = ScreenId.entries.filter { Flow.keepsItsScreenUnderTheEgress(it) }.toSet()
-        val expected = Subroutine.entries.mapNotNull { it.screen }.toSet() + ScreenId.ScanCaught + ScreenId.Scan
+        // And the report screen (D-307): the alert drops over the circle, which keeps filling.
+        val expected = Subroutine.entries.mapNotNull { it.screen }.toSet() + ScreenId.ScanCaught + ScreenId.Scan + ScreenId.Report
         assertEquals(expected, kept)
     }
 }

@@ -196,7 +196,7 @@ class RangingAllocationTest {
             fun beat(s: Seat, sightings: List<Sighting>, field: String): String? {
                 val at = Tick(tick++)
                 val distances = desk.read(s, field)
-                val arrival = ContactUpload(s, sightings, if (source == ContactSource.Uwb) distances else emptyList())
+                val arrival = ContactUpload(s, sightings, if (source == ContactSource.Uwb) distances else emptyList(), onMainView = true)
                 val r = resolveContacts(memory, at, window, listOf(arrival), round)
                 memory = r.memory
                 return desk.answer(round, at, s, sightings, memory.book, r.taken.isNotEmpty(), r.slotOf(s), nonce)

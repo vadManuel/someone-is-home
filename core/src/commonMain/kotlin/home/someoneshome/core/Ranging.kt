@@ -269,6 +269,9 @@ internal class RoundRangingNeed : RangingNeed {
         }
 
     override fun needs(a: Seat, b: Seat, at: Tick): Boolean = rangingNeeded(facts.state, facts, a, b, at)
+
+    /** [seat]'s upload said whether its phone is on the main view (D-307), for [holdMayRun]. */
+    fun sawMainView(seat: Seat, on: Boolean) = facts.sawMainView(seat, on)
 }
 
 /**
@@ -1045,10 +1048,12 @@ class RangingDesk(roundSeed: Long, seats: List<Seat>) {
      * window); the report is the one [read] just opened for [seat], if it read; [report] is the
      * seat's report slot from the resolver (D-301), sealed into the plan. [state] is the round as it
      * stands after the rules took this upload, and the pairing asks it which close pairs the game
-     * needs ([rangingNeeded], D-306). Null for a seat that is not the round's, which has no seed
+     * needs ([rangingNeeded], D-306). [onMainView] is the upload's main view field (D-307), kept as
+     * the seat's last word so the pairing's report need asks [holdMayRun] as the hold does; on by
+     * default for a caller with no field. Null for a seat that is not the round's, which has no seed
      * here.
      */
-    fun answer(state: GameState, at: Tick, seat: Seat, sightings: List<Sighting>, book: ContactBook?, taken: Boolean, report: ReportSlot, nonce: ByteArray): String? {
+    fun answer(state: GameState, at: Tick, seat: Seat, sightings: List<Sighting>, book: ContactBook?, taken: Boolean, report: ReportSlot, nonce: ByteArray, onMainView: Boolean = true): String? {
         val seed = seeds.getOrNull(seat.index) ?: return null
         if (book !== this.book) {
             this.book = book
@@ -1063,6 +1068,7 @@ class RangingDesk(roundSeed: Long, seats: List<Seat>) {
         val view: RangingReportView? = if (opened?.index == seat.index) codec else null
         opened = null
         need.state = state
+        need.sawMainView(seat, onMainView)
         pairing.arrive(at, seat, view, taken, need)
         sealing.kind = report.kind
         sealing.millis = report.millis

@@ -129,6 +129,13 @@ object Balance {
     const val TICKS_PER_SECOND: Long = 20L
 
     /**
+     * **A UWB report's hold: two seconds** (the owner's Q5 ruling, D-301), in milliseconds. Here so
+     * that the house's hold (`ContactGate.REPORT_HOLD_TICKS`, read through [TICKS_PER_SECOND]) and the
+     * circle the reader's phone fills over it (D-307) are the same number: `ui` cannot see `core`.
+     */
+    const val REPORT_HOLD_MILLIS: Long = 2_000L
+
+    /**
      * **D-132's normal duration for the Revoke, in ticks.** The lobby's own settings row reads
      * `REVOKE COOLDOWN 60S`, which is where this number comes from and where it will move from.
      *

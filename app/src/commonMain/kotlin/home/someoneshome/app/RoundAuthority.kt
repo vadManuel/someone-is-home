@@ -26,6 +26,7 @@ import home.someoneshome.model.SavedHome
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
 import home.someoneshome.model.toView
+import home.someoneshome.model.protocol.MainViewField
 import home.someoneshome.model.protocol.RangingWire
 import home.someoneshome.model.protocol.ReportSlot
 import home.someoneshome.model.protocol.RoundBody
@@ -497,7 +498,11 @@ class RoundAuthority(
         // in a round that reads UWB, and only there; the pairing reads the report either way.
         val desk = rangingDesk?.takeIf { state.armed }
         val distances = desk?.read(seat, upload.ranging)
-        val arrival = ContactUpload(seat, slots, if (state.contactSource == ContactSource.Uwb && distances != null) distances else emptyList())
+        val arrival = ContactUpload(
+            seat, slots, if (state.contactSource == ContactSource.Uwb && distances != null) distances else emptyList(),
+            // **Whether the phone is on the main view** (D-307): read by the report's hold alone.
+            onMainView = MainViewField.reads(upload.view),
+        )
         val resolution = resolveContacts(contactMemory, at, contactWindow(), listOf(arrival), state)
         contactMemory = resolution.memory
         for (event in resolution.events) concluded(event)
@@ -524,7 +529,11 @@ class RoundAuthority(
     private fun planFor(seat: Seat, at: Tick, arrival: ContactUpload, taken: Boolean, report: ReportSlot): String {
         val desk = rangingDesk ?: return blankPlan()
         if (!state.armed) return blankPlan()
-        return desk.answer(state, at, seat, arrival.sightings, contactMemory.book, taken, report, rangingRandom(RangingWire.NONCE_BYTES))
+        return desk.answer(
+            state, at, seat, arrival.sightings, contactMemory.book, taken, report, rangingRandom(RangingWire.NONCE_BYTES),
+            // The pairing's report need asks the hold's own gate, main view and all (D-306, D-307).
+            onMainView = arrival.onMainView,
+        )
             ?: blankPlan()
     }
 

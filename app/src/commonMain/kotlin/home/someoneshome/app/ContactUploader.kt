@@ -8,6 +8,7 @@ import home.someoneshome.model.Sighting
 import home.someoneshome.model.protocol.RangingCodec
 import home.someoneshome.model.protocol.RangingHandle
 import home.someoneshome.model.protocol.RangingWire
+import home.someoneshome.model.protocol.MainViewField
 import home.someoneshome.model.protocol.ReportSlot
 import home.someoneshome.model.protocol.SpareKey
 import home.someoneshome.model.protocol.RoundBody
@@ -135,6 +136,14 @@ class ContactUploader(
     private val ranging: RangingRadio = NoRanging,
     /** A fresh nonce for each upload's ranging report: `RangingWire.NONCE_BYTES` secure random bytes. */
     private val rangingNonce: () -> ByteArray = { secureRandomBytes(RangingWire.NONCE_BYTES) },
+    /**
+     * **Whether this phone is on the main view, now** (D-307): `FlowModel.onMainView` on a phone,
+     * asked once per upload and sent as its one-character field (`MainViewField`), so the house's
+     * report hold can start and run only while the person is on springboard page 1 or 2 (or the
+     * report screen). Off by default, for a construction with no screens:
+     * such a phone starts no hold, which is the direction a forgotten wire fails in.
+     */
+    private val mainView: () -> Boolean = { false },
     /** Up this phone's own socket. */
     private val send: (RoundBody.Sighted) -> Unit,
 ) {
@@ -210,7 +219,9 @@ class ContactUploader(
         }
         val readings = radio.drain()
         val heard = if (out) emptyList() else readings.map { Sighting(it.token, it.rssi, window) }
-        send(SightingUpload.pack(key, window, uploads++, heard, ask(), probe(), rangingReport(key)))
+        // **And whether the person is on the main view** (D-307), asked of the panel at this beat.
+        val view = MainViewField.of(mainView())
+        send(SightingUpload.pack(key, window, uploads++, heard, ask(), probe(), rangingReport(key), view))
         // **Rule 6: silent here, loud at the house** (T2, D-222). The radio reports each fault once,
         // at its onset; nothing on this phone's screen, lamp or motor hears of it. A return from
         // leaving the foreground is a person's act and wins the beat (D-229): the radio's onset is
@@ -264,7 +275,8 @@ class ContactUploader(
      * **The report's slot, as the house last said it in a plan that opened** (D-301): idle, held for
      * so long, or cancelled. Every phone reads one off every answer, at one width; a phone holding a
      * Revoked seat within report reach reads [ReportSlot.Pending]. Idle before a seed and after the
-     * round. The circle that draws it is the owner's to place, light and time, and is not built.
+     * round. The report screen draws it (D-307): `RoundOverTransport` hands it to the panel off every
+     * answer.
      */
     var report: ReportSlot = ReportSlot.Idle
         private set
@@ -279,7 +291,7 @@ class ContactUploader(
         val key = seed ?: return
         if (!codec.openPlan(key, plan)) return
         // **The report's slot** (D-301): what the house says this phone's report circle is doing.
-        // Read off every plan that opens, out or not, and drawn by nothing yet (the owner's).
+        // Read off every plan that opens, out or not; the report screen draws it (D-307).
         report = ReportSlot.of(codec.planReportKind, codec.planReportMillis) ?: ReportSlot.Idle
         for (i in 0 until codec.planSteps) {
             if (codec.planKind(i) == RangingWire.STEP_STOP) ranging.stop(RangingHandle(codec.planHandle(i)))

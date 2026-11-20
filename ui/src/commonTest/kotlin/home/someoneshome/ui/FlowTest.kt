@@ -78,7 +78,8 @@ class FlowTest {
      */
     private fun onward(id: ScreenId): Set<ScreenId> =
         ScreenGraph.exitsOf(id) + Flow.viaActions[id].orEmpty() +
-            setOfNotNull(Flow.autoAdvance[id]?.to) + setOfNotNull(Flow.housePushes[id]?.to)
+            setOfNotNull(Flow.autoAdvance[id]?.to) + setOfNotNull(Flow.housePushes[id]?.to) +
+            Flow.reportSlotLeadsTo[id].orEmpty()
 
     /** The card marked T, as a piece of paper the deck could have printed. */
     private fun terminalCard(id: String = "SEEDT01") =
@@ -364,6 +365,7 @@ class FlowTest {
             ScreenId.Ghost2,      // out, and walking in
             ScreenId.Ghost3,      // out, and watching from outside
             ScreenId.Disconnect,  // the house is gone; every screen behind assumes it is not
+            ScreenId.Report,      // the house's report slot put the phone here and only it takes it off (D-307)
         )
         assertEquals(
             arrivedUnasked + andTheseEight, Flow.houseDriving,

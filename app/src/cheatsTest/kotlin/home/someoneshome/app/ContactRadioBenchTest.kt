@@ -151,6 +151,9 @@ class ContactRadioBenchTest {
             contactWindow = { window },
         )
         val phones = mutableMapOf<Int, RoundOverTransport>()
+
+        /** Each phone's panel (D-307): where its person is, which every upload tells the house. */
+        val panels = mutableMapOf<Int, FlowModel>()
         private val jobs = mutableListOf<Job>()
 
         suspend fun start() {
@@ -182,8 +185,10 @@ class ContactRadioBenchTest {
                     nowMillis = { monotonicNanos() / 1_000_000 },
                     onFrame = { frame -> round.frameArrived(frame) },
                 )
+                val panel = FlowModel(PanelState(screen = ScreenId.Home))
+                panels[seat.index] = panel
                 round = RoundOverTransport(
-                    scope, FlowModel(PanelState(screen = ScreenId.Home)),
+                    scope, panel,
                     buzzer = HouseBuzzer(SilentHaptics),
                     send = { frame -> client.send(frame) },
                     radio = air.radioFor(seat),
@@ -475,6 +480,78 @@ class ContactRadioBenchTest {
         repeat(3) { second() }
         assertEquals(null, house.state.meeting, "a cancelled hold called the house: ${house.state.meeting}")
         assertEquals(ReportSlot.Idle, phones.getValue(reporter.index).report)
+    }
+
+    /**
+     * **GUARD (D-307): a report runs only from the main view, over real sockets.** The reader stands
+     * at 25 cm from a Revoked seat with a Subroutine open (the panel on Jam): every upload says it is
+     * off the main view, and the house starts no hold for as long as it stands there. Back on page 2,
+     * the next answer starts the hold, the panel takes the report screen over, and two seconds later
+     * the meeting's call takes it off again.
+     */
+    @Test
+    fun aReportRunsOnlyFromTheMainViewOnDistance() = rig(uwb = true) {
+        armed()
+        val insider = house.state.livingInsiders.single()
+        val target = house.state.livingPlainResidents.first()
+        val reporter = house.state.livingPlainResidents.first { it.index != target.index }
+        armRevoke(insider)
+        ranged()
+        air.touch(insider, target)
+        repeat(HELD_SECONDS) { if (!house.state.isRevoked(target)) second() }
+        air.spreadOut(seats)
+        repeat(5) { second() }
+        val panel = panels.getValue(reporter.index)
+        panel.go(ScreenId.SubJam)
+        val near = air.spotOf(target)!!
+        air.place(reporter, SimulatedAir.Spot(near.x + 0.25, near.y))
+        repeat(HELD_SECONDS + 3) {
+            second()
+            assertEquals(ReportSlot.Idle, phones.getValue(reporter.index).report, "a reader in a Subroutine was told it is holding a report")
+            assertEquals(ScreenId.SubJam, panel.state.screen, "the report took a Subroutine screen over")
+        }
+        assertEquals(null, house.state.meeting, "a reader in a Subroutine reported: ${house.state.meeting}")
+        panel.go(ScreenId.Page2)
+        repeat(HELD_SECONDS) { if (phones.getValue(reporter.index).report == ReportSlot.Idle && house.state.meeting == null) second() }
+        assertEquals(ReportSlot.Pending(0), phones.getValue(reporter.index).report, "back on page 2 the hold did not begin")
+        assertEquals(ScreenId.Report, panel.state.screen, "the hold did not take page 2 over")
+        assertEquals(ScreenId.Page2, panel.state.reportFrom)
+        repeat(HELD_SECONDS) { if (house.state.meeting == null) second() }
+        val meeting = assertNotNull(house.state.meeting, "a hold on the main view did not report: ${house.refusals}")
+        assertEquals(reporter, meeting.caller)
+        // The reader called it, so the house sends its phone to its own ring (`MeetingCalling`).
+        assertEquals(ScreenId.Calling, panel.state.screen, "the meeting's call did not end the report screen")
+    }
+
+    /**
+     * **GUARD (D-307): leaving the main view mid-hold cancels it, and the panel goes back to its page.**
+     * The reader holds from page 1; one second in, the house is told it opened the Egress widget
+     * (the panel leaves the report screen by a tap on the banner, say); the next answer is cancelled.
+     */
+    @Test
+    fun leavingTheMainViewCancelsTheHoldOnDistance() = rig(uwb = true) {
+        armed()
+        val insider = house.state.livingInsiders.single()
+        val target = house.state.livingPlainResidents.first()
+        val reporter = house.state.livingPlainResidents.first { it.index != target.index }
+        armRevoke(insider)
+        ranged()
+        air.touch(insider, target)
+        repeat(HELD_SECONDS) { if (!house.state.isRevoked(target)) second() }
+        air.spreadOut(seats)
+        repeat(5) { second() }
+        val panel = panels.getValue(reporter.index)
+        val near = air.spotOf(target)!!
+        air.place(reporter, SimulatedAir.Spot(near.x + 0.25, near.y))
+        repeat(HELD_SECONDS) { if (phones.getValue(reporter.index).report == ReportSlot.Idle) second() }
+        assertEquals(ReportSlot.Pending(0), phones.getValue(reporter.index).report, "the hold did not begin on page 1")
+        assertEquals(ScreenId.Report, panel.state.screen)
+        panel.go(ScreenId.EgressWidget)
+        second()
+        assertEquals(ReportSlot.Cancelled, phones.getValue(reporter.index).report, "leaving the main view did not cancel the hold")
+        repeat(3) { second() }
+        assertEquals(null, house.state.meeting, "a hold cancelled by leaving the main view called the house: ${house.state.meeting}")
+        assertEquals(ScreenId.EgressWidget, panel.state.screen, "the cancel moved a phone that had already left the report screen")
     }
 
     /** **D-291 on distance: the Revoking Insider's phone, held where it Revoked, holds a report only once the grace is over.** */

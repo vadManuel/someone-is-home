@@ -52,6 +52,12 @@ enum class ScreenId {
     // behind a flag on `Notify` would be a presentation none of them ever looked at.
     Home, Page2, Lock, Quiet, LockNotify,
 
+    // **The report, taking over page 1 or 2** (D-307, the owner's 2026-11-20 rulings): the circle
+    // that fills over the two seconds the house holds a report for, and nothing else on it. Reached
+    // only from the two pages, by the house's report slot and never by a tap, and left the same way:
+    // back to the page it came from on a cancel, or by the meeting's own call.
+    Report,
+
     // **Tier 2's two target lists** (the owner's 2026-08-22 targeting ruling). The one place in the
     // game a control opens a view rather than arming in place — D-142 settled that arming happens on
     // page 2 *in place*, and it settled it about the Revoke and the Egress, which have no target to
@@ -300,6 +306,12 @@ data class PanelState(
      * arrival anywhere ([arrivingAt]), so it can never outlive the screen it was raised over.
      */
     val egressAlertUp: Boolean = false,
+    /**
+     * **The page the report screen took over: [ScreenId.Home] or [ScreenId.Page2]** (D-307), or null
+     * on every other screen. Set on the arrival at [ScreenId.Report] and cleared by every arrival
+     * ([arrivingAt]); a cancelled report goes back to it. A banner over page 1 is page 1.
+     */
+    val reportFrom: ScreenId? = null,
     /**
      * **The Egress countdown: what is left of it and how long it ran from** (D-243).
      *

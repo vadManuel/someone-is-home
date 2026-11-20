@@ -48,8 +48,11 @@ class UwbContactTest {
 
     private var uploads = 0L
 
-    /** [seat]'s upload: Bluetooth hearing [heard] at −20 dBm, and [distances] (seat to centimetres). */
-    private fun up(seat: Int, vararg distances: Pair<Int, Int>, heard: List<Int> = emptyList(), seed: Long = 42L) = ContactUpload(
+    /**
+     * [seat]'s upload: Bluetooth hearing [heard] at −20 dBm, and [distances] (seat to centimetres),
+     * from a phone on the main view unless [main] says otherwise (D-307).
+     */
+    private fun up(seat: Int, vararg distances: Pair<Int, Int>, heard: List<Int> = emptyList(), seed: Long = 42L, main: Boolean = true) = ContactUpload(
         Seat(seat),
         SightingUpload.unpack(
             SightingUpload.pack(
@@ -58,6 +61,7 @@ class UwbContactTest {
             ),
         )!!,
         distances.map { (peer, cm) -> ContactDistance(Seat(peer), cm) },
+        onMainView = main,
     )
 
     /** The house: the resolver's memory and the rules' state, every minted event put through `admit`. */
@@ -205,6 +209,68 @@ class UwbContactTest {
         // In reach again: a fresh hold, from nothing.
         house.at(t0 + 3 * second, up(neighbour, target to 20))
         assertEquals(ReportSlot.Pending(0), house.slot(neighbour), "back in reach did not start a fresh hold")
+    }
+
+    // ---- The main view (D-307) ---------------------------------------------------------------------
+
+    @Test
+    fun `a reader off the main view starts no hold however long it is in reach`() {
+        val house = reportRound()
+        val t0 = hit + ContactGate.PAIR_GRACE_TICKS
+        for (k in 0..4) {
+            assertEquals(emptyList(), house.at(t0 + k * second, up(neighbour, target to 10, main = false)), "a reader off the main view called the house")
+            assertEquals(ReportSlot.Idle, house.slot(neighbour), "a reader off the main view was told it is holding a report")
+        }
+        // Back on the main view, in reach: a hold from nothing, and the call two seconds after.
+        val t1 = t0 + 5 * second
+        house.at(t1, up(neighbour, target to 10))
+        assertEquals(ReportSlot.Pending(0), house.slot(neighbour), "back on the main view did not start the hold")
+        house.at(t1 + second, up(neighbour, target to 10))
+        val called = house.at(t1 + 2 * second, up(neighbour, target to 10))
+        assertEquals(1, called.count(reportBy(neighbour)), "a hold on the main view did not call: $called")
+    }
+
+    @Test
+    fun `leaving the main view cancels a running hold and calls nothing`() {
+        val house = reportRound()
+        val t0 = hit + ContactGate.PAIR_GRACE_TICKS
+        house.at(t0, up(neighbour, target to 20))
+        assertEquals(ReportSlot.Pending(0), house.slot(neighbour))
+        val left = house.at(t0 + second, up(neighbour, target to 20, main = false))
+        assertEquals(emptyList(), left, "a reader that left the main view called the house")
+        assertEquals(ReportSlot.Cancelled, house.slot(neighbour), "leaving the main view did not cancel the hold")
+        val still = house.at(t0 + 2 * second, up(neighbour, target to 20, main = false))
+        assertEquals(emptyList(), still, "a cancelled hold called the house off the main view")
+        assertEquals(ReportSlot.Idle, house.slot(neighbour))
+        assertTrue(house.memory.held.none { it.reader == Seat(neighbour) }, "the house kept a hold for a reader off the main view")
+    }
+
+    @Test
+    fun `the main view is asked of the reader alone and never of the Revoked phone`() {
+        val house = reportRound()
+        val t0 = hit + ContactGate.PAIR_GRACE_TICKS
+        // The Revoked seat's own phone off the main view (it is on the couch) changes nothing.
+        for (k in 0..1) {
+            house.at(t0 + k * second, up(neighbour, target to 20), up(target, neighbour to 20, main = false))
+            assertEquals(ReportSlot.Pending((k * 1_000)), house.slot(neighbour), "the Revoked phone's screen moved the reader's hold")
+        }
+        val called = house.at(t0 + 2 * second, up(neighbour, target to 20), up(target, neighbour to 20, main = false))
+        assertEquals(1, called.count(reportBy(neighbour)), "the Revoked phone's screen stopped the report: $called")
+    }
+
+    @Test
+    fun `the pairing asks the hold's own main view gate so a report pair is ranged only while the hold could run`() {
+        val house = reportRound()
+        val at = Tick(hit + ContactGate.PAIR_GRACE_TICKS)
+        val need = RoundRangingNeed()
+        need.state = house.state
+        assertTrue(need.needs(Seat(neighbour), Seat(target), at), "a reader on the main view beside a Revoked seat was not needed")
+        need.sawMainView(Seat(neighbour), false)
+        assertEquals(false, need.needs(Seat(neighbour), Seat(target), at), "the pairing ranged a report pair for a reader off the main view (D-306, D-307)")
+        need.sawMainView(Seat(target), true)
+        assertEquals(false, need.needs(Seat(target), Seat(neighbour), at), "the Revoked phone's main view made a report pair")
+        need.sawMainView(Seat(neighbour), true)
+        assertTrue(need.needs(Seat(neighbour), Seat(target), at), "back on the main view, the pair was not needed again")
     }
 
     @Test

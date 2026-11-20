@@ -21,6 +21,7 @@ import home.someoneshome.model.Cell
 import home.someoneshome.model.RegisterResult
 import home.someoneshome.model.RoomKind
 import home.someoneshome.model.protocol.IntentMessage
+import home.someoneshome.model.protocol.ReportSlot
 import home.someoneshome.model.protocol.RoundMessage
 
 import androidx.compose.runtime.Composable
@@ -29,6 +30,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameMillis
 import kotlinx.coroutines.delay
 
 /**
@@ -164,6 +166,10 @@ object ScreenGraph {
         // phone is READ, not opened: this screen has one control and it is SLIDE TO OPEN, so a
         // card that also navigated would be an unlock nobody performed.
         ScreenId.Lock, ScreenId.LockNotify -> setOf(ScreenId.Home)
+        // **The report screen publishes no control at all** (D-307: the circle only, no words, no
+        // buttons). The house's report slot brings the phone here from page 1 or 2 and takes it
+        // back on a cancel; a full circle is followed by the meeting's call, as every call is.
+        ScreenId.Report -> emptySet()
 
         // Work.
         ScreenId.Work -> setOf(ScreenId.Home, ScreenId.Scan)
@@ -444,7 +450,10 @@ object Flow {
      * twins) are not here: they hold no card and no camera, and the ruling names neither.
      */
     fun keepsItsScreenUnderTheEgress(screen: ScreenId): Boolean =
-        Subroutine.on(screen) != null || screen == ScreenId.ScanCaught || screen == ScreenId.Scan
+        Subroutine.on(screen) != null || screen == ScreenId.ScanCaught || screen == ScreenId.Scan ||
+            // **And the report screen** (D-307): D-297's rule for a screen the person is in the middle
+            // of. The alert drops over the circle, which keeps filling; the house decides the rest.
+            screen == ScreenId.Report
 
     /**
      * **The rows in [autoAdvance] that are the phone's own only once the house has opened a phase**
@@ -642,6 +651,12 @@ object Flow {
         // The house is gone. Every screen behind this one describes a phone that is still
         // attached to one.
         add(ScreenId.Disconnect)
+        // **The report screen** (D-307). The house's slot put the phone here and only the house
+        // takes it off, back to the page or on to the call; it buzzes nobody, because the person is
+        // holding the phone to another and the screen they were on is the one they meant to be on.
+        // A notification that would have landed over the page waits where its kind waits, as at a
+        // meeting, rather than taking the circle away.
+        add(ScreenId.Report)
     }
 
     /**
@@ -696,6 +711,8 @@ object Flow {
         ScreenId.GhostMeeting, ScreenId.Ghost3,
         ScreenId.Disconnect,
         ScreenId.WinInsiders, ScreenId.WinResidents,
+        // **The report screen** (D-307): the house's report slot, from page 1 or 2, and nothing else.
+        ScreenId.Report,
     )
 
     /**
@@ -735,6 +752,17 @@ object Flow {
      * from nowhere else.
      */
     val houseOpened: Set<ScreenId> = setOf(ScreenId.TermLive)
+
+    /**
+     * **Where the house's report slot takes a phone off the report screen** (D-307): back to the page
+     * it came from, page 1 or page 2, on a cancel or an idle slot. Not a [HousePush], which is keyed
+     * on a pushed message's kind: the slot rides the answer to every upload (D-301) and is read by
+     * [FlowModel.reportSaid]. A full circle is followed by the meeting's call, which [housePushes]
+     * and `MeetingOpened` already route from every screen.
+     */
+    val reportSlotLeadsTo: Map<ScreenId, Set<ScreenId>> = mapOf(
+        ScreenId.Report to setOf(ScreenId.Home, ScreenId.Page2),
+    )
 
     /**
      * **The station's screens: while a phone is on one of these, it is the reader** (D-203).
@@ -961,9 +989,12 @@ fun PanelState.arrivingAt(id: ScreenId): PanelState = when (id) {
     // **And the Egress alert over a Subroutine goes with the screen it stood over** (E1, D-297):
     // finishing, STOP, a meeting's ring or a Surge all land somewhere else, and the alert was about
     // the moment it arrived, not about the next screen. The widget holds what is still running.
-    ScreenId.Revoked -> copy(screen = id, outBy = OutBy.Revoked, verdict = null, egressAlertUp = false)
-    ScreenId.Restrained -> copy(screen = id, outBy = OutBy.Restrained, verdict = null, egressAlertUp = false)
-    else -> copy(screen = id, verdict = null, egressAlertUp = false)
+    //
+    // **And the page a report took over is forgotten by every arrival** (D-307): only the arrival at
+    // the report screen sets it again ([FlowModel.reportSaid]).
+    ScreenId.Revoked -> copy(screen = id, outBy = OutBy.Revoked, verdict = null, egressAlertUp = false, reportFrom = null)
+    ScreenId.Restrained -> copy(screen = id, outBy = OutBy.Restrained, verdict = null, egressAlertUp = false, reportFrom = null)
+    else -> copy(screen = id, verdict = null, egressAlertUp = false, reportFrom = null)
 }
 
 /**
@@ -1270,6 +1301,12 @@ class FlowModel(
      * through by [houseSaid], read only inside a draw lambda. See [LampState].
      */
     val lamp: LampState = LampState()
+
+    /**
+     * **How full the report circle is** (D-307), [lamp]'s arrangement: one float read only inside
+     * the circle's draw lambda, written by [reportRead] every frame the report screen is up.
+     */
+    val report: ReportCircle = ReportCircle()
 
     /**
      * **The Surge this phone is inside, or null** (D-182).
@@ -3583,6 +3620,91 @@ class FlowModel(
         if (state.egressAlertUp) state = state.copy(egressAlertUp = false)
     }
 
+    // ---- The report (D-307) -------------------------------------------------------------------
+
+    /**
+     * **Whether this phone is on the main view now** (D-307): page 1 or 2, a banner over page 1, or
+     * the report screen. The uploader sends it in every upload ([MainView], `MainViewField`), and the
+     * house's report hold reads it.
+     */
+    val onMainView: Boolean get() = MainView.isOn(state)
+
+    /**
+     * **When the hold the report screen is filling for began, on this phone's monotonic clock**, and
+     * the held time the house last said. Null off the report screen. Not on [PanelState]: when this
+     * phone heard a slot is nothing another phone shares and nothing a screen draws (D-269).
+     */
+    private var reportBegan: Long? = null
+    private var reportLastHeld: Int = 0
+
+    /**
+     * **The house's report slot, off the answer to this phone's last upload** (D-301, D-307; the owner's
+     * 2026-11-20 rulings). Every answer on every phone carries one, so this is called once a second
+     * on every phone, and on almost every phone almost always it is idle and moves nothing.
+     *
+     * - **Pending, on page 1 or 2** ([MainView.takesOverFrom]): the report takes over the screen. The
+     *   phone goes to [ScreenId.Report], remembering the page, and the circle is stamped as begun
+     *   [ReportSlot.Pending.elapsedMillis] before now on this phone's clock.
+     * - **Pending, on the report screen**: the same hold, still running, and the stamp is kept, so the
+     *   circle fills smoothly over the two seconds rather than stepping at each answer. A held time
+     *   shorter than the last one is a new hold (the house began again on another seat), and is
+     *   stamped afresh.
+     * - **Pending anywhere else**: nothing. The phone never shows the report screen from anywhere but
+     *   page 1 or 2. An answer to an upload sent from the page can land after the person opened
+     *   something; that upload's successor says so, and the house cancels.
+     * - **Cancelled or idle, on the report screen**: straight back to the page it came from. A full
+     *   hold is followed by the meeting's call, a push that has already taken the phone off this
+     *   screen (the house queues the call before it answers the upload that made it).
+     *
+     * The house decides; this only follows. Only the screen is asked, never the role.
+     */
+    fun reportSaid(slot: ReportSlot) {
+        when (slot) {
+            is ReportSlot.Pending -> reportHeld(slot.elapsedMillis)
+            ReportSlot.Idle, ReportSlot.Cancelled -> reportEnded()
+        }
+    }
+
+    private fun reportHeld(heldMillis: Int) {
+        val now = monotonicNow()
+        if (state.screen == ScreenId.Report) {
+            if (reportBegan == null || heldMillis < reportLastHeld) reportBegan = now - heldMillis
+            reportLastHeld = heldMillis
+        } else {
+            val from = MainView.takesOverFrom(state)
+            if (from != null) {
+                reportBegan = now - heldMillis
+                reportLastHeld = heldMillis
+                trail.clear()
+                arrive(state.arrivingAt(ScreenId.Report).copy(reportFrom = from))
+            }
+        }
+        reportRead()
+    }
+
+    private fun reportEnded() {
+        if (state.screen == ScreenId.Report) push(state.reportFrom ?: ScreenId.Home)
+        reportRead()
+    }
+
+    /**
+     * **The circle read against this phone's clock** (D-307; D-243, D-269's discipline): the time
+     * since the hold began, of [Balance.REPORT_HOLD_MILLIS], from 0 to full and no further. Called by
+     * [FlowHost] every frame the report screen is up, and by every slot. Off the report screen it is
+     * empty and the stamp is forgotten. Moves no screen and no light: full is the house's to answer.
+     */
+    fun reportRead() {
+        val began = reportBegan
+        val fill = if (state.screen != ScreenId.Report || began == null) {
+            reportBegan = null
+            reportLastHeld = 0
+            0f
+        } else {
+            ((monotonicNow() - began).coerceAtLeast(0L).toFloat() / Balance.REPORT_HOLD_MILLIS).coerceIn(0f, 1f)
+        }
+        if (report.fill.floatValue != fill) report.fill.floatValue = fill
+    }
+
     /**
      * **The house armed, and every phone still standing in the lobby goes to PERIMETER ARMED**
      * (D-234).
@@ -3907,6 +4029,15 @@ fun FlowHost(
     // in [Flow.autoAdvance] is a screen's timer and this alert is not a screen, so it is run here,
     // housed or not, for [Flow.ownTimers]' reason: nothing outside the phone can push it. Keyed on
     // the flag, so a swipe or any arrival (both clear it) ends the wait with nothing left to fire.
+    // **The report circle, every frame the report screen is up** (D-307). The fill is read off the
+    // phone's clock against the hold's stamp and written to one float the circle's draw lambda reads,
+    // so a frame costs a draw and no recomposition (rule 7). Keyed on being on the screen, so leaving
+    // it ends the loop.
+    val onReport = screen == ScreenId.Report
+    LaunchedEffect(onReport) {
+        if (onReport) while (true) withFrameMillis { model.reportRead() }
+    }
+
     val alertUp = model.state.egressAlertUp
     LaunchedEffect(alertUp) {
         if (alertUp) {
@@ -3972,6 +4103,7 @@ fun FlowHost(
         // with the wrong model and no compile error to say so.
         perms = model.perms,
         lamp = model.lamp,
+        report = model.report,
     )
 }
 

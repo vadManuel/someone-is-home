@@ -41,7 +41,7 @@ class RequestSlotTest {
     )
 
     private fun frameOf(ask: String): Int =
-        TransportWire.encode(TransportFrame.Carry(RoundWire.encode(RoundBody.Sighted("0".repeat(SightingUpload.BODY_CHARS), ask, UploadProbe.NONE, RangingWire.NO_REPORT))))
+        TransportWire.encode(TransportFrame.Carry(RoundWire.encode(RoundBody.Sighted("0".repeat(SightingUpload.BODY_CHARS), ask, UploadProbe.NONE, RangingWire.NO_REPORT, MainViewField.OFF))))
             .encodeToByteArray().size
 
     @Test

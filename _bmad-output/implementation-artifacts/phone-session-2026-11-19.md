@@ -69,6 +69,12 @@ over Bluetooth, which is still the radio. Tick each line as you see it.
 ## Part 3 (optional): a UWB round
 
 - [ ] Install with `SOMEONES_HOME_UWB=1 ./run-app.sh device playtest` and play a round: the host's log says `CONTACT BY UWB DISTANCE` at lights out, and phones held screen to screen Revoke. (D-303)
+- [ ] In that round, hold a living phone on page 1 or page 2 within 30 cm of the Revoked phone: the
+      page gives way to a screen that is only a circle, which fills smoothly over about two seconds,
+      and the meeting's ring follows. Pull it away before it is full: it goes straight back to the
+      page it came from. Try the same hold from inside a Subroutine, the scan, the Egress widget and
+      the lantern: no circle, no meeting. Check the circle looks the same on an Insider's phone and
+      a Resident's, and is no brighter than the page it replaced. (D-307)
 
 Write anything that looks or feels wrong next to its line. The decision number shows where it was
 built.

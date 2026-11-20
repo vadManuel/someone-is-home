@@ -176,6 +176,9 @@ class RoundOverTransport(
         probe = uploadClock::stamp,
         // **And the UWB report** (D-300): capacity, spare tokens, nearest distances, one width.
         ranging = ranging,
+        // **And whether the person is on the main view** (D-307): asked of the panel at each beat,
+        // one character, every phone alike. The house's report hold reads it and nothing else does.
+        mainView = { flow.onMainView },
     )
 
     /** How many requests this phone has made in the round that the house has not answered. For tests. */
@@ -323,8 +326,12 @@ class RoundOverTransport(
             // probe, handed to the socket's estimator. Every answer to every upload, on every phone.
             is RoundBody.UploadHeard -> {
                 requests.heard(body.id)
-                // **And the house's ranging plan for this second** (D-300): to the radio, nowhere else.
+                // **And the house's ranging plan for this second** (D-300): to the radio.
                 contacts.planned(body.plan)
+                // **And the report's slot it carried, to the panel** (D-307): the report screen and
+                // its circle, from page 1 or 2 only, back to the page on a cancel. Every answer on
+                // every phone; on a phone that is not holding one it is idle and moves nothing.
+                flow.reportSaid(contacts.report)
                 uploadClock.answered(body, arrivedAtMillis) { sent, heard, answered, received ->
                     clock(sent, heard, answered, received)
                 }
@@ -337,7 +344,7 @@ class RoundOverTransport(
 
     /**
      * **The report's slot, as the house last said it to this phone** (D-301): idle, held for so
-     * long, or cancelled, off every answer's plan. Nothing draws it yet: the circle is the owner's.
+     * long, or cancelled, off every answer's plan. The report screen draws it (D-307).
      */
     val report: home.someoneshome.model.protocol.ReportSlot get() = contacts.report
 

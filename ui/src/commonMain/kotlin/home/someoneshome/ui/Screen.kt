@@ -96,6 +96,11 @@ fun Screen(
      * [LampState]. In the app [FlowHost] passes the one the round is writing to.
      */
     lamp: LampState = remember { LampState() },
+    /**
+     * **How full the report circle is** (D-307): [lamp]'s arrangement, one float read in a draw
+     * lambda. In the app [FlowHost] passes the model's; every render that does not gets an empty one.
+     */
+    report: ReportCircle = remember { ReportCircle() },
 ) {
     // **The one clock this device is entitled to run, started here because this is where a screen
     // arrives.** [localWindow] returns null on all but the two screens [LocalWindows] names, so on
@@ -182,6 +187,8 @@ fun Screen(
 
                 ScreenId.Home -> HomeScreen(vals)
                 ScreenId.Page2 -> Page2Screen(vals)
+                // The circle and nothing else (D-307). It takes no `vals`, so no role reaches it.
+                ScreenId.Report -> ReportScreen(report)
                 ScreenId.SurgeTargets -> SurgeTargetsScreen(vals)
                 ScreenId.IsolateTargets -> IsolateTargetsScreen(vals)
                 ScreenId.Quiet -> HomeScreen(vals)

@@ -11334,6 +11334,187 @@ eight-phone `ArrivalOrderTest` on Bluetooth: each round's touches landed after `
 **Not on a phone.** The real phones range nothing yet (`NoRanging`, D-303's switch off by default),
 so the next phone session's rounds arm on Bluetooth and nothing here touches them.
 
+### D-307 · **A report runs only from the main view, page 1 or 2, and takes the screen over with a circle that fills over the two seconds on the phone's own clock; every upload carries one character saying whether its phone is on the main view — built (recording stays 43); closes D-301's raised item 3**
+
+**The rulings** (owner, 2026-11-20). *In order to report a player you must not be in a minigame. You
+must just be in the main view (that being first or second page).* *Reporting takes over the screen
+and shows the circle filling.* The report screen is the circle only: no words, no buttons, drawn at
+the springboard's light with its own tokens. The circle fills smoothly over the 2 s, counted on the
+phone's clock from the moment the house's slot says the hold began (D-243, D-269's discipline); the
+house still decides: full is followed by the meeting's call as every call is, and a cancelled (or
+idle) slot sends the phone straight back to the page it came from. **And the same day's three
+clarifications:**
+
+1. **Control Centre or a notification pulled down over page 1 or 2: the person can report.** The app
+   does not watch resign-active at all.
+2. **The Egress alert dropped over page 1 or 2: the person can report.** A rule, not an open question.
+3. **The lantern (the game's own lock screen, `Lock` and `LockNotify`, SLIDE TO OPEN) is not the main
+   view.** No report starts or runs there; the person slides open to page 1 or 2 first. A phone the
+   OS has suspended (an iOS lock, the side button, a swipe home) sends nothing, and D-301's gap rule
+   (`REPORT_GAP_TICKS`) already ends its hold; no other gate was added for it.
+
+**How the house knows: one character in every upload** (`MainViewField`, model; `RoundBody.Sighted.view`).
+The house already knew some of where a reader is (a meeting running, a Subroutine armed at a card, a
+scan window), but not the briefing, the Egress widget, the lantern, a list or a picker, and nothing
+it holds says which page a phone is on. Inferring it would be a second copy of the phone's routing,
+kept in step by hope. So the phone says it: `1` on the main view, `0` anywhere else, one character in
+every upload, beside the sightings, the request slot, the probe and the ranging report, none of which
+moved. Why this is safe to put on the wire:
+
+- **One width and one cadence from every phone** (D-217): every seat sends it every beat, out seats
+  and Insiders included, and `MainViewFieldTest` measures the encoded frame equal either way.
+- **It says the screen, never the role.** An Insider's page 2 is a Resident's page 2 (D-142) and an
+  Insider's fake Subroutine is the same screen as a Resident's real one (rule 8), so the character is
+  the same for both roles at the same screen. What it carries is what the room already sees from the
+  phone's light (D-106, D-112): springboard or activity. The owner's 2026-11-20 ruling: what a phone
+  knows internally is not a leak; what matters is that nothing a person can see, hear or feel gives a
+  role away.
+- **It fails closed.** Only exactly `1` reads as the main view; anything else, and every caller that
+  is not the phone's own uploader (`SightingUpload.pack`'s default), is off it. A wrong field means
+  *my report did not start*, never a report from inside a Subroutine.
+- **Plain text, like the request slot** (D-212: length is the guarantee, content is as private as the
+  transport). Not sealed into the ranging report: that field is D-300's and D-306's, and a
+  one-character fact the room can see needs no seal.
+
+**Why the recording did not move.** The recording carries events, not uploads; the hold is resolver
+memory between arrivals, and what it mints (`MeetingCalled(RevokeReported)`) is recorded as before.
+A replay reads the events, so it needs no copy of the field. Recording stays 43.
+
+**At the house** (core `Contacts.kt`, on top of D-306). `ContactUpload.onMainView` (false by
+default: fails closed), read off the field by `RoundAuthority.sight`. The gate is **inside D-306's
+`holdMayRun`**, not beside it: `ContactFacts` gains `onMainView(seat)`, and one named question,
+`reportsFromWhereItIs(reader)`, is the fourth term of `holdMayRun` (UWB round, living reader, no
+meeting, on the main view). So the resolver's hold and the pairing's report need ask the same
+predicate and cannot disagree:
+
+- **The resolver** (`ContactHouse`) answers `onMainView` from this arrival's uploads (a loop over the
+  list it is handed, nothing allocated): off the main view nothing in reach is read, no hold begins,
+  and a running one ends `Cancelled` on that very upload, as leaving 30 cm ends one.
+- **The pairing** (`RoundContactFacts`, D-306) answers it from each seat's last upload:
+  `RangingDesk.answer` takes the upload's `onMainView` and records it before the pair is judged.
+  A seat not yet heard from counts as on, so the pairing never holds back a pair the hold might need;
+  the hold itself reads every upload's own field and fails closed there. So a reader in a Subroutine
+  beside a Revoked phone is not ranged at all, and back on page 1 or 2 its next upload forms the pair.
+
+Asked of the reader alone, never of the Revoked phone, and never of a role. **A Bluetooth round is
+not gated**: its report is D-236's two sightings, with no hold and no circle, and the brief scoped the
+gate to the hold (raised below).
+
+**On the phone** (ui).
+
+1. **`MainView`** (`Report.kt`), the one place the main view is defined: `Home`, `Page2`, `Report`,
+   and a banner over page 1 (`Banner`, `Notify`, `Quiet`); nothing else. `FlowModel.onMainView` asks
+   it; `ContactUploader` sends it each beat (`mainView`, wired by `RoundOverTransport` to the panel).
+2. **The report screen, `ScreenId.Report`.** `RoundOverTransport` hands every answer's slot to
+   `FlowModel.reportSaid`. Pending on page 1 or 2 (or a banner over page 1, which is page 1): the
+   phone goes to `Report`, remembering the page in `PanelState.reportFrom`. Pending anywhere else:
+   nothing (a late answer to an upload sent from the page; the next upload says off, and the house
+   cancels). Cancelled or idle on the report screen: back to `reportFrom`. The full circle's call
+   needs nothing: the house queues `MeetingOpened` (and `MeetingCalling` for the reader) on the seat's
+   socket before it answers the upload that minted it, so the ring has already taken the screen and
+   the idle slot after it lands on a ring and moves nothing.
+3. **The fill, on the phone's clock.** On the first pending slot the hold is stamped as begun
+   `elapsedMillis` before now on the monotonic clock (`monotonicMillis`, D-269); later slots of the
+   same hold keep the stamp, so the circle runs smoothly between answers and never steps back; a
+   shorter held time is a new hold and is restamped. `FlowHost` reads it every frame the screen is up
+   (`withFrameMillis` → `reportRead`) into one float (`ReportCircle`, `LampState`'s arrangement), read
+   only in the circle's draw lambda: a frame costs a draw, no `PanelState` copy and no recomposition.
+   Full stays full; the house decides.
+4. **Registered everywhere a screen is**: `ScreenGraph` (no exits: no controls), `Flow.housePushed`
+   (only the house's slot reaches it), `Flow.houseDriving` (no back; a text that would land over the
+   page waits where its kind waits, as at a meeting), `Flow.keepsItsScreenUnderTheEgress`, the new
+   `Flow.reportSlotLeadsTo` (its way off, for `FlowTest`'s walk), `Screen`'s exhaustive `when`, and
+   every sweep that walks `ScreenId.entries` (layout faults with a notch, the screenshot sweep, the
+   glass, the status strip). Not `BUZZING`: nothing buzzes; the person is holding the phone to another.
+5. **The Egress over the report screen: D-297's rule for a screen the person is in the middle of.**
+   The alert drops over the circle as a field (`egressAlertUp`), dims it by `NOTIFIED_DIM` as over the
+   springboard, and the circle keeps filling under it; the phone is still on the main view
+   (clarification 2), so the house keeps the hold. A swipe, the ten seconds or any arrival takes the
+   alert down; a tap on it opens the widget (D-299), which is off the main view, so the house cancels.
+   An Egress landing on the page *before* a hold begins is the banner over page 1, and the report
+   screen taking over is an arrival, so it takes that banner down with it (D-297's *any arrival
+   clears it*); the widget still holds the countdown.
+
+**The circle.** A ring, track in `Ramp.Line`, fill in `Ramp.Ink` from twelve o'clock clockwise, on
+the panel's black: the two inks page 1 already draws its lines and words in, and Jam's two rings'
+pair. Stroke 3, Jam's ring stroke. **Diameter 320 on the design's 360-wide canvas**: the
+springboard pages' content width (`DESIGN_WIDTH` less their 20 either side), centred in the space
+the page had under the status strip (the pages' own 18 top and 16 bottom), and the height left if
+that is less; 533 px in a 600×1300 render. No new light level, colour, type style or copy. The status
+strip stays: it is the phone's chrome on every screen in the round (D-078), not the screen's words.
+
+**What the renders showed** (`ReportScreenRender`, 600×1300, an iPhone 16 Pro's insets, through
+`FlowHost` with the composition's clock as the phone's; `ui/build/screens/report-*.png`):
+
+- `report-page1-*` and `report-page2-*`: the springboard as it always is (page 2 differs by role as
+  D-286 allows; page 1 and every report frame are pixel-identical across roles).
+- `report-0-*`: black, the status strip, and one thin dim amber ring (`Ramp.Line`) centred, nearly
+  edge to edge across the width.
+- `report-50-*`: the right half of the ring in the bright ink, from twelve o'clock down to just
+  past six (0.52: a second and a frame), the left half still dim.
+- `report-100-*`: the whole ring bright.
+- `report-egress-*`: the amber HOUSE · NOW / EGRESS ATTEMPT IN PROGRESS / CONTAIN AT UTILITY AND
+  LANDING card under the strip, the ring behind it at the dim with its right part filled.
+- Every pixel under the strip on the three report frames is the ground, one of the two inks, or an
+  edge between them; the report screen's ground is page 1's; the half ring's bright pixels are half
+  the full ring's (within 6 %); the full report screen lights fewer pixels than page 1.
+
+**Proved** (each guard red against its injected break first, then restored; quoted from the test XML):
+
+- **The house's gate removed** (`reportsFromWhereItIs` returning `true`, which takes it out of
+  `holdMayRun` for the hold and the pairing alike): `UwbContactTest` (core)
+  `a reader off the main view was told it is holding a report expected:<Idle> but
+  was:<Pending(elapsedMillis=0)>`, `leaving the main view did not cancel the hold
+  expected:<Cancelled> but was:<Pending(elapsedMillis=1000)>` and `the pairing ranged a report pair
+  for a reader off the main view (D-306, D-307) expected:<false> but was:<true>`; over real sockets,
+  `ContactRadioBenchTest` (app) `a reader in a Subroutine was told it is holding a report. Expected
+  <Idle>, actual <Pending(elapsedMillis=0)>.` and `leaving the main view did not cancel the hold.
+  Expected <Cancelled>, actual <Pending(elapsedMillis=1000)>.`
+- **The phone's gate removed** (`MainView.takesOverFrom` taking over from any screen):
+  `ReportScreenTest` (ui) `SubReplay: a pending slot took the phone to the report screen
+  expected:<SubReplay> but was:<Report>` and `Lock: the report screen took over the lantern
+  expected:<Lock> but was:<Report>`.
+- **Also green, not injected:** `UwbContactTest`'s fourth new case (the Revoked phone's own field is
+  never read); `ReportScreenTest` (ui, 16: the main view is exactly page 1, page 2, the report screen
+  and a banner over page 1, off on every Subroutine, the scan, the briefing, the widget, every meeting
+  screen and the lantern, the same answer for both roles; the screen from page 1 or 2 only and back
+  to that page on cancel or idle; the fill from the slot's held time on the phone's clock and smooth
+  between answers; a new hold restamped; the Egress over it; the call ending it; a text not taking
+  it; no back; the two roles' panels equal at every step); `ReportScreenRender` (ui desktop, above);
+  `MainViewFieldTest` (model, 3: one length on or off, survives the wire, fails closed);
+  `ContactRadioBenchTest.aReportRunsOnlyFromTheMainViewOnDistance` (a reader at 25 cm in Jam holds
+  nothing for five seconds; on page 2 the hold begins, the panel takes the report screen with
+  `reportFrom = Page2`, and the call lands the reader on its own ring).
+- Tests that moved with the change: `SightingUploadTest` (the body's keys gain `view`),
+  `FlowTest` (the no-back set names the report screen; the walk reads `reportSlotLeadsTo`),
+  `EgressOverScanTest` (the alert keeps the report screen too), `UwbContactTest`'s helper and the
+  two other resolver tests (`onMainView = true`, their question is not the screen), and every model
+  test that builds a `Sighted` by hand.
+
+**Rule 7.** On the phone: one character a beat, and while the report screen is up one float written a
+frame (no `PanelState` copy) and two `Stroke`s a draw. At the house: one boolean read off a field
+already decoded, a loop over the arrival's uploads by index, and one array slot per seat in the
+pairing's facts (grown once). `RangingAllocationTest` is unchanged and green, its ceilings unmoved.
+
+**Checked**: on the worktree rebased onto D-306 (`9114991`),
+`./gradlew :model:check :core:check :ui:check :app:check :harness:check --continue`, every result XML
+counted with a python glob: model 355 (JVM) + 339 (iOS Simulator), core 420 + 418, ui 732 (desktop)
++ 360 (iOS Simulator), app 266, harness 137: **3 027 tests, no failures, none skipped**. Nothing
+here has run on a phone.
+
+**Raised, not built.**
+
+1. **A Bluetooth round's report is not gated by the main view.** Real phones still arm on Bluetooth
+   (D-301), where a report is D-236's two sightings with no hold and no circle; the brief scoped the
+   gate to the hold. The ruling's first sentence reads as source-independent. If the owner wants it,
+   it is one line: the same `reportsFromWhereItIs` on the Bluetooth branch of `resolveContacts`.
+2. **A house that stops answering leaves the circle where it stood.** The phone moves off the report
+   screen only by a slot or a push; with the house off the air, D-260's disconnect screen is what
+   eventually comes. A phone-side timeout would be the phone deciding, so none was added.
+3. **The field is plain text on the Wi-Fi**, as the request slot is. A sniffer learns which phones
+   are on the springboard each second, which the room can see from the light; sealing it would mean
+   the ranging report's seal (D-300, D-306's file).
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

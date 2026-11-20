@@ -63,6 +63,8 @@ class DistanceResolverDifferentialTest {
             Seat(seat),
             SightingUpload.unpack(SightingUpload.pack(contactSeedFor(seed, Seat(seat)), w, n++, emptyList()))!!,
             d.map { (peer, cm) -> ContactDistance(Seat(peer), cm) },
+            // Every phone on the main view (D-307): the question here is the role, not the screen.
+            onMainView = true,
         )
         val t = ready + 200
         return listOf(
