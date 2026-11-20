@@ -80,6 +80,7 @@ Every call made without the owner is listed below: what was decided, why, and ho
 - **UWB runs only when the game needs it** (D-306, building): a pair is ranged only when Bluetooth says the phones are close and a Revoke, a report or the map could use it. Bluetooth runs the rest of the round.
 - **33.2:** applied. The GDD's sweep is once a second while performing a Subroutine at a card.
 - **33.4:** applied. The GDD's Platform section records D-292's launch refusal with the approved words.
-- **33.3, battery:** waits for D-306, so the line describes UWB running only for close pairs that need it.
+- **33.3, battery:** applied after D-306. The test conditions add UWB only while a close pair is needed; the 15% target stays; "non-issue by construction" is gone until a phone measures a round.
+- **D-306 merged.** The owner's threat model (2026-11-20): what sits only inside a player's own phone is not a leak. An unarmed touch is no longer measured on distance, so it sends no `ContactAnswered`; that frame never buzzed or drew anything, so nobody can perceive the change.
 - **D-305's scroll hint:** none. Nothing that needs action is under the edge.
 

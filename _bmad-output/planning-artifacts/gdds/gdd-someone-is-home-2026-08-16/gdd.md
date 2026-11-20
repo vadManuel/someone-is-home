@@ -1298,13 +1298,13 @@ Torch **level** control (not binary) · screen brightness override · keep-awake
 |---|---|---|
 | **Coordinated flip skew** | All devices flip within **±150 ms** of each other — "reads as one event" | Filmed at 240 fps across 8 devices in one room. **Delivery latency is not this number** — the event is scheduled 1–2 s ahead behind a calling screen, so only clock-offset accuracy matters, and offset estimation on a local network should comfortably beat 150 ms |
 | **Scan acquisition** | Code acquired in **≤500 ms** at arm's length, in ≤5 lux | Median over 50 scans, 5 lux ambient |
-| **Battery** | **≤15%** drain over a 25-minute round, iPhone 12 or later | Screen on throughout, camera duty-cycled (~3–4 min/round, not 25), BLE advertising and scanning continuously |
+| **Battery** | **≤15%** drain over a 25-minute round, iPhone 12 or later | Screen on throughout, camera duty-cycled (~3–4 min/round, not 25), BLE advertising and scanning continuously, Ultra Wideband ranging only while a close pair is needed (D-306) |
 | **Frame rate** | **60 FPS sustained** on the springboard and in every subroutine | Measured over a full round |
 | **Motion sampling** | **100 Hz** with no dropped windows during a subroutine | Instrumented over a 60-second circuit leg |
 | **Lamp luminance** | Dimmest step **≤2 nits** full-screen; lamp-screen lit pixel area **≤15%** of the panel | Photometer, and pixel-area measurement from a screenshot |
 | **Lamp blackout on contact** | **Same frame** as the contact handshake resolves | Single-device, and the one genuinely tight timing requirement in the game — it is the entire mitigation for losing the anonymous revoke |
 
-**Battery is a non-issue by construction**, because the camera duty-cycles to ~2–3 minutes per round rather than running for fifteen. A scan is a ten-second window that usually closes on acquire long before it expires, not a live preview.
+**The camera is duty-cycled**, to ~2–3 minutes per round rather than fifteen. A scan is a ten-second window that usually closes on acquire long before it expires, not a live preview. **Ultra Wideband runs only for close pairs the game needs** (D-306): an armed Revoke, a Revoked phone that can still be reported, or a player at a card, never for the whole round. **No round's drain has been measured on a phone yet**, so the 15% target is unproven until one is.
 
 ### Multi-device timing
 
