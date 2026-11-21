@@ -1,7 +1,6 @@
 package home.someoneshome.core
 
 import home.someoneshome.model.Balance
-import home.someoneshome.model.ContactSource
 import home.someoneshome.model.ContactTokens
 import home.someoneshome.model.ContactWindow
 import home.someoneshome.model.Event
@@ -18,8 +17,9 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * **D-301: the rules read UWB distance** (the U6 plan, unit 3), in a round whose contact source is
- * [ContactSource.Uwb], and Bluetooth exactly as before in one whose source is [ContactSource.Rssi].
+ * **D-301, D-308: the rules read UWB distance, in every round** (the U6 plan, unit 3; the owner's
+ * 2026-11-20 ruling: there are no Bluetooth rounds). Bluetooth only ranks who is near, for the
+ * pairing; no reading of it decides a touch, a report or a hold.
  *
  * The resolver and the rules together, one arrival a second, the way the house runs them. Every
  * upload carries real packed Bluetooth slots (so the duplicate guard sees two uploads as two) and the
@@ -41,8 +41,8 @@ class UwbContactTest {
     private val second = ContactGate.UPLOAD_TICKS
     private val hit = ready + 100
 
-    private fun armedRound(source: ContactSource, arm: Boolean = true): GameState = buildList {
-        add(Event.RoundArmed(Tick(0), seed = 42L, seats = seats, insiders = listOf(Seat(1), Seat(5)), contactSource = source))
+    private fun armedRound(arm: Boolean = true): GameState = buildList {
+        add(Event.RoundArmed(Tick(0), seed = 42L, seats = seats, insiders = listOf(Seat(1), Seat(5))))
         if (arm) add(Event.RevokeArmed(Tick(ready + 1), Seat(insider)))
     }.fold(GameState.EMPTY) { s, e -> reduce(s, e).state }
 
@@ -111,7 +111,7 @@ class UwbContactTest {
 
     @Test
     fun `a touch is both phones at ten centimetres or nearer within the mutual window`() {
-        val house = House(armedRound(ContactSource.Uwb, arm = false))
+        val house = House(armedRound(arm = false))
         assertEquals(emptyList(), house.at(hit, up(4, 6 to 10)), "one phone's reading alone minted something")
         val second = house.at(hit + ContactGate.MUTUAL_TICKS, up(6, 4 to 9))
         assertEquals(listOf(4 to 6, 6 to 4), contacts(second), "both phones at ten centimetres or nearer did not touch: $second")
@@ -120,7 +120,7 @@ class UwbContactTest {
     @Test
     fun `eleven centimetres on either side is not a touch`() {
         for ((a, b) in listOf(11 to 3, 3 to 11)) {
-            val house = House(armedRound(ContactSource.Uwb, arm = false))
+            val house = House(armedRound(arm = false))
             val events = house.at(hit, up(4, 6 to a), up(6, 4 to b))
             assertEquals(emptyList(), contacts(events), "a pair read at $a and $b cm touched: $events")
         }
@@ -128,7 +128,7 @@ class UwbContactTest {
 
     @Test
     fun `the halves of a touch must fall in the mutual window`() {
-        val house = House(armedRound(ContactSource.Uwb, arm = false))
+        val house = House(armedRound(arm = false))
         house.at(hit, up(4, 6 to 2))
         val late = house.at(hit + ContactGate.MUTUAL_TICKS + 1, up(6, 4 to 2))
         assertEquals(emptyList(), contacts(late), "two halves further apart than the mutual window touched: $late")
@@ -136,14 +136,14 @@ class UwbContactTest {
 
     @Test
     fun `an armed Insider's touch by distance Revokes the other phone`() {
-        val house = House(armedRound(ContactSource.Uwb))
+        val house = House(armedRound())
         house.touch()
         assertTrue(house.state.isRevoked(Seat(target)))
     }
 
     @Test
     fun `an out phone's distances are not read so it touches nobody`() {
-        val house = House(armedRound(ContactSource.Uwb))
+        val house = House(armedRound())
         house.touch()
         // Seat 1's arm is spent; seat 5 (the other Insider) arms and touches the Revoked seat 3, both ways.
         house.state = reduce(house.state, Event.RevokeArmed(Tick(hit + 200), Seat(5))).state
@@ -155,7 +155,7 @@ class UwbContactTest {
 
     /** A Revoked seat 3 and a reader at seat 2, nobody touching: the plain hold. */
     private fun reportRound(): House {
-        val house = House(armedRound(ContactSource.Uwb))
+        val house = House(armedRound())
         house.touch()
         return house
     }
@@ -315,7 +315,7 @@ class UwbContactTest {
 
     @Test
     fun `a neighbour who was not in the touch starts holding at once`() {
-        val house = House(armedRound(ContactSource.Uwb))
+        val house = House(armedRound())
         house.touch(up(neighbour, target to 25))
         house.at(hit + second, up(neighbour, target to 25))
         assertEquals(ReportSlot.Pending(0), house.slot(neighbour), "the neighbour was held by a grace that is the pair's")
@@ -356,52 +356,45 @@ class UwbContactTest {
         assertEquals(Tick(t0), house.memory.held.single().seen, "a repeat refreshed the hold")
     }
 
-    // ---- The source, per round -------------------------------------------------------------------
+    // ---- The grace (D-291) -------------------------------------------------------------------------
 
     @Test
-    fun `a round that reads Bluetooth ignores distances and one that reads distance ignores Bluetooth`() {
-        val rssi = House(armedRound(ContactSource.Rssi, arm = false))
-        val byDistance = rssi.at(hit, up(4, 6 to 2), up(6, 4 to 2))
-        assertEquals(emptyList(), byDistance, "a Bluetooth round touched on distance: $byDistance")
-        val byRssi = rssi.at(hit + 200, up(4, heard = listOf(6)), up(6, heard = listOf(4)))
-        assertEquals(listOf(4 to 6, 6 to 4), contacts(byRssi), "a Bluetooth round did not touch on RSSI")
-
-        val uwb = House(armedRound(ContactSource.Uwb, arm = false))
-        val uwbByRssi = uwb.at(hit, up(4, heard = listOf(6)), up(6, heard = listOf(4)))
-        assertEquals(emptyList(), uwbByRssi, "a distance round touched on RSSI: $uwbByRssi")
-        assertEquals(ReportSlot.Idle, uwb.slot(4))
+    fun `the grace is five seconds`() {
+        assertEquals(5L * Balance.TICKS_PER_SECOND, ContactGate.PAIR_GRACE_TICKS, "the grace moved without a ruling (D-291)")
     }
 
+    /** The grace counts from the touch, not from the last reading: one tick short still holds nothing. */
     @Test
-    fun `a Bluetooth round's report is D-236's and its slots are always idle`() {
-        val house = House(armedRound(ContactSource.Rssi))
-        val events = house.at(hit, up(insider, heard = listOf(target)), up(target, heard = listOf(insider)))
-        assertEquals(2, contacts(events).size)
-        house.at(hit + second, up(neighbour, target to 5, heard = listOf(target)))
-        assertEquals(ReportSlot.Idle, house.slot(neighbour), "a Bluetooth round told a phone it holds a report")
-        val called = house.at(hit + 2 * second, up(neighbour, target to 5, heard = listOf(target)))
-        assertEquals(1, called.count(reportBy(neighbour)), "D-236's two readings did not report in a Bluetooth round")
-        assertEquals(ReportSlot.Idle, house.slot(neighbour))
+    fun `one tick before the grace ends is still inside it`() {
+        val house = reportRound()
+        house.at(hit + ContactGate.PAIR_GRACE_TICKS - 2 * second, up(insider, target to 6))
+        assertEquals(emptyList(), house.at(hit + ContactGate.PAIR_GRACE_TICKS - 1, up(insider, target to 6)))
+        assertEquals(ReportSlot.Idle, house.slot(insider), "the Insider's phone started a hold a tick before the grace ended")
     }
 
-    @Test
-    fun `the source is UWB only when every armed phone can range`() {
-        val five = (0 until 5).map { Seat(it) }
-        assertEquals(ContactSource.Uwb, contactSourceFor(five) { 3 })
-        assertEquals(ContactSource.Uwb, contactSourceFor(five) { 1 })
-        assertEquals(ContactSource.Rssi, contactSourceFor(five) { if (it.index == 2) 0 else 3 }, "one phone that cannot range")
-        assertEquals(ContactSource.Rssi, contactSourceFor(five) { if (it.index == 4) null else 3 }, "one phone that never said")
-        assertEquals(ContactSource.Rssi, contactSourceFor(five) { null }, "no phone said")
-        assertEquals(ContactSource.Rssi, contactSourceFor(emptyList()) { 3 }, "no seats")
-    }
+    // ---- Bluetooth decides nothing (D-308) ---------------------------------------------------------
 
+    /**
+     * **No Bluetooth reading touches, reports or holds.** Two phones that hear each other at −20 dBm
+     * on every upload, an armed Insider among them, touch nobody; a living phone that hears the
+     * Revoked seat at −20 dBm for five seconds, measuring nothing, is told nothing and calls nothing.
+     * D-236's two readings were a report before D-308; D-233's −40 dBm was a touch.
+     */
     @Test
-    fun `the arming records the source the house chose`() {
-        val five = (0 until 5).map { Seat(it) }
-        val uwb = armingFor(Tick(0), 7L, five, null, emptyList(), contactSource = contactSourceFor(five) { 2 })
-        assertEquals(ContactSource.Uwb, uwb.contactSource)
-        assertEquals(ContactSource.Uwb, reduce(GameState.EMPTY, uwb).state.contactSource, "the state did not hold the arming's source")
-        val rssi = armingFor(Tick(0), 7L, five, null, emptyList())
-        assertEquals(ContactSource.Rssi, rssi.contactSource, "an arming that chose nothing does not read Bluetooth")
+    fun `Bluetooth at minus twenty dBm touches nobody and reports nobody`() {
+        val house = House(armedRound())
+        for (k in 0..4) {
+            val events = house.at(hit + k * second, up(insider, heard = listOf(target)), up(target, heard = listOf(insider)))
+            assertEquals(emptyList(), events, "a Bluetooth reading touched: $events")
+        }
+        assertTrue(!house.state.isRevoked(Seat(target)), "an armed Insider's Bluetooth Revoked the other phone")
+
+        val revoked = reportRound()
+        val t0 = hit + ContactGate.PAIR_GRACE_TICKS
+        for (k in 0..4) {
+            val events = revoked.at(t0 + k * second, up(neighbour, heard = listOf(target)))
+            assertEquals(emptyList(), events, "a Bluetooth reading of a Revoked seat reported it: $events")
+            assertEquals(ReportSlot.Idle, revoked.slot(neighbour), "a Bluetooth reading started a hold")
+        }
     }
 }

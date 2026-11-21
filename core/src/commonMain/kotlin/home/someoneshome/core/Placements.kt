@@ -1,7 +1,6 @@
 package home.someoneshome.core
 
 import home.someoneshome.model.Balance
-import home.someoneshome.model.ContactSource
 import home.someoneshome.model.Effect
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
@@ -15,14 +14,15 @@ import home.someoneshome.model.Tick
  * (O4 of the occupancy spec).
  *
  * The host has the plan (`GameState.plan`, O2), knows where every performer is (the presence plane)
- * and is handed one sighting upload a second by every living phone (D-212). D-212 itself says these
- * uploads are the spectator map's input. Until this file they reached the contact resolver alone.
+ * and is handed one upload a second by every phone (D-212). D-212 itself says these uploads are the
+ * spectator map's input. Since D-308 what places a seat is the UWB distance the performer's phone
+ * read of it (D-301), never a Bluetooth reading.
  *
  * ### Two halves, as the contacts have
  *
  * [resolvePlacements] sits above the rules, beside `resolveContacts`, for its reason: turning a
- * token back into a seat needs the token book, which `reduce` has never held. It mints one
- * [Event.Sensed] for an upload whose sender is a sensor and nothing for any other upload. The rules
+ * ranged pair back into a seat needs the house's UWB pairing, which `reduce` has never held. It
+ * mints one [Event.Sensed] for an upload whose sender is a sensor and nothing for any other upload. The rules
  * ([sensed]) then write a [Placement.Inferred] for every seat it heard and capture one
  * [Observation] of the sensor's room, its error rolled once and stored.
  *
@@ -37,7 +37,7 @@ import home.someoneshome.model.Tick
  *
  * ### The unreliability is kept on purpose
  *
- * Bleed into the next room at the RSSI floor, holes where nobody performs, placements that expire,
+ * Bleed into the next room at the room reach, holes where nobody performs, placements that expire,
  * and an injected error on every count: D-136 says *a map the out can read perfectly turns the
  * couch into an oracle*, and misreading each other is this game's material. **None of it is to be
  * tuned away.** Every number is provisional and named in [SensingGate] for playtest.
@@ -45,24 +45,16 @@ import home.someoneshome.model.Tick
 
 /**
  * **The spectator map's tunables, in one place** (O4). ⚠️ **Every one is provisional**: the
- * occupancy spec's Q5 and `gdd.md` A-7/A-8 leave them to playtest, and only the RSSI floor needs a
+ * occupancy spec's Q5 and `gdd.md` A-7/A-8 leave them to playtest, and only the room reach needs a
  * phone before it means anything (O8). The placement lifetimes are `PlacementTiming`'s, in `model`,
  * because `GameState.placementOf` reads them.
  */
 object SensingGate {
 
     /**
-     * ⚠️ **Provisional, −75 dBm: the room-presence floor.** Looser than the contact floor (−40,
-     * D-233) on purpose: this is *in the same room*, not *touching*. `gdd.md:791`: *BLE RSSI is a
-     * proximity gate, never a map*, and the next room's bleed through a wall is accepted (D-136).
-     * Uncalibrated: nothing has measured a room on two phones yet.
-     */
-    const val ROOM_RSSI_FLOOR: Int = -75
-
-    /**
      * ⚠️ **Provisional (overnight), 1.5 m: the room reach by UWB** (D-301; the U6 plan's starting
-     * number, unit 3). In a round that reads distance, a performer places a seat in its room when its
-     * phone read that seat this near. A wall does not lengthen a UWB reading the way a body does, so
+     * number, unit 3). A performer places a seat in its room when its phone read that seat this
+     * near, in every round (D-308). A wall does not lengthen a UWB reading the way a body does, so
      * the next room's bleed is still there (U3 accepts it), and only seats this phone is ranging can
      * be placed, which is a performer's few nearest. The deliberate error (D-272) is unchanged.
      */
@@ -91,9 +83,6 @@ object SensingGate {
     /** ⚠️ **Provisional, ±5 s: the age jitter**, rolled once per capture (`gdd.md:484`). */
     const val AGE_JITTER: Long = 5L * Balance.TICKS_PER_SECOND
 
-    /** Whether [rssi] is a room-range reading. Zero and above is no reading at all (CoreBluetooth's 127). */
-    fun inRoom(rssi: Int): Boolean = rssi in ROOM_RSSI_FLOOR..ContactGate.RSSI_CEILING
-
     /** Whether [cm] is a room-range distance (D-301). */
     fun inRoomReach(cm: Int): Boolean = cm <= ROOM_REACH_CM
 }
@@ -102,9 +91,7 @@ object SensingGate {
  * **One upload, judged as the spectator map's input: a [Event.Sensed] if its sender is a sensor,
  * or null** (D-136, D-212).
  *
- * [book] is the contact resolver's token book for this arrival (`ContactMemory.book`), so a token
- * is turned back into a seat once per window and by lookup, never by HMAC per slot. [at] is the
- * arrival's tick, the same one the contacts were judged on.
+ * [at] is the arrival's tick, the same one the contacts were judged on.
  *
  * **A sensor is a living seat the house has placed at a card this shift** that is performing (a
  * window open or a Subroutine armed, D-136) or within [SensingGate.SCAN_SWEEP] of the scan or close
@@ -112,34 +99,23 @@ object SensingGate {
  * the end, from a seat that is out (D-155; and an out phone uploads filler anyway, R8), or at a card
  * the house's own map cannot put in a room.
  *
- * **Heard** is every living seat of the round, other than the sensor, whose token the upload carried
- * at [SensingGate.ROOM_RSSI_FLOOR] or stronger, once each, in seat order. Filler and strangers
- * resolve to nobody, as they do for contacts. **In a round that reads UWB** ([ContactSource.Uwb],
- * D-301) it is every such seat the upload measured at [SensingGate.ROOM_REACH_CM] or nearer
- * ([ContactUpload.distances]) instead, and the Bluetooth slots place nobody.
+ * **Heard** is every living seat of the round, other than the sensor, that the upload measured at
+ * [SensingGate.ROOM_REACH_CM] or nearer ([ContactUpload.distances], D-301), once each, in seat
+ * order. The Bluetooth slots place nobody (D-308).
  *
  * **Allocation** (rule 7): an upload from a seat that is not a sensor costs one presence lookup and
  * allocates nothing; a sensor's costs one small list and the event.
  */
-fun resolvePlacements(at: Tick, book: ContactBook?, upload: ContactUpload, state: GameState): Event.Sensed? {
-    if (book == null) return null
+fun resolvePlacements(at: Tick, upload: ContactUpload, state: GameState): Event.Sensed? {
     val sensor = upload.seat
     val room = sensingRoom(state, sensor, at) ?: return null
 
     val heard = ArrayList<Seat>(4)
-    when (state.contactSource) {
-        ContactSource.Rssi -> for (sighting in upload.sightings) {
-            if (!SensingGate.inRoom(sighting.rssi)) continue
-            val seat = book.seatOf[sighting.token] ?: continue
-            if (!couldPlace(state, sensor, seat)) continue
-            if (heard.none { it.index == seat.index }) heard += seat
-        }
-        ContactSource.Uwb -> for (distance in upload.distances) {
-            if (!SensingGate.inRoomReach(distance.cm)) continue
-            val seat = distance.target
-            if (!couldPlace(state, sensor, seat)) continue
-            if (heard.none { it.index == seat.index }) heard += seat
-        }
+    for (distance in upload.distances) {
+        if (!SensingGate.inRoomReach(distance.cm)) continue
+        val seat = distance.target
+        if (!couldPlace(state, sensor, seat)) continue
+        if (heard.none { it.index == seat.index }) heard += seat
     }
     heard.sortBy { it.index }
     return Event.Sensed(at, sensor, room, heard)

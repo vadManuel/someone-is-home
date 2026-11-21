@@ -7,6 +7,7 @@ import home.someoneshome.model.OrderLine
 import home.someoneshome.model.Seat
 import home.someoneshome.model.protocol.IntentMessage
 import home.someoneshome.model.protocol.RoundMessage
+import home.someoneshome.model.protocol.SightingUpload
 import home.someoneshome.platform.launchSwitch
 import home.someoneshome.platform.monotonicNanos
 import home.someoneshome.platform.launchValue
@@ -93,6 +94,11 @@ class RoundCheat(
     private val isHost: () -> Boolean,
     /** This seat's screen, at every beat. Null on a seat with no ledger attached. */
     private val ledger: ScreenLedger? = null,
+    /**
+     * **The host's upload door, where act 3's stand-in radios are spliced in** (D-308). Null on a
+     * seat with no door attached, which then plays act 3 with no radio at all.
+     */
+    private val standIn: StandInDoor? = null,
     /**
      * **True when this process was launched to play a round rather than to be tapped** — the
      * [ROUND_SWITCH], read once. A parameter only so a test can hold a bench seat beside a person's.
@@ -640,10 +646,12 @@ class RoundCheat(
      *
      * **The contact and the report are no longer minted** (D-217). Both were stand-ins until the
      * radio existed: this act now walks the Insider's phone to the target's in a [SimulatedAir], the
-     * radios hear each other, the uploads go to the house, and the resolver mints whatever it
-     * concludes. The Revoke lands, or does not, by the rules; the report is a living phone hearing a
-     * Revoked one. What is still stood in for is the hop up each phone's socket, because five
-     * processes share no air: see [HouseAir]. The in-process tests carry that hop over real sockets.
+     * radios measure each other, the uploads go to the house, and the resolver mints whatever it
+     * concludes. The Revoke lands, or does not, by the rules, on distance (D-308); the report is a
+     * living phone held within 30 cm of a Revoked one for two seconds, from the main view (D-307).
+     * What is stood in for is the radios, Bluetooth and Ultra Wideband, because five processes share
+     * no air and a simulator has no Nearby Interaction: see [HouseAir], spliced into every phone's own
+     * upload at the host's door. The in-process tests carry that splice over real sockets.
      *
      * The meeting's four transitions are [tickHouse]'s, so the gate, the talk, the ballot and the
      * tally end when the house's own deadlines say they do and this method's job is to wait.
@@ -675,26 +683,32 @@ class RoundCheat(
             return
         }
         val radios = HouseAir(house).also { it.armed() }
-        val act = ContactAct(radios.air, beat = { radios.beat(); delay(STEP_MILLIS) }, note = note)
-        note("THE RADIO IS SIMULATED — THE HOUSE UPLOADS FOR THE OTHER PHONES (NO AIR BETWEEN PROCESSES)")
-        act.idle(beats = 2)
-        act.touch(insider, target)
-        delay(SETTLE_MILLIS)
-        note(if (house.state.isRevoked(target)) "THE REVOKE LANDED ON SEAT ${target.index}" else "THE TOUCH REVOKED NOBODY")
-        beat("REVOKED")
+        // One beat is one upload a second from every phone: the splice rides the phones' own cadence.
+        val act = ContactAct(radios.air, beat = { delay(SightingUpload.CADENCE_MILLIS) }, note = note)
+        standIn?.air = radios
+        try {
+            note("THE RADIO IS SIMULATED — THE HOUSE STANDS IN FOR EVERY PHONE'S BLUETOOTH AND ULTRA WIDEBAND (NO AIR BETWEEN PROCESSES)")
+            act.idle(beats = 2)
+            act.touch(insider, target, until = { house.state.isRevoked(target) })
+            delay(SETTLE_MILLIS)
+            note(if (house.state.isRevoked(target)) "THE REVOKE LANDED ON SEAT ${target.index}" else "THE TOUCH REVOKED NOBODY")
+            beat("REVOKED")
 
-        val reporter = house.state.livingSeats.firstOrNull { it.index != insider.index }
-        if (reporter == null) {
-            note("NOBODY LEFT TO REPORT IT")
-            return
+            val reporter = house.state.livingSeats.firstOrNull { it.index != insider.index }
+            if (reporter == null) {
+                note("NOBODY LEFT TO REPORT IT")
+                return
+            }
+            // A living phone held against the Revoked one for two seconds, from the main view
+            // (D-301, D-307): the resolver mints the report; the rules call it.
+            act.touch(reporter, target, until = { house.state.meeting != null })
+            note(
+                if (house.state.meeting != null) "SEAT ${reporter.index} FOUND A REVOKED PLAYER — A MEETING WAS CALLED"
+                else "NO MEETING CAME OF THE REPORT"
+            )
+        } finally {
+            standIn?.air = null
         }
-        // A living phone finding the Revoked one: one side hears, because a Revoked phone
-        // advertises and never scans (D-008). The resolver mints the report; the rules call it.
-        act.touch(reporter, target)
-        note(
-            if (house.state.meeting != null) "SEAT ${reporter.index} FOUND A REVOKED PLAYER — A MEETING WAS CALLED"
-            else "NO MEETING CAME OF THE REPORT"
-        )
         theMeeting(house)
     }
 

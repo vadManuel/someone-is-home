@@ -11515,6 +11515,205 @@ here has run on a phone.
    are on the springboard each second, which the room can see from the light; sealing it would mean
    the ranging report's seal (D-300, D-306's file).
 
+### D-308 · **There are no Bluetooth rounds: every round is the hybrid, Bluetooth ranking who is near and every rule reading Ultra Wideband distance; the per-round choice, the Bluetooth branch of the rules, the lobby's capacity message and the radio's switch are gone, and a phone that cannot range is paired with nobody — built (recording 44)**
+
+**The ruling** (owner, 2026-11-20): *"Let's implement the Bluetooth/UWB hybrid we discussed. We'll
+test it."* Every round is the hybrid: Bluetooth sightings only rank who is near (U6), the house pairs
+close, needed pairs for Ultra Wideband (D-306), and every rule reads the distance (D-301, D-307).
+With D-292's *UWB phones only; no Bluetooth fallback*. It supersedes overnight decisions 12 (D-301's
+per-round choice) and 24 (D-303's switch, off by default), and with them decision 13 (D-301's lobby
+message), which only fed the choice.
+
+**Now, the radio.**
+
+1. **On by default on every phone.** `CheatRoot` holds `nearbyRangingRadio` on every launch; the
+   `SOMEONES_HOME_UWB` switch (`UWB_SWITCH` in `Cheats.kt`, the `DEVICECTL_CHILD_` pass-through and
+   help lines in `run-app.sh`) is gone. The debug and playtest variants run the real Nearby
+   Interaction radio on every phone. **The release variant has no round to run it in**: its root is
+   still the launch gate or the boot screen (D-292), so it compiles the radio and calls none of it,
+   as before; nothing here changes that root. The `armingCordon` and `benchSeedCordon` lints are
+   untouched and green (the switch they did not fence was read in `cheats`, which they allow).
+2. **The simulator holds `NoRanging`.** `nearbyRangingRadio` is now an `actual` per iOS source set:
+   `iosArm64Main` hands out the Nearby Interaction pool (`nearbyInteractionRadio`, still in
+   `iosMain`, so the simulator's build compiles every line of it), and `iosSimulatorArm64Main` says
+   `NoRanging`, as `uwbSupported()` says true there (D-292). A simulator has no Nearby Interaction
+   ranging, and a pool there would only open sessions that never run and report faults for them.
+   Its uploads report capacity 0 at full width; the house pairs it with nobody. `run-app.sh`,
+   `e2e.sh` and the sim hunt launch and play as before, and nothing reads a distance on them.
+3. **Kept for the pairing, unchanged:** advertising, scanning, the rotating tokens, the 24-slot
+   upload, the contact resolver's token book (now kept only for the pairing's ranking) and D-306's
+   `NEAR_RSSI_FLOOR`.
+
+**Now, the rules** (core). `contactSourceFor` is gone, and with it `ContactSource`,
+`Event.RoundArmed.contactSource`, `GameState.contactSource`, `armingFor`'s `contactSource` and the
+`ContactFacts.source` term in `holdMayRun` and `rangingNeeded`. **No RSSI decides anything a rule
+decides:** `resolveContacts` reads each upload's distances and nothing else (a touch is both phones
+at 10 cm within the mutual window, D-301), D-236's Bluetooth report (one side heard twice) is
+deleted, and `resolvePlacements` places only what the performer measured within 1.5 m (it loses its
+`book` parameter, which only the Bluetooth branch read). Removed because nothing else read them:
+`ContactGate.RSSI_FLOOR` (D-233's −40), `ContactGate.atContact`, `ContactGate.REPORT_READINGS` and
+`REPORT_SPAN_TICKS` (D-236), the resolver's `HEARD_TICKS` (now `MUTUAL_TICKS` alone),
+`SensingGate.ROOM_RSSI_FLOOR` (−75) and `SensingGate.inRoom`. `RSSI_CEILING` (*127 is no reading*)
+moved from `ContactGate` to `RangingGate`, because the pairing's ranking is now its only reader. No
+light, timing value, reach (10 cm, 30 cm, 2 s, 1.5 m), Revoke window or copy moved.
+
+**A phone that cannot range** (capacity 0: NEARBY DEVICES refused, `unsupportedPlatform`, or iOS's
+session limit lowering it to nothing) **no longer changes the round.** Under D-301 one such phone
+took the whole round to Bluetooth. Now it simply cannot be paired, so **it can neither Revoke nor be
+Revoked, report nor be reported, and the map cannot place it by distance** (nor can it place
+anybody). D-303's fault reporting is unchanged: a refusal goes up as the person's fault and is named
+at the next meeting (D-187); the limit and an unsupported phone go up as the device's and are
+recorded only. **For the owner:** a player who refuses NEARBY DEVICES is, for the round, untouchable
+and unreportable, and is named at the next meeting for it; D-161's setup gate already stops a phone
+at PERMISSIONS until the row is answered, but ASKED (no answer in two seconds) does not block
+(D-303), and a refusal later in Settings is not seen until the round.
+
+**Now, the lobby: `LobbyBody.Ranging` is removed.** Its one reader was the arming's choice of
+source. Nothing before arming needs a phone's capacity: the pairing reads it from every upload's
+ranging report, once a second, from the first upload of the round (D-300), and never pairs before
+arming (D-306). So the body, `LobbyOverTransport.rangingCapacity`, the house's `rangingBySeat` and
+`ArmingInputs.ranging` are gone, and the lobby's wire is what it was before D-301.
+
+**Recording: 44.** The recorded contact source would be a constant, `uwb` on every row, so it is
+dropped rather than kept: a field with one value carries nothing, and keeping it would keep
+`ContactSource.Rssi` constructible, a round the resolvers would then have to branch on or refuse.
+`RoundArmed` loses `contacts=`, and so does the state row (`|host=` ends the arming row again). A
+version 43 recording is refused, as every older one is: it may hold a round whose events the
+Bluetooth rules minted, which this build cannot describe. No effect row changed shape, and the same
+events reduce the same way.
+
+**The house's log** loses `· CONTACT BY UWB DISTANCE` at arming (it would be the same words every
+round) and gains two lines, for the phone session's new check (how long ranging takes to start): `UWB
+— THE HOUSE PAIRED n MORE PAIR(S) AT t MS ON THE HOUSE'S CLOCK` when a pair forms, and `UWB — A PAIR
+READ ITS FIRST DISTANCE, d CM, AT t MS …` on a pair's first reading. Neither names a seat or a
+handle. The first-reading check is a 64-slot ring of handles in `RangingDesk`, written in place, so
+the path allocates nothing for it (rule 7); the strings are built only on those two moments.
+
+**The rehearsal's stand-in, on distance** (`HouseAir`, cheats). Five simulators share no air and
+have no UWB radio. D-301 left `HouseAir` on Bluetooth for that reason, as a second upload per seat
+beside the phone's own. On distance that cannot work: the house holds one upload stream per seat,
+the phone's own upload says capacity 0 (so the pairing lets the stand-in's pairs go) and carries no
+distances (so a report's hold is cancelled the second it begins). **So the stand-in is spliced into
+each phone's own upload at the host's door** (`StandInDoor`, the app root's `onSighted`): its
+Bluetooth slots and ranging report replace the phone's, the request slot, the clock probe and the
+main view field stay the phone's own, and the house's plan goes back to the stand-in's radio as well
+as down the phone's socket (where `NoRanging` applies nothing). `RoundCheat`'s act 3 puts it on the
+air for the Revoke and the report and takes it off before the meeting; its touches hold until the
+house concludes (up to ten seconds, `ContactAct.HOLD_BEATS`). The report needs the reporter's own
+phone on page 1 or 2 (D-307): if the scripted evening has that seat in a Subroutine, the log says `NO
+MEETING CAME OF THE REPORT`, honestly. `rehearse.sh` itself was not run here.
+
+**D-307's raised item 1 is closed**: there is no Bluetooth report left to gate by the main view.
+
+**`tools/one-phone`'s report check no longer passes, said plainly**: its step 4 has the phone's
+Bluetooth sighting of the Mac report a Revoked seat, and a Mac has no Ultra Wideband. Its README now
+says so above those lines; the tool is otherwise untouched.
+
+**Rule 7.** `RangingAllocationTest`'s second guard measured the distance rules against the Bluetooth
+rules' path in the same room and allowed 1 024 B more, and holding 1 536 B more. There is no
+Bluetooth path to subtract now, so the guard is absolute, at ceilings under the limits it replaces:
+on `183f387` the Bluetooth path read 6 477 B, so the old limits were 7 501 B and 8 013 B; the new
+ceilings are **7 168 B** and **7 680 B**. Measured now: **6 416 B** on distance and **6 576 B**
+holding (+160). D-300's ranging path: 1 810 B (ceiling 2 048, unmoved). No other ceiling moved.
+
+**Tests deleted, each because it pinned only the Bluetooth rules or the per-round choice:**
+
+- `PairGraceTest` (core, 4): D-291's grace on Bluetooth's two-readings report. Its two duplicate
+  cases already live on distance in `UwbContactTest` (*the Revoking Insider's phone holds nothing
+  inside the grace then holds and reports after it*, *a neighbour who was not in the touch starts
+  holding at once*); its two pins moved there (*the grace is five seconds*, *one tick before the
+  grace ends is still inside it*, on distance).
+- `ContactResolverTest` (core), 14 of its 29 cases: the four RSSI-gate cases (the −40 floor and
+  D-233's readings, *127 is no reading*, *a Revoked seat heard under the floor*), *a Revoked seat
+  needs one side only*, the six D-236 report cases (*one reading … a second within the span*, *a
+  stray reading over the floor*, *readings from different phones*, *a second delivery … is not a
+  second reading*, *a contact still needs only one reading from each phone*, *a second delivery of
+  a report's upload*), *a phone whose clock runs one window ahead* and *the house's window and one
+  either side* (tokens deciding a touch; the book's three windows stay pinned by *the book answers
+  exactly what seatOf answers*), and *a pair that both hear a Revoked seat mints every event*. The
+  other 15 are rebuilt on distance: mutual and one-sided, the mutual window, the book, the grace
+  between a pair (its Bluetooth report half dropped), duplicates, distances that are nobody, the
+  huddles, replay and order; plus two new, *an upload interval is the upload cadence* (the pin that
+  lived in a D-236 case) and *a phone's Bluetooth slots however loud are no half of a touch*.
+- `UwbContactTest` (core), 4: *a round that reads Bluetooth ignores distances…*, *a Bluetooth round's
+  report is D-236's…*, *the source is UWB only when every armed phone can range*, *the arming
+  records the source the house chose*. Replaced by *Bluetooth at minus twenty dBm touches nobody and
+  reports nobody* and the two grace pins above.
+- `RangingPairsTest` (core): the half of *aClosePairTheGameDoesNotNeedIsNeverPaired* that played a
+  Bluetooth round.
+- `ContactResolverDifferentialTest` (harness, 3): the Bluetooth resolver under role and arm swaps.
+  `DistanceResolverDifferentialTest` is the same two questions on distance; the third case
+  (*a report needs two readings*) was D-236's.
+- `ContactSourceRecordingTest` (harness, 4): the recorded source.
+- `LobbyRangingTest` (app, 2): the lobby's capacity message and the per-round choice over sockets.
+- `ContactRadioBenchTest` (app), 3: *theBenchPlaysARoundToAnEndingThroughTheFakeRadio* (the round to
+  an ending on Bluetooth; *theBenchPlaysARoundToAnEndingOnDistance* is that round now, and the host
+  log's S3 case plays it), *theRevokingInsidersPhoneReportsItsTargetOnlyAfterTheGrace* (its distance
+  twin stays) and *aNeighbourWhoWasNotInTheTouchReportsInsideTheGrace* (on distance the pairing's
+  seconds and the 2 s hold fill the 5 s grace, so the bench cannot show it inside the grace; core
+  pins it).
+
+**Tests moved to distance** (bench): every `ContactRadioBenchTest` case plays on distance through the
+app root's `StandInDoor`; the per-round choice case is now
+*onlyTheDistanceDecidesAndAPhoneThatCannotRangeIsTouchedByNobody* (a body between two phones: no
+Revoke; a phone with no radio: an armed touch held ten seconds Revokes nobody and it is paired with
+nobody, while the rest play); the S4 and R4/R5 cases assert that nothing starts and nothing is
+answered (no hold runs on a reported seat or at a meeting, so the gate is never asked); the
+rehearsal's stand-in case plays the splice over real sockets with five phones that have no UWB.
+`ArrivalOrderTest` plays its 28 touches on distance: every phone first opens a window at its own
+card, so each is a sensor and every close pair is one the map needs (D-306), and the touches are
+measured and answered. `PlacementTest` places by centimetres, and `PlacementWiringTest` (app) places
+through two real uploaders a metre apart, paired by the house for the map. `RangingAllocationTest`, the recording
+tests (format 44) and every bench that passed `rangingCapacity` moved with the change.
+
+**Proved, red against the injected break first, then restored.** A Bluetooth path put back into
+the resolver for one rule (a sighting at −40 dBm or stronger, resolved through the token book, taken
+as half of a touch), `:core:jvmTest`, 403 tests, two red, quoted from the XML: `UwbContactTest`
+*Bluetooth at minus twenty dBm touches nobody and reports nobody*: `a Bluetooth reading touched:
+[ContactMade(at=Tick(step=700), actor=Seat(index=1), target=Seat(index=3)), ContactMade(at=Tick(step=700),
+actor=Seat(index=3), target=Seat(index=1))] expected:<[]> but was:<[…]>`; `ContactResolverTest` *a
+phone's Bluetooth slots however loud are no half of a touch*: `a Bluetooth slot was read as half of a
+touch expected:<[]> but was:<[ContactHeard(observer=Seat(index=3), target=Seat(index=2),
+at=Tick(step=700))]>`. Restored; the counts below are the restored tree's.
+
+**Checked** (`./gradlew :model:check :core:check :ui:check :harness:check :cards:check :platform:check
+:buildSrc:test --continue`, then `:app:check` with its debug tests, then each variant sweep alone,
+every result XML counted with a python glob and the app's copied after each, because the sweeps
+write into one folder; `test-results` cleared first): model 355 (JVM) + 339 (iOS Simulator), core
+403 + 401, ui 732 (desktop) + 360 (iOS Simulator), platform 210, harness 130, cards 17, buildSrc 31,
+app 261 (debug), 155 (release sweep) and 261 (playtest sweep): **no failures, none skipped**. The first
+run caught `LobbyWireTest`'s pinned count of lobby bodies (`a lobby body was added without pinning
+its discriminator expected:<6> but was:<7>`, the count still naming `LobbyBody.Ranging`); fixed to 6
+and `:model:check` run again on the final tree (355 + 339, green). Against D-307's numbers: core 17
+fewer and harness 7 fewer (the deletions above, less the new cases), app 5 fewer (`LobbyRangingTest`'s
+2 and the bench's 3). `vocabularyLint`, `redactionLint`, `boundaryCheck`, `armingCordon`, `benchSeedCordon` and
+`seedSourceCordon` clean. Neither known load flake fired. **The Playtest app builds for a
+device** (`xcodebuild … -configuration Playtest -destination 'generic/platform=iOS'
+CODE_SIGNING_ALLOWED=NO`, `** BUILD SUCCEEDED **`): its binary references `NISession` and carries no
+`SOMEONES_HOME_UWB` string (the spike's own `SOMEONES_HOME_UWB_*` switches stay, for `tools/uwb-spike`).
+`run-app.sh` has no unsigned device build of its own, so this is D-303's command.
+
+**Not on a phone.** Nothing here has run on one. The phone session's checklist
+(`phone-session-2026-11-19.md`) now plays every round as the hybrid: Part 3 is folded into Part 2,
+the D-290 line is a 10 cm pass measured by Ultra Wideband, and two lines are added: how long two
+phones take to start ranging after an Insider arms beside someone (from the arm to the first
+distance in the host's log), and whether iOS shows anything on screen while a Nearby Interaction
+session runs (D-306's raised item 2).
+
+**Decisions for the owner** (each provisional):
+
+1. **The recorded source is dropped and the format is 44** (above), rather than kept as a constant.
+2. **`LobbyBody.Ranging` is removed** (above): nothing before arming reads a capacity.
+3. **The simulator's radio is `NoRanging`**, not the Nearby Interaction pool.
+4. **The rehearsal's stand-in is spliced into each phone's own upload**, keeping the phone's own main
+   view, so a scripted reporter in a Subroutine reports nothing.
+5. **Two new lines in the house's log**, a pairing and a pair's first distance, with no seat or
+   handle, for the phone session's timing.
+6. **`ArrivalOrderTest` makes every phone a sensor** so its unarmed touches are measured.
+7. **`RangingAllocationTest`'s guard is absolute**, at 7 168 B and 7 680 B.
+8. **D-300 decision 8 settled**: `RoundOverTransport` and `RoundClient` keep `NoRanging` as their
+   default, for the tests whose question is not ranging; the app's root always passes its radio.
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

@@ -25,8 +25,12 @@ What the answers change:
 
 ## Part 2: retests of the 2026-11-18 build
 
-Install the Playtest build on two phones (`./run-app.sh device playtest`) and play a short round
-over Bluetooth, which is still the radio. Tick each line as you see it.
+Install the Playtest build on two phones (`./run-app.sh device playtest`) and play a short round.
+Every round is the Bluetooth and Ultra Wideband hybrid (D-308): Bluetooth ranks who is near, the
+house pairs close phones the game needs for Ultra Wideband, and every Revoke, report and placement
+reads the distance. There is no switch to set. Grant NEARBY DEVICES on both phones: a phone that
+refused it cannot be paired, so it can neither Revoke nor be Revoked, report nor be reported.
+Tick each line as you see it.
 
 **Setup**
 - [ ] PERMISSIONS has a NEARBY DEVICES row under BLUETOOTH. Tapping it raises iOS's question,
@@ -43,8 +47,22 @@ over Bluetooth, which is still the radio. Tick each line as you see it.
 **Revoke, on the Insider's phone**
 - [ ] Page 2 after arming: ARMED, then 20 s later **COOLING DOWN, dimmed**, then READY about 61 s
       after the hold. It never says READY early. (D-286)
-- [ ] Touching phones while armed: **both phones give one Long buzz**, and the Insider's tile goes
-      straight to COOLING DOWN. (D-290)
+- [ ] While armed, pass the Insider's phone within 10 cm of the other phone (a pass is enough;
+      Ultra Wideband measures it): **both phones give one Long buzz**, and the Insider's tile goes
+      straight to COOLING DOWN. (D-290, D-301)
+- [ ] How long ranging takes to start: note the time you arm beside the other phone, then read the
+      host's log for the first distance between the two. Write down the seconds between. (D-306)
+- [ ] While a Nearby Interaction session runs (the Insider armed beside another phone, or a living
+      phone beside a Revoked one), does iOS show anything on either screen: an indicator, a banner,
+      a prompt? Write down what, on which phone. (D-306)
+
+**Report**
+- [ ] Hold a living phone on page 1 or page 2 within 30 cm of the Revoked phone: the page gives way
+      to a screen that is only a circle, which fills smoothly over about two seconds, and the
+      meeting's ring follows. Pull it away before it is full: it goes straight back to the page it
+      came from. Try the same hold from inside a Subroutine, the scan, the Egress widget and the
+      lantern: no circle, no meeting. Check the circle looks the same on an Insider's phone and a
+      Resident's, and is no brighter than the page it replaced. (D-307)
 
 **Egress**
 - [ ] Mid-Subroutine when an Egress starts: the alert drops **over** the work. The work stays.
@@ -65,16 +83,6 @@ over Bluetooth, which is still the radio. Tick each line as you see it.
 - [ ] `./run-app.sh device release` on a UWB phone launches to the boot screen. It must not stop
       at launch, now that it asks iOS about UWB (D-292) and carries the Nearby Interaction line
       (D-294).
-
-## Part 3 (optional): a UWB round
-
-- [ ] Install with `SOMEONES_HOME_UWB=1 ./run-app.sh device playtest` and play a round: the host's log says `CONTACT BY UWB DISTANCE` at lights out, and phones held screen to screen Revoke. (D-303)
-- [ ] In that round, hold a living phone on page 1 or page 2 within 30 cm of the Revoked phone: the
-      page gives way to a screen that is only a circle, which fills smoothly over about two seconds,
-      and the meeting's ring follows. Pull it away before it is full: it goes straight back to the
-      page it came from. Try the same hold from inside a Subroutine, the scan, the Egress widget and
-      the lantern: no circle, no meeting. Check the circle looks the same on an Insider's phone and
-      a Resident's, and is no brighter than the page it replaced. (D-307)
 
 Write anything that looks or feels wrong next to its line. The decision number shows where it was
 built.

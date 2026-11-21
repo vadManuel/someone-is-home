@@ -25,7 +25,12 @@ import platform.NearbyInteraction.NISessionDelegateProtocol
 import platform.darwin.NSObject
 import platform.posix.memcpy
 
-actual fun nearbyRangingRadio(log: (String) -> Unit): RangingRadio {
+/**
+ * **The Nearby Interaction pool, built** (D-303): what a phone's [nearbyRangingRadio] is. Shared by
+ * both iOS source sets so the simulator's build still compiles every line of it; only a phone's
+ * build hands it out (D-308).
+ */
+internal fun nearbyInteractionRadio(log: (String) -> Unit): RangingRadio {
     val sessions = NearbySessions(log)
     val pool = RangingPool(sessions, nextKey = ::randomKey, log = log)
     sessions.pool = pool

@@ -1,7 +1,6 @@
 package home.someoneshome.core
 
 import home.someoneshome.model.Balance
-import home.someoneshome.model.ContactSource
 import home.someoneshome.model.ContactToken
 import home.someoneshome.model.ContactTokens
 import home.someoneshome.model.ContactWindow
@@ -28,29 +27,28 @@ import home.someoneshome.model.protocol.ReportSlot
  * phones* (`gdd.md`, the contact primitive; D-121 corrected). This file mints the gesture and
  * leaves the outcome to the rules:
  *
- * - **A mutual sighting mints [Event.ContactMade] in both directions**, for every pair, whoever
- *   they are. Whether either side holds an armed Revoke is `Rules.contact`'s question, and the
- *   emit schema decides who hears the answer. **No role and no armed state is read here**, and
- *   the guarantee is [ContactHouse]'s field list: it carries the round's seed, its seats and who
- *   is Revoked, and nothing else.
- * - **A one-sided sighting of a Revoked seat, heard twice, mints the report**, `MeetingCalled`
- *   with [MeetingTrigger.RevokeReported], exactly the event the bench's stand-in mints. One side
- *   suffices because a Revoked phone advertises and never scans (D-008); twice, in two of the
- *   reporter's three latest uploads, because one side is one radio and one stray reading over the
- *   floor is not a find (D-236). Who is Revoked is the one piece of state read, because the report
- *   *is* that fact meeting a phone; the count asks nothing about who is counting.
+ * - **A mutual touch mints [Event.ContactMade] in both directions**, for every pair, whoever they
+ *   are: both phones read each other at [ContactGate.REVOKE_REACH_CM] or nearer within
+ *   [ContactGate.MUTUAL_TICKS]. Whether either side holds an armed Revoke is `Rules.contact`'s
+ *   question, and the emit schema decides who hears the answer. **No role and no armed state is
+ *   read here**, and the guarantee is [ContactHouse]'s field list: it carries the round's seed, its
+ *   seats, who is out, who is Revoked and who was reported, and nothing else.
+ * - **A living phone holding a Revoked seat mints the report**, `MeetingCalled` with
+ *   [MeetingTrigger.RevokeReported]: within [ContactGate.REPORT_REACH_CM] for
+ *   [ContactGate.REPORT_HOLD_TICKS], read from the reader's side alone, with a pending hold the
+ *   house tells that phone about every second ([ReportSlot]) so its circle can fill. Who is Revoked
+ *   is the one piece of state read, because the report *is* that fact meeting a phone.
  *
- * ### Two sources, one per round (D-301)
+ * ### Distance, in every round (D-308)
  *
- * The round's [ContactSource], chosen at arming and recorded, decides what the two questions above
- * read. Under [ContactSource.Rssi] they read Bluetooth exactly as described. Under
- * [ContactSource.Uwb] they read the nearest UWB distance each phone measured of each peer it is
- * ranging ([ContactUpload.distances]): **a touch is both phones at [ContactGate.REVOKE_REACH_CM] or
- * nearer within the mutual window**, and **a report is one living phone holding a Revoked seat
- * within [ContactGate.REPORT_REACH_CM] for [ContactGate.REPORT_HOLD_TICKS]**, read from the reader's
- * side alone, with a pending hold the house tells that phone about every second ([ReportSlot]) so
- * its circle can fill. A phone that is out keeps ranging (D-300), and the house reads none of its
- * distances: the Bluetooth rule's *a phone that is out does not scan* (D-008), kept.
+ * Both questions read the nearest UWB distance each phone measured of each peer it is ranging
+ * ([ContactUpload.distances]), and nothing else: **no Bluetooth reading decides a touch or a
+ * report** (the owner's 2026-11-20 ruling: every round is the hybrid). Bluetooth only ranks who is
+ * near whom, for the house's UWB pairing (`Ranging.kt`, U6, D-306), which is why the token book is
+ * still built here and kept in [ContactMemory.book]. A phone that is out keeps ranging (D-300), and
+ * the house reads none of its distances (D-008's *a phone that is out does not scan*, kept). A
+ * phone that cannot range (capacity 0) is paired with nobody, so it reads no distance and nobody
+ * reads one of it: it can neither touch nor be touched, report nor be reported.
  *
  * Where several apply at once, every one is minted, in seat order ([inSeatOrder]), and the rules
  * decide. A huddle of three is six contacts; a pair that also hears a Revoked seat is two contacts
@@ -78,8 +76,7 @@ data class ContactUpload(
     /**
      * **The nearest UWB distance this phone read this second of each peer it is ranging** (D-301),
      * resolved by the house's pairing from the pair's handle to the seat at its other end. Only a
-     * pair the house keeps resolves, so only a pair being ranged can touch or report (U6). Read only
-     * in a round whose [ContactSource] is [ContactSource.Uwb]; empty otherwise.
+     * pair the house keeps resolves, so only a pair being ranged can touch or report (U6).
      */
     val distances: List<ContactDistance> = emptyList(),
     /**
@@ -109,9 +106,8 @@ data class ContactResolution(
     val taken: List<Seat> = emptyList(),
     /**
      * **Each uploading seat's report slot for its answer** (D-301), one per upload of a seat of the
-     * round, in seat order: whether its phone is holding a report, and for how long. Always
-     * [ReportSlot.Idle] in a round that reads Bluetooth; the house seals it into the plan it answers
-     * every upload with, so every phone is sent one, at one width.
+     * round, in seat order: whether its phone is holding a report, and for how long. The house seals
+     * it into the plan it answers every upload with, so every phone is sent one, at one width.
      */
     val slots: List<ContactSlot> = emptyList(),
 ) {
@@ -138,17 +134,20 @@ data class ReportHeld(val reader: Seat, val target: Seat, val since: Tick, val s
  */
 data class ContactMemory(
     /**
-     * Every gated, resolved sighting, one per (observer, target) per upload, younger than the longer
-     * of [ContactGate.MUTUAL_TICKS] and [ContactGate.REPORT_SPAN_TICKS] (D-236: a report counts them).
+     * Every peer a living phone read at touch reach, one per (observer, target) per upload, younger
+     * than [ContactGate.MUTUAL_TICKS]: the halves a touch is made of.
      */
     val heard: List<ContactHeard>,
     /** The last contact or report minted per unordered pair, younger than [ContactGate.PAIR_GRACE_TICKS]. */
     val minted: List<ContactMinted>,
     /** Uploads already taken, younger than [ContactGate.DUPLICATE_TICKS], so a second delivery is recognised. */
     val received: List<ContactReceived>,
-    /** The token book for the window last resolved in, or null before the first arrival. */
+    /**
+     * The token book for the window last resolved in, or null before the first arrival. Read by the
+     * house's UWB pairing, which ranks peers by Bluetooth (D-300), and by no rule (D-308).
+     */
     val book: ContactBook?,
-    /** **Every report being held, by its reader, in seat order** (D-301). Empty in a round that reads Bluetooth. */
+    /** **Every report being held, by its reader, in seat order** (D-301). */
     val held: List<ReportHeld> = emptyList(),
 ) {
     companion object {
@@ -156,7 +155,7 @@ data class ContactMemory(
     }
 }
 
-/** [observer]'s radio heard [target] at contact range, in the upload that arrived at [at]. */
+/** [observer]'s phone read [target] at touch reach, in the upload that arrived at [at]. */
 data class ContactHeard(val observer: Seat, val target: Seat, val at: Tick)
 
 /** A contact between [low] and [high] (low < high) was minted at [at]. */
@@ -209,37 +208,11 @@ data class ContactBook(
 /**
  * **The tolerances, named, in one place** (D-213).
  *
- * The mutual window is a placeholder and says so; the floor is the owner's ruling (D-233). A number
- * here is a gameplay rule wearing a constant's clothes: the floor decides whether a Revoke lands at
- * all, and a mis-set one fails silently in both directions (architecture risk 2).
+ * The mutual window is a placeholder and says so; the reaches are the owner's rulings (U1, Q5). A
+ * number here is a gameplay rule wearing a constant's clothes: a reach decides whether a Revoke
+ * lands at all, and a mis-set one fails silently in both directions (architecture risk 2).
  */
 object ContactGate {
-
-    /**
-     * **Ruled by the owner on two phones: −40 dBm** (D-233). A reading at or above this is contact;
-     * below it is not.
-     *
-     * Measured phone to phone (2026-11-16): touching firmly −27, touching loosely −37, 30 cm −43
-     * (−41 to −45), 1 m −57. At −35 about a third to a half of quick realistic touches registered;
-     * at −40 about 65 to 80 per cent. So −40 opens on a loose touch and stays shut at 30 cm, by one
-     * dB at that distance's strongest reading.
-     *
-     * **The radius is a hard constraint, not a tuning value** (D-008, `gdd.md`). At *nearby* the
-     * report is a through-wall detector for Revoked players and *you can walk past a Revoked player
-     * and never notice* stops being true; too tight, and a Revoke silently never lands, which nobody
-     * can tell from an Insider who never tried. D-008 said it may only ever tighten; **D-233 loosens
-     * it from −35 by the owner's ruling, for this value only**, because at −35 half or more of real
-     * touches never landed. Any further move needs its own ruling and a two-phone 30 cm pass-by
-     * check.
-     */
-    const val RSSI_FLOOR: Int = -40
-
-    /**
-     * **A reading of zero or more is not a reading.** CoreBluetooth reports 127 when it has no
-     * RSSI, and the upload carries it faithfully; ungated, *no reading* would pass as the strongest
-     * contact possible from anywhere in the house.
-     */
-    const val RSSI_CEILING: Int = -1
 
     /**
      * **Windows behind the house's that a token may come from: one.** A sighting made just before
@@ -295,29 +268,9 @@ object ContactGate {
     /**
      * **One upload interval, in ticks: one second**, the same value as `SightingUpload.CADENCE_MILLIS`
      * (provisional there, and `ContactResolverTest` pins the two together). Held here so the report's
-     * span below is counted in uploads and moves with the cadence.
+     * slack and gap below are counted in uploads and move with the cadence.
      */
     const val UPLOAD_TICKS: Long = 1L * Balance.TICKS_PER_SECOND
-
-    /**
-     * **A report needs two readings at contact range, from two of the reporter's uploads** (D-236).
-     * A contact already needs two readings, one from each phone; a report has only one phone that
-     * scans (a Revoked phone never does, D-008), so it asks that one phone twice. One stray reading
-     * over the floor, a pass-by at 30 cm on the gate's one-dB margin or an Insider lingering near
-     * the player they Revoked, is no longer a meeting.
-     */
-    const val REPORT_READINGS: Int = 2
-
-    /**
-     * **...within two of the reporter's three latest uploads: 2.5 s**, which is two upload intervals
-     * between the first reading and the last plus half of one for delivery jitter, measured on
-     * arrival ticks as [MUTUAL_TICKS] is. Holding a phone to a Revoked one for about two seconds
-     * reports it; brushing it in one does not.
-     */
-    const val REPORT_SPAN_TICKS: Long = 2L * UPLOAD_TICKS + UPLOAD_TICKS / 2
-
-    /** How long a gated sighting is remembered: as long as the longer of the two questions asks. */
-    internal val HEARD_TICKS: Long = maxOf(MUTUAL_TICKS, REPORT_SPAN_TICKS)
 
     /**
      * **How long an upload is remembered to recognise a second delivery: as long as a token in it
@@ -328,16 +281,13 @@ object ContactGate {
     const val DUPLICATE_TICKS: Long =
         (WINDOWS_BACK + 1 + WINDOWS_AHEAD) * ContactWindow.MILLIS * Balance.TICKS_PER_SECOND / 1_000L
 
-    /** Whether [rssi] is a contact-range reading. */
-    fun atContact(rssi: Int): Boolean = rssi in RSSI_FLOOR..RSSI_CEILING
-
-    // ---- UWB distance (D-301) -----------------------------------------------------------------
+    // ---- UWB distance (D-301, D-308) -----------------------------------------------------------
 
     /**
      * **A touch, by UWB: 10 cm** (the owner's U1; the U6 plan, unit 3). Each phone of a pair must
-     * read the other at or nearer than this, within [MUTUAL_TICKS] of each other, as each phone
-     * must hear the other at [RSSI_FLOOR] under Bluetooth: one modified phone cannot claim a touch
-     * alone, and both phones read the same two-way exchange, so a real flyby shows on both. The
+     * read the other at or nearer than this, within [MUTUAL_TICKS] of each other: one modified
+     * phone cannot claim a touch alone, and both phones read the same two-way exchange, so a real
+     * flyby shows on both. The
      * phone keeps the nearest reading of each second (D-300), so a pass inside 10 cm caught by one
      * or two readings at 150 ms is not averaged away.
      */
@@ -388,9 +338,6 @@ object ContactGate {
  * [holdMayRun], [holdMayTarget]) and never a copy of them.
  */
 internal interface ContactFacts {
-    /** What this round reads (D-301): chosen at arming from the phones' capacities, never a role. */
-    val source: ContactSource
-
     /** Whether a meeting is running: no hold starts or runs at one, where everybody stands together. */
     val inMeeting: Boolean
 
@@ -418,13 +365,13 @@ internal interface ContactFacts {
 internal fun ContactFacts.readsDistancesOf(seat: Seat): Boolean = !isOut(seat)
 
 /**
- * **Whether [reader] may hold a report at all on this upload** (D-301): a round that reads
- * distance, a living reader (R3), no meeting running (D-301 decision 5), and the reader's phone on
- * the main view ([reportsFromWhereItIs], D-307). The pairing asks this same question (D-306), so a
- * report pair is ranged only while the hold could run.
+ * **Whether [reader] may hold a report at all on this upload** (D-301): a living reader (R3), no
+ * meeting running (D-301 decision 5), and the reader's phone on the main view
+ * ([reportsFromWhereItIs], D-307). The pairing asks this same question (D-306), so a report pair is
+ * ranged only while the hold could run.
  */
 internal fun ContactFacts.holdMayRun(reader: Seat): Boolean =
-    source == ContactSource.Uwb && readsDistancesOf(reader) && !inMeeting && reportsFromWhereItIs(reader)
+    readsDistancesOf(reader) && !inMeeting && reportsFromWhereItIs(reader)
 
 /**
  * **Whether [reader] may report from where its phone is** (D-307, the owner's 2026-11-20 ruling:
@@ -452,7 +399,6 @@ internal fun ContactFacts.holdMayTarget(reader: Seat, target: Seat): Boolean =
  * upload (rule 7): it allocates nothing.
  */
 internal class RoundContactFacts(var state: GameState) : ContactFacts {
-    override val source: ContactSource get() = state.contactSource
     override val inMeeting: Boolean get() = state.meeting != null
     override fun isRevoked(seat: Seat): Boolean = state.isRevoked(seat)
     override fun isOut(seat: Seat): Boolean = state.isOut(seat)
@@ -485,7 +431,6 @@ internal class ContactHouse private constructor(
     val roundSeed: Long,
     val seats: List<Seat>,
     val revoked: List<Seat>,
-    override val source: ContactSource,
     val out: List<Seat>,
     val reported: List<Seat>,
     override val inMeeting: Boolean,
@@ -511,7 +456,6 @@ internal class ContactHouse private constructor(
             roundSeed = state.seed,
             seats = state.seats.sortedBy { it.index },
             revoked = state.revoked.sortedBy { it.index },
-            source = state.contactSource,
             out = (state.revoked + state.restrained).distinctBy { it.index }.sortedBy { it.index },
             reported = state.reported.sortedBy { it.index },
             inMeeting = state.meeting != null,
@@ -528,25 +472,21 @@ internal class ContactHouse private constructor(
  *
  * 1. **A second delivery of an upload is ignored.** Same seat, same slots, filler included, within
  *    [ContactGate.DUPLICATE_TICKS]. Filler is keyed off the upload's own counter, so two honest
- *    uploads never match; a repeat is the transport's, and it must not refresh a sighting's time.
- *    An upload from a seat not in the round is ignored too: nothing it heard can be anybody's.
- * 2. **Each slot is gated, then inverted.** [ContactGate.atContact] first, then the book: a token
- *    from the house's window, the one before it or the one after it, from a seat of this round,
- *    that is not the uploader's own. Filler, strangers and windows further off resolve to nobody.
- * 3. **The heard list gains** one entry per seat each upload heard, and forgets what is older than
- *    either question below asks about.
- * 4. **Each pair heard this arrival is judged:** a contact if each side has heard the other within
- *    [ContactGate.MUTUAL_TICKS]; a report for each side that heard a Revoked seat in
- *    [ContactGate.REPORT_READINGS] uploads within [ContactGate.REPORT_SPAN_TICKS].
+ *    uploads never match; a repeat is the transport's, and it must not refresh a reading's time.
+ *    An upload from a seat not in the round is ignored too: nothing it read can be anybody's.
+ * 2. **Each distance is gated** ([ContactGate.atRevokeReach]): a peer of this round, other than the
+ *    uploader, read at [ContactGate.REVOKE_REACH_CM] or nearer. An out phone's distances are not
+ *    read at all (D-301). The Bluetooth slots decide nothing here (D-308).
+ * 3. **The heard list gains** one entry per seat each upload read at touch reach, and forgets what
+ *    is older than [ContactGate.MUTUAL_TICKS].
+ * 4. **Each pair read this arrival is judged:** a contact if each side has read the other within
+ *    [ContactGate.MUTUAL_TICKS].
  * 5. **A pair inside its grace mints nothing** ([inPairGrace], [ContactGate.PAIR_GRACE_TICKS],
- *    D-291); otherwise everything that applies to it is minted at [at] and the pair is stamped once.
+ *    D-291); otherwise the contact is minted at [at] and the pair is stamped once.
  *
- * **In a round that reads UWB** ([ContactSource.Uwb], D-301), step 2 reads each upload's
- * [ContactUpload.distances] instead of its Bluetooth slots: a peer at [ContactGate.REVOKE_REACH_CM]
- * or nearer is heard at contact range, and an out phone's distances are not read at all. Step 4's
- * contact is unchanged; its report is replaced by [heldReports]: one living reader holding a
- * Revoked seat within [ContactGate.REPORT_REACH_CM] for [ContactGate.REPORT_HOLD_TICKS], told to the
- * reader's phone in every answer as its [ContactResolution.slots]. The grace of step 5 covers it.
+ * Then the report, [heldReports]: one living reader holding a Revoked seat within
+ * [ContactGate.REPORT_REACH_CM] for [ContactGate.REPORT_HOLD_TICKS], told to the reader's phone in
+ * every answer as its [ContactResolution.slots]. The grace of step 5 covers it.
  */
 fun resolveContacts(
     memory: ContactMemory,
@@ -570,28 +510,20 @@ fun resolveContacts(
         if (repeat || !house.holds(upload.seat)) continue
         received += ContactReceived(upload.seat, at, upload.sightings)
         taken += upload.seat
-        when (house.source) {
-            ContactSource.Rssi -> upload.sightings
-                .filter { ContactGate.atContact(it.rssi) }
-                .mapNotNull { book.seatOf[it.token] }
-                .filter { it.index != upload.seat.index }
-                .distinctBy { it.index }
-                .forEach { fresh += ContactHeard(upload.seat, it, at) }
-            // **Distance, from a living phone only** (D-301). A phone that is out keeps ranging so
-            // that it stays measurable (D-300); what it measures is not read, as an out phone's
-            // Bluetooth never was (D-008).
-            ContactSource.Uwb -> if (house.readsDistancesOf(upload.seat)) {
-                upload.distances
-                    .filter { ContactGate.atRevokeReach(it.cm) && house.holds(it.target) && it.target.index != upload.seat.index }
-                    .distinctBy { it.target.index }
-                    .sortedBy { it.target.index }
-                    .forEach { fresh += ContactHeard(upload.seat, it.target, at) }
-            }
+        // **Distance, from a living phone only** (D-301). A phone that is out keeps ranging so that
+        // it stays measurable (D-300); what it measures is not read, as an out phone's Bluetooth
+        // never was (D-008).
+        if (house.readsDistancesOf(upload.seat)) {
+            upload.distances
+                .filter { ContactGate.atRevokeReach(it.cm) && house.holds(it.target) && it.target.index != upload.seat.index }
+                .distinctBy { it.target.index }
+                .sortedBy { it.target.index }
+                .forEach { fresh += ContactHeard(upload.seat, it.target, at) }
         }
     }
 
     val heard = (memory.heard + fresh)
-        .filter { at.step - it.at.step <= ContactGate.HEARD_TICKS }
+        .filter { at.step - it.at.step <= ContactGate.MUTUAL_TICKS }
         .sortedWith(compareBy<ContactHeard> { it.observer.index }.thenBy { it.target.index }.thenBy { it.at.step })
 
     /** How many of [observer]'s uploads heard [target] within [ticks] of this arrival. */
@@ -613,16 +545,6 @@ fun resolveContacts(
                 add(Event.ContactMade(at, low, high))
                 add(Event.ContactMade(at, high, low))
             }
-            // A report is one side, heard twice (D-236). The count is the same question for every
-            // reporter; the only thing asked of the seat heard is whether it is Revoked. Bluetooth's
-            // alone: under UWB a report is a hold ([heldReports], D-301).
-            val rssi = house.source == ContactSource.Rssi
-            if (rssi && house.isRevoked(high) && heardBy(low, high, ContactGate.REPORT_SPAN_TICKS) >= ContactGate.REPORT_READINGS) {
-                add(Event.MeetingCalled(at, low, MeetingTrigger.RevokeReported(high)))
-            }
-            if (rssi && house.isRevoked(low) && heardBy(high, low, ContactGate.REPORT_SPAN_TICKS) >= ContactGate.REPORT_READINGS) {
-                add(Event.MeetingCalled(at, high, MeetingTrigger.RevokeReported(low)))
-            }
         }
         val graced = minted.any { it.low.index == low.index && it.high.index == high.index }
         if (applies.isEmpty() || graced) continue
@@ -630,7 +552,7 @@ fun resolveContacts(
         minted = minted + ContactMinted(low, high, at)
     }
 
-    // **The UWB report's hold** (D-301): after the contacts, so a touch minted on this arrival puts
+    // **The report's hold** (D-301): after the contacts, so a touch minted on this arrival puts
     // its pair in the grace before any hold between the two is judged.
     val holds = heldReports(memory.held, at, uploads, taken, house, minted)
     events += holds.events
@@ -665,11 +587,11 @@ private class Holds(
  * 1. **What it reads in reach**: every Revoked seat its upload measured at
  *    [ContactGate.REPORT_REACH_CM] or nearer, not already reported (S4), its pair with the reader
  *    not inside its grace ([inPairGrace], D-291), nearest first, then by seat. Nothing when the
- *    reader is out (R3: only a living phone reports), when a meeting is running, when the reader's
- *    phone is off the main view (D-307), or in a round that reads Bluetooth: [holdMayRun].
+ *    reader is out (R3: only a living phone reports), when a meeting is running, or when the
+ *    reader's phone is off the main view (D-307): [holdMayRun].
  * 2. **A hold already running on a seat still in reach**: two seconds since it began
  *    ([ContactGate.REPORT_HOLD_TICKS], less [ContactGate.REPORT_HOLD_SLACK_TICKS]), the report is
- *    minted, `MeetingCalled` with [MeetingTrigger.RevokeReported] exactly as Bluetooth's, and the
+ *    minted, `MeetingCalled` with [MeetingTrigger.RevokeReported], and the
  *    pair is stamped; sooner, the slot says [ReportSlot.Pending] with the time held.
  * 3. **A hold whose seat left reach**, or whose reader missed an upload
  *    ([ContactGate.REPORT_GAP_TICKS]): it ends, and the slot says [ReportSlot.Cancelled], unless

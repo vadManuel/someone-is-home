@@ -1,7 +1,6 @@
 package home.someoneshome.core
 
 import home.someoneshome.model.ContactTokens
-import home.someoneshome.model.ContactSource
 import home.someoneshome.model.ContactWindow
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
@@ -49,14 +48,14 @@ class RangingAllocationTest {
     private val seats = (0 until 18).map { Seat(it) }
 
     /**
-     * A round that reads distance, the middle seat of every group of three Revoked and not yet
+     * A round (every one reads distance, D-308), the middle seat of every group of three Revoked and not yet
      * reported: since D-306 the house pairs only close phones the game needs, and a Revoked seat's
      * close living neighbours are needed for the report, so the room still holds twelve pairs.
      */
     private val state: GameState =
         reduce(
             GameState.EMPTY,
-            Event.RoundArmed(Tick(0), seed = 20261119L, seats = seats, insiders = listOf(Seat(2), Seat(9)), contactSource = ContactSource.Uwb),
+            Event.RoundArmed(Tick(0), seed = 20261119L, seats = seats, insiders = listOf(Seat(2), Seat(9))),
         ).state.let { s -> s.copy(revoked = seats.filter { it.index % 3 == 1 }) }
     private val window = ContactWindow(117_000L)
 
@@ -154,25 +153,26 @@ class RangingAllocationTest {
     }
 
     /**
-     * **GUARD (rule 7, D-301): what reading the rules from distance adds to the house, per seat per
-     * beat.** The same eighteen-seat room, settled, two ways: a round that reads Bluetooth (the
-     * resolver over the upload's slots, then the pairing and the plan, as before) and one that reads
-     * distance (the report opened first and its distances resolved to seats, the resolver over them
-     * with the report's hold, then the pairing and the plan with the slot sealed in). Each upload is
-     * a fresh packed one, so the resolver takes every one as new, as it would on the air. What the
-     * distance path adds is measured as the difference.
+     * **GUARD (rule 7, D-301, D-308): the house's whole path per seat per beat, the rules read from
+     * distance.** The same eighteen-seat room, settled: the report opened first and its distances
+     * resolved to seats, the resolver over them with the report's hold, then the pairing and the
+     * plan with the slot sealed in, as `RoundAuthority.sight` runs it. Each upload is a fresh packed
+     * one, so the resolver takes every one as new, as it would on the air. The middle seat of each
+     * group of three is Revoked, so the group's living phones are paired with it (D-306), and the
+     * holding variant reads each of them at 20 cm.
      *
-     * Since D-306 the house pairs only close phones the game needs, and in a round that reads
-     * Bluetooth none: so every variant has the middle seat of each group of three Revoked, which the
-     * group's living phones are paired with in the round that reads distance, and the holding variant
-     * reads each of them at 20 cm.
+     * **The ceilings are D-301's, made absolute and not loosened.** Until D-308 this measured the
+     * distance path against the Bluetooth rules' path in the same room (6 477 B on `183f387`) and
+     * allowed it 1 024 B more, and holding 1 536 B more: 7 501 B and 8 013 B. With no Bluetooth
+     * rules left there is no baseline to subtract, so the ceilings are now 7 168 B and 7 680 B, each
+     * under the limit it replaces. Measured on `183f387`: 6 416 B and 6 607 B.
      */
     @Test
-    fun `reading the rules from distance adds little to the house's path per seat per beat`() {
-        fun measure(source: ContactSource, holding: Boolean): Long {
+    fun `the house's path on distance costs what it did per seat per beat`() {
+        fun measure(holding: Boolean): Long {
             val round = reduce(
                 GameState.EMPTY,
-                Event.RoundArmed(Tick(0), seed = 20261119L, seats = seats, insiders = listOf(Seat(2), Seat(9)), contactSource = source),
+                Event.RoundArmed(Tick(0), seed = 20261119L, seats = seats, insiders = listOf(Seat(2), Seat(9))),
             ).state.let { s -> s.copy(revoked = seats.filter { it.index % 3 == 1 }) }
             val desk = rangingDeskFor(round)
             val phones = seats.map { Phone(it.index) }
@@ -196,7 +196,7 @@ class RangingAllocationTest {
             fun beat(s: Seat, sightings: List<Sighting>, field: String): String? {
                 val at = Tick(tick++)
                 val distances = desk.read(s, field)
-                val arrival = ContactUpload(s, sightings, if (source == ContactSource.Uwb) distances else emptyList(), onMainView = true)
+                val arrival = ContactUpload(s, sightings, distances, onMainView = true)
                 val r = resolveContacts(memory, at, window, listOf(arrival), round)
                 memory = r.memory
                 return desk.answer(round, at, s, sightings, memory.book, r.taken.isNotEmpty(), r.slotOf(s), nonce)
@@ -229,11 +229,10 @@ class RangingAllocationTest {
             check(sink != null)
             return (allocated() - before) / (rounds * seats.size)
         }
-        val rssi = measure(ContactSource.Rssi, holding = false)
-        val uwb = measure(ContactSource.Uwb, holding = false)
-        val held = measure(ContactSource.Uwb, holding = true)
-        println("D-301 THE HOUSE'S PATH PER SEAT PER BEAT — Bluetooth rules $rssi B · distance rules $uwb B (+${uwb - rssi}) · distance rules with every pair of a Revoked seat holding a report $held B (+${held - rssi})")
-        assertTrue(uwb - rssi <= 1_024, "reading the rules from distance adds ${uwb - rssi} bytes per seat per beat, over its ceiling of 1024 (rule 7, D-301)")
-        assertTrue(held - rssi <= 1_536, "holding reports adds ${held - rssi} bytes per seat per beat, over its ceiling of 1536 (rule 7, D-301)")
+        val path = measure(holding = false)
+        val held = measure(holding = true)
+        println("D-308 THE HOUSE'S PATH PER SEAT PER BEAT — distance rules $path B · with every pair of a Revoked seat holding a report $held B (+${held - path})")
+        assertTrue(path <= 7_168, "the house's path on distance allocates $path bytes per seat per beat, over its ceiling of 7168 (rule 7, D-301, D-308)")
+        assertTrue(held <= 7_680, "the house's path holding reports allocates $held bytes per seat per beat, over its ceiling of 7680 (rule 7, D-301, D-308)")
     }
 }

@@ -3,7 +3,6 @@ package home.someoneshome.core
 import home.someoneshome.model.Balance
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
-import home.someoneshome.model.ContactSource
 import home.someoneshome.model.Hmac
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.Presence
@@ -52,17 +51,14 @@ class RangingPairsTest {
     /** How many beats a held pair the house never picked may take to be ranged (D-302). */
     private val displaceBeats = 3
 
-    private fun armed(seats: Int, insiders: List<Int> = listOf(1), seed: Long = 20261119L, source: ContactSource = ContactSource.Rssi): GameState =
+    private fun armed(seats: Int, insiders: List<Int> = listOf(1), seed: Long = 20261119L): GameState =
         reduce(
             GameState.EMPTY,
             Event.RoundArmed(
                 Tick(0), seed = seed, seats = (0 until seats).map { Seat(it) }, insiders = insiders.map { Seat(it) },
-                contactSource = source, terminal = TERMINAL, terminalRoom = "ROOM 0",
+                terminal = TERMINAL, terminalRoom = "ROOM 0",
             ),
         ).state
-
-    /** A round that reads distance (D-301), the only kind in which the game needs a pair (D-306). */
-    private fun onDistance(seats: Int, insiders: List<Int> = listOf(1)): GameState = armed(seats, insiders, source = ContactSource.Uwb)
 
     /** The tick an Insider's Revoke can first be armed: the cooldown starts at half (D-132). */
     private val ready = Balance.REVOKE_COOLDOWN / 2
@@ -625,15 +621,13 @@ class RangingPairsTest {
 
     /**
      * **GUARD (D-306): a close pair the game does not need is never paired.** Three phones within a
-     * metre of each other in a round that reads distance, nobody armed, nobody Revoked, nobody at a
-     * card: for ten seconds the house forms nothing and tells every phone nothing. And in a round
-     * that reads Bluetooth nothing is needed, an armed Revoke included (D-301: no rule reads a
-     * distance there).
+     * metre of each other, nobody armed, nobody Revoked, nobody at a card: for ten seconds the house
+     * forms nothing and tells every phone nothing.
      */
     @Test
     fun aClosePairTheGameDoesNotNeedIsNeverPaired() {
         val phones = (0 until 3).map { Phone(it) }
-        val room = Room(onDistance(4), phones, byTheGame = true)
+        val room = Room(armed(4), phones, byTheGame = true)
         room.spots[0] = Spot(0.0, 0.0)
         room.spots[1] = Spot(0.6, 0.0)
         room.spots[2] = Spot(0.3, 0.5)
@@ -642,12 +636,6 @@ class RangingPairsTest {
         assertEquals(emptySet(), room.kept(), "three close phones the game does not need were paired")
         assertEquals(0L, room.memory.formed, "a pair the game does not need was formed")
         assertTrue(room.plans.all { (_, p) -> p.steps.isEmpty() }, "a phone the game does not need was told to range")
-
-        val onBluetooth = Room(withArm(armed(4), 1, ready + 1), (0 until 3).map { Phone(it) }, byTheGame = true)
-        onBluetooth.spots.putAll(room.spots)
-        onBluetooth.tick = ready
-        repeat(10) { onBluetooth.beat() }
-        assertEquals(emptySet(), onBluetooth.kept(), "a round that reads Bluetooth paired phones for UWB")
     }
 
     /**
@@ -657,7 +645,7 @@ class RangingPairsTest {
     @Test
     fun anArmedRevokePairsTheInsiderWithTheClosePhonesItCouldLandOn() {
         val phones = (0 until 4).map { Phone(it) }
-        val room = Room(withArm(onDistance(4, insiders = listOf(1)), 1, ready + 1), phones, byTheGame = true)
+        val room = Room(withArm(armed(4, insiders = listOf(1)), 1, ready + 1), phones, byTheGame = true)
         room.spots[0] = Spot(0.0, 0.0)
         room.spots[1] = Spot(0.8, 0.0)
         room.spots[2] = Spot(0.4, 0.7)
@@ -677,7 +665,7 @@ class RangingPairsTest {
     @Test
     fun aRevokedSeatThatCanStillBeReportedIsPairedAndLetGoAfterTheGraceOnceReported() {
         val phones = (0 until 3).map { Phone(it) }
-        val room = Room(onDistance(3, insiders = listOf(0)).copy(revoked = listOf(Seat(2))), phones, byTheGame = true)
+        val room = Room(armed(3, insiders = listOf(0)).copy(revoked = listOf(Seat(2))), phones, byTheGame = true)
         room.deaf += 2
         room.spots[0] = Spot(0.0, 0.0)
         room.spots[1] = Spot(0.7, 0.0)
@@ -703,7 +691,7 @@ class RangingPairsTest {
     @Test
     fun aSensorIsPairedWithTheClosePhonesItCouldPlace() {
         val phones = (0 until 3).map { Phone(it) }
-        val room = Room(withSensor(onDistance(3), 0, since = 1), phones, byTheGame = true)
+        val room = Room(withSensor(armed(3), 0, since = 1), phones, byTheGame = true)
         room.spots[0] = Spot(0.0, 0.0)
         room.spots[1] = Spot(1.2, 0.0)
         room.spots[2] = Spot(0.5, 1.0)
@@ -720,7 +708,7 @@ class RangingPairsTest {
     @Test
     fun aNeededPairBelowTheNearFloorIsNotPaired() {
         val phones = (0 until 2).map { Phone(it) }
-        val room = Room(withArm(onDistance(3, insiders = listOf(1)), 1, ready + 1), phones, byTheGame = true)
+        val room = Room(withArm(armed(3, insiders = listOf(1)), 1, ready + 1), phones, byTheGame = true)
         room.spots[0] = Spot(0.0, 0.0)
         room.spots[1] = Spot(4.5, 0.0)
         room.tick = ready + 1
@@ -741,7 +729,7 @@ class RangingPairsTest {
     @Test
     fun aRevokeArmedInACrowdStillPairsTheInsiderWithinItsCapacity() {
         val phones = (0 until 10).map { Phone(it) }
-        val base = onDistance(10, insiders = listOf(4)).copy(revoked = listOf(Seat(7)))
+        val base = armed(10, insiders = listOf(4)).copy(revoked = listOf(Seat(7)))
         val room = Room(base, phones, byTheGame = true)
         room.deaf += 7
         for (i in 0 until 10) room.spots[i] = Spot((i % 4) * 0.45, (i / 4) * 0.5)
@@ -769,7 +757,7 @@ class RangingPairsTest {
     fun anUnarmedInsiderIsPairedExactlyAsAResidentIs() {
         val caps = listOf(3, 2, 3, 1, 4, 3, 3, 2)
         fun round(insiders: List<Int>): Room {
-            val room = Room(onDistance(caps.size, insiders).copy(revoked = listOf(Seat(5))), caps.mapIndexed { i, c -> Phone(i, c) }, byTheGame = true)
+            val room = Room(armed(caps.size, insiders).copy(revoked = listOf(Seat(5))), caps.mapIndexed { i, c -> Phone(i, c) }, byTheGame = true)
             room.deaf += 5
             for (i in caps.indices) room.spots[i] = Spot((i % 3) * 0.9, (i / 3) * 0.8)
             repeat(6) { room.beat() }

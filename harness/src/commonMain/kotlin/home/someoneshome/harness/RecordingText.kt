@@ -1,6 +1,5 @@
 package home.someoneshome.harness
 
-import home.someoneshome.model.ContactSource
 import home.someoneshome.model.Destination
 import home.someoneshome.model.EgressType
 import home.someoneshome.model.RadioCause
@@ -122,13 +121,6 @@ object RecordingText {
         fun seat(key: String) = Seat(int(key))
         fun marker(key: String) = MarkerId(unescape(req(key), line))
         fun seatOrNone(key: String): Seat? = if (req(key) == "none") null else seat(key)
-
-        /** The round's contact source (D-301): `rssi` or `uwb`, and nothing else. */
-        fun contactSource(key: String): ContactSource = when (req(key)) {
-            "rssi" -> ContactSource.Rssi
-            "uwb" -> ContactSource.Uwb
-            else -> throw MalformedRecording(line, "$key='${req(key)}' is neither rssi nor uwb")
-        }
 
         /**
          * A list of plain integers. Empty value means an empty list — an entry a player handed
@@ -285,9 +277,6 @@ object RecordingText {
                 // Required like the T card, and for the same kind of reason (D-289): a replay that
                 // lost the host would name nobody where the evening named an out host who went dark.
                 seatOrNone("host"),
-                // Required, and never defaulted (D-301): a replay that read Bluetooth where the
-                // evening read distance would mint different touches, reports and placements.
-                contactSource("contacts"),
             )
             "Sensed" -> Event.Sensed(at, seat("sensor"), unescape(req("room"), line), seats("heard"))
             "MarkerScanned" -> Event.MarkerScanned(at, seat("actor"), marker("marker"))
@@ -341,7 +330,7 @@ object RecordingText {
         "RoundArmed" ->
             setOf(
                 "at", "seed", "seats", "insiders", "chosen", "markers", "voteWindow", "names",
-                "lines", "terminal", "rooms", "storeys", "terminalRoom", "host", "contacts",
+                "lines", "terminal", "rooms", "storeys", "terminalRoom", "host",
             )
         "Sensed" -> setOf("at", "sensor", "room", "heard")
         "MarkerScanned" -> setOf("at", "actor", "marker")

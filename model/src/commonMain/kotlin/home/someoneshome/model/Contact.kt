@@ -229,18 +229,3 @@ enum class ArmedTouch(
     /** **This phone's armed Revoke landed on the other phone of the touch.** The Long buzz (D-290). */
     Landed(Haptic.Long),
 }
-
-/**
- * **What the house's rules read a touch, a report and the spectator map from, for one round**
- * (D-301). Chosen once, at arming, by the house's one named function (`core`'s `contactSourceFor`),
- * and recorded on [Event.RoundArmed] so a replay reads what the evening read.
- *
- * - [Rssi]: Bluetooth signal strength, today's rules (D-233, D-236, D-272), unchanged.
- * - [Uwb]: the nearest UWB distance each phone measured (the U6 plan, unit 3): a touch at
- *   `ContactGate.REVOKE_REACH_CM`, a report at `ContactGate.REPORT_REACH_CM` held two seconds, and
- *   the map at `SensingGate.ROOM_REACH_CM`. Bluetooth then only ranks who is near whom (D-300).
- *
- * **Never a role, and no phone is told it.** It is a fact about the round's phones (whether every
- * one of them can range) and nothing else; no effect carries it.
- */
-enum class ContactSource { Rssi, Uwb }

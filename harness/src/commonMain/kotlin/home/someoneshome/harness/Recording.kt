@@ -50,6 +50,14 @@ class Recording(
     }
 
     companion object {
+        // 44: the contact source is gone (D-308). Every round is the hybrid: Bluetooth ranks who is
+        // near, and the rules read a touch, a report and the spectator map from UWB distance alone,
+        // so `RoundArmed` loses `contacts=` and so does the state row. A version 43 recording may
+        // hold a round whose events the Bluetooth rules minted (`contacts=rssi`), which this build
+        // cannot describe, and its arming row carries a field this parser does not expect, so a
+        // version 43 recording is refused here as every older one is. No effect row changed shape;
+        // the same events reduce the same way.
+        //
         // 43: the round's contact source (D-301). `RoundArmed` gains `contacts=` (`rssi` or `uwb`)
         // and the state row gains `contacts=`: the house chooses at arming, from whether every phone
         // can range, whether the rules read a touch, a report and the spectator map from Bluetooth
@@ -345,7 +353,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/43"
+        const val HEADER = "someone-is-home/recording/44"
     }
 }
 

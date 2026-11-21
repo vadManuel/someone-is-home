@@ -27,11 +27,11 @@ import kotlin.math.sqrt
  * person walking two phones together does: the uploader, the socket, the resolver, the gate.
  *
  * **Signal strength is a function of distance and of nothing else**: −30 dBm at five centimetres,
- * falling 20 dB a decade, floored at −100. The resolver's −40 dBm floor (D-233) is then about
- * sixteen centimetres, and a phone across a room is about −70. The curve is a stand-in and says so:
- * real phones read −43 at 30 cm and −37 touching loosely (D-233), which this curve does not follow.
- * The bench only ever touches (4 cm) or stands a room apart (5 m), so neither side of the floor
- * depends on the curve's shape.
+ * falling 20 dB a decade, floored at −100. The pairing's −68 dBm near floor (D-306) is then about
+ * four metres, and a phone across a room is about −70. The curve is a stand-in and says so: real
+ * phones read −43 at 30 cm and −57 at 1 m (D-233), which this curve does not follow. Since D-308
+ * Bluetooth decides nothing in the rules; on the bench it only ranks who the house pairs for UWB,
+ * and the distance that decides comes from [rangingFor].
  *
  * In the cheats source set, absent from a release build, like every other stand-in.
  */
@@ -126,8 +126,7 @@ class SimulatedAir {
 
         /**
          * **The benches' phones range three peers each, the phones' own start** (U6, D-302): every
-         * bench that plays through this air plays on distance, its phones telling the house so in the
-         * lobby. D-301 set four, so that five phones ranged every pair, because at three D-300's
+         * bench that plays through this air plays on distance, as every round does (D-308). D-301 set four, so that five phones ranged every pair, because at three D-300's
          * pairing could leave a pair of five unranged for good; since D-302 a pair both phones rank
          * first displaces a kept pair, and the benches play at the phones' number.
          */

@@ -10,8 +10,8 @@ import home.someoneshome.model.protocol.SpareKey
 
 /**
  * **The UWB radio, as the app sees it** (U6, D-300). A phone holds the Nearby Interaction one
- * ([nearbyRangingRadio], D-303) when the developer switch turns it on and [NoRanging] otherwise, the
- * bench a simulated one, and the tests [NoRanging].
+ * ([nearbyRangingRadio], D-303) in every round (D-308), the simulator [NoRanging] (it has no Nearby
+ * Interaction ranging), the bench a simulated one, and the tests [NoRanging].
  *
  * **A pool of sessions, and nothing that could carry a seat or a role.** The radio keeps up to
  * [capacity] sessions. A session that is not ranging is *idle*, and its discovery token is offered
@@ -88,14 +88,17 @@ class PooledRanging(private val pool: RangingPool) : RangingRadio {
  * **This phone's Nearby Interaction radio** (D-303): a [RangingPool] of `NISession`s. It opens no
  * session until [RangingRadio.open], which is the round's seed (D-067: built at arming, not before),
  * and every callback lands on the main thread, where the uploader runs. [log] is the device log.
+ *
+ * **On the simulator it is [NoRanging]** (D-308): the simulator has no Nearby Interaction ranging,
+ * and a pool there would only open sessions that never run. Its phones say capacity 0 and are
+ * paired with nobody, so a round on simulators plays everything that does not read a distance.
  */
 expect fun nearbyRangingRadio(log: (String) -> Unit): RangingRadio
 
 /**
- * **No UWB at all**: no capacity, nothing offered, nothing ranged (D-300). What every phone holds
- * until the Nearby Interaction radio exists, and what a test holds when ranging is not the
- * question. The uploader still sends a full-width report every second, and the house pairs it with
- * nobody.
+ * **No UWB at all**: no capacity, nothing offered, nothing ranged (D-300). What the simulator holds,
+ * and what a test holds when ranging is not the question. The uploader still sends a full-width
+ * report every second, and the house pairs it with nobody.
  */
 object NoRanging : RangingRadio {
     override fun capacity(): Int = 0

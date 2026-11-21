@@ -1,6 +1,6 @@
 package home.someoneshome.app
 
-import home.someoneshome.model.ContactTokens
+import home.someoneshome.core.ContactGate
 import home.someoneshome.model.ContactWindow
 import home.someoneshome.model.Effect
 import home.someoneshome.model.Intent
@@ -8,9 +8,9 @@ import home.someoneshome.model.OneLineHeld
 import home.someoneshome.model.Placement
 import home.someoneshome.model.Seat
 import home.someoneshome.model.SeatNamed
-import home.someoneshome.model.Sighting
 import home.someoneshome.model.Tick
-import home.someoneshome.model.protocol.SightingUpload
+import home.someoneshome.model.protocol.RoundBody
+import home.someoneshome.model.protocol.RoundMessage
 import home.someoneshome.model.toView
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
@@ -24,7 +24,9 @@ import kotlin.test.assertTrue
  * places the seats it heard, and not one frame goes to any phone for either.**
  *
  * The real [RoundAuthority] armed in the bench's home, every effect it hands its `emit` counted. A
- * seat scans its own work, then its phone's upload hears a second seat at −60.
+ * seat scans its own work, then its phone and a second seat's, a metre apart, upload every second
+ * through the real uploader and a simulated UWB radio: the house pairs them (the map needs the
+ * pair, D-306), and the performer's distance places the second seat (D-301; every round, D-308).
  */
 class PlacementWiringTest {
 
@@ -64,10 +66,32 @@ class PlacementWiringTest {
         assertTrue(house.state.presenceFor(Seat(0))!!.open, "seat 0's own work opened no window")
         val room = house.state.roomOfCard(card)!!
 
-        val heard = listOf(Sighting(ContactTokens.of(seeds.getValue(3), window), -60, window))
-        val upload = SightingUpload.pack(seeds.getValue(0), window, 1, heard)
+        // Seats 0 and 3 a metre apart, seat 4 a room away; each phone's real uploader and radios.
+        val air = SimulatedAir()
+        val sent = mutableMapOf<Int, RoundBody.Sighted>()
+        val phones = listOf(0, 3, 4).associateWith { i ->
+            ContactUploader(
+                air.radioFor(Seat(i)), { window },
+                ranging = air.rangingFor(Seat(i), SimulatedAir.BENCH_CAPACITY),
+                send = { sent[i] = it },
+            ).also { it.heard(RoundMessage.ContactSeedIssued(seeds.getValue(i))) }
+        }
+        air.place(Seat(0), SimulatedAir.Spot(0.0, 0.0))
+        air.place(Seat(3), SimulatedAir.Spot(1.0, 0.0))
+        air.place(Seat(4), SimulatedAir.Spot(20.0, 0.0))
         val before = pushed.size
-        house.sighted(Seat(0), upload)
+        var placing: RoundBody.Sighted? = null
+        for (second in 0 until 10) {
+            if (placing != null) break
+            house.advanceTo(Tick(house.clock + ContactGate.UPLOAD_TICKS))
+            for (i in listOf(0, 3)) {
+                phones.getValue(i).beat()
+                val body = sent.getValue(i)
+                phones.getValue(i).planned(house.sighted(Seat(i), body))
+                if (i == 0 && placing == null && house.state.placementOf(Seat(3), Tick(house.clock)) is Placement.Inferred) placing = body
+            }
+        }
+        val upload = assertNotNull(placing, "seat 0's uploads never placed seat 3 by distance: ${house.ranging?.pairs()}")
         assertEquals(before, pushed.size, "the house pushed something for an upload: ${pushed.drop(before)}")
 
         val placed = house.state.placementOf(Seat(3), Tick(house.clock))
@@ -75,14 +99,15 @@ class PlacementWiringTest {
         assertEquals(room, placed.room)
         val seen = assertNotNull(house.state.observationOf(room), "the sensor's room was not observed")
         assertEquals(2, seen.trueCount)
-        assertEquals(2L, house.state.nextObservation)
+        val captured = house.state.nextObservation
 
         // A second delivery of the same upload is one capture, not two: its error is rolled once.
         house.sighted(Seat(0), upload)
-        assertEquals(2L, house.state.nextObservation, "a transport's repeat was captured again")
+        assertEquals(captured, house.state.nextObservation, "a transport's repeat was captured again")
         // An upload from a seat that is not a sensor places nobody and observes nothing.
-        house.sighted(Seat(4), SightingUpload.pack(seeds.getValue(4), window, 1, heard))
-        assertEquals(2L, house.state.nextObservation, "a seat that scanned nothing sensed")
+        phones.getValue(4).beat()
+        house.sighted(Seat(4), sent.getValue(4))
+        assertEquals(captured, house.state.nextObservation, "a seat that scanned nothing sensed")
         assertEquals(before, pushed.size, "the house pushed something for an upload")
         assertTrue(house.contactRefusals.isEmpty(), "a Sensed was refused: ${house.contactRefusals}")
     }

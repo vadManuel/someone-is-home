@@ -10,11 +10,9 @@ import home.someoneshome.core.admit
 import home.someoneshome.core.resolveContacts
 import home.someoneshome.core.resolvePlacements
 import home.someoneshome.core.armingFor
-import home.someoneshome.core.contactSourceFor
 import home.someoneshome.core.egressFor
 import home.someoneshome.core.namedByTheNotice
 import home.someoneshome.model.Balance
-import home.someoneshome.model.ContactSource
 import home.someoneshome.model.ContactWindow
 import home.someoneshome.model.Effect
 import home.someoneshome.model.Event
@@ -344,9 +342,6 @@ class RoundAuthority(
             terminalRoom = hosted.map.terminal?.room?.name,
             // The host's own seat (D-289), for the notice's one exception (D-283). No phone is told it.
             host = inputs.host,
-            // **What the round's rules read a touch, a report and the map from** (D-301): UWB when
-            // every phone said it can range, Bluetooth otherwise. The one named choice, recorded.
-            contactSource = contactSourceFor(inputs.seats) { inputs.ranging[it.index] },
         ).copy(oneLines = inputs.oneLines)
         home = hosted
         // A new round's radios start from nothing: last round's halves and debounces are about
@@ -372,8 +367,7 @@ class RoundAuthority(
         note(
             "ARMING — ${inputs.seats.size} SEAT(S) · " +
                 "INSIDERS ${arming.insiders.size} (SETTING ${inputs.chosenInsiders ?: "UNKNOWN"}) · " +
-                "IN '${hosted.name}' · ${markers.size} MARKER(S) · ${inputs.oneLines.size} LINE(S) · " +
-                "CONTACT BY ${if (arming.contactSource == ContactSource.Uwb) "UWB DISTANCE" else "BLUETOOTH RSSI"}"
+                "IN '${hosted.name}' · ${markers.size} MARKER(S) · ${inputs.oneLines.size} LINE(S)"
         )
         gate(arming)
         // The UWB pairing for this round, from its seed and seats (D-300); it is handed the state on
@@ -494,12 +488,17 @@ class RoundAuthority(
         }
         val at = stamp()
         // **The ranging report first** (D-301): opened under the seat's seed, and each distance in
-        // it resolved to the seat at the other end of a pair the house keeps. The rules read them
-        // in a round that reads UWB, and only there; the pairing reads the report either way.
+        // it resolved to the seat at the other end of a pair the house keeps. The rules read a
+        // touch, a report and the map from these and from nothing else, in every round (D-308).
         val desk = rangingDesk?.takeIf { state.armed }
         val distances = desk?.read(seat, upload.ranging)
+        // **When ranging starts, for the phones to measure** (D-308): a pair's first distance, with no
+        // seat and no handle, on the house's clock. The pairings themselves are logged below.
+        if (desk != null && desk.firstReads > 0) {
+            note("UWB — A PAIR READ ITS FIRST DISTANCE, ${desk.firstCm} CM, AT ${tick * 1_000L / Balance.TICKS_PER_SECOND} MS ON THE HOUSE'S CLOCK")
+        }
         val arrival = ContactUpload(
-            seat, slots, if (state.contactSource == ContactSource.Uwb && distances != null) distances else emptyList(),
+            seat, slots, distances ?: emptyList(),
             // **Whether the phone is on the main view** (D-307): read by the report's hold alone.
             onMainView = MainViewField.reads(upload.view),
         )
@@ -509,14 +508,18 @@ class RoundAuthority(
         // **The same upload, read a second time as the spectator map's input** (O4, D-136, D-212).
         // After the contacts, so a Revoke this upload just landed is already in the state and the
         // seat it put out senses nothing. Only an upload the resolver took as new: a transport's
-        // second delivery is one capture, and its error is rolled once. One unpack, one token
-        // book. `Sensed` emits nothing, so nothing about this reaches any phone; a refusal of one
+        // second delivery is one capture, and its error is rolled once. One unpack, one report
+        // opened. `Sensed` emits nothing, so nothing about this reaches any phone; a refusal of one
         // is the radio's, recorded and answered with nothing, like a contact's.
         val taken = resolution.taken.any { it.index == seat.index }
         if (taken) {
-            resolvePlacements(at, contactMemory.book, arrival, state)?.let { concluded(it) }
+            resolvePlacements(at, arrival, state)?.let { concluded(it) }
         }
-        return planFor(seat, at, arrival, taken, resolution.slotOf(seat))
+        val formed = rangingDesk?.pairing?.pairsFormed ?: 0L
+        val plan = planFor(seat, at, arrival, taken, resolution.slotOf(seat))
+        val paired = (rangingDesk?.pairing?.pairsFormed ?: 0L) - formed
+        if (paired > 0) note("UWB — THE HOUSE PAIRED $paired MORE PAIR(S) AT ${tick * 1_000L / Balance.TICKS_PER_SECOND} MS ON THE HOUSE'S CLOCK")
+        return plan
     }
 
     /**

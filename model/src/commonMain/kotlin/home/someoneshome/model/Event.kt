@@ -155,14 +155,6 @@ sealed interface Event {
          * out seat, which is R7 (D-242) unchanged. **The recording's parser defaults nothing.**
          */
         val host: Seat? = null,
-        /**
-         * **What this round's rules read contact, the report and the map from** (D-301): every
-         * armed phone said it can range, so UWB distance, or not, so Bluetooth RSSI. Chosen by the
-         * house at arming (`contactSourceFor`) and recorded, so a replay reads what the evening read.
-         * **The house's alone**: no effect carries it, and it reads no role. Defaulted [ContactSource.Rssi]
-         * for [terminal]'s reason, which is today's rules; **the recording's parser defaults nothing.**
-         */
-        val contactSource: ContactSource = ContactSource.Rssi,
     ) : Event
 
     /**

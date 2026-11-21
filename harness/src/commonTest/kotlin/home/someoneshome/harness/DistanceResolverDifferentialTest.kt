@@ -10,7 +10,6 @@ import home.someoneshome.core.admit
 import home.someoneshome.core.contactSeedFor
 import home.someoneshome.core.resolveContacts
 import home.someoneshome.model.Balance
-import home.someoneshome.model.ContactSource
 import home.someoneshome.model.ContactWindow
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
@@ -25,12 +24,11 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 /**
- * **D-213 and D-301 under the differential harness, rebuilt on distances: in a round that reads UWB,
- * the resolver's output does not move with a role or an arm.** The same arrivals, carrying the same
+ * **D-213 and D-301 under the differential harness, on distances (every round, D-308): the
+ * resolver's output does not move with a role or an arm.** The same arrivals, carrying the same
  * distances, must mint the same events, leave the same memory and tell every phone the same report
  * slot, whoever holds which role and whoever is armed. The rules then diverge, as they should.
  *
- * [ContactResolverDifferentialTest] keeps the Bluetooth half: both sources are live, one per round.
  * Stricter than the stock diff: here nothing may differ on any seat, slots included.
  */
 class DistanceResolverDifferentialTest {
@@ -42,7 +40,7 @@ class DistanceResolverDifferentialTest {
     private val events: List<Event> = listOf(
         Event.RoundArmed(
             Tick(0), seed = 20260818L, seats = SEATS, insiders = INSIDERS, markers = placed(MARKERS),
-            names = NAMES, oneLines = LINES, terminal = STATION, contactSource = ContactSource.Uwb,
+            names = NAMES, oneLines = LINES, terminal = STATION,
         ),
         Event.RevokeArmed(Tick(ready + 1), Seat(1)),
         Event.ContactMade(Tick(ready + 2), Seat(1), Seat(6)),
@@ -100,7 +98,6 @@ class DistanceResolverDifferentialTest {
     @Test
     fun `the resolver mints the same events and slots on distances whoever holds the roles and whoever is armed`() {
         val baseline = walk(events)
-        assertEquals(ContactSource.Uwb, baseline.contactSource)
         val output = resolve(baseline)
         val minted = output.flatMap { it.events }
         assertTrue(minted.filterIsInstance<Event.ContactMade>().size >= 8, "too few contacts to compare: $minted")

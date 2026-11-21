@@ -1,11 +1,12 @@
 package home.someoneshome.app
 
+import home.someoneshome.core.ContactGate
 import home.someoneshome.core.contactSeedFor
 import home.someoneshome.model.Balance
-import home.someoneshome.model.ContactSource
 import home.someoneshome.model.ContactWindow
 import home.someoneshome.model.Effect
 import home.someoneshome.model.EmitSchema
+import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
 import home.someoneshome.model.OneLineHeld
 import home.someoneshome.model.Seat
@@ -64,6 +65,12 @@ import kotlin.test.assertTrue
  * state each effect goes out with is the house's state at that moment (no reduction landed between
  * an effect's reduction and its send); and, over sockets, every phone's stream is exactly the
  * schema's deliveries in the order the house made them.
+ *
+ * **On distance, as every round is** (D-308). The house ranges only close pairs the game needs
+ * (D-306), and a touch with no armed Revoke in it is needed only when one of its phones is a sensor
+ * that could place the other on the map. So every phone here first opens a window at its own card
+ * ([performEverywhere]): each is a sensor, every close pair is needed, every touch is measured and
+ * answered, and the question, the arrival order, is asked of 28 touches as it was on Bluetooth.
  */
 class ArrivalOrderTest {
 
@@ -109,9 +116,10 @@ class ArrivalOrderTest {
         /** Every push this phone was sent, decoded, in arrival order. */
         val pushed = mutableListOf<RoundMessage>()
 
-        // No UWB radio, and capacity 0 in the lobby: the round reads Bluetooth (D-306, below).
+        // Its UWB radio at the phones' own three peers (D-308): every touch is read on distance.
         val round = RoundClient(
             scope, flow, LineWatch {}, HouseBuzzer(SilentHaptics), air.radioFor(radioSpot), wake,
+            ranging = air.rangingFor(radioSpot, SimulatedAir.BENCH_CAPACITY),
         ) {}.also { made ->
             client = made
             made.onMessage = { pushed += it }
@@ -172,6 +180,19 @@ class ArrivalOrderTest {
         }
     }
 
+    /**
+     * **Every seat opens a window at its own first card** (D-136, D-306): each is then a sensor, so
+     * every close pair of living phones is one the map could use, and the house ranges it. Minted as
+     * the house's own scan answer would be: a stand-in for eight people walking to eight cards.
+     */
+    private suspend fun performEverywhere(house: RoundAuthority) {
+        for (seat in house.state.seats) {
+            val card = house.state.workOrderFor(seat)?.entries?.firstOrNull()?.anchor ?: error("seat ${seat.index} has no card to open")
+            house.mint(Event.MarkerScanned(house.now(), seat, card))
+            check(house.state.presenceFor(seat)?.open == true) { "seat ${seat.index}'s card opened no window: ${house.refusals}" }
+        }
+    }
+
     /** Every pair of [n] spots exactly once, as rounds of n/2 disjoint pairs (the circle method). */
     private fun roundRobin(n: Int): List<List<Pair<Int, Int>>> {
         val ring = (1 until n).toMutableList()
@@ -190,14 +211,10 @@ class ArrivalOrderTest {
      * phone is answered exactly once per touch it was in, nothing goes out against a newer state, and
      * every phone's stream is exactly what the house sent it, in the house's order.
      *
-     * **On Bluetooth** (D-306). D-302 played it on distance at three a phone, to show that a held
-     * touch between two phones the house was not ranging is ranged by displacement. Since D-306 the
-     * house ranges only close pairs the game needs, and a touch with no armed Revoke in it needs no
-     * pair, so on distance these touches are never measured and answer nobody: the question here,
-     * the arrival order, is the same under either source (D-301), so the bench reads Bluetooth again.
-     * D-302's displacement stays pinned in core (`RangingPairsTest`). Each pair is held until its
-     * touch has landed, each round's within [TOUCH_LANDS_MILLIS], then let go, inside the pair's
-     * five-second grace, so a touch is one touch.
+     * **On distance** (D-308), every phone a sensor at its own card, so every close pair is needed
+     * (D-306) and three peers a phone. Each pair is held until its touch has landed, each round's
+     * within [TOUCH_LANDS_MILLIS], then let go, inside the pair's five-second grace, so a touch is one
+     * touch.
      */
     @Test
     fun manyTouchesAtOnceOverTheSocketsAnswerEachToucherOncePerTouch() = runBlocking {
@@ -232,8 +249,8 @@ class ArrivalOrderTest {
                 until("every line reached the house") { host.model.standing.linesIn == phones.size }
                 air.spreadOut(phones.map { it.radioSpot })
                 assertTrue(armAtLightsOut(house, hosting = true, seed = SEED, note = { said += it }), "the round never armed: $said")
-                assertEquals(ContactSource.Rssi, house.state.contactSource, "no phone ranges and the round did not arm on Bluetooth")
                 until("every phone holds the round's seed") { phones.all { it.round.round.uploading } }
+                performEverywhere(house)
                 val seatOf = phones.associateWith { p -> house.state.names.single { it.name == p.name }.seat.index }
                 // The house's clock runs on real time, as the app's tick driver runs it; only the
                 // clock moves, nothing is minted. The pairing's grace (D-300) and the pair's grace
@@ -273,7 +290,7 @@ class ArrivalOrderTest {
                     delay(SightingUpload.CADENCE_MILLIS + 500)
                 }
                 assertTrue(!house.state.ended, "the round ended mid-test: $said")
-                println("D-306 EIGHT PHONES ON BLUETOOTH — each round's touches all landed after $landedAfter ms")
+                println("D-308 EIGHT PHONES ON DISTANCE — each round's touches all landed after $landedAfter ms")
                 landedAfter.forEachIndexed { r, ms ->
                     assertTrue(ms <= TOUCH_LANDS_MILLIS, "round $r's held touches took $ms ms to land, over $TOUCH_LANDS_MILLIS")
                 }
@@ -306,7 +323,8 @@ class ArrivalOrderTest {
      * **GUARD (R6): the authority takes one reduction at a time, whoever calls it.** Eight seats,
      * every upload of a beat put to `sighted` from its own coroutine at once (as the tick driver and
      * the bench call beside the queue), with an `emit` that suspends. Every pair of the eight touches
-     * once; every toucher is answered once per touch, and nothing goes out against a newer state.
+     * once, on distance, every seat a sensor at its own card; every toucher is answered once per
+     * touch, and nothing goes out against a newer state.
      */
     @Test
     fun concurrentCallersOnTheAuthorityTakeOneReductionAtATime() = runBlocking {
@@ -329,23 +347,32 @@ class ArrivalOrderTest {
         )
         val house = authority
         assertTrue(house.arm(SEED), "the round never armed")
+        performEverywhere(house)
 
         val air = SimulatedAir()
         val window = { ContactWindow.containing(wallClockMillis()) }
         val pending = mutableListOf<Pair<Seat, RoundBody.Sighted>>()
         val uploaders = seats.associate { seat ->
-            seat.index to ContactUploader(air.radioFor(seat), window, send = { pending += seat to it }).also {
+            seat.index to ContactUploader(
+                air.radioFor(seat), window,
+                ranging = air.rangingFor(seat, SimulatedAir.BENCH_CAPACITY),
+                send = { pending += seat to it },
+            ).also {
                 it.heard(RoundMessage.ContactSeedIssued(contactSeedFor(house.state.seed, seat)))
             }
         }
         air.spreadOut(seats)
 
-        /** One beat on every seat, and every upload put to the house at once, each from its own coroutine. */
+        /**
+         * One second on the house's clock, then one beat on every seat, and every upload put to the
+         * house at once, each from its own coroutine; each plan back to its phone's radio.
+         */
         suspend fun beat() {
+            house.advanceTo(Tick(house.clock + ContactGate.UPLOAD_TICKS))
             for (seat in seats) uploaders.getValue(seat.index).beat()
             val batch = pending.toList()
             pending.clear()
-            batch.map { (seat, body) -> launch { house.sighted(seat, body) } }.joinAll()
+            batch.map { (seat, body) -> launch { uploaders.getValue(seat.index).planned(house.sighted(seat, body)) } }.joinAll()
         }
 
         val touches = IntArray(seats.size)
@@ -356,7 +383,11 @@ class ArrivalOrderTest {
                 touches[a]++
                 touches[b]++
             }
-            repeat(ContactAct.HOLD_BEATS) { beat() }
+            // Held until every touch of the round has landed, then let go inside the pair's grace.
+            for (i in 0 until ContactAct.HOLD_BEATS) {
+                if (seats.all { outbox.answersTo(it.index) >= touches[it.index] }) break
+                beat()
+            }
             air.spreadOut(seats)
             beat()
         }
@@ -377,9 +408,8 @@ class ArrivalOrderTest {
         const val CLOCK_STEP_MILLIS = 50L
 
         /**
-         * **A held touch lands within eight seconds.** D-302's bound for a touch on distance between
-         * two phones the house was not ranging; on Bluetooth (D-306) a touch lands in about two
-         * beats, and the bound is kept as it was, with room for a loaded machine's late beat.
+         * **A held touch lands within eight seconds** (D-302): pairing two phones the house was not
+         * ranging, starting both, and both phones' readings, with room for a loaded machine's late beat.
          */
         const val TOUCH_LANDS_MILLIS = 8_000L
     }

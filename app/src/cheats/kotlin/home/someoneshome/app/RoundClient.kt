@@ -136,7 +136,7 @@ class RoundClient(
         { _, _, _, _ -> },
     /**
      * **This seat's UWB radio** (U6, D-300), handed straight down to [RoundOverTransport]. A
-     * `SimulatedRanging` on a bench; nothing on a phone yet, until the Nearby Interaction radio.
+     * `SimulatedRanging` on a bench; the Nearby Interaction radio on a phone (D-308).
      */
     private val ranging: RangingRadio = NoRanging,
     private val note: (String) -> Unit,

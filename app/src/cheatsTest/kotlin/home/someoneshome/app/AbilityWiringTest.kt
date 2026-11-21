@@ -124,7 +124,7 @@ class AbilityWiringTest {
         val ledger = ScreenLedger(flow, lines::screen)
 
         val link = LobbyOverTransport(
-            scope, rangingCapacity = { SimulatedAir.BENCH_CAPACITY }, onEvent = { log += it; lines.lobby(it) }, seat = Kept(),
+            scope, onEvent = { log += it; lines.lobby(it) }, seat = Kept(),
             // `CheatRoot`'s doors, exactly: `HouseDoors`, awaited (D-241).
             onIntent = HouseDoors(house)::heard,
             onEgressFired = HouseDoors(house)::fired,

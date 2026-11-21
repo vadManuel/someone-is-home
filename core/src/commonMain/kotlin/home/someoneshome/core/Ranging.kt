@@ -1,7 +1,6 @@
 package home.someoneshome.core
 
 import home.someoneshome.model.ContactSeed
-import home.someoneshome.model.ContactSource
 import home.someoneshome.model.GameState
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Sighting
@@ -24,11 +23,10 @@ import home.someoneshome.model.protocol.SpareKey
  *
  * Beside `resolveContacts` and for its reason: something above the rules has to turn what the
  * radios said into what happens next, and that needs knowledge `reduce` never holds (here, which
- * phone offered which token). It mints no `Event` and changes no state the rules hold. **No rule
- * reads its output in this unit**: contact, the report and the spectator map still read RSSI, so
- * nothing in play changes. What it decides is only which phones are told to range which.
+ * phone offered which token). It mints no `Event` and changes no state the rules hold. What it
+ * decides is which phones are told to range which.
  *
- * **Since D-301 the rules read its distances**, in a round whose contact source is UWB: the desk
+ * **The rules read its distances, in every round** (D-301, D-308: there are no Bluetooth rounds): the desk
  * opens each upload's report first ([RangingDesk.read]) and resolves every distance to the seat at
  * the other end of a pair the house keeps, for `resolveContacts` and `resolvePlacements`; then the
  * pairing is told and the plan sealed, with the reader's report slot in it ([RangingDesk.answer]).
@@ -52,8 +50,9 @@ import home.someoneshome.model.protocol.SpareKey
  * Every other pair is ranked as if it were not heard: it is never formed, never ranks ahead of a
  * needed one, and never displaces. A kept pair that stops being needed or close is kept
  * [RangingGate.NEED_GRACE_TICKS] longer, so one noisy reading or one upload's gap does not end it, and
- * then goes the way any pair goes: the house stops keeping it and each phone is told Stop. In a round
- * that reads Bluetooth nothing is needed, so nothing is paired.
+ * then goes the way any pair goes: the house stops keeping it and each phone is told Stop. A phone
+ * that says it can range nobody (capacity 0: NEARBY DEVICES refused, no support, the session limit)
+ * is paired with nobody, so no rule reads a distance of it or from it (D-308).
  *
  * ### What it does, once per upload ([RangingPairing.arrive])
  *
@@ -136,6 +135,13 @@ object RangingGate {
     const val HEARD_TICKS: Long = 3L * ContactGate.UPLOAD_TICKS
 
     /**
+     * **A Bluetooth reading of zero or more is not a reading.** CoreBluetooth reports 127 when it has
+     * no RSSI, and the upload carries it faithfully; ungated, *no reading* would rank as the nearest
+     * peer possible from anywhere in the house.
+     */
+    const val RSSI_CEILING: Int = -1
+
+    /**
      * **Readings kept per pair: 8.** Both phones of a pair hear each other once a second, so three
      * seconds is six; past eight the oldest goes first.
      */
@@ -191,9 +197,9 @@ object RangingGate {
      * The owner asked for roughly 2 to 3 m. Measured phone to phone (D-233): 30 cm −43, 1 m −57, which
      * is about 27 dB a decade; carried on, 2 m reads about −65 and 3 m about −70, so −68 is about
      * 2.6 m on that slope (and 4 m on the bench's 20 dB curve, so the bench's spread-out phones, 5 m
-     * apart at −70, are not close). It sits 28 dB under the contact floor (−40, D-233) and 7 dB
-     * over the room floor (−75, [SensingGate.ROOM_RSSI_FLOOR]); the map's 1.5 m reach reads about
-     * −62 on D-233's slope, 6 dB inside it, more than the 4 dB a reading jitters at one distance. A
+     * apart at −70, are not close). It sits 28 dB under D-233's loose touch (−40); the map's 1.5 m
+     * reach reads about −62 on D-233's slope, 6 dB inside it, more than the 4 dB a reading jitters at
+     * one distance. A
      * pair's strength is its strongest reading in the last three seconds, so a pair walking in is
      * judged by its nearest moment, not its average.
      *
@@ -228,8 +234,8 @@ fun interface RangingNeed {
 
 /**
  * **Whether the round [state] needs [a] and [b] ranged at [at]** (D-306): at least one rule that
- * reads a UWB distance could fire for the pair, either way round. Never in a round that reads
- * Bluetooth (D-301), before arming or after the end. Each of the three is the rule's own predicate:
+ * reads a UWB distance could fire for the pair, either way round. Never before arming or after the
+ * end. Each of the three is the rule's own predicate:
  *
  * 1. **A Revoke**: [revokeLands] (`Rules.contact`), both phones living ([readsDistancesOf]: a touch
  *    by distance reads both phones, and none of an out phone's).
@@ -240,7 +246,7 @@ fun interface RangingNeed {
  * [facts] are [state]'s ([RoundContactFacts]), passed in so that asking allocates nothing.
  */
 internal fun rangingNeeded(state: GameState, facts: ContactFacts, a: Seat, b: Seat, at: Tick): Boolean {
-    if (state.contactSource != ContactSource.Uwb || !state.armed || state.ended) return false
+    if (!state.armed || state.ended) return false
     return revokeNeeds(state, facts, a, b, at) || revokeNeeds(state, facts, b, a, at) ||
         reportNeeds(facts, a, b) || reportNeeds(facts, b, a) ||
         mapNeeds(state, a, b, at) || mapNeeds(state, b, a, at)
@@ -414,7 +420,7 @@ class RangingPairing(private val roundSeed: Long, seats: List<Seat>) {
     /** **This upload heard [seat] at [rssi]**: one Bluetooth slot, resolved. Before [arrive]. */
     fun hear(seat: Int, rssi: Int) {
         val p = slotOf(seat)
-        if (p < 0 || rssi > ContactGate.RSSI_CEILING) return
+        if (p < 0 || rssi > RangingGate.RSSI_CEILING) return
         if (hearing[p] == NONE || rssi > hearing[p]) hearing[p] = rssi
     }
 
@@ -1008,6 +1014,20 @@ class RangingDesk(roundSeed: Long, seats: List<Seat>) {
     /** [read]'s answer, held and refilled (rule 7): nothing keeps it past the upload it was read for. */
     private val distances = ArrayList<ContactDistance>(RangingWire.MAX_PEERS)
 
+    /**
+     * **The handles that have read a distance this round, the latest [FIRST_READS_KEPT]**, a ring
+     * written in place (rule 7): so [read] can say a pair just read its first distance, for the
+     * house's log (D-308: how long ranging takes to start is the phones' to measure).
+     */
+    private val readHandles = LongArray(FIRST_READS_KEPT)
+    private var readCount = 0
+
+    /** **How many pairs [read] saw read their first distance**, and the nearest of those, in cm. */
+    var firstReads: Int = 0
+        private set
+    var firstCm: Int = 0
+        private set
+
     /** The plan [answer] seals: the pairing's steps for the seat that just arrived, and its report slot. */
     private val sealing = object : RangingPlanSource {
         var kind = RangingWire.REPORT_IDLE
@@ -1031,15 +1051,28 @@ class RangingDesk(roundSeed: Long, seats: List<Seat>) {
     fun read(seat: Seat, field: String): List<ContactDistance> {
         distances.clear()
         opened = null
+        firstReads = 0
         val seed = seeds.getOrNull(seat.index) ?: return distances
         if (!codec.openReport(seed, field)) return distances
         opened = seat
         for (i in 0 until codec.readingCount) {
             if (codec.readingReadings(i) == 0) continue
-            val peer = pairing.peerOf(seat, codec.readingHandle(i)) ?: continue
+            val handle = codec.readingHandle(i)
+            val peer = pairing.peerOf(seat, handle) ?: continue
             distances += ContactDistance(peer, codec.readingCm(i))
+            if (!hasRead(handle)) {
+                readHandles[readCount % FIRST_READS_KEPT] = handle
+                readCount++
+                firstCm = if (firstReads == 0) codec.readingCm(i) else minOf(firstCm, codec.readingCm(i))
+                firstReads++
+            }
         }
         return distances
+    }
+
+    private fun hasRead(handle: Long): Boolean {
+        for (i in 0 until minOf(readCount, FIRST_READS_KEPT)) if (readHandles[i] == handle) return true
+        return false
     }
 
     /**
@@ -1073,6 +1106,11 @@ class RangingDesk(roundSeed: Long, seats: List<Seat>) {
         sealing.kind = report.kind
         sealing.millis = report.millis
         return codec.packPlan(seed, nonce, sealing)
+    }
+
+    private companion object {
+        /** The handles [read] remembers having read: far more than a round's live pairs. */
+        const val FIRST_READS_KEPT = 64
     }
 
     /** **[read] then [answer], with an idle report slot**: the whole path for a caller with no resolver between (D-300's). */

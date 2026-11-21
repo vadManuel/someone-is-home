@@ -2,7 +2,6 @@ package home.someoneshome.core
 
 import home.someoneshome.model.Balance
 import home.someoneshome.model.CellRect
-import home.someoneshome.model.ContactSource
 import home.someoneshome.model.ContactTokens
 import home.someoneshome.model.ContactWindow
 import home.someoneshome.model.Event
@@ -32,9 +31,10 @@ import kotlin.test.assertTrue
 /**
  * **O4: the house builds D-136's placements from what it already holds** (the occupancy spec).
  *
- * Every test below runs the real pipeline: a packed upload, the contact resolver's token book,
- * [resolvePlacements], and the admission gate. A sensor is a seat that scanned a card of its own
- * work order (the presence plane says its window is open); heard seats are tokens in its upload.
+ * Every test below runs the real pipeline: a packed upload, the contact resolver, [resolvePlacements],
+ * and the admission gate. A sensor is a seat that scanned a card of its own work order (the presence
+ * plane says its window is open); heard seats are the UWB distances its upload carries (D-301), the
+ * only thing that places a seat in every round (D-308).
  *
  * The home: ten rooms, two cards each (`placed`), on a plan of two storeys. GROUND holds ROOM 0 to
  * ROOM 4 in a row, each touching the next; UPPER holds ROOM 5 to ROOM 8 in a row and ROOM 9 alone,
@@ -88,31 +88,34 @@ class PlacementTest {
 
     private var uploadCount = 0L
 
-    /** [sensor]'s upload, hearing each `seat to rssi`, put through the house's own pipeline. */
+    /**
+     * [sensor]'s upload, measuring each `seat to cm`, put through the house's own pipeline. Its
+     * Bluetooth slots hear every one of them at −20 dBm too, which places nobody (D-308).
+     */
     private fun sensedBy(state: GameState, at: Long, sensor: Seat, vararg heard: Pair<Int, Int>): Event.Sensed? {
-        val slots = heard.map { (seat, rssi) -> Sighting(ContactTokens.of(contactSeedFor(seed, Seat(seat)), w), rssi, w) }
+        val slots = heard.map { (seat, _) -> Sighting(ContactTokens.of(contactSeedFor(seed, Seat(seat)), w), -20, w) }
         val packed = SightingUpload.pack(contactSeedFor(seed, sensor), w, uploadCount++, slots)
-        val upload = ContactUpload(sensor, SightingUpload.unpack(packed)!!)
-        val resolution = resolveContacts(ContactMemory.EMPTY, Tick(at), w, listOf(upload), state)
-        return resolvePlacements(Tick(at), resolution.memory.book, upload, state)
+        val upload = ContactUpload(sensor, SightingUpload.unpack(packed)!!, heard.map { (seat, cm) -> ContactDistance(Seat(seat), cm) })
+        resolveContacts(ContactMemory.EMPTY, Tick(at), w, listOf(upload), state)
+        return resolvePlacements(Tick(at), upload, state)
     }
 
     private fun sense(state: GameState, at: Long, sensor: Seat, vararg heard: Pair<Int, Int>): GameState =
         admitted(state, assertNotNull(sensedBy(state, at, sensor, *heard), "seat ${sensor.index} is not a sensor"))
 
-    /** **GUARD: a performer at a card hears seat 4 at −60, and seat 4 is placed, Inferred, in that room.** */
+    /** **GUARD: a performer at a card measures seat 4 at 1 m, and seat 4 is placed, Inferred, in that room.** */
     @Test
     fun `a performer's upload places the seats it heard in its room`() {
         val state = perform(armed(), Seat(0), at = 100)
         val room = roomOf(state, anchor(state, Seat(0)))
 
-        val sensed = assertNotNull(sensedBy(state, 110, Seat(0), 4 to -60, 5 to -90))
-        assertEquals(Event.Sensed(Tick(110), Seat(0), room, listOf(Seat(4))), sensed, "−90 is below the room floor; −60 is in it")
+        val sensed = assertNotNull(sensedBy(state, 110, Seat(0), 4 to 100, 5 to 300))
+        assertEquals(Event.Sensed(Tick(110), Seat(0), room, listOf(Seat(4))), sensed, "3 m is past the room's reach; 1 m is in it")
 
         val after = admitted(state, sensed)
         assertEquals(Placement.Inferred(Seat(4), room, Tick(110)), after.placementOf(Seat(4), Tick(111)))
         assertEquals(room, after.placedRoomOf(Seat(4), Tick(111)))
-        assertNull(after.placementOf(Seat(5), Tick(111)), "a seat heard below the floor was placed")
+        assertNull(after.placementOf(Seat(5), Tick(111)), "a seat measured past the room's reach was placed")
         // The sensor's room is observed, its own performer and the heard seat both counted.
         val seen = assertNotNull(after.observationOf(room))
         assertEquals(2, seen.trueCount)
@@ -134,10 +137,10 @@ class PlacementTest {
         val there = roomOf(base, anchor(base, performer))
 
         // Scan first, then heard.
-        val scanFirst = sense(perform(base, performer, at = 105), 110, Seat(0), performer.index to -50)
+        val scanFirst = sense(perform(base, performer, at = 105), 110, Seat(0), performer.index to 80)
         // Heard first, then scan.
-        val heardFirst = perform(sense(base, 102, Seat(0), performer.index to -50), performer, at = 105)
-            .let { sense(it, 110, Seat(0), performer.index to -50) }
+        val heardFirst = perform(sense(base, 102, Seat(0), performer.index to 80), performer, at = 105)
+            .let { sense(it, 110, Seat(0), performer.index to 80) }
 
         for ((label, state) in listOf("scan, then heard" to scanFirst, "heard, then scan" to heardFirst)) {
             assertEquals(here, state.sightingOf(performer)?.room, "$label: the sighting was not even recorded")
@@ -149,14 +152,14 @@ class PlacementTest {
         }
     }
 
-    /** **GUARD (D-155): a Revoked or Restrained seat is never placed or counted, even heard at −30.** */
+    /** **GUARD (D-155): a Revoked or Restrained seat is never placed or counted, even measured at 5 cm.** */
     @Test
-    fun `an out seat is never placed even heard at contact range`() {
+    fun `an out seat is never placed even measured at touch reach`() {
         val base = perform(armed(), Seat(0), at = 100)
         val room = roomOf(base, anchor(base, Seat(0)))
         val out = base.copy(revoked = listOf(Seat(3)), restrained = listOf(Seat(5)))
 
-        val sensed = assertNotNull(sensedBy(out, 110, Seat(0), 3 to -30, 5 to -30, 4 to -60))
+        val sensed = assertNotNull(sensedBy(out, 110, Seat(0), 3 to 5, 5 to 5, 4 to 100))
         assertEquals(listOf(Seat(4)), sensed.heard, "an out seat was heard into a room")
         // And the rules refuse to place one even if a Sensed names it (a forged or replayed row).
         val forged = admitted(out, Event.Sensed(Tick(110), Seat(0), room, listOf(Seat(3), Seat(4), Seat(5))))
@@ -169,22 +172,22 @@ class PlacementTest {
     @Test
     fun `an out seat senses nothing`() {
         val base = perform(armed(), Seat(0), at = 100)
-        assertNotNull(sensedBy(base, 110, Seat(0), 4 to -50), "the living performer should sense")
-        assertNull(sensedBy(base.copy(revoked = listOf(Seat(0))), 110, Seat(0), 4 to -50), "a Revoked seat sensed")
-        assertNull(sensedBy(base.copy(restrained = listOf(Seat(0))), 110, Seat(0), 4 to -50), "a Restrained seat sensed")
+        assertNotNull(sensedBy(base, 110, Seat(0), 4 to 80), "the living performer should sense")
+        assertNull(sensedBy(base.copy(revoked = listOf(Seat(0))), 110, Seat(0), 4 to 80), "a Revoked seat sensed")
+        assertNull(sensedBy(base.copy(restrained = listOf(Seat(0))), 110, Seat(0), 4 to 80), "a Restrained seat sensed")
         // And a living seat that never scanned anything is no sensor.
-        assertNull(sensedBy(base, 110, Seat(6), 4 to -50), "a seat placed nowhere sensed")
+        assertNull(sensedBy(base, 110, Seat(6), 4 to 80), "a seat placed nowhere sensed")
     }
 
     /** **GUARD: nothing is sensed or placed at a meeting, and the map is wiped when it ends.** */
     @Test
     fun `nothing is placed at a meeting and the map is wiped at its end`() {
-        val before = sense(perform(armed(), Seat(0), at = 100), 110, Seat(0), 4 to -50)
+        val before = sense(perform(armed(), Seat(0), at = 100), 110, Seat(0), 4 to 80)
         assertNotNull(before.placementOf(Seat(4), Tick(111)))
         assertTrue(before.observations.isNotEmpty())
 
         val meeting = before.copy(meeting = Meeting.called(Seat(6), MeetingTrigger.MeetingCard))
-        assertNull(sensedBy(meeting, 120, Seat(0), 4 to -50), "a Sensed was minted at a meeting")
+        assertNull(sensedBy(meeting, 120, Seat(0), 4 to 80), "a Sensed was minted at a meeting")
         assertEquals(
             RefusalReason.MeetingAlreadyRunning,
             (admit(meeting, Event.Sensed(Tick(120), Seat(0), "ROOM 0", listOf(Seat(4)))) as Admission.Refused).reason,
@@ -197,7 +200,7 @@ class PlacementTest {
         assertEquals(emptyList(), after.observations, "the observations outlived the meeting")
         for (seat in seats) assertNull(after.placementOf(seat, Tick(401)), "seat ${seat.index} kept a pre-meeting place")
         // And a window left open across the meeting is not a sensor after it.
-        assertNull(sensedBy(after, 410, Seat(0), 4 to -50), "a pre-meeting window sensed after the meeting")
+        assertNull(sensedBy(after, 410, Seat(0), 4 to 80), "a pre-meeting window sensed after the meeting")
     }
 
     /** **GUARD: sightings and closed knowledge expire; a check-in holds for ten seconds.** */
@@ -206,7 +209,7 @@ class PlacementTest {
         val sensor = seatOutside(armed(), setOf("ROOM 0"), after = Seat(-1))
         check(sensor.index != 4) { "the fixture's sensor is the seat it hears" }
         val start = perform(armed(), sensor, at = 100)
-        val heard = sense(start, 110, sensor, 4 to -50)
+        val heard = sense(start, 110, sensor, 4 to 80)
         assertNotNull(heard.placementOf(Seat(4), Tick(110 + PlacementTiming.EXPIRY - 1)))
         assertNull(heard.placementOf(Seat(4), Tick(110 + PlacementTiming.EXPIRY)), "a sighting never expired")
 
@@ -216,7 +219,7 @@ class PlacementTest {
         // Inside the hold, a sighting elsewhere does not move it.
         val elsewhere = roomOf(start, anchor(start, sensor))
         val rescan = perform(checked, sensor, at = 202)
-        val held = sense(rescan, 205, sensor, 4 to -50)
+        val held = sense(rescan, 205, sensor, 4 to 80)
         assertEquals("ROOM 0", held.placedRoomOf(Seat(4), Tick(206)), "a sighting relocated a check-in inside its hold")
         // Past the hold, the newer sighting wins.
         assertEquals(elsewhere, held.placedRoomOf(Seat(4), Tick(200 + PlacementTiming.KNOWN_HOLD)))
@@ -241,7 +244,7 @@ class PlacementTest {
         )
         // A newer sighting elsewhere still does not move it.
         val other = perform(working, Seat(2), at = tenMinutes - 20)
-        val moved = sense(other, tenMinutes - 10, Seat(2), 0 to -50)
+        val moved = sense(other, tenMinutes - 10, Seat(2), 0 to 80)
         assertEquals(Placement.Known(Seat(0), card), moved.placementOf(Seat(0), Tick(tenMinutes)))
 
         // The window closes: the place stands for the expiry and then the seat is unplaced.
@@ -260,8 +263,8 @@ class PlacementTest {
         val second = armed().let { seatOutside(it, setOf(roomOf(it, anchor(it, Seat(0))))) }
         fun walk(): GameState {
             val a = perform(perform(armed(), Seat(0), at = 100), second, at = 101)
-            val first = sense(a, 110, Seat(0), 4 to -50, 5 to -55)
-            return sense(first, 130, second, 6 to -50)
+            val first = sense(a, 110, Seat(0), 4 to 80, 5 to 90)
+            return sense(first, 130, second, 6 to 80)
         }
         val one = walk()
         val two = walk()
@@ -321,9 +324,9 @@ class PlacementTest {
         fun walk(insiders: List<Seat>): Pair<List<Event.Sensed?>, GameState> {
             val a = perform(perform(armed(insiders), Seat(0), at = 100), Seat(1), at = 101)
             uploadCount = 0
-            val e1 = sensedBy(a, 110, Seat(0), 1 to -50, 4 to -60)
+            val e1 = sensedBy(a, 110, Seat(0), 1 to 80, 4 to 100)
             val b = admitted(a, e1!!)
-            val e2 = sensedBy(b, 120, Seat(1), 0 to -50, 3 to -70)
+            val e2 = sensedBy(b, 120, Seat(1), 0 to 80, 3 to 140)
             return listOf(e1, e2) to admitted(b, e2!!)
         }
         val (events, state) = walk(listOf(Seat(1)))
@@ -340,20 +343,13 @@ class PlacementTest {
     }
 
     /**
-     * **GUARD (D-301): in a round that reads distance, a performer places the seats it measured
-     * within 1.5 m, and its Bluetooth places nobody.** Seat 4 at 150 cm is placed; seat 5 at 151 cm
-     * is not; seat 6, heard at −40 dBm and never measured, is not.
+     * **GUARD (D-301, D-308): a performer places the seats it measured within 1.5 m, and its
+     * Bluetooth places nobody.** Seat 4 at 150 cm is placed; seat 5 at 151 cm is not; seat 6, heard at
+     * −40 dBm and never measured, is not.
      */
     @Test
-    fun `a performer in a round that reads distance places what it measured within the room's reach`() {
-        val uwb = reduce(
-            GameState.EMPTY,
-            Event.RoundArmed(
-                Tick(0), seed = seed, seats = seats, insiders = listOf(Seat(1)), markers = placed(cards),
-                terminal = station, plan = plan.toView(), terminalRoom = "ROOM 0", contactSource = ContactSource.Uwb,
-            ),
-        ).state
-        val state = perform(uwb, Seat(0), at = 100)
+    fun `a performer places what it measured within the room's reach and Bluetooth places nobody`() {
+        val state = perform(armed(), Seat(0), at = 100)
         val room = roomOf(state, anchor(state, Seat(0)))
         val slots = listOf(Sighting(ContactTokens.of(contactSeedFor(seed, Seat(6)), w), -40, w))
         val upload = ContactUpload(
@@ -361,8 +357,8 @@ class PlacementTest {
             SightingUpload.unpack(SightingUpload.pack(contactSeedFor(seed, Seat(0)), w, uploadCount++, slots))!!,
             listOf(ContactDistance(Seat(5), 151), ContactDistance(Seat(4), 150)),
         )
-        val resolution = resolveContacts(ContactMemory.EMPTY, Tick(110), w, listOf(upload), state)
-        val sensed = assertNotNull(resolvePlacements(Tick(110), resolution.memory.book, upload, state))
+        resolveContacts(ContactMemory.EMPTY, Tick(110), w, listOf(upload), state)
+        val sensed = assertNotNull(resolvePlacements(Tick(110), upload, state))
         assertEquals(Event.Sensed(Tick(110), Seat(0), room, listOf(Seat(4))), sensed, "the room's reach by distance is not 1.5 m, or Bluetooth placed somebody")
         // The deliberate error is the same capture: an observation with its error rolled once.
         val after = admitted(state, sensed)

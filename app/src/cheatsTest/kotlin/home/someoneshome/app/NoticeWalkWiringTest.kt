@@ -98,7 +98,7 @@ class NoticeWalkWiringTest {
             made.onMessage = { pushed += it }
         }
         val link = LobbyOverTransport(
-            scope, rangingCapacity = { SimulatedAir.BENCH_CAPACITY }, onEvent = {}, seat = Kept(),
+            scope, onEvent = {}, seat = Kept(),
             onIntent = HouseDoors(house)::heard,
             onEgressFired = HouseDoors(house)::fired,
             onSighted = HouseDoors(house)::sighted,

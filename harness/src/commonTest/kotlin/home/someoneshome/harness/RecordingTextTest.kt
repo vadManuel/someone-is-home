@@ -62,7 +62,7 @@ class RecordingTextTest {
         )
 
         assertTrue(
-            text.startsWith("someone-is-home/recording/43"),
+            text.startsWith("someone-is-home/recording/44"),
             "the format changed shape twice and the version did not move with it",
         )
     }

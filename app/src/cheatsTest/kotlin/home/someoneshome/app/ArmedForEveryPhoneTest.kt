@@ -89,7 +89,7 @@ class ArmedForEveryPhoneTest {
         private val seam = DeferredRoundSeam()
 
         val link = LobbyOverTransport(
-            scope, rangingCapacity = { SimulatedAir.BENCH_CAPACITY }, onEvent = { log += it }, seat = Kept(),
+            scope, onEvent = { log += it }, seat = Kept(),
             onIntent = HouseDoors(house)::heard,
             onEgressFired = HouseDoors(house)::fired,
             onSighted = HouseDoors(house)::sighted,

@@ -3,7 +3,6 @@ package home.someoneshome.app
 import home.someoneshome.core.ContactGate
 import home.someoneshome.core.contactSeedFor
 import home.someoneshome.model.ContactWindow
-import home.someoneshome.model.ContactSource
 import home.someoneshome.model.Event
 import home.someoneshome.model.Haptic
 import home.someoneshome.model.InsiderAbility
@@ -61,17 +60,17 @@ import kotlin.test.fail
  * [RoundAuthority]. Every phone uploads up its own socket on the beat; the host's `onFrame` puts
  * each upload on one ordered queue exactly as `LobbyHouse` does (that class cannot be started in a
  * test, E-P2-2), and the queue's one consumer calls [RoundAuthority.sighted]. Nothing mints a
- * contact or a report: [ContactAct] walks phones together, and the resolver concludes.
+ * contact or a report: the rig walks phones together, and the resolver concludes.
  *
  * The meeting's timed transitions are minted here, as `tickHouse` would mint them; the presses in
  * it are requests through [RoundAuthority.heard], as the desk would put them.
  *
- * **Both contact sources** (D-301). The rig plays Bluetooth by default, today's rules; `rig(uwb =
- * true)` gives every phone a [SimulatedRanging] in the same air and tells the house each phone can
- * range, so the round arms on UWB distance and the touch, the held report and its circle's slot are
- * the distance rules', over the same sockets. Four peers a phone, so five phones range every pair
- * (D-300's pairing keeps a pair it formed, and at three a phone a missing pair of five can stay
- * missing: raised in D-301).
+ * **On distance, every round** (D-301, D-308: there are no Bluetooth rounds). Every phone has a
+ * [SimulatedRanging] in the same air at the phones' own three peers; Bluetooth only ranks who is
+ * near, and the touch, the held report and its circle's slot are the distance rules', over the same
+ * sockets. `rig(without = seat)` gives one phone no UWB radio (capacity 0), which nobody can touch
+ * or be touched by; `rig(ranging = false)` gives none, as five simulators have, for the rehearsal's
+ * stand-in ([HouseAir]). Every upload comes in by [StandInDoor], the app root's own door.
  */
 class ContactRadioBenchTest {
 
@@ -92,18 +91,12 @@ class ContactRadioBenchTest {
 
     private inner class Rig(
         private val scope: CoroutineScope,
-        /** Every phone ranges (D-301), and the house is told so at arming. */
-        val uwb: Boolean = false,
-        /** A phone with no UWB radio in a ranging rig (D-301): the round must read Bluetooth. */
+        /** A phone with no UWB radio (D-308): it says capacity 0 and is paired with nobody. */
         val without: Seat? = null,
+        /** Whether the phones range at all: false is five simulators, for the rehearsal's stand-in. */
+        val ranging: Boolean = true,
     ) {
         val air = SimulatedAir()
-
-        /** Every seat's ranging capacity as the house is told it at arming (D-301). */
-        private val capacities: Map<Int, Int> =
-            if (!uwb) emptyMap() else seats.associate { it.index to if (it == without) 0 else UWB_CAPACITY }
-
-        private val armingWith = inputs.copy(ranging = capacities)
 
         /** Every answer to an upload each phone's socket delivered, by its length on the wire (D-301). */
         val answers = seats.associate { it.index to mutableListOf<Int>() }
@@ -145,12 +138,15 @@ class ContactRadioBenchTest {
         )
         private val effects = EffectWire(send = { seat, frame -> host.send(seat, frame) })
         val house = RoundAuthority(
-            inputs = { armingWith },
+            inputs = { inputs },
             emit = { effect, state -> effects.emit(effect, state) },
             note = { said += it },
             contactWindow = { window },
         )
         val phones = mutableMapOf<Int, RoundOverTransport>()
+
+        /** The app root's upload door (D-308): the rules', with the rehearsal's stand-in when it is on the air. */
+        val door = StandInDoor(HouseDoors { house })
 
         /** Each phone's panel (D-307): where its person is, which every upload tells the house. */
         val panels = mutableMapOf<Int, FlowModel>()
@@ -161,7 +157,7 @@ class ContactRadioBenchTest {
             jobs += scope.launch {
                 for ((seat, body) in arrivals) {
                     uploads.getValue(seat.index) += body.slots
-                    val plan = house.sighted(seat, body)
+                    val plan = door.sighted(seat, body) ?: error("the door had no house to ask")
                     // **Answered as `LobbyHouse.answerUpload` answers** (D-263, D-300, D-301): one
                     // `UploadHeard` for every upload, its slot's id and the house's plan for the
                     // phone, report slot and all, down that phone's own socket.
@@ -201,7 +197,7 @@ class ContactRadioBenchTest {
                             else -> Unit
                         }
                     },
-                    ranging = if (uwb && seat != without) air.rangingFor(seat, UWB_CAPACITY) else NoRanging,
+                    ranging = if (ranging && seat != without) air.rangingFor(seat, UWB_CAPACITY) else NoRanging,
                 )
                 phones[seat.index] = round
                 jobs += scope.launch { client.run() }
@@ -253,7 +249,24 @@ class ContactRadioBenchTest {
             fail("the phones never settled on the house's pairs: ${house.ranging?.pairs()?.size} kept")
         }
 
-        val act get() = ContactAct(air, beat = { beat() }, note = { said += it })
+        /**
+         * **[mover] held [metres] from [still], a second at a time, until [until] or [HELD_SECONDS]**
+         * (D-308): the pair is formed once Bluetooth says close and a rule needs it, started on both
+         * phones, and read; then [mover] walks back to where it stood.
+         */
+        suspend fun holdAt(mover: Seat, still: Seat, metres: Double = SimulatedAir.TOUCH_METRES, until: () -> Boolean = { false }) {
+            val from = air.spotOf(mover)
+            val at = air.spotOf(still)!!
+            air.place(mover, SimulatedAir.Spot(at.x + metres, at.y))
+            repeat(HELD_SECONDS) { if (!until()) second() }
+            from?.let { air.place(mover, it) }
+        }
+
+        /** [insider]'s armed phone held against [target]'s until the house Revokes it. */
+        suspend fun revokeByTouch(insider: Seat, target: Seat) {
+            holdAt(insider, target) { house.state.isRevoked(target) }
+            assertTrue(house.state.isRevoked(target), "the touch did not Revoke the target by distance: ${house.refusals}")
+        }
 
         /**
          * **Every seat's push count, once nothing is still on its way.** A snapshot taken straight
@@ -301,8 +314,8 @@ class ContactRadioBenchTest {
         }
     }
 
-    private fun rig(uwb: Boolean = false, without: Seat? = null, block: suspend Rig.() -> Unit) = runBlocking {
-        val rig = Rig(this, uwb, without)
+    private fun rig(without: Seat? = null, ranging: Boolean = true, block: suspend Rig.() -> Unit) = runBlocking {
+        val rig = Rig(this, without, ranging)
         try {
             rig.start()
             rig.block()
@@ -313,39 +326,53 @@ class ContactRadioBenchTest {
 
     // ---- 1 · The round, to an ending ------------------------------------------------------------
 
+    /**
+     * **D-301 on the bench, over real sockets: an armed Insider's phone held against the target's
+     * Revokes it by distance, and a living phone held within 30 cm of the Revoked one for two seconds
+     * calls the meeting, its circle's slot filling on its own phone alone; the round plays to an
+     * ending.** Every round is this one (D-308).
+     */
     @Test
-    fun theBenchPlaysARoundToAnEndingThroughTheFakeRadio() = rig {
+    fun theBenchPlaysARoundToAnEndingOnDistance() = rig {
         armed()
         playToAnEnding()
     }
 
-    /** A Revoke, its report, a meeting that Restrains the Insider: the round to an ending. */
+    /** A Revoke, its report, a meeting that Restrains the Insider: the round to an ending, on distance. */
     private suspend fun Rig.playToAnEnding() {
         val state = { house.state }
         val insider = state().livingInsiders.single()
         val target = state().livingPlainResidents.first()
         val reporter = state().livingPlainResidents.first { it.index != target.index }
 
-        // Nobody touching: a few beats of filler from every phone, and the house concludes nothing.
-        act.idle(beats = 2)
+        // Nobody touching: a few seconds of uploads from every phone, and the house concludes nothing.
+        repeat(2) { second() }
         assertTrue(phones.values.all { it.uploading }, "a phone was not uploading in the round")
+        armRevoke(insider)
+        ranged()
         assertFalse(house.emitted.any { it is home.someoneshome.model.Effect.ContactAnswered }, "a contact was minted from nobody touching")
 
-        // The Revoke: the Insider walks over and holds the phones together.
-        armRevoke(insider)
-        act.touch(insider, target)
-        assertTrue(state().isRevoked(target), "the touch did not Revoke the target: ${house.refusals}")
-        assertTrue(RoundMessage.AbilityFired(RoundMessage.AbilityFired.LANDED_AT_A_TOUCH) in pushed.getValue(insider.index), "the Insider's phone was never told its Revoke fired")
+        // The Revoke: held together, a second at a time, until the house concludes.
+        revokeByTouch(insider, target)
+        assertTrue(RoundMessage.AbilityFired(RoundMessage.AbilityFired.LANDED_AT_A_TOUCH) in pushed.getValue(insider.index), "the Insider's phone was never told its Revoke landed")
         assertTrue(RoundMessage.RevokeLanded.Buzzing in pushed.getValue(target.index), "the target's phone was never told")
         assertTrue(phones.getValue(target.index).outOfTheRound, "the Revoked phone does not know it is out")
+        air.spreadOut(seats)
+        repeat(ContactGate.PAIR_GRACE_TICKS.toInt() / ContactGate.UPLOAD_TICKS.toInt()) { second() }
+        assertEquals(null, state().meeting, "a meeting was called with nobody near the Revoked phone")
 
-        // The report: a living phone finds the Revoked one.
-        act.touch(reporter, target)
-        val meeting = assertNotNull(state().meeting, "the report called no meeting: ${house.refusals}")
+        // The report: the reporter stands 20 cm from the Revoked phone and holds there.
+        val from = slots.getValue(reporter.index).size
+        holdAt(reporter, target, metres = 0.20) { state().meeting != null }
+        val meeting = assertNotNull(state().meeting, "two seconds held at 20 cm called no meeting: ${house.refusals}")
         assertEquals(reporter, meeting.caller, "the meeting was called by somebody else")
         assertEquals(MeetingTrigger.RevokeReported(target), meeting.trigger)
+        val held = slots.getValue(reporter.index).drop(from)
+        assertTrue(held.any { it is ReportSlot.Pending }, "the reporter's phone was never told its report was held: $held")
+        for (seat in seats.filter { it != reporter }) {
+            assertTrue(slots.getValue(seat.index).all { it == ReportSlot.Idle }, "seat ${seat.index}'s phone was told of a hold: ${slots.getValue(seat.index)}")
+        }
         meetingToAnEnding(insider)
-        assertTrue(said.any { it.startsWith("THE RADIO — SEAT ${insider.index} WALKS TO") }, "the act never walked")
     }
 
     /** The meeting, to the Restraint of [insider]: every seat checks in, the living vote, the house closes each phase. */
@@ -376,56 +403,13 @@ class ContactRadioBenchTest {
     // ---- D-301: the rules read UWB distance ------------------------------------------------------
 
     /**
-     * **D-301 on the bench, over real sockets: a round where every phone ranges arms on distance, an
-     * armed Insider's phone held against the target's Revokes it, and a living phone held within
-     * 30 cm of the Revoked one for two seconds calls the meeting, its circle's slot filling on its
-     * own phone alone; the round plays to an ending.**
-     */
-    @Test
-    fun theBenchPlaysARoundToAnEndingOnDistance() = rig(uwb = true) {
-        armed()
-        assertEquals(ContactSource.Uwb, house.state.contactSource, "every phone ranges and the round did not arm on distance")
-        assertTrue(said.any { it.contains("CONTACT BY UWB DISTANCE") }, "the house did not say which source it chose")
-        val insider = house.state.livingInsiders.single()
-        val target = house.state.livingPlainResidents.first()
-        val reporter = house.state.livingPlainResidents.first { it.index != target.index }
-        armRevoke(insider)
-        ranged()
-        assertFalse(house.emitted.any { it is home.someoneshome.model.Effect.ContactAnswered }, "a contact was minted from nobody touching")
-
-        // The Revoke: held together, a second at a time, until the house concludes.
-        air.touch(insider, target)
-        repeat(HELD_SECONDS) { if (!house.state.isRevoked(target)) second() }
-        assertTrue(house.state.isRevoked(target), "the touch did not Revoke the target by distance: ${house.refusals}")
-        assertTrue(RoundMessage.AbilityFired(RoundMessage.AbilityFired.LANDED_AT_A_TOUCH) in pushed.getValue(insider.index), "the Insider's phone was never told its Revoke landed")
-        air.spreadOut(seats)
-        repeat(ContactGate.PAIR_GRACE_TICKS.toInt() / ContactGate.UPLOAD_TICKS.toInt()) { second() }
-        assertEquals(null, house.state.meeting, "a meeting was called with nobody near the Revoked phone")
-
-        // The report: the reporter stands 20 cm from the Revoked phone and holds there.
-        val near = air.spotOf(target)!!
-        air.place(reporter, SimulatedAir.Spot(near.x + 0.20, near.y))
-        val from = slots.getValue(reporter.index).size
-        repeat(HELD_SECONDS) { if (house.state.meeting == null) second() }
-        val meeting = assertNotNull(house.state.meeting, "two seconds held at 20 cm called no meeting: ${house.refusals}")
-        assertEquals(reporter, meeting.caller, "the meeting was called by somebody else")
-        assertEquals(MeetingTrigger.RevokeReported(target), meeting.trigger)
-        val held = slots.getValue(reporter.index).drop(from)
-        assertTrue(held.any { it is ReportSlot.Pending }, "the reporter's phone was never told its report was held: $held")
-        for (seat in seats.filter { it != reporter }) {
-            assertTrue(slots.getValue(seat.index).all { it == ReportSlot.Idle }, "seat ${seat.index}'s phone was told of a hold: ${slots.getValue(seat.index)}")
-        }
-        meetingToAnEnding(insider)
-    }
-
-    /**
      * **GUARD (D-217, D-301): every answer is one width on every phone, whatever its report slot
      * says**: the Insider's, the Revoked phone's, the reader's mid-hold and every Resident's, from
      * arming to the call. A frame only a reporting phone receives would be a find anybody on the
      * Wi-Fi could see; there is none, only a sealed slot in the answer everybody gets.
      */
     @Test
-    fun everyAnswerIsOneWidthOnEveryPhoneWhileAReportIsHeld() = rig(uwb = true) {
+    fun everyAnswerIsOneWidthOnEveryPhoneWhileAReportIsHeld() = rig {
         armed()
         val insider = house.state.livingInsiders.single()
         val target = house.state.livingPlainResidents.first()
@@ -456,7 +440,7 @@ class ContactRadioBenchTest {
 
     /** **GUARD (D-301): leaving reach before two seconds cancels the hold, on the reader's phone, and calls nothing.** */
     @Test
-    fun walkingAwayBeforeTwoSecondsCancelsTheHold() = rig(uwb = true) {
+    fun walkingAwayBeforeTwoSecondsCancelsTheHold() = rig {
         armed()
         val insider = house.state.livingInsiders.single()
         val target = house.state.livingPlainResidents.first()
@@ -490,7 +474,7 @@ class ContactRadioBenchTest {
      * the meeting's call takes it off again.
      */
     @Test
-    fun aReportRunsOnlyFromTheMainViewOnDistance() = rig(uwb = true) {
+    fun aReportRunsOnlyFromTheMainViewOnDistance() = rig {
         armed()
         val insider = house.state.livingInsiders.single()
         val target = house.state.livingPlainResidents.first()
@@ -529,7 +513,7 @@ class ContactRadioBenchTest {
      * (the panel leaves the report screen by a tap on the banner, say); the next answer is cancelled.
      */
     @Test
-    fun leavingTheMainViewCancelsTheHoldOnDistance() = rig(uwb = true) {
+    fun leavingTheMainViewCancelsTheHoldOnDistance() = rig {
         armed()
         val insider = house.state.livingInsiders.single()
         val target = house.state.livingPlainResidents.first()
@@ -556,7 +540,7 @@ class ContactRadioBenchTest {
 
     /** **D-291 on distance: the Revoking Insider's phone, held where it Revoked, holds a report only once the grace is over.** */
     @Test
-    fun theRevokingInsidersPhoneHoldsItsTargetOnlyAfterTheGraceOnDistance() = rig(uwb = true) {
+    fun theRevokingInsidersPhoneHoldsItsTargetOnlyAfterTheGraceOnDistance() = rig {
         armed()
         val insider = house.state.livingInsiders.single()
         val target = house.state.livingPlainResidents.first()
@@ -578,14 +562,15 @@ class ContactRadioBenchTest {
     }
 
     /**
-     * **GUARD (D-301): the source is the round's, chosen at arming.** A body between two phones held
-     * together makes UWB read three to five metres long while Bluetooth still says touching: in a
-     * round where every phone ranges the armed touch lands nothing, and in a round with one phone
-     * that cannot range, the house reads Bluetooth and the same touch Revokes.
+     * **GUARD (D-301, D-308): only the distance decides.** A body between two phones held together
+     * makes UWB read three to five metres long while Bluetooth still says touching: the pair is
+     * ranged and the armed touch lands nothing. And a phone that cannot range (capacity 0: NEARBY
+     * DEVICES refused, no support, the session limit) is paired with nobody, so an armed touch with it
+     * Revokes nobody however long it is held, while the round plays on for the rest.
      */
     @Test
-    fun theRoundReadsDistanceOnlyWhenEveryPhoneRanges() {
-        rig(uwb = true) {
+    fun onlyTheDistanceDecidesAndAPhoneThatCannotRangeIsTouchedByNobody() {
+        rig {
             armed()
             val insider = house.state.livingInsiders.single()
             val target = house.state.livingPlainResidents.first()
@@ -599,22 +584,24 @@ class ContactRadioBenchTest {
                 house.ranging?.pairs().orEmpty().any { it.has(insider) && it.has(target) },
                 "the two phones held together were never ranged, so the body was never read",
             )
-            assertFalse(house.state.isRevoked(target), "a round on distance Revoked through a body that reads metres long")
+            assertFalse(house.state.isRevoked(target), "a touch Revoked through a body that reads metres long")
         }
-        rig(uwb = true, without = Seat(4)) {
+        val cannot = Seat(4)
+        rig(without = cannot) {
             armed()
-            assertEquals(ContactSource.Rssi, house.state.contactSource, "a phone that cannot range and the round still armed on distance")
-            assertTrue(said.any { it.contains("CONTACT BY BLUETOOTH RSSI") }, "the house did not say which source it chose")
             val insider = house.state.livingInsiders.single()
-            val target = house.state.livingPlainResidents.first()
+            // The phone that cannot range is the target, or, if the draw made it the Insider, the actor.
+            val target = if (cannot != insider) cannot else house.state.livingPlainResidents.first()
             armRevoke(insider)
-            air.bodyBetween(insider, target)
-            act.touch(insider, target)
-            assertTrue(house.state.isRevoked(target), "a round on Bluetooth did not Revoke on a touch: ${house.refusals}")
+            ranged()
+            holdAt(insider, target)
+            assertFalse(house.state.isRevoked(target), "a touch with a phone that cannot range Revoked somebody: ${house.refusals}")
+            assertTrue(house.ranging?.pairs().orEmpty().none { it.has(cannot) }, "a phone that cannot range was paired")
+            assertTrue(phones.values.all { it.uploading }, "a phone stopped uploading in a round with a phone that cannot range")
         }
     }
 
-    // ---- D-290 / D-291: the hit, on the sockets, and the pair's grace ----------------------------
+    // ---- D-290: the hit, on the sockets ----------------------------------------------------------
 
     /**
      * **D-290 on real sockets: a landed Revoke is one frame each, and both say Long.** The Insider's
@@ -627,10 +614,9 @@ class ContactRadioBenchTest {
         val insider = house.state.livingInsiders.single()
         val target = house.state.livingPlainResidents.first()
         armRevoke(insider)
-        act.idle(beats = 1)
+        ranged()
         val before = settledFrames()
-        act.touch(insider, target)
-        assertTrue(house.state.isRevoked(target), "the touch revoked nobody: ${house.refusals}")
+        revokeByTouch(insider, target)
         val after = settledFrames()
         val got = seats.associate { it.index to pushed.getValue(it.index).drop(before.getValue(it.index)) }
         assertEquals(
@@ -644,54 +630,6 @@ class ContactRadioBenchTest {
         for (seat in seats.filter { it != insider && it != target }) {
             assertEquals(before.getValue(seat.index), after.getValue(seat.index), "seat ${seat.index} did not touch and was sent a frame")
         }
-    }
-
-    /**
-     * **D-291 on the bench: the Revoking Insider's phone, held where it Revoked, reports only once
-     * the pair's grace is over.** One upload a second; the house's clock moves a second per beat.
-     */
-    @Test
-    fun theRevokingInsidersPhoneReportsItsTargetOnlyAfterTheGrace() = rig {
-        armed()
-        val insider = house.state.livingInsiders.single()
-        val target = house.state.livingPlainResidents.first()
-        armRevoke(insider)
-        act.touch(insider, target)
-        assertTrue(house.state.isRevoked(target), "the touch revoked nobody: ${house.refusals}")
-        val hit = house.clock
-        air.touch(insider, target)
-        while (house.clock + ContactGate.UPLOAD_TICKS < hit + ContactGate.PAIR_GRACE_TICKS) {
-            house.advanceTo(Tick(house.clock + ContactGate.UPLOAD_TICKS))
-            beat()
-            assertEquals(null, house.state.meeting, "the Insider's phone reported ${house.clock - hit} ticks after the hit, inside the grace")
-        }
-        house.advanceTo(Tick(hit + ContactGate.PAIR_GRACE_TICKS))
-        beat()
-        val meeting = assertNotNull(house.state.meeting, "the Insider's phone did not report at the grace's end: ${house.refusals}")
-        assertEquals(insider, meeting.caller, "the meeting was called by somebody else")
-        assertEquals(MeetingTrigger.RevokeReported(target), meeting.trigger)
-    }
-
-    /** D-291, accepted under U3: a phone that was not in the touch reports inside the grace. */
-    @Test
-    fun aNeighbourWhoWasNotInTheTouchReportsInsideTheGrace() = rig {
-        armed()
-        val insider = house.state.livingInsiders.single()
-        val target = house.state.livingPlainResidents.first()
-        val neighbour = house.state.livingPlainResidents.first { it.index != target.index }
-        armRevoke(insider)
-        act.touch(insider, target)
-        assertTrue(house.state.isRevoked(target), "the touch revoked nobody: ${house.refusals}")
-        val hit = house.clock
-        air.touch(neighbour, target)
-        repeat(2) {
-            house.advanceTo(Tick(house.clock + ContactGate.UPLOAD_TICKS))
-            beat()
-        }
-        assertTrue(house.clock < hit + ContactGate.PAIR_GRACE_TICKS, "the walk left the grace, so it proves nothing")
-        val meeting = assertNotNull(house.state.meeting, "the neighbour was held by the Insider's grace: ${house.refusals}")
-        assertEquals(neighbour, meeting.caller)
-        assertEquals(MeetingTrigger.RevokeReported(target), meeting.trigger)
     }
 
     // ---- S3: the host log carries no seed, token or key ------------------------------------------
@@ -734,20 +672,23 @@ class ContactRadioBenchTest {
     // ---- S4: a Revoked player is reported once ---------------------------------------------------
 
     /**
-     * **S4 (D-219) on the sockets: a second report of a couch phone is refused, recorded, and
-     * answered with nothing.** The report calls its meeting; the room votes Skip and the lights go
-     * out; the same living phone is held against the same Revoked phone again.
+     * **S4 (D-219) on the sockets: a couch phone is reported once.** The report calls its meeting;
+     * the room votes Skip and the lights go out; the same living phone is held 20 cm from the same
+     * Revoked phone again, well past the pair's grace. On distance no hold starts on a seat already
+     * reported (D-301), so nothing reaches the gate, nothing is called and nothing is answered.
      */
     @Test
-    fun aSecondReportOfTheSameRevokedPhoneIsRefusedAndAnsweredWithNothing() = rig {
+    fun aSecondReportOfTheSameRevokedPhoneStartsNothingAndIsAnsweredWithNothing() = rig {
         armed()
         val insider = house.state.livingInsiders.single()
         val target = house.state.livingPlainResidents.first()
         val reporter = house.state.livingPlainResidents.first { it.index != target.index }
         armRevoke(insider)
-        act.touch(insider, target)
-        assertTrue(house.state.isRevoked(target), "the fixture revoked nobody")
-        act.touch(reporter, target)
+        ranged()
+        revokeByTouch(insider, target)
+        air.spreadOut(seats)
+        repeat(ContactGate.PAIR_GRACE_TICKS.toInt() / ContactGate.UPLOAD_TICKS.toInt()) { second() }
+        holdAt(reporter, target, metres = 0.20) { house.state.meeting != null }
         assertEquals(MeetingTrigger.RevokeReported(target), house.state.meeting?.trigger, "the first report called no meeting")
 
         for (seat in seats) house.heard(Intent.CheckIn(seat))
@@ -765,19 +706,14 @@ class ContactRadioBenchTest {
 
         val framesBefore = settledFrames()
         val refusedBefore = house.contactRefusals.size
-        // Past the pair's grace (D-213's debounce, named by D-291), so the resolver mints the report again.
+        // Past the pair's grace (D-291), so only S4 stands between this hold and a second call.
         house.advanceTo(Tick(house.clock + ContactGate.PAIR_GRACE_TICKS + 1))
-        act.touch(reporter, target)
-        val refused = house.contactRefusals.drop(refusedBefore)
-        assertTrue(
-            refused.any { (event, reason) ->
-                event is Event.MeetingCalled && event.trigger == MeetingTrigger.RevokeReported(target) &&
-                    reason == RefusalReason.AlreadyReported
-            },
-            "S4: the second report of seat ${target.index} was not refused as already reported: $refused",
-        )
-        assertEquals(null, house.state.meeting, "S4: the second report called a meeting")
-        assertEquals(framesBefore, seats.associate { it.index to pushed.getValue(it.index).size }, "S4: a refused second report was answered")
+        val from = slots.getValue(reporter.index).size
+        holdAt(reporter, target, metres = 0.20)
+        assertEquals(null, house.state.meeting, "S4: the second hold called a meeting")
+        assertTrue(slots.getValue(reporter.index).drop(from).all { it == ReportSlot.Idle }, "S4: a hold started on a seat already reported")
+        assertTrue(house.contactRefusals.drop(refusedBefore).none { it.first is Event.MeetingCalled }, "S4: a second report reached the gate")
+        assertEquals(framesBefore, seats.associate { it.index to pushed.getValue(it.index).size }, "S4: the second hold was answered")
     }
 
     // ---- 2 · R8: out, and still uploading on the beat --------------------------------------------
@@ -789,21 +725,21 @@ class ContactRadioBenchTest {
         val target = house.state.livingPlainResidents.first()
         val other = house.state.livingPlainResidents.first { it.index != target.index }
         armRevoke(insider)
-        act.touch(insider, target)
-        assertTrue(house.state.isRevoked(target), "the fixture revoked nobody")
+        ranged()
+        revokeByTouch(insider, target)
 
         val before = uploads.getValue(target.index).size
         val emittedBefore = house.emitted.size
-        // Put a living phone right against the Revoked one: if it were still scanning, it would hear.
-        air.touch(target, other)
-        repeat(3) { beat() }
+        // Put a living phone right against the Revoked one: the living phone's hold reports it, and
+        // the Revoked phone's own distances are read for nothing (D-301).
+        holdAt(other, target) { house.state.meeting != null }
         val after = uploads.getValue(target.index).drop(before)
-        assertEquals(3, after.size, "a Revoked phone stopped uploading on the beat: ${after.size} in 3 beats")
+        assertTrue(after.size >= 3, "a Revoked phone stopped uploading on the beat: ${after.size} uploads")
         assertTrue(after.all { it.length == SightingUpload.BODY_CHARS }, "a Revoked phone's upload changed size")
         val sizes = seats.associate { s -> s.index to uploads.getValue(s.index).map { it.length }.toSet() }
         assertTrue(sizes.values.all { it == setOf(SightingUpload.BODY_CHARS) }, "uploads differ in size by phone: $sizes")
         // What the Revoked phone uploaded resolved to nothing: the only events since are the living
-        // phone's one-sided report of it, never a contact from the Revoked side.
+        // phone's report of it, never a contact from the Revoked side.
         assertTrue(house.state.meeting != null, "the living phone pressed against the Revoked one reported nothing")
         assertFalse(
             house.emitted.drop(emittedBefore)
@@ -826,16 +762,16 @@ class ContactRadioBenchTest {
 
         val framesBefore = settledFrames()
         val refusedBefore = house.contactRefusals.size
-        act.touch(insider, target)
+        holdAt(insider, target)
 
         assertFalse(house.state.isRevoked(target), "R5: an armed Revoke landed in the meeting room")
+        // On distance nothing is ranged at a meeting (D-306: no rule there reads one), so a touch
+        // reaches the gate only from a pair kept a moment past the call; any that does is refused.
         val refused = house.contactRefusals.drop(refusedBefore)
-        assertEquals(
-            listOf(RefusalReason.MeetingAlreadyRunning, RefusalReason.MeetingAlreadyRunning),
-            refused.map { it.second },
-            "R5: both halves of the touch should be refused for the meeting: $refused",
+        assertTrue(
+            refused.all { it.first is Event.ContactMade && it.second == RefusalReason.MeetingAlreadyRunning },
+            "R5: a touch at a meeting was refused for something else: $refused",
         )
-        assertTrue(refused.all { it.first is Event.ContactMade })
         val framesAfter = seats.associate { it.index to pushed.getValue(it.index).size }
         assertEquals(framesBefore, framesAfter, "R4: a refused contact put frames on a socket")
         // The arm is gone, and not by the touch: a meeting call ends every armed Revoke (the owner's
@@ -844,28 +780,28 @@ class ContactRadioBenchTest {
         assertFalse(house.state.cooldownArmed.any { it.index == insider.index }, "a meeting call left an armed Revoke standing (2026-11-18)")
     }
 
-    /** R4 for the report: a second meeting from the radio is refused and answered with nothing. */
+    /**
+     * R4 for the report: no hold runs during a meeting (D-301 decision 5), so a living phone held
+     * beside the Revoked one at a meeting is told nothing, calls nothing and is answered with nothing.
+     */
     @Test
-    fun aReportDuringAMeetingIsRefusedAndAnsweredWithNothing() = rig {
+    fun aReportDuringAMeetingStartsNothingAndIsAnsweredWithNothing() = rig {
         armed()
         val insider = house.state.livingInsiders.single()
         val target = house.state.livingPlainResidents.first()
         val reporter = house.state.livingPlainResidents.first { it.index != target.index }
         armRevoke(insider)
-        act.touch(insider, target)
-        assertTrue(house.state.isRevoked(target))
+        ranged()
+        revokeByTouch(insider, target)
         house.mint(Event.MeetingCalled(house.now(), insider, MeetingTrigger.MeetingCard))
         delay(SETTLE_MILLIS)
 
         val framesBefore = settledFrames()
-        val refusedBefore = house.contactRefusals.size
-        act.touch(reporter, target)
-        val refused = house.contactRefusals.drop(refusedBefore)
-        assertTrue(
-            refused.any { it.first is Event.MeetingCalled && it.second == RefusalReason.MeetingAlreadyRunning },
-            "the report during a meeting was not refused: $refused",
-        )
-        assertEquals(framesBefore, seats.associate { it.index to pushed.getValue(it.index).size }, "R4: a refused report was answered")
+        val from = slots.getValue(reporter.index).size
+        holdAt(reporter, target, metres = 0.20)
+        assertEquals(MeetingTrigger.MeetingCard, house.state.meeting?.trigger, "the meeting changed under a hold")
+        assertTrue(slots.getValue(reporter.index).drop(from).all { it == ReportSlot.Idle }, "a hold ran at a meeting")
+        assertEquals(framesBefore, seats.associate { it.index to pushed.getValue(it.index).size }, "R4: a hold at a meeting was answered")
     }
 
     // ---- T2 · A radio that went down: named if a person did it, recorded if not (D-222; D-223) ----
@@ -939,24 +875,27 @@ class ContactRadioBenchTest {
     // ---- 4 · The cross-process stand-in, without sockets ----------------------------------------
 
     /**
-     * [HouseAir], which [RoundCheat] uses because five processes share no air: the same act, the
-     * uploads put to [RoundAuthority.sighted] directly, and the Revoke and the report still made by
-     * the resolver from tokens rather than minted.
+     * **[HouseAir], which [RoundCheat] uses because five processes share no air** (D-308): five
+     * phones with no UWB radio, as five simulators are, keep uploading up their own sockets; the
+     * stand-in's radios are spliced into each upload at the app root's door ([StandInDoor]), the
+     * plan goes back to the stand-in, and the Revoke and the report are still made by the resolver
+     * from distances rather than minted. The reporter's own phone says it is on the main view.
      */
     @Test
-    fun theRehearsalsHouseAirLandsARevokeAndAReportThroughTheResolver() = rig {
+    fun theRehearsalsHouseAirLandsARevokeAndAReportOnDistanceThroughTheResolver() = rig(ranging = false) {
         armed()
         val insider = house.state.livingInsiders.single()
         val target = house.state.livingPlainResidents.first()
         val reporter = house.state.livingPlainResidents.first { it.index != target.index }
-        stop() // the phones' own uploads stop; only the house's stand-in uploads from here
         armRevoke(insider)
         val radios = HouseAir(house, window = { window }).also { it.armed() }
-        val act = ContactAct(radios.air, beat = { radios.beat() }, note = { said += it })
-        act.touch(insider, target)
+        door.air = radios
+        val act = ContactAct(radios.air, beat = { second() }, note = { said += it })
+        act.touch(insider, target, until = { house.state.isRevoked(target) })
         assertTrue(house.state.isRevoked(target), "HouseAir's touch revoked nobody: ${house.refusals}")
-        act.touch(reporter, target)
+        act.touch(reporter, target, until = { house.state.meeting != null })
         assertEquals(MeetingTrigger.RevokeReported(target), house.state.meeting?.trigger, "HouseAir's report called no meeting")
+        assertTrue(slots.getValue(reporter.index).any { it is ReportSlot.Pending }, "the reporter's own phone was never told its report was held")
     }
 
     private companion object {
@@ -971,7 +910,7 @@ class ContactRadioBenchTest {
         const val UWB_CAPACITY = SimulatedAir.BENCH_CAPACITY
 
         /**
-         * **How long a held touch or a held report is given, in seconds: ten** (D-302). Between two
+         * **How long a held touch or a held report is given, in seconds: ten** (D-302, D-308). Between two
          * phones the house is not ranging, three to pair (the stops, the second spare, the second
          * start), one for both phones' readings, and for a report two more of the hold: six, with
          * four to spare. A loop over it stops as soon as the touch or the call lands.

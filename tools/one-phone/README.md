@@ -247,6 +247,9 @@ there; that is the rules, after the report and the notice have been shown.
   Revoked: check `SOMEONES_HOME_ROUND_SEED` is unset and the run was four seats.
 - **PASS, the round goes on:** no `THE ROUND ENDED` line before `[round] PUSH … MEETING CALLED`, and
   no `REFUSED — RoundAlreadyEnded`.
+- **No longer reachable since D-308, said plainly:** every rule reads Ultra Wideband distance now, and a
+  Mac has no Ultra Wideband, so the phone's Bluetooth sighting of the Mac reports nothing. The two
+  lines below and the RSSI advice after them describe the Bluetooth rules D-308 removed.
 - **PASS, the house resolved the phone's sighting,** one of:
   - `[round] PUSH … MEETING CALLED BY SEAT 0 · RevokeReported…`: the phone's report beat the bench's.
     The strongest result.

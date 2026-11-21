@@ -88,7 +88,7 @@ import home.someoneshome.platform.secureRandomBytes
  * first, then starts. **A phone that is out keeps ranging and keeps reporting its distances**, unlike
  * its Bluetooth sightings (R8): a Revoked phone must stay measurable for the report, and a phone
  * that dropped its readings would leave the handles it was dealt unanswered in its uploads, a
- * difference anybody holding its seed could read. No rule reads a distance yet.
+ * difference anybody holding its seed could read. Every rule reads the distances (D-301, D-308).
  *
  * ### Why the one early exit here is not rule 1's
  *

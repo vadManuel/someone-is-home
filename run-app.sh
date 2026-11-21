@@ -7,11 +7,12 @@
 #   ./run-app.sh simulator playtest   simulator, playtest variant
 #   ./run-app.sh device playtest      EVERY phone plugged into this Mac, playtest variant
 #   APP_DEVICE_NAME=fiance ./run-app.sh device   just the phone whose name contains "fiance"
-#   SOMEONES_HOME_UWB=1 ./run-app.sh device playtest
-#                                     the same, with the UWB radio switched on (D-303). Off by
-#                                     default: every round arms on Bluetooth. On, a round arms on
-#                                     UWB distance when every phone in it was launched this way.
-#                                     Phones only, debug or playtest; the simulator ignores it.
+#
+# Every round on a phone is the Bluetooth/UWB hybrid (D-308): Bluetooth ranks who is near, the house
+# pairs close phones the game needs for Ultra Wideband, and every rule reads the distance. There is
+# no switch: the debug and playtest variants run the real Nearby Interaction radio on every phone.
+# The simulator's build has no UWB radio at all, so a round on simulators plays everything that does
+# not read a distance, and nothing about UWB is signed off there.
 #
 # The second argument is story 0.10b's build variant and maps one-to-one onto an Xcode
 # configuration: debug -> Debug, playtest -> Playtest, release -> Release. Playtest and debug
@@ -22,8 +23,8 @@
 # phone-shaped panel at phone density, which no desktop preview can: a Mac window has no notch,
 # no Dynamic Island and no safe area, and all three change where things land.
 #
-# It shows NOTHING about the game. The Simulator has no BLE, no torch, no camera and no
-# haptics, which is every input this game has. Nothing that touches those may be signed off
+# It shows NOTHING about the game. The Simulator has no BLE, no Ultra Wideband, no torch, no camera
+# and no haptics, which is every input this game has. Nothing that touches those may be signed off
 # from there — that needs physical devices, plural, in a dark room.
 #
 # THE DEVICE PATH DOES NOT SCREENSHOT. `devicectl` has no screenshot command, so it confirms the
@@ -107,13 +108,7 @@ for x in d['result']['devices']:
         assert_fonts "$APP"
 
         xcrun devicectl device install app --device "$core" "$APP" >/dev/null
-        # The UWB switch reaches the app's environment through devicectl's DEVICECTL_CHILD_ prefix.
-        if [ -n "${SOMEONES_HOME_UWB:-}" ]; then
-            DEVICECTL_CHILD_SOMEONES_HOME_UWB=1 \
-                xcrun devicectl device process launch --device "$core" "$BUNDLE_ID" >/dev/null
-        else
-            xcrun devicectl device process launch --device "$core" "$BUNDLE_ID" >/dev/null
-        fi
+        xcrun devicectl device process launch --device "$core" "$BUNDLE_ID" >/dev/null
 
         python3 -c 'import time; time.sleep(5)'
         procs="$(xcrun devicectl device info processes --device "$core" 2>/dev/null || true)"
@@ -126,7 +121,6 @@ $devices
 EOF
     [ "$failed" -eq 0 ] || exit 1
     count="$(printf '%s\n' "$devices" | grep -c .)"
-    [ -z "${SOMEONES_HOME_UWB:-}" ] || echo "the UWB radio is on (SOMEONES_HOME_UWB)."
     if [ "$count" -eq 1 ]; then echo "done. Look at the phone."; else echo "done. Look at the phones."; fi
     exit 0
 fi

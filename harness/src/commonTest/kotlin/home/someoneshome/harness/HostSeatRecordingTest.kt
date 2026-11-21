@@ -30,9 +30,9 @@ class HostSeatRecordingTest {
         val (end, recording) = record(GameState.EMPTY, events)
         assertEquals(host, end.host, "the round did not hold the host's seat")
         val text = recording.toText()
-        assertTrue(text.startsWith("someone-is-home/recording/43\n"), "the format was not bumped: ${text.lineSequence().first()}")
+        assertTrue(text.startsWith("someone-is-home/recording/44\n"), "the format was not bumped: ${text.lineSequence().first()}")
         val armingLine = text.lines().first { it.startsWith("E RoundArmed") }
-        assertTrue(armingLine.contains("|host=0|"), "the arming row does not carry the host: $armingLine")
+        assertTrue(armingLine.endsWith("|host=0"), "the arming row does not carry the host: $armingLine")
         assertTrue(recording.stateTranscript.last().contains("|host=0|"), "the state row does not carry the host")
 
         val parsed = RecordingText.parse(text)
@@ -46,7 +46,7 @@ class HostSeatRecordingTest {
 
         // And none is none, both ways.
         val none = record(GameState.EMPTY, withHost(null)).second.toText()
-        assertTrue(none.lines().first { it.startsWith("E RoundArmed") }.contains("|host=none|"))
+        assertTrue(none.lines().first { it.startsWith("E RoundArmed") }.endsWith("|host=none"))
         assertEquals(null, (RecordingText.parse(none).events.first() as Event.RoundArmed).host)
     }
 

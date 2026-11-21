@@ -1,7 +1,6 @@
 package home.someoneshome.app
 
 import home.someoneshome.platform.ScreenWake
-import home.someoneshome.platform.NoRanging
 import home.someoneshome.platform.bluetoothContactRadio
 import home.someoneshome.platform.nearbyRangingRadio
 import home.someoneshome.platform.deviceForeground
@@ -212,17 +211,18 @@ fun CheatRoot(uwb: Boolean) {
     // per arrival, so the arrival queue took the next upload while the last was still pushing and two
     // touches' halves interleaved. `HouseDoors` suspends until the rules are done.
     val doors = remember { HouseDoors { rules.value } }
+    // The door every upload comes in by: the rules', with the rehearsal's stand-in radios spliced in
+    // while `RoundCheat`'s act 3 has them on the air (D-308), and nothing else otherwise.
+    val uploadDoor = remember { StandInDoor(doors) }
     // The disconnect screen's walk there and back, reading the panel the line below it is promised.
     val gone = remember { HouseGone { panel.value } }
-    // **The UWB radio, behind a developer switch and OFF by default** (D-303). Off, this phone
-    // holds `NoRanging` and tells the lobby it can range nobody, so every round arms on Bluetooth
-    // (D-301's per-round choice) exactly as before. On (`SOMEONES_HOME_UWB=1 ./run-app.sh device
-    // playtest`), it holds the Nearby Interaction pool, says its capacity in the lobby, and a round
-    // whose every phone says the same arms on distance. Building it opens no session: the pool
-    // opens at the round's seed (D-067). Its lines go to stdout only, never to a screen (rule 6).
-    val ranging = remember {
-        if (launchSwitch(UWB_SWITCH)) nearbyRangingRadio { line -> println("[ranging] $line") } else NoRanging
-    }
+    // **The UWB radio, on every phone, in every round** (D-308: there are no Bluetooth rounds).
+    // The Nearby Interaction pool: Bluetooth ranks who is near, the house pairs close phones the game
+    // needs (D-306), and every rule reads the distance this measures. Building it opens no session:
+    // the pool opens at the round's seed (D-067). A phone that cannot range (NEARBY DEVICES refused,
+    // no support, the session limit) says capacity 0 in its uploads and is paired with nobody; the
+    // simulator's build holds no radio at all. Its lines go to stdout only, never to a screen (rule 6).
+    val ranging = remember { nearbyRangingRadio { line -> println("[ranging] $line") } }
     val link = remember {
         LobbyOverTransport(
             scope, onEvent = radio, onInbound = watch::saw,
@@ -235,7 +235,7 @@ fun CheatRoot(uwb: Boolean) {
             onEgressFired = doors::fired,
             // **The third door: what another phone's radio heard** (D-217). The house judges it
             // with the resolver and puts whatever it concludes to the rules.
-            onSighted = doors::sighted,
+            onSighted = uploadDoor::sighted,
             // **The fourth: a phone saying its radio went down, and why** (T2, D-222; D-223). A
             // person's act is named to the room at the next meeting; a reset is recorded only.
             onRadioFaulted = doors::faulted,
@@ -267,8 +267,6 @@ fun CheatRoot(uwb: Boolean) {
             // CLOCK_SKEW_SWITCH. And every estimate of the house's clock, to the console only.
             clientMillis = benchClientMillis(),
             onClockFix = { lines.offset(fixLine(it)) },
-            // What this phone says it can range, on every seating (D-301): 0 with the switch off.
-            rangingCapacity = { ranging.capacity() },
         )
     }
     // **THE HOST'S PHONE LEAVING THE FOREGROUND, AND COMING BACK** (H2, D-225). A lock, the side
@@ -513,7 +511,7 @@ fun CheatRoot(uwb: Boolean) {
         ScreenLedger(flow, lines::screen)
     }
     val round = remember {
-        RoundCheat(roundClient, flow, authority, isHost = { flow.lobby.hosting }, ledger = ledger, note = lines::bench)
+        RoundCheat(roundClient, flow, authority, isHost = { flow.lobby.hosting }, ledger = ledger, standIn = uploadDoor, note = lines::bench)
     }
     // Every push, to the reactive half — the only channel five processes in a dark house have.
     remember { roundClient.onMessage = round::react }
@@ -1041,11 +1039,3 @@ private fun BoxScope.MarkerChip(onTap: () -> Unit) {
         Label(BuildVariant.MARKER, size = 6.6, color = Amber.Dim, tracking = 0.24)
     }
 }
-
-/**
- * **The UWB radio's developer switch** (D-303): present in the environment, this phone ranges over
- * Nearby Interaction; absent, which is every launch a person makes, it holds `NoRanging`.
- * `run-app.sh` passes it to the phones when `SOMEONES_HOME_UWB=1` is set. Not the spike's
- * `SOMEONES_HOME_UWB_SPIKE`, which hands the whole phone to the measurement tool.
- */
-internal const val UWB_SWITCH = "SOMEONES_HOME_UWB"

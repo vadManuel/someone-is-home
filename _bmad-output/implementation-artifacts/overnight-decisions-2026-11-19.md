@@ -83,4 +83,4 @@ Every call made without the owner is listed below: what was decided, why, and ho
 - **33.3, battery:** applied after D-306. The test conditions add UWB only while a close pair is needed; the 15% target stays; "non-issue by construction" is gone until a phone measures a round.
 - **D-306 merged.** The owner's threat model (2026-11-20): what sits only inside a player's own phone is not a leak. An unarmed touch is no longer measured on distance, so it sends no `ContactAnswered`; that frame never buzzed or drew anything, so nobody can perceive the change.
 - **D-305's scroll hint:** none. Nothing that needs action is under the edge.
-
+- **12 and 24 superseded (D-308):** the owner ruled *let's implement the Bluetooth/UWB hybrid we discussed; we'll test it.* There are no Bluetooth rounds: every round is the hybrid, the per-round choice (`contactSourceFor`) and the Bluetooth branch of the rules are gone, and the UWB radio is on by default on every phone (the `SOMEONES_HOME_UWB` switch is gone). A phone that cannot range is paired with nobody instead of changing the round. Decision 13's lobby message went with it (D-308).

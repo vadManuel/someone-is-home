@@ -142,9 +142,10 @@ class RoundOverTransport(
     private val clock: suspend (sentAtMillis: Long, heardAtMillis: Long, answeredAtMillis: Long, receivedAtMillis: Long) -> Unit =
         { _, _, _, _ -> },
     /**
-     * **This phone's UWB radio** (U6, D-300), handed to the uploader. Defaulted to [NoRanging],
-     * unlike [radio], because no root has a UWB radio to pass yet: the Nearby Interaction radio is a
-     * later unit, and when it lands this default goes and every root must say what it ranges with.
+     * **This phone's UWB radio** (U6, D-300), handed to the uploader. The app's root passes the
+     * Nearby Interaction radio in every round (D-308); defaulted to [NoRanging], unlike [radio], for
+     * a test whose question is not ranging, which then plays a round in which nobody can be touched
+     * or reported.
      */
     private val ranging: RangingRadio = NoRanging,
 ) {

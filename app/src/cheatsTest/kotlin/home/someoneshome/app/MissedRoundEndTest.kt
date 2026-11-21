@@ -97,7 +97,7 @@ class MissedRoundEndTest {
         val radio = air.radioFor(spot)
         private val seam = DeferredRoundSeam()
         val link: LobbyOverTransport = LobbyOverTransport(
-            scope, rangingCapacity = { SimulatedAir.BENCH_CAPACITY }, onEvent = { log += it },
+            scope, onEvent = { log += it },
             seat = kept,
             onIntent = HouseDoors(house)::heard,
             onEgressFired = HouseDoors(house)::fired,

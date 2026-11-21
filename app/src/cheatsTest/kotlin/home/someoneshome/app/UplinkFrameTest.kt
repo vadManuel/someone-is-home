@@ -186,7 +186,7 @@ class UplinkFrameTest {
             }
         val tap = Tap(round)
         val link = LobbyOverTransport(
-            scope, rangingCapacity = { SimulatedAir.BENCH_CAPACITY }, seat = Kept(),
+            scope, seat = Kept(),
             onIntent = HouseDoors(house)::heard,
             onEgressFired = HouseDoors(house)::fired,
             onSighted = HouseDoors(house)::sighted,
