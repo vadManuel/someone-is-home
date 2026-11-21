@@ -143,7 +143,11 @@ class PermsModel(
      */
     fun refresh() {
         states = DevicePermission.entries.associateWith(read)
-        reread { states = DevicePermission.entries.associateWith(read) }
+        walkOnIfOpened()
+        reread {
+            states = DevicePermission.entries.associateWith(read)
+            walkOnIfOpened()
+        }
     }
 
     /**
@@ -173,17 +177,57 @@ class PermsModel(
      * Serial rather than all at once, and that is not politeness: iOS shows one system modal at a
      * time and queues the rest behind it, so five simultaneous requests are five dialogs a host
      * dismisses without reading. Each answer starts the next.
+     *
+     * ### An answer that arrives late still starts the next (D-314)
+     *
+     * Bluetooth's first answer is TAP TO GRANT: the manager that raises the prompt does not know
+     * its state yet, and the real answer comes a moment later from its delegate, when the person
+     * taps Allow (on a simulator, NOT ON THIS PHONE). So the walk keeps the row it asked in
+     * [awaiting] until that row has a real answer, heard on the prompt's callback (which may speak
+     * more than once) or on a read of the OS ([refresh]), and only then goes on or stops.
      */
     fun requestMissing() {
         refusal = null
-        val next = missing.firstOrNull() ?: return
-        ask(next) { grant ->
-            states = states + (next to grant)
-            // The row that was just answered is no longer the head of `missing` whichever way it
-            // went — granted removes it, refused or ASKED stops the walk, and none loops. An ASKED
-            // NEARBY DEVICES is still the head of `missing`, so the next press probes it again
-            // (D-309) rather than this walk probing it forever.
+        val next = missing.firstOrNull()
+        awaiting = next
+        if (next != null) ask(next) { grant -> answered(next, grant) }
+    }
+
+    /**
+     * The row the walk asked and has not had a real answer for yet, or none (D-314). Only this row
+     * moves the walk on, and only once: whatever it answers, the walk stops waiting on it.
+     */
+    private var awaiting: DevicePermission? = null
+
+    /** **Whether REQUEST WHAT IS MISSING is still waiting to hear a row it asked** (D-314). */
+    val walking: Boolean get() = awaiting != null
+
+    /**
+     * One answer on the prompt's callback. The row that answered is no longer the head of `missing`
+     * whichever way it went — granted removes it, refused or ASKED stops the walk, and none loops.
+     * An ASKED NEARBY DEVICES is still the head of `missing`, so the next press probes it again
+     * (D-309) rather than this walk probing it forever. TAP TO GRANT is no answer yet, so the walk
+     * keeps waiting on that row. An answer for a row the walk is no longer waiting on moves only
+     * the row.
+     */
+    private fun answered(row: DevicePermission, grant: Grant) {
+        states = states + (row to grant)
+        if (awaiting == row && grant != Grant.Unasked) {
+            awaiting = null
             if (grant.opensTheGate) requestMissing()
+        }
+    }
+
+    /**
+     * A read of the OS found the row the walk is waiting on open: go on (D-314). A read that finds
+     * it anything else changes nothing, because a probe still in flight reads ASKED and its own
+     * answer is the one the walk waits for.
+     */
+    private fun walkOnIfOpened() {
+        val row = awaiting
+        if (row != null && grant(row).opensTheGate) {
+            awaiting = null
+            requestMissing()
         }
     }
 

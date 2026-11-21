@@ -57,6 +57,10 @@ interface Permissions {
      * Asking for something already answered raises nothing — iOS asks once, ever — and reports the
      * standing answer instead. That is not a failure and must not be drawn as one: the row's fix
      * is the settings page, which the screen offers separately.
+     *
+     * **[then] may be called a second time** (D-314): an answer that is still [Grant.Unasked]
+     * because the OS does not know yet (Bluetooth's manager, before its delegate speaks) is
+     * followed by the real one when it arrives.
      */
     fun request(of: DevicePermission, then: (Grant) -> Unit)
 

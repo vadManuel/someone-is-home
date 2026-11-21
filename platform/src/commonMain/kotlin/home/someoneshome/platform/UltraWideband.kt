@@ -18,3 +18,14 @@ package home.someoneshome.platform
  * cannot carry that answer: it is compiled into the simulator's source set and nowhere else.
  */
 expect fun uwbSupported(): Boolean
+
+/**
+ * **Whether this build's NEARBY DEVICES row is asked of Nearby Interaction at all** (D-314).
+ *
+ * True on a phone, where the row is read by a probe (D-303) and must read GRANTED (D-309). False
+ * on the simulator build, whose row then reads NOT ON THIS PHONE, as its Bluetooth row does: the
+ * simulator has no ranging (D-308 gives it `NoRanging`), so its probe could only ever say ASKED and
+ * no simulator bench could take a seat. **A bench accommodation**, not a hole in the gate: it is
+ * compiled into the simulator's source set and nowhere else, and D-292's launch gate is untouched.
+ */
+internal expect fun nearbyDevicesAskedOnThisBuild(): Boolean

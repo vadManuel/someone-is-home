@@ -255,4 +255,106 @@ class PermsModelTest {
                 "rows are missing",
         )
     }
+
+    /**
+     * **A fake OS whose Bluetooth answers late** (D-314), the iOS seam's shape. Asking for Bluetooth
+     * builds a central manager whose state is not known yet, so the first answer is the standing TAP
+     * TO GRANT; the real one (here NOT ON THIS PHONE, a simulator's) arrives a moment later from the
+     * delegate. [late] holds that callback for the test to fire, and [arrive] puts the late answer
+     * where a read of the OS sees it. NEARBY DEVICES answers [nearby] at once.
+     */
+    private class LateBluetooth(val nearby: Grant = Grant.Granted) {
+        val asked = mutableListOf<DevicePermission>()
+        val standing = (
+            DevicePermission.entries.associateWith { Grant.Granted } +
+                mapOf(DevicePermission.Bluetooth to Grant.Unasked, DevicePermission.NearbyDevices to Grant.Unasked)
+            ).toMutableMap()
+        var late: ((Grant) -> Unit)? = null
+        val model = PermsModel(
+            read = { standing[it] ?: Grant.Unasked },
+            ask = { permission, then ->
+                asked += permission
+                when (permission) {
+                    DevicePermission.Bluetooth -> {
+                        late = then
+                        then(Grant.Unasked)
+                    }
+                    DevicePermission.NearbyDevices -> {
+                        standing[permission] = nearby
+                        then(nearby)
+                    }
+                    else -> then(standing.getValue(permission))
+                }
+            },
+        )
+
+        fun arrive(grant: Grant) {
+            standing[DevicePermission.Bluetooth] = grant
+        }
+    }
+
+    /**
+     * **A late answer moves the walk on, without a second press** (D-314). The overnight benches
+     * stopped at BLUETOOTH: it answered TAP TO GRANT, the walk stopped, the delegate said NOT ON THIS
+     * PHONE a moment later and nothing asked NEARBY DEVICES. On a phone the same happens when the
+     * person taps Allow. Heard here through a read of the OS, as the screen hears it on a refresh.
+     */
+    @Test
+    fun aLateAnswerHeardOnAReadMovesTheWalkOn() {
+        val os = LateBluetooth()
+        os.model.refresh()
+        os.model.requestMissing()
+        assertEquals(listOf(DevicePermission.Bluetooth), os.asked, "the arrangement is wrong")
+
+        os.arrive(Grant.Unavailable)
+        os.model.refresh()
+
+        assertEquals(
+            listOf(DevicePermission.Bluetooth, DevicePermission.NearbyDevices), os.asked,
+            "Bluetooth answered late and the walk never went on to NEARBY DEVICES",
+        )
+        assertTrue(os.model.complete, "every row answered and the gate is still shut")
+    }
+
+    /**
+     * **The same late answer through the prompt's own callback moves the walk on once** (D-314). The
+     * answer can come more than once, so the second must not start a second walk, which would probe
+     * NEARBY DEVICES again after an ASKED (D-309: one probe per press).
+     */
+    @Test
+    fun aLateAnswerOnThePromptsCallbackMovesTheWalkOnOnce() {
+        val os = LateBluetooth(nearby = Grant.Asked)
+        os.model.refresh()
+        os.model.requestMissing()
+        val late = assertNotNull(os.late, "the arrangement is wrong: Bluetooth was not asked")
+
+        os.arrive(Grant.Unavailable)
+        late(Grant.Unavailable)
+        late(Grant.Unavailable)
+
+        assertEquals(
+            listOf(DevicePermission.Bluetooth, DevicePermission.NearbyDevices), os.asked,
+            "the late answer did not move the walk on exactly once",
+        )
+        assertEquals(listOf(DevicePermission.NearbyDevices), os.model.missing, "NEARBY DEVICES at ASKED opened the gate")
+        assertTrue(!os.model.walking, "the walk still says it is waiting after NEARBY DEVICES answered ASKED")
+    }
+
+    /**
+     * **A late answer after the walk has stopped does not restart it** (D-314). One press is one walk;
+     * a row that answers after a refusal ended the walk is the row's, and the rest wait for a press.
+     */
+    @Test
+    fun aLateAnswerAfterTheWalkStoppedDoesNotRestartIt() {
+        val os = LateBluetooth()
+        os.standing[DevicePermission.Camera] = Grant.Refused
+        os.model.refresh()
+        os.model.requestMissing()
+        assertEquals(listOf(DevicePermission.Camera), os.asked, "the walk did not stop at the refused CAMERA")
+
+        os.arrive(Grant.Unavailable)
+        os.model.refresh()
+
+        assertEquals(listOf(DevicePermission.Camera), os.asked, "a read after the walk stopped started it again")
+    }
 }

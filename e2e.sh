@@ -7,6 +7,10 @@
 #   ./e2e.sh --diagnose         the geometry probe (see FRAME_LIFT in HumanMock.swift)
 #   E2E_DEVICE="iPhone Air" ./e2e.sh
 #
+# Its own simulator by default (D-314), "E2E Seat", created on first use and shut down at the end,
+# because "iPhone 17 Pro" is the one Gradle's iOS test runs boot and two runs must not share it.
+# A failed run's xcodebuild log is kept and its path printed; a green run's is removed.
+#
 # THIS IS THE SLOW SUITE AND IT IS NOT IN `check`, BY DESIGN. It builds an app, boots a
 # simulator, installs, launches and drives it; a full pass is minutes where the unit suites are
 # seconds. It is the release gate, run deliberately, and `gradlew check` stays fast enough to run
@@ -23,7 +27,7 @@ cd "$(dirname "$0")"
 # The Bash tool's shell does not pick up mise; the user's terminal does.
 export PATH="$HOME/.local/share/mise/shims:$PATH"
 
-DEVICE="${E2E_DEVICE:-iPhone 17 Pro}"
+DEVICE="${E2E_DEVICE:-E2E Seat}"
 DERIVED="${E2E_DERIVED_DATA:-/tmp/someones-home-dd-e2e}"
 SCHEME=SomeonesHomeE2E
 REPEAT=1
@@ -38,6 +42,24 @@ while [ $# -gt 0 ]; do
         *) echo "unknown argument '$1'" >&2; exit 1 ;;
     esac
 done
+
+udid_for() {
+    xcrun simctl list devices available | awk -v name="$1" -F '[()]' '$0 ~ "    " name " \\(" { print $2; exit }'
+}
+if [ -z "${E2E_DEVICE:-}" ]; then
+    OWN="$(udid_for "$DEVICE")"
+    if [ -z "$OWN" ]; then
+        runtime="$(xcrun simctl list runtimes -j | python3 -c "
+import json, sys
+r = [x for x in json.load(sys.stdin)['runtimes'] if x['platform'] == 'iOS' and x['isAvailable']]
+print(sorted(r, key=lambda x: [int(n) for n in x['version'].split('.')])[-1]['identifier'] if r else '')
+")"
+        OWN="$(xcrun simctl create "$DEVICE" com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro "$runtime")"
+        echo "created '$DEVICE' ($OWN)"
+    fi
+    # Shut down on the way out, green or not: the seat is this script's own.
+    trap 'xcrun simctl shutdown "$OWN" 2>/dev/null || true' EXIT
+fi
 
 args=(
     -project iosApp/iosApp.xcodeproj
@@ -67,13 +89,16 @@ for run in $(seq 1 "$REPEAT"); do
         cases="$(grep -c "' passed (" "$log" || true)"
         echo "  passed — $cases test case(s)"
         [ "$cases" -gt 0 ] || { echo "  a green run with no test cases in it" >&2; failed=1; }
+        grep -E "^=== " "$log" || true
+        rm -f "$log"
     else
-        echo "  FAILED — $log" >&2
+        # Kept (D-314): this path is the only record of why, and it was removed a line after it
+        # was printed.
+        echo "  FAILED — the log is kept at $log" >&2
         grep -E "error:|XCTAssert" "$log" | head -10 >&2 || true
+        grep -E "^=== " "$log" || true
         failed=1
     fi
-    grep -E "^=== " "$log" || true
-    rm -f "$log"
 done
 
 [ "$failed" -eq 0 ] || { echo "e2e: not green." >&2; exit 1; }

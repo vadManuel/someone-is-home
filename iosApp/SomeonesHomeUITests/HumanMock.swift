@@ -181,24 +181,37 @@ final class HumanMockTests: XCTestCase {
     // 1 · The cold start, and the gate that is supposed to refuse
     // ---------------------------------------------------------------------------------------
 
-    /// **The permissions gate refuses on a simulator, and that is the assertion.**
+    /// **The permissions gate refuses a cold start on a CAMERA nobody has answered, and that is the
+    /// assertion** (D-314).
     ///
-    /// Not a workaround and not a skip: this phone has no Bluetooth, so a build that let it take a
-    /// seat would be the bug. The test names the missing permission out of the app's own refusal
-    /// sentence, so a gate that silently opened — or that refused for a different reason — fails
-    /// here rather than being discovered five screens later.
+    /// Not a workaround and not a skip: a phone whose camera was never granted cannot read the
+    /// printed cards, so a build that let it take a seat would be the bug. The test names the
+    /// missing permission out of the app's own refusal sentence, so a gate that silently opened, or
+    /// that refused for a different reason, fails here rather than being discovered five screens
+    /// later.
+    ///
+    /// It named BLUETOOTH until D-314, and that was stale: on a simulator BLUETOOTH reads GRANTED
+    /// or NOT ON THIS PHONE, and NEARBY DEVICES now reads NOT ON THIS PHONE (the simulator build
+    /// has no ranging), so neither can be what a simulator is refused on. CAMERA is reset to
+    /// unanswered before launch, so the cold start is cold on any simulator this runs on.
     func testTheColdStartReachesTheGateAndTheGateRefuses() {
         let app = coldApp()
+        app.resetAuthorizationStatus(for: .camera)
         app.launch()
 
         waitFor(app.labelled("PERMISSIONS"), "the permissions page")
 
-        // The refusal names what is missing. BLUETOOTH is the one the Simulator can never supply.
+        // The refusal names what is missing: the CAMERA nobody has answered, and not NEARBY
+        // DEVICES, which a simulator does not have (D-314).
         let refusal = app.containing("THIS PHONE CANNOT TAKE A SEAT YET")
         waitFor(refusal, "the refusal sentence")
         XCTAssertTrue(
-            refusal.label.contains("BLUETOOTH"),
-            "the gate refused without naming BLUETOOTH — refusal read: \(refusal.label)"
+            refusal.label.contains("CAMERA"),
+            "the gate refused without naming the unanswered CAMERA — refusal read: \(refusal.label)"
+        )
+        XCTAssertFalse(
+            refusal.label.contains("NEARBY DEVICES"),
+            "the gate named NEARBY DEVICES, which reads NOT ON THIS PHONE on a simulator — refusal read: \(refusal.label)"
         )
 
         // And the primary control says what it does, which is ask rather than proceed.

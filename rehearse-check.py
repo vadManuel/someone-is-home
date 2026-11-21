@@ -319,10 +319,34 @@ def main(root):
     check("no timed transition was minted by the bench — the driver owns all five (E-P3-3)",
           minted == 0, "bench mints of a timed transition: %d" % minted)
 
-    # 16. The one line never came back down, on any seat, across a round that publishes one.
-    carried = [p for seat in seats for p in seat.probe if "0 CARRIED" not in p]
-    check("no frame on any socket carried this phone's own line",
-          not carried, "probe lines that were not clean: %s" % (carried or "none"))
+    # 16. The one line never came back down, on any seat, before the round ended. **The reveal is the
+    # one lawful carrier** (D-314, provisional (overnight)): `InsiderNamed` pairs each Insider with
+    # the line they were coerced with (`gdd.md:1063`) and goes to every phone once the round has
+    # ended, so an Insider's own phone receives its own line then and only then. Every carrying frame
+    # is shouted in the seat's log (`LineWatch.saw`), so each one is placed against the seat's
+    # ROUND ENDED push: one before it, or one on a seat that was not an Insider, is a leak.
+    def carriers(seat):
+        ended = next((n for n, line in enumerate(seat.raw) if PUSH.match(line) and "ROUND ENDED" in line), None)
+        shouted = [n for n, line in enumerate(seat.raw) if "CARRIED THIS PHONE'S LINE=true" in line]
+        early = [n for n in shouted if ended is None or n < ended]
+        late = [n for n in shouted if ended is not None and n > ended]
+        return early, late
+
+    insider_seats = [s.index for s in seats if s.has("ROLE INSIDER")]
+    unclean = []
+    revealed = []
+    for seat in seats:
+        early, late = carriers(seat)
+        if early or (late and seat.index not in insider_seats):
+            unclean.append("seat%d: %d before the ending, %d after" % (seat.index, len(early), len(late)))
+        elif late:
+            revealed.append("seat%d (Insider): %d after the ending" % (seat.index, len(late)))
+    unshouted = [p for seat in seats for p in seat.probe
+                 if "0 CARRIED" not in p and not seat.has("CARRIED THIS PHONE'S LINE=true")]
+    check("no frame on any socket carried this phone's own line before the reveal",
+          not unclean and not unshouted,
+          "leaks: %s · carriers no shout accounts for: %s · the reveal, lawfully: %s"
+          % (unclean or "none", unshouted or "none", revealed or "none"))
 
     print("\n" + "=" * 100)
     print("THE ASSERTIONS")

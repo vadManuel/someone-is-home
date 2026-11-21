@@ -5,6 +5,7 @@ import home.someoneshome.platform.launchValue
 import home.someoneshome.ui.FlowModel
 import home.someoneshome.ui.LobbyModel
 import home.someoneshome.ui.NearbyHome
+import home.someoneshome.ui.PermsModel
 import home.someoneshome.ui.ScreenId
 import kotlinx.coroutines.delay
 
@@ -121,13 +122,19 @@ class LobbyCheat(
      * each ask the gate themselves a moment later, off a fresh OS read, and whatever they say is
      * the result. Two gates in one path would be two opinions about one phone.
      *
-     * ### What it waits for, and why the wait is bounded
+     * ### What it waits for, and when it stops waiting (D-314)
      *
-     * Three of the five answer through a callback and two of those can be a modal standing on the
-     * glass with nobody in the room — a simulator has no thumb for `Would Like to Send You
-     * Notifications`. So the wait ends on the clock as well as on the answer, and what is printed
-     * is the OS's own reading either way. **A row still missing here is a row the log names**, and
-     * the refusal that follows will name it again.
+     * **The rows, not a clock.** It waits while the walk is still waiting on a row it asked
+     * (`PermsModel.walking`), and when the walk has stopped short with rows still missing it presses
+     * again, as a host would, up to [SETUP_PRESSES] presses in all. A walk that stands on one row
+     * for [SETUP_STALL_MILLIS] (a modal with no thumb in the room: a simulator has none for `Would
+     * Like to Send You Notifications`) is pressed again too. [SETUP_CEILING_MILLIS] bounds the whole
+     * of it. Every [PATIENCE_MILLIS] it says what it is still waiting on. What is printed is the OS's
+     * own reading either way. **A row still missing here is a row the log names**, and the refusal
+     * that follows will name it again.
+     *
+     * The overnight run of 2026-11-21 is why: it pressed once, waited a fixed fifteen seconds, and
+     * every seat stopped at the lobby on NEARBY DEVICES, which the walk never reached.
      */
     private suspend fun walkSetup() {
         val perms = flow.perms
@@ -141,18 +148,39 @@ class LobbyCheat(
                 " · THE MODALS A HOST WOULD HAVE ANSWERED"
         )
         perms.requestMissing()
+        var presses = 1
         var waited = 0L
-        while (waited < SETUP_MILLIS && perms.missingNow().isNotEmpty()) {
+        var sincePress = 0L
+        while (waited < SETUP_CEILING_MILLIS && perms.missingNow().isNotEmpty()) {
+            val stalled = !perms.walking || sincePress >= SETUP_STALL_MILLIS
+            if (stalled && sincePress >= SETTLE_MILLIS) {
+                if (presses >= SETUP_PRESSES) break
+                presses++
+                note(
+                    "SETUP — THE WALK " + (if (perms.walking) "STOOD ON ONE ROW" else "STOPPED SHORT") +
+                        " AT ${waitingOn(perms)} · PRESSING AGAIN ($presses OF $SETUP_PRESSES)"
+                )
+                perms.requestMissing()
+                sincePress = 0L
+            }
             delay(STEP_MILLIS)
             waited += STEP_MILLIS
+            sincePress += STEP_MILLIS
+            if (waited % PATIENCE_MILLIS == 0L && perms.missingNow().isNotEmpty()) {
+                note("SETUP — STILL WAITING ON ${waitingOn(perms)} · ${waited / 1000}S")
+            }
         }
         val short = perms.missingNow()
         note(
-            if (short.isEmpty()) "SETUP DONE — THE OS ANSWERED EVERY ROW · ${waited / 1000}S"
-            else "SETUP INCOMPLETE AFTER ${waited / 1000}S — STILL MISSING " +
-                short.joinToString(" · ") { it.label }
+            if (short.isEmpty()) "SETUP DONE — THE OS ANSWERED EVERY ROW · ${waited / 1000}S · $presses PRESS(ES)"
+            else "SETUP INCOMPLETE AFTER ${waited / 1000}S AND $presses PRESS(ES) — STILL MISSING " +
+                waitingOn(perms)
         )
     }
+
+    /** The rows still missing, each with what this phone's screen has for it. */
+    private fun waitingOn(perms: PermsModel): String =
+        perms.missingNow().joinToString(" · ") { "${it.label} ${perms.grant(it).label}" }
 
     /**
      * **The fourth thing a finger would have supplied: a home on this phone's disk.**
@@ -504,14 +532,19 @@ class LobbyCheat(
         private const val PATIENCE_MILLIS = 5_000L
 
         /**
-         * How long setup is given before the evening goes on without it.
-         *
-         * Long enough for five serial modals to be raised and answered by an OS that is going to
-         * answer them, short enough that a modal nobody can dismiss does not hold the whole run —
-         * the honest failure there is a named row in the log and a refusal at the gate, not a
-         * process that never gets to either.
+         * The most setup is given before the evening goes on without it (D-314). A ceiling, not the
+         * wait: [walkSetup] ends as soon as the rows are answered or the presses are spent. Long
+         * enough for five serial modals and a NEARBY DEVICES probe or two, short enough that a modal
+         * nobody can dismiss does not hold the whole run — the honest failure there is a named row
+         * in the log and a refusal at the gate, not a process that never gets to either.
          */
-        private const val SETUP_MILLIS = 15_000L
+        private const val SETUP_CEILING_MILLIS = 60_000L
+
+        /** How many times [walkSetup] presses REQUEST WHAT IS MISSING in all (D-314). */
+        private const val SETUP_PRESSES = 3
+
+        /** How long the walk may stand on one row before [walkSetup] presses again (D-314). */
+        private const val SETUP_STALL_MILLIS = 10_000L
 
         /** Long enough for an answer to come back around the socket before it is read. */
         private const val SETTLE_MILLIS = 750L

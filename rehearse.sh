@@ -49,7 +49,14 @@ HOME_NAME="THE BUNGALOW"
 # THE FIVE SEATS, pinned by device name rather than by whatever `simctl list booted` happens to
 # print first. A rehearsal whose seat order changes between runs is a rehearsal whose per-seat
 # tables cannot be compared, and comparing them across two seeds is half of what this is for.
-SEAT_DEVICES=("iPhone 17 Pro" "iPhone 17 Pro Max" "iPhone 17e" "iPhone Air" "iPhone 17")
+#
+# **Seats of its own** (D-314), "Rehearsal Seat 0" to "Rehearsal Seat 4", created on first use the
+# way tools/sim-hunt/hunt.sh creates its own. It asked for the stock "iPhone 17 Pro" to "iPhone 17"
+# by name, so a Mac without an "iPhone 17 Pro Max" stopped before building, and "iPhone 17 Pro" is
+# the one Gradle's iOS test runs boot, so two runs shared a device. Each seat keeps a different
+# device type for the five aspects, and falls back to an iPhone 17 where this Xcode has no such type.
+SEAT_DEVICES=("Rehearsal Seat 0" "Rehearsal Seat 1" "Rehearsal Seat 2" "Rehearsal Seat 3" "Rehearsal Seat 4")
+SEAT_TYPES=(iPhone-17-Pro iPhone-17-Pro-Max iPhone-17e iPhone-Air iPhone-17)
 SEAT_NAMES=(HOSTPHONE MARCUS PRIYA ELLIOT NOOR)
 # Which published Egress node each bench walks to when the house catches fire, ALTERNATING so that
 # no node's walkers are adjacent in the seat order. A Revoke and a Restrain take two people out
@@ -72,10 +79,27 @@ udid_for() {
         | awk -v name="$1" -F '[()]' '$0 ~ "    " name " \\(" { print $2; exit }'
 }
 
+# The newest available iOS runtime, for a seat that has to be created.
+newest_runtime() {
+    xcrun simctl list runtimes -j | python3 -c "
+import json, sys
+r = [x for x in json.load(sys.stdin)['runtimes'] if x['platform'] == 'iOS' and x['isAvailable']]
+print(sorted(r, key=lambda x: [int(n) for n in x['version'].split('.')])[-1]['identifier'] if r else '')
+"
+}
+
 UDIDS=()
-for dev in "${SEAT_DEVICES[@]}"; do
+for i in "${!SEAT_DEVICES[@]}"; do
+    dev="${SEAT_DEVICES[$i]}"
     u="$(udid_for "$dev")"
-    [ -n "$u" ] || { echo "no simulator named '$dev'" >&2; exit 1; }
+    if [ -z "$u" ]; then
+        runtime="$(newest_runtime)"
+        [ -n "$runtime" ] || { echo "no available iOS simulator runtime" >&2; exit 1; }
+        u="$(xcrun simctl create "$dev" "com.apple.CoreSimulator.SimDeviceType.${SEAT_TYPES[$i]}" "$runtime" 2>/dev/null)" \
+            || u="$(xcrun simctl create "$dev" "com.apple.CoreSimulator.SimDeviceType.iPhone-17" "$runtime")" \
+            || { echo "could not create a simulator named '$dev'" >&2; exit 1; }
+        echo "created '$dev' ($u)"
+    fi
     UDIDS+=("$u")
 done
 
@@ -101,6 +125,15 @@ find "$APP" -name 'Silkscreen-Regular.ttf' | grep -q . || {
 # booted device with the app on it.
 say "=== THE GRANTS A HOST WOULD HAVE GIVEN ==="
 for u in "${UDIDS[@]}"; do xcrun simctl shutdown "$u" 2>/dev/null || true; done
+# A seat that has never booted has no bulletin store to write into (D-314: the seats are created
+# here now), so it is booted once and shut down first, as tools/sim-hunt/hunt.sh does.
+for u in "${UDIDS[@]}"; do
+    if [ ! -f "$HOME/Library/Developer/CoreSimulator/Devices/$u/data/Library/BulletinBoard/VersionedSectionInfo.plist" ]; then
+        xcrun simctl boot "$u" 2>/dev/null || true
+        xcrun simctl bootstatus "$u" -b >/dev/null
+        xcrun simctl shutdown "$u" 2>/dev/null || true
+    fi
+done
 python3 "$PWD/sim-grants.py" notifications "${UDIDS[@]}" | tee -a "$OUT/driver.log"
 
 say "=== BOOTING AND INSTALLING ON ${#UDIDS[@]} SEATS ==="
@@ -129,6 +162,9 @@ launch_seat() {
         env+=("SIMCTL_CHILD_SOMEONES_HOME_LOBBY_HOST=$HOME_NAME")
         env+=("SIMCTL_CHILD_SOMEONES_HOME_LOBBY_INSIDERS=0")
         env+=("SIMCTL_CHILD_SOMEONES_HOME_LOBBY_LIGHTS_OUT=1")
+        # LIGHTS OUT once all five are seated (D-314). Without it the host pressed as soon as the
+        # button was live, at three, and seats 3 and 4 were refused at the door: ROUND IN PROGRESS.
+        env+=("SIMCTL_CHILD_SOMEONES_HOME_LOBBY_SEATS=${#UDIDS[@]}")
     else
         env+=("SIMCTL_CHILD_SOMEONES_HOME_LOBBY_JOIN=$HOME_NAME")
     fi
@@ -246,4 +282,10 @@ shoot "99-new-round"
 say "=== TERMINATING ==="
 for u in "${UDIDS[@]}"; do xcrun simctl terminate "$u" "$BUNDLE_ID" 2>/dev/null || true; done
 sleep 2
+# The seats are this script's own, so it shuts them down too (D-314). REHEARSE_KEEP_SEATS=1 keeps
+# them up for a look at the glass afterwards.
+if [ -z "${REHEARSE_KEEP_SEATS:-}" ]; then
+    for u in "${UDIDS[@]}"; do xcrun simctl shutdown "$u" 2>/dev/null || true; done
+    say "the five Rehearsal Seat simulators are shut down"
+fi
 say "logs and shots: $OUT"

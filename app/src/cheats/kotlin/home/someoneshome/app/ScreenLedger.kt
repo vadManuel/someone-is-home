@@ -2,6 +2,7 @@ package home.someoneshome.app
 
 import home.someoneshome.platform.monotonicNanos
 import home.someoneshome.ui.FlowModel
+import home.someoneshome.ui.MeetingCounts
 import home.someoneshome.ui.PanelState
 import kotlinx.coroutines.delay
 
@@ -55,7 +56,10 @@ class ScreenLedger(
      */
     fun reading(): String {
         val s: PanelState = flow.state
-        val counts = flow.meeting.counts
+        // **No house, no counts** (D-314): an unhoused model holds the design's fixture for the render
+        // harness, and every seat's ledger printed it on JOIN as GATE 4/6 · READY 3/6 · VOTED 4/6.
+        // No screen draws it there; a housed phone's counts are the house's from attaching (D-247).
+        val counts = if (s.houseAttached) flow.meeting.counts else MeetingCounts.UNSAID
         return buildString {
             append("ON ${s.screen.name.uppercase()}")
             append(" · ROLE ${s.role.name.uppercase()}")

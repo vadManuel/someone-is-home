@@ -12562,6 +12562,103 @@ owner:** one raw-read request from the scan, routed by `routeScan` at the author
 scanner-only unregistered answer that is not recorded, or another shape. The acquire buzz is D-160's
 *acquired = yes* and stands either way. Whether NOT A MARKER also buzzes *no* is unruled.
 
+### D-314 · **Overnight: the permission walk survives a late answer, and the simulator benches play again (2026-11-21) — built**
+
+**What the overnight run found.** Both multi-simulator scripts stopped at the lobby on every seat:
+`SETUP INCOMPLETE AFTER 15S — STILL MISSING NEARBY DEVICES`, then `NOT HOSTING — THIS PHONE CANNOT
+TAKE A SEAT YET / NEARBY DEVICES`. No `[perms]` line for NEARBY DEVICES ever appeared. The walk
+(`PermsModel.requestMissing`) moved on only when an answer opened the gate; Bluetooth's first answer
+is TAP TO GRANT, because the central manager that raises the prompt does not know its state yet, so
+the walk stopped there. The delegate said NOT ON THIS PHONE a moment later and nothing resumed the
+walk. The bench pressed once and waited a fixed fifteen seconds. On a phone the same happens when
+the person taps Allow: the state arrives later and nobody hears it.
+
+No copy, light, colour, type or game timing changed. Device builds are untouched apart from item 1's
+late answer, and D-292's launch gate is untouched.
+
+1. **The walk survives a late answer** (`ui`, `Perms.kt`). The walk keeps the row it asked
+   (`awaiting`, read as `walking`) until that row has a real answer, and only then goes on or stops.
+   A real answer comes on the prompt's callback, which may now speak twice (the standing TAP TO GRANT,
+   then the late one), or on a read of the OS (`refresh`). TAP TO GRANT is no answer and keeps the walk
+   waiting. D-309's rule stands: an ASKED or REFUSED answer stops the walk, one press is one walk, and
+   an answer for a row the walk is no longer waiting on moves only the row, so nothing loops. A read
+   moves the walk on only when it finds the awaited row open, never stops it, because a probe still in
+   flight reads ASKED. The iOS seam (`Permissions.ios.kt`) holds each Bluetooth request whose answer was
+   TAP TO GRANT and answers it again when the delegate gives a real state (`bluetoothWaiting`);
+   `Permissions.request`'s KDoc says `then` may be called a second time. Tests (`PermsModelTest`):
+   `aLateAnswerHeardOnAReadMovesTheWalkOn` and `aLateAnswerOnThePromptsCallbackMovesTheWalkOnOnce`
+   both **failed before the fix** (the walk stayed on BLUETOOTH; the second callback probed NEARBY
+   DEVICES twice) and pass after; `aLateAnswerAfterTheWalkStoppedDoesNotRestartIt` holds the stop.
+   Beside D-311's manager, which a refresh builds once the grant is already given, a phone that has
+   granted Bluetooth answers at once; the wait is for the first ask, and the late answer goes through
+   D-311's `requestStanding` like any other. ⚠️ The phone half (the person taps Allow and the walk goes
+   on to NEARBY DEVICES) is unverified until a phone runs it.
+2. **The simulator's NEARBY DEVICES reads NOT ON THIS PHONE** (`nearbyDevicesAskedOnThisBuild`, an
+   `expect` whose simulator actual answers false and whose phone actual answers true). On the
+   simulator build the row reads NOT ON THIS PHONE, as its Bluetooth row does, and nothing is probed:
+   the simulator has no ranging (D-308 gives it `NoRanging`), so its probe could only ever say ASKED.
+   **This is a bench accommodation**, provisional (overnight): it opens D-161's gate on simulators so
+   the benches can host, the way D-292's simulator answer keeps them past the launch gate. Nothing
+   about Ultra Wideband or Nearby Interaction is signed off on a simulator.
+3. **The bench's setup walk waits on the rows** (`LobbyCheat.walkSetup`). It waits while the walk is
+   waiting, presses REQUEST WHAT IS MISSING again when the walk stopped short or stood on one row for
+   ten seconds (three presses in all), says every five seconds what it is still waiting on with each
+   row's state, and gives up at a sixty-second ceiling. The bench numbers are provisional (overnight).
+4. **The e2e cold-start test asserts the real refusal** (`HumanMock.swift`,
+   `testTheColdStartReachesTheGateAndTheGateRefuses`). It asserted that the refusal named BLUETOOTH,
+   which a simulator no longer refuses on: its BLUETOOTH reads GRANTED or NOT ON THIS PHONE, and
+   NEARBY DEVICES now reads NOT ON THIS PHONE. A fresh simulator's cold start is refused on what nobody
+   has answered on it, CAMERA and NOTIFICATIONS. The test resets the camera grant before launch
+   (`resetAuthorizationStatus(for: .camera)`), so the cold start is cold on any simulator, and asserts
+   that the refusal names CAMERA and does not name NEARBY DEVICES.
+5. **The scripts** (provisional (overnight)). `e2e.sh` keeps a failed run's log and prints where;
+   it used to print the path and delete the file. `e2e.sh` and `rehearse.sh` use simulators of their
+   own, "E2E Seat" and "Rehearsal Seat 0" to "4", created on first use (each rehearsal seat keeps a
+   different iPhone type, falling back to an iPhone 17) and shut down at the end, so neither shares
+   "iPhone 17 Pro" with Gradle's iOS test runs and neither needs an "iPhone 17 Pro Max". A rehearsal
+   seat that has never booted is booted once before the notification grant, as the hunt does. And the
+   rehearsal's host now presses LIGHTS OUT once all five are seated (`SOMEONES_HOME_LOBBY_SEATS`): it
+   pressed at three, and seats 3 and 4 were refused at the door with ROUND IN PROGRESS.
+6. **The fixture meeting counts.** Every seat's ledger line on JOIN read `GATE 4/6 · READY 3/6 ·
+   VOTED 4/6`, the design's `MeetingCounts()`. **No meeting screen can draw them on a housed phone**:
+   `FlowModel.houseAttached` sets the counts unsaid before any push (D-247), and `HousedContentTest`
+   renders every screen housed against the fixture strings. The ledger alone printed them, against
+   its own rule that a count the house has not said is `-`. It now prints `-` for every count until a
+   house is attached (`ScreenLedger.reading`). `ScreenLedgerTest.aCountNoHouseSentPrintsAsUnsaid`
+   failed before (it read `GATE 4/6`) and passes after.
+7. **The rehearsal's line probe allows the reveal** (`rehearse-check.py`, check 16, provisional
+   (overnight)). With the walk fixed a rehearsal reached an ending for the first time on this Mac, and
+   the check failed on seat 2, the Insider: two frames carried its own line. Both came after ROUND
+   ENDED. They are the reveal, which pairs each Insider with the line they were coerced with
+   (`InsiderNamed`, `gdd.md:1063`) and goes to every phone. The check now fails on any carrying frame
+   before the seat's ROUND ENDED, or on a seat that was not an Insider, and names the lawful carriers.
+   Verified by injection: a carrier written into seat 3's log before the ending fails it.
+
+**The rounds.** `rehearse.sh` (seed 20260822), five seats: every seat finished setup in one press
+(`SETUP DONE — THE OS ANSWERED EVERY ROW`, with `[perms] NEARBY DEVICES — → Unavailable`). The round
+played to an ending, the Insiders by an uncontained Egress (`Insiders BY EgressUncontained`). A Revoke
+landed (seat 0), a report called a meeting (`SEAT 1 FOUND A REVOKED PLAYER — A MEETING WAS CALLED`:
+D-309's page 2), the meeting ran its gate (5/5), talk, vote and tally and restrained seat 1, a Static
+jam reached the living, an Egress ran and resolved, and the reveal reached all five. `rehearse-check.py`:
+21 of 21. Refusals in the logs, all lawful: LIGHTS OUT refused at NEEDS 3 RESIDENTS before three
+were seated, and the house refused an out seat's SelectVote and LockVote (VoterOut). The bench reported
+the meter bar out of reach (E-P3-4, not fixed). The radio is the house's stand-in on simulators
+(D-308); nothing about contact, distance, light or a buzz is signed off here.
+
+`tools/sim-hunt/hunt.sh` (seed 20261150), four seats: setup done in one press on all four. The round
+ended for the Insiders by parity after a Revoke and a report (`SEAT 2 FOUND A REVOKED PLAYER — A
+MEETING WAS CALLED`), a meeting with a vote that restrained seat 2, and no Egress, which four seats
+leave no room for. The second round armed and worked (AGAIN beats). The same lawful refusals, plus
+`RoundAlreadyEnded · MeetingClosed` at the ending; the Insider's own line came down only in the
+reveal. `./e2e.sh` on its own seat: three cases passed and the geometry probe skipped as designed;
+the old cold-start assertion, run against the new build, failed reading `THIS PHONE CANNOT TAKE A
+SEAT YET / CAMERA · NOTIFICATIONS`, and its log was kept.
+
+**Again on D-311 and D-313.** Rebased and played again: the rehearsal reached the same ending by the
+same route, 21 of 21. D-311's lobby check left every bench seat in place: on a simulator BLUETOOTH
+reads NOT ON THIS PHONE (D-311's manager hears `unsupported`), NEARBY DEVICES reads NOT ON THIS
+PHONE, and neither is refused, so no seat's ledger ever read PERMISSIONS.
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

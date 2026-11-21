@@ -150,4 +150,30 @@ class ScreenLedgerTest {
     }
 
     private fun trigger() = home.someoneshome.model.MeetingTrigger.RevokeReported(Seat(4))
+
+    /**
+     * **A count no house sent prints as `-`** (D-314). Every seat's line on JOIN read
+     * `GATE 4/6 · READY 3/6 · VOTED 4/6`, the design's fixture, before any house existed. Once a house
+     * is attached the counts are its own, and the first it sends is what the line prints.
+     */
+    @Test
+    fun aCountNoHouseSentPrintsAsUnsaid() {
+        val b = Bench()
+        val before = b.ledger.reading()
+        assertTrue(
+            before.contains("GATE -/- · READY -/- · VOTED -/-"),
+            "an unhoused seat printed meeting counts nobody sent: $before",
+        )
+
+        b.flow.houseAttached(true)
+        assertTrue(
+            b.ledger.reading().contains("GATE -/- · READY -/- · VOTED -/-"),
+            "a housed seat with no count yet printed one: ${b.ledger.reading()}",
+        )
+        b.flow.meeting.houseCounted(present = 2, seats = 5)
+        assertTrue(
+            b.ledger.reading().contains("GATE 2/5"),
+            "the house counted and the line did not print it: ${b.ledger.reading()}",
+        )
+    }
 }

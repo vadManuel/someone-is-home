@@ -119,10 +119,24 @@ private class IosPermissions(
     private val bluetoothDelegate = object : NSObject(), CBCentralManagerDelegateProtocol {
         override fun centralManagerDidUpdateState(central: CBCentralManager) {
             val grant = bluetoothGrantOf(central.state)
-            remembered[DevicePermission.Bluetooth] = grant
             log("$TAG BLUETOOTH state=${central.state} → $grant" + if (central.state == CBManagerStatePoweredOff) " · THE RADIO IS OFF (D-311)" else "")
+            // **The late answer, handed to whoever asked before it was known** (D-314). Once each,
+            // and only a real answer: a state still unknown keeps them waiting. Handed through
+            // [answer], so the log says `Unasked → …` for the request it answers.
+            val waiting = if (grant != Grant.Unasked) bluetoothWaiting.toList() else emptyList()
+            bluetoothWaiting.removeAll(waiting)
+            waiting.forEach { answer(DevicePermission.Bluetooth, grant, it) }
+            remembered[DevicePermission.Bluetooth] = grant
         }
     }
+
+    /**
+     * The requests whose answer was TAP TO GRANT because the manager did not know its state yet
+     * (D-314). Each is answered again when the delegate does, which is the person tapping Allow on
+     * a phone and NOT ON THIS PHONE a moment later on a simulator; before this, nobody heard it and
+     * the setup walk stopped on BLUETOOTH.
+     */
+    private val bluetoothWaiting = mutableListOf<(Grant) -> Unit>()
 
     /**
      * **Silent.** Every row on the Perms screen reads this on every frame it is drawn, so a line
@@ -211,7 +225,7 @@ private class IosPermissions(
         // Nearby Interaction has no status to read, so a phone that has already been asked is asked
         // again the only way there is: a probe, which raises nothing once the prompt has been
         // answered. Its answer lands late, and the rows are read again when it does.
-        if (defaults.boolForKey(NEARBY_RAISED)) probeNearby { then() }
+        if (nearbyDevicesAskedOnThisBuild() && defaults.boolForKey(NEARBY_RAISED)) probeNearby { then() }
     }
 
     override fun request(of: DevicePermission, then: (Grant) -> Unit) {
@@ -369,17 +383,14 @@ private class IosPermissions(
     }
 
     private fun requestBluetooth(then: (Grant) -> Unit) {
-        val existing = central
-        if (existing != null) {
-            answer(DevicePermission.Bluetooth, bluetoothGrantOf(existing.state), then)
-            return
-        }
         // Building it IS the request — see [central]. The state arrives on the delegate a moment
-        // later; what is reported back now is whatever it already knows, and the row moves again
-        // when the delegate fires.
-        val manager = CBCentralManager(delegate = bluetoothDelegate, queue = dispatch_get_main_queue())
-        central = manager
-        answer(DevicePermission.Bluetooth, bluetoothGrantOf(manager.state), then)
+        // later; what is reported back now is whatever it already knows, and while that is no
+        // answer yet the asker waits for the delegate's (D-314), so the row and the walk move on.
+        val manager = central
+            ?: CBCentralManager(delegate = bluetoothDelegate, queue = dispatch_get_main_queue()).also { central = it }
+        val now = bluetoothGrantOf(manager.state)
+        if (now == Grant.Unasked) bluetoothWaiting += then
+        answer(DevicePermission.Bluetooth, now, then)
     }
 
     // ---- Nearby devices -------------------------------------------------------------------------
@@ -391,8 +402,12 @@ private class IosPermissions(
      * prompt and [Grant.Unasked] on one that has not. **ASKED keeps the phone at PERMISSIONS** (D-309):
      * a tap on the row, REQUEST WHAT IS MISSING and every refresh probe again.
      */
-    private fun nearbyGrant(): Grant =
-        remembered[DevicePermission.NearbyDevices] ?: if (defaults.boolForKey(NEARBY_RAISED)) Grant.Asked else Grant.Unasked
+    private fun nearbyGrant(): Grant = when {
+        // The simulator build (D-314): no ranging, so no probe, and the row reads as Bluetooth's.
+        !nearbyDevicesAskedOnThisBuild() -> Grant.Unavailable
+        else -> remembered[DevicePermission.NearbyDevices]
+            ?: if (defaults.boolForKey(NEARBY_RAISED)) Grant.Asked else Grant.Unasked
+    }
 
     /**
      * **Raise the prompt the way iOS raises it: by running a session** (D-161: asked at setup, in the
@@ -400,6 +415,11 @@ private class IosPermissions(
      * (ASKED and REFUSED included, D-309) runs a probe.
      */
     private fun requestNearby(then: (Grant) -> Unit) {
+        // The simulator build (D-314): reported as it reads, NOT ON THIS PHONE, and nothing probed.
+        if (!nearbyDevicesAskedOnThisBuild()) {
+            answer(DevicePermission.NearbyDevices, Grant.Unavailable, then)
+            return
+        }
         val standing = remembered[DevicePermission.NearbyDevices]
         // REFUSED probes again too: it raises nothing once the person has answered, and it is the
         // only way this row can be re-read after a trip to Settings (D-309).
