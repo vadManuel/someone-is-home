@@ -370,7 +370,7 @@ fun JoinScreen() {
             // (E-PAY-6). In full ink and at reading size, because this is often the reason the
             // screen changed **under** the player: a house that closed arrives by a push
             // (`LobbyModel.HOUSE_CLOSED`).
-            lobby.refusal?.let { KitBody(it, p, size = 22, align = TextAlign.Center) }
+            lobby.refusal?.let { KitBody(it, p, Modifier.fillMaxWidth(), size = 22, align = TextAlign.Center) }
             KitSecondary("HOST A HOME INSTEAD", p) { go(ScreenId.Maps) }
         }
     }

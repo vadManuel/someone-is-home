@@ -1264,9 +1264,12 @@ class PanelVals(
      * set, so every Resident in every round was handed *why was rose in the garage*. Picking a real
      * player instead would be every Resident's phone accusing the same person, which is the app
      * authoring a read the room is meant to make. ⚠️ The words are provisional, owner to confirm.
+     *
+     * **An Insider is handed exactly the note a Resident in the same state is** (D-312, GDD M8,
+     * D-286): Notes is one tap from page 1, and only page 2 may differ by role. The role is not
+     * read here at all.
      */
     val noteLine: String = when {
-        insider -> "i hope no one finds out"
         state.houseAttached -> HOUSED_NOTE
         else -> residentNotes[state.noteSeed.mod(residentNotes.size)]
     }
@@ -2776,12 +2779,9 @@ fun Plan.mapCells(): List<MapCell> =
  * The one place those words are decided. **An empty list is null**: a meeting where nobody evaded
  * draws nothing (the owner, 2026-11-15).
  *
- * ⚠️ **A non-empty list is null too, until the owner rules the copy** (D-223). The existing notice
- * (`Notifications.notice`, D-035's sentence, which D-161 says a permission flip is reported in)
- * carries a clock interval, *21:04–21:07*, and the house keeps no clock to fill one: every time on
- * every screen is a fixture. So the sentence cannot be reused unchanged, and a new one is the
- * owner's. Proposed, in its voice and shape: *Resident MARCUS was unreachable this shift. Occupancy
- * data for this interval is incomplete.* When it is ruled, this function is the whole change.
+ * **A non-empty list names them in the owner's sentence** (D-223, as ruled): *Resident MARCUS was
+ * unreachable this shift. Occupancy data for this interval is incomplete.* The render harness's
+ * fixture (`Notifications.notice`) is this function's own output, so no second copy exists.
  *
  * **A seat with no name is named [UNNAMED]** (the owner's 2026-11-18 ruling on D-242; D-277's word):
  * a blank read *Resident  was unreachable*, a sentence with a hole where a person goes. The ballot

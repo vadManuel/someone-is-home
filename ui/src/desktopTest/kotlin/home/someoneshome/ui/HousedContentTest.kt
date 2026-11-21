@@ -182,7 +182,8 @@ class HousedContentTest {
     @Test
     fun aHousedNoteNamesNobody() {
         assertEquals(PanelVals.HOUSED_NOTE, PanelVals(housed().state).noteLine)
-        assertEquals("i hope no one finds out", PanelVals(housed(insider = true).state).noteLine)
+        // An Insider is handed the Resident's note (D-312): `NotesParityTest` holds every state.
+        assertEquals(PanelVals.HOUSED_NOTE, PanelVals(housed(insider = true).state).noteLine)
     }
 
     /** **GUARD: the reconnecting screen counts no attempts nobody counted.** */

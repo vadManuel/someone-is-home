@@ -30,6 +30,9 @@ import home.someoneshome.model.SubroutineKind
 import java.io.File
 import javax.imageio.ImageIO
 import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 /**
  * Renders every screen to a PNG so they can be looked at.
@@ -69,11 +72,13 @@ class ScreenshotTest {
             }
             for (role in PanelRole.entries) {
                 runDesktopComposeUiTest(width = w * 2, height = h * 2) {
+                    val state = PanelState(screen = id, role = role, outBy = outBy)
+                    val editor = editorFor(state)
                     setContent {
                         Box(Modifier.fillMaxSize().background(Color.Black)) {
                             Box(Modifier.size((w * 2).dp, (h * 2).dp)) {
                                 DeviceCanvas {
-                                    Screen(PanelState(screen = id, role = role, outBy = outBy))
+                                    Screen(state, editor = editor)
                                 }
                             }
                         }
@@ -117,10 +122,12 @@ class ScreenshotTest {
                 else -> null
             }
             runDesktopComposeUiTest(width = 720, height = 1520) {
+                val state = PanelState(screen = id, role = role, outBy = outBy)
+                val editor = editorFor(state)
                 setContent {
                     Box(Modifier.fillMaxSize().background(Color.Black)) {
                         DeviceCanvas(insets = cameraBand) {
-                            Screen(PanelState(screen = id, role = role, outBy = outBy))
+                            Screen(state, editor = editor)
                         }
                     }
                 }
@@ -173,22 +180,41 @@ class ScreenshotTest {
             // ruled five and at the temporary three alike, so this frame is a refusal either way.
             "lobby-two-phones" to lobbyOf(joined = 2, linesIn = 2, hosting = true),
         )
+        // **The ready lobby and the client's at phone size** (D-312), 720 by 1520 with the camera
+        // band as `PermsWalkRender` draws it: at 600 by 800 the handed-over count, the live LIGHTS
+        // OUT and CLOSE THE HOUSE fell below the edge, and the two pictures were the same pixels.
+        val phoneSize = setOf("lobby-ready", "lobby-client")
+        val pixels = mutableMapOf<String, IntArray>()
         for ((name, lobby) in states) {
-            runDesktopComposeUiTest(width = 600, height = 800) {
+            val phone = name in phoneSize
+            val (w, h) = if (phone) 720 to 1520 else 600 to 800
+            runDesktopComposeUiTest(width = w, height = h) {
                 setContent {
                     Box(Modifier.fillMaxSize().background(Color.Black)) {
-                        Box(Modifier.size(600.dp, 800.dp)) {
-                            DeviceCanvas {
+                        Box(Modifier.size(w.dp, h.dp)) {
+                            DeviceCanvas(insets = if (phone) PanelInsets(top = 36.dp) else null) {
                                 Screen(PanelState(screen = ScreenId.Lobby), lobby = lobby)
                             }
                         }
                     }
                 }
-                ImageIO.write(
-                    onRoot().captureToImage().toAwtImage(), "png", File(out, "$name.png"),
-                )
+                if (name == "lobby-ready") {
+                    val root = onRoot().fetchSemanticsNode().boundsInRoot
+                    val lit = onAllNodes(hasText("LIGHTS OUT"), useUnmergedTree = true).fetchSemanticsNodes()
+                    assertTrue(
+                        lit.any { it.boundsInRoot.bottom <= root.bottom },
+                        "the ready lobby's LIGHTS OUT is not in the picture",
+                    )
+                }
+                val img = onRoot().captureToImage().toAwtImage()
+                if (phone) pixels[name] = img.getRGB(0, 0, img.width, img.height, null, 0, img.width)
+                ImageIO.write(img, "png", File(out, "$name.png"))
             }
         }
+        assertFalse(
+            pixels.getValue("lobby-ready").contentEquals(pixels.getValue("lobby-client")),
+            "the host's ready lobby rendered the same pixels as a client's",
+        )
         println("wrote ${states.size} lobby states to ${out.absolutePath}")
     }
 
@@ -244,8 +270,11 @@ class ScreenshotTest {
             "homedetail-refused-name" to HostRefusal.NameAlreadyOnTheAir,
             "homedetail-refused-air" to HostRefusal.CouldNotGoOnTheAir,
         )
+        val pixels = mutableMapOf<String, IntArray>()
+        val settings = mutableMapOf<String, Int>()
+        val words = mutableMapOf<String, String>()
         for ((name, why) in refusals) {
-            runDesktopComposeUiTest(width = 600, height = 800) {
+            runDesktopComposeUiTest(width = 720, height = 1520) {
                 val model = FlowModel(
                     PanelState(screen = ScreenId.HomeDetail),
                     lobby = LobbyModel(link = RefusingLobbyLink(why)),
@@ -253,12 +282,17 @@ class ScreenshotTest {
                     // and D-161's gate stands one step in front of it.
                     perms = PermsModel.sample(),
                 )
+                // **And a phone with a name on it, at phone size** (D-312): without a name the
+                // radio is never asked, and both pictures were TYPE YOUR NAME FIRST, the same
+                // pixels; at 600 by 800 the plan overlapped the words and OPEN SETTINGS fell below
+                // the edge. 720 by 1520 with the camera band, as `PermsWalkRender` draws.
+                model.lobby.nameResident("ELLIOT")
                 model.openSavedHome(HomeEditorModel.BUNGALOW)
                 model.hostHome(HomeEditorModel.BUNGALOW)
                 setContent {
                     Box(Modifier.fillMaxSize().background(Color.Black)) {
-                        Box(Modifier.size(600.dp, 800.dp)) {
-                            DeviceCanvas {
+                        Box(Modifier.size(720.dp, 1520.dp)) {
+                            DeviceCanvas(insets = PanelInsets(top = 36.dp)) {
                                 Screen(
                                     model.state, model.actions(), model.editor,
                                     model.homes, model.lobby,
@@ -267,11 +301,30 @@ class ScreenshotTest {
                         }
                     }
                 }
-                ImageIO.write(
-                    onRoot().captureToImage().toAwtImage(), "png", File(out, "$name.png"),
-                )
+                words[name] = model.lobby.refusal.orEmpty()
+                // Counted only where it is in the picture: at 600 by 800 it fell below the edge.
+                val edge = onRoot().fetchSemanticsNode().boundsInRoot.bottom
+                settings[name] = onAllNodes(hasText("OPEN SETTINGS")).fetchSemanticsNodes()
+                    .count { it.boundsInRoot.bottom <= edge }
+                val img = onRoot().captureToImage().toAwtImage()
+                pixels[name] = img.getRGB(0, 0, img.width, img.height, null, 0, img.width)
+                ImageIO.write(img, "png", File(out, "$name.png"))
             }
         }
+        assertEquals(
+            LobbyModel.NOT_ON_THE_AIR + "\n" + LobbyModel.NOT_ON_THE_AIR_CAUSE, words["homedetail-refused-air"],
+            "the air refusal drew another refusal",
+        )
+        assertTrue(
+            "ALREADY CALLED" in words.getValue("homedetail-refused-name"),
+            "the name refusal drew ${words["homedetail-refused-name"]}",
+        )
+        assertFalse(
+            pixels.getValue("homedetail-refused-air").contentEquals(pixels.getValue("homedetail-refused-name")),
+            "the two hosting refusals rendered the same pixels",
+        )
+        assertEquals(1, settings["homedetail-refused-air"], "the air refusal drew no OPEN SETTINGS")
+        assertEquals(0, settings["homedetail-refused-name"], "the name refusal offered OPEN SETTINGS")
         println("wrote ${refusals.size} hosting refusals to ${out.absolutePath}")
     }
 
@@ -645,6 +698,20 @@ class ScreenshotTest {
         }
         println("wrote ${frames.size} house-driven frames to ${out.absolutePath}")
     }
+
+    /**
+     * **The plan each sweep frame is drawn with**: `Screen`'s own default, except that ReviewNeeds
+     * is given a real shortfall (D-312), a terminal and a meeting card missing. The default plan
+     * passes the gate, and REVIEW HOME never routes a passing plan here, so the screen drew
+     * THIS HOME NEEDS 0 MORE THINGS, a state no host can reach.
+     */
+    private fun editorFor(state: PanelState): HomeEditorModel =
+        HomeEditorModel.opening(PanelVals.isRenderHarness(state)).also {
+            if (state.screen == ScreenId.ReviewNeeds) {
+                it.removeTerminal()
+                it.removeMeeting()
+            }
+        }
 
     private fun lobbyOf(joined: Int, linesIn: Int, hosting: Boolean): LobbyModel {
         val home = NearbyHome("THE BUNGALOW", "192.168.1.24", 47747)

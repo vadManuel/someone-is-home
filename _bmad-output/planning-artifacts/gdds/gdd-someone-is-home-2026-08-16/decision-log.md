@@ -12195,6 +12195,30 @@ CLOSED and returns to JOIN A HOME, the host's to its lobby.
 6. **A guest is not dismissed**: it hangs up and keeps its seat token, so JOIN takes it back into the
    host's next lobby by that token. *Everyone starts over* is the new round, not new seats.
 
+### D-312 · **Overnight screen-audit fixes (2026-11-21) — built**
+
+An audit of every rendered screen found six faults. Each is fixed where it was found: no new copy,
+and no light, colour, type or timing changed.
+
+1. **Notes no longer differs by role** (**provisional (overnight)**, owner to confirm). `noteLine`
+   handed every Insider an Insider-only line that no decision or GDD text sanctions, one tap from
+   page 1; GDD M8 and D-286 let only page 2 differ. An Insider now gets exactly the note a Resident
+   in the same state gets (`HOUSED_NOTE` housed, the seeded pick otherwise), and the line is gone.
+   `NotesParityTest` sweeps both roles, housed and not, through the line and the rendered screen,
+   words and pixels.
+2. **`homedetail-refused-air` and `-refused-name` draw their real refusals.** The render never named
+   the phone, so both were TYPE YOUR NAME FIRST. Named, at 720×1520: THIS HOME DID NOT GO ON THE AIR /
+   CHECK LOCAL NETWORK PERMISSION with OPEN SETTINGS, and ANOTHER HOME HERE IS ALREADY CALLED THE
+   BUNGALOW without it. Asserted: the two differ, and only the first has OPEN SETTINGS in the picture.
+3. **`lobby-ready` and `lobby-client` render at 720×1520**, so the handed-over count, the live LIGHTS
+   OUT and CLOSE THE HOUSE are in the picture. Asserted: the two differ, and LIGHTS OUT is inside it.
+4. **The notice fixture is `noticeBody(listOf("MARCUS"))`**, D-223's ruled sentence, not a literal
+   with a clock interval; `noticeBody`'s KDoc no longer says the copy awaits a ruling.
+5. **The ReviewNeeds sweep frame has a real shortfall** (no terminal, no meeting card): THIS HOME
+   NEEDS 2 MORE THINGS, never 0.
+6. **JOIN A HOME's refusal slot is full width**, so its centred words (D-310) are centred. The host
+   lobby's slot already was.
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

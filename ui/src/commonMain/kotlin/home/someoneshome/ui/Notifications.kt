@@ -316,11 +316,13 @@ object Notifications {
      * Its surface today is the meeting's own notices screen rather than a banner, which is what
      * the design drew — see the worklog. What is settled and held here is the part D-105 settled:
      * these words live in exactly one place and survive nowhere.
+     *
+     * **The fixture's words are [noticeBody]'s own** (D-223, D-312), for one Resident who left the
+     * app: a literal here drew a clock interval the house never sends long after the copy was ruled.
      */
     val notice: Notification = Notification(
         kind = NotificationKind.Notice,
-        body = "Resident MARCUS was unreachable 21:04–21:07. Occupancy data for this interval " +
-            "is incomplete.",
+        body = checkNotNull(noticeBody(listOf("MARCUS"))),
         bodySize = 8.5,
     )
 
