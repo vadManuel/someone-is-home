@@ -31,6 +31,19 @@ Main at the start: `1eb155e` (D-306 to D-310 merged).
 
 ## Results
 
+### The full test suite on main (done)
+
+- I ran `./gradlew check` myself on `1eb155e`, with D-306 to D-310 all merged. **3,269 tests, 0 failures, 0 skipped**, counted from the result files. BUILD SUCCESSFUL in 24 minutes.
+- Per module:
+  - model: 355 + 339
+  - core: 413 + 411
+  - ui: 755 + 371
+  - platform: 210
+  - harness: 132
+  - cards: 17
+  - app: 266
+- Today's five changes had each been tested separately. This is the first run with all of them together.
+
 ### Review of D-306 to D-310 (done)
 
 - **D-306, D-307, D-308 and D-309:** sound under every rule checked. That covers the report gate (no path from the lantern or a Subroutine), the pairing's predicates, the removal of the Bluetooth rules, and NEARBY DEVICES not passable at ASKED by any path.
