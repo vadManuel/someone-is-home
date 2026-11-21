@@ -561,12 +561,14 @@ class SwitchboardRadio(
  *
  * Asked once, at the onset, of whichever managers are down then. Unauthorized is
  * [RadioCause.Permission]: the Bluetooth permission switched off (D-310), and every grant was given
- * at setup (D-161), so one missing in a round is something somebody did. Off is [RadioCause.Person]:
- * Bluetooth switched off, which is a radio and not a permission (a powered-off radio is still
- * granted, `Permissions`), named and never counted toward closing the house. Resetting or
- * Unsupported is [RadioCause.Device], and **the phone's own failure wins** when the two managers
- * disagree, because naming a player whose phone failed is the injustice D-187 exists to prevent and
- * missing one evasion is not. On and Unknown are not down and say nothing.
+ * at setup (D-161), so one missing in a round is something somebody did. **Off is
+ * [RadioCause.Permission] too** (the owner's 2026-11-21 rulings, D-311, overruling D-310's
+ * provisional item 1): the Bluetooth radio itself turned off, in Control Centre or by airplane mode,
+ * *counts exactly as a permission switched off*: named in the owner's permission sentence, and after
+ * the warning it closes the house. Resetting or Unsupported is [RadioCause.Device], and **the
+ * phone's own failure wins** when the two managers disagree, because naming a player whose phone
+ * failed is the injustice D-187 exists to prevent and missing one evasion is not. On and Unknown
+ * are not down and say nothing.
  */
 fun causeOf(advertiser: RadioPower, scanner: RadioPower): RadioCause {
     // Exhaustive, so a state the OS adds later has to be put on one side of the line by somebody.
@@ -574,13 +576,14 @@ fun causeOf(advertiser: RadioPower, scanner: RadioPower): RadioCause {
         RadioPower.Resetting, RadioPower.Unsupported -> true
         RadioPower.Off, RadioPower.Unauthorized, RadioPower.On, RadioPower.Unknown -> false
     }
-    fun withdrawn(power: RadioPower) = when (power) {
-        RadioPower.Unauthorized -> true
-        RadioPower.Off, RadioPower.Resetting, RadioPower.Unsupported, RadioPower.On, RadioPower.Unknown -> false
+    fun switchedOff(power: RadioPower) = when (power) {
+        RadioPower.Off, RadioPower.Unauthorized -> true
+        RadioPower.Resetting, RadioPower.Unsupported, RadioPower.On, RadioPower.Unknown -> false
     }
     return when {
         failed(advertiser) || failed(scanner) -> RadioCause.Device
-        withdrawn(advertiser) || withdrawn(scanner) -> RadioCause.Permission
+        switchedOff(advertiser) || switchedOff(scanner) -> RadioCause.Permission
+        // Neither manager down: not an onset, and never asked. Said for the `when`'s sake.
         else -> RadioCause.Person
     }
 }

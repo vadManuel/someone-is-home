@@ -90,12 +90,24 @@ Tick each line as you see it.
 
 **A permission switched off**
 - [ ] Mid-round, switch a permission off in Settings (Notifications is the one iOS does not end the
-      app for) and come back. At the next meeting the notice names that phone and carries the
-      warning: "A permission was switched off. If anyone switches one off again, the house closes
-      and everyone starts over." Then switch one off again, on any phone: every phone shows THE
-      HOUSE IS CLOSED / "A permission was switched off again. Everyone starts over." and returns
-      to JOIN A HOME, and the host's returns to its lobby. Separately, only leaving the app (side
-      button, swipe home) is named with no warning and never closes the house. (D-310)
+      app for) and come back. At the next meeting the notice names that phone in the owner's
+      sentence: "Resident Mia switched off a permission this game needs. If anyone switches one off
+      again, the house closes and everyone starts over." Then switch one off again, on any phone:
+      every phone shows THE HOUSE IS CLOSED / "A permission was switched off again. Everyone starts
+      over." and returns to JOIN A HOME, and the host's returns to its lobby. Separately, only
+      leaving the app (side button, swipe home) is named with "was unreachable this shift", no
+      warning, and never closes the house; when both happen in one shift, that sentence comes
+      first. (D-310, D-311)
+- [ ] In the lobby, before lights out, switch a permission off on a guest (Settings, or Bluetooth
+      in Control Centre) and come back: the guest leaves the lobby and lands on PERMISSIONS with
+      that row reading REFUSED, the host's count drops by one, and with it back on the guest
+      rejoins as usual. On the host: it is shown PERMISSIONS, the guests stay seated, and CONTINUE
+      takes it back to its lobby. (D-311)
+- [ ] Mid-round, turn Bluetooth off in Control Centre (do not leave the app). At the next meeting
+      the notice names that phone in the permission sentence, not "was unreachable". Note whether
+      the console logs `[perms] BLUETOOTH state=... THE RADIO IS OFF (D-311)` and the radio's
+      `FAULT ... PERMISSION`: if iOS keeps the radio powered for Control Centre's switch (it is
+      documented as disconnecting accessories), nothing is named, and that is the finding. (D-311)
 
 **Release build**
 - [ ] `./run-app.sh device release` on a UWB phone launches to the boot screen. It must not stop

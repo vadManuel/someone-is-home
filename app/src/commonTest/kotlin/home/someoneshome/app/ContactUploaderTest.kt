@@ -412,17 +412,21 @@ class ContactUploaderTest {
         }
     }
 
-    /** **GUARD (D-310): a grant already off at arming never counts**, however many beats read it off. */
+    /**
+     * **GUARD (D-311): a grant already off at arming counts, once**, however many beats read it off:
+     * no phone is to enter a round missing one, and one that does is named (D-310's provisional item
+     * 3 overruled). A leave after it is a leave.
+     */
     @Test
-    fun aGrantOffAtArmingNeverCounts() {
+    fun aGrantOffAtArmingCountsOnce() {
         val (up, reports) = granted({ 1 shl 2 })
         up.heard(RoundMessage.ContactSeedIssued(seed))
         repeat(4) { up.beat() }
-        assertEquals(emptyList(), reports, "a grant that was off at arming went up as switched off")
+        assertEquals(listOf(RadioCause.Permission), reports.map { it.cause }, "a grant off at arming did not go up once as switched off")
         up.leftTheForeground()
         up.backInTheForeground()
         repeat(2) { up.beat() }
-        assertEquals(listOf(RadioCause.Person), reports.map { it.cause }, "a leave on a phone armed with a grant off was not a person's")
+        assertEquals(listOf(RadioCause.Permission, RadioCause.Person), reports.map { it.cause }, "a leave after it was not a person's")
     }
 
     /**
@@ -450,12 +454,14 @@ class ContactUploaderTest {
     }
 
     /**
-     * **GUARD (D-310): a relaunch compares against the grants kept at arming, not what it finds.**
-     * iOS ends the app when Camera is switched off in Settings; the relaunched process reads its owed
-     * leave back and sends it as a permission, because the grant was on when the round armed.
+     * **The uploader's half of a relaunch after a trip to Settings** (D-310, D-311). iOS ends the app
+     * when Camera is switched off in Settings; the relaunched process reads its owed leave back and
+     * sends it as a permission, because that grant was not yet reported. The phone getting back to
+     * its seat at all is `RelaunchIntoTheRoundTest`'s, over real sockets (the overnight review's
+     * finding 2): this case hands the seed straight over.
      */
     @Test
-    fun aRelaunchComparesAgainstTheGrantsKeptAtArming() {
+    fun aRelaunchSendsTheTripToSettingsAsAPermission() {
         val store = MemorySeat()
         var off = 0
         val (before, _) = granted({ off }, store)

@@ -241,7 +241,10 @@ class SwitchboardRadioTest {
 
     // ---- T2: one fault onset, however many callbacks (D-222), and why (D-223) -------------------
 
-    /** A Bluetooth switch-off reaches both managers; the house hears of it once, as a person's act. */
+    /**
+     * **GUARD (D-311): Bluetooth turned off reaches both managers; the house hears of it once, as a
+     * switch-off** that counts toward closing the house, not as a person's leave.
+     */
     @Test
     fun aSwitchOffIsOneFaultHoweverManyCallbacks() {
         val radio = SwitchboardRadio(RecordingHardware())
@@ -250,7 +253,7 @@ class SwitchboardRadioTest {
         on(radio)
         assertNull(radio.faultBegan(), "a radio that came up reported a fault")
         radio.advertiserPower(RadioPower.Off)
-        assertEquals(RadioCause.Person, radio.faultBegan(), "Bluetooth switched off was not reported as a person's act")
+        assertEquals(RadioCause.Permission, radio.faultBegan(), "Bluetooth turned off was not reported as a switch-off (D-311)")
         // Collected between callbacks, as the uploader collects once a beat.
         radio.scannerPower(RadioPower.Off)
         assertNull(radio.faultBegan(), "the scanner's callback for the same switch-off was reported as a second fault")
@@ -297,21 +300,18 @@ class SwitchboardRadioTest {
     }
 
     /**
-     * The line itself, every pairing: the phone's own failure wins a disagreement; then a permission
-     * withdrawn on either manager is a permission's (D-310); otherwise Bluetooth switched off is a
-     * person's.
+     * The line itself, every pairing: the phone's own failure wins a disagreement; otherwise a
+     * manager down is a switch-off, its permission withdrawn (D-310) or the radio turned off (D-311).
      */
     @Test
-    fun theCauseIsAPersonsOnlyWhenNothingFailed() {
+    fun theCauseIsASwitchOffWhenNothingFailed() {
         val down = listOf(RadioPower.Off, RadioPower.Unauthorized, RadioPower.Resetting, RadioPower.Unsupported)
         val failed = setOf(RadioPower.Resetting, RadioPower.Unsupported)
         for (a in RadioPower.entries) for (b in RadioPower.entries) {
             if (a !in down && b !in down) continue
-            val expected = when {
-                a in failed || b in failed -> RadioCause.Device
-                a == RadioPower.Unauthorized || b == RadioPower.Unauthorized -> RadioCause.Permission
-                else -> RadioCause.Person
-            }
+            // **Off is a switch-off too** (the owner's 2026-11-21 rulings, D-311): the radio itself
+            // turned off counts exactly as its permission withdrawn.
+            val expected = if (a in failed || b in failed) RadioCause.Device else RadioCause.Permission
             assertEquals(expected, causeOf(a, b), "advertiser $a, scanner $b")
         }
     }
@@ -347,12 +347,12 @@ class SwitchboardRadioTest {
         radio.scannerPower(RadioPower.Off)
         assertNull(radio.faultBegan(), "a fault was reported before the round's radio had a token")
         radio.advertise(t1)
-        assertEquals(RadioCause.Person, radio.faultBegan(), "a radio switched off at arming was never reported")
+        assertEquals(RadioCause.Permission, radio.faultBegan(), "a radio switched off at arming was never reported")
         // The round ends with it still down; the next round's first advertise finds it again.
         radio.silence()
         assertNull(radio.faultBegan(), "a fault outlived the round it was reported in")
         radio.advertise(t2)
-        assertEquals(RadioCause.Person, radio.faultBegan(), "the next round never heard of a radio still down")
+        assertEquals(RadioCause.Permission, radio.faultBegan(), "the next round never heard of a radio still down")
     }
 
     // ---- The first device session (2026-11-16): one FAULT per switch-off, and one start in flight --
@@ -386,7 +386,7 @@ class SwitchboardRadioTest {
         radio.advertiserPower(RadioPower.On)
         val first = radio.faultBegan()
         val faultLines = lines.count { it.startsWith("FAULT") }
-        assertEquals(RadioCause.Person, first, "Bluetooth switched off was not reported as a person's act")
+        assertEquals(RadioCause.Permission, first, "Bluetooth turned off was not reported as a switch-off (D-311)")
         assertEquals(1, faultLines, "one switch-off logged $faultLines FAULT lines: ${lines.filter { it.startsWith("FAULT") }}")
         assertNull(radio.faultBegan(), "one switch-off was reported to the house twice")
         assertEquals(
@@ -406,7 +406,7 @@ class SwitchboardRadioTest {
         settle(radio)
         radio.advertiserPower(RadioPower.Off)
         radio.scannerPower(RadioPower.Off)
-        assertEquals(RadioCause.Person, radio.faultBegan(), "a second switch-off after recovery was swallowed")
+        assertEquals(RadioCause.Permission, radio.faultBegan(), "a second switch-off after recovery was swallowed")
         assertNull(radio.faultBegan(), "the second switch-off was reported twice")
         assertEquals(2, lines.count { it.startsWith("FAULT") })
     }
@@ -446,7 +446,7 @@ class SwitchboardRadioTest {
         assertEquals(starts, hw.calls.count { it == "advertise" }, "the token already on the air was started again")
         assertEquals(0, hw.startedTwice)
 
-        assertEquals(RadioCause.Person, radio.faultBegan(), "the switch-off itself is still one fault")
+        assertEquals(RadioCause.Permission, radio.faultBegan(), "the switch-off itself is still one fault")
         assertNull(radio.faultBegan(), "a start was reported as a fault")
         assertEquals(listOf(RadioSide.Advertiser to RadioPower.Off), reported, "a start was reported as an outage")
         assertTrue(lines.none { it.contains("NOT STARTED") }, "a start that began was logged as failed")

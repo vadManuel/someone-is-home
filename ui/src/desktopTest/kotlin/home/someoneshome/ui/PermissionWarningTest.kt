@@ -24,10 +24,14 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalTestApi::class)
 class PermissionWarningTest {
 
-    private val one = "Resident MIA was unreachable this shift. Occupancy data for this interval is incomplete. " +
-        "A permission was switched off. If anyone switches one off again, the house closes and everyone starts over."
-    private val two = "Residents MIA and JO were unreachable this shift. Occupancy data for this interval is incomplete. " +
-        "A permission was switched off. If anyone switches one off again, the house closes and everyone starts over."
+    // **The owner's words, approved verbatim** (2026-11-21, D-311).
+    private val one = "Resident MIA switched off a permission this game needs. " +
+        "If anyone switches one off again, the house closes and everyone starts over."
+    private val two = "Residents MIA and JO switched off a permission this game needs. " +
+        "If anyone switches one off again, the house closes and everyone starts over."
+    private val three = "Residents MIA, JO and DANI switched off a permission this game needs. " +
+        "If anyone switches one off again, the house closes and everyone starts over."
+    private val samLeft = "Resident SAM was unreachable this shift. Occupancy data for this interval is incomplete."
     private val closedLines = "THE HOUSE IS CLOSED\nA permission was switched off again. Everyone starts over."
 
     /** Every piece of text the Notice screen drew for [state]. */
@@ -42,40 +46,70 @@ class PermissionWarningTest {
         return texts
     }
 
-    private fun housed(notice: List<Seat>, switchedOff: Boolean): PanelState {
+    /** A housed phone holding the notice the house sent: [left] only left the app, [switchedOff] switched something off. */
+    private fun housed(left: List<Seat>, switchedOff: List<Seat>, insider: Boolean = false): PanelState {
         val model = FlowModel(PanelState(houseAttached = true))
-        model.houseSaid(RoundMessage.RosterIssued(listOf("ROSE", "MIA", "JO", "DANI")))
-        model.houseSaid(RoundMessage.NoticeIssued(notice, permissionSwitchedOff = switchedOff))
+        model.houseSaid(RoundMessage.RoleRevealed(insider = insider))
+        model.houseSaid(RoundMessage.RosterIssued(listOf("ROSE", "MIA", "JO", "DANI", "SAM")))
+        model.houseSaid(RoundMessage.NoticeIssued(left, switchedOff = switchedOff))
         return model.state
     }
 
-    /** **GUARD: a permission switched off is named with the owner's two sentences appended**, one name or two. */
+    /**
+     * **GUARD: a seat that switched something off is named in the owner's permission sentence**
+     * (D-311), one name, two or three, joined with commas and then *and*, and drawn so on the notices
+     * screen.
+     */
     @Test
-    fun aPermissionSwitchedOffIsNamedWithTheWarningInTheOwnersWords() {
-        assertEquals(one, noticeBody(listOf("MIA"), switchedOff = true))
-        assertEquals(two, noticeBody(listOf("MIA", "JO"), switchedOff = true))
-        assertEquals(one, PanelVals(housed(listOf(Seat(1)), switchedOff = true)).notice)
-        val texts = drawn(housed(listOf(Seat(1), Seat(2)), switchedOff = true))
-        assertTrue(texts.any { it == two }, "the notices screen did not draw the warning in the owner's words: $texts")
+    fun aSwitchOffIsNamedInTheOwnersPermissionSentence() {
+        assertEquals(one, noticeBody(emptyList(), switchedOff = listOf("MIA")))
+        assertEquals(two, noticeBody(emptyList(), switchedOff = listOf("MIA", "JO")))
+        assertEquals(three, noticeBody(emptyList(), switchedOff = listOf("MIA", "JO", "DANI")))
+        assertEquals(one, PanelVals(housed(emptyList(), listOf(Seat(1)))).notice)
+        val texts = drawn(housed(emptyList(), listOf(Seat(1), Seat(2))))
+        assertTrue(texts.any { it == two }, "the notices screen did not draw the permission sentence in the owner's words: $texts")
     }
 
-    /** **GUARD: a notice naming only phones that left the app is unchanged, with no warning.** */
+    /**
+     * **GUARD: the orderings** (D-311). Only leavers: today's sentence, unchanged, and no warning.
+     * Both: the leavers' sentence first, then the permission sentence. A seat the house put on the
+     * permission list alone (it both left and switched off) is named once, there.
+     */
     @Test
-    fun aNoticeForALeaveCarriesNoWarning() {
-        val words = PanelVals(housed(listOf(Seat(1)), switchedOff = false)).notice
-        assertEquals("Resident MIA was unreachable this shift. Occupancy data for this interval is incomplete.", words)
-        val texts = drawn(housed(listOf(Seat(1)), switchedOff = false))
+    fun theNoticeOrderings() {
+        // Only leavers: exactly today's notice.
+        val leftOnly = PanelVals(housed(listOf(Seat(4)), emptyList())).notice
+        assertEquals(samLeft, leftOnly)
+        val texts = drawn(housed(listOf(Seat(4)), emptyList()))
         assertTrue(texts.none { "permission" in it.lowercase() || "starts over" in it }, "a leave drew the warning: $texts")
-        // And an empty notice draws nothing, warned or not.
-        assertNull(noticeBody(emptyList(), switchedOff = true))
+        // Both: the leaver first, then the switchers.
+        val both = PanelVals(housed(listOf(Seat(4)), listOf(Seat(1), Seat(2)))).notice
+        assertEquals("$samLeft $two", both)
+        assertTrue(drawn(housed(listOf(Seat(4)), listOf(Seat(1), Seat(2)))).any { it == "$samLeft $two" }, "the notices screen drew the two sentences otherwise")
+        // A seat that did both is on the permission list alone, and is named once.
+        val did = PanelVals(housed(emptyList(), listOf(Seat(1)))).notice!!
+        assertEquals(1, Regex("MIA").findAll(did).count(), "a seat that both left and switched off was named twice: $did")
+        // And an empty notice draws nothing.
+        assertNull(noticeBody(emptyList(), emptyList()))
+        assertNull(PanelVals(housed(emptyList(), emptyList())).notice)
     }
 
-    /** The warning is reset between rounds with the notice it rode. */
+    /** **GUARD (rule 1, parity): the notice draws the same words on an Insider's phone and a Resident's.** */
+    @Test
+    fun theNoticeIsTheSameOnEveryRole() {
+        for ((left, switched) in listOf(listOf(Seat(4)) to emptyList(), emptyList<Seat>() to listOf(Seat(1)), listOf(Seat(4)) to listOf(Seat(1), Seat(2)))) {
+            val resident = drawn(housed(left, switched, insider = false))
+            val insider = drawn(housed(left, switched, insider = true))
+            assertEquals(resident, insider, "the notice drew differently by role for $left / $switched")
+        }
+    }
+
+    /** The permission list is reset between rounds with the notice it rode. */
     @Test
     fun theWarningIsForgottenBetweenRounds() {
-        val state = housed(listOf(Seat(1)), switchedOff = true)
-        assertTrue(state.noticeSwitchedOff)
-        assertFalse(state.betweenRounds().noticeSwitchedOff)
+        val state = housed(emptyList(), listOf(Seat(1)))
+        assertEquals(listOf(Seat(1)), state.noticeSwitchedOff)
+        assertTrue(state.betweenRounds().noticeSwitchedOff.isEmpty())
     }
 
     // ---- The close -------------------------------------------------------------------------------

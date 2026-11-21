@@ -59,34 +59,66 @@ interface Permissions {
      * is the settings page, which the screen offers separately.
      */
     fun request(of: DevicePermission, then: (Grant) -> Unit)
+
+    /**
+     * **Whether the Bluetooth radio itself is turned off, as the OS last said** (the owner's
+     * 2026-11-21 rulings, D-311): Control Centre, or airplane mode, which turns Bluetooth off. Not a
+     * grant (a powered-off radio is still one the app may use), so [grant] does not say it; but the
+     * game needs the radio on exactly as it needs the grant, so [standing] reads the BLUETOOTH row as
+     * refused while it is off. False by default, for a seam with no radio to ask.
+     */
+    fun bluetoothOff(): Boolean = false
 }
 
 /** This device's own permission prompts. */
 expect fun devicePermissions(): Permissions
 
 /**
+ * **What one row reads for this game** (D-311): [Permissions.grant], except that a BLUETOOTH grant
+ * given while the radio itself is turned off reads [Grant.Refused]. *The game requires all these to
+ * function* (the owner, 2026-11-21): a phone with Bluetooth off cannot do the job, so it is shown
+ * PERMISSIONS with the row refused, the lobby lets it go, and in a round it is a switch-off. A row
+ * not yet answered stays as it reads: it is owed either way, and a tap still raises its prompt.
+ *
+ * The one reading the gate, the rows, [missing] and [refusedGrants] all take, so the PERMISSIONS
+ * screen, the lobby and the round cannot disagree about the radio.
+ */
+fun Permissions.standing(of: DevicePermission): Grant {
+    val grant = grant(of)
+    return if (of == DevicePermission.Bluetooth && grant == Grant.Granted && bluetoothOff()) Grant.Refused else grant
+}
+
+/**
+ * **[Permissions.request], answered in [standing]'s terms** (D-311): a BLUETOOTH prompt granted
+ * while the radio is off comes back refused, as the row will read on its next refresh.
+ */
+fun Permissions.requestStanding(of: DevicePermission, then: (Grant) -> Unit) =
+    request(of) { then(standing(of)) }
+
+/**
  * **What is still standing between this phone and a seat**, off a live [Permissions].
  *
  * The gate D-161 rules, in one call, so that the lobby and the Perms screen cannot come to
- * different conclusions about the same phone. Empty means setup is complete.
+ * different conclusions about the same phone. Empty means setup is complete. Read in [standing]'s
+ * terms, so the Bluetooth radio turned off is missing too (D-311).
  */
 fun Permissions.missing(): List<DevicePermission> =
-    grantsMissing(DevicePermission.entries.associateWith(::grant))
+    grantsMissing(DevicePermission.entries.associateWith { standing(it) })
 
 /**
  * **The grants that read switched off now, as one number** (D-310): bit `ordinal` set for every row
- * that reads [Grant.Refused]. Every row is required to play (D-309), so one refused in a round was
+ * that reads [Grant.Refused] in [standing]'s terms, so the Bluetooth radio turned off sets
+ * BLUETOOTH's bit (D-311). Every row is required to play (D-309), so one refused in a round was
  * switched off after the phone was seated.
  *
- * Read once a beat by the round's uploader and compared with the same number at arming
- * (`ContactUploader`), so a grant switched off mid-round goes up as a permission. A number and not a
- * list, so the read allocates nothing (rule 7). It stays inside this phone: only the one fixed report
- * body goes up.
+ * Read once a beat by the round's uploader (`ContactUploader`), so a grant switched off mid-round
+ * goes up as a permission. A number and not a list, so the read allocates nothing (rule 7). It stays
+ * inside this phone: only the one fixed report body goes up.
  */
 fun Permissions.refusedGrants(): Int {
     var refused = 0
     for (row in DevicePermission.entries) {
-        if (grant(row) == Grant.Refused) refused = refused or (1 shl row.ordinal)
+        if (standing(row) == Grant.Refused) refused = refused or (1 shl row.ordinal)
     }
     return refused
 }
@@ -132,4 +164,9 @@ class NoPermissions(
     fun says(of: DevicePermission, grant: Grant) {
         answers[of] = grant
     }
+
+    /** **The Bluetooth radio turned off, or back on** (D-311). Test-facing. */
+    var radioOff: Boolean = false
+
+    override fun bluetoothOff(): Boolean = radioOff
 }

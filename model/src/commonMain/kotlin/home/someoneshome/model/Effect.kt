@@ -922,18 +922,24 @@ sealed interface Effect {
      * Sent to every phone, living and out, at the moment the check-in gate closes, and **sent at
      * every meeting, empty when nobody evaded**, so its arrival says nothing; only its content
      * does, and the content is the same on every phone. **An empty one draws nothing** (the owner,
-     * 2026-11-15): no *data is complete* line. [unreachable] is in seat order, each once, and names
-     * no role: every phone reports an outage identically, so being named says whose phone went
+     * 2026-11-15): no *data is complete* line. Both lists are in seat order, each seat once, and
+     * name no role: every phone reports an outage identically, so being named says whose phone went
      * quiet and nothing about who holds it.
      *
-     * **[permissionSwitchedOff] carries the owner's warning** (D-310): true when at least one seat
-     * named here switched a permission off this shift (`RadioCause.Permission`), false when every
-     * one named only left the app or switched Bluetooth off, and false on an empty notice. The same
-     * on every phone, so the phones append the same two sentences or none. Issuing a notice with it
-     * true gives the round's one warning ([GameState.warned]); after that, a permission switched off
+     * **Two lists, and no seat on both** (the owner's 2026-11-21 rulings, D-311):
+     * - [unreachable]: the seats named that **only left the app** this shift (the side button, a
+     *   swipe home, another app). They keep D-223's sentence, *was unreachable this shift*, unchanged,
+     *   and it comes first.
+     * - [switchedOff]: the seats named that **switched off something this game needs** this shift
+     *   (`RadioCause.Permission`): a permission withdrawn in Settings, or the Bluetooth radio itself
+     *   turned off (Control Centre, airplane mode). They are named in the owner's permission sentence,
+     *   which carries the warning. A seat that both left and switched off is here alone, once.
+     *
+     * The same on every phone, so the phones draw the same words. Issuing a notice with [switchedOff]
+     * not empty gives the round's one warning ([GameState.warned]); after that, anything switched off
      * closes the house ([HouseClosedOnPermission]).
      */
-    data class NoticeIssued(val unreachable: List<Seat>, val permissionSwitchedOff: Boolean) : Effect
+    data class NoticeIssued(val unreachable: List<Seat>, val switchedOff: List<Seat>) : Effect
 
     /** Lights out. The meeting is over, and D-135's fifth long haptic rides it. */
     data class MeetingEnded(val haptic: Haptic) : Effect

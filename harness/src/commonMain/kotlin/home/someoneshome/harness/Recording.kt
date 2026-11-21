@@ -50,6 +50,14 @@ class Recording(
     }
 
     companion object {
+        // 46: the notice names who switched something off apart from who only left the app (the
+        // owner's 2026-11-21 rulings, D-311). The `NoticeIssued` effect row's `unreachable=` now lists
+        // the leavers alone and its `switchedOff=` is a list of seats where it was `true`/`false`, so a
+        // version 45 recording's notice rows cannot be compared with what this build emits: a 45 row
+        // naming a switcher in `unreachable=` would read here as a leaver. Events and state rows are
+        // unchanged (the Bluetooth radio turned off arrives as the cause `Permission` a 45 build
+        // already parses). A version 45 recording is refused here as every older one is.
+        //
         // 45: a permission switched off is told apart from leaving the app, and the second one closes
         // the house (the owner's 2026-11-20 rulings, D-310). One event a version 44 build cannot
         // construct, `HouseClosedOnPermission` (`seat=`); `RadioFaulted` may carry a cause a version 44
@@ -361,7 +369,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/45"
+        const val HEADER = "someone-is-home/recording/46"
     }
 }
 

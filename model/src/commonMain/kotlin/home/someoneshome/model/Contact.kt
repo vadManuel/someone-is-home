@@ -178,13 +178,14 @@ private const val HEX = "0123456789abcdef"
  * earns no notice.* So the only thing the house needs to know about an outage is which side of that
  * line it is on, and this is the whole of what a phone says about one.
  *
- * - [Permission]: a permission switched off during a round (D-310): Bluetooth's or Nearby
- *   Interaction's withdrawn, as the radios say, or any grant this phone held at arming now reading
- *   switched off (`Permissions.refusedGrants`, read by the uploader every beat). Every grant is
- *   required to take a seat (D-161, D-309), so one missing during a round is something a person did.
- *   **Named at the next meeting with the owner's warning, and after the warning it closes the
+ * - [Permission]: something this game needs switched off during a round (D-310, D-311): Bluetooth's
+ *   or Nearby Interaction's permission withdrawn, or **the Bluetooth radio itself turned off**
+ *   (Control Centre, airplane mode), as the radios say, or any grant now reading switched off
+ *   (`Permissions.refusedGrants`, read by the uploader every beat). Every one is required to take a
+ *   seat (D-161, D-309, D-311), so one missing during a round is something a person did. **Named at
+ *   the next meeting in the owner's permission sentence, and after the warning it closes the
  *   house** (`Event.HouseClosedOnPermission`).
- * - [Person]: Bluetooth switched off, or the phone locked or taken out of the app (D-229).
+ * - [Person]: the phone locked or taken out of the app (D-229).
  *   **Named at the next meeting**, with no warning, and it **never** counts toward closing the
  *   house (the owner, 2026-11-20).
  * - [Device]: the OS resetting the radio, or the hardware not supporting it. **Recorded for the

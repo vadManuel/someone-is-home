@@ -349,7 +349,8 @@ sealed interface Event {
      * A fact the phone reports, never a request (rule 10): its own radio told it so. Once per fault
      * onset, whatever the radio does next, and the same from every phone whatever its role or
      * whether it is out. **[cause] is the only thing it says**: [RadioCause.Permission] for a
-     * permission switched off mid-round (D-310), [RadioCause.Person] for Bluetooth switched off, or
+     * permission switched off mid-round, the Bluetooth radio turned off among them (D-310, D-311),
+     * [RadioCause.Person] for
      * the phone locked or taken out of the app mid-round (suspended, so its radio is silent; reported
      * once it is back, D-229), [RadioCause.Device] for a reset or unsupported hardware. The upward body is one fixed shape of one length (`RoundBody.RadioFaulted`), so it
      * cannot say more about one phone than another. The seat is the connection's.
@@ -542,7 +543,7 @@ sealed interface Event {
      * (the owner's 2026-11-20 rulings, D-310).
      *
      * The first time a permission is switched off in a round, the next meeting's notice names the
-     * seat and warns the room (`Effect.NoticeIssued.permissionSwitchedOff`). Once a notice carrying
+     * seat and warns the room (`Effect.NoticeIssued.switchedOff`, D-311). Once a notice carrying
      * the warning has been issued, the next [RadioFaulted] with [RadioCause.Permission] from any seat
      * the notice would name closes the house: this event. **Minted by the house** the moment the
      * rules say that report closes it (`closesTheHouse`), never requested by a phone (rule 10). A

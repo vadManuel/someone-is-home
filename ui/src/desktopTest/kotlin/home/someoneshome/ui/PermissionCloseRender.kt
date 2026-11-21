@@ -23,7 +23,8 @@ import kotlin.test.Test
 
 /**
  * **A viewer, not an assertion: the notice with the owner's warning, the notice without it, and
- * THE HOUSE IS CLOSED** (D-310). Writes `build/screens/permission-*.png` at a phone's 600×1300.
+ * THE HOUSE IS CLOSED** (D-310), the notice in every ordering and the lobby's check landing on
+ * PERMISSIONS (D-311). Writes `build/screens/permission-*.png` at a phone's 600×1300.
  */
 class PermissionCloseRender {
 
@@ -48,7 +49,7 @@ class PermissionCloseRender {
             Box(Modifier.fillMaxSize().background(Color.Black)) {
                 Box(Modifier.size(600.dp, 1300.dp)) {
                     DeviceCanvas(insets = PanelInsets()) {
-                        Screen(model.state, model.actions(), model.editor, model.homes, model.lobby)
+                        Screen(model.state, model.actions(), model.editor, model.homes, model.lobby, perms = model.perms)
                     }
                 }
             }
@@ -56,20 +57,38 @@ class PermissionCloseRender {
         ImageIO.write(onRoot().captureToImage().toAwtImage(), "png", File(out, "$name.png"))
     }
 
-    /** A housed phone at the notices, the house having named [seats], warned or not. */
-    private fun notice(seats: List<Seat>, warned: Boolean): FlowModel {
+    /** A housed phone at the notices, the house having named [left] as leavers and [switched] as switchers (D-311). */
+    private fun notice(left: List<Seat>, switched: List<Seat>): FlowModel {
         val model = FlowModel(PanelState(houseAttached = true))
-        model.houseSaid(RoundMessage.RosterIssued(listOf("ROSE", "MIA", "JO", "DANI")))
-        model.houseSaid(RoundMessage.NoticeIssued(seats, permissionSwitchedOff = warned))
+        model.houseSaid(RoundMessage.RosterIssued(listOf("ROSE", "MIA", "JO", "DANI", "SAM")))
+        model.houseSaid(RoundMessage.NoticeIssued(left, switchedOff = switched))
         model.push(ScreenId.Notice)
         return model
     }
 
     @Test
     fun renderTheNoticeAndTheClose() {
-        render("permission-notice-warned-one", notice(listOf(Seat(1)), warned = true))
-        render("permission-notice-warned-two", notice(listOf(Seat(1), Seat(2)), warned = true))
-        render("permission-notice-left-the-app", notice(listOf(Seat(1)), warned = false))
+        // The notice in every ordering (D-311): only switchers, one and two; only a leaver; both.
+        render("permission-notice-switched-one", notice(emptyList(), listOf(Seat(1))))
+        render("permission-notice-switched-two", notice(emptyList(), listOf(Seat(1), Seat(2))))
+        render("permission-notice-left-the-app", notice(listOf(Seat(4)), emptyList()))
+        render("permission-notice-both", notice(listOf(Seat(4)), listOf(Seat(1), Seat(2))))
+
+        // The lobby's check (D-311): a guest whose Bluetooth radio is turned off is let go and lands
+        // on PERMISSIONS with the row refused; the host is shown PERMISSIONS with its lobby kept.
+        val radioOff: (home.someoneshome.model.DevicePermission) -> home.someoneshome.model.Grant = {
+            if (it == home.someoneshome.model.DevicePermission.Bluetooth) home.someoneshome.model.Grant.Refused else home.someoneshome.model.Grant.Granted
+        }
+        val inLobby = LobbyModel(MemoryHomeFinder(listOf(NearbyHome("THE BUNGALOW", "192.168.1.24", 47747))), Seating)
+        inLobby.look()
+        inLobby.nameResident("DANI")
+        inLobby.attachTo(inLobby.nearby.first())
+        val kicked = FlowModel(PanelState(screen = ScreenId.Lobby), lobby = inLobby, perms = PermsModel(read = radioOff))
+        kicked.permissionsChecked()
+        render("permission-lobby-guest-kicked", kicked)
+        val held = FlowModel(PanelState(screen = ScreenId.Lobby), lobby = LobbyModel.sample(), perms = PermsModel(read = radioOff))
+        held.permissionsChecked()
+        render("permission-lobby-host-held", held)
 
         // A guest in a round, closed: JOIN A HOME with the two lines.
         val lobby = LobbyModel(

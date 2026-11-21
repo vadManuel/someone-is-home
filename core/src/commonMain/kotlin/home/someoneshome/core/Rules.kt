@@ -1246,9 +1246,10 @@ fun namedByTheNotice(cause: RadioCause): Boolean = when (cause) {
 
 /**
  * **The owner's line, as one question: does this outage count toward closing the house?** (the
- * owner's 2026-11-20 rulings, D-310). *Only a permission switched off counts.* Leaving the app (the
- * side button, swiping home, another app) is still named, and never counts; nor does Bluetooth
- * switched off, which is a radio and not a permission (`Grant`: powered off is still granted).
+ * owner's 2026-11-20 rulings, D-310). *Only a permission switched off counts*, and since the owner's
+ * 2026-11-21 rulings (D-311) **the Bluetooth radio turned off counts exactly as one**: the phone
+ * sends it as [RadioCause.Permission] (`causeOf`), so it reaches here as one. Leaving the app (the
+ * side button, swiping home, another app) is still named, and never counts.
  */
 fun countsTowardClosing(cause: RadioCause): Boolean = when (cause) {
     RadioCause.Permission -> true
@@ -1628,17 +1629,20 @@ private fun checkedIn(state: GameState, event: Event.MeetingCheckedIn): Reductio
         if (!everybody) return@withMeeting Reduction(state.copy(meeting = next), listOf(counted))
 
         val talking = next.copy(phase = MeetingPhase.Discussion)
-        // **Who is named, and whether the owner's warning goes with them** (D-310): true when a seat
-        // named here switched a permission off this shift. Issued true, it is the round's warning.
+        // **Who is named, and in which sentence** (D-310, D-311): the seats named that switched
+        // something off this shift go in the owner's permission sentence, which is the warning, and
+        // only there; the rest only left the app and keep D-223's sentence. One partition, so no
+        // seat is named twice. A notice with anyone switched off on it is the round's warning.
         val named = state.unreachable.filterNot { state.isOut(it) && !state.isHost(it) }
-        val switchedOff = named.any { seat -> state.switchedOff.any { it.index == seat.index } }
+        val switched = named.filter { seat -> state.switchedOff.any { it.index == seat.index } }
+        val left = named.filterNot { seat -> switched.any { it.index == seat.index } }
         Reduction(
             // The seats named are forgotten here: an evasion after this is the next meeting's.
             state.copy(
                 meeting = talking,
                 unreachable = emptyList(),
                 switchedOff = emptyList(),
-                warned = state.warned || switchedOff,
+                warned = state.warned || switched.isNotEmpty(),
             ),
             listOf(
                 counted,
@@ -1650,7 +1654,7 @@ private fun checkedIn(state: GameState, event: Event.MeetingCheckedIn): Reductio
                 // **And nobody who is out by now** (R7, D-242, provisional): a seat listed while it
                 // was living and Revoked or Restrained since is not named either. **Bar the host**
                 // (D-283, D-289), who is named out or not: the house went off the air with them.
-                Effect.NoticeIssued(unreachable = named, permissionSwitchedOff = switchedOff),
+                Effect.NoticeIssued(unreachable = left, switchedOff = switched),
                 Effect.MeetingPhaseOpened(
                     MeetingPhase.Discussion,
                     voteWindowSeconds = null,

@@ -896,7 +896,11 @@ object Flow {
         // neither publishes a click action, so both are declared here. `Join` is where a client who
         // left and a host who closed the house both land — see `FlowModel.leaveLobby` and
         // `FlowModel.terminateHouse`, and `FlowModel.houseClosed` for the phones that were told.
-        ScreenId.Lobby to setOf(ScreenId.Armed, ScreenId.Join),
+        // **And PERMISSIONS** (D-311): something this game needs switched off in the lobby walks a
+        // guest out and the host aside to it, and LIGHTS OUT held by a host missing one lands there.
+        ScreenId.Lobby to setOf(ScreenId.Armed, ScreenId.Join, ScreenId.Perms),
+        // **CONTINUE on a hosting phone goes back to its own lobby** (D-311, `FlowModel.permissionsDone`): whether a phone is hosting is not a fact a screen graph holds.
+        ScreenId.Perms to setOf(ScreenId.Lobby),
         // **LEAVE THIS HOUSE, off the disconnect screen** (D-260): the lobby's own way out, for a
         // guest whose house has been out of reach long enough to be shown it. A hold, like the
         // lobby's, so it is declared here.
@@ -1350,7 +1354,7 @@ class FlowModel(
      * cannot be sure is shown the screen, and a missing grant always is.
      */
     fun fallThrough(rule: AutoAdvance): ScreenId =
-        if (rule.to == ScreenId.Perms && perms.missingNow().isEmpty()) ScreenId.Join else rule.to
+        if (rule.to == ScreenId.Perms && (perms.missingNow().isEmpty() || lobby.holdsARoundSeat)) ScreenId.Join else rule.to
 
     /** What the house will do to this screen, if anything. Nothing here fires it — see [FlowHost]. */
     val awaitingPush: HousePush? get() = Flow.housePushes[state.screen]
@@ -2278,7 +2282,12 @@ class FlowModel(
         // The same gate the host stands behind, on the other side of the party. D-161 is about a
         // seat rather than about hosting: *the lobby will not seat a device that cannot do the
         // job, and the host is never handed a party that will fail in the dark.*
-        if (!setupIsComplete()) return
+        // **Except a phone going back to its seat in a running round** (D-311, the overnight
+        // review's finding 2, provisional): the gate is for taking a seat in a lobby. A phone iOS
+        // ended for a grant switched off mid-round holds its round's record, and goes back to that
+        // seat with the grant still off; its switch-off goes up as the round's, and the lobby's check
+        // applies again once the round is over.
+        if (!lobby.holdsARoundSeat && !setupIsComplete()) return
         // And the name, which is the second thing a seat needs and the one the room will need at a
         // meeting. `attachTo` writes its own refusal; this only reads whether it went.
         lobby.attachTo(home)
@@ -2357,6 +2366,65 @@ class FlowModel(
         roundForgotten()
         lobby.refuse("$HOUSE_IS_CLOSED\n$SWITCHED_OFF_AGAIN")
         push(if (hosting) ScreenId.Lobby else ScreenId.Join)
+        // **And the host's lobby is checked as it arrives** (D-311, the overnight review's finding
+        // 3): a host whose grant is still off is shown PERMISSIONS, not a lobby with LIGHTS OUT.
+        permissionsChecked()
+    }
+
+    /**
+     * **Something this game needs switched off in the lobby** (the owner's 2026-11-21 rulings, D-311):
+     * *"If you're in the lobby you get kicked out and land on the permission screen."*
+     *
+     * Asked of the OS at the moment it is called ([PermsModel.switchedOffNow], the gate's fresh read,
+     * which reads the Bluetooth radio turned off as its row refused): by the app root once a second
+     * and on every return to the foreground, and here on every arrival in a lobby (NEW ROUND, a later
+     * round's push, the host after a close). It acts only on a phone holding a lobby seat and on the
+     * lobby's own screens (the lobby and the one-line screen); anywhere else, and with nothing
+     * missing, it moves nothing.
+     *
+     * - **A guest leaves the lobby and lands on PERMISSIONS**, the missing rows read in place so they
+     *   show as refused on arrival: it hangs up as LEAVE does, and keeps its seat token and its name,
+     *   so with everything back on, CONTINUE and a tap on the home take it back in as usual. The house
+     *   drops it from the standing, so the round armed at LIGHTS OUT does not include it.
+     * - **The host is the house, so it cannot leave** (D-311, provisional): it is shown PERMISSIONS
+     *   with the house still on the air and every guest still seated; it cannot press LIGHTS OUT from
+     *   there, and [lightsOut] asks the same question again. With everything back on, its CONTINUE
+     *   goes back to its own lobby ([permissionsDone]).
+     *
+     * **A phone seated in a running round is never sent here** (the overnight review's finding 2):
+     * a phone that relaunched mid-round holds its round's record ([LobbyModel.holdsARoundSeat]) and is
+     * walked back to its seat by the house; its switch-off is the round's, named at the next meeting.
+     *
+     * No new words, light or screen: PERMISSIONS draws its rows and the gate's sentence as it always
+     * has. No Nearby Interaction probe is started here (D-309); the screen's own refresh is the one
+     * it always ran on arrival.
+     */
+    fun permissionsChecked() {
+        val inTheLobby = state.screen in LOBBY_SCREENS && (lobby.hosting || lobby.attached != null) && !lobby.holdsARoundSeat
+        if (inTheLobby && perms.switchedOffNow().isNotEmpty()) {
+            if (lobby.hosting) {
+                hostHeldAtPermissions = true
+            } else {
+                lobby.leaveLobby()
+                roundForgotten()
+            }
+            perms.readNow()
+            push(ScreenId.Perms)
+        }
+    }
+
+    /**
+     * **CONTINUE on PERMISSIONS** (D-161, D-311): to JOIN A HOME, as it always went, or for a phone
+     * that is hosting, back to its own lobby, which it was shown PERMISSIONS from with its house
+     * still on the air.
+     */
+    /** **The host was shown PERMISSIONS from its own lobby** (D-311), so its CONTINUE goes back there. */
+    private var hostHeldAtPermissions = false
+
+    fun permissionsDone() {
+        val back = lobby.hosting && hostHeldAtPermissions
+        hostHeldAtPermissions = false
+        go(if (back) ScreenId.Lobby else ScreenId.Join)
     }
 
     /**
@@ -2444,7 +2512,14 @@ class FlowModel(
      * again on arrival, in a lit room, out loud.
      */
     fun lightsOut() {
-        onLightsOut { push(ScreenId.Armed) }
+        // **The same check at lights out** (D-311): a host missing anything this game needs is shown
+        // PERMISSIONS and arms nothing, so no round starts on a phone missing one. Its guests were
+        // checked on their own phones, and one that was missing has already left the lobby.
+        if (lobby.hosting && perms.switchedOffNow().isNotEmpty()) {
+            permissionsChecked()
+        } else {
+            onLightsOut { push(ScreenId.Armed) }
+        }
     }
 
     /**
@@ -2476,6 +2551,9 @@ class FlowModel(
         lobby.roundEnded()
         roundForgotten()
         push(ScreenId.Lobby)
+        // **The lobby's check, on arrival** (D-311, the overnight review's finding 3): the seats are
+        // kept across NEW ROUND, so a phone still missing something from the round is let go here.
+        permissionsChecked()
     }
 
     /**
@@ -2490,6 +2568,7 @@ class FlowModel(
         lobby.line.roundEnded()
         roundForgotten()
         push(ScreenId.Lobby)
+        permissionsChecked()
     }
 
     /**
@@ -2820,10 +2899,11 @@ class FlowModel(
             // before the push that opens the notices, and it is what the notices screen draws: the
             // seats it names, or none, and none draws nothing. It moves no screen; the phase push
             // beside it does. The words for a named seat are `noticeBody`'s, and the owner's.
-            // **And whether the owner's warning goes with it** (D-310), the same on every phone.
+            // **And who switched something off, in the owner's permission sentence** (D-311), the
+            // same on every phone.
             is RoundMessage.NoticeIssued -> state = state.copy(
                 notice = message.unreachable,
-                noticeSwitchedOff = message.permissionSwitchedOff,
+                noticeSwitchedOff = message.switchedOff,
             )
 
             // **THE HOUSE IS CLOSED** (D-310): a permission was switched off again. Every phone, whatever
@@ -3919,6 +3999,7 @@ class FlowModel(
         openSystemSettings = lobby::openSystemSettings,
         requestGrant = perms::request,
         requestMissingGrants = perms::requestMissing,
+        permissionsDone = ::permissionsDone,
         attachToHome = ::attachToHome,
         typeLine = lobby::typeLine,
         handOverLine = ::handOverLine,
@@ -4178,3 +4259,10 @@ private const val IDLE_CLOCK_MILLIS: Long = 250L
 
 /** The shortest wait between two reads, so a clock that turns over now is not read twice in a frame. */
 private const val MIN_CLOCK_MILLIS: Long = 16L
+
+/**
+ * **The lobby's own screens, where a phone holding a lobby seat stands before lights out** (D-311):
+ * the lobby and the one-line screen it opens. [FlowModel.permissionsChecked] acts on these and
+ * nowhere else.
+ */
+private val LOBBY_SCREENS: Set<ScreenId> = setOf(ScreenId.Lobby, ScreenId.Secret)

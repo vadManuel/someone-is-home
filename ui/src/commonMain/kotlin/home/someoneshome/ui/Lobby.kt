@@ -233,6 +233,15 @@ interface LobbyLink {
      * legitimate calls it there.
      */
     fun terminate()
+
+    /**
+     * **This phone holds a seat in a round it has not been told is over** (D-311, the overnight
+     * review's finding 2): the round half kept a record of it beside the seat token (`SeatStore`'s
+     * owed reports), which only a round writes and its ending forgets. A phone iOS ended for a grant
+     * switched off mid-round relaunches holding one, and goes back to that seat rather than being
+     * held at PERMISSIONS. False by default, for a link with no round behind it.
+     */
+    fun holdsARoundSeat(): Boolean = false
 }
 
 /**
@@ -700,6 +709,12 @@ class LobbyModel(
      * standing, never this phone's guess; while it holds, [standing] counts the running round.
      */
     val waitingForNextRound: Boolean get() = standing.waitingForNextRound
+
+    /**
+     * **This phone holds a seat in a running round** (D-311, the overnight review's finding 2), as its
+     * link keeps it ([LobbyLink.holdsARoundSeat]). Asked fresh: a round's ending forgets it.
+     */
+    val holdsARoundSeat: Boolean get() = link.holdsARoundSeat()
 
     /** The last refusal, in the player's own words, or none. Cleared by the next thing they do. */
     var refusal: String? by mutableStateOf(null)

@@ -12,6 +12,7 @@ import platform.AVFoundation.authorizationStatusForMediaType
 import platform.AVFoundation.requestAccessForMediaType
 import platform.CoreBluetooth.CBCentralManager
 import platform.CoreBluetooth.CBCentralManagerDelegateProtocol
+import platform.CoreBluetooth.CBCentralManagerOptionShowPowerAlertKey
 import platform.CoreBluetooth.CBManagerAuthorizationAllowedAlways
 import platform.CoreBluetooth.CBManagerAuthorizationDenied
 import platform.CoreBluetooth.CBManagerAuthorizationNotDetermined
@@ -119,7 +120,7 @@ private class IosPermissions(
         override fun centralManagerDidUpdateState(central: CBCentralManager) {
             val grant = bluetoothGrantOf(central.state)
             remembered[DevicePermission.Bluetooth] = grant
-            log("$TAG BLUETOOTH state=${central.state} → $grant")
+            log("$TAG BLUETOOTH state=${central.state} → $grant" + if (central.state == CBManagerStatePoweredOff) " · THE RADIO IS OFF (D-311)" else "")
         }
     }
 
@@ -146,8 +147,37 @@ private class IosPermissions(
         DevicePermission.Notifications -> remembered[of] ?: Grant.Unasked
     }
 
+    /**
+     * **The Bluetooth radio turned off** (D-311): the manager this seam holds says `poweredOff`.
+     * Control Centre's switch and airplane mode both reach a manager this way, if iOS powers the
+     * radio down for them (**unverified until a phone shows it**: since iOS 11 Control Centre's
+     * Bluetooth switch has been documented as disconnecting accessories rather than powering the
+     * radio off; the phone session's check settles which). Unknown, and so false, until the manager
+     * has answered once. Silent, as [grant] is: it is read on every frame a row is drawn.
+     */
+    override fun bluetoothOff(): Boolean = central?.state == CBManagerStatePoweredOff
+
+    /**
+     * **A manager to hear the radio's power by, built once the grant is given** (D-311). [central]
+     * was built only by the Bluetooth row's own request, so a phone that skipped PERMISSIONS (D-235)
+     * held none, and nothing here could say the radio was off. Built only when the grant is already
+     * `allowedAlways`, so building it raises no permission prompt, and with the power alert
+     * switched off, so a phone whose radio is off is not shown iOS's own modal: the game's answer is
+     * the PERMISSIONS row. Read, never a probe: no Nearby Interaction session is started here.
+     */
+    private fun hearTheRadio() {
+        if (central != null || CBCentralManager.authorization != CBManagerAuthorizationAllowedAlways) return
+        log("$TAG BLUETOOTH — A MANAGER TO HEAR THE RADIO BY (D-311)")
+        central = CBCentralManager(
+            delegate = bluetoothDelegate,
+            queue = dispatch_get_main_queue(),
+            options = mapOf<Any?, Any?>(CBCentralManagerOptionShowPowerAlertKey to false),
+        )
+    }
+
     override fun reread(then: () -> Unit) {
         log("$TAG re-reading, no probe (D-310)")
+        hearTheRadio()
         UNUserNotificationCenter.currentNotificationCenter()
             .getNotificationSettingsWithCompletionHandler { settings ->
                 val grant = notificationGrantOf(settings?.authorizationStatus)
@@ -162,6 +192,7 @@ private class IosPermissions(
 
     override fun refresh(then: () -> Unit) {
         log("$TAG refreshing")
+        hearTheRadio()
         // Notifications is the one that genuinely changes behind the app's back: a host who walked
         // out to Settings comes back to a row that has to move. It is also the only read of the
         // three that raises nothing, which is what makes it safe to do on every screen open.

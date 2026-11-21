@@ -252,7 +252,9 @@ fun PermsScreen() {
                     KitSecondary("OPEN SETTINGS", p, onClick = actions.openSystemSettings)
                 }
                 if (perms.complete) {
-                    KitPrimary("CONTINUE", p) { go(ScreenId.Join) }
+                    // **A hosting phone goes back to its own lobby** (D-311): the house stayed on the
+                    // air while it was shown this screen for something switched off.
+                    KitPrimary("CONTINUE", p) { actions.permissionsDone?.invoke() ?: go(ScreenId.Join) }
                 } else {
                     // It asks, and it stays here. The one screen where a control that navigated
                     // without doing anything cost an evening.

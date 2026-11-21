@@ -234,6 +234,13 @@ class PanelActions(
      */
     val requestGrant: (DevicePermission) -> Unit = {},
     val requestMissingGrants: () -> Unit = {},
+    /**
+     * **CONTINUE, once the gate is open** (D-311): `FlowModel.permissionsDone`, which takes a hosting
+     * phone back to its own lobby and every other phone to JOIN A HOME. Null where no flow is behind
+     * the screen, and then CONTINUE goes to JOIN A HOME as it always did, which is the edge
+     * [ScreenGraph] reads off the screen; the hosting phone's edge is in [Flow.viaActions].
+     */
+    val permissionsDone: (() -> Unit)? = null,
     val nameResident: (String) -> Unit = {},
     val hostHome: (String) -> Unit = {},
     /**

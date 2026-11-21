@@ -36,6 +36,8 @@ import home.someoneshome.platform.SeededCardScanner
 import home.someoneshome.platform.clearSeatToken
 import home.someoneshome.platform.devicePermissions
 import home.someoneshome.platform.refusedGrants
+import home.someoneshome.platform.requestStanding
+import home.someoneshome.platform.standing
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import home.someoneshome.platform.deviceHaptics
@@ -292,8 +294,10 @@ fun CheatRoot(uwb: Boolean) {
             onForeground = {
                 // **What the OS says now, read for the round's beats** (D-310): a phone back from
                 // Settings with a grant switched off reports a permission, not a leave. A read, never
-                // a prompt or a probe (D-309 keeps probes off a round); every beat asks it.
-                permissions.reread()
+                // a prompt or a probe (D-309 keeps probes off a round); every beat asks it. **And in
+                // the lobby, the check runs on the answer** (D-311): back from Settings with a grant
+                // switched off, a guest leaves the lobby for PERMISSIONS and the host is shown it.
+                permissions.reread { panel.value?.permissionsChecked() }
                 link.foregrounded()
                 rules.value?.cameBackOnAir()
             },
@@ -332,9 +336,12 @@ fun CheatRoot(uwb: Boolean) {
             //
             // The lobby's gate hangs off the same object: `hostHome` and `attachToHome` both ask
             // it, so a phone that cannot scan cannot be seated and cannot seat anybody else.
+            //
+            // **Read in `standing`'s terms** (D-311): the Bluetooth radio turned off reads as the
+            // BLUETOOTH row refused, for the rows, the gate and the lobby's check alike.
             perms = PermsModel(
-                read = permissions::grant,
-                ask = permissions::request,
+                read = permissions::standing,
+                ask = permissions::requestStanding,
                 reread = permissions::refresh,
             ),
             // **THE TORCH, REACHING THE LED** (E-PAY-5). `toggleTorch` moved a colour value in
@@ -582,6 +589,18 @@ fun CheatRoot(uwb: Boolean) {
             },
         )
         onDispose { unwatch() }
+    }
+    // **The lobby's check, once a second** (the owner's 2026-11-21 rulings, D-311). The Bluetooth
+    // radio turned off in Control Centre suspends nothing and composes nothing, so no foreground
+    // watch hears it: the check reads the OS again on this clock, and acts only on a phone holding a
+    // lobby seat and standing on the lobby's own screens (`FlowModel.permissionsChecked`). A read of
+    // what the seam already holds, never a prompt or a probe (D-309); off the lobby's screens it
+    // reads nothing at all.
+    LaunchedEffect(flow) {
+        while (true) {
+            delay(LOBBY_CHECK_MILLIS)
+            flow.permissionsChecked()
+        }
     }
     LaunchedEffect(sweeping) { if (sweeping) bench.sweep() }
     LaunchedEffect(scanSweeping) { if (scanSweeping) scan.sweep() }
@@ -1066,3 +1085,10 @@ private fun BoxScope.MarkerChip(onTap: () -> Unit) {
         Label(BuildVariant.MARKER, size = 6.6, color = Amber.Dim, tracking = 0.24)
     }
 }
+
+/**
+ * **How often the lobby's check reads the OS again** (D-311): once a second, so the Bluetooth radio
+ * turned off in Control Centre lets a guest go within a second. **Provisional:** no ruling names a
+ * number, and a phone has not measured what a read costs.
+ */
+private const val LOBBY_CHECK_MILLIS: Long = 1_000L

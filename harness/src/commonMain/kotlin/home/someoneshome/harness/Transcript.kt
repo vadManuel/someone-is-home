@@ -365,8 +365,10 @@ object Transcript {
         // must not be separable by the shape of the line rather than by its contents.
         is Effect.NoticeIssued ->
             "NoticeIssued|unreachable=" + effect.unreachable.joinToString(",") { num(it.index) } +
-                // The owner's warning (D-310): a replay that warned where the evening did not must not match.
-                "|switchedOff=${effect.permissionSwitchedOff}"
+                // The seats named in the owner's permission sentence (D-311), apart from the leavers:
+                // a replay that put a seat in the other sentence, or warned where the evening did not,
+                // must not match.
+                "|switchedOff=" + effect.switchedOff.joinToString(",") { num(it.index) }
         is Effect.MeetingPhaseOpened ->
             "MeetingPhaseOpened|phase=${effect.phase}" +
                 "|voteWindow=${effect.voteWindowSeconds?.let { num(it) } ?: "none"}" +

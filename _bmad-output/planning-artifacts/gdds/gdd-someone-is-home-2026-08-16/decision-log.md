@@ -12195,6 +12195,280 @@ CLOSED and returns to JOIN A HOME, the host's to its lobby.
 6. **A guest is not dismissed**: it hangs up and keeps its seat token, so JOIN takes it back into the
    host's next lobby by that token. *Everyone starts over* is the new round, not new seats.
 
+### D-311 · **Anything this game needs switched off counts, the Bluetooth radio included: in the lobby the phone is let go to PERMISSIONS, mid-round it is named in the owner's new permission sentence, and after the warning it closes the house; leaving the app never counts — built (recording 46)**
+
+**The rulings** (owner, 2026-11-21; the details approved: *"lgtm, build it"*):
+
+- *"The game requires all these to function. Turning them off would be cheating. If you're in the
+  lobby you get kicked out and land on the permission screen. If you are mid-game a reworded
+  permission message shows and the same warning is stated about if it happens again the game will
+  end."*
+- **What counts as switching off:** any permission PERMISSIONS asks for (CAMERA, BLUETOOTH, NEARBY
+  DEVICES, MOTION & FITNESS, NOTIFICATIONS) withdrawn in Settings, **and the Bluetooth radio itself
+  turned off** (Control Centre, or airplane mode). Leaving the app (the side button, swiping home,
+  another app) is still not switching off: named as unreachable, never counted.
+- **In the lobby, before lights out:** switching any of them off removes the phone from the lobby,
+  and it lands on PERMISSIONS with that row refused; with everything back on, it rejoins as usual.
+  The same check runs at lights out, so no phone enters a round missing one.
+- **Mid-round, the words, approved verbatim:** *"Resident Mia switched off a permission this game
+  needs. If anyone switches one off again, the house closes and everyone starts over."*, and for two
+  or more *"Residents Mia and Jo switched off a permission this game needs. If anyone switches one
+  off again, the house closes and everyone starts over."*, the names joined as the existing notice
+  joins them. **These replace D-310's appended two sentences.** Seats that only left the app keep
+  the existing sentence, unchanged, **and it comes first**; a seat that both left and switched off is
+  named once, in the permission sentence.
+- **The second time** closes the house exactly as D-310 built it.
+
+**D-310 overruled, item by item:** its provisional decision 1 (*Bluetooth switched off is not a
+permission*) is **overruled by the ruling**: the radio turned off counts exactly as a permission
+switched off. Its provisional decision 3 (*a grant switched off in the lobby, before arming, does not
+count*) is **overruled**: in the lobby the phone is let go, and a grant off when a round arms is
+counted (below). Its words (*"A permission was switched off. If anyone switches one off again…"*,
+appended to the leavers' sentence) are **replaced** by the permission sentence. Decisions 2, 4, 5 and
+6 stand.
+
+**What counts, on the phone.** `causeOf` reads **Off as `RadioCause.Permission`**, as it already read
+Unauthorized; Resetting and Unsupported stay the phone's own (D-223) and still win a disagreement. So
+the round's radio reports Bluetooth turned off as a switch-off, through the one fixed body
+(`permit`, D-217), and the house's rules, schema and close are D-310's, unchanged: the rules never
+knew which grant it was and still do not. **How Bluetooth's power is read:** two ways, both from
+CoreBluetooth's own `poweredOff` state.
+
+1. **In a round**, the contact radio's two managers (`SwitchboardRadio`, D-218) report `Off`, and
+   the onset goes up as a switch-off.
+2. **Everywhere, the lobby included**, the Perms seam's own `CBCentralManager` (`Permissions.ios`).
+   It was built only by the BLUETOOTH row's request, so a phone that skipped PERMISSIONS (D-235) held
+   none; it is now built at the launch refresh and every re-read once the grant is `allowedAlways`
+   (so no permission prompt), **with iOS's power alert switched off**
+   (`CBCentralManagerOptionShowPowerAlertKey` false: the game's answer is the PERMISSIONS row, not
+   iOS's modal). `Permissions.bluetoothOff()` is its `state == poweredOff`. **`Permissions.standing`**
+   reads a BLUETOOTH grant given while the radio is off as **REFUSED**, and every reader takes it:
+   the rows and the gate (`PermsModel(read = permissions::standing)`, the request through
+   `requestStanding`), `missing()` and `refusedGrants()`. The grant itself (`grant`) is unchanged: a
+   powered-off radio is still one the app may use, and the log says `THE RADIO IS OFF (D-311)`.
+
+**Unverified until a phone shows it:** since iOS 11 Control Centre's Bluetooth button is
+documented as disconnecting accessories rather than powering the radio off. If iOS keeps the radio
+powered for it, neither manager hears `poweredOff`, and nothing is named, because nothing the game
+needs went off. Airplane mode does power it off. The phone session checks which.
+
+**The lobby** (`FlowModel.permissionsChecked`). Asked of the OS by a fresh read of the rows
+(`PermsModel.switchedOffNow`: the rows reading REFUSED, the radio off among them; a seated phone
+passed the gate with every row GRANTED, so what it lacks now was switched off). Called by the app
+root once a second (`LOBBY_CHECK_MILLIS`, provisional: Control Centre suspends nothing, so no
+foreground watch hears it), on every return to the foreground after `Permissions.reread` answers
+(D-310's read, no probe), and on every arrival in a lobby (NEW ROUND, a later round's push, the host
+after a close). It acts only on a phone holding a lobby seat, standing on the lobby or the one-line
+screen, and not holding a round seat (below); anywhere else it moves nothing. **No Nearby Interaction
+probe starts for it** (D-309): the read is of what the seam holds; landing on PERMISSIONS runs that
+screen's own refresh, as it always has.
+
+- **A guest** leaves the lobby as LEAVE does (it hangs up, keeps its seat token and its name), the
+  rows are read in place (`PermsModel.readNow`, no probe) so the row switched off reads REFUSED on
+  arrival, and it is pushed to PERMISSIONS with nothing behind it. The house's desk drops it from the
+  standing, so the round armed at LIGHTS OUT does not hold it. Back on, CONTINUE and a tap on the home
+  take it back in by its token, as usual.
+- **The host** (provisional, the coordinator's suggestion, chosen as the least disruptive): the host
+  is the house, so leaving would end every guest's lobby. It is **shown PERMISSIONS with the house
+  still on the air and every guest still seated**; it cannot press LIGHTS OUT from there, and
+  `lightsOut` asks the same question again at the press (a host holding LIGHTS OUT with something
+  off arms nothing and is shown PERMISSIONS). Back on, its CONTINUE goes back to its own lobby
+  (`PermsScreen`: `Lobby` when hosting, `Join` otherwise; declared in `Flow.viaActions`). No new copy:
+  PERMISSIONS draws its rows and the gate's sentence (THIS PHONE CANNOT TAKE A SEAT YET / the rows)
+  as ever.
+- **NEARBY DEVICES in the lobby** is heard only if something reads it: a refusal stands in the
+  seat's last probe, and the lobby starts none. Switched off in the lobby without a relaunch, it is
+  heard at lights out, when the round's ranging sessions refuse, and named at the first meeting.
+
+**At lights out.** The host's own phone is checked at the press (above). A guest's phone cannot be
+asked by the host without a new lobby message, and none is added: each guest is checked on its own
+phone, once a second and on every return, and one that is missing something has already left the
+lobby before the press. **For the moment between a guest's last check and the arming**, the uploader
+no longer excuses a grant that is off when the round arms (D-310 compared against the arming read):
+one off then goes up on the first beat as a switch-off and is named at the first meeting, as the
+radio already reported a Bluetooth still off at arming (D-223). So no phone plays a round missing one
+unnamed. **Provisional:** a lobby message saying *not ready* would keep that guest out of the round
+instead; it is a wire change and was not made.
+
+**The notice.** `Effect.NoticeIssued` and `RoundMessage.NoticeIssued` carry **two lists, no seat on
+both**: `unreachable`, the seats named that only left the app, and `switchedOff` (was
+`permissionSwitchedOff: Boolean`), the seats named that switched something off. The rules partition
+the named seats at the check-in gate (`checkedIn`): a seat on `GameState.switchedOff` goes on the
+permission list alone, the rest on the leavers'. The warning is given when the permission list is
+not empty. The state rows are unchanged (`unreachable` still lists every named seat, `switchedOff`
+the subset), so the partition is the effect's alone. **The wire:** one frame, the same bytes on
+every phone (D-217); the schema row is unchanged (`NOTICE_ISSUED` to `LIVING + OUTSIDE`: the field
+rides the kind it is part of, and an effect with no row still ships to nobody). **The words**
+(`noticeBody(names, switchedOff)`, `ui`): the leavers' sentence, unchanged, then the permission
+sentence (`SWITCHED_OFF_A_PERMISSION`, `IF_ANYONE_SWITCHES_ONE_OFF_AGAIN`), the names joined with
+commas then *and* by `residentsNamed`, the verbless twin of `residents`. `PanelState.noticeSwitchedOff`
+is the list, reset between rounds. `PERMISSION_WARNING` is gone. No new light, colour or type: the
+notice's own box and type.
+
+**Recording: 46.** The `NoticeIssued` effect row's `unreachable=` now lists the leavers alone and its
+`switchedOff=` a list of seats where it was `true`/`false`, so a version 45 recording's notice rows
+cannot be compared with what this build emits (a 45 row naming a switcher under `unreachable=` would
+read as a leaver). Events and state rows are unchanged; the radio turned off arrives as the cause
+`Permission`, which a 45 build already parses. A version 45 recording is refused, as every older one
+is.
+
+**Found by the overnight review** (2026-11-21, relayed by the coordinator; each with a test that was
+red before its fix and is green after):
+
+1. **CONFIRMED, fixed: a relaunch turned a leave into a second permission and could close the
+   house.** `ContactUploader` reset what it had reported to nothing on every seed and kept only the
+   arming read, so after one reported switch-off, with the grant still off, a leave and a relaunch
+   went up as `Permission`; and `RangingPool.open` forgets its refusal, so a relaunch with NEARBY
+   DEVICES still off raised a fresh onset. **Fix:** what was reported this round is one bit a grant
+   (`reported`), **kept beside the owed reports** (the `grants` line, which D-310 used for the arming
+   read) and read back on the relaunch; the record is kept while anything is reported, not only
+   while something is owed. The pool's refusal is the NEARBY DEVICES bit, so the pool's fresh onset
+   after a relaunch, and the launch probe reading the row refused, are both the bit already told.
+   **Test:** `ReviewRelaunchTest` (the reviewer's, copied in unchanged) — before (the reviewer's run on D-310's tree, and here with the fix reversed, `reported = 0` on the seed): *a leave after a relaunch went up as a second permission switched off. Expected <[Person]>, actual <[Permission]>*;
+   after: green. `OneReportAGrantTest.nearbyDevicesRefusedIsOneReportARoundAcrossARelaunch` — before (fix reversed):
+   *the relaunch told the house of NEARBY DEVICES again, or lost the leave. Expected <[Person]>,
+   actual <[Permission]>*; after: green.
+2. **PLAUSIBLE, fixed (the coordinator's provisional decision): a phone relaunched mid-round with
+   Camera or Motion still off could not get back to its seat.** The cold start fell through to
+   PERMISSIONS, and `attachToHome`'s gate refused it. **Fix:** the PERMISSIONS gate is for taking a
+   seat in a lobby. A phone holding a round's record beside its seat token
+   (`LobbyLink.holdsARoundSeat`, `SeatStore.owedReports() != null`: only a round writes it, its ending
+   forgets it) falls through to JOIN A HOME and is let past the gate; the house seats it back by its
+   token, and its owed leave goes up as `Permission` because that grant was not yet reported. The
+   lobby's check never lets such a phone go. Once the round is over the record is gone, and the gate
+   and the check apply again. **Test:** `PermissionCloseLoopbackTest.aPhoneRelaunchedMidRoundWithCameraOffGetsBackToItsSeat`,
+   by a relaunch over real sockets (a fresh process on the old files, cold-started on the self-test,
+   through JOIN) — before (the gate's exception removed): *a phone holding a round seat was held at PERMISSIONS. Expected <Join>, actual <Perms>*, in both; after: green. And `LobbyPermissionCheckTest.aPhoneHoldingARoundSeatGoesBackToItPastTheGate`.
+   `ContactUploaderTest`'s `aRelaunchComparesAgainstTheGrantsKeptAtArming`, which handed the seed
+   straight over, is renamed `aRelaunchSendsTheTripToSettingsAsAPermission` and says it is the
+   uploader's half only. **Limit, reasoned:** a phone whose round ended while its process was gone
+   and that never hears `RoundEnded` keeps the record until the next round's seed, and passes the
+   JOIN gate meanwhile; if it is then seated in a lobby, the record exempts it from the lobby's check
+   until that seed, where a grant still off is counted.
+3. **PLAUSIBLE, fixed: grants were not re-checked between rounds.** **Fix:** the lobby's check runs
+   on every arrival in a lobby: NEW ROUND, a later round's push (`houseBeganAnotherRound`), and the
+   host after a close (`houseClosedOnPermission`), and LIGHTS OUT asks it at the press. **Test:**
+   `LobbyPermissionCheckTest.betweenRoundsTheCheckRunsOnArrival` — before (the three arrival checks removed): *NEW ROUND kept a guest missing a grant in the lobby expected:<Perms> but was:<Lobby>*; after: green.
+4. **PLAUSIBLE, fixed: one Bluetooth switch-off could go up as two `Permission` reports**, the radio's
+   onset and the grants read's on different beats, and with D-311 the power read is a third. **Fix:**
+   every source is keyed by its grant's bit (the contact radio's switch-off is BLUETOOTH's, the
+   ranging radio's is NEARBY DEVICES'), and a bit already reported is not reported again. A bit is
+   cleared when the grants read shows that grant back on, so back on and off again is a second
+   switch-off, except that a bit a radio set holds for two beats (`HOLD_BEATS`: the read is on
+   another queue and can lag a beat) and NEARBY DEVICES' never clears in a round (no read can see it,
+   D-309: once a round). **The house:** no change. It dedups by onset name (`onsetsHeard`). A rule
+   *one switch-off per seat per shift toward the close* was considered and not built: the harmful
+   duplicate is one that arrives in the shift **after** the warning for the switch-off the room was
+   warned about, which a per-shift rule does not catch and the phone's per-grant key does; and a
+   per-seat rule would stop a warned seat's real second switch-off from closing the house. **Test:**
+   `OneReportAGrantTest.oneBluetoothSwitchOffIsOneReportFromEverySource` (lag 0, 1 and 2 beats) —
+   before (the contact radio's switch-off owed as a report of its own, not keyed by its grant, as D-310 did): *lag 1: one switch-off went up as something else, or twice. Expected <[Permission]>, actual <[Permission, Permission]>*; after: green; and `aRelaunchDoesNotReportABluetoothSwitchOffAgain`.
+5. **Cosmetic, not changed: a report cancelled over the Egress banner returns to page 1.** The
+   banner is drawn over page 1 whichever page it dropped over (`Screen`: `ScreenId.Banner ->
+   HomeScreen`), so page 1 *is* the page under it on the glass, and the report returns to what the
+   person saw. Returning to page 2 would mean drawing page 2 under the banner, a screen change no
+   ruling covers. Raised, not built.
+
+**Tests.** `PermissionCloseTest` (core): every notice fixture names the two lists;
+*bluetoothSwitchedOffIsNamedAndNeverCounts* becomes *onlyASwitchOffCountsAndALeaveOrAResetNever*;
+new *theNoticeKeepsLeaversAndSwitchersApartInEveryOrdering* (only leavers, only switchers, both, and
+two seats that did both, the same notice on every seat, the Insider's and the host's).
+`RadioFaultTest` (core, fixtures). `RoundWireTest` (model, the one-of-every-effect fixture carries
+both lists). `PermissionCloseRecordingTest` (harness): a leaver beside the switcher, the row
+`NoticeIssued|unreachable=4|switchedOff=3`, recording 46; three other recording tests' header pins.
+`SwitchboardRadioTest` (platform): Off is a switch-off on every pairing and in every onset test.
+`PermissionsTest` (platform, +1): the radio turned off reads the BLUETOOTH row refused, for the gate,
+the round and a tap, and back on reads granted; an unasked row stays owed. `PermissionWarningTest`
+(ui): the permission sentence with one, two and three names, drawn; the orderings; the same words on
+an Insider's phone and a Resident's; the list reset between rounds. `LobbyPermissionCheckTest` (ui,
+new, 6): a guest switching any row off, every row in turn and the radio's as BLUETOOTH, leaves the
+lobby for PERMISSIONS with the row refused and rejoins once it is back on; the one-line screen too,
+and no other screen, and no phone without a lobby seat; a phone holding a round seat goes back past
+the gate; the host is shown PERMISSIONS with its lobby kept; LIGHTS OUT with something off arms
+nothing; the check on arrival at NEW ROUND and after a close. `FlowTest`: the lobby's PERMISSIONS
+edge and the hosting phone's CONTINUE walked. `OneReportAGrantTest` (app, new, 6): the radio turned
+off goes up as a switch-off through the production `causeOf`; one Bluetooth switch-off is one report
+from every source at a lag of 0, 1 and 2 beats; back on and off again is a second; a relaunch tells
+neither a Bluetooth nor a NEARBY DEVICES switch-off again; a new round reports afresh.
+`ReviewRelaunchTest` (app, the reviewer's, 1). `ContactUploaderTest` (app): *aGrantOffAtArmingNeverCounts*
+becomes *aGrantOffAtArmingCountsOnce*; the relaunch case renamed. `PermissionCloseLoopbackTest` (app,
+real sockets, +3): *bluetoothTurnedOffIsNamedInThePermissionSentenceAndThenClosesTheHouse* (Dani's
+radio off and Jo's leave in one shift: the notice names Jo first and Dani in the permission sentence,
+the same bytes and words on every phone; then Mia's radio off closes the house on every phone);
+*aGuestSwitchingOffInTheLobbyLeavesItAndIsNotInTheRound* (the radio off on a guest before lights out:
+it lands on PERMISSIONS with the row refused, the standing drops to three, the round arms three
+seats without it, and it is handed no seed); *aPhoneRelaunchedMidRoundWithCameraOffGetsBackToItsSeat*
+(finding 2). The D-310 evening's notices now assert the two lists and the new words.
+`PermissionCloseRender` renders every ordering and both lobby landings.
+
+**Proved, red against the injected break first, then restored.** **D-310's Bluetooth turned off as
+`Person` put back** (`causeOf`: Off read as not switched off), `:platform` and `:app` on the simulator
+on the affected tests, quoted from the XML: 7 red. `OneReportAGrantTest`
+*bluetoothTurnedOffGoesUpAsASwitchOff*: *Bluetooth turned off did not go up as a switch-off. Expected
+<[Permission]>, actual <[Person]>.*; `PermissionCloseLoopbackTest`
+*bluetoothTurnedOffIsNamedInThePermissionSentenceAndThenClosesTheHouse*: *never happened, beating: the
+house listed Dani's switch-off and Jo's leave · [… RADIO FAULT — SEAT 2 · PERSON · NAMED AT THE NEXT
+MEETING, RADIO FAULT — SEAT 3 · PERSON · NAMED AT THE NEXT MEETING]*; and five `SwitchboardRadioTest`
+cases, among them *aSwitchOffIsOneFaultHoweverManyCallbacks*: *Bluetooth turned off was not reported
+as a switch-off (D-311). Expected <Permission>, actual <Person>.* and
+*theCauseIsASwitchOffWhenNothingFailed*: *advertiser Unknown, scanner Off. Expected <Permission>,
+actual <Person>.* Restored. Each review finding's fix reversed, in one run, as quoted above under
+its finding: 7 red (5 app, 2 ui), every other test in those classes green. Restored; the counts
+below are the restored tree's.
+
+**Checked** (rebased onto D-312, `252e062`, on the final tree, `test-results` cleared first:
+`./gradlew :model:check :core:check :ui:check :platform:check :app:check :harness:check :cards:check
+--continue` with the two variant sweeps excluded, then `:app:variantSweepRelease`, then
+`:app:variantSweepPlaytest`, the app's XML copied out after each, every result XML counted with a
+python glob): model 355 (JVM) + 339 (iOS Simulator), core 414 + 412, ui 764 (desktop) + 377 (iOS
+Simulator), harness 132, platform 211, cards 17, app 276 (debug), 170 (release sweep) and
+276 (playtest sweep): **no failures, none skipped**, bar the two known load flakes, which
+fired in the full run on a machine at a load average near 200 and passed run alone (`RealClocksTest`
+at once; `OutboundQueueTest.aSeatThatStopsDraining…` on its second lone run). `vocabularyLint`,
+`redactionLint`, `boundaryCheck`, `armingCordon`, `benchSeedCordon` and `seedSourceCordon` ran in
+those checks, clean. Against D-310: core 1 more on each target (the orderings test), platform 1 more
+(`PermissionsTest`), app 10 more in every variant (`OneReportAGrantTest`'s six, `ReviewRelaunchTest`
+and the loopback test's three); ui desktop counts `LobbyPermissionCheckTest`'s six and
+`PermissionWarningTest`'s six (was five) beside D-312's own additions. After the full run, two comments
+alone changed (a warning sign in `Cheats.kt` and `Permissions.ios.kt` became a bold lead word); both
+files were compiled again by the playtest sweep.
+
+**Rendered and looked at** (`PermissionCloseRender`, 600×1300, `ui/build/screens/permission-*.png`):
+`permission-notice-switched-one` (the notices band and, in the notice's box, *Resident MIA switched
+off a permission this game needs. If anyone switches one off again, the house closes and everyone
+starts over.*, six lines, amber on black); `permission-notice-switched-two` (*Residents MIA and JO
+switched off …*, six lines); `permission-notice-left-the-app` (*Resident SAM was unreachable this
+shift. Occupancy data for this interval is incomplete.*, four lines, nothing else); and
+`permission-notice-both` (the leaver's sentence first, then *Residents MIA and JO switched off …*,
+ten lines in the one box). `permission-lobby-guest-kicked` (PERMISSIONS as it is: five rows, CAMERA,
+NEARBY DEVICES, MOTION & FITNESS and NOTIFICATIONS GRANTED in outline, BLUETOOTH's tag filled with
+REFUSED, THIS PHONE CANNOT TAKE A SEAT YET / BLUETOOTH over OPEN SETTINGS and REQUEST WHAT IS
+MISSING); `permission-lobby-host-held` (the same screen on the host). The first render of the two
+lobby landings showed every row GRANTED: the render handed `Screen` a sample `PermsModel` rather than
+the flow's, so it now passes `perms = model.perms`. No new light, colour or type on any of them.
+
+**Not on a phone.** Nothing here has run on one. Unverified until it does: whether Control Centre's
+Bluetooth button powers the radio off for CoreBluetooth (above); that the Perms seam's manager,
+built with the power alert off, raises nothing; that a guest let go from the lobby lands on
+PERMISSIONS with the row refused and rejoins; that a phone iOS ends for Camera mid-round is walked
+back to its seat through JOIN. The phone session's checklist gains two lines and its D-310 line now
+quotes the permission sentence.
+
+**Decisions for the owner** (each provisional):
+
+1. **The host is shown PERMISSIONS and its lobby survives**; it cannot press LIGHTS OUT until it is
+   fixed, and its CONTINUE goes back to its lobby.
+2. **A guest's check at lights out is its own phone's**, once a second and on every return; a grant
+   off when a round arms is counted and named, since the host cannot keep that guest out without a
+   new lobby message.
+3. **The lobby's check runs once a second** (`LOBBY_CHECK_MILLIS`).
+4. **NEARBY DEVICES switched off in the lobby is heard at lights out**, not in the lobby, because
+   reading it needs a probe and D-309 keeps probes off the lobby.
+5. **A phone holding a round seat goes back to it past the gate** (the coordinator's decision on
+   finding 2), and is never let go by the lobby's check while it holds one.
+6. **One switch-off of NEARBY DEVICES is one report a round**, since nothing in a round can see it
+   come back on.
+
 ### D-312 · **Overnight screen-audit fixes (2026-11-21) — built**
 
 An audit of every rendered screen found six faults. Each is fixed where it was found: no new copy,

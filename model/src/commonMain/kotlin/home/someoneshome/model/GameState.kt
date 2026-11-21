@@ -99,7 +99,7 @@ class GameState private constructor(
      * **The seats on [unreachable] that switched a permission off this shift** (D-310), in seat
      * order, each once: a subset of it, written by [Event.RadioFaulted] with
      * [RadioCause.Permission] alone. Read at the check-in gate for the notice's warning
-     * (`Effect.NoticeIssued.permissionSwitchedOff`) and emptied there with [unreachable]. Holds no
+     * and its permission sentence (`Effect.NoticeIssued.switchedOff`, D-311) and emptied there with [unreachable]. Holds no
      * role and reaches no client as itself.
      */
     val switchedOff: List<Seat>,

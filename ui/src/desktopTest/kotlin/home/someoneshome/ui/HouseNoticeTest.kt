@@ -42,7 +42,7 @@ class HouseNoticeTest {
     private fun housed(notice: List<Seat>): PanelState {
         val model = FlowModel(PanelState(houseAttached = true))
         model.houseSaid(RoundMessage.RosterIssued(listOf("ROSE", "ELLIOT", "PRIYA", "DANI")))
-        model.houseSaid(RoundMessage.NoticeIssued(notice, permissionSwitchedOff = false))
+        model.houseSaid(RoundMessage.NoticeIssued(notice, switchedOff = emptyList()))
         return model.state
     }
 

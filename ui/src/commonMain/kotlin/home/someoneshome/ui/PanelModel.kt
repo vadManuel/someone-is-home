@@ -622,11 +622,12 @@ data class PanelState(
      */
     val notice: List<Seat>? = null,
     /**
-     * **The house notice carries the owner's warning** (`Effect.NoticeIssued.permissionSwitchedOff`,
-     * D-310): a seat it names switched a permission off this shift. The same on every phone. False
+     * **The seats the house notice names for switching off something this game needs**
+     * (`Effect.NoticeIssued.switchedOff`, D-311), in the owner's permission sentence with its
+     * warning; [notice] then holds only the seats that left the app. The same on every phone. Empty
      * until a notice says otherwise, and reset between rounds with [notice].
      */
-    val noticeSwitchedOff: Boolean = false,
+    val noticeSwitchedOff: List<Seat> = emptyList(),
     /**
      * **The markers this phone may Isolate, as the house last offered them**
      * (`Effect.IsolateTargetsOffered`, D-150).
@@ -1399,7 +1400,10 @@ class PanelVals(
      * reported. A notice naming somebody draws [noticeBody].
      */
     val notice: String? = when {
-        state.notice != null -> noticeBody(state.notice.map { roster.getOrNull(it.index).orEmpty() }, state.noticeSwitchedOff)
+        state.notice != null -> noticeBody(
+            state.notice.map { roster.getOrNull(it.index).orEmpty() },
+            state.noticeSwitchedOff.map { roster.getOrNull(it.index).orEmpty() },
+        )
         state.houseAttached -> null
         else -> Notifications.notice.body
     }
@@ -2788,23 +2792,45 @@ fun Plan.mapCells(): List<MapCell> =
  * and the couch already draw the same word for the same seat, so the notice names it the way the
  * room has seen it named.
  *
- * **[switchedOff] appends the owner's warning** (the owner's 2026-11-20 words, D-310): when a seat
- * named switched a permission off this shift, the two sentences of [PERMISSION_WARNING] follow the
- * names, whoever and however many they are. A notice naming only phones that left the app is the
- * sentence above, unchanged. An empty notice draws nothing either way.
+ * **[switchedOff] is named in the owner's permission sentence** (the owner's 2026-11-21 words,
+ * approved verbatim, D-311), which replaces D-310's two appended sentences: *Resident Mia switched
+ * off a permission this game needs. If anyone switches one off again, the house closes and everyone
+ * starts over.*, plural as the leavers' sentence is. [names] are the seats that only left the app,
+ * and their sentence, unchanged, **comes first**; the permission sentence follows. Only leavers is
+ * the notice as it was; only switchers is the permission sentence alone; both empty draws nothing.
+ * The house puts no seat on both lists, so a seat that both left and switched off is named once, in
+ * the permission sentence.
  */
-fun noticeBody(names: List<String>, switchedOff: Boolean = false): String? = when {
-    names.isEmpty() -> NOTHING
-    else -> "${residents(names.map { it.ifBlank { UNNAMED } })} unreachable this shift. Occupancy data for this interval is incomplete." +
-        if (switchedOff) " $PERMISSION_WARNING" else ""
+fun noticeBody(names: List<String>, switchedOff: List<String> = emptyList()): String? {
+    val left = if (names.isEmpty()) {
+        null
+    } else {
+        "${residents(names.map { it.ifBlank { UNNAMED } })} unreachable this shift. Occupancy data for this interval is incomplete."
+    }
+    val switched = if (switchedOff.isEmpty()) {
+        null
+    } else {
+        "${residentsNamed(switchedOff.map { it.ifBlank { UNNAMED } })} $SWITCHED_OFF_A_PERMISSION $IF_ANYONE_SWITCHES_ONE_OFF_AGAIN"
+    }
+    return when {
+        left != null && switched != null -> "$left $switched"
+        else -> left ?: switched ?: NOTHING
+    }
 }
 
 /**
- * **The owner's warning, appended to the notice** (approved verbatim, 2026-11-20, D-310): a
- * permission was switched off this shift, and the next one closes the house.
+ * **The owner's permission sentence, after the names** (approved verbatim, 2026-11-21, D-311):
+ * *Resident Mia switched off a permission this game needs.* It names every seat that switched off
+ * anything this game needs, the Bluetooth radio included.
  */
-const val PERMISSION_WARNING: String =
-    "A permission was switched off. If anyone switches one off again, the house closes and everyone starts over."
+const val SWITCHED_OFF_A_PERMISSION: String = "switched off a permission this game needs."
+
+/**
+ * **The owner's warning, the permission sentence's second half** (approved verbatim, D-310, kept by
+ * D-311).
+ */
+const val IF_ANYONE_SWITCHES_ONE_OFF_AGAIN: String =
+    "If anyone switches one off again, the house closes and everyone starts over."
 
 /**
  * **THE HOUSE IS CLOSED: the owner's two lines, on every phone** (approved verbatim, 2026-11-20,
@@ -2824,4 +2850,10 @@ private val NOTHING: String? = null
 private fun residents(names: List<String>): String = when (names.size) {
     1 -> "Resident ${names[0]} was"
     else -> "Residents ${names.dropLast(1).joinToString(", ")} and ${names.last()} were"
+}
+
+/** The same names without the verb (D-311): commas, then *and*, as [residents] joins them. */
+private fun residentsNamed(names: List<String>): String = when (names.size) {
+    1 -> "Resident ${names[0]}"
+    else -> "Residents ${names.dropLast(1).joinToString(", ")} and ${names.last()}"
 }

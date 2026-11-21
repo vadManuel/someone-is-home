@@ -45,8 +45,8 @@ interface ContactRadio {
 
     /**
      * **Whether the radio went down since the last call, and on which side of D-187's line** (T2,
-     * D-222; D-223). [RadioCause.Permission] for its permission withdrawn (D-310),
-     * [RadioCause.Person] for Bluetooth switched off, [RadioCause.Device] for a reset or unsupported
+     * D-222; D-223). [RadioCause.Permission] for its permission withdrawn (D-310) or the radio turned
+     * off (D-311), [RadioCause.Device] for a reset or unsupported
      * hardware; null when no outage began. Non-null
      * once per fault onset and then null until the radio has recovered and gone down again, however
      * many callbacks the OS makes in between. The cause is the only thing the house is told.

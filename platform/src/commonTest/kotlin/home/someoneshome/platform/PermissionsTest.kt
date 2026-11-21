@@ -138,4 +138,29 @@ class PermissionsTest {
         perms.says(DevicePermission.Camera, Grant.Unavailable)
         assertEquals(1 shl DevicePermission.Notifications.ordinal, perms.refusedGrants(), "hardware missing read as a grant switched off")
     }
+
+    /**
+     * **GUARD (D-311): the Bluetooth radio turned off reads as the BLUETOOTH row refused**, for the
+     * rows, the gate and the round alike, and back on reads granted again. A row not yet answered
+     * stays owed as it was, and the other rows are untouched.
+     */
+    @Test
+    fun theBluetoothRadioTurnedOffReadsAsTheRowRefused() {
+        val perms = NoPermissions()
+        DevicePermission.entries.forEach { perms.says(it, Grant.Granted) }
+        perms.radioOff = true
+        assertEquals(Grant.Refused, perms.standing(DevicePermission.Bluetooth), "the radio turned off did not read refused")
+        assertEquals(Grant.Granted, perms.grant(DevicePermission.Bluetooth), "the grant itself was rewritten")
+        assertEquals(listOf(DevicePermission.Bluetooth), perms.missing(), "the gate let a phone with its radio off through")
+        assertEquals(1 shl DevicePermission.Bluetooth.ordinal, perms.refusedGrants(), "the round did not read the radio off")
+        var answered: Grant? = null
+        perms.requestStanding(DevicePermission.Bluetooth) { answered = it }
+        assertEquals(Grant.Refused, answered, "a tap on the row while the radio is off answered granted")
+        perms.radioOff = false
+        assertTrue(perms.missing().isEmpty(), "the radio back on still closed the gate")
+        assertEquals(0, perms.refusedGrants())
+        val fresh = NoPermissions().also { it.radioOff = true }
+        assertEquals(Grant.Unasked, fresh.standing(DevicePermission.Bluetooth), "an unasked row was read as refused")
+        assertFalse(DevicePermission.entries.filter { it != DevicePermission.Bluetooth }.any { perms.standing(it) != Grant.Granted })
+    }
 }

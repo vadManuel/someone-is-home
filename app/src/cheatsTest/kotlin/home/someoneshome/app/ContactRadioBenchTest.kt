@@ -851,7 +851,7 @@ class ContactRadioBenchTest {
     @Test
     fun aRadioSwitchedOffIsNamedToEveryPhoneAtTheNextMeeting() = rig {
         val (insider, notices) = outageThenMeeting(RadioCause.Person)
-        val expected = RoundWire.encode(RoundBody.Push(1, RoundMessage.NoticeIssued(listOf(insider), permissionSwitchedOff = false)))
+        val expected = RoundWire.encode(RoundBody.Push(1, RoundMessage.NoticeIssued(listOf(insider), switchedOff = emptyList())))
         for (seat in seats) {
             assertEquals(listOf(expected), notices.getValue(seat.index), "seat ${seat.index} was not told exactly once, at the meeting")
         }
@@ -866,7 +866,7 @@ class ContactRadioBenchTest {
     fun aRadioThatResetIsRecordedAndNamedToNobody() = rig {
         val (insider, notices) = outageThenMeeting(RadioCause.Device)
         assertTrue(said.any { it.startsWith("RADIO FAULT — SEAT ${insider.index} · DEVICE · RECORDED") }, "the reset was not recorded for the authority: $said")
-        val empty = RoundWire.encode(RoundBody.Push(1, RoundMessage.NoticeIssued(emptyList(), permissionSwitchedOff = false)))
+        val empty = RoundWire.encode(RoundBody.Push(1, RoundMessage.NoticeIssued(emptyList(), switchedOff = emptyList())))
         for (seat in seats) {
             assertEquals(listOf(empty), notices.getValue(seat.index), "a reset was named to seat ${seat.index} (D-187)")
         }

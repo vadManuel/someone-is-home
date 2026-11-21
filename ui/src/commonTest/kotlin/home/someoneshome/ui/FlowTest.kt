@@ -1,6 +1,8 @@
 package home.someoneshome.ui
 
 import home.someoneshome.model.CardPayload
+import home.someoneshome.model.DevicePermission
+import home.someoneshome.model.Grant
 import home.someoneshome.model.EmitSchema
 import home.someoneshome.model.MessageKind
 import home.someoneshome.model.Cell
@@ -682,8 +684,27 @@ class FlowTest {
                 .apply { lightsOut() }.state.screen,
             FlowModel(PanelState(screen = ScreenId.Lobby))
                 .apply { leaveLobby() }.state.screen,
+            // **And PERMISSIONS** (D-311): LIGHTS OUT held by a host with something switched off.
+            FlowModel(
+                PanelState(screen = ScreenId.Lobby),
+                lobby = LobbyModel.sample(),
+                perms = PermsModel(read = { if (it == DevicePermission.Bluetooth) Grant.Refused else Grant.Granted }),
+            ).apply { lightsOut() }.state.screen,
         )
         assertEquals(Flow.viaActions.getValue(ScreenId.Lobby), lobbyExits)
+
+        // **CONTINUE on a hosting phone's PERMISSIONS goes back to its lobby** (D-311).
+        var radio = Grant.Refused
+        val held = FlowModel(
+            PanelState(screen = ScreenId.Lobby),
+            lobby = LobbyModel.sample(),
+            perms = PermsModel(read = { if (it == DevicePermission.Bluetooth) radio else Grant.Granted }),
+        )
+        held.permissionsChecked()
+        assertEquals(ScreenId.Perms, held.state.screen)
+        radio = Grant.Granted
+        held.permissionsDone()
+        assertEquals(Flow.viaActions.getValue(ScreenId.Perms), setOf(held.state.screen))
 
         // **Page 2's gestures, and the two Tier-1 holds publish no edge** (D-231). The Revoke and
         // the Egress each send a request and stay on page 2; the alert is the house's push
@@ -832,6 +853,8 @@ class FlowTest {
                 ScreenId.Editor, ScreenId.RoomEdit, ScreenId.StairsWarn,
                 ScreenId.SaveName, ScreenId.Delete, ScreenId.HomeDetail, ScreenId.ScanMarker,
                 ScreenId.Secret, ScreenId.Lobby, ScreenId.ScanCaught, ScreenId.Disconnect,
+                // A hosting phone's CONTINUE back to the lobby it was shown PERMISSIONS from (D-311).
+                ScreenId.Perms,
                 ScreenId.WinInsiders, ScreenId.WinResidents,
                 // Page 2's three holds, and the two pickers a row fires off. The third hold fires
                 // in place and declares no edge (D-186).

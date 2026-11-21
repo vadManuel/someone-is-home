@@ -11,7 +11,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * **The warning and the close are recorded, and the round replays exactly** (D-310; recording 45).
+ * **The warning and the close are recorded, and the round replays exactly** (D-310, D-311; recording 46).
  *
  * A round armed as the fixture arms it, a permission switched off, the meeting that warns, and a
  * second permission the house closes on. The recording holds the cause, the notice's warning, the
@@ -24,7 +24,7 @@ class PermissionCloseRecordingTest {
         val arming = round().first()
         var t = arming.at.step + 1
         fun at() = Tick(t++)
-        return listOf(arming, Event.RadioFaulted(at(), Seat(3), RadioCause.Permission)) +
+        return listOf(arming, Event.RadioFaulted(at(), Seat(3), RadioCause.Permission), Event.RadioFaulted(at(), Seat(4), RadioCause.Person)) +
             Event.MeetingCalled(at(), Seat(0), MeetingTrigger.MeetingCard) +
             SEATS.drop(1).map { Event.MeetingCheckedIn(at(), it) } +
             listOf(
@@ -40,10 +40,10 @@ class PermissionCloseRecordingTest {
         val (end, recording) = record(GameState.EMPTY, events)
         assertTrue(end.closed && end.ended && end.outcome == null, "the fixture never closed the house")
         val text = recording.toText()
-        assertTrue(text.startsWith("someone-is-home/recording/45\n"), "the format was not bumped: ${text.lineSequence().first()}")
+        assertTrue(text.startsWith("someone-is-home/recording/46\n"), "the format was not bumped: ${text.lineSequence().first()}")
         assertTrue(text.lines().any { it.startsWith("E RadioFaulted") && it.contains("|cause=Permission") }, "the cause was not recorded")
         assertTrue(text.lines().any { it.startsWith("E HouseClosedOnPermission") && it.endsWith("|seat=2") }, "the close was not recorded")
-        assertTrue(text.lines().any { it.startsWith("F NoticeIssued|unreachable=3|switchedOff=true") }, "the warning was not recorded")
+        assertTrue(text.lines().any { it.startsWith("F NoticeIssued|unreachable=4|switchedOff=3") }, "the two lists of the notice were not recorded apart (D-311)")
         assertTrue(text.lines().any { it.startsWith("F HouseClosedOnPermission") }, "the close's effect was not recorded")
         assertTrue(recording.stateTranscript.last().contains("|warned=true|closed=true"), "the state row does not say why the round ended")
 

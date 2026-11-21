@@ -591,14 +591,14 @@ sealed class RoundMessage {
      * room** (D-187, D-223). Every phone gets the same list, empty at a meeting where nobody evaded,
      * and an empty one draws nothing. See [home.someoneshome.model.Effect.NoticeIssued].
      *
-     * [permissionSwitchedOff] is the owner's warning (D-310), the same on every phone: true when a
-     * seat it names switched a permission off this shift, and every phone then appends the two
-     * sentences.
+     * [unreachable] is the seats that only left the app, [switchedOff] the seats that switched off
+     * something this game needs, no seat on both (D-311), the same on every phone: every phone draws
+     * the leavers' sentence first and then the owner's permission sentence, with its warning.
      */
     @ClientFacing
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("NoticeIssued")
-    data class NoticeIssued(val unreachable: List<Seat>, val permissionSwitchedOff: Boolean) : RoundMessage()
+    data class NoticeIssued(val unreachable: List<Seat>, val switchedOff: List<Seat>) : RoundMessage()
 
     @ClientFacing
     @kotlinx.serialization.Serializable
@@ -1256,7 +1256,7 @@ sealed class RoundBody {
      * D-222; D-223).
      *
      * **One fixed shape, one field, one length.** [cause] is `permit` (a permission switched off,
-     * D-310), `person` (Bluetooth switched off, or the phone locked or taken out of the app mid-round
+     * D-310, or the Bluetooth radio turned off, D-311), `person` (the phone locked or taken out of the app mid-round
      * and now back, D-229) or `device` (reset, unsupported), three serial names of six letters
      * each, so the body is the same number of bytes whichever it carries and from every phone,
      * whatever its role and whether it is out. No reason beyond that, no time, no seat. A reader of
@@ -1393,7 +1393,7 @@ object RoundWire {
             RoundMessage.CheckInProgressed(effect.present, effect.expected)
         is Effect.MeetingPhaseOpened ->
             RoundMessage.MeetingPhaseOpened(effect.phase, effect.voteWindowSeconds, effect.haptic)
-        is Effect.NoticeIssued -> RoundMessage.NoticeIssued(effect.unreachable, effect.permissionSwitchedOff)
+        is Effect.NoticeIssued -> RoundMessage.NoticeIssued(effect.unreachable, effect.switchedOff)
         is Effect.ReadyProgressed -> RoundMessage.ReadyProgressed(effect.ready, effect.expected)
         is Effect.VoteHeld -> RoundMessage.VoteHeld(effect.selection, effect.locked)
         is Effect.VoteSelectionShown ->

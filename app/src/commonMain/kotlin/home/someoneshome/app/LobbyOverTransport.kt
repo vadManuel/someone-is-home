@@ -1922,6 +1922,18 @@ class LobbyOverTransport(
     }
 
     /**
+     * **A round's record kept beside the seat token** (D-311, the overnight review's finding 2): the
+     * round half writes it in a round (`ContactUploader.keep`) and its ending forgets it, so a phone
+     * relaunched mid-round holds one and goes back to its seat. A store that cannot be read holds
+     * none, which sends the phone through the PERMISSIONS gate as before.
+     */
+    override fun holdsARoundSeat(): Boolean = try {
+        seat.owedReports() != null
+    } catch (_: IllegalStateException) {
+        false
+    }
+
+    /**
      * **CLOSE THE HOUSE — and every other phone is told before the sockets go** (E-PAY-6).
      *
      * [leave] and this do the same three things to *this* phone. What this adds is the broadcast,

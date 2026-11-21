@@ -103,7 +103,7 @@ class PermissionCloseTest {
         assertFalse(reported.warned, "the warning counted as given before any notice carried it")
 
         val met = meeting(reported)
-        assertEveryPhoneNoticed(Effect.NoticeIssued(listOf(Seat(3)), permissionSwitchedOff = true), "the first permission")
+        assertEveryPhoneNoticed(Effect.NoticeIssued(emptyList(), switchedOff = listOf(Seat(3))), "the first permission")
         assertTrue(met.warned, "a notice carrying the warning did not give it")
         assertTrue(met.switchedOff.isEmpty() && met.unreachable.isEmpty(), "the shift's lists were not emptied at the gate")
         assertFalse(met.ended, "the warning ended the round")
@@ -117,7 +117,7 @@ class PermissionCloseTest {
     fun aLeaveIsNamedWithoutTheWarningAndNeverClosesTheHouse() {
         tick = 0
         val left = meeting(report(round(), Seat(3), RadioCause.Person))
-        assertEveryPhoneNoticed(Effect.NoticeIssued(listOf(Seat(3)), permissionSwitchedOff = false), "a leave")
+        assertEveryPhoneNoticed(Effect.NoticeIssued(listOf(Seat(3)), switchedOff = emptyList()), "a leave")
         assertFalse(left.warned, "a leave gave the warning")
 
         // The warning, given for somebody else's permission.
@@ -136,12 +136,15 @@ class PermissionCloseTest {
         assertFalse(shift.ended, "a leave closed the house")
         assertTrue(closes().values.all { it.isEmpty() }, "a leave sent a phone the close")
         meeting(shift)
-        assertEveryPhoneNoticed(Effect.NoticeIssued(listOf(Seat(2), Seat(4)), permissionSwitchedOff = false), "two leaves after the warning")
+        assertEveryPhoneNoticed(Effect.NoticeIssued(listOf(Seat(2), Seat(4)), switchedOff = emptyList()), "two leaves after the warning")
     }
 
-    /** **GUARD: Bluetooth switched off is a radio, not a permission**: named, never warned, never counted. */
+    /**
+     * **GUARD: only a switch-off counts** (D-310, D-311). The Bluetooth radio turned off reaches the
+     * rules as a permission (`causeOf`, platform), so it counts; a leave and a reset never do.
+     */
     @Test
-    fun bluetoothSwitchedOffIsNamedAndNeverCounts() {
+    fun onlyASwitchOffCountsAndALeaveOrAResetNever() {
         tick = 0
         assertFalse(countsTowardClosing(RadioCause.Person))
         assertFalse(countsTowardClosing(RadioCause.Device))
@@ -149,7 +152,7 @@ class PermissionCloseTest {
         assertTrue(namedByTheNotice(RadioCause.Permission) && namedByTheNotice(RadioCause.Person))
         // A reset is the phone's own: listed nowhere, warning nobody.
         val reset = meeting(report(round(), Seat(3), RadioCause.Device))
-        assertEveryPhoneNoticed(Effect.NoticeIssued(emptyList(), permissionSwitchedOff = false), "a reset")
+        assertEveryPhoneNoticed(Effect.NoticeIssued(emptyList(), switchedOff = emptyList()), "a reset")
         assertFalse(reset.warned)
     }
 
@@ -166,7 +169,7 @@ class PermissionCloseTest {
         assertFalse(shift.ended, "a second permission in the shift closed the house before the warning was given")
         assertTrue(closes().values.all { it.isEmpty() }, "a phone was sent the close before the warning")
         val met = meeting(shift)
-        assertEveryPhoneNoticed(Effect.NoticeIssued(listOf(Seat(2), Seat(4)), permissionSwitchedOff = true), "two permissions in one shift")
+        assertEveryPhoneNoticed(Effect.NoticeIssued(emptyList(), switchedOff = listOf(Seat(2), Seat(4))), "two permissions in one shift")
         assertTrue(met.warned)
         assertFalse(met.ended)
     }
@@ -177,7 +180,50 @@ class PermissionCloseTest {
         tick = 0
         val shift = report(report(round(), Seat(3), RadioCause.Person), Seat(3), RadioCause.Permission)
         meeting(shift)
-        assertEveryPhoneNoticed(Effect.NoticeIssued(listOf(Seat(3)), permissionSwitchedOff = true), "a leave then a permission")
+        assertEveryPhoneNoticed(Effect.NoticeIssued(emptyList(), switchedOff = listOf(Seat(3))), "a leave then a permission")
+    }
+
+    /**
+     * **GUARD: the notice's two lists, in every ordering** (the owner's 2026-11-21 rulings, D-311).
+     * Only leavers: the leavers' list alone, the notice as it was. Only switchers: the permission
+     * list alone. Both: each seat on its own list. A seat that both left and switched off: on the
+     * permission list only, once. Every seat is told the same notice, the Insider's and the host's.
+     */
+    @Test
+    fun theNoticeKeepsLeaversAndSwitchersApartInEveryOrdering() {
+        tick = 0
+        // Only leavers.
+        var shift = report(report(round(), Seat(4), RadioCause.Person), Seat(2), RadioCause.Person)
+        var met = meeting(shift)
+        assertEveryPhoneNoticed(Effect.NoticeIssued(listOf(Seat(2), Seat(4)), switchedOff = emptyList()), "only leavers")
+        assertFalse(met.warned, "a notice of leavers alone gave the warning")
+
+        // Only switchers.
+        forget()
+        tick = 0
+        shift = report(report(round(), Seat(5), RadioCause.Permission), Seat(2), RadioCause.Permission)
+        met = meeting(shift)
+        assertEveryPhoneNoticed(Effect.NoticeIssued(emptyList(), switchedOff = listOf(Seat(2), Seat(5))), "only switchers")
+        assertTrue(met.warned)
+
+        // Both, and a seat that did both: seat 2 left, seat 4 switched off, seat 3 left and then
+        // switched off, and seat 5 switched off and then left.
+        forget()
+        tick = 0
+        shift = round()
+        shift = report(shift, Seat(2), RadioCause.Person)
+        shift = report(shift, Seat(4), RadioCause.Permission)
+        shift = report(shift, Seat(3), RadioCause.Person)
+        shift = report(shift, Seat(3), RadioCause.Permission)
+        shift = report(shift, Seat(5), RadioCause.Permission)
+        shift = report(shift, Seat(5), RadioCause.Person)
+        met = meeting(shift)
+        assertEveryPhoneNoticed(
+            Effect.NoticeIssued(listOf(Seat(2)), switchedOff = listOf(Seat(3), Seat(4), Seat(5))),
+            "leavers and switchers, two seats that did both",
+        )
+        assertTrue(met.warned)
+        assertFalse(met.ended)
     }
 
     // ---- The close ----------------------------------------------------------------------------------
@@ -242,7 +288,7 @@ class PermissionCloseTest {
 
         forget()
         val warnedByHost = meeting(report(endMeeting(quiet), host, RadioCause.Permission))
-        assertEveryPhoneNoticed(Effect.NoticeIssued(listOf(host), permissionSwitchedOff = true), "the host's permission")
+        assertEveryPhoneNoticed(Effect.NoticeIssued(emptyList(), switchedOff = listOf(host)), "the host's permission")
         assertTrue(warnedByHost.warned)
 
         forget()
@@ -265,7 +311,7 @@ class PermissionCloseTest {
         val reported = report(next, Seat(3), RadioCause.Permission)
         assertFalse(reported.ended, "the first permission of a new round closed the house")
         meeting(reported)
-        assertEveryPhoneNoticed(Effect.NoticeIssued(listOf(Seat(3)), permissionSwitchedOff = true), "the new round's first permission")
+        assertEveryPhoneNoticed(Effect.NoticeIssued(emptyList(), switchedOff = listOf(Seat(3))), "the new round's first permission")
 
         // And a closed round is followed by an open one.
         val closed = report(meeting(report(round(), Seat(3), RadioCause.Permission)), Seat(2), RadioCause.Permission)

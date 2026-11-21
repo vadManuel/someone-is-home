@@ -126,6 +126,16 @@ class PermsModel(
         grantsMissing(DevicePermission.entries.associateWith(read))
 
     /**
+     * **What reads switched off right now** (D-311): the rows the OS reads [Grant.Refused], the
+     * Bluetooth radio turned off among them (the app reads it so). [missingNow]'s question for a
+     * phone already seated: it passed the gate with every row GRANTED, so anything it lacks now was
+     * switched off, and reads refused. A row nobody has answered is not a switch-off; it is only
+     * ever seen on a phone with no OS behind it, which this never lets go.
+     */
+    fun switchedOffNow(): List<DevicePermission> =
+        DevicePermission.entries.filter { read(it) == Grant.Refused }
+
+    /**
      * Read every row off the OS. Called when the screen opens and when the app comes back to it.
      *
      * The synchronous read lands first and the callback lands again afterwards, because two of the
@@ -134,6 +144,16 @@ class PermsModel(
     fun refresh() {
         states = DevicePermission.entries.associateWith(read)
         reread { states = DevicePermission.entries.associateWith(read) }
+    }
+
+    /**
+     * **The rows as the OS reads them now, with nothing asked again** (D-311): what a phone the
+     * lobby let go is shown on arrival, the row that was switched off reading REFUSED. A read alone,
+     * so no Nearby Interaction probe starts here (D-309); the screen's own [refresh] on arrival is
+     * the one it always ran.
+     */
+    fun readNow() {
+        states = DevicePermission.entries.associateWith(read)
     }
 
     /**

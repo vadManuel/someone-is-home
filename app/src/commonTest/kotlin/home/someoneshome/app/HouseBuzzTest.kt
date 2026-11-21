@@ -351,7 +351,7 @@ class HouseBuzzTest {
         // A touch, answered (R1, D-216): silent, because every touch in the house sends one.
         Effect.ContactAnswered(Seat(1)),
         // The house notice (D-187, D-223): silent, because the gate's own push beside it buzzes.
-        Effect.NoticeIssued(listOf(Seat(2)), permissionSwitchedOff = false),
+        Effect.NoticeIssued(listOf(Seat(2)), switchedOff = emptyList()),
     )
 
     /**
