@@ -56,6 +56,22 @@ Main at the start: `1eb155e` (D-306 to D-310 merged).
      - **Decision 2 (provisional):** every source for the same permission makes one report per round.
   5. **Cosmetic.** A report cancelled from under a banner on page 2 returned to page 1.
 
+### Scripted rounds on the iOS Simulator (first pass done: blocked)
+
+- **No simulator round could start.** The host never got past PERMISSIONS:
+  - Bluetooth first answers "not asked yet" and only answers properly a moment later.
+  - The permission walk stops at that first answer and never moves on to NEARBY DEVICES.
+  - Since D-309, NEARBY DEVICES must be answered before anyone can host.
+- **Why it may matter on your phones:** after someone answers the Bluetooth prompt, the walk may stall until they tap REQUEST WHAT IS MISSING again. Watch for it tomorrow.
+- **Being fixed (D-314):**
+  - The walk continues when a late answer arrives.
+  - **Decision 4 (provisional):** on the iOS Simulator only, NEARBY DEVICES reads NOT ON THIS PHONE, as Bluetooth already does there, so test benches can host. Phones are unchanged.
+  - Also: the bench's setup gets sturdier, one stale end-to-end test is updated, and two script defects are fixed:
+    - `e2e.sh` deleted its own log on failure;
+    - `rehearse.sh` asked for a simulator this Mac doesn't have.
+  - Then the rounds are played for real.
+- **End-to-end tests:** 2 pass. 1 is stale: it expected the simulator to refuse on BLUETOOTH, which it never does. That predates today.
+
 ### The GDD against the code, rule by rule (done)
 
 Most rules a first playtest touches are built, tested and match the latest ruling. That covers the lobby and arming, lights out, page 2, the Revoke, the report, meetings, the vote, the Egress, the endings and the house closing. The full table is kept in the session; ask if you want it as a page.
@@ -120,7 +136,7 @@ Bring a fourth phone if you can. With the minimum at 3, the "joining during a ro
   - Your D-307 report screen, the D-309 JOIN states and the D-310 notice and close lines match your words exactly.
   - Nothing runs off a phone-sized screen.
   - No screen in the dark uses a colour the others don't.
-- **Being fixed** (one build, D-312):
+- **Fixed and merged as D-312** (`252e062`). The ui tests went from 755 to 757 and all pass. With the Insider line put back on purpose, the new parity test fails. Both roles' Notes screens are now byte-identical.
   1. **A real tell.** The Notes app showed an Insider the line *i hope no one finds out*, while a Resident sees a different note. Notes is one tap from page 1, so a glance at someone's phone could give them away. No decision ever allowed it.
      - **Decision 3 (provisional):** an Insider now gets exactly the note a Resident would. The Insider-only line is deleted.
   2. **Four renders never showed the state they were named for:**
