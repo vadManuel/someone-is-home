@@ -225,7 +225,6 @@ fun Screen(
                 ScreenId.SubInterrupt -> InterruptScreen(state.verdict)
                 ScreenId.SubDrift -> DriftScreen(state.verdict)
                 ScreenId.Files -> FilesScreen(vals)
-                ScreenId.Notes -> NotesScreen(vals)
                 ScreenId.TermLive -> TermLiveScreen(vals)
                 ScreenId.Timelapse -> TimelapseScreen(vals)
                 ScreenId.EgressWidget -> EgressWidgetScreen(vals)

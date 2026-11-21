@@ -700,27 +700,6 @@ fun FilesScreen(vals: PanelVals) {
 }
 
 /**
- * Notes: **read only. It writes to you, not the other way round.**
- *
- * The line is plausible, unverifiable and deliberately not context aware. *These are not your
- * notes* is the whole joke and the whole mechanic: the device hands you an accusation you did not
- * make and cannot check. READ ONLY . NO INPUT PERMITTED went with the mockup's copy cut: there is
- * nothing on the screen to type into, which says it.
- */
-@Composable
-fun NotesScreen(vals: PanelVals) {
-    val p = Palette.DARK
-    KitScreen(gap = 14.dp) {
-        KitHeader("NOTES", p, back = ScreenId.Home, meta = "UNTITLED")
-        Box(Modifier.fillMaxWidth().edgeLine(PanelSide.Top, p.faint, 1.dp).padding(top = 18.dp)) {
-            Words(vals.noteLine, size = 34, color = p.ink, lineHeight = 1.1)
-        }
-        KitSpacer()
-        KitCaption("THESE ARE NOT YOUR NOTES", p, Modifier.fillMaxWidth(), center = true)
-    }
-}
-
-/**
  * Counts per room, three staleness bands, your own room outlined. Never dots.
  *
  * **STATIC lands here** (D-186). The plan, the labels and the counts are drawn exactly as they

@@ -46,7 +46,7 @@ class ReportScreenTest {
                 ScreenId.Scan, ScreenId.ScanCaught, ScreenId.EgressWidget,
                 ScreenId.Calling, ScreenId.Call, ScreenId.Found, ScreenId.Assemble, ScreenId.Notice,
                 ScreenId.Discussion, ScreenId.Vote, ScreenId.Tally,
-                ScreenId.Work, ScreenId.Files, ScreenId.Notes, ScreenId.Lock, ScreenId.LockNotify, ScreenId.SurgeTargets,
+                ScreenId.Work, ScreenId.Files, ScreenId.Lock, ScreenId.LockNotify, ScreenId.SurgeTargets,
                 ScreenId.IsolateTargets, ScreenId.TermLive,
             )
 

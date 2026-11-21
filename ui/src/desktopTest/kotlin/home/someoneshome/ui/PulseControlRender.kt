@@ -51,7 +51,7 @@ class PulseControlRender {
         "16pro" to PanelInsets(top = 45.dp, bottom = 25.dp, side = 12.dp),
     )
 
-    private val gridLabels = listOf("FILES", "NOTES", "MESSAGES", "SETTINGS", "CAMERA")
+    private val gridLabels = listOf("FILES", "MESSAGES", "SETTINGS", "CAMERA")
 
     @OptIn(ExperimentalTestApi::class, ExperimentalComposeUiApi::class)
     private fun render(name: String, model: FlowModel, insets: PanelInsets = PanelInsets(), save: Boolean = true): Pair<BufferedImage, List<String>> {

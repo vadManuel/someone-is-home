@@ -115,8 +115,9 @@ fun HomeScreen(vals: PanelVals, widget: @Composable (PanelVals) -> Unit = { Inte
             }
 
             // **THE PHONE TILE IS GONE** (D-121: meetings are called only by scanning the meeting
-            // card) **and so is TERMINAL** (D-199: the map opens only by scanning the T card). Their
-            // slots stand empty, so the grid keeps its shape, and the shape is part of the parity every
+            // card), **so is TERMINAL** (D-199: the map opens only by scanning the T card) **and so is
+            // NOTES** (D-315: the owner removed the app). Each row closes up and ends in empty slots,
+            // as TERMINAL's did, so the grid keeps its shape, and the shape is part of the parity every
             // phone on this screen is holding.
             Column(
                 Modifier.fillMaxWidth().padding(top = 4.dp),
@@ -124,8 +125,8 @@ fun HomeScreen(vals: PanelVals, widget: @Composable (PanelVals) -> Unit = { Inte
             ) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     AppTile("FILES", APP_FILES, Modifier.weight(1f)) { go(ScreenId.Files) }
-                    AppTile("NOTES", APP_NOTES, Modifier.weight(1f)) { go(ScreenId.Notes) }
                     AppTile("MESSAGES", APP_MESSAGES, Modifier.weight(1f)) { go(ScreenId.Reveal) }
+                    Box(Modifier.weight(1f))
                     Box(Modifier.weight(1f))
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -179,7 +180,6 @@ private fun AppTile(label: String, path: String, modifier: Modifier, onClick: ((
 
 /** The mockup's app glyphs, on its 28-unit grid. */
 private const val APP_FILES = "M4 8h8l2 3h10v12H4z"
-private const val APP_NOTES = "M7 4h14v20H7z M11 10h6 M11 14h6 M11 18h4"
 private const val APP_MESSAGES = "M4 6h20v13H12l-5 4v-4H4z"
 private const val APP_SETTINGS = "M4 9h3 M13 9h11 M4 19h11 M21 19h3 M7 6h6v6H7z M15 16h6v6h-6z"
 private const val APP_CAMERA = "M4 9h20v14H4z M10 9l2-3h4l2 3 M11 13h6v6h-6z"

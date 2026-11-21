@@ -465,7 +465,7 @@ class FlowTest {
         val model = FlowModel(PanelState(screen = ScreenId.Home))
         model.go(ScreenId.Files)
         model.go(ScreenId.Home)
-        model.go(ScreenId.Notes)
+        model.go(ScreenId.Settings)
         assertTrue(model.back()); assertEquals(ScreenId.Home, model.state.screen)
         assertTrue(model.back()); assertEquals(ScreenId.Files, model.state.screen)
         assertTrue(model.back()); assertEquals(ScreenId.Home, model.state.screen)

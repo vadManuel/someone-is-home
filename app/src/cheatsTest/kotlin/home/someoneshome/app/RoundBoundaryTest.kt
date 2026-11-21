@@ -195,7 +195,6 @@ class RoundBoundaryTest {
         "egressesContained" to { it.egressesContained },
         "residents" to { it.residents },
         "inboxSeed" to { it.inboxSeed },
-        "noteSeed" to { it.noteSeed },
     )
 
     @Test

@@ -67,7 +67,6 @@ class RoundForgottenTest {
         residents = listOf("BRUNO"),
         markersOn = true,
         inboxSeed = 5,
-        noteSeed = 2,
     )
 
     private fun flowOn(screen: ScreenId, hosting: Boolean = false): Pair<FlowModel, MemoryLobbyLink> {
@@ -89,7 +88,7 @@ class RoundForgottenTest {
 
     /** What a phone that has never played holds, on [screen], with the evening's fields kept. */
     private fun fresh(screen: ScreenId) = PanelState(
-        screen = screen, houseAttached = true, wallTime = clock, markersOn = true, inboxSeed = 5, noteSeed = 2,
+        screen = screen, houseAttached = true, wallTime = clock, markersOn = true, inboxSeed = 5,
     )
 
     private fun assertForgotten(flow: FlowModel, screen: ScreenId, how: String) {

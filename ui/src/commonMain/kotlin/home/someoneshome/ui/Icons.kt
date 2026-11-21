@@ -31,7 +31,6 @@ object PanelIcons {
     const val VIEWBOX = 20f
 
     val Files = listOf("M3 5h5l2 2h7v9H3z")
-    val Notes = listOf("M5 3h7l3 3v11H5z", "M7.5 10h5M7.5 13h5")
     val Phone = listOf(
         "M6 4c-1 1-1.4 2.4-1 3.4.7 1.6 1.8 3.2 3.1 4.5s2.9 2.4 4.5 3.1c1 .4 2.4 0 3.4-1l-2.4-2.4" +
             "-1.9.9c-.9-.5-1.7-1.1-2.4-1.8s-1.3-1.5-1.8-2.4l.9-1.9z"

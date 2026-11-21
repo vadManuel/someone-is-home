@@ -207,7 +207,6 @@ object ScreenGraph {
         // the player pressing STOP NOW or the house answering what they sent.
         ScreenId.SubInterrupt, ScreenId.SubDrift -> emptySet()
         ScreenId.Files -> setOf(ScreenId.Home)
-        ScreenId.Notes -> setOf(ScreenId.Home)
         // **The live view is opened by the house and left by the player** (D-199). See
         // [Flow.houseOpened]: nothing walks to it except its own timelapse coming back.
         ScreenId.TermLive -> setOf(ScreenId.Home, ScreenId.Timelapse)
@@ -254,13 +253,13 @@ object ScreenGraph {
         ScreenId.WinInsiders, ScreenId.WinResidents -> emptySet()
     }
 
-    /** The springboard's ten tiles and dock buttons, shared by the three screens that draw it. */
+    /** The springboard's tiles and dock buttons, shared by the three screens that draw it. */
     private val SPRINGBOARD = setOf(
         // **`Calling` is not in here, and its absence is D-121** (N5b). The PHONE tile went straight
         // to the caller's ring, which made a house meeting callable from a chair — the one thing
         // that ruling forbids outright. The tile is deleted rather than retargeted and `Calling`
         // has moved to [Flow.housePushed], where `MeetingCalling` is the only thing that reaches it.
-        ScreenId.Work, ScreenId.Files, ScreenId.Notes, ScreenId.Reveal,
+        ScreenId.Work, ScreenId.Files, ScreenId.Reveal,
         // No TERMINAL tile (D-199). The map opens by scanning the T card, so it is not here.
         // **No Page2 either**: the page bar is not a control (D-202), and page 2 is a swipe away,
         // declared in [Flow.viaActions].
@@ -1021,7 +1020,7 @@ fun PanelState.arrivingAt(id: ScreenId): PanelState = when (id) {
  * - [PanelState.houseAttached] — a fact about the socket, which outlives the round (D-157).
  * - [PanelState.markersOn], [PanelState.torch] — the host's marker registration, done in the light.
  * - [PanelState.wallTime] — the phone's own clock (D-255).
- * - [PanelState.inboxSeed], [PanelState.noteSeed] — the phone's own fictional backlog.
+ * - [PanelState.inboxSeed] — the phone's own fictional backlog.
  */
 fun PanelState.betweenRounds(): PanelState = PanelState(
     screen = screen,
@@ -1030,7 +1029,6 @@ fun PanelState.betweenRounds(): PanelState = PanelState(
     torch = torch,
     wallTime = wallTime,
     inboxSeed = inboxSeed,
-    noteSeed = noteSeed,
 )
 
 /**

@@ -12659,6 +12659,80 @@ same route, 21 of 21. D-311's lobby check left every bench seat in place: on a s
 reads NOT ON THIS PHONE (D-311's manager hears `unsupported`), NEARBY DEVICES reads NOT ON THIS
 PHONE, and neither is refused, so no seat's ledger ever read PERMISSIONS.
 
+### D-315 · **The Notes app is removed: page 1 is FILES, MESSAGES, SETTINGS and CAMERA, the same for both roles — built; supersedes D-247 item 5 and D-312 item 1; nothing on the wire or in the recording changed**
+
+**The ruling** (owner, 2026-11-21). *Let's just remove the notes app entirely.* It answers D-312 item 1,
+which was provisional and for the owner to confirm: Notes had handed an Insider a line of its own one
+tap from page 1, and D-312 made it the Resident's. Neither the note nor the screen it sat on is kept.
+**D-247 item 5** (the housed note, *somebody was already at the marker*, provisional words) **and D-312
+item 1** (Notes the same for both roles, and `NotesParityTest`) are superseded: there is no note to
+word and no screen to hold parity on.
+
+1. **The tile, the screen and the words are gone** (`ui`). The NOTES tile on page 1, `ScreenId.Notes`,
+   `NotesScreen`, `PanelVals.noteLine`, the eight Resident lines, `PanelVals.HOUSED_NOTE`,
+   `PanelState.noteSeed` (never set by anything; `betweenRounds` kept it as part of the evening, and
+   no longer has it to keep), the tile's glyph `APP_NOTES` and `PanelIcons.Notes` (unused already).
+   The Flow loses Notes' edge back to Home and its place in the springboard's set, so no walk, sweep
+   or graph reaches it, and every sweep over `ScreenId.entries` (the screen renders, the layout-fault
+   guard, the housed sweep) draws one screen fewer in each role.
+2. **The grid closes up the way it did when TERMINAL went** (D-199: *the slot stays empty … so the
+   grid keeps its shape for both roles*, built as *CAMERA moves up one slot and the row ends in two
+   empty ones*). MESSAGES moves up one slot, beside FILES, and the first row ends in two empty slots;
+   the second row is unchanged, SETTINGS and CAMERA and two empty slots. Two rows of four, as before.
+   Tile size, spacing, ink and light are untouched. **The other arrangement**, all four tiles in one
+   row with the second row gone, is a one-line change if the owner prefers it; it was not taken,
+   because the grid's own precedent is that a removed tile leaves the rows as they were.
+3. **Parity.** Page 1 is not allowed to differ by role (GDD M8, D-286) and does not: an Insider's and
+   a Resident's render at 720×1520 are the same pixels, and the same words.
+4. **Not recorded.** `ScreenId` and `PanelState` live in `ui`, which the recording never reads; the
+   note was drawn on the phone and never sent or stored, and `noteSeed` was never on the wire. **The
+   recording format is unchanged.** No copy, light, colour, type or timing was added or moved.
+
+**Guards** (`PageOneTilesTest`, new): *noScreenIsNamedNotes*; *pageOneHasFourTilesAndNoNotes* (both
+roles: no NOTES drawn, each of FILES, MESSAGES, SETTINGS and CAMERA drawn once, FILES and MESSAGES on
+one row and SETTINGS and CAMERA on the row below in the same two columns); and
+*pageOneRendersTheSameForBothRoles* (words and pixels, 720×1520 with the mockup's camera band,
+written to `build/screens/home-phone-*.png`). **Proved red against the tree before this change**
+(the tile and the screen put back, the new test file alone added), quoted from the XML:
+*a screen named Notes is back (D-315) expected:<[]> but was:<[Notes]>* and *page 1 drew NOTES for a
+Resident (D-315): [… FILES, NOTES, MESSAGES, SETTINGS, CAMERA, …]*; the parity guard held on both
+trees.
+
+**Rendered and looked at.** Page 1 at 720×1520, both roles: FILES and MESSAGES on the first row,
+SETTINGS and CAMERA (inert, hatched) below, the right half of both rows empty, the widgets above and
+the dock below where they were; Insider against Resident, 0 pixels differ. Against the tree before,
+the only pixels that moved are inside the grid's first row (the NOTES tile gone, MESSAGES in its
+place); in the 600×800 sweep the same holds, the grid there squashed under the widgets as it was
+before. Every screen that draws page 1 (`home`, `notify`, `quiet`, `banner` and its three 600×1300 frames,
+`egresswidget`, `springboard-dealt`) changed there and nowhere else; page 2, both roles, at 600×800 and 720×1520, is
+the same pixels as before, and so is every other screen. `notes-*.png` is no longer written.
+
+**Not changed, and said rather than done.** The design mockup's generator (`tools/design-mockup`,
+`logic.js` and `s_work.py`) still draws a NOTES tile and screen, as it still drew D-312's Insider line:
+it builds the published design artifact, and that is rebuilt and published by its own loop. The
+older reports that mention Notes are history and are left as written.
+
+| site | before | after |
+|---|---|---|
+| `ui` `ScreensSpringboard.kt` | FILES, NOTES, MESSAGES, empty / SETTINGS, CAMERA, empty, empty | FILES, MESSAGES, empty, empty / SETTINGS, CAMERA, empty, empty; `APP_NOTES` deleted |
+| `ui` `ScreenId`, `Screen.kt`, `ScreensWork.kt` | `Notes`, `NotesScreen` | deleted |
+| `ui` `PanelVals`, `PanelState` | `noteLine`, the Resident lines, `HOUSED_NOTE`, `noteSeed` | deleted |
+| `ui` `Flow.kt` | Notes → Home; Notes in the springboard's set; `noteSeed` kept between rounds | deleted |
+| `ui` `Icons.kt` | `PanelIcons.Notes` | deleted |
+| `NotesParityTest` (D-312) | words and pixels of Notes, both roles | deleted with the screen |
+| `HousedContentTest` | *aHousedNoteNamesNobody*, the unhoused note | deleted |
+| `FlowTest`, `ReportScreenTest`, `PulseControlRender`, `RoundForgottenTest`, `RoundBoundaryTest` | named Notes or `noteSeed` | Settings for the back-trail walk; Notes and `noteSeed` dropped |
+| `PageOneTilesTest` (new) | (none) | the three guards above |
+| `gdd.md` | Notes in P2's steers, the device-state table, E3's *five apps* | removed; E3 names page 1's four |
+| `phone-session-2026-11-19.md` | *Notes reads the same on an Insider's phone* | page 1 has four tiles and no NOTES |
+
+**Checked** (on the final tree, `*/build/test-results` cleared first: `./gradlew :ui:check :app:check
+--continue` with the two variant sweeps excluded, then `:app:variantSweepRelease`, then
+`:app:variantSweepPlaytest`, the app's XML copied out after each, every result XML counted with a
+python glob): ui 772 (desktop) + 380 (iOS Simulator); app 277 (the default variant), 170 (Release),
+277 (Playtest). 0 failures, 0 errors, 0 skipped. `PageOneTilesTest` is in the XML and
+`NotesParityTest` is not. `model` and `core` are untouched and were not run.
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

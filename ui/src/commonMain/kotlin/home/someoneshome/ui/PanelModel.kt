@@ -89,8 +89,9 @@ enum class ScreenId {
     SubHandshake, SubReplay, SubParity, SubShort, SubTrace, SubJam, SubSniff, SubDeallocate,
     SubInterrupt, SubDrift,
     // **No `TermNo`.** NO SIGNAL is deleted with the tile that reached it (D-199): the live view
-    // opens because the house answered a scan of the T card, and from nowhere else.
-    Files, Notes, TermLive, Timelapse,
+    // opens because the house answered a scan of the T card, and from nowhere else. **No `Notes`**
+    // either: the owner removed the app (D-315).
+    Files, TermLive, Timelapse,
 
     // The house's hands.
     Banner, EgressWidget,
@@ -752,7 +753,6 @@ data class PanelState(
     val residents: List<String>? = null,
     /** Randomises the backlog's *count and mix*, so inbox density can never imply a role. */
     val inboxSeed: Int = 3,
-    val noteSeed: Int = 0,
 )
 
 /**
@@ -1239,40 +1239,6 @@ class PanelVals(
         !state.houseAttached -> "You still have Priya's spare key. $HOUSE_INSTRUCTION"
         else -> state.heldOver?.text?.takeIf { it.isNotBlank() }
             ?.let { "I know you said \"$it\". $HOUSE_INSTRUCTION" } ?: HOUSE_INSTRUCTION
-    }
-
-    /**
-     * Notes writes to you, not the other way round.
-     *
-     * The Resident lines are plausible, unverifiable and deliberately **not context aware** — a
-     * line referring to something that actually happened would be a private channel from the
-     * authority to one player, which is the thing this app does not have.
-     */
-    private val residentNotes = listOf(
-        "why was rose in the garage",
-        "i have not seen marcus finish anything yet",
-        "priya was upstairs when the lights went",
-        "dani walked past the study twice",
-        "somebody was already at the garage marker",
-        "tomas has not been in the hall all night",
-        "count was four. i only saw three of you",
-        "rose scanned nothing for a long time",
-    )
-
-    /**
-     * **A housed Resident's note names nobody and no room** (D-247). The port's lines name five
-     * people who are not in the house and rooms it may not have, and [PanelState.noteSeed] is never
-     * set, so every Resident in every round was handed *why was rose in the garage*. Picking a real
-     * player instead would be every Resident's phone accusing the same person, which is the app
-     * authoring a read the room is meant to make. ⚠️ The words are provisional, owner to confirm.
-     *
-     * **An Insider is handed exactly the note a Resident in the same state is** (D-312, GDD M8,
-     * D-286): Notes is one tap from page 1, and only page 2 may differ by role. The role is not
-     * read here at all.
-     */
-    val noteLine: String = when {
-        state.houseAttached -> HOUSED_NOTE
-        else -> residentNotes[state.noteSeed.mod(residentNotes.size)]
     }
 
     // ---- The springboard's two tiles --------------------------------------------------------
@@ -2369,9 +2335,6 @@ class PanelVals(
 
         /** What the house tells every Insider to do, after the quote (D-101, D-247). */
         const val HOUSE_INSTRUCTION = "Follow my instructions tonight and nobody else needs to hear about it."
-
-        /** A housed Resident's note: no name, no room, no count (D-247, provisional). */
-        const val HOUSED_NOTE = "somebody was already at the marker"
 
         /**
          * **The ending's line for each of D-131's four routes** (D-261), one place for all four.

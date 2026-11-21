@@ -168,7 +168,7 @@ If the app owns the only light in the house, every game event can be expressed a
 
 The device enforces by refusing, not by instructing. There is no rules screen because there are no rules to read.
 
-*Steers:* Terminal reads NO SIGNAL everywhere but the map station · Files holds one item while carrying and every app needing storage refuses · Notes accepts typing and never saves · Messages receives but cannot send · ARMED in the status bar all game · Settings mostly locked.
+*Steers:* Terminal reads NO SIGNAL everywhere but the map station · Files holds one item while carrying and every app needing storage refuses · Messages receives but cannot send · ARMED in the status bar all game · Settings mostly locked.
 
 #### P3 — The app supplies constraints; the players supply the accusations.
 
@@ -966,7 +966,6 @@ The device states are now live, and each of them is a rule that no longer needs 
 |---|---|---|
 | **Terminal** | `NO SIGNAL` | The map is a place, not a screen |
 | **Files** | Empty | You can carry one thing, and only when carrying |
-| **Notes** | Types, never saves | Only your head is off-network |
 | **Messages** | Receive-only | Enforced silence, rendered |
 | **Settings** | Mostly locked | Lamp control and *About* only; **End Session** for the host |
 
@@ -1369,7 +1368,7 @@ Fourteen epics. Detailed story breakdown in `epics.md`.
 | **E0** | **Foundations** | Pure deterministic simulation core (no platform types), fixed-timestep tick, session recording, deterministic replay, client-transcript recorder, differential leak harness, map persistence, disconnect/rejoin | 1.7 spike |
 | **E1** | **The lamp** | Full-screen amber lamp, torch level, brightness override, the white flip, and **every connected phone flipping at once**. **Carries the stack gate (1.7)** | — |
 | **E2** | Session, sync, and arming | Host-owned server, join, lobby settings, clock-offset measurement, scheduled-timestamp flips, perimeter arming, role reveal by text | E1 |
-| **E3** | The device shell | Springboard (two pages, role-identical), status bar, the five apps as device states, the work-order widget, Settings | E2 |
+| **E3** | The device shell | Springboard (two pages, role-identical), status bar, the apps as device states (page 1 is FILES, MESSAGES, SETTINGS and CAMERA; there is no Notes app, D-315), the work-order widget, Settings | E2 |
 | **E4** | The house | Grid painter per storey, room/stairs tagging, additive floors, markers, host acknowledgment, the stairs exclusion, adjacency from cell neighbours | E3 |
 | **E5** | Scanning and the motion budget | Tap-to-scan with the ten-second window and auto-open, preview-less capture, routing/check-in decoupling, motion accumulator with per-player calibration and both bounds, the draining meter | E4 |
 | **E6** | The subroutine set | Ten subroutines across 3 bright / 4 medium / 3 dark, **plus the fake versions**, plus degradation | E5 |

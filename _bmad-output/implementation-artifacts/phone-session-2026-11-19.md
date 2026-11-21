@@ -146,7 +146,8 @@ Tick each line as you see it.
       (D-165, D-313).
 - [ ] An **armed pass at an already-Revoked phone**: today nothing happens, no buzz and the tile
       stays ARMED. Say whether that is right (D-290).
-- [ ] **Notes** reads the same on an Insider's phone as on a Resident's (D-312).
+- [ ] **Page 1** has four tiles, FILES, MESSAGES, SETTINGS and CAMERA, and no NOTES, on an
+      Insider's phone and a Resident's alike (D-315).
 
 **Release build**
 - [ ] `./run-app.sh device release` on a UWB phone launches to the boot screen. It must not stop

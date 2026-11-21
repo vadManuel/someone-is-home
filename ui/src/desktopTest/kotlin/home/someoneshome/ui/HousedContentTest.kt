@@ -176,15 +176,7 @@ class HousedContentTest {
         assertTrue("85%" in drawn(phone, ScreenId.WinInsiders), "the Insiders' ending did not draw the final meter")
     }
 
-    // ---- 5 · Notes, the reconnect line, the callers, the inbox ---------------------------------
-
-    /** **GUARD: a housed Resident's note names nobody.** */
-    @Test
-    fun aHousedNoteNamesNobody() {
-        assertEquals(PanelVals.HOUSED_NOTE, PanelVals(housed().state).noteLine)
-        // An Insider is handed the Resident's note (D-312): `NotesParityTest` holds every state.
-        assertEquals(PanelVals.HOUSED_NOTE, PanelVals(housed(insider = true).state).noteLine)
-    }
+    // ---- 5 · The reconnect line, the callers, the inbox ----------------------------------------
 
     /** **GUARD: the reconnecting screen counts no attempts nobody counted.** */
     @Test
@@ -360,7 +352,6 @@ class HousedContentTest {
         assertEquals("ATTEMPT 3 . 8S", port.reconnectLine)
         assertEquals("PRIYA", port.callerOr("PRIYA"))
         assertTrue(port.inbox.any { it.from == "MUM" || it.from == "BANK" || it.from == "PRIYA" }, "the harness lost its backlog")
-        assertEquals("why was rose in the garage", PanelVals(PanelState()).noteLine)
         assertEquals(MeetingCounts(), MeetingModel.sample().counts, "the harness lost its meeting counts")
         val calling = drawn(FlowModel(PanelState(screen = ScreenId.Calling)), ScreenId.Calling)
         assertTrue("4 OF 6 ANSWERED" in calling, "the harness lost the caller's count: $calling")
