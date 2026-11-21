@@ -2,7 +2,6 @@ package home.someoneshome.platform
 
 import home.someoneshome.model.DevicePermission
 import home.someoneshome.model.Grant
-import home.someoneshome.platform.transport.DISCOVERY_SERVICE_TYPE
 import platform.AVFoundation.AVAuthorizationStatusAuthorized
 import platform.AVFoundation.AVAuthorizationStatusDenied
 import platform.AVFoundation.AVAuthorizationStatusNotDetermined
@@ -30,12 +29,7 @@ import platform.CoreMotion.CMAuthorizationStatusRestricted
 import platform.CoreMotion.CMMotionActivityManager
 import platform.Foundation.NSDate
 import platform.Foundation.NSError
-import platform.Foundation.NSNetService
-import platform.Foundation.NSNetServiceBrowser
-import platform.Foundation.NSNetServiceBrowserDelegateProtocol
 import platform.Foundation.NSOperationQueue
-import platform.Foundation.NSRunLoop
-import platform.Foundation.NSRunLoopCommonModes
 import platform.Foundation.NSUserDefaults
 import platform.Foundation.dateWithTimeIntervalSinceNow
 import platform.NearbyInteraction.NINearbyPeerConfiguration
@@ -62,16 +56,20 @@ import platform.darwin.dispatch_time
 /**
  * **iOS: five different frameworks, five different ways of being asked, one seam.**
  *
+ * Local Network is not one of them (D-309): iOS raises that prompt by itself the first time the
+ * phone browses for a home or advertises one, so the setup walk does not ask for it and this seam
+ * neither reads nor raises it.
+ *
  * There is no general permission API on this platform. Each grant lives in the framework that owns
  * the hardware and each has its own spelling of *not determined*, so the whole of this file is that
  * translation — into [Grant], which is the only vocabulary anything above here sees.
  *
  * ### Every string in Info.plist is load-bearing and its absence is a crash, not a refusal
  *
- * `NSCameraUsageDescription`, `NSLocalNetworkUsageDescription`, `NSMotionUsageDescription` and
- * `NSBluetoothAlwaysUsageDescription` are all present in `iosApp/iosApp/Info.plist`, each with the
- * sentence the prompt shows. **iOS stops an app that raises a prompt without one** rather than
- * refusing the request — so a missing key here is not a permission bug, it is a phone that fails at
+ * `NSCameraUsageDescription`, `NSMotionUsageDescription` and `NSBluetoothAlwaysUsageDescription`
+ * are all present in `iosApp/iosApp/Info.plist`, each with the sentence the prompt shows (and
+ * `NSLocalNetworkUsageDescription` with `NSBonjourServices`, for the prompt iOS raises itself).
+ * **iOS stops an app that raises a prompt without one** rather than refusing the request — so a missing key here is not a permission bug, it is a phone that fails at
  * the exact moment the host is standing in front of the party.
  *
  * ### The two that answer through a callback are cached, and the cache is the honest kind
@@ -99,7 +97,7 @@ private class IosPermissions(
 ) : Permissions {
 
     /**
-     * The two answers that only ever arrive late, plus the one iOS will not give at all.
+     * The answers that only ever arrive late: Notifications, Bluetooth's delegate, and the probe's.
      *
      * Seeded empty rather than seeded optimistic. [Grant.Unasked] is what an unread row means and
      * it is what the gate refuses on — the failure direction is *the host is asked again*, never
@@ -117,60 +115,11 @@ private class IosPermissions(
      */
     private var central: CBCentralManager? = null
 
-    /** The browse that raises the Local Network prompt. Held so it can be stopped. */
-    private var browser: NSNetServiceBrowser? = null
-
     private val bluetoothDelegate = object : NSObject(), CBCentralManagerDelegateProtocol {
         override fun centralManagerDidUpdateState(central: CBCentralManager) {
             val grant = bluetoothGrantOf(central.state)
             remembered[DevicePermission.Bluetooth] = grant
             log("$TAG BLUETOOTH state=${central.state} → $grant")
-        }
-    }
-
-    /**
-     * The browse's own delegate, and **only the failure half is wired**.
-     *
-     * Finding a home is not what this browse is for — it is for the modal. What matters is
-     * `didNotSearch`, which is the one signal iOS gives when Local Network is refused, and which
-     * `HostDiscovery` learned the hard way is the difference between a refusal and a silence.
-     */
-    private val browseDelegate = object : NSObject(), NSNetServiceBrowserDelegateProtocol {
-
-        /**
-         * ⚠️ **A failed browse is NOT a refusal, and reading it as one is what blocked the owner.**
-         *
-         * This wrote [Grant.Refused] here. But iOS fails the browse that *raises* the Local Network
-         * prompt — the operation cannot proceed while a person is still looking at the modal — so
-         * `didNotSearch` arrives seconds **before** the answer, and on a phone whose owner then
-         * taps Allow the seam had already written down a refusal nothing would ever correct. The
-         * report was exact: the row still said the prompt had been raised, because that is what the
-         * screen's own map held, while the gate read this cache and refused naming LOCAL NETWORK.
-         *
-         * So the standing answer stays at [Grant.Asked] — the most this platform can ever know
-         * (see [localNetworkStanding]) — and the error dictionary is logged rather than believed.
-         * A grant that really is switched off is caught where D-179 and D-180 put it: the advertise
-         * fails, and that refusal names the grant and opens Settings.
-         *
-         * [Grant.Granted] is never walked back: a browse that found a home is proof, and a later
-         * failure is not evidence against it.
-         */
-        override fun netServiceBrowser(browser: NSNetServiceBrowser, didNotSearch: Map<Any?, *>) {
-            if (remembered[DevicePermission.LocalNetwork] != Grant.Granted) {
-                remembered[DevicePermission.LocalNetwork] = Grant.Asked
-            }
-            log("$TAG LOCAL NETWORK browse did not start $didNotSearch — the prompt may still be up")
-        }
-
-        override fun netServiceBrowser(
-            browser: NSNetServiceBrowser,
-            didFindService: NSNetService,
-            moreComing: Boolean,
-        ) {
-            // A home answered, which is proof the browse is really running — the one moment iOS
-            // ever tells an app the grant was given. Every other run stops at REQUESTED.
-            remembered[DevicePermission.LocalNetwork] = Grant.Granted
-            log("$TAG LOCAL NETWORK is up — '${didFindService.name}' answered a browse")
         }
     }
 
@@ -190,7 +139,6 @@ private class IosPermissions(
         DevicePermission.Motion -> motionGrant()
         DevicePermission.Bluetooth -> bluetoothGrant()
         DevicePermission.NearbyDevices -> nearbyGrant()
-        DevicePermission.LocalNetwork -> remembered[of] ?: localNetworkStanding()
         // The one that is genuinely callback-only: there is no synchronous notification status on
         // this platform. What is held is the last answer [refresh] heard, and [refresh] now has a
         // caller at the app root as well as on the Perms screen, so a phone that never opened that
@@ -229,7 +177,6 @@ private class IosPermissions(
             DevicePermission.Notifications -> requestNotifications(then)
             DevicePermission.Bluetooth -> requestBluetooth(then)
             DevicePermission.NearbyDevices -> requestNearby(then)
-            DevicePermission.LocalNetwork -> requestLocalNetwork(then)
         }
     }
 
@@ -396,22 +343,27 @@ private class IosPermissions(
      * **NEARBY DEVICES, as last heard** (D-303). Nearby Interaction has no authorization status: the
      * only answer iOS gives is what a running session does. So the row reads the last probe's
      * answer, and before any probe in this process, [Grant.Asked] on an install that has raised the
-     * prompt (Local Network's honest floor, kept the same way) and [Grant.Unasked] on one that has not.
+     * prompt and [Grant.Unasked] on one that has not. **ASKED keeps the phone at PERMISSIONS** (D-309):
+     * a tap on the row, REQUEST WHAT IS MISSING and every refresh probe again.
      */
     private fun nearbyGrant(): Grant =
         remembered[DevicePermission.NearbyDevices] ?: if (defaults.boolForKey(NEARBY_RAISED)) Grant.Asked else Grant.Unasked
 
     /**
      * **Raise the prompt the way iOS raises it: by running a session** (D-161: asked at setup, in the
-     * light; D-303). A standing answer is reported as it is; anything else runs a probe.
+     * light; D-303). A standing GRANTED or NOT ON THIS PHONE is reported as it is; anything else
+     * (ASKED and REFUSED included, D-309) runs a probe.
      */
     private fun requestNearby(then: (Grant) -> Unit) {
         val standing = remembered[DevicePermission.NearbyDevices]
-        if (standing == Grant.Granted || standing == Grant.Refused || standing == Grant.Unavailable) {
+        // REFUSED probes again too: it raises nothing once the person has answered, and it is the
+        // only way this row can be re-read after a trip to Settings (D-309).
+        if (standing == Grant.Granted || standing == Grant.Unavailable) {
             answer(DevicePermission.NearbyDevices, standing, then)
             return
         }
-        // Written before the answer, as Local Network's is: the prompt is on this install's glass.
+        // Written before the answer: the prompt is on this install's glass. An ASKED standing
+        // answer probes again (D-309), so a phone whose first probe timed out can still reach GRANTED.
         defaults.setBool(true, NEARBY_RAISED)
         probeNearby(then)
     }
@@ -487,62 +439,6 @@ private class IosPermissions(
         }
     }
 
-    // ---- Local network ------------------------------------------------------------------------
-
-    /**
-     * **Browse, so the modal appears — and then say REQUESTED, because that is all iOS will tell.**
-     *
-     * See [Grant.Asked]. The browse is left running for a moment rather than started and stopped in
-     * the same breath: `didNotSearch` is the refusal and it arrives asynchronously, so a browser
-     * torn down immediately would take the one signal there is down with it.
-     */
-    private fun requestLocalNetwork(then: (Grant) -> Unit) {
-        if (browser == null) {
-            val started = NSNetServiceBrowser()
-            started.delegate = browseDelegate
-            started.scheduleInRunLoop(NSRunLoop.mainRunLoop, NSRunLoopCommonModes)
-            started.searchForServicesOfType(DISCOVERY_SERVICE_TYPE, inDomain = "local.")
-            browser = started
-        }
-        // **Written down before the answer is given, and it is the raising that is recorded** —
-        // see [localNetworkStanding]. The prompt has now been put on the glass on this install, and
-        // that is a fact about the install rather than about this process.
-        defaults.setBool(true, LOCAL_NETWORK_RAISED)
-        val standing = remembered[DevicePermission.LocalNetwork]
-        answer(
-            DevicePermission.LocalNetwork,
-            if (standing == Grant.Refused || standing == Grant.Granted) standing else Grant.Asked,
-            then,
-        )
-    }
-
-    /**
-     * ⚠️ **The one answer that has to outlive the process, because iOS will never give it again.**
-     *
-     * Every other row is re-read from its framework on demand. Local Network cannot be: there is no
-     * status call, there never has been, and [Grant.Asked] exists precisely because *the prompt was
-     * raised and the OS will not say what came back* is the strongest thing this app can ever know.
-     *
-     * **Held only in memory, that knowledge failed with the process** — so a host who granted Local
-     * Network at setup last week launched the app, went to host, and was refused a seat naming a
-     * grant they had already given. That is a false refusal, and D-180's family rules that a
-     * refusal name a cause a person can act on; naming one that is already done is worse than
-     * silence, because the only thing it offers them to do is the one thing that cannot help.
-     *
-     * So the *raising* is recorded, and nothing else is. It is deliberately **not** a stored
-     * `Granted`: this seam never reports a grant it did not hear (see the class KDoc), and a phone
-     * whose owner switched the permission off in Settings afterwards would be a phone the app told
-     * a comfortable lie about. `Asked` stays exactly as honest a year later as it was that evening
-     * — and the real answer still arrives where D-179 and D-180 put it, at hosting, where the home
-     * either goes on the air or it does not and the refusal names the grant and opens Settings.
-     *
-     * ⚠️ **Flagged for the owner's morning review.** It is the smallest honest way to stop the gate
-     * refusing on a row the OS refuses to answer, and it is a ruling somebody should make on
-     * purpose rather than inherit from this file.
-     */
-    private fun localNetworkStanding(): Grant =
-        if (defaults.boolForKey(LOCAL_NETWORK_RAISED)) Grant.Asked else Grant.Unasked
-
     // ---- Shared -------------------------------------------------------------------------------
 
     /**
@@ -559,16 +455,13 @@ private class IosPermissions(
         then(grant)
     }
 
-    /** Where the one unrepeatable answer is kept. See [localNetworkStanding]. */
+    /** Where the raising of the Nearby Interaction prompt is kept. See [nearbyGrant]. */
     private val defaults = NSUserDefaults.standardUserDefaults
 
     private companion object {
 
         /** What the device log is grepped for. */
         const val TAG = "[perms]"
-
-        /** *The Local Network prompt has been put on this install's glass.* Nothing more. */
-        const val LOCAL_NETWORK_RAISED = "home.someoneshome.perms.localNetworkRaised"
 
         /** *The Nearby Interaction prompt has been put on this install's glass.* Nothing more. */
         const val NEARBY_RAISED = "home.someoneshome.perms.nearbyRaised"

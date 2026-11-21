@@ -18,39 +18,27 @@ package home.someoneshome.model
  * corridor, where a system modal is both a light nobody authored (rule 5) and a tell. Warming one
  * permission and leaving four to ambush the round is the same bug with a smaller blast radius.
  *
- * **The order is the order the rows are drawn in**, and it is deliberate: Local Network and Camera
- * first because they are the two that end an evening, Notifications last because it is the one a
- * host will be least surprised to be asked for. Nearby Devices sits under Bluetooth, the other half
- * of how the house sees who is near whom (D-303).
+ * ### Every one is required to play, and each must read GRANTED (D-309)
+ *
+ * The owner, 2026-11-20: *every request we make in the game is required for one to play.* No row
+ * opens the gate on anything short of [Grant.Granted] (see [Grant.opensTheGate]).
+ *
+ * **Local Network is not a row.** iOS gives no way to read that grant back, and it raises the
+ * prompt by itself the first time the phone browses for a home or advertises one; the walk asked
+ * for it and could only ever say ASKED. Whether it was given is found out where it always was: the
+ * home goes on the air or it does not.
+ *
+ * **The order is the order the rows are drawn in**, and it is deliberate: Camera first because it
+ * is the one that ends an evening, Notifications last because it is the one a host will be least
+ * surprised to be asked for. Nearby Devices sits under Bluetooth, the other half of how the house
+ * sees who is near whom (D-303).
  */
 enum class DevicePermission(
     /** The row's own words on the Perms screen. Screen copy, in the closed vocabulary. */
     val label: String,
     /** What the evening cannot do without it, said to the host in one line. */
     val need: String,
-    /**
-     * ⚠️ **Whether the OS will ever confirm this grant — and therefore what a gate may demand.**
-     *
-     * Five of the six answer for real: `AVCaptureDevice`, `CMMotionActivityManager`,
-     * `CBManager.authorization` and `UNUserNotificationCenter` each report a status this app can
-     * read back, and Nearby Interaction answers a short session run to ask (D-303). **Local Network reports nothing, on any version this project targets** — see
-     * [Grant.Asked] — so [Grant.Granted] is a state that row can never reach and a gate that waits
-     * for it is a gate that never opens. The owner met that gate holding two phones with the
-     * permission switched on in Settings: *it still shows as REQUESTED and … it says this phone
-     * cannot take a seat yet, local network.*
-     *
-     * A row that cannot be confirmed gates at what **is** knowable — the prompt was raised — and
-     * the truth test moves to where D-179 and D-180 already put it: the home either goes on the
-     * air or it does not, and that refusal names the grant and opens Settings.
-     */
-    val confirmable: Boolean = true,
 ) {
-
-    LocalNetwork(
-        "LOCAL NETWORK",
-        "THE PHONES FIND THE HOUSE OVER THIS NETWORK",
-        confirmable = false,
-    ),
 
     Camera(
         "CAMERA",
@@ -87,16 +75,10 @@ enum class DevicePermission(
 /**
  * **What the OS has said about one permission.** Five answers, because four would be a lie.
  *
- * [Asked] is the one that needs defending. iOS exposes **no way to read the Local Network grant** —
- * there is no status call, and there has not been one for any version this project targets. What
- * an app can do is browse and see what happens, which distinguishes *refused* from *not refused*
- * and never distinguishes *granted* from *nobody has answered yet*. So the honest state after
- * raising that prompt is **ASKED**, and the real answer arrives where it always did: the home
- * either goes on the air or it does not, and the hosting refusal already names that cause and
- * carries a control that opens the settings page (D-173).
- *
- * Inventing a [Granted] there would be the app asserting a fact it does not have, on the one screen
- * whose whole job is to tell a host the truth about their phone before the lights go out.
+ * [Asked] is NEARBY DEVICES' alone (D-303). Nearby Interaction has no status to read, so its probe
+ * runs a short session, and a session that neither runs nor is refused within two seconds of an
+ * active app says only that the prompt was raised. That is not an answer, so it keeps the phone at
+ * PERMISSIONS (D-309), and a tap on the row, REQUEST WHAT IS MISSING or a refresh probes again.
  */
 enum class Grant(
     /** The value drawn at the right of the row. */
@@ -106,17 +88,7 @@ enum class Grant(
     /** Nobody has asked the OS yet. The state every row starts in on a fresh install. */
     Unasked("TAP TO GRANT"),
 
-    /**
-     * The prompt was raised and the OS will not say what came back. See the class KDoc.
-     *
-     * ⚠️ **The value was REQUESTED and it read as *pending* to the one person it is written for.**
-     * The owner granted Local Network on both phones, came back to a row still saying REQUESTED,
-     * and reasonably read it as *the app is still waiting for something*. Nothing is waiting:
-     * this is the end state of that row, forever, and REQUESTED is the wrong word for a terminus.
-     * ASKED says what happened without promising an answer, and the Perms screen carries the rest of
-     * the sentence — that the house finds out when the home goes on the air — as its own line
-     * rather than crushing it into a two-word value column. ⚠️ Proposed copy, for the owner.
-     */
+    /** The prompt was raised and the probe has not heard what came back. See the class KDoc. */
     Asked("ASKED"),
 
     Granted("GRANTED"),
@@ -128,32 +100,22 @@ enum class Grant(
     Unavailable("NOT ON THIS PHONE");
 
     /**
-     * **Whether a phone in this state may take a seat** (D-161's gate).
+     * **Whether a phone in this state may take a seat** (D-161's gate; D-309: every row must read
+     * GRANTED).
+     *
+     * [Asked] does not pass. On NEARBY DEVICES it is a probe with no clear answer, and a phone
+     * seated on it could not be measured all round (D-308: it can neither Revoke nor be Revoked,
+     * report nor be reported).
      *
      * [Unavailable] passes, and that is not a hole in the gate. A grant is a question about a
      * person's consent; a missing sensor is a question about hardware, and refusing to seat a
      * phone until its owner grows a motion coprocessor would be a gate nobody can ever open. It is
-     * loud in the log where the authority reads it, silent to the party (rule 6).
+     * loud in the log where the authority reads it, silent to the party (rule 6). On NEARBY DEVICES
+     * it does not arise at this gate: D-292's launch gate refuses a phone without Ultra Wideband
+     * first.
      */
-    val opensTheGate: Boolean get() = this == Granted || this == Asked || this == Unavailable
+    val opensTheGate: Boolean get() = this == Granted || this == Unavailable
 }
-
-/**
- * **Whether this row, in this state, lets the phone take a seat** — the gate, one row at a time.
- *
- * [Grant.opensTheGate] is the rule for every row the OS will answer. For a row it will not
- * ([DevicePermission.confirmable]), the bar is the strongest thing that row can ever say:
- * **anything but [Grant.Unasked]**, and Unasked still blocks — so the one action the refusal asks
- * for is the one action that helps, which is tapping the row and raising the prompt.
- *
- * That admits [Grant.Refused] on an unconfirmable row, deliberately. On Local Network that value
- * cannot be trusted anyway: the only signal behind it is a browse that failed, and a browse fails
- * *while the system modal is still on the glass*, before the person standing there has answered.
- * A genuinely revoked grant is caught one screen later, at hosting, by the home that does not go
- * on the air.
- */
-fun DevicePermission.opensTheGate(grant: Grant): Boolean =
-    if (confirmable) grant.opensTheGate else grant != Grant.Unasked
 
 /**
  * **The whole set, as one question**: what is still standing between this phone and a seat.
@@ -162,4 +124,4 @@ fun DevicePermission.opensTheGate(grant: Grant): Boolean =
  * order they are looking at them. Empty means setup is complete.
  */
 fun grantsMissing(states: Map<DevicePermission, Grant>): List<DevicePermission> =
-    DevicePermission.entries.filter { it.opensTheGate(states[it] ?: Grant.Unasked).not() }
+    DevicePermission.entries.filter { (states[it] ?: Grant.Unasked).opensTheGate.not() }

@@ -49,10 +49,9 @@ class PermsSkipTest {
     @Test
     fun aPhoneMissingAnyOneRowIsShownThePermsScreen() {
         for (row in DevicePermission.entries) {
-            for (answer in listOf(Grant.Unasked, Grant.Refused)) {
-                // Local Network can never be confirmed, so Refused opens its row (DevicePermission
-                // .opensTheGate); Unasked is the one answer that blocks it.
-                if (!row.confirmable && answer == Grant.Refused) continue
+            // D-309: every row must read GRANTED, so ASKED (NEARBY DEVICES' probe with no clear
+            // answer) is short as well.
+            for (answer in listOf(Grant.Unasked, Grant.Asked, Grant.Refused)) {
                 val os = everything.also { it[row] = answer }
                 assertEquals(
                     ScreenId.Perms, afterTheSelfTest(os),
@@ -60,6 +59,22 @@ class PermsSkipTest {
                 )
             }
         }
+    }
+
+    /**
+     * **D-309: NEARBY DEVICES reading ASKED is not skipped past**, and a probe that answers GRANTED
+     * while the self-test runs (the app root's refresh probes on launch) is.
+     */
+    @Test
+    fun aPhoneWhoseNearbyDevicesReadsAskedIsShownThePermsScreen() {
+        val asked = everything.also { it[DevicePermission.NearbyDevices] = Grant.Asked }
+        assertEquals(
+            ScreenId.Perms, afterTheSelfTest(asked),
+            "NEARBY DEVICES reads ASKED and the phone skipped the Perms screen",
+        )
+        val probed = everything.also { it[DevicePermission.NearbyDevices] = Grant.Asked }
+        val landed = afterTheSelfTest(probed) { probed[DevicePermission.NearbyDevices] = Grant.Granted }
+        assertEquals(ScreenId.Join, landed, "the probe answered GRANTED during the self-test and was not read")
     }
 
     /**

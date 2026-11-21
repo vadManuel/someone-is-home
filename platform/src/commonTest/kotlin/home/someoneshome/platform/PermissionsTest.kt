@@ -45,72 +45,42 @@ class PermissionsTest {
     }
 
     /**
-     * **One row short is short.** Each of the five, on its own, closes the gate.
+     * **One row short is short.** Each row, on its own, closes the gate, at every answer short of
+     * GRANTED (D-309: every request is required to play).
      *
      * Swept rather than asserted for one permission, because the failure this stands against is a
      * gate that checks four of them: it would pass any single-row test written against the row
      * somebody remembered.
-     *
-     * ⚠️ **Each row is held short at the worst state it can honestly reach.** For four of them that
-     * is [Grant.Refused], read back off a framework that really answers. For Local Network it is
-     * [Grant.Unasked] — see [DevicePermission.confirmable]: iOS has no call that confirms that
-     * grant, so a refused reading there is a browse that failed and not a person who said no, and
-     * gating on it was a gate that could not be opened from inside the app.
      */
     @Test
     fun everySinglePermissionCanCloseTheGateOnItsOwn() {
         for (short in DevicePermission.entries) {
-            val perms = NoPermissions()
-            val worst = if (short.confirmable) Grant.Refused else Grant.Unasked
-            DevicePermission.entries.forEach {
-                perms.says(it, if (it == short) worst else Grant.Granted)
+            for (worst in listOf(Grant.Unasked, Grant.Asked, Grant.Refused)) {
+                val perms = NoPermissions()
+                DevicePermission.entries.forEach {
+                    perms.says(it, if (it == short) worst else Grant.Granted)
+                }
+                assertEquals(
+                    listOf(short), perms.missing(),
+                    "a phone whose ${short.label} reads $worst was seated anyway — the gate is not " +
+                        "reading the whole set, and D-161's whole argument is that it must",
+                )
             }
-            assertEquals(
-                listOf(short), perms.missing(),
-                "a phone missing ${short.label} was seated anyway — the gate is not reading the " +
-                    "whole set, and D-161's whole argument is that it must",
-            )
         }
     }
 
     /**
-     * **The row iOS will never confirm is done once it has been asked** — the owner's 2026-08-25
-     * report, on this side of the seam.
+     * **ASKED is not an answer, and a phone missing a sensor is not refused** (D-309).
      *
-     * Both phones had Local Network switched on in Settings and both were refused a seat naming it.
-     * [Grant.Asked] is the end state of that row and [Grant.Refused] there is a browse that failed
-     * while the system modal was still on the glass; neither may stand between a phone and a seat.
-     * What still may is [Grant.Unasked] — covered by the sweep above — because raising the prompt
-     * is something the host standing there can actually do.
+     * ASKED is a NEARBY DEVICES probe that heard nothing clear (D-303); seated on it, a phone could
+     * not be measured all round (D-308). NOT ON THIS PHONE is hardware, not consent.
      */
     @Test
-    fun theUnconfirmableRowIsDoneAtAsked() {
-        for (standing in listOf(Grant.Asked, Grant.Refused)) {
-            val perms = NoPermissions()
-            DevicePermission.entries.forEach { perms.says(it, Grant.Granted) }
-            perms.says(DevicePermission.LocalNetwork, standing)
-            assertEquals(
-                emptyList(), perms.missing(),
-                "LOCAL NETWORK reading $standing refuses a seat, and no call on this platform will " +
-                    "ever move it off that — a gate that cannot be opened",
-            )
-        }
-    }
-
-    /**
-     * **Local Network stops at ASKED and that is enough to be seated.**
-     *
-     * iOS exposes no read-back for this grant, so the honest state after raising the prompt is
-     * *asked* — see [Grant.Asked]. Blocking a seat on it would be a gate nobody can ever open on
-     * the one permission the platform will not answer; the real answer arrives when the home goes
-     * on the air, where the hosting refusal already names the cause and offers the settings page.
-     */
-    @Test
-    fun aPermissionTheOsWillNotReportOpensTheGateOnceItHasBeenAsked() {
-        assertTrue(
+    fun askedClosesTheGateAndAMissingSensorDoesNot() {
+        assertFalse(
             Grant.Asked.opensTheGate,
-            "ASKED closes the gate — which on Local Network is a gate that can never open, " +
-                "because iOS has no call that reports that grant",
+            "ASKED opens the gate — a NEARBY DEVICES probe with no answer seats a phone that cannot " +
+                "be measured all round",
         )
         assertTrue(
             Grant.Unavailable.opensTheGate,

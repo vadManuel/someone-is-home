@@ -7,6 +7,7 @@ import home.someoneshome.model.protocol.LobbyBody
 
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -30,9 +31,36 @@ data class NearbyHome(val name: String, val address: String, val port: Int)
  * is [MemoryHomeFinder].
  */
 interface HomeFinder {
-    /** Begin looking. [onFound] fires once per home found, on whatever thread found it. */
-    fun start(onFound: (NearbyHome) -> Unit)
+    /**
+     * Begin looking. [onFound] fires once per home found, on whatever thread found it.
+     *
+     * [onRefused] fires when the OS will not let the phone look at all (D-309): on iOS, a browse
+     * refused because Local Network is off. The search is over when it fires; [stop] and [start]
+     * again to look again.
+     */
+    fun start(onFound: (NearbyHome) -> Unit, onRefused: () -> Unit = {})
     fun stop()
+}
+
+/**
+ * **What JOIN A HOME says under NETWORKS NEARBY while no home is listed** (D-309, the owner's words,
+ * 2026-11-20). Set by [LobbyModel] from what the radio said; the screen only draws it.
+ */
+enum class Listening(
+    /** The caption the screen draws, exactly the owner's words. */
+    val caption: String,
+) {
+    /** Still looking, and nothing has answered yet. */
+    Looking("LISTENING FOR A HOME ON THIS NETWORK"),
+
+    /**
+     * Looked for [LobbyModel.NO_HOME_AFTER_MILLIS] and nothing answered. The phone keeps looking,
+     * and a home that answers later is listed as usual.
+     */
+    NothingFound("NO HOME ON THIS NETWORK"),
+
+    /** The OS refused the search: Local Network is off. OPEN SETTINGS is drawn under it. */
+    Off("LOCAL NETWORK IS OFF"),
 }
 
 /**
@@ -215,8 +243,38 @@ interface LobbyLink {
  * screen the app never shows.
  */
 class MemoryHomeFinder(private val homes: List<NearbyHome> = emptyList()) : HomeFinder {
-    override fun start(onFound: (NearbyHome) -> Unit) = homes.forEach(onFound)
+    override fun start(onFound: (NearbyHome) -> Unit, onRefused: () -> Unit) = homes.forEach(onFound)
     override fun stop() = Unit
+}
+
+/**
+ * **A finder a test drives by hand** (D-309): it finds and refuses only when told, so a test can
+ * walk JOIN A HOME through LISTENING, NO HOME and LOCAL NETWORK IS OFF and back.
+ */
+class ScriptedHomeFinder : HomeFinder {
+    private var found: (NearbyHome) -> Unit = {}
+    private var refused: () -> Unit = {}
+
+    /** How many times looking began, a restart included. Test-facing. */
+    var starts: Int = 0
+        private set
+
+    override fun start(onFound: (NearbyHome) -> Unit, onRefused: () -> Unit) {
+        starts++
+        found = onFound
+        refused = onRefused
+    }
+
+    override fun stop() {
+        found = {}
+        refused = {}
+    }
+
+    /** A home answered. */
+    fun answers(home: NearbyHome) = found(home)
+
+    /** The OS refused the search. */
+    fun refuses() = refused()
 }
 
 /**
@@ -481,8 +539,9 @@ class LobbyModel(
      * `deviceSystemSettings()::open`; **defaulted to nothing, so a bench, a screenshot and a
      * rendering test all draw the control and none of them leaves the app.**
      *
-     * It is reachable from exactly one place — see [openSystemSettings] — and that place is host
-     * setup, in a lit room, before any round exists.
+     * It is reachable from two places, both in a lit room before any round exists: the control
+     * under the hosting refusal ([openSystemSettings]) and the one under LOCAL NETWORK IS OFF on
+     * JOIN A HOME (D-309).
      */
     private val settings: () -> Unit = {},
     /**
@@ -574,6 +633,40 @@ class LobbyModel(
     /** The homes on the air, in the order they answered. */
     var nearby: List<NearbyHome> by mutableStateOf(emptyList())
         private set
+
+    /**
+     * **What the screen says while no home is listed** (D-309). [Listening.Off] from the radio's
+     * refusal; [Listening.NothingFound] when a look ran [NO_HOME_AFTER_MILLIS] unrefused and found
+     * nothing; [Listening.Looking] otherwise.
+     */
+    var listening: Listening by mutableStateOf(Listening.Looking)
+        private set
+
+    /**
+     * **Which look this is**: counted up each time looking begins, a restart included, so the
+     * screen's timer for [NO_HOME_AFTER_MILLIS] restarts with it and a timer from an earlier look
+     * changes nothing ([lookedFor]).
+     */
+    var looks: Int by mutableIntStateOf(0)
+        private set
+
+    /**
+     * ⚠️ **[looks] and [listening] as plain fields, which is what [look] and [lookedFor] read.**
+     * [look] is called inside a composition by fixtures that build a lobby in `setContent`; a read
+     * of either state there subscribed that composition to it, so the screen's own [look] made it
+     * build a new lobby, which looked again, for ever (`EndingScreensTest` hung on JOIN A HOME).
+     * The two states are only written here; only the screen reads them.
+     */
+    private var lookCount = 0
+    private var off = false
+
+    /** The OS refused the current look. Reset when looking begins again. */
+    private var refusedThisLook = false
+
+    private fun hear(next: Listening) {
+        off = next == Listening.Off
+        listening = next
+    }
 
     /** The home this phone attached to, or none. */
     var attached: NearbyHome? by mutableStateOf(null)
@@ -675,15 +768,52 @@ class LobbyModel(
         refusal = null
     }
 
-    /** Begin listening for homes. Idempotent from the screen's point of view. */
+    /**
+     * Begin listening for homes. Idempotent from the screen's point of view.
+     *
+     * **LOCAL NETWORK IS OFF holds across a restart** (D-309) rather than flickering back to
+     * LISTENING: it clears when a home answers, or when this look runs [NO_HOME_AFTER_MILLIS]
+     * without being refused ([lookedFor]). A phone still refused is refused again at once.
+     */
     fun look() {
-        finder.start { found ->
-            // By address and port, not by name: two households on one network may both have
-            // called their home THE BUNGALOW, and the one that answered second must not vanish.
-            if (nearby.none { it.address == found.address && it.port == found.port }) {
-                nearby = nearby + found
-            }
-        }
+        lookCount += 1
+        looks = lookCount
+        refusedThisLook = false
+        if (!off) hear(Listening.Looking)
+        finder.start(
+            onFound = { found ->
+                // By address and port, not by name: two households on one network may both have
+                // called their home THE BUNGALOW, and the one that answered second must not vanish.
+                if (nearby.none { it.address == found.address && it.port == found.port }) {
+                    nearby = nearby + found
+                }
+                // A home answered, so the search is running: the radio is not refused.
+                hear(Listening.Looking)
+            },
+            onRefused = {
+                refusedThisLook = true
+                hear(Listening.Off)
+            },
+        )
+    }
+
+    /**
+     * **Look again from the start** (D-309): the app is back in the foreground, so someone who
+     * switched Local Network on in Settings sees JOIN A HOME recover. The count restarts.
+     */
+    fun lookAgain() {
+        finder.stop()
+        look()
+    }
+
+    /**
+     * **The look numbered [look] has run [NO_HOME_AFTER_MILLIS]** on the phone's clock (the screen's
+     * timer). If it is still the current look and was not refused, nothing listed reads NO HOME ON
+     * THIS NETWORK, and a LOCAL NETWORK IS OFF from an earlier look clears.
+     */
+    fun lookedFor(look: Int) {
+        val current = look == lookCount && !refusedThisLook
+        if (current) hear(if (nearby.isEmpty()) Listening.NothingFound else Listening.Looking)
     }
 
     fun stopLooking() = finder.stop()
@@ -1117,11 +1247,18 @@ class LobbyModel(
          * holding the phone in a lit room with the party in front of them, and two taps from a
          * person cleared exactly this on the night it was first seen.
          *
-         * **LOCAL NETWORK is the app's own name for the grant** — the setup walk lists it under
-         * that heading — so the host is being sent to a row they have already read once rather
-         * than to a term this screen invented.
+         * **LOCAL NETWORK is iOS's own name for the grant**, the heading on the switch in Settings,
+         * so the host is sent to words they will find there rather than to a term this screen
+         * invented. (The setup walk listed it too, until D-309 took that row away.)
          */
         const val NOT_ON_THE_AIR_CAUSE: String = "CHECK LOCAL NETWORK PERMISSION"
+
+        /**
+         * **How long JOIN A HOME looks before it says NO HOME ON THIS NETWORK**: about ten seconds
+         * (D-309). ⚠️ Provisional, the owner's *about 10 s*. Counted on the phone's clock from when
+         * looking began, and again from every restart.
+         */
+        const val NO_HOME_AFTER_MILLIS: Long = 10_000L
 
         /**
          * **The windows the host may choose between, first one being the design's default.**

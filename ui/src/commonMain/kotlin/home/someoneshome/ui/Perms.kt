@@ -160,7 +160,9 @@ class PermsModel(
         ask(next) { grant ->
             states = states + (next to grant)
             // The row that was just answered is no longer the head of `missing` whichever way it
-            // went — granted removes it, refused stops the walk, and neither loops.
+            // went — granted removes it, refused or ASKED stops the walk, and none loops. An ASKED
+            // NEARBY DEVICES is still the head of `missing`, so the next press probes it again
+            // (D-309) rather than this walk probing it forever.
             if (grant.opensTheGate) requestMissing()
         }
     }

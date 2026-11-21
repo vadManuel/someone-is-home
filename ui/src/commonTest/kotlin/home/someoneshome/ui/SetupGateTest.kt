@@ -200,22 +200,17 @@ class SetupGateTest {
     }
 
     /**
-     * ⚠️ **HOST WITH THIS HOME, on the owner's two phones** (2026-08-25).
+     * **D-309: a host whose NEARBY DEVICES reads ASKED is refused**, and the refusal names it.
      *
-     * Local Network granted on both, the row saying the prompt had been raised, and the button
-     * answering *this phone cannot take a seat yet · LOCAL NETWORK*. Same arrangement as the two
-     * above and the same path a thumb takes — no `refresh()`, because the Perms screen is not the
-     * screen the owner was standing on when they pressed it.
+     * ASKED is a probe that heard nothing clear in two seconds (D-303). Seated on it, the phone
+     * could not be measured all round (D-308), so it is held at the gate like any missing row. Same
+     * path a thumb takes, with no `refresh()`.
      */
     @Test
-    fun theHostIsNotRefusedOverTheGrantIosWillNotReportBack() {
+    fun aHostWhoseNearbyDevicesReadsAskedIsRefused() {
         val model = FlowModel(
             perms = PermsModel(
-                read = {
-                    // What the seam really held: the browse that raises the prompt failed while the
-                    // modal was still up, and that was written down as a refusal.
-                    if (it == DevicePermission.LocalNetwork) Grant.Refused else Grant.Granted
-                },
+                read = { if (it == DevicePermission.NearbyDevices) Grant.Asked else Grant.Granted },
             ),
             homes = SavedHomesModel.sample(),
             lobby = LobbyModel(),
@@ -225,12 +220,17 @@ class SetupGateTest {
 
         model.hostHome(model.homes.homes.first().name)
 
-        assertNull(
-            model.lobby.refusal,
-            "the owner's sentence, still: '${model.lobby.refusal}'",
+        assertTrue(!model.lobby.hosting, "a phone whose NEARBY DEVICES reads ASKED went on the air")
+        val refusal = assertNotNull(model.lobby.refusal, "the host was refused with no reason given")
+        assertTrue(
+            DevicePermission.NearbyDevices.label in refusal,
+            "the refusal does not name NEARBY DEVICES: '$refusal'",
         )
-        assertTrue(model.lobby.hosting, "a phone with Local Network switched on could not host")
-        assertEquals(ScreenId.Lobby, model.state.screen, "the host did not reach the lobby")
+        assertEquals(
+            emptyList(),
+            DevicePermission.entries.filter { it != DevicePermission.NearbyDevices && it.label in refusal },
+            "the refusal names rows this phone was granted: '$refusal'",
+        )
     }
 
     /**

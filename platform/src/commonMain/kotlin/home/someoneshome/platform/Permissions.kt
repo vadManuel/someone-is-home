@@ -22,8 +22,10 @@ import home.someoneshome.model.grantsMissing
  *
  * ### It never reports a grant it did not hear
  *
- * The one permission iOS will not answer at all is Local Network, and the seam says so rather than
- * guessing — see [Grant.Asked]. The rule the whole interface is built on is `SystemSettings`': a
+ * The one permission iOS will not answer at all is Local Network, so it is not a row (D-309): iOS
+ * raises that prompt itself when the phone first browses or advertises. NEARBY DEVICES answers only
+ * through a probe, and a probe with no clear answer says so rather than guessing — see
+ * [Grant.Asked]. The rule the whole interface is built on is `SystemSettings`': a
  * seam that invented an answer would be a second source of truth about a fact the radio already
  * settles, and the two would disagree on the phone where it mattered.
  */

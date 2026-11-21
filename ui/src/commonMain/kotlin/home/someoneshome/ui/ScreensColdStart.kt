@@ -15,6 +15,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -27,7 +28,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import home.someoneshome.model.DevicePermission
 import home.someoneshome.model.Grant
-import home.someoneshome.model.opensTheGate
 
 /**
  * Cold start: the screens before anyone has joined anything, and the launch gate before them.
@@ -162,8 +162,9 @@ private const val MAX_DOTS = 10_000
 /**
  * Permissions, asked **at startup, in the light — never at arming** (D-161).
  *
- * Every input this game has is a permission: camera, local network, Bluetooth, motion,
- * notifications. A system prompt appearing mid-round would be an unauthored screen state at the
+ * Every input this game has is a permission: camera, Bluetooth, nearby devices, motion,
+ * notifications. Local Network is not asked here (D-309): iOS raises it by itself when the phone
+ * first browses for a home or advertises one. A system prompt appearing mid-round would be an unauthored screen state at the
  * exact moment screen state is evidence, so the whole set is collected while nothing is at stake
  * and nothing is asked for again.
  *
@@ -209,12 +210,11 @@ fun PermsScreen() {
                 KitRules(p) {
                     DevicePermission.entries.forEach { permission ->
                         val grant = perms.grant(permission)
-                        // **The row's own rule, not [Grant]'s** — a row iOS will never confirm is
-                        // done at ASKED, and drawing it as outstanding beside four done ones is the
-                        // screen agreeing with the gate that something is still owed when nothing
-                        // is. An open row's state is an outline; one still owed is the filled tag,
-                        // which is the mockup's TAP TO GRANT.
-                        val open = permission.opensTheGate(grant)
+                        // **The gate's own rule** (D-309: every row must read GRANTED), so the
+                        // screen and the gate agree about what is still owed. An open row's state is
+                        // an outline; one still owed is the filled tag, which is the mockup's TAP TO
+                        // GRANT, and NEARBY DEVICES at ASKED is owed.
+                        val open = grant.opensTheGate
                         Row(
                             Modifier.fillMaxWidth().heightIn(min = 56.dp)
                                 .edgeLine(PanelSide.Bottom, p.line, 1.dp)
@@ -242,18 +242,6 @@ fun PermsScreen() {
                     // Never both, and never an invented sentence: a complete phone has nothing here
                     // at all.
                     (perms.refusal ?: perms.gateRefusal())?.let { KitBody(it, p, size = 22) }
-                    // **The sentence the value column cannot hold** (the owner's 2026-08-25
-                    // report). ASKED is the end state of that row and iOS has no call that will
-                    // ever move it — so without this line a host who has granted the permission is
-                    // reading a word that looks like a countdown to an answer that is not coming.
-                    // It appears only on the phone that is really in that state.
-                    if (DevicePermission.entries.any { !it.confirmable && perms.grant(it) == Grant.Asked }) {
-                        KitCaption(
-                            "iOS never reports the local network grant. ASKED is all this phone can know; " +
-                                "the house finds out when it goes on the air.",
-                            p, size = 20,
-                        )
-                    }
                 }
             }
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -318,6 +306,16 @@ fun JoinScreen() {
     // Listening starts when the screen does. Nothing before this point has any business having
     // the radio on: permissions are granted one screen back, in the light.
     LaunchedEffect(lobby) { lobby.look() }
+    // **The look's clock** (D-309): NO HOME ON THIS NETWORK after about ten seconds of a look that
+    // found nothing. Keyed on the look, so a restart (back from Settings) restarts the count; the
+    // decision is the model's ([LobbyModel.lookedFor]), the screen only keeps the time.
+    val look = lobby.looks
+    LaunchedEffect(lobby, look) {
+        if (look > 0) {
+            delay(LobbyModel.NO_HOME_AFTER_MILLIS)
+            lobby.lookedFor(look)
+        }
+    }
     KitScreen {
         // **The page name, and the way back to the permissions walk beside it** (E-PAY-6). CONTINUE
         // is a real `go` from `Perms`, so the trail is often there. **And PERMISSIONS is named as
@@ -339,16 +337,18 @@ fun JoinScreen() {
             }
         }
         KitLabel("NETWORKS NEARBY", p, Modifier.padding(top = 8.dp).then(SILK_LINE))
+        val off = lobby.listening == Listening.Off
         KitRules(p) {
-            if (lobby.nearby.isEmpty()) {
+            if (lobby.nearby.isEmpty() || off) {
                 // Not an error and not a dialog: a house that has not been started yet looks
                 // exactly like this, and the phone says what it is doing rather than what went
-                // wrong.
+                // wrong. Three captions, the owner's words (D-309): still looking, looked and
+                // found nothing, and the OS refusing the search.
                 Box(
                     Modifier.fillMaxWidth().heightIn(min = 60.dp).edgeLine(PanelSide.Bottom, p.line, 1.dp)
                         .padding(horizontal = 2.dp),
                     contentAlignment = Alignment.CenterStart,
-                ) { KitCaption("LISTENING FOR A HOME ON THIS NETWORK", p) }
+                ) { KitCaption(lobby.listening.caption, p) }
             }
             lobby.nearby.forEach { home ->
                 NetworkRow(
@@ -361,6 +361,9 @@ fun JoinScreen() {
                 )
             }
         }
+        // **Local Network is off: the way to it, under the words** (D-309). PERMISSIONS' own control,
+        // same copy and style, and the same verb.
+        if (off) KitSecondary("OPEN SETTINGS", p, onClick = actions.openSystemSettings)
         KitSpacer()
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             // **What the last tap was refused with** — a permission still missing, or no name typed

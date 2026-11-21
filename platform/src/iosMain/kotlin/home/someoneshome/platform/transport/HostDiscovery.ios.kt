@@ -81,6 +81,7 @@ actual class HostAdvertiser actual constructor(
 actual class HostBrowser actual constructor(
     private val onFound: (name: String, address: String, port: Int) -> Unit,
     private val onEvent: (String) -> Unit,
+    private val onRefused: (code: Int?) -> Unit,
 ) {
 
     private val browser = NSNetServiceBrowser()
@@ -104,7 +105,10 @@ actual class HostBrowser actual constructor(
             browser: NSNetServiceBrowser,
             didNotSearch: Map<Any?, *>,
         ) {
-            onEvent("SEARCH FAILED $didNotSearch")
+            // Still logged, and now surfaced (D-309): the lobby reads it as LOCAL NETWORK IS OFF.
+            val code = errorCodeOf(didNotSearch)
+            onEvent(searchFailureLine(code, didNotSearch.toString()))
+            onRefused(code)
         }
 
         override fun netServiceDidResolveAddress(sender: NSNetService) {

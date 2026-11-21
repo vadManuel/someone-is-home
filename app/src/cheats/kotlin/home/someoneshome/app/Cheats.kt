@@ -556,6 +556,25 @@ fun CheatRoot(uwb: Boolean) {
     // own call: a host who walks out to Settings comes back to that screen, and this one fired long
     // before they left.
     LaunchedEffect(permissions) { permissions.refresh() }
+    // **And back from Settings onto PERMISSIONS, the rows are read again** (D-309). The screen's own
+    // refresh runs when it is composed, and a walk out to Settings and back composes nothing, so a
+    // NEARBY DEVICES switched on there stayed REFUSED until the app was relaunched. Only on that
+    // screen: elsewhere a refresh would run a Nearby Interaction probe beside a round's sessions.
+    // **And back onto JOIN A HOME, the phone looks again** (D-309), so someone who switched Local
+    // Network on in Settings sees LOCAL NETWORK IS OFF give way to the homes on the network.
+    DisposableEffect(flow) {
+        val unwatch = deviceForeground().watch(
+            onBackground = {},
+            onForeground = {
+                when (flow.state.screen) {
+                    ScreenId.Perms -> flow.perms.refresh()
+                    ScreenId.Join -> flow.lobby.lookAgain()
+                    else -> Unit
+                }
+            },
+        )
+        onDispose { unwatch() }
+    }
     LaunchedEffect(sweeping) { if (sweeping) bench.sweep() }
     LaunchedEffect(scanSweeping) { if (scanSweeping) scan.sweep() }
     LaunchedEffect(setupSweeping) {

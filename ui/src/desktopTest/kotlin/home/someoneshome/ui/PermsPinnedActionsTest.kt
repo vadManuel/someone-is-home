@@ -21,8 +21,8 @@ import kotlin.test.assertTrue
 /**
  * **The PERMISSIONS screen's buttons stay on the glass in its tallest state** (D-305).
  *
- * One row refused, the rest owed and Local Network's caption showing put OPEN SETTINGS and REQUEST
- * WHAT IS MISSING below the edge at 720×1520 (D-303's `perms-tallest.png`), where nothing could
+ * One row refused and the rest owed (with Local Network's caption, until D-309 took that row away)
+ * put OPEN SETTINGS and REQUEST WHAT IS MISSING below the edge at 720×1520 (D-303's `perms-tallest.png`), where nothing could
  * tap them. The owner's ruling is a scroll with the buttons pinned under it, and this holds the
  * pinning: each button's whole box inside the screen.
  *
@@ -33,11 +33,24 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalTestApi::class)
 class PermsPinnedActionsTest {
 
+    /**
+     * **At the mockup's 720×1520 the buttons are on the glass.** Since D-309 took the LOCAL NETWORK
+     * row and its caption away, the tallest state fits there without scrolling; the buttons are
+     * held on the glass all the same.
+     */
     @Test
-    fun theButtonsAreOnTheScreenInTheTallestState() = runDesktopComposeUiTest(width = 720, height = 1520) {
+    fun theButtonsAreOnTheScreenInTheTallestState() = tallest(height = 1520, mustScroll = false)
+
+    /**
+     * **And on a shorter screen, where the tallest state does need the scroll**, so the pinning is
+     * still what is under test (D-305).
+     */
+    @Test
+    fun theButtonsArePinnedWhenTheTallestStateScrolls() = tallest(height = SHORT, mustScroll = true)
+
+    private fun tallest(height: Int, mustScroll: Boolean) = runDesktopComposeUiTest(width = 720, height = height) {
         // PermsWalkRender's tallest state, on its canvas: the mockup's camera band above.
         val os = DevicePermission.entries.associateWith { Grant.Unasked }.toMutableMap().apply {
-            this[DevicePermission.LocalNetwork] = Grant.Asked
             this[DevicePermission.NearbyDevices] = Grant.Refused
         }
         val perms = PermsModel(read = { os.getValue(it) }).also { it.refresh() }
@@ -51,15 +64,17 @@ class PermsPinnedActionsTest {
         waitForIdle()
         val screen = onRoot().fetchSemanticsNode().size.height
 
-        // The state really is too tall: the caption ends below the scrolling part's bottom edge.
-        // Without that this test would pass on a screen that never needed the scroll.
-        val scroll = onNodeWithTag(PERMS_SCROLL).fetchSemanticsNode()
-        val caption = onNodeWithText("iOS never reports", substring = true).fetchSemanticsNode()
-        assertTrue(
-            caption.bottom() > scroll.bottom(),
-            "the tallest state fits without scrolling (caption ends at ${caption.bottom()}, the " +
-                "scrolling part at ${scroll.bottom()}), so it no longer tests the pinning",
-        )
+        // The state really is too tall: the gate's sentence ends below the scrolling part's bottom
+        // edge. Without that this test would pass on a screen that never needed the scroll.
+        if (mustScroll) {
+            val scroll = onNodeWithTag(PERMS_SCROLL).fetchSemanticsNode()
+            val gate = onNodeWithText("THIS PHONE CANNOT TAKE A SEAT YET", substring = true).fetchSemanticsNode()
+            assertTrue(
+                gate.bottom() > scroll.bottom(),
+                "the tallest state fits without scrolling at $height (the gate's sentence ends at " +
+                    "${gate.bottom()}, the scrolling part at ${scroll.bottom()}), so it no longer tests the pinning",
+            )
+        }
 
         for (button in listOf("OPEN SETTINGS", "REQUEST WHAT IS MISSING")) {
             val node = onNodeWithText(button).node()
@@ -75,4 +90,9 @@ class PermsPinnedActionsTest {
 
     /** The node's bottom edge in the root, unclipped. */
     private fun SemanticsNode.bottom(): Float = positionInRoot.y + size.height
+
+    private companion object {
+        /** A screen shorter than the mockup's, on which the tallest state runs under the scroll's edge. */
+        const val SHORT = 1100
+    }
 }

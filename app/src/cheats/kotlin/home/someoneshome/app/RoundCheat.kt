@@ -135,6 +135,9 @@ class RoundCheat(
     /** How far along its own order's destinations this phone has walked. See [shift]. */
     private var walked = 0
 
+    /** Every card on this phone's own order has been walked. See [backToPage2]. */
+    private var walkedEvery = false
+
     /**
      * **The page-2 tiles this seat keeps its thumb on, and why they are flags rather than calls.**
      *
@@ -348,6 +351,7 @@ class RoundCheat(
                 sawOpening = false
                 scanning = false
                 walked = 0
+                walkedEvery = false
                 pressingEgress = false
                 pressingStatic = false
                 pressingRevoke = false
@@ -451,6 +455,26 @@ class RoundCheat(
             client.act(IntentMessage.BeginSubroutine(marker))
             delay(STEP_MILLIS)
         }
+        walkedEvery = scanning && walked >= mine.size
+    }
+
+    /**
+     * **Done with the work, the thumb goes back to page 2** (D-307, D-309's rehearsal change).
+     *
+     * A report runs only from the main view, page 1 or 2. Until this, a bench phone stood on its
+     * last Subroutine's answer for the rest of the shift, so the seat act 3 picked as the reporter
+     * was off the main view and the log said `NO MEETING CAME OF THE REPORT`. A person who has
+     * read the house's answer walks away from the card; this is that walk, once the phone's own
+     * order is walked, nothing caught is waiting for BEGIN and the house has answered the hand-over.
+     * Page 2 is where an Insider's REVOKE tile is held as well (D-231).
+     */
+    private fun backToPage2() {
+        val state = flow.state
+        val answered = state.verdict != null && Subroutine.entries.any { it.screen == state.screen }
+        if (!over && walkedEvery && !caughtScan && answered) {
+            flow.go(ScreenId.Page2)
+            note("THE HOUSE ANSWERED THE LAST HAND-OVER — BACK ON PAGE 2, WHERE A REPORT RUNS")
+        }
     }
 
     /**
@@ -472,6 +496,7 @@ class RoundCheat(
                 caughtScan = false
                 workTheCaughtScan()
             }
+            backToPage2()
             ringingSince?.let { rang ->
                 if (monotonicNanos() - rang > RING_NANOS) {
                     ringingSince = null

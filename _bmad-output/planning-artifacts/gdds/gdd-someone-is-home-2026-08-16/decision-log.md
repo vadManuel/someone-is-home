@@ -11714,6 +11714,241 @@ session runs (D-306's raised item 2).
 8. **D-300 decision 8 settled**: `RoundOverTransport` and `RoundClient` keep `NoRanging` as their
    default, for the tests whose question is not ranging; the app's root always passes its radio.
 
+### D-309 · **Every permission the game asks for is required to play: NEARBY DEVICES must read GRANTED before a phone leaves PERMISSIONS, ASKED holds it there and is probed again, the LOCAL NETWORK row is gone, and JOIN A HOME says when nothing answers and when Local Network is off — built (recording stays 44)**
+
+**The rulings** (owner, 2026-11-20): *"UWB should block access to the game. You must allow UWB on your
+phone to play. Every request we make in the game is required for one to play."* And, the same day,
+relayed by the coordinator: the LOCAL NETWORK row comes off PERMISSIONS entirely, with its caption
+and everything that raised its prompt from that screen, because iOS raises the Local Network prompt
+by itself when the phone first browses for a home on JOIN A HOME, or advertises one when hosting.
+The Info.plist's `NSLocalNetworkUsageDescription` and `NSBonjourServices` stay: iOS needs them for
+its own prompt. And, the same day, the words for JOIN A HOME, approved by the owner (*"lgtm"*):
+under NETWORKS NEARBY, LISTENING FOR A HOME ON THIS NETWORK while still looking, NO HOME ON THIS
+NETWORK after about ten seconds of finding nothing, and LOCAL NETWORK IS OFF with OPEN SETTINGS under
+it when iOS refuses the search. This supersedes D-303's decision 10 in the part that let ASKED
+through the gate, closes D-308's *For the owner* note (a phone seated on ASKED, then unmeasurable
+all round), and retires the 2026-08-25 rule that an unconfirmable row opened the gate at ASKED.
+
+**Now, the gate** (`Grant.opensTheGate`, `model`). A row opens D-161's gate on **GRANTED** only, and
+on NOT ON THIS PHONE, which is hardware rather than consent and is kept as it was (on NEARBY DEVICES
+it does not arise here: D-292's launch gate refuses a phone without Ultra Wideband first). ASKED no
+longer passes. With the LOCAL NETWORK row gone, ASKED is NEARBY DEVICES' alone: its probe ran no
+session and heard no refusal within two seconds of an active app (D-303). The one rule is read by
+every door: the PERMISSIONS screen's rows and CONTINUE (`missing`), the lobby's gate at hosting and
+taking a seat (`missingNow`), and D-235's skip after the self-test. `DevicePermission.confirmable`
+and the per-row `DevicePermission.opensTheGate` are gone with the only row that used them.
+
+1. **ASKED on NEARBY DEVICES keeps the phone at PERMISSIONS**, its tag the filled one a row still owed
+   draws, and the gate's sentence names it like any missing row: THIS PHONE CANNOT TAKE A SEAT YET /
+   NEARBY DEVICES. No CONTINUE.
+2. **REQUEST WHAT IS MISSING and a tap on the row probe again** (the iOS seam already probed on a
+   standing ASKED), so a phone whose first probe timed out can reach GRANTED without reinstalling.
+   The walk (`requestMissing`) stops at an ASKED answer as it stops at a refusal, so a probe that
+   still hears nothing is one probe per press, never a loop.
+3. **REFUSED keeps OPEN SETTINGS** as before. **A tap on a refused NEARBY DEVICES row now probes
+   again as well**: the iOS seam reported a standing refusal without asking, so the row's tap, which
+   the screen's own KDoc calls a re-read, re-read nothing for this row. A probe raises nothing once
+   the person has answered.
+4. **Back from Settings onto PERMISSIONS, the rows are read again** (`CheatRoot`, on the foreground
+   notification, only while the screen is PERMISSIONS). The screen's refresh ran only when it was
+   composed, and a walk to Settings and back composes nothing. Only on that screen, because
+   elsewhere a refresh would run a Nearby Interaction probe beside a round's sessions.
+5. **The skip** (D-235) asks the same gate at the end of the self-test, so a phone whose NEARBY
+   DEVICES reads ASKED then is shown PERMISSIONS. On an install that has raised the prompt the row
+   reads ASKED until the app root's launch refresh probes it, so a granted phone skips only if that
+   probe answers inside the self-test's 2.4 seconds; otherwise it lands on PERMISSIONS and the row
+   moves to GRANTED when the probe lands (the refresh's own callback), and CONTINUE appears.
+
+**Now, Local Network.** The LOCAL NETWORK row (`DevicePermission.LocalNetwork`), the caption under it
+(*iOS never reports the local network grant. ASKED is all this phone can know; the house finds out
+when it goes on the air.*), the iOS seam's browse that raised the prompt from PERMISSIONS
+(`requestLocalNetwork`, its `NSNetServiceBrowser` and delegate) and its `NSUserDefaults` record of
+the raising (`home.someoneshome.perms.localNetworkRaised`, `localNetworkStanding`), which nothing
+else read, are gone. The walk is five rows: CAMERA, BLUETOOTH, NEARBY DEVICES, MOTION & FITNESS,
+NOTIFICATIONS. It was the one row the phone could not read: iOS has no call that reports that grant,
+so the row could only ever say ASKED, and the truth was always found where D-179 and D-180 put it,
+at hosting, where the home goes on the air or does not and the refusal names the grant and opens
+Settings. That refusal (CHECK LOCAL NETWORK PERMISSION) is untouched; only a comment beside it, which
+said the setup walk lists the grant, now says the words are the ones on the switch in Settings.
+
+**No new words, light, colour or type on PERMISSIONS.** The rows already had ASKED, TAP TO GRANT,
+REFUSED and GRANTED, and the gate its sentence. The screen lost a row and a caption and gained
+nothing.
+
+**Now, JOIN A HOME** (`JoinScreen`, `LobbyModel`, `HostDiscovery`). Under NETWORKS NEARBY, while no
+home is listed, the one caption row draws one of three captions, each the owner's exact words, in the
+caption style the row already used. The state is `LobbyModel.listening` (`Listening.Looking`,
+`NothingFound`, `Off`), set from what the radio said; the screen only draws it.
+
+1. **Still looking**: LISTENING FOR A HOME ON THIS NETWORK, unchanged.
+2. **Looked and found nothing**: NO HOME ON THIS NETWORK once a look has run
+   `LobbyModel.NO_HOME_AFTER_MILLIS` (10 000, ⚠️ provisional, the owner's *about 10 s*) with nothing
+   answering. Counted on the phone's clock from when looking began: the screen keeps the time (a
+   `LaunchedEffect` keyed on the look's number, `LobbyModel.looks`) and the model decides
+   (`lookedFor`). A restart is a new look and restarts the count; a timer from an earlier look
+   changes nothing. The phone keeps looking, and a home that answers later is listed as usual.
+3. **Local Network is off**: LOCAL NETWORK IS OFF, with PERMISSIONS' OPEN SETTINGS under it (same copy,
+   `KitSecondary`, the same `actions.openSystemSettings`). `HostBrowser`'s `didNotSearch`, which only
+   logged `SEARCH FAILED`, now also goes up as `onRefused(code)`, the code read as `errorCodeOf` reads
+   it; `NearbyHomes` hands it to `HomeFinder.start`'s new `onRefused`, and the model sets `Off`. The log
+   line stays, now `SEARCH FAILED code=… (POLICY DENIED: LOCAL NETWORK IS OFF)` for DNS-SD's
+   `kDNSServiceErr_PolicyDenied` (−65570, `DNS_SD_POLICY_DENIED`) and `(READ AS LOCAL NETWORK IS OFF,
+   PROVISIONAL)` for any other. ⚠️ **Whether `NSNetServiceBrowser` reports −65570 in
+   `NSNetServicesErrorCode` or one of its own codes is not known here, so every search failure reads
+   as OFF**, and the phone test reads the code off the log.
+4. **Back in the foreground on JOIN A HOME, the phone looks again** (`LobbyModel.lookAgain`, from the
+   same `CheatRoot` foreground watch as PERMISSIONS' refresh), so someone who switched Local Network
+   on in Settings sees the screen recover. **OFF holds across the restart** rather than flickering to
+   LISTENING: it clears when a home answers (the search is plainly running) or when the restarted look
+   runs its ten seconds unrefused (then NO HOME). A phone still refused is refused again at once and
+   stays OFF.
+5. **Homes already listed stay listed under OFF**, as they stay across any restart; a home is never
+   removed from the list today.
+
+The hosting refusal (CHECK LOCAL NETWORK PERMISSION) is unchanged. `LobbyModel.settings`' KDoc now
+names both controls that reach it.
+
+**The rehearsal** (`RoundCheat`, cheats). D-308 left act 3's scripted reporter standing on its last
+Subroutine's answer, off the main view, so its report started nothing and the log said `NO MEETING
+CAME OF THE REPORT` (D-307: a report runs only from page 1 or 2). Now each bench phone, once it has
+walked every card on its own order, has nothing caught waiting for BEGIN and the house has answered
+its last hand-over, walks away from the card to page 2 (`flow.go(ScreenId.Page2)`, a person's
+swipe) and logs `THE HOUSE ANSWERED THE LAST HAND-OVER — BACK ON PAGE 2, WHERE A REPORT RUNS`. The
+reporter is whichever living seat act 3 picks, so every bench phone does it; page 2 is also where
+an Insider's REVOKE tile is held (D-231). `rehearse.sh` itself was not run here, so that the log now
+says `A MEETING WAS CALLED` is unproven until it is.
+
+**Recording: no change, 44 stays.** The setup walk is not recorded and no event, effect or wire body
+changed.
+
+**Leak and parity.** Setup has no roles; the gate reads the same rows on every phone. The bench's
+walk to page 2 is the same on every bench seat, Resident or Insider.
+
+**Rendered and looked at** (`PermsWalkRender`, 720×1520 with the mockup's camera band,
+`ui/build/screens/perms-*.png`): fresh (five rows TAP TO GRANT, the sentence naming all five, REQUEST
+WHAT IS MISSING); NEARBY DEVICES unasked; **NEARBY DEVICES ASKED, new** (four outlined GRANTED tags,
+NEARBY DEVICES' filled ASKED tag, THIS PHONE CANNOT TAKE A SEAT YET / NEARBY DEVICES over REQUEST
+WHAT IS MISSING, no CONTINUE, no OPEN SETTINGS); NEARBY DEVICES refused (REFUSED, the sentence
+naming it, OPEN SETTINGS over REQUEST WHAT IS MISSING); all granted (CONTINUE alone); CONTINUE
+pressed (JOIN A HOME); and the tallest state (one row refused, four owed), which now fits at
+720×1520: the sentence's three lines sit directly on OPEN SETTINGS and REQUEST WHAT IS MISSING, both
+whole on the glass, so its scrolled twin is the same picture. No LOCAL NETWORK row or caption on any
+of them.
+
+**JOIN A HOME, rendered and looked at** (`JoinListeningScreenTest`, 720×1520 with the camera band,
+`ui/build/screens/join-*.png`): `join-listening` (LISTENING FOR A HOME ON THIS NETWORK over two lines
+in the caption row, nothing else under NETWORKS NEARBY, HOST A HOME INSTEAD at the bottom);
+`join-no-home` (NO HOME ON THIS NETWORK on one line in the same row); `join-off` (LOCAL NETWORK IS OFF
+in the same row, OPEN SETTINGS directly under the row, in PERMISSIONS' outlined secondary style); and
+`join-home-listed` (THE BUNGALOW and 192.168.1.24 in the row, no caption). Nothing else on the screen
+moved.
+
+**The pinned buttons (D-305)**: `PermsPinnedActionsTest` asserted that the tallest state overflows the
+scroll at 720×1520, and with a row and a caption gone it no longer does (`the gate's sentence ends at
+1200.0, the scrolling part at 1200.0`). It is now two tests: at 720×1520 both buttons lie whole on
+the screen, and at 720×1100, where the tallest state does run under the scroll's edge (asserted), both
+buttons are still whole on the screen. The pinning itself is unchanged.
+
+**Proved, red against the injected break first, then restored.** ASKED let through the gate again
+(`Grant.opensTheGate` with `this == Asked` put back), `:ui:desktopTest` on the PERMISSIONS and gate
+tests, 8 red, quoted from the XML: `PermsModelTest` *nearbyDevicesReadingAskedKeepsThePhoneAtPermissions*:
+`NEARBY DEVICES reads ASKED and the phone was seated anyway`; *aProbeAgainThatAnswersGrantedLetsThePhoneContinue*:
+`the arrangement is wrong: ASKED already opened the gate`; *aProbeAgainThatStillSaysAskedStopsTheWalk*:
+`the walk probed NEARBY DEVICES more than once expected:<[NearbyDevices]> but was:<[]>`;
+*everyRowClosesItOnAnythingButGranted*: `CAMERA reads Asked and the phone was seated anyway`;
+`PermsScreenTest` *nearbyDevicesReadingAskedHoldsThePhoneUntilAProbeAgainAnswersGranted*: `Did not expect
+any node but found '1' node that satisfies: (Text … contains 'CONTINUE' …)`; `PermsSkipTest`
+*aPhoneWhoseNearbyDevicesReadsAskedIsShownThePermsScreen*: `NEARBY DEVICES reads ASKED and the phone
+skipped the Perms screen expected:<Perms> but was:<Join>` and *aPhoneMissingAnyOneRowIsShownThePermsScreen*:
+`CAMERA Asked and the phone skipped the Perms screen expected:<Perms> but was:<Join>`; `SetupGateTest`
+*aHostWhoseNearbyDevicesReadsAskedIsRefused*: `a phone whose NEARBY DEVICES reads ASKED went on the
+air`. Restored; the counts below are the restored tree's.
+
+And for JOIN A HOME: `lookedFor` made to ignore whether this look was refused, `:ui:desktopTest` on
+the JOIN tests, 3 red: `JoinListeningTest` *aRefusedSearchSaysLocalNetworkIsOff*: `the timer of a
+refused look turned OFF into NO HOME expected:<Off> but was:<NothingFound>`;
+*offHoldsAcrossARestartThatIsRefusedAgain*: `a phone still refused stopped saying OFF
+expected:<Off> but was:<NothingFound>`; `JoinListeningScreenTest`
+*aRefusedSearchSaysOffAndOffersSettings*: `Did not expect any node but found '1' node that
+satisfies: (Text … contains 'NO HOME ON THIS NETWORK' …)`. Restored.
+
+**Tests changed.** `PermsModelTest`: the walk's first prompts are CAMERA then BLUETOOTH; the two Local
+Network cases (*the row iOS will never confirm…*, *every other row still closes it*) are replaced by
+*NEARBY DEVICES at ASKED keeps the phone at PERMISSIONS*, *a probe again that answers GRANTED lets
+the phone continue* (by the row and by REQUEST WHAT IS MISSING), *a probe again that still says ASKED
+stops the walk*, *every row closes it on anything but GRANTED* and *there is no LOCAL NETWORK row*.
+`PermissionsTest` (platform): every row at Unasked, Asked and Refused closes the gate; *ASKED closes
+the gate and a missing sensor does not* replaces *a permission the OS will not report opens the gate
+once asked* and *the unconfirmable row is done at ASKED*. `SetupGateTest`: *the host is not refused
+over the grant iOS will not report back* is replaced by *a host whose NEARBY DEVICES reads ASKED is
+refused*, naming it and nothing else. `PermsSkipTest`: ASKED is swept with Unasked and Refused over
+every row, and *a phone whose NEARBY DEVICES reads ASKED is shown the Perms screen* (and skips it when
+the probe answers GRANTED during the self-test). `PermsScreenTest`: REQUEST WHAT IS MISSING asks for
+CAMERA first, and *NEARBY DEVICES at ASKED holds the phone until a probe again answers GRANTED* (no
+CONTINUE, the sentence, the probe, then CONTINUE to JOIN A HOME); its fake OS probes again on ASKED,
+as the iOS seam does. `PermsWalkRender` gains the ASKED state; `PermsPinnedActionsTest` as above.
+New: `JoinListeningTest` (ui, common, 8), each transition on the model through a `ScriptedHomeFinder`:
+a look starts at LISTENING; ten seconds of nothing is NO HOME; a home after NO HOME is listed; a
+refused search is OFF and its own timer leaves it OFF; OFF holds across a restart refused again; OFF
+clears when the restarted look runs unrefused, and when a home answers; a restart restarts the count.
+`JoinListeningScreenTest` (ui, desktop, 3), on the screen's own clock: LISTENING, still LISTENING at
+nine seconds, NO HOME after ten, then a home answering is listed; a refused search draws OFF with
+OPEN SETTINGS, which opens Settings, and stays OFF past ten seconds; OFF clears when the look again
+finds a home.
+
+**Checked** (on the final tree, `test-results` cleared first: `./gradlew :model:check :ui:check
+:platform:check :app:check --continue` with the two variant sweeps excluded, then
+`:app:variantSweepRelease`, then `:app:variantSweepPlaytest`, each exit 0, the app's XML copied out
+after each because the sweeps write into one folder, every result XML counted with a python glob):
+model 355 (JVM) + 339 (iOS Simulator), ui 749 (desktop) + 371 (iOS Simulator), platform 209, app 261
+(debug), 155 (release sweep) and 261 (playtest sweep): **no failures, none skipped**. Against D-308:
+ui desktop 17 more (PERMISSIONS' six, `JoinListeningTest`'s eight run there too, and
+`JoinListeningScreenTest`'s three), ui iOS Simulator 11 more (`PermsModelTest`'s three and
+`JoinListeningTest`'s eight), platform 1 fewer (`PermissionsTest`: two cases out, one in).
+`vocabularyLint`, `redactionLint`, `boundaryCheck`, `armingCordon`, `benchSeedCordon` and
+`seedSourceCordon` clean. Core, harness and cards were not run: nothing in them changed. Neither
+known load flake fired. On the way: a first full run caught `vocabularyLint` on two test names
+(`…AtAsked…` runs two words into one of the lint's rejected stems); renamed `…ReadingAsked…`. A second hung in
+`EndingScreensTest`, which builds a lobby inside `setContent`: `look()` read `looks` there, so the
+screen's own `look()` rebuilt the lobby for ever; `look()` and `lookedFor()` now read plain fields
+and only write the two states.
+
+**Not on a phone, said plainly.** Nothing here has run on one. Unverified until it does: how often
+the probe answers ASKED on a phone that granted NEARBY DEVICES, and so how often a granted phone is
+shown PERMISSIONS for a moment at launch; that a probe on a refused install raises nothing and
+answers REFUSED again; that a NEARBY DEVICES switched on in Settings reads GRANTED on the return
+(iOS may instead relaunch the app after a privacy change, which reaches the same probe at launch);
+that iOS raises the Local Network prompt on JOIN A HOME and at hosting with no row asking first;
+what code `didNotSearch` carries when Local Network is off, and whether it fires at all; and that
+JOIN A HOME recovers on the return from Settings. The phone session's Setup section gains both
+checks.
+
+**Raised, not built.**
+
+1. **A phone whose probe keeps answering ASKED cannot play**, by the ruling. The only way on is a
+   probe that runs; nothing on the screen says why ASKED persists, and no new words were added.
+2. **A Local Network refusal on JOIN A HOME depends on iOS failing the browse.** If iOS instead
+   lets a refused browse run and find nothing, the screen says NO HOME ON THIS NETWORK, not OFF. The
+   phone test settles it.
+3. **A home that leaves the network stays listed** on JOIN A HOME, as before; nothing removes one.
+
+**Decisions for the owner** (each provisional):
+
+1. **REFUSED on NEARBY DEVICES probes again on a tap**, as a re-read, rather than reporting the
+   standing refusal.
+2. **The foreground refresh runs only on PERMISSIONS**, so no probe runs beside a round's sessions.
+3. **The rehearsal: every bench phone walks to page 2** once its order is walked and its last
+   hand-over answered, rather than only the seat act 3 names (another process cannot know it is the
+   reporter).
+4. **`PermsPinnedActionsTest` holds the pinning at 720×1100**, a screen on which the tallest state
+   still needs the scroll, since at 720×1520 it no longer does.
+5. **Every search failure reads as LOCAL NETWORK IS OFF**, with the code logged, until a phone shows
+   which code a refusal carries.
+6. **OFF holds across a restart** and clears on a home answering or ten unrefused seconds, rather
+   than going back to LISTENING at the restart.
+7. **The ten-second count is kept by the screen's clock** (a `LaunchedEffect` on the look's number)
+   and decided by the model; `LobbyModel` has no clock of its own.
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

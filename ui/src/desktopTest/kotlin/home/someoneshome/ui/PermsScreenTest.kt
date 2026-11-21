@@ -39,7 +39,9 @@ class PermsScreenTest {
             read = { standing[it] ?: Grant.Unasked },
             ask = { permission, then ->
                 asked += permission
-                val answer = standing[permission]?.takeIf { it != Grant.Unasked } ?: gives(permission)
+                // A standing answer is reported as it is, except ASKED, which the iOS seam probes
+                // again (NEARBY DEVICES, D-309).
+                val answer = standing[permission]?.takeIf { it != Grant.Unasked && it != Grant.Asked } ?: gives(permission)
                 standing[permission] = answer
                 then(answer)
             },
@@ -100,7 +102,7 @@ class PermsScreenTest {
         onNodeWithText("REQUEST WHAT IS MISSING").performClick()
 
         assertEquals(
-            listOf(DevicePermission.LocalNetwork), asked,
+            listOf(DevicePermission.Camera), asked,
             "the primary control raised no prompt at all, which is what shipped",
         )
         assertEquals(
@@ -125,6 +127,31 @@ class PermsScreenTest {
             "a row on the permissions screen is still a drawing rather than a control",
         )
         assertTrue(went.isEmpty(), "tapping a permission row moved the phone somewhere")
+    }
+
+    /**
+     * **D-309: NEARBY DEVICES at ASKED keeps the phone here**, named in the gate's sentence, with no
+     * CONTINUE; REQUEST WHAT IS MISSING probes it again, and a probe that answers GRANTED lets the
+     * phone continue.
+     */
+    @Test
+    fun nearbyDevicesReadingAskedHoldsThePhoneUntilAProbeAgainAnswersGranted() = perms(
+        answers = DevicePermission.entries.associateWith { Grant.Granted } +
+            mapOf(DevicePermission.NearbyDevices to Grant.Asked),
+    ) { asked, went ->
+        onAllNodesWithText(Grant.Asked.label).assertCountEquals(1)
+        onAllNodesWithText("CONTINUE").assertCountEquals(0)
+        onAllNodesWithText("OPEN SETTINGS").assertCountEquals(0)
+        onAllNodesWithText(
+            "THIS PHONE CANNOT TAKE A SEAT YET\n${DevicePermission.NearbyDevices.label}",
+        ).assertCountEquals(1)
+
+        onNodeWithText("REQUEST WHAT IS MISSING").performClick()
+
+        assertEquals(listOf(DevicePermission.NearbyDevices), asked, "NEARBY DEVICES was not probed again")
+        onAllNodesWithText(Grant.Asked.label).assertCountEquals(0)
+        onNodeWithText("CONTINUE").performClick()
+        assertEquals(listOf(ScreenId.Join), went, "NEARBY DEVICES answered GRANTED and the phone could not continue")
     }
 
     /** A phone that can do the job is offered the way forward, and only then. */

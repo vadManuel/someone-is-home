@@ -275,11 +275,13 @@ class NearbyHomes(private val onEvent: (String) -> Unit = {}) : HomeFinder {
 
     private var browser: HostBrowser? = null
 
-    override fun start(onFound: (NearbyHome) -> Unit) {
+    override fun start(onFound: (NearbyHome) -> Unit, onRefused: () -> Unit) {
         if (browser != null) return
         browser = HostBrowser(
             onFound = { name, address, port -> onFound(NearbyHome(name, address, port)) },
             onEvent = onEvent,
+            // The OS refused the search: LOCAL NETWORK IS OFF on JOIN A HOME (D-309).
+            onRefused = { onRefused() },
         ).also { it.start() }
     }
 

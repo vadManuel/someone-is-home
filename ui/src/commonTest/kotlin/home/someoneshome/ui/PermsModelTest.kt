@@ -82,7 +82,6 @@ class PermsModelTest {
 
         assertEquals(
             listOf(
-                DevicePermission.LocalNetwork,
                 DevicePermission.Camera,
                 DevicePermission.Bluetooth,
             ),
@@ -93,7 +92,7 @@ class PermsModelTest {
         assertEquals(listOf(DevicePermission.Bluetooth), model.missing.take(1), "the refused row is not first")
     }
 
-    /** Every row granted, and the walk visits all five and leaves the gate open. */
+    /** Every row granted, and the walk visits every row and leaves the gate open. */
     @Test
     fun requestingWhatIsMissingOpensTheGateWhenEveryPromptIsAnswered() {
         val (model, asked) = seam()
@@ -126,61 +125,114 @@ class PermsModelTest {
     }
 
     /**
-     * ⚠️ **The owner's exact sentence, as a test** (2026-08-25).
+     * **D-309: NEARBY DEVICES at ASKED keeps the phone at PERMISSIONS**, named in the gate's
+     * sentence like any missing row.
      *
-     * Two phones with Local Network switched on in Settings, the row reading that the prompt had
-     * been raised, and: *I tap the button and it says this phone cannot take a seat yet, local
-     * network.* The gate was reading a [Grant.Refused] the seam wrote when the browse that raises
-     * the prompt failed — which it does while the modal is still on the glass, before anyone has
-     * answered. **A row the OS will never confirm cannot be gated on a confirmation**, so anything
-     * but [Grant.Unasked] seats the phone and the real test is the advertise.
+     * ASKED is a probe that neither ran nor was refused within two seconds (D-303). A phone seated
+     * on it could not be measured all round (D-308), and the owner's ruling is that every request
+     * is required to play.
      */
     @Test
-    fun theRowIosWillNeverConfirmDoesNotStandBetweenAGrantedPhoneAndASeat() {
-        for (unconfirmed in listOf(Grant.Asked, Grant.Refused)) {
-            val (model, _) = seam(
-                answers = DevicePermission.entries.associateWith { Grant.Granted } +
-                    mapOf(DevicePermission.LocalNetwork to unconfirmed),
-            )
-            model.refresh()
+    fun nearbyDevicesReadingAskedKeepsThePhoneAtPermissions() {
+        val (model, _) = seam(
+            answers = DevicePermission.entries.associateWith { Grant.Granted } +
+                mapOf(DevicePermission.NearbyDevices to Grant.Asked),
+        )
+        model.refresh()
 
-            assertNull(
-                model.gateRefusalNow(),
-                "a phone that granted everything is refused a seat over LOCAL NETWORK reading " +
-                    "$unconfirmed — the one row iOS has no call to confirm, so this gate never opens",
-            )
-            assertTrue(model.complete, "the screen and the gate disagree about the same phone")
-        }
+        val why = assertNotNull(
+            model.gateRefusalNow(),
+            "NEARBY DEVICES reads ASKED and the phone was seated anyway",
+        )
+        assertTrue(DevicePermission.NearbyDevices.label in why, "the refusal does not name NEARBY DEVICES: '$why'")
+        assertEquals(
+            listOf(DevicePermission.NearbyDevices), model.missing,
+            "the screen and the gate disagree about a phone whose NEARBY DEVICES reads ASKED",
+        )
+        assertTrue(!model.complete, "NEARBY DEVICES reads ASKED and the screen offers CONTINUE")
     }
 
     /**
-     * **And the exemption is one row wide.** The half that stops the fix being *open the gate*.
-     *
-     * Every other row is answered for real by its framework, so a refusal there is a fact and still
-     * closes the gate — and the unconfirmable row still closes it when nobody has raised the prompt
-     * at all, because tapping it is an action the host can actually take.
+     * **A probe again that answers GRANTED lets the phone continue**, from a tap on the row and
+     * from REQUEST WHAT IS MISSING, so a phone whose first probe timed out need not be reinstalled.
      */
     @Test
-    fun everyOtherRowStillClosesIt() {
-        for (short in DevicePermission.entries) {
-            val standing = if (short.confirmable) Grant.Refused else Grant.Unasked
-            val (model, _) = seam(
-                answers = DevicePermission.entries.associateWith { Grant.Granted } +
-                    mapOf(short to standing),
+    fun aProbeAgainThatAnswersGrantedLetsThePhoneContinue() {
+        for (viaTheButton in listOf(false, true)) {
+            val standing = (
+                DevicePermission.entries.associateWith { Grant.Granted } +
+                    mapOf(DevicePermission.NearbyDevices to Grant.Asked)
+                ).toMutableMap()
+            val asked = mutableListOf<DevicePermission>()
+            val model = PermsModel(
+                read = { standing[it] ?: Grant.Unasked },
+                // The iOS seam's rule: a standing ASKED on NEARBY DEVICES probes again.
+                ask = { permission, then ->
+                    asked += permission
+                    standing[permission] = Grant.Granted
+                    then(Grant.Granted)
+                },
             )
             model.refresh()
+            assertTrue(!model.complete, "the arrangement is wrong: ASKED already opened the gate")
 
-            val why = assertNotNull(
-                model.gateRefusalNow(),
-                "${short.label} reads $standing and the phone was seated anyway",
-            )
-            assertTrue(short.label in why, "the refusal does not name ${short.label}: '$why'")
-            assertEquals(
-                emptyList(),
-                DevicePermission.entries.filter { it != short && it.label in why },
-                "the refusal names rows this phone was granted: '$why'",
-            )
+            if (viaTheButton) model.requestMissing() else model.request(DevicePermission.NearbyDevices)
+
+            assertEquals(listOf(DevicePermission.NearbyDevices), asked, "NEARBY DEVICES was not probed again")
+            assertTrue(model.complete, "the probe answered GRANTED and the phone still cannot continue")
+            assertNull(model.gateRefusalNow(), "the probe answered GRANTED and the lobby still refuses")
         }
+    }
+
+    /** **A probe again that still says ASKED stops the walk**, once; it does not probe forever. */
+    @Test
+    fun aProbeAgainThatStillSaysAskedStopsTheWalk() {
+        val (model, asked) = seam(
+            answers = DevicePermission.entries.associateWith { Grant.Granted } +
+                mapOf(DevicePermission.NearbyDevices to Grant.Asked),
+        )
+        model.refresh()
+        model.requestMissing()
+        assertEquals(listOf(DevicePermission.NearbyDevices), asked, "the walk probed NEARBY DEVICES more than once")
+        assertTrue(!model.complete, "a second ASKED opened the gate")
+    }
+
+    /**
+     * **Every row closes the gate on anything but GRANTED** (D-309), Unasked, Asked and Refused
+     * alike, and names only itself.
+     */
+    @Test
+    fun everyRowClosesItOnAnythingButGranted() {
+        for (short in DevicePermission.entries) {
+            for (standing in listOf(Grant.Unasked, Grant.Asked, Grant.Refused)) {
+                val (model, _) = seam(
+                    answers = DevicePermission.entries.associateWith { Grant.Granted } +
+                        mapOf(short to standing),
+                )
+                model.refresh()
+
+                val why = assertNotNull(
+                    model.gateRefusalNow(),
+                    "${short.label} reads $standing and the phone was seated anyway",
+                )
+                assertTrue(short.label in why, "the refusal does not name ${short.label}: '$why'")
+                assertEquals(
+                    emptyList(),
+                    DevicePermission.entries.filter { it != short && it.label in why },
+                    "the refusal names rows this phone was granted: '$why'",
+                )
+            }
+        }
+    }
+
+    /** **There is no LOCAL NETWORK row** (D-309): iOS raises that prompt itself, at JOIN A HOME. */
+    @Test
+    fun thereIsNoLocalNetworkRow() {
+        assertEquals(
+            listOf("CAMERA", "BLUETOOTH", "NEARBY DEVICES", "MOTION & FITNESS", "NOTIFICATIONS"),
+            DevicePermission.entries.map { it.label },
+            "the walk's rows changed",
+        )
     }
 
     /**

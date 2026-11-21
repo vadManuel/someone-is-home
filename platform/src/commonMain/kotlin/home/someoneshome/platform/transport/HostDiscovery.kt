@@ -36,6 +36,23 @@ fun advertiseFailureOf(code: Int?): AdvertiseFailure =
     if (code == BONJOUR_COLLISION) AdvertiseFailure.NameAlreadyOnTheAir else AdvertiseFailure.Refused
 
 /**
+ * DNS-SD's `kDNSServiceErr_PolicyDenied`: the code a browse is expected to fail with when Local
+ * Network is off (D-309).
+ *
+ * ⚠️ **Provisional until a phone shows it.** Whether `NSNetServiceBrowser` reports this number in
+ * `NSNetServicesErrorCode` or folds it into one of its own `NSNetServicesErrorCode` values is not
+ * known here, so nothing branches on it: every search failure reads as LOCAL NETWORK IS OFF, and the
+ * code is logged ([searchFailureLine]) for the phone test to settle.
+ */
+const val DNS_SD_POLICY_DENIED: Int = -65570
+
+/** The log line for a refused search: the code, and whether it is [DNS_SD_POLICY_DENIED]. */
+fun searchFailureLine(code: Int?, details: String): String =
+    "SEARCH FAILED code=${code ?: "none"}" +
+        (if (code == DNS_SD_POLICY_DENIED) " (POLICY DENIED: LOCAL NETWORK IS OFF)" else " (READ AS LOCAL NETWORK IS OFF, PROVISIONAL)") +
+        " $details"
+
+/**
  * D1's discovery half: mDNS, the one platform-specific piece of the transport.
  *
  * The host advertises; a phone browses; nobody types an IP in a dark house. This also closes
@@ -79,6 +96,12 @@ expect class HostBrowser(
     onFound: (name: String, address: String, port: Int) -> Unit,
     /** Publish/search/resolve failures, in words. Silence was the first device run's only symptom. */
     onEvent: (String) -> Unit,
+    /**
+     * **The OS refused the search** (D-309), with its error code when one could be read. The search
+     * is over; [stop] and [start] to look again. Every refusal is read as Local Network off; see
+     * [DNS_SD_POLICY_DENIED].
+     */
+    onRefused: (code: Int?) -> Unit = {},
 ) {
     fun start()
     fun stop()

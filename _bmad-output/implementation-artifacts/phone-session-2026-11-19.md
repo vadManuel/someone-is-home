@@ -36,6 +36,15 @@ Tick each line as you see it.
 - [ ] PERMISSIONS has a NEARBY DEVICES row under BLUETOOTH. Tapping it raises iOS's question,
       and the row then reads GRANTED. CONTINUE goes straight to JOIN A HOME, with no NameDrop
       step. (D-303)
+- [ ] Refuse NEARBY DEVICES on one phone: it cannot get past PERMISSIONS (no CONTINUE, the gate's
+      sentence names NEARBY DEVICES, OPEN SETTINGS shows) until it is granted in Settings; back in
+      the app the row reads GRANTED and CONTINUE appears. PERMISSIONS has no LOCAL NETWORK row;
+      iOS asks for it on JOIN A HOME or when hosting. (D-309)
+- [ ] On JOIN A HOME, deny the Local Network prompt: the screen reads LOCAL NETWORK IS OFF with
+      OPEN SETTINGS under it. Turn Local Network on in Settings, come back, and the home appears.
+      With no host running, NO HOME ON THIS NETWORK shows after about 10 s. Note the code on the
+      `SEARCH FAILED code=` line in the log: -65570 is the expected one, and any other code is
+      read as OFF too until this check says otherwise. (D-309)
 
 **Lobby and start**
 - [ ] A third phone joining **during** a round is refused, and reads "ROUND IN PROGRESS / YOU JOIN
