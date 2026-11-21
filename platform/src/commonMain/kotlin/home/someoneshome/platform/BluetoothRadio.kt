@@ -559,9 +559,11 @@ class SwitchboardRadio(
 /**
  * **D-187's line, drawn on the radio: was this outage a person's act, or the phone's own?** (D-223)
  *
- * Asked once, at the onset, of whichever managers are down then. Off or Unauthorized is
- * [RadioCause.Person]: Bluetooth switched off, or its permission withdrawn, and every grant was
- * given at setup (D-161), so one missing in a round is something somebody did. Resetting or
+ * Asked once, at the onset, of whichever managers are down then. Unauthorized is
+ * [RadioCause.Permission]: the Bluetooth permission switched off (D-310), and every grant was given
+ * at setup (D-161), so one missing in a round is something somebody did. Off is [RadioCause.Person]:
+ * Bluetooth switched off, which is a radio and not a permission (a powered-off radio is still
+ * granted, `Permissions`), named and never counted toward closing the house. Resetting or
  * Unsupported is [RadioCause.Device], and **the phone's own failure wins** when the two managers
  * disagree, because naming a player whose phone failed is the injustice D-187 exists to prevent and
  * missing one evasion is not. On and Unknown are not down and say nothing.
@@ -572,7 +574,15 @@ fun causeOf(advertiser: RadioPower, scanner: RadioPower): RadioCause {
         RadioPower.Resetting, RadioPower.Unsupported -> true
         RadioPower.Off, RadioPower.Unauthorized, RadioPower.On, RadioPower.Unknown -> false
     }
-    return if (failed(advertiser) || failed(scanner)) RadioCause.Device else RadioCause.Person
+    fun withdrawn(power: RadioPower) = when (power) {
+        RadioPower.Unauthorized -> true
+        RadioPower.Off, RadioPower.Resetting, RadioPower.Unsupported, RadioPower.On, RadioPower.Unknown -> false
+    }
+    return when {
+        failed(advertiser) || failed(scanner) -> RadioCause.Device
+        withdrawn(advertiser) || withdrawn(scanner) -> RadioCause.Permission
+        else -> RadioCause.Person
+    }
 }
 
 /**

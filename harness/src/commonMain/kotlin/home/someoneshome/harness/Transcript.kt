@@ -171,6 +171,9 @@ object Transcript {
         // Both ticks, because the gap between them is the whole of what the event moves.
         is Event.OffAirEnded ->
             row("OffAirEnded", event.at, "since" to num(event.since.step))
+        // The house's close on a permission switched off again (D-310): the seat whose report it was.
+        is Event.HouseClosedOnPermission ->
+            row("HouseClosedOnPermission", event.at, "seat" to num(event.seat.index))
     }
 
     /**
@@ -361,7 +364,9 @@ object Transcript {
         // reason a scan's null does: a phase that carries no window and a phase that carries one
         // must not be separable by the shape of the line rather than by its contents.
         is Effect.NoticeIssued ->
-            "NoticeIssued|unreachable=" + effect.unreachable.joinToString(",") { num(it.index) }
+            "NoticeIssued|unreachable=" + effect.unreachable.joinToString(",") { num(it.index) } +
+                // The owner's warning (D-310): a replay that warned where the evening did not must not match.
+                "|switchedOff=${effect.permissionSwitchedOff}"
         is Effect.MeetingPhaseOpened ->
             "MeetingPhaseOpened|phase=${effect.phase}" +
                 "|voteWindow=${effect.voteWindowSeconds?.let { num(it) } ?: "none"}" +
@@ -435,6 +440,8 @@ object Transcript {
             "InsidersRevealed|seats=" + effect.insiders.joinToString(",") { num(it.seat.index) }
         is Effect.HouseSignedOff ->
             "HouseSignedOff|seat=${effect.seat.index}|body=${text(effect.body)}"
+        // No field: the close names nobody (D-310).
+        is Effect.HouseClosedOnPermission -> "HouseClosedOnPermission"
     }
 
     /**
@@ -536,6 +543,11 @@ object Transcript {
         )
         // The seats the next meeting's notice names (D-187, D-223).
         append("|unreachable=").append(state.unreachable.joinToString(",") { num(it.index) })
+        // Who of them switched a permission off, whether the warning has been given, and whether the
+        // house closed on the next one (D-310).
+        append("|switchedOff=").append(state.switchedOff.joinToString(",") { num(it.index) })
+        append("|warned=").append(state.warned)
+        append("|closed=").append(state.closed)
         // Every Insider cooldown, as the tick it is ready at (D-132). A remaining count would be a
         // fact about the moment somebody asked; a tick is a fact about the round, and it replays.
         append("|cooldowns=").append(

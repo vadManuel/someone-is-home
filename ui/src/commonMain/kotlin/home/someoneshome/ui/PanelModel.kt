@@ -622,6 +622,12 @@ data class PanelState(
      */
     val notice: List<Seat>? = null,
     /**
+     * **The house notice carries the owner's warning** (`Effect.NoticeIssued.permissionSwitchedOff`,
+     * D-310): a seat it names switched a permission off this shift. The same on every phone. False
+     * until a notice says otherwise, and reset between rounds with [notice].
+     */
+    val noticeSwitchedOff: Boolean = false,
+    /**
      * **The markers this phone may Isolate, as the house last offered them**
      * (`Effect.IsolateTargetsOffered`, D-150).
      *
@@ -1390,7 +1396,7 @@ class PanelVals(
      * reported. A notice naming somebody draws [noticeBody].
      */
     val notice: String? = when {
-        state.notice != null -> noticeBody(state.notice.map { roster.getOrNull(it.index).orEmpty() })
+        state.notice != null -> noticeBody(state.notice.map { roster.getOrNull(it.index).orEmpty() }, state.noticeSwitchedOff)
         state.houseAttached -> null
         else -> Notifications.notice.body
     }
@@ -2781,11 +2787,35 @@ fun Plan.mapCells(): List<MapCell> =
  * a blank read *Resident  was unreachable*, a sentence with a hole where a person goes. The ballot
  * and the couch already draw the same word for the same seat, so the notice names it the way the
  * room has seen it named.
+ *
+ * **[switchedOff] appends the owner's warning** (the owner's 2026-11-20 words, D-310): when a seat
+ * named switched a permission off this shift, the two sentences of [PERMISSION_WARNING] follow the
+ * names, whoever and however many they are. A notice naming only phones that left the app is the
+ * sentence above, unchanged. An empty notice draws nothing either way.
  */
-fun noticeBody(names: List<String>): String? = when {
+fun noticeBody(names: List<String>, switchedOff: Boolean = false): String? = when {
     names.isEmpty() -> NOTHING
-    else -> "${residents(names.map { it.ifBlank { UNNAMED } })} unreachable this shift. Occupancy data for this interval is incomplete."
+    else -> "${residents(names.map { it.ifBlank { UNNAMED } })} unreachable this shift. Occupancy data for this interval is incomplete." +
+        if (switchedOff) " $PERMISSION_WARNING" else ""
 }
+
+/**
+ * **The owner's warning, appended to the notice** (approved verbatim, 2026-11-20, D-310): a
+ * permission was switched off this shift, and the next one closes the house.
+ */
+const val PERMISSION_WARNING: String =
+    "A permission was switched off. If anyone switches one off again, the house closes and everyone starts over."
+
+/**
+ * **THE HOUSE IS CLOSED: the owner's two lines, on every phone** (approved verbatim, 2026-11-20,
+ * D-310). Drawn in the refusal slot each phone lands on, JOIN A HOME or the host's lobby, which is
+ * where the existing closed house's line is drawn (`LobbyModel.HOUSE_CLOSED`): the headline first,
+ * the sentence under it.
+ */
+const val HOUSE_IS_CLOSED: String = "THE HOUSE IS CLOSED"
+
+/** The second of the two lines under [HOUSE_IS_CLOSED] (D-310). */
+const val SWITCHED_OFF_AGAIN: String = "A permission was switched off again. Everyone starts over."
 
 /** A meeting where nobody evaded: no words, and no box to put them in. */
 private val NOTHING: String? = null

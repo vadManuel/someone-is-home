@@ -50,6 +50,14 @@ class Recording(
     }
 
     companion object {
+        // 45: a permission switched off is told apart from leaving the app, and the second one closes
+        // the house (the owner's 2026-11-20 rulings, D-310). One event a version 44 build cannot
+        // construct, `HouseClosedOnPermission` (`seat=`); `RadioFaulted` may carry a cause a version 44
+        // parser refuses, `Permission`; the `NoticeIssued` effect row gains `switchedOff=` (the
+        // owner's warning); and the state row gains `switchedOff=`, `warned=` and `closed=`, without
+        // which a replay could not say why a round ended with no winner. A version 44 recording is
+        // refused here as every older one is.
+        //
         // 44: the contact source is gone (D-308). Every round is the hybrid: Bluetooth ranks who is
         // near, and the rules read a touch, a report and the spectator map from UWB distance alone,
         // so `RoundArmed` loses `contacts=` and so does the state row. A version 43 recording may
@@ -353,7 +361,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/44"
+        const val HEADER = "someone-is-home/recording/45"
     }
 }
 

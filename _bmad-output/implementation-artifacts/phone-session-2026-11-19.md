@@ -88,6 +88,15 @@ Tick each line as you see it.
 - [ ] A Handshake tapped at the wrong rhythm, with the right number of taps, is REJECTED. One
       tapped close to the dealt rhythm is accepted. (D-296)
 
+**A permission switched off**
+- [ ] Mid-round, switch a permission off in Settings (Notifications is the one iOS does not end the
+      app for) and come back. At the next meeting the notice names that phone and carries the
+      warning: "A permission was switched off. If anyone switches one off again, the house closes
+      and everyone starts over." Then switch one off again, on any phone: every phone shows THE
+      HOUSE IS CLOSED / "A permission was switched off again. Everyone starts over." and returns
+      to JOIN A HOME, and the host's returns to its lobby. Separately, only leaving the app (side
+      button, swipe home) is named with no warning and never closes the house. (D-310)
+
 **Release build**
 - [ ] `./run-app.sh device release` on a UWB phone launches to the boot screen. It must not stop
       at launch, now that it asks iOS about UWB (D-292) and carries the Nearby Interaction line

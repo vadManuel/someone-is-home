@@ -11,6 +11,7 @@ import home.someoneshome.core.resolveContacts
 import home.someoneshome.core.resolvePlacements
 import home.someoneshome.core.armingFor
 import home.someoneshome.core.egressFor
+import home.someoneshome.core.closesTheHouse
 import home.someoneshome.core.namedByTheNotice
 import home.someoneshome.model.Balance
 import home.someoneshome.model.ContactWindow
@@ -567,7 +568,15 @@ class RoundAuthority(
         }
         val fate = if (namedByTheNotice(cause)) "NAMED AT THE NEXT MEETING" else "RECORDED · NAMED BY NO NOTICE (D-187)"
         note("RADIO FAULT — SEAT ${seat.index} · ${cause.name.uppercase()} · $fate")
-        concluded(Event.RadioFaulted(stamp(), seat, cause))
+        val report = Event.RadioFaulted(stamp(), seat, cause)
+        concluded(report)
+        // **After the warning, a permission switched off closes the house** (D-310): the rules say so
+        // of the state the report was admitted into, and the house mints the close as a fact of its
+        // own, put to the same gate, so the recording holds it.
+        if (closesTheHouse(state, report)) {
+            note("THE HOUSE IS CLOSED — SEAT ${seat.index} SWITCHED A PERMISSION OFF AFTER THE WARNING · EVERYONE STARTS OVER (D-310)")
+            concluded(Event.HouseClosedOnPermission(stamp(), seat))
+        }
     }
 
     /** One event the resolver minted, admitted; refused, it is recorded and answered with nothing. */
@@ -584,7 +593,7 @@ class RoundAuthority(
                 note("REFUSED — ${admission.reason} · ${event::class.simpleName} (THE RADIO'S, NOT ANSWERED)")
             }
         }
-        if (!before.ended && state.ended) {
+        if (!before.ended && state.ended && !state.closed) {
             note("THE ROUND ENDED — ${state.outcome?.winner} BY ${state.outcome?.by}")
         }
     }

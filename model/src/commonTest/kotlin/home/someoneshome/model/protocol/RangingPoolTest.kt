@@ -207,7 +207,8 @@ class RangingPoolTest {
         assertEquals(0, pool.capacity())
         assertTrue(pool.spares().isEmpty() && pool.drain().isEmpty(), "a refused pool still offers ${pool.spares().size} spares")
         assertTrue(sessions.open.isEmpty(), "a refused pool still holds sessions: ${sessions.open}")
-        assertEquals(RadioCause.Person, pool.faultBegan())
+        // **NEARBY DEVICES withdrawn is a permission switched off** (D-310).
+        assertEquals(RadioCause.Permission, pool.faultBegan())
         // The other sessions' own refusals come late, and are one onset.
         pool.start(RangingHandle(8L), other.key, peer(2))
         assertEquals(1, sessions.runs.size, "a refused pool ran a session")
@@ -283,7 +284,7 @@ class RangingPoolTest {
         // A person's refusal inside a device's onset is its own.
         val d = startOn(pool.spares()[0], 4L, 4)
         pool.ended(d, sessions.generationOf(d), SessionEnd.NotAllowed)
-        assertEquals(RadioCause.Person, pool.faultBegan(), "a refusal was folded into a device fault")
+        assertEquals(RadioCause.Permission, pool.faultBegan(), "a refusal was folded into a device fault")
 
         // Quiet for the settle, then a new onset.
         pool.open()

@@ -590,11 +590,15 @@ sealed class RoundMessage {
      * **The house notice: who was unreachable on purpose since the last meeting, named to the whole
      * room** (D-187, D-223). Every phone gets the same list, empty at a meeting where nobody evaded,
      * and an empty one draws nothing. See [home.someoneshome.model.Effect.NoticeIssued].
+     *
+     * [permissionSwitchedOff] is the owner's warning (D-310), the same on every phone: true when a
+     * seat it names switched a permission off this shift, and every phone then appends the two
+     * sentences.
      */
     @ClientFacing
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("NoticeIssued")
-    data class NoticeIssued(val unreachable: List<Seat>) : RoundMessage()
+    data class NoticeIssued(val unreachable: List<Seat>, val permissionSwitchedOff: Boolean) : RoundMessage()
 
     @ClientFacing
     @kotlinx.serialization.Serializable
@@ -905,6 +909,16 @@ sealed class RoundMessage {
     data class HouseSignedOff(val body: String) : RoundMessage()
 
     /**
+     * **THE HOUSE IS CLOSED** (D-310): a permission was switched off again, and everyone starts over.
+     * No field, so every phone is sent the same bytes whatever it is; the two lines are the phone's.
+     * See [home.someoneshome.model.Effect.HouseClosedOnPermission].
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("HouseClosedOnPermission")
+    data object HouseClosedOnPermission : RoundMessage()
+
+    /**
      * **The allowlist's own key, off the message rather than beside it.**
      *
      * Carried as a computed property and never as a field: a `kind` field would be a second
@@ -959,6 +973,7 @@ sealed class RoundMessage {
             is RoundEnded -> EmitSchema.ROUND_ENDED
             is InsidersRevealed -> EmitSchema.INSIDERS_REVEALED
             is HouseSignedOff -> EmitSchema.HOUSE_SIGNED_OFF
+            is HouseClosedOnPermission -> EmitSchema.HOUSE_CLOSED_ON_PERMISSION
         }
 }
 
@@ -1240,9 +1255,9 @@ sealed class RoundBody {
      * **Client → host. "My radio went down", and on which side of D-187's line** (rule 10; T2,
      * D-222; D-223).
      *
-     * **One fixed shape, one field, one length.** [cause] is `person` (Bluetooth switched off, or
-     * its permission withdrawn, or the phone locked or taken out of the app mid-round and now back,
-     * D-229) or `device` (reset, unsupported), two serial names of six letters
+     * **One fixed shape, one field, one length.** [cause] is `permit` (a permission switched off,
+     * D-310), `person` (Bluetooth switched off, or the phone locked or taken out of the app mid-round
+     * and now back, D-229) or `device` (reset, unsupported), three serial names of six letters
      * each, so the body is the same number of bytes whichever it carries and from every phone,
      * whatever its role and whether it is out. No reason beyond that, no time, no seat. A reader of
      * the Wi-Fi learns that some phone's radio went down and whether a person did it, which the
@@ -1378,7 +1393,7 @@ object RoundWire {
             RoundMessage.CheckInProgressed(effect.present, effect.expected)
         is Effect.MeetingPhaseOpened ->
             RoundMessage.MeetingPhaseOpened(effect.phase, effect.voteWindowSeconds, effect.haptic)
-        is Effect.NoticeIssued -> RoundMessage.NoticeIssued(effect.unreachable)
+        is Effect.NoticeIssued -> RoundMessage.NoticeIssued(effect.unreachable, effect.permissionSwitchedOff)
         is Effect.ReadyProgressed -> RoundMessage.ReadyProgressed(effect.ready, effect.expected)
         is Effect.VoteHeld -> RoundMessage.VoteHeld(effect.selection, effect.locked)
         is Effect.VoteSelectionShown ->
@@ -1406,6 +1421,7 @@ object RoundWire {
         is Effect.RoundEnded -> RoundMessage.RoundEnded(effect.winner, effect.by, effect.haptic, effect.integrity)
         is Effect.InsidersRevealed -> RoundMessage.InsidersRevealed(effect.insiders)
         is Effect.HouseSignedOff -> RoundMessage.HouseSignedOff(effect.body)
+        is Effect.HouseClosedOnPermission -> RoundMessage.HouseClosedOnPermission
     }
 }
 

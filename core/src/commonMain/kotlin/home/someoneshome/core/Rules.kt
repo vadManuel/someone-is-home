@@ -81,6 +81,8 @@ private fun dispatch(state: GameState, event: Event): Reduction<GameState, Effec
     is Event.EgressExpired -> withEgress(state) { egressExpired(state) }
     is Event.OffAirEnded -> backOnAir(state, event)
 
+    is Event.HouseClosedOnPermission -> houseClosed(state)
+
     is Event.Sensed -> sensed(state, event)
 }
 
@@ -1210,10 +1212,16 @@ internal fun GameState.revokeLands(actor: Seat, target: Seat, at: Tick): Boolean
  * **A phone's radio went down, and the house writes down what D-187 lets it say** (T2, D-222;
  * D-223).
  *
- * [RadioCause.Person] (Bluetooth switched off, or its permission withdrawn) is deliberate evasion:
- * the seat joins [GameState.unreachable], which the next meeting's notice names. [RadioCause.Device]
+ * [RadioCause.Person] (Bluetooth switched off, the app left) and [RadioCause.Permission] (a
+ * permission switched off, D-310) are deliberate evasion: the seat joins [GameState.unreachable],
+ * which the next meeting's notice names, and a permission joins [GameState.switchedOff] as well,
+ * which puts the owner's warning on that notice. [RadioCause.Device]
  * (a reset, unsupported hardware) is not: it is recorded by being admitted, in the recording and the
  * house's log, and the state does not move (D-187: *genuine radio loss earns no notice*).
+ *
+ * **After the warning, a permission closes the house**, and the house mints that as an event of its
+ * own ([closesTheHouse], `Event.HouseClosedOnPermission`), so this reduction is the same whatever
+ * the warning: the seat is listed as before, and the close that follows ends the round.
  *
  * **No effect, in either case, to anybody**, which is what keeps the two from being told apart now
  * (rule 1): the phone's own screen does not move (rule 6), no other phone hears of it until the
@@ -1222,18 +1230,56 @@ internal fun GameState.revokeLands(actor: Seat, target: Seat, at: Tick): Boolean
  * once, in seat order, and the host's seat out or not (D-283, D-289).
  */
 private fun radioFaulted(state: GameState, event: Event.RadioFaulted): Reduction<GameState, Effect> {
-    val next = if (namedByTheNotice(event.cause)) onTheNotice(state, event.seat) else state
+    val next = if (namedByTheNotice(event.cause)) onTheNotice(state, event.seat, countsTowardClosing(event.cause)) else state
     return Reduction(next, emptyList())
 }
 
 /**
- * **D-187's line, as one question: does this outage earn the house notice?** A person's act does;
- * the phone's own failure never does (D-223).
+ * **D-187's line, as one question: does this outage earn the house notice?** A person's act does,
+ * a permission switched off among them; the phone's own failure never does (D-223).
  */
 fun namedByTheNotice(cause: RadioCause): Boolean = when (cause) {
+    RadioCause.Permission -> true
     RadioCause.Person -> true
     RadioCause.Device -> false
 }
+
+/**
+ * **The owner's line, as one question: does this outage count toward closing the house?** (the
+ * owner's 2026-11-20 rulings, D-310). *Only a permission switched off counts.* Leaving the app (the
+ * side button, swiping home, another app) is still named, and never counts; nor does Bluetooth
+ * switched off, which is a radio and not a permission (`Grant`: powered off is still granted).
+ */
+fun countsTowardClosing(cause: RadioCause): Boolean = when (cause) {
+    RadioCause.Permission -> true
+    RadioCause.Person -> false
+    RadioCause.Device -> false
+}
+
+/**
+ * **Does this report close the house?** (D-310) Asked by the house of the state the report was
+ * admitted into, and answered yes only when all four hold: the round is running; the warning has
+ * been given this round ([GameState.warned]: a notice carrying it was issued at a meeting); the
+ * report is a permission switched off ([countsTowardClosing]); and its seat is one the notice
+ * would name ([namedOnTheNotice]: seated, and living or the host's). **Anyone's** report counts,
+ * not only the seat that was warned. Before the warning, every permission in a shift is listed for
+ * the one notice that gives it, so several in one shift are one warning and no close.
+ *
+ * A pure question for the house to mint on: the answer is `Event.HouseClosedOnPermission`, put to
+ * the same gate, so the close is in the recording as a fact of its own.
+ */
+fun closesTheHouse(state: GameState, event: Event.RadioFaulted): Boolean =
+    state.armed && !state.ended && state.warned && countsTowardClosing(event.cause) &&
+        namedOnTheNotice(state, event.seat)
+
+/**
+ * **THE HOUSE IS CLOSED** (D-310): the round ends with no winner, and every seat is told the one
+ * fact. Built once, in every case; the admission gate has already refused a close of a round that
+ * is not running, so there is no branch here. `GameState.closeHouse` drops the one lines and the
+ * names in the same transition (D-115, D-116).
+ */
+private fun houseClosed(state: GameState): Reduction<GameState, Effect> =
+    Reduction(state.closeHouse(), listOf(Effect.HouseClosedOnPermission))
 
 /**
  * [seat] on the next notice's list, once, in seat order; a seat not in the round changes nothing.
@@ -1247,15 +1293,29 @@ fun namedByTheNotice(cause: RadioCause): Boolean = when (cause) {
  * takes the whole house off the air with them, so they are named like a living seat. The house knows
  * which seat is the host's from the arming ([GameState.host]); every other out seat stays off.
  */
-private fun onTheNotice(state: GameState, seat: Seat): GameState {
-    val seated = state.seats.any { it.index == seat.index }
+private fun onTheNotice(state: GameState, seat: Seat, permission: Boolean): GameState {
+    val named = namedOnTheNotice(state, seat)
+    // **A permission is listed beside the name** (D-310), even for a seat already named this shift
+    // for leaving the app: the warning is about the permission, whichever came first.
     val listed = state.unreachable.any { it.index == seat.index }
-    return if (seated && !listed && (!state.isOut(seat) || state.isHost(seat))) {
-        state.copy(unreachable = (state.unreachable + seat).sortedBy { it.index })
-    } else {
-        state
-    }
+    val switched = state.switchedOff.any { it.index == seat.index }
+    return state.copy(
+        unreachable = if (!named || listed) state.unreachable else (state.unreachable + seat).sortedBy { it.index },
+        switchedOff = if (!named || !permission || switched) {
+            state.switchedOff
+        } else {
+            (state.switchedOff + seat).sortedBy { it.index }
+        },
+    )
 }
+
+/**
+ * **Whether the notice would name [seat]**: seated in the round, and living or the host's (R7,
+ * D-242; D-283, D-289). The one predicate the notice's list and the close both read (D-310), so a
+ * report that could not be named can never close the house.
+ */
+internal fun namedOnTheNotice(state: GameState, seat: Seat): Boolean =
+    state.seats.any { it.index == seat.index } && (!state.isOut(seat) || state.isHost(seat))
 
 /**
  * **D-109 — the house grades every entry for real, for both roles, in identical words.**
@@ -1568,9 +1628,18 @@ private fun checkedIn(state: GameState, event: Event.MeetingCheckedIn): Reductio
         if (!everybody) return@withMeeting Reduction(state.copy(meeting = next), listOf(counted))
 
         val talking = next.copy(phase = MeetingPhase.Discussion)
+        // **Who is named, and whether the owner's warning goes with them** (D-310): true when a seat
+        // named here switched a permission off this shift. Issued true, it is the round's warning.
+        val named = state.unreachable.filterNot { state.isOut(it) && !state.isHost(it) }
+        val switchedOff = named.any { seat -> state.switchedOff.any { it.index == seat.index } }
         Reduction(
             // The seats named are forgotten here: an evasion after this is the next meeting's.
-            state.copy(meeting = talking, unreachable = emptyList()),
+            state.copy(
+                meeting = talking,
+                unreachable = emptyList(),
+                switchedOff = emptyList(),
+                warned = state.warned || switchedOff,
+            ),
             listOf(
                 counted,
                 // **The house notice, before the push that opens the notices** (D-187, D-223).
@@ -1581,7 +1650,7 @@ private fun checkedIn(state: GameState, event: Event.MeetingCheckedIn): Reductio
                 // **And nobody who is out by now** (R7, D-242, provisional): a seat listed while it
                 // was living and Revoked or Restrained since is not named either. **Bar the host**
                 // (D-283, D-289), who is named out or not: the house went off the air with them.
-                Effect.NoticeIssued(unreachable = state.unreachable.filterNot { state.isOut(it) && !state.isHost(it) }),
+                Effect.NoticeIssued(unreachable = named, permissionSwitchedOff = switchedOff),
                 Effect.MeetingPhaseOpened(
                     MeetingPhase.Discussion,
                     voteWindowSeconds = null,

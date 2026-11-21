@@ -450,6 +450,16 @@ class LobbyHouse(
     private var playingOver = false
 
     /**
+     * **The round in [playing] ended because the house closed on a permission switched off again**
+     * (D-310), from the close's push to the host's turning its lobby over ([roundEnded]). Every phone
+     * is walked out by the close itself, the guests to JOIN A HOME and the host to its lobby, so the
+     * turnover tells no guest anything: a `RoundEnded` or a later round's standing reaching a guest
+     * that had not yet drawn the close would walk it to the lobby instead. Written and read on
+     * [scope], with [playing].
+     */
+    private var closedOnPermission = false
+
+    /**
      * **The seat this phone's own loopback client holds: the host's seat** (D-289), or null before it
      * is seated. The host joins its own house like everybody (D-229), so nothing else marks it; its
      * client says which token it was handed ([hostHolds]) and the ledger answers which seat that is.
@@ -721,6 +731,9 @@ class LobbyHouse(
                 }
             }
         }
+        // **The house closed on a permission switched off again** (D-310): marked before the push goes,
+        // so the host's turnover, which its own phone makes on that push, tells no guest anything.
+        if (effect is Effect.HouseClosedOnPermission) atTheDesk { closedOnPermission = true }
         effects.emit(effect, state)
     }
 
@@ -788,6 +801,10 @@ class LobbyHouse(
     /** **Deleted when the round ends** — the host's half of the promise. */
     fun roundEnded() {
         desk.roundEnded()
+        // **A round the house closed on a permission turns over for the host alone** (D-310): every
+        // guest has been walked to JOIN A HOME by the close, and is told nothing more here.
+        val quietly = closedOnPermission
+        closedOnPermission = false
         // The round is over and the lobby is the desk's again: every seated phone is in the next one.
         playing = null
         playingOver = false
@@ -803,12 +820,24 @@ class LobbyHouse(
         // BEFORE `publish`, so a client acts on the moment and then receives the standing that
         // moment produced — the other order would hand it a lobby of zero lines it had no reason
         // to expect yet.
-        announce(TransportFrame.Carry(LobbyWire.encode(LobbyBody.RoundEnded)))
+        val ended = TransportFrame.Carry(LobbyWire.encode(LobbyBody.RoundEnded))
+        if (quietly) toTheHost(ended) else announce(ended)
         // The retained streams are a round's worth of one house's messages and outlive nothing.
         // Wiped in the same method the lines are, so what the house holds about an evening ends
         // when the evening does rather than when somebody remembers.
         scope.launch { effects.roundEnded(next) }
-        publish()
+        if (quietly) toTheHost(TransportFrame.Carry(LobbyWire.encode(desk.standing().copy(round = round)))) else publish()
+    }
+
+    /**
+     * **One frame to the host's own phone and to no other** (D-310): the closed round's turnover, which
+     * the host's phone hears over loopback as it hears every NEW ROUND, so its name goes back up. A
+     * house that has not learned its host's seat sends nothing.
+     */
+    private fun toTheHost(body: TransportFrame) {
+        val server = host ?: return
+        val seat = hostSeat ?: return
+        scope.launch { runCatching { server.send(seat, body) } }
     }
 
     fun stop() {
@@ -828,6 +857,7 @@ class LobbyHouse(
         away = false
         playing = null
         playingOver = false
+        closedOnPermission = false
         // A new house mints new seats; the host's is learned again from its own client (D-289).
         hostSeat = null
         // The house is down, so this phone is hosting nothing — and a stale home here would let a

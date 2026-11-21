@@ -311,6 +311,7 @@ object RecordingText {
             "SyncPulseReturned" -> Event.SyncPulseReturned(at, seat("actor"), longs("taps"))
             "EgressExpired" -> Event.EgressExpired(at)
             "OffAirEnded" -> Event.OffAirEnded(at, Tick(long("since")))
+            "HouseClosedOnPermission" -> Event.HouseClosedOnPermission(at, seat("seat"))
             else -> throw MalformedRecording(
                 line,
                 "unknown event '$name'. This recording was written by a build that had an event " +
@@ -366,6 +367,7 @@ object RecordingText {
         "SyncPulseReturned" -> setOf("at", "actor", "taps")
         "EgressExpired" -> setOf("at")
         "OffAirEnded" -> setOf("at", "since")
+        "HouseClosedOnPermission" -> setOf("at", "seat")
         else -> emptySet()
     }
 

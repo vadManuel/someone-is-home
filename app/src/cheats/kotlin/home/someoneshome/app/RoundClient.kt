@@ -139,6 +139,11 @@ class RoundClient(
      * `SimulatedRanging` on a bench; the Nearby Interaction radio on a phone (D-308).
      */
     private val ranging: RangingRadio = NoRanging,
+    /**
+     * **The grants that read switched off now, one bit a row** (D-310), handed straight down to
+     * [RoundOverTransport]: `Permissions.refusedGrants` on a phone.
+     */
+    private val refusedGrants: () -> Int = { 0 },
     private val note: (String) -> Unit,
 ) : RoundSeam {
 
@@ -186,6 +191,7 @@ class RoundClient(
         clientMillis = clientMillis,
         clock = clock,
         ranging = ranging,
+        refusedGrants = refusedGrants,
         // A later round's push ended this phone's round (V1, D-267): the bench's copy goes too.
         onRoundTurned = {
             note("A LATER ROUND'S PUSH — THE ROUND'S END WAS MISSED, AND THIS PHONE HOLDS NOTHING OF IT")

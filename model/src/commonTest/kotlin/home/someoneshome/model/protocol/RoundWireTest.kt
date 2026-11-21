@@ -98,7 +98,7 @@ class RoundWireTest {
         Effect.MeetingResolved(restrained = Seat(2), attribution = listOf(Seat(3) to Seat(2), Seat(4) to null)),
         Effect.RestrainedTakeover(Seat(3), Haptic.Long),
         Effect.RevokeLanded(Seat(4), Haptic.Long),
-        Effect.NoticeIssued(listOf(Seat(2), Seat(5))),
+        Effect.NoticeIssued(listOf(Seat(2), Seat(5)), permissionSwitchedOff = true),
         Effect.MeetingEnded(Haptic.Long),
         Effect.EgressOpened(
             Seat(3), EgressType.Tether,
@@ -119,6 +119,7 @@ class RoundWireTest {
         Effect.RoundEnded(Seat(3), Winner.Residents, WinRoute.SystemIntegrityCleared, Haptic.Short, integrity = 60),
         Effect.InsidersRevealed(listOf(InsiderNamed(Seat(1), name = "PRIYA", line = "a line"))),
         Effect.HouseSignedOff(Seat(1), body = "Unfortunate."),
+        Effect.HouseClosedOnPermission,
     )
 
     /**

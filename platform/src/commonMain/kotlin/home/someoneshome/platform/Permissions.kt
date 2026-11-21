@@ -43,6 +43,15 @@ interface Permissions {
     fun refresh(then: () -> Unit = {})
 
     /**
+     * **[refresh] without the Nearby Interaction probe** (D-310): what the OS answers by a read
+     * alone, for a phone back in the foreground in a round. D-309 keeps every probe off a round's
+     * sessions, so a round re-reads Notifications and Bluetooth this way, and a NEARBY DEVICES grant
+     * switched off is heard from the ranging radio instead. [refresh] itself by default, for a seam
+     * that has no probe.
+     */
+    fun reread(then: () -> Unit = {}) = refresh(then)
+
+    /**
      * **Raise the prompt.** [then] carries what came back, and is called on the main thread.
      *
      * Asking for something already answered raises nothing — iOS asks once, ever — and reports the
@@ -63,6 +72,24 @@ expect fun devicePermissions(): Permissions
  */
 fun Permissions.missing(): List<DevicePermission> =
     grantsMissing(DevicePermission.entries.associateWith(::grant))
+
+/**
+ * **The grants that read switched off now, as one number** (D-310): bit `ordinal` set for every row
+ * that reads [Grant.Refused]. Every row is required to play (D-309), so one refused in a round was
+ * switched off after the phone was seated.
+ *
+ * Read once a beat by the round's uploader and compared with the same number at arming
+ * (`ContactUploader`), so a grant switched off mid-round goes up as a permission. A number and not a
+ * list, so the read allocates nothing (rule 7). It stays inside this phone: only the one fixed report
+ * body goes up.
+ */
+fun Permissions.refusedGrants(): Int {
+    var refused = 0
+    for (row in DevicePermission.entries) {
+        if (grant(row) == Grant.Refused) refused = refused or (1 shl row.ordinal)
+    }
+    return refused
+}
 
 /**
  * **A phone with no OS behind it**, [NoSystemSettings]' shape: the call goes through, the row moves,

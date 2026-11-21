@@ -2339,6 +2339,27 @@ class FlowModel(
     }
 
     /**
+     * **THE HOUSE IS CLOSED: a permission was switched off again, and everyone starts over** (the
+     * owner's 2026-11-20 rulings, D-310). Reached by the house's push, on every phone alike, whatever
+     * its role and whether it is out; never by a control.
+     *
+     * [houseClosed]'s shape, and the existing closed house's place for its words: the owner's two
+     * lines ([HOUSE_IS_CLOSED], [SWITCHED_OFF_AGAIN]) in the refusal slot of the screen the phone
+     * lands on, in the type and light that screen already has. Nothing pops up and nothing has to be
+     * dismissed. **Where it lands is the ruling's one difference**: a guest walks out to JOIN A HOME,
+     * exactly as a guest of a closed house does, and the host goes back to its own lobby, the house
+     * still on the air, as NEW ROUND takes it there. The host's lobby turns over without telling a
+     * guest anything (`LobbyHouse.roundEnded`), so no guest is walked anywhere but JOIN.
+     */
+    fun houseClosedOnPermission() {
+        val hosting = lobby.hosting
+        if (hosting) lobby.roundEnded() else lobby.leaveLobby()
+        roundForgotten()
+        lobby.refuse("$HOUSE_IS_CLOSED\n$SWITCHED_OFF_AGAIN")
+        push(if (hosting) ScreenId.Lobby else ScreenId.Join)
+    }
+
+    /**
      * **The house refused this phone at JOIN: a round is under way and it is not in it** (D-287,
      * the owner's ruling 9c). [houseClosed]'s shape and landing: the join screen, with the waiting
      * screen's own two lines in its refusal slot, so the phone is not left on a lit lobby for the
@@ -2799,7 +2820,15 @@ class FlowModel(
             // before the push that opens the notices, and it is what the notices screen draws: the
             // seats it names, or none, and none draws nothing. It moves no screen; the phase push
             // beside it does. The words for a named seat are `noticeBody`'s, and the owner's.
-            is RoundMessage.NoticeIssued -> state = state.copy(notice = message.unreachable)
+            // **And whether the owner's warning goes with it** (D-310), the same on every phone.
+            is RoundMessage.NoticeIssued -> state = state.copy(
+                notice = message.unreachable,
+                noticeSwitchedOff = message.permissionSwitchedOff,
+            )
+
+            // **THE HOUSE IS CLOSED** (D-310): a permission was switched off again. Every phone, whatever
+            // it is, is walked out of the round to the owner's two lines; see [houseClosedOnPermission].
+            is RoundMessage.HouseClosedOnPermission -> houseClosedOnPermission()
 
             // **THE SURGE LANDING ON THIS PHONE, and it is five seconds of the phone malfunctioning**
             // (D-182: 1.5s at full, 1.0s black, 2.5s of the Boot render, no input at any point, and

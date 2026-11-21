@@ -146,6 +146,20 @@ private class IosPermissions(
         DevicePermission.Notifications -> remembered[of] ?: Grant.Unasked
     }
 
+    override fun reread(then: () -> Unit) {
+        log("$TAG re-reading, no probe (D-310)")
+        UNUserNotificationCenter.currentNotificationCenter()
+            .getNotificationSettingsWithCompletionHandler { settings ->
+                val grant = notificationGrantOf(settings?.authorizationStatus)
+                dispatch_async(dispatch_get_main_queue()) {
+                    remembered[DevicePermission.Notifications] = grant
+                    log("$TAG NOTIFICATIONS → $grant")
+                    then()
+                }
+            }
+        central?.let { bluetoothDelegate.centralManagerDidUpdateState(it) }
+    }
+
     override fun refresh(then: () -> Unit) {
         log("$TAG refreshing")
         // Notifications is the one that genuinely changes behind the app's back: a host who walked

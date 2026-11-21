@@ -61,7 +61,7 @@ interface RangingRadio {
 
     /**
      * **Whether the radio went down since the last call, and on which side of D-187's line** (D-303,
-     * the plan's *Outages*): [RadioCause.Person] for Nearby Interaction refused, [RadioCause.Device]
+     * the plan's *Outages*): [RadioCause.Permission] for Nearby Interaction refused (D-310), [RadioCause.Device]
      * for the session limit, an unsupported phone or a ranging session that failed. Once per onset,
      * as `ContactRadio.faultBegan`; the uploader sends it as the same fixed `RoundBody.RadioFaulted`.
      * A radio that cannot fault says null, which is every one but the phone's.

@@ -148,6 +148,12 @@ class RoundOverTransport(
      * or reported.
      */
     private val ranging: RangingRadio = NoRanging,
+    /**
+     * **The grants that read switched off now, one bit a row** (D-310), handed to the uploader:
+     * `Permissions.refusedGrants` on a phone. None by default, for a construction with no OS behind
+     * it.
+     */
+    private val refusedGrants: () -> Int = { 0 },
 ) {
 
     private val inbox = RoundInbox()
@@ -180,6 +186,8 @@ class RoundOverTransport(
         // **And whether the person is on the main view** (D-307): asked of the panel at each beat,
         // one character, every phone alike. The house's report hold reads it and nothing else does.
         mainView = { flow.onMainView },
+        // **And the grants, so a permission switched off is told from a leave** (D-310).
+        refusedGrants = refusedGrants,
     )
 
     /** How many requests this phone has made in the round that the house has not answered. For tests. */
@@ -270,7 +278,9 @@ class RoundOverTransport(
                     contacts.heard(landing.message)
                     // A round begins or ends with nothing waiting from another one (D-263): a
                     // request left over from the last round must never be put to the next.
-                    if (landing.message is RoundMessage.ContactSeedIssued || landing.message is RoundMessage.RoundEnded) {
+                    if (landing.message is RoundMessage.ContactSeedIssued || landing.message is RoundMessage.RoundEnded ||
+                        landing.message is RoundMessage.HouseClosedOnPermission
+                    ) {
                         requests.clear()
                     }
                     when (keepsTheScreenAwake(landing.message)) {
@@ -492,7 +502,8 @@ class RoundOverTransport(
     /**
      * **This phone is back** (D-229). If it left during this round, the next beat sends the one fixed
      * body a person's radio outage sends, up this phone's own socket: `RoundBody.RadioFaulted` with
-     * `RadioCause.Person`. A socket still coming back holds it until it is seated.
+     * `RadioCause.Person`, or `RadioCause.Permission` when a grant now reads switched off (D-310). A
+     * socket still coming back holds it until it is seated.
      */
     fun backInTheForeground() {
         if (contacts.backInTheForeground()) onEvent("BACK IN THE FOREGROUND — THE NEXT BEAT TELLS THE HOUSE, ONCE · PERSON")
@@ -535,5 +546,7 @@ internal const val GAP_PATIENCE_BEATS: Int = 5
 internal fun keepsTheScreenAwake(message: RoundMessage): Boolean? = when (message) {
     is RoundMessage.ContactSeedIssued -> true
     is RoundMessage.RoundEnded -> false
+    // The house closed on a permission switched off again (D-310): the round is over.
+    is RoundMessage.HouseClosedOnPermission -> false
     else -> null
 }

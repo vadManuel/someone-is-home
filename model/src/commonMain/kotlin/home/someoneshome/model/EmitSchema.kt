@@ -109,6 +109,7 @@ object EmitSchema {
         is Effect.RoundEnded -> ROUND_ENDED
         is Effect.InsidersRevealed -> INSIDERS_REVEALED
         is Effect.HouseSignedOff -> HOUSE_SIGNED_OFF
+        is Effect.HouseClosedOnPermission -> HOUSE_CLOSED_ON_PERMISSION
     }
 
     val LAMP_SET = MessageKind("LampSet")
@@ -163,6 +164,7 @@ object EmitSchema {
     val ROUND_ENDED = MessageKind("RoundEnded")
     val INSIDERS_REVEALED = MessageKind("InsidersRevealed")
     val HOUSE_SIGNED_OFF = MessageKind("HouseSignedOff")
+    val HOUSE_CLOSED_ON_PERMISSION = MessageKind("HouseClosedOnPermission")
 
     private val LIVING = setOf(
         ClientClass(Role.Resident, RoundState.Live),
@@ -647,6 +649,13 @@ object EmitSchema {
         // ABILITY_FIRED's reason -- a row derived by subtraction is a row that widens the day
         // somebody adds a class to the set it was subtracted from.
         HOUSE_SIGNED_OFF to setOf(ClientClass(Role.Insider, RoundState.Ended)),
+
+        // **THE HOUSE IS CLOSED, to every seat, and it must never be narrowed** (D-310). The round
+        // is over when it is sent, so it is ROUND_ENDED's two classes, and for ROUND_ENDED's reason:
+        // a close that reached only Residents would leave the Insiders on a live round while the room
+        // started over, and the phones it missed would be the answer. It carries no field, so there
+        // is nothing in it to narrow.
+        HOUSE_CLOSED_ON_PERMISSION to AFTER,
     )
 
     /**
@@ -824,6 +833,10 @@ object EmitSchema {
             // was written for exactly two people -- and it is the addressing rather than the row
             // that stops a Insider reading the sign-off sent to the OTHER Insider.
             is Effect.HouseSignedOff -> listOf(effect.seat)
+            // **Every seat in the house** (D-310): the close is one fact about the house, the same
+            // on every phone, living, out and the host's, and it carries no seat to address it by.
+            // Left to the allowlist, which permits it to the ended round's two classes only.
+            is Effect.HouseClosedOnPermission -> state.seats
         }
         return state.seats.filter { seated -> addressed.any { it.index == seated.index } }
     }

@@ -1278,6 +1278,12 @@ fun LobbyScreen(vals: PanelVals) {
             KitCaption("${standing.linesIn} OF ${standing.joined} HANDED THEIRS OVER", P, Modifier.fillMaxWidth(), center = true)
         }
         KitSpacer()
+        // **THE HOUSE IS CLOSED, on the host's own lobby** (D-310): the owner's two lines, in the type
+        // and place JOIN A HOME draws them for a guest, above LIGHTS OUT. Only these: no other refusal
+        // has ever been drawn on this screen, and drawing them here would be new copy on it.
+        lobby.refusal?.takeIf { it.startsWith(HOUSE_IS_CLOSED) }?.let {
+            KitBody(it, P, Modifier.fillMaxWidth(), size = 22, align = TextAlign.Center)
+        }
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             LightsOut(
                 hosting = lobby.hosting,

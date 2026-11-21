@@ -119,4 +119,23 @@ class PermissionsTest {
             "a second ask laundered a refusal into a grant",
         )
     }
+
+    /**
+     * **GUARD (D-310): a grant reading switched off is one bit a row**, and only a refusal sets it:
+     * nothing refused reads zero, and a missing sensor is hardware, not a grant switched off.
+     */
+    @Test
+    fun theGrantsSwitchedOffAreOneBitARow() {
+        val perms = NoPermissions()
+        DevicePermission.entries.forEach { perms.says(it, Grant.Granted) }
+        assertEquals(0, perms.refusedGrants(), "a phone with every grant read a grant switched off")
+        perms.says(DevicePermission.Camera, Grant.Refused)
+        perms.says(DevicePermission.Notifications, Grant.Refused)
+        assertEquals(
+            (1 shl DevicePermission.Camera.ordinal) or (1 shl DevicePermission.Notifications.ordinal),
+            perms.refusedGrants(),
+        )
+        perms.says(DevicePermission.Camera, Grant.Unavailable)
+        assertEquals(1 shl DevicePermission.Notifications.ordinal, perms.refusedGrants(), "hardware missing read as a grant switched off")
+    }
 }

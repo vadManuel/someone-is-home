@@ -72,7 +72,7 @@ class RadioFaultTest {
         val (after, got) = feed(reported, *meeting())
         for (seat in seats) {
             assertEquals(
-                listOf(Effect.NoticeIssued(listOf(Seat(3)))), notices(got).getValue(seat.index),
+                listOf(Effect.NoticeIssued(listOf(Seat(3)), permissionSwitchedOff = false)), notices(got).getValue(seat.index),
                 "seat ${seat.index} was not delivered the notice naming seat 3 exactly once",
             )
         }
@@ -96,7 +96,7 @@ class RadioFaultTest {
         val (_, got) = feed(admission.reduction.state, *meeting())
         for (seat in seats) {
             assertEquals(
-                listOf(Effect.NoticeIssued(emptyList())), notices(got).getValue(seat.index),
+                listOf(Effect.NoticeIssued(emptyList(), permissionSwitchedOff = false)), notices(got).getValue(seat.index),
                 "a reset was named to seat ${seat.index}: D-187 says genuine radio loss earns no notice",
             )
         }
@@ -126,7 +126,7 @@ class RadioFaultTest {
         assertTrue(revoked.isRevoked(Seat(4)), "the fixture never put anybody out")
         val (_, got) = feed(revoked, Event.RadioFaulted(t(), Seat(2), RadioCause.Person), *meeting())
         assertEquals(
-            listOf(Effect.NoticeIssued(listOf(Seat(2)))), notices(got).getValue(4),
+            listOf(Effect.NoticeIssued(listOf(Seat(2)), permissionSwitchedOff = false)), notices(got).getValue(4),
             "the Revoked seat at the meeting was not told",
         )
     }
@@ -157,7 +157,7 @@ class RadioFaultTest {
         val (_, got) = feed(admission.reduction.state, *meeting())
         for (seat in seats) {
             assertEquals(
-                listOf(Effect.NoticeIssued(emptyList())), notices(got).getValue(seat.index),
+                listOf(Effect.NoticeIssued(emptyList(), permissionSwitchedOff = false)), notices(got).getValue(seat.index),
                 "the Revoked seat was named to seat ${seat.index} for locking its phone",
             )
         }
@@ -176,7 +176,7 @@ class RadioFaultTest {
         val (_, got) = feed(revokeFour(listed), *meeting())
         for (seat in seats) {
             assertEquals(
-                listOf(Effect.NoticeIssued(listOf(Seat(2)))), notices(got).getValue(seat.index),
+                listOf(Effect.NoticeIssued(listOf(Seat(2)), permissionSwitchedOff = false)), notices(got).getValue(seat.index),
                 "seat ${seat.index} was not told exactly seat 2: the out seat 4 named, or the living seat 2 dropped",
             )
         }
@@ -211,7 +211,7 @@ class RadioFaultTest {
         val (_, got) = feed(listed, *meeting())
         for (seat in seats) {
             assertEquals(
-                listOf(Effect.NoticeIssued(listOf(Seat(4)))), notices(got).getValue(seat.index),
+                listOf(Effect.NoticeIssued(listOf(Seat(4)), permissionSwitchedOff = false)), notices(got).getValue(seat.index),
                 "seat ${seat.index} was not told exactly the out host",
             )
         }
@@ -228,7 +228,7 @@ class RadioFaultTest {
         val (listed, _) = feed(armed, Event.RadioFaulted(t(), Seat(4), RadioCause.Person))
         val (_, got) = feed(revokeFour(listed), *meeting())
         for (seat in seats) {
-            assertEquals(listOf(Effect.NoticeIssued(listOf(Seat(4)))), notices(got).getValue(seat.index))
+            assertEquals(listOf(Effect.NoticeIssued(listOf(Seat(4)), permissionSwitchedOff = false)), notices(got).getValue(seat.index))
         }
     }
 
@@ -249,7 +249,7 @@ class RadioFaultTest {
         tick = 0
         val (_, got) = feed(round(Seat(1)), *meeting())
         for (seat in seats) {
-            assertEquals(listOf(Effect.NoticeIssued(emptyList())), notices(got).getValue(seat.index))
+            assertEquals(listOf(Effect.NoticeIssued(emptyList(), permissionSwitchedOff = false)), notices(got).getValue(seat.index))
         }
     }
 
@@ -264,8 +264,8 @@ class RadioFaultTest {
             val a = byInsider.getValue(seat.index)
             val b = byResident.getValue(seat.index)
             assertEquals(a.map { it::class.simpleName }, b.map { it::class.simpleName }, "seat ${seat.index}'s stream differs by role")
-            assertEquals(listOf(Effect.NoticeIssued(listOf(Seat(1)))), notices(byInsider).getValue(seat.index))
-            assertEquals(listOf(Effect.NoticeIssued(listOf(Seat(2)))), notices(byResident).getValue(seat.index))
+            assertEquals(listOf(Effect.NoticeIssued(listOf(Seat(1)), permissionSwitchedOff = false)), notices(byInsider).getValue(seat.index))
+            assertEquals(listOf(Effect.NoticeIssued(listOf(Seat(2)), permissionSwitchedOff = false)), notices(byResident).getValue(seat.index))
         }
     }
 
@@ -302,7 +302,7 @@ class RadioFaultTest {
         val (_, got) = feed(round(Seat(1)), *meeting())
         for (seat in seats) {
             assertEquals(
-                listOf(Effect.NoticeIssued(emptyList())), notices(got).getValue(seat.index),
+                listOf(Effect.NoticeIssued(emptyList(), permissionSwitchedOff = false)), notices(got).getValue(seat.index),
                 "a report from before arming was named at the round's first meeting",
             )
         }

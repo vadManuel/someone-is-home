@@ -283,6 +283,8 @@ private fun firedBy(event: Event): Seat? = when (event) {
     is Event.Sensed,
     // The house's own fact about its own air, never an ability.
     is Event.OffAirEnded,
+    // The house's own fact about a permission switched off again (D-310), never an ability.
+    is Event.HouseClosedOnPermission,
     -> null
 }
 
@@ -329,6 +331,10 @@ private fun phaseOf(event: Event): MeetingPhase? = when (event) {
     // meeting's own pause already holds the Egress then, so the rules move nothing.
     is Event.OffAirEnded -> null
 
+    // Not a meeting event, and not refused at one (D-310): a permission switched off during a
+    // meeting, after the warning, closes the house as it would during a shift.
+    is Event.HouseClosedOnPermission -> null
+
     is Event.MeetingCheckedIn -> MeetingPhase.CheckIn
     is Event.ReadyToVoteDeclared, is Event.DiscussionClosed -> MeetingPhase.Discussion
     is Event.VoteSelected, is Event.VoteLocked, is Event.VoteWindowClosed -> MeetingPhase.Vote
@@ -363,7 +369,7 @@ private fun isTierTwo(event: Event): Boolean = when (event) {
     is Event.DiscussionClosed, is Event.VoteSelected, is Event.VoteLocked,
     is Event.VoteWindowClosed, is Event.TallyHalfwayReached, is Event.MeetingClosed,
     is Event.EgressFired, is Event.SyncPulseReturned, is Event.EgressExpired,
-    is Event.TerminalLeft, is Event.Sensed, is Event.OffAirEnded,
+    is Event.TerminalLeft, is Event.Sensed, is Event.OffAirEnded, is Event.HouseClosedOnPermission,
     -> false
 }
 
@@ -402,5 +408,7 @@ private fun needsEgress(event: Event): Boolean = when (event) {
     // **The house's return reads the Egress and does not need one.** A lock with no Egress running
     // is the ordinary case, and the rules then move nothing.
     is Event.OffAirEnded,
+    // **The close reads no Egress** (D-310): a running one ends with the round.
+    is Event.HouseClosedOnPermission,
     -> false
 }

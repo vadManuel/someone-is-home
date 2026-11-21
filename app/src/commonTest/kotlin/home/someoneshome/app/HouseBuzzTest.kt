@@ -297,6 +297,8 @@ class HouseBuzzTest {
             Effect.SyncPulseBlanked(seat),
             Effect.InsidersRevealed(emptyList()),
             Effect.HouseSignedOff(seat, "one last thing"),
+            // The close is silent on every phone (D-310).
+            Effect.HouseClosedOnPermission,
         )
     }
 
@@ -349,7 +351,7 @@ class HouseBuzzTest {
         // A touch, answered (R1, D-216): silent, because every touch in the house sends one.
         Effect.ContactAnswered(Seat(1)),
         // The house notice (D-187, D-223): silent, because the gate's own push beside it buzzes.
-        Effect.NoticeIssued(listOf(Seat(2))),
+        Effect.NoticeIssued(listOf(Seat(2)), permissionSwitchedOff = false),
     )
 
     /**
@@ -519,7 +521,7 @@ class HouseBuzzTest {
             "VoteSelectionShown", "VoteProgressed", "MeetingResult", "MeetingResolved",
             "RestrainedTakeover", "MeetingEnded", "EgressOpened", "EgressHeld",
             "SyncPulseAnswered", "SyncPulseBlanked", "EgressContained", "EgressSucceeded", "RoundEnded",
-            "InsidersRevealed", "HouseSignedOff",
+            "InsidersRevealed", "HouseSignedOff", "HouseClosedOnPermission",
             "RoleRevealed", "MeetingCalling", "RosterIssued", "RevokeLanded",
             "ContactSeedIssued",
             "ContactAnswered",

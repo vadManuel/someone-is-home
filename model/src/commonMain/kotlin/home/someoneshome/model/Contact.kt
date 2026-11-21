@@ -178,27 +178,45 @@ private const val HEX = "0123456789abcdef"
  * earns no notice.* So the only thing the house needs to know about an outage is which side of that
  * line it is on, and this is the whole of what a phone says about one.
  *
- * - [Person]: Bluetooth switched off, or its permission withdrawn, during a round. Every grant is
- *   asked at setup, in the light, before a seat is taken (D-161), so one missing during a round is
- *   something a person did. **The house names the player at the next meeting**, in the house
- *   notice that lock and backgrounding are reported in.
+ * - [Permission]: a permission switched off during a round (D-310): Bluetooth's or Nearby
+ *   Interaction's withdrawn, as the radios say, or any grant this phone held at arming now reading
+ *   switched off (`Permissions.refusedGrants`, read by the uploader every beat). Every grant is
+ *   required to take a seat (D-161, D-309), so one missing during a round is something a person did.
+ *   **Named at the next meeting with the owner's warning, and after the warning it closes the
+ *   house** (`Event.HouseClosedOnPermission`).
+ * - [Person]: Bluetooth switched off, or the phone locked or taken out of the app (D-229).
+ *   **Named at the next meeting**, with no warning, and it **never** counts toward closing the
+ *   house (the owner, 2026-11-20).
  * - [Device]: the OS resetting the radio, or the hardware not supporting it. **Recorded for the
  *   authority and announced to nobody**: a notice naming a player whose phone failed reads to the
  *   room exactly like a notice naming a cheat (D-187). It shows as disconnection on the monitoring
  *   surfaces, which it does by itself, since a radio that is down is heard by nobody.
  *
- * **The two serial names are the same length**, so the one upward body is the same number of bytes
- * whichever it carries. `RadioFaultTest` pins it.
+ * **The three serial names are the same length**, so the one upward body is the same number of
+ * bytes whichever it carries (D-217). `RadioFaultTest` pins it.
  */
 @ClientFacing
 @kotlinx.serialization.Serializable
 enum class RadioCause {
+    @kotlinx.serialization.SerialName("permit")
+    Permission,
+
     @kotlinx.serialization.SerialName("person")
     Person,
 
     @kotlinx.serialization.SerialName("device")
     Device,
 }
+
+/**
+ * **Two causes for one onset, as one** (D-303, D-310): a permission switched off outranks a person's
+ * other act, which outranks the phone's own failure. One beat that holds both a leave and a radio's
+ * onset, or both radios going down together, sends one report, and it must not hide the stronger
+ * act: a device fault that coincided must not hide an evasion D-187 names, and a leave that
+ * coincided must not hide a permission the owner's warning is about. Null is no onset.
+ */
+fun RadioCause.outranking(other: RadioCause?): RadioCause =
+    if (other != null && other.ordinal < ordinal) other else this
 
 /**
  * **What a touch did with an armed phone's Revoke, on that phone's own answer** (the owner's

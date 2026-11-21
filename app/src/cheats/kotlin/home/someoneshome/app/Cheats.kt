@@ -35,6 +35,7 @@ import home.someoneshome.model.protocol.IntentMessage
 import home.someoneshome.platform.SeededCardScanner
 import home.someoneshome.platform.clearSeatToken
 import home.someoneshome.platform.devicePermissions
+import home.someoneshome.platform.refusedGrants
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import home.someoneshome.platform.deviceHaptics
@@ -289,6 +290,10 @@ fun CheatRoot(uwb: Boolean) {
                 rules.value?.wentOffAir()
             },
             onForeground = {
+                // **What the OS says now, read for the round's beats** (D-310): a phone back from
+                // Settings with a grant switched off reports a permission, not a leave. A read, never
+                // a prompt or a probe (D-309 keeps probes off a round); every beat asks it.
+                permissions.reread()
                 link.foregrounded()
                 rules.value?.cameBackOnAir()
             },
@@ -477,7 +482,10 @@ fun CheatRoot(uwb: Boolean) {
         // the socket's estimator, so the containment control's taps are stamped on a current offset.
         RoundClient(
             scope, flow, watch, buzzer, radio, wake, kept = DeviceSeat,
-            clientMillis = link::clientNow, clock = link::uploadAnswered, ranging = ranging, note = lines::round,
+            clientMillis = link::clientNow, clock = link::uploadAnswered, ranging = ranging,
+            // **A grant switched off mid-round goes up as a permission, not a leave** (D-310).
+            refusedGrants = permissions::refusedGrants,
+            note = lines::round,
         )
             // Both knots tied in one place: the lobby gets the seam it was promised, and the four
             // meeting controls, the Subroutine's hand-over and page 2's two fires get the way up

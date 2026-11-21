@@ -268,7 +268,7 @@ class HousedContentTest {
         val found = mutableListOf<String>()
         for (insider in listOf(false, true)) {
             val phone = housed(insider = insider)
-            phone.houseSaid(RoundMessage.NoticeIssued(emptyList()))
+            phone.houseSaid(RoundMessage.NoticeIssued(emptyList(), permissionSwitchedOff = false))
             phone.houseSaid(RoundMessage.MessageDelivered("Do not run."))
             phone.houseSaid(RoundMessage.MeetingOpened(Seat(1), MeetingTrigger.MeetingCard, Haptic.Long))
             phone.houseSaid(RoundMessage.CheckInProgressed(present = 2, expected = 5))

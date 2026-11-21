@@ -262,7 +262,7 @@ class EvasionNoticeTest {
      * on every phone, naming [expected].
      */
     private fun Room.assertNoticeNames(expected: List<Seat>) {
-        val frame = RoundWire.encode(RoundBody.Push(1, RoundMessage.NoticeIssued(expected)))
+        val frame = RoundWire.encode(RoundBody.Push(1, RoundMessage.NoticeIssued(expected, permissionSwitchedOff = false)))
         for (p in all) {
             val notices = p.half.pushed.filterIsInstance<RoundMessage.NoticeIssued>()
                 .map { RoundWire.encode(RoundBody.Push(1, it)) }

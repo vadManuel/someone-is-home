@@ -11949,6 +11949,252 @@ checks.
 7. **The ten-second count is kept by the screen's clock** (a `LaunchedEffect` on the look's number)
    and decided by the model; `LobbyModel` has no clock of its own.
 
+### D-310 · **A permission switched off is named with the owner's warning, and after the warning anyone's closes the house; leaving the app is named as before and never counts — built (recording 45)**
+
+**The rulings** (owner, 2026-11-20):
+
+- *A permission switched off mid-round is still only named at the next meeting. The phone is not
+  sent back to PERMISSIONS.*
+- *The second time closes the house. Only a permission switched off counts.* Leaving the app (the
+  side button, swiping home, another app) *is still named as today but never counts toward
+  closing. Anyone's second time counts, not only the same player's.*
+- **The words, approved verbatim.** At a meeting where at least one named seat switched a
+  permission off this shift, the names stay as they are and two sentences are appended:
+  *"Resident Mia was unreachable this shift. Occupancy data for this interval is incomplete. A
+  permission was switched off. If anyone switches one off again, the house closes and everyone
+  starts over."* (plural names as today: *"Residents Mia and Jo were unreachable this shift. …"*
+  plus the same two sentences). Where the named only left the app, the notice is unchanged, with no
+  warning. When it happens again, every phone shows *"THE HOUSE IS CLOSED"* / *"A permission was
+  switched off again. Everyone starts over."*; then each phone goes back to JOIN A HOME, and the
+  host goes back to its lobby.
+
+**What "again" means, as built.**
+
+1. **The warning counts as given** once a notice carrying it has been issued at a meeting this
+   round (`GameState.warned`, set at the check-in gate by the notice it rides).
+2. **After that,** any seat's permission switched off mid-round, as the house learns of it, closes
+   the house, during a shift or at a meeting, the warned seat's or anybody else's.
+3. **Before the warning is given,** every permission switched off in the same shift is named
+   together at that meeting, with the warning: several people in one shift are one warning, not a
+   close (`GameState.switchedOff`, listed beside `unreachable` and emptied with it at the gate).
+4. **The count is per round.** Every arming starts with no warning given.
+5. **The host's own seat counts like any other** (D-230), out or not (D-283, D-289). **A seat that is
+   out does not** (R7, D-242): the notice does not name it, so it neither warns nor closes. One
+   predicate, `namedOnTheNotice`, decides both, so a report that could not be named can never close
+   the house.
+
+**How the two causes are told apart.** Both still reach the house as `RoundBody.RadioFaulted`, the
+one fixed body (D-217, D-223, D-229). Its cause gains a third value: `RadioCause.Permission`,
+serial name `permit`, six letters like `person` and `device`, so the body is the same number of
+bytes whichever it carries and from every phone (`RadioFaultTest`'s length pin, and the loopback
+test, read it). The phone decides the cause and nothing else goes up; what it reads to decide stays
+inside the phone (the owner's threat model, 2026-11-20: what sits only inside a player's own phone
+is not a leak). **A permission** is:
+
+- **Bluetooth's withdrawn**, as the radio says (`causeOf`: Unauthorized). Bluetooth switched off
+  (`poweredOff`) stays `Person`: a radio is not a permission, and the Perms seam already reads a
+  powered-off radio as still granted.
+- **Nearby Interaction's withdrawn**, as the ranging radio says (a session ended `NotAllowed`, which
+  D-303 sent as `Person`). Since D-309 no phone is seated without NEARBY DEVICES reading GRANTED, so
+  a refusal in a round is a switch-off.
+- **Any grant this phone held at arming now reading switched off.** `Permissions.refusedGrants` (one
+  bit a row, every row of D-309's five) is read when the seed arrives and **once a beat**, and a bit
+  set that was clear at arming is a permission's onset: folded into a report not yet sent (the leave
+  that was the trip to Settings), or owed as one of its own, each grant once until it is back on.
+  The app root re-reads the OS on every return to the foreground with **`Permissions.reread`**, new:
+  `refresh` without the Nearby Interaction probe, because D-309 keeps every probe off a round's
+  sessions (its decision 2), so NEARBY DEVICES is heard from the radio above and not from this read.
+  A grant whose answer lands a beat late (Notifications answers through a callback) is its own
+  permission report on the beat that reads it.
+- **Across a relaunch.** iOS ends the app when Camera or Motion is switched off in Settings (D-229,
+  D-245). The grants read at arming are kept beside the owed reports (`grants n`, a line no onset
+  name can be), so the relaunched process compares against them, not against what it finds, and the
+  leave it reads back goes up as a permission.
+
+**A leave is `Person`, as before**, named and never counted. **The rules draw the line in one function each**: `namedByTheNotice`
+(Permission and Person named, Device not) and `countsTowardClosing` (Permission only). When two
+causes meet in one onset the stronger wins (`RadioCause.outranking`: a permission, then a person's
+act, then the phone's own failure), replacing D-303's *a person's act wins*.
+
+**The notice.** `Effect.NoticeIssued` and `RoundMessage.NoticeIssued` gain `permissionSwitchedOff`,
+true when a seat the notice names switched a permission off this shift, the same on every phone
+(schema row unchanged: `NOTICE_ISSUED` to `LIVING + OUTSIDE`, the field rides the kind it is part of).
+`noticeBody(names, switchedOff)` appends the owner's two sentences (`PERMISSION_WARNING`), once,
+after the names; the panel holds it as `PanelState.noticeSwitchedOff`, reset between rounds with
+the notice (D-259's fresh panel).
+
+**The close.** A new event, **`Event.HouseClosedOnPermission(at, seat)`**, minted by the house: after
+a `RadioFaulted` is admitted, the authority asks `closesTheHouse` (round running, warned, a
+permission, a seat the notice would name) and puts the close to the same gate, so the recording
+holds it as a fact of its own (rule 10). It reduces in one line, every time: `GameState.closeHouse`
+(the round's second ending reason beside `outcome`, `ended` derived from both; the one lines and
+names dropped in the same transition, D-115, D-116) and one effect,
+**`Effect.HouseClosedOnPermission`**, with no field, addressed to every seat, schema row
+**`HOUSE_CLOSED_ON_PERMISSION` to `AFTER`** (the ended round's two classes, ROUND_ENDED's row and for
+its reason). The seat that closed it is in the recording and the house's log (`THE HOUSE IS CLOSED —
+SEAT n SWITCHED A PERMISSION OFF AFTER THE WARNING`) and on no screen. No haptic, no lamp: D-135's
+set is closed and nothing is said about light.
+
+**On every phone the close takes the existing closed-house path** (`FlowModel.houseClosed`'s
+shape): the round is forgotten (`betweenRounds`), the radio silenced and the screen let sleep as at
+an ending, and the owner's two lines are put in **the refusal slot of the screen the phone lands
+on**, where `LobbyModel.HOUSE_CLOSED` is drawn today: a guest leaves the lobby and lands on JOIN A
+HOME (it hangs up; its token is kept, so JOIN takes it back in as a fresh lobby's seat); the host
+turns its lobby over, as NEW ROUND does, and lands on its own lobby with the house still on the air.
+The words are `KitBody` at 22, centred, the slot's existing type, in the screen's existing
+light-field palette. **The host's lobby had no refusal slot drawn** (`LobbyScreen` never drew
+`LobbyModel.refusal`; the render showed the lines missing while the model test passed), so it now
+draws one, above LIGHTS OUT, in the same type, and **only for these two lines** (`startsWith(HOUSE_IS_CLOSED)`):
+no other refusal has ever been drawn there, and showing them now would be new copy on that screen.
+**No new screen, light level, colour or type.** The landing differs by hosting only, which
+the room can see, never by role or by being out.
+
+**The host's turnover tells no guest anything.** `LobbyHouse` marks the close when the effect is
+emitted, and the host's NEW ROUND that follows sends `RoundEnded` and the next standing to the host's
+own seat alone. A guest that was sent the usual broadcast before it had drawn the close would have
+ended its round on it, dropped the close's push as stale, and been walked to the lobby instead of
+JOIN A HOME (V1, D-267). The loopback test asserts that no guest is sent `RoundEnded`.
+
+**Recording: 45.** One event a version 44 build cannot construct (`HouseClosedOnPermission|seat=`),
+a cause a version 44 parser refuses (`Permission`), the `NoticeIssued` effect row's
+`switchedOff=`, and three state columns (`switchedOff=`, `warned=`, `closed=`), without which a replay
+could not say why a round ended with no winner. A version 44 recording is refused, as every older
+one is.
+
+**Determinism and rule 1.** A report still emits nothing to anybody when it arrives, whatever its
+cause. The notice is sent at every meeting, empty or not, warned or not. The close is built once,
+with no branch, and reaches every seat in the same bytes.
+
+| site | what it said | what it says now |
+|---|---|---|
+| `model` `RadioCause` | `Person` / `Device` | `Permission` (`permit`) first; `outranking` |
+| `model` `Event` | (none) | `HouseClosedOnPermission(at, seat)` |
+| `model` `Effect.NoticeIssued`, `RoundMessage.NoticeIssued` | `unreachable` | and `permissionSwitchedOff` |
+| `model` `Effect`/`RoundMessage.HouseClosedOnPermission`, `EmitSchema` | (none) | no field; `HOUSE_CLOSED_ON_PERMISSION` to `AFTER`, every seat |
+| `model` `GameState` | `ended` = an outcome | `switchedOff`, `warned`, `closed`; `ended` reads both reasons; `closeHouse` |
+| `core` `Rules` | `namedByTheNotice` | `countsTowardClosing`, `closesTheHouse`, `namedOnTheNotice`, the close's reduction; the gate's notice warns and sets `warned` |
+| `core` `Admission` | (exhaustive) | the close: not an ability, not a meeting's, needs no Egress |
+| `platform` `causeOf`, `Permissions`, `Permissions.ios.kt` | Unauthorized a person's | a permission's; `refusedGrants`; `reread`, `refresh` without the probe |
+| `model` `RangingPool` | `NotAllowed` a person's | a permission's; a stronger cause takes the onset |
+| `app` `ContactUploader` | a leave and Bluetooth one cause | grants read at arming and every beat, kept beside the owed reports; the close ends the round |
+| `app` `RoundAuthority` | the report put to the rules | then the close minted when `closesTheHouse` says so, logged |
+| `app` `LobbyHouse` | NEW ROUND told every phone | after a close, the host alone |
+| `app` `RoundOverTransport`, `HouseBuzzer`, cheats `RoundClient`, `Cheats.kt` | | the close releases the screen and clears requests, buzzes nothing; the grants wired from `Permissions`, re-read at every return |
+| `ui` `PanelState`, `PanelVals`, `noticeBody`, `Flow` | | `noticeSwitchedOff`; the warning appended; `houseClosedOnPermission` |
+| `ui` `LobbyScreen` | no refusal drawn | the close's two lines, and nothing else, above LIGHTS OUT |
+| `harness` `Transcript`, `RecordingText`, `Recording.HEADER` | `recording/44` | the event, the field, the columns; `recording/45` |
+
+**Tests.** `PermissionCloseTest` (core, 10): a permission named with the warning on every seat; a
+leave named without it and never closing, before and after the warning; Bluetooth switched off
+and a reset never counting; three permissions in one shift one warning and no close; a leave then a
+permission from one seat named once, warned; a permission after the warning closing the house for
+every seat, the Insider's, the Revoked seat's and the host's, with one effect each and every later
+report refused; the close at the meeting that warned; an out seat neither warning nor closing while
+the host does both; a new round starting with no warning, after a warning and after a close; the
+close permitted only to the ended round. `PermissionWarningTest` (ui, 5): the owner's words with one
+name and two, drawn on the notices screen; a leave's notice unchanged; the warning reset between
+rounds; the close walking a guest to JOIN A HOME from four screens, Insider and Resident, living and
+out, with the same two lines, drawn on JOIN A HOME; the host back on its lobby, still hosting, the
+two lines drawn there. `PermissionCloseRecordingTest` (harness, 2): the cause, the warning, the close
+and the three columns survive the text form and replay identically; a role exchange adds no
+unexplained divergence. `PermissionCloseLoopbackTest`
+(app, 1, real sockets): the evening end to end, below. `ContactUploaderTest` (app, +4): a trip to
+Settings that switched a grant off goes up as a permission and one that did not as a person's; a
+grant off at arming never counts; a grant read off late is its own report once until it is back on;
+a relaunch compares against the grants kept at arming. `PermissionsTest` (platform, +1): one bit a
+row, a refusal only. `SwitchboardRadioTest` (platform, 3 changed): Unauthorized is now
+`Permission`. `RangingPoolTest` (model, 2 changed): `NotAllowed` is now `Permission`. Fixtures that built a notice name the field (`RadioFaultTest`, `RoundWireTest`,
+`HouseNoticeTest`, `HousedContentTest`, `HouseBuzzTest`, `EvasionNoticeTest`,
+`ContactRadioBenchTest`); `RoundWireTest`'s one-of-every-effect fixture gains the close; the
+admission test's origin table names the close as the radio's.
+
+**The loopback evening** (`aSecondPermissionClosesTheHouseOnEveryPhoneAndALeaveNeverDoes`): host and
+three guests, armed through production's arming path. Mia goes to Settings and switches a grant off:
+her report goes up as a permission, the house's log says `PERMISSION`, and the next meeting names her
+with the warning, the same bytes and the same words on every phone. Jo then only leaves the app: a
+person's report, no close, named at the next meeting without the warning. Jo then switches a grant
+off: the house closes, every phone is pushed the close once in the same bytes, every guest lands on
+JOIN A HOME with the two lines, unattached and out of the round, and the host lands on its lobby,
+still hosting, with the two lines, its standing back to one seat; no guest is sent `RoundEnded`.
+
+**Proved, red against the injected break first, then restored.** A foreground leave made to count
+toward the close in two ways, `:core:jvmTest` each time, 413 tests, quoted from the XML. (1)
+`countsTowardClosing(Person)` true: 8 red, among them `PermissionCloseTest`
+*aLeaveIsNamedWithoutTheWarningAndNeverClosesTheHouse*: `a leave: seat 0 was not told exactly once
+expected:<[NoticeIssued(unreachable=[Seat(index=3)], permissionSwitchedOff=false)]> but
+was:<[NoticeIssued(unreachable=[Seat(index=3)], permissionSwitchedOff=true)]>`, *bluetoothSwitchedOffIsNamedAndNeverCounts*
+and six `RadioFaultTest` cases whose leave grew the warning. (2) Only the close widened
+(`closesTheHouse` taking `Person` as well): 1 red, the same case, `leaving the app after the warning
+counted toward closing the house`. Restored. (Run before the rebase onto D-309, which changed
+nothing in `core`.) And the host's lobby: its two lines' draw removed (`takeIf { false }`),
+`:ui:desktopTest` on `PermissionWarningTest`, 5 tests, 1 red: *theCloseWalksTheHostBackToItsLobbyWithTheTwoLines*:
+`the host's lobby did not draw the two lines: [, 20:41, THE BUNGALOW, 6 JOINED, PRIYA, …]`. Restored;
+the counts below are the restored tree's.
+
+**Checked** (rebased onto D-309, on the final tree, `test-results` cleared first: `./gradlew
+:model:check :core:check :ui:check :app:check :harness:check :platform:check --continue` with the
+two variant sweeps excluded, then `:app:variantSweepRelease`, then `:app:variantSweepPlaytest`, each
+exit 0, the app's XML copied out after each because the sweeps write into one folder, every result
+XML counted with a python glob): model 355 (JVM) + 339 (iOS Simulator), core 413 + 411, ui 755
+(desktop) + 371 (iOS Simulator), harness 132, platform 210, app 266 (debug), 160 (release sweep) and
+266 (playtest sweep): **no failures, none skipped**. Against D-309 and D-308: core 10 more
+(`PermissionCloseTest`), harness 2 more (`PermissionCloseRecordingTest`), ui desktop 6 more
+(`PermissionWarningTest`'s five and the render), platform 1 more (`PermissionsTest`), app 5 more in
+every variant (`ContactUploaderTest`'s four and the loopback evening). `vocabularyLint`,
+`redactionLint`, `boundaryCheck`, `armingCordon`, `benchSeedCordon` and `seedSourceCordon` clean.
+Neither known load flake fired. The first full run before the rebase caught five pins, each fixed:
+`RoundWireTest`'s one-of-every-effect fixture and `HouseBuzzTest`'s every-kind list (the close),
+`RangingPoolTest` and `SwitchboardRadioTest` (the new cause), and three recording tests' `recording/44`.
+
+**Renders** (`PermissionCloseRender`, 600×1300, `ui/build/screens/permission-*.png`). Looked at, each:
+`permission-notice-warned-one` (the notices band, and in its box *Resident MIA was unreachable this
+shift. Occupancy data for this interval is incomplete. A permission was switched off. If anyone
+switches one off again, the house closes and everyone starts over.*, nine lines, amber on black, the
+notice's own type and box); `permission-notice-warned-two` (the same with *Residents MIA and JO
+were*, nine lines); `permission-notice-left-the-app` (the sentence alone, four lines, no warning);
+`permission-closed-guest-join` (JOIN A HOME as it is, light field, RESIDENT DANI and the two homes,
+and above HOST A HOME INSTEAD, centred, THE HOUSE IS CLOSED / *A permission was switched off again.
+Everyone starts over.* in the refusal slot's body type, where ROUND IN PROGRESS is drawn); and
+`permission-closed-host-lobby` (the host's lobby unchanged, settings and YOUR ONE LINE, and the same
+two lines centred above LIGHTS OUT). No new light, colour or type on any of them.
+
+**Not on a phone.** Nothing here has run on one. The checklist (`phone-session-2026-11-19.md`)
+gains a line: mid-round, switch a permission off in Settings and come back, and the next meeting's
+notice carries the warning; switch one off again on any phone, and every phone shows THE HOUSE IS
+CLOSED and returns to JOIN A HOME, the host's to its lobby.
+
+**Limits, reasoned and not observed:**
+
+1. **A guest that did not see the close** (suspended, or its socket failed, at that moment) comes
+   back to a house on the next round: the turnover wiped the retained pushes (V2), so it is not
+   replayed the close, and the next standing walks it to the host's lobby (V1, D-267) without the two
+   lines. Nothing is stuck; the words are missed.
+2. **A guest whose close and a later standing arrive in one read** (another guest hung up first, and
+   this one's socket stalled) ends its round on the standing before the close's push is applied, and
+   lands on the lobby the same way. The host sends the standing only after a guest has left, so this
+   needs a stall of at least one round trip.
+3. **Notifications answers late.** If the first beat after a return reads the grant before iOS's
+   callback lands, the leave goes up as a person's and the permission as its own report a beat
+   later: the seat is still listed for the warning, by a second report.
+
+**Decisions for the owner** (each provisional):
+
+1. **Bluetooth switched off is not a permission** (above): named, never counted. Toggling Bluetooth
+   off in Control Centre is evasion D-187 names, and the ruling's word is *permission*; the Perms
+   seam already reads a powered-off radio as granted.
+2. **Nearby Interaction refusing a session is a permission switched off** (above), as D-309's gate
+   makes it: a phone in a round was seated with NEARBY DEVICES GRANTED.
+3. **A grant switched off in the lobby, before arming, does not count**, except Bluetooth's, which the
+   radio reports as a permission at the round's first advertise (D-223's *already off at arming* rule).
+4. **An out seat neither warns nor closes**, the host's excepted, by D-242's and D-289's rule for who
+   the notice names.
+5. **The close's two lines are drawn in the refusal slot of the screen each phone lands on** (JOIN A
+   HOME, or the host's lobby), the existing closed house's place for its line, rather than on a screen
+   of their own before it: a screen of their own would need a timing value or a control the ruling
+   does not give.
+6. **A guest is not dismissed**: it hangs up and keeps its seat token, so JOIN takes it back into the
+   host's next lobby by that token. *Everyone starts over* is the new round, not new seats.
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

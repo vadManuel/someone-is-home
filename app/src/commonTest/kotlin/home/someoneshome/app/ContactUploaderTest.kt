@@ -382,4 +382,91 @@ class ContactUploaderTest {
         repeat(3) { after.beat() }
         assertEquals(emptyList(), afterReports, "a phone that crashed in the foreground was reported on its relaunch")
     }
+
+    // ---- D-310: a permission switched off, told apart from a leave ---------------------------------
+
+    /** An uploader whose OS answers [grants] for the grants switched off, with its reports and its store. */
+    private fun granted(grants: () -> Int, kept: SeatStore = MemorySeat()): Pair<ContactUploader, MutableList<RoundBody.RadioFaulted>> {
+        val reports = mutableListOf<RoundBody.RadioFaulted>()
+        val radio = LoudRadio()
+        return ContactUploader(radio, { ContactWindow(10) }, faulted = { reports += it }, kept = kept, refusedGrants = grants, send = { }) to reports
+    }
+
+    /**
+     * **GUARD (D-310): a trip to Settings that switched a grant off goes up as a permission; a leave
+     * that switched nothing off goes up as a person's.** One report each, the one fixed body.
+     */
+    @Test
+    fun aLeaveThatSwitchedAGrantOffIsAPermissionAndOneThatDidNotIsAPersons() {
+        for (switched in listOf(false, true)) {
+            var off = 0
+            val (up, reports) = granted({ off })
+            up.heard(RoundMessage.ContactSeedIssued(seed))
+            up.beat()
+            up.leftTheForeground()
+            if (switched) off = 1 shl 3
+            up.backInTheForeground()
+            repeat(3) { up.beat() }
+            val expected = if (switched) RadioCause.Permission else RadioCause.Person
+            assertEquals(listOf(expected), reports.map { it.cause }, "switched=$switched: the leave went up as something else, or more than once")
+        }
+    }
+
+    /** **GUARD (D-310): a grant already off at arming never counts**, however many beats read it off. */
+    @Test
+    fun aGrantOffAtArmingNeverCounts() {
+        val (up, reports) = granted({ 1 shl 2 })
+        up.heard(RoundMessage.ContactSeedIssued(seed))
+        repeat(4) { up.beat() }
+        assertEquals(emptyList(), reports, "a grant that was off at arming went up as switched off")
+        up.leftTheForeground()
+        up.backInTheForeground()
+        repeat(2) { up.beat() }
+        assertEquals(listOf(RadioCause.Person), reports.map { it.cause }, "a leave on a phone armed with a grant off was not a person's")
+    }
+
+    /**
+     * A grant read off only after the leave's report went up (a late answer from the OS) is a
+     * permission's report of its own, once; back on and off again is another.
+     */
+    @Test
+    fun aGrantReadOffLateIsItsOwnReportOnceUntilItIsBackOn() {
+        var off = 0
+        val (up, reports) = granted({ off })
+        up.heard(RoundMessage.ContactSeedIssued(seed))
+        up.leftTheForeground()
+        up.backInTheForeground()
+        up.beat()
+        off = 1
+        repeat(3) { up.beat() }
+        off = 0
+        up.beat()
+        off = 1
+        up.beat()
+        assertEquals(
+            listOf(RadioCause.Person, RadioCause.Permission, RadioCause.Permission), reports.map { it.cause },
+            "a grant switched off late was not one report each time it went off",
+        )
+    }
+
+    /**
+     * **GUARD (D-310): a relaunch compares against the grants kept at arming, not what it finds.**
+     * iOS ends the app when Camera is switched off in Settings; the relaunched process reads its owed
+     * leave back and sends it as a permission, because the grant was on when the round armed.
+     */
+    @Test
+    fun aRelaunchComparesAgainstTheGrantsKeptAtArming() {
+        val store = MemorySeat()
+        var off = 0
+        val (before, _) = granted({ off }, store)
+        before.heard(RoundMessage.ContactSeedIssued(seed))
+        before.beat()
+        before.leftTheForeground()
+        // Camera switched off in Settings; iOS ends the process. A fresh one reads its files back.
+        off = 1 shl 1
+        val (after, reports) = granted({ off }, store)
+        after.heard(RoundMessage.ContactSeedIssued(seed))
+        repeat(2) { after.beat() }
+        assertEquals(listOf(RadioCause.Permission), reports.map { it.cause }, "the relaunch did not send the trip to Settings as a permission")
+    }
 }

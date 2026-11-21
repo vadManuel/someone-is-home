@@ -914,9 +914,10 @@ sealed interface Effect {
      *
      * D-187's notice and nothing else: it reports detectable deliberate evasion (locking the phone,
      * backgrounding the app, disabling a permission mid-round) and never a radio that failed. All
-     * of them reach it as `Event.RadioFaulted` with `RadioCause.Person`: a radio switched off or its
-     * permission withdrawn (D-223), and a phone that left the foreground mid-round, reported when
-     * it is back (D-229), the host's own seat as any other (D-230). There is no second notice.
+     * of them reach it as `Event.RadioFaulted` with `RadioCause.Person` or, for a permission switched
+     * off, `RadioCause.Permission` (D-310): a radio switched off or its permission withdrawn (D-223),
+     * and a phone that left the foreground mid-round, reported when it is back (D-229), the host's own
+     * seat as any other (D-230). There is no second notice.
      *
      * Sent to every phone, living and out, at the moment the check-in gate closes, and **sent at
      * every meeting, empty when nobody evaded**, so its arrival says nothing; only its content
@@ -924,8 +925,15 @@ sealed interface Effect {
      * 2026-11-15): no *data is complete* line. [unreachable] is in seat order, each once, and names
      * no role: every phone reports an outage identically, so being named says whose phone went
      * quiet and nothing about who holds it.
+     *
+     * **[permissionSwitchedOff] carries the owner's warning** (D-310): true when at least one seat
+     * named here switched a permission off this shift (`RadioCause.Permission`), false when every
+     * one named only left the app or switched Bluetooth off, and false on an empty notice. The same
+     * on every phone, so the phones append the same two sentences or none. Issuing a notice with it
+     * true gives the round's one warning ([GameState.warned]); after that, a permission switched off
+     * closes the house ([HouseClosedOnPermission]).
      */
-    data class NoticeIssued(val unreachable: List<Seat>) : Effect
+    data class NoticeIssued(val unreachable: List<Seat>, val permissionSwitchedOff: Boolean) : Effect
 
     /** Lights out. The meeting is over, and D-135's fifth long haptic rides it. */
     data class MeetingEnded(val haptic: Haptic) : Effect
@@ -1219,4 +1227,25 @@ sealed interface Effect {
      * after the answer.
      */
     data class HouseSignedOff(val seat: Seat, val body: String) : Effect
+
+    /**
+     * **THE HOUSE IS CLOSED: a permission was switched off again, and everyone starts over** (the
+     * owner's 2026-11-20 rulings, D-310).
+     *
+     * The one effect `Event.HouseClosedOnPermission` emits, to every seat, once: the living, the
+     * out, the Insiders and the host's own phone alike, in the same bytes. **It carries nothing**:
+     * not the seat whose report closed the house (the room heard that seat named with the warning at
+     * the last meeting, and whose second switch it was is the house's log's, never a screen's), not
+     * a role, not a count. Its arrival is the whole message, and the words are the phone's, the
+     * owner's two lines, the same on every screen.
+     *
+     * The round is over when it is sent ([GameState.closed]), so it is permitted to the two classes
+     * of a round that has ended, as the ending's own rows are. Each phone then goes back to JOIN A
+     * HOME, and the host's to its lobby: that difference is the ruling's, and it is drawn by whether
+     * the phone is hosting, which every phone in the room can see, never by a role.
+     *
+     * **No haptic and no light.** The owner's words are shown in the light the screen each phone
+     * lands on already has; nothing here buzzes or sets a lamp.
+     */
+    data object HouseClosedOnPermission : Effect
 }

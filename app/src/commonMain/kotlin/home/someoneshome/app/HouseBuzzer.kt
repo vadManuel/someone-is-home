@@ -293,6 +293,7 @@ internal fun Effect.ringing(): Boolean = when (this) {
     is Effect.ContactAnswered, is Effect.AbilityBlanked, is Effect.NoticeIssued,
     is Effect.SubroutineGraded, is Effect.SubroutineProgressed, is Effect.SystemIntegrityLive,
     is Effect.SystemIntegrityBatched, is Effect.MessageDelivered, is Effect.HouseSignedOff,
+    is Effect.HouseClosedOnPermission,
     // The Revoke landing says its thing once, like the takeover it mirrors: a single Long on the
     // touch that Revoked this phone (D-290), and the armed phone's answer says its single Long the
     // same way. The roster is silent entirely and is one of the `null` rows in [haptic] below.
@@ -397,6 +398,9 @@ internal fun Effect.haptic(): Haptic? = when (this) {
     // (D-187, D-223). A second buzz on it would be a buzz that meant *somebody evaded*, at every
     // meeting, empty or not.
     is Effect.NoticeIssued -> null
+    // **The close is silent** (D-310): the owner ruled its words and nothing else, and D-135's set
+    // is closed. Every phone walks out of the round in the light it already has.
+    is Effect.HouseClosedOnPermission -> null
     // A verdict on work the player is standing over, on a screen they are already looking at.
     // **SILENT, and F-003 is the whole reason** (`gdd.md:930`). The reveal leaking through the
     // haptic count is the gap the design named itself: in a silent dark house, standing in a
@@ -498,7 +502,7 @@ internal fun RoundMessage.ringing(): Boolean = when (this) {
     is RoundMessage.RoleRevealed, is RoundMessage.RevokeLanded, is RoundMessage.RosterIssued,
     is RoundMessage.ContactSeedIssued,
     is RoundMessage.Surged, is RoundMessage.IsolateTargetsOffered, is RoundMessage.IsolateTargetsBlanked,
-    is RoundMessage.StaticOpened, is RoundMessage.MeetingCalling,
+    is RoundMessage.StaticOpened, is RoundMessage.MeetingCalling, is RoundMessage.HouseClosedOnPermission,
     -> false
 }
 
@@ -573,4 +577,6 @@ internal fun RoundMessage.haptic(): Haptic? = when (this) {
     is RoundMessage.StaticOpened -> null
     is RoundMessage.InsidersRevealed -> null
     is RoundMessage.MeetingCalling -> null
+    // Silent, as the effect-side branch says (D-310).
+    is RoundMessage.HouseClosedOnPermission -> null
 }

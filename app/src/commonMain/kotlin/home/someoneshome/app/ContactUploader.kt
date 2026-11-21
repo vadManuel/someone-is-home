@@ -4,6 +4,7 @@ import home.someoneshome.model.ContactSeed
 import home.someoneshome.model.ContactTokens
 import home.someoneshome.model.ContactWindow
 import home.someoneshome.model.RadioCause
+import home.someoneshome.model.outranking
 import home.someoneshome.model.Sighting
 import home.someoneshome.model.protocol.RangingCodec
 import home.someoneshome.model.protocol.RangingHandle
@@ -66,6 +67,21 @@ import home.someoneshome.platform.secureRandomBytes
  * into it, so one beat never sends two. Before arming, after the round, and on a phone that relaunched
  * into its seat after a crash in the foreground (a crash is not a person's act, D-036), nothing is
  * owed.
+ *
+ * ### A permission switched off is told apart from leaving the app (D-310)
+ *
+ * The owner's 2026-11-20 ruling: only a permission switched off counts toward closing the house, and
+ * leaving the app never does. Both reach the house as this one body, told apart by its cause alone.
+ * [RadioCause.Permission] is sent where a radio says its permission was withdrawn (Bluetooth
+ * unauthorized, Nearby Interaction not allowed: every phone was seated with both GRANTED, D-309), and
+ * where [refusedGrants], read every beat, has a grant switched off that was not switched off at
+ * arming. Every grant is changed in Settings and going there is leaving the app, so a trip to
+ * Settings is a leave whose report, if it is not sent yet, becomes a permission's on the first beat
+ * that reads the grant off; one already sent is followed by a permission's report of its own. iOS
+ * ends the app for some grants (Camera, Motion), so the grants read at arming are kept beside the
+ * owed reports, and a relaunch compares against those rather than against what it finds. A grant
+ * already off when the round armed (switched off in the lobby) is not counted by this read. One body
+ * of one length either way (D-217), and what decides the cause stays inside this phone.
  *
  * ### Every report is kept until the house says it has it (D-245)
  *
@@ -144,6 +160,12 @@ class ContactUploader(
      * such a phone starts no hold, which is the direction a forgotten wire fails in.
      */
     private val mainView: () -> Boolean = { false },
+    /**
+     * **The grants that read switched off now, one bit a row** (D-310): `Permissions.refusedGrants`
+     * on a phone, read at arming and once a beat. None by default, for a construction with no OS
+     * behind it.
+     */
+    private val refusedGrants: () -> Int = { 0 },
     /** Up this phone's own socket. */
     private val send: (RoundBody.Sighted) -> Unit,
 ) {
@@ -154,6 +176,12 @@ class ContactUploader(
 
     /** This phone left the foreground in this round and has not come back yet (D-229). */
     private var away = false
+
+    /** **The grants that read switched off at arming** (D-310): never counted as switched off in the round. */
+    private var refusedAtArming = 0
+
+    /** **The grants already reported switched off this round** (D-310), so each switch-off is one report. */
+    private var reportedOff = 0
 
     /**
      * **One onset the house has not yet said it has** (D-245). [due] is false while this phone is
@@ -194,6 +222,10 @@ class ContactUploader(
                 // what it owed in that round. Any other seed is a new round, and nothing is owed.
                 owed.clear()
                 owed += restore(message.seed)
+                // **The grants at arming** (D-310): what this phone kept beside its owed reports, if a
+                // relaunch is reading them back, or what the OS says now.
+                refusedAtArming = keptGrants ?: refusedGrants()
+                reportedOff = 0
                 if (owed.isNotEmpty()) onEvent("${owed.size} REPORT(S) OWED FROM BEFORE THIS PROCESS — THE NEXT BEATS TELL THE HOUSE (D-245)")
                 radio.scan(true)
                 ranging.open()
@@ -205,6 +237,9 @@ class ContactUploader(
                 radio.scan(false)
             }
             is RoundMessage.RoundEnded -> roundEnded()
+            // **The house closed on a permission switched off again** (D-310): the round is over on
+            // this phone exactly as at an ending.
+            is RoundMessage.HouseClosedOnPermission -> roundEnded()
             else -> Unit
         }
     }
@@ -229,12 +264,26 @@ class ContactUploader(
         faultBegan()?.let { cause ->
             val unsent = owed.lastOrNull { it.due && it.sentOn == NEVER_SENT }
             if (unsent != null) {
-                if (cause == RadioCause.Person) unsent.cause = RadioCause.Person
+                unsent.cause = unsent.cause.outranking(cause)
             } else {
                 owe(Owed(onsetName(), cause, due = !away))
             }
             keep()
         }
+        // **A grant switched off since arming is a permission's onset** (D-310): folded into a report
+        // not yet sent (the leave that was the trip to Settings), or owed as one of its own. Each
+        // grant once, until it is back on; a grant off at arming never counts.
+        val off = refusedGrants() and refusedAtArming.inv()
+        if ((off and reportedOff.inv()) != 0) {
+            val unsent = owed.lastOrNull { it.due && it.sentOn == NEVER_SENT }
+            if (unsent != null) {
+                unsent.cause = RadioCause.Permission
+            } else {
+                owe(Owed(onsetName(), RadioCause.Permission, due = !away))
+            }
+            keep()
+        }
+        reportedOff = off
         // **The oldest report this connection has not carried, and only one** (D-245): a new onset,
         // or one that went up a connection since replaced and was never answered.
         val next = owed.firstOrNull { it.due && it.sentOn != connection } ?: return
@@ -245,14 +294,14 @@ class ContactUploader(
     /**
      * **Either radio's onset this beat, as one cause** (D-303). Both radios are asked every beat, so
      * neither holds an onset back for a later one. Bluetooth and UWB going down in the same beat is
-     * one report, and **a person's act wins it**: a device fault that happened to coincide must not
-     * hide an evasion D-187 names (the uploader's own rule for a leave, D-229).
+     * one report, and **the stronger act wins it** (`RadioCause.outranking`, D-310): a permission
+     * over a person's other act, which wins over a device fault that happened to coincide and must
+     * not hide an evasion D-187 names (the uploader's own rule for a leave, D-229).
      */
     private fun faultBegan(): RadioCause? {
         val bluetooth = radio.faultBegan()
         val uwb = ranging.faultBegan()
-        if (bluetooth == RadioCause.Person || uwb == RadioCause.Person) return RadioCause.Person
-        return bluetooth ?: uwb
+        return bluetooth?.outranking(uwb) ?: uwb
     }
 
     /**
@@ -337,7 +386,8 @@ class ContactUploader(
         // Flicks between two beats are one onset: a report not yet sent takes this leave too.
         val unsent = owed.lastOrNull { it.sentOn == NEVER_SENT }
         if (unsent != null) {
-            unsent.cause = RadioCause.Person
+            // A person's act at least; a permission already owed stays one (D-310).
+            unsent.cause = unsent.cause.outranking(RadioCause.Person)
             unsent.due = false
         } else {
             owe(Owed(onsetName(), RadioCause.Person, due = false))
@@ -405,7 +455,7 @@ class ContactUploader(
             if (owed.isEmpty()) {
                 kept.forgetOwedReports()
             } else {
-                val lines = listOf(fingerprintOf(key)) + owed.map { "${it.onset} ${it.cause.name.lowercase()}" }
+                val lines = listOf(fingerprintOf(key), "$GRANTS $refusedAtArming") + owed.map { "${it.onset} ${it.cause.name.lowercase()}" }
                 kept.keepOwedReports(lines.joinToString(LINE))
             }
         } catch (failed: IllegalStateException) {
@@ -425,6 +475,12 @@ class ContactUploader(
             null
         }
         val lines = text?.split(LINE).orEmpty()
+        // **The grants at arming, as kept** (D-310): the second line, when this round wrote one.
+        keptGrants = if (lines.firstOrNull() == fingerprintOf(key)) {
+            lines.getOrNull(1)?.takeIf { it.startsWith("$GRANTS ") }?.substringAfter(' ')?.toIntOrNull()
+        } else {
+            null
+        }
         val reports = if (lines.firstOrNull() == fingerprintOf(key)) {
             lines.drop(1).mapNotNull { line ->
                 val parts = line.split(' ')
@@ -445,9 +501,15 @@ class ContactUploader(
         return reports
     }
 
+    /** The grants at arming read back by the last [restore], or null when nothing for this round was kept. */
+    private var keptGrants: Int? = null
+
     private companion object {
         const val NEVER_SENT = -1
         const val LINE = "\n"
+
+        /** The kept line that holds the grants at arming (D-310). Not an onset's name, so no report reads it. */
+        const val GRANTS = "grants"
 
         /** Reports one phone may owe at once. A phone that owes this many is not reaching the house. */
         const val OWED_MOST = 8

@@ -260,15 +260,18 @@ class SwitchboardRadioTest {
         assertNull(radio.faultBegan(), "callbacks inside one outage were reported as more faults")
     }
 
-    /** **GUARD: the permission withdrawn mid-round is a person's act** (D-187, D-161). */
+    /**
+     * **GUARD: the permission withdrawn mid-round is a permission switched off** (D-187, D-161,
+     * D-310): named with the owner's warning, and the one cause that counts toward closing the house.
+     */
     @Test
-    fun aPermissionWithdrawnIsAPersonsAct() {
+    fun aPermissionWithdrawnIsAPermissionSwitchedOff() {
         val radio = SwitchboardRadio(RecordingHardware())
         radio.scan(true)
         radio.advertise(t1)
         on(radio)
         radio.scannerPower(RadioPower.Unauthorized)
-        assertEquals(RadioCause.Person, radio.faultBegan(), "a permission withdrawn mid-round was not a person's act")
+        assertEquals(RadioCause.Permission, radio.faultBegan(), "a permission withdrawn mid-round was not a permission switched off")
     }
 
     /**
@@ -293,14 +296,22 @@ class SwitchboardRadioTest {
         assertEquals(RadioCause.Device, radio.faultBegan(), "unsupported hardware was reported as a person's act")
     }
 
-    /** The line itself, every pairing: the phone's own failure wins a disagreement. */
+    /**
+     * The line itself, every pairing: the phone's own failure wins a disagreement; then a permission
+     * withdrawn on either manager is a permission's (D-310); otherwise Bluetooth switched off is a
+     * person's.
+     */
     @Test
     fun theCauseIsAPersonsOnlyWhenNothingFailed() {
         val down = listOf(RadioPower.Off, RadioPower.Unauthorized, RadioPower.Resetting, RadioPower.Unsupported)
         val failed = setOf(RadioPower.Resetting, RadioPower.Unsupported)
         for (a in RadioPower.entries) for (b in RadioPower.entries) {
             if (a !in down && b !in down) continue
-            val expected = if (a in failed || b in failed) RadioCause.Device else RadioCause.Person
+            val expected = when {
+                a in failed || b in failed -> RadioCause.Device
+                a == RadioPower.Unauthorized || b == RadioPower.Unauthorized -> RadioCause.Permission
+                else -> RadioCause.Person
+            }
             assertEquals(expected, causeOf(a, b), "advertiser $a, scanner $b")
         }
     }
@@ -318,7 +329,7 @@ class SwitchboardRadioTest {
         assertNull(radio.faultBegan(), "a recovery was reported as a fault")
         settle(radio)
         radio.scannerPower(RadioPower.Unauthorized)
-        assertEquals(RadioCause.Person, radio.faultBegan(), "the second onset was swallowed by the first, or took its cause")
+        assertEquals(RadioCause.Permission, radio.faultBegan(), "the second onset was swallowed by the first, or took its cause")
         // One manager back is not the radio back: still down, so no new onset.
         radio.scannerPower(RadioPower.Off)
         assertNull(radio.faultBegan(), "a manager changing state inside an outage was reported as a new fault")

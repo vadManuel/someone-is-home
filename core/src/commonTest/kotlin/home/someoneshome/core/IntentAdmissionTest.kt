@@ -227,6 +227,9 @@ class IntentAdmissionTest {
         is Event.Sensed -> Origin.ContactResolved
         is Event.EgressFired -> Origin.HouseComposed
         is Event.RadioFaulted -> Origin.RadioReported
+        // **The close the house concludes from a radio report** (D-310): minted by the house when
+        // the rules say a permission switched off after the warning closes it. Never requested.
+        is Event.HouseClosedOnPermission -> Origin.RadioReported
 
         // **STOP NOW and the taps of a Sync Pulse, carried now** (E-P2-5 / E-P3-7, closed). Both
         // were real controls with no member on the wire, and both belong on this row rather than

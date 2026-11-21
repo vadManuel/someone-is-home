@@ -1,6 +1,7 @@
 package home.someoneshome.model.protocol
 
 import home.someoneshome.model.RadioCause
+import home.someoneshome.model.outranking
 import kotlin.math.roundToInt
 
 /**
@@ -224,7 +225,9 @@ class RangingPool(
             SessionEnd.NotAllowed -> {
                 refused = true
                 retireAll()
-                fault(RadioCause.Person)
+                // **NEARBY DEVICES withdrawn: a permission switched off** (D-310). Every phone in a
+                // round was seated with it GRANTED (D-309), so a refusal now is a switch-off.
+                fault(RadioCause.Permission)
             }
             SessionEnd.Unsupported -> {
                 unsupported = true
@@ -307,10 +310,12 @@ class RangingPool(
 
     private fun fault(cause: RadioCause) {
         val quiet = drains >= quietFrom
-        if (quiet || (cause == RadioCause.Person && onset == RadioCause.Device)) {
+        // **A stronger cause takes the onset** (D-303, D-310): a permission over a device fault, as a
+        // person's act was (`RadioCause.outranking`).
+        if (quiet || (onset != null && cause != onset && cause.outranking(onset) == cause)) {
             onset = cause
             pending = cause
-        } else if (cause == RadioCause.Person && pending != null) {
+        } else if (pending != null && cause != pending && cause.outranking(pending) == cause) {
             onset = cause
             pending = cause
         }

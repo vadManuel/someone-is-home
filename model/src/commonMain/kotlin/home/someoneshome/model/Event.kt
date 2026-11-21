@@ -348,14 +348,15 @@ sealed interface Event {
      *
      * A fact the phone reports, never a request (rule 10): its own radio told it so. Once per fault
      * onset, whatever the radio does next, and the same from every phone whatever its role or
-     * whether it is out. **[cause] is the only thing it says**: [RadioCause.Person] for Bluetooth
-     * switched off or its permission withdrawn, or the phone locked or taken out of the app
-     * mid-round (suspended, so its radio is silent; reported once it is back, D-229),
-     * [RadioCause.Device] for a reset or unsupported hardware. The upward body is one fixed shape of one length (`RoundBody.RadioFaulted`), so it
+     * whether it is out. **[cause] is the only thing it says**: [RadioCause.Permission] for a
+     * permission switched off mid-round (D-310), [RadioCause.Person] for Bluetooth switched off, or
+     * the phone locked or taken out of the app mid-round (suspended, so its radio is silent; reported
+     * once it is back, D-229), [RadioCause.Device] for a reset or unsupported hardware. The upward body is one fixed shape of one length (`RoundBody.RadioFaulted`), so it
      * cannot say more about one phone than another. The seat is the connection's.
      *
-     * Silent on the phone in every case (rule 6). A [RadioCause.Person] outage is deliberate
-     * evasion and the house names the seat in the next meeting's notice; a [RadioCause.Device] one
+     * Silent on the phone in every case (rule 6). A [RadioCause.Person] or [RadioCause.Permission]
+     * outage is deliberate evasion and the house names the seat in the next meeting's notice; a
+     * permission, after the warning, closes the house ([HouseClosedOnPermission]); a [RadioCause.Device] one
      * is recorded here, in the round's recording and the house's log, and announced to nobody
      * (D-187: *genuine radio loss earns no notice*).
      */
@@ -535,4 +536,21 @@ sealed interface Event {
      * and never requestable; a fact, not a request (rule 10).
      */
     data class OffAirEnded(override val at: Tick, val since: Tick) : Event
+
+    /**
+     * **A permission was switched off again, after the warning: the house closes and the round ends**
+     * (the owner's 2026-11-20 rulings, D-310).
+     *
+     * The first time a permission is switched off in a round, the next meeting's notice names the
+     * seat and warns the room (`Effect.NoticeIssued.permissionSwitchedOff`). Once a notice carrying
+     * the warning has been issued, the next [RadioFaulted] with [RadioCause.Permission] from any seat
+     * the notice would name closes the house: this event. **Minted by the house** the moment the
+     * rules say that report closes it (`closesTheHouse`), never requested by a phone (rule 10). A
+     * phone that only left the app ([RadioCause.Person]) never mints it.
+     *
+     * [seat] is the seat whose report closed it, for the recording and the house's log. **No effect
+     * carries it**: every phone, whatever its role, out or not, the host's included, is sent the one
+     * `Effect.HouseClosedOnPermission`, which names nobody.
+     */
+    data class HouseClosedOnPermission(override val at: Tick, val seat: Seat) : Event
 }

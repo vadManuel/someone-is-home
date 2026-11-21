@@ -86,14 +86,36 @@ class GameState private constructor(
      * **Every seat the next house notice names: deliberate evasion since the last one, in seat
      * order, each once** (D-187, D-223).
      *
-     * The notice's one list, whatever the evasion. [Event.RadioFaulted] with [RadioCause.Person] is
-     * its only writer, and it now carries all three of D-187's: Bluetooth switched off or its
-     * permission withdrawn (D-223), and a phone locked or taken out of the app mid-round, which is
-     * its radio taken down by the same hand and reported in the same body when the phone is back
-     * (D-229), the host's own seat included (D-230). A [RadioCause.Device] outage never does. Read and emptied when the
-     * next meeting's check-in gate closes, where the house tells everybody. Holds no role.
+     * The notice's one list, whatever the evasion. [Event.RadioFaulted] with [RadioCause.Person] or
+     * [RadioCause.Permission] is its only writer, and it now carries all three of D-187's: Bluetooth
+     * switched off or its permission withdrawn (D-223), and a phone locked or taken out of the app
+     * mid-round, which is its radio taken down by the same hand and reported in the same body when
+     * the phone is back (D-229), the host's own seat included (D-230). A [RadioCause.Device] outage
+     * never does. Read and emptied when the next meeting's check-in gate closes, where the house
+     * tells everybody. Holds no role.
      */
     val unreachable: List<Seat>,
+    /**
+     * **The seats on [unreachable] that switched a permission off this shift** (D-310), in seat
+     * order, each once: a subset of it, written by [Event.RadioFaulted] with
+     * [RadioCause.Permission] alone. Read at the check-in gate for the notice's warning
+     * (`Effect.NoticeIssued.permissionSwitchedOff`) and emptied there with [unreachable]. Holds no
+     * role and reaches no client as itself.
+     */
+    val switchedOff: List<Seat>,
+    /**
+     * **The owner's warning has been given this round** (D-310): a notice carrying it has been
+     * issued at a meeting. From then on a permission switched off closes the house
+     * ([Event.HouseClosedOnPermission]). False at every arming, so a new round starts with no
+     * warning given.
+     */
+    val warned: Boolean,
+    /**
+     * **The house closed on a second permission switched off, and the round is over** (D-310).
+     * The second of the two reasons a round ends, beside [outcome]: a close has no winner and no
+     * route, so it is not an [Outcome]. [ended] reads both, and only [closeHouse] writes this.
+     */
+    val closed: Boolean,
     /**
      * **Every Insider ability's cooldown, already running when the round opens** (D-132).
      *
@@ -418,9 +440,10 @@ class GameState private constructor(
      *
      * It feeds [roundStateOf], so it decides what every client is permitted to receive. That is
      * why it may not be a field of its own: a flag and a reason are two things a build can
-     * de-synchronise, and this is the half nobody would notice had gone stale.
+     * de-synchronise, and this is the half nobody would notice had gone stale. **It reads the two
+     * reasons a round ends**: an [outcome], or the house closed on a permission ([closed], D-310).
      */
-    val ended: Boolean get() = outcome != null
+    val ended: Boolean get() = outcome != null || closed
 
     /** In the round: seated, and neither Revoked nor Restrained. Ordered, like everything here. */
     val livingSeats: List<Seat> get() = seats.filterNot { isRevoked(it) || isRestrained(it) }
@@ -720,6 +743,15 @@ class GameState private constructor(
     fun endRound(outcome: Outcome): GameState =
         copy(outcome = outcome, oneLines = emptyList(), names = emptyList())
 
+    /**
+     * **The house closes on a permission switched off again, and the round ends with no winner**
+     * (D-310). [endRound]'s sibling and its promise kept the same way: the one lines and the names
+     * are dropped in the same transition that closes the round (D-115, D-116), because a round
+     * that ends by closing is still a round that ended. The only writer of [closed].
+     */
+    fun closeHouse(): GameState =
+        copy(closed = true, oneLines = emptyList(), names = emptyList())
+
     fun copy(
         armed: Boolean = this.armed,
         outcome: Outcome? = this.outcome,
@@ -732,6 +764,9 @@ class GameState private constructor(
         revokeArms: List<RevokeArm> = this.revokeArms,
         touches: List<Touch> = this.touches,
         unreachable: List<Seat> = this.unreachable,
+        switchedOff: List<Seat> = this.switchedOff,
+        warned: Boolean = this.warned,
+        closed: Boolean = this.closed,
         cooldowns: List<Cooldown> = this.cooldowns,
         isolated: List<Isolation> = this.isolated,
         systemIntegrity: Int = this.systemIntegrity,
@@ -761,7 +796,7 @@ class GameState private constructor(
         host: Seat? = this.host,
     ) = GameState(
         armed, outcome, seats, insiderSeats, revoked, newlyRevoked, reported, restrained, revokeArms,
-        touches, unreachable, cooldowns, isolated, systemIntegrity, openSubroutines, workOrders, stations,
+        touches, unreachable, switchedOff, warned, closed, cooldowns, isolated, systemIntegrity, openSubroutines, workOrders, stations,
         activeMarkers, destinations, presence, staticUntil, meeting, egress, egressReadyAt, oneLines,
         names, voteWindowSeconds, nextEntity, seed, terminal, reader, plan, terminalRoom, shiftStartedAt,
         sightings, observations, nextObservation, host,
@@ -863,6 +898,10 @@ class GameState private constructor(
             revokeArms = emptyList(),
             touches = emptyList(),
             unreachable = emptyList(),
+            // **No warning given, and the house open** (D-310): the count is per round.
+            switchedOff = emptyList(),
+            warned = false,
+            closed = false,
             cooldowns = cooldowns,
             // Nothing is dark. A round that carried an isolation across an arming would open with a
             // marker offline that nobody had ever fired at, and that is not announced.
@@ -913,6 +952,9 @@ class GameState private constructor(
             revokeArms = emptyList(),
             touches = emptyList(),
             unreachable = emptyList(),
+            switchedOff = emptyList(),
+            warned = false,
+            closed = false,
             cooldowns = emptyList(),
             isolated = emptyList(),
             systemIntegrity = 0,
