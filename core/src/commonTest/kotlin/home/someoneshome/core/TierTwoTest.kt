@@ -205,6 +205,27 @@ class AccessPoolTest {
     }
 
     /**
+     * **Surge is the longest weight in the pool — over Static too, not only over Isolate.**
+     *
+     * The test above holds Surge over Isolate and `StaticTest` holds Static over Isolate, which
+     * left the pair the design's sentence is most about unpinned: *longest cooldown in the Access
+     * pool* (`gdd.md:342`) is a claim about all three, and D-186 raised Static's weight, so Static
+     * is the one that could quietly overtake it. And Static stays heavier than the sixty seconds the
+     * ability it replaced carried, which is the direction D-186 ruled.
+     */
+    @Test
+    fun `surge weighs more on the pool than static does`() {
+        assertTrue(
+            Balance.SURGE_COOLDOWN > Balance.STATIC_COOLDOWN,
+            "Static is now at least as heavy as Surge, so Surge is no longer the Access pool's longest",
+        )
+        assertTrue(
+            Balance.STATIC_COOLDOWN > 60L * Balance.TICKS_PER_SECOND,
+            "Static is no longer heavier than the sixty seconds of the ability it replaced (D-186)",
+        )
+    }
+
+    /**
      * **A meeting does not touch the pool on the way in, and resets it on the way out** (D-183,
      * D-184, and the owner's 2026-08-24 ruling deleting `GameState.accessPausedAt`).
      *

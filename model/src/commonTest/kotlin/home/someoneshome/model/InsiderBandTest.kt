@@ -33,6 +33,23 @@ class InsiderBandTest {
     }
 
     /**
+     * **D-143 — the floor is `max(1, ⌊seats ÷ 6⌋)`: 1 through eleven seats, 2 from twelve, 3 from
+     * eighteen** (E-L3-1 closed).
+     *
+     * Twelve was already pinned above; eighteen was not, and it is the seat count the ruling names
+     * as the floor's next step. One Insider against seventeen Residents is unwinnable for the one, so
+     * a host at eighteen cannot hand-pick fewer than three. The arming draw clamps through
+     * [InsiderBand.clamp] (`Arming.kt`), so the clamp is the draw's floor too.
+     */
+    @Test
+    fun theFloorReachesThreeAtEighteenSeats() {
+        assertEquals(2, InsiderBand.of(17).first, "seventeen seats lost the floor of two")
+        assertEquals(3..5, InsiderBand.of(18), "eighteen seats are not the D-143 band 3..5")
+        assertEquals(3, InsiderBand.clamp(seats = 18, chosen = 1), "eighteen seats took a hand-picked 1")
+        assertEquals(3, InsiderBand.clamp(seats = 18, chosen = 2), "eighteen seats took a hand-picked 2")
+    }
+
+    /**
      * **Both edges clamp the setting itself.** A host cannot hand-pick a count outside the band
      * any more than UNKNOWN can land on one.
      *

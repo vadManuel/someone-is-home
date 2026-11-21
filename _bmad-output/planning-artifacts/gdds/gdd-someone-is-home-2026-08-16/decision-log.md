@@ -12493,6 +12493,75 @@ and no light, colour, type or timing changed.
 6. **JOIN A HOME's refusal slot is full width**, so its centred words (D-310) are centred. The host
    lobby's slot already was.
 
+### D-313 · **Overnight fixes where the code contradicted a ruling (2026-11-21) — built**
+
+An audit found code that contradicts rulings already made. Each fix below has a test that failed
+before it and passes after. No new copy, and no light, colour, type or timing value changed. The
+wire did not widen and the recording did not change.
+
+1. **An early Drift tap is handed over and graded REJECTED** (D-165, superseding E-S2-3). The screen
+   handed a tap over only after the buzz, so a tap before it was echoed and the player could try
+   again: a free probe of the house's NOW. A tap before the buzz now goes as
+   `ChoiceEntry.handOverEarly`, the mark stays where the finger landed, `RETURNED . WAITING` shows,
+   and a second tap moves nothing and sends nothing. **What goes is an entry holding no step**
+   (**provisional (overnight)**): the screen is the only thing that knows the house had not asked,
+   and an entry of the wrong shape is graded wrong (`Subroutines.within`), so the house rejects it
+   whatever the dot was doing. Nothing reads a role. `DriftScreen`'s KDoc no longer argues E-S2-3.
+   `SubroutineMotionTest.driftEchoesATapBeforeTheBuzzAndSendsOnlyTheOneAfterIt` is rewritten as
+   `driftHandsOverATapBeforeTheBuzzAndTheAttemptIsGone`, walked for both roles with the two wires
+   compared. Before: *Resident: a tap before the buzz was kept back, so the player may try again
+   for free (D-165)*. After: passes. The house's half, `EarlyDriftTapTest`, holds today (empty entry
+   REJECTED, attempt spent, both roles alike) and stays as a guard.
+2. **A Surge takes no input** (D-182: *player input: none*). The slam is a lamp drawn over the
+   panel, and it holds no finger. In the bright phase a tap on Drift's lane handed the entry over,
+   and in the dark phase STOP NOW sent `StopSubroutine`. Two changes. While a Surge runs, `Screen`
+   puts a pane over everything that consumes every pointer (`inputBlocked`, passed by `FlowHost`).
+   And `FlowModel.surged` lets go of the card at the slam rather than at the reboot, so a gesture
+   already under way (a Short's hold running out) cannot hand work over either
+   (**provisional (overnight)**: the ruling says the work is lost and does not say in which phase).
+   `SurgeTakesNoInputTest`. Before: *a tap in the Surge's bright phase handed the Drift over …
+   [HandOverEntry(marker=card-hall, entered=[])]* and *a tap in the Surge's dark phase put something
+   on the wire … [StopSubroutine]*. After: passes. With the slam's let-go removed on purpose, the
+   in-flight case fails: *a gesture that began before the Surge handed work over during it … entered=[2],
+   … entered=[3]*. **Limits, not fixed:** a hold on page 2 already under way when the Surge lands
+   (arming a Revoke or an Egress, the report circle) still completes, because a pointer already down
+   keeps its target. And on the scan screen the cheats build's camera window stays open through the
+   bright and dark phases, so a card read there still goes up. Closing it at the slam would move
+   the double vibrate the window gives on closing from the reboot to the slam, and no ruling says
+   which.
+3. **Rules that held with nothing pinning them now have tests.** Each was broken on purpose once and
+   restored:
+   - **D-154: a Revoke leaves System Integrity where it was**, with the meter moved once before and no
+     meter push riding the touch. Broken (a landed Revoke decrements the meter): *a Revoke moved System
+     Integrity (D-154: the meter moves on completions only) expected:<39> but was:<38>*.
+   - **The Insider's fake advances its own work order and not the meter.** Broken (only a banked
+     entry marks its line done): *an Insider's accepted fake left its line of the work order standing
+     expected:<true> but was:<false>*.
+   - **D-143 at eighteen seats: the band is 3..5**, and a hand-picked 1 or 2 is clamped to 3. Broken
+     (the floor capped at two, which no other test catches): *eighteen seats are not the D-143 band
+     3..5 expected:<3..5> but was:<2..5>*.
+   - **Surge is the Access pool's longest weight over Static too**, and Static stays above the 60 s
+     of the ability it replaced (D-186). Broken (Static at 150 s): *Static is now at least as heavy
+     as Surge, so Surge is no longer the Access pool's longest*. The ordering in force is the build's, Surge 150 > Static 120 >
+     Isolate 90. Surge over Isolate and Static over Isolate were already pinned, so this was the
+     missing pair. No ruling puts Isolate above Static.
+
+**Stopped: unregistered cards in a round (D-124, D-169).** The contradiction is real. A card not
+registered in this home goes up as `BeginSubroutine` and the rules answer it NOTHING FOR YOU HERE,
+when D-124 reserves NOT A MARKER for it. On the way, the rules place the seat at a card that is no
+place in the home and spend whatever it had armed, though D-072 says unregistered paper never
+reaches the rules. A mislaid meeting card calls a meeting, because `CallMeeting` carries no card
+and admission checks none. D-169 says it is refused as unregistered, and `inRoundScan`'s KDoc
+claims, wrongly, that the rules refuse it. **The fix needs a decision no ruling makes.** A phone has
+no map, so only the house can route a scan (`routeScan`). That takes a card id on the meeting
+card's request, which is an uplink change. It also takes a way to tell one phone NOT A MARKER,
+which is a new downlink member or field with an emit-schema row. And D-072's *no event* means that
+answer would be a delivery outside the recording. All three are *what a client may receive* and
+*whether something needs a schema entry*, which `project-context.md` says to ask. **For the
+owner:** one raw-read request from the scan, routed by `routeScan` at the authority, plus a
+scanner-only unregistered answer that is not recorded, or another shape. The acquire buzz is D-160's
+*acquired = yes* and stands either way. Whether NOT A MARKER also buzzes *no* is unruled.
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

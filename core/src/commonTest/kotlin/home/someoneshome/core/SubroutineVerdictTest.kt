@@ -365,3 +365,68 @@ class ASignalTraceGradesFromEitherEndTest {
         assertEquals(listOf(true, true), verdicts, "real and fake disagree on a reversed route")
     }
 }
+
+/**
+ * **D-165 — a Drift tap before the buzz is graded REJECTED, and the attempt is gone.**
+ *
+ * The phone hands an early tap over as an entry holding no step (`ChoiceEntry.handOverEarly`),
+ * because the screen is the only thing that knows the house had not asked yet. This is the house's
+ * half: such an entry is refused **whatever the dot was doing** — the right answer and the empty
+ * one are walked from the same instance, so the fixture is shown accepting something — and it is
+ * spent like any other, so the right answer straight after it is refused too (D-110). For both
+ * roles, verdict for verdict: the Insider's Drift is a fake graded by the same rule (D-109).
+ */
+class EarlyDriftTapTest {
+
+    /** [seat] standing at its own card holding a Drift, with the house's answer known. */
+    private fun holdingADrift(seat: Seat): GameState {
+        val base = armed()
+        val scanned = reduce(base, Event.MarkerScanned(Tick(1), seat, cardFor(base, seat))).state
+        val open = scanned.openSubroutineFor(seat) ?: error("seat ${seat.index} opened nothing")
+        val parameters = drawParameters(SubroutineKind.Drift, Draw(20261121L, SeedPurpose.Instance))
+        return scanned.withOpenSubroutine(
+            OpenSubroutine(
+                seat = seat,
+                entry = open.entry,
+                subroutine = SubroutineKind.Drift,
+                parameters = parameters,
+                expected = answerTo(SubroutineKind.Drift, parameters),
+                armedAt = open.armedAt,
+            ),
+        )
+    }
+
+    private fun returned(state: GameState, seat: Seat, entered: List<Int>, at: Long = 2) =
+        reduce(state, Event.SubroutineReturned(Tick(at), seat, cardFor(armed(), seat), entered))
+
+    private fun verdicts(effects: List<Effect>) =
+        effects.filterIsInstance<Effect.SubroutineGraded>().map { it.accepted }
+
+    @Test
+    fun `an early Drift tap is graded rejected and spends the attempt for both roles`() {
+        val walked = listOf(Seat(0), Seat(1)).map { seat ->
+            val holding = holdingADrift(seat)
+            val answer = holding.openSubroutineFor(seat)!!.expected
+            assertEquals(
+                listOf(true), verdicts(returned(holding, seat, answer).effects),
+                "${holding.roleOf(seat)}: the fixture's Drift accepts nothing, so this proves nothing",
+            )
+
+            val early = returned(holding, seat, emptyList())
+            assertEquals(
+                listOf(false), verdicts(early.effects),
+                "${holding.roleOf(seat)}: an early Drift tap was not graded REJECTED (D-165)",
+            )
+            val after = returned(early.state, seat, answer, at = 3)
+            assertEquals(
+                listOf(false), verdicts(after.effects),
+                "${holding.roleOf(seat)}: the right answer after an early tap was accepted — " +
+                    "the attempt was not spent (D-110, D-165)",
+            )
+            verdicts(early.effects) + verdicts(after.effects)
+        }
+        assertEquals(Role.Resident, armed().roleOf(Seat(0)))
+        assertEquals(Role.Insider, armed().roleOf(Seat(1)))
+        assertEquals(walked[0], walked[1], "real and fake disagree on an early Drift tap")
+    }
+}

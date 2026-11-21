@@ -19,6 +19,8 @@ import androidx.compose.ui.test.runDesktopComposeUiTest
 import home.someoneshome.model.DotColumns
 import home.someoneshome.model.DriftPath
 import home.someoneshome.model.InterruptSweep
+import home.someoneshome.model.MarkerId
+import home.someoneshome.model.protocol.IntentMessage
 import java.awt.image.BufferedImage
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -317,19 +319,112 @@ class SubroutineMotionTest {
     }
 
     /**
-     * **D-140 — a tap before the buzz is echoed and sends nothing; the one after it sends.**
+     * **D-165 — a tap before the buzz is handed over, graded REJECTED, and the attempt is gone.**
      *
-     * The question is the house's to ask, and until it has been asked there is nothing to answer.
-     * But a control that swallowed the tap in silence is indistinguishable, in an unlit room, from
-     * a phone that has failed — and this is the one Subroutine where the player's eyes are on the
-     * screen rather than on the doorway. So the mark moves and the entry stays put.
+     * Superseding E-S2-3, which echoed the early tap and sent nothing: that made an early tap a
+     * free probe of the house's NOW — tap, learn you were early, tap again — on the one Subroutine
+     * whose whole content is *when*. The game's answer to *did my tap land* is a grade, and an early
+     * tap is an entry and a wrong one (D-109, D-110).
+     *
+     * So the early tap goes, and what goes is **an entry with no position in it**: the house cannot
+     * accept it whatever the dot was doing, because a Drift entry is one step along the lane and
+     * this one holds none (`Subroutines.within` refuses an entry of the wrong shape; `core`'s
+     * `SubroutineVerdictTest` holds that half). A second tap, after the buzz, changes nothing and
+     * sends nothing — the attempt is spent, and the walk back is the cost.
+     *
+     * Walked for **both roles**, and the two wires must be identical: an Insider's Drift is a fake,
+     * and a fake that answered an early tap differently would be a role read off the timing of one
+     * finger.
      *
      * Driven with real pointers at the lane rather than through the model, because the decision
      * being checked lives in the screen: it is the screen that knows whether the house has asked.
      */
     @Test
-    fun driftEchoesATapBeforeTheBuzzAndSendsOnlyTheOneAfterIt() {
-        val model = SubroutineModel()
+    fun driftHandsOverATapBeforeTheBuzzAndTheAttemptIsGone() {
+        val wires = PanelRole.entries.associateWith { role -> earlyDriftWire(role) }
+        assertEquals(
+            wires.getValue(PanelRole.Resident), wires.getValue(PanelRole.Insider),
+            "an early Drift tap put different things on the wire for the two roles",
+        )
+    }
+
+    /** One early tap, then one after the buzz, on a [role]'s Drift; everything the phone sent. */
+    private fun earlyDriftWire(role: PanelRole): List<IntentMessage> {
+        val sent = mutableListOf<IntentMessage>()
+        val model = SubroutineModel(send = { sent += it }).apply { opened(MarkerId("card-hall")) }
+        val path = SubroutineModel.DRIFT
+        runDesktopComposeUiTest(width = width, height = height) {
+            mainClock.autoAdvance = false
+            setContent {
+                DeviceCanvas(insets = PanelInsets()) {
+                    Screen(
+                        PanelState(screen = ScreenId.SubDrift, role = role),
+                        PanelActions(
+                            tapSubroutine = model::tap,
+                            handOverSubroutine = model::handOver,
+                            handOverEarly = model::handOverEarly,
+                        ),
+                        subroutines = model,
+                    )
+                }
+            }
+            mainClock.advanceTimeByFrame()
+
+            // Well before the buzz, and the fixture's wait is long enough that this is not a
+            // matter of a frame either way.
+            mainClock.advanceTimeBy(path.askAtMillis / 3L)
+            tapLane(fraction = 0.25f)
+            mainClock.advanceTimeBy(100)
+
+            val marked = model.drift.choice
+            assertTrue(marked != null, "$role: a tap before the buzz reached nothing at all")
+            assertTrue(
+                model.drift.gone,
+                "$role: a tap before the buzz was kept back, so the player may try again for free (D-165)",
+            )
+            val early = sent.filterIsInstance<IntentMessage.HandOverEntry>()
+            assertEquals(
+                1, early.size,
+                "$role: a tap before the buzz did not go to the house to be graded (D-165): $sent",
+            )
+            assertEquals(
+                emptyList(), early.single().entered,
+                "$role: the early tap went up as a position on the lane, which the house could " +
+                    "accept — D-165 grades it REJECTED whatever the dot was doing",
+            )
+            assertTrue(
+                onAllNodes(hasText("RETURNED . WAITING")).fetchSemanticsNodes().isNotEmpty(),
+                "$role: the entry has gone and the screen has not said so",
+            )
+
+            // Past the instant the scan named. The buzz is the house's and this build has no motor
+            // to feel it on, so what happens here is the clock reaching it.
+            mainClock.advanceTimeBy(path.askAtMillis.toLong())
+            tapLane(fraction = 0.75f)
+            mainClock.advanceTimeBy(100)
+
+            assertEquals(
+                marked, model.drift.choice,
+                "$role: a second tap moved the mark — the attempt was spent on the first (D-110)",
+            )
+            assertEquals(
+                1, sent.filterIsInstance<IntentMessage.HandOverEntry>().size,
+                "$role: a second tap after an early one went to the house — a retry with no walk back",
+            )
+        }
+        return sent
+    }
+
+    /**
+     * **A tap after the buzz is the answer, and it goes as the step it landed on** (D-140).
+     *
+     * The other half of D-165, and unchanged by it: once the house has asked, the tap is a
+     * position, and what goes is what the screen is showing.
+     */
+    @Test
+    fun driftSendsTheTapAfterTheBuzzAsTheStepItLandedOn() {
+        val sent = mutableListOf<IntentMessage>()
+        val model = SubroutineModel(send = { sent += it }).apply { opened(MarkerId("card-hall")) }
         val path = SubroutineModel.DRIFT
         runDesktopComposeUiTest(width = width, height = height) {
             mainClock.autoAdvance = false
@@ -340,49 +435,22 @@ class SubroutineMotionTest {
                         PanelActions(
                             tapSubroutine = model::tap,
                             handOverSubroutine = model::handOver,
+                            handOverEarly = model::handOverEarly,
                         ),
                         subroutines = model,
                     )
                 }
             }
             mainClock.advanceTimeByFrame()
-
-            // Well before the buzz, and the fixture's wait is long enough that this is not a
-            // matter of a frame either way.
-            val early = path.askAtMillis / 3L
-            mainClock.advanceTimeBy(early)
-            tapLane(fraction = 0.25f)
-            mainClock.advanceTimeBy(100)
-
-            val marked = model.drift.choice
-            assertTrue(marked != null, "a tap before the buzz reached nothing at all")
-            assertNull(
-                model.drift.handedOver,
-                "a tap before the buzz went to the house, which is an answer to a question " +
-                    "nobody has asked",
-            )
-            assertTrue(
-                onAllNodes(hasText("RETURNED . WAITING")).fetchSemanticsNodes().isEmpty(),
-                "DRIFT says it has returned something, and nothing has gone",
-            )
-
-            // Past the instant the scan named. The buzz is the house's and this build has no motor
-            // to feel it on, so what happens here is the clock reaching it.
-            mainClock.advanceTimeBy(path.askAtMillis.toLong())
+            mainClock.advanceTimeBy(path.askAtMillis.toLong() + 200L)
             tapLane(fraction = 0.75f)
             mainClock.advanceTimeBy(100)
 
-            assertTrue(
-                model.drift.handedOver != null,
-                "a tap after the buzz did not go, so the answer cannot be given",
-            )
+            assertTrue(model.drift.handedOver != null, "a tap after the buzz did not go")
             assertEquals(
-                model.drift.choice, model.drift.handedOver,
-                "what went to the house is not what the screen is showing",
-            )
-            assertTrue(
-                model.drift.handedOver!! > marked,
-                "the second tap landed further along the lane and the entry kept the first one",
+                listOf(model.drift.choice!!),
+                sent.filterIsInstance<IntentMessage.HandOverEntry>().single().entered,
+                "what went to the house is not the step the screen is showing",
             )
             assertTrue(
                 onAllNodes(hasText("RETURNED . WAITING")).fetchSemanticsNodes().isNotEmpty(),

@@ -441,8 +441,22 @@ class ChoiceEntry : SubroutineEntry {
 
     override val gone: Boolean get() = handedOver != null
 
-    /** The one cell, as a list of one. [handedOver] and not [choice]: what went, not what is lit. */
-    override val entered: List<Int> get() = listOfNotNull(handedOver)
+    /**
+     * **Whether what went was a tap before the question was asked** — Drift's, and only Drift's
+     * (D-165). Parity Check and Sniff never set it: their question is on the screen from the start.
+     */
+    var early: Boolean by mutableStateOf(false)
+        private set
+
+    /**
+     * The one cell, as a list of one. [handedOver] and not [choice]: what went, not what is lit.
+     *
+     * **Empty for an [early] hand-over**, and that is D-165 rather than a missing answer: a tap
+     * before the buzz is an entry and a wrong one, so what goes holds no step along the lane. The
+     * house grades an entry of the wrong shape as wrong (`Subroutines.within`), whatever the dot
+     * was doing, so an early tap that happened to land where the dot would be is still REJECTED.
+     */
+    override val entered: List<Int> get() = if (early) emptyList() else listOfNotNull(handedOver)
 
     /** A tap on a cell. Re-tapping the held one changes nothing; a different one moves the mark. */
     fun choose(at: Int) {
@@ -455,6 +469,18 @@ class ChoiceEntry : SubroutineEntry {
         if (choice != null) handedOver = choice
     }
 
+    /**
+     * **A tap before the question was asked, handed over as the wrong answer it is** (D-165).
+     *
+     * The mark stays where the finger landed — that is input echo — and the entry goes, spent. To
+     * try again the player walks back and re-scans (D-110).
+     */
+    fun handOverEarly() {
+        if (choice == null || handedOver != null) return
+        handedOver = choice
+        early = true
+    }
+
     fun holds(at: Int): Boolean = choice == at
 
     val locked: Boolean get() = choice != null && choice == handedOver
@@ -462,6 +488,7 @@ class ChoiceEntry : SubroutineEntry {
     override fun restart() {
         choice = null
         handedOver = null
+        early = false
     }
 }
 
@@ -813,9 +840,10 @@ class SubroutineModel(
      * **Drift's answer is a [ChoiceEntry], for [sniff]'s reason and one of its own.**
      *
      * It is one position, held until it goes. What it needs that a sequence cannot give it is a
-     * touched-but-unsent state: **the question is not asked until the phone buzzes**, and a tap
-     * before that is a finger landing on glass rather than an answer. So the mark moves and nothing
-     * goes, and the screen hands it over once the house has asked. See [DriftScreen].
+     * second way to go: **the question is not asked until the phone buzzes**, and a tap before
+     * that is an entry and a wrong one (D-165, superseding E-S2-3). So a tap after the buzz goes as
+     * the step it landed on, and a tap before it goes as [ChoiceEntry.handOverEarly] — spent, and
+     * graded REJECTED by the house. See [DriftScreen].
      */
     val drift: ChoiceEntry = ChoiceEntry(),
     /**
@@ -1049,8 +1077,8 @@ class SubroutineModel(
      *
      * SUBMIT on the five whose answer can still change, **the clock** on Short — a hold that has
      * run its two seconds has nothing further to say and no button to press, since both hands are
-     * on the glass — and **the house's own buzz** on Drift, which is the only one of the eight
-     * whose entry goes on something that is neither a control nor this phone's clock. The three
+     * on the glass — and **the tap itself** on Drift once the house's buzz has asked; a tap before
+     * it goes by [handOverEarly] instead, as the wrong answer it is (D-165). The three
      * sequences are absent because they hand themselves over on their last element, which is what
      * *an entry goes when it can no longer change* comes to when the player has said everything
      * they were asked for.
@@ -1070,6 +1098,19 @@ class SubroutineModel(
             else -> Unit
         }
         posted(subroutine)
+    }
+
+    /**
+     * **Drift tapped before the buzz: the entry goes, and it goes as a wrong one** (D-165).
+     *
+     * Beside [handOver] rather than inside it because the screen is the only thing that knows the
+     * house has not asked yet — the question's *now* is on the screen's own clock — and a
+     * hand-over that had to be told which kind it was would be a parameter a second caller could
+     * get wrong. Drift's alone: no other Subroutine asks its question after it opens.
+     */
+    fun handOverEarly() {
+        drift.handOverEarly()
+        posted(Subroutine.Drift)
     }
 
     /**

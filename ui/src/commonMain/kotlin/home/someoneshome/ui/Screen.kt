@@ -7,8 +7,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 
 /**
  * The device, showing one screen.
@@ -101,6 +103,13 @@ fun Screen(
      * lambda. In the app [FlowHost] passes the model's; every render that does not gets an empty one.
      */
     report: ReportCircle = remember { ReportCircle() },
+    /**
+     * **True while a Surge owns the phone, and then nothing a finger does reaches anything** (D-182:
+     * *player input: none, fully automatic, start to finish*). The lamp's slam draws over the panel
+     * and holds no finger, so without this a tap in the bright or the dark phase landed on the
+     * Subroutine underneath and handed its entry over. [FlowHost] passes it; every render is false.
+     */
+    inputBlocked: Boolean = false,
 ) {
     // **The one clock this device is entitled to run, started here because this is where a screen
     // arrives.** [localWindow] returns null on all but the two screens [LocalWindows] names, so on
@@ -242,6 +251,9 @@ fun Screen(
             }
         }
             Lamp(lamp.slam)
+            // Over the lamp too, and drawing nothing: it is the Surge's whole five seconds of
+            // *no input*, and it sits in the tree only while a Surge is running (D-182).
+            if (inputBlocked) InputShield()
         }
     }
 }
@@ -286,5 +298,24 @@ private fun bannerFor(vals: PanelVals): (@Composable BoxScope.() -> Unit)? {
     val arrival = vals.arrival ?: return null
     if (arrival.presentation != Presentation.Banner) return null
     return { NotificationBanner(arrival.notification) }
+}
+
+/**
+ * **A pane over the whole screen that takes every pointer and does nothing with it** (D-182).
+ *
+ * Every change it sees is consumed, so no screen beneath it is hit and the frame's edge swipe reads
+ * a consumed drag and lets it go. It draws nothing, so the light is still only the lamp's (rule 5).
+ * A gesture already under way when it appears is not cut short by it; [FlowModel.surged] stops
+ * such a gesture handing work over by letting go of the card at the slam.
+ */
+@Composable
+private fun InputShield() {
+    Spacer(
+        Modifier.fillMaxSize().pointerInput(Unit) {
+            awaitPointerEventScope {
+                while (true) awaitPointerEvent().changes.forEach { it.consume() }
+            }
+        },
+    )
 }
 

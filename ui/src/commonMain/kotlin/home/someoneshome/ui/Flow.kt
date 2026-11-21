@@ -1470,7 +1470,14 @@ class FlowModel(
      */
     fun surged(peak: Int, black: Int) {
         lamp.slamTo(peak)
-        surge = SurgeSlam(peak = peak, black = black, nth = (surge?.nth ?: 0) + 1)
+        // **The card is let go at the slam, not at the reboot** (D-182: no input at any point, and
+        // the work in your hands is LOST). [FlowHost] holds every new finger off the glass for the
+        // five seconds; this is for a gesture already under way — a Short's hold running out in
+        // the bright phase — which would otherwise still hand its entry over, because a hand-over
+        // with no card goes nowhere. Silent, as the reboot's is. The entry itself is wiped at the
+        // reboot, under the lamp either way.
+        subroutines.opened(null)
+        surge =SurgeSlam(peak = peak, black = black, nth = (surge?.nth ?: 0) + 1)
     }
 
     /**
@@ -2798,6 +2805,9 @@ class FlowModel(
      */
     fun handOverSubroutine(subroutine: Subroutine) = subroutines.handOver(subroutine)
 
+    /** Drift tapped before the buzz (D-165). [SubroutineModel.handOverEarly] says why it is its own. */
+    fun handOverEarly() = subroutines.handOverEarly()
+
     /**
      * **The house answered (D-109). The one push that lands on a Subroutine screen.**
      *
@@ -4014,6 +4024,7 @@ class FlowModel(
         beginSubroutine = { beginSubroutine() },
         tapSubroutine = ::tapSubroutine,
         handOverSubroutine = ::handOverSubroutine,
+        handOverEarly = ::handOverEarly,
         dismissNotification = ::dismissNotification,
         dismissNotice = ::dismissNotice,
         stopSubroutine = ::stopSubroutine,
@@ -4214,6 +4225,9 @@ fun FlowHost(
         perms = model.perms,
         lamp = model.lamp,
         report = model.report,
+        // **No input at any point of a Surge** (D-182): the bright phase, the dark one and the Boot
+        // render alike. The lamp draws over the panel and holds no finger; this holds every one.
+        inputBlocked = surge != null,
     )
 }
 

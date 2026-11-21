@@ -308,6 +308,11 @@ class PanelActions(
     val tapSubroutine: (Subroutine, Int) -> Unit = { _, _ -> },
     val handOverSubroutine: (Subroutine) -> Unit = {},
     /**
+     * **Drift tapped before the buzz** (D-165): the entry goes as a wrong answer and is spent. The
+     * screen calls it because the screen is what knows the house has not asked yet. No role.
+     */
+    val handOverEarly: () -> Unit = {},
+    /**
      * **Something arriving, swiped away — up on a banner, left under the clock.**
      *
      * Not a tap and not a navigation the notification can name: what a dismissal leaves you

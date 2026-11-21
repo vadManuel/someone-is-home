@@ -786,14 +786,16 @@ fun InterruptScreen(verdict: SubroutineVerdict? = null) {
  * this screen's one presentation decision and it is flagged: it makes the hit radius a distance
  * along the path.
  *
- * ### A tap before the buzz is echoed and goes nowhere
+ * ### A tap before the buzz is handed over, graded REJECTED, and the attempt is gone (D-165)
  *
- * The question has not been asked yet, so there is nothing to send — but a control that swallowed
- * the tap in silence is indistinguishable, in the dark, from a phone that has failed, and this is the
- * one Subroutine where the player is watching the screen rather than the room. So the mark moves and
- * the entry stays put; `RETURNED . WAITING` is what says it went, and it says nothing until it has.
- * **This is not the phone refusing an answer** — it is the phone not inventing a question. Flagged
- * as a treatment decision.
+ * D-165 supersedes E-S2-3, which echoed the early tap and sent nothing. That made an early tap a
+ * free probe of the house's NOW — tap, learn you were early, tap again — on the one Subroutine whose
+ * whole content is *when*. The game already answers *did my tap land*, and the answer is a grade
+ * (D-109): an early tap is an entry and a wrong one. So the mark stays where the finger landed, the
+ * entry goes as [ChoiceEntry.handOverEarly] — holding no step, so the house cannot accept it
+ * whatever the dot was doing — and `RETURNED . WAITING` says it went. One attempt per scan (D-110):
+ * to try again the player walks back and re-scans. **Both roles, the same way**: nothing here reads
+ * one.
  *
  * ### The motion stops when the entry goes, and it shows exactly what it was showing
  *
@@ -812,8 +814,8 @@ fun DriftScreen(verdict: SubroutineVerdict? = null) {
     val path = LocalSubroutine.current.path
     val live = entry.handedOver == null
     val elapsed = screenMillis(running = live, instance = LocalSubroutine.current.instance)
-    // Whether the house has said *now*. Not a judgement and not about the entry: it is the clock
-    // reaching the instant the scan named, and the same instant for both roles.
+    // Whether the house has said *now*. Not a judgement: it is the clock reaching the instant the
+    // scan named, the same instant for both roles, and it decides only which way a tap goes (D-165).
     val asked = elapsed >= path.askAtMillis
     // Drawn only where there is nothing in front of it. The cover is drawn over the dot as well,
     // so the last of it goes behind an edge rather than blinking out of a clear stretch of lane.
@@ -836,7 +838,13 @@ fun DriftScreen(verdict: SubroutineVerdict? = null) {
                         val step = (offset.x * DriftPath.SPAN / size.width)
                             .toInt().coerceIn(0, DriftPath.SPAN)
                         actions.tapSubroutine(Subroutine.Drift, step)
-                        if (asked) actions.handOverSubroutine(Subroutine.Drift)
+                        // Either way the entry goes (D-165). Before the buzz it goes as the
+                        // wrong answer it is; after, as the step the finger landed on.
+                        if (asked) {
+                            actions.handOverSubroutine(Subroutine.Drift)
+                        } else {
+                            actions.handOverEarly()
+                        }
                     }
                 },
         ) {

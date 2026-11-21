@@ -193,4 +193,84 @@ class SystemIntegrityTest {
             "an Insider's fake advanced the meter (gdd.md:382)",
         )
     }
+
+    /**
+     * **The Insider's fake goes through its line of the work order, and the meter stays put**
+     * (D-109, `gdd.md:382`).
+     *
+     * The other half of the test above, read off the fake's own counter rather than off the meter:
+     * an accepted fake marks its line done exactly as a Resident's real entry does (`Rules.kt`'s
+     * `returned`, the `advanced` step) — that is what unblocks the next line and what page 1 counts
+     * on both phones — while [GameState.systemIntegrity] does not move. A fake whose counter stood
+     * still would be a role read off the work order.
+     */
+    @Test
+    fun `an Insider's accepted fake advances its own order and not the meter`() {
+        val seats = seatsOf(8)
+        val armed = armedWith(seats, listOf(Seat(1)), (0 until 8).map { MarkerId("m$it") })
+        val insider = Seat(1)
+        assertEquals(Role.Insider, armed.roleOf(insider))
+        val entry = armed.workOrderFor(insider)!!.entries.first()
+        val scanned = reduce(armed, Event.MarkerScanned(Tick(1), insider, entry.anchor!!)).state
+        val returned = reduce(
+            scanned,
+            Event.SubroutineReturned(Tick(2), insider, entry.anchor!!, scanned.openSubroutineFor(insider)!!.expected),
+        ).state
+
+        assertEquals(
+            true, returned.workOrderFor(insider)!!.entries.first { it.index == entry.index }.done,
+            "an Insider's accepted fake left its line of the work order standing",
+        )
+        assertEquals(
+            armed.systemIntegrity, returned.systemIntegrity,
+            "an Insider's fake advanced the meter (gdd.md:382)",
+        )
+    }
+
+    /**
+     * **D-154 — a Revoke never moves System Integrity**, in either direction and by any amount.
+     *
+     * The out watch the meter live (D-134, D-145); a percentage that stepped at the moment
+     * somebody's lamp went out would be a removal report delivered as progress. Walked as the house
+     * walks a landed Revoke: armed at the opening half-cooldown, then both halves of the touch in
+     * seat order. The meter has moved once before it, so *unchanged* is not the starting value by
+     * coincidence, and no meter push may ride the touch either.
+     */
+    @Test
+    fun `a Revoke leaves the meter where it was`() {
+        val seats = seatsOf(8)
+        val armed = armedWith(seats, listOf(Seat(1)), (0 until 8).map { MarkerId("m$it") })
+        val resident = Seat(0)
+        val target = Seat(3)
+        val entry = armed.workOrderFor(resident)!!.entries.first()
+        val scanned = reduce(armed, Event.MarkerScanned(Tick(1), resident, entry.anchor!!)).state
+        val banked = reduce(
+            scanned,
+            Event.SubroutineReturned(Tick(2), resident, entry.anchor!!, scanned.openSubroutineFor(resident)!!.expected),
+        ).state
+        assertEquals(armed.systemIntegrity - 1, banked.systemIntegrity, "the fixture's Resident did not bank")
+
+        val ready = Balance.REVOKE_COOLDOWN / 2
+        fun put(state: GameState, event: Event): Pair<GameState, List<home.someoneshome.model.Effect>> {
+            val admission = admit(state, event)
+            check(admission is Admission.Admitted) { "the fixture's $event was refused: $admission" }
+            return admission.reduction.state to admission.reduction.effects
+        }
+        val (arming, _) = put(banked, Event.RevokeArmed(Tick(ready), Seat(1)))
+        val (half, first) = put(arming, Event.ContactMade(Tick(ready + 3), Seat(1), target))
+        val (after, second) = put(half, Event.ContactMade(Tick(ready + 3), target, Seat(1)))
+
+        assertTrue(after.isRevoked(target), "the fixture's touch revoked nobody, so this proves nothing")
+        assertEquals(
+            banked.systemIntegrity, after.systemIntegrity,
+            "a Revoke moved System Integrity (D-154: the meter moves on completions only)",
+        )
+        assertTrue(
+            (first + second).none {
+                it is home.someoneshome.model.Effect.SubroutineProgressed ||
+                    it is home.someoneshome.model.Effect.SystemIntegrityLive
+            },
+            "a Revoke pushed the meter to somebody (D-154): ${first + second}",
+        )
+    }
 }
