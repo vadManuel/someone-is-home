@@ -149,7 +149,27 @@ Most rules a first playtest touches are built, tested and match the latest rulin
    - isolating the Terminal;
    - the Egress timer, discussion time and Revoke cooldown as lobby settings (they are fixed);
    - a timeout on the meeting's check-in gate (one wandering phone stalls a meeting).
-10. **The GDD has many stale lines.** Each is overridden by a later decision: vocabulary, vote attribution, Egress taps, F-003/F-004/F-005, the work order and Subroutine wording. A sweep runs after D-311 lands, so the two don't collide.
+10. **The GDD's stale lines: swept and merged.** About 100 lines now match the decisions that overrode them:
+    - vocabulary: "an Insider", "Subroutine" for "task", "report" for "deactivation report";
+    - the vote and its attribution;
+    - the Egress taps;
+    - F-003, F-004 and F-005 closed;
+    - the work order;
+    - the Subroutine rows;
+    - the four endings.
+
+    Nine code comments were corrected too; no code changed. Where the Terminal and couch counts are described, the GDD now says they are not built yet.
+
+    **Two disputes are flagged in the GDD, not settled:**
+    - is not voting an abstention or a Skip (items 7 above);
+    - does an armed pass at a Revoked phone look the same as one at a live phone (item 6).
+
+    **A few more stale lines were left for you,** because the audit hadn't listed them:
+    - the win table has no "every Insider Restrained" row;
+    - "fifteen minutes" at two places;
+    - the per-Resident load of 7 at 694;
+    - "will never know it" at 211;
+    - the word "guest" in the D-311 paragraph.
 
 **What to watch on the phones that tests can't cover.** This list goes into the checklist after D-311 lands:
 1. Revoke pass timing: how long the attacker stays lit, and whether a brisk walk-past lands.
