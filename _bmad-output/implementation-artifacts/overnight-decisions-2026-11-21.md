@@ -31,6 +31,29 @@ Main at the start: `1eb155e` (D-306 to D-310 merged).
 
 ## Results
 
+### D-311 and D-313 merged (`40d79ce`)
+
+I ran the full check myself on the two combined: **3,312 tests, 0 failures, 0 skipped**, release and Playtest builds included. BUILD SUCCESSFUL.
+
+### D-311, switching off is cheating
+
+- **Your rules, as built:**
+  - Switching off any permission, or the Bluetooth radio, counts. Leaving the app doesn't.
+  - **In the lobby:** a guest is let go to PERMISSIONS with that row shown REFUSED. They keep their name and can rejoin. The lobby re-checks once a second, on every return to the app, at NEW ROUND, and for the host after a close.
+  - **Mid-round:** the meeting names them with your sentence. Anyone who only left the app is named first with the old sentence. Anyone's next switch-off closes the house.
+  - The notice renders exactly your words, in the right order.
+- **All five review bugs are fixed**, each with a test that failed before:
+  - a reopened phone no longer turns a plain leave into a second switch-off;
+  - a phone reopened mid-round with Camera off gets back to its seat, and is named for it;
+  - permissions are re-checked between rounds;
+  - one Bluetooth switch-off is one report, whatever reports it.
+- **Decisions made (provisional):**
+  - **The host's own phone** goes to PERMISSIONS, but its house stays open and every guest stays seated. LIGHTS OUT does nothing until everything is back on, then CONTINUE returns the host to its lobby.
+  - **At lights out,** guests check themselves. The host can't ask them without a new message. A guest who switches something off in the second before lights out, or turns NEARBY DEVICES off in the lobby, enters the round and is named at the first meeting rather than kept out. Tell me if you'd rather they were kept out; that needs a new lobby message.
+  - **The recording format is now 46,** because the notice now lists leavers and switchers separately.
+  - **Unchanged:** the Egress banner always draws page 1 under it, so a report cancelled from under the banner returns to page 1.
+- **Only a phone can tell:** whether Control Centre's Bluetooth button really turns the radio off. Apple says it only disconnects accessories. If the radio stays on, nothing is named, because nothing actually went off. Airplane mode does turn it off. The checklist says what to look for.
+
 ### The full test suite on main (done)
 
 - I ran `./gradlew check` myself on `1eb155e`, with D-306 to D-310 all merged. **3,269 tests, 0 failures, 0 skipped**, counted from the result files. BUILD SUCCESSFUL in 24 minutes.
@@ -78,7 +101,26 @@ Most rules a first playtest touches are built, tested and match the latest rulin
 
 **First: use the Playtest build tomorrow.** The release build still shows only the boot screen. The whole round lives in the Playtest and Debug builds. The checklist already says `./run-app.sh device playtest`.
 
-**Being fixed tonight (D-313).** Each of these is code that contradicts a ruling you already made:
+**D-313 results** (merged, `40d79ce`):
+- **Drift early tap: fixed.** It is handed over and graded REJECTED, the same for both roles.
+  - **Decision 5 (provisional):** an early tap goes up as an entry with no step in it. The house already rejects that.
+- **Surge input: it did NOT block, and that's fixed.** Before the fix, a tap during the bright phase handed work over, and STOP NOW worked in the dark phase. Now nothing takes a touch for the whole Surge.
+  - **Decision 6 (provisional):** the open Subroutine is dropped at the slam, not at the reboot, so a hold that started before the Surge can't finish during it.
+  - **Two gaps left for you:**
+    - A finger already holding on page 2 when the Surge lands (arming a Revoke or an Egress, or the report circle) still completes.
+    - The camera window stays open during the Surge, so a card read then still counts. Closing it would move its double buzz, and no ruling covers that buzz.
+- **Tests added and proved:** a Revoke leaves the meter alone; the Insider's fake counter; the Insider band at 18 seats; Surge's cooldown is longer than Static's.
+  - My brief had the cooldown order wrong. The code is Surge 150 s > Static 120 s > Isolate 90 s, which matches D-186.
+- **Cards that aren't markers: stopped. This needs you.** It's worse than the audit said:
+  - A card this home never registered still reaches the rules. The player is placed at a card that isn't anywhere in the home, their open work is cancelled, and they get NOTHING FOR YOU HERE instead of NOT A MARKER. D-072 says such paper never reaches the rules.
+  - A meeting card from another home calls a meeting, because nothing checks the card.
+  - A phone has no map of the home, so only the house can tell. Fixing it needs three things no ruling covers:
+    - a card id on the meeting request;
+    - a new message telling one phone NOT A MARKER;
+    - whether that answer goes in the recording.
+  - **Suggested:** the scan sends one plain "card read" request, the house decides, and only the scanning phone hears NOT A MARKER. Whether that also buzzes "no" is yours.
+
+**What D-313 was asked to fix.** Each of these is code that contradicts a ruling you already made:
 - **Drift, early tap.** A tap before the buzz is echoed and you try again, which makes it a free probe of the hidden timing. D-165 says it is handed over and graded REJECTED. A test currently pins the old behaviour.
 - **Cards that aren't markers.** A game card from another home shows NOTHING FOR YOU HERE instead of NOT A MARKER (D-124, D-169). Outside paper gives the "yes" buzz and then nothing.
 - **Surge.** It may not block input during its bright and dark phases. D-182 says no input at any point. This gets checked and fixed if so.
