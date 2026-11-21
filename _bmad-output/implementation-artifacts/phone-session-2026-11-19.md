@@ -6,6 +6,12 @@ This page is the whole session, so nothing gets missed.
 
 Allow about 45 minutes for part 1 and 30 minutes for part 2.
 
+**Updated overnight, 2026-11-21.** Use the **Playtest** build for everything in part 2: the release
+build still stops at the boot screen. A round needs **three phones** (the minimum is 3 while you
+test, D-128 says 5 for release), and the "joining during a round" line needs a **fourth**. Lines
+marked *(overnight)* are what the overnight audit says tests cannot cover; the full list of what is
+and is not built is in `rules-audit-2026-11-21.md`.
+
 ## Part 1: three-phone UWB test (decides the UWB build)
 
 Follow `tools/uwb-spike/README.md`, section **"Three phones"**, steps 1 to 4. In short:
@@ -25,7 +31,7 @@ What the answers change:
 
 ## Part 2: retests of the 2026-11-18 build
 
-Install the Playtest build on two phones (`./run-app.sh device playtest`) and play a short round.
+Install the Playtest build on three phones (`./run-app.sh device playtest`) and play a short round.
 Every round is the Bluetooth and Ultra Wideband hybrid (D-308): Bluetooth ranks who is near, the
 house pairs close phones the game needs for Ultra Wideband, and every Revoke, report and placement
 reads the distance. There is no switch to set. Grant NEARBY DEVICES on both phones: a phone that
@@ -40,6 +46,10 @@ Tick each line as you see it.
       sentence names NEARBY DEVICES, OPEN SETTINGS shows) until it is granted in Settings; back in
       the app the row reads GRANTED and CONTINUE appears. PERMISSIONS has no LOCAL NETWORK row;
       iOS asks for it on JOIN A HOME or when hosting. (D-309)
+- [ ] On a fresh install, tap REQUEST WHAT IS MISSING once and answer each iOS prompt as it comes:
+      the walk should carry on to the next row by itself, Bluetooth's answer included, without a
+      second tap. If it stops after Bluetooth, note it: that is the stall the overnight run found
+      on the simulators (D-314).
 - [ ] On JOIN A HOME, deny the Local Network prompt: the screen reads LOCAL NETWORK IS OFF with
       OPEN SETTINGS under it. Turn Local Network on in Settings, come back, and the home appears.
       With no host running, NO HOME ON THIS NETWORK shows after about 10 s. Note the code on the
@@ -108,6 +118,35 @@ Tick each line as you see it.
       the console logs `[perms] BLUETOOTH state=... THE RADIO IS OFF (D-311)` and the radio's
       `FAULT ... PERMISSION`: if iOS keeps the radio powered for Control Centre's switch (it is
       documented as disconnecting accessories), nothing is named, and that is the finding. (D-311)
+
+**Abilities and meetings** *(overnight)*
+- [ ] **Surge** on another phone: its lamp slams bright, goes dark, reboots, and any open
+      Subroutine is lost. **No sound plays** (not built yet), and **no tap does anything** during the
+      whole sequence, STOP NOW included (D-182, D-313).
+- [ ] **Static**: expect it to show only to someone at the Terminal. Nobody else is told yet
+      (D-186; not built).
+- [ ] **The Terminal and the couch show no counts**: scanning T claims the station and shows an
+      empty map. Expected for now; the house computes counts but sends none (not built).
+- [ ] **The meeting ring** on a real phone: LONG, pause, LONG, repeating until answered, felt in a
+      pocket and heard by nobody (D-160).
+- [ ] **Meeting light**: does the room go bright together at the call and back to dim together at
+      the end? The house sets no lamp level for it, so watch closely (D-168).
+- [ ] **Check-in, vote and tally**: the gate waits for every living phone; the vote casts on a 2 s
+      hold and can be changed until it is cast; the tally shows a count to the living and who voted
+      for whom only to the out (D-104, D-141, D-195).
+- [ ] **Endings**: play one round to an ending and check the route it names.
+
+**Scanning and Subroutines** *(overnight)*
+- [ ] A card's verdict gives **no buzz**, and NOTHING FOR YOU HERE gives no buzz. D-160 lists a yes
+      and a no buzz: say whether silence is what you want.
+- [ ] Scan a QR code that is not a game card: a "yes" buzz, then nothing. Scan a game card from
+      another home, if you have one: it currently gets NOTHING FOR YOU HERE, not NOT A MARKER
+      (stopped in D-313 for your decision).
+- [ ] **Drift**: tap before the buzz. It is handed over and REJECTED, and the attempt is gone
+      (D-165, D-313).
+- [ ] An **armed pass at an already-Revoked phone**: today nothing happens, no buzz and the tile
+      stays ARMED. Say whether that is right (D-290).
+- [ ] **Notes** reads the same on an Insider's phone as on a Resident's (D-312).
 
 **Release build**
 - [ ] `./run-app.sh device release` on a UWB phone launches to the boot screen. It must not stop
