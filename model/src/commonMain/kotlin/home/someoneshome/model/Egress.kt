@@ -125,10 +125,10 @@ data class Egress(
     /**
      * Whether [node] is one of the two. A marker that is not is not part of this Egress.
      *
-     * ### ⚠️ ISOLATE MUST ASK THIS, AND ISOLATE DOES NOT EXIST YET (F-002, amended by ruling)
+     * ### Isolate asks this (F-002, amended by ruling, D-150)
      *
      * **Egress nodes are excluded from Isolate's target list for the duration of an Egress.**
-     * Isolate takes a marker offline; a Insider who Isolates a node mid-Egress makes containment
+     * Isolate takes a marker offline; an Insider who Isolates a node mid-Egress makes containment
      * impossible and wins with no counterplay, which is F-002 exactly.
      *
      * **The ruling amends F-002's proposed resolution and the amendment is the important half.**
@@ -139,9 +139,9 @@ data class Egress(
      * something everybody is looking at — and a fake success would spend the Insider's cooldown on
      * a shot the house had already decided could not land.
      *
-     * That is the whole of what this build can record: **there is no Isolate, no Access pool, and
-     * no target list.** The note is here rather than in a document because this is the function the
-     * exclusion will be written against.
+     * Isolate, the Access pool and the target list are built, and both halves read this function:
+     * `core` `Rules.isolateOffers` leaves the nodes off the list and `Rules.isolateFired` refuses a
+     * fire at one, so the exclusion and the refusal are one fact asked twice.
      */
     fun isNode(node: MarkerId): Boolean = nodes.any { it.value == node.value }
 

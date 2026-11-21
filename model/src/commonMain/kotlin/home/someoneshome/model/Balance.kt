@@ -383,10 +383,10 @@ object Balance {
     fun syncPulseIsGradeableInMillis(): Boolean = SYNC_PULSE_WINDOW_MILLIS * 2 < SYNC_PULSE_INTERVAL_MILLIS
 
     /**
-     * **What a missed beat costs — the design's 2–3s** (`gdd.md:359`).
+     * **What a missed beat costs — 3 s, the tapping phone vibrating for all of it** (D-298).
      *
      * *Makes stalling meaningfully more expensive and stops spam-retry from being optimal.* Three,
-     * the top of the range, because the thing it is priced against is a Insider standing at a node
+     * the top of the range, because the thing it is priced against is an Insider standing at a node
      * hammering the button, and the cheaper end buys less of that.
      */
     const val SYNC_PULSE_LOCKOUT: Long = 3L * TICKS_PER_SECOND

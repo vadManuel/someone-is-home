@@ -187,7 +187,7 @@ Standing still, glowing, heads-down in a dark house is an actual physical exposu
 **Resident loop (~40–95 seconds per cycle, repeated ~7 times per round):**
 
 1. **Move** to a marker in the dark, lit only by your own phone (~25s typical travel between markers).
-2. **Hold to scan** it. One gesture, two independent effects: **routing** (opens the subroutine if you have one there) and **check-in** (always logs your presence, task or no task). The decoupling makes alibi-building a first-class action.
+2. **Hold to scan** it. One gesture, two independent effects: **routing** (opens the subroutine if you have one there) and **check-in** (always logs your presence, Subroutine or no Subroutine). The decoupling makes alibi-building a first-class action.
 3. **Perform the subroutine.** You are now stationary, motion-budgeted, and either lit up or blacked out depending on that subroutine's light signature. Your phone sweeps for nearby devices while you work — you are a stationary sensor.
 4. **Complete it.** System Integrity drops by one. The count is only shown at meetings.
 5. **Move on**, generating and consuming surveillance as you go.
@@ -196,19 +196,19 @@ Standing still, glowing, heads-down in a dark house is an actual physical exposu
 
 **Interrupts** (any of which can land mid-cycle): a Revoke · an Egress · a House Meeting.
 
-**The loop's engine is that every action generates the information other players use against you.** Scanning to prove a route also tells the map where you are. Doing a long task makes you a sensor for everyone else and blind to the room. Camping the Terminal buys near-total surveillance and pays for it with a stationary body at a location everyone knows.
+**The loop's engine is that every action generates the information other players use against you.** Scanning to prove a route also tells the map where you are. Doing a long Subroutine makes you a sensor for everyone else and blind to the room. Camping the Terminal buys near-total surveillance and pays for it with a stationary body at a location everyone knows.
 
 ### Win / Loss Conditions
 
 | Outcome | Condition |
 |---|---|
 | **Residents win** | System Integrity reaches **0**. Immediate — no meeting required. The perimeter disarms; the status bar reads `PERIMETER DISARMED`. |
-| **Insiders win (parity)** | `residents_alive ≤ guests_alive`, counting **living** Insiders. |
+| **Insiders win (parity)** | `living plain Residents ≤ living Insiders` — **living** Insiders, not the initial count (D-131). |
 | **Insiders win (outright)** | An **Egress** runs its clock out uncontained. |
 
-**The parity condition is load-bearing beyond pacing.** A live game requires `residents_alive ≥ guests_alive + 1`, so the smallest living Resident population in a running game is 2 — which is exactly the number needed to contain an Egress at two separate markers. **The parity rule is what guarantees an Egress is always containable, so no low-population fallback is needed.** This was verified during the round trace and holds.
+**The parity condition is load-bearing beyond pacing.** A live game requires `living plain Residents ≥ living Insiders + 1`, so the smallest living Resident population in a running game is 2 — which is exactly the number needed to contain an Egress at two separate markers. **The parity rule is what guarantees an Egress is always containable, so no low-population fallback is needed.** This was verified during the round trace and holds.
 
-**The win check counts living Insiders, not initial.** A Insider who revokes another Insider has moved the goalposts against themselves and will never know it. Do not tell them.
+**The win check counts living Insiders, not initial.** An Insider who revokes another Insider has moved the goalposts against themselves and will never know it. Do not tell them.
 
 **Never shown:** any confirmation of alignment, at any point, by any path. Not on revoke, not at the tally, not on finding a revoked player, not ever. Confirming a removed player's alignment is permanently out.
 
@@ -225,7 +225,7 @@ Standing still, glowing, heads-down in a dark house is an actual physical exposu
 - **A ten-second window runs from the tap**, counting down. **Timing out closes the scanner by itself, with a double vibrate** — two vibrates being the house's word for *no* (D-160). Nothing is spent; tap SCAN again.
 - **No camera preview.** `AVCaptureSession` + metadata output with no preview layer attached. The lamp screen *is* the scanner — there is no "open scanner" step, and while you are scanning the screen is pointed away from you and cannot show you anything. **Auto-open is not a convenience; it is the only way a scan can end in the player's favour** when the surface that would say *got it* is facing the wall.
 - **Aim feedback via haptics**, since there is no preview and no line of sight to the screen.
-- **Check-in always fires**, task or no task. A Resident can sweep the house scanning everything to prove a route; a Insider can scan markers to manufacture task activity they never performed.
+- **Check-in always fires**, Subroutine or no Subroutine. A Resident can sweep the house scanning everything to prove a route; an Insider can scan markers to manufacture Subroutine activity they never performed.
 - QR ships in v1 (free, printed at home). NFC (NTAG213/215/216, ~$0.15–0.30/sticker) is the paid add-on, sold because it is better — it works blind, by feel, and cannot be photographed and completed from the couch. One SCAN button drives both paths.
 
 #### M2 — The motion energy budget
@@ -249,39 +249,39 @@ Skip the altimeter for crouch detection — this game has people opening and clo
 
 Residents **dismantle** rather than maintain, which inverted four of the original verbs. **Ten subroutines, spread 3 bright / 4 medium / 3 dark.** Full roster and specifications in the genre section below.
 
-**The screen is the lamp, so light signature is a second risk axis independent of duration.** A bright subroutine makes you a beacon for its whole duration. A near-black one hides you — and blinds you to the room. A 6-second bright task and a 30-second dark task are meaningfully different decisions, rather than everything collapsing to "how long."
+**The screen is the lamp, so light signature is a second risk axis independent of duration.** A bright subroutine makes you a beacon for its whole duration. A near-black one hides you — and blinds you to the room. A 6-second bright Subroutine and a 30-second dark Subroutine are meaningfully different decisions, rather than everything collapsing to "how long."
 
-#### M4 — Task structures: short, medium, long, circuit
+#### M4 — Subroutine structures: short, medium, long, circuit
 
-The tiers are task *structures* — how a task is scheduled and where it sits in space. Subroutines populate them.
+The tiers are Subroutine *structures* — how a Subroutine is scheduled and where it sits in space. The roster's Subroutines populate them.
 
 | Structure | Shape | Duration budget |
 |---|---|---|
 | **Short** | One marker, 5–10s. Cheap, low exposure, do casually. | ~33s incl. travel |
 | **Medium** | One marker, 20–30s. | ~50s incl. travel |
 | **Long** | **Two stages at two different markers.** Forces a *route* rather than a destination, and the route is where you are vulnerable. | ~95s |
-| **Circuit** | Three markers, one carried-state machine. **The only task where you are mobile and aware, but predictable.** | ~160s |
+| **Circuit** | Three markers, one carried-state machine. **The only Subroutine where you are mobile and aware, but predictable.** | ~160s |
 
-**Assigned mix: 7 subroutines per Resident — 1 circuit, 1 long, 3 medium, 2 short.** Derived in `decision-log.md` D-005.
+**Order size: `K = ⌈M ÷ worstCasePlainResidents⌉ + slack` Subroutines per Resident, where `worstCasePlainResidents = seats − bandMax`** — computed from public lobby facts alone, never from the hidden draw (D-129). The mix derived in `decision-log.md` D-005 was 7 per Resident, weighted 1 circuit, 1 long, 3 medium, 2 short; D-129 replaced the fixed 7.
 
 #### M5 — Dependency chains
 
 The strongest structural idea in the design: it manufactures the one thing physical social deduction usually lacks — **a reason for two specific people to be in specific places at specific times.**
 
-- **Chains are composed entirely of Residents.** Insiders have no assigned subroutines, so they can never be a link.
+- **Chains are composed entirely of Residents.** An Insider's order is a fake that counts for nothing (D-109, D-129), so they can never be a link.
 - Links are at different, random markers. A player may never appear twice in the same chain; track full membership history.
-- **Chain length bound: `L ≤ living_guests + 1`.** Tight — one more would generate a task that becomes literally unstaffable while the game is still running.
-- **Lazy linking, sliding window of two.** A is active, B is assigned as waiting. When A resolves (**completed or revoked**), B unlocks and C is assigned. C is chosen at that moment from living, eligible players not already in the chain. This staffs every link against the population as it actually exists, closing the late-game hole.
-- If a chain still cannot be staffed, **collapse gracefully** — silently auto-satisfy the remaining links.
+- **Chain length bound: `L ≤ living Insiders + 1`.** Tight — one more would generate a Subroutine that becomes literally unstaffable while the game is still running.
+- **Lazy linking, sliding window of two.** A is active, B is assigned as waiting. When A is **completed**, B unlocks and C is assigned. C is chosen at that moment from living, eligible players not already in the chain. This staffs every link against the population as it actually exists, closing the late-game hole.
+- **A Revoke strands work, and nothing rescues it (D-146).** When a Revoked player held somebody else's blocker, the blocked entries stay blocked. Nothing auto-satisfies, ever, and no per-chain repair runs at any point in the round; what keeps the round winnable is the over-provisioning D-129 sizes into every order (`slack`).
 
 **Anonymity rules, all non-negotiable:**
 
 - **Never name the dependency.** "You're waiting on Marcus" hands out a confirmed-innocent identity — the most valuable information in the game, unearnable and unfakeable.
-- **When the dependency is revoked, the task simply becomes available** — identical in content to what happens when they complete it. The waiting player gains nothing either way.
+- **When the dependency is revoked, the Subroutine stays blocked** (D-146). It is a visible blocked entry (D-114), and one that never unblocks is a fact a Resident can carry to the meeting: either the player upstream is gone, or they are sitting on it. The waiting player cannot tell which.
 - **Never display chain membership to anyone but the holder.** Chains are Resident-only, so any visible confirmation of membership is an alignment reveal. Expose the full structure only on the end-of-game screen.
 - **The upstream player IS told someone is waiting on them** — at assignment time only. This reveals only that a Resident exists downstream, which they already know. **Never confirm that the downstream unlock happened.**
 
-**Random unlock delay: 20–120s, applied identically to both paths.** Without it, timing leaks even though content does not: a revocation discovered at 21:04 and a task unlocking at 21:03:58 is a trivial correlation that reconstructs who was revoked when. If completion-unlocks were instant and revoke-unlocks delayed, the leak would be rebuilt with extra steps.
+**Random unlock delay: 20–120s, applied identically to both paths.** Without it, timing leaks even though content does not: a revocation discovered at 21:04 and a Subroutine unlocking at 21:03:58 is a trivial correlation that reconstructs who was revoked when. If completion-unlocks were instant and revoke-unlocks delayed, the leak would be rebuilt with extra steps.
 
 > **Held at the original 20–120s.** It was briefly shortened when the round was provisionally 15 minutes; at ~25 minutes the original window is proportionate again — a 3-link chain with two long draws consumes ~16% of a round rather than a quarter of it. **Start at the short end and lengthen if playtests show the game is too blind.** See `decision-log.md` F-013.
 
@@ -290,7 +290,7 @@ The delay length is the **fog dial**: long → chains become a strong distribute
 **What chains are actually for — two things, and the second is rarer than it sounds:**
 
 1. **Chains are bait.** They create a predictable rendezvous — a known Resident who must be at a known marker, and a partner who will eventually come looking. **Revoking the first link schedules a second target to walk to a location the Insider is standing in.**
-2. **Chains create verifiable alibis, which the genre almost never has.** It is structurally impossible for a Insider to have a genuine chain partner. Most alibis are unverifiable assertions; these have a witness with a stake in the truth.
+2. **Chains create verifiable alibis, which the genre almost never has.** It is structurally impossible for an Insider to have a genuine chain partner. Most alibis are unverifiable assertions; these have a witness with a stake in the truth.
 
 > **Keep verification social. Leave the check-in ledger coarse.** If the app confirms that two players scanned the same marker within seconds of each other, **it is adjudicating alibis** — which is powerful, and considerably more than this design wants. The ledger reports anonymous counts and nothing finer.
 
@@ -298,7 +298,7 @@ The delay length is the **fog dial**: long → chains become a strong distribute
 
 > **Design principle: the best abilities weaponize the app's control over other players' bodies and attention, not over game state.** No other social deduction game can do this, because no other one owns your light and your phone.
 
-The binding constraint is not balance — it is that a Insider operates the panel **by feel, in the dark, one-handed, under stress.** Four targets is realistically the limit before people fumble, and a misfire is catastrophic.
+The binding constraint is not balance — it is that an Insider operates the panel **by feel, in the dark, one-handed, under stress.** Four targets is realistically the limit before people fumble, and a misfire is catastrophic.
 
 | Tier | Contents | Cost | Why |
 |---|---|---|---|
@@ -319,15 +319,15 @@ The binding constraint is not balance — it is that a Insider operates the pane
 
 **Revoke — the two-step:**
 
-1. Insider arms a Revoke in-app. Silent and invisible; nothing changes on screen for anyone.
+1. Insider arms a Revoke in-app. Silent; nothing changes on any other phone. The Insider's own REVOKE tile reads ARMED, then COOLING DOWN, and never READY while its own arm is spending (D-286, D-290).
 2. Arming opens a **20s window** in which the contact must land. A meeting call closes it early. The lapse is silent (owner ruling, 2026-11-18; D-280).
 3. **The Insider brings their phone within 10 cm of the target's phone. A pass is enough; they do not have to stop.** The phones measure the distance between them by Ultra Wideband, **both phones must read the 10 cm**, and the house resolves the contact. The target's lamp goes dark at that instant (owner rulings U1, 2026-11-18; D-290, D-301). Which phones measure each other, and what a phone that cannot measure means, are under *The contact primitive*.
 4. **Both phones give one Long buzz when the Revoke lands**, and the Insider's REVOKE tile drops from ARMED to COOLING DOWN. There is no sound and no animation, and the Insider's screen gives nobody else anything to see (owner ruling, 2026-11-18; D-290). *Until 2026-11-18 the Insider's device gave no feedback at all.*
 
 **There is no target confirmation step and no self-deactivate control anywhere in the game.** Contact *is* the revocation. This closes four things at once that a self-confirm model could not:
 
-- **No probe.** With no self-deactivate button, there is nothing to press to learn whether a Insider is armed.
-- **No free fake-tap.** A Insider who touches phones without an armed token accomplishes nothing, so there is no cost-free way to remove someone from play.
+- **No probe.** With no self-deactivate button, there is nothing to press to learn whether an Insider is armed.
+- **No free fake-tap.** An Insider who touches phones without an armed token accomplishes nothing, so there is no cost-free way to remove someone from play.
 - **No proximity bug.** Under a self-confirm model, an open token anywhere in the house could resolve against a player nobody had touched. Contact *is* the proximity gate, so the failure mode cannot occur.
 - **Exact attribution.** The device handshake names both parties precisely, which the end-of-game reveal uses — a mistaken Insider-on-Insider revoke is now attributable rather than guessed.
 
@@ -335,7 +335,7 @@ The binding constraint is not balance — it is that a Insider operates the pane
 
 **Accepted consequence: the revoked player often sees who did it.** The Insider has to reach into the space the target is looking at, lit by the target's own screen. **The mitigation is the mechanic itself** — the target's lamp is the only thing illuminating the attacker, and it goes dark at the instant of contact, so the reveal window is close to zero and the Insider is standing in darkness a fraction of a second later. Certainty is therefore not guaranteed, which preserves *a revoked player may not know who revoked them* as a probabilistic rather than absolute property. **Test this in the E1 prototype — it is a dark-room question, not a paper one.**
 
-**A rule this changes:** a Insider who revokes another Insider **now finds out immediately**, where previously they would never know they had moved the goalposts against themselves. The mistake still happens; it stops being invisible to the person who made it, and they have to keep playing next to the person they took out. **In `Hidden` mode this is the better beat**, so it is kept deliberately rather than inherited.
+**A rule this changes:** an Insider who revokes another Insider **now finds out immediately**, where previously they would never know they had moved the goalposts against themselves. The mistake still happens; it stops being invisible to the person who made it, and they have to keep playing next to the person they took out. **In `Hidden` mode this is the better beat**, so it is kept deliberately rather than inherited.
 
 **A trap this creates, for free:** any "let's touch phones to prove we are both Residents" trust ritual is a trap, because an armed Insider simply accepts the offer. Emergent, correct, no design needed.
 
@@ -354,23 +354,23 @@ The binding constraint is not balance — it is that a Insider operates the pane
 
 **Static is anonymity, not concealment.** It jams what the living can *read*, never what the house *records*: check-ins, verdicts, System Integrity and the emit gates are all untouched, so an Insider who fires it hides no fact — they blind the only surface that could have shown it to anybody in the ten seconds that mattered. **It is loud on purpose.** Static is deliberately distinguishable from a disconnection, so the house announces *that* the monitoring was jammed and never who jammed it: every living player learns an Insider did something just now, and nobody learns which one. **Ghosts are exempt** — their true occupancy stays clean, which is the liveness privilege stated once more and costs nothing, because a ghost has no channel to tell anybody with. Self-targeting needs no special case: it jams the firing Insider's own monitoring alongside everyone else's, and the announcement fires for the whole house, so M9's no-actor-side-feedback rule holds without a branch. **Heavier default cooldown than the ability it replaced**; playtest tunes it.
 
-**The leak this roster creates:** ranged abilities target players from a roster. **Targeting an already-revoked player must appear to succeed *on the actor's device*** — same animation, same cooldown spent, no feedback whatsoever. Otherwise the panel becomes a revoke-detector: a Insider could poll the roster and learn exactly who is out without ever finding them.
+**The leak this roster creates:** ranged abilities target players from a roster. **Targeting an already-revoked player must appear to succeed *on the actor's device*** — same animation, same cooldown spent, no feedback whatsoever. Otherwise the panel becomes a revoke-detector: an Insider could poll the roster and learn exactly who is out without ever finding them.
 
 > **The guarantee is device-side and cannot extend to the room.** **Surge is world-observable** — a lamp flares, a phone makes noise. Surge someone you can *see*, watch nothing happen, and you have learned they are revoked with no panel involved.
 >
-> **Accepted, because it mostly self-mitigates:** a Insider usually does not know where their target is, so "no flare" is ambiguous between *revoked* and *in another room*. The leak opens only against a target already in line of sight — at which point you are standing next to someone you already suspect, with working eyes.
+> **Accepted, because it mostly self-mitigates:** an Insider usually does not know where their target is, so "no flare" is ambiguous between *revoked* and *in another room*. The leak opens only against a target already in line of sight — at which point you are standing next to someone you already suspect, with working eyes.
 
 #### M7 — Egress
 
-**A Insider triggers it; the house picks which one** — **Beacon** (broadcasting outward) or **Tether** (piggybacking a cellular radio).
+**An Insider triggers it; the house picks which one** — **Beacon** (broadcasting outward) or **Tether** (piggybacking a cellular radio).
 
 | Parameter | Value |
 |---|---|
-| Containment | **Two people at two separate markers**, simultaneously |
+| Containment | **Two people at two separate markers**, whose runs share a pulse of the house's grid (D-298) |
 | Timer | **Lobby setting. Default 120s** — see below |
-| Containment action | **Sync Pulse** — both phones pulse haptically in unison off a server-scheduled timestamp; both players tap on the beat **4 times** [ASSUMPTION: A-11] |
+| Containment action | **Sync Pulse** — the house runs one pulse grid off a server-scheduled timestamp, felt only on a phone with a live tap control; each player taps **four pulses in a row**, and a miss starts the count again (D-298, settling A-11) |
 | Participants | **Unlimited.** Holders at one marker pair with holders at the other; extras form concurrent pairs; first success contains |
-| Failed attempt | 2–3s lockout — makes stalling meaningfully more expensive and stops spam-retry from being optimal |
+| Failed attempt | **3 s lockout**, felt as one unbroken vibration on the tapping phone for the whole 3 s, with no words (D-298) — makes stalling meaningfully more expensive and stops spam-retry from being optimal |
 | Alert | **Must be dismissable.** You cannot scan a marker through a modal |
 | Display | **The System Integrity widget becomes the Egress countdown**, and names the two nodes |
 | Failure | **Insiders win outright** |
@@ -393,13 +393,13 @@ The binding constraint is not balance — it is that a Insider operates the pane
 
 #### M8 — Screen parity
 
-**A Insider's default screen must be indistinguishable from a Resident's.** Shoulder-surfing is a real threat in a physical game, and "identical" is stronger than it sounds. Three leaks to cover:
+**An Insider's default screen must be indistinguishable from a Resident's.** Shoulder-surfing is a real threat in a physical game, and "identical" is stronger than it sounds. Three leaks to cover:
 
-1. **The fake subroutine list must be structurally plausible for this house map** — right mix of structures, right markers, sensible count. Seven, weighted 1/1/3/2, like everyone else's.
+1. **The fake subroutine list must be structurally plausible for this house map** — right mix of structures, right markers, sensible count: the same length as everyone else's, drawn by the same sizing rule, so order length is role-independent (D-129).
 2. **It must sometimes show a waiting state.** Insiders cannot be in chains. If Resident screens can show "you're waiting on someone" and Insider screens structurally never can, that is a single-glance tell. The fake list must fake chains too.
 3. **The fake counter must advance.** A screen reading 0/7 at the second meeting while everyone else is at 5/7 is a tell.
 
-**Insiders have no assigned subroutines, and no action a Insider takes ever advances System Integrity.** They may scan any marker any number of times — every scan produces a real check-in, and a marker on their fake list opens a fake subroutine. **A marker not on their fake list opens nothing, exactly as it would for a Resident with no task there**, so the null case is not a tell either.
+**Insiders have no assigned subroutines that count — an Insider's order is a fake, drawn by the same sizing rule as a Resident's (D-129) and graded for real, in identical words (D-109) — and no action an Insider takes ever advances System Integrity.** They may scan any marker any number of times — every scan produces a real check-in, and a marker on their fake list opens a fake subroutine. **A marker not on their fake list opens nothing, exactly as it would for a Resident with no Subroutine there**, so the null case is not a tell either.
 
 **Build the fake subroutine early** — a fully convincing version of the real thing, with real UI, real progress, real completion animation, that writes nothing to the ledger. Cheap from the start, awkward to retrofit.
 
@@ -428,17 +428,19 @@ Designed under one constraint: **minimal phone interaction for anything social.*
 | Phase | Rules | Default |
 |---|---|---|
 | **Trigger** | Rendered as an **incoming call with the caller named, and it rings in the hand and nowhere else** — LONG–pause–LONG, repeating until answered (D-160). All lamps snap to full white simultaneously off a scheduled timestamp; masking audio cuts to total silence; **no phone makes a sound** *(the ringtone is superseded — see the sound corollary above)* | — |
-| **1. Discussion** | Phone shows a timer and one control. **Unanimous "Ready to vote" skips ahead.** Living players only | **90s** (lobby setting) |
-| **2. Vote** | Names plus **Skip**, changeable until the clock ends. You see **how many** have voted, never what. **Not voting is an abstention** | **45s** (lobby setting) |
-| **3. Result** | **Most votes is restrained; ties resolve to Skip.** **Attribution is shown** — who voted for whom. Then nothing: no role, no confirmation, no reveal | ~15s |
+| **1. Discussion** | Starts once every living and every out player has checked in at the meeting area (D-104). Phone shows a timer and one control. **Unanimous "Ready to vote" skips ahead**, counting living players only (D-147) | **90s** (lobby setting) |
+| **2. Vote** | Names plus **Skip**. Select a row, then a two-second hold locks it **irrevocably** and the control reads **VOTE CAST** (D-117, D-141); the buzzer locks whatever is selected, and the window closes early once every vote is locked (D-117). You see **how many** have voted, never what. **Not voting is an abstention** *(disputed, owner to rule: D-075 and D-117 count a player who selected nothing as a Skip; D-144 counts an abstention as nothing; the code counts it as a Skip)* | **45s** (lobby setting) |
+| **3. Result** | **Most votes is restrained; ties resolve to Skip** (D-144). The living see the count and who was Restrained, never who voted for whom and never a per-candidate total; only the out see the ballot with names against it, live (D-075, D-195). Then nothing: no role, no confirmation, no reveal | ~15s |
 
-**A correct revoke and a catastrophic one look identical.** Attribution is shown because it is consistent with *the app supplies constraints, the players supply the accusations* — the tally is a constraint, and what it means is the players' problem.
+**A correct revoke and a catastrophic one look identical.** The count is consistent with *the app supplies constraints, the players supply the accusations* — the tally is a constraint, and what it means is the players' problem. *(Attribution was shown here until D-075 reversed it.)*
 
 **The revoked do not vote.** Not for fairness — **voting is a communication channel.** A ghost who knows who revoked them and can vote is leaking that knowledge through the ballot; even with a secret vote the *tally* leaks, and several ghosts voting as a bloc is a beacon. Ghosts still see the vote; they cast nothing.
 
 **The house notice, and it is anti-cheat and nothing else (D-187).** A notice reports **detectable deliberate evasion**: locking the phone, backgrounding the app, disabling a permission mid-round. **The house reports it to everyone, at the meeting**, in its own administrative register:
 
-> **NOTICE:** Occupant **Marcus** was unreachable 21:04–21:07. Occupancy data for this interval is incomplete.
+> Resident **Marcus** was unreachable this shift. Occupancy data for this interval is incomplete.
+
+*(The words are the owner's, D-223; the house keeps no clock, so the notice names the shift rather than an interval of time.)*
 
 **Genuine radio loss earns no notice.** It shows as a disconnection on the monitoring surfaces and nowhere else. **Static earns no notice either** — it has its own announcement, and it is an ability rather than an evasion.
 
@@ -483,11 +485,11 @@ The system logs and localizes voices, so **speaking tells the Insiders where you
 
 **Exclusive access — one player at a time.** The station locks on *any* viewing, not just timelapse playback. Others may stand there; only one person reads.
 
-*Why:* uncapped live view makes camping *viable* (fine — it is paid for in task opportunity cost); simultaneous access would make camping *superlinear*, since two campers pay exactly 2× the cost but cover each other's blind spots for more than 2× the information. Either alone is fine; both together is the problem.
+*Why:* uncapped live view makes camping *viable* (fine — it is paid for in Subroutine opportunity cost); simultaneous access would make camping *superlinear*, since two campers pay exactly 2× the cost but cover each other's blind spots for more than 2× the information. Either alone is fine; both together is the problem.
 
-Viewing is treated as an **uncompletable task**, so the motion budget applies: standing still, glowing, attention-captured, at a fixed location everyone knows about. Exceed the budget and the view closes — no time limit needed, **the exposure is the limit**. The station generates its own check-in, so using the surveillance system is itself surveilled.
+Viewing is treated as an **uncompletable Subroutine**, so the motion budget applies: standing still, glowing, attention-captured, at a fixed location everyone knows about. Exceed the budget and the view closes — no time limit needed, **the exposure is the limit**. The station generates its own check-in, so using the surveillance system is itself surveilled.
 
-**What it shows: counts per room, never dots.**
+**What it shows: counts per room, never dots.** (not yet built: the house computes counts but sends none to a phone, as of 2026-11-21)
 
 > A dot implies a trackable individual, and no such thing exists in this system. You learn that *four people* were in the living room, never which four — and a numeral says exactly that and nothing more.
 
@@ -533,9 +535,9 @@ Viewing is treated as an **uncompletable task**, so the motion budget applies: s
 **Second-order effects, all emergent and none requiring design:**
 
 - **Memory is the bottleneck, and that is a feature.** The map is unreadable during meetings, so everything anyone brings to the argument comes from **human memory, recalled in the dark, minutes later.** Free honest error, exploitable by Insiders, and a natural cap on how strong the surveillance system can ever get.
-- **Coverage holes are a feature.** Rooms nobody scans in produce no data, so the map has holes that correlate exactly with where people are not going. **A Insider can work the quiet wing.**
+- **Coverage holes are a feature.** Rooms nobody scans in produce no data, so the map has holes that correlate exactly with where people are not going. **An Insider can work the quiet wing.**
 - **Check-in becomes active surveillance.** A Resident touring the house is not only building an alibi, they are *generating coverage* — which gives cautious players something useful to do that is not subroutines.
-- **Squatting is a free Insider ability that nobody designed.** Exclusive access means a Insider can hold the map open and **the Residents' primary investigative tool is offline for as long as they stand there.** They look like they are doing something legitimate, and the ledger records only that *someone* was there a long time. **The counter is physical: go look.** The app cannot tell you who is squatting, but a person walking to the station with a lamp can see exactly who is standing there. **Physical investigation beating digital investigation is the spirit of the whole game.**
+- **Squatting is a free Insider ability that nobody designed.** Exclusive access means an Insider can hold the map open and **the Residents' primary investigative tool is offline for as long as they stand there.** They look like they are doing something legitimate, and the ledger records only that *someone* was there a long time. **The counter is physical: go look.** The app cannot tell you who is squatting, but a person walking to the station with a lamp can see exactly who is standing there. **Physical investigation beating digital investigation is the spirit of the whole game.**
 - **Expect a bodyguard dynamic.** The camper is the Insider's highest-value target and cannot see it coming — they are heads-down for twenty seconds at a time. Two players at the station, one reading and one facing outward, is the obvious counter, and **exclusive access does not break it**: a bodyguard needs to stand there, not to read.
 
 **The best moment this system can produce:** you watch a room's count go from 1 to 2, then to 1 again. You have just witnessed a revocation. You know the room, you know roughly when, and you know exactly two people were present. **You know nothing about who, you can prove nothing, and you were standing exposed at a station everyone knows about the entire time.**
@@ -555,7 +557,7 @@ Viewing is treated as an **uncompletable task**, so the motion budget applies: s
 **So ghosts get what the whole house is denied:**
 
 - **Both bars, as exact percentages** — Resident System Integrity *and* the Egress's progress. Living phones see the Egress as a countdown and a draining bar; the couch reads the exact number behind it (owner ruling Q3, 2026-11-18).
-- **True occupancy** — live, every storey, no injected error, no staleness bands. **Still counts, never identities.**
+- **True occupancy** — live, every storey, no injected error, no staleness bands. **Still counts, never identities.** (not yet built: the house computes counts but sends none to a phone, as of 2026-11-21)
 - **Not alignments.** The tools to deduce, never the answer. A ghost is still solving, from outside.
 
 **No channel of any kind.** Cannot act, cannot speak, cannot vote, and **cannot message other ghosts.** Several people watch the same truth side by side, unable to share one thought about it.
@@ -579,7 +581,7 @@ The whole game is operated **one-handed, in the dark, without looking.** Every c
 
 #### The contact primitive
 
-**One short-range measurement serves both the Revoke and the deactivation report.** The outcome is determined entirely by the state of the two devices and the distance between them: armed Insider + live player, both phones reading 10 cm → revocation; a player who is not revoked holding a revoked player's phone within 30 cm for 2 s → deactivation report; anything else → nothing at all, silently, with no feedback on either device.
+**One short-range measurement serves both the Revoke and the report.** The outcome is determined entirely by the state of the two devices and the distance between them: armed Insider + live player, both phones reading 10 cm → revocation; a player who is not revoked holding a revoked player's phone within 30 cm for 2 s → report; anything else → nothing at all, silently, with no feedback on either device.
 
 > **It is presented to the player as touching phones. It is not NFC.** iOS exposes no phone-to-phone NFC — Core NFC reads tags, and card emulation is scoped to payment-style contactless with special entitlements. **Bluetooth picks, Ultra Wideband measures** (owner ruling U6, 2026-11-18). Every phone's Bluetooth ranks who is near it; from those rankings the house pairs phones for Ultra Wideband (Nearby Interaction, iPhone 11+), never giving a phone more pairs than it says it can hold, and the rules read only the distance each pair measures (D-300, D-301). **Ultra Wideband runs only for close pairs the game needs; Bluetooth runs the rest of the game** (owner ruling, 2026-11-20; D-306). Two phones are paired only while Bluetooth says they are within about two and a half metres (provisional) and one of the rules that reads a distance could fire between them: an Insider holding an armed Revoke and a phone it could land on, a living phone and a revoked one that can still be reported, or a phone working at a marker and a player it could place. A pair that stops being needed or close is let go two seconds later (provisional). **A pair the house is not measuring can neither revoke nor report**, so a crowd larger than a phone's capacity can miss a pass; that is accepted (U3, U6). Direction is not read (U4). The physical gesture is what makes the tight radius feel deliberate rather than fiddly, and 1–2s latency is acceptable for an intentional two-handed action.
 
@@ -587,7 +589,7 @@ The whole game is operated **one-handed, in the dark, without looking.** Every c
 
 **The reach is a hard constraint, not a tuning value.** Radio passes through walls, and Ultra Wideband cannot tell rooms apart (U3); if the report fired at "nearby" rather than at arm's length, it would become a **through-wall detector for revoked players** and *you can walk past a revoked player and never notice* would stop being true. **So the report is a hold, not a pass:** within **30 cm for 2 s**, with the reporting phone filling a circle over those two seconds, and leaving 30 cm before it is full cancels the report (owner ruling Q5, 2026-11-18; D-301). **A report runs only from the main view** (owner, 2026-11-20; D-307): the reporter must not be in a Subroutine or any other activity, only on springboard page 1 or 2, and the lantern does not count (slide to open first). Every phone tells the house in each upload whether it is on the main view, one character at one width from every phone; the house starts no hold for a reader off it and cancels one when the reader leaves it. When the hold begins the page gives way to a screen that is the circle and nothing else, filling smoothly over the two seconds on the phone's own clock from the time the house says the hold began; the house still decides, and a cancel takes the phone straight back to its page. The house judges the two seconds on the once-a-second uploads, with half a second of slack, and a missed upload breaks the hold (provisional, D-301). Only the reporter's measurement counts; the revoked phone's own measurement of the pair is ignored. **The two phones of a Revoke cannot report each other for 5 s after it**, so the Insider can report their own target only once that grace ends, and a phone that was not in the touch can report at once (D-291).
 
-**Why a gesture beats a button, beyond removing the radar.** Reporting a revocation now means kneeling down in the dark beside the revoked player — stationary, both hands occupied, exposed. That is the vulnerability this game is built on, and it creates a decision the button version never had: **report it now, or walk away and come back when it suits you.** It also means **a Insider can camp a player they revoked** — chains-are-bait, applied to the revoked.
+**Why a gesture beats a button, beyond removing the radar.** Reporting a revocation now means kneeling down in the dark beside the revoked player — stationary, both hands occupied, exposed. That is the vulnerability this game is built on, and it creates a decision the button version never had: **report it now, or walk away and come back when it suits you.** It also means **an Insider can camp a player they revoked** — chains-are-bait, applied to the revoked.
 
 **There is no Status panel** (D-168). What it was going to hold has gone to the two surfaces that already exist: **your subroutines and your carry state live on the work-order widget**, and **the light level is the house's, never yours.** The role parity it was built to provide now lives on **springboard page 2**, which is identical for both roles at rest and entirely inert for a Resident (D-142) — a shoulder-surf at close range sees a page of the right shape with the right contents, and one fewer surface to keep in sync.
 
@@ -606,9 +608,9 @@ The whole game is operated **one-handed, in the dark, without looking.** Every c
 | 1 | **Replay** | Short | Sequence memory | 3–5 dots flash in order; tap them back | Bright |
 | 2 | **Interrupt** | Short | Timing | A slow bar sweeps; tap inside a generous band | Medium |
 | 3 | **Parity Check** | Short | Visual search | Grid of filled/empty cells; tap the one breaking the pattern | Bright |
-| 4 | **Sniff** | Short | Haptic counting | The phone buzzes N times; tap N | **Dark** |
-| 5 | **Deallocate** | Short | Counting / arithmetic | Unequal columns of dots; tap to even them out | Bright |
-| 6 | **Drift** | Medium | Tracking under occlusion | A dot drifts slowly behind occluders; tap where it is now | Medium |
+| 4 | **Sniff** | Short | Haptic comparison | The phone buzzes two groups with a pause between; tap the side that buzzed more. The screen stays dark until the answer (D-137) | **Dark** |
+| 5 | **Deallocate** | Short | Counting / arithmetic | Unequal columns of dots; each tap removes one dot, and even means every column down to the shortest (D-138) | Bright |
+| 6 | **Drift** | Medium | Tracking under occlusion | A dot drifts slowly behind occluders; at a house-chosen instant a haptic pulse says *now*, and you tap where the dot is (D-140) | Medium |
 | 7 | **Short** | Short | Gross motor | Hold N fingers on the screen for two seconds | **Dark** |
 | 8 | **Signal Trace** | Medium | Pathfinding | Tap node-to-node from source to sink through a small graph | Medium |
 | 9 | **Jam** | Medium | Convergence | Tap +/− until two shapes overlap. Slow, forgiving, satisfying | Medium |
@@ -620,7 +622,7 @@ The whole game is operated **one-handed, in the dark, without looking.** Every c
 
 **Sort was cut** — the only one with no fiction, and its mode is half-covered by Deallocate.
 
-**Sniff is the important one** — the only *short dark* subroutine, filling the cell where you can grab a quick task without becoming a beacon. Everything else short lights you up.
+**Sniff is the important one** — the only *short dark* subroutine, filling the cell where you can grab a quick Subroutine without becoming a beacon. Everything else short lights you up.
 
 **Short (the subroutine) commits both hands to the glass for two full seconds.** Brief, but genuinely defenceless.
 
@@ -634,25 +636,25 @@ The whole game is operated **one-handed, in the dark, without looking.** Every c
 
 1. **Legible at the dimmest amber luminance step.** No hue discrimination — shape, position, count, sequence only.
 2. **Silent, or haptic-only.** A chirping phone is a beacon.
-3. **Interruptible.** Revoked mid-task aborts cleanly with unambiguous progress state.
+3. **Interruptible.** Revoked mid-Subroutine aborts cleanly with unambiguous progress state.
 4. **No twitch timing.** Someone will tap your shoulder at the worst moment. A 200ms fail window reads as unfair, not tense.
 5. **No precise dragging.** Standing, possibly one-handed, in the dark.
 
 **Every subroutine is briefed before it opens, and none of them explains itself inside (D-188).** All ten carry their instruction **at the caught scan**, ahead of the minigame; **no subroutine draws an instruction line while it is running.** A misread costs the attempt and a rescan.
 
-**The argument is the light signature.** Every subroutine is rated bright, medium or dark, and **the rating is a promise about how much light you stand in while you work.** An in-screen instruction is lit pixels for the whole duration of the task — it makes a dark subroutine less dark and a bright one longer. **Reading happens at the card, where the scan has already lit you up and the cost is already paid**, and the task itself is then as dark as it was rated. Sniff forced the pattern rather than being the exception to it: its own screen is black until the answer (D-137), so a sentence drawn there is black ink on black glass.
+**The argument is the light signature.** Every subroutine is rated bright, medium or dark, and **the rating is a promise about how much light you stand in while you work.** An in-screen instruction is lit pixels for the whole duration of the Subroutine — it makes a dark subroutine less dark and a bright one longer. **Reading happens at the card, where the scan has already lit you up and the cost is already paid**, and the Subroutine itself is then as dark as it was rated. Sniff forced the pattern rather than being the exception to it: its own screen is black until the answer (D-137), so a sentence drawn there is black ink on black glass.
 
 **A misread costing the attempt is the intended severity.** D-110 already rules one attempt per scan with the walk back as the cost; tying comprehension to the same gate means there is **one** recovery path in the game rather than two.
 
-> ⚠️ **Nine briefing lines are owed.** Sniff's stands — *THE PHONE WILL BUZZ TWICE. TAP THE SIDE THAT BUZZED MORE.* — and is the register the other nine are written against: second person, imperative, what the phone will do and what you do about it, no nouns from the fiction. The nine in-screen instruction lines come out in the same pass.
+> **All ten briefing lines are canon, as written (D-194).** Sniff's — *THE PHONE WILL BUZZ TWICE. TAP THE SIDE THAT BUZZED MORE.* — is the register the other nine were written against (second person, imperative, what the phone will do and what you do about it, no nouns from the fiction), and the owner confirmed all nine unchanged. The full table is in D-194.
 
-#### The two structured tasks
+#### The two structured Subroutines
 
 **Memory Dump (long).** Stage 1 at one marker, stage 2 at a *different*, specified marker.
 
 > **Memory Dump is sneakernet.** The network is compromised, so the system cannot be trusted to move the data — a human carries it. And it cannot sit on your phone, because your phone is a compromised client and the house would see it. **Only your head is off-network.**
 
-The most thematically loaded task in the set — it explains its own rules. It is the only task where the length is not *waiting*, it is **carrying something fragile**, and human memory genuinely degrades under stress, so the failure is real rather than simulated.
+The most thematically loaded Subroutine in the set — it explains its own rules. It is the only Subroutine where the length is not *waiting*, it is **carrying something fragile**, and human memory genuinely degrades under stress, so the failure is real rather than simulated.
 
 - **Pattern length: four elements, maybe five.** Difficulty must come from stress, darkness, and delay — not from the pattern being intrinsically hard.
 - **Failure → back to the source.** Re-scan the origin for a fresh pattern. Failure cannot be permanent, because the System Integrity denominator is fixed.
@@ -669,7 +671,7 @@ A RAID 1 mirror has failed disks. You may carry **only one at a time**. Scanning
 
 > **While carrying a disk you cannot scan any other subroutine.**
 
-Legible fiction (your hands are full) that converts the circuit from something done opportunistically into a genuine commitment. **It also transforms Isolate:** a Insider who Isolates the Disposal marker does not delay one task — they lock that player out of **every** task until it clears. Temporary, so a delay rather than a permanent lock, but it gives Isolate a precise, devastating target. This interaction alone justifies the task.
+Legible fiction (your hands are full) that converts the circuit from something done opportunistically into a genuine commitment. **It also transforms Isolate:** an Insider who Isolates the Disposal marker does not delay one Subroutine — they lock that player out of **every** Subroutine until it clears. Temporary, so a delay rather than a permanent lock, but it gives Isolate a precise, devastating target. This interaction alone justifies the Subroutine.
 
 **The disk is virtual — app state, not a prop.** Stays Tier 0. In a dark house nobody can see what you are carrying anyway.
 
@@ -685,13 +687,13 @@ Legible fiction (your hands are full) that converts the circuit from something d
 
 | | Value |
 |---|---|
-| **Task-time floor** — every Resident beelining, no investigation | **~8 minutes** |
+| **Subroutine-time floor** — every Resident beelining, no investigation | **~8 minutes** |
 | **Realistic round** | **~25 minutes** |
 | **What fills the gap** | Shadowing someone you suspect · sweeping for revoked players · camping the Terminal · hesitating in doorways · converging on an Egress · **choosing to do nothing** |
 
-**Per-Resident load: 7 subroutines — 1 circuit (~160s), 1 long (~95s), 3 medium (~150s), 2 short (~66s) ≈ 471s of task time.** Weighted toward the long and circuit tiers deliberately, so the time those subroutines add comes as **movement and exposure rather than busywork**.
+**Per-Resident load: 7 subroutines — 1 circuit (~160s), 1 long (~95s), 3 medium (~150s), 2 short (~66s) ≈ 471s of Subroutine time.** Weighted toward the long and circuit tiers deliberately, so the time those subroutines add comes as **movement and exposure rather than busywork**.
 
-> **Why the floor is not a problem.** A Resident who ignores everything and beelines is not playing optimally — they are being hunted while they do it. Two Insiders can reach parity in roughly two minutes of clean hunting, so pure task-rushing loses. The floor exists; it is simply not reachable under pressure.
+> **Why the floor is not a problem.** A Resident who ignores everything and beelines is not playing optimally — they are being hunted while they do it. Two Insiders can reach parity in roughly two minutes of clean hunting, so pure Subroutine-rushing loses. The floor exists; it is simply not reachable under pressure.
 
 **Session shape.** Setup is ~15 minutes, **once per house, ever** — not once per round. After that, rounds run back-to-back with only role reassignment between them. Expect **two to three rounds in an evening**.
 
@@ -786,7 +788,7 @@ All positions are relative and inherit the scanner's ground truth. Room-level gr
 
 **Three detection sources:**
 
-1. **Check-in / task scan** — self-reported, player-initiated, voluntary. Insiders can abstain or forge.
+1. **Check-in / Subroutine scan** — self-reported, player-initiated, voluntary. Insiders can abstain or forge.
 2. **Sweep on scan** — when anyone scans, their phone sweeps for nearby devices. **You cannot stay off the map by refusing to scan**; someone else's scan counts you where you are.
 3. **Sweep once a second while performing** — a player performing a Subroutine at a card counts who is near with every upload, once a second (D-212), and becomes a stationary sensor.
 
@@ -796,14 +798,14 @@ All positions are relative and inherit the scanner's ground truth. Room-level gr
 
 | | Revoked phone |
 |---|---|
-| **Advertises** | **Yes** — this is what makes the deactivation report verifiable, so the report is not a fakeable signal |
+| **Advertises** | **Yes** — this is what makes the report verifiable, so the report is not a fakeable signal |
 | **Scans** | **No** — see below |
 | **Measures by Ultra Wideband** | **When paired, and none of it is read** — it is paired only while a living phone is close and it can still be reported, and then it measures like any phone; the house reads none of its distances (provisional, D-300, D-301, D-306) |
 | **Appears in rendered counts** | **No** |
 
 **A revoked phone must never contribute sweep observations.** If what it sensed still counted, a player sitting revoked in a dark room would become an invisible sensor generating fresh occupancy data for a room nobody is scanning in — and **a room with suspiciously fresh counts and no one scanning there implies a hidden sensor, which means a revoked player is sitting in it.** That inverts the rule that coverage holes correlate with where people are not going. **Stay findable, never count.**
 
-The meeting/couch area is a **mapping blind zone**, producing no data — without this, a sweep near the couch would place a cluster there, and under a count-based system a cluster at the couch *is* a count of the revoked. With both rules, absence stays ambiguous between *revoked*, *alone*, and *missed*, so a Insider working quietly in an empty wing looks identical to someone sitting revoked.
+The meeting/couch area is a **mapping blind zone**, producing no data — without this, a sweep near the couch would place a cluster there, and under a count-based system a cluster at the couch *is* a count of the revoked. With both rules, absence stays ambiguous between *revoked*, *alone*, and *missed*, so an Insider working quietly in an empty wing looks identical to someone sitting revoked.
 
 **Live positional tracking would damage the game.** The tension comes from not knowing where people are. ARKit visual positioning is out — it needs visual features and fails in darkness. Bluetooth ranks who is near and Ultra Wideband measures how near, by distance alone and never direction (U4); both feed gates, never a map.
 
@@ -814,7 +816,7 @@ The scarce resources are **time, light, and attention** — not ammunition.
 | Resource | Scarcity |
 |---|---|
 | **Round clock** | ~25 minutes, hidden. Neither side sees the other's bar, or how much of it is left |
-| **Motion budget** | Per-task, calibrated per player, drains visibly |
+| **Motion budget** | Per-Subroutine, calibrated per player, drains visibly |
 | **Timelapse** | 2:00 of history, once per 2:00, and watching it blinds you to 20s of the present |
 | **Terminal access** | Exclusive — one reader at a time |
 | **Access pool** | One shared number across Surge, Static, and Isolate, including self-targeting |
@@ -848,7 +850,7 @@ The scarce resources are **time, light, and attention** — not ammunition.
 
 | Marker | Count | Placement rules |
 |---|---|---|
-| **Task marker** | ~8–12 per house | Never in a stairs zone |
+| **Subroutine marker** | ~8–12 per house | Never in a stairs zone |
 | **Terminal** (map station) | Exactly 1 | Anywhere a room is drawn. Highly campable by design |
 | **Array Wipe: Spares / Rack / Disposal** | 3, **drawn by the house at arming** | Not designated by the host and never stored with the home — the circuit moves every round (D-122). Ordinary registered markers, ideally spread across storeys, because the circuit is transit |
 | **Insider-only rooms** | Host's choice | **Never app data.** Spoken aloud in the setup walkthrough; their doors are Override's business |
@@ -857,7 +859,7 @@ The scarce resources are **time, light, and attention** — not ammunition.
 
 ### The one exclusion the editor enforces
 
-**No task markers in stairs zones.** Safety. Easy for a host to get wrong, catastrophic if missed, and the editor refuses it with a legible reason.
+**No Subroutine markers in stairs zones.** Safety. Easy for a host to get wrong, catastrophic if missed, and the editor refuses it with a legible reason.
 
 **There is no second exclusion, because Insider-only rooms are not app data.** The host declares them aloud during the setup walkthrough, with every player present — *"this bathroom is Insider-only"*, *"here is the terminal"* — and the app never learns which rooms they are. Nothing to exclude, and nothing to leak: a room the editor could mark is a room a Resident's phone could read. **The Terminal's room is playable by definition**, so a closed door can inconvenience the Residents but can never put the Terminal out of reach. The old hazard — a Terminal behind an Insider-only door — cannot occur, so it becomes walkthrough guidance rather than an editor rule. **Guide the host; don't gate them.**
 
@@ -878,7 +880,7 @@ The shape to avoid is *Lemmon v. Snap*: a design that **rewards** a dangerous re
 
 **Design-level mitigations, in order of value:**
 
-1. **Never place a task on stairs, a landing, or a step.** Enforced by the editor.
+1. **Never place a Subroutine on stairs, a landing, or a step.** Enforced by the editor.
 2. **Never put a timer on a route that crosses stairs.** No countdown that induces a sprint down a staircase in low light. This is most of the exposure.
 3. **Auto-raise the lamp to full on stair traverse.** We own every photon — spend some on the staircase. Turns stairs into a designed, well-lit beat and is evidence of engineering toward safety.
 4. **Hard rule against running**, stated in-app.
@@ -919,11 +921,11 @@ The host drops markers into single cells. The editor **refuses** a marker in a s
 
 > **`GAP` F-001 — Egress node designation is unspecified.** The house must name two *separate* markers when an Egress fires, but nothing says where they come from. Setup never designates them, and the two events have distinct fictions (**Beacon** broadcasts outward; **Tether** piggybacks a cellular radio) that imply particular places.
 >
-> **Proposed resolution:** *do not add a setup step.* Select two ordinary task markers at fire time, constrained to **non-adjacent rooms** — adjacency is already free from the grid. This keeps setup at three designated marker types instead of five, and it makes each Egress geographically different, which a fixed pair would not. Beacon/Tether then differ in flavour text and the containment beat, not in placement.
+> **Proposed resolution:** *do not add a setup step.* Select two ordinary Subroutine markers at fire time, constrained to **non-adjacent rooms** — adjacency is already free from the grid. This keeps setup at three designated marker types instead of five, and it makes each Egress geographically different, which a fixed pair would not. Beacon/Tether then differ in flavour text and the containment beat, not in placement.
 
-> **`GAP` F-002 — Isolate can win the game outright.** Isolate takes a marker offline. If a Insider Isolates an Egress node during an active Egress, containment becomes impossible and the Insiders win with no counterplay. Nothing in the roster prevents this.
+> **`GAP` F-002 — Isolate can win the game outright.** Isolate takes a marker offline. If an Insider Isolates an Egress node during an active Egress, containment becomes impossible and the Insiders win with no counterplay. Nothing in the roster prevents this.
 >
-> **Resolution — D-150, closing F-002:** **for the duration of an Egress the two nodes are simply excluded from Isolate's target list. They do not appear.** There is no fake success and no pool spend. The widget names both nodes to the whole house the instant the Egress fires, so a target list without them tells a Insider nothing they were not just told — the exclusion leaks nothing, and the shared Access pool is never silently burned on an action that could not have worked. *(This supersedes the earlier appears-to-succeed proposal: immunity plus fake feedback would charge a shared pool for nothing. Isolate is unbuilt; this is a constraint recorded for its builder.)*
+> **Resolution — D-150, closing F-002:** **for the duration of an Egress the two nodes are simply excluded from Isolate's target list. They do not appear.** There is no fake success and no pool spend. The widget names both nodes to the whole house the instant the Egress fires, so a target list without them tells an Insider nothing they were not just told — the exclusion leaks nothing, and the shared Access pool is never silently burned on an action that could not have worked. *(This supersedes the earlier appears-to-succeed proposal: immunity plus fake feedback would charge a shared pool for nothing. Isolate is unbuilt; this is a constraint recorded for its builder.)*
 
 The host sets lobby options: player count, Insider count, **`Known`**, discussion time, voting time, Revoke cooldown, Egress cooldown and timer, Access pool, meeting cooldown.
 
@@ -944,15 +946,19 @@ The perimeter arms. **`ARMED` appears in the status bar and stays there all roun
 
 Both roles receive texts, so **receiving a text is not itself a tell**. This makes the `Known` setting fully diegetic — **no roster screen needs to exist**, which is also what makes misidentifying your own partner in the dark a real and emergent failure. Leave it ambiguous whether the house wrote the friendly texts; it is free, and permanent. **The house never addresses a Resident directly — it is intimate only with the people it owns.**
 
-> **`GAP` F-003 — the reveal leaks through haptics.** In `Known` mode with 2 Insiders, a Insider's phone buzzes four times (blackmail, house line, two partners); a Resident's buzzes once. **In a silent dark house, standing in a group, buzz count is an audible and tactile tell** — and it fires at the exact moment everyone is still clustered together. The design carefully made *receiving a text* not a tell and then let the *number* of them be one.
+> **`GAP` F-003 — the reveal leaks through haptics.** In `Known` mode with 2 Insiders, an Insider's phone buzzes four times (blackmail, house line, two partners); a Resident's buzzes once. **In a silent dark house, standing in a group, buzz count is an audible and tactile tell** — and it fires at the exact moment everyone is still clustered together. The design carefully made *receiving a text* not a tell and then let the *number* of them be one.
 >
 > **Proposed resolution:** **all roles receive an identical message count with an identical haptic pattern**, padded on the Resident side (work order + a house system notice + two routine maintenance advisories). Alternative, cheaper and arguably better: **deliver the whole reveal as one silent batch with a single haptic**, and let the player scroll. Either works; the current design does not.
+>
+> **Resolution — D-156 and D-249, closing F-003:** **the opening reveal is one notification, with one haptic, identical for every player** (D-156). The underlying message count never drives the buzz count, and the Resident side gets no padding deliveries. **Every seat's role reveal is also one length on the Wi-Fi**, whatever its role and its line (D-249). *(This supersedes both proposals above.)*
 
-> **`GAP` F-004 — is Revoke available at T+0?** Nothing specifies an initial cooldown. If Revoke is live at arming, a Insider can revoke someone in the first fifteen seconds while the group is still clustered and nobody has dispersed — grim, confusing, and it wastes the round's only quiet stretch.
+> **`GAP` F-004 — is Revoke available at T+0?** Nothing specifies an initial cooldown. If Revoke is live at arming, an Insider can revoke someone in the first fifteen seconds while the group is still clustered and nobody has dispersed — grim, confusing, and it wastes the round's only quiet stretch.
 >
 > **Proposed resolution:** **an initial Revoke cooldown of 45s**, longer than steady state. Egress gets the same treatment for the same reason. [ASSUMPTION: 45s — playtest number.]
+>
+> **Resolution — D-132, closing F-004:** **every Insider ability cooldown begins the round already running, at half its normal duration**, so the round opens with a guaranteed stretch of peace. The durations themselves are playtest's. *(This supersedes the 45s proposal above.)*
 
-Lamps come up: **dim amber**. The springboard appears — **two pages, identical for both roles, same icons, same positions, same page-dot count.**
+Lamps come up: **dim amber**. The springboard appears — **two pages, the same structure for both roles (D-286): same icons, same positions, same page-dot count.** The Insider's page 2 shows its own true state: REVOKE never reads READY while its own arm is spending, and the EGRESS and Tier-2 names dim while their clocks run.
 
 The device states are now live, and each of them is a rule that no longer needs remembering:
 
@@ -964,11 +970,13 @@ The device states are now live, and each of them is a rule that no longer needs 
 | **Messages** | Receive-only | Enforced silence, rendered |
 | **Settings** | Mostly locked | Lamp control and *About* only; **End Session** for the host |
 
-Each Resident's list holds **7 subroutines: 1 circuit, 1 long, 3 medium, 2 short.** Each Insider's list holds a fake of the same shape — same count, same mix, plausible markers, **including a fake waiting state**, with **a counter that advances**.
+Each Resident's list holds **K Subroutines, `K = ⌈M ÷ worstCasePlainResidents⌉ + slack`** (D-129; the mix was first written as 7, weighted 1 circuit, 1 long, 3 medium, 2 short). Each Insider's list holds a fake of the same shape — same count, same mix, plausible markers, **including a fake waiting state**, with **a counter that advances**.
 
 > **`GAP` F-005 — the System Integrity denominator does not match the subroutine count.** The revisions set System Integrity counting down from **32 → 0**. The round-length fix assigns **7 per Resident**. At 6 Residents that is **42 assigned subroutines against a 32-count bar** — so the bar empties with ten subroutines still outstanding, or the numbers mean different things. The rule that the denominator must never move makes this unfixable at runtime.
 >
 > **Proposed resolution:** **System Integrity starts at `7 × initial_residents` and decrements by 1 per completed subroutine.** Fixed at arming, never moves. Orphaned subroutines (from a revoked player or a collapsed chain) are **silently auto-satisfied** so the bar stays winnable. The `32` appears to be an artifact of an earlier player count and should be dropped. **This is a real blocker, not a cosmetic one — the bar is a win condition.**
+>
+> **Resolution — D-129, D-130 and D-146, closing F-005:** **the meter total `M` is proportional to seats** (D-130; the coefficient is playtest's), and every order's length is `K = ⌈M ÷ worstCasePlainResidents⌉ + slack`, computed from public lobby facts alone (D-129). **Nothing auto-satisfies, ever:** work a Revoke strands stays stranded, and `slack` is what pays for it (D-146). *(This supersedes `7 × initial_residents` and the auto-satisfaction proposed above.)*
 
 ---
 
@@ -980,7 +988,7 @@ Everyone disperses. Nobody has been revoked. The **timelapse floor is the start 
 
 A Resident walks to their nearest marker, **taps SCAN and turns the lamp onto the code** (haptic tick on detection), and the subroutine opens by itself. The **motion budget calibrates on entry** against that player's hand steadiness, and the draining bar appears.
 
-**What a Resident actually does in the first sixty seconds is: pure task execution with zero information — and that is correct.** It is the only stretch of the round when the house is quiet, and its tension is entirely anticipatory. Nothing needs adding here. The design's instinct to check this seam was right, and the answer is that the seam is a feature.
+**What a Resident actually does in the first sixty seconds is: pure Subroutine execution with zero information — and that is correct.** It is the only stretch of the round when the house is quiet, and its tension is entirely anticipatory. Nothing needs adding here. The design's instinct to check this seam was right, and the answer is that the seam is a feature.
 
 The Insiders, meanwhile, are walking to markers and going through the motions, because **a plausible screen requires real attendance**. Their cooldowns tick.
 
@@ -990,9 +998,9 @@ The Insiders, meanwhile, are walking to markers and going through the motions, b
 
 The steady state, running for every player simultaneously.
 
-**A Resident's cycle.** Move (~25s) → tap SCAN, turn the lamp onto the code → **routing** opens the subroutine, **check-in** logs the presence regardless → the subroutine runs, lighting them up or blacking them out per its light signature → their phone **sweeps every 5s** for nearby devices, making them a stationary sensor → complete → System Integrity decrements silently → move.
+**A Resident's cycle.** Move (~25s) → tap SCAN, turn the lamp onto the code → **routing** opens the subroutine, **check-in** logs the presence regardless → the subroutine runs, lighting them up or blacking them out per its light signature → their phone **scans continuously** for nearby devices (D-212), making them a stationary sensor → complete → System Integrity decrements silently → move.
 
-**A Insider's cycle.** The same, for cover. Plus: **swipe to springboard page 2** — the same swipe every Resident has — → **hold a tile for two seconds** to **arm Revoke** (silent, invisible, nothing changes on any screen, and nothing opens) → close the distance on someone heads-down in a subroutine → **touch phone to phone.**
+**An Insider's cycle.** The same, for cover. Plus: **swipe to springboard page 2** — the same swipe every Resident has — → **hold a tile for two seconds** to **arm Revoke** (silent, invisible, nothing changes on any screen, and nothing opens) → close the distance on someone heads-down in a subroutine → **touch phone to phone.**
 
 The target's lamp goes dark at the instant of contact. **No confirmation is asked of anyone, and nothing a bystander can see or hear marks the Insider:** both phones give one Long buzz, felt only in the hand (D-290). Because the target's own screen was the only thing lighting the attacker, it goes out in the same instant — so whether the target resolved a face is genuinely uncertain, which is the point.
 
@@ -1000,7 +1008,7 @@ The target's lamp goes dark at the instant of contact. **No confirmation is aske
 
 The revoked player's device goes dark and inert **to them** — but **the radio stays up so they can be found, and nothing it senses counts** (see Ghost mode). They sit down where they are, phone in their lap. **Ghost phase 1**: findable in the dark, leaking nothing, because they genuinely have nothing.
 
-**Around T+3:00 a Resident camps the Terminal.** The station **locks exclusively**. The live count view is free, limited only by the motion budget; their own room is outlined as an anchor; counts dim through three staleness bands. Their arrival **generates its own check-in**, so using the surveillance system is itself surveilled. They trigger the **timelapse**: 2:00 of history at 6×, twenty seconds, oldest→newest, plays once.
+**Around T+3:00 a Resident camps the Terminal.** The station **locks exclusively**. The live count view is free, limited only by the motion budget; their own room is outlined as an anchor; counts dim through three staleness bands (not yet built: the house computes counts but sends none to a phone, as of 2026-11-21). Their arrival **generates its own check-in**, so using the surveillance system is itself surveilled. They trigger the **timelapse**: 2:00 of history at 6×, twenty seconds, oldest→newest, plays once.
 
 > **`GAP` F-006 — the Egress widget takeover costs less than the design claims.** The pitch is that converting the System Integrity widget into an Egress countdown "costs the Residents their only number at exactly the moment they most want it." But System Integrity **updates only at meetings and is frozen between them**. Between meetings the widget shows a stale number that has not moved and will not move. Taking it over costs a stale anchor, not live information.
 >
@@ -1024,11 +1032,11 @@ The revoked player's device goes dark and inert **to them** — but **the radio 
 >
 > **Status: deferred, not solved.** The four highest-value stairs mitigations do not depend on detection at all and all survive — no markers in stairs zones (editor-enforced), no timed routes crossing stairs, the hard no-running rule, and the host acknowledgment at tagging time. Deferring the two detection-dependent mitigations leaves a real mitigation set intact. **The condition on deferral: it stops being deferrable at public launch, not at v1** — a controlled friend group is a different exposure than an App Store listing. See **OI-1**.
 
-Around T+5:00 a Insider fires **Egress**. The house picks **Beacon**.
+Around T+5:00 an Insider fires **Egress**. The house picks **Beacon**.
 
 Every phone shows a **dismissable** alert — dismissable because you cannot scan a marker through a modal. The **System Integrity widget becomes the countdown and names the two nodes**, because coordination is required and nobody may speak.
 
-Residents converge. Two reach separate nodes and hold; both phones **pulse haptically in unison** off a scheduled timestamp; they tap on the same beat. Extras arriving form **concurrent pairs**; the first success contains it. A stalling Insider at one node **removes a partner, not the attempt** — and a failed attempt costs a 2–3s lockout, so spam-retry is not optimal.
+Residents converge. Two reach separate nodes and hold; each tapping phone **feels the house's pulse** off a scheduled timestamp; each taps four pulses in a row, and the two pair when their runs share a pulse (D-298). Extras arriving form **concurrent pairs**; the first success contains it. A stalling Insider at one node **removes a partner, not the attempt** — and a failed attempt costs a 3 s lockout, felt as one unbroken vibration on the tapping phone (D-298), so spam-retry is not optimal.
 
 **Contained.** The widget reverts. Nobody learns anything about anybody.
 
@@ -1058,15 +1066,15 @@ Speech is now permitted, **for living players only**.
 
 **Discussion — 90s.** The phone shows a timer and one control. **Unanimous "Ready to vote" skips ahead.** Minimal phone interaction for anything social: the phone's job here is to hold a clock and get out of the way.
 
-**Vote — 45s.** Names plus **Skip**, changeable until the clock ends. You see **how many** have voted, never what. **Not voting is an abstention.** **Ghosts cast nothing** — a vote is a channel, and the tally leaks even when secret.
+**Vote — 45s.** Names plus **Skip**. A two-second hold locks the vote irrevocably, and the buzzer locks whatever is selected (D-117, D-141). You see **how many** have voted, never what. **Not voting is an abstention** *(disputed, owner to rule: D-075 and D-117 count a player who selected nothing as a Skip; D-144 counts an abstention as nothing)*. **Ghosts cast nothing** — a vote is a channel, and the tally leaks even when secret.
 
-**Result.** Most votes is **restrained**; **ties resolve to Skip**. **Attribution is shown** — who voted for whom. Then **nothing**: no role, no confirmation, no reveal. **A correct restraint and a catastrophic one look identical.**
+**Result.** Most votes is **restrained**; **ties resolve to Skip**. **The living see the count and who was Restrained, never who voted for whom**; only the out see the ballot with names against it (D-075, D-195). Then **nothing**: no role, no confirmation, no reveal. **A correct restraint and a catastrophic one look identical.**
 
 The group holds them; **the house deauthorises them moments later**, because a restrained occupant is no longer useful to it. The system was watching the meeting.
 
 **Meeting ends. All lamps drop back to dim in unison — the "go" signal.** Masking resumes. **The timelapse history floor resets to now**, wiping everything. Any Insider who did something risky at T+5:30 has just had it erased, and calling the meeting was a real play with real odds.
 
-**Ghost mode appears — phase 3 — only now**, for everyone on the couch. Both bars as exact percentages, the Egress's included (living phones see it as a countdown and a draining bar; owner ruling Q3, 2026-11-18). True occupancy, live, every storey, no injected error, no staleness. **Never alignments.** **No channel of any kind** — cannot act, cannot speak, cannot vote, cannot message each other. Several people watching the same truth side by side, unable to share one thought about it.
+**Ghost mode appears — phase 3 — only now**, for everyone on the couch. Both bars as exact percentages, the Egress's included (living phones see it as a countdown and a draining bar; owner ruling Q3, 2026-11-18). True occupancy, live, every storey, no injected error, no staleness (not yet built: the house computes counts but sends none to a phone, as of 2026-11-21). **Never alignments.** **No channel of any kind** — cannot act, cannot speak, cannot vote, cannot message each other. Several people watching the same truth side by side, unable to share one thought about it.
 
 > **`COMPOSES` F-012 — post-meeting Terminal blindness is intent, not a bug.** *A seam explicitly flagged as worth watching.* For the first two minutes after every meeting the timelapse has almost no history. Traced: the **cooldown scales to available history**, so a camper gets a short timelapse early rather than nothing, and the **live count view remains free**. More importantly, this window is *supposed* to be the most dangerous stretch of the round — the surveillance system is blind at exactly the moment everyone has just learned where everyone else is and dispersed from one place. **Record it as designed behaviour so nobody "fixes" it.**
 
@@ -1076,25 +1084,25 @@ The group holds them; **the house deauthorises them moments later**, because a r
 
 > **`GAP` F-014 — carry state across a meeting is unspecified.** A player holding a **Memory Dump** pattern or an **Array Wipe** disk when the meeting fires: does the carry survive? Nothing says. It matters twice over, because the Array Wipe carry flag also **blocks scanning every other subroutine**, so a carry that persists through a meeting extends a lockout across a phase change.
 >
-> **Proposed resolution: both carries persist.** For Memory Dump this is explicitly the intended experience — holding four remembered elements through ninety seconds of white light and arguing is exactly the stress the task exists to create. For Array Wipe, persisting is also correct: the commitment should not be laundered by a meeting. **State it, because the default implementation is to clear transient state on a phase change and that would be wrong in both cases.**
+> **Proposed resolution: both carries persist.** For Memory Dump this is explicitly the intended experience — holding four remembered elements through ninety seconds of white light and arguing is exactly the stress the Subroutine exists to create. For Array Wipe, persisting is also correct: the commitment should not be laundered by a meeting. **State it, because the default implementation is to clear transient state on a phase change and that would be wrong in both cases.**
 
-> **`DECIDED HERE` F-015 — Files must never show the Memory Dump pattern.** The interface model says Files holds one item while carrying. The Array Wipe disk belongs there. **The Memory Dump pattern must not**, because the task's whole premise is that the data cannot sit on your phone — *only your head is off-network*. A Files entry showing the pattern would make the task's fiction literally false and quietly turn a memory task into a reading task. **Files shows the disk; the pattern lives nowhere but the player.** Easy to build wrong, so it is written down.
+> **`DECIDED HERE` F-015 — Files must never show the Memory Dump pattern.** The interface model says Files holds one item while carrying. The Array Wipe disk belongs there. **The Memory Dump pattern must not**, because the Subroutine's whole premise is that the data cannot sit on your phone — *only your head is off-network*. A Files entry showing the pattern would make the Subroutine's fiction literally false and quietly turn a memory Subroutine into a reading Subroutine. **Files shows the disk; the pattern lives nowhere but the player.** Easy to build wrong, so it is written down.
 
 ---
 
 ### T+7:00 to T+13:00 · The second interval, and the endgame
 
-The loop resumes with the map wiped and the population smaller. Chains re-check their length bound against the **living** Insider count at every extension, so the late-game unstaffable hole never opens; a chain that still cannot be staffed **collapses gracefully**, silently auto-satisfying its remaining links so the fixed denominator stays winnable.
+The loop resumes with the map wiped and the population smaller. Chains re-check their length bound against the **living** Insider count at every extension, so the late-game unstaffable hole never opens; **nothing auto-satisfies**: work a Revoke strands stays blocked, and the slack sized into every order is what keeps the meter winnable (D-146).
 
-**Subroutines are visibly degrading now.** With the doom clock hidden from both roles, this is the **only** channel telling Residents the house is winning.
+**Subroutines do not degrade in v1** — degrading Subroutines are deferred to v2 (D-158). With the doom clock hidden from both roles, atmosphere is what tells Residents the house is winning.
 
 A second meeting lands around T+11:00. Another player is revoked. **Down to 3 living Residents and 2 living Insiders.**
 
 > **`COMPOSES` F-016 — the endgame at 3–4 players holds, and the parity rule is why.** *A seam explicitly flagged as worth watching.* The concern was that Egress becomes uncontainable and chains collapse just as parity closes in. Traced:
 >
-> A live game requires `residents_alive ≥ guests_alive + 1`, so **the smallest living Resident population in a running game is 2** — with 1 Insider, the floor is 2 Residents; with 2 Insiders, 3. **Two Residents are exactly what an Egress needs.** The parity loss condition therefore *guarantees* every Egress is containable for as long as the game is running, and **no low-population fallback rule is needed anywhere.**
+> A live game requires `living plain Residents ≥ living Insiders + 1`, so **the smallest living Resident population in a running game is 2** — with 1 Insider, the floor is 2 Residents; with 2 Insiders, 3. **Two Residents are exactly what an Egress needs.** The parity loss condition therefore *guarantees* every Egress is containable for as long as the game is running, and **no low-population fallback rule is needed anywhere.**
 >
-> It is brutal, and it should be: at 3 Residents versus 2 Insiders, an Egress means two of three must find two separate nodes across a dark house inside 120s while one of the remaining players is hunting them. **The endgame is short and grim by construction, which is precisely why the round is fifteen minutes and not twenty-five.** Record this as verified — the two rules were designed independently and the tight coupling between them is load-bearing.
+> It is brutal, and it should be: at 3 Residents versus 2 Insiders, an Egress means two of three must find two separate nodes across a dark house inside 120s while one of the remaining players is hunting them. **The endgame is short and grim by construction.** *(This was traced when the round was provisionally fifteen minutes; the estimate is now ~25 minutes, as an estimate and a ceiling, D-011.)* Record this as verified — the two rules were designed independently and the tight coupling between them is load-bearing.
 
 > **`REOPENED` F-017 — ghost idle time scales with round length, and the ~25-minute decision reopened it.** Ghost mode does not activate until the first meeting *ends*, so a player revoked early sits with a dark phone until then.
 >
@@ -1102,17 +1110,20 @@ A second meeting lands around T+11:00. Another player is revoked. **Down to 3 li
 >
 > **There is no clean fix, and the constraint is structural.** Ghost mode cannot activate before the living know you are out, or the sequencing rule breaks — *there is never a window where a ghost knows something the living do not* — and phase 1 must stay empty, because anything on that screen would glow or be readable. **The only lever is meeting frequency.** Escalated to **OI-6**.
 
-**The endgame arrives one of three ways:**
+**The endgame arrives one of four ways:**
 
 1. **System Integrity reaches 0.** Residents win **immediately**, without waiting for a meeting. The completing player gets no experience distinct from anyone else's beyond "you won." **The perimeter disarms** — the status bar has read `ARMED` for fifteen minutes and now reads `PERIMETER DISARMED`.
-2. **`residents_alive ≤ guests_alive`.** Insiders win.
+2. **`living plain Residents ≤ living Insiders`.** Insiders win (D-131).
 3. **An Egress runs its clock out.** Insiders win outright.
+4. **Every Insider is Restrained.** Residents win — except that a running Egress outlives its Insiders and must still be stopped; Restraining the last Insider during an Egress does not end the round (D-131).
+
+**A round can also end with no winner.** After the warning, a permission switched off closes the house: every phone shows **THE HOUSE IS CLOSED** and everyone starts over (D-310).
 
 ### The reveal
 
 Fixed sequence, and **the room does most of it, not a screen**:
 
-1. **The house speaks last** — its only direct address of the round. *"Thank you for your cooperation"* on a Insider win; *"Unfortunate"* on a Resident win.
+1. **The house speaks last** — its only direct address of the round. *"Thank you for your cooperation"* on an Insider win; *"Unfortunate"* on a Resident win.
 2. **Lights up, and the Insiders stand.** Physically, in the room. No screen announces it.
 3. **The blackmail publishes.** Everyone learns who *and why* — the petty, mundane thing each Insider was coerced with.
 
@@ -1124,11 +1135,11 @@ Chain membership is exposed here and nowhere else. **There is no round replay** 
 
 | # | Kind | Finding | Status |
 |---|---|---|---|
-| F-001 | GAP | Egress node designation unspecified | Proposed: pick two non-adjacent task markers at fire time |
+| F-001 | GAP | Egress node designation unspecified | Proposed: pick two non-adjacent Subroutine markers at fire time |
 | F-002 | GAP | Isolate on an Egress node is an unanswerable win | Proposed: Egress nodes immune, failure invisible |
-| F-003 | GAP | Role reveal leaks through haptic buzz count | Proposed: identical message count, or one batched haptic |
-| F-004 | GAP | No initial Revoke/Egress cooldown at arming | Proposed: 45s initial |
-| F-005 | GAP | **System Integrity 32 vs 42 assigned subroutines** | Proposed: `7 × initial_residents`. **Blocker — it is a win condition** |
+| F-003 | GAP | Role reveal leaks through haptic buzz count | **Closed (D-156, D-249).** One notification, one haptic, one length on the Wi-Fi, for every player |
+| F-004 | GAP | No initial Revoke/Egress cooldown at arming | **Closed (D-132).** Every Insider cooldown starts the round running, at half |
+| F-005 | GAP | **System Integrity 32 vs 42 assigned subroutines** | **Closed (D-129, D-130, D-146).** The meter scales with seats, order length is `K` from public facts, nothing auto-satisfies |
 | F-006 | GAP | Egress widget takeover costs a stale number, not a live one | Proposed: keep meetings-only, restate the value honestly |
 | F-007 | GAP | Counts decrement unambiguously where dots faded | Proposed: false negatives must work harder; re-verify the leak analysis |
 | F-008 | DECIDED | Dot interpolation is defunct under counts | Delete; animate the numeral instead |
@@ -1160,12 +1171,12 @@ Chain membership is exposed here and nowhere else. **There is no round replay** 
 
 ### The balance surface
 
-Every tunable in the game, and what each one does. **Nothing else should become tunable** — the roster is tight by necessity, because a Insider operates the panel by feel, in the dark, one-handed, under stress.
+Every tunable in the game, and what each one does. **Nothing else should become tunable** — the roster is tight by necessity, because an Insider operates the panel by feel, in the dark, one-handed, under stress.
 
 | Lever | Default | Effect | Confidence |
 |---|---|---|---|
 | **Player count** | 6–8 | Everything | Validated by prior play |
-| **Insider count** | 2 at 8 players | Sets the parity floor and the chain length bound (`L ≤ living_guests + 1`) | Derived |
+| **Insider count** | 2 at 8 players | Sets the parity floor and the chain length bound (`L ≤ living Insiders + 1`) | Derived |
 | **`Known` / `Hidden`** | `Known` | Whether Insiders are shown to each other once at arming, never again | Decided |
 | **Subroutines per Resident** | **7** (1 circuit / 1 long / 3 medium / 2 short) | Round length. **The primary pacing lever** | Derived, not playtested |
 | **Revoke cooldown** | Own pool. Initial 45s | The win-condition clock | [ASSUMPTION] |
@@ -1187,7 +1198,7 @@ Every tunable in the game, and what each one does. **Nothing else should become 
 **Difficulty is not authored — it self-escalates from population.**
 
 - **Egress containment** gets harder as players are revoked, because difficulty is a function of how many living players are nearby to pair with. Early round, six people converge and form three concurrent attempts; late round, three scattered players may never find each other in time. **No tuning knob, and none needed.**
-- **Chains** shorten automatically as Insiders are revoked, since the bound is `L ≤ living_guests + 1`.
+- **Chains** shorten automatically as Insiders are revoked, since the bound is `L ≤ living Insiders + 1`.
 - **Subroutines degrade** as System Integrity drops, which is also the only signal Residents get that the house is winning.
 - **Camping the Terminal self-limits**, because it does not merely fail to advance the bar — it **extends the round**, and a longer round is strictly more Revoke opportunities. The cost compounds rather than accruing. Mass camping is a stalling strategy that structurally cannot win.
 
@@ -1195,8 +1206,8 @@ Every tunable in the game, and what each one does. **Nothing else should become 
 
 1. **`Hidden` mode strips Insiders of coordination**, which is a large chunk of their power. Expect Residents to be noticeably stronger. **The compensating lever is deliberately undecided** — more Insiders, shorter Revoke cooldown, or longer meeting cooldowns are all candidates, and it is a playtest call, not a now call.
 2. **The parity-win justification needs rewording, not deleting.** It originally rested on the traitor bloc being able to tie a *vote*; the vote now ends in a group **Restrain**. The conclusion almost certainly holds — games at parity are grim regardless — but it is now kept for pacing and feel rather than for the original logic. Revisit if Residents get robbed in `Hidden` mode.
-3. **The Terminal may be Insider-favoured on net.** Target selection is more actionable than diffuse constraint information: a Insider at the station finds isolated counts, sees where crowds are, and checks whether anyone is following them. Accepted, and watched.
-4. **Static's risk is its price, not its abstraction — the abstraction risk was taken (D-186).** This slot used to hold Spoof, and the risk written here was that Spoof was slow, indirect, asked a Insider to reason about the map layer while standing in a dark hallway, and **may simply never get used.** The owner cut the mechanic and kept the slot rather than waiting for the playtest to report it. **What is watched now is the opposite failure:** Static is immediate, needs no map reasoning, and announces itself to the whole house, so the question is whether the heavier cooldown is heavy enough — an ability fired on reflex before every Revoke is a tax on the Access pool that Surge and Isolate pay.
+3. **The Terminal may be Insider-favoured on net.** Target selection is more actionable than diffuse constraint information: an Insider at the station finds isolated counts, sees where crowds are, and checks whether anyone is following them. Accepted, and watched.
+4. **Static's risk is its price, not its abstraction — the abstraction risk was taken (D-186).** This slot used to hold Spoof, and the risk written here was that Spoof was slow, indirect, asked an Insider to reason about the map layer while standing in a dark hallway, and **may simply never get used.** The owner cut the mechanic and kept the slot rather than waiting for the playtest to report it. **What is watched now is the opposite failure:** Static is immediate, needs no map reasoning, and announces itself to the whole house, so the question is whether the heavier cooldown is heavy enough — an ability fired on reflex before every Revoke is a tax on the Access pool that Surge and Isolate pay.
 5. **The first meeting is thin by design.** Accepted, not mitigated — see OI-3.
 
 ---
@@ -1335,7 +1346,7 @@ Torch **level** control (not binary) · screen brightness override · keep-awake
 | **Kotlin/Native GC pause on the blackout frame** | Kotlin/Native uses a tracing collector, and the lamp blackout is the only hard real-time requirement in the game. **A pause there does not drop a frame — it un-anonymises a revoke.** Unlike a shader stall it cannot be pre-warmed away; the fix is a no-allocation discipline on that path, enforced by a **permanent allocation assertion** rather than a one-time check |
 | **Backgrounding degrades BLE advertising** | A phone call, a notification tap, or a lock silently reduces a player's visibility to everyone. Keep-awake is planned; **also log backgrounding as a game event**, or phantom false negatives will appear that were never designed and cannot be tuned |
 | **iOS NFC system sheet** | `NFCTagReaderSession` presents a "Ready to Scan" sheet that cannot be styled, branded, or suppressed. **Checked 2026-08-16: current docs still require user-initiated scans, a 60 s timeout, and a foregrounded app — no evidence the sheet became suppressible.** Prior is now *restriction persists*; the 30-minute spike stands. The one-SCAN-button design is correct regardless |
-| **QR is photographable** | Mitigations: require the marker in frame for the full task duration, cross-check against BLE proximity, and accept that among friends it is mostly a non-issue. NFC is the real fix and it is the paid tier |
+| **QR is photographable** | Mitigations: require the marker in frame for the full Subroutine duration, cross-check against BLE proximity, and accept that among friends it is mostly a non-issue. NFC is the real fix and it is the paid tier |
 | **Anonymize server-side** | Resolve identity on the backend and ship only anonymized counts to clients, or a proxy trivially unmasks the map. Low stakes among friends, free to get right from the start |
 | **Amber vs. scotopic vision** | The Tier 0 promise now depends on a palette chosen for art reasons. The first prototype must test it |
 
@@ -1362,7 +1373,7 @@ Fourteen epics. Detailed story breakdown in `epics.md`.
 | **E4** | The house | Grid painter per storey, room/stairs tagging, additive floors, markers, host acknowledgment, the stairs exclusion, adjacency from cell neighbours | E3 |
 | **E5** | Scanning and the motion budget | Tap-to-scan with the ten-second window and auto-open, preview-less capture, routing/check-in decoupling, motion accumulator with per-player calibration and both bounds, the draining meter | E4 |
 | **E6** | The subroutine set | Ten subroutines across 3 bright / 4 medium / 3 dark, **plus the fake versions**, plus degradation | E5 |
-| **E7** | Task structures | Short/medium/long/circuit scheduling, Memory Dump, Array Wipe carry state, chains with lazy linking and randomized unlock, System Integrity | E6 |
+| **E7** | Subroutine structures | Short/medium/long/circuit scheduling, Memory Dump, Array Wipe carry state, chains with lazy linking and randomized unlock, System Integrity | E6 |
 | **E8** | The Terminal | Live counts, staleness bands with stored jitter, error injection, exclusive access, timelapse with cooldown-scales-to-history | E5, E4 |
 | **E9** | Insider abilities | Revoke token model, Egress (Beacon/Tether, Sync Pulse containment), Surge, Static, Isolate, Override, Access pool, screen parity | E7, E8 |
 | **E10** | The House Meeting | Trigger as incoming call, lights-up snap, discussion, vote, result, attribution | E2, E7 |
@@ -1378,7 +1389,7 @@ Fourteen epics. Detailed story breakdown in `epics.md`.
 
 All of the performance targets above, plus:
 
-- **Zero role leaks through light or sound.** Verified by a dedicated adversarial pass: no cue fires on the actor's device for any ability; no cue fires for a subset of players over audio; targeting a revoked player is indistinguishable from targeting a live one.
+- **Zero role leaks through light or sound.** Verified by a dedicated adversarial pass: no cue fires on the actor's device for any ability; no cue fires for a subset of players over audio; targeting a revoked player is indistinguishable from targeting a live one. *(Disputed, owner to rule, for an armed pass at a phone already Revoked: this line says it looks the same as one at a live phone; D-290 tells the armed phone whether its Revoke landed, a Long buzz when it lands and none when the other phone was already out.)*
 - **Zero alignment confirmations.** No screen, at any point, confirms anyone's alignment to anyone.
 - **The denominator never moves.** System Integrity's displayed total is identical at arming and at the final meeting, in every round, including rounds with orphaned subroutines.
 
@@ -1570,10 +1581,10 @@ Every `[ASSUMPTION]` in this document, in one place. **All are numbers, and ever
 | Tag | Assumption | Risk if wrong |
 |---|---|---|
 | A-1 | **Egress timer default 120s** | Host-configurable, so a wrong default is a bad first round rather than a broken game. Too short and Egress is uncontainable in a large house; too long and it is never a threat in a small one |
-| A-2 | **Initial Revoke/Egress cooldown 45s** | Too short and the round's quiet opening is destroyed; too long and the first interval is inert |
+| A-2 | **Initial Revoke/Egress cooldown 45s** *(superseded by D-132: every Insider cooldown starts the round at half its duration)* | Too short and the round's quiet opening is destroyed; too long and the first interval is inert |
 | A-3 | **Revoke steady-state cooldown, Egress cooldown, Access pool** | Core pacing. Three numbers, each independently tunable by design |
-| A-4 | **7 subroutines per Resident at 1/1/3/2, ~25-minute round** | The primary content lever. The round figure is an estimate to adjust from live play, not a derived number |
-| A-5 | **~25s travel between markers** | Only used to derive the *default* Egress timer and the task-time floor. **Both are now host-tuned or behaviour-driven, so nothing load-bearing rests on it.** Varies enormously by house — an apartment and a three-storey house are not the same game |
+| A-4 | **Order size `K` per Resident (D-129; first written as 7 at 1/1/3/2), ~25-minute round** | The primary content lever. The round figure is an estimate to adjust from live play, not a derived number |
+| A-5 | **~25s travel between markers** | Only used to derive the *default* Egress timer and the Subroutine-time floor. **Both are now host-tuned or behaviour-driven, so nothing load-bearing rests on it.** Varies enormously by house — an apartment and a three-storey house are not the same game |
 | A-6 | **Unlock delay 20–120s** | The fog dial, and **coupled to round length** — it must be re-derived whenever the round estimate moves. Start at the short end |
 | A-7 | **Staleness band thresholds and jitter magnitude** | How honestly the map admits its age |
 | A-8 | **Error injection rate** | Too much and the map is unreadable; too little and a dropped count is a revocation alarm |
@@ -1581,7 +1592,7 @@ Every `[ASSUMPTION]` in this document, in one place. **All are numbers, and ever
 | A-10 | **Discussion 90s / voting 45s** | Lobby settings, so cheap to be wrong about |
 | A-12 | **Compose Multiplatform can blank the lamp in the same frame as contact** | **Gates the stack.** Skia→Metal shader stalls are its most-documented iOS frame-drop source. E1 proves or disproves it; mitigation is pre-warming the draw path. Fallback is Flutter |
 | A-13 | **±150 ms coordinated flip skew reads as one event** | Replaces an earlier ±50 ms figure that was invented rather than derived. Too loose and the snap reads as a cascade; the real constraint is clock-offset accuracy, not delivery |
-| A-11 | **Sync Pulse: 4 taps on the beat** | Too few and containment is trivial; too many and it cannot be completed inside the Egress timer by two people who just ran across a house |
+| A-11 | **Sync Pulse: 4 pulses in a row** *(owner-ruled in D-298: four consecutive pulses with no miss)* | Too few and containment is trivial; too many and it cannot be completed inside the Egress timer by two people who just ran across a house |
 
 ### External dependencies
 

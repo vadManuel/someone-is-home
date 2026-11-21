@@ -627,7 +627,8 @@ fun TermBusyScreen() {
  *
  * **The three screens are identical apart from their two lines of text, and that must stay true.**
  * If they had different icons or different shapes, an onlooker could tell which refusal you got
- * from across a room — and one of them (NOTHING FOR YOU HERE) is reachable only by a Resident.
+ * from across a room — and one of them (NOTHING FOR YOU HERE) answers a card holding no work for
+ * you, for either role (D-109, D-124).
  * Sharing the body makes that identity structural instead of a coincidence someone later
  * "improves" away.
  *

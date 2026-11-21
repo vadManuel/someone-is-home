@@ -1305,6 +1305,7 @@ fun LobbyScreen(vals: PanelVals) {
  * count and the names are the round's, said as the round's, with the one fact and the one way
  * out. No settings and no line: neither is this phone's to act on until the round ends, and the
  * house walks it into the next lobby by the push every phone gets (D-157).
+ * Since D-287 (refused at the door mid-round) it is reached only after the ending, or before the first push.
  */
 @Composable
 private fun RoundUnderWay(lobby: LobbyModel, actions: PanelActions) {

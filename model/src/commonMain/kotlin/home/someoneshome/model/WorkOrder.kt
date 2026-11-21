@@ -10,7 +10,7 @@ package home.someoneshome.model
  * something, and nothing in the design needs that wire yet.
  *
  * The names are the roster's own (`gdd.md:563`–`:588`, as superseded by revision 31). All ten are
- * specified; six are built. A kind whose screen does not exist yet is still a lawful thing for the
+ * specified and all ten are built. A kind whose screen does not exist yet is still a lawful thing for the
  * house to assign — the roster is the design's, not the build's — and `ui` is where the two are
  * reconciled.
  */

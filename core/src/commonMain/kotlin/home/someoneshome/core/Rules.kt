@@ -2136,7 +2136,7 @@ private fun egressFired(state: GameState, event: Event.EgressFired): Reduction<G
  *
  * ### A missed beat costs a lockout and a locked seat is not re-graded
  *
- * The lockout is `gdd.md:359`'s 2–3 seconds and its whole job is that stalling at a node is
+ * The lockout is 3 s (D-298, the top of the design's 2–3 s) and its whole job is that stalling at a node is
  * expensive. A seat already serving one is not graded again and its lockout is **not extended** —
  * an extension would turn a mistimed retry at the moment of expiry into a permanent exclusion, and
  * the thing being priced is spam, which a lockout that simply does nothing already prices.
@@ -2293,8 +2293,9 @@ private const val LAMP_DIM = 1
  * not emit* — so the slam is two numbers this file chose, carried on the effect, and the device
  * performs those and returns to whatever [Effect.LampSet] it was last sent.
  *
- * ⚠️ **How long each half lasts is unruled and is not here**, because `core` has no clock to say it
- * with. It is the platform's, and it is flagged.
+ * **How long each half lasts is ruled (D-182: 1.5 s full, 1.0 s black, then 2.5 s of Boot) and is
+ * not here**, because `core` has no clock to say it with. It is the platform's (`SURGE_PEAK_MS`,
+ * `SURGE_BLACK_MS`, `SURGE_BOOT_MS` in `ui` `Flow.kt`).
  */
 private const val LAMP_FULL = 100
 private const val LAMP_BLACK = 0

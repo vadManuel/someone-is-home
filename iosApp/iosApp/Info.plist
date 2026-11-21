@@ -92,8 +92,9 @@
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>The house senses which phones are near each other in the rooms. No connection leaves this house.</string>
 
-	<!-- Nearby Interaction (UWB), which replaces Bluetooth for contact, report and presence (the
-	     owner's 2026-11-18 rulings). iOS ends an app that runs an NISession without this string,
+	<!-- Nearby Interaction (UWB), which measures the distance for contact, report and presence
+	     while Bluetooth picks which phones to pair (D-300, D-301, D-306, D-308). iOS ends an
+	     app that runs an NISession without this string,
 	     so it ships in every configuration. The wording is the owner's (draft B, approved
 	     2026-11-18). Until the 2026-11-18 build it was injected into Debug and Playtest only, for
 	     the UWB spike. -->
