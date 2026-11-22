@@ -307,3 +307,9 @@ D-311 and D-313 were also run together in a full check before pushing: 3,312 tes
   - **Wrong card while carrying:** "CARRYING . GO TO <ROOM>".
   - **The padlock** on the status strip shows for a disk but not for a held pattern. Nothing rules it.
 - **Building:** D-329, the lobby let-go asks the house first; if the round is armed, the switch-off is reported at the meeting.
+- **Owner's rulings on D-328's follow-ups:**
+  - re-scanning the source restarts a forgotten pattern;
+  - UNREGISTER AND CONTINUE becomes UNREGISTER AND PROCEED;
+  - the padlock shows for a held pattern too.
+
+  Building as D-330.
