@@ -212,3 +212,17 @@ D-311 and D-313 were also run together in a full check before pushing: 3,312 tes
   - D-325: Memory Dump's screens, switched on;
   - D-321: the motion budget;
   - then the design mockup.
+- **Merged:** D-319, D-320, D-322 and D-323 (`b891101`). Recording 50; 3,522 tests, 0 failures; rehearsal 21/21.
+- **More rulings (2026-11-22):**
+  - **MONITORING JAMMED:** stays over the current screen.
+  - **Leaving the Terminal mid-playback:** an early cancel.
+  - **"you're up":** gets the same buzz as a house text.
+  - **Lights out:** keep the guests' self-check.
+  - **Notifications permission:** removed ("we don't use it").
+  - **NEARBY DEVICES:** tested on every return to the app in the lobby.
+  - **The once-a-second lobby check:** dropped in favour of the callbacks iOS gives.
+- **Building:**
+  - D-321: the motion budget;
+  - D-324 and D-325: chains among Residents only, and Memory Dump from the approved draft, switched on;
+  - D-326: permissions.
+- **Note for the owner:** the meeting's System Integrity percentage depends on which seats did real work. That is by design: only plain Residents' work moves the meter (M8, D-154), and the meter is batched at meetings to blur it (D-153). The overnight differential test only passed before by a fixture coincidence. Say if you want coarser steps.
