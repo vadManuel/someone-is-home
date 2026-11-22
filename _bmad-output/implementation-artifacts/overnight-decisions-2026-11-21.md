@@ -226,3 +226,8 @@ D-311 and D-313 were also run together in a full check before pushing: 3,312 tes
   - D-324 and D-325: chains among Residents only, and Memory Dump from the approved draft, switched on;
   - D-326: permissions.
 - **Note for the owner:** the meeting's System Integrity percentage depends on which seats did real work. That is by design: only plain Residents' work moves the meter (M8, D-154), and the meter is batched at meetings to blur it (D-153). The overnight differential test only passed before by a fixture coincidence. Say if you want coarser steps.
+- **More rulings (2026-11-22):**
+  - **Array Wipe:** briefed at Spares with "CARRY ONE DISK AT A TIME. / NOTHING ELSE OPENS UNTIL IT IS DELIVERED." The rest stays as built: it lands on page 1 after each station, and a finished circuit just strikes through.
+  - **The two-pulse "no":** the same everywhere.
+  - **The meeting percentage:** stays exact.
+  - **The Release build:** not yet.
