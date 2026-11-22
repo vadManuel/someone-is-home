@@ -347,7 +347,6 @@ class HousedContentTest {
         val port = PanelVals(PanelState(role = PanelRole.Insider))
         assertTrue("Priya's spare key" in port.houseLine)
         assertEquals("6 RESIDENTS\nACCOUNTED FOR", port.accountedFor)
-        assertEquals("4 OF 6", port.residentsStanding)
         assertEquals(PanelVals.ENDING_RESIDENTS, port.residentNames)
         assertEquals("2", port.egressesContained)
         assertEquals("ATTEMPT 3 . 8S", port.reconnectLine)

@@ -559,7 +559,7 @@ object Balance {
      * D-005 wrote the mix for an order of seven. D-129 replaced the fixed seven with `K`, and the
      * owner chose to **scale the proportions** rather than keep seven fixed entries and pad the rest:
      * about 14% circuit, 14% long, 43% medium and 29% short of whatever `K` the lobby's public facts
-     * compute. The weights are written here once, in structure order, and [orderMix] is the only
+     * compute. The weights are written here once, in structure order, and [designMix] is the only
      * thing that reads them.
      */
     val ORDER_MIX_WEIGHTS: List<Pair<SubroutineStructure, Int>> = listOf(
@@ -570,8 +570,38 @@ object Balance {
     )
 
     /**
-     * **How many entries of each structure an order of [size] holds** — D-322's rounding, ⚠️
-     * **provisional until the owner confirms it.**
+     * **Whether the mix deals a Memory Dump: not until its screens are designed** (the owner's
+     * 2026-11-22 ruling, D-323 A). ⚠️ **Provisional, owner-pending.**
+     *
+     * D-322 built Memory Dump's house half and STOPPED its two screens, so no phone can open one.
+     * Dealt into every order as D-322 had it, every seat held a line nobody could finish and the
+     * meter could not reach 0. **While this is false [orderMix] gives the long's share to medium**;
+     * the house half stays built and is tested on lines planted by hand, not by the draw.
+     *
+     * **One switch, so dealing it is one line**: set this to true when Memory Dump's screens exist,
+     * and [orderMix] is [designMix] again. It is not a lobby setting and not a balance value a round
+     * locks: it says what the build can play, and no role reads it.
+     */
+    val MEMORY_DUMP_DEALT: Boolean = false
+
+    /**
+     * **How many entries of each structure an order of [size] holds**: [designMix], with the long's
+     * share dealt as medium while [MEMORY_DUMP_DEALT] is off (D-323 A). Always sums to [size], and
+     * **no role is an input**.
+     */
+    fun orderMix(size: Int): Map<SubroutineStructure, Int> {
+        val mix = designMix(size)
+        if (MEMORY_DUMP_DEALT) return mix
+        return mix + mapOf(
+            SubroutineStructure.Long to 0,
+            SubroutineStructure.Medium to mix.getValue(SubroutineStructure.Medium) + mix.getValue(SubroutineStructure.Long),
+        )
+    }
+
+    /**
+     * **The design's mix of an order of [size], Memory Dump included** — D-322's rounding, ⚠️
+     * **provisional until the owner confirms it.** What [orderMix] deals once [MEMORY_DUMP_DEALT]
+     * is on.
      *
      * **Largest remainder** (Hamilton's method), integer-only, and the answer always sums to [size]:
      *
@@ -592,7 +622,7 @@ object Balance {
      * is a number that differs between two phones. **No role is an input**, so an Insider's fake
      * order has the same shape as every Resident's (D-109, D-129).
      */
-    fun orderMix(size: Int): Map<SubroutineStructure, Int> {
+    fun designMix(size: Int): Map<SubroutineStructure, Int> {
         if (size <= 0) return SubroutineStructure.entries.associateWith { 0 }
         val total = ORDER_MIX_WEIGHTS.sumOf { it.second }
         val whole = ORDER_MIX_WEIGHTS.associate { (s, w) -> s to (size * w) / total }

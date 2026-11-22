@@ -368,10 +368,10 @@ fun DisconnectScreen(vals: PanelVals) {
  *
  * Everything is LOCKED and visibly so, which is the standing-condition pattern again — the list
  * is identical on every device, so nothing about which rows are locked can distinguish a player.
- * END SESSION is host-only and says so.
+ * LEAVE THIS HOUSE is host-only and says so.
  *
  * Drawn as the mockup draws it (D-202): a hairline list rather than boxed rows, and the one
- * boxed thing, END SESSION, at the foot.
+ * boxed thing, LEAVE THIS HOUSE, at the foot.
  */
 @Composable
 fun SettingsScreen() {
@@ -415,7 +415,7 @@ fun SettingsScreen() {
             Modifier.fillMaxWidth().cssBorder(1.dp, p.line).heightIn(min = 56.dp).padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Words("END SESSION", Modifier.weight(1f), size = 26, color = p.ink, lineHeight = 1.0)
+            Words("LEAVE THIS HOUSE", Modifier.weight(1f), size = 26, color = p.ink, lineHeight = 1.0)
             Tag("HOST ONLY", p.dim)
         }
     }
@@ -495,13 +495,8 @@ fun WinResidentsScreen(vals: PanelVals) {
         // makes it apologetic -- but the lights are on, so it says it in bone, like everything
         // else on this screen.
         vals.signOff?.let { HouseSignOff(it, vals.endedAt, p) }
-        Row(Modifier.fillMaxWidth()) {
-            Words("THE RESIDENTS", Modifier.weight(1f), size = 22, color = p.dim, lineHeight = 1.0)
-            // Who is still standing, which everybody in the room can already see. A count of
-            // seats is not a count of Insiders and divides nothing out -- see
-            // PanelVals.integrityPercent for the number that would.
-            vals.residentsStanding?.let { Words(it, size = 22, color = p.dim, lineHeight = 1.0) }
-        }
+        // **The name tiles alone** (the owner's 2026-11-22 ruling, D-323 C): no THE RESIDENTS label
+        // over them and no standing count beside it.
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             // The house's Residents on a housed phone (D-247), two to a row; the port's four without.
             vals.residentNames.chunked(2).forEach { pair ->
@@ -619,7 +614,7 @@ private fun Revealed(heading: String, insiders: List<RevealedInsider>, p: Palett
  * the moment the round ended and dropped again here (D-116, D-157).
  *
  * On a phone that is not hosting it is present and inert with `HOST ONLY` beside it, exactly as
- * `END SESSION` is on the settings screen — a control that appeared only on one phone would be
+ * `LEAVE THIS HOUSE` is on the settings screen — a control that appeared only on one phone would be
  * a layout that moves under a thumb, and one that vanished would be a host wondering where it went.
  * The mockup draws only the host's face; the other phones' words drop to dim, since they press
  * nothing.

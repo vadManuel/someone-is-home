@@ -443,9 +443,18 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
             // **And an Insider's carries their own one line, for the blackmail text** (D-116,
             // D-101, D-247). The house quotes it back to the phone that typed it; a Resident's
             // carries nothing, because the house never uses a Resident's line.
+            //
+            // **And an Insider's carries the round's Insider count** (the owner's 2026-11-22
+            // ruling, D-323 B), so page 2 says the Egress clock is shared only when it is. A
+            // Resident's carries 0, which the message pads to the same width.
             seats.map {
                 val role = state.roleOf(it)
-                Effect.RoleRevealed(it, role, line = if (role == Role.Insider) state.lineOf(it).orEmpty() else "")
+                Effect.RoleRevealed(
+                    it,
+                    role,
+                    line = if (role == Role.Insider) state.lineOf(it).orEmpty() else "",
+                    insiders = if (role == Role.Insider) state.insiderSeats.size else 0,
+                )
             } +
             // **The radio's key, one per seat, every seat** (D-212). Drawn from the round's seed and
             // the seat alone, never from a role, so the run is the same on both sides of a role

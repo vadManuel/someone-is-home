@@ -1594,6 +1594,21 @@ class FlowModel(
         // reboot, under the lamp either way.
         subroutines.opened(null)
         surge =SurgeSlam(peak = peak, black = black, nth = (surge?.nth ?: 0) + 1)
+        // **And every hold and the camera are let go at the slam** (the owner's 2026-11-22 ruling,
+        // D-323 E: *cancel both*). A Revoke or Egress arm, or any other two-second hold, lets go in
+        // [rememberHold] off [Screen]'s `inputBlocked`. The report circle: this phone says it is
+        // off the main view from now until the Surge ends ([onMainView]), so the house ends a hold
+        // already running on the next upload and starts none, and the report screen is left now.
+        // The camera's scan window closes now rather than at the reboot: walking off the scan
+        // screen is what closes it, and its D-160 *no* is played as it closes, so the double buzz
+        // is at the slam. Both land where they would have (the page the report took over, and
+        // the springboard the window's timeout walks to), under the lamp.
+        when (state.screen) {
+            ScreenId.Report -> push(state.reportFrom ?: ScreenId.Home)
+            ScreenId.Scan -> push(ScreenId.Home)
+            else -> Unit
+        }
+        reportRead()
     }
 
     /**
@@ -2462,7 +2477,7 @@ class FlowModel(
      * everything after: `RoundEnded` keeps the home, the seats, the settings and the socket and
      * walks this phone to the *lobby*, and this one has no lobby to walk to.
      *
-     * The honest line is [LobbyModel.HOUSE_CLOSED] and it is **flagged as proposed copy**, at the
+     * The honest line is [LobbyModel.HOUSE_CLOSED], **the owner's approved words** (D-323 D), at the
      * constant. It is put on the join screen rather than on a dialog for rule 6's reason read in a
      * lit room: nothing pops up, nothing has to be dismissed, and what the player sees is the screen
      * they would have been on with a sentence saying why they are on it.
@@ -3310,9 +3325,13 @@ class FlowModel(
             // **And an Insider's carries the line this phone handed over** (D-116, D-101, D-247),
             // which the house thread quotes back. Held only on an Insider's phone and only if the
             // house sent words; a Resident's message carries none.
+            //
+            // **And an Insider's carries the round's Insider count** (D-323 B), held only on an
+            // Insider's phone, for page 2's EGRESS line and nothing else. A Resident's is zeros.
             is RoundMessage.RoleRevealed -> state = state.copy(
                 role = if (message.insider) PanelRole.Insider else PanelRole.Resident,
                 heldOver = message.line.takeIf { message.insider && it.isNotBlank() }?.let(::HeldLine),
+                insiderCount = message.insiders.takeIf { message.insider },
             )
 
             // **Who is in the round, in seat order — and it is the field four screens were reading
@@ -3353,13 +3372,9 @@ class FlowModel(
                 // offers, and never the same thing as a blank, which is somebody with no name.
                 val roster = message.roster
                 meeting.houseNamed(roster)
-                // **And the host's INSIDERS setting, as this phone's lobby drew it** (D-320): with the
-                // party's size it settles whether page 2's EGRESS line says the clock is shared. A
-                // public lobby fact, copied at arming; see [PanelState.insidersChosen].
                 state = state.copy(
                     roster = roster,
                     seats = roster.count { it != null },
-                    insidersChosen = lobby.standing.insiders,
                 )
             }
 
@@ -3949,8 +3964,12 @@ class FlowModel(
      * **Whether this phone is on the main view now** (D-307): page 1 or 2, a banner over page 1, or
      * the report screen. The uploader sends it in every upload ([MainView], `MainViewField`), and the
      * house's report hold reads it.
+     *
+     * **Never while a Surge owns the phone** (D-323 E): the report circle is a hold, and a Surge
+     * lets go of every hold at the slam, so the house ends one running and starts none until the
+     * phone is back on the springboard.
      */
-    val onMainView: Boolean get() = MainView.isOn(state)
+    val onMainView: Boolean get() = surge == null && MainView.isOn(state)
 
     /**
      * **When the hold the report screen is filling for began, on this phone's monotonic clock**, and
@@ -4025,7 +4044,9 @@ class FlowModel(
             if (reportBegan == null || heldMillis < reportLastHeld) reportBegan = now - heldMillis
             reportLastHeld = heldMillis
         } else {
-            val from = MainView.takesOverFrom(state)
+            // Not while a Surge owns the phone (D-323 E): a slot the house sent before it heard
+            // this phone leave the main view opens nothing under the lamp.
+            val from = MainView.takesOverFrom(state).takeIf { surge == null }
             if (from != null) {
                 reportBegan = now - heldMillis
                 reportLastHeld = heldMillis

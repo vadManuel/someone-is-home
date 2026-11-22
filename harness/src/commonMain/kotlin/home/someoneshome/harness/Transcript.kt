@@ -363,7 +363,7 @@ object Transcript {
         // the reveal each phone was actually sent rather than re-deriving it, which is the whole
         // reason the transcript never renders anything it can look up.
         is Effect.RoleRevealed ->
-            "RoleRevealed|seat=${effect.seat.index}|role=${effect.role}"
+            "RoleRevealed|seat=${effect.seat.index}|role=${effect.role}|insiders=${effect.insiders}"
         // **The seat and the SIZE, and never one of the names** (D-115). The lines' rule and the
         // arming row's, applied to the third round-scoped text: names arrive for the round and are
         // gone when it ends, and a recording outlives the evening. What a replay needs is that the

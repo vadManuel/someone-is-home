@@ -17,6 +17,7 @@ import home.someoneshome.model.Seat
 import home.someoneshome.model.SubroutineKind
 import home.someoneshome.model.SubroutineStructure
 import home.someoneshome.model.Tick
+import home.someoneshome.model.WorkOrder
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -116,6 +117,28 @@ private fun drawn(state: GameState): String = state.workOrders.joinToString("\n"
 private fun deliveredTo(seat: Seat, effects: List<Effect>, state: GameState): List<Effect> =
     effects.filter { e -> EmitSchema.deliveries(e, state).any { it.seat.index == seat.index } }
 
+/**
+ * **A Memory Dump put into [seat]'s order by hand** (D-323 A). The mix deals none while
+ * [Balance.MEMORY_DUMP_DEALT] is off, so Memory Dump's house half is tested on a line planted here
+ * rather than one the draw dealt. The first Subroutine line of the order that nothing holds and
+ * nothing of its own is chained before becomes a Memory Dump from its own card to the first card of
+ * [cards] the order does not use, so the planted target chains nothing. Nothing here reads a role:
+ * two rounds that differ only in who is an Insider get the same line.
+ */
+private fun GameState.withMemoryDump(seat: Seat, cards: List<MarkerId> = CARDS): GameState {
+    val order = workOrderFor(seat)!!
+    val line = order.entries.first { it.work is AssignedWork.Subroutine && !it.held && it.blockedBy.isEmpty() }
+    val target = cards.first { c -> order.entries.none { it.isAt(c) } }
+    val planted = OrderEntry(
+        index = line.index,
+        work = AssignedWork.MemoryDump,
+        markers = listOf(line.anchor!!, target),
+        blockedBy = emptyList(),
+        done = false,
+    )
+    return withWorkOrder(WorkOrder(seat, order.entries.map { if (it.index == line.index) planted else it }))
+}
+
 // =================================================================================================
 
 class OrderMixTest {
@@ -125,7 +148,7 @@ class OrderMixTest {
         val total = Balance.ORDER_MIX_WEIGHTS.sumOf { it.second }
         assertEquals(7, total, "the design's mix is seven parts: 1 circuit 1 long 3 medium 2 short")
         for (k in 0..60) {
-            val mix = Balance.orderMix(k)
+            val mix = Balance.designMix(k)
             assertEquals(k, mix.values.sum(), "an order of $k was dealt ${mix.values.sum()}")
             for ((structure, weight) in Balance.ORDER_MIX_WEIGHTS) {
                 // |count − K·w/7| < 1, in sevenths so nothing is rounded.
@@ -137,7 +160,7 @@ class OrderMixTest {
 
     @Test
     fun `an order of seven is the design's own mix and the K a lobby computes round as stated`() {
-        fun mix(k: Int) = Balance.orderMix(k).let {
+        fun mix(k: Int) = Balance.designMix(k).let {
             listOf(it[SubroutineStructure.Circuit], it[SubroutineStructure.Long], it[SubroutineStructure.Medium], it[SubroutineStructure.Short])
         }
         assertEquals(listOf(1, 1, 3, 2), mix(7), "K=7 is not D-005's 1 circuit 1 long 3 medium 2 short")
@@ -192,6 +215,44 @@ class OrderMixTest {
             assertTrue(state.workOrders.any { it.seat == insider }, "the Insider was dealt no order")
         }
     }
+
+    /**
+     * **GUARD (D-323 A): no Memory Dump is dealt while its screens are unbuilt.** The owner's
+     * 2026-11-22 ruling: no phone can open one, so dealt into every order it left every seat a line
+     * nobody could finish and the meter out of reach. While [Balance.MEMORY_DUMP_DEALT] is off the
+     * long's share is medium, every order still sums to `K`, and no order of any round, the
+     * Insider's fake included, holds a Memory Dump.
+     */
+    @Test
+    fun `no dealt order holds a Memory Dump while the switch is off`() {
+        assertEquals(false, Balance.MEMORY_DUMP_DEALT, "Memory Dump is dealt: its screens must exist first (D-323)")
+        for (k in 0..60) {
+            val design = Balance.designMix(k)
+            val dealt = Balance.orderMix(k)
+            assertEquals(k, dealt.values.sum(), "an order of $k was dealt ${dealt.values.sum()}")
+            assertEquals(0, dealt.getValue(SubroutineStructure.Long), "the mix deals a long at K=$k")
+            assertEquals(
+                design.getValue(SubroutineStructure.Medium) + design.getValue(SubroutineStructure.Long),
+                dealt.getValue(SubroutineStructure.Medium),
+                "the long's share at K=$k did not go to medium",
+            )
+            assertEquals(design.getValue(SubroutineStructure.Circuit), dealt.getValue(SubroutineStructure.Circuit))
+            assertEquals(design.getValue(SubroutineStructure.Short), dealt.getValue(SubroutineStructure.Short))
+        }
+        for (seats in 3..18) {
+            for (seed in listOf(1L, 77L, 20261121L, 20261122L)) {
+                val insiders = listOf(Seat(seats - 1)) + if (seats >= 8) listOf(Seat(1)) else emptyList()
+                val state = armed(seats = seats, insiders = insiders, seed = seed).state
+                assertEquals(seats, state.workOrders.size, "a seat of $seats was dealt no order")
+                for (order in state.workOrders) {
+                    assertTrue(
+                        order.entries.none { it.work == AssignedWork.MemoryDump },
+                        "seat ${order.seat.index} of $seats (${state.roleOf(order.seat)}, seed $seed) was dealt a Memory Dump",
+                    )
+                }
+            }
+        }
+    }
 }
 
 // =================================================================================================
@@ -230,7 +291,13 @@ class CrossPlayerChainTest {
     @Test
     fun `a chain unlocks across players after its delay and not a tick before`() {
         var state = armed(seats = 6).state
-        val link = state.links.first { state.roleOf(it.up) == home.someoneshome.model.Role.Resident }
+        // A downstream line nothing of its own order is chained before, so the release alone names
+        // it on the wire (D-323 A's mix moved which lines the seed chains; a line still behind its
+        // own earlier work is rightly Blocked after the release too).
+        val link = state.links.first {
+            state.roleOf(it.up) == home.someoneshome.model.Role.Resident &&
+                state.workOrderFor(it.down)!!.entries[it.downEntry].blockedBy.isEmpty()
+        }
         val clock = Clock()
         state = finish(state, link.up, link.upEntry, clock)
         val started = state.links.single { it.isDown(link.down, link.downEntry) }
@@ -387,9 +454,10 @@ class MemoryDumpTest {
     private fun dumpOf(state: GameState, seat: Seat): OrderEntry =
         state.workOrderFor(seat)!!.entries.first { it.work == AssignedWork.MemoryDump }
 
+    // Planted by hand (D-323 A): the mix deals none while its screens are unbuilt.
     private fun ready(): Triple<GameState, Seat, Clock> {
-        val start = armed(seats = 6).state
-        val seat = seatsOf(6).first { start.alone(it, dumpOf(start, it).index) }
+        val seat = seatsOf(6).first()
+        val start = armed(seats = 6).state.withMemoryDump(seat)
         var state = start
         val clock = Clock()
         for (b in dumpOf(state, seat).blockedBy) state = finish(state, seat, b, clock)
@@ -488,8 +556,9 @@ class OrderParityTest {
     fun `a seat walks a circuit and a Memory Dump to the same delivered effects in either role`() {
         val seat = Seat(3)
         // The delivered effects are compared scan by scan below; the meter is the one difference.
-        val asResident = armed(seats = 6, insiders = listOf(Seat(1))).state
-        val asInsider = armed(seats = 6, insiders = listOf(seat)).state
+        // The Memory Dump is planted (D-323 A), by the same role-free hand in both rounds.
+        val asResident = armed(seats = 6, insiders = listOf(Seat(1))).state.withMemoryDump(seat)
+        val asInsider = armed(seats = 6, insiders = listOf(seat)).state.withMemoryDump(seat)
         val clockA = Clock()
         val clockB = Clock()
         var a = asResident
@@ -546,7 +615,9 @@ class WorkOrderDeterminismTest {
 
     @Test
     fun `a Memory Dump's pattern is drawn from the scan and replays from the recording`() {
-        val (state, seat) = armed(seats = 6).state.let { s -> s to seatsOf(6).first { s.alone(it, s.workOrderFor(it)!!.entries.first { e -> e.work == AssignedWork.MemoryDump }.index) } }
+        // Planted by hand (D-323 A): the mix deals none while its screens are unbuilt.
+        val seat = Seat(0)
+        val state = armed(seats = 6).state.withMemoryDump(seat)
         var a = state
         var b = state
         val dump = state.workOrderFor(seat)!!.entries.first { it.work == AssignedWork.MemoryDump }

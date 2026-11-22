@@ -44,7 +44,7 @@ class TimelapseRecordingTest {
         val events = withPlaybacks()
         val (_, recording) = record(GameState.EMPTY, events)
         val text = recording.toText()
-        assertTrue(text.startsWith("someone-is-home/recording/49\n"), "the format was not bumped: ${text.lineSequence().first()}")
+        assertTrue(text.startsWith("someone-is-home/recording/50\n"), "the format was not bumped: ${text.lineSequence().first()}")
         assertTrue(text.lines().any { it.startsWith("E TimelapsePlayed") }, "no TIMELAPSE was recorded")
         assertTrue(text.lines().any { it.startsWith("E TimelapseStopped") }, "no STOP was recorded")
         assertTrue(recording.stateTranscript.all { "|timelapse=" in it }, "a state row does not carry the station's timelapse")
@@ -60,7 +60,10 @@ class TimelapseRecordingTest {
     /** **GUARD (rule 1): the two requests emit nothing, so a role exchange under them leaves nothing unexplained.** */
     @Test
     fun `the timelapse adds nothing unexplained to a role exchange's diff`() {
-        val with = differentialOnRoleExchange(GameState.EMPTY, withPlaybacks(), Seat(1), Seat(3))
+        // **The meter subtracted, as `HostSeatRecordingTest` subtracts it** (D-109's ruled asymmetry;
+        // integrated with D-322, whose fixture walks circuits, so the exchanged seats bank at different
+        // moments). What is asked here is whether the timelapse adds anything else.
+        val with = differentialOnRoleExchange(GameState.EMPTY, withPlaybacks(), Seat(1), Seat(3), ignoring = METER_ASYMMETRY)
         assertEquals(emptyList(), with.unexplained, "the timelapse leaked a role: $with")
         val (_, plain) = record(GameState.EMPTY, round())
         val (_, played) = record(GameState.EMPTY, withPlaybacks())

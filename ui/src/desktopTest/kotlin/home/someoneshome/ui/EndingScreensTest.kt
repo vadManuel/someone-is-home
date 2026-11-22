@@ -202,7 +202,7 @@ class EndingScreensTest {
      * **NEW ROUND is on both endings, and it is the host's** (D-157).
      *
      * Present and inert on a phone that is not hosting, with `HOST ONLY` beside it, exactly as
-     * `END SESSION` is on the settings screen. Absent, it would be a layout that changes between
+     * `LEAVE THIS HOUSE` is on the settings screen. Absent, it would be a layout that changes between
      * phones; a live control on a client would be one phone starting a round for six.
      */
     @Test
@@ -258,7 +258,7 @@ class EndingScreensTest {
      *
      * DO NOT DISTURB reads like a setting with a value, and that is the mockup's look, not a
      * control: a working one would leave one phone undimmed under a banner every other phone
-     * dims for (D-118), a beacon. END SESSION is boxed like a button and is not one on any phone.
+     * dims for (D-118), a beacon. LEAVE THIS HOUSE is boxed like a button and is not one on any phone.
      */
     @Test
     fun settingsOffersOnlyTheWayBack() =

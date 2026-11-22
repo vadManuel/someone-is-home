@@ -673,9 +673,23 @@ sealed interface Effect {
      * **[toString] prints the line's length and never its words** (`OneLine`'s rule): an effect is
      * the thing a bench, a log line or a failure message stringifies, and a device console is a file
      * that outlives the evening. `RoundAuthorityTest` sweeps everything pushed for the typed text.
+     *
+     * ### [insiders]: an Insider's phone is told how many Insiders the round has (D-323 B)
+     *
+     * The owner's 2026-11-22 ruling: *just because the phone knows doesn't mean the player itself
+     * does … we can share any info with player phones.* An Insider's reveal carries the round's
+     * Insider count, so page 2 says SHARED WITH THE OTHER INSIDER only when there is one. **A
+     * Resident's carries 0**, for [line]'s reason: the house never tells a Resident, and the message
+     * pads it to the same width (D-249). No name and no seat: a count is not a roster, and Known
+     * mode's fellow Insider still arrives as text on a thread (`gdd.md:923`).
      */
-    data class RoleRevealed(val seat: Seat, val role: Role, val line: String = "") : Effect {
-        override fun toString(): String = "RoleRevealed(seat=$seat, role=$role, line=${line.length} chars)"
+    data class RoleRevealed(val seat: Seat, val role: Role, val line: String = "", val insiders: Int = 0) : Effect {
+        init {
+            require(role == Role.Insider || insiders == 0) { "a Resident is never told the Insider count" }
+            require(insiders >= 0) { "an Insider count of $insiders" }
+        }
+
+        override fun toString(): String = "RoleRevealed(seat=$seat, role=$role, line=${line.length} chars, insiders=$insiders)"
     }
 
     /**

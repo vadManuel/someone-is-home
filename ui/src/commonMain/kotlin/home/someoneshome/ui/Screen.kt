@@ -126,6 +126,8 @@ fun Screen(
         LocalSubroutine provides subroutines,
         LocalNotifications provides notifications,
         LocalPerms provides perms,
+        // A hold already under way lets go at the slam (D-323 E); see [rememberHold].
+        LocalInputBlocked provides inputBlocked,
     ) {
         // THE FRAME DIMS FOR A HEAVY BANNER AND FOR NOTHING ELSE. `dims` is the house-wide
         // question — is one of D-118's two events on this screen — and the answer is yes on the

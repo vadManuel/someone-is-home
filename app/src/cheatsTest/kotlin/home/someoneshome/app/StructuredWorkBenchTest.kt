@@ -29,9 +29,9 @@ import kotlin.test.assertTrue
 
 /**
  * **A bench round where somebody finishes each new piece of work** (D-322): an Array Wipe walked on
- * a phone's real model through the house's own card-read path (`RoundAuthority.cardRead`, D-318), a
- * Memory Dump handed over at its target, and a cross-player dependency released by the house's own
- * clock onto the downstream phone as `you're up`.
+ * a phone's real model through the house's own card-read path (`RoundAuthority.cardRead`, D-318), no
+ * Memory Dump dealt while its screens are unbuilt (D-323 A), and a cross-player dependency released
+ * by the house's own clock onto the downstream phone as `you're up`.
  *
  * Real: the rules, the draw, the gate, `EmitSchema`'s allowlist, `RoundWire.project`, `FlowModel`.
  * What stands in is the socket, as in [HandOverLoopTest]: the projected message is handed straight
@@ -161,25 +161,26 @@ class StructuredWorkBenchTest {
         assertTrue(bench.house.state.workOrderFor(seat)!!.entries[wipe.index].done)
     }
 
+    /**
+     * **No phone on the bench is dealt a Memory Dump while its screens are unbuilt** (the owner's
+     * 2026-11-22 ruling, D-323 A). No phone can open one, so the mix deals the long's share as
+     * medium; the house half is tested on a planted line in `core` (`MemoryDumpTest`). Every seat's
+     * order, the Insider's included, and every phone's copy of it name none.
+     */
     @Test
-    fun aMemoryDumpIsShownAtItsSourceAndGradedAtItsTarget() = bench { bench ->
+    fun noOrderOnTheBenchHoldsAMemoryDumpWhileItsScreensAreUnbuilt() = bench { bench ->
         assertTrue(bench.house.arm(RoundCheat.SEED))
+        assertEquals(false, Balance.MEMORY_DUMP_DEALT, "Memory Dump is dealt: its screens must exist first (D-323)")
         val state = bench.house.state
-        val seat = seats.first { s -> state.alone(s, state.workOrderFor(s)!!.entries.first { it.work == AssignedWork.MemoryDump }.index) }
-        val dump = state.workOrderFor(seat)!!.entries.first { it.work == AssignedWork.MemoryDump }
-        bench.clear(seat, dump.index)
-        val phone = bench.phones.getValue(seat)
-
-        bench.read(seat, dump.markers[0])
-        // ⚠️ STOPPED (D-322): no screen draws a Memory Dump, so the phone opens nothing over it.
-        assertNull(phone.state.carrying, "a pattern reached the carry, which Files draws (F-015)")
-        val pattern = assertNotNull(bench.house.state.patternOf(seat, dump.index)).elements
-        bench.read(seat, dump.markers[1])
-        val graded = bench.house.emitted.count { it is Effect.SubroutineGraded }
-        bench.house.heard(Intent.HandOverEntry(seat, dump.markers[1], pattern))
-        assertEquals(graded + 1, bench.house.emitted.count { it is Effect.SubroutineGraded })
-        assertTrue(bench.house.state.workOrderFor(seat)!!.entries[dump.index].done, "the Memory Dump did not finish")
-        assertTrue(phone.state.order!!.filterIsInstance<OrderLine.Known>().single { it.index == dump.index }.done)
+        for (seat in seats) {
+            val order = assertNotNull(state.workOrderFor(seat), "seat ${seat.index} was dealt no order")
+            assertTrue(order.entries.none { it.work == AssignedWork.MemoryDump }, "seat ${seat.index} was dealt a Memory Dump")
+            val lines = assertNotNull(bench.phones.getValue(seat).state.order, "seat ${seat.index}'s phone holds no order")
+            assertTrue(
+                lines.filterIsInstance<OrderLine.Known>().none { it.work == AssignedWork.MemoryDump },
+                "seat ${seat.index}'s phone names a Memory Dump",
+            )
+        }
     }
 
     @Test

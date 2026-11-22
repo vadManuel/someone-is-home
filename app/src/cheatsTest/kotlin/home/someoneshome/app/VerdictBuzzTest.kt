@@ -108,7 +108,9 @@ class VerdictBuzzTest {
             val role = state.roleOf(seat)
             val card = bench.house.state.workCard(seat)
             val nothing = bench.felt(seat) { bench.house.cardRead(seat, bench.house.state.emptyCard(seat)) }
-            assertEquals(listOf<RoundMessage>(RoundMessage.ScanAnswered(null, Haptic.Double)), nothing.first, "$role: NOTHING FOR YOU HERE")
+            // The answer itself: since D-322 the order rides every scan beside it, silent, and the
+            // buzz below is still read off everything the seat was sent.
+            assertEquals(listOf<RoundMessage>(RoundMessage.ScanAnswered(null, Haptic.Double)), nothing.first.filterIsInstance<RoundMessage.ScanAnswered>(), "$role: NOTHING FOR YOU HERE")
             assertEquals(no, nothing.second, "$role: NOTHING FOR YOU HERE did not say no")
 
             val opened = bench.felt(seat) { bench.house.cardRead(seat, card) }
@@ -145,7 +147,7 @@ class VerdictBuzzTest {
         val node = requireNotNull(bench.house.state.egress).nodes.first()
         for (seat in seats) {
             val felt = bench.felt(seat) { bench.house.cardRead(seat, node) }
-            assertEquals(listOf<RoundMessage>(RoundMessage.ScanAnswered(null, haptic = null)), felt.first, "seat ${seat.index} at a node")
+            assertEquals(listOf<RoundMessage>(RoundMessage.ScanAnswered(null, haptic = null)), felt.first.filterIsInstance<RoundMessage.ScanAnswered>(), "seat ${seat.index} at a node")
             assertEquals(emptyList(), felt.second, "seat ${seat.index}: a node of the Egress said no")
         }
     }

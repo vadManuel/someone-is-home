@@ -4,7 +4,6 @@ import home.someoneshome.model.AssignedWork
 import home.someoneshome.model.Destination
 import home.someoneshome.model.HomePlanView
 import home.someoneshome.model.HomeReview
-import home.someoneshome.model.InsiderBand
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MarkerShape
 import home.someoneshome.model.MarkerShapes
@@ -608,22 +607,18 @@ data class PanelState(
      * arithmetic, so a meter drawn as `28 / 42` hands back the Insider count by division, in a game
      * played two to three rounds an evening (D-157). `MeterDisclosureTest` reads the panels; this
      * field is fed to `Balance.integrityPercent` and to nothing else.
-     *
-     * **And to [egressShared]** (D-320), with [insidersChosen]: two public lobby facts, the party's
-     * size and the host's setting, which settle the Insider count whenever the band or the host
-     * does. Nothing draws the result as a number.
      */
     val seats: Int? = null,
     /**
-     * **The host's INSIDERS setting as this phone's lobby showed it when the round was armed; null
-     * is UNKNOWN** (D-103, D-320).
+     * **The round's Insider count, as the house told this Insider's phone at arming; null until it
+     * has** (the owner's 2026-11-22 ruling, D-323 B).
      *
-     * A public fact: the host chose it in a lit room, and every phone's lobby drew it off the
-     * standing (`LobbyBody.Standing.insiders`). Copied at arming, beside the roster, so page 2 can
-     * say whether the Egress clock is shared without the house telling any phone anything new. Read
-     * by [PanelVals.egressShared] and by nothing else; nothing draws it.
+     * Off the role reveal (`RoundMessage.RoleRevealed.insiders`), written only when the reveal says
+     * Insider: a Resident's carries zeros and leaves this null. Read by [PanelVals.egressShared]
+     * and by nothing else; **nothing draws it as a number**. It replaces D-320's reading of the
+     * lobby's public facts, which could not settle UNKNOWN at seven to eleven seats.
      */
-    val insidersChosen: Int? = null,
+    val insiderCount: Int? = null,
     /**
      * **Every seat in the round, by the name its owner asked for, in seat order** (D-115).
      *
@@ -1172,12 +1167,6 @@ class PanelVals(
      */
     val residentNames: List<String> = housed(state.residents, ENDING_RESIDENTS, nothing = emptyList())
 
-    /**
-     * The port's `4 OF 6` beside them, and **nothing on a housed phone** (D-247): the house sends no
-     * count of who is still standing, and a phone that worked one out would be guessing.
-     */
-    val residentsStanding: String? = if (state.houseAttached) null else "4 OF 6"
-
     /** **How many Egresses were contained** (D-247), as the house's pushes counted them. */
     val egressesContained: String =
         housed(state.egressesContained?.toString(), fixture = "2", nothing = NO_READING)
@@ -1381,10 +1370,10 @@ class PanelVals(
     val secondName: String = if (insider) "EGRESS" else "SUBSYS"
 
     /**
-     * **Whether another Insider shares this round's Egress clock, as far as public facts settle it**
-     * (the owner's 2026-11-21 ruling, D-320). See [egressSharedBy].
+     * **Whether another Insider shares this round's Egress clock** (the owner's 2026-11-21 ruling,
+     * D-320), off the count the house told this phone at arming (D-323 B). See [egressSharedBy].
      */
-    val egressShared: Boolean = egressSharedBy(state.seats, state.insidersChosen)
+    val egressShared: Boolean = egressSharedBy(state.insiderCount)
 
     /**
      * **The Insider's EGRESS line says the clock is shared only when it is** (D-151, D-320): the
@@ -3040,32 +3029,15 @@ private fun residentsNamed(names: List<String>): String = when (names.size) {
 }
 
 /**
- * **Does this round have a second Insider, by what every phone already knows?** (the owner's
- * 2026-11-21 ruling, D-320: *SHARED WITH THE OTHER INSIDER* hidden when the round has one Insider.)
+ * **Does this round have a second Insider?** (the owner's 2026-11-21 ruling, D-320: *SHARED WITH
+ * THE OTHER INSIDER* hidden when the round has one Insider.)
  *
- * Read from two public lobby facts and nothing else: [seats], the round's party, and [chosen], the
- * host's INSIDERS setting (null is UNKNOWN). The house draws the count inside [InsiderBand] with
- * the same two (`insidersFor`), so wherever they settle it this is the count the round has:
- *
- * - the host chose a number: it is [InsiderBand.clamp]'s, the number the house drew;
- * - UNKNOWN in a band of one (three to six seats, D-103's amendment): one;
- * - UNKNOWN in a band that starts at two (twelve seats and more): two or more.
- *
- * **No role, no seat and nothing the house sent about the draw is read**, so the answer is the
- * same on every phone and tells an Insider nothing the lobby did not.
- *
- * ### ⚠️ Not settled: UNKNOWN in a band that holds one and more (seven to eleven seats)
- *
- * There the count is hidden from every phone, the Insider's included (D-103; the role reveal
- * carries self-knowledge only, D-193, and no phone is told about a fellow Insider). Saying which
- * would be new information to an Insider, and D-320 stopped there for the owner to rule. Until then
- * the line stays as it was, shown, which is `true` here. A ruling that tells an Insider the count
- * replaces this function's question and nothing else. A phone no house has spoken to ([seats]
- * null) draws the port's fixture, shown, for the same reason.
+ * Read off [count], the round's Insider count as the house told this Insider's phone at arming
+ * (the owner's 2026-11-22 ruling, D-323 B: *just because the phone knows doesn't mean the player
+ * itself does … we can share any info with player phones*). Two or more shows the line; one hides
+ * it. This replaces D-320's reading of the lobby's public facts, which stopped at UNKNOWN in seven
+ * to eleven seats, where no phone held the count; now every Insider's phone holds it, whatever the
+ * host set. A phone the house has not told (null: a Resident's, or a bench with no house) draws the
+ * port's fixture, shown, and a Resident's page 2 never reads this.
  */
-fun egressSharedBy(seats: Int?, chosen: Int?): Boolean {
-    if (seats == null) return true
-    val band = InsiderBand.of(seats)
-    val count = InsiderBand.clamp(seats, chosen) ?: band.first.takeIf { !band.isEmpty() && it == band.last }
-    return count == null || count >= 2
-}
+fun egressSharedBy(count: Int?): Boolean = count == null || count >= 2

@@ -32,7 +32,7 @@ class LobbySettingsRecordingTest {
         assertEquals(30, end.revokeCooldownSeconds)
 
         val text = recording.toText()
-        assertTrue(text.startsWith("someone-is-home/recording/49\n"), "the format was not bumped: ${text.lineSequence().first()}")
+        assertTrue(text.startsWith("someone-is-home/recording/50\n"), "the format was not bumped: ${text.lineSequence().first()}")
         val armingLine = text.lines().first { it.startsWith("E RoundArmed") }
         for (field in listOf("|discussion=60", "|egressTimer=60", "|revokeCooldown=30")) {
             assertTrue(field in armingLine, "the arming row does not stamp $field: $armingLine")

@@ -66,11 +66,11 @@ Tick each line as you see it.
 **Revoke, on the Insider's phone**
 - [ ] Page 2 after arming: ARMED, then 20 s later **COOLING DOWN, dimmed**, then READY about 61 s
       after the hold. It never says READY early. (D-286)
-- [ ] Page 2's EGRESS tile, on the Insider's phone: in a round with **one** Insider (any party of
-      three to six, or the host set INSIDERS to 1) the line under EGRESS is blank; with **two or
-      more** it reads SHARED WITH THE OTHER INSIDER. A Resident's tile reads ALL SYSTEMS RESPONDING
-      either way. Not settled yet: INSIDERS left UNKNOWN with seven to eleven phones, where the
-      line still shows. (D-320)
+- [ ] Page 2's EGRESS tile, on the Insider's phone: in a round with **one** Insider the line under
+      EGRESS is blank; with **two or more** it reads SHARED WITH THE OTHER INSIDER, whatever the
+      host set, INSIDERS left UNKNOWN with seven to eleven phones included (the house tells each
+      Insider's phone the count). A Resident's tile reads ALL SYSTEMS RESPONDING either way.
+      (D-320, D-323)
 - [ ] While armed, pass the Insider's phone within 10 cm of the other phone (a pass is enough;
       Ultra Wideband measures it): **both phones give one Long buzz**, and the Insider's tile goes
       straight to COOLING DOWN. (D-290, D-301)
@@ -128,6 +128,10 @@ Tick each line as you see it.
 - [ ] **Surge** on another phone: its lamp slams bright, goes dark, reboots, and any open
       Subroutine is lost. **No sound plays**, by ruling: the game makes none (D-320), and **no tap does anything** during the
       whole sequence, STOP NOW included (D-182, D-313).
+- [ ] **Surge mid-hold**: on the surged phone, start holding REVOKE or EGRESS (or stand in a
+      report circle, or tap SCAN) and have the Surge land during it. The hold lets go at the slam
+      and nothing arms; the report circle goes; the camera closes at the slam and its two buzzes
+      come then, not at the reboot. (D-323)
 - [ ] **Static**: the Terminal's reader sees the noise over the plan, and **every living phone**
       gets a quiet banner, **MONITORING JAMMED**, over whatever it is showing: no dim, no buzz, and
       the phone stays where it was (the reader stays at the Terminal). It stands until swiped and is
@@ -181,9 +185,9 @@ Tick each line as you see it.
 
 **The work order and carrying** *(D-322)*
 - [ ] **The mix**: open SUBROUTINES at LIGHTS OUT. Every phone's list is the same length and holds
-      one ARRAY WIPE, at least one MEMORY DUMP, and short and medium Subroutines, plus one or more
-      LOCKED · WAITING UPSTREAM lines. An Insider's list looks the same. MEMORY DUMP has no light
-      mark (its rating is not ruled yet).
+      one ARRAY WIPE and short and medium Subroutines, plus one or more LOCKED · WAITING UPSTREAM
+      lines, and **no MEMORY DUMP**: it is not dealt until its screens are designed (D-323). An
+      Insider's list looks the same.
 - [ ] **Array Wipe**: scan the ARRAY WIPE's first card (Spares). The phone goes to page 1 and the
       widget says CARRYING · DISK 01 · TO RACK · NOTHING ELSE OPENS UNTIL IT IS DELIVERED, with the
       padlock on the strip; FILES shows DISK 01, IN HAND, DESTINATION · RACK. Scan any other card of
@@ -199,9 +203,8 @@ Tick each line as you see it.
       it lands after the meeting.
 - [ ] **A Revoke strands a line**: if a Revoked player held your LOCKED line, it never opens. Note
       whether that is what happens and how it feels at the next meeting (D-146).
-- [ ] **Memory Dump cannot be played yet**: scanning its first card opens nothing on the phone (the
-      screens are not ruled). Expect that line to stay open all round, and say whether the round is
-      still winnable with it (slack is 1).
+- [ ] **No Memory Dump anywhere**: no phone's list holds one (D-323), so every line is one the
+      phone can finish. Say whether the meter reaches 0 when everyone finishes.
 - [ ] **Nothing tells you someone is waiting on you yet** (the house sends it; how it looks is not
       ruled).
 
@@ -209,6 +212,11 @@ Tick each line as you see it.
 - [ ] `./run-app.sh device release` on a UWB phone launches to the boot screen. It must not stop
       at launch, now that it asks iOS about UWB (D-292) and carries the Nearby Interaction line
       (D-294).
+
+**The owner's 2026-11-22 rulings** *(D-323)*
+- [ ] **The Residents' ending**: RESIDENTS WIN, the house's card, then the name tiles alone, with
+      no THE RESIDENTS label and no count beside it.
+- [ ] **Settings** ends with LEAVE THIS HOUSE and HOST ONLY beside it.
 
 Write anything that looks or feels wrong next to its line. The decision number shows where it was
 built.

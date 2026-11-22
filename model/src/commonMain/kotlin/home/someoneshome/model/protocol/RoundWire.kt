@@ -523,20 +523,33 @@ sealed class RoundMessage {
      * not others, so a string's width on the wire is not its length. Both are checked when a
      * message is built, so one of the wrong width cannot be decoded or constructed.
      * `RoleRevealedFrameSizeTest` measures the two over the real sockets.
+     *
+     * ### [count]: the round's Insider count, on an Insider's phone (D-323 B)
+     *
+     * The owner's 2026-11-22 ruling tells each Insider's phone how many Insiders the round has, so
+     * page 2's EGRESS line says the clock is shared only when it is. It rides here, in the one
+     * message every seat is sent once at arming, as [COUNT_CHARS] decimal digits, **always that
+     * width**: a Resident's is all zeros, the padding [lineHex] already uses, and the constructor
+     * zeroes it for a Resident whatever it was handed, so no Resident's phone can be told it.
      */
     @ClientFacing
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("RoleRevealed")
-    data class RoleRevealed(val role: Int, val lineHex: String) : RoundMessage() {
+    data class RoleRevealed(val role: Int, val count: String, val lineHex: String) : RoundMessage() {
 
-        /** The message for this phone: its role, and its own words or none. */
-        constructor(insider: Boolean, line: String = "") : this(if (insider) INSIDER else RESIDENT, sealLine(line))
+        /** The message for this phone: its role, its own words or none, and the count or zeros. */
+        constructor(insider: Boolean, line: String = "", insiders: Int = 0) :
+            this(if (insider) INSIDER else RESIDENT, sealCount(if (insider) insiders else 0), sealLine(line))
 
         init {
             require(role == INSIDER || role == RESIDENT) { "a reveal's role is $INSIDER or $RESIDENT" }
             require(lineHex.length == LINE_CHARS && lineHex.all { it in '0'..'9' || it in 'a'..'f' }) {
                 "a reveal's line is $LINE_CHARS lowercase hex characters"
             }
+            require(count.length == COUNT_CHARS && count.all { it in '0'..'9' }) {
+                "a reveal's count is $COUNT_CHARS decimal digits"
+            }
+            require(role == INSIDER || count.all { it == '0' }) { "a Resident's reveal carries the Insider count" }
         }
 
         /** Whether page 2 answers this phone's thumb. */
@@ -545,12 +558,24 @@ sealed class RoundMessage {
         /** The words, with the padding off. Blank on a Resident's. */
         val line: String get() = openLine(lineHex)
 
+        /** The round's Insider count on an Insider's phone; 0 on a Resident's (D-323 B). */
+        val insiders: Int get() = count.toInt()
+
         /** The length, never the words: `Effect.RoleRevealed`'s rule, one layer out (D-247). */
-        override fun toString(): String = "RoleRevealed(insider=$insider, line=${line.length} chars)"
+        override fun toString(): String = "RoleRevealed(insider=$insider, line=${line.length} chars, insiders=$insiders)"
 
         companion object {
             const val INSIDER: Int = 1
             const val RESIDENT: Int = 0
+
+            /** [count]'s one width: two digits, up to 99 Insiders, which no lobby reaches. */
+            const val COUNT_CHARS: Int = 2
+
+            /** The count as [COUNT_CHARS] digits, zero-padded. */
+            fun sealCount(insiders: Int): String {
+                require(insiders in 0..99) { "an Insider count of $insiders does not fit $COUNT_CHARS digits" }
+                return insiders.toString().padStart(COUNT_CHARS, '0')
+            }
 
             /** The most bytes a line can take: [LobbyBody.Handover.LIMIT] units at three bytes each. */
             const val LINE_BYTES: Int = LobbyBody.Handover.LIMIT * 3
@@ -1488,7 +1513,7 @@ object RoundWire {
         // no way to put the authority's own type on a socket and no reason to want one:
         // what a phone needs is whether page 2 answers its thumb, and rule 3 says redact
         // by constructing a narrower type rather than by carrying the wide one.
-        is Effect.RoleRevealed -> RoundMessage.RoleRevealed(effect.role == Role.Insider, effect.line)
+        is Effect.RoleRevealed -> RoundMessage.RoleRevealed(effect.role == Role.Insider, effect.line, effect.insiders)
         // The seat comes off; the list is the same list on every wire it goes down.
         is Effect.RosterIssued -> RoundMessage.RosterIssued(effect.roster)
         // The seat comes off; the plan is the same plan on every wire it goes down (D-316).

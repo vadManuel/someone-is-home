@@ -127,7 +127,7 @@ class LobbyExitTest {
      *
      * A leaver knows why they are on the join screen. A phone whose house closed under it does not,
      * and the whole of what it is owed is an honest sentence — see `LobbyModel.HOUSE_CLOSED`, whose
-     * wording is flagged as proposed.
+     * wording the owner approved as written (D-323 D).
      */
     @Test
     fun aClosedHouseLeavesAnHonestLineAndNothingElse() {

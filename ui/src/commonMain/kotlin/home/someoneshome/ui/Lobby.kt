@@ -1298,9 +1298,8 @@ class LobbyModel(
         const val NAME_TAKEN: String = "NAME TAKEN"
 
         /**
-         * ⚠️ **PROPOSED COPY, NOT RATIFIED.** The owner asked for *an honest line* and did not write
-         * one; this is the draft, flagged here rather than shipped quietly, in the register the rest
-         * of the refusals on this screen are written in.
+         * **The owner's approved words, as written** (2026-11-22, D-323 D). The owner asked for *an
+         * honest line*; this was the draft, and it is ratified unchanged.
          *
          * It says what happened and does not editorialise about why. The host is standing in the
          * room — a client's screen is the wrong place to explain a decision the person who made it

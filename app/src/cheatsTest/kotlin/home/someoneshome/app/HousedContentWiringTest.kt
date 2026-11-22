@@ -211,7 +211,6 @@ class HousedContentWiringTest {
                 val residentNames = residents.map { it.name }.sortedBy { names.indexOf(it) }
                 for (p in phones) {
                     assertEquals(residentNames, p.vals.residentNames, "${p.name}'s ending named the wrong Residents")
-                    assertNull(p.vals.residentsStanding, "${p.name}'s ending drew a standing count no house sent")
                     assertEquals("0", p.vals.egressesContained, "${p.name}'s ending counted Egresses nobody contained")
                     assertNull(p.flow.state.heldOver, "${p.name} kept a line past the round")
                     assertTrue(p.flow.meeting.counts != MeetingCounts(), "${p.name} holds the design's meeting counts")

@@ -732,6 +732,13 @@ fun ReadoutField(
  * synthetic click would not be a hold — so the edges these walk are declared in [Flow.viaActions]
  * and proved by tests that really hold a finger down for two seconds.
  */
+/**
+ * **True while a Surge owns the phone** ([Screen]'s `inputBlocked`, D-182). Read by [rememberHold],
+ * which lets go of a hold already under way when it turns true (D-323 E). Every render outside
+ * [Screen] is false.
+ */
+val LocalInputBlocked: ProvidableCompositionLocal<Boolean> = staticCompositionLocalOf { false }
+
 @Composable
 fun rememberHold(
     onConfirm: () -> Unit,
@@ -740,9 +747,15 @@ fun rememberHold(
 ): HoldState {
     var holding by remember { mutableStateOf(false) }
     var elapsed by remember { mutableStateOf(0) }
+    // **A Surge lets go of every hold already under way, at the slam** (the owner's 2026-11-22
+    // ruling, D-323 E: *cancel both*). The shield that keeps new fingers off the glass cannot cut
+    // short a finger already down, so the hold itself lets go: the bar empties, the clock stops and
+    // nothing is confirmed, and while the Surge runs there is no pointer input here at all.
+    val interrupted = LocalInputBlocked.current
 
-    LaunchedEffect(holding) {
-        if (!holding) {
+    LaunchedEffect(holding, interrupted) {
+        if (!holding || interrupted) {
+            holding = false
             elapsed = 0
             return@LaunchedEffect
         }
@@ -759,7 +772,7 @@ fun rememberHold(
     }
 
     val surface =
-        if (!enabled) Modifier
+        if (!enabled || interrupted) Modifier
         else Modifier.pointerInput(Unit) {
             detectTapGestures(
                 onPress = {

@@ -13460,6 +13460,8 @@ the known load flake: rerun alone it passes (1 test, 0 failures). The vocabulary
 `TimelapseRenderTest` (5) and `TimelapseRecordingTest` (2) are in the XML. **Nothing here has run on
 a phone**: the phone session's new lines carry the strip, the timelapse and the banner.
 
+**Set to 50 at integration** (D-323): D-319, D-320 and D-322 were each 49 alone and were integrated together, so the combined format is 50 and carries every row change of the three; `Recording.HEADER` and the six pinned recording tests read 50.
+
 ### D-320 · **The verdict buzzes, the EGRESS line follows the Insider count, the lobby's three timed rows get the owner's ranges and every guest draws the host's numbers, and the game makes no sound — built (recording 49); the EGRESS line is STOPPED for one case: INSIDERS left UNKNOWN at seven to eleven seats, where no phone holds the count**
 
 **The rulings** (owner, 2026-11-21, *Owner's review, 2026-11-21 morning* in
@@ -13619,6 +13621,10 @@ THIS HOUSE, no LIGHTS OUT.
 **Checked** (on the final tree, `*/build/test-results` cleared first: `./gradlew check --continue`
 with the two variant sweeps excluded, then `:app:variantSweepRelease`, then `:app:variantSweepPlaytest`,
 the app's XML copied out after each, every result XML counted with a python glob): model 365 (JVM) + 346 (iOS Simulator); core 433 + 431; platform 211; ui 790 (desktop) + 393; harness 136; cards 17; app 293 (the default variant), 176 (Release), 293 (Playtest). 3,415 in the default check, 0 errors, 0 skipped, and two failures, each rerun alone and passing: `OutboundQueueTest.aSeatThatStopsDrainingDelaysNobodyAndIsDroppedWhenItsQueueIsFull`, the known load flake (1 test, 0 failures alone), and in the Release sweep `HouseGoneTest.aGuestWhoLeavesKeepsHerSeatAndAGuestWhoStaysIsSeatedAgain` (*ROSE came back to somebody else's chair*), which passed in the default and Playtest sweeps and alone in Release (4 tests, 0 failures); it is not on the known list and is recorded here rather than dismissed. The vocabulary lints, `redactionLint`, the cordons and `boundaryCheck` ran and passed. `VerdictBuzzTest`, `LobbySettingsWireTest`, `EgressSharedLineTest` and `NoSoundTest` are in the XML, the two app suites in the default and Playtest sweeps (Release does not compile the cheats' tests).
+
+**Set to 50 at integration** (D-323), with D-319 and D-322; the `ScanAnswered` row carries `haptic=` and then D-322's `carrying=`.
+
+**The EGRESS line's stop is answered by D-323 B** (the owner, 2026-11-22): each Insider's phone is told the round's Insider count on its role reveal, and `egressSharedBy` reads that count alone, so the lobby inference and the UNKNOWN stop at seven to eleven seats are gone.
 
 ### D-322 · **The work order is the design's: the mix scaled to `K`, one cross-player dependency per seat with the 20–120 s unlock and `you're up`, the Array Wipe circuit with its disk in hand, and Memory Dump's house half — built (recording 49); Memory Dump's screens, the upstream notice's look and three of M5's chain rules are STOPPED for the owner**
 
@@ -13887,6 +13893,102 @@ are in the XML: `OrderMixTest` 4, `CrossPlayerChainTest` 5, `ArrayWipeTest` 3, `
 `StructuredWorkBenchTest` 3, `StructuredWorkRender` 6. `SubroutineQuestionWiringTest` gained three
 evenings (seeds 2, 15, 20): the mix deals the Insider's one order two shorts, and the first three
 evenings no longer dealt it Parity Check, Deallocate, Short or Sniff.
+
+**Set to 50 at integration** (D-323), with D-319 and D-320. Combined with D-320's *no*, an Array Wipe station step (Spares, the Rack, Disposal) is not NOTHING FOR YOU HERE and answers with no buzz, as an opened scan does (`ScanStep.isStationStep`, read beside `opened` and never the role); a refusal while carrying is NOTHING FOR YOU HERE and says *no*.
+
+**⚠️ Memory Dump is not dealt: provisional, owner-pending** (D-323 A, the owner, 2026-11-22). Until its screens are designed, `Balance.MEMORY_DUMP_DEALT` is false and `Balance.orderMix` gives the long's share to medium (`designMix` is the mix above, dealt again when the switch is turned on), so no order holds a line no phone can open and the meter can reach 0 again. The house half stays built; `MemoryDumpTest`, `OrderParityTest` and `WorkOrderDeterminismTest` plant a Memory Dump line by hand rather than finding a dealt one, and *What this does to a real round* above no longer applies while the switch is off.
+
+### D-323 · **Owner rulings applied at integration (2026-11-22)**
+
+D-319, D-320 and D-322 were built in parallel from the same tree, each at recording 49, and integrated
+together (picked D-320, D-319, D-322: D-320 is the narrowest and its `ScanAnswered.haptic` is the field
+D-322's `carrying` then sits beside; D-319 touches the fewest of D-322's files). **The combined format is
+50.** Five rulings from the owner were applied in the same integration.
+
+- **A · Memory Dump is not dealt until its screens are designed** (⚠️ provisional, owner-pending). D-322
+  dealt one into every order and no phone can open one, so nobody could finish an order and the meter
+  could not reach 0. `Balance.MEMORY_DUMP_DEALT` is one switch, false: `orderMix` deals the long's share
+  as medium, and `designMix` is D-322's mix, dealt again the moment the switch is true. The house half
+  is kept and tested on a line planted by hand (`MemoryDumpTest`, `OrderParityTest`,
+  `WorkOrderDeterminismTest`). Guards: `OrderMixTest` *no dealt order holds a Memory Dump while the
+  switch is off* (every `K` to 60; 3 to 18 seats over four seeds, the Insiders' orders included) and
+  `StructuredWorkBenchTest` *noOrderOnTheBenchHoldsAMemoryDumpWhileItsScreensAreUnbuilt* (the house's
+  orders and every phone's copy).
+- **B · Each Insider's phone is told the round's Insider count** (*just because the phone knows doesn't
+  mean the player itself does … we can share any info with player phones*). It rides the role reveal
+  (D-193, D-249): `Effect.RoleRevealed.insiders` and `RoundMessage.RoleRevealed.count`, two decimal
+  digits always sent, **zeros on a Resident's** (the constructor zeroes it for a Resident whatever it is
+  handed, and the effect refuses a count on a Resident), so the reveal is 863 bytes framed for every
+  role and count. The phone keeps it as `PanelState.insiderCount`, an Insider's only, and
+  `egressSharedBy(count)` shows SHARED WITH THE OTHER INSIDER at two or more. D-320's lobby inference
+  (`insidersChosen`, the band reading) and its UNKNOWN stop at seven to eleven seats are gone. The
+  transcript's `RoleRevealed` row gains `insiders=`. Guards: `EgressSharedLineTest` (ui: one hides,
+  two to five show, seven to eleven seats follow the count not the lobby, a Resident holds none and
+  its page 2 never moves, one width for every role and count) and `EgressSharedCountTest` (app, the
+  real rules, schema, projection and frame: one Insider at three to six seats and the host's one at
+  eight hide it; the host's two at eight and twelve seats UNKNOWN show it; **UNKNOWN at seven to
+  eleven seats swept over seeds until the draw gave both one and two**, each Insider's page following
+  its count and every Resident's unmoved, every reveal one length).
+- **C · The Residents' ending drops THE RESIDENTS and the count.** The name tiles sit straight under the
+  banner and the house's card; `PanelVals.residentsStanding` (the port's `4 OF 6`) is deleted with
+  its two assertions. No new copy. Rendered and looked at (`ResidentsEndingRender`,
+  `build/screens/d323-residents-*.png`, 600 by 1300): RESIDENTS WIN, then ALBA BRUNO / CYRUS DEVI /
+  ENZO in two columns, then SYSTEM INTEGRITY, EGRESSES CONTAINED, WORKING FOR THE HOUSE and NEW
+  ROUND; the port's ELLIOT PRIYA / MARCUS ROSE likewise, nothing between the banner and the tiles.
+- **D · Copy.** Settings' `END SESSION` is `LEAVE THIS HOUSE`, D-235's words (with HOST ONLY beside it,
+  still no control on any phone). `THE HOST CLOSED THE HOUSE` is approved as written; its
+  *PROPOSED COPY, NOT RATIFIED* note is gone.
+- **E · A Surge lets go of every hold and closes the camera at the slam** (*cancel both*). `rememberHold`
+  reads `LocalInputBlocked` (`Screen`'s `inputBlocked`, the Surge's): at the slam a hold already under
+  way empties, its clock stops, nothing is confirmed, and it takes no pointer until the Surge ends,
+  which covers the Revoke and Egress arms and every other two-second hold. The report circle: a
+  surged phone tells the house it is off the main view (`FlowModel.onMainView`), so D-307's path ends
+  a running hold on the next upload and starts none, the report screen is left at the slam, and a slot
+  sent before the house heard opens nothing. The camera: the scan screen is left at the slam, which
+  is what closes the window, and its D-160 *no* is played as it closes, so the double buzz is at the
+  slam rather than the reboot. Guards: `SurgeLetsGoTest` (real pointers through `FlowHost`: a Revoke arm
+  and an Egress arm held through the slam do nothing, each beside a control that fires without one;
+  the report circle let go and the main view back after; the scan screen left in the slam's call).
+  ⚠️ The camera's buzz is the in-round scan's `onDispose` in `Cheats.kt`, which has no test of its own;
+  what is tested is that the slam leaves the screen.
+
+**Integration calls, recorded.** An Array Wipe station step (Spares, the Rack, Disposal) answers with
+no buzz: it opens nothing because the scan was the work, so it is not NOTHING FOR YOU HERE
+(`ScanStep.isStationStep`, beside `opened`, never the role); a refusal while carrying says *no*.
+`RoundMessage.ScanAnswered` keeps D-320's `no` digit and gains D-322's `carrying`.
+`CrossPlayerChainTest`'s release test now picks a downstream line with nothing of its own order before
+it, since A's mix moved which lines the seed chains. `VerdictBuzzTest` reads the scan's answer out of
+what the seat is sent, since D-322's order rides every scan beside it (the buzz is still read off
+everything). `TimelapseRecordingTest`'s role exchange subtracts the meter, as D-322 had
+`HostSeatRecordingTest` do. `DifferentialTest`'s toggle subtracts the reveal as well as the meter and
+asserts that what moved is only an Insider's count (B: toggling a role changes the count the other
+Insider is told).
+
+**⚠️ For the owner: the meter at a meeting can now follow who banked.** `DifferentialTest`'s *the meter
+asymmetry reaches no living player* held because every seat in the fixture banked one line a pass.
+D-322's Array Wipe is four traverses for one line, and with A's mix the fixture's seat 5 is on its
+circuit while seat 6 banks, so after exchanging the two the percentage every phone is shown at the
+second meeting differs (67 against 70). It is D-109's asymmetry in the aggregate form D-103 shows the
+living, not a per-player line, and the test now allows that one kind (`SystemIntegrityBatched`) and
+still refuses every other on a living seat. Whether that reach is acceptable, or the meeting's
+percentage needs coarser steps, is the owner's.
+
+**Proved red by injection**, each restored and green again, quoted from the XML: `MEMORY_DUMP_DEALT`
+set true, *Memory Dump is dealt: its screens must exist first (D-323) expected:<false> but was:<true>*;
+`egressSharedBy` at one or more, *one Insider, and page 2 still says the Egress is shared expected:<[]>
+but was:<[SHARED WITH THE OTHER INSIDER]>* and *one Insider at 7 seats (UNKNOWN), and the line stayed*;
+`rememberHold` blind to the Surge, *a Revoke arm held through the slam armed: [ArmRevoke]* and *an
+Egress arm held through the slam fired expected:<0> but was:<1>*; `onMainView` blind to the Surge, *a
+surged phone still told the house it could report*.
+
+**Frames** (D-217). The upload is 3,570 bytes framed with an empty request slot and with ArmRevoke, the
+Egress, PlayTimelapse, StopTimelapse or a card read in it (the slot 532 characters every time); the
+answer is 2,461 bytes with a blank, a nothing, a couch or a three-frame 128-room playback map (the field
+544 characters). A push of `ScanAnswered` is not one width, as it never was: 123 bytes for NOTHING FOR
+YOU HERE and a node alike (D-297), 165 or 169 with a disk in hand (D-322), the same on both roles.
+
+**Allocation** (rule 7). `WireDecodeAllocationTest`: writing an upload's answer 5,552 B (ceiling 6,144),
+reading an upload frame 17,760 B (ceiling 20,480), as D-319 measured.
 
 ## State after revision 12
 

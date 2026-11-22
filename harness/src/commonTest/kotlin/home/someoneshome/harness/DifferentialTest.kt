@@ -232,10 +232,17 @@ class DifferentialTest {
         assertTrue(out.isNotEmpty(), "nobody is out in this round, so this proves nothing")
 
         val raw = diff(GameState.EMPTY, baseline, exchanged, listOf(Seat(5), Seat(6)))
+        // ⚠️ **Except the meeting's frozen percentage, for the owner to rule** (D-323). Since D-322 an
+        // order holds an Array Wipe, four traverses for one line, so two seats walking the same cards
+        // bank at different moments; with D-323 A's mix seat 5 is on its circuit while seat 6 banks,
+        // and at the second meeting the percentage every phone is shown moves with which of the two
+        // is the Resident. That is D-109's asymmetry in the one form D-103 shows the living, the
+        // aggregate at a meeting; the live meter and every other kind still reach no living phone.
         val living = raw.unexplained.filterNot { it.seat.index in out }
+        val beyondTheMeeting = living.filterNot { it.toString().contains("SystemIntegrityBatched|") }
         assertEquals(
-            emptyList(), living,
-            "a seat that stayed in the round saw the meter asymmetry: ${living.take(3)}",
+            emptyList(), beyondTheMeeting,
+            "a seat that stayed in the round saw the meter asymmetry: ${beyondTheMeeting.take(3)}",
         )
     }
 
@@ -331,12 +338,21 @@ class DifferentialTest {
             "toggling changed the Insider count and therefore how many seats bank; if this is " +
                 "now clean, the meter has stopped reading the roles and the test needs revisiting",
         )
+        // **And the Insider count each Insider is told** (the owner's 2026-11-22 ruling, D-323 B): a
+        // toggle changes the count, so the reveal on the other Insider's own phone carries the new
+        // count. That is the count itself, a balance value, on the reveal of the seat it is about; an
+        // EXCHANGE keeps the count, and there the reveal still moves on the traded seats alone.
         assertEquals(
             emptyList(),
             differentialOnRoleSwap(
-                GameState.EMPTY, round(), Seat(1), ignoring = METER_ASYMMETRY,
+                GameState.EMPTY, round(), Seat(1), ignoring = METER_ASYMMETRY + THE_ROLE_REVEAL,
             ).unexplained,
-            "toggling diverged in something other than the meter",
+            "toggling diverged in something other than the meter and the Insider count",
+        )
+        val reveals = differentialOnRoleSwap(GameState.EMPTY, round(), Seat(1), ignoring = METER_ASYMMETRY).unexplained
+        assertTrue(
+            reveals.all { it.toString().contains("RoleRevealed|") && it.toString().contains("role=Insider") },
+            "toggling moved a reveal other than an Insider's count: $reveals",
         )
     }
 
