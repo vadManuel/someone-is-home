@@ -152,3 +152,24 @@ D-311 and D-313 were also run together in a full check before pushing: 3,312 tes
   Chains and carrying will be built together with the work-order mix once that is discussed.
 - **To discuss:** the work-order mix, the two missing Subroutine types, Static's announcement, Isolate on the Terminal, cards from another home, and the remaining overnight decisions.
 - **The design mockup:** update the Claude Design project to remove Notes.
+- **More rulings (morning):**
+  - **Static:** a quiet banner MONITORING JAMMED on every living phone (no dim, no buzz).
+  - **Isolating the Terminal:** not now.
+  - **The work-order mix:** scale the 1 : 1 : 3 : 2 (circuit : long : medium : short) proportions with K.
+  - **Foreign cards:** built as proposed, NOT A MARKER with a two-pulse 'no' buzz (D-318).
+  - **Verdict buzz:** ACCEPTED gives the short 'yes'; REJECTED and NOTHING FOR YOU HERE give a two-pulse 'no'.
+  - **Armed pass at a Revoked phone:** keep "nothing happens"; correct the GDD.
+  - **Not voting:** counts as a Skip (D-075, D-117 stand; D-144's abstention line is superseded).
+  - **Page 2's SHARED WITH THE OTHER INSIDER:** hidden when the round has one Insider.
+- **Built this morning:**
+  - D-316: the Terminal and couch map;
+  - D-317: the three lobby settings, with each value as its only choice until you rule ranges;
+  - D-318: foreign cards.
+
+  An integration agent is combining them (the recording format becomes 48).
+- **Open from D-316:**
+  - The timelapse has five unruled points: whose cooldown it is, what a frame shows and the sample rate, the button while cooling, the count-up against rule 5, and whether a meeting counts as an early cancel.
+  - The couch on a home with two or more storeys shows only the first.
+  - The Terminal shows only the station's own storey.
+  - The plan now goes to every phone at arming (provisional; it amends D-186 and D-271).
+- **Open from D-317:** ranges and steps for the three settings, and whether the map proposes the Egress timer.
