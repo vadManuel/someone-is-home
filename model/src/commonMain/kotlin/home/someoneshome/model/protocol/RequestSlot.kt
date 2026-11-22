@@ -1,19 +1,21 @@
 package home.someoneshome.model.protocol
 
 import home.someoneshome.model.ClientFacing
+import home.someoneshome.model.MarkerId
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
 /**
- * **What a phone may ask the house for from inside its upload: a control, or the Egress tile**
- * (D-263, provisional).
+ * **What a phone may ask the house for from inside its upload: a control, the Egress tile, or a
+ * card it read** (D-263, provisional; D-318).
  *
- * The two upward requests the round has, [IntentMessage] in [Act] and the Egress tile in [Fire],
- * kept as two members for the reason [RoundBody.Fire] is not an [RoundBody.Act]: one is translated
- * and admitted, the other needs the house to make a draw first. Neither carries a seat, and neither
- * can: the seat comes off the connection the upload arrived on, exactly as it always has.
+ * The upward requests the round has, [IntentMessage] in [Act], the Egress tile in [Fire] and a card
+ * read in [Read], kept as separate members for the reason [RoundBody.Fire] is not an
+ * [RoundBody.Act]: a control is translated and admitted, and the other two need the house to do
+ * something first, a draw for the tile and a look at the map for the card. None carries a seat,
+ * and none can: the seat comes off the connection the upload arrived on, exactly as it always has.
  */
 @ClientFacing
 @kotlinx.serialization.Serializable
@@ -30,6 +32,24 @@ sealed class Asked {
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("fire")
     data object Fire : Asked()
+
+    /**
+     * **A card this phone's camera read in a round: the id printed on it, and nothing else**
+     * (the owner's 2026-11-21 ruling, D-318).
+     *
+     * Every decoded in-round scan goes up as this, whatever the card is and whoever is holding it,
+     * so it is one shape and, in the fixed-width slot, one size on every phone. **No shape rides
+     * it**: the shape is printed on the paper and the paper can be wrong (a spare from the deck, a
+     * card from another home), so what the card *is* is the house's answer from the map
+     * (`routeScan`): work, the meeting, or NOT A MARKER. The phone has no map and decides nothing.
+     *
+     * [card] is a reading, never a claim about where the reader is standing; that is the house's
+     * conclusion from a registered card, and it draws none from an unregistered one (D-136, D-072).
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("read")
+    data class Read(val card: MarkerId) : Asked()
 }
 
 /**

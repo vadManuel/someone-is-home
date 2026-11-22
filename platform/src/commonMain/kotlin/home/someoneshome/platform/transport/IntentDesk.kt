@@ -1,6 +1,7 @@
 package home.someoneshome.platform.transport
 
 import home.someoneshome.model.Intent
+import home.someoneshome.model.MarkerId
 import home.someoneshome.model.Seat
 import home.someoneshome.model.protocol.Asked
 import home.someoneshome.model.protocol.IntentMessage
@@ -98,6 +99,21 @@ class IntentDesk(
          * [actor] is the connection's seat, arrived at exactly as [Put]'s is.
          */
         data class Draw(val actor: Seat) : Landing
+
+        /**
+         * **New: a card this seat's phone read, and the house has to look at the map before there
+         * is anything to put** (`Asked.Read`, D-318).
+         *
+         * [Draw]'s reasoning with a different second source. Which fact a card is — work, the
+         * meeting, or paper this home never registered — is a question about the home's map, which
+         * the rules have never held and no phone holds either, so the authority routes it
+         * (`routeScan`) and only then admits whatever it turned out to be. Carried as a [Put] it
+         * would need an [Intent] whose `factOf` arm guesses at the map.
+         *
+         * [actor] is the connection's seat, as [Put]'s is; [card] is the id the phone read and
+         * nothing about where it was standing.
+         */
+        data class Read(val actor: Seat, val card: MarkerId) : Landing
     }
 
     private val gate = Mutex()
@@ -147,7 +163,8 @@ class IntentDesk(
      * under it is put, in the order the slot holds them** ([Landing.Put] for a control,
      * [Landing.Draw] for the Egress tile); every later time the id is one [Landing.Duplicate] and
      * nothing under it is put again. The seat is the connection's, as in [arrived]; [asked] has
-     * nowhere to name one.
+     * nowhere to name one. A card read ([Landing.Read]) comes only this way: a read means nothing
+     * outside a round, and in a round every request rides the slot.
      *
      * The id mark is not cleared by [seated]. A slot that went up a failing socket is sent again on the
      * next one, under the same id, and has to be recognised there.
@@ -161,6 +178,7 @@ class IntentDesk(
             when (it) {
                 is Asked.Act -> Landing.Put(it.intent.attributedTo(seat))
                 is Asked.Fire -> Landing.Draw(seat)
+                is Asked.Read -> Landing.Read(seat, it.card)
             }
         }
     }

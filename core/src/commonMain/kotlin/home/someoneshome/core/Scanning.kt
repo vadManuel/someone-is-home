@@ -3,7 +3,6 @@ package home.someoneshome.core
 import home.someoneshome.model.EntityId
 import home.someoneshome.model.Event
 import home.someoneshome.model.HouseMap
-import home.someoneshome.model.MarkerCard
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.OpenSubroutine
@@ -58,16 +57,25 @@ sealed interface ScanRouting {
     data class Meeting(val event: Event.MeetingCalled) : ScanRouting
 
     /**
-     * **Paper that is not part of this home. No event, and no report to anybody** (D-071, D-072).
+     * **Paper that is not part of this home. No event, and no report to anybody** (D-071, D-072,
+     * D-169, D-318).
      *
-     * The client says so plainly — the one refusal allowed to be specific, because it is a fact
-     * about a piece of paper rather than about a player — and **nothing else happens**. No count at
-     * the end of the round, no notice at the next meeting: either would turn the app into an
-     * arbiter of a player's claim, letting the room verify testimony. Unreported it becomes
-     * material instead, which is the decision rather than an omission.
+     * The scanning phone alone is told so plainly, NOT A MARKER — the one refusal allowed to be
+     * specific, because it is a fact about a piece of paper rather than about a player — and
+     * **nothing else happens**. The seat is not placed, its open work is not spent, no meeting is
+     * called, and no other phone learns that a card was read. No count at the end of the round, no
+     * notice at the next meeting: either would turn the app into an arbiter of a player's claim,
+     * letting the room verify testimony. Unreported it becomes material instead, which is the
+     * decision rather than an omission.
+     *
+     * **A mislaid card is this** (D-169): an id no longer on the map is simply unregistered. **So is
+     * a meeting card the home never put in a room**, a spare from the house's own deck: its shape is
+     * the meeting card's, and the shape is printed on paper, so only the id the map holds calls a
+     * meeting.
      *
      * It is an object with no event precisely so that this stays impossible to route into the
-     * rules by accident.
+     * rules by accident. The house answers it above the rules, outside the recording
+     * (`Effect.CardUnregistered`).
      */
     data object Unregistered : ScanRouting
 }
@@ -79,18 +87,23 @@ sealed interface ScanRouting {
  * a shape, and the branch is provably outside every client-visible path rather than reviewed as
  * being outside one.
  *
+ * **It takes the card's id and never its shape** (D-318). The id is what the phone read; the shape
+ * is printed on the same paper and says what the card was made as, not whether this home ever put
+ * it in a room. A routing that trusted the shape would call a meeting off any spare `u_shape` in
+ * the deck, which is the defect D-313 found.
+ *
  * The meeting card is asked about first, because it is the one card whose *identity* changes what
  * the scan means. Everything else registered is work, and the difference between an ordinary
  * marker holding work for you and one holding none is the rules' to answer, not this function's —
  * that is D-124's whole point, and a routing that pre-answered it would have to know the work
  * order, which would put the answer key one call away from the map.
  */
-fun routeScan(at: Tick, actor: Seat, card: MarkerCard, map: HouseMap): ScanRouting = when {
-    map.meeting?.card?.id == card.id ->
+fun routeScan(at: Tick, actor: Seat, card: MarkerId, map: HouseMap): ScanRouting = when {
+    map.meeting?.card?.id == card ->
         ScanRouting.Meeting(Event.MeetingCalled(at, actor, MeetingTrigger.MeetingCard))
 
-    map.terminal?.card?.id == card.id || map.registrationOf(card.id) != null ->
-        ScanRouting.Work(Event.MarkerScanned(at, actor, card.id))
+    map.terminal?.card?.id == card || map.registrationOf(card) != null ->
+        ScanRouting.Work(Event.MarkerScanned(at, actor, card))
 
     else -> ScanRouting.Unregistered
 }

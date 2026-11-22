@@ -62,7 +62,7 @@ class PlacementWiringTest {
 
         val seeds = pushed.filterIsInstance<Effect.ContactSeedIssued>().associate { it.seat.index to it.seed }
         val card = house.state.workOrderFor(Seat(0))!!.entries.first().anchor!!
-        house.heard(Intent.BeginSubroutine(Seat(0), card))
+        house.cardRead(Seat(0), card)
         assertTrue(house.state.presenceFor(Seat(0))!!.open, "seat 0's own work opened no window")
         val room = house.state.roomOfCard(card)!!
 

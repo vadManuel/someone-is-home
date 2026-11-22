@@ -30,8 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import home.someoneshome.model.CardPayload
-import home.someoneshome.model.MarkerShapes
-import home.someoneshome.model.protocol.IntentMessage
+import home.someoneshome.model.MarkerId
 import home.someoneshome.platform.SeededCardScanner
 import home.someoneshome.platform.clearSeatToken
 import home.someoneshome.platform.devicePermissions
@@ -236,6 +235,9 @@ fun CheatRoot(uwb: Boolean) {
             // `fireEgress` makes the house's draw against the home's shape and then mints, which is
             // two steps where `heard` is one — the reason the request has a frame of its own.
             onEgressFired = doors::fired,
+            // **A card another phone read, to this round's map** (D-318). The house routes it: work,
+            // the meeting, or NOT A MARKER to that phone alone.
+            onCardRead = doors::read,
             // **The third door: what another phone's radio heard** (D-217). The house judges it
             // with the resolver and puts whatever it concludes to the rules.
             onSighted = uploadDoor::sighted,
@@ -707,10 +709,10 @@ fun CheatRoot(uwb: Boolean) {
         // got here by tapping SCAN; the window is open for the ten seconds the bar is emptying,
         // and the lens is held for exactly that long.
         //
-        // What a read produces is `Effect.ScanAnswered` and the house's push to `ScanCaught` —
-        // `Flow.housePushed` says so. A client that walked itself to `ScanCaught` would be the
-        // device deciding which Subroutine a card holds, so nothing here moves a screen: the read
-        // goes UP as an intent and the house answers it.
+        // What a read produces is the house's answer — `ScanAnswered` and its push to `ScanCaught`
+        // or NOTHING FOR YOU HERE, the ring, or NOT A MARKER — and `Flow.housePushed` says so. A
+        // client that walked itself to any of them would be the device deciding what a card is,
+        // so nothing here moves a screen: the read goes UP and the house answers it.
         //
         // ⚠️ **THIS CALLBACK WAS EMPTY UNTIL THE PAYOFF RUN, AND THE COMMENT SAID WHY.** It was
         // written when no house was attached (E-D3-3), so a read in a round had nowhere to go and
@@ -722,21 +724,18 @@ fun CheatRoot(uwb: Boolean) {
         // seat's Subroutine, NOTHING FOR YOU HERE otherwise), and D-121 (a meeting is called ONLY
         // by physically scanning the meeting card).
         //
-        // ⚠️ **THE INTENT SPLIT IS CLIENT-SIDE AND THAT IS THE SEAM TO REPLACE.** `CallMeeting` and
-        // `BeginSubroutine` are two wire members, so somebody has to decide which a card is. The
-        // HOUSE is the one that should: `routeScan` (`core/Scanning.kt:87`) decides it against the
-        // home's map, and a client has no map — Static deleted `Effect.HomePlanOffered` and the
-        // plan now reaches nobody. So this trusts **the paper over the map**, reading the shape
-        // printed on the card, which is strictly weaker than the house's answer and **fails in the
-        // harmless direction**: an unregistered meeting-shaped card produces a `MeetingCalled` the
-        // rules refuse, and a real client cannot construct a wrong seat in any case because
-        // `IntentDesk` stamps the seat off the connection. **A production build should send ONE raw
-        // read and let the house route it** — one wire member, the house's judgment. That is E5's,
-        // and this split is the seam it replaces.
+        // **ONE RAW READ, AND THE HOUSE ROUTES IT** (the owner's 2026-11-21 ruling, D-318). This
+        // used to split the read on the phone into `BeginSubroutine` or `CallMeeting` by the shape
+        // printed on the card, and the paper was trusted over the map: a card this home never
+        // registered went up as work, placed its reader at no place in the home, spent their open
+        // work and was answered NOTHING FOR YOU HERE; a spare meeting card called a meeting. Now
+        // every decoded read goes up as the card's id and nothing else, the same request on every
+        // phone, and the house answers from the map (`routeScan`): work, the meeting, or NOT A
+        // MARKER to this phone alone.
         if (view == CheatView.Panel && flow.state.screen == ScreenId.Scan) {
             DisposableEffect(scan) {
                 scan.scan { payload ->
-                    when (val intent = inRoundScan(payload)) {
+                    when (val card = inRoundScan(payload)) {
                         // Paper this game did not print. Nothing goes up: D-071 makes an unreadable
                         // card a fact about a piece of paper rather than a statement about a
                         // player, and the house is not asked about paper. The lens already buzzed.
@@ -751,19 +750,14 @@ fun CheatRoot(uwb: Boolean) {
                         // row came down, and the id in between was dropped on the floor.
                         //
                         // Written beside the send rather than inside `inRoundScan` deliberately.
-                        // That function is a pure decode and the shape test E5 deletes; this is the
-                        // client keeping a fact about its own act, and it has to outlive the split.
-                        is IntentMessage.BeginSubroutine -> {
-                            println("[round] SCAN — ${nameOfScan(intent)} · ASKING THE HOUSE")
-                            flow.scanning(intent.marker)
-                            press.value?.act(intent)
-                        }
-
-                        // The meeting card opens no work and files no entry, so there is nothing
-                        // here for a hand-over to be attributed to (D-121).
+                        // That function is a pure decode; this is the client keeping a fact about
+                        // its own act. Kept for every card, because the phone cannot tell which
+                        // cards open work: a meeting card or NOT A MARKER files no entry against it
+                        // and leaves it unread, and the next read replaces it.
                         else -> {
-                            println("[round] SCAN — ${nameOfScan(intent)} · ASKING THE HOUSE")
-                            press.value?.act(intent)
+                            println("[round] SCAN — ${card.value} · ASKING THE HOUSE")
+                            flow.scanning(card)
+                            press.value?.readCard(card)
                         }
                     }
                 }
@@ -803,36 +797,23 @@ fun CheatRoot(uwb: Boolean) {
 }
 
 /**
- * **A card read in a round, turned into the request it is** — and the seam a real build replaces.
+ * **A card read in a round, turned into the id that goes up** (the owner's 2026-11-21 ruling,
+ * D-318).
  *
  * Pulled out of the callback that calls it so that it can be tested and injected against. The
  * callback is inside a `@Composable`, where a rule about what a scan means would be a rule nothing
- * could check; here it is a pure function from a payload to an intent, and
- * [ScanIntentTest] sweeps the whole shape roster through it.
+ * could check; here it is a pure function from a payload to a card id, and [ScanIntentTest] sweeps
+ * the whole shape roster through it.
  *
- * ### It is ruled behaviour, not a decision taken here
+ * ### It decides nothing about the card, and that is the ruling
  *
- * Decision-log revision 34's scan flow (tap SCAN, the ten-second window, **auto-open on acquire** —
- * the auto-open *is* the read becoming the request), D-124's resolution (a `(seat, card)` pair
- * resolves to that seat's Subroutine, and to NOTHING FOR YOU HERE otherwise), and **D-121**: a
- * meeting is called only by physically scanning the meeting card.
- *
- * ### ⚠️ The split is client-side, and that is exactly what E5 should delete
- *
- * `CallMeeting` and `BeginSubroutine` are two wire members, so something must decide which a card
- * is. **The house is what should decide it** — `routeScan` (`core/Scanning.kt`) answers it against
- * the home's map, and a client has no map: Static deleted `Effect.HomePlanOffered` and the plan
- * now reaches nobody. So this reads **the shape printed on the paper** instead, which is strictly
- * weaker than the map's answer.
- *
- * **It fails in the harmless direction, and that is the whole argument for it standing in.** A
- * meeting-shaped card the home never registered produces a `MeetingCalled` the rules refuse; a
- * marker this seat has no work at produces the `ScanAnswered` that opens nothing, which is D-124
- * working. Nothing here can name a seat: `IntentDesk` stamps that off the connection, so the worst
- * a wrong answer costs is one refused frame.
- *
- * **A production build should send one raw read and let the house route it** — one wire member,
- * the house's judgment, no shape test on a phone. Returns null for paper this game did not print.
+ * It used to split the read into `CallMeeting` or `BeginSubroutine` by the shape printed on the
+ * paper, which trusted the paper over the map: D-313 found a card this home never registered
+ * answered NOTHING FOR YOU HERE after placing its reader at no place in the home and spending their
+ * open work, and a spare meeting card calling a meeting. **The house decides now**, against the map
+ * the round was armed in (`routeScan`): work, the meeting, or NOT A MARKER to this phone alone. So
+ * every card this game printed comes out as its id, whatever its shape, and the same request goes
+ * up from every phone. Returns null for paper this game did not print.
  */
 /**
  * **Whether the bench's fake house may drive this phone's screens** — `FlowHost`'s
@@ -908,23 +889,12 @@ internal suspend fun lightsOutPressed(
     return armAtLightsOut(house = house, hosting = hosting, seed = RoundCheat.seed(read), note = note)
 }
 
-internal fun inRoundScan(payload: String): IntentMessage? =
+internal fun inRoundScan(payload: String): MarkerId? =
     when (val read = CardPayload.decode(payload)) {
         is CardPayload.Result.Rejected -> null
-        // The reserved `u_shape` and nothing else. The Terminal's `t_shape` is deliberately NOT a
-        // second case: `routeScan` calls the Terminal **work** — it is a place you scan to work at
-        // — so it travels as an ordinary marker exactly like the ten.
-        is CardPayload.Result.Read ->
-            if (read.card.shape == MarkerShapes.MEETING) IntentMessage.CallMeeting
-            else IntentMessage.BeginSubroutine(read.card.id)
+        // **No shape test, the meeting card's included** (D-318). What the paper is, is the map's.
+        is CardPayload.Result.Read -> read.card.id
     }
-
-/** What to call a scan in the log. The marker, or the one card that is not a marker at all. */
-private fun nameOfScan(intent: IntentMessage): String = when (intent) {
-    is IntentMessage.BeginSubroutine -> intent.marker.value
-    IntentMessage.CallMeeting -> "THE MEETING CARD"
-    else -> "A SCAN"
-}
 
 /**
  * **The shutter: the one thing a build with no camera cannot do for itself.**

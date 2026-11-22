@@ -5,6 +5,8 @@ import home.someoneshome.core.ContactMemory
 import home.someoneshome.core.ContactUpload
 import home.someoneshome.core.RangingDesk
 import home.someoneshome.core.RangingPairing
+import home.someoneshome.core.ScanRouting
+import home.someoneshome.core.routeScan
 import home.someoneshome.core.rangingDeskFor
 import home.someoneshome.core.admit
 import home.someoneshome.core.resolveContacts
@@ -19,7 +21,9 @@ import home.someoneshome.model.ContactWindow
 import home.someoneshome.model.Effect
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
+import home.someoneshome.model.HouseMap
 import home.someoneshome.model.Intent
+import home.someoneshome.model.MarkerId
 import home.someoneshome.model.RadioCause
 import home.someoneshome.model.RefusalReason
 import home.someoneshome.model.SavedHome
@@ -616,6 +620,61 @@ class RoundAuthority(
         }
         if (!before.ended && state.ended && !state.closed) {
             note("THE ROUND ENDED — ${state.outcome?.winner} BY ${state.outcome?.by}")
+        }
+    }
+
+    /**
+     * **Every answer the house gave outside the rules, in order** (D-318). Today that is NOT A
+     * MARKER alone. Kept apart from [emitted], which is *every effect the rules produced*: these
+     * were not, no event stands behind them, and the recording, which holds what reached the rules,
+     * holds none of them. For the assertions, and for nothing a phone can see.
+     */
+    val answeredOutsideTheRules: MutableList<Effect> = mutableListOf()
+
+    /**
+     * **A card one phone read in a round, routed against this round's map and only then put to
+     * the rules** (the owner's 2026-11-21 ruling, D-318; D-124, D-169, D-072).
+     *
+     * The read is the card's id and nothing else, the same for every phone and role. What kind of
+     * fact it is, is the map's to say, and [home] is the map the round was armed in:
+     *
+     * - **a registered card, the Terminal and every Egress node with it**, is work: the
+     *   `MarkerScanned` the rules have always resolved (D-124, D-199, D-297), placing the seat;
+     * - **the registered meeting card** calls the meeting (D-121);
+     * - **anything else is NOT A MARKER**: paper this home never registered, a mislaid card
+     *   (D-169), a spare meeting card from the deck. **No event**, so nothing is recorded, the seat
+     *   is not placed, its open work is not spent and no meeting is called (D-072). The scanning
+     *   phone alone is answered, through the emit boundary like any push, so the schema still
+     *   decides who may receive it ([Effect.CardUnregistered], one seat, the living).
+     *
+     * ### Not an early return on invalid
+     *
+     * Every read is answered: a work card by the rules' `ScanAnswered` or `TerminalAnswered`, the
+     * meeting card by the ring, and paper by NOT A MARKER. The branch is on the map, which no role
+     * reads and which says the same thing about a card whoever holds it, so the answer to the same
+     * paper is the same bytes on an Insider's phone and a Resident's.
+     *
+     * ### Before arming there is no map, and nothing to answer
+     *
+     * [home] is null until LIGHTS OUT. A read then is routed as unregistered against an empty map,
+     * and the schema delivers NOT A MARKER to no pre-arm class (D-067), so nothing goes anywhere.
+     */
+    suspend fun cardRead(actor: Seat, card: MarkerId): Unit = turn.withLock { read(actor, card) }
+
+    private suspend fun read(actor: Seat, card: MarkerId) {
+        val routing = routeScan(stamp(), actor, card, home?.map ?: HouseMap.EMPTY)
+        when (routing) {
+            is ScanRouting.Work -> gate(routing.event)
+            is ScanRouting.Meeting -> gate(routing.event)
+            // **Outside the recording, and that is D-072 rather than a shortcut.** The recording is
+            // what reached the rules; unregistered paper never does. The log names neither the seat
+            // nor the card: which phone read which scrap of paper is nobody's but the player's.
+            ScanRouting.Unregistered -> {
+                note("A CARD THIS HOME NEVER REGISTERED — NOT A MARKER, TO THAT PHONE ONLY · NO EVENT (D-072, D-318)")
+                val answer = Effect.CardUnregistered(actor)
+                answeredOutsideTheRules += answer
+                emit(answer, state)
+            }
         }
     }
 

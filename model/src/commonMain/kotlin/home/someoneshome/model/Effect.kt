@@ -404,9 +404,10 @@ sealed interface Effect {
      *
      * A **registered** card the house has nothing for you at is this effect with a null, and it is
      * deliberately unremarkable. **Unregistered paper never reaches the rules at all** — it is
-     * refused at the scan's routing, reported to nobody (D-072), and answered by the client's own
-     * alert. Collapsing the two would build the detector D-124 refuses: a Resident sweeping cards
-     * could separate *registered but not mine* from *not registered at all*.
+     * refused at the scan's routing, reported to nobody (D-072), and answered by [CardUnregistered],
+     * which the house builds above the rules and sends to the scanning phone alone (D-318).
+     * Collapsing the two would build the detector D-124 refuses: a Resident sweeping cards could
+     * separate *registered but not mine* from *not registered at all*.
      *
      * **Addressed to the scanning seat and to nobody else.** Broadcast, it would publish who is
      * standing where and finding work, which is the whole read the meter is quantised into a
@@ -439,6 +440,47 @@ sealed interface Effect {
      * house who is reading the map, which is the anonymity M11's check-in rule is careful about.
      */
     data class TerminalAnswered(val seat: Seat, val reading: Boolean) : Effect
+
+    /**
+     * **NOT A MARKER: the card this phone just read is not part of this home** (D-124, D-169,
+     * D-072, the owner's 2026-11-21 ruling, D-318).
+     *
+     * D-124's second vocabulary. A card the home never registered — a mislaid one, a spare from the
+     * deck, a meeting card the host did not put in a room, a card from another home — is answered
+     * with this, and a registered card with nothing for you is answered with [ScanAnswered]'s null.
+     * The two must sound different, and they do: two kinds, two screens, two sets of words.
+     *
+     * ### The one effect the rules never produce
+     *
+     * **Unregistered paper never reaches the rules** (D-072), so there is no event for this to be
+     * the effect of. The house builds it above the rules, where `routeScan` has just found that the
+     * card is not on the map, and hands it to the emit boundary directly. **It is a delivery
+     * outside the recording, and that is the ruling rather than a gap:** the recording holds what
+     * reached the rules, and D-072 says this does not. A count of unregistered cards, in a
+     * recording or anywhere else, is the arbiter of a player's claim that D-072 refuses; leaving it
+     * out keeps the paper *theirs to report, or to lie about*.
+     *
+     * ### Addressed to the scanning seat and to nobody else
+     *
+     * Broadcast, it would tell the house who had just read a card that is not part of it, and
+     * where that card might be. **No other phone learns anything**: not the scan, not the answer,
+     * and not that a card was read at all.
+     *
+     * ### No role in it, and nothing that could carry one
+     *
+     * It carries the seat it is addressed to and nothing else. It is built from the card and the
+     * map, never from who read it, so an Insider and a Resident holding the same paper are answered
+     * with the same bytes on the same schedule — and the seat comes off at the wire.
+     */
+    data class CardUnregistered(val seat: Seat) : Effect {
+        /**
+         * **D-160's *no*: two vibrates**, on this phone only. The card's acquire has already said
+         * *yes* with one (the scan window's, D-159); this is the house saying the paper is not
+         * part of the home. **Provisional** (D-318): the owner agreed to the proposal that
+         * recommended it. The same on every phone, for both roles, because it is the kind's.
+         */
+        val haptic: Haptic get() = Haptic.Double
+    }
 
     /**
      * **The presence plane's whole output: a window opened, or a window closed** (D-111, D-136).

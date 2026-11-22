@@ -318,6 +318,12 @@ object Transcript {
         // Open and held are one kind and one row shape, for ScanAnswered's reason (D-199).
         is Effect.TerminalAnswered ->
             "TerminalAnswered|seat=${effect.seat.index}|reading=${effect.reading}"
+        // **The rules never produce this, so no recording holds this row** (D-318, D-072). It is
+        // rendered because the per-client transcripts and the differential harness read every
+        // effect a phone is sent, and the house sends this one from above the rules. Naming it here
+        // changes no recorded row: a recording is what reached the rules, and paper the home never
+        // registered never does.
+        is Effect.CardUnregistered -> "CardUnregistered|seat=${effect.seat.index}"
         is Effect.PresenceChanged ->
             "PresenceChanged|seat=${effect.seat.index}" +
                 "|at=${effect.at?.let { text(it.value) } ?: "none"}|open=${effect.open}"

@@ -227,9 +227,8 @@ class IntentPushTest {
             phone.meeting.choose(VoteChoice.Named("DANI"))
             phone.meeting.readyToVote()
             phone.round.act(IntentMessage.ArmRevoke)
-            phone.round.act(IntentMessage.CallMeeting)
             phone.round.act(IntentMessage.HandOverEntry(MarkerId("CARD-4"), listOf(3, 1, 4)))
-            house.awaitHeard(7)
+            house.awaitHeard(6)
             sent = phone.outbound()
         } finally {
             house.stop()
@@ -251,7 +250,7 @@ class IntentPushTest {
         try {
             watching.start()
             val phone = watching.seat()
-            phone.round.act(IntentMessage.BeginSubroutine(MarkerId(line)))
+            phone.round.act(IntentMessage.HandOverEntry(MarkerId(line), listOf(1)))
             watching.awaitHeard(1)
             withALine = phone.outbound()
         } finally {

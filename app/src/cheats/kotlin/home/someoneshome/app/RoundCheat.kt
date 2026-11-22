@@ -452,7 +452,7 @@ class RoundCheat(
         while (scanning && walked < mine.size) {
             val marker = mine[walked++]
             client.scanning(marker)
-            client.act(IntentMessage.BeginSubroutine(marker))
+            client.readCard(marker)
             delay(STEP_MILLIS)
         }
         walkedEvery = scanning && walked >= mine.size
@@ -610,7 +610,7 @@ class RoundCheat(
     private suspend fun reachNodeAndPulse(destination: MarkerId) {
         note("WALKING TO ${destination.value} — THE HOUSE WILL READ THIS SEAT'S OWN SCAN")
         client.scanning(destination)
-        client.act(IntentMessage.BeginSubroutine(destination))
+        client.readCard(destination)
         delay(STEP_MILLIS)
         val taps = List(Balance.SYNC_PULSE_BEATS) { b ->
             Balance.SYNC_PULSE_LEAD + b * Balance.SYNC_PULSE_INTERVAL

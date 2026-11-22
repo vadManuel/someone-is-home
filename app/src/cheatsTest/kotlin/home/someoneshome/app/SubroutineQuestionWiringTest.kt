@@ -148,6 +148,7 @@ class SubroutineQuestionWiringTest {
             scope, onEvent = { log += it }, seat = Kept(),
             onIntent = HouseDoors(house)::heard,
             onEgressFired = HouseDoors(house)::fired,
+            onCardRead = HouseDoors(house)::read,
             onSighted = HouseDoors(house)::sighted,
             onRadioFaulted = HouseDoors(house)::faulted,
             round = round, wake = wake, advertising = bonjour,
@@ -354,7 +355,7 @@ class SubroutineQuestionWiringTest {
         val role = house.state.roleOf(seat)
         val scans = phone.pushed.count { it is RoundMessage.ScanAnswered }
         phone.round.scanning(marker)
-        phone.round.act(IntentMessage.BeginSubroutine(marker))
+        phone.round.readCard(marker)
         until("${phone.name}'s scan was answered") { phone.pushed.count { it is RoundMessage.ScanAnswered } > scans }
         val opened: SubroutineInstance = (phone.pushed.last { it is RoundMessage.ScanAnswered } as RoundMessage.ScanAnswered)
             .opened ?: return null

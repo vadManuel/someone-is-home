@@ -79,7 +79,6 @@ class EgressOverWorkLoopTest {
         private fun up(seat: Seat, intent: IntentMessage) {
             pending += when (intent) {
                 is IntentMessage.HandOverEntry -> Intent.HandOverEntry(seat, intent.marker, intent.entered)
-                is IntentMessage.BeginSubroutine -> Intent.BeginSubroutine(seat, intent.marker)
                 IntentMessage.StopSubroutine -> Intent.StopSubroutine(seat)
                 else -> return
             }
@@ -93,11 +92,10 @@ class EgressOverWorkLoopTest {
             }
         }
 
-        /** A card read on [seat]'s phone and put to the house, as the scan bridge does. */
+        /** A card read on [seat]'s phone and put to the house, as the scan bridge does (D-318). */
         suspend fun scan(seat: Seat, marker: MarkerId) {
             phones.getValue(seat).scanning(marker)
-            requests += Intent.BeginSubroutine(seat, marker)
-            house.heard(Intent.BeginSubroutine(seat, marker))
+            house.cardRead(seat, marker)
         }
     }
 

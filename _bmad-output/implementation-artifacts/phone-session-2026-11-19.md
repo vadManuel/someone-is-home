@@ -146,9 +146,10 @@ Tick each line as you see it.
 **Scanning and Subroutines** *(overnight)*
 - [ ] A card's verdict gives **no buzz**, and NOTHING FOR YOU HERE gives no buzz. D-160 lists a yes
       and a no buzz: say whether silence is what you want.
-- [ ] Scan a QR code that is not a game card: a "yes" buzz, then nothing. Scan a game card from
-      another home, if you have one: it currently gets NOTHING FOR YOU HERE, not NOT A MARKER
-      (stopped in D-313 for your decision).
+- [ ] Scan a QR code that is not a game card: a "yes" buzz, then nothing. Scan a game card this
+      home never registered (one from another home, a spare from the deck, or a spare meeting
+      card): a "yes" buzz, then NOT A MARKER with a "no" buzz (two vibrates), on that phone only.
+      No other phone reacts and no meeting is called. The "no" buzz is provisional (D-318).
 - [ ] **Drift**: tap before the buzz. It is handed over and REJECTED, and the attempt is gone
       (D-165, D-313).
 - [ ] An **armed pass at an already-Revoked phone**: today nothing happens, no buzz and the tile

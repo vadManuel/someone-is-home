@@ -53,11 +53,9 @@ class IntentAdmissionTest {
         Intent.FireSurge(Seat(1), Seat(2)),
         Intent.FireIsolate(Seat(1), marker),
         Intent.FireStatic(Seat(1)),
-        Intent.BeginSubroutine(Seat(2), marker),
         Intent.StopSubroutine(Seat(2)),
         Intent.LeaveTerminal(Seat(2)),
         Intent.ReturnSyncPulse(Seat(2), listOf(1L, 2L)),
-        Intent.CallMeeting(Seat(3)),
         Intent.CheckIn(Seat(4)),
         Intent.DeclareReadyToVote(Seat(4)),
         Intent.SelectVote(Seat(4), Seat(0)),
@@ -78,14 +76,6 @@ class IntentAdmissionTest {
     @Test
     fun `every request becomes the fact it names`() {
         assertEquals(Event.RevokeArmed(at, Seat(1)), factOf(Intent.ArmRevoke(Seat(1)), at))
-        assertEquals(
-            Event.MarkerScanned(at, Seat(2), marker),
-            factOf(Intent.BeginSubroutine(Seat(2), marker), at),
-        )
-        assertEquals(
-            Event.MeetingCalled(at, Seat(3), MeetingTrigger.MeetingCard),
-            factOf(Intent.CallMeeting(Seat(3)), at),
-        )
         assertEquals(Event.MeetingCheckedIn(at, Seat(4)), factOf(Intent.CheckIn(Seat(4)), at))
         assertEquals(
             Event.ReadyToVoteDeclared(at, Seat(4)),
@@ -180,11 +170,15 @@ class IntentAdmissionTest {
         ContactResolved,
 
         /**
-         * A phone did it, but the fact carries a draw the **house** makes.
+         * A phone did it, but the fact carries a draw the **house** makes, or needs the house's
+         * **map** to exist at all.
          *
          * `EgressFired` needs a type and two nodes chosen above the rules against a home's shape
-         * the phone has never held. Carrying it would mean composing a fact from more than the
-         * phone gave, which is the loop's join rather than this translation's.
+         * the phone has never held. **A card read is the second** (D-318): whether paper is work,
+         * the meeting card or NOT A MARKER is the map's answer (`routeScan`), so `MarkerScanned` and
+         * the card's `MeetingCalled` are routed by the house from `Asked.Read`, and unregistered
+         * paper makes no fact at all. Carrying either would mean composing a fact from more than
+         * the phone gave, which is the loop's join rather than this translation's.
          */
         HouseComposed,
 
@@ -199,7 +193,11 @@ class IntentAdmissionTest {
     }
 
     private fun originOf(event: Event): Origin = when (event) {
-        is Event.MarkerScanned, is Event.SubroutineReturned, is Event.RevokeArmed,
+        // **A card read, routed by the house against the map** (D-318). It was requestable, and a
+        // phone chose the event by the shape printed on the paper: a card the home never
+        // registered reached the rules as work, and a spare meeting card called a meeting.
+        is Event.MarkerScanned -> Origin.HouseComposed
+        is Event.SubroutineReturned, is Event.RevokeArmed,
         is Event.MeetingCheckedIn, is Event.ReadyToVoteDeclared, is Event.VoteSelected,
         is Event.VoteLocked,
         // **The two Tier-2 fires, and they are requestable where `EgressFired` is not.** The
@@ -212,12 +210,12 @@ class IntentAdmissionTest {
         is Event.SurgeFired, is Event.IsolateFired, is Event.StaticFired,
         -> Origin.Requestable
 
-        // Two ways to call a meeting and only one of them is a card. `MeetingCard` is requestable;
-        // `RevokeReport` names the seat that was reported, arrived at by touching a phone to
-        // another phone, so the trigger is what splits this row. The wire has a member for the card
-        // and none for the report, which is that split made structural.
+        // Two ways to call a meeting and neither is a request. `MeetingCard` is a card read the house
+        // routed against the map (D-318): only the card this home registered calls one. `RevokeReport`
+        // names the seat that was reported, arrived at by touching a phone to another phone. The
+        // trigger still splits the row, because the two are refused for different reasons.
         is Event.MeetingCalled -> when (event.trigger) {
-            is MeetingTrigger.MeetingCard -> Origin.Requestable
+            is MeetingTrigger.MeetingCard -> Origin.HouseComposed
             is MeetingTrigger.RevokeReported -> Origin.ContactResolved
         }
 
@@ -350,11 +348,9 @@ class IntentAdmissionTest {
         is Intent.FireSurge -> intent.copy(actor = actor)
         is Intent.FireIsolate -> intent.copy(actor = actor)
         is Intent.FireStatic -> intent.copy(actor = actor)
-        is Intent.BeginSubroutine -> intent.copy(actor = actor)
         is Intent.StopSubroutine -> intent.copy(actor = actor)
         is Intent.LeaveTerminal -> intent.copy(actor = actor)
         is Intent.ReturnSyncPulse -> intent.copy(actor = actor)
-        is Intent.CallMeeting -> intent.copy(actor = actor)
         is Intent.CheckIn -> intent.copy(actor = actor)
         is Intent.DeclareReadyToVote -> intent.copy(actor = actor)
         is Intent.SelectVote -> intent.copy(actor = actor)

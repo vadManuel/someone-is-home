@@ -26,6 +26,12 @@ package home.someoneshome.model
  * seat only the authority can resolve from a rotating token (D7), and [Event.EgressFired] carries a
  * draw the house makes against a home's shape. See `IntentMessage`'s header, which holds the full
  * argument for all three.
+ *
+ * **A card read fails it too, and has no member here since D-318.** [Event.MarkerScanned] and the
+ * meeting card's [Event.MeetingCalled] were `BeginSubroutine` and `CallMeeting`, chosen on the phone
+ * by the shape printed on the paper. Which of the two a card is, or whether it is part of this home
+ * at all, is a question about the home's map, which no phone holds: so the house routes the raw read
+ * (`routeScan`, above the rules) and only then is there a fact to admit (`Asked.Read`).
  */
 sealed interface Intent {
     data class ArmRevoke(val actor: Seat) : Intent
@@ -48,8 +54,8 @@ sealed interface Intent {
      * **Isolate this marker** (`gdd.md:315`, [Event.IsolateFired]).
      *
      * [target] is a printed card off `Effect.IsolateTargetsOffered`, and it is a card id rather than
-     * a claim about where anybody is standing — [BeginSubroutine]'s marker exactly, and the same
-     * reason (D-136).
+     * a claim about where anybody is standing — a card read's id exactly, and the same reason
+     * (D-136).
      */
     data class FireIsolate(val actor: Seat, val target: MarkerId) : Intent
 
@@ -62,8 +68,6 @@ sealed interface Intent {
      * jam of the whole building's monitoring; see the event.
      */
     data class FireStatic(val actor: Seat) : Intent
-    data class BeginSubroutine(val actor: Seat, val marker: MarkerId) : Intent
-    data class CallMeeting(val actor: Seat) : Intent
 
     /**
      * **An entry handed over at a marker — a report of what was entered, never a claim that it was

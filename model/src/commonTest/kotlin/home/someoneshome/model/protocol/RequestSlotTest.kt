@@ -26,11 +26,9 @@ class RequestSlotTest {
         Asked.Act(IntentMessage.FireSurge(Seat(17))),
         Asked.Act(IntentMessage.FireIsolate(marker)),
         Asked.Act(IntentMessage.FireStatic),
-        Asked.Act(IntentMessage.BeginSubroutine(marker)),
         Asked.Act(IntentMessage.StopSubroutine),
         Asked.Act(IntentMessage.LeaveTerminal),
         Asked.Act(IntentMessage.ReturnSyncPulse(List(8) { 9_999_999_999L - it })),
-        Asked.Act(IntentMessage.CallMeeting),
         Asked.Act(IntentMessage.CheckIn),
         Asked.Act(IntentMessage.DeclareReadyToVote),
         Asked.Act(IntentMessage.SelectVote(Seat(17))),
@@ -38,6 +36,8 @@ class RequestSlotTest {
         Asked.Act(IntentMessage.LockVote),
         Asked.Act(IntentMessage.HandOverEntry(marker, List(24) { 99 - it })),
         Asked.Fire,
+        // A card read (D-318): the id and nothing else, the same width as every other request.
+        Asked.Read(marker),
     )
 
     private fun frameOf(ask: String): Int =

@@ -189,6 +189,7 @@ class UplinkFrameTest {
             scope, seat = Kept(),
             onIntent = HouseDoors(house)::heard,
             onEgressFired = HouseDoors(house)::fired,
+            onCardRead = HouseDoors(house)::read,
             onSighted = HouseDoors(house)::sighted,
             onRadioFaulted = HouseDoors(house)::faulted,
             round = tap, wake = wake, advertising = bonjour,
@@ -280,7 +281,7 @@ class UplinkFrameTest {
 
                 // ---- 3 · A meeting: called, checked in, readied, a Resident voted out -----------
                 val caller = phones.first { it !== insider && it !== surged && it !== host }
-                timed("the meeting call", { house.state.meeting != null }) { caller.press(IntentMessage.CallMeeting) }
+                timed("the meeting call", { house.state.meeting != null }) { caller.round.readCard(requireNotNull(home.map.meeting).card.id) }
                 val living = phones.toList()
                 for (p in living) timed("${p.name}'s check-in", { Intent.CheckIn(seatOf(p)) in house.heard }) { p.press(IntentMessage.CheckIn) }
                 until("the gate closed", { "meeting=${house.state.meeting}" }) { house.state.meeting?.phase == MeetingPhase.Discussion }

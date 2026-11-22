@@ -52,23 +52,23 @@ import kotlin.test.assertTrue
  */
 class IntentLoopTest {
 
-    /** The requests the identity test drives, in order. Deliberately a mix of ruled and refused. */
-    private fun aShiftOfRequests(state: GameState): List<IntentMessage> {
-        val marker = state.workOrderFor(Seat(0))?.entries?.firstOrNull()?.anchor
-            ?: MARKERS.first()
-        return listOf(
-            // A meeting, and then the gate the whole house fills.
-            IntentMessage.CallMeeting,
-            IntentMessage.CheckIn,
-            // Out of phase and therefore refused -- on the path on purpose, because a refusal that
-            // travelled differently from an admission would be the drift this test exists to catch.
-            IntentMessage.LockVote,
-            IntentMessage.DeclareReadyToVote,
-            // Work, at a card this seat's own order points at.
-            IntentMessage.BeginSubroutine(marker),
-            IntentMessage.ArmRevoke,
-        )
-    }
+    /**
+     * The requests the identity test drives, in order. Deliberately a mix of ruled and refused.
+     *
+     * **No card read is among them, and none can be** (D-318). A scan goes up as `Asked.Read` in a
+     * round's upload slot and the house routes it against the map before there is a request to put,
+     * so it is not an [IntentMessage] and has no `factOf` arm for this comparison to run. The meeting
+     * this list used to call with `CallMeeting` is the fixture's instead ([ringing]).
+     */
+    private fun aShiftOfRequests(): List<IntentMessage> = listOf(
+        // The gate the whole house fills, on the meeting the fixture rang.
+        IntentMessage.CheckIn,
+        // Out of phase and therefore refused -- on the path on purpose, because a refusal that
+        // travelled differently from an admission would be the drift this test exists to catch.
+        IntentMessage.LockVote,
+        IntentMessage.DeclareReadyToVote,
+        IntentMessage.ArmRevoke,
+    )
 
     // ---- 1 · One gate, two sources -----------------------------------------------------------------
 
@@ -86,8 +86,8 @@ class IntentLoopTest {
      */
     @Test
     fun inProcessAndOverLoopbackLeaveIdenticalAuthorityState() = runBlocking<Unit> {
-        val start = armed()
-        val requests = aShiftOfRequests(start)
+        val start = ringing()
+        val requests = aShiftOfRequests()
         val seat = Seat(0)
 
         // ---- In process: the desk's stamp done by hand, everything else identical --------------
@@ -326,13 +326,15 @@ class IntentLoopTest {
             val marker = authority.state.workOrderFor(worker)?.entries
                 ?.firstOrNull { authority.state.workOrderFor(worker)!!.isActionable(it) }?.anchor
             assertTrue(marker != null, "this seat was issued no work, so nothing could be handed over")
-            phone.act(IntentMessage.BeginSubroutine(marker))
-            house.awaitHandled(1)
+            // **The scan is the house's, routed from the map** (D-318): a card read is not a request
+            // this rig can carry, so the fact the house's routing makes of it is put here directly,
+            // and the hand-over below is the round trip under test.
+            authority.put(Event.MarkerScanned(Tick(9_000), worker, marker))
 
             val expected = authority.state.openSubroutineFor(worker)?.takeIf { it.armed }?.expected
             assertTrue(expected != null, "the scan opened nothing, so there was nothing to hand over")
             phone.act(IntentMessage.HandOverEntry(marker, expected))
-            house.awaitHandled(2)
+            house.awaitHandled(1)
             house.settle()
         } finally {
             house.stop()

@@ -28,12 +28,14 @@ import home.someoneshome.model.Tick
  *
  * A new [Intent] does not compile until somebody names the [Event] it makes, which is
  * `EmitSchema.kindOf`'s discipline pointed up the wire instead of down it. It is worth something
- * because the reverse direction is where the real judgement sits: **three client-originated events
+ * because the reverse direction is where the real judgement sits: **some client-originated events
  * have no intent at all**, and each is a decision written down rather than a case nobody reached.
  * [Event.ContactMade] and [MeetingTrigger.RevokeReported] name a seat that only the authority can
  * resolve from a rotating token (D7); [Event.EgressFired] carries a draw the house makes against a
- * home's shape the phone has never held. All three would need this function to compose a fact from
- * more than the phone gave it, which is the loop's join and not this translation's.
+ * home's shape the phone has never held; and since D-318 a card read, [Event.MarkerScanned] and the
+ * meeting card's [Event.MeetingCalled], is routed against the home's map (`routeScan`) before there
+ * is a fact at all. Each would need this function to compose a fact from more than the phone gave
+ * it, which is the loop's join and not this translation's.
  *
  * `IntentAdmissionTest.everyClientOriginatedEventIsEitherRequestableOrNamedHere` is the completeness
  * check, written out by hand against the table rather than derived from [factOf] — a list derived
@@ -56,8 +58,6 @@ fun factOf(intent: Intent, at: Tick): Event = when (intent) {
     is Intent.FireIsolate -> Event.IsolateFired(at, intent.actor, intent.target)
     is Intent.FireStatic -> Event.StaticFired(at, intent.actor)
 
-    is Intent.BeginSubroutine -> Event.MarkerScanned(at, intent.actor, intent.marker)
-
     // **STOP NOW, and the Sync Pulse handed over.** Both pass this file's test more plainly than
     // anything above them: the first composes an event out of the actor alone, and the second out of
     // the actor and the taps the finger made. Neither names a target the house has to resolve and
@@ -67,12 +67,6 @@ fun factOf(intent: Intent, at: Tick): Event = when (intent) {
     // The live view closed. The actor alone, for STOP NOW's reason (D-203).
     is Intent.LeaveTerminal -> Event.TerminalLeft(at, intent.actor)
     is Intent.ReturnSyncPulse -> Event.SyncPulseReturned(at, intent.actor, intent.taps)
-
-    // The trigger is which control was pressed, and the wire has a member per control for exactly
-    // this reason: a trigger field would be a client choosing which admission rule it is judged by,
-    // and the card is inert during an Egress while the report is not (D-133). The report has no
-    // intent at all — see this file's header.
-    is Intent.CallMeeting -> Event.MeetingCalled(at, intent.actor, MeetingTrigger.MeetingCard)
 
     is Intent.CheckIn -> Event.MeetingCheckedIn(at, intent.actor)
     is Intent.DeclareReadyToVote -> Event.ReadyToVoteDeclared(at, intent.actor)

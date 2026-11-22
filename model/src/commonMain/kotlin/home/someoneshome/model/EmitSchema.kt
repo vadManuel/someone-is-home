@@ -80,6 +80,7 @@ object EmitSchema {
         is Effect.WorkOrderIssued -> WORK_ORDER_ISSUED
         is Effect.ScanAnswered -> SCAN_ANSWERED
         is Effect.TerminalAnswered -> TERMINAL_ANSWERED
+        is Effect.CardUnregistered -> CARD_UNREGISTERED
         is Effect.PresenceChanged -> PRESENCE_CHANGED
         is Effect.OpeningMessage -> OPENING_MESSAGE
         is Effect.RoleRevealed -> ROLE_REVEALED
@@ -129,6 +130,7 @@ object EmitSchema {
     val WORK_ORDER_ISSUED = MessageKind("WorkOrderIssued")
     val SCAN_ANSWERED = MessageKind("ScanAnswered")
     val TERMINAL_ANSWERED = MessageKind("TerminalAnswered")
+    val CARD_UNREGISTERED = MessageKind("CardUnregistered")
 
     /**
      * **Named here and permitted nowhere. That is the whole of the presence plane's boundary.**
@@ -448,6 +450,16 @@ object EmitSchema {
             ClientClass(Role.Resident, RoundState.Out),
             ClientClass(Role.Insider, RoundState.Out),
         ),
+
+        // **Both living classes, for SCAN_ANSWERED's reason, and it is the other half of D-124**
+        // (D-318). NOT A MARKER answers paper this home never registered, on whichever phone read
+        // it, and the house builds it from the card and the map alone -- so narrowed to either role
+        // it would be a role test anyone could run with a scrap of paper.
+        //
+        // Not the out classes, for SCAN_ANSWERED's reason: an out seat's registered scan is
+        // answered on this axis by nothing, so its unregistered one must be answered by nothing
+        // too, or the pair would separate *registered* from *not* for a player on the couch.
+        CARD_UNREGISTERED to LIVING,
 
         // **PRESENCE_CHANGED HAS NO ROW, DELIBERATELY, AND THAT IS THE DECISION** (D-111, D-136).
         //
@@ -794,6 +806,10 @@ object EmitSchema {
             is Effect.ScanAnswered -> listOf(effect.seat)
             // The scanning seat alone. Broadcast, it would say who is reading the map.
             is Effect.TerminalAnswered -> listOf(effect.seat)
+            // **The seat holding the paper, and no other phone** (D-318). Broadcast, it would tell
+            // the house that somebody had just read a card that is not part of it -- the report
+            // D-072 refuses to make, made live to every phone at once.
+            is Effect.CardUnregistered -> listOf(effect.seat)
             // **The performing seat, and this is the second of the presence plane's two
             // independent denials** -- the first being that the kind has no row at all. Neither
             // subsumes the other: a row written by mistake still could not carry seat 3's window

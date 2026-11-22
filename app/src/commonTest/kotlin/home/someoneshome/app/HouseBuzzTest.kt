@@ -354,6 +354,8 @@ class HouseBuzzTest {
         Effect.ContactAnswered(Seat(1)),
         // The house notice (D-187, D-223): silent, because the gate's own push beside it buzzes.
         Effect.NoticeIssued(listOf(Seat(2)), switchedOff = emptyList()),
+        // NOT A MARKER (D-318): D-160's *no*, which is the kind's own and the same for every seat.
+        Effect.CardUnregistered(Seat(1)),
     )
 
     /**
@@ -530,6 +532,7 @@ class HouseBuzzTest {
             "ContactSeedIssued",
             "ContactAnswered",
             "NoticeIssued",
+            "CardUnregistered",
         )
 
         /** The two nodes, as places. The rooms are never read here; the pair is what buzzes. */

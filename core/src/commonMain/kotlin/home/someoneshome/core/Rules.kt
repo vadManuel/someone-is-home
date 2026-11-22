@@ -457,7 +457,8 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
  *
  * D-124's two vocabularies are both real and only one of them is here: NOTHING FOR YOU HERE is
  * this effect with a null, and **unregistered paper never reaches the rules at all** — see
- * [ScanRouting], which decides that above the gate and reports it to nobody (D-072).
+ * [ScanRouting], which decides that above the gate and reports it to nobody (D-072); the house
+ * answers the scanning phone alone, NOT A MARKER, outside the recording (D-318).
  *
  * ### The first ACTIONABLE entry at that card, which is what walks a self-chain
  *

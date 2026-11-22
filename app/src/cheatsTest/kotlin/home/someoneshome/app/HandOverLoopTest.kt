@@ -119,7 +119,6 @@ class HandOverLoopTest {
             pending += when (intent) {
                 is IntentMessage.HandOverEntry ->
                     Intent.HandOverEntry(seat, intent.marker, intent.entered)
-                is IntentMessage.BeginSubroutine -> Intent.BeginSubroutine(seat, intent.marker)
                 IntentMessage.StopSubroutine -> Intent.StopSubroutine(seat)
                 else -> return
             }
@@ -167,7 +166,7 @@ class HandOverLoopTest {
         // The read goes up, and the phone remembers its own read. Both halves, in the order the
         // scan bridge does them.
         phone.scanning(marker)
-        heard(Intent.BeginSubroutine(seat, marker))
+        house.cardRead(seat, marker)
 
         val current = phone.state.current ?: return null
         if (phone.state.screen != ScreenId.ScanCaught) return null

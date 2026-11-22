@@ -300,6 +300,8 @@ internal fun Effect.ringing(): Boolean = when (this) {
     is Effect.RevokeLanded, is Effect.RosterIssued, is Effect.PlanIssued, is Effect.ContactSeedIssued,
     is Effect.WorkOrderIssued, is Effect.ScanAnswered, is Effect.TerminalAnswered,
     is Effect.PresenceChanged,
+    // NOT A MARKER says *no* once, like every refusal (D-160, D-318).
+    is Effect.CardUnregistered,
     is Effect.CheckInProgressed, is Effect.ReadyProgressed, is Effect.VoteProgressed,
     is Effect.VoteHeld, is Effect.VoteSelectionShown, is Effect.MeetingResolved,
     is Effect.SyncPulseAnswered, is Effect.SyncPulseBlanked, is Effect.InsidersRevealed, is Effect.RoleRevealed,
@@ -382,6 +384,10 @@ internal fun Effect.haptic(): Haptic? = when (this) {
     // The Revoked phone's half: Long on the touch that put it out, and nothing on every touch after
     // (D-156, see the effect). Both values are `Rules.kt`'s; nothing is decided here.
     is Effect.RevokeLanded -> haptic
+    // **NOT A MARKER: D-160's *no*, two vibrates, on the scanning phone alone** (D-318, provisional).
+    // The house's, off the kind; the acquire's *yes* before it was the scan window's. Read off the
+    // effect like every value here, so the same paper buzzes the same on either role's phone.
+    is Effect.CardUnregistered -> haptic
 
     // ---- The rest arrive quietly, each for its own reason -------------------------------------
     // The lamp is a pure function of state (rule 5) and a buzz on every luminance change would be
@@ -505,6 +511,7 @@ internal fun RoundMessage.ringing(): Boolean = when (this) {
     is RoundMessage.ContactSeedIssued,
     is RoundMessage.Surged, is RoundMessage.IsolateTargetsOffered, is RoundMessage.IsolateTargetsBlanked,
     is RoundMessage.StaticOpened, is RoundMessage.MeetingCalling, is RoundMessage.HouseClosedOnPermission,
+    is RoundMessage.CardUnregistered,
     -> false
 }
 
@@ -545,6 +552,8 @@ internal fun RoundMessage.haptic(): Haptic? = when (this) {
     // D-290: both phones of a landed Revoke, one digit each on the wire.
     is RoundMessage.AbilityFired -> haptic
     is RoundMessage.RevokeLanded -> haptic
+    // D-318: NOT A MARKER's *no*, the effect's own and copied onto the message.
+    is RoundMessage.CardUnregistered -> haptic
 
     // ---- The rest arrive quietly. Each reason is on the effect-side branch it mirrors ---------
     is RoundMessage.LampSet -> null

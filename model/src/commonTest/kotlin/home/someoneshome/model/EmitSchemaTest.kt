@@ -186,6 +186,34 @@ class EmitSchemaTest {
     }
 
     /**
+     * **NOT A MARKER reaches both living roles, one seat at a time, and nobody else** (D-124, D-318).
+     *
+     * The other half of D-124, and it is the house's answer to a piece of paper, so the row must not
+     * know a role: narrowed to either, a scrap of paper from another home would be a role test. Not
+     * the out classes, because an out seat's registered scan is answered on this axis by nothing,
+     * and the two must not separate on the couch. And the seat holding the card alone: broadcast, it
+     * would be the report D-072 refuses.
+     */
+    @Test
+    fun `not a marker reaches the scanning seat of either living role and nobody else`() {
+        assertEquals(
+            listOf(
+                ClientClass(Role.Resident, RoundState.Live),
+                ClientClass(Role.Insider, RoundState.Live),
+            ),
+            EmitSchema.classesFor(EmitSchema.CARD_UNREGISTERED),
+        )
+        assertEquals(
+            listOf(Seat(3)),
+            EmitSchema.deliveries(Effect.CardUnregistered(Seat(3)), live()).map { it.seat },
+        )
+        assertTrue(
+            EmitSchema.kindOf(Effect.CardUnregistered(Seat(3))) != EmitSchema.SCAN_ANSWERED,
+            "NOT A MARKER and NOTHING FOR YOU HERE are one kind, so D-124's two answers sound alike",
+        )
+    }
+
+    /**
      * **THE PRESENCE PLANE'S ROW, AND IT DOES NOT EXIST** (D-111, D-136, rule 2).
      *
      * *The house records, never recites.* The one designed consumer is the spectator map's expiry

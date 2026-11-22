@@ -1,11 +1,12 @@
 package home.someoneshome.app
 
 import home.someoneshome.model.Intent
+import home.someoneshome.model.MarkerId
 import home.someoneshome.model.Seat
 import home.someoneshome.model.protocol.RoundBody
 
 /**
- * **The arrival queue's four doors into the rules, each one awaited** (R6, D-241).
+ * **The arrival queue's doors into the rules, each one awaited** (R6, D-241).
  *
  * `LobbyHouse.attend` is the one consumer of every arrival, and it hands each to one of these. Until
  * D-241 the app root's doors were `scope.launch { rules.value?.sighted(…) }`, one new coroutine per
@@ -30,6 +31,11 @@ class HouseDoors(private val rules: () -> RoundAuthority?) {
     /** The Egress tile, held down: the house draws, then mints. */
     suspend fun fired(actor: Seat) {
         rules()?.fireEgress(actor)
+    }
+
+    /** A card a phone read: the house routes it against the map, then admits it or answers it (D-318). */
+    suspend fun read(actor: Seat, card: MarkerId) {
+        rules()?.cardRead(actor, card)
     }
 
     /**

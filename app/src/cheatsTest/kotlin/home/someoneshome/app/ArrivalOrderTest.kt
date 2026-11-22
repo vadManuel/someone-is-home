@@ -130,6 +130,7 @@ class ArrivalOrderTest {
             // `CheatRoot`'s doors, exactly.
             onIntent = HouseDoors(house)::heard,
             onEgressFired = HouseDoors(house)::fired,
+            onCardRead = HouseDoors(house)::read,
             onSighted = HouseDoors(house)::sighted,
             onRadioFaulted = HouseDoors(house)::faulted,
             round = round, wake = wake, advertising = bonjour,

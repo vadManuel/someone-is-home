@@ -3,6 +3,7 @@ package home.someoneshome.app
 import home.someoneshome.model.Effect
 import home.someoneshome.model.GameState
 import home.someoneshome.model.Intent
+import home.someoneshome.model.MarkerId
 import home.someoneshome.model.OneLineHeld
 import home.someoneshome.model.RadioCause
 import home.someoneshome.model.SavedHome
@@ -332,6 +333,15 @@ class LobbyHouse(
      * has no way to name one — see [RoundBody.Fire], which carries nothing but its sequence.
      */
     private val onEgressFired: suspend (Seat) -> Unit = {},
+    /**
+     * **A card one phone read in a round, on its way to the house's map** (`Asked.Read`, D-318).
+     *
+     * [onEgressFired]'s sibling and a seam of its own for its reason: which fact a card is (work,
+     * the meeting, or NOT A MARKER) is the map's answer, and the map is the authority's, held from
+     * LIGHTS OUT. `RoundAuthority.cardRead` is what fills it. The seat is the connection's, stamped
+     * by [IntentDesk]; the read carries the card's id and nothing else.
+     */
+    private val onCardRead: suspend (Seat, MarkerId) -> Unit = { _, _ -> },
     /**
      * **What one phone's radio heard, on its way to the contact resolver** ([RoundBody.Sighted],
      * D-212, D-217).
@@ -996,6 +1006,8 @@ class LobbyHouse(
                     // `RoundBody.Fire` and to nothing else, and this branch is what says so rather
                     // than an `else` that would quietly accept one if the desk ever changed.
                     is IntentDesk.Landing.Draw -> Unit
+                    // Nor can it be a card read, which rides only the slot (D-318).
+                    is IntentDesk.Landing.Read -> Unit
                 }
                 // **The Egress tile, through the same desk and the same dedup mark.** What comes
                 // back names the seat and nothing else, and the draw is the authority's: it needs
@@ -1005,6 +1017,7 @@ class LobbyHouse(
                     is IntentDesk.Landing.Duplicate -> Unit
                     // A `Fire` carries no intent, so there is nothing here a `Put` could hold.
                     is IntentDesk.Landing.Put -> Unit
+                    is IntentDesk.Landing.Read -> Unit
                 }
                 // **The house says the reader left, because the reader cannot** (D-203). Not through
                 // the desk: there is no frame and no sequence, only a connection that closed.
@@ -1029,6 +1042,8 @@ class LobbyHouse(
                             when (landing) {
                                 is IntentDesk.Landing.Put -> onIntent(landing.intent)
                                 is IntentDesk.Landing.Draw -> onEgressFired(landing.actor)
+                                // A card read, to the house's map (D-318).
+                                is IntentDesk.Landing.Read -> onCardRead(landing.actor, landing.card)
                                 is IntentDesk.Landing.Duplicate -> Unit
                             }
                         }
@@ -1414,6 +1429,8 @@ class LobbyOverTransport(
      * its own rather than another [Intent].
      */
     private val onEgressFired: suspend (Seat) -> Unit = {},
+    /** [LobbyHouse.onCardRead], threaded through: a card another phone read, to the map (D-318). */
+    private val onCardRead: suspend (Seat, MarkerId) -> Unit = { _, _ -> },
     /** [LobbyHouse.onSighted], threaded through: what another phone's radio heard (D-217). */
     private val onSighted: suspend (Seat, RoundBody.Sighted) -> String? = { _, _ -> null },
     /** [LobbyHouse.onRadioFaulted], threaded through: another phone's radio went down (T2, D-222; D-223). */
@@ -1539,7 +1556,7 @@ class LobbyOverTransport(
      * at all. `emit` and `armingInputs` are what it is reached for, and both are the authority's
      * own calls rather than a screen's.
      */
-    internal val house = LobbyHouse(scope, onEvent, onIntent, onEgressFired, onSighted, onRadioFaulted, advertising, houseMillis, onMapped)
+    internal val house = LobbyHouse(scope, onEvent, onIntent, onEgressFired, onCardRead, onSighted, onRadioFaulted, advertising, houseMillis, onMapped)
     private var session: ClientSession? = null
     private var client: TransportClient? = null
     private var clientJob: Job? = null

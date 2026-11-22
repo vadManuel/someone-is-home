@@ -3069,6 +3069,14 @@ class FlowModel(
             // couch to draw, and moves nothing: no screen, no buzz, no light.
             is RoundMessage.PlanIssued -> state = state.copy(plan = message.plan)
 
+            // **NOT A MARKER: the house says the paper this phone read is not part of the home**
+            // (D-124, D-169, the owner's 2026-11-21 ruling, D-318). The phone read a card, sent the
+            // id up and decided nothing; this is the house's answer, to this phone alone, and the
+            // phone moves on it. **It changes nothing else here**, because nothing changed at the
+            // house: the seat was not placed, so the tap control's [PanelState.pulseAt] stays where
+            // it was; its open work was not spent, so [PanelState.current] stands.
+            is RoundMessage.CardUnregistered -> push(ScreenId.ScanUnknown)
+
             // **A node of the running Egress: the tap control, whatever the card held** (D-295,
             // the owner's Q2 ruling: *a tap control after the node scan*). Read off two public facts,
             // the card this phone just read and the pair every phone was told, and never off the

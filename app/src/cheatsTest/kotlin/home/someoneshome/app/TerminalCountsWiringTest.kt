@@ -90,6 +90,7 @@ class TerminalCountsWiringTest {
             scope, seat = Kept(),
             onIntent = HouseDoors(house)::heard,
             onEgressFired = HouseDoors(house)::fired,
+            onCardRead = HouseDoors(house)::read,
             onSighted = HouseDoors(house)::sighted,
             onRadioFaulted = HouseDoors(house)::faulted,
             onMapped = HouseDoors(house)::mapped,
@@ -172,11 +173,11 @@ class TerminalCountsWiringTest {
                 val room = house.state().destinationOf(anchor)!!.room
                 val at = air.spotOf(performer)!!
                 air.place(beside, SimulatedAir.Spot(at.x + 1.0, at.y))
-                phoneAt(performer).round.act(IntentMessage.BeginSubroutine(anchor))
+                phoneAt(performer).round.readCard(anchor)
                 until("the house captured the performer's room") { house.state().observationOf(room) != null }
 
                 val terminal = assertNotNull(home.map.terminal?.card?.id, "the bench home has no T card")
-                phoneAt(reader).round.act(IntentMessage.BeginSubroutine(terminal))
+                phoneAt(reader).round.readCard(terminal)
                 until("CYRUS holds the station") { house.state().readerHolding()?.index == reader.index }
                 until("CYRUS's panel holds the house's counts") { phoneAt(reader).flow.state.terminalBeat != null }
                 // BRUNO stops, so the house stops capturing once its sweep on the close has run (3 s),

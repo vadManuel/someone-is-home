@@ -50,11 +50,9 @@ class IntentWireTest {
         // round-trip sweep and the no-actor-field sweep below both stop covering, silently, from
         // the day it is added.
         IntentMessage.FireStatic,
-        IntentMessage.BeginSubroutine(marker),
         IntentMessage.StopSubroutine,
         IntentMessage.LeaveTerminal,
         IntentMessage.ReturnSyncPulse(listOf(1L, 2L, 3L, 4L)),
-        IntentMessage.CallMeeting,
         IntentMessage.CheckIn,
         IntentMessage.DeclareReadyToVote,
         IntentMessage.SelectVote(Seat(2)),
@@ -76,11 +74,9 @@ class IntentWireTest {
         is Intent.FireSurge -> IntentMessage.FireSurge(intent.target)
         is Intent.FireIsolate -> IntentMessage.FireIsolate(intent.target)
         is Intent.FireStatic -> IntentMessage.FireStatic
-        is Intent.BeginSubroutine -> IntentMessage.BeginSubroutine(intent.marker)
         is Intent.StopSubroutine -> IntentMessage.StopSubroutine
         is Intent.LeaveTerminal -> IntentMessage.LeaveTerminal
         is Intent.ReturnSyncPulse -> IntentMessage.ReturnSyncPulse(intent.taps)
-        is Intent.CallMeeting -> IntentMessage.CallMeeting
         is Intent.CheckIn -> IntentMessage.CheckIn
         is Intent.DeclareReadyToVote -> IntentMessage.DeclareReadyToVote
         is Intent.SelectVote -> IntentMessage.SelectVote(intent.target)
@@ -212,6 +208,31 @@ class IntentWireTest {
         )
     }
 
+    /**
+     * **No phone can put a card to the rules, or call a meeting, by naming what the card is**
+     * (D-318).
+     *
+     * The two members that did, `BeginSubroutine` and `CallMeeting`, are gone: which fact a card is
+     * belongs to the house's map. A frame written the old way does not decode, so it reaches no desk;
+     * the only way up for a card is [Asked.Read], which carries the id and nothing that says what it
+     * is.
+     */
+    @Test
+    fun aCardCannotBeNamedAsWorkOrAsTheMeetingFromAPhone() {
+        val honest = RoundWire.encode(RoundBody.Act(seq = 1, intent = IntentMessage.CheckIn))
+        val asCheckIn = """"intent":{"type":"CheckIn"}"""
+        for (forged in listOf(
+            honest.replace(asCheckIn, """"intent":{"type":"CallMeeting"}"""),
+            honest.replace(asCheckIn, """"intent":{"type":"BeginSubroutine","marker":"CARD-11"}"""),
+        )) {
+            assertNotEquals(honest, forged, "the forge did not change the frame, so it proved nothing")
+            assertEquals(null, RoundWire.decodeOrNull(forged), "a phone named what a card is: $forged")
+        }
+        val names = fieldsOf(Asked.serializer().descriptor)
+        assertTrue("card" in names, "the card read is not on the upward wire: $names")
+        assertTrue("shape" !in names, "a card read carries its shape, which is the map's to say: $names")
+    }
+
     // ---- 2 · One request, one message, nothing lost ------------------------------------------------
 
     /** Every message is exactly the request it names, both ways round. */
@@ -269,11 +290,9 @@ class IntentWireTest {
         is Intent.FireSurge -> intent.actor
         is Intent.FireIsolate -> intent.actor
         is Intent.FireStatic -> intent.actor
-        is Intent.BeginSubroutine -> intent.actor
         is Intent.StopSubroutine -> intent.actor
         is Intent.LeaveTerminal -> intent.actor
         is Intent.ReturnSyncPulse -> intent.actor
-        is Intent.CallMeeting -> intent.actor
         is Intent.CheckIn -> intent.actor
         is Intent.DeclareReadyToVote -> intent.actor
         is Intent.SelectVote -> intent.actor

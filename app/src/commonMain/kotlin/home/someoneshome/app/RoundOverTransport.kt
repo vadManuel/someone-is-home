@@ -1,6 +1,7 @@
 package home.someoneshome.app
 
 import home.someoneshome.model.ContactWindow
+import home.someoneshome.model.MarkerId
 import home.someoneshome.model.protocol.Asked
 import home.someoneshome.model.protocol.IntentMessage
 import home.someoneshome.model.protocol.RoundBody
@@ -453,6 +454,24 @@ class RoundOverTransport(
      */
     fun fireEgress() {
         if (contacts.inRound) requests.ask(Asked.Fire) else up(RoundWire.encode(outbox.fire()))
+    }
+
+    /**
+     * **A card this phone's camera read, on its way to the house as the id and nothing else**
+     * (the owner's 2026-11-21 ruling, D-318).
+     *
+     * Every decoded in-round scan goes up as this, whatever is printed on the card: the same
+     * request, the same shape and, in the fixed-width slot, the same size on every phone and for
+     * both roles. **This phone decides nothing about the card.** It holds no map, so whether the
+     * paper is work, the meeting card or NOT A MARKER is the house's answer, and the screen moves on
+     * that answer and never on the read.
+     *
+     * In a round it rides the next beat's slot, for [act]'s reason (D-263). **Outside one it does
+     * not go at all**: no phone holds a seed then, every phone is in the same state, and there is no
+     * map to route a card against (D-067), so the read is said in this phone's log and nowhere else.
+     */
+    fun readCard(card: MarkerId) {
+        if (contacts.inRound) requests.ask(Asked.Read(card)) else onEvent("A CARD READ BEFORE THE ROUND — NOTHING GOES UP (D-318)")
     }
 
     /**

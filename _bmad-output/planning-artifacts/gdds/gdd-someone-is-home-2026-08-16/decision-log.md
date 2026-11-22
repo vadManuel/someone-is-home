@@ -12978,6 +12978,124 @@ errors, 0 skipped; `vocabularyLint`, `redactionLint` and the boundary checks cle
 the XML. **Nothing here has run on a phone**: the counts' fit to who is really where waits on the
 phone session's new line, and no UWB room reach is calibrated (D-272).
 
+### D-318 · **A card read goes up as its id and the house routes it: paper this home never registered is NOT A MARKER, on that phone only, outside the recording — built; answers D-313's stop; the uplink and the downlink changed, the recording did not (46)**
+
+**The ruling** (owner, 2026-11-21). *Make sense* — to D-313's proposal: one raw read from the scan,
+routed by `routeScan` at the authority, and a scanner-only unregistered answer that is not recorded.
+The proposal recommended D-160's *no* for NOT A MARKER and the owner agreed to it; it is built
+**provisional**. D-313 found the contradiction: a card this home never registered went up as
+`BeginSubroutine`, so the rules placed its reader at a card that is no place in the home, spent
+their open Subroutine and answered NOTHING FOR YOU HERE where D-124 reserves NOT A MARKER; a mislaid
+or spare meeting card called a meeting, because `CallMeeting` carried no card and nothing checked
+it; and `routeScan` was called by nothing but its own test, because a phone has no map.
+
+1. **One raw read.** Every decoded in-round scan goes up as `Asked.Read(card)`, the card's id and
+   nothing else, in the upload's request slot: one shape and, in the fixed-width slot, one size on
+   every phone and for both roles. `inRoundScan` decodes and returns the id, with no shape test, the
+   meeting card's included. The house routes it: `IntentDesk.Landing.Read` → `LobbyHouse.onCardRead`
+   → `HouseDoors.read` → `RoundAuthority.cardRead`, which calls `routeScan` against the home the
+   round was armed in. A registered card, the Terminal and every Egress node go to the rules as the
+   `MarkerScanned` they always were (placement, D-124's resolution, D-199, D-297); the registered
+   meeting card is the `MeetingCalled` it always was (D-121, refused by the gate as before during an
+   Egress or from an out seat). **`routeScan` now takes the card's id and never its shape**: the shape
+   is printed on the same paper and is not what makes a card part of a home.
+   **`IntentMessage.BeginSubroutine` and `IntentMessage.CallMeeting` are deleted from the wire**, and
+   `Intent.BeginSubroutine`, `Intent.CallMeeting` and their `factOf` arms with them. Kept, either
+   would be one forged frame away from the bug this closes, and `IntentMessage`'s own rule — *an
+   Intent may exist only where the event it becomes needs nothing but the phone* — already said a
+   card read fails it: which fact a card is needs the map. A card read is `RoundBody.Fire`'s case
+   with the map as the second source, so it has a member of its own beside `Asked.Fire`.
+   `IntentAdmissionTest` moves `MarkerScanned` and the card's `MeetingCalled` from *requestable* to
+   *house-composed*. A read outside a round does not go up (no seed, no map; the phone's log says so).
+2. **Unregistered → NOT A MARKER, to that phone only.** A new effect, `Effect.CardUnregistered(seat)`,
+   projected as `RoundMessage.CardUnregistered`, which carries nothing: the socket is the address.
+   **Schema row `CARD_UNREGISTERED` to the two living classes, addressed to the scanning seat** —
+   `SCAN_ANSWERED`'s row and for its reason: narrowed to either role it would be a role test anyone
+   could run with a scrap of paper, and the out classes get nothing because their registered scans
+   get nothing on this axis either. The phone moves to the screen it already had,
+   `ScreenId.ScanUnknown`, and changes nothing else (`FlowModel.housePushed`): its caught work and its
+   tap control stand, because nothing at the house moved. **The seat is not placed, its open
+   Subroutine is not spent, no meeting is called, and no other phone is sent anything.** The answer
+   is built from the card and the map and never from a role, so the same paper is the same bytes on
+   an Insider's phone and a Resident's.
+3. **Not recorded, and that is D-072 rather than a gap.** The recording is what reached the rules:
+   events, the effects the rules produced from them, the states, and the gate's refusals. Unregistered
+   paper never reaches the rules, so it makes no event and no row. `CardUnregistered` is the one
+   effect the rules never produce: the house builds it above them and hands it to the emit boundary
+   directly, so the schema still decides who may receive it, and `RoundAuthority` keeps it in
+   `answeredOutsideTheRules`, apart from `emitted`. A count of unregistered cards, in a recording or
+   anywhere else, is the arbiter of a player's claim D-072 refuses: *everything a player saw is theirs
+   to report, or to lie about.*
+4. **The buzz.** NOT A MARKER carries D-160's *no*, two vibrates (`Haptic.Double`), on that phone
+   only, the kind's own value read by `HouseBuzzer` off the effect and the message alike; **provisional**.
+   The acquire keeps its *yes*, one Short, which is the scan window's and is unchanged (D-159, D-160).
+   NOTHING FOR YOU HERE stays silent; whether it should say *no* too is the open line on the phone
+   checklist, as before.
+5. **A meeting card from the house's own deck that this home did not register** is unregistered, so
+   NOT A MARKER and no meeting (D-169). So is a mislaid card. Only the id on the map calls a meeting.
+6. **The recording format is unchanged, at 46.** No event, effect row or state row changed shape,
+   and `reduce` reduces every event exactly as before: `MarkerScanned` and `MeetingCalled` are the same
+   events, and the routing above the rules only decides which reads become them. `Transcript` renders
+   `CardUnregistered` (the per-client transcripts read every effect a phone is sent), but no
+   recording can hold that row, because the rules never emit it. A version 46 recording made before
+   this change, unregistered `MarkerScanned` and all, replays exactly as it did.
+7. **No new copy, light, colour or type.** NOT A MARKER and its screen already existed (D-124);
+   nothing on it was touched.
+
+**Guards.** `CardReadTest` (app, new), in process on the real `RoundAuthority` in the bench's home:
+*anUnregisteredCardIsNotAMarkerOnThatPhoneOnlyAndNothingElseHappens* (one `CardUnregistered` to that
+seat through the real schema, the state the same object so no event reached the rules, the rules'
+effects and refusals unchanged, the open work and the placement unchanged, no meeting);
+*aSpareMeetingCardCallsNoMeetingAndIsNotAMarker*; *aRegisteredCardOfEveryKindRoutesAsBefore* (work
+opens and places, the Terminal is the station, an Egress node answers nothing and places, the
+registered meeting card calls the meeting, none of them NOT A MARKER); *anInsiderAndAResidentAreAnsweredAlike*
+(the same message, the same class, the same buzz); *theAcquireSaysYesAndNotAMarkerSaysNo* (one motor:
+the window's Short, then the house's Double); and, **over real loopback sockets**, a five-phone evening,
+*overTheWireNotAMarkerIsThatPhonesAloneAndTheMeetingCardStillCalls*: a Resident and then an Insider
+catch their own work, read a stray card and a spare meeting card, and each lands on NOT A MARKER
+with one *no*, the other four phones sent nothing in two beats, the rules emitted nothing for that
+seat, its work and placement unchanged, no meeting, the two roles' wires the same; then the
+registered meeting card rings every phone. `ScanRoutingTest`: *a spare meeting card from the deck
+calls no meeting*. `EmitSchemaTest`: *not a marker reaches the scanning seat of either living role
+and nobody else*. `IntentWireTest`: *aCardCannotBeNamedAsWorkOrAsTheMeetingFromAPhone* (the two old
+frames no longer decode; the read carries a card and no shape). `NotAMarkerRender` (ui, new).
+
+**Proved red by injection.** The unregistered branch of `RoundAuthority.cardRead` made to put the
+card to the rules as work again (`gate(Event.MarkerScanned(…))`), then restored: four of
+`CardReadTest`'s six went red, quoted from the XML: *an unregistered card was not answered NOT A
+MARKER, once, to that seat (D-124, D-318). Expected <[CardUnregistered(seat=Seat(index=2))]>, actual
+<[ScanAnswered(seat=Seat(index=2), opened=null), PresenceChanged(seat=Seat(index=2),
+at=MarkerId(value=ZZZZ001), open=false)]>*; *a spare meeting card reached the rules*; the role
+comparison (*Expected <[CardUnregistered]>, actual <[ScanAnswered(opened=null)]>*); and over the
+wire *never happened: Resident was told NOT A MARKER … SCAN OPENED NOTHING*, which is D-313's defect
+exactly.
+
+**Rendered and looked at.** NOT A MARKER in a round, 600×1300 with an iPhone 16 Pro's insets,
+through `FlowHost`, after a Jam was caught and left by NOT THIS ONE: the shared refusal frame, the
+struck circle, NOT A MARKER, SCAN ANOTHER and SEE MY SUBROUTINES, the status bar ARMED with the
+meter's honest dash. An Insider's and a Resident's are the same pixels, and the caught work is still
+held (`build/screens/notamarker-in-round-*.png`).
+
+| site | before | after |
+|---|---|---|
+| `model` `IntentWire.kt`, `Intent.kt` | `BeginSubroutine`, `CallMeeting` | deleted |
+| `model` `RequestSlot.kt` | `Asked.Act`, `Asked.Fire` | + `Asked.Read(card)` |
+| `model` `Effect.kt`, `RoundWire.kt`, `EmitSchema.kt` | (none) | `CardUnregistered`, its message, its row (living, the seat) |
+| `core` `Scanning.kt` | `routeScan(…, card: MarkerCard, …)`, called by a test | takes the id; called by the house |
+| `core` `Intents.kt` | `factOf` arms for the two | deleted |
+| `platform` `IntentDesk.kt` | `Put`, `Draw`, `Duplicate` | + `Landing.Read` |
+| `app` `RoundAuthority.kt`, `HouseDoors.kt`, `LobbyOverTransport.kt` | (none) | `cardRead`, `read`, `onCardRead` |
+| `app` `RoundOverTransport.kt`, `RoundClient.kt`, `Cheats.kt`, `RoundCheat.kt` | the read split by shape on the phone | `readCard(id)` |
+| `app` `HouseBuzzer.kt` | (none) | `CardUnregistered` buzzes `Double` |
+| `ui` `Flow.kt` | (none) | `CardUnregistered` → `ScanUnknown` |
+| `harness` `Transcript.kt` | (none) | renders the effect; no recording holds it |
+| tests that sent the two members | `BeginSubroutine`, `CallMeeting` | `readCard`, `cardRead`, or the event put directly where the rig has no map (`IntentLoopTest`) |
+| `phone-session-2026-11-19.md` | *a card from another home gets NOTHING FOR YOU HERE* | NOT A MARKER with a *no*, that phone only |
+
+**Checked** (on the final tree, `*/build/test-results` cleared first: `./gradlew check --continue`
+with the two variant sweeps excluded, then `:app:variantSweepRelease`, then `:app:variantSweepPlaytest`,
+the app's XML copied out after each, every result XML counted with a python glob): model 358 (JVM) + 342 (iOS Simulator); core 419 + 417; platform 211; ui 773 (desktop) + 380; harness 132; cards 17; app 280 (the default variant), 170 (Release), 280 (Playtest). 3,779 in all. 0 errors, 0 skipped, and one failure, `OutboundQueueTest.aSeatThatStopsDrainingDelaysNobodyAndIsDroppedWhenItsQueueIsFull`, a known load flake: rerun alone it passes (1 test, 0 failures). The vocabulary lints, `redactionLint` and the cordons ran and passed. `CardReadTest`, `NotAMarkerRender` and the new `ScanRoutingTest`, `EmitSchemaTest` and `IntentWireTest` cases are in the XML.
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

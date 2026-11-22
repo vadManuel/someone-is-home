@@ -123,6 +123,8 @@ class SlotRequests(
     private fun kindOf(asked: Asked): String = when (asked) {
         is Asked.Act -> asked.intent::class.simpleName ?: "?"
         is Asked.Fire -> "THE EGRESS TILE"
+        // The card's id is this phone's own read, and it is not printed: a log is a file (D-318).
+        is Asked.Read -> "A CARD READ"
     }
 }
 

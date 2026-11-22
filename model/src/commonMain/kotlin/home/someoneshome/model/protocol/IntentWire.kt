@@ -78,6 +78,18 @@ import home.someoneshome.model.Seat
  * So the request keeps its own frame and the desk keeps two answers rather than one branch. See
  * [RoundBody.Fire], where the argument is written at the frame that carries it.
  *
+ * ### A card read is not one of these either (D-318)
+ *
+ * A scan used to go up as one of two members chosen **on the phone** by the shape printed on the
+ * paper: `BeginSubroutine(card)` for most cards, `CallMeeting` for a `u_shape`. Neither event is
+ * fully determined by what the phone did: which fact a card is (work, the meeting, or paper this
+ * home never registered) is a question about the home's **map**, which no phone holds, so the
+ * phone's guess put a card the home never registered to the rules as work, and called a meeting
+ * off any meeting-shaped card at all. Both members are deleted. A card read now rides the upload
+ * as [Asked.Read], carrying the card id and nothing else, and the house routes it (`routeScan`)
+ * before there is any fact to admit — [RoundBody.Fire]'s argument exactly, for a second source
+ * that is the map rather than a draw.
+ *
  * ### In a round, neither travels as a frame of its own (D-263)
  *
  * Once a round is armed, a request rides inside the upload every phone sends once a beat at one
@@ -94,18 +106,6 @@ sealed class IntentMessage {
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("ArmRevoke")
     data object ArmRevoke : IntentMessage()
-
-    /**
-     * A card was read. The card's own id and nothing about where the reader was standing.
-     *
-     * [MarkerId] is the printed card, which the house registered to a room during the setup walk —
-     * so this reports a *reading*, and where that puts the player is the house's conclusion rather
-     * than the phone's claim (D-136).
-     */
-    @ClientFacing
-    @kotlinx.serialization.Serializable
-    @kotlinx.serialization.SerialName("BeginSubroutine")
-    data class BeginSubroutine(val marker: MarkerId) : IntentMessage()
 
     /**
      * **Surge that seat** (`gdd.md:313`, the owner's 2026-08-22 targeting ruling).
@@ -130,8 +130,9 @@ sealed class IntentMessage {
      * **Isolate that marker** (`gdd.md:315`, D-150).
      *
      * [MarkerId] is the printed card, off the list the house sent this seat
-     * (`RoundMessage.IsolateTargetsOffered`) — so like [BeginSubroutine] this reports a **choice
-     * among what the house offered**, and carries nothing about where the player is standing.
+     * (`RoundMessage.IsolateTargetsOffered`) — so like a card read ([Asked.Read]) this names a
+     * printed card, a **choice among what the house offered**, and carries nothing about where the
+     * player is standing.
      *
      * **A card the list did not offer is refused by the rules and costs nothing**, which is the one
      * place the two halves of D-150 meet: the exclusion is what the *list* does, and the refusal
@@ -147,7 +148,7 @@ sealed class IntentMessage {
      * **Jam the house's monitoring** (D-186, [Intent.FireStatic]).
      *
      * **A `data object`, because there is nothing to say.** Static has no target of any kind, so the
-     * request is the fact that this control was pressed — [CallMeeting]'s shape, and the same
+     * request is the fact that this control was pressed — [ArmRevoke]'s shape, and the same
      * reasoning arrives from the other direction: what makes a member rather than a field carry the
      * meaning is that a field is a thing a client can choose, and there is nothing here a client may
      * choose.
@@ -160,21 +161,6 @@ sealed class IntentMessage {
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("FireStatic")
     data object FireStatic : IntentMessage()
-
-    /**
-     * The meeting card was scanned.
-     *
-     * **The trigger is which member of this type was sent, and is not a field.** The house has to
-     * tell the card from the Revoked report because one is inert during an Egress and the other is
-     * not (D-133), and a `trigger` field here would be a client choosing which of the two admission
-     * rules it would like to be judged by. Two controls, two members — D-079's *if two classes need
-     * different content, that is two kinds* pointed the other way up the wire. The report itself is
-     * not here at all; see this file's header.
-     */
-    @ClientFacing
-    @kotlinx.serialization.Serializable
-    @kotlinx.serialization.SerialName("CallMeeting")
-    data object CallMeeting : IntentMessage()
 
     /**
      * **STOP NOW — the one control on every Subroutine screen, which had no wire member** (E-P2-5,
@@ -214,7 +200,7 @@ sealed class IntentMessage {
      * **[taps] are milliseconds of the host's monotonic clock**, as this phone measured it (C1),
      * on the grid `EgressOpened.pulseFrom` names (C2). Not ticks: no phone knows the house's tick.
      *
-     * **No node**, for [BeginSubroutine]'s reason taken one step further: a phone naming its own
+     * **No node**, for a card read's reason taken one step further: a phone naming its own
      * node would be the cheapest cheat in the game — sit on the couch, claim the Landing, and
      * contain an Egress from a chair. Where the player is standing is what the house recorded when
      * they scanned the node's card (D-136).
@@ -302,11 +288,9 @@ sealed class IntentMessage {
         is FireSurge -> Intent.FireSurge(actor, target)
         is FireIsolate -> Intent.FireIsolate(actor, target)
         is FireStatic -> Intent.FireStatic(actor)
-        is BeginSubroutine -> Intent.BeginSubroutine(actor, marker)
         is StopSubroutine -> Intent.StopSubroutine(actor)
         is LeaveTerminal -> Intent.LeaveTerminal(actor)
         is ReturnSyncPulse -> Intent.ReturnSyncPulse(actor, taps)
-        is CallMeeting -> Intent.CallMeeting(actor)
         is CheckIn -> Intent.CheckIn(actor)
         is DeclareReadyToVote -> Intent.DeclareReadyToVote(actor)
         is SelectVote -> Intent.SelectVote(actor, target)

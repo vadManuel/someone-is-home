@@ -290,6 +290,15 @@ class RoundClient(
     }
 
     /**
+     * **A card this phone read, up as its id and nothing else** ([RoundOverTransport.readCard],
+     * D-318). The house routes it against the map and answers; this phone decides nothing.
+     */
+    fun readCard(card: MarkerId) {
+        note("READ — A CARD")
+        round.readCard(card)
+    }
+
+    /**
      * **What this phone has been told, as a tally of kinds** — never as content.
      *
      * Printed beside every change rather than once at the end, for [LobbyCheat]'s reason: this

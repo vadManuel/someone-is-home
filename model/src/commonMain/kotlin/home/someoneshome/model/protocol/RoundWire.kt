@@ -379,6 +379,24 @@ sealed class RoundMessage {
     data class TerminalAnswered(val reading: Boolean) : RoundMessage()
 
     /**
+     * **NOT A MARKER: the card this phone read is not part of this home** (D-124, D-318), and it
+     * carries nothing.
+     *
+     * The seat comes off as it does for every addressed kind, and there is nothing left: which
+     * phone it means is the socket it goes down. No card id rides it either — the phone read the
+     * card, and the house's answer is only *not here*. One shape and one size on every phone, for
+     * both roles. See [home.someoneshome.model.Effect.CardUnregistered], which says why the rules
+     * never produce it and why it is outside the recording.
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("CardUnregistered")
+    data object CardUnregistered : RoundMessage() {
+        /** D-160's *no*, the effect's own and copied here (D-318, provisional). */
+        val haptic: Haptic get() = Haptic.Double
+    }
+
+    /**
      * **Projected and permitted to nobody, exactly as its kind is named in [EmitSchema.kindOf] and
      * granted nothing** (D-111, D-136).
      *
@@ -954,6 +972,7 @@ sealed class RoundMessage {
             is WorkOrderIssued -> EmitSchema.WORK_ORDER_ISSUED
             is ScanAnswered -> EmitSchema.SCAN_ANSWERED
             is TerminalAnswered -> EmitSchema.TERMINAL_ANSWERED
+            is CardUnregistered -> EmitSchema.CARD_UNREGISTERED
             is PresenceChanged -> EmitSchema.PRESENCE_CHANGED
             is OpeningMessage -> EmitSchema.OPENING_MESSAGE
             is RoleRevealed -> EmitSchema.ROLE_REVEALED
@@ -1391,6 +1410,8 @@ object RoundWire {
         is Effect.WorkOrderIssued -> RoundMessage.WorkOrderIssued(effect.lines)
         is Effect.ScanAnswered -> RoundMessage.ScanAnswered(effect.opened)
         is Effect.TerminalAnswered -> RoundMessage.TerminalAnswered(effect.reading)
+        // The seat comes off and nothing is left: the socket is the address (D-318).
+        is Effect.CardUnregistered -> RoundMessage.CardUnregistered
         is Effect.PresenceChanged -> RoundMessage.PresenceChanged(effect.at, effect.open)
         is Effect.OpeningMessage -> RoundMessage.OpeningMessage(effect.haptic)
         // **The seat comes off and the role narrows to one bit about the recipient.**

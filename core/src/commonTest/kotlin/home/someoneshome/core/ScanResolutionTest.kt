@@ -370,7 +370,7 @@ class ScanRoutingTest {
      */
     @Test
     fun `the meeting card calls a meeting and never opens work`() {
-        val routing = routeScan(Tick(5), Seat(2), card(MarkerShapes.MEETING.id, "MMMMMMM"), home())
+        val routing = routeScan(Tick(5), Seat(2), card(MarkerShapes.MEETING.id, "MMMMMMM").id, home())
         val called = assertIs<ScanRouting.Meeting>(routing)
         assertEquals(Seat(2), called.event.caller)
         assertEquals(MeetingTrigger.MeetingCard, called.event.trigger)
@@ -380,7 +380,7 @@ class ScanRoutingTest {
     /** An ordinary registered card is work, and the rules decide whether there is any. */
     @Test
     fun `an ordinary registered card routes to the work plane`() {
-        val routing = routeScan(Tick(1), Seat(0), card("diamond", "AAAAAAA"), home())
+        val routing = routeScan(Tick(1), Seat(0), card("diamond", "AAAAAAA").id, home())
         val work = assertIs<ScanRouting.Work>(routing)
         assertEquals(MarkerId("AAAAAAA"), work.event.marker)
     }
@@ -396,7 +396,7 @@ class ScanRoutingTest {
      */
     @Test
     fun `the terminal is a registered card and is answered as one`() {
-        val routing = routeScan(Tick(1), Seat(0), card(MarkerShapes.TERMINAL.id, "TTTTTTT"), home())
+        val routing = routeScan(Tick(1), Seat(0), card(MarkerShapes.TERMINAL.id, "TTTTTTT").id, home())
         assertIs<ScanRouting.Work>(routing)
 
         val state = armed()
@@ -415,8 +415,25 @@ class ScanRoutingTest {
      */
     @Test
     fun `unregistered paper produces no event at all`() {
-        val routing = routeScan(Tick(1), Seat(0), card("cross", "ZZZZZZZ"), home())
+        val routing = routeScan(Tick(1), Seat(0), card("cross", "ZZZZZZZ").id, home())
         assertEquals(ScanRouting.Unregistered, routing)
+    }
+
+    /**
+     * **A meeting card the home never registered is paper, not a meeting** (D-169, D-318).
+     *
+     * The house's own deck holds more than one `u_shape`, and a home registers one of them. The
+     * spare has the meeting card's shape and is not the meeting card: the routing reads the id the
+     * map holds, never the shape printed on the paper, so the spare is NOT A MARKER and calls
+     * nothing. A mislaid card is the same case one step on (D-169): an id that is no longer on the
+     * map is simply unregistered.
+     */
+    @Test
+    fun `a spare meeting card from the deck calls no meeting`() {
+        val spare = card(MarkerShapes.MEETING.id, "MMMMMMN")
+        assertEquals(ScanRouting.Unregistered, routeScan(Tick(5), Seat(2), spare.id, home()))
+        // The complement: the one the home registered still calls one.
+        assertIs<ScanRouting.Meeting>(routeScan(Tick(5), Seat(2), MarkerId("MMMMMMM"), home()))
     }
 
     /**
@@ -428,11 +445,11 @@ class ScanRoutingTest {
     fun `an empty home registers nothing and routes everything to the alert`() {
         assertEquals(
             ScanRouting.Unregistered,
-            routeScan(Tick(1), Seat(0), card("diamond", "AAAAAAA"), HouseMap.EMPTY),
+            routeScan(Tick(1), Seat(0), card("diamond", "AAAAAAA").id, HouseMap.EMPTY),
         )
         assertEquals(
             ScanRouting.Unregistered,
-            routeScan(Tick(1), Seat(0), card(MarkerShapes.MEETING.id, "MMMMMMM"), HouseMap.EMPTY),
+            routeScan(Tick(1), Seat(0), card(MarkerShapes.MEETING.id, "MMMMMMM").id, HouseMap.EMPTY),
             "a meeting card the host never registered called a meeting in a house with no " +
                 "meeting place",
         )
