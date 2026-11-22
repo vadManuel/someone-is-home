@@ -83,11 +83,6 @@ def build():
   </div>
   {cap("NOTHING ELSE OPENS UNTIL IT IS DELIVERED", D, size=24)}''', D, "CARRYING. One item, and every other app refuses.", gap=14)
 
-    o += screen("sNotes", f'''
-  {hdr("NOTES", D, back="goHome", back_label="Back to home", meta="UNTITLED")}
-  <div style="border-top:1px solid #5A3D0E;padding-top:18px;font-size:34px;line-height:1.1">{{{{ noteLine }}}}</div>
-  {cap("THESE ARE NOT YOUR NOTES", D, center=True, extra="margin-top:auto")}''', D, "NOTES. Read only. It writes to you.", gap=14)
-
     o += refusal("sTermBusy", "ONE READER<br>AT A TIME", None,
                  "THE TERMINAL IS TAKEN. A scan of the T card while someone else is reading (M11, D-199).")
 

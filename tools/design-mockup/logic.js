@@ -128,10 +128,6 @@ class Component extends DCLogic {
       { from: "HOUSE", at: "21:02", preview: "Regarding this evening. Please read.", fromInk: A, ink: A }
     ].concat(BACKLOG.slice(seed % 3, (seed % 3) + 3 + (seed % 4)).map(([from, at, preview]) => ({ from, at, preview, fromInk: DIM, ink: MID })));
 
-    const NOTES = ["why was rose in the garage", "i have not seen marcus finish anything yet", "priya was upstairs when the lights went",
-      "dani walked past the study twice", "somebody was already at the garage marker", "tomas has not been in the hall all night",
-      "count was four. i only saw three of you", "rose scanned nothing for a long time"];
-
     const rs = p.revokeState || "ready";
     const hasTerminal = p.hasTerminal === undefined ? true : !!p.hasTerminal;
     const rtype = st.rtype;
@@ -161,13 +157,14 @@ class Component extends DCLogic {
     });
 
     const APPS = [
-      ["FILES", "files", "M4 8h8l2 3h10v12H4z"], ["NOTES", "notes", "M7 4h14v20H7z M11 10h6 M11 14h6 M11 18h4"],
-      ["MESSAGES", "reveal", "M4 6h20v13H12l-5 4v-4H4z"], null,
+      ["FILES", "files", "M4 8h8l2 3h10v12H4z"],
+      ["MESSAGES", "reveal", "M4 6h20v13H12l-5 4v-4H4z"], null, null,
       ["SETTINGS", "settings", "M4 9h3 M13 9h11 M4 19h11 M21 19h3 M7 6h6v6H7z M15 16h6v6h-6z"],
       ["CAMERA", null, "M4 9h20v14H4z M10 9l2-3h4l2 3 M11 13h6v6h-6z"], null, null
     ];
     // The PHONE tile is gone (D-121): meetings are called only by scanning the meeting card.
     // The TERMINAL tile is gone (D-199): the map opens only by scanning the T card.
+    // The NOTES app is gone (D-315): MESSAGES moves up one slot.
     // Their slots stay empty, so the grid keeps its shape for both roles.
     const apps = APPS.map((a) => {
       if (!a) return { blank: true, real: false };
@@ -211,7 +208,7 @@ class Component extends DCLogic {
       notEgress: s !== "egresswidget", sCarrying: s === "carrying", notCarrying: s !== "carrying", sPage2: s === "page2", sSurgeTargets: s === "surgetargets", sIsolateTargets: s === "isolatetargets",
       sLock: s === "lock", sLockNotify: s === "locknotify",
       sWork: s === "work", sScan: s === "scan", sScanCaught: s === "scancaught", sScanBad: s === "scanbad", sScanUnknown: s === "scanunknown",
-      sFiles: s === "files", sNotes: s === "notes", sTermBusy: s === "termbusy", sTermLive: s === "termlive", sTermStatic: s === "termstatic",
+      sFiles: s === "files", sTermBusy: s === "termbusy", sTermLive: s === "termlive", sTermStatic: s === "termstatic",
       sTimelapse: s === "timelapse",
       sSubReplay: s === "subreplay", sSubInterrupt: s === "subinterrupt", sSubParity: s === "subparity", sSubSniff: s === "subsniff",
       sSubDeallocate: s === "subdeallocate", sSubDrift: s === "subdrift", sSubShort: s === "subshort", sSubTrace: s === "subtrace",
@@ -274,7 +271,6 @@ class Component extends DCLogic {
         ["21:01", "Do not attempt the exterior doors."],
         ["21:02", ins ? "You still have Priya's spare key. Follow my instructions tonight and nobody else needs to hear about it." : "I am watching you. Thank you for your cooperation."]]
         .map(([at, text]) => ({ at, text })),
-      noteLine: ins ? "i hope no one finds out" : NOTES[(p.noteSeed === undefined ? 0 : p.noteSeed) % NOTES.length],
 
       intSegs: cells(32, 28, MID), egCells: cells(32, 22, MID), ghostCells: cells(32, 21, MID), meetCells: cells(30, 16, A),
       scanCells: cells(20, 12, "#000", LINE),
@@ -304,7 +300,7 @@ class Component extends DCLogic {
       isolateRows: [["HALL", "diamond"], ["GARAGE", "triangle"], ["BED 2", "cross"], ["STUDY", "squareframe"]].map(([room, sh]) => Object.assign({ room }, mk(sh))),
       holds,
 
-      parityCells, unavailable: ["SUBROUTINES", "NOTES", "ARCHIVE"],
+      parityCells, unavailable: ["SUBROUTINES", "ARCHIVE"],
       mapCells, mapRooms,
       termRooms: counted({ KITCHEN: [2, A], LIVING: [4, DIM], HALL: [1, LINE], STUDY: [0, LINE], GARAGE: [1, A] }),
       lapseRooms: counted({ KITCHEN: [3, DIM], LIVING: [1, DIM], HALL: [2, DIM], STUDY: [0, DIM], GARAGE: [0, DIM] }),

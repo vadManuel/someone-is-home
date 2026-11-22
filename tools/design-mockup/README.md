@@ -13,7 +13,7 @@ drawn one way everywhere. Edit a screen module, never the built file.
 | `kit.py` | palettes, header, rows, buttons, two-second hold, light mark, meters, floor plans |
 | `s_setup.py` | cold start and host setup (bone field, lights on) |
 | `s_play.py` | arming, springboard pages 1 and 2, banners, lantern, Surge and Isolate pickers |
-| `s_work.py` | work order, scan path, Files, Notes, Terminal, the ten Subroutines |
+| `s_work.py` | work order, scan path, Files, Terminal, the ten Subroutines |
 | `s_room.py` | meetings, the out screens, settings, both endings |
 | `logic.js` | the component's `renderVals()`: data, holds, swipes, status strip rules |
 | `shell_head.html`, `shell_script_tag.html` | the fixed shell: helmet, root, status strip, props |
