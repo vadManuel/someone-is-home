@@ -201,3 +201,14 @@ D-311 and D-313 were also run together in a full check before pushing: 3,312 tes
 - **Memory Dump:** draft its screens for review. It is not dealt until they are approved.
 - **Chain notice:** no separate notice. The LOCKED · WAITING UPSTREAM row says it, and "you're up" announces the unlock.
 - **Chains are Residents only:** "insiders don't have real tasks... an insider cannot be included in the chain". Insiders' fake orders show fake locked entries that unlock on a plausible delay, so the screens stay identical (D-324, after integration).
+- **Memory Dump: approved as drafted** (draft branch `worktree-agent-aa216d461ba48ec5f`, commit `abac9b9`).
+  - **Pattern:** 4 of Replay's dots in a 2×2 grid, played twice in Replay's rhythm (about 9 s), then the target's glyph and "TO <ROOM>".
+  - **Entry and verdict:** entry is Replay's tap input. A mismatch shows "REJECTED . BACK TO <SOURCE ROOM>".
+  - **Light:** MEDIUM.
+  - **Briefings:** "DOTS WILL FLASH IN ORDER. / CARRY THE ORDER IN YOUR HEAD." and "THE DOTS WILL NOT FLASH. / TAP THEM BACK FROM MEMORY."
+  - **My calls (provisional):** the pattern is held only once BEGIN starts the playback (NOT THIS ONE holds nothing); the house tells the phone the pattern is held, so the order row reads TO <ROOM>; the length is fixed at 4.
+- **Build queue:**
+  - after the integration: D-324, chains among Residents only, with fake locked entries for Insiders;
+  - D-325: Memory Dump's screens, switched on;
+  - D-321: the motion budget;
+  - then the design mockup.
