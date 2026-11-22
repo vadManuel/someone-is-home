@@ -3,6 +3,7 @@ package home.someoneshome.ui
 import home.someoneshome.model.AssignedWork
 import home.someoneshome.model.Destination
 import home.someoneshome.model.MarkerId
+import home.someoneshome.model.MemoryPattern
 import home.someoneshome.model.OrderLine
 import home.someoneshome.model.SubroutineInstance
 import home.someoneshome.model.SubroutineKind
@@ -163,6 +164,57 @@ class MotionBudgetTest {
     }
 
     private fun Phone.walkOffOk(screen: ScreenId): Boolean = model.walkOff(screen) > 0
+
+    /**
+     * **Memory Dump's screen is measured too, at both of its cards** (D-321 with D-325, set at
+     * integration). D-321 was built before Memory Dump had a screen, so the loop above leaves it
+     * out: its BEGIN is the house's carry at the source and nothing at the target, not the bench's
+     * instance. Here it is opened as D-325's flow opens it, and walking off closes it exactly as STOP
+     * NOW does, with the same one report, for both roles.
+     */
+    @Test
+    fun `passing the budget closes Memory Dump at the source and at the target as STOP NOW does`() {
+        val bed = Destination(MarkerId("card-bed2"), "cross", "BED 2")
+        val hall = Destination(MarkerId("card-hall"), "diamond", "HALL")
+        fun opened(role: PanelRole, source: Boolean): Phone {
+            val phone = Phone(role)
+            phone.model.houseSaid(
+                RoundMessage.WorkOrderIssued(
+                    listOf(
+                        OrderLine.Known(
+                            0, AssignedWork.MemoryDump, done = false, at = listOf(bed, hall),
+                            pattern = if (source) 0 else 1,
+                        ),
+                    ),
+                ),
+            )
+            phone.model.go(ScreenId.Scan)
+            phone.model.scanning(if (source) bed.marker else hall.marker)
+            val question = if (source) listOf(MemoryPattern.SOURCE, 2, 0, 3, 1) else listOf(MemoryPattern.TARGET, 4)
+            phone.model.houseSaid(RoundMessage.ScanAnswered(SubroutineInstance(0, SubroutineKind.MemoryDump, question)))
+            phone.model.actions().beginSubroutine()
+            assertEquals(ScreenId.SubMemory, phone.model.state.screen, "$role: BEGIN did not open Memory Dump")
+            phone.sent.clear()
+            return phone
+        }
+        for (source in listOf(true, false)) {
+            val card = if (source) "the source" else "the target"
+            val walked = PanelRole.entries.map { role ->
+                val phone = opened(role, source)
+                phone.model.still(MotionBudget.CALIBRATION_SAMPLES + 500)
+                assertEquals(ScreenId.SubMemory, phone.model.state.screen, "$card: a still hand was walked off")
+                assertTrue(phone.walkOffOk(ScreenId.SubMemory), "$card: walking away never closed Memory Dump")
+                assertEquals(listOf<IntentMessage>(IntentMessage.StopSubroutine), phone.sent, "$card: the cancel said something STOP NOW does not")
+                assertEquals(listOf(true, false), phone.measuring, "$card: the sensor was not started and stopped once")
+                phone
+            }
+            val pressed = opened(PanelRole.Resident, source).also { it.model.actions().stopSubroutine() }
+            for (phone in walked) {
+                assertEquals(pressed.sent, phone.sent, "$card: the cancel and STOP NOW sent different things")
+                assertEquals(pressed.model.state, phone.model.state.copy(role = PanelRole.Resident), "$card: the cancel left a phone STOP NOW would not")
+            }
+        }
+    }
 
     @Test
     fun `the cancel and STOP NOW leave the same phone`() {

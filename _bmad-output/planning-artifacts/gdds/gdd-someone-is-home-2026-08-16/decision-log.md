@@ -13793,6 +13793,8 @@ where it is first seen working, and where the provisional numbers are first felt
 | `app` `MotionWiring.kt` (new), `Cheats.kt` | — | `measuringWith`; the sensor behind the grant, started by the panel |
 | `phone-session-2026-11-19.md` | — | *The motion budget* (D-321) |
 
+**The combined format is 52, set at integration** (with D-324, D-325 and D-326): this entry left the recording at 50 and moved nothing in it; Memory Dump's screen (D-325) is one more the budget measures and closes as STOP NOW does, at the source and at the target, held by `MotionBudgetTest`'s tenth case.
+
 ### D-322 · **The work order is the design's: the mix scaled to `K`, one cross-player dependency per seat with the 20–120 s unlock and `you're up`, the Array Wipe circuit with its disk in hand, and Memory Dump's house half — built (recording 49); Memory Dump's screens, the upstream notice's look and three of M5's chain rules are STOPPED for the owner**
 
 **The rulings** (owner, 2026-11-21). *"We should build this"*, of four things the rules audit listed
@@ -14691,6 +14693,8 @@ appears in the app's page in Settings. The phone session's checklist gains those
 2. **The probe is started on every return in the lobby**, the host's included, not only on a return
    from Settings: the app cannot tell where the person went.
 3. **The radio's watchers are told only on iOS's own state callback**, not on the seam's re-reads.
+
+**The combined format is 52, set at integration** (with D-321, D-324 and D-325): this entry left the recording at 50 and moved nothing in it.
 
 ## State after revision 12
 

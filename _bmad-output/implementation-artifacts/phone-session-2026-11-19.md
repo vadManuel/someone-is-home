@@ -247,6 +247,10 @@ Tick each line as you see it.
 - [ ] **The station**: read the Terminal and walk off. The live view closes to the springboard, and
       a second phone scanning the T card straight after is let in (the station is free). Same from
       the timelapse while it plays.
+- [ ] **Memory Dump and the walk** *(D-321 with D-325)*: after the source's playback, walk to the
+      target with TO <ROOM> still on the screen. The budget closes it to the work order on the way,
+      as STOP NOW would, and the row still reads TO <ROOM>. Say whether that close feels like a
+      failure when the walk is the Subroutine.
 - [ ] **Both roles feel the same**: the Insider's phone drains and closes exactly as a Resident's.
 - [ ] **MOTION & FITNESS off**: switch it off in Settings, come back, open a Subroutine and walk
       off. Nothing drains and nothing closes (and the permission warning is the house's, as before).
