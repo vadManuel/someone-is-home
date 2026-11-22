@@ -75,4 +75,27 @@ class MotionAllocationTest {
         assertNothingPerSample("a moving sample through the panel", moving)
         assertEquals(ScreenId.TermLive, model.state.screen)
     }
+
+    /**
+     * **And a sample asked of this phone's own motor allocates nothing either** (D-327): the motor's
+     * clock is the standard library's, read on every sample while something has played; a repeating
+     * script (the ring) keeps it playing for the whole measurement, and one played once and over
+     * keeps the clock read on every sample after it.
+     */
+    @Test
+    fun `a sample while this phone's own motor plays allocates nothing`() {
+        val motor = OwnMotor()
+        val budget = MotionBudget(motor)
+        budget.begin(1e9)
+        repeat(MotionBudget.CALIBRATION_SAMPLES) { budget.sample(0.004, 0.006, 0.003) }
+        motor.played(home.someoneshome.model.HouseBuzz.RING, repeating = true)
+        assertTrue(motor.running(), "the arrangement is wrong: the motor is not playing")
+        assertNothingPerSample("a sample under the ring", runs { repeat(100_000) { budget.sample(0.12, 0.15, 0.05) } })
+        assertEquals(1.0, budget.left, "the ring spent the budget, so this measured the wrong path")
+        motor.played(listOf(home.someoneshome.model.HapticStep.Buzz(1)))
+        Thread.sleep(OwnMotor.TAIL_MILLIS + 20)
+        assertTrue(!motor.running(), "the arrangement is wrong: the buzz is still playing")
+        assertNothingPerSample("a sample after a buzz", runs { repeat(100_000) { budget.sample(0.12, 0.15, 0.05) } })
+        assertTrue(budget.left < 1.0, "the moving run spent nothing, so it measured nothing")
+    }
 }

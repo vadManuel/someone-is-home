@@ -497,6 +497,14 @@ object Flow {
             screen == ScreenId.Report
 
     /**
+     * **Where `you're up` and a later house text still walk to the banner over page 1** (D-327):
+     * page 1, page 2 and that banner itself. Everywhere else a quiet text stands over the screen it
+     * lands on (`FlowModel.quietLanded`). Page 1 and 2 hold nothing a walk could lose, so they keep
+     * the walk they always had.
+     */
+    val quietWalksThePages: Set<ScreenId> = setOf(ScreenId.Home, ScreenId.Page2, ScreenId.Quiet)
+
+    /**
      * **The rows in [autoAdvance] that are the phone's own only once the house has opened a phase**
      * (D-250, provisional, owner to confirm).
      *
@@ -1330,6 +1338,12 @@ class FlowModel(
      * Defaulted to nothing: every render and every test, whose samples are fed by hand.
      */
     private val onMeasuring: (Boolean) -> Unit = {},
+    /**
+     * **This phone's own motor, as the app root's haptics report it** (D-327): while it is playing,
+     * and for [OwnMotor.TAIL_MILLIS] after, the motion budget takes no sample. The app root hands
+     * the same one to its haptics; by default one nothing tells, so nothing is ever playing.
+     */
+    val motor: OwnMotor = OwnMotor(),
 ) {
 
     var state: PanelState by mutableStateOf(initial)
@@ -1401,7 +1415,7 @@ class FlowModel(
      * Begun on every opening of a screen [Flow.motionMeasured] names, on a housed phone, and ended
      * when the phone leaves them; fed by [motionSampled].
      */
-    val motion: MotionBudget = MotionBudget()
+    val motion: MotionBudget = MotionBudget(motor)
 
     /** **The budget as the row draws it** ([report]'s arrangement): stepped, read only in draw. */
     val motionBar: MotionBar = MotionBar()
@@ -2648,7 +2662,22 @@ class FlowModel(
      * holding a round's record ([LobbyModel.holdsARoundSeat]) is the round's, wherever it stands.
      */
     private val inTheLobby: Boolean
-        get() = state.screen in LOBBY_SCREENS && (lobby.hosting || lobby.attached != null) && !lobby.holdsARoundSeat
+        get() = state.screen in LOBBY_SCREENS && (lobby.hosting || lobby.attached != null) && !lobby.holdsARoundSeat &&
+            !roundHeard
+
+    /**
+     * **A round has said something to this phone since it last forgot one** (D-327): set by every
+     * push [houseSaid] applies, cleared by [roundForgotten]. A phone that holds a push of a round was
+     * armed into it, whatever screen it is still on: the house's arming pushes land one by one (the
+     * lamp and the work order before the opening text that walks the phone to ARMED, D-234), so for a
+     * moment an armed phone stands on the lobby. A lobby check or a late NEARBY DEVICES probe answer
+     * landing then must not let the seat go (D-311: *in the lobby, before lights out*); the switch-off
+     * is the round's, counted on its first beat and named at the first meeting (D-310, D-311).
+     *
+     * ⚠️ **It cannot see an arming whose first push has not yet arrived** (a frame still in the air
+     * when the probe answers). That narrower window is raised in D-327, not closed here.
+     */
+    private var roundHeard = false
 
     /**
      * **Back in the foreground** (D-310, D-311, D-326), called by the app root once the OS has been
@@ -2823,8 +2852,12 @@ class FlowModel(
     fun houseBeganAnotherRound() {
         lobby.line.roundEnded()
         roundForgotten()
+        // **The push in hand is the next round's, so this phone was armed into it** (D-327): no lobby
+        // check here. A grant still off is that round's to count, on its first beat (D-311), as it is
+        // for every phone armed missing one; letting the seat go would leave the round a seat with no
+        // phone in it.
+        roundHeard = true
         push(ScreenId.Lobby)
-        permissionsChecked()
     }
 
     /**
@@ -2844,6 +2877,7 @@ class FlowModel(
      * would leave its slam painted with nothing left to lift it.
      */
     private fun roundForgotten() {
+        roundHeard = false
         selections.clear()
         meeting.meetingBegan()
         if (state.houseAttached) {
@@ -3118,6 +3152,8 @@ class FlowModel(
      * branches that do nothing are the honest map of what the surfaces still owe.
      */
     fun houseSaid(message: RoundMessage) {
+        // Any push of a round: this phone was armed into it (D-327, [roundHeard]).
+        roundHeard = true
         said(message)
         // Every clock this push started is stamped with the moment it arrived (V4, D-269).
         clocksStamped()
@@ -3293,7 +3329,8 @@ class FlowModel(
                 // being the one the banner draws (D-322).
                 state = state.copy(houseTexts = state.houseTexts + text, lastQuiet = null)
                 notifications.houseSent(Notifications.houseText(text))
-                arrived(ScreenId.Quiet)
+                // Over the screen it lands on, as `you're up` is (D-327).
+                quietLanded(Notifications.houseText(text), walksThePages = true)
             }
 
             is RoundMessage.WorkOrderIssued -> state = state.copy(order = message.lines)
@@ -3304,11 +3341,15 @@ class FlowModel(
             // quiet banner. No dim (D-119); the buzz is the house text's, played by the app root off
             // the message (D-324), and nothing here chooses it. An Insider's fake hold lands here
             // the same way. There is no upstream notice to draw (D-324: the locked row is the notice).
+            //
+            // **It stands over the screen it lands on** (D-327, provisional, D-319's choice for
+            // MONITORING JAMMED): a Subroutine, the station, the caught scan and the scan keep their
+            // screen, and nothing is sent. Only page 1 and page 2 still walk to the banner over page 1.
             is RoundMessage.WorkUnblocked -> {
                 val text = Notifications.unblockedAt(landedAt() ?: PanelVals.NO_READING)
                 state = state.copy(lastQuiet = text)
                 notifications.houseSent(text)
-                arrived(ScreenId.Quiet)
+                quietLanded(text, walksThePages = true)
             }
 
             // **THE SCAN'S ANSWER, and it lands on the caught scan rather than in a Subroutine**
@@ -4051,7 +4092,7 @@ class FlowModel(
      * **It stands over the screen it lands on** ([PanelState.quietUp]) rather than walking the phone
      * to page 1, so the reader stays at the station under the jam and work stays where it was; on the
      * lock screen it lands under the clock, and on a screen the house is driving it waits there, as
-     * every quiet notification does.
+     * every quiet notification does. [quietLanded] is the one rule, page 1 and 2 included.
      */
     private fun monitoringJammed() {
         // Never on an out phone: the house sends it no jam, and a phone that is out says nothing
@@ -4060,9 +4101,41 @@ class FlowModel(
         val text = HouseText(landedAt() ?: PanelVals.NO_READING, Notifications.MONITORING_JAMMED)
         state = state.copy(houseTexts = state.houseTexts + text)
         notifications.houseSent(Notifications.houseText(text))
+        quietLanded(Notifications.houseText(text), walksThePages = false)
+    }
+
+    /**
+     * **A quiet text from the house, landing on whatever this phone is doing** (D-327, provisional,
+     * D-319's choice for MONITORING JAMMED made the rule for every quiet text the round sends:
+     * `you're up`, a later house text and the jam). Already stored by the caller, in the house
+     * thread and on the lock screen; this decides only where the banner is drawn.
+     *
+     * - **On a screen the house is driving it waits** ([Flow.houseDriving]): a meeting, an ending,
+     *   the report's circle (D-307), as every quiet notification always did.
+     * - **On the lock screen it lands under the clock** ([ScreenId.LockNotify]), as before.
+     * - **On page 1 or page 2, `you're up` and a house text still walk to the banner over page 1**
+     *   ([Flow.quietWalksThePages], [walksThePages]): nothing is lost there, and D-201 and D-118 rule
+     *   the words, the sender and the absent dim, which are the same either way. The jam keeps
+     *   D-319's own choice and stands over the page.
+     * - **Everywhere else it stands over the screen** ([PanelState.quietUp]) and the screen does
+     *   not change, so nothing the screen holds is touched and nothing is sent: a Subroutine's
+     *   attempt (D-110: STOP NOW is its only exit), the station's lock and a running timelapse
+     *   (D-203, D-319), the caught scan's BEGIN, Memory Dump's playback, the scan's camera, the
+     *   Egress widget's tap control. **The caught scan is the house's arrival and still takes the
+     *   banner over it**, for the Egress alert's reason (D-299): it stands between a card and its
+     *   work, and a text that waited there would be a text the player walks into the work without.
+     *
+     * Only the screen is asked, never the role: a Resident's real work and an Insider's fake are the
+     * same screen (rule 8), so both take one path. Swiped, it comes down and the screen stays
+     * ([dismissNotification]); any arrival anywhere takes it down with the screen ([arrivingAt]).
+     */
+    private fun quietLanded(text: Notification, walksThePages: Boolean) {
+        val screen = state.screen
         when {
-            state.screen in Flow.houseDriving -> Unit
-            state.screen == ScreenId.Lock -> push(ScreenId.LockNotify)
+            screen == ScreenId.ScanCaught -> state = state.copy(quietUp = text)
+            screen in Flow.houseDriving -> Unit
+            screen == ScreenId.Lock -> push(ScreenId.LockNotify)
+            walksThePages && screen in Flow.quietWalksThePages -> push(ScreenId.Quiet)
             else -> state = state.copy(quietUp = text)
         }
     }

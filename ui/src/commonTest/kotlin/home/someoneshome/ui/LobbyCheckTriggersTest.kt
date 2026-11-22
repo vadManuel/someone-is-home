@@ -2,6 +2,7 @@ package home.someoneshome.ui
 
 import home.someoneshome.model.DevicePermission
 import home.someoneshome.model.Grant
+import home.someoneshome.model.Haptic
 import home.someoneshome.model.protocol.RoundMessage
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -243,7 +244,12 @@ class LobbyCheckTriggersTest {
 
     // ---- NEW ROUND, and a later round's push -------------------------------------------------------
 
-    /** **GUARD: NEW ROUND, and a later round's push, run the check on arrival in the lobby.** */
+    /**
+     * **GUARD: NEW ROUND runs the check on arrival in the lobby; a later round's push does not**
+     * (D-327). The later round's push is that round's, so the phone holding it was armed into it,
+     * and a grant still off is the round's to count on its first beat (D-311), not the lobby's to
+     * let go: the seat stays, and the push walks the phone to ARMED.
+     */
     @Test
     fun aNewRoundRunsTheCheckOnArrival() {
         val os = Os()
@@ -258,7 +264,10 @@ class LobbyCheckTriggersTest {
         behind.push(ScreenId.Home)
         again.off(DevicePermission.Camera)
         behind.houseBeganAnotherRound()
-        behind.assertLetGo("a later round's push kept a guest missing a grant in the lobby")
+        assertEquals(ScreenId.Lobby, behind.state.screen, "a later round's push let go a seat armed into that round")
+        assertNotNull(behind.lobby.attached, "a later round's push let go a seat armed into that round")
+        behind.houseSaid(RoundMessage.OpeningMessage(Haptic.Long, 0L))
+        assertEquals(ScreenId.Armed, behind.state.screen, "the later round's opening did not walk the kept seat to ARMED")
     }
 
     // ---- The host after a close ---------------------------------------------------------------------

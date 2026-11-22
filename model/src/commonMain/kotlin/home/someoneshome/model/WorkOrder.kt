@@ -47,10 +47,10 @@ enum class SubroutineKind(
      * as [AssignedWork.MemoryDump], whose two cards are the source and the target; never as
      * [AssignedWork.Subroutine], which names one card.
      *
-     * ⚠️ **Its two screens, its briefing and its light signature are STOPPED for the owner**
-     * (D-113: *Memory Dump is rated when it is built*; D-188, D-194: every Subroutine is briefed at
-     * the card, and no line exists for this one). The house deals it, grades it and carries its
-     * pattern; no phone can open it yet.
+     * **Its screens are built from the owner's approved draft, and it is dealt** (D-325, settling
+     * D-113's *rated when it is built* and D-188's briefing): the pattern is four of Replay's dots,
+     * played twice at the source; each card has its own briefing; its light is MEDIUM. BEGIN at the
+     * source takes the pattern into the seat's hands, and the target takes it back from memory.
      */
     MemoryDump(SubroutineStructure.Long),
     ;

@@ -10,6 +10,7 @@ import home.someoneshome.model.GameState
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.Meeting
 import home.someoneshome.model.MeetingTrigger
+import home.someoneshome.model.RefusalReason
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
 import kotlin.test.Test
@@ -81,6 +82,12 @@ class ChainClockTest {
         assertTrue(ran.state.links.all { ran.state.workOrderFor(it.down)!!.entries[it.downEntry].held })
     }
 
+    /**
+     * **The clock holds a release that falls due during a meeting, and so does the gate** (D-322,
+     * D-327). The clock's hold reads its own snapshot of the state; the gate's is the second wall, so
+     * a release minted off a snapshot from before the meeting is refused at it, the line stays held,
+     * and the clock mints it again once the meeting is over.
+     */
     @Test
     fun `a release that falls due during a meeting waits for the lights to go out`() {
         val state = started(armed())
@@ -89,6 +96,22 @@ class ChainClockTest {
         val seconds = (link.delay / Balance.TICKS_PER_SECOND).toInt()
         val during = run(meeting, seconds + 10)
         assertEquals(emptyList(), during.minted, "`you're up` landed on a phone standing in a meeting")
+
+        // The gate, handed the release the clock mints off a snapshot that missed the meeting.
+        var snapshot = HouseClock.started()
+        var due: Event.ChainUnlocked? = null
+        repeat((seconds + 1) * Balance.TICKS_PER_SECOND.toInt()) {
+            val turned = snapshot.turned(second / Balance.TICKS_PER_SECOND, state)
+            snapshot = turned.next
+            due = due ?: turned.due.filterIsInstance<Event.ChainUnlocked>().firstOrNull()
+        }
+        assertEquals(link.down to link.downEntry, due?.let { it.seat to it.entry }, "the arrangement is wrong: nothing fell due")
+        assertEquals(
+            Admission.Refused(RefusalReason.MeetingAlreadyRunning), admit(meeting, due!!),
+            "the gate admitted a release during a meeting",
+        )
+        assertTrue(meeting.workOrderFor(link.down)!!.entries[link.downEntry].held, "a refused release moved the line")
+
         val after = run(state, 1, during.clock)
         assertEquals(1, after.minted.size, "the release did not land once the meeting was over")
     }

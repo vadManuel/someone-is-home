@@ -4,8 +4,11 @@ import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.staticCompositionLocalOf
+import home.someoneshome.model.HapticStep
+import kotlin.concurrent.Volatile
 import kotlin.math.ceil
 import kotlin.math.sqrt
+import kotlin.time.TimeSource
 
 /**
  * **M2's motion budget: an accumulator, not a classifier** (`gdd.md` M2, D-043, D-110, D-203, D-321).
@@ -38,8 +41,16 @@ import kotlin.math.sqrt
  *
  * Primitives only, and [sample] allocates nothing: a hundred calls a second, for every second
  * anybody stands at a card. `MotionAllocationTest` holds it to zero bytes.
+ *
+ * ### This phone's own buzz is not the player moving
+ *
+ * The Taptic Engine shakes the phone it is in, and `userAcceleration` reads it: Handshake's rhythm,
+ * Sniff's groups, Drift's *now* and every verdict are this phone's own motor, under a limit that can
+ * be as low as [MotionAllowance.LIMIT_FLOOR_G]. So while [motor] says it is playing, plus
+ * [OwnMotor.TAIL_MILLIS] after, a sample is nothing: not spent, and not taken into the calibration
+ * either (D-327, provisional). The motor is the one way in; no screen and no role is asked.
  */
-class MotionBudget {
+class MotionBudget(private val motor: OwnMotor? = null) {
 
     private var calibrated = 0
     private var steadySum = 0.0
@@ -79,6 +90,8 @@ class MotionBudget {
      */
     fun sample(x: Double, y: Double, z: Double): Boolean {
         if (!running || spent >= allowed) return false
+        // This phone's own buzz, read through its own case (D-327): neither spent nor calibrated on.
+        if (motor != null && motor.running()) return false
         val magnitude = sqrt(x * x + y * y + z * z)
         if (calibrated < CALIBRATION_SAMPLES) {
             steadySum += magnitude
@@ -103,6 +116,101 @@ class MotionBudget {
         /** M2's *first ~0.5 s on entry*, at 100 Hz. */
         const val CALIBRATION_SAMPLES: Int = SAMPLES_PER_SECOND / 2
     }
+}
+
+/** **A monotonic clock in milliseconds**, a `fun interface` returning a primitive so a read boxes nothing (rule 7). */
+fun interface MotorClock {
+    fun millis(): Long
+}
+
+/** Where a [MotorClock] handed none counts from: the standard library's monotonic clock. */
+private val motorOrigin = TimeSource.Monotonic.markNow()
+
+/**
+ * **This phone's own motor, as far as the motion budget needs to know it** (D-327, provisional).
+ *
+ * Told by the app root's haptics on every play, buzz and stop (`ReportingHaptics`, app), and read by
+ * [MotionBudget.sample] a hundred times a second. It holds what is playing and from when, and it says
+ * [running] while a [HapticStep.Buzz] of it is vibrating or ended less than [TAIL_MILLIS] ago. A rest
+ * longer than the tail is not the motor and is measured as any other moment. A repeating script (the
+ * ring, D-160) runs until [stopped], as the motor does. **Nothing queues**, as the motor does not: a
+ * new script replaces the last, with the tail of whatever it cut short.
+ *
+ * It decides no buzz and reads no role: it is told what the motor was asked for, by the one place
+ * that asks it, and both roles' buzzes are the same scripts (D-102).
+ *
+ * [running] allocates nothing (rule 7): two volatile reads, and the clock only once something has
+ * played; an indexed walk over the script, never an iterator.
+ */
+class OwnMotor(private val clock: MotorClock = MotorClock { motorOrigin.elapsedNow().inWholeMilliseconds }) {
+
+    private class Playing(val script: List<HapticStep>, val from: Long, val repeating: Boolean) {
+        val length: Long = script.sumOf { it.millis().toLong() }
+    }
+
+    @Volatile
+    private var playing: Playing? = null
+
+    /** The end of the tail of a script cut short by [played] or [stopped], or [Long.MIN_VALUE]. */
+    @Volatile
+    private var tailUntil: Long = Long.MIN_VALUE
+
+    /** The motor was asked to play [script], from now, once or [repeating]. */
+    fun played(script: List<HapticStep>, repeating: Boolean = false) {
+        cut()
+        playing = Playing(script, clock.millis(), repeating)
+    }
+
+    /** The motor was asked for silence. What was vibrating keeps its tail. */
+    fun stopped() {
+        cut()
+        playing = null
+    }
+
+    /** Whatever is vibrating now stops now, so its tail runs from now. */
+    private fun cut() {
+        val now = clock.millis()
+        if (playing?.buzzingAt(now) == true) tailUntil = now + TAIL_MILLIS
+    }
+
+    /** True while this phone's own motor is vibrating, or ended less than [TAIL_MILLIS] ago. */
+    fun running(): Boolean {
+        val now = playing
+        val tail = tailUntil
+        if (now == null && tail == Long.MIN_VALUE) return false
+        val at = clock.millis()
+        return at < tail || now?.buzzingAt(at) == true
+    }
+
+    private fun Playing.buzzingAt(at: Long): Boolean {
+        var t = at - from
+        if (t < 0) return true
+        if (length <= 0L) return false
+        if (repeating) t %= length else if (t >= length + TAIL_MILLIS) return false
+        var start = 0L
+        for (i in script.indices) {
+            val step = script[i]
+            val ms = step.millis().toLong()
+            if (step is HapticStep.Buzz && t >= start && t < start + ms + TAIL_MILLIS) return true
+            start += ms
+        }
+        return false
+    }
+
+    companion object {
+        /**
+         * **How long after this phone's own buzz the budget still hears it** (D-327, PROVISIONAL,
+         * unruled): the Taptic Engine rings down and Core Motion's filter lags a sample or two, so a
+         * sample just after the motor stops is still the motor. 150 ms is this build's guess, one named
+         * number so the owner's replaces it; the phone session's D-327 line is where it is first felt.
+         */
+        const val TAIL_MILLIS: Long = 150L
+    }
+}
+
+private fun HapticStep.millis(): Int = when (this) {
+    is HapticStep.Buzz -> millis
+    is HapticStep.Rest -> millis
 }
 
 /**

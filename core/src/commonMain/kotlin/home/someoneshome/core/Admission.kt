@@ -235,6 +235,16 @@ fun admit(state: GameState, event: Event): Admission = when {
     event is Event.ChainUnlocked && !state.chainDue(event.seat, event.entry, event.at) ->
         Admission.Refused(RefusalReason.ChainNotDue)
 
+    // **And no release lands while a meeting runs** (D-322: *a release that falls due during a
+    // meeting waits until the meeting ends*; D-327). The clock holds it already, off its own
+    // snapshot of the state; this is the second wall, the Egress expiry's below, for a release the
+    // clock minted off a snapshot taken before a meeting the gate then admitted first (`pumped` reads
+    // the state without the lock, and each event is gated under its own). Refused, recorded, the
+    // meeting's own reason; the line stays held, so the clock mints it again on the first step after
+    // the meeting closes. Answered to nobody, so no phone's stream differs for it.
+    event is Event.ChainUnlocked && state.meeting != null ->
+        Admission.Refused(RefusalReason.MeetingAlreadyRunning)
+
     needsEgress(event) &&
         (state.egress == null || state.egress?.pausedAt != null || state.meeting != null) ->
         Admission.Refused(RefusalReason.EgressNotRunning)

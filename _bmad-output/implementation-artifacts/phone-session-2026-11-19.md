@@ -233,6 +233,13 @@ Tick each line as you see it.
       everyone finishes.
 - [ ] **Nothing tells you someone is waiting on you** (D-324: no chain notice at lights out; the
       LOCKED · WAITING UPSTREAM row is the notice).
+- [ ] **you're up over a Subroutine** *(D-327)*: have a phone with a LOCKED line start a Subroutine,
+      and let its unlock land mid-attempt. The NUMBER WITHHELD · you're up banner drops over the top of
+      the work and the work stays: the same entries, the same clock, SUBMIT and STOP NOW still there.
+      Swipe it up and you are where you were. Do the same at the Terminal (the live view stays open
+      and nobody else can read it) and on a caught scan (BEGIN still opens the work). On page 1 or 2
+      it still lands as the banner over page 1. Say whether a banner over the work's top is right, or
+      whether it covers something you needed. Both roles alike.
 
 **The motion budget** *(D-321; every number is provisional, so these lines are where they are first felt)*
 - [ ] **Still is free**: open a Subroutine and hold the phone as you naturally would for its whole
@@ -256,6 +263,11 @@ Tick each line as you see it.
       off. Nothing drains and nothing closes (and the permission warning is the house's, as before).
 - [ ] **The line itself**: say whether the lit lower hairline reads as the budget, and whether it
       should be somewhere else or another ink (its look is provisional).
+- [ ] **Your own buzz does not spend it** *(D-327)*: open a Handshake, a Sniff and a Drift, and stand
+      still while each one buzzes its question; then let a verdict buzz. The line does not move while
+      the phone vibrates, nor for a moment after (150 ms, provisional), and nothing closes. Then walk
+      off during a long rest in a Sniff: the line does drain. Say whether a phone held tight still
+      loses any of the line to its own buzz, and whether the 150 ms tail is too short or too long.
 
 **Release build**
 - [ ] `./run-app.sh device release` on a UWB phone launches to the boot screen. It must not stop

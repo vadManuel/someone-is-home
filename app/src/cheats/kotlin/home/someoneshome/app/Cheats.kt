@@ -53,6 +53,8 @@ import home.someoneshome.ui.FlowHost
 import home.someoneshome.ui.FlowModel
 import home.someoneshome.ui.Label
 import home.someoneshome.ui.LobbyModel
+import home.someoneshome.ui.MotorClock
+import home.someoneshome.ui.OwnMotor
 import home.someoneshome.ui.MeetingModel
 import home.someoneshome.ui.LocalPanelInsets
 import home.someoneshome.ui.LocalViewfinder
@@ -186,7 +188,12 @@ fun CheatRoot(uwb: Boolean) {
     // **It is built up here, above the panel, because the round needs it and so does the panel.**
     // It used to be built two hundred lines down beside the benches, which is precisely how long
     // the game went without a buzz in it: the only things that could see it were benches.
-    val haptics = remember { deviceHaptics() }
+    //
+    // **And it tells the motion budget when it is playing** (D-327): this phone's own buzz shakes the
+    // phone, Core Motion reads it, and a player standing still must not spend their budget on it.
+    // The same `OwnMotor` goes to the panel below, so the budget hears every buzz the motor plays.
+    val ownMotor = remember { OwnMotor(MotorClock { monotonicNanos() / 1_000_000L }) }
+    val haptics = remember { ReportingHaptics(deviceHaptics(), ownMotor) }
     // **THE MOTOR, JOINED TO THE ROUND — E-D1-1 CLOSED.** Every push this seat is sent goes through
     // `RoundOverTransport`, which now cannot be built without one of these; the panel reports its
     // own arrivals to it so the ring can be answered and a Subroutine's question can be buzzed at
@@ -446,6 +453,8 @@ fun CheatRoot(uwb: Boolean) {
             // as `meeting.names` is, because this lambda is handed to the model being built here; it
             // is called only when a screen the budget applies to opens, a whole lobby later.
             onMeasuring = measuringWith(motion) { panel.value },
+            // **The motor the haptics above report to** (D-327): the budget takes no sample while it plays.
+            motor = ownMotor,
         ).also { panel.value = it }
     }
     // **The Sync Pulse, felt** (D-295): one short buzz on each pulse of the house's grid, through

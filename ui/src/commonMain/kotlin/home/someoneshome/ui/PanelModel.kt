@@ -327,8 +327,12 @@ data class PanelState(
      * house thread and on the lock screen as every later text is (D-119); drawn over the screen
      * rather than walking the phone to page 1, so the Terminal's reader stays at the station under
      * the jam the banner names (D-186). Cleared by the swipe and by any arrival ([arrivingAt]).
+     *
+     * **And `you're up` and every later house text, by the same rule** (D-327): a quiet text off
+     * page 1 and 2 stands over the screen it lands on, so a Subroutine, the station, the caught scan
+     * and the scan keep theirs. The notification as it is drawn, sender and time included.
      */
-    val quietUp: HouseText? = null,
+    val quietUp: Notification? = null,
     /**
      * **The page the report screen took over: [ScreenId.Home] or [ScreenId.Page2]** (D-307), or null
      * on every other screen. Set on the arrival at [ScreenId.Report] and cleared by every arrival
@@ -2089,7 +2093,7 @@ class PanelVals(
     // (E1, D-297): `under` is the Subroutine itself, so a swipe leaves the person where they were.
     val arrival: Arrival? = when {
         state.egressAlertUp -> Arrival(Notifications.egressFor(egressType, egressNodes), under = state.screen)
-        state.quietUp != null -> Arrival(Notifications.houseText(state.quietUp), under = state.screen)
+        state.quietUp != null -> Arrival(state.quietUp, under = state.screen)
         state.houseAttached && state.screen == ScreenId.Quiet ->
             (state.lastQuiet ?: state.houseTexts.lastOrNull()?.let { Notifications.houseText(it) })
                 ?.let { Arrival(it, under = ScreenId.Home) }

@@ -14696,6 +14696,172 @@ appears in the app's page in Settings. The phone session's checklist gains those
 
 **The combined format is 52, set at integration** (with D-321, D-324 and D-325): this entry left the recording at 50 and moved nothing in it.
 
+### D-327 · **Overnight review fixes, 2026-11-22: a quiet text stands over the screen it lands on, the gate holds a release at a meeting, this phone's own buzz does not spend its motion budget, and an armed seat is not let go by a late lobby answer — built (recording stays 52); the disk in hand survives a reconnect already, and is pinned**
+
+The overnight review of 2026-11-22 found two bugs and four plausible ones, with two failing tests.
+The owner was asleep and asked for reasonable decisions; each one taken here is **provisional**, and
+none moved a ruling. No new copy, light, colour or type. The recording format stays **52**: nothing
+recorded changed shape (the gate's new refusal reuses `MeetingAlreadyRunning`).
+
+**1 · CONFIRMED: `you're up` walked a busy player off their screen.** `RoundMessage.WorkUnblocked`
+called `arrived(ScreenId.Quiet)`, which pushed the banner over page 1 from any screen the house was not
+driving: a Subroutine lost its attempt (D-110: STOP NOW is its only exit), the Terminal sent
+`LeaveTerminal` and freed the station (D-203 names four releases, and a text is not one) and dropped a
+running timelapse, and the scan, the caught scan's BEGIN and Memory Dump's playback were lost.
+
+*Decided (provisional):* D-319's choice for MONITORING JAMMED is the rule for every quiet text the round
+sends (`you're up`, a later house text, the jam), in one function, `FlowModel.quietLanded`:
+
+- on a screen the house is driving it waits, as before (a meeting, an ending, the report's circle,
+  D-307); **except the caught scan**, which takes the banner over it, for the Egress alert's reason
+  (D-299: it stands between a card and its work). The jam now does the same there;
+- on the lock screen it lands under the clock (`LockNotify`), as before;
+- **on page 1 and page 2, `you're up` and a house text still walk to the banner over page 1**
+  (`Flow.quietWalksThePages`: Home, Page2, Quiet). D-201 rules the sender and the words and D-118 the
+  absent dim; neither rules where the banner sits, and nothing is lost by the walk there. The jam keeps
+  D-319's own choice and stands over the page;
+- **everywhere else it stands over the screen** (`PanelState.quietUp`, now a `Notification` rather
+  than a `HouseText` so `you're up` can ride it) and the screen does not change, so nothing it holds is
+  touched and nothing is sent. Swiped, it comes down and the screen stays; any arrival takes it down
+  with the screen. The Egress widget's tap control is one of these (it was walked before).
+
+Both roles take one path (only the screen is asked). The buzz is unchanged (D-324: the house text's,
+played by the app root off the message). It is kept in the house thread and on the lock screen as
+before. **Raised:** a tap on the banner over a Subroutine still opens what the banner opens (`you're
+up`: the Subroutines list), which leaves the work by the player's own tap, as the Egress alert's tap
+over a Subroutine already does (D-297). Not changed.
+
+**2 · CONFIRMED: a chain release could be admitted during a meeting.** `HouseClock.turned` holds a
+release while `state.meeting != null`, but `TickDriver.pumped` reads the state without the lock, and
+each due event is gated under its own: a meeting card gated between the snapshot and the mint let the
+release through, and `you're up` landed on a phone standing in the meeting. *Built:* the gate's second
+wall, the Egress expiry's shape: `Admission` refuses `ChainUnlocked` while a meeting runs, recorded as
+`MeetingAlreadyRunning`, below the `ChainNotDue` check (so an early release is still recorded as
+that). The line stays held, and the clock, which reads held-and-due off the state every step, mints it
+again on the first step after the meeting closes (D-322: *a release that falls due during a meeting
+waits until the meeting ends*). Answered to nobody, so no phone's stream differs.
+
+**3 · PLAUSIBLE, built: this phone's own vibration could spend its motion budget.** The Taptic Engine
+shakes the phone, `userAcceleration` reads it, and the limit can be 0.03 g. *Decided (provisional):*
+`OwnMotor` (ui) is told by the app root's one motor (`ReportingHaptics`, app, wrapping
+`deviceHaptics()`; every buzz in the app goes through it) what it plays, from when, and when it stops;
+`MotionBudget.sample` takes no sample, neither spent nor calibrated on, while a `Buzz` step of it is
+vibrating or ended less than **`OwnMotor.TAIL_MILLIS` = 150 ms** ago (provisional, one named number).
+A rest longer than the tail is measured; a repeating script (the ring) runs until its stop; a new
+script replaces the last with the tail of what it cut short, as the motor does. The clock is the
+phone's monotonic one (`monotonicNanos`), read through a `fun interface`, and only once something has
+played. No role is read: both roles' buzzes are the same scripts (D-102). No copy or light.
+
+**4 · PLAUSIBLE, not real; pinned.** `PanelState.carrying` is written only by `ScanAnswered`, and
+`Flow.stationStepped` is `before != after`, so a phone that came back with nothing in hand while the
+house held a disk would draw its next NOTHING FOR YOU HERE as a station step. **It does not:** the house
+keeps every push of the round for every seat and replays on any ask (`EffectWire.reassert`, D-097,
+D-268). A dropped socket keeps its panel and asks from what it holds; a relaunched phone holds nothing
+(`RoundInbox` starts at 0; the seat store keeps only the token, the address and owed reports), asks from
+zero and is replayed its whole round, every scan answer that carried the disk included, in order. No
+new replay of the carry is needed, and none was added.
+
+**5 · PLAUSIBLE, built in part: a late lobby answer could let an armed seat go** (D-311, D-326). The
+house's arming pushes land one by one, and the opening text that walks a phone to ARMED is not the
+first (the lamp and the work order are), so an armed phone stands on the lobby for a moment holding a
+round. A NEARBY DEVICES probe answering REFUSED then (up to two seconds after a return), or the
+Bluetooth radio's callback, ran `leaveLobby` and `roundForgotten` on a seat the round held. *Built:*
+`FlowModel.roundHeard`, set by every push `houseSaid` applies and cleared by `roundForgotten`, and the
+lobby's predicate (`inTheLobby`) is false while it is set, so neither the probe's answer nor the radio
+check acts: the seat stays, and the switch-off is the round's, counted on its first beat as a
+permission (D-311: *a grant already off when the round armed counts too*) and named at the first
+meeting. **A later round's push** (`houseBeganAnotherRound`, D-267) is the same case and is changed the
+same way: the push in hand is the next round's, so the phone is armed into it and no lobby check runs
+there (D-326 listed it as a check-on-arrival trigger; its test now asserts the seat is kept and walked
+to ARMED). D-311's ruling is *in the lobby, before lights out*, which neither case is.
+
+⚠️ **Not closed, raised:** an arming whose **first** push has not yet reached the phone when the probe
+answers (a frame still in the air). The phone cannot know of it, and closing it needs the house to
+answer a lobby let-go in order with its arming (a new lobby frame, or the let-go made a request the
+house decides), which is a protocol change for the owner. Even then the seat is not lost at the house:
+the round keeps it, and the phone, on PERMISSIONS with its token, is seated back into its round and
+replayed once NEARBY DEVICES is on and it rejoins.
+
+**6 · Stale KDoc.** `SubroutineKind.MemoryDump` said its screens were STOPPED; it now says what D-325
+built.
+
+**Tests.** New: `YoureUpStandsOverTest` (ui, common, 10; the reviewer's probe, renamed and widened):
+the live view, the timelapse, Jam, Handshake and Sniff, Memory Dump's playback, the caught scan (BEGIN
+still opens the work under it) and the scan each keep their screen, send nothing and leave the motion
+budget where it was, with `you're up` drawn over them, for both roles; a house text over a Subroutine
+stands over it; the swipe takes it down and leaves the work; page 1 and 2 still go to the banner over
+page 1 and the lock screen under the clock; the discussion, the vote and the report still wait.
+`YoureUpOverWorkRender` (ui, desktop, 2): rendered through `FlowHost` over Jam and over the Terminal,
+both roles, the same pixels for both. `ChainReleaseMeetingWallTest` (app, 1; the reviewer's race
+probe): the release minted off a snapshot from before the meeting is refused at the gate as
+`MeetingAlreadyRunning`, the line stays held, and the clock mints it again after the meeting and the
+gate admits it with `WorkUnblocked`. `OwnBuzzBudgetTest` (ui, common, 6): samples during a buzz do not
+drain and samples after the tail do; a rest longer than the tail is measured; a buzz stopped early keeps
+its tail and no more; the ring runs until its stop; a buzz during calibration is not calibrated on; and
+through the panel on Handshake both roles keep their work through their own buzz and lose it to the
+same walk after. `ReportingHapticsTest` (app, 3): the motor is asked exactly what it was asked before,
+and the budget hears each house buzz for its length and its tail. `MotionAllocationTest` (ui, desktop,
++1): a sample under the ring and a sample after a buzz allocate nothing. `DiskInHandReconnectTest`
+(app, 2, real sockets on loopback): after a dropped connection and after a relaunch over the same files,
+the panel holds the disk the house holds, and the next NOTHING FOR YOU HERE lands on the refusal, not
+as a station step. `ArmedSeatKeptTest` (ui, common, 3): a REFUSED probe answer and the radio's callback
+after the first arming push leave the seat in the round, for both roles, and the opening walks it to
+ARMED; before any push the lobby still lets the guest go. `ArmedSeatSwitchOffTest` (app, 1): the same,
+then the round's uploader reading the same OS reports it once, as a permission. Changed:
+`ChainClockTest`'s meeting case now also hands the gate the release and expects the refusal;
+`LobbyCheckTriggersTest`'s later-round case expects the seat kept.
+
+**Proved, red against the injected break first, then restored.** (1) `WorkUnblocked` and
+`MessageDelivered` put back to `arrived(ScreenId.Quiet)`, `:ui:desktopTest` on `YoureUpStandsOverTest`,
+10 tests, 8 red, quoted from the XML: *you're up over the live view keeps the reader at the station*:
+`Resident on the live view: the text sent something up expected:<[]> but was:<[LeaveTerminal]>`;
+*…over a timelapse…*: `…expected:<[]> but was:<[LeaveTerminal]>`; *…over a Subroutine…*: `Resident on
+Jam: the text walked the player off the screen expected:<SubJam> but was:<Quiet>`; *…Memory Dump's
+playback…*: `…expected:<SubMemory> but was:<Quiet>`; *…the scan keeps the camera*: `…expected:<Scan> but
+was:<Quiet>`; *…the caught scan keeps BEGIN*: `Resident on the caught scan: no banner is drawn over the
+screen`; and the house text and swipe cases. Restored: 10 of 10. (2) The gate's meeting wall disabled
+(`&& false`), `:app:iosSimulatorArm64Test` on the two chain tests: *a release minted before a meeting
+and gated after it is refused*: `a release reached the rules during a meeting and was admitted:
+[WorkOrderIssued, WorkUnblocked] (WorkUnblocked buzzes Short)`; *a release that falls due during a
+meeting waits for the lights to go out*: `the gate admitted a release during a meeting. Expected
+<Refused(reason=MeetingAlreadyRunning)>, actual <Admitted(…)>`. Restored: 1 of 1 and 3 of 3.
+
+**Rendered and looked at** (`ui/build/screens/`, 600×1300, an iPhone 16 Pro's insets):
+`d327-youre-up-over-jam-resident`/`-insider` (the quiet banner, NUMBER WITHHELD, `-` for the time on a
+phone with no wall clock, *you're up*, over the top of Jam; the two circles, − and +, MOTION BUDGET
+HOLDING, SUBMIT and STOP NOW below it, untouched) and `d327-youre-up-over-terminal-resident`/`-insider`
+(the banner over the top of the live view's frame, the frame, MOTION BUDGET and TIMELAPSE . READY IN -
+below). Identical pixels for the two roles in each pair.
+
+**Checked** (on the final tree, `*/build/test-results` cleared first: `./gradlew check --continue`
+with the two variant sweeps excluded, then `:app:variantSweepRelease`, then `:app:variantSweepPlaytest`,
+each exit 0, the app's XML copied out after each, every result XML counted with a python glob): model
+369 (JVM) + 350 (iOS Simulator); core 469 + 467; platform 218; harness 138; ui 873 (desktop) + 448 (iOS
+Simulator); cards 17; app 317 (the default variant), 192 (Release), 317 (Playtest). **3,666 in the
+default check, 4,175 across the three, 0 failures, 0 errors, 0 skipped.** This entry's own: ui 19 more
+on each target and 3 more on the desktop alone, app 7 more in every variant. `vocabularyLint`,
+`redactionLint`, `boundaryCheck` and the cordons ran in it, clean. Neither known load flake fired.
+buildSrc's own tests, run on their own (`./gradlew -p buildSrc test --rerun-tasks`): 35, 0 failures.
+
+**The rehearsal, on the final tree.** `rehearse.sh` (from a copy, `REPO` set, seed 20260822), five
+seats: the round ran ARMED to ENDING (the work order, a gap injected on seat 3 and replayed, a Revoke,
+a meeting through the gate at 5/5, discussion, vote and tally, Static, an Egress that resolved; the
+round ended on the first Egress, so the second never arrived, as in D-323 and D-326).
+`rehearse-check.py`: 21 of 21.
+
+**Not on a phone, said plainly.** None of this has run on one. Unverified until a phone shows it: that
+the banner over a Subroutine's top hides nothing a player needs; that 150 ms covers the Taptic
+Engine's ring-down and Core Motion's lag; that a held phone loses none of its budget to its own buzz.
+The phone session's checklist gains those lines.
+
+**Decisions for the owner** (each provisional):
+
+1. **A quiet text stands over every screen but page 1, page 2, the lock screen and the house's
+   screens**, the caught scan included; page 1 and 2 still walk to the banner over page 1.
+2. **The motor's tail is 150 ms**, and a rest longer than it is measured.
+3. **A seat that holds any push of a round is the round's**, a later round's push included; the
+   in-flight arming is raised above.
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).
