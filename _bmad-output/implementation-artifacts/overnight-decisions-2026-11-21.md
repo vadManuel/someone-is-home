@@ -189,3 +189,15 @@ D-311 and D-313 were also run together in a full check before pushing: 3,312 tes
   - D-322: chains, carrying, Memory Dump, Array Wipe, the scaled mix.
 - **Next:** the motion budget (after D-319), then the design mockup.
 - **Open, unexplained:** the rehearsal's line-leak check once saw an Insider's own line arrive just before ROUND ENDED. It passed on a rerun, and it predates today. To investigate.
+
+## Owner's rulings, 2026-11-22
+
+- **Copy:**
+  - THE HOST CLOSED THE HOUSE is approved;
+  - END SESSION becomes LEAVE THIS HOUSE;
+  - the Residents' ending drops "THE RESIDENTS · 4 OF 6" and keeps only the names.
+- **Surge:** cancels any hold in progress and closes the camera at the slam.
+- **Insiders are told the Insider count:** "we can share any info with player phones". Page 2's SHARED WITH THE OTHER INSIDER line shows only when there are two or more.
+- **Memory Dump:** draft its screens for review. It is not dealt until they are approved.
+- **Chain notice:** no separate notice. The LOCKED · WAITING UPSTREAM row says it, and "you're up" announces the unlock.
+- **Chains are Residents only:** "insiders don't have real tasks... an insider cannot be included in the chain". Insiders' fake orders show fake locked entries that unlock on a plausible delay, so the screens stay identical (D-324, after integration).
