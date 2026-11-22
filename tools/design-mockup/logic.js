@@ -239,7 +239,7 @@ class Component extends DCLogic {
       // ---- data ----
       bootRows: [["MEM 640K", "OK"], ["REGISTRY", "0 ENTRIES"], ["PERIMETER", "IDLE"], ["LAMP ALLOCATION", "GRANTED"], ["UPLINK", "CONNECTED"]].map(([k, v]) => ({ k, v })),
       bootCells: cells(20, 14, "#14110B", "#837B68"),
-      permRows: [["LOCAL NETWORK", "GRANTED"], ["CAMERA", "GRANTED"], ["BLUETOOTH", "GRANTED"], ["MOTION & FITNESS", "TAP TO GRANT"]]
+      permRows: [["CAMERA", "GRANTED"], ["BLUETOOTH", "GRANTED"], ["NEARBY DEVICES", "GRANTED"], ["MOTION & FITNESS", "TAP TO GRANT"]]
         .map(([name, state]) => { const ok = state === "GRANTED";
           return { name, state, tagEdge: ok ? "#332E24" : "#14110B", tagFill: ok ? "none" : "#14110B", tagInk: ok ? "#14110B" : "#A29A86" }; }),
       joinNets: [["THE BUNGALOW", "192.168.1.24"], ["MUM & DAD'S", "192.168.1.31"], ["FLAT 6", "192.168.1.40"]].map(([name, ip]) => ({ name, ip })),
