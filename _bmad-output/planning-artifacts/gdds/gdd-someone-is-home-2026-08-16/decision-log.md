@@ -13990,6 +13990,22 @@ YOU HERE and a node alike (D-297), 165 or 169 with a disk in hand (D-322), the s
 **Allocation** (rule 7). `WireDecodeAllocationTest`: writing an upload's answer 5,552 B (ceiling 6,144),
 reading an upload frame 17,760 B (ceiling 20,480), as D-319 measured.
 
+**Checked** (on the final tree, `*/build/test-results` cleared first: `./gradlew check --continue`
+with the two variant sweeps excluded, then `:app:variantSweepRelease`, then `:app:variantSweepPlaytest`,
+the app's XML copied out after each, every result XML counted with a python glob): model 367 (JVM) +
+348 (iOS Simulator); core 462 + 460; platform 211; harness 138; ui 816 (desktop) + 401 (iOS Simulator);
+cards 17; app 302 (the default variant), 179 (Release), 302 (Playtest). 3,522 in the default check,
+0 failures, 0 errors, 0 skipped, in all three sweeps; `OutboundQueueTest` and `HouseGoneTest` passed
+in every one. The vocabulary lints, `redactionLint` and `boundaryCheck` ran and passed. D-319's
+`TimelapseTest`, `TimelapseRecordingTest`, `TimelapseFlowTest`, `TimelapseRenderTest`; D-320's
+`VerdictBuzzTest`, `LobbySettingsWireTest`, `EgressSharedLineTest`, `NoSoundTest`; D-322's
+`OrderMixTest`, `CrossPlayerChainTest`, `ArrayWipeTest`, `MemoryDumpTest`, `OrderParityTest`,
+`WorkOrderDeterminismTest`, `ChainClockTest`, `StructuredWorkBenchTest`, `StructuredWorkRender`; and
+this entry's `EgressSharedCountTest`, `SurgeLetsGoTest` and `ResidentsEndingRender` are in the XML,
+green. The scripted rehearsal (`rehearse.sh`, five simulator seats, seed 20260822) played to the
+ending, and `rehearse-check.py` read 21 PASS and no FAIL; the driver noted that the round ended on
+the first Egress, so its second, uncontained one never arrived. **Nothing here has run on a phone.**
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).
