@@ -2517,11 +2517,14 @@ class FlowModel(
      * *"If you're in the lobby you get kicked out and land on the permission screen."*
      *
      * Asked of the OS at the moment it is called ([PermsModel.switchedOffNow], the gate's fresh read,
-     * which reads the Bluetooth radio turned off as its row refused): by the app root once a second
-     * and on every return to the foreground, and here on every arrival in a lobby (NEW ROUND, a later
-     * round's push, the host after a close). It acts only on a phone holding a lobby seat and on the
-     * lobby's own screens (the lobby and the one-line screen); anywhere else, and with nothing
-     * missing, it moves nothing.
+     * which reads the Bluetooth radio turned off as its row refused), on events and never on a clock
+     * (D-326: D-311's once-a-second read is gone): by the app root when the Bluetooth radio's state
+     * changes (Control Centre, airplane mode) and on every return to the foreground
+     * ([cameBackToTheForeground]; every Settings change means leaving the app), and here on every
+     * arrival in a lobby (NEW ROUND, a later round's push, the host after a close). A phone iOS ended
+     * for Camera or Motion is met by the gate at its cold start. It acts only on a phone holding a
+     * lobby seat and on the lobby's own screens (the lobby and the one-line screen); anywhere else,
+     * and with nothing missing, it moves nothing.
      *
      * - **A guest leaves the lobby and lands on PERMISSIONS**, the missing rows read in place so they
      *   show as refused on arrival: it hangs up as LEAVE does, and keeps its seat token and its name,
@@ -2537,11 +2540,10 @@ class FlowModel(
      * walked back to its seat by the house; its switch-off is the round's, named at the next meeting.
      *
      * No new words, light or screen: PERMISSIONS draws its rows and the gate's sentence as it always
-     * has. No Nearby Interaction probe is started here (D-309); the screen's own refresh is the one
-     * it always ran on arrival.
+     * has. No Nearby Interaction probe is started here (D-309); the one the lobby runs is
+     * [cameBackToTheForeground]'s, and the screen's own refresh is the one it always ran on arrival.
      */
     fun permissionsChecked() {
-        val inTheLobby = state.screen in LOBBY_SCREENS && (lobby.hosting || lobby.attached != null) && !lobby.holdsARoundSeat
         if (inTheLobby && perms.switchedOffNow().isNotEmpty()) {
             if (lobby.hosting) {
                 hostHeldAtPermissions = true
@@ -2552,6 +2554,33 @@ class FlowModel(
             perms.readNow()
             push(ScreenId.Perms)
         }
+    }
+
+    /**
+     * **A phone holding a lobby seat, on the lobby's own screens, before any round's session exists**
+     * (D-311, D-326): where [permissionsChecked] acts and where the lobby's probe may run. A phone
+     * holding a round's record ([LobbyModel.holdsARoundSeat]) is the round's, wherever it stands.
+     */
+    private val inTheLobby: Boolean
+        get() = state.screen in LOBBY_SCREENS && (lobby.hosting || lobby.attached != null) && !lobby.holdsARoundSeat
+
+    /**
+     * **Back in the foreground** (D-310, D-311, D-326), called by the app root once the OS has been
+     * read again (`Permissions.reread`, no probe). The lobby's check runs at once; and in the lobby,
+     * where no round's session exists, **NEARBY DEVICES is probed again** (the owner, 2026-11-22:
+     * *"yes"*), because Nearby Interaction has no status to read and a NEARBY DEVICES switched off in
+     * Settings is otherwise heard only when the round's sessions refuse. The probe's answer runs the
+     * check again: REFUSED lets the phone go to PERMISSIONS like any other lobby switch-off (the host
+     * shown it, its house kept on the air, D-311); **ASKED leaves the row as it read, so the phone
+     * stays** (D-326, provisional: a slow probe is not a switch-off).
+     *
+     * **In a round nothing is probed** (D-309, D-310): a round's ranging sessions report a refusal
+     * themselves, and a return there is the round's, read beat by beat by its uploader. Nothing here
+     * reads a role.
+     */
+    fun cameBackToTheForeground() {
+        permissionsChecked()
+        if (inTheLobby) perms.recheckNearby { permissionsChecked() }
     }
 
     /**

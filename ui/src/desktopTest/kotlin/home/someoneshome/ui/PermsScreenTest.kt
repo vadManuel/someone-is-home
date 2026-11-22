@@ -120,10 +120,10 @@ class PermsScreenTest {
      */
     @Test
     fun tappingARowAsksForThatRow() = perms(answers = emptyMap()) { asked, went ->
-        onNodeWithText(DevicePermission.Notifications.label).performClick()
+        onNodeWithText(DevicePermission.entries.last().label).performClick()
 
         assertEquals(
-            listOf(DevicePermission.Notifications), asked,
+            listOf(DevicePermission.entries.last()), asked,
             "a row on the permissions screen is still a drawing rather than a control",
         )
         assertTrue(went.isEmpty(), "tapping a permission row moved the phone somewhere")

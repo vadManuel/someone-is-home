@@ -117,24 +117,12 @@ find "$APP" -name 'Silkscreen-Regular.ttf' | grep -q . || {
 
 # THE GRANTS A HOST WOULD HAVE GIVEN, given out of band — see sim-grants.py for the whole argument.
 # D-161's gate refuses a seat to a phone the OS has not answered for, and a simulator has no thumb
-# for a SpringBoard alert. This is `seedTheHome`'s sibling: the walk is stood in for and only the
-# walk, and the app still asks the OS itself and still prints what it hears.
-#
-# The notification half goes FIRST and while the devices are shut down, because SpringBoard reads
-# its bulletin store at boot; the `simctl privacy` half goes after the install, because it needs a
-# booted device with the app on it.
+# for a modal. This is `seedTheHome`'s sibling: the walk is stood in for and only the walk, and the
+# app still asks the OS itself and still prints what it hears. The `simctl privacy` grant goes after
+# the install, because it needs a booted device with the app on it. There is no notification half
+# any more (D-326: no NOTIFICATIONS row); every seat still boots fresh, as it did.
 say "=== THE GRANTS A HOST WOULD HAVE GIVEN ==="
 for u in "${UDIDS[@]}"; do xcrun simctl shutdown "$u" 2>/dev/null || true; done
-# A seat that has never booted has no bulletin store to write into (D-314: the seats are created
-# here now), so it is booted once and shut down first, as tools/sim-hunt/hunt.sh does.
-for u in "${UDIDS[@]}"; do
-    if [ ! -f "$HOME/Library/Developer/CoreSimulator/Devices/$u/data/Library/BulletinBoard/VersionedSectionInfo.plist" ]; then
-        xcrun simctl boot "$u" 2>/dev/null || true
-        xcrun simctl bootstatus "$u" -b >/dev/null
-        xcrun simctl shutdown "$u" 2>/dev/null || true
-    fi
-done
-python3 "$PWD/sim-grants.py" notifications "${UDIDS[@]}" | tee -a "$OUT/driver.log"
 
 say "=== BOOTING AND INSTALLING ON ${#UDIDS[@]} SEATS ==="
 for u in "${UDIDS[@]}"; do

@@ -229,7 +229,7 @@ class PermsModelTest {
     @Test
     fun thereIsNoLocalNetworkRow() {
         assertEquals(
-            listOf("CAMERA", "BLUETOOTH", "NEARBY DEVICES", "MOTION & FITNESS", "NOTIFICATIONS"),
+            listOf("CAMERA", "BLUETOOTH", "NEARBY DEVICES", "MOTION & FITNESS"),
             DevicePermission.entries.map { it.label },
             "the walk's rows changed",
         )

@@ -203,7 +203,7 @@ class LobbyPermissionCheckTest {
         val os = Os()
         val guest = aGuest(os)
         guest.push(ScreenId.Home)
-        os.off(DevicePermission.Notifications)
+        os.off(DevicePermission.Motion)
         guest.newRound()
         assertEquals(ScreenId.Perms, guest.state.screen, "NEW ROUND kept a guest missing a grant in the lobby")
         assertNull(guest.lobby.attached)

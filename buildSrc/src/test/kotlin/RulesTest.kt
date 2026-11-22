@@ -265,3 +265,37 @@ class SeedSourceRulesTest {
         assertEquals(2, v.single().line)
     }
 }
+
+/** The notification cordon (D-326), checked the way the other cordons are. */
+class NotificationCordonRulesTest {
+
+    private fun caught(source: String) = NotificationCordonRules.violations(source).isNotEmpty()
+
+    @Test
+    fun `the framework and its permission calls are caught`() {
+        assertTrue(caught("import platform.UserNotifications.UNAuthorizationOptionAlert"))
+        assertTrue(caught("UNUserNotificationCenter.currentNotificationCenter()"))
+        assertTrue(caught("center.requestAuthorizationWithOptions(options) { granted, error -> }"))
+        assertTrue(caught("center.getNotificationSettingsWithCompletionHandler { settings -> }"))
+    }
+
+    /** The game's own in-app notifications are not the OS's. */
+    @Test
+    fun `the in-app notifications are left alone`() {
+        assertTrue(!caught("import home.someoneshome.ui.Notifications"))
+        assertTrue(!caught("assertFalse(Notifications.dims(screen))"))
+        assertTrue(!caught("val kind = NotificationKind.Opening"))
+        assertTrue(!caught("NSNotificationCenter.defaultCenter.addObserverForName(UIApplicationDidBecomeActiveNotification)"))
+    }
+
+    @Test
+    fun `the rule does not trip on documentation about itself`() {
+        assertTrue(!caught("// nothing here may name UNUserNotificationCenter\nval x = 1"))
+    }
+
+    @Test
+    fun `it reports the line the use is on`() {
+        val v = NotificationCordonRules.violations("val a = 1\nval c = UNUserNotificationCenter.currentNotificationCenter()")
+        assertEquals(2, v.single().line)
+    }
+}

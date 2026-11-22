@@ -133,15 +133,8 @@ APP="$DERIVED/Build/Products/$CONFIG-iphonesimulator/SomeonesHome.app"
 find "$APP" -name 'Silkscreen-Regular.ttf' | grep -q . || { say "no pixel fonts in $APP"; exit 1; }
 
 say "=== GRANTS AND INSTALL ==="
+# Every seat boots fresh. There is no notification grant to give any more (D-326).
 for u in "${UDIDS[@]}"; do xcrun simctl shutdown "$u" 2>/dev/null || true; done
-for u in "${UDIDS[@]}"; do
-    if [ ! -f "$HOME/Library/Developer/CoreSimulator/Devices/$u/data/Library/BulletinBoard/VersionedSectionInfo.plist" ]; then
-        xcrun simctl boot "$u" 2>/dev/null || true
-        xcrun simctl bootstatus "$u" -b >/dev/null
-        xcrun simctl shutdown "$u" 2>/dev/null || true
-    fi
-done
-python3 "$REPO/sim-grants.py" notifications "${UDIDS[@]}" | tee -a "$OUT/driver.log"
 for u in "${UDIDS[@]}"; do xcrun simctl boot "$u" 2>/dev/null || true; done
 for u in "${UDIDS[@]}"; do
     xcrun simctl bootstatus "$u" -b >/dev/null

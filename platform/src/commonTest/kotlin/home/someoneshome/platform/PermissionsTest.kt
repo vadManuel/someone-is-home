@@ -130,13 +130,13 @@ class PermissionsTest {
         DevicePermission.entries.forEach { perms.says(it, Grant.Granted) }
         assertEquals(0, perms.refusedGrants(), "a phone with every grant read a grant switched off")
         perms.says(DevicePermission.Camera, Grant.Refused)
-        perms.says(DevicePermission.Notifications, Grant.Refused)
+        perms.says(DevicePermission.Motion, Grant.Refused)
         assertEquals(
-            (1 shl DevicePermission.Camera.ordinal) or (1 shl DevicePermission.Notifications.ordinal),
+            (1 shl DevicePermission.Camera.ordinal) or (1 shl DevicePermission.Motion.ordinal),
             perms.refusedGrants(),
         )
         perms.says(DevicePermission.Camera, Grant.Unavailable)
-        assertEquals(1 shl DevicePermission.Notifications.ordinal, perms.refusedGrants(), "hardware missing read as a grant switched off")
+        assertEquals(1 shl DevicePermission.Motion.ordinal, perms.refusedGrants(), "hardware missing read as a grant switched off")
     }
 
     /**
@@ -162,5 +162,43 @@ class PermissionsTest {
         val fresh = NoPermissions().also { it.radioOff = true }
         assertEquals(Grant.Unasked, fresh.standing(DevicePermission.Bluetooth), "an unasked row was read as refused")
         assertFalse(DevicePermission.entries.filter { it != DevicePermission.Bluetooth }.any { perms.standing(it) != Grant.Granted })
+    }
+
+    /**
+     * **GUARD (D-326): the lobby's probe on a return to the foreground** moves NEARBY DEVICES only on a
+     * real answer. REFUSED is a switch-off and reads refused; GRANTED stays granted; **ASKED is no
+     * answer and leaves the row as it read** (provisional), so a slow probe never lets a phone go.
+     */
+    @Test
+    fun aReturnsProbeMovesTheRowOnlyOnARealAnswer() {
+        assertEquals(Grant.Refused, Grant.Granted.afterARecheck(Grant.Refused), "a refusal on the return was not heard")
+        assertEquals(Grant.Granted, Grant.Granted.afterARecheck(Grant.Granted))
+        assertEquals(Grant.Granted, Grant.Granted.afterARecheck(Grant.Asked), "a probe that said only ASKED unseated a granted phone")
+        assertEquals(Grant.Unavailable, Grant.Granted.afterARecheck(Grant.Unavailable))
+
+        val perms = NoPermissions()
+        DevicePermission.entries.forEach { perms.says(it, Grant.Granted) }
+        perms.probeHears = Grant.Asked
+        perms.recheckNearby()
+        assertEquals(Grant.Granted, perms.standing(DevicePermission.NearbyDevices), "ASKED on the return rewrote the row")
+        assertEquals(0, perms.refusedGrants())
+        perms.probeHears = Grant.Refused
+        perms.recheckNearby()
+        assertEquals(listOf(DevicePermission.NearbyDevices), perms.missing(), "REFUSED on the return did not close the gate")
+        assertEquals(2, perms.rechecks)
+    }
+
+    /** **The radio's state callback reaches every watcher** (D-326), until it stops watching. */
+    @Test
+    fun theRadiosStateCallbackReachesItsWatchers() {
+        val perms = NoPermissions()
+        var heard = 0
+        val stop = perms.watchTheRadio { heard++ }
+        perms.radioOff = true
+        perms.radioOff = false
+        assertEquals(2, heard, "a change of the radio's state was not told")
+        stop()
+        perms.radioOff = true
+        assertEquals(2, heard, "a watcher that stopped was still told")
     }
 }

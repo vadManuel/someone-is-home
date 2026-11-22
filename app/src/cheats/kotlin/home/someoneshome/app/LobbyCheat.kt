@@ -127,9 +127,9 @@ class LobbyCheat(
      * **The rows, not a clock.** It waits while the walk is still waiting on a row it asked
      * (`PermsModel.walking`), and when the walk has stopped short with rows still missing it presses
      * again, as a host would, up to [SETUP_PRESSES] presses in all. A walk that stands on one row
-     * for [SETUP_STALL_MILLIS] (a modal with no thumb in the room: a simulator has none for `Would
-     * Like to Send You Notifications`) is pressed again too. [SETUP_CEILING_MILLIS] bounds the whole
-     * of it. Every [PATIENCE_MILLIS] it says what it is still waiting on. What is printed is the OS's
+     * for [SETUP_STALL_MILLIS] (a modal with no thumb in the room) is pressed again too.
+     * [SETUP_CEILING_MILLIS] bounds the whole of it. Every [PATIENCE_MILLIS] it says what it is still
+     * waiting on. What is printed is the OS's
      * own reading either way. **A row still missing here is a row the log names**, and the refusal
      * that follows will name it again.
      *

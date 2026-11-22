@@ -14006,6 +14006,219 @@ green. The scripted rehearsal (`rehearse.sh`, five simulator seats, seed 2026082
 ending, and `rehearse-check.py` read 21 PASS and no FAIL; the driver noted that the round ended on
 the first Egress, so its second, uncontained one never arrived. **Nothing here has run on a phone.**
 
+### D-326 · **The NOTIFICATIONS row is gone; in the lobby a return to the foreground probes NEARBY DEVICES again; the lobby's check runs on events and the once-a-second read is gone — built (recording stays 50)**
+
+**The rulings** (owner, 2026-11-22):
+
+1. *"Remove the notification permission. We don't use it."* The app never posts an iOS notification,
+   has no background mode, and draws every notification in the game in-app.
+2. *Test NEARBY DEVICES when the app comes back to the foreground in the lobby:* "yes". In the lobby,
+   before any round's session exists, a return runs D-303's probe again, and REFUSED lets the phone
+   go to PERMISSIONS like any other lobby switch-off (D-311). During a round, no probe (D-309, D-310).
+3. *Drop the once-a-second lobby poll* (D-311's provisional decision 3). The triggers that remain:
+   the return to the foreground, the Bluetooth manager's state callback, the app reopened after iOS
+   ends it, NEW ROUND, the host after a close, and a refused Nearby Interaction session.
+
+This supersedes D-161's and D-309's *five rows* (now four), D-310's notes on Notifications'
+late answer (its limit 3), and D-311's decision 3 and its *once a second* in the lobby's check and at
+lights out. Nothing else in D-310 or D-311 moves.
+
+**Now, no NOTIFICATIONS row.** `DevicePermission.Notifications` (*A MEETING REACHES A PHONE THAT IS
+FACE DOWN*) is gone, and with it the iOS seam's prompt (`requestAuthorizationWithOptions`), its two
+reads (`getNotificationSettingsWithCompletionHandler`, in `refresh` and `reread`), its status mapping
+and the `UserNotifications` imports. The walk, the gate (`grantsMissing`), D-235's skip, the refresh
+and the switch-off bits (`refusedGrants`) all run over `DevicePermission.entries`, so each lost the row
+with the enum and nothing else had to name it. The row was the last entry, so no other row's bit moved:
+CAMERA 0, BLUETOOTH 1, NEARBY DEVICES 2, MOTION 3, and the uploader's `BLUETOOTH` and `NEARBY` constants
+and its per-grant hold array (sized by the entries) need no change. A `grants n` line an older build
+kept with bit 4 set is cleared on the first beat's read, as any grant back on is. D-310's limit 3 (a
+late Notifications answer going up a beat after the leave) is gone with the row: every grant a round
+reads now answers synchronously, Bluetooth's state from the delegate's last word.
+
+- **`refresh` and `reread` still answer late.** Without the notification read's callback they would
+  have answered inside the call, and every caller was written against an answer that lands after it
+  returns (the foreground watch's `link.foregrounded()` ran before the check). Both now call back on
+  the main queue's next turn (`dispatch_async`), and `refresh` again when its NEARBY DEVICES probe lands,
+  as before.
+- **The Info.plist had no notification key** (no `UIBackgroundModes`, no usage string), and no
+  entitlements file exists, so nothing there changed.
+- **The simulator benches.** `sim-grants.py` copied an answered notification alert between simulators,
+  because a SpringBoard alert has no CLI; that half is gone, and the script grants CAMERA and MOTION &
+  FITNESS through `simctl privacy` as before (same `privacy` argument). `rehearse.sh`,
+  `tools/sim-hunt/hunt.sh` and `tools/one-phone/round.sh` no longer boot a fresh seat once to give it a
+  bulletin store or copy the record into it; they still shut every seat down so it boots fresh, as
+  they did. `round.sh`'s one-time *press Allow on the notification prompt* step and its README step 7
+  are gone (steps 8 and 9 renumbered), and its failure line no longer names NOTIFICATIONS. The bench's
+  setup walk (`LobbyCheat.walkSetup`) waits on rows as D-314 built it; its KDoc no longer names the
+  notification modal. The design mockup's PERMISSIONS sample (`tools/design-mockup`) drops the row.
+- **The e2e cold start** asserts what it did: the refusal names CAMERA and not NEARBY DEVICES. A fresh
+  simulator is now refused on CAMERA alone (it was `CAMERA · NOTIFICATIONS`); the test never named
+  NOTIFICATIONS, so it did not change.
+- **Left as it was, said plainly:** `PermsModel.missingNow`'s KDoc quotes the 13 Pro's log line from
+  before N6, which names NOTIFICATIONS beside the long-gone LOCAL NETWORK; it is a quotation of a log,
+  not a row.
+
+**The guards.** `DevicePermissionTest` (model, new, 2) pins the four rows, in order, and that no row's
+label or name says NOTIF; and that the gate runs over the four. `notificationCordon` (buildSrc, new,
+in `check` for `model`, `platform`, `ui` and `app`) fails the build on `UserNotifications`,
+`UNUserNotificationCenter`, `requestAuthorizationWithOptions` or `getNotificationSettings…` in any
+source set that compiles into a phone, the cheats included (comments blanked, as the other cordons
+blank them; the game's in-app `Notifications` is not a match). `NotificationCordonRulesTest` (buildSrc,
+4) holds what it catches and what it leaves alone.
+
+**Now, the lobby's NEARBY DEVICES probe.** `Permissions.recheckNearby(then)` (new, platform): the iOS
+seam runs the D-303 probe and calls back when it lands; a seam with no probe calls back at once, and
+the simulator build probes nothing (D-314). `FlowModel.cameBackToTheForeground()` (new, ui) is what the
+app root calls on every return, once the OS has been read again (`reread`, no probe): it runs the
+lobby's check at once and then, **only in the lobby**, probes NEARBY DEVICES and runs the check again
+on the answer. *In the lobby* is D-311's own predicate, now one property (`inTheLobby`): a phone
+holding a lobby seat, on the lobby or the one-line screen, and holding no round's record. The host
+takes D-311's host choice: shown PERMISSIONS, its house on the air, every guest seated.
+
+- **REFUSED** (`userDidNotAllow`): the row reads REFUSED, `switchedOffNow` names it, and the phone is
+  let go exactly as any other lobby switch-off.
+- **ASKED** (no answer within two seconds of an active app): **the row is left as it read**, so the
+  phone stays (`Grant.afterARecheck`, platform: what the probe heard, except ASKED, which keeps the
+  row's last answer). **Provisional.** On a phone seated with NEARBY DEVICES GRANTED iOS raises no
+  prompt, so ASKED there means a slow or failed probe and not a person switching anything off; letting
+  a guest go over one would cost a seat for nothing it did, and a host would be held at PERMISSIONS
+  with nothing to fix. If the row really was switched off and the probe still says ASKED, D-311's
+  backstop stands: the round's sessions refuse at lights out and the phone is named at the first
+  meeting. The row is not rewritten to ASKED either, so a later gate (a host's LIGHTS OUT reads only
+  REFUSED; a guest re-seating reads every row) is not refused over a probe that heard nothing.
+- **In a round nothing is probed.** Off the lobby's screens, or holding a round's record on any
+  screen, `cameBackToTheForeground` runs the check (which moves nothing there) and starts no session.
+  A round's switch-off of NEARBY DEVICES is still the ranging pool's `NotAllowed` (D-310), once a round
+  (D-311).
+
+**Now, no poll.** `LOBBY_CHECK_MILLIS` and the app root's once-a-second loop are gone. Each trigger,
+confirmed wired for the lobby and the round before the loop came out:
+
+| trigger | the lobby | a round |
+|---|---|---|
+| return to the foreground | `watchTheLobby`: `reread`, then `cameBackToTheForeground` (the check, and the NEARBY DEVICES probe) | the same `reread`, read beat by beat by `ContactUploader` (`refusedGrants`); no probe |
+| the Bluetooth manager's state callback | **new**: the Perms seam's manager tells `watchTheRadio`'s watchers on iOS's own callback (not on the re-reads), and `watchTheLobby` runs the check | the contact radio's two managers report `Off` as a switch-off (D-311), unchanged |
+| reopened after iOS ends it (Camera, Motion) | the cold start's gate (D-235's skip asks `missingNow`): PERMISSIONS | the round's record lets it past the gate to its seat, and its kept leave goes up as a permission (D-311 finding 2) |
+| NEW ROUND, a later round's push | `newRound` and `houseBeganAnotherRound` run the check on arrival | a grant still off at the next arming is counted on the first beat (D-311) |
+| the host after a close | `houseClosedOnPermission` runs the check | not a round any more |
+| a refused Nearby Interaction session | the return's probe (above) | the ranging pool's `NotAllowed`, `Permission` (D-310), once a round |
+
+**The one gap the poll was covering** was the Bluetooth radio turned off in Control Centre in the
+lobby, which suspends nothing: the Perms seam's manager already heard it (`bluetoothOff`), but nothing
+asked until the next tick. It now tells its watchers (`Permissions.watchTheRadio`, new; the delegate's
+body moved to `heardTheRadio` so that the seam's own re-reads, which hear nothing new, tell nobody).
+The wiring is one function in `app` (`watchTheLobby`, new, `LobbyWatch.kt`) so it can be tested off the
+Composable root: the root calls it once, and the foreground watch beside `link.foregrounded()` no
+longer reads the OS itself. **Unverified:** D-311's open question stands and matters more now: if iOS keeps the
+radio powered for Control Centre's switch, nothing hears it in the lobby at all (as before, the poll
+would have read nothing either), and the phone session's check says which.
+
+**Recording: no change, 50 stays.** The setup walk, the rows and the switch-off bits are the phone's and
+are not recorded; the switch-off still reaches the house as the one fixed `RadioFaulted` body with the
+cause `Permission`, whose shape did not move.
+
+**Leak and parity.** The lobby has no roles. `cameBackToTheForeground` reads no role, and a round's
+phone is probed on neither role: the test walks an Insider's phone and a Resident's through the same
+screens and asserts no probe on either. The probe runs only before arming, so nothing in a round's
+radio, wire or timing differs by it.
+
+**Tests.** New: `LobbyCheckTriggersTest` (ui, common, 11), one or more per trigger, none of which calls
+the check on a clock: the return lets a guest go for every row in turn; the return's probe REFUSED
+lets the guest go, on the lobby and on the one-line screen; ASKED keeps the guest, its seat and its
+row; the host's return follows the host choice (REFUSED: PERMISSIONS, house on the air, seats kept;
+ASKED: stays); no probe in a round, for both roles, on ARMED, page 1, page 2 and the discussion, and
+holding a round's record on the lobby; no probe for a phone in no lobby; the radio's callback lets the
+guest go with no probe; a relaunch with Camera or Motion off meets the gate, and holding a round's
+seat goes past it; NEW ROUND and a later round's push check on arrival; the host after a close is
+checked. `LobbyWatchTest` (app, 3): the radio's state callback lets a seated guest go through
+`watchTheLobby`; a return reads the OS once, probes once and lets a REFUSED guest go; stopped, neither
+reaches the flow. `PermissionsTest` (platform, +2): `afterARecheck` (ASKED keeps, REFUSED, GRANTED and
+NOT ON THIS PHONE replace) and the fake's probe; the radio's callback reaches its watchers until they
+stop. `DevicePermissionTest` and `NotificationCordonRulesTest` above. Changed: `PermissionsTest`'s
+one-bit-a-row case uses MOTION where it used NOTIFICATIONS; `PermsModelTest`'s row list is four;
+`PermsScreenTest` taps the last row by position (`entries.last()`), as its KDoc always said;
+`PermsSkipTest`'s late answer during the self-test is Bluetooth's, the real late one now;
+`LobbyPermissionCheckTest`'s NEW ROUND case switches off MOTION.
+
+**Proved, red against the injected break first, then restored.** The lobby's probe skipped on the
+return (`if (false && inTheLobby)` in `cameBackToTheForeground`), `:ui:desktopTest` on
+`LobbyCheckTriggersTest`, 11 tests, 4 red, quoted from the XML: *aReturnsProbeThatHearsRefusedLetsTheGuestGo*:
+`the return to the lobby did not probe NEARBY DEVICES (D-326) expected:<1> but was:<0>`;
+*theOneLineScreenIsProbedToo*: `NEARBY DEVICES refused on the one-line screen and the guest stayed
+expected:<Perms> but was:<Secret>`; *aReturnsProbeThatSaysOnlyAskedKeepsTheGuest*: `the return to the
+lobby did not probe NEARBY DEVICES expected:<1> but was:<0>`; *theHostsReturnFollowsTheHostsChoice*:
+`the host's return to its lobby did not probe NEARBY DEVICES expected:<1> but was:<0>`. Restored: 11
+of 11 green.
+
+**Rendered and looked at** (`PermsWalkRender`, 720×1520 with the camera band, `ui/build/screens/`):
+`perms-fresh` (four rows, CAMERA, BLUETOOTH, NEARBY DEVICES, MOTION & FITNESS, each with the filled TAP
+TO GRANT tag; a wide gap under the last row; THIS PHONE CANNOT TAKE A SEAT YET / CAMERA · BLUETOOTH ·
+NEARBY DEVICES / · MOTION & FITNESS in three lines over REQUEST WHAT IS MISSING); `perms-nearby-refused`
+(three outlined GRANTED tags and NEARBY DEVICES' filled REFUSED, the sentence naming NEARBY DEVICES,
+OPEN SETTINGS over REQUEST WHAT IS MISSING); `perms-granted` (four outlined GRANTED tags, CONTINUE alone
+at the bottom); and `perms-tallest` (one refused, three owed), which fits whole at 720×1520 with room to
+spare above the sentence. D-305's pinning is unchanged and `PermsPinnedActionsTest` holds it at both
+heights. No new words, light, colour or type on any of them.
+
+**Checked** (on the final tree, `*/build/test-results` cleared first: `./gradlew check --continue`
+with the two variant sweeps excluded, then `:app:variantSweepRelease`, then `:app:variantSweepPlaytest`,
+each exit 0, the app's XML copied out after each, every result XML counted with a python glob): model
+369 (JVM) + 350 (iOS Simulator); core 462 + 460; platform 213; harness 138; ui 827 (desktop) + 412 (iOS
+Simulator); cards 17; app 305 (the default variant), 182 (Release), 305 (Playtest). **3,553 in the
+default check, 4,040 across the three, 0 failures, 0 errors, 0 skipped.** Against D-323's 3,522: model
+2 more on each target (`DevicePermissionTest`), platform 2 (`PermissionsTest`), ui 11 more on each
+target (`LobbyCheckTriggersTest`), app 3 more in every variant (`LobbyWatchTest`); core, harness and
+cards unchanged. `vocabularyLint`, `redactionLint`, `boundaryCheck`, `armingCordon`,
+`benchSeedCordon`, `seedSourceCordon` and the new `notificationCordon` (on `model`, `platform`, `ui` and
+`app`) ran in it, clean. Neither known load flake fired. buildSrc's own tests are not part of `check`;
+run on their own (`./gradlew -p buildSrc test --rerun-tasks`): 35, 0 failures, among them
+`NotificationCordonRulesTest`'s 4. **The cordon broken on purpose**: `import
+platform.UserNotifications.UNUserNotificationCenter` put back into `Permissions.ios.kt`,
+`:platform:notificationCordon`: `notificationCordon failed. 2 violation(s): …Permissions.ios.kt:41
+'UNUserNotificationCenter' — the app asks iOS for no notification permission (D-326) — every
+notification in the game is drawn in-app`, `BUILD FAILED`. Restored: `notificationCordon clean — 55
+file(s) scanned`.
+
+**The benches and e2e, run on the final tree.** `./e2e.sh` on its own seat: `passed — 3 test case(s)`,
+`e2e: 1/1 green` (the cold start refused on the unanswered CAMERA and not NEARBY DEVICES, the name and
+the back arrow, the short press and the two-second hold; the geometry probe skipped by its own
+`XCTSkipUnless`, as designed). `rehearse.sh` (from a copy, `REPO` set, seed 20260822), five seats:
+`sim-grants` granted camera and motion on all five with no notification step, every seat said `SETUP
+DONE — THE OS ANSWERED EVERY ROW · 0S · 1 PRESS(ES)`, and the round ran ARMED to ENDING (a Revoke, a
+meeting through the gate at 5/5, discussion, vote and tally, Static, an Egress that resolved; the
+round ended on the first Egress, so the second never arrived, as in D-323). `rehearse-check.py`: 21
+of 21. `tools/sim-hunt/hunt.sh --seats 4 --seed 20261150`: setup done in one press on all four; the
+round ended for the Insiders by parity after a Revoke, a report's meeting and a vote; the second round
+armed and its shift was done (AGAIN beats). No seat on either bench was let go to PERMISSIONS, so the
+lobby's check, now on events, left every simulator seat in place, as the poll did (D-314: a
+simulator's BLUETOOTH and NEARBY DEVICES read NOT ON THIS PHONE, and the simulator build probes
+nothing). `tools/one-phone/round.sh` was checked for syntax only (`bash -n`): it needs a phone.
+
+**Not on a phone, said plainly.** Nothing here has run on one, and none of it can on a simulator:
+there is no ranging there, and the simulator's NEARBY DEVICES reads NOT ON THIS PHONE (D-314).
+Unverified until a phone shows it: that the return's probe on a granted phone answers GRANTED rather
+than ASKED, and how often; that a NEARBY DEVICES switched off in Settings answers REFUSED to it; that
+the Perms seam's manager hears Control Centre's switch at all (D-311); and that no notification entry
+appears in the app's page in Settings. The phone session's checklist gains those lines.
+
+**Raised, not built.**
+
+1. **A probe started on a return can overlap the first two seconds of a round** if the host completes
+   LIGHTS OUT in that window. The round's pool opens its sessions at the seed while the probe's session
+   still runs, and the pool lowers its capacity for the round if iOS answers that the session limit is
+   reached. Its answer moves nothing (the check re-reads where the phone stands, and a round's phone is
+   not the lobby's), but the session is real. Ending the probe when the pool opens would join two
+   objects that know nothing of each other today; not done.
+2. **A NEARBY DEVICES switched off and a probe that keeps saying ASKED** leaves the guest seated until
+   lights out, where it is named at the first meeting (D-311's decision 4, still the backstop).
+
+**Decisions for the owner** (each provisional):
+
+1. **ASKED on a return keeps the phone, and the row keeps its last answer** (above).
+2. **The probe is started on every return in the lobby**, the host's included, not only on a return
+   from Settings: the app cannot tell where the person went.
+3. **The radio's watchers are told only on iOS's own state callback**, not on the seam's re-reads.
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

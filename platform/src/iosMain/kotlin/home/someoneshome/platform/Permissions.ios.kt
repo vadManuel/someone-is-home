@@ -38,15 +38,6 @@ import platform.NearbyInteraction.NISession
 import platform.NearbyInteraction.NISessionDelegateProtocol
 import platform.UIKit.UIApplication
 import platform.UIKit.UIApplicationState
-import platform.UserNotifications.UNAuthorizationOptionAlert
-import platform.UserNotifications.UNAuthorizationOptionBadge
-import platform.UserNotifications.UNAuthorizationOptionSound
-import platform.UserNotifications.UNAuthorizationStatusAuthorized
-import platform.UserNotifications.UNAuthorizationStatusDenied
-import platform.UserNotifications.UNAuthorizationStatusEphemeral
-import platform.UserNotifications.UNAuthorizationStatusNotDetermined
-import platform.UserNotifications.UNAuthorizationStatusProvisional
-import platform.UserNotifications.UNUserNotificationCenter
 import platform.darwin.NSObject
 import platform.darwin.DISPATCH_TIME_NOW
 import platform.darwin.dispatch_after
@@ -55,11 +46,12 @@ import platform.darwin.dispatch_get_main_queue
 import platform.darwin.dispatch_time
 
 /**
- * **iOS: five different frameworks, five different ways of being asked, one seam.**
+ * **iOS: four different frameworks, four different ways of being asked, one seam.**
  *
  * Local Network is not one of them (D-309): iOS raises that prompt by itself the first time the
  * phone browses for a home or advertises one, so the setup walk does not ask for it and this seam
- * neither reads nor raises it.
+ * neither reads nor raises it. Notifications is not one of them either (D-326): the app posts no
+ * iOS notification, so this seam neither reads nor raises that grant.
  *
  * There is no general permission API on this platform. Each grant lives in the framework that owns
  * the hardware and each has its own spelling of *not determined*, so the whole of this file is that
@@ -75,9 +67,9 @@ import platform.darwin.dispatch_time
  *
  * ### The two that answer through a callback are cached, and the cache is the honest kind
  *
- * Notifications and Bluetooth cannot be read synchronously, and rows are drawn every frame. So the
- * last answer each of them gave is held here, seeded at [Grant.Unasked] and never at a plausible
- * guess: a row that has not been asked reads TAP TO GRANT, which is what has happened.
+ * Bluetooth's state and NEARBY DEVICES' probe cannot be read synchronously, and rows are drawn every
+ * frame. So the last answer each of them gave is held here, seeded at nothing and never at a
+ * plausible guess: a row that has not been asked reads TAP TO GRANT, which is what has happened.
  */
 actual fun devicePermissions(): Permissions = IosPermissions()
 
@@ -98,7 +90,7 @@ private class IosPermissions(
 ) : Permissions {
 
     /**
-     * The answers that only ever arrive late: Notifications, Bluetooth's delegate, and the probe's.
+     * The answers that only ever arrive late: Bluetooth's delegate and the probe's.
      *
      * Seeded empty rather than seeded optimistic. [Grant.Unasked] is what an unread row means and
      * it is what the gate refuses on — the failure direction is *the host is asked again*, never
@@ -118,16 +110,33 @@ private class IosPermissions(
 
     private val bluetoothDelegate = object : NSObject(), CBCentralManagerDelegateProtocol {
         override fun centralManagerDidUpdateState(central: CBCentralManager) {
-            val grant = bluetoothGrantOf(central.state)
-            log("$TAG BLUETOOTH state=${central.state} → $grant" + if (central.state == CBManagerStatePoweredOff) " · THE RADIO IS OFF (D-311)" else "")
-            // **The late answer, handed to whoever asked before it was known** (D-314). Once each,
-            // and only a real answer: a state still unknown keeps them waiting. Handed through
-            // [answer], so the log says `Unasked → …` for the request it answers.
-            val waiting = if (grant != Grant.Unasked) bluetoothWaiting.toList() else emptyList()
-            bluetoothWaiting.removeAll(waiting)
-            waiting.forEach { answer(DevicePermission.Bluetooth, grant, it) }
-            remembered[DevicePermission.Bluetooth] = grant
+            heardTheRadio(central)
+            // **And whoever watches the radio is told** (D-326): Control Centre and airplane mode
+            // reach a running app here and nowhere else. Only on iOS's own callback, never on the
+            // re-reads below, which hear nothing new.
+            radioWatchers.toList().forEach { it() }
         }
+    }
+
+    /** What the manager's state says, remembered and logged, and handed to any request waiting on it. */
+    private fun heardTheRadio(central: CBCentralManager) {
+        val grant = bluetoothGrantOf(central.state)
+        log("$TAG BLUETOOTH state=${central.state} → $grant" + if (central.state == CBManagerStatePoweredOff) " · THE RADIO IS OFF (D-311)" else "")
+        // **The late answer, handed to whoever asked before it was known** (D-314). Once each,
+        // and only a real answer: a state still unknown keeps them waiting. Handed through
+        // [answer], so the log says `Unasked → …` for the request it answers.
+        val waiting = if (grant != Grant.Unasked) bluetoothWaiting.toList() else emptyList()
+        bluetoothWaiting.removeAll(waiting)
+        waiting.forEach { answer(DevicePermission.Bluetooth, grant, it) }
+        remembered[DevicePermission.Bluetooth] = grant
+    }
+
+    /** Everyone told of the radio's state changes (D-326). See [watchTheRadio]. */
+    private val radioWatchers = mutableListOf<() -> Unit>()
+
+    override fun watchTheRadio(changed: () -> Unit): () -> Unit {
+        radioWatchers += changed
+        return { radioWatchers -= changed }
     }
 
     /**
@@ -140,7 +149,7 @@ private class IosPermissions(
 
     /**
      * **Silent.** Every row on the Perms screen reads this on every frame it is drawn, so a line
-     * here is five lines per frame — a log that drowns the transitions [answer] writes, which are
+     * here is four lines per frame — a log that drowns the transitions [answer] writes, which are
      * the only lines a device run has as evidence. Reading a status is not an event; being told a
      * new answer is, and that is where the seam speaks.
      *
@@ -154,11 +163,6 @@ private class IosPermissions(
         DevicePermission.Motion -> motionGrant()
         DevicePermission.Bluetooth -> bluetoothGrant()
         DevicePermission.NearbyDevices -> nearbyGrant()
-        // The one that is genuinely callback-only: there is no synchronous notification status on
-        // this platform. What is held is the last answer [refresh] heard, and [refresh] now has a
-        // caller at the app root as well as on the Perms screen, so a phone that never opened that
-        // screen still has a real answer here rather than a hole.
-        DevicePermission.Notifications -> remembered[of] ?: Grant.Unasked
     }
 
     /**
@@ -192,40 +196,45 @@ private class IosPermissions(
     override fun reread(then: () -> Unit) {
         log("$TAG re-reading, no probe (D-310)")
         hearTheRadio()
-        UNUserNotificationCenter.currentNotificationCenter()
-            .getNotificationSettingsWithCompletionHandler { settings ->
-                val grant = notificationGrantOf(settings?.authorizationStatus)
-                dispatch_async(dispatch_get_main_queue()) {
-                    remembered[DevicePermission.Notifications] = grant
-                    log("$TAG NOTIFICATIONS → $grant")
-                    then()
-                }
-            }
-        central?.let { bluetoothDelegate.centralManagerDidUpdateState(it) }
+        central?.let { heardTheRadio(it) }
+        // On the main queue's next turn, as the read it replaced answered (D-326): every caller was
+        // written against an answer that lands after it returns.
+        dispatch_async(dispatch_get_main_queue()) { then() }
     }
 
     override fun refresh(then: () -> Unit) {
         log("$TAG refreshing")
         hearTheRadio()
-        // Notifications is the one that genuinely changes behind the app's back: a host who walked
-        // out to Settings comes back to a row that has to move. It is also the only read of the
-        // three that raises nothing, which is what makes it safe to do on every screen open.
-        UNUserNotificationCenter.currentNotificationCenter()
-            .getNotificationSettingsWithCompletionHandler { settings ->
-                val grant = notificationGrantOf(settings?.authorizationStatus)
-                dispatch_async(dispatch_get_main_queue()) {
-                    remembered[DevicePermission.Notifications] = grant
-                    log("$TAG NOTIFICATIONS → $grant")
-                    then()
-                }
-            }
         // The Bluetooth manager reports its own state changes into `remembered` for as long as it
         // exists; asking it again means asking the one it already has.
-        central?.let { bluetoothDelegate.centralManagerDidUpdateState(it) }
+        central?.let { heardTheRadio(it) }
+        // Camera and Motion answer synchronously, so the read is done; told on the main queue's
+        // next turn, as [reread] is.
+        dispatch_async(dispatch_get_main_queue()) { then() }
         // Nearby Interaction has no status to read, so a phone that has already been asked is asked
         // again the only way there is: a probe, which raises nothing once the prompt has been
         // answered. Its answer lands late, and the rows are read again when it does.
         if (nearbyDevicesAskedOnThisBuild() && defaults.boolForKey(NEARBY_RAISED)) probeNearby { then() }
+    }
+
+    /**
+     * **The lobby's probe on a return to the foreground** (D-326): [probeNearby], with the row left
+     * as it read when the probe says only ASKED ([afterARecheck]). The simulator build has no
+     * ranging and probes nothing (D-314).
+     */
+    override fun recheckNearby(then: () -> Unit) {
+        if (!nearbyDevicesAskedOnThisBuild()) {
+            then()
+            return
+        }
+        val before = nearbyGrant()
+        log("$TAG NEARBY DEVICES — PROBED AGAIN ON A RETURN TO THE LOBBY (D-326)")
+        probeNearby { heard ->
+            val kept = before.afterARecheck(heard)
+            remembered[DevicePermission.NearbyDevices] = kept
+            if (kept != heard) log("$TAG NEARBY DEVICES — ASKED IS NO ANSWER, THE ROW STAYS $kept (D-326)")
+            then()
+        }
     }
 
     override fun request(of: DevicePermission, then: (Grant) -> Unit) {
@@ -233,7 +242,6 @@ private class IosPermissions(
         when (of) {
             DevicePermission.Camera -> requestCamera(then)
             DevicePermission.Motion -> requestMotion(then)
-            DevicePermission.Notifications -> requestNotifications(then)
             DevicePermission.Bluetooth -> requestBluetooth(then)
             DevicePermission.NearbyDevices -> requestNearby(then)
         }
@@ -306,37 +314,6 @@ private class IosPermissions(
         ) { _, _ ->
             manager.stopActivityUpdates()
             answer(DevicePermission.Motion, motionGrant(), then)
-        }
-    }
-
-    // ---- Notifications ------------------------------------------------------------------------
-
-    private fun notificationGrantOf(status: Long?): Grant = when (status) {
-        null -> Grant.Unasked
-        UNAuthorizationStatusAuthorized, UNAuthorizationStatusProvisional,
-        UNAuthorizationStatusEphemeral,
-        -> Grant.Granted
-
-        UNAuthorizationStatusNotDetermined -> Grant.Unasked
-        UNAuthorizationStatusDenied -> Grant.Refused
-        else -> {
-            log("$TAG NOTIFICATIONS unknown authorization status $status")
-            Grant.Refused
-        }
-    }
-
-    private fun requestNotifications(then: (Grant) -> Unit) {
-        UNUserNotificationCenter.currentNotificationCenter().requestAuthorizationWithOptions(
-            UNAuthorizationOptionAlert or UNAuthorizationOptionSound or UNAuthorizationOptionBadge,
-        ) { granted, error ->
-            if (error != null) log("$TAG NOTIFICATIONS refused with $error")
-            dispatch_async(dispatch_get_main_queue()) {
-                answer(
-                    DevicePermission.Notifications,
-                    if (granted) Grant.Granted else Grant.Refused,
-                    then,
-                )
-            }
         }
     }
 

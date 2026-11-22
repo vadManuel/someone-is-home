@@ -49,6 +49,12 @@ class PermsModel(
      * left to flip a switch comes back to rows that have to move, and nothing else would move them.
      */
     private val reread: (() -> Unit) -> Unit = { it() },
+    /**
+     * **NEARBY DEVICES probed again, for a phone back in the foreground in a lobby** (D-326): the
+     * app hands down `Permissions.recheckNearby`, whose ASKED answer leaves the row as it read. The
+     * one caller is [recheckNearby]. Nothing to ask by default.
+     */
+    private val recheck: (() -> Unit) -> Unit = { it() },
 ) {
 
     /**
@@ -139,7 +145,7 @@ class PermsModel(
      * Read every row off the OS. Called when the screen opens and when the app comes back to it.
      *
      * The synchronous read lands first and the callback lands again afterwards, because two of the
-     * five only answer late — so a row can move twice on one refresh and both of those are true.
+     * four only answer late — so a row can move twice on one refresh and both of those are true.
      */
     fun refresh() {
         states = DevicePermission.entries.associateWith(read)
@@ -159,6 +165,13 @@ class PermsModel(
     fun readNow() {
         states = DevicePermission.entries.associateWith(read)
     }
+
+    /**
+     * **Probe NEARBY DEVICES again, and call [then] once it has answered** (D-326): for a phone back
+     * in the foreground in a lobby, where no round's session exists. Writes nothing here: [then]
+     * asks the OS afresh ([switchedOffNow]), and an ASKED answer has left the row as it read.
+     */
+    fun recheckNearby(then: () -> Unit) = recheck(then)
 
     /**
      * **Tap a row: raise the prompt.**

@@ -40,15 +40,10 @@ Insider of a round somebody plays from the springboard.
    fourth Simulator host in the phone's place and plays the round to the end of its first meeting.
    **PASS:** it ends on `--no-phone dry run PASSED`, after `PASS — THE REVOKE LANDED ON SEAT 1` and
    `PASS — the round did not end before the meeting`. Stop it with `round.sh stop`.
-7. **One time only, the Simulators' notification prompt.** A Simulator that has never answered it is
-   refused a seat, naming NOTIFICATIONS, and no Simulator on this Mac has answered it yet. The first
-   `start` prints `ONE-TIME SETUP` and opens the Simulator app: press **Allow** on *"Someone's Home
-   Would Like to Send You Notifications"*, then Ctrl-C and run `start` again. `sim-grants.py` copies
-   that answer to every Simulator from then on.
-8. **Terminal needs Bluetooth.** The first `ble-peer` run may ask *"Terminal would like to use
+7. **Terminal needs Bluetooth.** The first `ble-peer` run may ask *"Terminal would like to use
    Bluetooth"*: allow it. If it says `BLUETOOTH IS NOT ALLOWED FOR THIS TERMINAL`, go to System Settings
    → Privacy & Security → Bluetooth, switch on the terminal app you use, and run it again.
-9. **Before any test with two or more iPhones, switch NameDrop off on every one:** Settings → General →
+8. **Before any test with two or more iPhones, switch NameDrop off on every one:** Settings → General →
    AirDrop → Bringing Devices Together → off. Two unlocked iPhones held close otherwise offer to share
    contacts, and the offer lights both screens (twice in about 40 touches on 2026-11-16). The app can
    neither read nor change it; a fresh install asks once, on its NAMEDROP setup step (D-248).

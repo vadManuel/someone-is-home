@@ -46,6 +46,9 @@ Tick each line as you see it.
       sentence names NEARBY DEVICES, OPEN SETTINGS shows) until it is granted in Settings; back in
       the app the row reads GRANTED and CONTINUE appears. PERMISSIONS has no LOCAL NETWORK row;
       iOS asks for it on JOIN A HOME or when hosting. (D-309)
+- [ ] PERMISSIONS has four rows: CAMERA, BLUETOOTH, NEARBY DEVICES, MOTION & FITNESS. There is no
+      NOTIFICATIONS row, and no iOS notification prompt appears anywhere in setup. In Settings, the
+      app's page has no Notifications entry. (D-326)
 - [ ] On a fresh install, tap REQUEST WHAT IS MISSING once and answer each iOS prompt as it comes:
       the walk should carry on to the next row by itself, Bluetooth's answer included, without a
       second tap. If it stops after Bluetooth, note it: that is the stall the overnight run found
@@ -104,8 +107,8 @@ Tick each line as you see it.
       tapped close to the dealt rhythm is accepted. (D-296)
 
 **A permission switched off**
-- [ ] Mid-round, switch a permission off in Settings (Notifications is the one iOS does not end the
-      app for) and come back. At the next meeting the notice names that phone in the owner's
+- [ ] Mid-round, switch a permission off in Settings (Bluetooth, or NEARBY DEVICES; note whether
+      iOS ends the app for it, as it does for Camera and Motion) and come back. At the next meeting the notice names that phone in the owner's
       sentence: "Resident Mia switched off a permission this game needs. If anyone switches one off
       again, the house closes and everyone starts over." Then switch one off again, on any phone:
       every phone shows THE HOUSE IS CLOSED / "A permission was switched off again. Everyone starts
@@ -117,7 +120,17 @@ Tick each line as you see it.
       in Control Centre) and come back: the guest leaves the lobby and lands on PERMISSIONS with
       that row reading REFUSED, the host's count drops by one, and with it back on the guest
       rejoins as usual. On the host: it is shown PERMISSIONS, the guests stay seated, and CONTINUE
-      takes it back to its lobby. (D-311)
+      takes it back to its lobby. (D-311) There is no once-a-second check any more (D-326): Bluetooth
+      turned off in Control Centre, without leaving the app, should let the guest go within a moment
+      of the switch, on the radio's own callback (`[perms] BLUETOOTH state=... THE RADIO IS OFF`).
+      If nothing happens until the guest leaves and comes back, note it: that is the finding.
+- [ ] In the lobby, switch NEARBY DEVICES off in Settings on a guest and come back: the console logs
+      `[perms] NEARBY DEVICES — PROBED AGAIN ON A RETURN TO THE LOBBY (D-326)`, and the guest lands
+      on PERMISSIONS with NEARBY DEVICES reading REFUSED. On the host, it is shown PERMISSIONS and
+      the guests stay seated. Note what the probe answered (`[perms] NEARBY DEVICES probe: ...`): if
+      it says `no answer` and the guest stays (`ASKED IS NO ANSWER, THE ROW STAYS`), the switch-off
+      is heard only at lights out, and that is the finding. With NEARBY DEVICES left on, leave the
+      app and come back several times: the guest is never let go. (D-326)
 - [ ] Mid-round, turn Bluetooth off in Control Centre (do not leave the app). At the next meeting
       the notice names that phone in the permission sentence, not "was unreachable". Note whether
       the console logs `[perms] BLUETOOTH state=... THE RADIO IS OFF (D-311)` and the radio's

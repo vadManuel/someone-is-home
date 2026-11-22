@@ -16,7 +16,7 @@ package home.someoneshome.model
  * Perms set, camera included.* The argument is that **iOS asks once, ever, on whichever screen
  * first needs the thing** — and the screen that first needs the camera is a player alone in a dark
  * corridor, where a system modal is both a light nobody authored (rule 5) and a tell. Warming one
- * permission and leaving four to ambush the round is the same bug with a smaller blast radius.
+ * permission and leaving three to ambush the round is the same bug with a smaller blast radius.
  *
  * ### Every one is required to play, and each must read GRANTED (D-309)
  *
@@ -28,10 +28,12 @@ package home.someoneshome.model
  * for it and could only ever say ASKED. Whether it was given is found out where it always was: the
  * home goes on the air or it does not.
  *
+ * **Notifications is not a row** (the owner, 2026-11-22, D-326: *"we don't use it"*). The app posts
+ * no iOS notification and has no background mode; every notification in the game is drawn in-app.
+ *
  * **The order is the order the rows are drawn in**, and it is deliberate: Camera first because it
- * is the one that ends an evening, Notifications last because it is the one a host will be least
- * surprised to be asked for. Nearby Devices sits under Bluetooth, the other half of how the house
- * sees who is near whom (D-303).
+ * is the one that ends an evening. Nearby Devices sits under Bluetooth, the other half of how the
+ * house sees who is near whom (D-303).
  */
 enum class DevicePermission(
     /** The row's own words on the Perms screen. Screen copy, in the closed vocabulary. */
@@ -64,11 +66,6 @@ enum class DevicePermission(
     Motion(
         "MOTION & FITNESS",
         "THE HOUSE KNOWS WHEN A PHONE IS BEING CARRIED",
-    ),
-
-    Notifications(
-        "NOTIFICATIONS",
-        "A MEETING REACHES A PHONE THAT IS FACE DOWN",
     ),
 }
 

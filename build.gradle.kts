@@ -19,9 +19,12 @@ val cordonModules = setOf("app")
 // `app`, every source set that compiles into a phone and the cheats among them, and `platform`,
 // where the secure source itself lives.
 val seedSourceModules = setOf("app", "platform")
+// The notification cordon (D-326) covers every module that compiles into a phone and could ask iOS
+// for a notification permission: `platform`, where the prompts live, and `app`, `ui` and `model`.
+val notificationModules = setOf("model", "platform", "ui", "app")
 gradle.projectsEvaluated {
     val present = subprojects.map { it.name }.toSet()
-    val missing = (vocabularyModules + redactionModules + cordonModules + seedSourceModules) - present
+    val missing = (vocabularyModules + redactionModules + cordonModules + seedSourceModules + notificationModules) - present
     require(missing.isEmpty()) {
         "Guards are registered by module name and these do not exist: $missing. " +
             "Renaming a module must not silently remove its guard."
@@ -107,6 +110,22 @@ subprojects {
                 .forEach { sources.from(it) }
         }
         tasks.matching { it.name == "check" }.configureEach { dependsOn(seedSource) }
+    }
+
+    // **The notification cordon (D-326).** The owner removed the NOTIFICATIONS row: the app posts no
+    // iOS notification. Every source set of these modules that compiles into a phone, the cheats
+    // included, may not name the UserNotifications framework. Named by suffix, so a layout change
+    // that matched nothing fails the empty scan rather than passing it.
+    if (name in notificationModules) {
+        val notifications = tasks.register<NotificationCordonTask>("notificationCordon") {
+            group = "verification"
+            description = "Fails if anything that compiles into a phone asks iOS for notifications."
+            (layout.projectDirectory.dir("src").asFile.listFiles() ?: emptyArray())
+                .filter { it.isDirectory && (it.name.endsWith("Main") || it.name == "cheats" || it.name == "variant") }
+                .sortedBy { it.name }
+                .forEach { sources.from(it) }
+        }
+        tasks.matching { it.name == "check" }.configureEach { dependsOn(notifications) }
     }
 
     // Redaction lint covers model, which is where the schema and every wire type live.

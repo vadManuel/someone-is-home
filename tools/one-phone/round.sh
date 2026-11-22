@@ -374,32 +374,8 @@ prepare_sims() {
     say "=== THE GRANTS A HOST WOULD HAVE GIVEN, AND THE INSTALL (see sim-grants.py) ==="
     local u sims=()
     while read -r u; do [ -z "$u" ] || sims+=("$u"); done < <(all_sims)
+    # Every Simulator boots fresh. There is no notification grant to give any more (D-326).
     for u in "${sims[@]}"; do xcrun simctl shutdown "$u" 2>/dev/null || true; done
-    # A Simulator that has never booted has no bulletin store for sim-grants to write the answer
-    # into (a seat Simulator `ensure_sim` has just created, say), and would be refused a seat. Booted
-    # once and shut down, it has one.
-    local fresh=()
-    for u in "${sims[@]}"; do
-        [ -f "$HOME/Library/Developer/CoreSimulator/Devices/$u/data/Library/BulletinBoard/VersionedSectionInfo.plist" ] || fresh+=("$u")
-    done
-    for u in ${fresh[@]+"${fresh[@]}"}; do
-        say "booting $u once, so it has a notification store to answer into"
-        xcrun simctl boot "$u" 2>/dev/null || true
-        xcrun simctl bootstatus "$u" -b >/dev/null
-        xcrun simctl shutdown "$u" 2>/dev/null || true
-    done
-    python3 "$REPO/sim-grants.py" notifications "${sims[@]}" | tee -a "$OUT/driver.log" | tee "$RUN/grants.txt"
-    # A Simulator that has never answered the notification prompt is refused a seat, naming
-    # NOTIFICATIONS. sim-grants copies an answer from any Simulator that has one; with none, a person
-    # answers it once and every run after this is covered.
-    if grep -q "NO ANSWERED NOTIFICATION ALERT" "$RUN/grants.txt"; then
-        say ""
-        say "!!! ONE-TIME SETUP: no Simulator on this Mac has answered the notification prompt."
-        say "!!! When the Simulator window shows 'Someone's Home Would Like to Send You Notifications',"
-        say "!!! press Allow. Then Ctrl-C and run start again: every run after that is covered."
-        say ""
-        open -a Simulator 2>/dev/null || true
-    fi
     for u in "${sims[@]}"; do xcrun simctl boot "$u" 2>/dev/null || true; done
     for u in "${sims[@]}"; do
         xcrun simctl bootstatus "$u" -b >/dev/null
@@ -539,7 +515,7 @@ do_start() {
         for ((seat = 1; seat < SEATS; seat++)); do
             launch_sim "$seat"
             if [ "$seat" -eq 1 ]; then
-                wait_for "$OUT/phone.log" "2 JOINED" 90 "seat 1 is seated" || fail "seat 1 never joined. Is this Mac on the phone's Wi-Fi? Does $OUT/seat-1.log say SETUP INCOMPLETE … NOTIFICATIONS (see the one-time setup above)?"
+                wait_for "$OUT/phone.log" "2 JOINED" 90 "seat 1 is seated" || fail "seat 1 never joined. Is this Mac on the phone's Wi-Fi? Does $OUT/seat-1.log say SETUP INCOMPLETE?"
             else
                 wait_for "$OUT/phone.log" "$((seat + 1)) JOINED" 90 "seat $seat is seated" || fail "seat $seat never joined — see $OUT/seat-$seat.log"
             fi

@@ -193,7 +193,7 @@ fun CheatRoot(uwb: Boolean) {
     // "does not vibrate at all".
     val buzzer = remember { HouseBuzzer(haptics) { line -> println("[haptic] $line") } }
     // **THE OS'S OWN PROMPTS.** Held for the life of the app rather than for the life of the Perms
-    // screen: two of the five answer through a callback and remember what they last heard, and a
+    // screen: two of the four answer through a callback and remember what they last heard, and a
     // seam rebuilt on every visit to that screen would forget the answers between visits — the row
     // would go back to TAP TO GRANT on a phone that had already granted.
     val permissions = remember { devicePermissions() }
@@ -297,12 +297,7 @@ fun CheatRoot(uwb: Boolean) {
                 rules.value?.wentOffAir()
             },
             onForeground = {
-                // **What the OS says now, read for the round's beats** (D-310): a phone back from
-                // Settings with a grant switched off reports a permission, not a leave. A read, never
-                // a prompt or a probe (D-309 keeps probes off a round); every beat asks it. **And in
-                // the lobby, the check runs on the answer** (D-311): back from Settings with a grant
-                // switched off, a guest leaves the lobby for PERMISSIONS and the host is shown it.
-                permissions.reread { panel.value?.permissionsChecked() }
+                // The OS is read again on the same return by `watchTheLobby`, below (D-310, D-326).
                 link.foregrounded()
                 rules.value?.cameBackOnAir()
             },
@@ -348,6 +343,8 @@ fun CheatRoot(uwb: Boolean) {
                 read = permissions::standing,
                 ask = permissions::requestStanding,
                 reread = permissions::refresh,
+                // **And NEARBY DEVICES probed again on a return to the lobby** (D-326).
+                recheck = permissions::recheckNearby,
             ),
             // **THE TORCH, REACHING THE LED** (E-PAY-5). `toggleTorch` moved a colour value in
             // `Amber` and nothing else; the owner's finding was a button that reaches no hardware.
@@ -595,17 +592,13 @@ fun CheatRoot(uwb: Boolean) {
         )
         onDispose { unwatch() }
     }
-    // **The lobby's check, once a second** (the owner's 2026-11-21 rulings, D-311). The Bluetooth
-    // radio turned off in Control Centre suspends nothing and composes nothing, so no foreground
-    // watch hears it: the check reads the OS again on this clock, and acts only on a phone holding a
-    // lobby seat and standing on the lobby's own screens (`FlowModel.permissionsChecked`). A read of
-    // what the seam already holds, never a prompt or a probe (D-309); off the lobby's screens it
-    // reads nothing at all.
-    LaunchedEffect(flow) {
-        while (true) {
-            delay(LOBBY_CHECK_MILLIS)
-            flow.permissionsChecked()
-        }
+    // **The lobby's check, on events** (D-311, the owner's 2026-11-22 ruling, D-326: no poll). The
+    // Bluetooth radio's state changing, heard by the permission seam's own manager, and every return
+    // to the foreground, where the OS is read again for the round's beats as well (D-310) and, in the
+    // lobby alone, NEARBY DEVICES is probed again. See `watchTheLobby`.
+    DisposableEffect(flow) {
+        val unwatch = watchTheLobby(permissions, deviceForeground()) { flow }
+        onDispose { unwatch() }
     }
     LaunchedEffect(sweeping) { if (sweeping) bench.sweep() }
     LaunchedEffect(scanSweeping) { if (scanSweeping) scan.sweep() }
@@ -1058,10 +1051,3 @@ private fun BoxScope.MarkerChip(onTap: () -> Unit) {
         Label(BuildVariant.MARKER, size = 6.6, color = Amber.Dim, tracking = 0.24)
     }
 }
-
-/**
- * **How often the lobby's check reads the OS again** (D-311): once a second, so the Bluetooth radio
- * turned off in Control Centre lets a guest go within a second. **Provisional:** no ruling names a
- * number, and a phone has not measured what a read costs.
- */
-private const val LOBBY_CHECK_MILLIS: Long = 1_000L

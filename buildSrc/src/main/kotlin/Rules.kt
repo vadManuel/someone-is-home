@@ -351,3 +351,31 @@ object SeedSourceRules {
         }.toList()
     }
 }
+
+/**
+ * **The notification cordon: nothing that compiles into a phone asks iOS for notifications**
+ * (the owner, 2026-11-22, D-326: *"Remove the notification permission. We don't use it."*).
+ *
+ * The app posts no iOS notification and has no background mode; every notification in the game is
+ * drawn in-app. The NOTIFICATIONS row, its prompt and its reads were removed, and this keeps the
+ * prompt from coming back: the framework is not named, and neither are the two calls a permission
+ * seam would make. The row's half is `DevicePermissionTest` (model), which pins the four rows.
+ *
+ * Matched as words, so the game's own in-app `Notifications` (the house's texts) is not a use.
+ */
+object NotificationCordonRules {
+
+    private val USES = Regex("""\bUserNotifications\b|\bUNUserNotificationCenter\b|\brequestAuthorizationWithOptions\b|\bgetNotificationSettings\w*""")
+
+    fun violations(source: String): List<Violation> {
+        val code = SourceText.blankComments(source)
+        return USES.findAll(code).map { m ->
+            Violation(
+                line = code.take(m.range.first).count { it == '\n' } + 1,
+                text = m.value,
+                reason = "the app asks iOS for no notification permission (D-326) — every notification " +
+                    "in the game is drawn in-app",
+            )
+        }.toList()
+    }
+}

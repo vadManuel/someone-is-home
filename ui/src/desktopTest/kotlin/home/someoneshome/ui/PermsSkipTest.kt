@@ -78,14 +78,14 @@ class PermsSkipTest {
     }
 
     /**
-     * **Asked when the self-test runs out, not when it is drawn.** Notifications answers through a
-     * callback that lands after launch; a decision taken on the first frame would show every
+     * **Asked when the self-test runs out, not when it is drawn.** Bluetooth's state answers through
+     * a callback that lands after launch; a decision taken on the first frame would show every
      * granted phone the screen.
      */
     @Test
     fun aRowAnsweredDuringTheSelfTestCounts() {
-        val os = everything.also { it.remove(DevicePermission.Notifications) }
-        val landed = afterTheSelfTest(os) { os[DevicePermission.Notifications] = Grant.Granted }
+        val os = everything.also { it.remove(DevicePermission.Bluetooth) }
+        val landed = afterTheSelfTest(os) { os[DevicePermission.Bluetooth] = Grant.Granted }
         assertEquals(ScreenId.Join, landed, "the answer that arrived during the self-test was not read")
     }
 

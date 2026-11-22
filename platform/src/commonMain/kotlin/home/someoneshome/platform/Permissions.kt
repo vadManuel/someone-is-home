@@ -15,7 +15,7 @@ import home.someoneshome.model.grantsMissing
  * ### Reading is synchronous and asking is not, and neither of those is a choice
  *
  * A grant is drawn on a row every frame, so [grant] answers now, out of what the seam last learned.
- * Two of the five (notifications, Bluetooth) only answer through a callback, so what [grant]
+ * Two of the four (Bluetooth's state, NEARBY DEVICES' probe) only answer late, so what [grant]
  * returns for those is the last answer that came back — refreshed by [refresh] and by every
  * [request]. **A row that has never been asked reads [Grant.Unasked], which is the truth**: nothing
  * has happened yet.
@@ -44,12 +44,35 @@ interface Permissions {
 
     /**
      * **[refresh] without the Nearby Interaction probe** (D-310): what the OS answers by a read
-     * alone, for a phone back in the foreground in a round. D-309 keeps every probe off a round's
-     * sessions, so a round re-reads Notifications and Bluetooth this way, and a NEARBY DEVICES grant
-     * switched off is heard from the ranging radio instead. [refresh] itself by default, for a seam
-     * that has no probe.
+     * alone, for every phone back in the foreground. D-309 keeps every probe off a round's sessions,
+     * so a round re-reads Bluetooth this way, and a NEARBY DEVICES grant switched off is heard from
+     * the ranging radio instead. [refresh] itself by default, for a seam that has no probe.
      */
     fun reread(then: () -> Unit = {}) = refresh(then)
+
+    /**
+     * **NEARBY DEVICES probed again, for a phone back in the foreground in a lobby** (the owner,
+     * 2026-11-22, D-326). Nearby Interaction has no status to read, so a NEARBY DEVICES switched off
+     * in Settings is heard only by running a probe; before this the lobby started none and the
+     * switch-off was not heard until the round's sessions refused. Called only where no round's
+     * session exists (D-309, D-310): `FlowModel.cameBackToTheForeground` asks it in the lobby and
+     * nowhere else.
+     *
+     * [then] is called once the probe has answered, and the row then reads [afterARecheck] of what
+     * it read before and what the probe heard: **an ASKED answer leaves the row as it was**, so a
+     * slow probe never lets a phone go (D-326, provisional). Nothing at all by default, for a seam
+     * with no probe: [then] at once.
+     */
+    fun recheckNearby(then: () -> Unit = {}) = then()
+
+    /**
+     * **Tell [changed] every time the Bluetooth radio's state changes, as the OS reports it** (D-326):
+     * Control Centre or airplane mode turning it off or on. The lobby's check runs on it, in place of
+     * D-311's once-a-second read: no other event reaches a running app when the radio is turned off,
+     * because Control Centre suspends nothing. Returns the way to stop. Never by default, for a seam
+     * with no radio to hear.
+     */
+    fun watchTheRadio(changed: () -> Unit): () -> Unit = {}
 
     /**
      * **Raise the prompt.** [then] carries what came back, and is called on the main thread.
@@ -128,6 +151,18 @@ fun Permissions.refusedGrants(): Int {
 }
 
 /**
+ * **What NEARBY DEVICES reads after a lobby's probe on a return to the foreground** (D-326): what the
+ * probe heard, except that **[Grant.Asked] is no answer and leaves the row as it read**. ASKED means
+ * the probe neither ran nor was refused within two seconds of an active app (D-303); on a phone that
+ * was seated with the row GRANTED, iOS raises no prompt, so ASKED there is a slow or failed probe and
+ * not a person switching anything off. Letting the phone go over it would cost a guest their seat
+ * for nothing they did. Only a real [Grant.Refused] (`userDidNotAllow`) is a switch-off. If the row
+ * really was switched off and the probe still says ASKED, the round's own sessions refuse at lights
+ * out and it is named at the first meeting, as D-311 built. **Provisional**, the coordinator's call.
+ */
+fun Grant.afterARecheck(heard: Grant): Grant = if (heard == Grant.Asked) this else heard
+
+/**
  * **A phone with no OS behind it**, [NoSystemSettings]' shape: the call goes through, the row moves,
  * and no modal appears anywhere.
  *
@@ -169,8 +204,35 @@ class NoPermissions(
         answers[of] = grant
     }
 
-    /** **The Bluetooth radio turned off, or back on** (D-311). Test-facing. */
+    /**
+     * **The Bluetooth radio turned off, or back on** (D-311). Test-facing. Setting it is the OS's
+     * state callback: every [watchTheRadio] watcher hears it (D-326).
+     */
     var radioOff: Boolean = false
+        set(off) {
+            field = off
+            radioWatchers.toList().forEach { it() }
+        }
 
     override fun bluetoothOff(): Boolean = radioOff
+
+    private val radioWatchers = mutableListOf<() -> Unit>()
+
+    override fun watchTheRadio(changed: () -> Unit): () -> Unit {
+        radioWatchers += changed
+        return { radioWatchers -= changed }
+    }
+
+    /** What the next [recheckNearby]'s probe hears. Test-facing. */
+    var probeHears: Grant = Grant.Granted
+
+    /** How many times NEARBY DEVICES was probed again on a return to the lobby. Test-facing. */
+    var rechecks: Int = 0
+        private set
+
+    override fun recheckNearby(then: () -> Unit) {
+        rechecks++
+        answers[DevicePermission.NearbyDevices] = grant(DevicePermission.NearbyDevices).afterARecheck(probeHears)
+        then()
+    }
 }

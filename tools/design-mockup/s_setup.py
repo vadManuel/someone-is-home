@@ -24,7 +24,7 @@ def build():
   {body("Grant these now, while the lights are on.", B, 24)}
   {rules(f"""<sc-for list="{{{{ permRows }}}}" as="r" hint-placeholder-count="5"><button type="button" style="display:flex;align-items:center;gap:12px;min-height:56px;border:none;border-bottom:1px solid #837B68;background:none;padding:0 2px;color:#14110B;font:400 24px/1 {FONT};text-align:left;cursor:pointer"><span style="flex:1">{{{{ r.name }}}}</span><span style="{SILK};padding:5px 6px;border:1px solid {{{{ r.tagEdge }}}};background:{{{{ r.tagFill }}}};color:{{{{ r.tagInk }}}}">{{{{ r.state }}}}</span></button></sc-for>""", B)}
   <div style="margin-top:auto;display:flex;flex-direction:column;gap:10px">
-    {body("THIS PHONE CANNOT TAKE A SEAT YET<br>MOTION &amp; FITNESS · NOTIFICATIONS", B, 22)}
+    {body("THIS PHONE CANNOT TAKE A SEAT YET<br>MOTION &amp; FITNESS", B, 22)}
     {primary("REQUEST WHAT IS MISSING", None, B, 28)}
   </div>''', B, "PERMISSIONS (D-161). Every row is tappable and asks for that one permission.")
 

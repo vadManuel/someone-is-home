@@ -160,3 +160,24 @@ abstract class SeedSourceCordonTask : SourceGuardTask() {
         },
     )
 }
+
+/**
+ * Notification cordon (D-326).
+ *
+ * *"Remove the notification permission. We don't use it."* Scans every source set that compiles
+ * into a phone, cheats included, and fails on the UserNotifications framework or its permission
+ * calls.
+ */
+abstract class NotificationCordonTask : SourceGuardTask() {
+    @TaskAction
+    fun check() = scan(
+        name = "notificationCordon",
+        rule = NotificationCordonRules::violations,
+        advice = buildString {
+            appendLine("The app posts no iOS notification and has no background mode; every")
+            appendLine("notification in the game is drawn in-app (D-326). The NOTIFICATIONS row and")
+            appendLine("its prompt were removed on the owner's ruling. If a real need for an OS")
+            appendLine("notification arises, raise it with the owner before asking iOS for one.")
+        },
+    )
+}
