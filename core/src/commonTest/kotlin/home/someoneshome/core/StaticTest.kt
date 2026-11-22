@@ -341,8 +341,7 @@ class StaticTest {
             listOf(
                 "LampSet", "WorkOrderIssued", "OpeningMessage", "RosterIssued", "RoleRevealed",
                 "ContactSeedIssued", "IsolateTargetsOffered", "IsolateTargetsBlanked", "PlanIssued",
-                // D-322: every seat is upstream of exactly one other, so one notice per seat.
-                "UpstreamWaiting",
+                // D-324: no chain notice at lights out; D-322's `UpstreamWaiting` run is gone.
             ),
             runs,
             "the arming burst gained or lost a run",

@@ -302,7 +302,7 @@ internal fun Effect.ringing(): Boolean = when (this) {
     // same way. The roster is silent entirely and is one of the `null` rows in [haptic] below.
     is Effect.RevokeLanded, is Effect.RosterIssued, is Effect.PlanIssued, is Effect.ContactSeedIssued,
     is Effect.WorkOrderIssued, is Effect.ScanAnswered, is Effect.TerminalAnswered,
-    is Effect.UpstreamWaiting, is Effect.WorkUnblocked,
+    is Effect.WorkUnblocked,
     is Effect.PresenceChanged,
     // NOT A MARKER says *no* once, like every refusal (D-160, D-318).
     is Effect.CardUnregistered,
@@ -342,7 +342,8 @@ internal fun Effect.ringing(): Boolean = when (this) {
  * (Thirteen, since the Surge — see its branch, and D-135, which the Surge does *not* join. Fifteen,
  * since D-290: the armed phone's answer and the Revoke landing each carry a Long on a landed Revoke
  * and nothing otherwise. Nineteen, since D-318's NOT A MARKER and D-320's verdict and NOTHING FOR
- * YOU HERE: D-160's *yes* and *no* on the answers to a phone's own work.)
+ * YOU HERE: D-160's *yes* and *no* on the answers to a phone's own work. Twenty, since D-324's
+ * `you're up`, which buzzes as the house's text does.)
  *
  * ### D-135's five, and where they are
  *
@@ -355,7 +356,7 @@ internal fun Effect.ringing(): Boolean = when (this) {
  * and Short for the couch, which is a fact about round-state that only the authority holds.
  */
 internal fun Effect.haptic(): Haptic? = when (this) {
-    // ---- The nineteen that buzz --------------------------------------------------------------
+    // ---- The twenty that buzz --------------------------------------------------------------
     // The house's answer to this phone's run of the Sync Pulse: a failed attempt vibrates for the
     // whole 3 s lockout, a good run is silent (the owner's O4, D-298). It reaches the tapper alone.
     is Effect.SyncPulseAnswered -> haptic
@@ -401,6 +402,9 @@ internal fun Effect.haptic(): Haptic? = when (this) {
     // nothing at a node of the Egress (the tap control, D-295) and nothing on an opened scan, whose
     // *yes* was the acquire's.
     is Effect.ScanAnswered -> haptic
+    // **`you're up` buzzes as a house text does** (the owner's 2026-11-22 ruling, D-324): the rules
+    // put the opening text's kind on it, on both roles' phones, a fake hold's release included.
+    is Effect.WorkUnblocked -> haptic
 
     // ---- The rest arrive quietly, each for its own reason -------------------------------------
     // The lamp is a pure function of state (rule 5) and a buzz on every luminance change would be
@@ -450,11 +454,6 @@ internal fun Effect.haptic(): Haptic? = when (this) {
     is Effect.HouseSignedOff -> null
     // The work order lands with the opening delivery, which has already buzzed.
     is Effect.WorkOrderIssued -> null
-    // **Silent, for the roster's reason** (D-322): the upstream notice rides the arming burst.
-    is Effect.UpstreamWaiting -> null
-    // **Quiet** (D-119, D-201): `you're up` is a quiet text, and a quiet text neither dims nor
-    // buzzes. Provisional with the notice's look (D-322).
-    is Effect.WorkUnblocked -> null
     // The station's answer, for the same reason: the phone is held up to the T card already.
     is Effect.TerminalAnswered -> null
     // The map moving. Every phone in the house would buzz every time anybody walked anywhere.
@@ -517,7 +516,7 @@ internal fun RoundMessage.ringing(): Boolean = when (this) {
     is RoundMessage.SystemIntegrityBatched, is RoundMessage.MessageDelivered,
     is RoundMessage.HouseSignedOff, is RoundMessage.WorkOrderIssued,
     is RoundMessage.ScanAnswered, is RoundMessage.TerminalAnswered, is RoundMessage.PresenceChanged,
-    is RoundMessage.UpstreamWaiting, is RoundMessage.WorkUnblocked,
+    is RoundMessage.WorkUnblocked,
     is RoundMessage.CheckInProgressed, is RoundMessage.ReadyProgressed,
     is RoundMessage.VoteProgressed, is RoundMessage.VoteHeld,
     is RoundMessage.VoteSelectionShown, is RoundMessage.MeetingResolved,
@@ -548,7 +547,7 @@ internal fun RoundMessage.ringing(): Boolean = when (this) {
  * what it received**, so the effect-side branch alone never closed it.
  */
 internal fun RoundMessage.haptic(): Haptic? = when (this) {
-    // ---- The nineteen that buzz -------------------------------------------------------------
+    // ---- The twenty that buzz -------------------------------------------------------------
     // The owner's O4 (D-298): the lockout's 3 s on a failed attempt, off the answer's one digit.
     is RoundMessage.SyncPulseAnswered -> haptic
     is RoundMessage.OpeningMessage -> haptic
@@ -573,6 +572,8 @@ internal fun RoundMessage.haptic(): Haptic? = when (this) {
     // rules' value copied onto the message.
     is RoundMessage.SubroutineGraded -> haptic
     is RoundMessage.ScanAnswered -> haptic
+    // D-324: `you're up`, the house text's buzz, copied off the effect.
+    is RoundMessage.WorkUnblocked -> haptic
 
     // ---- The rest arrive quietly. Each reason is on the effect-side branch it mirrors ---------
     is RoundMessage.LampSet -> null
@@ -592,8 +593,6 @@ internal fun RoundMessage.haptic(): Haptic? = when (this) {
     is RoundMessage.MessageDelivered -> null
     is RoundMessage.HouseSignedOff -> null
     is RoundMessage.WorkOrderIssued -> null
-    is RoundMessage.UpstreamWaiting -> null
-    is RoundMessage.WorkUnblocked -> null
     is RoundMessage.TerminalAnswered -> null
     is RoundMessage.PresenceChanged -> null
     is RoundMessage.CheckInProgressed -> null

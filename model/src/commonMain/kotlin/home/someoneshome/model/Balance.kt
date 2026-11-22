@@ -655,6 +655,18 @@ object Balance {
     const val UNLOCK_DELAY_MOST_SECONDS: Int = 120
 
     /**
+     * **The longest a dependency chain may be: `L ≤ living Insiders + 1`** (`gdd.md:273`, D-324),
+     * counted in the players the chain links.
+     *
+     * The design's bound, built as written: *tight — one more would generate a Subroutine that
+     * becomes literally unstaffable while the game is still running*. Read at arming, where every
+     * Insider is living. The draw links Residents in pairs (D-324), so every lawful round, whose
+     * band never falls below one Insider, has room for its chains; a hand-built round with no
+     * Insider has a bound of one and draws no chain at all.
+     */
+    fun chainBound(livingInsiders: Int): Int = livingInsiders + 1
+
+    /**
      * **Two damaged disks to an Array Wipe** (`gdd.md:660`): *two damaged disks → four traverses*,
      * Spares to Rack and Rack to Disposal, twice, carrying one disk at a time.
      */

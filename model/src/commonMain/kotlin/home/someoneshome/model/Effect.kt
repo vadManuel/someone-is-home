@@ -460,23 +460,6 @@ sealed interface Effect {
     }
 
     /**
-     * **Somebody is waiting on [entry] of this seat's order** (`gdd.md:282`, D-146, D-322).
-     *
-     * *The upstream player IS told someone is waiting on them — at assignment time only.* So it is
-     * sent once, at arming, to the seat whose entry holds another seat's, and **never again**: not
-     * when the entry is done, and never to confirm that the downstream unlocked. It names nobody;
-     * *never name the dependency* (`gdd.md:278`).
-     *
-     * **Every seat is upstream of exactly one other** (the draw's single cycle, D-322), so every seat
-     * receives exactly one of these at arming and the burst's shape does not move with the role or
-     * with anything else the house drew.
-     *
-     * ⚠️ **How the phone shows it is STOPPED for the owner** (D-322): no ruling says what the notice
-     * looks like or says. The house sends it; the phone holds it and draws nothing.
-     */
-    data class UpstreamWaiting(val seat: Seat, val entry: Int) : Effect
-
-    /**
      * **Another seat's work released one of this seat's lines: `you're up`** (D-201, D-146, D-322).
      *
      * Sent with the order that now names the line, when the house's clock releases it — the random
@@ -485,8 +468,16 @@ sealed interface Effect {
      * NUMBER WITHHELD, because *the dependency is never named* and the words never say why.
      *
      * A self-chain's unlock sends none (D-123: *discovered as they complete rather than announced*).
+     *
+     * **An Insider's fake hold sends this too, on the same schedule** (D-324): an Insider is never a
+     * chain's link, so their locked line is held off a Resident's completion with its own 20–120 s
+     * delay, and its release is this effect with this [haptic] — nothing on the phone differs.
+     *
+     * [haptic] is **the house text's buzz** (the owner's 2026-11-22 ruling, D-324: *it's a text
+     * message, the same as when the house texts*): `Rules.kt` sets it to the opening text's kind, so
+     * the two cannot drift apart. The buzz rides the effect (D-134), never a table on the phone.
      */
-    data class WorkUnblocked(val seat: Seat) : Effect
+    data class WorkUnblocked(val seat: Seat, val haptic: Haptic) : Effect
 
     /**
      * **The house's answer to a scan of the T card: you are reading, or somebody else is** (D-199).

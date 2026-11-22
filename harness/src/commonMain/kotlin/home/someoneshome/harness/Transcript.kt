@@ -339,8 +339,7 @@ object Transcript {
                 // a refusal stay one row shape, and the step is the field moving.
                 "|carrying=" + (effect.carrying?.let { "${num(it.disk)}>${it.to}" } ?: "none")
         // The upstream seat and its own line; nobody else is on the row (D-322).
-        is Effect.UpstreamWaiting -> "UpstreamWaiting|seat=${effect.seat.index}|entry=${num(effect.entry)}"
-        is Effect.WorkUnblocked -> "WorkUnblocked|seat=${effect.seat.index}"
+        is Effect.WorkUnblocked -> "WorkUnblocked|seat=${effect.seat.index}|haptic=${effect.haptic}"
         // Open and held are one kind and one row shape, for ScanAnswered's reason (D-199).
         is Effect.TerminalAnswered ->
             "TerminalAnswered|seat=${effect.seat.index}|reading=${effect.reading}"
@@ -695,7 +694,9 @@ object Transcript {
         append("|links=").append(
             state.links.joinToString(",") {
                 "${num(it.up.index)}.${num(it.upEntry)}>${num(it.down.index)}.${num(it.downEntry)}" +
-                    ":${num(it.delay)}:${it.dueAt?.let { d -> num(d.step) } ?: "none"}"
+                    ":${num(it.delay)}:${it.dueAt?.let { d -> num(d.step) } ?: "none"}" +
+                    // An Insider's fake hold, beside the Residents' chains (D-324).
+                    if (it.fake) ":fake" else ":real"
             }
         )
         append("|carries=").append(

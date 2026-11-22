@@ -15,6 +15,7 @@ import home.someoneshome.model.DiskInHand
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.OrderLine
 import home.someoneshome.model.SubroutineKind
+import home.someoneshome.model.Haptic
 import home.someoneshome.model.protocol.RoundMessage
 import java.awt.image.BufferedImage
 import java.io.File
@@ -154,6 +155,6 @@ class StructuredWorkRender {
                     },
                 ),
             )
-            it.houseSaid(RoundMessage.WorkUnblocked)
+            it.houseSaid(RoundMessage.WorkUnblocked(Haptic.Short))
         }
 }

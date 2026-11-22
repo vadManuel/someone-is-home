@@ -79,7 +79,6 @@ object EmitSchema {
         is Effect.MessageDelivered -> MESSAGE_DELIVERED
         is Effect.WorkOrderIssued -> WORK_ORDER_ISSUED
         is Effect.ScanAnswered -> SCAN_ANSWERED
-        is Effect.UpstreamWaiting -> UPSTREAM_WAITING
         is Effect.WorkUnblocked -> WORK_UNBLOCKED
         is Effect.TerminalAnswered -> TERMINAL_ANSWERED
         is Effect.CardUnregistered -> CARD_UNREGISTERED
@@ -131,7 +130,6 @@ object EmitSchema {
     val MESSAGE_DELIVERED = MessageKind("MessageDelivered")
     val WORK_ORDER_ISSUED = MessageKind("WorkOrderIssued")
     val SCAN_ANSWERED = MessageKind("ScanAnswered")
-    val UPSTREAM_WAITING = MessageKind("UpstreamWaiting")
     val WORK_UNBLOCKED = MessageKind("WorkUnblocked")
     val TERMINAL_ANSWERED = MessageKind("TerminalAnswered")
     val CARD_UNREGISTERED = MessageKind("CardUnregistered")
@@ -417,18 +415,12 @@ object EmitSchema {
         SCAN_ANSWERED to LIVING,
 
         // **Both living classes, and this row must never be narrowed to one of them** (D-146,
-        // D-322). Every seat is upstream of exactly one other in the draw's cycle and the cycle never
-        // reads the role, so every living phone gets exactly one of these at arming. Narrowed to
-        // Residents it would make the Insiders the phones that are never waited on -- the
-        // `gdd.md:271` reading the build could not take, because it would be the role delivered by
-        // the frame count. Not the out classes: nobody is out at arming, and a notice for work the
-        // seat can no longer do is not one.
-        UPSTREAM_WAITING to LIVING,
-
-        // **Both living classes, for UPSTREAM_WAITING's reason** (D-201, D-146). The release is the
-        // same for a dependency an Insider completed as for one a Resident did (D-109, rule 1), and a
-        // downstream seat of either role is told the same two words. Not the out classes: an out
-        // seat has no screen to go to, and denying it on the round-state axis carries no role.
+        // D-322, D-324). Chains link plain Residents only, and an Insider's locked line is a fake
+        // hold released on the same schedule off a Resident's completion, so a downstream seat of
+        // either role is told the same two words with the same buzz. Narrowed to Residents it would
+        // make the Insiders the phones that are never told `you're up` -- the role, by the frame
+        // count. Not the out classes: an out seat has no screen to go to, and denying it on the
+        // round-state axis carries no role.
         WORK_UNBLOCKED to LIVING,
 
         // **Both living classes, for SCAN_ANSWERED's reason** (D-199). The station is open to
@@ -839,9 +831,6 @@ object EmitSchema {
             // house -- the per-player read the percentage meter (D-103) exists to keep out of
             // aggregate, arriving one scan at a time.
             is Effect.ScanAnswered -> listOf(effect.seat)
-            // **The upstream seat alone** (`gdd.md:282`). Broadcast, it would tell the house who is
-            // holding somebody's work, which is half of the dependency the design never names.
-            is Effect.UpstreamWaiting -> listOf(effect.seat)
             // **The downstream seat alone** (D-201). Broadcast, it would tell the house whose work
             // just came free, and the timestamp beside it would say whose completion freed it.
             is Effect.WorkUnblocked -> listOf(effect.seat)

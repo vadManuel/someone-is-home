@@ -359,9 +359,8 @@ class HouseBuzzTest {
         Effect.SubroutineGraded(Seat(1), accepted = true),
         Effect.SubroutineGraded(Seat(1), accepted = false),
         Effect.ScanAnswered(Seat(1), opened = null, haptic = Haptic.Double),
-        // D-322: the upstream notice rides the arming burst and `you're up` is quiet; both silent.
-        Effect.UpstreamWaiting(Seat(1), entry = 2),
-        Effect.WorkUnblocked(Seat(1)),
+        // D-324: `you're up` buzzes as the house's text does.
+        Effect.WorkUnblocked(Seat(1), Haptic.Short),
     )
 
     /**
@@ -563,7 +562,7 @@ class HouseBuzzTest {
         val EVERY_KIND: Set<String> = setOf(
             "LampSet", "AbilityFired", "AbilityBlanked", "Surged", "IsolateTargetsOffered", "IsolateTargetsBlanked", "StaticOpened",
             "SubroutineGraded", "SubroutineProgressed", "SystemIntegrityLive",
-            "SystemIntegrityBatched", "MessageDelivered", "WorkOrderIssued", "ScanAnswered", "UpstreamWaiting", "WorkUnblocked",
+            "SystemIntegrityBatched", "MessageDelivered", "WorkOrderIssued", "ScanAnswered", "WorkUnblocked",
             "TerminalAnswered", "PresenceChanged", "OpeningMessage", "MeetingOpened", "StandAndWalkIn",
             "CheckInProgressed", "MeetingPhaseOpened", "ReadyProgressed", "VoteHeld",
             "VoteSelectionShown", "VoteProgressed", "MeetingResult", "MeetingResolved",

@@ -2,23 +2,38 @@ package home.someoneshome.model
 
 /**
  * **One cross-player dependency: an entry of one seat's order holds an entry of another's**
- * (D-146, `gdd.md:262`, D-322).
+ * (D-146, `gdd.md:262`, D-322, D-324).
  *
  * Authority state, never on any client type. The downstream seat sees a blocked line (D-114) and
- * nothing about who holds it; the upstream seat is told once, at arming, that somebody is waiting
- * on [upEntry] ([Effect.UpstreamWaiting]) and never told whether or when the downstream unlocked
- * (`gdd.md:282`).
+ * nothing about who holds it. **The upstream seat is told nothing** (the owner's 2026-11-22 ruling,
+ * D-324: *no separate notice; the LOCKED · WAITING UPSTREAM row says it*), and never whether or when
+ * the downstream unlocked (`gdd.md:282`).
+ *
+ * ### Real links join two plain Residents; a fake one is an Insider's locked line (D-324)
+ *
+ * *Insiders don't have real tasks. They cannot progress any task … an insider cannot be included in
+ * the chain* (the owner, 2026-11-22). So when [fake] is false, [up] and [down] are both Residents,
+ * always: an Insider is never upstream of anybody's real line and never downstream of one.
+ *
+ * When [fake] is true the link is **an Insider's fake hold**: [down] is the Insider and [downEntry]
+ * the locked line their order shows, so it has the same LOCKED · WAITING UPSTREAM a Resident's has.
+ * It is timed off a Resident's real completion ([up], [upEntry] — the Resident before the Insider in
+ * the draw's cycle) plus its own drawn [delay], which is exactly *as if an upstream Resident had
+ * finished*, because one did. It holds nothing of the Resident's and changes nothing for them; it is
+ * the fake list faking a chain (M8), and the release reaches the Insider's phone as a Resident's
+ * does. It lives in the house, beside the real links, because the clock, the gate and the release
+ * are then the same code for both.
  *
  * ### The delay is drawn at arming and starts when the upstream entry is completed
  *
  * [delay] is in ticks, drawn once from the round's seed inside [Balance.UNLOCK_DELAY_LEAST_SECONDS]
- * to [Balance.UNLOCK_DELAY_MOST_SECONDS]. [dueAt] is null until the upstream entry is completed,
- * by either role — an Insider's fake is graded for real and its completion unlocks exactly as a
- * Resident's does (D-109, rule 1) — and then it is the completion's tick plus [delay]. The house's
- * clock mints [Event.ChainUnlocked] once it has passed.
+ * to [Balance.UNLOCK_DELAY_MOST_SECONDS], by the same draw for a real link and a fake one. [dueAt]
+ * is null until the upstream entry is completed, and then it is the completion's tick plus [delay].
+ * The house's clock mints [Event.ChainUnlocked] once it has passed.
  *
  * **Nothing else ever sets [dueAt]** (D-146): a Revoke that takes the upstream seat out before the
- * entry is done strands the downstream line for the rest of the round, and no repair runs.
+ * entry is done strands the downstream line for the rest of the round, real or fake alike, and no
+ * repair runs.
  *
  * Not a `data class`, for [OrderEntry]'s reason: the two transitions below are the only ones.
  */
@@ -29,9 +44,11 @@ class ChainLink(
     val downEntry: Int,
     val delay: Long,
     val dueAt: Tick?,
+    /** An Insider's fake hold rather than a chain between two Residents (D-324). */
+    val fake: Boolean,
 ) {
     /** The upstream entry was completed at [at]: the downstream unlocks [delay] ticks later. */
-    fun startedAt(at: Tick): ChainLink = ChainLink(up, upEntry, down, downEntry, delay, Tick(at.step + delay))
+    fun startedAt(at: Tick): ChainLink = ChainLink(up, upEntry, down, downEntry, delay, Tick(at.step + delay), fake)
 
     fun isUp(seat: Seat, entry: Int): Boolean = up.index == seat.index && upEntry == entry
 

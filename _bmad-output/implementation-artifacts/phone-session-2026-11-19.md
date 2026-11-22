@@ -211,15 +211,19 @@ Tick each line as you see it.
 - [ ] **A disk through a meeting**: call a meeting while carrying. After it, the widget still says
       CARRYING and other cards still answer NOTHING FOR YOU HERE (F-014).
 - [ ] **you're up**: finish a Subroutine and wait. Somewhere in the house, 20 s to 2 min later, a
-      phone that had a LOCKED line gets a quiet NUMBER WITHHELD · you're up banner, no buzz, and the
-      line now names its Subroutine. Nobody else's phone changes. If a meeting is called in between,
-      it lands after the meeting.
+      phone that had a LOCKED line gets the NUMBER WITHHELD · you're up banner **with the same buzz
+      as the house's opening text** (D-324), and the line now names its Subroutine. Nobody else's
+      phone changes. If a meeting is called in between, it lands after the meeting.
+- [ ] **Chains are Residents only** *(D-324)*: an Insider's LOCKED line looks the same as a
+      Resident's and unlocks the same way, 20 s to 2 min after some Resident finishes something. An
+      Insider finishing their own work never unlocks anybody's line. Say whether an Insider's unlock
+      ever feels different.
 - [ ] **A Revoke strands a line**: if a Revoked player held your LOCKED line, it never opens. Note
       whether that is what happens and how it feels at the next meeting (D-146).
 - [ ] **No Memory Dump anywhere**: no phone's list holds one (D-323), so every line is one the
       phone can finish. Say whether the meter reaches 0 when everyone finishes.
-- [ ] **Nothing tells you someone is waiting on you yet** (the house sends it; how it looks is not
-      ruled).
+- [ ] **Nothing tells you someone is waiting on you** (D-324: no chain notice at lights out; the
+      LOCKED · WAITING UPSTREAM row is the notice).
 
 **The motion budget** *(D-321; every number is provisional, so these lines are where they are first felt)*
 - [ ] **Still is free**: open a Subroutine and hold the phone as you naturally would for its whole

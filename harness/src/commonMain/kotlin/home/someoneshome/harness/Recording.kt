@@ -50,6 +50,14 @@ class Recording(
     }
 
     companion object {
+        // 51 (D-324): chains link plain Residents only (the owner's 2026-11-22 ruling). The same seed
+        // draws different links, the Residents chained in the cycle's order and every Insider's locked
+        // line a fake hold timed off the Resident before it, so a version 50 round would replay to
+        // different releases. One effect a 50 build names is gone, `UpstreamWaiting` (no chain notice
+        // at lights out, so the arming burst is one run shorter); `WorkUnblocked` gains `haptic=`, the
+        // house text's buzz; the state row's `links=` gains `:real` or `:fake` on every link. A version
+        // 50 recording is refused here as every older one is.
+        //
         // 50: three changes built in parallel and integrated together (D-319, D-320, D-322, with the
         // owner's 2026-11-22 rulings, D-323), each of which alone was 49. The combined tree carries
         // every row change below: D-319's two timelapse events and `timelapse=` state field; D-320's
@@ -419,7 +427,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/50"
+        const val HEADER = "someone-is-home/recording/51"
     }
 }
 

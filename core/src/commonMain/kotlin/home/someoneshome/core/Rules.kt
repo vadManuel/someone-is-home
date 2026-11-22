@@ -335,8 +335,10 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
     val active = activeFor(event.seed, cards, stations, seats.size)
     val size = Balance.orderSize(seats.size, event.chosenInsiders)
     // The mix, the anchors and the self-chains per seat, then the cross-player holds over all of
-    // them (D-322). Neither reads a role: the Insider's fake is drawn by the same two calls.
-    val (orders, links) = linksFor(event.seed, seats.map { workOrderFor(event.seed, it, size, active, stations) })
+    // them (D-322). The orders never read a role. The holds read it once (D-324): chains link plain
+    // Residents only, and an Insider's locked line is a fake hold, at the place the role-free draw
+    // put it, so every order still has the same shape.
+    val (orders, links) = linksFor(event.seed, seats.map { workOrderFor(event.seed, it, size, active, stations) }, insiders)
 
     val state = GameState.armedRound(
         seed = event.seed,
@@ -413,7 +415,7 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
         state,
         seats.map { Effect.LampSet(it, LAMP_DIM) } +
             orders.map { Effect.WorkOrderIssued(it.seat, it.asLines(state.destinations)) } +
-            seats.map { Effect.OpeningMessage(it, Haptic.Short, state.revokeCooldown) } +
+            seats.map { Effect.OpeningMessage(it, HOUSE_TEXT_BUZZ, state.revokeCooldown) } +
             // **The roster, one per seat, and every copy of it is the same list** (D-115).
             //
             // Built once, outside the run, because there is only one of them: what varies between
@@ -470,12 +472,10 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
             // message above keeps the place in the burst it had. The Terminal and the couch draw
             // it; sent to every seat at once, it says nothing about who will read or who will be
             // out, and no role is read.
-            seats.map { Effect.PlanIssued(it, state.plan) } +
-            // **Somebody is waiting on you, once, at assignment** (`gdd.md:282`, D-146, D-322). Last,
-            // so every message above keeps its place. Every seat is upstream of exactly one other in
-            // the draw's cycle, so this is one per seat in seat order and the burst's shape is the
-            // same on every phone; no role is read and nobody is named.
-            links.sortedBy { it.up.index }.map { Effect.UpstreamWaiting(it.up, it.upEntry) },
+            seats.map { Effect.PlanIssued(it, state.plan) },
+        // **No chain notice at lights out** (the owner's 2026-11-22 ruling, D-324): the LOCKED ·
+        // WAITING UPSTREAM row is the notice, and `you're up` announces the unlock. D-322's
+        // `UpstreamWaiting` is gone with it.
     )
 }
 
@@ -1562,8 +1562,16 @@ private fun chainUnlocked(state: GameState, event: Event.ChainUnlocked): Reducti
         seat = event.seat,
         lines = next.workOrderFor(event.seat)?.asLines(next.destinations) ?: emptyList(),
     )
-    return Reduction(next, listOf(order, Effect.WorkUnblocked(event.seat)))
+    return Reduction(next, listOf(order, Effect.WorkUnblocked(event.seat, HOUSE_TEXT_BUZZ)))
 }
+
+/**
+ * **The buzz a text from the house makes** — the opening message's, and `you're up`'s (the owner's
+ * 2026-11-22 ruling, D-324: *it's a text message, the same as when the house texts, it should just
+ * be the same buzz*). One value for both, so they cannot drift apart. The opening text is the only
+ * house text sent today; D-156's later `MessageDelivered` rides its buzz.
+ */
+internal val HOUSE_TEXT_BUZZ: Haptic = Haptic.Short
 
 // =================================================================================================
 // The meeting.

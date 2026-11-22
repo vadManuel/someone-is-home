@@ -3277,17 +3277,12 @@ class FlowModel(
 
             is RoundMessage.WorkOrderIssued -> state = state.copy(order = message.lines)
 
-            // **Somebody is waiting on one of this phone's lines** (`gdd.md:282`, D-146, D-322). The
-            // house sends it once, at arming, to every seat. ⚠️ **How it looks is STOPPED for the
-            // owner**: nothing ruled what the notice says or where it stands, so this branch is a
-            // named no-op and the phone draws nothing. The house half is built; a ruling replaces
-            // this one line.
-            is RoundMessage.UpstreamWaiting -> Unit
-
             // **`you're up`: another seat's work released one of this phone's lines** (D-201,
             // D-322). The order beside it already names the line; this is D-201's quiet text from
             // NUMBER WITHHELD, stamped when it landed, stored on the lock screen and raised as the
-            // quiet banner. Quiet, so no dim and no buzz (D-119).
+            // quiet banner. No dim (D-119); the buzz is the house text's, played by the app root off
+            // the message (D-324), and nothing here chooses it. An Insider's fake hold lands here
+            // the same way. There is no upstream notice to draw (D-324: the locked row is the notice).
             is RoundMessage.WorkUnblocked -> {
                 val text = Notifications.unblockedAt(landedAt() ?: PanelVals.NO_READING)
                 state = state.copy(lastQuiet = text)

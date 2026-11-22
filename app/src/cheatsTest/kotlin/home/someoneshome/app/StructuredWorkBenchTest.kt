@@ -11,8 +11,10 @@ import home.someoneshome.model.MarkerId
 import home.someoneshome.model.OneLineHeld
 import home.someoneshome.model.OrderLine
 import home.someoneshome.model.Seat
+import home.someoneshome.model.Role
 import home.someoneshome.model.SeatNamed
 import home.someoneshome.model.protocol.IntentMessage
+import home.someoneshome.model.protocol.RoundMessage
 import home.someoneshome.model.protocol.RoundWire
 import home.someoneshome.ui.Carried
 import home.someoneshome.ui.FlowModel
@@ -66,9 +68,15 @@ class StructuredWorkBenchTest {
             note = {},
         )
 
+        /** Every message each phone was sent, in order, as it went down the wire. */
+        val said = mutableListOf<Pair<Seat, RoundMessage>>()
+
         private fun emit(effect: Effect, state: GameState) {
             val message = RoundWire.project(effect)
-            for (delivery in EmitSchema.deliveries(effect, state)) phones[delivery.seat]?.houseSaid(message)
+            for (delivery in EmitSchema.deliveries(effect, state)) {
+                said += delivery.seat to message
+                phones[delivery.seat]?.houseSaid(message)
+            }
         }
 
         private fun up(seat: Seat, intent: IntentMessage) {
@@ -210,6 +218,42 @@ class StructuredWorkBenchTest {
         assertEquals("you're up", text.body)
         assertEquals("NUMBER WITHHELD", text.from)
         assertTrue(bench.house.emitted.none { it is Effect.WorkUnblocked && it.seat == link.up }, "the upstream seat was told the unlock happened")
+    }
+
+    /**
+     * **GUARD (D-324): `you're up` buzzes as the house's text does, on both roles.** Every chain on
+     * the bench, a Resident's real one and an Insider's fake hold alike, is released by the house's
+     * clock, and what reaches the downstream phone buzzes exactly as the opening text did there.
+     */
+    @Test
+    fun youreUpBuzzesAsTheHouseTextOnBothRoles() = bench { bench ->
+        assertTrue(bench.house.arm(RoundCheat.SEED))
+        val armed = bench.house.state
+        val released = mutableSetOf<Role>()
+        for (link in armed.links) {
+            if (bench.house.state.workOrderFor(link.up)!!.entries[link.upEntry].done) continue
+            if (armed.workOrderFor(link.up)!!.entries[link.upEntry].work !is AssignedWork.Subroutine) continue
+            bench.clear(link.up, link.upEntry)
+            bench.play(link.up, link.upEntry)
+        }
+        var clock = HouseClock.started(Tick0)
+        val step = 1_000_000_000L / Balance.TICKS_PER_SECOND
+        val last = bench.house.state.links.mapNotNull { it.dueAt?.step }.maxOrNull()!!
+        while (clock.now.step <= last + Balance.TICKS_PER_SECOND) {
+            val turned = clock.turned(step, bench.house.state)
+            clock = turned.next
+            bench.house.advanceTo(clock.now)
+            for (event in turned.due) bench.house.mint(event)
+        }
+        for (seat in seats) {
+            val opening = bench.said.single { it.first == seat && it.second is RoundMessage.OpeningMessage }.second
+            for ((_, message) in bench.said.filter { it.first == seat && it.second is RoundMessage.WorkUnblocked }) {
+                assertEquals(opening.haptic(), message.haptic(), "seat ${seat.index}'s `you're up` buzzed unlike the house's text")
+                assertNotNull(message.haptic(), "`you're up` is silent")
+                released += armed.roleOf(seat)
+            }
+        }
+        assertEquals(setOf(Role.Resident, Role.Insider), released, "the bench released `you're up` on only $released")
     }
 
     private companion object {

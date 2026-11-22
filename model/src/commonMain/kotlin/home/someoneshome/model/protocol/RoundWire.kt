@@ -408,24 +408,14 @@ sealed class RoundMessage {
     }
 
     /**
-     * **Somebody is waiting on [entry] of this phone's order** (`gdd.md:282`, D-322). Once, at
-     * arming, to every seat (each is upstream of one other). It names nobody. ⚠️ How the phone shows
-     * it is STOPPED for the owner. See [home.someoneshome.model.Effect.UpstreamWaiting].
-     */
-    @ClientFacing
-    @kotlinx.serialization.Serializable
-    @kotlinx.serialization.SerialName("UpstreamWaiting")
-    data class UpstreamWaiting(val entry: Int) : RoundMessage()
-
-    /**
-     * **`you're up`: another seat's work released one of this phone's lines** (D-201, D-322). It
-     * carries nothing; the order beside it names the line. See
+     * **`you're up`: another seat's work released one of this phone's lines** (D-201, D-322). The
+     * order beside it names the line; this carries the buzz alone, the house text's (D-324). See
      * [home.someoneshome.model.Effect.WorkUnblocked].
      */
     @ClientFacing
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("WorkUnblocked")
-    data object WorkUnblocked : RoundMessage()
+    data class WorkUnblocked(val haptic: Haptic) : RoundMessage()
 
     /**
      * The answer to a scan of the T card: the live view opens, or ONE READER AT A TIME (D-199).
@@ -1059,7 +1049,6 @@ sealed class RoundMessage {
             is MessageDelivered -> EmitSchema.MESSAGE_DELIVERED
             is WorkOrderIssued -> EmitSchema.WORK_ORDER_ISSUED
             is ScanAnswered -> EmitSchema.SCAN_ANSWERED
-            is UpstreamWaiting -> EmitSchema.UPSTREAM_WAITING
             is WorkUnblocked -> EmitSchema.WORK_UNBLOCKED
             is TerminalAnswered -> EmitSchema.TERMINAL_ANSWERED
             is CardUnregistered -> EmitSchema.CARD_UNREGISTERED
@@ -1500,9 +1489,8 @@ object RoundWire {
         is Effect.WorkOrderIssued -> RoundMessage.WorkOrderIssued(effect.lines)
         is Effect.ScanAnswered -> RoundMessage.ScanAnswered(effect.opened, effect.haptic, effect.carrying)
         // The seat comes off; the entry is this phone's own line.
-        is Effect.UpstreamWaiting -> RoundMessage.UpstreamWaiting(effect.entry)
         // The seat comes off and nothing is left: the socket is the address.
-        is Effect.WorkUnblocked -> RoundMessage.WorkUnblocked
+        is Effect.WorkUnblocked -> RoundMessage.WorkUnblocked(effect.haptic)
         is Effect.TerminalAnswered -> RoundMessage.TerminalAnswered(effect.reading)
         // The seat comes off and nothing is left: the socket is the address (D-318).
         is Effect.CardUnregistered -> RoundMessage.CardUnregistered

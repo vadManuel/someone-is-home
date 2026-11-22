@@ -14173,6 +14173,133 @@ green. The scripted rehearsal (`rehearse.sh`, five simulator seats, seed 2026082
 ending, and `rehearse-check.py` read 21 PASS and no FAIL; the driver noted that the round ended on
 the first Egress, so its second, uncontained one never arrived. **Nothing here has run on a phone.**
 
+### D-324 · **Chains link plain Residents only, every Insider's order is locked where a Resident's would be and unlocks on a Resident's completion, `L ≤ living Insiders + 1` holds, `you're up` buzzes as the house's text, and there is no chain notice at lights out — built (recording 51); lazy linking is STOPPED**
+
+**The rulings** (owner, 2026-11-22). *"Insiders don't have real tasks. They cannot progress any task.
+They can enter a task, but it doesn't mean anything for resident task progression. So no, an insider
+cannot be included in the chain."* Insiders' fake orders show fake locked entries that unlock on a
+plausible delay, so the screens stay identical. *"you're up"* gets the same buzz as a house text
+(*it's a text message, the same as when the house texts, it should just be the same buzz*). **No
+separate chain notice**: the LOCKED · WAITING UPSTREAM row says it, and *you're up* announces the
+unlock. The owner's threat model (2026-11-20/22): what a phone knows is not a leak; only what a
+person can see, hear or feel counts.
+
+**1 · The draw (`linksFor`, `core/Arming.kt`).** Unchanged from D-322 where it does not read the role:
+the seats with an order of two entries or more are shuffled into one cycle (`SeedPurpose.Links`), and
+each seat's two lines are drawn (`LinkEntries`), the earlier its upstream line and the later its
+downstream one. Then the role, once: walking the cycle **with the Insiders skipped**, each Resident's
+upstream line holds the next Resident's downstream line, the last's holding the first's. Every plain
+Resident is upstream of exactly one Resident and downstream of exactly one, never of itself, and **no
+Insider is a link of any real chain**, upstream or downstream. An Insider's completions start nobody's
+delay.
+
+**2 · `L ≤ living Insiders + 1` (`gdd.md:273`), built as written.** `Balance.chainBound(livingInsiders)`
+is `livingInsiders + 1`, read at arming, where every Insider is living. Each chain links two players: a
+Resident's upstream line is earlier in its own order than its downstream one, so the line a Resident is
+released on holds nobody's and no chain runs on through it. Every lawful round has at least one Insider,
+so a bound of at least two; a hand-built round with no Insider has a bound of one and draws no chain
+(and, so that every order keeps one shape, no fake either).
+
+**3 · Lazy linking (`gdd.md:274`): STOPPED, not built.** *A is active, B is assigned as waiting. When A
+is completed, B unlocks and C is assigned. C is chosen at that moment from living, eligible players not
+already in the chain.* What C's assignment does is unruled in five places, and each changes what a
+phone shows:
+
+- **Whether a line of C's order becomes LOCKED at that moment** (a line C was already shown named turns
+  into LOCKED · WAITING UPSTREAM mid-round), or whether C's lock stood from arming with its upstream
+  chosen late. D-114 rules that blocked work is a visible blocked entry; nothing says an entry may
+  become blocked after it was shown.
+- **When**: at A's completion, which puts a visible change on C's phone at the moment A finishes (the
+  correlation the 20–120 s delay exists to break), or with B's release.
+- **Which of C's lines, and what "eligible" means**: not done, not open, not carried, at a marker none
+  of the chain's links use (`gdd.md:272`).
+- **How many chains open at lights out, and with whom**: M5 names the window, not the population.
+  D-322's one-per-seat cycle was the build's.
+- **The Insider's parity**: under lazy linking a Resident's count of LOCKED lines changes through the
+  round with other players' progress, so *the same number at the same positions* has no fixed answer,
+  and an Insider's fake would need mid-round locks drawn from a distribution the design does not give.
+
+Built without it, every chain is the two players D-322 drew, now both Residents.
+
+**4 · The Insider's order (the owner: *fake locked entries that unlock on a plausible delay*).** Which
+line of every order is locked is the role-free `LinkEntries` draw, so **an Insider's order holds one
+LOCKED · WAITING UPSTREAM line, at the same index it would hold as a Resident**, and the work order
+reaches its phone byte-identical under a role exchange. The lock is a **fake hold** (`ChainLink.fake`):
+it is timed off the upstream line of the Resident before the Insider in the cycle, plus the Insider's
+own delay drawn by the same `UnlockDelay` draw a real link uses (indexed by the downstream seat, so a
+seat's delay does not move with its role). So it unlocks *as if an upstream Resident had finished*,
+because one did: the timing is a real Resident's completion plus a 20–120 s draw, the same distribution
+as a real unlock by construction. It holds nothing of the Resident's; the Resident's completion starts
+both delays and nothing is sent to the Resident. A Revoke that takes that Resident out first strands
+the Insider's lock as it would a Resident's. **The schedule lives in the house** (the simplest: the
+clock, the gate, `ChainUnlocked`, the release and its two effects are the real link's code), and the
+phone cannot tell a fake release from a real one.
+
+**5 · `you're up` buzzes as a house text.** `Effect.WorkUnblocked` and `RoundMessage.WorkUnblocked`
+carry `haptic`, set by the rules to `HOUSE_TEXT_BUZZ`, the one value the opening text
+(`OpeningMessage`) is also built with: `Haptic.Short`. The opening text is the only house text the
+rules send today (D-156's `MessageDelivered` rides its buzz), so that is the buzz *the house texts*
+with. `HouseBuzzer` reads it off the message as every other buzz (D-134). A fake hold's release is the
+same effect, so both roles feel the same buzz. The banner is unchanged (D-201's quiet NUMBER WITHHELD ·
+*you're up*, no dim).
+
+**6 · No chain notice at lights out.** D-322's `Effect.UpstreamWaiting`, its message, its schema row,
+its transcript row and the phone's no-op branch are deleted: nothing needed it once the phone draws no
+notice. The arming burst is one run shorter, the same on every seat. *The upstream player IS told
+someone is waiting on them* (`gdd.md:281`) is superseded by the owner's ruling.
+
+**7 · The recording: 50 → 51.** The same seed draws different links (the Residents chained in the
+cycle's order, every Insider's lock a fake hold), so a version 50 round replays to different releases;
+`UpstreamWaiting` is gone from the arming burst; `WorkUnblocked` gains `haptic=`; the state row's
+`links=` gains `:real` or `:fake`.
+
+**Guards.** `CrossPlayerChainTest` (core, rewritten): *every real chain links two plain Residents and no
+Insider is ever upstream* (seeds 1–30 at five to twelve seats, the Insiders as `insidersFor` draws them:
+every real link Resident to Resident, every Resident upstream once and downstream once, no link of any
+kind with an Insider upstream, every fake on an Insider); *the length bound holds, and a round with no
+Insider draws no chain* (every chain, followed release by release, within `chainBound`); *an Insider's
+order is locked in the same number and at the same place a Resident's would be* (seed 1–30, seat 4 as a
+Resident and as one of one or two Insiders: the same locked line, the same delay, one lock, and the
+same `WorkOrderIssued` lines on the wire); *an Insider's locked line unlocks on the same distribution as
+a Resident's* (300 eight-seat rounds with two Insiders: every delay in 20–120 s, the two samples' means
+within 8 s); *no seat is told anyone is waiting at lights out* (every seat's arming burst the same kinds,
+no `WorkUnblocked`, every held line `Blocked`); *a chain unlocks across players after its delay and not
+a tick before*; *a Revoke strands downstream work and nothing ever releases it*; *an Insider's work
+releases nobody*; *an Insider's fake hold is released off a Resident's completion with a Resident's
+effects* (seat 3 as Insider and as Resident: the same delay and the same delivered release, its
+`you're up` carrying `HOUSE_TEXT_BUZZ`). `OrderParityTest`'s shape counts held lines instead of notices,
+and its role exchange compares the orders and every seat's locked line and delay. `StructuredWorkBenchTest`
+(app) *youreUpBuzzesAsTheHouseTextOnBothRoles*: on the bench, every link's upstream line played through
+`RoundAuthority`, the house's clock pumped past the last deadline, and every `WorkUnblocked` that reached
+a phone buzzes exactly as that phone's `OpeningMessage` did, on a Resident's phone and an Insider's.
+Moved with the change: `StaticTest` (the burst has no `UpstreamWaiting` run), `RoundWireTest`,
+`HouseBuzzTest` (`you're up` buzzes), `StructuredWorkRender`, the five recording tests (51).
+
+**Proved red by injection.** `linksFor` let the Insiders into the real cycle (`val residents = cycle`), then
+restored. `CrossPlayerChainTest` went 5 of 9 red, quoted from the XML: *every real chain links two plain
+Residents and no Insider is ever upstream: java.lang.AssertionError: an Insider is upstream of a real
+chain: Seat(index=3)*; *an Insider's work releases nobody: java.lang.AssertionError: an Insider's fake
+started somebody's delay*; *an Insider's order is locked in the same number and at the same place a
+Resident's would be: seat 4's locked line or its delay moved with its role (seed 1) expected:<[(6,
+1620)]> but was:<[(6, 1620), (6, 1620)]>*; and two `Collection contains more than one matching element`
+where a seat held two locks. Restored, 9 of 9.
+
+**Checked.** On this commit's tree, each module's XML counted with a python glob: model
+367 (JVM), core 466 (JVM), harness 138 (iOS Simulator), app 303 (iOS Simulator), ui 816 (desktop), 0
+failures, 0 errors. The full `./gradlew check --continue`, both variant sweeps and the rehearsal ran
+on D-325's final tree (D-325, *Checked*). **Nothing here has run on a phone.**
+
+| site | before | after |
+|---|---|---|
+| `model` `Carrying.kt` | `ChainLink` | + `fake` |
+| `model` `Balance.kt` | | + `chainBound` |
+| `model` `Effect.kt`, `RoundWire.kt`, `EmitSchema.kt` | `UpstreamWaiting`; `WorkUnblocked(seat)` | `UpstreamWaiting` deleted; `WorkUnblocked(seat, haptic)` |
+| `core` `Arming.kt` | one cycle over every seat | Residents chained in the cycle's order; Insiders' fake holds |
+| `core` `Rules.kt` | the burst ends with `UpstreamWaiting`; `Haptic.Short` | no notice; `HOUSE_TEXT_BUZZ` on the opening text and `you're up` |
+| `app` `HouseBuzzer.kt` | `you're up` silent | the message's buzz |
+| `harness` `Transcript.kt`, `Recording.kt` | 50 | 51 |
+| `ui` `Flow.kt` | `UpstreamWaiting` no-op | deleted |
+
 ### D-326 · **The NOTIFICATIONS row is gone; in the lobby a return to the foreground probes NEARBY DEVICES again; the lobby's check runs on events and the once-a-second read is gone — built (recording stays 50)**
 
 **The rulings** (owner, 2026-11-22):
