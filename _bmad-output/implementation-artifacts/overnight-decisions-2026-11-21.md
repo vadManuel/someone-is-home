@@ -135,3 +135,20 @@ D-311 and D-313 were also run together in a full check before pushing: 3,312 tes
   - the per-Resident load of 7;
   - "will never know it";
   - the word "guest" in the D-311 paragraph.
+
+## Owner's review, 2026-11-21 morning
+
+- **Notes:** "lets just remove the notes app entirely". Done as D-315 (`1ed150a`). Page 1 is FILES, MESSAGES / SETTINGS, CAMERA, with the empty slots kept, as D-199 did.
+- **The Terminal and the couch:** build it next. In progress as D-316.
+- **Sound:** "we can't control sound on the phone. so lets just exclude this". Surge is light only and the game has no audio. This reverses D-176's "one sound in the game".
+- **Check-in gate:** no timeout. "that's how its supposed to be" (D-104 stands).
+- **The minimum party:** stays at 3 while testing.
+- **To build:**
+  - the motion budget, after D-316;
+  - lobby settings: Egress timer, discussion, Revoke cooldown. In progress as D-317;
+  - cross-player chains;
+  - carrying.
+
+  Chains and carrying will be built together with the work-order mix once that is discussed.
+- **To discuss:** the work-order mix, the two missing Subroutine types, Static's announcement, Isolate on the Terminal, cards from another home, and the remaining overnight decisions.
+- **The design mockup:** update the Claude Design project to remove Notes.
