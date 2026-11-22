@@ -250,6 +250,8 @@ class IntentAdmissionTest {
         is Event.TallyHalfwayReached, is Event.MeetingClosed, is Event.EgressExpired,
         // The house's return to the air, off its own clock (the owner's 2026-11-18 ruling, D-281).
         is Event.OffAirEnded,
+        // A dependency's release, off the house's clock once its delay ran out (D-146, D-322).
+        is Event.ChainUnlocked,
         -> Origin.HouseClock
     }
 
@@ -288,6 +290,7 @@ class IntentAdmissionTest {
         Event.SyncPulseReturned(at, Seat(2), listOf(1L)),
         Event.EgressExpired(at),
         Event.OffAirEnded(at, since = at),
+        Event.ChainUnlocked(at, Seat(2), entry = 3),
     )
 
     /**

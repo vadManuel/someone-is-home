@@ -2,6 +2,7 @@ package home.someoneshome.harness
 
 import home.someoneshome.core.Admission
 import home.someoneshome.core.admit
+import home.someoneshome.model.AssignedWork
 import home.someoneshome.model.Balance
 import home.someoneshome.model.Destination
 import home.someoneshome.model.EgressType
@@ -116,6 +117,28 @@ private fun actor(state: GameState, insiders: List<Seat>): Seat =
  * identical questions and hand over the identical answers — and any divergence in a verdict is
  * then unambiguously the grading having noticed who was asking.
  */
+/**
+ * **The card this seat's next step is at**, read off the draw and the carry (D-322): the station a
+ * disk in hand goes to next, or else the first actionable line's own step — a Subroutine's card, a
+ * Memory Dump's target once the house holds its pattern and its source before, an Array Wipe's
+ * Spares. So the fixture walks circuits and Memory Dumps as a player would, and the differential
+ * harness diffs them, rather than taking a disk at Spares and scanning past it for the rest of the
+ * round.
+ */
+internal fun nextCard(state: GameState, seat: Seat): MarkerId? {
+    val order = state.workOrderFor(seat) ?: return null
+    state.diskOf(seat)?.let { disk ->
+        return order.entries.getOrNull(disk.entry)?.markers?.getOrNull(if (disk.damaged) 2 else 1)
+    }
+    val entry = order.entries.firstOrNull { order.isActionable(it) } ?: return null
+    return when (entry.work) {
+        is AssignedWork.Subroutine -> entry.anchor
+        AssignedWork.MemoryDump ->
+            if (state.patternOf(seat, entry.index) != null) entry.markers.getOrNull(1) else entry.anchor
+        AssignedWork.ArrayWipe -> entry.anchor
+    }
+}
+
 internal fun round(insiders: List<Seat> = INSIDERS): List<Event> {
     val arming = Event.RoundArmed(
         Tick(0), seed = 20260818L, seats = SEATS, insiders = insiders, markers = placed(MARKERS), names = NAMES,
@@ -149,9 +172,7 @@ internal fun round(insiders: List<Seat> = INSIDERS): List<Event> {
             // The next piece of work the house will actually open for this seat, read off the draw
             // rather than typed in. A fixture that named a card would be asserting against its own
             // idea of where the work is, and would keep agreeing after the draw moved.
-            val order = state.workOrderFor(seat)
-            val entry = order?.entries?.firstOrNull { order.isActionable(it) }
-            val marker = entry?.anchor ?: MARKERS[i % MARKERS.size]
+            val marker = nextCard(state, seat) ?: MARKERS[i % MARKERS.size]
             add(walk(Event.MarkerScanned(Tick(t++), seat, marker)))
             // **Read AFTER the scan, because the scan is what draws it** (D-139, D-140). The
             // question and its answer are a property of the instance the scan opened, re-drawn on

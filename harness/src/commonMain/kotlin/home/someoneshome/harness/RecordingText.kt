@@ -317,6 +317,7 @@ object RecordingText {
             )
             "SyncPulseReturned" -> Event.SyncPulseReturned(at, seat("actor"), longs("taps"))
             "EgressExpired" -> Event.EgressExpired(at)
+            "ChainUnlocked" -> Event.ChainUnlocked(at, seat("seat"), int("entry"))
             "OffAirEnded" -> Event.OffAirEnded(at, Tick(long("since")))
             "HouseClosedOnPermission" -> Event.HouseClosedOnPermission(at, seat("seat"))
             else -> throw MalformedRecording(
@@ -376,6 +377,7 @@ object RecordingText {
         "EgressFired" -> setOf("at", "actor", "type", "nodes", "pulseFrom")
         "SyncPulseReturned" -> setOf("at", "actor", "taps")
         "EgressExpired" -> setOf("at")
+        "ChainUnlocked" -> setOf("at", "seat", "entry")
         "OffAirEnded" -> setOf("at", "since")
         "HouseClosedOnPermission" -> setOf("at", "seat")
         else -> emptySet()

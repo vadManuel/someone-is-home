@@ -1,5 +1,6 @@
 package home.someoneshome.app
 
+import home.someoneshome.model.AssignedWork
 import home.someoneshome.model.DotColumns
 import home.someoneshome.model.DriftPath
 import home.someoneshome.model.Effect
@@ -226,6 +227,8 @@ class SubroutineQuestionWiringTest {
         SubroutineKind.SignalTrace -> m.wiring.let { listOf(it.nodes, it.edges, it.source, it.sink) }
         SubroutineKind.Jam -> m.rings.opening
         SubroutineKind.Handshake -> m.handshake.length
+        // No screen draws a Memory Dump: its two screens are STOPPED for the owner (D-322).
+        SubroutineKind.MemoryDump -> Unit
     }
 
     /** The same projection off the reader, for the parameters that came down the socket. */
@@ -240,6 +243,7 @@ class SubroutineQuestionWiringTest {
         SubroutineKind.SignalTrace -> SignalGraph.of(p).let { listOf(it.nodes, it.edges, it.source, it.sink) }
         SubroutineKind.Jam -> JamRings.of(p).opening
         SubroutineKind.Handshake -> HandshakeRhythm.of(p).beats
+        SubroutineKind.MemoryDump -> Unit
     }
 
     /** The shortest route over the lattice the phone draws — the player's work, done by a test. */
@@ -424,7 +428,7 @@ class SubroutineQuestionWiringTest {
                 if (house.state.roleOf(seat) == Role.Resident && house.state.systemIntegrity <= 1) break
                 val phone = phoneAt(seat)
                 val marker = phone.flow.state.order.orEmpty().filterIsInstance<OrderLine.Known>()
-                    .filter { !it.done }.flatMap { it.at }.map { it.marker }
+                    .filter { !it.done && it.work is AssignedWork.Subroutine }.flatMap { it.at }.map { it.marker }
                     .firstOrNull { it.value !in tried } ?: break
                 tried += marker.value
                 attempt(seat, marker, right = false)?.let { done += it }
@@ -455,7 +459,8 @@ class SubroutineQuestionWiringTest {
         for (role in listOf(Role.Resident, Role.Insider)) {
             for (right in listOf(true, false)) {
                 val reached = attempts.filter { it.role == role && it.right == right }.map { it.kind }.toSet()
-                val owed = SubroutineKind.entries.toSet()
+                // Every kind a phone can open: Memory Dump's screens are STOPPED for the owner (D-322).
+                val owed = SubroutineKind.entries.toSet() - SubroutineKind.MemoryDump
                 assertEquals(
                     owed, reached,
                     "these were never graded ${if (right) "right" else "wrong"} for a $role: ${owed - reached}",
@@ -465,6 +470,9 @@ class SubroutineQuestionWiringTest {
     }
 
     private companion object {
-        val SEEDS = listOf(20261150L, 7L, 19L)
+        // 2, 15 and 20 since D-322: the mix deals an order two shorts, so the Insider's one fake
+        // order needs more evenings to be dealt all six short kinds (Parity Check, Deallocate, Short
+        // and Sniff were missing from the first three).
+        val SEEDS = listOf(20261150L, 7L, 19L, 2L, 15L, 20L)
     }
 }

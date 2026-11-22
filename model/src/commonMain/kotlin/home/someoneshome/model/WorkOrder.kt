@@ -16,18 +16,61 @@ package home.someoneshome.model
  */
 @ClientFacing
 @kotlinx.serialization.Serializable
-enum class SubroutineKind {
-    Replay,
-    Interrupt,
-    ParityCheck,
-    Sniff,
-    Deallocate,
-    Drift,
-    Short,
-    SignalTrace,
-    Jam,
-    Handshake,
+enum class SubroutineKind(
+    /**
+     * **Which of M4's structures this kind populates** (`gdd.md:256`, the roster table at
+     * `gdd.md:600`). The roster's own column, carried into the type so that the mix draw
+     * ([Balance.orderMix]) and the table cannot disagree: six of the ten are short and four are
+     * medium, as the roster rates them, and D-137 to D-140 rewrote four of the ten without moving
+     * a single one between structures.
+     *
+     * The circuit is not a kind (see [AssignedWork.ArrayWipe]), so no kind is [SubroutineStructure.Circuit].
+     */
+    val structure: SubroutineStructure,
+) {
+    Replay(SubroutineStructure.Short),
+    Interrupt(SubroutineStructure.Short),
+    ParityCheck(SubroutineStructure.Short),
+    Sniff(SubroutineStructure.Short),
+    Deallocate(SubroutineStructure.Short),
+    Drift(SubroutineStructure.Medium),
+    Short(SubroutineStructure.Short),
+    SignalTrace(SubroutineStructure.Medium),
+    Jam(SubroutineStructure.Medium),
+    Handshake(SubroutineStructure.Medium),
+
+    /**
+     * **Memory Dump, the long structure's one Subroutine** (`gdd.md:640`, D-322).
+     *
+     * Two stages at two different markers: the source shows a pattern of four or five elements,
+     * and the target, a different card the order names, takes it back from memory. Only ever dealt
+     * as [AssignedWork.MemoryDump], whose two cards are the source and the target; never as
+     * [AssignedWork.Subroutine], which names one card.
+     *
+     * ⚠️ **Its two screens, its briefing and its light signature are STOPPED for the owner**
+     * (D-113: *Memory Dump is rated when it is built*; D-188, D-194: every Subroutine is briefed at
+     * the card, and no line exists for this one). The house deals it, grades it and carries its
+     * pattern; no phone can open it yet.
+     */
+    MemoryDump(SubroutineStructure.Long),
+    ;
+
+    companion object {
+        /** The kinds the house may deal into [structure], in roster order. */
+        fun dealtAs(structure: SubroutineStructure): List<SubroutineKind> =
+            entries.filter { it.structure == structure }
+    }
 }
+
+/**
+ * **M4's four structures: how a Subroutine is scheduled and where it sits in space**
+ * (`gdd.md:256`).
+ *
+ * Short and medium are one marker each; **long** is two stages at two markers (Memory Dump);
+ * **circuit** is three markers and one carried state (the Array Wipe, D-164). The work-order mix
+ * is written in these ([Balance.orderMix]), never in kinds.
+ */
+enum class SubroutineStructure { Short, Medium, Long, Circuit }
 
 /**
  * **One line of a work order, authority-side: what was assigned, where, and what unblocks it.**
@@ -76,13 +119,34 @@ class OrderEntry(
     /** Earlier entries that must be done first. Empty for an entry that is actionable at once. */
     val blockedBy: List<Int>,
     val done: Boolean,
+    /**
+     * **Held by another seat's work** (D-146, D-322): true from arming until the house releases it,
+     * which it does a random 20–120 s after the upstream entry is completed (`gdd.md:284`), and
+     * never otherwise. **Nothing auto-satisfies, ever** — a Revoke that takes the upstream seat out
+     * leaves this true for the rest of the round, and the entry stays a blocked line (D-114).
+     *
+     * Which seat holds it is not here and is never on any type a client can see: the link lives on
+     * `GameState.links`, authority-side.
+     */
+    val held: Boolean = false,
+    /**
+     * **How many damaged disks this Array Wipe has degaussed** (`gdd.md:660`). Zero for every other
+     * work; the circuit is done at [Balance.ARRAY_WIPE_DISKS].
+     */
+    val wiped: Int = 0,
 ) {
     /** Where this entry begins. Null only for an entry with nowhere to be, which no draw makes. */
     val anchor: MarkerId? get() = markers.firstOrNull()
 
     fun isAt(marker: MarkerId): Boolean = markers.any { it.value == marker.value }
 
-    fun completed(): OrderEntry = OrderEntry(index, work, markers, blockedBy, true)
+    fun completed(): OrderEntry = OrderEntry(index, work, markers, blockedBy, true, held, wiped)
+
+    /** Another seat's dependency, released (D-146). Only the house's unlock calls this. */
+    fun released(): OrderEntry = OrderEntry(index, work, markers, blockedBy, done, false, wiped)
+
+    /** One more damaged disk degaussed at Disposal. */
+    fun wipedOne(): OrderEntry = OrderEntry(index, work, markers, blockedBy, done, held, wiped + 1)
 }
 
 /**
@@ -100,33 +164,42 @@ class OrderEntry(
  */
 class WorkOrder(val seat: Seat, val entries: List<OrderEntry>) {
 
-    /** Done, or blocked by something that is not. The player can act on everything else. */
+    /**
+     * Done, or blocked by something that is not — an earlier entry of this order, or another seat's
+     * work holding it ([OrderEntry.held]). The player can act on everything else.
+     */
     fun isActionable(entry: OrderEntry): Boolean =
-        !entry.done && entry.blockedBy.all { i -> entries.getOrNull(i)?.done == true }
+        !entry.done && !entry.held && entry.blockedBy.all { i -> entries.getOrNull(i)?.done == true }
 
     /**
-     * What a scan of [marker] opens for this seat, or null for D-124's NOTHING FOR YOU HERE.
+     * **The first actionable entry that BEGINS at [marker]**, for a seat carrying nothing, or null
+     * for D-124's NOTHING FOR YOU HERE.
      *
      * The **first** actionable entry at that card, in order, which is what makes a self-chain walk
      * itself: an order deeper than the home's marker count visits some cards twice, and the second
      * visit is blocked by the first until the first is done (D-123).
      *
-     * ### A circuit line is stepped over rather than returned, and it is worth saying why
+     * ### Where each kind of work begins (D-322)
      *
-     * [AssignedWork.ArrayWipe] has no [AssignedWork.opensAs], because the carried state a circuit
-     * leg is graded against is not built (F-014, E7). Skipping it means a later Subroutine at the
-     * same station still opens, which is the better of the two wrong answers: the alternative is a
-     * circuit line standing in front of real work and turning a card into a blind alley.
-     *
-     * **It is unreachable today** — the draw deals no circuit — and it is the reason the format
-     * being able to carry one is not the same as the round being able to contain one. Recorded
-     * here rather than left for somebody to find at the station.
+     * Every [AssignedWork] begins at its first card: a Subroutine at its one card, a Memory Dump at
+     * its **source** (the pattern), an Array Wipe at **Spares** (the first good disk). A Memory
+     * Dump's *target* and the circuit's Rack and Disposal are steps that depend on what the seat is
+     * carrying, which this type does not hold, so the rules resolve those (`core`'s scan
+     * resolution) and ask this for the empty-handed case only.
      */
     fun openAt(marker: MarkerId): OrderEntry? =
-        entries.firstOrNull { it.isAt(marker) && it.work.opensAs != null && isActionable(it) }
+        entries.firstOrNull { it.anchor?.value == marker.value && isActionable(it) }
 
     fun withCompleted(index: Int): WorkOrder =
         WorkOrder(seat, entries.map { if (it.index == index) it.completed() else it })
+
+    /** [index]'s cross-player hold released (D-146). */
+    fun withReleased(index: Int): WorkOrder =
+        WorkOrder(seat, entries.map { if (it.index == index) it.released() else it })
+
+    /** One disk more degaussed on the circuit at [index]. */
+    fun withWiped(index: Int): WorkOrder =
+        WorkOrder(seat, entries.map { if (it.index == index) it.wipedOne() else it })
 
     /**
      * **The order as its own player's phone sees it** — narrowing, never nulling (rule 3).

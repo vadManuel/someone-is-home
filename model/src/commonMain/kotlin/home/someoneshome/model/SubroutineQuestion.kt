@@ -1212,6 +1212,85 @@ object SubroutineQuestion {
             SubroutineKind.SignalTrace -> SignalGraph.of(parameters)
             SubroutineKind.Jam -> JamRings.of(parameters)
             SubroutineKind.Handshake -> HandshakeRhythm.of(parameters)
+            SubroutineKind.MemoryDump -> MemoryPattern.of(parameters)
+        }
+    }
+}
+
+/**
+ * **Memory Dump's two questions: the pattern at the source, and how long it was at the target**
+ * (`gdd.md:640`, D-322).
+ *
+ * One reader for both stages, because they are one Subroutine and the first number says which:
+ *
+ * - **at the source** `[SOURCE, e₁ … eₙ]` — the pattern itself, four or five elements
+ *   (`gdd.md:646`: *four elements, maybe five*). It is shown and then it is gone: the phone may not
+ *   keep it (*only your head is off-network*) and Files never shows it (F-015);
+ * - **at the target** `[TARGET, n]` — how many elements to enter, and nothing else. The answer is
+ *   the house's copy of the pattern, held between the two cards (`GameState.carries`), and it never
+ *   leaves the house again.
+ *
+ * ### ⚠️ What an element is, is STOPPED for the owner (D-322)
+ *
+ * The design says how many and never says of what. Until the owner rules, an element is **a dot,
+ * drawn the way [ReplayPattern]'s are** — `n` distinct indices into `n` positions, in the order
+ * they are shown — because Replay is the roster's one ruled *show a sequence, take it back* and its
+ * reader already refuses what its screen could not echo. It is a placeholder for the house's draw
+ * and grade only; **no phone draws either stage yet.**
+ *
+ * All-or-nothing (`gdd.md:648`): the grade is equality, and a mismatch says *mismatch* and never
+ * which elements were wrong.
+ */
+class MemoryPattern private constructor(
+    /** True at the source, where the pattern is shown; false at the target, where it is entered. */
+    val shown: Boolean,
+    /** The pattern, at the source; empty at the target, where it is in the player's head. */
+    val elements: List<Int>,
+    /** How many elements the pattern has, at either stage. */
+    val length: Int,
+) {
+    companion object {
+        /** The first parameter at the source. */
+        const val SOURCE: Int = 0
+
+        /** The first parameter at the target. */
+        const val TARGET: Int = 1
+
+        /** `gdd.md:646`: *four elements, maybe five.* */
+        const val LEAST: Int = 4
+        const val MOST: Int = 5
+
+        fun of(parameters: List<Int>): MemoryPattern {
+            val stage = parameters.firstOrNull()
+            return when (stage) {
+                SOURCE -> {
+                    val elements = parameters.drop(1)
+                    if (elements.size !in LEAST..MOST) {
+                        throw MalformedSubroutineParameters(
+                            "MEMORY DUMP shows $LEAST to $MOST elements and this is ${elements.size}: $parameters",
+                        )
+                    }
+                    if (elements.any { it !in elements.indices } || elements.toSet().size != elements.size) {
+                        throw MalformedSubroutineParameters(
+                            "MEMORY DUMP was given a pattern that is not ${elements.size} distinct " +
+                                "places in ${elements.size}: $parameters",
+                        )
+                    }
+                    MemoryPattern(shown = true, elements = elements, length = elements.size)
+                }
+                TARGET -> {
+                    val length = parameters.getOrNull(1)
+                    if (parameters.size != 2 || length == null || length !in LEAST..MOST) {
+                        throw MalformedSubroutineParameters(
+                            "MEMORY DUMP's target asks for $LEAST to $MOST elements and this is $parameters",
+                        )
+                    }
+                    MemoryPattern(shown = false, elements = emptyList(), length = length)
+                }
+                else -> throw MalformedSubroutineParameters(
+                    "MEMORY DUMP's first number says which card this is, $SOURCE or $TARGET: $parameters",
+                )
+            }
         }
     }
 }

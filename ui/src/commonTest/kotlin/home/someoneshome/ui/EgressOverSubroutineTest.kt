@@ -81,7 +81,8 @@ class EgressOverSubroutineTest {
 
     @Test
     fun `the alert drops over every Subroutine and the screen and the work stay for either role`() {
-        for (kind in SubroutineKind.entries) {
+        // Memory Dump has no screen yet (D-322, STOPPED).
+        for (kind in SubroutineKind.entries - SubroutineKind.MemoryDump) {
             val panels = PanelRole.entries.map { role ->
                 val phone = atWork(role, kind)
                 val subroutine = Subroutine.of(kind)

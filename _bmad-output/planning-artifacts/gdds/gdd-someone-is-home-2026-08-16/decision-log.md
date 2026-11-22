@@ -13620,6 +13620,274 @@ THIS HOUSE, no LIGHTS OUT.
 with the two variant sweeps excluded, then `:app:variantSweepRelease`, then `:app:variantSweepPlaytest`,
 the app's XML copied out after each, every result XML counted with a python glob): model 365 (JVM) + 346 (iOS Simulator); core 433 + 431; platform 211; ui 790 (desktop) + 393; harness 136; cards 17; app 293 (the default variant), 176 (Release), 293 (Playtest). 3,415 in the default check, 0 errors, 0 skipped, and two failures, each rerun alone and passing: `OutboundQueueTest.aSeatThatStopsDrainingDelaysNobodyAndIsDroppedWhenItsQueueIsFull`, the known load flake (1 test, 0 failures alone), and in the Release sweep `HouseGoneTest.aGuestWhoLeavesKeepsHerSeatAndAGuestWhoStaysIsSeatedAgain` (*ROSE came back to somebody else's chair*), which passed in the default and Playtest sweeps and alone in Release (4 tests, 0 failures); it is not on the known list and is recorded here rather than dismissed. The vocabulary lints, `redactionLint`, the cordons and `boundaryCheck` ran and passed. `VerdictBuzzTest`, `LobbySettingsWireTest`, `EgressSharedLineTest` and `NoSoundTest` are in the XML, the two app suites in the default and Playtest sweeps (Release does not compile the cheats' tests).
 
+### D-322 · **The work order is the design's: the mix scaled to `K`, one cross-player dependency per seat with the 20–120 s unlock and `you're up`, the Array Wipe circuit with its disk in hand, and Memory Dump's house half — built (recording 49); Memory Dump's screens, the upstream notice's look and three of M5's chain rules are STOPPED for the owner**
+
+**The rulings** (owner, 2026-11-21). *"We should build this"*, of four things the rules audit listed
+as not built (`rules-audit-2026-11-21.md`, *Not built*):
+
+1. **Cross-player chains** (D-146): one player's Subroutine unlocks another's, with the 20–120 s
+   unlock delay and the upstream notice. *A Revoke strands work, and nothing auto-satisfies.* Blocked
+   work is a blocked entry (D-114): you see that something is there and not what. The work order is a
+   menu, not a queue. Until now only same-card self-chains existed (`Arming.kt`).
+2. **Carrying** (D-114, F-014): while you carry something you cannot scan any other Subroutine.
+3. **The two missing kinds**, both of which carry: **Memory Dump** (long: a 4–5 element pattern shown
+   at one marker and entered from memory at a different, specified one; all-or-nothing; a mismatch
+   says only *mismatch* and sends you back to the source for a fresh pattern; Files never shows the
+   pattern) and **Array Wipe** (circuit, D-164: Spares, Rack, Disposal; one disk at a time; two
+   damaged disks are four traverses; shared by players with one Rack; the disk is in Files; the
+   three stations drawn by the house at arming, D-122).
+4. **The mix: "scale the proportions"** — D-005's *1 circuit : 1 long : 3 medium : 2 short* as
+   proportions of D-129's `K`, rounded, *about 14% circuit, 14% long, 43% medium and 29% short*, with
+   a deterministic rounding that always sums to `K`, stated and marked provisional. The Insider's fake
+   order has the same shape (D-109, D-129).
+
+**1 · The mix (`Balance.orderMix`, ⚠️ the rounding is provisional).** Largest remainder, integer only:
+each structure takes the whole part of `K × weight ÷ 7`, and the entries left go one each to the
+largest fractional remainders, **a tie to the cheaper structure first** (short, medium, long,
+circuit). With these weights only the circuit and the long can ever tie, so in practice *the long
+before the circuit*: a second circuit is the costliest thing a tie could deal. It always sums to `K`
+and keeps every structure within one entry of its share; `K = 7` is 1/1/3/2 exactly; the `K`s a lobby
+computes read 6 → 1/1/2/2, 8 → 1/1/4/2, 9 → 1/1/4/3, 10 → 1/2/4/3. **The classification is the roster
+table's own** (`gdd.md:600`): short is Replay, Interrupt, Parity Check, Sniff, Deallocate and Short;
+medium is Drift, Signal Trace, Jam and Handshake (D-137 to D-140 rewrote four of the ten and moved
+none between structures); the long is Memory Dump; the circuit is the Array Wipe. It is now a property
+of the kind (`SubroutineKind.structure`), so the draw and the table cannot disagree. Each seat's
+structures are shuffled from the seed (a new `SeedPurpose.Structures`) and its short and medium kinds
+drawn from that structure's kinds (`Kinds` moved to version 2). **No role is read**: every order,
+the Insider's fake included, holds the same mix at the same length. A home too small for a circuit
+(fewer than three stations) or a long (fewer than two cards) deals a short in its place; D-128's
+eight-marker minimum makes that unreachable in a home that passed review.
+
+**2 · Cross-player dependencies (⚠️ the shape is provisional).** Dealt at arming as **one seeded cycle
+over the seats** (`linksFor`): each seat's *upstream* line holds the *downstream* line of the next seat
+in the cycle, so every seat is upstream of exactly one seat and downstream of exactly one, and two
+seats are always different. Per seat the two lines are drawn from the seed, the earlier upstream and
+the later downstream, which keeps the round acyclic: an upstream line depends only on earlier lines of
+its own order. The downstream line is **held** (`OrderEntry.held`) and reaches its phone as
+`OrderLine.Blocked` — LOCKED · WAITING UPSTREAM, the row the mockup already drew — with no name, no
+light and no room. Each link's delay is drawn once from the seed, uniform over the whole seconds of
+20–120 (⚠️ uniform is the build's reading; the design says *random* and names no shape), and starts
+when the upstream line is completed, **by either role**: an Insider's fake is graded for real (D-109)
+and its completion unlocks exactly as a Resident's (rule 1). The house's clock (`HouseClock`) mints a
+new event, **`ChainUnlocked(seat, entry)`**, once the delay has run out; the gate refuses one that is
+not due with a new reason, **`ChainNotDue`** (answered to nobody: no phone can request the event).
+The rules release the line and send the downstream seat its order, now naming it, and
+**`Effect.WorkUnblocked`**, which the phone draws as D-201's quiet text, NUMBER WITHHELD · *you're
+up*, stamped when it landed, stored on the lock screen, no dim and no buzz. **Nothing is sent to the
+upstream seat** (*never confirm that the downstream unlock happened*). **A Revoke strands the line**:
+an out seat's hand-over completes nothing, so its delay never starts, the clock never mints and the
+gate refuses any release; nothing auto-satisfies (D-146). ⚠️ **A release that falls due during a
+meeting waits for the lights to go out** (provisional: a `you're up` on a phone standing in a meeting
+is unruled), and none is minted off the air or after the round ends.
+
+**The upstream notice** is built on the house's side: at arming every seat is sent
+**`Effect.UpstreamWaiting(entry)`** — once, naming its own line and nobody — at the end of the arming
+burst, one per seat, so the burst's shape does not move. **How the phone shows it is STOPPED** (below);
+the phone holds it and draws nothing.
+
+**Three of M5's rules are not built, and the build could not build them** (STOPPED, below). The cycle
+is drawn over every seat, Insiders included. *Chains are composed entirely of Residents*
+(`gdd.md:271`), *`L ≤ living Insiders + 1`* (`:273`) and *lazy linking from living, eligible players*
+(`:274`) each need the hidden draw, and a chain drawn from it is a fact about another seat's role
+delivered to a downstream Resident: the differential harness reads exactly that as a leak, D-129 sizes
+the order from public facts for the same reason, and `armingFor`'s draw is role-free so the harness
+can exchange roles at all. Drawn over every seat, an Insider upstream unlocks a Resident by doing the
+fake or sits on it — *either the player upstream is gone, or they are sitting on it* (D-146) — and M8's
+*the fake list must fake chains too* holds with real lines. Each chain is two links, inside `L ≤ 2`
+for every lawful round.
+
+**3 · Carrying** (`GameState.carries`, F-014). Authority state: a **disk** (which entry, which disk,
+good or damaged) or a Memory Dump **pattern** (the house's copy, to grade the target). It persists
+through meetings and across shifts and is cleared only by the step that consumes it. **One function
+decides what a scan of an ordinary card is** (`stepAt`, `core/Carrying.kt`): **a disk in hand answers
+first, and only at its station** — a good disk opens only the Rack, a damaged one only Disposal, and
+every other card, Spares again included, is NOTHING FOR YOU HERE. Empty-handed, the first actionable
+line with a step at that card wins, in order: a Subroutine at its card, a Memory Dump at its target
+while the pattern is held and at its source otherwise, an Array Wipe at Spares. **It works through
+D-318's path**: a read goes up as the card's id, `routeScan` makes it a `MarkerScanned`, and the rules
+answer it here; the meeting card and the Terminal are routed before the rules and are never blocked
+by a disk (⚠️ unruled whether a carrier may read the Terminal; the build lets them). **Every ordinary
+scan now answers with three effects, constructed once**: `ScanAnswered` (which gains `carrying`, the
+disk in hand after the scan as `DiskInHand(disk, to)`, on every answer), `WorkOrderIssued` (on every
+scan, for `returned`'s reason: the circuit's last disk completes a line at a scan) and
+`PresenceChanged`; a circuit finished by a plain Resident adds the two meter effects, exactly as a
+banked hand-over does. ⚠️ A held pattern does **not** block other scans: F-014 says *the Array Wipe
+carry flag* blocks, and nothing says a pattern in your head does.
+
+**4 · Array Wipe.** A line of every order at the round's three stations (D-122), `AssignedWork.ArrayWipe`
+now scannable. Spares puts a good disk in hand (`DISK 01`, then `DISK 02`), the Rack swaps it for a
+damaged one, Disposal degausses it, and the second disposal completes the line
+(`Balance.ARRAY_WIPE_DISKS = 2`; `OrderEntry.wiped` counts). Every step is the scan itself (D-113: *the
+work is the scanning*), so no screen opens; the phone reads a step as *the answer opened nothing and
+the disk moved* (`Flow.stationStepped`) and lands on the springboard, whose widget — built at D-168
+and fed by nothing until now — says CARRYING · DISK 01 · TO RACK (or TO DISPOSAL) · NOTHING ELSE OPENS
+UNTIL IT IS DELIVERED, with the strip's padlock; FILES holds the disk (D-257's `filed`). A card refused
+while carrying is NOTHING FOR YOU HERE with the disk unchanged. ⚠️ **Provisional**: that a step lands on
+the springboard (`Flow.afterAStationStep`, one named decision); that a finished circuit shows no verdict
+(the row strikes off); the item words `DISK 01`/`DISK 02` and `TO DISPOSAL` (the mockup drew `DISK 01`
+and `TO RACK`). Every circuit holder in the round shares the one Rack, because D-122 draws one set of
+stations per round; `gdd.md:672`'s *two or three players* is therefore every seat at five seats or
+more (⚠️ unruled).
+
+**5 · Memory Dump, the house half.** `SubroutineKind.MemoryDump` (structure long), dealt only as
+`AssignedWork.MemoryDump` at two different cards (the next two anchors of the seat's walk). A scan of
+the source draws a **fresh** pattern off the scan's own minted id (D-139's re-draw), shows it in the
+answer (`[SOURCE, e₁…eₙ]`, n of 4 or 5) and puts the house's copy in `carries`; the phone keeps none of
+it, and it never rides `carrying`, so **Files cannot show it** (F-015). The target opens only while the
+pattern is held (`[TARGET, n]`, the length and nothing else), and its answer is the house's copy.
+**All-or-nothing**: the grade is equality, and the verdict is the one boolean `SubroutineGraded`
+already carries. **Every hand-over consumes the pattern, matched or not**, on the kind and never on
+the verdict, which is the whole of *a mismatch sends you back to the source*. ⚠️ What an element is,
+is unruled: until the owner rules, an element is a dot drawn the way Replay's are (`MemoryPattern`), a
+placeholder for the house's draw and grade only. The work order names it MEMORY DUMP with **no light
+mark** (`OrderRow.Named.light` is nullable for exactly this: nothing on the ladder is zero cells, so an
+absent mark reads as *nothing claimed*).
+
+**6 · Parity.** An Insider's order is drawn by the same calls at the same length with the same mix,
+the same held line and the same line somebody waits on; its circuit and Memory Dump walk the same
+steps with the same delivered effects, graded for real, and only the meter differs (D-109). The arming
+burst is ten runs, one per seat each, `UpstreamWaiting` last. Every new frame is built without the
+role, so frame counts and sizes do not move with it (`ScanAnswered`'s width moves with the disk, which
+is the seat's own).
+
+**7 · The recording: 48 → 49.** Justified: the same seed now draws different orders (the mix, the
+circuit and the long dealt, the dependencies), so a version 48 round would replay to different work;
+one event a 48 build cannot construct (`ChainUnlocked`); two effects it cannot name (`UpstreamWaiting`,
+`WorkUnblocked`); `ScanAnswered` gains `carrying=` and every ordinary scan answers with
+`WorkOrderIssued`; the state row gains `links=` and `carries=` and each entry `/held|free/<wiped>`.
+⚠️ D-319 or D-320 may bump the format in parallel; whichever lands second takes the next number and
+says both in the header note.
+
+**STOPPED — unruled, listed exactly, nothing invented.**
+
+- **Memory Dump's two screens**: the copy of each, what the source screen shows and for how long
+  (timing), how the target takes the pattern back, the word a mismatch says on the screen (*only
+  "mismatch"* rules the content, not the line), and where each lands after.
+- **Memory Dump's light signature** (D-113: *rated when it is built*).
+- **Memory Dump's briefing at the card** (D-188, D-194: every Subroutine is briefed; no line exists).
+- **What a Memory Dump element is** (a dot, a shape, a position, a count): the house draws a
+  placeholder.
+- **The upstream notice's look**: its copy, its sender, whether it buzzes, where it stands.
+- **M5's three**: Resident-only chains, `L ≤ living Insiders + 1`, lazy linking (above, and why).
+- **Whether the circuit is briefed at Spares**, and what a phone shows after a station step and at
+  a finished circuit (built: the springboard and a struck row, provisional).
+- **Whether a release may land during a meeting** (built: it waits, provisional).
+- **Whether a carrier may read the Terminal**, and whether a held pattern blocks other scans (built:
+  yes, and no).
+- **How many players share a Rack** (built: every circuit holder, one station set per round).
+
+**Provisional, built:** the mix's rounding; the dependency shape (one cycle, two-link chains, which
+lines); the uniform delay; holding releases during meetings; the station step landing on the
+springboard; `DISK 0n` and `TO DISPOSAL`; no buzz on `you're up` (D-320 owns buzzes); the Memory
+Dump element.
+
+**⚠️ What this does to a real round until Memory Dump's screens land.** Every order holds a long
+(one at every `K` a lobby computes) that no phone can open, so every plain Resident has one line that
+cannot be finished. `slack` is one per order (D-129), so a five- or six-seat round with no other loss
+still reaches the meter's end exactly, and any stranded dependency, or an Insider who sits on one,
+puts the meter out of reach and leaves Restraining every Insider as the Residents' one route. A Memory
+Dump that is a seat's upstream line strands its downstream seat too. `slack` is playtest's, and the
+screens are the owner's; neither is changed here.
+
+**Guards.** `WorkOrderStructureTest` (core, new): `OrderMixTest` (the mix sums to `K` for every `K` to
+60 and keeps each structure within one entry of its share; 7 is 1/1/3/2 and 6, 8, 9, 10 round as
+stated; the ten are classified as the roster rates them; every order of a 5-, 6- and 8-seat round
+holds the mix, the Insider's included, circuits at the round's stations and Memory Dumps at two
+cards); `CrossPlayerChainTest` (every seat upstream once and downstream once, never of itself, delays
+inside 20–120 s; a held line reaches its phone as `Blocked` and every seat is sent one
+`UpstreamWaiting` naming its line; a chain unlocks across players after its delay and not a tick
+before — `ChainNotDue` a tick early, admitted at the due tick with the order and `WorkUnblocked` to the
+downstream seat and nothing to anybody else, refused a second time; a Revoke strands the line and
+the gate refuses a release at any later tick; an Insider's completion releases the downstream seat
+with the same tick and the same delivered effects as a Resident's); `ArrayWipeTest` (two disks are
+four traverses, the disk walking Rack, Disposal, nothing, twice, and the line done and banked once at
+the second disposal; while a disk is in hand no other card opens anything and the disk does not move;
+two seats share one Rack, interleaved at every station, and both finish); `MemoryDumpTest` (the source
+shows four or five elements, the house holds them, the carry is empty, the target shows only the
+length, the right entry finishes the line and consumes the pattern; the target opens nothing before
+the source, a mismatch is a bare `false` that consumes the pattern, the target then opens nothing
+until a fresh source scan, and the line finishes after); `OrderParityTest` (every seat of an
+eight-seat round with two Insiders has the same shape; exchanging who is an Insider draws byte-equal
+orders and links; a seat walks its circuit and Memory Dump to the same delivered effects in either
+role and only the Resident banks); `WorkOrderDeterminismTest` (one seed, one round; two seeds, two;
+a Memory Dump pattern replays). `ChainClockTest` (app, new): the clock releases a started dependency
+once, when its delay runs out, through the real gate; a stranded one never in ten minutes; one due
+during a meeting waits for it to end. `StructuredWorkBenchTest` (app, new, the bench round): on a
+phone's real `FlowModel` through `RoundAuthority.cardRead`, an Array Wipe walked to the end (DISK 01 TO
+RACK on the widget after Spares, the springboard, a Subroutine of the order answered NOTHING FOR YOU
+HERE with the disk unchanged and nothing armed, TO DISPOSAL, empty hands, struck off after four
+traverses); a Memory Dump shown and graded at its target and struck off; and a dependency released
+by `HouseClock` onto the downstream phone as NUMBER WITHHELD · *you're up* with the line now named and
+nothing sent to the upstream seat. `StructuredWorkRender` (ui, new). Existing tests moved with the
+draw: `StaticTest` (ten runs), `SubroutineDrawTest` (the long's pattern through the same oracle, and
+graded all-or-nothing), `GeographyTest` (a circuit now begins at its first card), `ArmingTest` (the
+self-chain walk releases the one cross-player hold through the rules), `PresenceTest`, `RoundWireTest`,
+`IntentAdmissionTest` (`ChainUnlocked` is the house's clock), the harness fixture (`nextCard`: walks
+circuits and Memory Dumps as a player would, so the differential harness diffs them),
+`HousedSubroutineQuestionTest`, `SubroutineQuestionWiringTest`, `SubroutineRosterTest`, `HandOverSeamTest`,
+`EgressOverSubroutineTest`/`Render`, `HandOverLoopTest` and `HouseBuzzTest` (Memory Dump has no roster
+row, no screen and no script, each asserted rather than skipped); `EgressOverWorkLoopTest`,
+`ArrivalOrderTest` and `CardReadTest` (pick a Subroutine's line; a node scan's answer now has the order
+beside it); `HouseBuzzTest` walks the two new kinds; the four recording tests and `RecordingTextTest` pin 49.
+
+**Proved red by injection.** The carry block in `stepAt` removed (a disk in hand answered at its
+station and otherwise fell through to the empty-handed walk), then restored: `ArrayWipeTest` went red,
+quoted from the XML, *while a disk is in hand no other card opens anything: java.lang.AssertionError: a
+Subroutine opened while a disk was in hand expected null, but was:<SubroutineInstance(entry=1,
+subroutine=Jam, parameters=[-3])>*. Restored, 452 of 452 in core's JVM XML. The harness fixture was
+also checked the other way: put back to *the first actionable line's card*, it takes a disk at Spares
+and scans past it all round, the two exchanged seats bank at different moments, and
+`DifferentialTest` reports *seat 3, line 63: baseline SystemIntegrityBatched|percent=77 / variant
+SystemIntegrityBatched|percent=75*: the meter, D-109's ruled asymmetry, moving on different lines
+because the fixture stalled, not anything else following the role. With `nextCard` it is green, and
+`HostSeatRecordingTest` and `LobbySettingsRecordingTest` subtract the meter (`METER_ASYMMETRY`) as
+`DifferentialTest` does, for the same reason.
+
+**Rendered and looked at** (`StructuredWorkRender`, 600×1300 with an iPhone 16 Pro's insets, through
+`FlowHost`, a housed phone fed only house messages, `build/screens/structured-*.png`, the Insider's and
+the Resident's the same pixels in all six). *The order*: SUBROUTINES 1 OF 8 DONE; REPLAY struck through;
+JAM the solid current row with GARAGE, its glyph and MEDIUM; ARRAY WIPE with STUDY and BRIGHT;
+MEMORY DUMP with BED 2, its glyph and no light mark; two hatched LOCKED · WAITING UPSTREAM rows;
+HANDSHAKE and SHORT with DARK; the legend. *The widget*: CARRYING · DISK 01 · TO RACK · NOTHING ELSE
+OPENS UNTIL IT IS DELIVERED in NEXT SUBROUTINE's box, COMPLETED 1 OF 8 beside it, the padlock on the
+strip; and TO DISPOSAL after the Rack. *Files*: 1 ITEM, DISK 01, IN HAND, DESTINATION . RACK.
+*Refused while carrying*: NOTHING FOR YOU HERE, SCAN ANOTHER, SEE MY SUBROUTINES, the padlock still on.
+*`you're up`*: the quiet banner, NUMBER WITHHELD over *you're up*, over page 1 whose widget names JAM.
+
+**Docs.** `gdd.md`: M4's order-size paragraph (the ruling and the rounding), M5 (built, and the three
+rules not built), M8's fake chains, Memory Dump (the house half built, the phone half stopped), Array
+Wipe (built), E7's row. `phone-session-2026-11-19.md`: *The work order and carrying*.
+
+| site | before | after |
+|---|---|---|
+| `model` `Balance.kt` | `orderSize` | + `ORDER_MIX_WEIGHTS`, `orderMix`, `UNLOCK_DELAY_*`, `ARRAY_WIPE_DISKS` |
+| `model` `WorkOrder.kt` | ten kinds; entry `done` | + `MemoryDump`, `SubroutineStructure`, `structure`; entry `held`, `wiped`; `openAt` is the empty-handed step |
+| `model` `Destination.kt` | `ArrayWipe` opens nothing | + `AssignedWork.MemoryDump` |
+| `model` `Carrying.kt` (new) | (none) | `ChainLink`, `Carry`, `CircuitStation`, `DiskInHand` |
+| `model` `GameState.kt` | (none) | `links`, `carries`, `diskOf`, `patternOf`, `carrying`, `putDown`, `withLinks` |
+| `model` `Event.kt`, `Refusal.kt` | (none) | `ChainUnlocked`; `ChainNotDue` |
+| `model` `Effect.kt`, `RoundWire.kt`, `EmitSchema.kt` | `ScanAnswered(opened)` | + `carrying`; `UpstreamWaiting`, `WorkUnblocked`, their messages and rows (the two living classes, the seat) |
+| `model` `SubroutineQuestion.kt` | ten readers | + `MemoryPattern` |
+| `core` `Arming.kt` | kinds drawn flat, self-chains | the mix, `structuresFor`, `linksFor`, four new seed purposes |
+| `core` `Carrying.kt` (new) | (none) | `stepAt`, `patternFor`, `patternEntry`, `completing`, `chainDue` |
+| `core` `Rules.kt`, `Admission.kt`, `Subroutines.kt` | a scan opens a Subroutine or nothing | carry steps, `chainUnlocked`, the gate, Memory Dump's grade |
+| `app` `HouseClock.kt` | meetings, Egress | + releases |
+| `app` `HouseBuzzer.kt` | | the two new kinds silent; Memory Dump has no script |
+| `harness` `Transcript.kt`, `RecordingText.kt`, `Recording.kt` | 48 | 49 |
+| `ui` `Flow.kt`, `PanelModel.kt`, `Notifications.kt`, `ScreensWork.kt`, `Subroutines.kt` | the carry widget fed by nothing | fed by the house; station steps; `you're up`; MEMORY DUMP row with no mark; `ofOrNull` |
+
+**Checked** (on the final tree, `*/build/test-results` cleared first: `./gradlew check --continue`
+with the two variant sweeps excluded, then `:app:variantSweepRelease`, then `:app:variantSweepPlaytest`,
+the app's XML copied out after each, every result XML counted with a python glob): model 362 (JVM) +
+346 (iOS Simulator); core 452 + 450; platform 211; ui 789 (desktop) + 386; harness 136; cards 17; app
+290 (the default variant), 176 (Release), 290 (Playtest). 3,905 in all, 0 failures, 0 errors, 0
+skipped. The vocabulary lints, `redactionLint` and the cordons ran and passed. The new test classes
+are in the XML: `OrderMixTest` 4, `CrossPlayerChainTest` 5, `ArrayWipeTest` 3, `MemoryDumpTest` 2,
+`OrderParityTest` 3, `WorkOrderDeterminismTest` 2 (JVM and iOS each), `ChainClockTest` 3,
+`StructuredWorkBenchTest` 3, `StructuredWorkRender` 6. `SubroutineQuestionWiringTest` gained three
+evenings (seeds 2, 15, 20): the mix deals the Insider's one order two shorts, and the first three
+evenings no longer dealt it Parity Check, Deallocate, Short or Sniff.
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

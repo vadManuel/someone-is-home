@@ -4,7 +4,9 @@ import home.someoneshome.model.Balance
 import home.someoneshome.model.ArmedTouch
 import home.someoneshome.model.AssignedWork
 import home.someoneshome.model.ContactSeed
+import home.someoneshome.model.CircuitStation
 import home.someoneshome.model.Destination
+import home.someoneshome.model.DiskInHand
 import home.someoneshome.model.Effect
 import home.someoneshome.model.EgressType
 import home.someoneshome.model.EmitSchema
@@ -67,6 +69,8 @@ class RoundWireTest {
             ),
         ),
         Effect.SubroutineGraded(Seat(3), accepted = true),
+        Effect.UpstreamWaiting(Seat(3), entry = 4),
+        Effect.WorkUnblocked(Seat(3)),
         Effect.SubroutineProgressed(remaining = 41),
         Effect.SystemIntegrityLive(percent = 87),
         Effect.SystemIntegrityBatched(percent = 87),
@@ -87,6 +91,8 @@ class RoundWireTest {
             Seat(3),
             SubroutineInstance(entry = 0, subroutine = SubroutineKind.Handshake, parameters = listOf(2, 5)),
             haptic = null,
+            // The disk in hand rides every answer (D-322), so the sweep carries one.
+            carrying = DiskInHand(disk = 1, to = CircuitStation.Rack),
         ),
         Effect.TerminalAnswered(Seat(3), reading = true),
         Effect.CardUnregistered(Seat(3)),

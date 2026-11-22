@@ -119,6 +119,8 @@ class TheDrawCannotDealAQuestionAClientRefusesTest {
             SubroutineKind.Sniff, SubroutineKind.Deallocate, SubroutineKind.Drift,
             SubroutineKind.Short, SubroutineKind.SignalTrace, SubroutineKind.Jam,
             SubroutineKind.Handshake,
+            // The long's source pattern (D-322), read through the same oracle as the ten.
+            SubroutineKind.MemoryDump,
         )
         assertEquals(SubroutineKind.entries.toSet(), dealt.toSet(), "a kind is dealt by nothing")
         assertEquals(SubroutineKind.entries.size, dealt.size, "a kind is dealt twice")
@@ -416,6 +418,8 @@ class TheToleranceIsRealAndItIsTheHousesTest {
             SubroutineKind.Replay, SubroutineKind.ParityCheck, SubroutineKind.Sniff,
             SubroutineKind.Deallocate, SubroutineKind.Short, SubroutineKind.SignalTrace,
             SubroutineKind.Jam,
+            // All-or-nothing (`gdd.md:648`, D-322): one element off is a mismatch.
+            SubroutineKind.MemoryDump,
         )
         assertEquals(
             SubroutineKind.entries -

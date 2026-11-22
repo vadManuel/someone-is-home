@@ -439,12 +439,54 @@ sealed interface Effect {
         val seat: Seat,
         val opened: SubroutineInstance?,
         val haptic: Haptic?,
+        /**
+         * **The Array Wipe disk in this seat's hand after the scan, or null for empty hands**
+         * (D-168, F-014, D-322).
+         *
+         * On **every** answer, constructed once beside [opened], so that a station step and a refusal
+         * are the same kind, the same row and the same message: what differs is the content. A
+         * station step is the one scan that opens nothing and moves the carry — Spares puts a good
+         * disk here, the Rack swaps it, Disposal takes it away — and the phone reads the step off
+         * this field changing, never off a second kind of answer.
+         *
+         * A Memory Dump pattern is never here (F-015, *only your head is off-network*).
+         */
+        val carrying: DiskInHand? = null,
     ) : Effect {
         init {
             require(haptic == null || haptic == Haptic.Double) { "a scan's answer says no or nothing, never $haptic" }
             require(opened == null || haptic == null) { "a scan that opened work does not say no" }
         }
     }
+
+    /**
+     * **Somebody is waiting on [entry] of this seat's order** (`gdd.md:282`, D-146, D-322).
+     *
+     * *The upstream player IS told someone is waiting on them — at assignment time only.* So it is
+     * sent once, at arming, to the seat whose entry holds another seat's, and **never again**: not
+     * when the entry is done, and never to confirm that the downstream unlocked. It names nobody;
+     * *never name the dependency* (`gdd.md:278`).
+     *
+     * **Every seat is upstream of exactly one other** (the draw's single cycle, D-322), so every seat
+     * receives exactly one of these at arming and the burst's shape does not move with the role or
+     * with anything else the house drew.
+     *
+     * ⚠️ **How the phone shows it is STOPPED for the owner** (D-322): no ruling says what the notice
+     * looks like or says. The house sends it; the phone holds it and draws nothing.
+     */
+    data class UpstreamWaiting(val seat: Seat, val entry: Int) : Effect
+
+    /**
+     * **Another seat's work released one of this seat's lines: `you're up`** (D-201, D-146, D-322).
+     *
+     * Sent with the order that now names the line, when the house's clock releases it — the random
+     * 20–120 s after the upstream entry was completed (`gdd.md:284`). The same effect whoever
+     * completed it (D-109, rule 1). It carries nothing: the phone draws D-201's quiet text from
+     * NUMBER WITHHELD, because *the dependency is never named* and the words never say why.
+     *
+     * A self-chain's unlock sends none (D-123: *discovered as they complete rather than announced*).
+     */
+    data class WorkUnblocked(val seat: Seat) : Effect
 
     /**
      * **The house's answer to a scan of the T card: you are reading, or somebody else is** (D-199).

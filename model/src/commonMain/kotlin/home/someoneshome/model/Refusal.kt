@@ -166,4 +166,15 @@ enum class RefusalReason {
      * reach a rule at all.
      */
     WrongMeetingPhase,
+
+    /**
+     * **A [Event.ChainUnlocked] for a dependency that is not due** (D-146, D-322): no link holds that
+     * line, its upstream entry has not been completed, its delay has not run out, or it was already
+     * released.
+     *
+     * The event is the house's own and no phone can request it, so this refusal answers nobody: it
+     * is the gate keeping a clock that fired twice, or early, from releasing work the rules never
+     * scheduled. It names nothing a phone could learn, because no phone is told.
+     */
+    ChainNotDue,
 }

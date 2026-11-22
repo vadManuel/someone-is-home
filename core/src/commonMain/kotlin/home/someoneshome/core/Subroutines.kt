@@ -7,6 +7,7 @@ import home.someoneshome.model.HandshakeTaps
 import home.someoneshome.model.InterruptSweep
 import home.someoneshome.model.JamRings
 import home.someoneshome.model.MarkerId
+import home.someoneshome.model.MemoryPattern
 import home.someoneshome.model.OpenSubroutine
 import home.someoneshome.model.ParityGrid
 import home.someoneshome.model.ReplayPattern
@@ -141,6 +142,14 @@ internal fun drawParameters(kind: SubroutineKind, draw: Draw): List<Int> = when 
                 draw.next(HandshakeRhythm.GAP_MOST - HandshakeRhythm.GAP_LEAST + 1)
         }
     }
+
+    // The source's question: the pattern itself, four or five elements (`gdd.md:646`). The scan
+    // handler draws it through [patternFor] off the same stream; this branch is the same draw, so a
+    // sweep of every kind through [drawParameters] reads a Memory Dump the way a phone would.
+    SubroutineKind.MemoryDump -> {
+        val length = MemoryPattern.LEAST + draw.next(MemoryPattern.MOST - MemoryPattern.LEAST + 1)
+        listOf(MemoryPattern.SOURCE) + List(length) { it }.shuffledBy(draw)
+    }
 }
 
 /**
@@ -204,6 +213,11 @@ internal fun answerTo(kind: SubroutineKind, parameters: List<Int>): List<Int> = 
     // The entry that returns the dealt gaps exactly (D-296): each silence in milliseconds, padded
     // to the longest Handshake any rule can deal. [grades] is what knows how far off each may be.
     SubroutineKind.Handshake -> HandshakeTaps.ofGaps(HandshakeRhythm.of(parameters).gapsMillis)
+
+    // The pattern shown at the source is the answer at the target. The target's own instance is
+    // built from the house's held copy (`patternEntry`), never from its parameters, which carry
+    // only the length.
+    SubroutineKind.MemoryDump -> MemoryPattern.of(parameters).elements
 }
 
 /**
@@ -237,6 +251,10 @@ internal fun grades(open: OpenSubroutine, marker: MarkerId, entered: List<Int>):
         SubroutineKind.Short,
         SubroutineKind.Jam,
         -> open.expected == entered
+
+        // **All-or-nothing** (`gdd.md:648`): the whole pattern, in order, or a mismatch. No partial
+        // credit, so guessing and keeping the hits banks nothing.
+        SubroutineKind.MemoryDump -> open.expected == entered
 
         // D-211: the route traced from either end. Both ends are drawn alike, so which one the
         // player started from is not part of the question; the route is.

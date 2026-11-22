@@ -20,10 +20,16 @@ import kotlin.test.assertTrue
  */
 class SubroutineRosterTest {
 
-    /** Every kind the house can send resolves to exactly one roster row. */
+    /**
+     * Every kind the house can send resolves to exactly one roster row — **but Memory Dump, which has
+     * none** (D-322): its screens, briefing and light are STOPPED for the owner, so the phone opens
+     * nothing over it (`Subroutine.ofOrNull`). Asserted rather than skipped, so the day it gets a row
+     * this test says to sweep it in.
+     */
     @Test
     fun `every kind the house can name has exactly one roster row`() {
-        for (kind in SubroutineKind.entries) {
+        assertEquals(null, Subroutine.ofOrNull(SubroutineKind.MemoryDump), "Memory Dump has a roster row now")
+        for (kind in SubroutineKind.entries - SubroutineKind.MemoryDump) {
             val rows = Subroutine.entries.filter { it.kind == kind }
             assertEquals(1, rows.size, "$kind resolves to ${rows.size} roster rows")
         }
@@ -33,11 +39,11 @@ class SubroutineRosterTest {
     @Test
     fun `the roster and the wire name the same ten`() {
         assertEquals(
-            SubroutineKind.entries.size, Subroutine.entries.size,
+            (SubroutineKind.entries - SubroutineKind.MemoryDump).size, Subroutine.entries.size,
             "the roster and the set of kinds are different sizes",
         )
         assertEquals(
-            SubroutineKind.entries.toSet(), Subroutine.entries.map { it.kind }.toSet(),
+            (SubroutineKind.entries - SubroutineKind.MemoryDump).toSet(), Subroutine.entries.map { it.kind }.toSet(),
             "a roster row names a kind twice, or a kind has no row",
         )
     }
@@ -52,14 +58,14 @@ class SubroutineRosterTest {
      */
     @Test
     fun `every kind resolves to a rated light signature`() {
-        for (kind in SubroutineKind.entries) {
+        for (kind in SubroutineKind.entries - SubroutineKind.MemoryDump) {
             val row = Subroutine.of(kind)
             assertEquals(kind, row.kind)
             assertTrue(row.label.isNotBlank(), "$kind has no name to draw")
         }
         assertEquals(
             Subroutine.entries.size,
-            SubroutineKind.entries.map { Subroutine.of(it) }.distinct().size,
+            (SubroutineKind.entries - SubroutineKind.MemoryDump).map { Subroutine.of(it) }.distinct().size,
             "two kinds resolved to the same roster row",
         )
     }

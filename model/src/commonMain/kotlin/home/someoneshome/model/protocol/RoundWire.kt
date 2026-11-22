@@ -5,6 +5,7 @@ import home.someoneshome.model.AssignedWork
 import home.someoneshome.model.ClientFacing
 import home.someoneshome.model.ContactSeed
 import home.someoneshome.model.Destination
+import home.someoneshome.model.DiskInHand
 import home.someoneshome.model.Effect
 import home.someoneshome.model.EgressType
 import home.someoneshome.model.EmitSchema
@@ -376,13 +377,26 @@ sealed class RoundMessage {
     @ClientFacing
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("ScanAnswered")
-    data class ScanAnswered(val opened: SubroutineInstance?, val no: Int) : RoundMessage() {
+    data class ScanAnswered(
+        val opened: SubroutineInstance?,
+        val no: Int,
+        /**
+         * The Array Wipe disk in this phone's hand after the scan, or null (D-168, D-322). On every
+         * answer, for [opened]'s reason: one kind and one message per scan. See
+         * [home.someoneshome.model.Effect.ScanAnswered.carrying].
+         */
+        val carrying: DiskInHand? = null,
+    ) : RoundMessage() {
         init {
             require(no == NO || no == QUIET) { "a scan's answer says no or nothing, never $no" }
         }
 
-        /** The answer with the rules' buzz: [Haptic.Double] or nothing. */
-        constructor(opened: SubroutineInstance?, haptic: Haptic? = null) : this(opened, if (haptic == Haptic.Double) NO else QUIET)
+        /** The answer with the rules' buzz ([Haptic.Double] or nothing) and the disk in hand. */
+        constructor(
+            opened: SubroutineInstance?,
+            haptic: Haptic? = null,
+            carrying: DiskInHand? = null,
+        ) : this(opened, if (haptic == Haptic.Double) NO else QUIET, carrying)
 
         /** D-160's *no* on NOTHING FOR YOU HERE, nothing otherwise: the effect's own value. */
         val haptic: Haptic? get() = if (no == NO) Haptic.Double else null
@@ -392,6 +406,26 @@ sealed class RoundMessage {
             const val NO: Int = 1
         }
     }
+
+    /**
+     * **Somebody is waiting on [entry] of this phone's order** (`gdd.md:282`, D-322). Once, at
+     * arming, to every seat (each is upstream of one other). It names nobody. ⚠️ How the phone shows
+     * it is STOPPED for the owner. See [home.someoneshome.model.Effect.UpstreamWaiting].
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("UpstreamWaiting")
+    data class UpstreamWaiting(val entry: Int) : RoundMessage()
+
+    /**
+     * **`you're up`: another seat's work released one of this phone's lines** (D-201, D-322). It
+     * carries nothing; the order beside it names the line. See
+     * [home.someoneshome.model.Effect.WorkUnblocked].
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("WorkUnblocked")
+    data object WorkUnblocked : RoundMessage()
 
     /**
      * The answer to a scan of the T card: the live view opens, or ONE READER AT A TIME (D-199).
@@ -1000,6 +1034,8 @@ sealed class RoundMessage {
             is MessageDelivered -> EmitSchema.MESSAGE_DELIVERED
             is WorkOrderIssued -> EmitSchema.WORK_ORDER_ISSUED
             is ScanAnswered -> EmitSchema.SCAN_ANSWERED
+            is UpstreamWaiting -> EmitSchema.UPSTREAM_WAITING
+            is WorkUnblocked -> EmitSchema.WORK_UNBLOCKED
             is TerminalAnswered -> EmitSchema.TERMINAL_ANSWERED
             is CardUnregistered -> EmitSchema.CARD_UNREGISTERED
             is PresenceChanged -> EmitSchema.PRESENCE_CHANGED
@@ -1437,7 +1473,11 @@ object RoundWire {
         is Effect.SystemIntegrityBatched -> RoundMessage.SystemIntegrityBatched(effect.percent)
         is Effect.MessageDelivered -> RoundMessage.MessageDelivered(effect.body)
         is Effect.WorkOrderIssued -> RoundMessage.WorkOrderIssued(effect.lines)
-        is Effect.ScanAnswered -> RoundMessage.ScanAnswered(effect.opened, effect.haptic)
+        is Effect.ScanAnswered -> RoundMessage.ScanAnswered(effect.opened, effect.haptic, effect.carrying)
+        // The seat comes off; the entry is this phone's own line.
+        is Effect.UpstreamWaiting -> RoundMessage.UpstreamWaiting(effect.entry)
+        // The seat comes off and nothing is left: the socket is the address.
+        is Effect.WorkUnblocked -> RoundMessage.WorkUnblocked
         is Effect.TerminalAnswered -> RoundMessage.TerminalAnswered(effect.reading)
         // The seat comes off and nothing is left: the socket is the address (D-318).
         is Effect.CardUnregistered -> RoundMessage.CardUnregistered

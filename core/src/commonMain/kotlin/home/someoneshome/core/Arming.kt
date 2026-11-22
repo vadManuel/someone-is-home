@@ -2,6 +2,7 @@ package home.someoneshome.core
 
 import home.someoneshome.model.AssignedWork
 import home.someoneshome.model.Balance
+import home.someoneshome.model.ChainLink
 import home.someoneshome.model.ContactSeed
 import home.someoneshome.model.Destination
 import home.someoneshome.model.Event
@@ -13,6 +14,7 @@ import home.someoneshome.model.OrderEntry
 import home.someoneshome.model.Seat
 import home.someoneshome.model.SeatNamed
 import home.someoneshome.model.SubroutineKind
+import home.someoneshome.model.SubroutineStructure
 import home.someoneshome.model.Tick
 import home.someoneshome.model.WorkOrder
 
@@ -178,16 +180,32 @@ internal fun activeFor(
 }
 
 /**
- * **One seat's work order: [size] entries, anchored round-robin through a shuffled active set**
- * (D-129, D-123, D-114).
+ * **One seat's work order: [size] entries in the design's mix, anchored round-robin through a
+ * shuffled active set** (D-129, D-123, D-114, D-322).
  *
- * ### The shuffle is per seat and the size is not
+ * ### The size is public, the mix is the size's, and the order is per seat
  *
  * [size] is [Balance.orderSize], computed from public lobby facts alone, so **every order in the
  * round is the same length** — the Insider's fake included, which is what makes length
- * role-independent by construction rather than by a rule somebody keeps applying. The *contents*
- * are shuffled per seat so that two players do not walk the same route in the same order, which
- * would turn congestion from content into a queue.
+ * role-independent by construction rather than by a rule somebody keeps applying. **The mix is
+ * [Balance.orderMix] of that size** (the owner's 2026-11-21 ruling: *scale the proportions*), so
+ * every order also holds the same number of each structure. What is per seat is which short and
+ * medium kinds were drawn, where in the order each structure sits, and the anchors — so that two
+ * players do not walk the same route in the same order, which would turn congestion from content
+ * into a queue.
+ *
+ * ### What each structure is dealt
+ *
+ * - **short, medium** — one of that structure's kinds ([SubroutineKind.dealtAs]), at one card;
+ * - **long** — a Memory Dump at **two different cards**, the source and then the target
+ *   (`gdd.md:640`: *a different, specified marker*), the next two anchors in the walk;
+ * - **circuit** — the Array Wipe at the round's three [stations], in D-122's draw order (Spares,
+ *   Rack, Disposal). Every circuit in the round shares the one Rack (`gdd.md:672`).
+ *
+ * **A home too small for a structure deals a short in its place**: a circuit needs three stations
+ * and a Memory Dump two distinct cards, and a home with fewer cannot hold them. D-128's minimum
+ * home is eight markers, so this is unreachable in a home that passed review; it is the fail-closed
+ * answer for a hand-built round, and the length still says [size].
  *
  * ### Round-robin is what makes a self-chain happen, and only when it has to
  *
@@ -195,11 +213,10 @@ internal fun activeFor(
  * than the active set therefore gets **distinct** anchors and is a flat menu; an order deeper than
  * the active set wraps, and the second visit to a card is blocked by the first (D-123's
  * blocked-by-your-own-work, discovered as the player completes rather than announced in advance).
- * A home that is short of markers absorbs the shortage exactly there, which is why D-129 is
- * enforced at arming and is not a REVIEW gate.
+ * An entry at several cards is blocked by the most recent earlier entry at each of them.
  *
  * **The dependency always points backwards**, so an order can always be finished — see
- * [OrderEntry.blockedBy].
+ * [OrderEntry.blockedBy]. The cross-player holds are added after, by [linksFor].
  *
  * ### `Role` does not appear in this function, and that is load-bearing
  *
@@ -212,34 +229,135 @@ internal fun workOrderFor(
     seat: Seat,
     size: Int,
     active: List<MarkerId>,
+    stations: List<MarkerId> = emptyList(),
 ): WorkOrder {
     if (active.isEmpty() || size <= 0) return WorkOrder(seat, emptyList())
     val anchors = active.shuffledBy(Draw(seed, SeedPurpose.Anchors, seat.index.toLong()))
     val kinds = Draw(seed, SeedPurpose.Kinds, seat.index.toLong())
+    val structures = structuresFor(size, circuit = stations.size >= Balance.STATIONS, long = anchors.size >= 2)
+        .shuffledBy(Draw(seed, SeedPurpose.Structures, seat.index.toLong()))
     val entries = mutableListOf<OrderEntry>()
-    for (index in 0 until size) {
-        val marker = anchors[index % anchors.size]
-        // The most recent earlier entry at the same card, and nothing else. A dependency graph
-        // between DIFFERENT Subroutines is a design nobody has drawn -- D-114 says a blocked entry
-        // is a known unknown and D-123 says where the blocking comes from, and neither invents a
-        // second source. One is enough to make the order a menu rather than a queue.
-        val chain = entries.lastOrNull { it.isAt(marker) }
+    var walk = 0
+    fun nextAnchor(): MarkerId = anchors[walk++ % anchors.size]
+    for ((index, structure) in structures.withIndex()) {
+        val (work, markers) = when (structure) {
+            SubroutineStructure.Circuit -> AssignedWork.ArrayWipe to stations.take(Balance.STATIONS)
+            SubroutineStructure.Long -> AssignedWork.MemoryDump to listOf(nextAnchor(), nextAnchor())
+            SubroutineStructure.Short, SubroutineStructure.Medium -> {
+                val dealt = SubroutineKind.dealtAs(structure)
+                AssignedWork.Subroutine(dealt[kinds.next(dealt.size)]) to listOf(nextAnchor())
+            }
+        }
+        // The most recent earlier entry at each of this entry's cards, and nothing else (D-123).
+        val chain = markers.mapNotNull { m -> entries.lastOrNull { it.isAt(m) }?.index }.distinct().sorted()
         entries += OrderEntry(
             index = index,
-            // **Every drawn entry is a Subroutine, and the circuit is not dealt** (see
-            // `AssignedWork.ArrayWipe`). The design's assigned mix -- 1 circuit, 1 long, 3 medium,
-            // 2 short -- is not built at all: length is D-129's K and the kinds are drawn flat. The
-            // format can carry a circuit so that a client can draw one; putting one in an order
-            // needs the carried state it is graded against, which is F-014's and E7's.
-            work = AssignedWork.Subroutine(
-                SubroutineKind.entries[kinds.next(SubroutineKind.entries.size)],
-            ),
-            markers = listOf(marker),
-            blockedBy = chain?.let { listOf(it.index) } ?: emptyList(),
+            work = work,
+            markers = markers,
+            blockedBy = chain,
             done = false,
         )
     }
     return WorkOrder(seat, entries)
+}
+
+/**
+ * **The structures of one order, in mix order, before the per-seat shuffle** (D-322).
+ *
+ * [Balance.orderMix]'s counts, with a circuit or a long the home cannot hold dealt as a short
+ * instead (see [workOrderFor]). Always [size] long.
+ */
+internal fun structuresFor(size: Int, circuit: Boolean, long: Boolean): List<SubroutineStructure> {
+    val mix = Balance.orderMix(size)
+    return Balance.ORDER_MIX_WEIGHTS.flatMap { (structure, _) ->
+        val held = when (structure) {
+            SubroutineStructure.Circuit -> circuit
+            SubroutineStructure.Long -> long
+            SubroutineStructure.Short, SubroutineStructure.Medium -> true
+        }
+        List(mix.getValue(structure)) { if (held) structure else SubroutineStructure.Short }
+    }
+}
+
+/**
+ * **The round's cross-player dependencies: one seeded cycle over the seats** (D-146, D-322).
+ *
+ * *Work-order dependencies are cross-player*: one seat's entry holds another seat's until it is
+ * completed, and then a random 20–120 s later (`gdd.md:284`). The draw is one cycle: the seats are
+ * shuffled, and each seat's **upstream** entry holds the **downstream** entry of the seat after it,
+ * the last seat's holding the first's. So **every seat is upstream of exactly one seat and
+ * downstream of exactly one**, a dependency always joins two different seats, and nobody appears
+ * twice in a chain (`gdd.md:272`).
+ *
+ * ### ⚠️ The shape is the build's, and provisional (D-322)
+ *
+ * The design rules that dependencies exist, that they are cross-player, how long the unlock waits
+ * and that nothing rescues them. It does not say how many per order or how long a chain is, and
+ * the one bound it gives — `L ≤ living Insiders + 1` (`gdd.md:273`) — is computed from the hidden
+ * draw. A cycle of pairs is the smallest shape that is cross-player for every seat: each chain is
+ * two links long, inside that bound for every lawful round (the band's least is one).
+ *
+ * ### Chains are drawn over every seat, Insiders included, and that is rule 1 rather than a choice
+ *
+ * `gdd.md:271` says chains are composed entirely of Residents. **The build cannot draw that**
+ * without reading the role, and the role read here would reach every downstream seat: a Resident
+ * whose dependency was redrawn because a seat turned out to be an Insider is a Resident told
+ * something about that seat, and the differential harness reads exactly that as a leak. An
+ * Insider's fake is graded for real (D-109), so an Insider upstream unlocks a downstream seat by
+ * completing their entry, or sits on it — *either the player upstream is gone, or they are sitting
+ * on it* (D-146). Flagged for the owner in D-322.
+ *
+ * ### Which entries
+ *
+ * Per seat, two distinct entries drawn from the seed: the **earlier** is the seat's upstream entry
+ * and the **later** its downstream one. Upstream before downstream is what keeps the whole round
+ * acyclic: an upstream entry depends only on earlier entries of its own order (self-chains point
+ * backwards), so it never waits, however indirectly, on the line it is holding elsewhere.
+ *
+ * A round with fewer than two orders of two entries has no cycle to draw and gets none.
+ */
+internal fun linksFor(seed: Long, orders: List<WorkOrder>): Pair<List<WorkOrder>, List<ChainLink>> {
+    val eligible = orders.filter { it.entries.size >= 2 }
+    if (eligible.size < 2) return orders to emptyList()
+    val cycle = eligible.shuffledBy(Draw(seed, SeedPurpose.Links))
+    val picks = cycle.map { order ->
+        val draw = Draw(seed, SeedPurpose.LinkEntries, order.seat.index.toLong())
+        val size = order.entries.size
+        val first = draw.next(size)
+        val second = draw.next(size - 1).let { if (it >= first) it + 1 else it }
+        minOf(first, second) to maxOf(first, second)
+    }
+    val links = cycle.indices.map { k ->
+        val up = cycle[k]
+        val down = cycle[(k + 1) % cycle.size]
+        val delay = Draw(seed, SeedPurpose.UnlockDelay, down.seat.index.toLong()).let { draw ->
+            val seconds = Balance.UNLOCK_DELAY_LEAST_SECONDS +
+                draw.next(Balance.UNLOCK_DELAY_MOST_SECONDS - Balance.UNLOCK_DELAY_LEAST_SECONDS + 1)
+            seconds * Balance.TICKS_PER_SECOND
+        }
+        ChainLink(
+            up = up.seat,
+            upEntry = picks[k].first,
+            down = down.seat,
+            downEntry = picks[(k + 1) % cycle.size].second,
+            delay = delay,
+            dueAt = null,
+        )
+    }.sortedBy { it.down.index }
+    val held = orders.map { order ->
+        val holds = links.filter { it.down.index == order.seat.index }.map { it.downEntry }
+        if (holds.isEmpty()) {
+            order
+        } else {
+            WorkOrder(
+                order.seat,
+                order.entries.map { e ->
+                    if (e.index in holds) OrderEntry(e.index, e.work, e.markers, e.blockedBy, e.done, held = true) else e
+                },
+            )
+        }
+    }
+    return held to links
 }
 
 /**
@@ -296,8 +414,27 @@ internal enum class SeedPurpose(val label: String) {
     /** One seat's anchors, indexed by seat. Reach that seat's work order. */
     Anchors("someone-is-home/draw/anchors/1"),
 
-    /** One seat's Subroutine kinds, indexed by seat. Reach that seat's work order. */
-    Kinds("someone-is-home/draw/kinds/1"),
+    /**
+     * One seat's short and medium kinds, indexed by seat. Reach that seat's work order. Version 2
+     * since the mix (D-322): the stream is read once per short or medium entry, from that
+     * structure's kinds, where version 1 was read once per entry from all ten.
+     */
+    Kinds("someone-is-home/draw/kinds/2"),
+
+    /** Where each structure sits in one seat's order, indexed by seat (D-322). Reaches that seat. */
+    Structures("someone-is-home/draw/structures/1"),
+
+    /** The cycle of cross-player dependencies over the seats (D-146, D-322). Never reaches a phone. */
+    Links("someone-is-home/draw/links/1"),
+
+    /**
+     * One seat's upstream and downstream entries, indexed by seat (D-322). Reaches the seat only as
+     * which of its own lines is blocked, and which one somebody is waiting on.
+     */
+    LinkEntries("someone-is-home/draw/link-entries/1"),
+
+    /** One dependency's unlock delay, indexed by its downstream seat (`gdd.md:284`). Never sent. */
+    UnlockDelay("someone-is-home/draw/unlock-delay/1"),
 
     /** One opened Subroutine's question, indexed by its entity. Reaches the scanning phone. */
     Instance("someone-is-home/draw/instance/1"),

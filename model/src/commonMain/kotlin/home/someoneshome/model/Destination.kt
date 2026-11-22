@@ -58,25 +58,19 @@ data class Destination(
  * the light roster, the parameter draw, the grading — and every one of those would have had to
  * grow a special case for it.
  *
- * ### The circuit is representable and is not yet dealt
+ * ### The circuit and the long are dealt (D-322)
  *
- * The design's assigned mix is *1 circuit, 1 long, 3 medium, 2 short* (`gdd.md:265`), and none of
- * that mix is built: order length is D-129's `K` and the kinds are drawn flat. So the **format**
- * can carry a circuit — which is what lets the client's ARRAY WIPE row stop being a fixture — and
- * the draw does not put one in an order. Dealing one needs the carry-state machine (F-014, E7),
- * which is not this unit's.
- *
- * See [WorkOrder.openAt] for the one consequence of that, stated where it bites.
+ * The design's assigned mix is *1 circuit, 1 long, 3 medium, 2 short* (`gdd.md:265`), and the
+ * owner ruled it scaled to D-129's `K` ([Balance.orderMix]). So an order now holds Subroutines,
+ * Memory Dumps (two cards: source, target) and the Array Wipe circuit (three: the stations).
  */
 @ClientFacing
 @kotlinx.serialization.Serializable
 sealed interface AssignedWork {
 
     /**
-     * The kind a scan opens, or **null for work no scan opens yet**.
-     *
-     * A property rather than an `is` check at each call site, so that the day the circuit becomes
-     * scannable there is one place that changes rather than three that have to be found.
+     * The kind a scan opens as a Subroutine screen, or **null for work that opens no screen** — the
+     * circuit, whose every step is the scan itself (D-113: *the work is the scanning*).
      */
     val opensAs: SubroutineKind?
 
@@ -98,11 +92,26 @@ sealed interface AssignedWork {
      * ([OrderEntry.markers]), so a circuit line and a Subroutine line are the same shape with a
      * different number of places in it, and there is no second list to disagree with the draw.
      *
-     * `opensAs` is null: the carry-state machine that makes a circuit leg scannable is not built.
+     * **Every step is a scan and none opens a screen** (D-113, D-322): Spares hands the seat a good
+     * disk, the Rack swaps it for a damaged one, Disposal degausses it, and two damaged disks
+     * finish the line ([Balance.ARRAY_WIPE_DISKS]). While a disk is in hand nothing else opens
+     * (`gdd.md:664`, F-014). So `opensAs` is null.
      */
     @ClientFacing
     @kotlinx.serialization.Serializable
     data object ArrayWipe : AssignedWork {
         override val opensAs: SubroutineKind? get() = null
+    }
+
+    /**
+     * **Memory Dump, the long structure** (`gdd.md:640`, D-322). Two cards in the entry's
+     * [OrderEntry.markers]: the **source**, where the pattern is shown, and the **target**, a
+     * different card, where it is entered from memory. The house holds the pattern between the two
+     * (`GameState.carries`); the phone never keeps it, and Files never shows it (F-015).
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    data object MemoryDump : AssignedWork {
+        override val opensAs: SubroutineKind get() = SubroutineKind.MemoryDump
     }
 }

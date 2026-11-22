@@ -772,6 +772,12 @@ data class PanelState(
      */
     val carrying: Carried? = null,
     /**
+     * **The newest quiet arrival, when it was a `you're up`** (D-201, D-322), or null when the house's
+     * own newest text is the one to draw. On a housed phone the quiet banner is whichever landed
+     * last; a house text sets this back to null.
+     */
+    val lastQuiet: Notification? = null,
+    /**
      * **This phone's own wall clock, as it last read it** (D-243). Written by `FlowModel` from the
      * clock the app root hands it, at construction and once a minute changes, **housed or not**
      * (D-255); read by the status strip and the lantern. Not a fact the house sent, and nothing but
@@ -1794,6 +1800,13 @@ class PanelVals(
                     AssignedWork.ArrayWipe -> OrderRow.Named(
                         line.index, ARRAY_WIPE, ARRAY_WIPE_LIGHT, line.done, room, glyph,
                     )
+                    // **The long, by name and with no light mark** (D-322). D-113: *Memory Dump is
+                    // rated when it is built*, and its rating is STOPPED for the owner with its two
+                    // screens, so the row claims no signature rather than inventing one. An absent
+                    // mark is never misread as DARK: nothing on the ladder is zero cells.
+                    AssignedWork.MemoryDump -> OrderRow.Named(
+                        line.index, MEMORY_DUMP, MEMORY_DUMP_LIGHT, line.done, room, glyph,
+                    )
                 }
             }
             is OrderLine.Blocked -> OrderRow.Blocked(line.index)
@@ -2063,8 +2076,9 @@ class PanelVals(
     val arrival: Arrival? = when {
         state.egressAlertUp -> Arrival(Notifications.egressFor(egressType, egressNodes), under = state.screen)
         state.quietUp != null -> Arrival(Notifications.houseText(state.quietUp), under = state.screen)
-        state.houseAttached && state.screen == ScreenId.Quiet -> state.houseTexts.lastOrNull()
-            ?.let { Arrival(Notifications.houseText(it), under = ScreenId.Home) }
+        state.houseAttached && state.screen == ScreenId.Quiet ->
+            (state.lastQuiet ?: state.houseTexts.lastOrNull()?.let { Notifications.houseText(it) })
+                ?.let { Arrival(it, under = ScreenId.Home) }
         else -> Notifications.arrivalOn(state.screen, egressType, egressNodes)
     }
 
@@ -2317,6 +2331,14 @@ class PanelVals(
 
         const val ARRAY_WIPE = "ARRAY WIPE"
         val ARRAY_WIPE_LIGHT: LightSignature = LightSignature.Bright
+
+        /**
+         * **What the long is called, and its light: unrated** (D-322). The name is the design's
+         * (`gdd.md:640`); the light is STOPPED with its screens (D-113), so it is null and the row
+         * draws no mark.
+         */
+        const val MEMORY_DUMP = "MEMORY DUMP"
+        val MEMORY_DUMP_LIGHT: LightSignature? = null
 
         val CURRENT: CurrentSubroutine = CurrentSubroutine(
             subroutine = Subroutine.Handshake,
@@ -2820,7 +2842,12 @@ sealed interface OrderRow {
     data class Named(
         override val index: Int,
         val label: String,
-        val light: LightSignature,
+        /**
+         * The row's light signature, or **null for a kind nothing has rated** — Memory Dump, until
+         * the owner rules (D-113, D-322). Null draws no mark, and nothing on the ladder is zero cells,
+         * so it reads as *nothing is claimed* rather than as DARK.
+         */
+        val light: LightSignature?,
         val done: Boolean,
         /**
          * **Where this line is: the house's own room name and the glyph printed on the card.**

@@ -551,4 +551,82 @@ object Balance {
      */
     fun activeMarkers(seats: Int, available: Int): Int =
         maxOf(1, minOf(available, seats * ACTIVE_MARKERS_PER_SEAT))
+
+    /**
+     * **The design's mix, as proportions of `K`** (D-005, D-129; the owner's 2026-11-21 ruling,
+     * D-322): *1 circuit : 1 long : 3 medium : 2 short*, in that order.
+     *
+     * D-005 wrote the mix for an order of seven. D-129 replaced the fixed seven with `K`, and the
+     * owner chose to **scale the proportions** rather than keep seven fixed entries and pad the rest:
+     * about 14% circuit, 14% long, 43% medium and 29% short of whatever `K` the lobby's public facts
+     * compute. The weights are written here once, in structure order, and [orderMix] is the only
+     * thing that reads them.
+     */
+    val ORDER_MIX_WEIGHTS: List<Pair<SubroutineStructure, Int>> = listOf(
+        SubroutineStructure.Circuit to 1,
+        SubroutineStructure.Long to 1,
+        SubroutineStructure.Medium to 3,
+        SubroutineStructure.Short to 2,
+    )
+
+    /**
+     * **How many entries of each structure an order of [size] holds** — D-322's rounding, ⚠️
+     * **provisional until the owner confirms it.**
+     *
+     * **Largest remainder** (Hamilton's method), integer-only, and the answer always sums to [size]:
+     *
+     * 1. each structure's quota is `size × weight ÷ 7`; every structure first takes the whole part
+     *    of its quota;
+     * 2. the entries still unassigned go one each to the structures with the **largest fractional
+     *    remainders**;
+     * 3. **a tie goes to the cheaper structure first** — short, then medium, then long, then circuit.
+     *    With these weights the only remainders that can ever tie are the circuit's and the long's,
+     *    which share a weight, so the rule in practice is *the long before the circuit*: a circuit is
+     *    the most expensive entry in the game (~160 s, three markers, a carry that blocks everything
+     *    else), and a tie is not a reason to deal a second one.
+     *
+     * At `K = 7` it is the design's 1/1/3/2 exactly. At the `K`s a lobby actually computes it reads:
+     * 6 → 1/1/2/2, 8 → 1/1/4/2, 9 → 1/1/4/3, 10 → 1/2/4/3.
+     *
+     * Integer arithmetic for [orderSize]'s reason: a balance number that depends on a rounding mode
+     * is a number that differs between two phones. **No role is an input**, so an Insider's fake
+     * order has the same shape as every Resident's (D-109, D-129).
+     */
+    fun orderMix(size: Int): Map<SubroutineStructure, Int> {
+        if (size <= 0) return SubroutineStructure.entries.associateWith { 0 }
+        val total = ORDER_MIX_WEIGHTS.sumOf { it.second }
+        val whole = ORDER_MIX_WEIGHTS.associate { (s, w) -> s to (size * w) / total }
+        val remainder = ORDER_MIX_WEIGHTS.associate { (s, w) -> s to (size * w) % total }
+        val left = size - whole.values.sum()
+        // Cheaper first on a tie: the structures in ascending cost, then a stable sort on the
+        // remainder, descending. `sortedByDescending` is stable, so the cost order survives a tie.
+        val byCost = listOf(
+            SubroutineStructure.Short,
+            SubroutineStructure.Medium,
+            SubroutineStructure.Long,
+            SubroutineStructure.Circuit,
+        )
+        val extra = byCost.sortedByDescending { remainder.getValue(it) }.take(left)
+        return SubroutineStructure.entries.associateWith { s ->
+            whole.getValue(s) + if (s in extra) 1 else 0
+        }
+    }
+
+    /**
+     * **The random unlock delay on a cross-player dependency, in whole seconds** (`gdd.md:284`,
+     * F-013, D-074, D-146): **20–120 s**, held at the original window (D-011).
+     *
+     * Drawn once per dependency from the round's seed, uniform over the whole seconds of the
+     * window, and applied from the moment the upstream entry is completed. ⚠️ The **uniform
+     * distribution** is the build's reading (D-322): the design says *random 20–120 s* and *start at
+     * the short end and lengthen if playtests show the game is too blind*, and names no shape.
+     */
+    const val UNLOCK_DELAY_LEAST_SECONDS: Int = 20
+    const val UNLOCK_DELAY_MOST_SECONDS: Int = 120
+
+    /**
+     * **Two damaged disks to an Array Wipe** (`gdd.md:660`): *two damaged disks → four traverses*,
+     * Spares to Rack and Rack to Disposal, twice, carrying one disk at a time.
+     */
+    const val ARRAY_WIPE_DISKS: Int = 2
 }

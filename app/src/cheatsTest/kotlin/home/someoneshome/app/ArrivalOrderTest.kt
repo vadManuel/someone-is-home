@@ -1,5 +1,6 @@
 package home.someoneshome.app
 
+import home.someoneshome.model.AssignedWork
 import home.someoneshome.core.ContactGate
 import home.someoneshome.core.contactSeedFor
 import home.someoneshome.model.Balance
@@ -188,7 +189,10 @@ class ArrivalOrderTest {
      */
     private suspend fun performEverywhere(house: RoundAuthority) {
         for (seat in house.state.seats) {
-            val card = house.state.workOrderFor(seat)?.entries?.firstOrNull()?.anchor ?: error("seat ${seat.index} has no card to open")
+            val order = house.state.workOrderFor(seat)
+            // A Subroutine's line: a circuit's Spares and a Memory Dump's source open no screen (D-322).
+            val card = order?.entries?.firstOrNull { it.work is AssignedWork.Subroutine && order.isActionable(it) }?.anchor
+                ?: error("seat ${seat.index} has no card to open")
             house.mint(Event.MarkerScanned(house.now(), seat, card))
             check(house.state.presenceFor(seat)?.open == true) { "seat ${seat.index}'s card opened no window: ${house.refusals}" }
         }

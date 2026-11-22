@@ -109,6 +109,8 @@ class HousedSubroutineQuestionTest {
         SubroutineKind.SignalTrace -> model.wiring.let { listOf(it.nodes, it.edges, it.source, it.sink) }
         SubroutineKind.Jam -> model.rings.opening
         SubroutineKind.Handshake -> model.handshake.length
+        // No screen draws a Memory Dump: its two screens are STOPPED for the owner (D-322).
+        SubroutineKind.MemoryDump -> Unit
     }
 
     /** The same projection, read straight off the reader the house drew against. */
@@ -123,6 +125,7 @@ class HousedSubroutineQuestionTest {
         SubroutineKind.SignalTrace -> SignalGraph.of(p).let { listOf(it.nodes, it.edges, it.source, it.sink) }
         SubroutineKind.Jam -> JamRings.of(p).opening
         SubroutineKind.Handshake -> HandshakeRhythm.of(p).beats
+        SubroutineKind.MemoryDump -> Unit
     }
 
     private fun render(state: PanelState, model: SubroutineModel, atMillis: Long = 0): BufferedImage {
@@ -148,7 +151,10 @@ class HousedSubroutineQuestionTest {
     /** **GUARD: on a housed phone, BEGIN deals the house's parameters into the model the screen reads.** */
     @Test
     fun aHousedPhoneHoldsTheQuestionTheHouseDealt() {
-        assertEquals(SubroutineKind.entries.toSet(), dealt.keys, "a kind has no dealt question here")
+        // ⚠️ Every kind but Memory Dump, whose two screens are STOPPED for the owner (D-322): it has
+        // no roster row, so a phone opens nothing over it, and that is asserted rather than skipped.
+        assertEquals(SubroutineKind.entries.toSet() - SubroutineKind.MemoryDump, dealt.keys, "a kind has no dealt question here")
+        assertEquals(null, Subroutine.ofOrNull(SubroutineKind.MemoryDump), "Memory Dump grew a screen: give it a dealt question here")
         for ((kind, parameters) in dealt) {
             val phone = housedAndDealt(kind, parameters)
             val subroutine = Subroutine.of(kind)

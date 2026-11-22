@@ -262,7 +262,7 @@ The tiers are Subroutine *structures* — how a Subroutine is scheduled and wher
 | **Long** | **Two stages at two different markers.** Forces a *route* rather than a destination, and the route is where you are vulnerable. | ~95s |
 | **Circuit** | Three markers, one carried-state machine. **The only Subroutine where you are mobile and aware, but predictable.** | ~160s |
 
-**Order size: `K = ⌈M ÷ worstCasePlainResidents⌉ + slack` Subroutines per Resident, where `worstCasePlainResidents = seats − bandMax`** — computed from public lobby facts alone, never from the hidden draw (D-129). The mix derived in `decision-log.md` D-005 was 7 per Resident, weighted 1 circuit, 1 long, 3 medium, 2 short; D-129 replaced the fixed 7.
+**Order size: `K = ⌈M ÷ worstCasePlainResidents⌉ + slack` Subroutines per Resident, where `worstCasePlainResidents = seats − bandMax`** — computed from public lobby facts alone, never from the hidden draw (D-129). The mix derived in `decision-log.md` D-005 was 7 per Resident, weighted 1 circuit, 1 long, 3 medium, 2 short; D-129 replaced the fixed 7. **The owner ruled the mix scaled as proportions of `K` (D-322, built):** about 14% circuit, 14% long, 43% medium and 29% short, rounded by largest remainder with a tie going to the cheaper structure, so every order sums to `K` (6 → 1/1/2/2, 7 → 1/1/3/2, 8 → 1/1/4/2, 10 → 1/2/4/3). The rounding is provisional. The roster rates six of the ten short (Replay, Interrupt, Parity Check, Sniff, Deallocate, Short) and four medium (Drift, Signal Trace, Jam, Handshake); Memory Dump is the long and the Array Wipe the circuit. Every order, the Insider's fake included, holds the same mix.
 
 #### M5 — Dependency chains
 
@@ -280,6 +280,8 @@ The strongest structural idea in the design: it manufactures the one thing physi
 - **When the dependency is revoked, the Subroutine stays blocked** (D-146). It is a visible blocked entry (D-114), and one that never unblocks is a fact a Resident can carry to the meeting: either the player upstream is gone, or they are sitting on it. The waiting player cannot tell which.
 - **Never display chain membership to anyone but the holder.** Chains are Resident-only, so any visible confirmation of membership is an alignment reveal. Expose the full structure only on the end-of-game screen.
 - **The upstream player IS told someone is waiting on them** — at assignment time only. This reveals only that a Resident exists downstream, which they already know. **Never confirm that the downstream unlock happened.**
+
+> **Built (D-322), with three of the bullets above STOPPED for the owner.** Cross-player dependencies are dealt at arming as **one seeded cycle over the seats**: every seat's order holds one line another seat's work holds (a blocked line, D-114) and one line another seat is waiting on, so every seat is told once, at arming, that someone is waiting. Completing the upstream line, in either role, starts a 20–120 s delay drawn from the seed; the house's clock then releases the line and the phone gets `you're up` from NUMBER WITHHELD (D-201). A Revoke before the upstream line is done strands the downstream line for the round. **Not built:** *chains are composed entirely of Residents*, the `L ≤ living Insiders + 1` bound and lazy linking each need the hidden draw, and a chain drawn from it would tell a downstream Resident about another seat's role; the build draws over every seat, Insiders included, and each chain is two links. How the upstream notice looks is unruled, and the phone draws nothing for it yet.
 
 **Random unlock delay: 20–120s, applied identically to both paths.** Without it, timing leaks even though content does not: a revocation discovered at 21:04 and a Subroutine unlocking at 21:03:58 is a trivial correlation that reconstructs who was revoked when. If completion-unlocks were instant and revoke-unlocks delayed, the leak would be rebuilt with extra steps.
 
@@ -396,7 +398,7 @@ The binding constraint is not balance — it is that an Insider operates the pan
 **An Insider's default screen must be indistinguishable from a Resident's.** Shoulder-surfing is a real threat in a physical game, and "identical" is stronger than it sounds. Three leaks to cover:
 
 1. **The fake subroutine list must be structurally plausible for this house map** — right mix of structures, right markers, sensible count: the same length as everyone else's, drawn by the same sizing rule, so order length is role-independent (D-129).
-2. **It must sometimes show a waiting state.** Insiders cannot be in chains. If Resident screens can show "you're waiting on someone" and Insider screens structurally never can, that is a single-glance tell. The fake list must fake chains too.
+2. **It must sometimes show a waiting state.** Insiders cannot be in chains. If Resident screens can show "you're waiting on someone" and Insider screens structurally never can, that is a single-glance tell. The fake list must fake chains too. *(D-322 builds this by drawing the dependencies over every seat, so an Insider's list holds a real blocked line and a real line somebody waits on; see M5's note.)*
 3. **The fake counter must advance.** A screen reading 0/7 at the second meeting while everyone else is at 5/7 is a tell.
 
 **Insiders have no assigned subroutines that count — an Insider's order is a fake, drawn by the same sizing rule as a Resident's (D-129) and graded for real, in identical words (D-109) — and no action an Insider takes ever advances System Integrity.** They may scan any marker any number of times — every scan produces a real check-in, and a marker on their fake list opens a fake subroutine. **A marker not on their fake list opens nothing, exactly as it would for a Resident with no Subroutine there**, so the null case is not a tell either.
@@ -667,6 +669,8 @@ The most thematically loaded Subroutine in the set — it explains its own rules
 - **All-or-nothing, no partial credit.** Banking 3-of-4 would let players brute-force by guessing repeatedly and keeping the hits. A mismatch reports *only* "mismatch" — never which elements were wrong.
 - **Files must never show the pattern.** The disk from Array Wipe appears in Files; the memory pattern never does. That is the fiction being literally true, and it is easy to build wrong.
 
+> **The house half is built; the phone half is STOPPED (D-322).** The house deals a Memory Dump at two different cards, shows a fresh four- or five-element pattern at every scan of the source, holds it (the phone never keeps it, and it never rides the carry Files draws), opens the target only while the pattern is held, grades all-or-nothing, and consumes the pattern on every hand-over, so a mismatch sends the player back to the source. **No phone can open one yet:** its two screens, its briefing at the card (D-188, D-194), its light signature (D-113) and what an element is are unruled. The work order names it MEMORY DUMP with no light mark.
+
 **Array Wipe (circuit).** Three markers, one carried-state machine:
 
 ```
@@ -682,6 +686,8 @@ Legible fiction (your hands are full) that converts the circuit from something d
 **The disk is virtual — app state, not a prop.** Stays Tier 0. In a dark house nobody can see what you are carrying anyway.
 
 **Give the same circuit to two or three players simultaneously** — not chained, just independent instances sharing one Rack. The rack becomes a hub where people keep bumping into each other, with no chaining machinery at all. **The cheapest rendezvous generator in the design.**
+
+> **Built (D-322).** The circuit is a line of every order at the three stations the house draws at arming (D-122), and every circuit in the round shares the one Rack. Spares puts DISK 01 in hand, the Rack swaps it, Disposal degausses it, twice; while a disk is held every other card answers NOTHING FOR YOU HERE, across meetings (F-014). The step is the scan itself: the phone lands on the springboard, whose widget says CARRYING, the disk and TO RACK or TO DISPOSAL, and Files holds the disk. Provisional: where a step lands, and that every circuit holder (not two or three) shares the Rack, because one station draw per round is D-122's.
 
 **Array Wipe is the heaviest map-data generator in the game** — three markers, scanned repeatedly, over minutes. The carrier involuntarily provides surveillance coverage for everyone else while being the easiest person in the house to intercept.
 
@@ -1378,7 +1384,7 @@ Fourteen epics. Detailed story breakdown in `epics.md`.
 | **E4** | The house | Grid painter per storey, room/stairs tagging, additive floors, markers, host acknowledgment, the stairs exclusion, adjacency from cell neighbours | E3 |
 | **E5** | Scanning and the motion budget | Tap-to-scan with the ten-second window and auto-open, preview-less capture, routing/check-in decoupling, motion accumulator with per-player calibration and both bounds, the draining meter | E4 |
 | **E6** | The subroutine set | Ten subroutines across 3 bright / 4 medium / 3 dark, **plus the fake versions**, plus degradation | E5 |
-| **E7** | Subroutine structures | Short/medium/long/circuit scheduling, Memory Dump, Array Wipe carry state, chains with lazy linking and randomized unlock, System Integrity | E6 |
+| **E7** | Subroutine structures | Short/medium/long/circuit scheduling, Memory Dump, Array Wipe carry state, chains with lazy linking and randomized unlock, System Integrity. **Built by D-322** except lazy linking, Resident-only chains and Memory Dump's screens (stopped for the owner) | E6 |
 | **E8** | The Terminal | Live counts, staleness bands with stored jitter, error injection, exclusive access, timelapse with cooldown-scales-to-history | E5, E4 |
 | **E9** | Insider abilities | Revoke token model, Egress (Beacon/Tether, Sync Pulse containment), Surge, Static, Isolate, Override, Access pool, screen parity | E7, E8 |
 | **E10** | The House Meeting | Trigger as incoming call, lights-up snap, discussion, vote, result, attribution | E2, E7 |

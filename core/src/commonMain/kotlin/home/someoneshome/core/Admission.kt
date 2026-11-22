@@ -229,6 +229,12 @@ fun admit(state: GameState, event: Event): Admission = when {
     // Egress out of a meeting; this is the second wall, so that an expiry minted against one that
     // slipped in anyway -- a replayed recording, a future path that starts one -- cannot end the
     // round in the middle of the vote. It refuses nothing an honest round produces.
+    // **The house's own release, refused unless a link holds the line and is due** (D-146, D-322).
+    // No phone can request it; this keeps a clock that fired twice, or early, from releasing work the
+    // rules never scheduled. Answered to nobody.
+    event is Event.ChainUnlocked && !state.chainDue(event.seat, event.entry, event.at) ->
+        Admission.Refused(RefusalReason.ChainNotDue)
+
     needsEgress(event) &&
         (state.egress == null || state.egress?.pausedAt != null || state.meeting != null) ->
         Admission.Refused(RefusalReason.EgressNotRunning)
@@ -281,6 +287,8 @@ private fun firedBy(event: Event): Seat? = when (event) {
     is Event.SyncPulseReturned, is Event.EgressExpired, is Event.TerminalLeft,
     // The station's timelapse is open to either role on the same terms (D-319), never an ability.
     is Event.TimelapsePlayed, is Event.TimelapseStopped,
+    // The house's own release of a dependency (D-146), never an ability.
+    is Event.ChainUnlocked,
     // The radio's conclusion, like ContactMade: a fact the house is told, never an ability.
     is Event.Sensed,
     // The house's own fact about its own air, never an ability.
@@ -313,6 +321,10 @@ private fun phaseOf(event: Event): MeetingPhase? = when (event) {
     // the same answer by a shorter route, and the one that stays true if the meeting's phases are
     // ever reshaped.
     is Event.EgressFired, is Event.SyncPulseReturned, is Event.EgressExpired -> null
+
+    // Not a meeting event. The house's clock holds a release while a meeting runs (D-322), so none
+    // arrives during one; a gate here would be a second copy of that rule.
+    is Event.ChainUnlocked -> null
 
     // Not a meeting event, and deliberately not refused during one either. A window that was open
     // when the house rang closes wherever the player is standing; a gate that declined the report
@@ -378,6 +390,7 @@ private fun isTierTwo(event: Event): Boolean = when (event) {
     is Event.EgressFired, is Event.SyncPulseReturned, is Event.EgressExpired,
     is Event.TerminalLeft, is Event.Sensed, is Event.OffAirEnded, is Event.HouseClosedOnPermission,
     is Event.TimelapsePlayed, is Event.TimelapseStopped,
+    is Event.ChainUnlocked,
     -> false
 }
 
@@ -420,5 +433,7 @@ private fun needsEgress(event: Event): Boolean = when (event) {
     is Event.OffAirEnded,
     // **The close reads no Egress** (D-310): a running one ends with the round.
     is Event.HouseClosedOnPermission,
+    // A dependency's release reads no Egress (D-322).
+    is Event.ChainUnlocked,
     -> false
 }

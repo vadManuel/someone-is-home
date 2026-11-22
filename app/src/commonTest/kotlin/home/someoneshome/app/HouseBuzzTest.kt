@@ -359,6 +359,9 @@ class HouseBuzzTest {
         Effect.SubroutineGraded(Seat(1), accepted = true),
         Effect.SubroutineGraded(Seat(1), accepted = false),
         Effect.ScanAnswered(Seat(1), opened = null, haptic = Haptic.Double),
+        // D-322: the upstream notice rides the arming burst and `you're up` is quiet; both silent.
+        Effect.UpstreamWaiting(Seat(1), entry = 2),
+        Effect.WorkUnblocked(Seat(1)),
     )
 
     /**
@@ -560,7 +563,7 @@ class HouseBuzzTest {
         val EVERY_KIND: Set<String> = setOf(
             "LampSet", "AbilityFired", "AbilityBlanked", "Surged", "IsolateTargetsOffered", "IsolateTargetsBlanked", "StaticOpened",
             "SubroutineGraded", "SubroutineProgressed", "SystemIntegrityLive",
-            "SystemIntegrityBatched", "MessageDelivered", "WorkOrderIssued", "ScanAnswered",
+            "SystemIntegrityBatched", "MessageDelivered", "WorkOrderIssued", "ScanAnswered", "UpstreamWaiting", "WorkUnblocked",
             "TerminalAnswered", "PresenceChanged", "OpeningMessage", "MeetingOpened", "StandAndWalkIn",
             "CheckInProgressed", "MeetingPhaseOpened", "ReadyProgressed", "VoteHeld",
             "VoteSelectionShown", "VoteProgressed", "MeetingResult", "MeetingResolved",
@@ -751,8 +754,14 @@ class HouseBuzzTest {
             "Drift did not buzz its now-pulse",
         )
 
+        // Memory Dump has no screen to stand on (D-322, STOPPED); its script is asserted null below.
         val quiet = SubroutineKind.entries -
-            setOf(SubroutineKind.Handshake, SubroutineKind.Sniff, SubroutineKind.Drift)
+            setOf(SubroutineKind.Handshake, SubroutineKind.Sniff, SubroutineKind.Drift, SubroutineKind.MemoryDump)
+        assertEquals(
+            null,
+            home.someoneshome.model.SubroutineInstance(0, SubroutineKind.MemoryDump, listOf(0, 2, 0, 3, 1)).script(),
+            "Memory Dump's pattern was buzzed, and nothing ruled that it should be",
+        )
         val noisy = quiet.filter { kind ->
             // Their parameters are their own shapes; what is asserted is that nothing is played
             // whatever they carry, so an empty list is the honest input.
@@ -815,7 +824,7 @@ class HouseBuzzTest {
      */
     @Test
     fun theCallIsTheOnlyScriptThatRepeats() {
-        val repeating = SubroutineKind.entries.filter { kind ->
+        val repeating = (SubroutineKind.entries - SubroutineKind.MemoryDump).filter { kind ->
             val motor = RecordingHaptics()
             playOn(motor, kind, parametersFor(kind))
             motor.plays.any { it.repeating }

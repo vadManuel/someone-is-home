@@ -249,6 +249,9 @@ internal fun SubroutineInstance.script(note: (String) -> Unit = {}): List<Haptic
         SubroutineKind.Replay, SubroutineKind.Interrupt, SubroutineKind.ParityCheck,
         SubroutineKind.Deallocate, SubroutineKind.Short, SubroutineKind.SignalTrace,
         SubroutineKind.Jam,
+        // Memory Dump's pattern is not asked with the motor by anything ruled (D-322); its screens
+        // are STOPPED, so the phone asks it with nothing yet.
+        SubroutineKind.MemoryDump,
         -> null
     }
 } catch (refused: MalformedSubroutineParameters) {
@@ -299,6 +302,7 @@ internal fun Effect.ringing(): Boolean = when (this) {
     // same way. The roster is silent entirely and is one of the `null` rows in [haptic] below.
     is Effect.RevokeLanded, is Effect.RosterIssued, is Effect.PlanIssued, is Effect.ContactSeedIssued,
     is Effect.WorkOrderIssued, is Effect.ScanAnswered, is Effect.TerminalAnswered,
+    is Effect.UpstreamWaiting, is Effect.WorkUnblocked,
     is Effect.PresenceChanged,
     // NOT A MARKER says *no* once, like every refusal (D-160, D-318).
     is Effect.CardUnregistered,
@@ -446,6 +450,11 @@ internal fun Effect.haptic(): Haptic? = when (this) {
     is Effect.HouseSignedOff -> null
     // The work order lands with the opening delivery, which has already buzzed.
     is Effect.WorkOrderIssued -> null
+    // **Silent, for the roster's reason** (D-322): the upstream notice rides the arming burst.
+    is Effect.UpstreamWaiting -> null
+    // **Quiet** (D-119, D-201): `you're up` is a quiet text, and a quiet text neither dims nor
+    // buzzes. Provisional with the notice's look (D-322).
+    is Effect.WorkUnblocked -> null
     // The station's answer, for the same reason: the phone is held up to the T card already.
     is Effect.TerminalAnswered -> null
     // The map moving. Every phone in the house would buzz every time anybody walked anywhere.
@@ -508,6 +517,7 @@ internal fun RoundMessage.ringing(): Boolean = when (this) {
     is RoundMessage.SystemIntegrityBatched, is RoundMessage.MessageDelivered,
     is RoundMessage.HouseSignedOff, is RoundMessage.WorkOrderIssued,
     is RoundMessage.ScanAnswered, is RoundMessage.TerminalAnswered, is RoundMessage.PresenceChanged,
+    is RoundMessage.UpstreamWaiting, is RoundMessage.WorkUnblocked,
     is RoundMessage.CheckInProgressed, is RoundMessage.ReadyProgressed,
     is RoundMessage.VoteProgressed, is RoundMessage.VoteHeld,
     is RoundMessage.VoteSelectionShown, is RoundMessage.MeetingResolved,
@@ -582,6 +592,8 @@ internal fun RoundMessage.haptic(): Haptic? = when (this) {
     is RoundMessage.MessageDelivered -> null
     is RoundMessage.HouseSignedOff -> null
     is RoundMessage.WorkOrderIssued -> null
+    is RoundMessage.UpstreamWaiting -> null
+    is RoundMessage.WorkUnblocked -> null
     is RoundMessage.TerminalAnswered -> null
     is RoundMessage.PresenceChanged -> null
     is RoundMessage.CheckInProgressed -> null

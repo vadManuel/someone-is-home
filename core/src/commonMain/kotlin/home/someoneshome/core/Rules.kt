@@ -2,6 +2,7 @@ package home.someoneshome.core
 
 import home.someoneshome.model.ArmedTouch
 import home.someoneshome.model.Balance
+import home.someoneshome.model.Carry
 import home.someoneshome.model.Ballot
 import home.someoneshome.model.Cooldown
 import home.someoneshome.model.Effect
@@ -15,6 +16,8 @@ import home.someoneshome.model.Isolation
 import home.someoneshome.model.Meeting
 import home.someoneshome.model.MeetingPhase
 import home.someoneshome.model.MeetingTrigger
+import home.someoneshome.model.MemoryPattern
+import home.someoneshome.model.OpenSubroutine
 import home.someoneshome.model.Outcome
 import home.someoneshome.model.Presence
 import home.someoneshome.model.PulseOffer
@@ -25,6 +28,7 @@ import home.someoneshome.model.Tick
 import home.someoneshome.model.Touch
 import home.someoneshome.model.Seat
 import home.someoneshome.model.SubroutineInstance
+import home.someoneshome.model.SubroutineKind
 import home.someoneshome.model.WinRoute
 import home.someoneshome.model.Winner
 import home.someoneshome.model.tallyOf
@@ -87,6 +91,8 @@ private fun dispatch(state: GameState, event: Event): Reduction<GameState, Effec
     is Event.EgressFired -> egressFired(state, event)
     is Event.SyncPulseReturned -> pulseReturned(state, event)
     is Event.EgressExpired -> withEgress(state) { egressExpired(state) }
+
+    is Event.ChainUnlocked -> chainUnlocked(state, event)
     is Event.OffAirEnded -> backOnAir(state, event)
 
     is Event.HouseClosedOnPermission -> houseClosed(state)
@@ -328,7 +334,9 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
     val stations = stationsFor(event.seed, cards)
     val active = activeFor(event.seed, cards, stations, seats.size)
     val size = Balance.orderSize(seats.size, event.chosenInsiders)
-    val orders = seats.map { workOrderFor(event.seed, it, size, active) }
+    // The mix, the anchors and the self-chains per seat, then the cross-player holds over all of
+    // them (D-322). Neither reads a role: the Insider's fake is drawn by the same two calls.
+    val (orders, links) = linksFor(event.seed, seats.map { workOrderFor(event.seed, it, size, active, stations) })
 
     val state = GameState.armedRound(
         seed = event.seed,
@@ -340,6 +348,7 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
         // opened by a scan now and spent by an entry, and advancing the order is arming's job.
         openSubroutines = emptyList(),
         workOrders = orders,
+        links = links,
         stations = stations,
         activeMarkers = active,
         // The home's cards, glyphs and rooms, carried across arming rather than drawn -- the rules
@@ -452,7 +461,12 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
             // message above keeps the place in the burst it had. The Terminal and the couch draw
             // it; sent to every seat at once, it says nothing about who will read or who will be
             // out, and no role is read.
-            seats.map { Effect.PlanIssued(it, state.plan) },
+            seats.map { Effect.PlanIssued(it, state.plan) } +
+            // **Somebody is waiting on you, once, at assignment** (`gdd.md:282`, D-146, D-322). Last,
+            // so every message above keeps its place. Every seat is upstream of exactly one other in
+            // the draw's cycle, so this is one per seat in seat order and the burst's shape is the
+            // same on every phone; no role is read and nobody is named.
+            links.sortedBy { it.up.index }.map { Effect.UpstreamWaiting(it.up, it.upEntry) },
     )
 }
 
@@ -598,47 +612,100 @@ private fun markerScanned(state: GameState, event: Event.MarkerScanned): Reducti
     // into it is a scan in flight from a phone that has not yet heard `EgressHeld`, and that phone
     // routes the answer to the control. Opening work for it there would be the bug this closes.
     val node = state.egress?.isNode(event.marker) == true
-    val entry = if (state.isOut(event.actor) || offline || node) {
-        null
+    // **Which step of this seat's work the card is** (D-322) — a Subroutine opening, a Memory Dump
+    // showing or taking back its pattern, an Array Wipe station, or nothing. One decision, in
+    // [stepAt], and a disk in hand answers first: *while carrying a disk you cannot scan any other
+    // subroutine* (`gdd.md:664`, F-014).
+    val step = if (state.isOut(event.actor) || offline || node) {
+        ScanStep.Nothing
     } else {
-        state.workOrderFor(event.actor)?.openAt(event.marker)
-    }
-    // `openAt` returns only work a scan opens, so this is non-null for every entry it returns --
-    // the circuit is stepped over there rather than arriving here as a kind that does not exist.
-    val kind = entry?.work?.opensAs
-    val instance = if (entry == null || kind == null) {
-        null
-    } else {
-        instanceFor(state.seed, id, event.actor, entry, kind, event.marker)
+        stepAt(state, event.actor, event.marker)
     }
 
-    val next = if (entry == null || instance == null) {
-        spend(minted, event.actor)
-    } else {
-        minted.withOpenSubroutine(instance)
-    }.withPresence(Presence(event.actor, event.marker, open = instance != null, since = event.at))
+    // What the house holds armed for a hand-over at this card: a Subroutine's question with its
+    // answer, or a Memory Dump target whose answer is the pattern the house has been holding.
+    val instance: OpenSubroutine? = when (step) {
+        is ScanStep.Open -> instanceFor(state.seed, id, event.actor, step.entry, step.kind, event.marker)
+        is ScanStep.EnterPattern -> patternEntry(event.actor, step.entry, step.pattern, event.marker)
+        else -> null
+    }
+    // What the phone is shown: the instance's question, or the source's pattern, which is shown
+    // and then held by the house alone (`gdd.md:642`).
+    val shown: SubroutineInstance? = when (step) {
+        is ScanStep.ShowPattern -> SubroutineInstance(
+            step.entry.index,
+            SubroutineKind.MemoryDump,
+            listOf(MemoryPattern.SOURCE) + patternFor(state.seed, id),
+        )
+        else -> instance?.let { SubroutineInstance(it.entry, it.subroutine, it.parameters) }
+    }
 
-    // Both constructed once, outside the branch above. Deliberately not inside it.
+    // The scan relocates the seat and spends what was armed elsewhere, as every scan always has;
+    // then the step's own transition on the carry, and the circuit's completion at its last disk.
+    val opened = if (instance == null) spend(minted, event.actor) else minted.withOpenSubroutine(instance)
+    val finished = step is ScanStep.DisposeDisk && lastDisk(step.entry)
+    val stepped = when (step) {
+        is ScanStep.ShowPattern ->
+            opened.carrying(Carry.Pattern(event.actor, step.entry.index, shown?.parameters.orEmpty().drop(1)))
+        is ScanStep.TakeDisk ->
+            opened.carrying(Carry.Disk(event.actor, step.entry.index, disk = step.entry.wiped + 1, damaged = false))
+        is ScanStep.SwapDisk -> opened.carrying(step.disk.swapped())
+        is ScanStep.DisposeDisk -> {
+            val down = opened.putDown(event.actor, step.entry.index)
+            val wiped = down.workOrderFor(event.actor)?.let { down.withWorkOrder(it.withWiped(step.entry.index)) } ?: down
+            if (finished) wiped.completing(event.actor, step.entry.index, event.at) else wiped
+        }
+        is ScanStep.Open, is ScanStep.EnterPattern, ScanStep.Nothing -> opened
+    }
+    // **The circuit's last disk is the one completion a scan makes, and it banks as a hand-over
+    // does** (D-109): a plain Resident's moves the meter, an Insider's writes nothing. The only place
+    // in this function a role changes anything, and it changes state rather than shape.
+    val banks = finished && state.roleOf(event.actor) == Role.Resident
+    val remaining = (state.systemIntegrity - 1).coerceAtLeast(0)
+    val next = (if (banks) stepped.copy(systemIntegrity = remaining) else stepped)
+        .withPresence(Presence(event.actor, event.marker, open = shown != null, since = event.at))
+
+    // All three constructed once, outside every branch above. Deliberately not inside them.
     //
     // The instance the client is shown is the NARROWED one: it carries the parameters and cannot
     // carry the answer, because it is a different type rather than the same type with a field
     // blanked (rule 3). The answer never leaves `next`.
-    val opened = if (entry != null && instance != null) {
-        SubroutineInstance(entry.index, instance.subroutine, instance.parameters)
-    } else {
-        null
-    }
+    //
+    // **The order goes back on every scan** (D-322), for `returned`'s reason one handler over: the
+    // circuit's last disk completes a line at a scan now, and an order sent only when something
+    // moved would make its presence a second answer beside this one.
     val answered = Effect.ScanAnswered(
         seat = event.actor,
-        opened = opened,
+        opened = shown,
         // **NOTHING FOR YOU HERE says *no*** (the owner's 2026-11-21 ruling, D-320): D-160's two
         // vibrates, NOT A MARKER's. Not at a node of the Egress, where every phone shows the tap
-        // control (D-295), and not on an opened scan. Read off the card and the opened work,
-        // never the role, so the same card buzzes the same on either phone.
-        haptic = if (opened == null && !node) Haptic.Double else null,
+        // control (D-295), not on an opened scan, and not on an Array Wipe station step (D-322),
+        // which opens nothing because the step is the scan itself and the disk moved. Read off the
+        // card, the step and the opened work, never the role, so the same card buzzes the same on
+        // either phone.
+        haptic = if (shown == null && !node && !step.isStationStep) Haptic.Double else null,
+        carrying = next.diskOf(event.actor)?.inHand(),
     )
-    val placed = Effect.PresenceChanged(event.actor, event.marker, open = instance != null)
-    return Reduction(next, listOf(answered, placed))
+    val order = Effect.WorkOrderIssued(
+        seat = event.actor,
+        lines = next.workOrderFor(event.actor)?.asLines(next.destinations) ?: emptyList(),
+    )
+    val placed = Effect.PresenceChanged(event.actor, event.marker, open = shown != null)
+    return Reduction(
+        next,
+        if (banks) {
+            // Both meter effects, and only when the meter really moved — `returned`'s reason.
+            listOf(
+                answered,
+                order,
+                placed,
+                Effect.SubroutineProgressed(remaining),
+                Effect.SystemIntegrityLive(Balance.integrityPercent(remaining, state.seats.size)),
+            )
+        } else {
+            listOf(answered, order, placed)
+        },
+    )
 }
 
 /**
@@ -1407,14 +1474,20 @@ private fun returned(
     val remaining = (state.systemIntegrity - 1).coerceAtLeast(0)
 
     val spent = if (open == null) state else state.withOpenSubroutine(open.spent())
-    // An accepted entry marks its line of the work order done, which is what unblocks whatever was
-    // chained behind it (D-114, D-123). A rejected one leaves the line standing: D-110's re-scan
-    // is the only way back to ready, and there is no RETRY and must never be one.
-    val advanced = if (open == null || !accepted) spent else {
-        spent.workOrderFor(event.actor)
-            ?.let { spent.withWorkOrder(it.withCompleted(open.entry)) }
-            ?: spent
+    // **A Memory Dump's hand-over consumes the pattern, matched or not** (`gdd.md:644`, D-322). That
+    // is the whole of *a mismatch sends you back to the source for a fresh pattern*: the target opens
+    // only while a pattern is held, and this is where it stops being held. On the kind and never on
+    // the verdict, so the transition is the same whichever way the grade went.
+    val handed = if (open != null && open.armed && open.subroutine == SubroutineKind.MemoryDump) {
+        spent.putDown(event.actor, open.entry)
+    } else {
+        spent
     }
+    // An accepted entry marks its line of the work order done, which is what unblocks whatever was
+    // chained behind it (D-114, D-123) and starts the delay on whatever another seat was waiting on
+    // it (D-146) -- for both roles (D-109, rule 1). A rejected one leaves the line standing: D-110's
+    // re-scan is the only way back to ready, and there is no RETRY and must never be one.
+    val advanced = if (open == null || !accepted) handed else handed.completing(event.actor, open.entry, event.at)
     val banked = if (banks) advanced.copy(systemIntegrity = remaining) else advanced
 
     // **The hand-over closes the performance window** (D-111). The place is the one the house
@@ -1460,6 +1533,28 @@ private fun returned(
 }
 
 private fun sameSeat(a: Seat, b: Seat) = a.index == b.index
+
+/**
+ * **Another seat's work, released: the line names itself, and the phone is told `you're up`**
+ * (D-146, D-201, `gdd.md:284`, D-322).
+ *
+ * The admission gate has already refused this unless a link holds the line, its upstream entry was
+ * completed and its delay has run out ([chainDue]), so the rules never ask whether the house means
+ * it. **Both effects on every release**, constructed once: the order that now names the line, and
+ * the two words. Nothing is sent to the upstream seat — *never confirm that the downstream unlock
+ * happened* (`gdd.md:282`).
+ *
+ * A seat that is out is released too, and its effects reach no out class (the allowlist): its line
+ * is a fact about the order whether or not anybody can still walk to it.
+ */
+private fun chainUnlocked(state: GameState, event: Event.ChainUnlocked): Reduction<GameState, Effect> {
+    val next = state.workOrderFor(event.seat)?.let { state.withWorkOrder(it.withReleased(event.entry)) } ?: state
+    val order = Effect.WorkOrderIssued(
+        seat = event.seat,
+        lines = next.workOrderFor(event.seat)?.asLines(next.destinations) ?: emptyList(),
+    )
+    return Reduction(next, listOf(order, Effect.WorkUnblocked(event.seat)))
+}
 
 // =================================================================================================
 // The meeting.

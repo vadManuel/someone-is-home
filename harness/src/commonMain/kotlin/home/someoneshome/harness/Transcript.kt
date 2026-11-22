@@ -179,6 +179,9 @@ object Transcript {
                 "taps" to event.taps.joinToString(",") { num(it) })
         is Event.EgressExpired ->
             row("EgressExpired", event.at)
+        // The downstream seat and its line: which dependency the house released (D-146, D-322).
+        is Event.ChainUnlocked ->
+            row("ChainUnlocked", event.at, "seat" to num(event.seat.index), "entry" to num(event.entry))
         // Both ticks, because the gap between them is the whole of what the event moves.
         is Event.OffAirEnded ->
             row("OffAirEnded", event.at, "since" to num(event.since.step))
@@ -225,6 +228,9 @@ object Transcript {
     private fun work(work: AssignedWork): String = when (work) {
         is AssignedWork.Subroutine -> work.kind.toString()
         AssignedWork.ArrayWipe -> "ArrayWipe"
+        // Its own word for the circuit's reason: a single-card `MemoryDump` would be a different
+        // line from the two-card one the draw deals (D-322).
+        AssignedWork.MemoryDump -> "MemoryDumpAt2"
     }
 
     /**
@@ -328,7 +334,13 @@ object Transcript {
             "ScanAnswered|seat=${effect.seat.index}|opened=" +
                 (effect.opened?.let {
                     "${it.entry}:${it.subroutine}:${it.parameters.joinToString(".") { p -> num(p) }}"
-                } ?: "none") + "|haptic=${effect.haptic ?: "none"}"
+                } ?: "none") + "|haptic=${effect.haptic ?: "none"}" +
+                // The disk in hand on every answer, `none` for empty hands (D-322): a station step and
+                // a refusal stay one row shape, and the step is the field moving.
+                "|carrying=" + (effect.carrying?.let { "${num(it.disk)}>${it.to}" } ?: "none")
+        // The upstream seat and its own line; nobody else is on the row (D-322).
+        is Effect.UpstreamWaiting -> "UpstreamWaiting|seat=${effect.seat.index}|entry=${num(effect.entry)}"
+        is Effect.WorkUnblocked -> "WorkUnblocked|seat=${effect.seat.index}"
         // Open and held are one kind and one row shape, for ScanAnswered's reason (D-199).
         is Effect.TerminalAnswered ->
             "TerminalAnswered|seat=${effect.seat.index}|reading=${effect.reading}"
@@ -670,7 +682,33 @@ object Transcript {
                     "${num(entry.index)}/${work(entry.work)}" +
                         "/${entry.markers.joinToString("+") { text(it.value) }}" +
                         "/${entry.blockedBy.joinToString("-") { num(it) }}" +
-                        "/${if (entry.done) "done" else "open"}"
+                        "/${if (entry.done) "done" else "open"}" +
+                        // Held by another seat's work, and the circuit's disks degaussed (D-322).
+                        "/${if (entry.held) "held" else "free"}/${num(entry.wiped)}"
+                }
+            }
+        )
+        // **The dependencies and the carries** (D-146, F-014, D-322). Neither reaches a client as
+        // itself -- a phone sees a blocked line and a disk, never the link or the pattern -- so a state
+        // row is the only artifact that holds them, and a replay that stopped short of them would
+        // certify a build whose chains never released and whose disks were never put down.
+        append("|links=").append(
+            state.links.joinToString(",") {
+                "${num(it.up.index)}.${num(it.upEntry)}>${num(it.down.index)}.${num(it.downEntry)}" +
+                    ":${num(it.delay)}:${it.dueAt?.let { d -> num(d.step) } ?: "none"}"
+            }
+        )
+        append("|carries=").append(
+            state.carries.joinToString(",") { carry ->
+                when (carry) {
+                    is home.someoneshome.model.Carry.Disk ->
+                        "${num(carry.seat.index)}.${num(carry.entry)}:disk${num(carry.disk)}" +
+                            if (carry.damaged) ":damaged" else ":good"
+                    // The pattern, because the target is graded against it: ground truth, held
+                    // here for the answer key's reason (`open=`).
+                    is home.someoneshome.model.Carry.Pattern ->
+                        "${num(carry.seat.index)}.${num(carry.entry)}:pattern" +
+                            carry.elements.joinToString(".", prefix = ":") { num(it) }
                 }
             }
         )

@@ -165,6 +165,20 @@ class GameState private constructor(
      */
     val workOrders: List<WorkOrder>,
     /**
+     * **Every cross-player dependency in the round, drawn at arming** (D-146, D-322).
+     *
+     * One per seat, as the downstream end of the draw's single cycle over the seats; seat order
+     * of the downstream seat. Authority-side and never on any client type: a phone sees a blocked
+     * line and nothing about who holds it (D-114, `gdd.md:278`).
+     */
+    val links: List<ChainLink>,
+    /**
+     * **What every seat is carrying between two cards** (F-014, D-322): an Array Wipe disk, or a
+     * Memory Dump pattern the house holds to grade the target with. Persists through meetings and
+     * across shifts; cleared only by the step that consumes it. Seat order, then entry order.
+     */
+    val carries: List<Carry>,
+    /**
      * **Spares, Rack and Disposal — the Array Wipe circuit, drawn fresh every round** (D-122).
      *
      * Round state, and **never stored with the home**, which is the load-bearing half: a home that
@@ -582,6 +596,34 @@ class GameState private constructor(
         },
     )
 
+    /** The disk in this seat's hand, or null (`gdd.md:656`). At most one: carrying blocks every other scan. */
+    fun diskOf(seat: Seat): Carry.Disk? =
+        carries.firstOrNull { it.seat.index == seat.index && it is Carry.Disk } as Carry.Disk?
+
+    /** The pattern this seat holds for [entry], or null (`gdd.md:642`). */
+    fun patternOf(seat: Seat, entry: Int): Carry.Pattern? =
+        carries.firstOrNull { it.seat.index == seat.index && it.entry == entry && it is Carry.Pattern } as Carry.Pattern?
+
+    /**
+     * Put [carry] in its seat's hands, replacing whatever that seat carried for the same entry, or
+     * any disk if it is a disk. Kept in seat order, then entry order.
+     */
+    fun carrying(carry: Carry): GameState = copy(
+        carries = (
+            carries.filterNot {
+                it.seat.index == carry.seat.index &&
+                    (it.entry == carry.entry || (it is Carry.Disk && carry is Carry.Disk))
+            } + carry
+            ).sortedWith(compareBy({ it.seat.index }, { it.entry })),
+    )
+
+    /** Empty [seat]'s hands of what it carried for [entry]. A no-op for a seat that held nothing. */
+    fun putDown(seat: Seat, entry: Int): GameState =
+        copy(carries = carries.filterNot { it.seat.index == seat.index && it.entry == entry })
+
+    /** Replace the links, for the two transitions on [ChainLink]. */
+    fun withLinks(replacement: List<ChainLink>): GameState = copy(links = replacement)
+
     /** Replace one cooldown, leaving every other row and the list's order alone. */
     fun withCooldown(replacement: Cooldown): GameState = copy(
         cooldowns = cooldowns.map {
@@ -801,6 +843,8 @@ class GameState private constructor(
         systemIntegrity: Int = this.systemIntegrity,
         openSubroutines: List<OpenSubroutine> = this.openSubroutines,
         workOrders: List<WorkOrder> = this.workOrders,
+        links: List<ChainLink> = this.links,
+        carries: List<Carry> = this.carries,
         stations: List<MarkerId> = this.stations,
         activeMarkers: List<MarkerId> = this.activeMarkers,
         destinations: List<Destination> = this.destinations,
@@ -829,7 +873,8 @@ class GameState private constructor(
         timelapse: Timelapse = this.timelapse,
     ) = GameState(
         armed, outcome, seats, insiderSeats, revoked, newlyRevoked, reported, restrained, revokeArms,
-        touches, unreachable, switchedOff, warned, closed, cooldowns, isolated, systemIntegrity, openSubroutines, workOrders, stations,
+        touches, unreachable, switchedOff, warned, closed, cooldowns, isolated, systemIntegrity, openSubroutines, workOrders,
+        links, carries, stations,
         activeMarkers, destinations, presence, staticUntil, meeting, egress, egressReadyAt, oneLines,
         names, voteWindowSeconds, discussionSeconds, egressTimerSeconds, revokeCooldownSeconds,
         nextEntity, seed, terminal, reader, plan, terminalRoom, shiftStartedAt,
@@ -863,6 +908,8 @@ class GameState private constructor(
              * stations, so no circuit; no active markers, so nothing is lit.
              */
             workOrders: List<WorkOrder> = emptyList(),
+            /** The round's cross-player dependencies (D-146). Empty for [workOrders]' reason. */
+            links: List<ChainLink> = emptyList(),
             stations: List<MarkerId> = emptyList(),
             activeMarkers: List<MarkerId> = emptyList(),
             /**
@@ -949,6 +996,9 @@ class GameState private constructor(
             systemIntegrity = systemIntegrity,
             openSubroutines = openSubroutines,
             workOrders = workOrders,
+            links = links,
+            // Nobody carries anything until somebody scans a source or Spares (F-014).
+            carries = emptyList(),
             stations = stations,
             activeMarkers = activeMarkers,
             destinations = destinations,
@@ -1005,6 +1055,8 @@ class GameState private constructor(
             systemIntegrity = 0,
             openSubroutines = emptyList(),
             workOrders = emptyList(),
+            links = emptyList(),
+            carries = emptyList(),
             stations = emptyList(),
             activeMarkers = emptyList(),
             destinations = emptyList(),

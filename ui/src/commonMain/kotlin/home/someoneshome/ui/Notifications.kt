@@ -333,6 +333,12 @@ object Notifications {
      */
     const val MONITORING_JAMMED: String = "MONITORING JAMMED"
 
+    /**
+     * **[unblocked], as it lands on a housed phone** (D-201, D-322): the same sender and words,
+     * stamped with when it landed rather than the design's `21:03`.
+     */
+    fun unblockedAt(at: String): Notification = unblocked.copy(at = at)
+
     /** All five, for the tests that check a property of every kind at once. */
     val all: List<Notification> = listOf(opening, egress, text, unblocked, notice)
 

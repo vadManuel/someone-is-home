@@ -338,7 +338,7 @@ private fun WorkRow(
             row.marker?.let { MarkerGlyph(it, 10.dp, meta, Modifier.testTag(ORDER_DESTINATION)) }
             // Last, because it is read DOWN the list rather than across a row: choosing a dark
             // route means comparing this row's light with the next one's.
-            WorkMark(row.light, meta)
+            row.light?.let { WorkMark(it, meta) }
         }
     }
 }

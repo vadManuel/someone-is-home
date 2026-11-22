@@ -141,10 +141,31 @@ class HouseClock private constructor(
             ?.takeIf { !offAir && it.pausedAt == null && at.step >= it.deadline.step }
             ?.let { Event.EgressExpired(at) }
 
+        // **A dependency's release, once its delay has run out** (D-146, `gdd.md:284`, D-322). The
+        // delay started when the upstream entry was completed and is on the state ([ChainLink.dueAt]);
+        // this reads it, as the Egress's line reads its deadline, and decides nothing. In the links'
+        // order, one per link that is due, after the meeting's and the Egress's.
+        //
+        // ⚠️ **Held while a meeting runs and while the house is off the air** (D-322, provisional):
+        // a release during a meeting would put `you're up` on a phone standing in the meeting, and
+        // nothing ruled whether it should. It lands on the first step after the lights go out.
+        // A round that has ended releases nothing: the gate would refuse it every pump.
+        val chainsDue = if (offAir || state.meeting != null || state.ended) emptyList() else chainsDueAt(state, at)
+
         return Turned(
             next = HouseClock(pumped.next, opened?.spent(meetingDue)),
-            due = listOfNotNull(meetingDue, egressDue),
+            due = listOfNotNull(meetingDue, egressDue) + chainsDue,
         )
+    }
+
+    /**
+     * Every link whose downstream line is still held and whose delay has run out at [at]. Read off
+     * the state alone, so a link the rules have released is never minted again.
+     */
+    private fun chainsDueAt(state: GameState, at: Tick): List<Event> = state.links.mapNotNull { link ->
+        val held = state.workOrderFor(link.down)?.entries?.getOrNull(link.downEntry)?.held == true
+        val due = link.dueAt?.let { at.step >= it.step } == true
+        if (held && due) Event.ChainUnlocked(at, link.down, link.downEntry) else null
     }
 
     /**

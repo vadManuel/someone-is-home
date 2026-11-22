@@ -83,8 +83,12 @@ class HostSeatRecordingTest {
     /** **GUARD (the differential harness): the host's seat adds no divergence on a role exchange.** */
     @Test
     fun `the host's seat adds nothing to a role exchange's diff`() {
-        val with = differentialOnRoleExchange(GameState.EMPTY, withHost(host), Seat(1), Seat(3))
-        val without = differentialOnRoleExchange(GameState.EMPTY, withHost(null), Seat(1), Seat(3))
+        // **The meter subtracted, as `DifferentialTest` subtracts it** (D-109's ruled asymmetry). Since
+        // D-322 the fixture walks circuits and Memory Dumps as well as Subroutines, so the two exchanged
+        // seats bank at different moments and the meter moves on different lines; what is asked here is
+        // whether anything ELSE follows the role, and `DifferentialTest` owns the meter's own reach.
+        val with = differentialOnRoleExchange(GameState.EMPTY, withHost(host), Seat(1), Seat(3), ignoring = METER_ASYMMETRY)
+        val without = differentialOnRoleExchange(GameState.EMPTY, withHost(null), Seat(1), Seat(3), ignoring = METER_ASYMMETRY)
         assertEquals(emptyList(), with.unexplained, "the host's seat leaked a role: $with")
         assertEquals(without.divergences.map { it.toString() }, with.divergences.map { it.toString() })
     }

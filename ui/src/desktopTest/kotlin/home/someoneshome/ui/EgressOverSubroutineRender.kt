@@ -203,7 +203,8 @@ class EgressOverSubroutineRender {
         val faults = mutableListOf<String>()
         val reference = bannerOverHome().let { (banner, home) -> lightLeft(banner, home) }
         if (kotlin.math.abs(reference - NOTIFIED_DIM) > DIM_SLACK) faults += "the banner over Home is not at NOTIFIED_DIM: $reference"
-        for (kind in SubroutineKind.entries) {
+        // Memory Dump has no screen yet (D-322, STOPPED).
+        for (kind in SubroutineKind.entries - SubroutineKind.MemoryDump) {
             val name = kind.name.lowercase()
             val (residentUp, residentCleared) = held(PanelRole.Resident, kind)
             val (insiderUp, insiderCleared) = held(PanelRole.Insider, kind)

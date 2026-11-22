@@ -274,6 +274,12 @@ class WorkOrderDrawTest {
         val length = state.workOrderFor(seat)!!.entries.size
 
         for (step in 0 until length) {
+            // **The cross-player hold is the link's, not this test's** (D-322): every seat has one
+            // line another seat's work holds, and the house's clock releases it. Released here
+            // directly, through the rules, so the self-chain is all that is left to walk.
+            if (state.workOrderFor(seat)!!.entries[step].held) {
+                state = reduce(state, Event.ChainUnlocked(Tick(1), seat, step)).state
+            }
             val order = state.workOrderFor(seat)!!
             val open = order.entries.filter { order.isActionable(it) }
             assertEquals(

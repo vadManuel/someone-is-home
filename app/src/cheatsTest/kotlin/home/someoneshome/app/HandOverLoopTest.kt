@@ -1,5 +1,6 @@
 package home.someoneshome.app
 
+import home.someoneshome.model.AssignedWork
 import home.someoneshome.model.Balance
 import home.someoneshome.model.Effect
 import home.someoneshome.model.EmitSchema
@@ -147,7 +148,9 @@ class HandOverLoopTest {
 
     /** This seat's order as its own phone holds it — the list the house pushed, and nothing else. */
     private fun FlowModel.knownLines(): List<OrderLine.Known> =
-        state.order.orEmpty().filterIsInstance<OrderLine.Known>().filter { !it.done }
+        // Subroutine lines only (D-322): a circuit's Spares puts a disk in hand that blocks every later
+        // card, and a Memory Dump opens no screen yet. Both are walked in `StructuredWorkBenchTest`.
+        state.order.orEmpty().filterIsInstance<OrderLine.Known>().filter { !it.done && it.work is AssignedWork.Subroutine }
 
     /**
      * **One card, played the whole way through, on one seat's real screens.**
@@ -303,10 +306,11 @@ class HandOverLoopTest {
             }
         }
 
+        // Every kind but Memory Dump, whose screens are STOPPED for the owner (D-322).
+        val playable = SubroutineKind.entries.toSet() - SubroutineKind.MemoryDump
         assertEquals(
-            SubroutineKind.entries.toSet(), reached,
-            "the draw never routed these all the way through a screen: " +
-                "${SubroutineKind.entries.toSet() - reached}",
+            playable, reached,
+            "the draw never routed these all the way through a screen: ${playable - reached}",
         )
     }
 

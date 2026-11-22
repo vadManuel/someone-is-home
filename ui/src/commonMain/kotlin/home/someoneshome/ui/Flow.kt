@@ -1,6 +1,8 @@
 package home.someoneshome.ui
 
 import home.someoneshome.model.ArmedTouch
+import home.someoneshome.model.CircuitStation
+import home.someoneshome.model.DiskInHand
 import home.someoneshome.model.SubroutineInstance
 import home.someoneshome.model.SubroutineQuestion
 import home.someoneshome.model.MalformedSubroutineParameters
@@ -311,6 +313,37 @@ data class HousePush(val to: ScreenId, val on: MessageKind, val why: String)
 data class SurgeSlam(val peak: Int, val black: Int, val nth: Int)
 
 object Flow {
+
+    /**
+     * **The disk the house says this phone holds, in the widget's words** (D-168, D-322): `DISK 01`
+     * and the station it goes to next. The item is the mockup's `DISK 01`, counted from one for the
+     * second disk of a circuit; the destination is the station's own name.
+     */
+    fun carriedOf(disk: DiskInHand): Carried = Carried(
+        item = "DISK " + disk.disk.toString().padStart(2, '0'),
+        to = when (disk.to) {
+            CircuitStation.Spares -> "SPARES"
+            CircuitStation.Rack -> "RACK"
+            CircuitStation.Disposal -> "DISPOSAL"
+        },
+    )
+
+    /**
+     * **Whether an answer that opened nothing was an Array Wipe station step** (D-322): the disk in
+     * hand moved. Spares puts one there, the Rack swaps it, Disposal takes it away, and nothing else
+     * the house answers ever moves it. Two pushed facts read side by side, so this decides nothing.
+     */
+    fun stationStepped(before: Carried?, after: Carried?): Boolean = before != after
+
+    /**
+     * **Where a station step lands: the springboard, where the widget now says what is in hand**
+     * (D-168: *the state and the list it blocks are one surface*).
+     *
+     * ⚠️ **Provisional, and one named decision so a ruling replaces only this** (D-322). Nothing
+     * ruled what the phone shows after a circuit step; the springboard draws no new copy and no new
+     * light, and the widget already says CARRYING, the disk and where it goes.
+     */
+    fun afterAStationStep(): ScreenId = ScreenId.Home
 
     /**
      * Screens that move on by themselves.
@@ -3112,12 +3145,32 @@ class FlowModel(
             // for good, in arrival order.
             is RoundMessage.MessageDelivered -> {
                 val text = HouseText(landedAt() ?: PanelVals.NO_READING, message.body)
-                state = state.copy(houseTexts = state.houseTexts + text)
+                // The house's text is now the newest quiet arrival, so a `you're up` before it stops
+                // being the one the banner draws (D-322).
+                state = state.copy(houseTexts = state.houseTexts + text, lastQuiet = null)
                 notifications.houseSent(Notifications.houseText(text))
                 arrived(ScreenId.Quiet)
             }
 
             is RoundMessage.WorkOrderIssued -> state = state.copy(order = message.lines)
+
+            // **Somebody is waiting on one of this phone's lines** (`gdd.md:282`, D-146, D-322). The
+            // house sends it once, at arming, to every seat. ⚠️ **How it looks is STOPPED for the
+            // owner**: nothing ruled what the notice says or where it stands, so this branch is a
+            // named no-op and the phone draws nothing. The house half is built; a ruling replaces
+            // this one line.
+            is RoundMessage.UpstreamWaiting -> Unit
+
+            // **`you're up`: another seat's work released one of this phone's lines** (D-201,
+            // D-322). The order beside it already names the line; this is D-201's quiet text from
+            // NUMBER WITHHELD, stamped when it landed, stored on the lock screen and raised as the
+            // quiet banner. Quiet, so no dim and no buzz (D-119).
+            is RoundMessage.WorkUnblocked -> {
+                val text = Notifications.unblockedAt(landedAt() ?: PanelVals.NO_READING)
+                state = state.copy(lastQuiet = text)
+                notifications.houseSent(text)
+                arrived(ScreenId.Quiet)
+            }
 
             // **THE SCAN'S ANSWER, and it lands on the caught scan rather than in a Subroutine**
             // (the owner's routing table; D-124, D-188). One flow and one route: scan → caught, with
@@ -3172,12 +3225,21 @@ class FlowModel(
             // control, and a node card that also holds work for this phone shows the control, not
             // the work (the containment spec's O1, provisional). The scan has already placed this
             // seat there at the house (`PresenceChanged`), which is what the house grades a pair by.
+            //
+            // **And the disk in hand rides every answer** (D-168, F-014, D-322). It is copied onto
+            // the panel whole, so the widget and Files say what the house says this phone holds; and
+            // **a station step is the one answer that opens nothing and moves the disk**, so it is
+            // read as that and nothing else ([stationStepped]) and lands where [afterAStationStep]
+            // says, never on NOTHING FOR YOU HERE.
             is RoundMessage.ScanAnswered -> {
                 val node = state.scannedAt?.takeIf { it in state.egressCards && state.egressRunning && !state.egressHeld }
-                state = state.copy(pulseAt = node, pulseTaps = emptyList())
+                val carried = message.carrying?.let { Flow.carriedOf(it) }
+                val stepped = Flow.stationStepped(before = state.carrying, after = carried)
+                state = state.copy(pulseAt = node, pulseTaps = emptyList(), carrying = carried)
                 val opened = message.opened
                 when {
                     node != null -> push(ScreenId.EgressWidget)
+                    opened == null && stepped -> push(Flow.afterAStationStep())
                     opened == null -> push(ScreenId.ScanBad)
                     else -> currentFrom(opened)?.let { current ->
                         state = state.copy(current = current)
@@ -3761,6 +3823,9 @@ class FlowModel(
         val lines = state.order ?: return null
         val line = lines.filterIsInstance<OrderLine.Known>()
             .firstOrNull { it.index == opened.entry } ?: return null
+        // **A kind with no roster row opens nothing** (D-322): Memory Dump's two screens, its
+        // briefing and its light are STOPPED for the owner, so the phone stays on the scan.
+        val subroutine = Subroutine.ofOrNull(opened.subroutine) ?: return null
         // The FIRST destination, for `PanelVals.order`'s reason: the Array Wipe circuit names three
         // stations in draw order (D-122) and a screen read by lamplight has room for the one you
         // are walking to. An empty list is lawful and leaves the room unnamed rather than invented.
@@ -3777,7 +3842,7 @@ class FlowModel(
             return null
         }
         return CurrentSubroutine(
-            subroutine = Subroutine.of(opened.subroutine),
+            subroutine = subroutine,
             room = at?.room,
             marker = at?.shape?.let { MarkerShapes[it] },
             // One-based, because it is read aloud off a screen as SUBROUTINE 4 OF 7 and the house's

@@ -167,15 +167,14 @@ class GeographyTest {
     }
 
     /**
-     * **A circuit is not opened by a scan and does not block the card it sits at.**
+     * **A circuit begins at its first card, and stands in front of the work behind it** (D-322).
      *
-     * The carried state a circuit leg is graded against is not built (F-014, E7), so the format can
-     * hold one and the scan path cannot yet answer one. Stepping over it is the better of the two
-     * wrong answers: refusing at the card would turn a station into a blind alley for the real work
-     * behind it.
+     * It used to be stepped over, while the carried state it is walked with was unbuilt. It is built
+     * now: an empty-handed scan of Spares is the circuit's first step, and the work order is walked in
+     * order there as at every card (D-123).
      */
     @Test
-    fun `a scan steps over a circuit line and opens the real work behind it`() {
+    fun `a circuit line begins at its first card and is the step a scan of it reaches`() {
         val card = home.first().marker
         val order = WorkOrder(
             Seat(0),
@@ -187,7 +186,7 @@ class GeographyTest {
                 ),
             ),
         )
-        assertEquals(1, order.openAt(card)?.index, "the scan did not reach the work behind the circuit")
+        assertEquals(0, order.openAt(card)?.index, "the scan stepped over the circuit at its own first card")
     }
 
     /**

@@ -13,6 +13,7 @@ import home.someoneshome.model.InterruptSweep
 import home.someoneshome.model.JamRings
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MalformedSubroutineParameters
+import home.someoneshome.model.MemoryPattern
 import home.someoneshome.model.ParityGrid
 import home.someoneshome.model.ReplayPattern
 import home.someoneshome.model.ShortHold
@@ -191,6 +192,13 @@ enum class Subroutine(
          * to be there (D-114).
          */
         fun of(kind: SubroutineKind): Subroutine = entries.first { it.kind == kind }
+
+        /**
+         * The roster row for [kind], or **null for a kind with no row** — Memory Dump, whose screens,
+         * briefing and light are STOPPED for the owner (D-322). A caller that gets null opens
+         * nothing, which is the fail-closed direction: *it did not open*.
+         */
+        fun ofOrNull(kind: SubroutineKind): Subroutine? = entries.firstOrNull { it.kind == kind }
 
         /** The ones with an interaction behind them, in roster order. */
         val built: List<Subroutine> get() = entries.filter { it.screen != null }
@@ -984,6 +992,9 @@ class SubroutineModel(
             SubroutineKind.Jam -> rings = JamRings.of(parameters)
             // Felt, not drawn, for Sniff's reason; the beat count is the number of taps owed.
             SubroutineKind.Handshake -> handshake.resize(HandshakeRhythm.of(parameters).beats)
+            // **Read and drawn nowhere** (D-322): Memory Dump's two screens are STOPPED for the
+            // owner, so a malformed pattern still opens nothing and a well-formed one has no slot.
+            SubroutineKind.MemoryDump -> MemoryPattern.of(parameters)
         }
     }
 
@@ -1219,6 +1230,12 @@ class SubroutineModel(
          */
         val HANDSHAKE_PARAMETERS: List<Int> = listOf(3, 3, 6, 2)
 
+        /**
+         * **A Memory Dump source, four elements** (D-322), for [benchParameters]' tests only. No
+         * screen draws it: the two Memory Dump screens are STOPPED for the owner.
+         */
+        val MEMORY_DUMP_PARAMETERS: List<Int> = listOf(MemoryPattern.SOURCE, 2, 0, 3, 1)
+
         /** The rhythm, read once. */
         val HANDSHAKE: HandshakeRhythm = HandshakeRhythm.of(HANDSHAKE_PARAMETERS)
 
@@ -1375,6 +1392,7 @@ class SubroutineModel(
             SubroutineKind.SignalTrace -> TRACE_PARAMETERS
             SubroutineKind.Jam -> JAM_PARAMETERS
             SubroutineKind.Handshake -> HANDSHAKE_PARAMETERS
+            SubroutineKind.MemoryDump -> MEMORY_DUMP_PARAMETERS
         }
 
         /**

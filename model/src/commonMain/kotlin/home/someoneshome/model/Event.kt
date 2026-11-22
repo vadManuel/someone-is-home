@@ -560,6 +560,22 @@ sealed interface Event {
     data class EgressExpired(override val at: Tick) : Event
 
     /**
+     * **Another seat's work, released: [seat]'s entry [entry] is no longer held** (D-146,
+     * `gdd.md:284`, D-322).
+     *
+     * A house push on the authority's own clock, as [EgressExpired] is: the upstream entry was
+     * completed, the link's random 20–120 s delay ran out ([ChainLink.dueAt]), and the house's clock
+     * minted this. **Never requestable** — a phone that could ask for its own dependency to be
+     * released would be a phone that could finish somebody else's work for them. The admission gate
+     * refuses it for a link that is not due, so the rules never have to ask whether the house
+     * means it.
+     *
+     * The same event whoever completed the upstream entry, Resident or Insider (D-109, rule 1), and
+     * **nothing but a completion ever leads to one** (D-146): nothing auto-satisfies.
+     */
+    data class ChainUnlocked(override val at: Tick, val seat: Seat, val entry: Int) : Event
+
+    /**
      * **The house is back on the air, after being off it since [since]** (the owner's 2026-11-18
      * ruling, Q4 option A).
      *

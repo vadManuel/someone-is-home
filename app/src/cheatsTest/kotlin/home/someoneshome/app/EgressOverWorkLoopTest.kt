@@ -1,5 +1,6 @@
 package home.someoneshome.app
 
+import home.someoneshome.model.AssignedWork
 import home.someoneshome.model.Balance
 import home.someoneshome.model.Effect
 import home.someoneshome.model.EmitSchema
@@ -104,7 +105,8 @@ class EgressOverWorkLoopTest {
     }
 
     private fun FlowModel.firstCard(): MarkerId? =
-        state.order.orEmpty().filterIsInstance<OrderLine.Known>().firstOrNull { !it.done && it.at.isNotEmpty() }
+        state.order.orEmpty().filterIsInstance<OrderLine.Known>()
+            .firstOrNull { !it.done && it.at.isNotEmpty() && it.work is AssignedWork.Subroutine }
             ?.at?.first()?.marker
 
     @Test
@@ -204,7 +206,7 @@ class EgressOverWorkLoopTest {
                 assertTrue(phone.state.egressAlertUp, "$role: no alert over the scan")
                 val card = assertNotNull(
                     phone.state.order.orEmpty().filterIsInstance<OrderLine.Known>()
-                        .firstOrNull { !it.done && it.at.any { d -> d.marker !in nodes } }
+                        .firstOrNull { !it.done && it.work is AssignedWork.Subroutine && it.at.any { d -> d.marker !in nodes } }
                         ?.at?.first { it.marker !in nodes }?.marker,
                     "$role has no card off the Egress's nodes",
                 )
@@ -253,7 +255,9 @@ class EgressOverWorkLoopTest {
             assertEquals(node, bench.house.state.presenceFor(seat)?.at, "$role: the node scan did not place the seat")
             assertEquals(
                 listOf<RoundMessage>(RoundMessage.ScanAnswered(null)),
-                bench.told[seat.index].orEmpty().drop(before),
+                // Every ordinary scan re-sends the seat's own order beside the answer (D-322), the same
+                // order whatever the card held; the answer itself is the empty card's.
+                bench.told[seat.index].orEmpty().drop(before).filterNot { it is RoundMessage.WorkOrderIssued },
                 "$role: the node scan was answered with something other than an empty card's answer",
             )
             break

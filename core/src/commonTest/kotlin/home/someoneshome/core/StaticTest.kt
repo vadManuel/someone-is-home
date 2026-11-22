@@ -330,7 +330,7 @@ class StaticTest {
      * sent. The plan this burst no longer holds was rooms, and nothing here brings one back.
      */
     @Test
-    fun `the arming burst is nine runs and the plan is the last and the same for every seat`() {
+    fun `the arming burst is ten runs with the plan and the upstream notice last and one per seat`() {
         val reduction = reduce(
             GameState.EMPTY,
             armingFor(Tick(1), 20260823L, ST_SEATS, null, placed(ST_ACTIVE)),
@@ -341,6 +341,8 @@ class StaticTest {
             listOf(
                 "LampSet", "WorkOrderIssued", "OpeningMessage", "RosterIssued", "RoleRevealed",
                 "ContactSeedIssued", "IsolateTargetsOffered", "IsolateTargetsBlanked", "PlanIssued",
+                // D-322: every seat is upstream of exactly one other, so one notice per seat.
+                "UpstreamWaiting",
             ),
             runs,
             "the arming burst gained or lost a run",

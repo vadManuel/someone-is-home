@@ -1,5 +1,6 @@
 package home.someoneshome.core
 
+import home.someoneshome.model.AssignedWork
 import home.someoneshome.model.ClientClass
 import home.someoneshome.model.Effect
 import home.someoneshome.model.EmitSchema
@@ -277,7 +278,9 @@ class PresenceIsNeverRecitedTest {
         repeat(3) {
             for (seat in P_SEATS) {
                 val order = state.workOrderFor(seat)!!
-                val card = order.entries.first { order.isActionable(it) }.anchor!!
+                // A Subroutine's card: a circuit's Spares and a Memory Dump's source open no
+                // instance to hand over (D-322).
+                val card = order.entries.first { order.isActionable(it) && it.work is AssignedWork.Subroutine }.anchor!!
                 for (event in listOf(
                     Event.MarkerScanned(Tick(t++), seat, card),
                     Event.SubroutineReturned(

@@ -179,6 +179,32 @@ Tick each line as you see it.
 - [ ] **Page 1** has four tiles, FILES, MESSAGES, SETTINGS and CAMERA, and no NOTES, on an
       Insider's phone and a Resident's alike (D-315).
 
+**The work order and carrying** *(D-322)*
+- [ ] **The mix**: open SUBROUTINES at LIGHTS OUT. Every phone's list is the same length and holds
+      one ARRAY WIPE, at least one MEMORY DUMP, and short and medium Subroutines, plus one or more
+      LOCKED · WAITING UPSTREAM lines. An Insider's list looks the same. MEMORY DUMP has no light
+      mark (its rating is not ruled yet).
+- [ ] **Array Wipe**: scan the ARRAY WIPE's first card (Spares). The phone goes to page 1 and the
+      widget says CARRYING · DISK 01 · TO RACK · NOTHING ELSE OPENS UNTIL IT IS DELIVERED, with the
+      padlock on the strip; FILES shows DISK 01, IN HAND, DESTINATION · RACK. Scan any other card of
+      yours: NOTHING FOR YOU HERE, and the disk stays. Scan the Rack: TO DISPOSAL. Scan Disposal: the
+      widget goes back to the list. Do it twice and the line is struck off. Say whether landing on
+      page 1 after each step is right (provisional), and whether the widget's words read.
+- [ ] **Two phones on one circuit**: two players carry disks to the same Rack at once. Both finish.
+- [ ] **A disk through a meeting**: call a meeting while carrying. After it, the widget still says
+      CARRYING and other cards still answer NOTHING FOR YOU HERE (F-014).
+- [ ] **you're up**: finish a Subroutine and wait. Somewhere in the house, 20 s to 2 min later, a
+      phone that had a LOCKED line gets a quiet NUMBER WITHHELD · you're up banner, no buzz, and the
+      line now names its Subroutine. Nobody else's phone changes. If a meeting is called in between,
+      it lands after the meeting.
+- [ ] **A Revoke strands a line**: if a Revoked player held your LOCKED line, it never opens. Note
+      whether that is what happens and how it feels at the next meeting (D-146).
+- [ ] **Memory Dump cannot be played yet**: scanning its first card opens nothing on the phone (the
+      screens are not ruled). Expect that line to stay open all round, and say whether the round is
+      still winnable with it (slack is 1).
+- [ ] **Nothing tells you someone is waiting on you yet** (the house sends it; how it looks is not
+      ruled).
+
 **Release build**
 - [ ] `./run-app.sh device release` on a UWB phone launches to the boot screen. It must not stop
       at launch, now that it asks iOS about UWB (D-292) and carries the Nearby Interaction line

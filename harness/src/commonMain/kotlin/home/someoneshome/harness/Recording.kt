@@ -50,14 +50,34 @@ class Recording(
     }
 
     companion object {
-        // 49: two effect rows changed shape (the owner's 2026-11-21 rulings, D-320). `ScanAnswered`
+        // 50: three changes built in parallel and integrated together (D-319, D-320, D-322, with the
+        // owner's 2026-11-22 rulings, D-323), each of which alone was 49. The combined tree carries
+        // every row change below: D-319's two timelapse events and `timelapse=` state field; D-320's
+        // `ScanAnswered` `haptic=` and `Surged` without `sound=`; D-322's draw, `ChainUnlocked`,
+        // `UpstreamWaiting`, `WorkUnblocked`, `ScanAnswered` `carrying=`, `links=`, `carries=` and
+        // the entries' `/held|free/<wiped>`. With D-323 the mix deals no Memory Dump while its
+        // screens are unbuilt, so the same seed draws a different order from any one 49, and
+        // `RoleRevealed` gains `insiders=`. A recording of any one 49 lacks the others' rows or
+        // fields, and a version 49 or older recording is refused here as every older one is.
+        //
+        // 49 (D-322): the work order is the design's now (D-322). The same seed draws different orders: the
+        // owner's mix scaled to `K` (circuit, long, medium, short), the Array Wipe circuit and Memory
+        // Dump dealt, and one cross-player dependency per seat, so a version 48 round would replay to
+        // different work. One event a version 48 build cannot construct, `ChainUnlocked` (`seat=`,
+        // `entry=`), minted by the house's clock when a dependency's delay runs out. Two effects it
+        // cannot name, `UpstreamWaiting` (one per seat at the end of the arming burst) and
+        // `WorkUnblocked`; `ScanAnswered` gains `carrying=`, and every ordinary scan now answers with
+        // `WorkOrderIssued` between it and `PresenceChanged`. The state row gains `links=` and
+        // `carries=`, and each order entry gains `/held|free/<wiped>`. A version 48 recording is
+        // refused here as every older one is.
+        // 49 (D-320): two effect rows changed shape (the owner's 2026-11-21 rulings, D-320). `ScanAnswered`
         // gains `haptic=`, `Double` on NOTHING FOR YOU HERE and `none` at a node of the Egress and on
         // an opened scan: the rules choose the buzz from the facts that chose `opened`, and a
         // replay that could not see it would certify a build that buzzed a node scan *no*. `Surged`
         // loses `sound=`: the game makes no sound, and the effect no longer carries one. A version
         // 48 recording's rows cannot be compared with what this build emits, so it is refused here
         // as every older one is. No event or state row moved.
-        // 49: the Terminal's timelapse (the owner's 2026-11-21 rulings, D-319). Two events a version
+        // 49 (D-319): the Terminal's timelapse (the owner's 2026-11-21 rulings, D-319). Two events a version
         // 48 build cannot construct, `TimelapsePlayed` and `TimelapseStopped` (`actor=`), the
         // reader's TIMELAPSE and STOP THE PLAYBACK; and the state row gains `timelapse=`: the
         // station's history (a frame every two seconds of the shift, bare counts and the jam), the
@@ -399,7 +419,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/49"
+        const val HEADER = "someone-is-home/recording/50"
     }
 }
 
