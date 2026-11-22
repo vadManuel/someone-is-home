@@ -1,5 +1,6 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.Balance
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -62,7 +63,7 @@ class ArmedContinueTest {
 
     /** The arming burst, in the house's own order: the opening, the roster, the role. */
     private fun armingBurst(phone: FlowModel, insider: Boolean) {
-        phone.houseSaid(RoundMessage.OpeningMessage(Haptic.Short))
+        phone.houseSaid(RoundMessage.OpeningMessage(Haptic.Short, Balance.REVOKE_COOLDOWN))
         phone.houseSaid(RoundMessage.RosterIssued(names))
         phone.houseSaid(RoundMessage.RoleRevealed(insider = insider, line = if (insider) "a line" else ""))
     }
@@ -185,12 +186,12 @@ class ArmedContinueTest {
     fun aSecondOpeningMovesNothingAndARelaunchedPhoneStandsOnArmedAgain() {
         for (insider in listOf(false, true)) {
             val phone = seated(ScreenId.Lobby, insider)
-            phone.houseSaid(RoundMessage.OpeningMessage(Haptic.Short))
+            phone.houseSaid(RoundMessage.OpeningMessage(Haptic.Short, Balance.REVOKE_COOLDOWN))
             assertEquals(ScreenId.Armed, phone.state.screen, "a second opening moved a phone on ARMED (insider=$insider)")
             assertFalse(Notifications.dims(phone.state.screen), "a second opening dimmed ARMED (insider=$insider)")
 
             phone.go(ScreenGraph.exitsOf(ScreenId.Armed).single())
-            phone.houseSaid(RoundMessage.OpeningMessage(Haptic.Short))
+            phone.houseSaid(RoundMessage.OpeningMessage(Haptic.Short, Balance.REVOKE_COOLDOWN))
             assertEquals(ScreenId.Notify, phone.state.screen, "a second opening moved a phone under its banner (insider=$insider)")
 
             val relaunched = seated(ScreenId.Lobby, insider)

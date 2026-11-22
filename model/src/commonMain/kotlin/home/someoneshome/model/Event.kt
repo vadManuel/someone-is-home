@@ -155,6 +155,29 @@ sealed interface Event {
          * out seat, which is R7 (D-242) unchanged. **The recording's parser defaults nothing.**
          */
         val host: Seat? = null,
+        /**
+         * **How long the talk runs, in seconds — the host's DISCUSSION row, locked here** (D-317).
+         *
+         * [voteWindowSeconds]' shape exactly, and public for its reason: the host set it in a lit
+         * room with the party standing there. Read by the house's clock to close the talk and
+         * published on the push that opens it. Defaulted to [Balance.DISCUSSION_SECONDS] for
+         * [voteWindowSeconds]' reason; **the recording's parser defaults nothing.**
+         */
+        val discussionSeconds: Int = Balance.DISCUSSION_SECONDS,
+        /**
+         * **How long an Egress runs, in seconds — the host's EGRESS TIMER row, locked here** (D-014,
+         * D-317). The rules start every Egress of the round at this; it reaches every phone as the
+         * `remaining` the Egress opens with. Defaulted to [Balance.EGRESS_TIMER_SECONDS].
+         */
+        val egressTimerSeconds: Int = Balance.EGRESS_TIMER_SECONDS,
+        /**
+         * **The Revoke's normal cooldown, in seconds — the host's REVOKE COOLDOWN row, locked here**
+         * (D-037, D-132, D-317). D-037 names this one: *locked at arming, or whoever runs the server
+         * can shorten their own Revoke cooldown mid-round*. Every seat's opening half and every
+         * meeting's half are read off it, and every phone is pushed it at LIGHTS OUT and at each
+         * meeting's end. Defaulted to [Balance.REVOKE_COOLDOWN_SECONDS].
+         */
+        val revokeCooldownSeconds: Int = Balance.REVOKE_COOLDOWN_SECONDS,
     ) : Event
 
     /**

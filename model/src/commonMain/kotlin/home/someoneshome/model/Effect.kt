@@ -522,7 +522,18 @@ sealed interface Effect {
      * silent house a long buzz is world-observable through a pocket, and a signal that means five
      * specific things stops meaning them the moment a sixth is added.
      */
-    data class OpeningMessage(val seat: Seat, val haptic: Haptic) : Effect
+    data class OpeningMessage(
+        val seat: Seat,
+        val haptic: Haptic,
+        /**
+         * **The Revoke cooldown this round was armed with, in ticks** (D-317). Page 2 restarts every
+         * seat's Revoke bar at half of it here (D-132, D-239), and an Insider's own arm holds its
+         * echo back for all of it (D-286), so a phone draws the host's setting rather than its own
+         * default. **The same number to every seat**: it is the host's public lobby setting, so
+         * there is no narrowing in it, and a field that differed by seat would be a beacon.
+         */
+        val revokeCooldown: Long,
+    ) : Effect
 
     /**
      * **What this phone is, said once, at arming, to the one phone it is about** (`gdd.md:923`,
@@ -804,6 +815,14 @@ sealed interface Effect {
          * [EgressHeld]'s `running` is the same decision.
          */
         val voteWindowSeconds: Int?,
+        /**
+         * **How long the talk runs, on the push that opens it — and null on every other phase**
+         * (D-317). [voteWindowSeconds]' shape and its reason, one phase earlier: the DISCUSSION row
+         * is the host's now, locked at arming ([Event.RoundArmed.discussionSeconds]), and a phone
+         * draws the talk's clock from this rather than from its own ninety. Its own field rather
+         * than a shared *this phase's window*, for the reason [voteWindowSeconds] gives.
+         */
+        val discussionSeconds: Int?,
         val haptic: Haptic,
     ) : Effect
 
@@ -1002,8 +1021,14 @@ sealed interface Effect {
      */
     data class NoticeIssued(val unreachable: List<Seat>, val switchedOff: List<Seat>) : Effect
 
-    /** Lights out. The meeting is over, and D-135's fifth long haptic rides it. */
-    data class MeetingEnded(val haptic: Haptic) : Effect
+    /**
+     * Lights out. The meeting is over, and D-135's fifth long haptic rides it.
+     *
+     * [revokeCooldown] is [OpeningMessage.revokeCooldown] again (D-317): a meeting's end puts every
+     * Revoke clock back at half (D-184), so the push that says so carries what it is half of. The
+     * same number to every seat.
+     */
+    data class MeetingEnded(val haptic: Haptic, val revokeCooldown: Long) : Effect
 
     // ---- The Egress ---------------------------------------------------------------------------
     //

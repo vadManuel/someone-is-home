@@ -257,6 +257,10 @@ class PanelActions(
     val handOverLine: () -> Unit = {},
     val cycleInsiders: () -> Unit = {},
     val cycleVoteWindow: () -> Unit = {},
+    /** The host's three timed rows (D-317): [cycleVoteWindow]'s shape. See [LobbyModel.cycleDiscussion]. */
+    val cycleDiscussion: () -> Unit = {},
+    val cycleEgressTimer: () -> Unit = {},
+    val cycleRevokeCooldown: () -> Unit = {},
     val lightsOut: () -> Unit = {},
     /**
      * **NEW ROUND — the host's control on the two ending screens** (D-157). See

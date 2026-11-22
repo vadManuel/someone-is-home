@@ -117,7 +117,7 @@ class ScreenLedgerTest {
     fun everyLineCarriesAStampAndTheStampsDoNotGoBackwards() {
         val b = Bench()
         b.ledger.beat("ARMED")
-        b.flow.houseSaid(RoundMessage.MeetingPhaseOpened(MeetingPhase.Vote, 45, Haptic.Short))
+        b.flow.houseSaid(RoundMessage.MeetingPhaseOpened(MeetingPhase.Vote, 45, null, Haptic.Short))
         b.ledger.sample()
         b.ledger.beat("VOTE")
 

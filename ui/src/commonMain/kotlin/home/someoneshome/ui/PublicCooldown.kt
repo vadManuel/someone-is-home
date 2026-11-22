@@ -69,13 +69,25 @@ data class PublicCooldown(val seconds: Int, val elapsed: Int = 0) {
         /**
          * **How long this phone's own arm holds the next echo back**: the full cooldown the house
          * spent at that arm, plus the pad, so the echo errs late like every clock here.
+         *
+         * [revokeCooldown] is the round's own, in ticks, as the house pushed it at LIGHTS OUT and at
+         * each meeting's end (D-317): the host's REVOKE COOLDOWN row, not this build's default.
          */
-        val OWN_ARM_SECONDS: Int = Balance.wholeSeconds(Balance.REVOKE_COOLDOWN) + PAD_SECONDS
+        fun ownArmSeconds(revokeCooldown: Long): Int = Balance.wholeSeconds(revokeCooldown) + PAD_SECONDS
+
+        /** [ownArmSeconds] for a round armed at the default cooldown. Tests and fixtures only. */
+        val OWN_ARM_SECONDS: Int = ownArmSeconds(Balance.REVOKE_COOLDOWN)
 
         private fun restarted(ticks: Long) = PublicCooldown(Balance.wholeSeconds(ticks) + PAD_SECONDS)
 
-        /** The Revoke at half, per seat in the house and the same on every phone (D-132, D-184). */
-        val Revoke: PublicCooldown get() = restarted(Balance.REVOKE_OPENING)
+        /**
+         * **The Revoke at half, per seat in the house and the same on every phone** (D-132, D-184),
+         * of the cooldown the house pushed (D-317) and so of the host's setting.
+         */
+        fun revoke(revokeCooldown: Long): PublicCooldown = restarted(Balance.opening(revokeCooldown))
+
+        /** [revoke] for a round armed at the default cooldown. Tests and fixtures only. */
+        val Revoke: PublicCooldown get() = revoke(Balance.REVOKE_COOLDOWN)
 
         /** The Access pool at half (D-132, D-184). A Tier-2 fire's restart is the actor's own: [fired]. */
         val Access: PublicCooldown get() = restarted(Balance.ACCESS_OPENING)

@@ -1,5 +1,6 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.Balance
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
@@ -124,7 +125,7 @@ class AccessBarParityTest {
             assertEquals(0, count, "page 2 differed by role at $moment, $count pixels, first at $first")
         }
 
-        at("LIGHTS OUT", "1-lights-out") { it.said(RoundMessage.OpeningMessage(Haptic.Short)) }
+        at("LIGHTS OUT", "1-lights-out") { it.said(RoundMessage.OpeningMessage(Haptic.Short, Balance.REVOKE_COOLDOWN)) }
         at("15 s in", "2-15s") { it.seconds(15) }
         at("the Access half run out", "3-access-ready") { it.seconds(PublicCooldown.Access.seconds) }
 
@@ -136,6 +137,6 @@ class AccessBarParityTest {
         println("after the Surge: $count pixels differ, first at $first")
 
         // A meeting's end puts every pool back on the public half, so the pages are one again.
-        at("the meeting's end after the Surge", "5-meeting-end") { it.said(RoundMessage.MeetingEnded(Haptic.Long)) }
+        at("the meeting's end after the Surge", "5-meeting-end") { it.said(RoundMessage.MeetingEnded(Haptic.Long, Balance.REVOKE_COOLDOWN)) }
     }
 }

@@ -1,5 +1,6 @@
 package home.someoneshome.app
 
+import home.someoneshome.model.Balance
 import home.someoneshome.model.OneLineHeld
 import home.someoneshome.model.Seat
 import home.someoneshome.model.SeatNamed
@@ -33,6 +34,9 @@ class LightsOutSeedTest {
         voteWindowSeconds = 45,
         readyToArm = true,
         home = BenchHome.home,
+        discussionSeconds = Balance.DISCUSSION_SECONDS,
+        egressTimerSeconds = Balance.EGRESS_TIMER_SECONDS,
+        revokeCooldownSeconds = Balance.REVOKE_COOLDOWN_SECONDS,
     )
 
     /** One launch environment, and every name the press asked it for. */

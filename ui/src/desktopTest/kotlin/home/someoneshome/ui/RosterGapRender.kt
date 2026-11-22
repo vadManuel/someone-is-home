@@ -83,6 +83,9 @@ class RosterGapRender {
                 override fun handOver(line: String) = Unit
                 override fun setInsiders(chosen: Int?) = Unit
                 override fun setVoteWindow(seconds: Int) = Unit
+                override fun setDiscussion(seconds: Int) = Unit
+                override fun setEgressTimer(seconds: Int) = Unit
+                override fun setRevokeCooldown(seconds: Int) = Unit
                 override fun roundEnded() = Unit
                 override fun leave() = Unit
                 override fun terminate() = Unit

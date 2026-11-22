@@ -1,5 +1,6 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.Balance
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
@@ -109,7 +110,7 @@ class RealClocksTest {
     fun aHousedThreadCarriesEachTextsArrivalTime() {
         now = now.copy(hour = 21, minute = 50)
         val phone = housed()
-        phone.houseSaid(RoundMessage.OpeningMessage(Haptic.Long))
+        phone.houseSaid(RoundMessage.OpeningMessage(Haptic.Long, Balance.REVOKE_COOLDOWN))
         now = now.copy(hour = 22, minute = 5)
         phone.houseSaid(RoundMessage.MessageDelivered("Do not run."))
 
@@ -167,15 +168,15 @@ class RealClocksTest {
     @Test
     fun meetingClocksFollowTheHousesDeadlines() {
         val phone = housed(ScreenId.Notice)
-        phone.houseSaid(RoundMessage.MeetingPhaseOpened(MeetingPhase.CheckIn, null, Haptic.Short))
+        phone.houseSaid(RoundMessage.MeetingPhaseOpened(MeetingPhase.CheckIn, null, null, Haptic.Short))
         assertNull(phone.state.secondsLeft, "the gate ran a clock")
 
-        phone.houseSaid(RoundMessage.MeetingPhaseOpened(MeetingPhase.Discussion, null, Haptic.Short))
+        phone.houseSaid(RoundMessage.MeetingPhaseOpened(MeetingPhase.Discussion, null, null, Haptic.Short))
         assertEquals(90, phone.state.secondsLeft)
         repeat(10) { phone.secondPassed() }
         assertEquals("1:20", PanelVals(phone.state.copy(screen = ScreenId.Discussion)).countdown.text)
 
-        phone.houseSaid(RoundMessage.MeetingPhaseOpened(MeetingPhase.Vote, 30, Haptic.Short))
+        phone.houseSaid(RoundMessage.MeetingPhaseOpened(MeetingPhase.Vote, 30, null, Haptic.Short))
         assertEquals(30, phone.state.secondsLeft, "the ballot did not start at the window the house sent")
         repeat(5) { phone.secondPassed() }
         assertEquals("0:25", PanelVals(phone.state.copy(screen = ScreenId.Vote)).countdown.text)
@@ -184,13 +185,13 @@ class RealClocksTest {
             "the couch and the hallway count different ballots",
         )
 
-        phone.houseSaid(RoundMessage.MeetingPhaseOpened(MeetingPhase.Tally, null, Haptic.Short))
+        phone.houseSaid(RoundMessage.MeetingPhaseOpened(MeetingPhase.Tally, null, null, Haptic.Short))
         repeat(6) { phone.secondPassed() }
         assertEquals("9", PanelVals(phone.state.copy(screen = ScreenId.Tally)).countdown.text)
         repeat(60) { phone.secondPassed() }
         assertEquals(0, phone.state.secondsLeft, "the clock ran past zero")
 
-        phone.houseSaid(RoundMessage.MeetingEnded(Haptic.Long))
+        phone.houseSaid(RoundMessage.MeetingEnded(Haptic.Long, Balance.REVOKE_COOLDOWN))
         assertNull(phone.state.secondsLeft, "the meeting's clock outlived the meeting")
     }
 
@@ -245,7 +246,7 @@ class RealClocksTest {
             mainClock.autoAdvance = false
             setContent { DeviceCanvas(insets = PanelInsets()) { FlowHost(phone) } }
             mainClock.advanceTimeByFrame()
-            phone.houseSaid(RoundMessage.MeetingPhaseOpened(MeetingPhase.Discussion, null, Haptic.Short))
+            phone.houseSaid(RoundMessage.MeetingPhaseOpened(MeetingPhase.Discussion, null, null, Haptic.Short))
             mainClock.advanceTimeByFrame()
             val standing = phone.state.screen
             repeat(3) { mainClock.advanceTimeBy(1_000L) }

@@ -411,11 +411,14 @@ sealed class RoundMessage {
     @kotlinx.serialization.SerialName("PresenceChanged")
     data class PresenceChanged(val at: MarkerId?, val open: Boolean) : RoundMessage()
 
-    /** The house's opening text. It carries no words — the client holds the copy (D-112). */
+    /**
+     * The house's opening text. It carries no words — the client holds the copy (D-112). It carries
+     * the round's locked Revoke cooldown, in ticks (D-317): see `Effect.OpeningMessage`.
+     */
     @ClientFacing
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("OpeningMessage")
-    data class OpeningMessage(val haptic: Haptic) : RoundMessage()
+    data class OpeningMessage(val haptic: Haptic, val revokeCooldown: Long) : RoundMessage()
 
     /**
      * **What this phone is** (`gdd.md:923`, E-R2-2).
@@ -634,6 +637,8 @@ sealed class RoundMessage {
     data class MeetingPhaseOpened(
         val phase: MeetingPhase,
         val voteWindowSeconds: Int?,
+        /** The talk's locked length on the push that opens it, null elsewhere (D-317). */
+        val discussionSeconds: Int?,
         val haptic: Haptic,
     ) : RoundMessage()
 
@@ -776,11 +781,11 @@ sealed class RoundMessage {
         }
     }
 
-    /** Lights out. */
+    /** Lights out, with the round's locked Revoke cooldown, in ticks (D-317). */
     @ClientFacing
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("MeetingEnded")
-    data class MeetingEnded(val haptic: Haptic) : RoundMessage()
+    data class MeetingEnded(val haptic: Haptic, val revokeCooldown: Long) : RoundMessage()
 
     /**
      * The house on fire, to everybody (D-118, D-076).
@@ -1413,7 +1418,7 @@ object RoundWire {
         // The seat comes off and nothing is left: the socket is the address (D-318).
         is Effect.CardUnregistered -> RoundMessage.CardUnregistered
         is Effect.PresenceChanged -> RoundMessage.PresenceChanged(effect.at, effect.open)
-        is Effect.OpeningMessage -> RoundMessage.OpeningMessage(effect.haptic)
+        is Effect.OpeningMessage -> RoundMessage.OpeningMessage(effect.haptic, effect.revokeCooldown)
         // **The seat comes off and the role narrows to one bit about the recipient.**
         // `Role` is deliberately neither `@Serializable` nor `@ClientFacing`, so there is
         // no way to put the authority's own type on a socket and no reason to want one:
@@ -1436,7 +1441,7 @@ object RoundWire {
         is Effect.CheckInProgressed ->
             RoundMessage.CheckInProgressed(effect.present, effect.expected)
         is Effect.MeetingPhaseOpened ->
-            RoundMessage.MeetingPhaseOpened(effect.phase, effect.voteWindowSeconds, effect.haptic)
+            RoundMessage.MeetingPhaseOpened(effect.phase, effect.voteWindowSeconds, effect.discussionSeconds, effect.haptic)
         is Effect.NoticeIssued -> RoundMessage.NoticeIssued(effect.unreachable, effect.switchedOff)
         is Effect.ReadyProgressed -> RoundMessage.ReadyProgressed(effect.ready, effect.expected)
         is Effect.VoteHeld -> RoundMessage.VoteHeld(effect.selection, effect.locked)
@@ -1452,7 +1457,7 @@ object RoundWire {
         is Effect.RestrainedTakeover -> RoundMessage.RestrainedTakeover(effect.haptic)
         // The seat comes off and only the pad is left: the touch's one frame size (S1, D-219).
         is Effect.RevokeLanded -> RoundMessage.RevokeLanded.of(effect.haptic)
-        is Effect.MeetingEnded -> RoundMessage.MeetingEnded(effect.haptic)
+        is Effect.MeetingEnded -> RoundMessage.MeetingEnded(effect.haptic, effect.revokeCooldown)
         is Effect.EgressOpened ->
             RoundMessage.EgressOpened(effect.type, effect.nodes, effect.remaining, effect.haptic, effect.pulseFrom)
         is Effect.EgressHeld ->

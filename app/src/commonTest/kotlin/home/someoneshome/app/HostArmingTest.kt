@@ -1,5 +1,6 @@
 package home.someoneshome.app
 
+import home.someoneshome.model.Balance
 import home.someoneshome.model.CellRect
 import home.someoneshome.model.Effect
 import home.someoneshome.model.Floor
@@ -116,6 +117,9 @@ class HostArmingTest {
         voteWindowSeconds = 45,
         readyToArm = ready,
         home = home,
+        discussionSeconds = Balance.DISCUSSION_SECONDS,
+        egressTimerSeconds = Balance.EGRESS_TIMER_SECONDS,
+        revokeCooldownSeconds = Balance.REVOKE_COOLDOWN_SECONDS,
     )
 
     private class Bench(inputs: ArmingInputs) {
@@ -245,7 +249,7 @@ class HostArmingTest {
         assertTrue(answered.await(), "the house did not arm a ready lobby: ${bench.said}")
         assertEquals(ScreenId.Lobby, flow.state.screen, "the host walked itself to ARMED, not by the house's push")
         val opening = bench.pushed.filterIsInstance<Effect.OpeningMessage>().single { it.seat == seats.first() }
-        flow.houseSaid(RoundMessage.OpeningMessage(opening.haptic))
+        flow.houseSaid(RoundMessage.OpeningMessage(opening.haptic, Balance.REVOKE_COOLDOWN))
         // Plain ARMED: the opening banner waits for this phone's own CONTINUE (D-293).
         assertEquals(ScreenId.Armed, flow.state.screen, "the house's opening push left the host on its lobby")
     }

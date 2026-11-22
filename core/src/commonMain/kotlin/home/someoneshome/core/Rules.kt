@@ -345,7 +345,7 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
         // the Revoke's own clock and the Access pool Tier 2 shares (`gdd.md:306`, `:318`) -- and
         // both open at half, so the round's guaranteed stretch of peace covers the support kit as
         // well as the two time-critical abilities.
-        cooldowns = openingCooldowns(seats, event.at),
+        cooldowns = openingCooldowns(seats, event.at, event.revokeCooldownSeconds * Balance.TICKS_PER_SECOND),
         // D-132 again, and it is ONE value rather than a row per seat because the Egress cooldown
         // is house-wide -- *shared with the other Insider*. See GameState.egressReadyAt.
         egressReadyAt = event.at + Balance.EGRESS_OPENING,
@@ -359,6 +359,12 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
         // Balance values lock at arming. The ballot's length is the host's and it is public; it is
         // read once, by `openVote`, and published on the push that opens the vote.
         voteWindowSeconds = event.voteWindowSeconds,
+        // The other three host settings, locked here beside the ballot and for its reason (D-317):
+        // the talk's length, the Egress's and the Revoke's cooldown. Each is read off the state by
+        // the one rule that uses it, never off `Balance`, whose numbers are only their defaults.
+        discussionSeconds = event.discussionSeconds,
+        egressTimerSeconds = event.egressTimerSeconds,
+        revokeCooldownSeconds = event.revokeCooldownSeconds,
         // The station's card, so that a scan of it is answered as the station (D-199).
         terminal = event.terminal,
         // The plan and the station's room, carried across arming for O4's map (O2). Nothing in
@@ -390,7 +396,7 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
         state,
         seats.map { Effect.LampSet(it, LAMP_DIM) } +
             orders.map { Effect.WorkOrderIssued(it.seat, it.asLines(state.destinations)) } +
-            seats.map { Effect.OpeningMessage(it, Haptic.Short) } +
+            seats.map { Effect.OpeningMessage(it, Haptic.Short, state.revokeCooldown) } +
             // **The roster, one per seat, and every copy of it is the same list** (D-115).
             //
             // Built once, outside the run, because there is only one of them: what varies between
@@ -690,7 +696,7 @@ private fun revokeArmed(state: GameState, event: Event.RevokeArmed): Reduction<G
                 revokeArms = (state.revokeArms.filterNot { it.seat.index == event.actor.index } + arm)
                     .sortedBy { it.seat.index },
             )
-            .withCooldown(cooldown.restartedAt(event.at, Balance.REVOKE_COOLDOWN))
+            .withCooldown(cooldown.restartedAt(event.at, state.revokeCooldown))
     }
     return Reduction(next, emptyList())
 }
@@ -742,9 +748,10 @@ private fun spendPool(state: GameState, actor: Seat, at: Tick, weight: Long): Ga
  * **frozen out of resets until containment**, which is a condition on the caller and is written at
  * [lightsOut], where the condition can be read.
  */
-private fun openingCooldowns(seats: List<Seat>, at: Tick): List<Cooldown> = seats.flatMap {
+private fun openingCooldowns(seats: List<Seat>, at: Tick, revokeCooldown: Long): List<Cooldown> = seats.flatMap {
     listOf(
-        Cooldown(it, InsiderAbility.Revoke, at + Balance.REVOKE_OPENING),
+        // Half of the Revoke cooldown the round was armed with (D-317), not of `Balance`'s default.
+        Cooldown(it, InsiderAbility.Revoke, at + Balance.opening(revokeCooldown)),
         Cooldown(it, InsiderAbility.Access, at + Balance.ACCESS_OPENING),
     )
 }
@@ -1661,9 +1668,12 @@ private fun checkedIn(state: GameState, event: Event.MeetingCheckedIn): Reductio
                 // was living and Revoked or Restrained since is not named either. **Bar the host**
                 // (D-283, D-289), who is named out or not: the house went off the air with them.
                 Effect.NoticeIssued(unreachable = left, switchedOff = switched),
+                // **The talk's length rides the push that opens it** (D-317), the ballot's shape: the
+                // host set it, arming locked it, and every phone draws one clock from one number.
                 Effect.MeetingPhaseOpened(
                     MeetingPhase.Discussion,
                     voteWindowSeconds = null,
+                    discussionSeconds = state.discussionSeconds,
                     haptic = Haptic.Short,
                 ),
             ),
@@ -1724,6 +1734,7 @@ private fun openVote(state: GameState, meeting: Meeting): Reduction<GameState, E
             Effect.MeetingPhaseOpened(
                 MeetingPhase.Vote,
                 voteWindowSeconds = state.voteWindowSeconds,
+                discussionSeconds = null,
                 haptic = Haptic.Short,
             ),
             Effect.VoteProgressed(voting.lockedCount, voting.ballots.size),
@@ -1833,6 +1844,7 @@ private fun readTheBallot(state: GameState, meeting: Meeting): Reduction<GameSta
             Effect.MeetingPhaseOpened(
                 MeetingPhase.Tally,
                 voteWindowSeconds = null,
+                discussionSeconds = null,
                 haptic = Haptic.Short,
             ),
             Effect.VoteProgressed(finished.lockedCount, finished.ballots.size),
@@ -1925,7 +1937,7 @@ private fun lightsOut(state: GameState, event: Event.MeetingClosed): Reduction<G
     // that door from the other side: a Tier-2 fire is refused at the gate for the whole of a
     // meeting, so nothing could ask. `GameState.accessPausedAt` is gone; this reset is the whole of
     // what a meeting does to a clock.
-    val reopened = openingCooldowns(state.seats, event.at)
+    val reopened = openingCooldowns(state.seats, event.at, state.revokeCooldown)
 
     // **The Egress's clock is house-wide and is frozen out of this while its Egress runs**, until
     // containment. A reset that reached it mid-crisis would hand the Insiders a second Egress to
@@ -1960,7 +1972,7 @@ private fun lightsOut(state: GameState, event: Event.MeetingClosed): Reduction<G
             sightings = emptyList(),
             observations = emptyList(),
         ),
-        listOf(Effect.MeetingEnded(Haptic.Long)) + restarted,
+        listOf(Effect.MeetingEnded(Haptic.Long, state.revokeCooldown)) + restarted,
     )
 }
 
@@ -2029,7 +2041,8 @@ private inline fun withEgress(
  *
  * Not because it is refused — that would be a refusal about a running Egress, which is the gate's
  * job and is already there for the meeting card — but because the cooldown outlives the timer:
- * [Balance.EGRESS_COOLDOWN] is longer than [Balance.EGRESS_TIMER], and **every pause of the Egress
+ * [Balance.EGRESS_COOLDOWN] is longer than the round's [GameState.egressTimer] at every value the
+ * lobby offers (D-317: one, the default 120 s; a range past 180 s would need this read again), and **every pause of the Egress
  * pushes the cooldown back by the same length**, at a meeting's close and at the house's return
  * (decision pack 9f option a; D-282). Until then this said *by construction*, and it was not: the
  * cooldown kept wall time while a meeting held the Egress, so a long enough meeting let a second
@@ -2049,7 +2062,8 @@ private fun egressFired(state: GameState, event: Event.EgressFired): Reduction<G
     val started = if (!ready) {
         null
     } else {
-        Egress.fired(event.at, event.type, event.nodes, Balance.EGRESS_TIMER, event.pulseFrom)
+        // The EGRESS TIMER the round was armed with (D-014, D-317), never `Balance`'s default.
+        Egress.fired(event.at, event.type, event.nodes, state.egressTimer, event.pulseFrom)
             .takeIf { it.namesTwoNodes }
     }
 

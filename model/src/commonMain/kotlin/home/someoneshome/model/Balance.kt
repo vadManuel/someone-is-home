@@ -136,8 +136,20 @@ object Balance {
     const val REPORT_HOLD_MILLIS: Long = 2_000L
 
     /**
-     * **D-132's normal duration for the Revoke, in ticks.** The lobby's own settings row reads
-     * `REVOKE COOLDOWN 60S`, which is where this number comes from and where it will move from.
+     * **The REVOKE COOLDOWN row's default, in seconds: the lobby's own `60S`** (D-317).
+     *
+     * A host's setting since D-317, locked at arming ([Event.RoundArmed.revokeCooldownSeconds]) and
+     * read by the rules off [GameState.revokeCooldown], never off this. This is what a round armed
+     * without a setting gets, and the only choice the lobby's row offers until the owner rules a
+     * range (no ruling sets one: `gdd.md:930`, `:1181`, D-132, D-037).
+     */
+    const val REVOKE_COOLDOWN_SECONDS: Int = 60
+
+    /**
+     * **D-132's normal duration for the Revoke, in ticks — the default only** (D-317). The lobby's
+     * REVOKE COOLDOWN row is the host's now, and the round reads the locked
+     * [GameState.revokeCooldown]; this is [REVOKE_COOLDOWN_SECONDS] in ticks, for a round armed
+     * without a setting.
      *
      * The round opens with every Insider ability **already running at half of this**, which closes
      * the opening-Revoke problem structurally rather than by asking players not to.
@@ -147,7 +159,7 @@ object Balance {
      * `60S` on the lobby row and sixty seconds in the rules are the same fact rather than two that
      * happen to agree. **The number on screen has not changed; the number in ticks has.**
      */
-    const val REVOKE_COOLDOWN: Long = 60L * TICKS_PER_SECOND
+    const val REVOKE_COOLDOWN: Long = REVOKE_COOLDOWN_SECONDS * TICKS_PER_SECOND
 
     /**
      * **How long an armed Revoke stays armed: 20 s, or until a meeting is called, whichever comes
@@ -162,7 +174,18 @@ object Balance {
     const val REVOKE_ARM_WINDOW: Long = 20L * TICKS_PER_SECOND
 
     /**
-     * **The Egress countdown — 120s, and a placeholder for a lobby setting** (`gdd.md:353`, F-009).
+     * **The EGRESS TIMER row's default, in seconds: 120** (D-014, F-009, `gdd.md:382`, D-317).
+     *
+     * A host's setting since D-317, locked at arming ([Event.RoundArmed.egressTimerSeconds]) and read
+     * by the rules off [GameState.egressTimer], never off this. D-014 gives the default and no range
+     * or step, so this is also the row's only choice until the owner rules one.
+     */
+    const val EGRESS_TIMER_SECONDS: Int = 120
+
+    /**
+     * **The Egress countdown's default, in ticks** (`gdd.md:353`, F-009). Since D-317 the host's
+     * setting is built and the round reads the locked [GameState.egressTimer]; this is what a round
+     * armed without a setting gets. What follows is the history, and its first sentence still holds.
      *
      * The design is explicit that this *is not a constant*: it has to cover two Residents reading
      * the node names off a widget, crossing **this particular house**, and pairing — and a
@@ -171,11 +194,10 @@ object Balance {
      * default from the painted grid, since the longest marker-to-marker path is already computable
      * from the setup walk.
      *
-     * **Neither the setting nor the proposal is built.** What is built is the number the round is
-     * armed against, in one place, named as the placeholder it is. Playtest owns it, and the lobby
-     * owns it after that.
+     * **The setting is built (D-317); the proposal is not**, because no ruling says how the longest
+     * path becomes seconds (D-014 gives the idea and no rate).
      */
-    const val EGRESS_TIMER: Long = 120L * TICKS_PER_SECOND
+    const val EGRESS_TIMER: Long = EGRESS_TIMER_SECONDS * TICKS_PER_SECOND
 
     /**
      * **One shared Egress cooldown for the whole house, at 180s — a placeholder** (D-132).
@@ -215,6 +237,13 @@ object Balance {
      * PUBLIC fact; a `/ 2` in each layer would be two copies that agree until somebody moves one.
      */
     const val REVOKE_OPENING: Long = REVOKE_COOLDOWN / 2
+
+    /**
+     * **Any cooldown at half: the one arithmetic behind the three openings above** (D-132, D-184).
+     * The rules apply it to the Revoke cooldown the round was armed with (D-317), and page 2 to the
+     * one the house pushed, so the `/ 2` is still written once.
+     */
+    fun opening(cooldown: Long): Long = cooldown / 2
     const val ACCESS_OPENING: Long = ACCESS_COOLDOWN / 2
     const val EGRESS_OPENING: Long = EGRESS_COOLDOWN / 2
 
@@ -414,7 +443,10 @@ object Balance {
 
     /**
      * **The talk — 90s, the design's own number and a lobby setting after that** (`gdd.md:412`,
-     * `:1005`, `:1122`, A-10).
+     * `:1005`, `:1122`, A-10). **The DISCUSSION row's default since D-317**: the host's setting
+     * is locked at arming ([Event.RoundArmed.discussionSeconds]) and the house closes the talk on
+     * [GameState.discussionSeconds]; this is what a round armed without a setting gets, and the
+     * row's only choice until the owner rules a range.
      *
      * *The phone shows a timer and one control. Unanimous "Ready to vote" skips ahead.* The skip is
      * a count of phones and ends the talk early; this is the other way it ends, and it is the

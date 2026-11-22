@@ -1,5 +1,6 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.Balance
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
@@ -47,7 +48,7 @@ class HousedContentTest {
         ).also { phone ->
             phone.houseAttached(true)
             if (roster) phone.houseSaid(RoundMessage.RosterIssued(names))
-            phone.houseSaid(RoundMessage.OpeningMessage(Haptic.Short))
+            phone.houseSaid(RoundMessage.OpeningMessage(Haptic.Short, Balance.REVOKE_COOLDOWN))
             phone.houseSaid(RoundMessage.RoleRevealed(insider = insider, line = if (insider) line else ""))
         }
 
@@ -158,7 +159,7 @@ class HousedContentTest {
     fun theEgressCountIsThisRounds() {
         val phone = ended(housed(), contained = 2)
         assertEquals(2, phone.state.egressesContained)
-        phone.houseSaid(RoundMessage.OpeningMessage(Haptic.Short))
+        phone.houseSaid(RoundMessage.OpeningMessage(Haptic.Short, Balance.REVOKE_COOLDOWN))
         assertEquals(0, phone.state.egressesContained, "a new round kept the last one's Egresses")
         assertNull(phone.state.residents, "a new round kept the last one's Residents")
     }

@@ -84,6 +84,13 @@ fun armingFor(
      * which names no out seat on the notice (R7, D-242).
      */
     host: Seat? = null,
+    /**
+     * The host's DISCUSSION, EGRESS TIMER and REVOKE COOLDOWN rows, in seconds, off the lobby's
+     * desk (D-317). Defaulted to their `Balance` numbers for [voteWindowSeconds]' reason.
+     */
+    discussionSeconds: Int = Balance.DISCUSSION_SECONDS,
+    egressTimerSeconds: Int = Balance.EGRESS_TIMER_SECONDS,
+    revokeCooldownSeconds: Int = Balance.REVOKE_COOLDOWN_SECONDS,
 ): Event.RoundArmed {
     require(seats.size >= Balance.MINIMUM_SEATS) {
         "a round cannot be armed for ${seats.size} seats: the minimum party is " +
@@ -104,6 +111,9 @@ fun armingFor(
         plan = plan,
         terminalRoom = terminalRoom,
         host = host?.takeIf { h -> seats.any { it.index == h.index } },
+        discussionSeconds = discussionSeconds,
+        egressTimerSeconds = egressTimerSeconds,
+        revokeCooldownSeconds = revokeCooldownSeconds,
     )
 }
 

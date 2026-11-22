@@ -1,5 +1,6 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.Balance
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
@@ -53,7 +54,7 @@ class ClockParityTest {
         mainClock.advanceTimeBy(100)
 
         // LIGHTS OUT on both, at the same moment.
-        listOf(insider, resident).forEach { it.houseSaid(RoundMessage.OpeningMessage(Haptic.Short)) }
+        listOf(insider, resident).forEach { it.houseSaid(RoundMessage.OpeningMessage(Haptic.Short, Balance.REVOKE_COOLDOWN)) }
         val seconds = PublicCooldown.Revoke.seconds
         var worst = 0
         val readings = mutableListOf<String>()
@@ -101,7 +102,7 @@ class ClockParityTest {
         phone.houseSaid(RoundMessage.RoleRevealed(insider = false))
         setContent { DeviceCanvas(insets = PanelInsets()) { FlowHost(phone) } }
         mainClock.advanceTimeBy(100)
-        phone.houseSaid(RoundMessage.OpeningMessage(Haptic.Short))
+        phone.houseSaid(RoundMessage.OpeningMessage(Haptic.Short, Balance.REVOKE_COOLDOWN))
         val seconds = PublicCooldown.Revoke.seconds
         mainClock.advanceTimeBy(seconds * 1_000L - 200)
         assertTrue(phone.state.revokeClock?.running == true, "the Revoke clock ran out before its ${seconds}s")

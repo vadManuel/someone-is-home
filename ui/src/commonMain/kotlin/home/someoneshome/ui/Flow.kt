@@ -1276,6 +1276,17 @@ class FlowModel(
      */
     private var awaitingFire: Long? = null
 
+    /**
+     * **The Revoke cooldown this round was armed with, in ticks, as the house pushed it** (D-317).
+     *
+     * Written by the two pushes that restart page 2's clocks, LIGHTS OUT (`OpeningMessage`) and a
+     * meeting's end (`MeetingEnded`), which carry it; read by the public Revoke clock at half and by
+     * this phone's own arm at full. So the host's REVOKE COOLDOWN row is what every phone draws, and
+     * this build's default is only what a phone holds before its first push of a round, when no
+     * Revoke clock is drawn at all.
+     */
+    private var revokeCooldown: Long = Balance.REVOKE_COOLDOWN
+
     // A phone built already housed draws no design count at its first meeting either (D-247).
     // And a real phone shows its own time from its first frame, housed or not (D-255): the join
     // screen on first launch is drawn before any house exists.
@@ -1679,10 +1690,11 @@ class FlowModel(
     fun armRevoke() {
         send(IntentMessage.ArmRevoke)
         val now = monotonicNow()
-        val ownArmSpent = stamps.armed?.let { now - it < PublicCooldown.OWN_ARM_SECONDS * 1_000L } == true
+        val ownArm = PublicCooldown.ownArmSeconds(revokeCooldown)
+        val ownArmSpent = stamps.armed?.let { now - it < ownArm * 1_000L } == true
         if (state.revokeClock?.running != true && !ownArmSpent) {
             stamps.armed = now
-            state = state.copy(revoke = RevokeState.Armed, ownArmClock = PublicCooldown(PublicCooldown.OWN_ARM_SECONDS))
+            state = state.copy(revoke = RevokeState.Armed, ownArmClock = PublicCooldown(ownArm))
         }
     }
 
@@ -1899,7 +1911,9 @@ class FlowModel(
      * back with them, except at a meeting's end while an Egress is running, which D-184 freezes out
      * of the reset. LIGHTS OUT has no running Egress to freeze, whatever an earlier round left here.
      */
-    private fun shiftBegan(opening: Boolean = false) {
+    private fun shiftBegan(revokeCooldown: Long, opening: Boolean = false) {
+        // The round's own cooldown, off the push that began this shift (D-317).
+        this.revokeCooldown = revokeCooldown
         val frozen = !opening && state.egressRunning
         // The house resets the pool to half here whatever the actor last fired (D-184), so an
         // answer still owed from before belongs to no bar.
@@ -1915,7 +1929,7 @@ class FlowModel(
             // *the house keeps the arm across a meeting*). The ring already took ARMED down; this
             // is the same answer for a phone that missed it.
             revoke = if (opening || state.revoke == RevokeState.Armed) RevokeState.Ready else state.revoke,
-            revokeClock = PublicCooldown.Revoke,
+            revokeClock = PublicCooldown.revoke(revokeCooldown),
             accessClock = PublicCooldown.Access,
             egressClock = if (frozen) state.egressClock else PublicCooldown.EgressOpening,
         )
@@ -3127,7 +3141,7 @@ class FlowModel(
             //
             // **And it is when the house thread's opening rows landed** (D-243), on this phone's clock.
             is RoundMessage.OpeningMessage -> {
-                shiftBegan(opening = true)
+                shiftBegan(message.revokeCooldown, opening = true)
                 val at = landedAt()
                 // A new round holds no last round's Egress count, quoted line or Residents (D-247).
                 state = state.copy(
@@ -3324,10 +3338,13 @@ class FlowModel(
                     // one screen, and a vote window blanked by the tally's push would take the
                     // ballot's clock off a screen that is still drawing it.
                     voteWindowSeconds = message.voteWindowSeconds ?: state.voteWindowSeconds,
+                    // The talk's, the same way and for the same reason (D-317).
+                    discussionSeconds = message.discussionSeconds ?: state.discussionSeconds,
                     // **The phase's clock starts now, at the window the house runs it for** (D-243).
                     // Null at the gate, which runs on a count and not a clock (D-104).
                     secondsLeft = Countdowns.windowOfPhase(
                         message.phase, message.voteWindowSeconds ?: state.voteWindowSeconds,
+                        message.discussionSeconds ?: state.discussionSeconds,
                     ),
                 )
                 housePushed(message)
@@ -3444,7 +3461,7 @@ class FlowModel(
             // The meeting ends the shift it interrupted and starts the next (D-170), and every
             // clock goes back to half on every phone (D-184, D-239).
             is RoundMessage.MeetingEnded -> {
-                shiftBegan()
+                shiftBegan(message.revokeCooldown)
                 // The meeting's last clock goes with it (D-243).
                 state = state.copy(secondsLeft = null)
                 housePushed(message)
@@ -3519,8 +3536,8 @@ class FlowModel(
             // would be the one screen contradicting the room. The number itself resets the phone's
             // count at every pause and restart, through `Balance.wholeSeconds` (D-239), which
             // rounds up so the phone never reads less than the house holds. The length stays the
-            // one the Egress fired with; a phone that missed the fire falls back to the house's
-            // timer.
+            // one the Egress fired with; a phone that missed the fire draws it against the number
+            // this push carries, since the timer is the host's now and not a constant (D-317).
             //
             // **And page 2's Egress clock waits with its Egress** (decision pack 9f option a, D-282):
             // the house pushes the Egress cooldown back by however long the Egress was held, so this
@@ -3542,7 +3559,9 @@ class FlowModel(
                     // scan from before a meeting after it (D-279 F3), so neither does the control.
                     pulseAt = if (message.running) state.pulseAt else null,
                     pulseTaps = if (message.running) state.pulseTaps else emptyList(),
-                    egressLeft = Countdown(left, state.egressLeft?.ofSeconds ?: maxOf(left, Balance.wholeSeconds(Balance.EGRESS_TIMER))),
+                    // A phone that missed the fire draws the bar against the house's own number
+                    // rather than this build's default timer, which the host may have moved (D-317).
+                    egressLeft = Countdown(left, state.egressLeft?.ofSeconds ?: left),
                     // A new value at a restart, so it is stamped again from now (`clocksStamped`).
                     egressClock = if (message.running) {
                         state.egressClock?.let { it.copy(elapsed = (it.elapsed - gaveBack).coerceAtLeast(0)) }
@@ -4046,6 +4065,9 @@ class FlowModel(
         handOverLine = ::handOverLine,
         cycleInsiders = lobby::cycleInsiders,
         cycleVoteWindow = lobby::cycleVoteWindow,
+        cycleDiscussion = lobby::cycleDiscussion,
+        cycleEgressTimer = lobby::cycleEgressTimer,
+        cycleRevokeCooldown = lobby::cycleRevokeCooldown,
         lightsOut = ::lightsOut,
         newRound = ::newRound,
         checkIn = ::checkIn,

@@ -1,5 +1,6 @@
 package home.someoneshome.app
 
+import home.someoneshome.model.Balance
 import home.someoneshome.model.Haptic
 import home.someoneshome.model.InsiderNamed
 import home.someoneshome.model.Seat
@@ -91,7 +92,7 @@ class RoundClientTest {
      */
     @Test
     fun everyPushIsTalliedByKindAndTheHeldSequenceMovesWithIt() = bench { b ->
-        b.push(1, RoundMessage.OpeningMessage(Haptic.Short))
+        b.push(1, RoundMessage.OpeningMessage(Haptic.Short, Balance.REVOKE_COOLDOWN))
         b.push(2, RoundMessage.CheckInProgressed(present = 2, expected = 5))
         b.push(3, RoundMessage.CheckInProgressed(present = 3, expected = 5))
         delay(SETTLE)
@@ -112,7 +113,7 @@ class RoundClientTest {
      */
     @Test
     fun aHoleIsNoticedAndTheScreenIsNotWrittenOverIt() = bench { b ->
-        b.push(1, RoundMessage.OpeningMessage(Haptic.Short))
+        b.push(1, RoundMessage.OpeningMessage(Haptic.Short, Balance.REVOKE_COOLDOWN))
         b.push(3, RoundMessage.CheckInProgressed(present = 3, expected = 5))
         delay(SETTLE)
 

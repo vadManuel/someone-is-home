@@ -1,5 +1,6 @@
 package home.someoneshome.app
 
+import home.someoneshome.model.Balance
 import home.someoneshome.model.EmitSchema
 import home.someoneshome.model.Effect
 import home.someoneshome.model.GameState
@@ -75,6 +76,9 @@ class CardReadTest {
         voteWindowSeconds = 45,
         readyToArm = true,
         home = BenchHome.home,
+        discussionSeconds = Balance.DISCUSSION_SECONDS,
+        egressTimerSeconds = Balance.EGRESS_TIMER_SECONDS,
+        revokeCooldownSeconds = Balance.REVOKE_COOLDOWN_SECONDS,
     )
 
     /** The authority, with `emit` as a recorder of what went to whom, through the real schema. */

@@ -277,6 +277,11 @@ object RecordingText {
                 // Required like the T card, and for the same kind of reason (D-289): a replay that
                 // lost the host would name nobody where the evening named an out host who went dark.
                 seatOrNone("host"),
+                // The host's three timed rows (D-317). Required like `voteWindow`: a replay that
+                // defaulted one would run this build's number where the evening ran the host's.
+                discussionSeconds = int("discussion"),
+                egressTimerSeconds = int("egressTimer"),
+                revokeCooldownSeconds = int("revokeCooldown"),
             )
             "Sensed" -> Event.Sensed(at, seat("sensor"), unescape(req("room"), line), seats("heard"))
             "MarkerScanned" -> Event.MarkerScanned(at, seat("actor"), marker("marker"))
@@ -332,6 +337,7 @@ object RecordingText {
             setOf(
                 "at", "seed", "seats", "insiders", "chosen", "markers", "voteWindow", "names",
                 "lines", "terminal", "rooms", "storeys", "terminalRoom", "host",
+                "discussion", "egressTimer", "revokeCooldown",
             )
         "Sensed" -> setOf("at", "sensor", "room", "heard")
         "MarkerScanned" -> setOf("at", "actor", "marker")

@@ -31,8 +31,8 @@ class PublicCooldownTest {
         val vals: PanelVals get() = PanelVals(flow.state)
     }
 
-    private val opening = RoundMessage.OpeningMessage(Haptic.Short)
-    private val meetingEnded = RoundMessage.MeetingEnded(Haptic.Long)
+    private val opening = RoundMessage.OpeningMessage(Haptic.Short, Balance.REVOKE_COOLDOWN)
+    private val meetingEnded = RoundMessage.MeetingEnded(Haptic.Long, Balance.REVOKE_COOLDOWN)
     private val egressOpened = RoundMessage.EgressOpened(
         type = EgressType.Beacon,
         nodes = listOf(

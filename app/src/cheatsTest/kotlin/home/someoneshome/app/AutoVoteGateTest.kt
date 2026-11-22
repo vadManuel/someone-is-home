@@ -63,7 +63,7 @@ class AutoVoteGateTest {
         /** A meeting called by seat 2, through to the ballot opening. */
         suspend fun theBallotOpens() {
             push(1, RoundMessage.MeetingOpened(Seat(2), MeetingTrigger.MeetingCard, Haptic.Short))
-            push(2, RoundMessage.MeetingPhaseOpened(MeetingPhase.Vote, voteWindowSeconds = 30, haptic = Haptic.Short))
+            push(2, RoundMessage.MeetingPhaseOpened(MeetingPhase.Vote, voteWindowSeconds = 30, discussionSeconds = null, haptic = Haptic.Short))
             delay(SETTLE_MILLIS)
         }
     }

@@ -1,5 +1,6 @@
 package home.someoneshome.app
 
+import home.someoneshome.model.Balance
 import home.someoneshome.core.ContactGate
 import home.someoneshome.core.contactSeedFor
 import home.someoneshome.model.ContactWindow
@@ -84,6 +85,9 @@ class ContactRadioBenchTest {
         voteWindowSeconds = 45,
         readyToArm = true,
         home = BenchHome.home,
+        discussionSeconds = Balance.DISCUSSION_SECONDS,
+        egressTimerSeconds = Balance.EGRESS_TIMER_SECONDS,
+        revokeCooldownSeconds = Balance.REVOKE_COOLDOWN_SECONDS,
     )
 
     /** One window for every clock in the rig: the house and five phones agree, as wall clocks do. */

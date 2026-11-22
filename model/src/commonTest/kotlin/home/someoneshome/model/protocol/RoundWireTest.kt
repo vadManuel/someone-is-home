@@ -1,5 +1,6 @@
 package home.someoneshome.model.protocol
 
+import home.someoneshome.model.Balance
 import home.someoneshome.model.ArmedTouch
 import home.someoneshome.model.AssignedWork
 import home.someoneshome.model.ContactSeed
@@ -90,7 +91,7 @@ class RoundWireTest {
         Effect.TerminalAnswered(Seat(3), reading = true),
         Effect.CardUnregistered(Seat(3)),
         Effect.PresenceChanged(Seat(3), at = MarkerId("M-1"), open = true),
-        Effect.OpeningMessage(Seat(3), Haptic.Short),
+        Effect.OpeningMessage(Seat(3), Haptic.Short, Balance.REVOKE_COOLDOWN),
         // The Insider's copy, because the projection's one decision on this kind is the
         // narrowing of `Role` to a bit and `Role.Resident` would project `false` either way.
         Effect.RoleRevealed(Seat(3), Role.Insider),
@@ -101,7 +102,7 @@ class RoundWireTest {
         Effect.MeetingCalling(Seat(3)),
         Effect.StandAndWalkIn(Seat(3), Haptic.Long),
         Effect.CheckInProgressed(present = 4, expected = 6),
-        Effect.MeetingPhaseOpened(MeetingPhase.Vote, voteWindowSeconds = 45, haptic = Haptic.Short),
+        Effect.MeetingPhaseOpened(MeetingPhase.Vote, voteWindowSeconds = 45, discussionSeconds = null, haptic = Haptic.Short),
         Effect.ReadyProgressed(ready = 2, expected = 6),
         Effect.VoteHeld(Seat(3), selection = Seat(2), locked = true),
         Effect.VoteSelectionShown(voter = Seat(3), selection = Seat(2)),
@@ -111,7 +112,7 @@ class RoundWireTest {
         Effect.RestrainedTakeover(Seat(3), Haptic.Long),
         Effect.RevokeLanded(Seat(4), Haptic.Long),
         Effect.NoticeIssued(listOf(Seat(2)), switchedOff = listOf(Seat(5))),
-        Effect.MeetingEnded(Haptic.Long),
+        Effect.MeetingEnded(Haptic.Long, Balance.REVOKE_COOLDOWN),
         Effect.EgressOpened(
             Seat(3), EgressType.Tether,
             // Destinations, because the widget NAMES the two nodes. The room is host-authored text
@@ -214,7 +215,7 @@ class RoundWireTest {
         bothWays { Effect.TerminalAnswered(it, reading = false) }
         bothWays { Effect.CardUnregistered(it) }
         bothWays { Effect.PresenceChanged(it, at = null, open = false) }
-        bothWays { Effect.OpeningMessage(it, Haptic.Short) }
+        bothWays { Effect.OpeningMessage(it, Haptic.Short, Balance.REVOKE_COOLDOWN) }
         bothWays { Effect.StandAndWalkIn(it, Haptic.Long) }
         bothWays { Effect.VoteHeld(it, selection = Seat(2), locked = true) }
         bothWays { Effect.RestrainedTakeover(it, Haptic.Long) }
@@ -271,7 +272,7 @@ class RoundWireTest {
         val standing = LobbyWire.encode(LobbyBody.Standing(joined = 3, linesIn = 2))
         assertNull(RoundWire.decodeOrNull(standing), "a lobby body decoded as a round body")
 
-        val push = RoundWire.encode(RoundBody.Push(1, RoundMessage.MeetingEnded(Haptic.Long)))
+        val push = RoundWire.encode(RoundBody.Push(1, RoundMessage.MeetingEnded(Haptic.Long, Balance.REVOKE_COOLDOWN)))
         assertNull(LobbyWire.decodeOrNull(push), "a round body decoded as a lobby body")
 
         assertNull(RoundWire.decodeOrNull("not json at all"))

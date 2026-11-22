@@ -1,5 +1,6 @@
 package home.someoneshome.app
 
+import home.someoneshome.model.Balance
 import home.someoneshome.platform.NoRadio
 import home.someoneshome.model.AssignedWork
 import home.someoneshome.model.Destination
@@ -107,18 +108,18 @@ class EffectPushTest {
      * sharper input than a round because it can contain kinds a fixture round would never reach.
      */
     private fun aShift(state: GameState): List<Effect> = listOf(
-        Effect.OpeningMessage(Seat(0), Haptic.Short),
+        Effect.OpeningMessage(Seat(0), Haptic.Short, Balance.REVOKE_COOLDOWN),
         Effect.WorkOrderIssued(Seat(0), emptyList()),
         Effect.SystemIntegrityBatched(percent = 87),
         Effect.SubroutineGraded(Seat(0), accepted = true),
         Effect.SystemIntegrityLive(percent = 86),
         Effect.MeetingOpened(Seat(2), MeetingTrigger.MeetingCard, Haptic.Long),
         Effect.CheckInProgressed(present = 3, expected = 3),
-        Effect.MeetingPhaseOpened(MeetingPhase.Discussion, voteWindowSeconds = null, haptic = Haptic.Short),
-        Effect.MeetingPhaseOpened(MeetingPhase.Vote, voteWindowSeconds = 30, haptic = Haptic.Short),
+        Effect.MeetingPhaseOpened(MeetingPhase.Discussion, voteWindowSeconds = null, discussionSeconds = null, haptic = Haptic.Short),
+        Effect.MeetingPhaseOpened(MeetingPhase.Vote, voteWindowSeconds = 30, discussionSeconds = null, haptic = Haptic.Short),
         Effect.VoteProgressed(locked = 2, expected = 3),
         Effect.MeetingResult(restrained = null, voted = 3, living = 3, haptic = Haptic.Short),
-        Effect.MeetingEnded(Haptic.Long),
+        Effect.MeetingEnded(Haptic.Long, Balance.REVOKE_COOLDOWN),
         Effect.SubroutineGraded(Seat(0), accepted = false),
     ).also { require(it.isNotEmpty() && state.armed) }
 
@@ -443,24 +444,24 @@ class EffectPushTest {
                 phone.awaitHeld(sent)
             }
 
-            say(Effect.OpeningMessage(Seat(0), Haptic.Long))
+            say(Effect.OpeningMessage(Seat(0), Haptic.Long, Balance.REVOKE_COOLDOWN))
             assertEquals("21:50", flow.state.openedAt, "LIGHTS OUT was not stamped with the phone's time")
             assertEquals("21:50", PanelVals(flow.state).clock, "the strip is not the phone's own clock")
 
             say(
                 Effect.MeetingOpened(Seat(2), MeetingTrigger.MeetingCard, Haptic.Long),
-                Effect.MeetingPhaseOpened(MeetingPhase.Discussion, voteWindowSeconds = null, haptic = Haptic.Short),
+                Effect.MeetingPhaseOpened(MeetingPhase.Discussion, voteWindowSeconds = null, discussionSeconds = null, haptic = Haptic.Short),
             )
             assertEquals(90, flow.state.secondsLeft, "the talk did not start at the house's ninety")
             repeat(26) { flow.secondPassed() }
             assertEquals(64, flow.state.secondsLeft)
 
-            say(Effect.MeetingPhaseOpened(MeetingPhase.Vote, voteWindowSeconds = 30, haptic = Haptic.Short))
+            say(Effect.MeetingPhaseOpened(MeetingPhase.Vote, voteWindowSeconds = 30, discussionSeconds = null, haptic = Haptic.Short))
             assertEquals(30, flow.state.secondsLeft, "the ballot did not start at the window the house sent")
             repeat(7) { flow.secondPassed() }
             assertEquals(23, flow.state.secondsLeft)
 
-            say(Effect.MeetingEnded(Haptic.Long))
+            say(Effect.MeetingEnded(Haptic.Long, Balance.REVOKE_COOLDOWN))
             assertEquals(null, flow.state.secondsLeft, "a meeting's clock outlived the meeting")
 
             say(Effect.EgressOpened(Seat(0), EgressType.Tether, emptyList(), remaining = 2_400, haptic = Haptic.Long, pulseFrom = 86_402_000L))

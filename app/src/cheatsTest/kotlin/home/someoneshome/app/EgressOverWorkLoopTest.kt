@@ -1,5 +1,6 @@
 package home.someoneshome.app
 
+import home.someoneshome.model.Balance
 import home.someoneshome.model.Effect
 import home.someoneshome.model.EmitSchema
 import home.someoneshome.model.GameState
@@ -47,6 +48,9 @@ class EgressOverWorkLoopTest {
         voteWindowSeconds = 45,
         readyToArm = true,
         home = BenchHome.home,
+        discussionSeconds = Balance.DISCUSSION_SECONDS,
+        egressTimerSeconds = Balance.EGRESS_TIMER_SECONDS,
+        revokeCooldownSeconds = Balance.REVOKE_COOLDOWN_SECONDS,
     )
 
     private class Bench(inputs: ArmingInputs) {

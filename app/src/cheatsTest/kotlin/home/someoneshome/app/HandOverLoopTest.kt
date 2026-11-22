@@ -1,5 +1,6 @@
 package home.someoneshome.app
 
+import home.someoneshome.model.Balance
 import home.someoneshome.model.Effect
 import home.someoneshome.model.EmitSchema
 import home.someoneshome.model.GameState
@@ -64,6 +65,9 @@ class HandOverLoopTest {
         readyToArm = true,
         // The bench's fixture, hosted as a home would be — see BenchHome.
         home = BenchHome.home,
+        discussionSeconds = Balance.DISCUSSION_SECONDS,
+        egressTimerSeconds = Balance.EGRESS_TIMER_SECONDS,
+        revokeCooldownSeconds = Balance.REVOKE_COOLDOWN_SECONDS,
     )
 
     /**

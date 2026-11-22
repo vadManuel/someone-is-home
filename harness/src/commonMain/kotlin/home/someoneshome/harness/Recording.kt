@@ -50,12 +50,19 @@ class Recording(
     }
 
     companion object {
-        // 47: the home's plan goes to every seat at arming (D-316): a new effect, `PlanIssued`, one
-        // per seat at the end of the arming burst, which a version 46 build cannot name, so a 46
-        // recording's effect rows stop one row per seat short of what this build emits. Events and
-        // state rows are unchanged. The Terminal's counts and the couch's true occupancy ride the
-        // upload's answer (`UploadHeard.map`), are no effect and add no row: what a phone was shown
-        // at a tick is `occupancyBeat` of the recorded state at that tick.
+        // 48: two changes built in parallel and integrated together, each of which alone was 47.
+        // The home's plan goes to every seat at arming (D-316): a new effect, `PlanIssued`, one per
+        // seat at the end of the arming burst, which an older build cannot name. The Terminal's
+        // counts and the couch's true occupancy ride the upload's answer (`UploadHeard.map`), are no
+        // effect and add no row: what a phone was shown at a tick is `occupancyBeat` of the recorded
+        // state at that tick. And the host's DISCUSSION, EGRESS TIMER and REVOKE COOLDOWN rows lock
+        // at arming (the owner's 2026-11-21 ruling, D-317): `RoundArmed` gains `discussion=`,
+        // `egressTimer=` and `revokeCooldown=`, in seconds, and the state row gains the same three;
+        // the parser defaults none of them. Effect rows change too: `MeetingPhaseOpened` gains
+        // `discussion=` (the talk's length on the push that opens it, `none` on every other phase),
+        // and `OpeningMessage` and `MeetingEnded` gain `revokeCooldown=`, the ticks every phone's
+        // Revoke clock is half of. A recording of either 47 lacks the other's rows or fields, and a
+        // version 47 or older recording is refused here as every older one is.
         //
         // 46: the notice names who switched something off apart from who only left the app (the
         // owner's 2026-11-21 rulings, D-311). The `NoticeIssued` effect row's `unreachable=` now lists
@@ -376,7 +383,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/47"
+        const val HEADER = "someone-is-home/recording/48"
     }
 }
 

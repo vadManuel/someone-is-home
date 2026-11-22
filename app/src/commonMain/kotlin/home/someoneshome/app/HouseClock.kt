@@ -40,9 +40,9 @@ import home.someoneshome.model.Tick
  * ### Where each deadline comes from, and the one that had to be remembered
  *
  * Four of the five are read straight off state that already exists. [GameState.egress] carries its
- * own [Egress.deadline]; [GameState.voteWindowSeconds] is the ballot's length, locked at arming.
- * The two that are not on state are the talk's ninety seconds and the tally's fifteen, and they are
- * [Balance.DISCUSSION_SECONDS] and [Balance.TALLY_SECONDS] — moved into `Balance` by this unit for
+ * own [Egress.deadline]; [GameState.voteWindowSeconds] is the ballot's length and
+ * [GameState.discussionSeconds] the talk's (D-317), both locked at arming. The one that is not on
+ * state is the tally's fifteen, [Balance.TALLY_SECONDS] — moved into `Balance` by this unit for
  * exactly the reason `Balance` exists, so the bar on five phones and the transition that ends it
  * count against one number.
  *
@@ -174,8 +174,10 @@ class HouseClock private constructor(
         return when (running.phase) {
             MeetingPhase.CheckIn -> null
 
+            // The host's DISCUSSION row, locked at arming and carried on the state (D-317) — the
+            // ballot's arrangement below, one phase earlier, and never a constant here.
             MeetingPhase.Discussion ->
-                Event.DiscussionClosed(at).takeIf { ran >= seconds(Balance.DISCUSSION_SECONDS) }
+                Event.DiscussionClosed(at).takeIf { ran >= seconds(state.discussionSeconds) }
 
             // The host's setting, locked at arming and carried on the state — never a constant
             // here. A driver with its own forty-five would run a ballot the lobby had shortened.

@@ -215,6 +215,37 @@ class LobbyDesk {
     }
 
     /**
+     * **The host's DISCUSSION, EGRESS TIMER and REVOKE COOLDOWN rows, in seconds** (D-317).
+     *
+     * [voteWindowSeconds]' shape exactly, and for each of its reasons: held here because this desk
+     * is what a round is armed from, unclamped because each is a number the room watches run, and
+     * **not on the wire** — the clients learn each from the push that starts its clock (the talk's
+     * phase, the Egress's opening, LIGHTS OUT and every meeting's end). Each starts at its design
+     * default.
+     */
+    var discussionSeconds: Int = Balance.DISCUSSION_SECONDS
+        private set
+    var egressTimerSeconds: Int = Balance.EGRESS_TIMER_SECONDS
+        private set
+    var revokeCooldownSeconds: Int = Balance.REVOKE_COOLDOWN_SECONDS
+        private set
+
+    /** The host moved the DISCUSSION row. Refused from anywhere but the host's phone, one layer up. */
+    fun setDiscussion(seconds: Int) {
+        discussionSeconds = seconds
+    }
+
+    /** The host moved the EGRESS TIMER row. Refused from anywhere but the host's phone, one layer up. */
+    fun setEgressTimer(seconds: Int) {
+        egressTimerSeconds = seconds
+    }
+
+    /** The host moved the REVOKE COOLDOWN row. Refused from anywhere but the host's phone, one layer up. */
+    fun setRevokeCooldown(seconds: Int) {
+        revokeCooldownSeconds = seconds
+    }
+
+    /**
      * **What every phone in the lobby is shown: counts, a setting, and the names.**
      *
      * Counted from the seats currently here, so the numbers cannot contradict each other — a line

@@ -84,7 +84,14 @@ object Transcript {
                 // **The host's own seat, or none** (D-289): an input, because the notice names an
                 // out host who goes dark and no other out seat (D-283), so a replay that lost it
                 // would name nobody where the evening named the host.
-                "host" to (event.host?.let { num(it.index) } ?: "none"))
+                "host" to (event.host?.let { num(it.index) } ?: "none"),
+                // **The host's other three timed rows** (D-317), `voteWindow`'s reason: balance
+                // values lock at arming and stamp into the recording, so a replay closes the talk,
+                // runs the Egress and spends the Revoke the evening's host chose, not this build's
+                // defaults. Seconds, as the lobby set them.
+                "discussion" to num(event.discussionSeconds),
+                "egressTimer" to num(event.egressTimerSeconds),
+                "revokeCooldown" to num(event.revokeCooldownSeconds))
         // **The spectator map's input** (O4): who sensed, in which room, and every seat heard
         // there. An input drawn above the rules from the radio, exactly as a contact is, so it is
         // on the row in full and a replay places the same seats without a radio.
@@ -328,7 +335,8 @@ object Transcript {
             "PresenceChanged|seat=${effect.seat.index}" +
                 "|at=${effect.at?.let { text(it.value) } ?: "none"}|open=${effect.open}"
         is Effect.OpeningMessage ->
-            "OpeningMessage|seat=${effect.seat.index}|haptic=${effect.haptic}"
+            "OpeningMessage|seat=${effect.seat.index}|haptic=${effect.haptic}" +
+                "|revokeCooldown=${num(effect.revokeCooldown)}"
         // **The seat and the role, both written out, and this row is why a recording is a secret.**
         // The transcript is the authority's own ledger and it holds ground truth everywhere -- who
         // was revoked, who was drawn -- so writing the role here adds no channel that
@@ -383,6 +391,7 @@ object Transcript {
         is Effect.MeetingPhaseOpened ->
             "MeetingPhaseOpened|phase=${effect.phase}" +
                 "|voteWindow=${effect.voteWindowSeconds?.let { num(it) } ?: "none"}" +
+                "|discussion=${effect.discussionSeconds?.let { num(it) } ?: "none"}" +
                 "|haptic=${effect.haptic}"
         is Effect.ReadyProgressed ->
             "ReadyProgressed|ready=${effect.ready}|expected=${effect.expected}"
@@ -408,7 +417,7 @@ object Transcript {
         is Effect.RevokeLanded ->
             "RevokeLanded|seat=${effect.seat.index}|haptic=${effect.haptic ?: "none"}"
         is Effect.MeetingEnded ->
-            "MeetingEnded|haptic=${effect.haptic}"
+            "MeetingEnded|haptic=${effect.haptic}|revokeCooldown=${num(effect.revokeCooldown)}"
         is Effect.EgressOpened ->
             "EgressOpened|seat=${effect.seat.index}|type=${effect.type}" +
                 // Card AND room, because the effect carries both now and the transcript renders
@@ -713,6 +722,10 @@ object Transcript {
         // The ballot's length, locked at arming. A state row that omitted it would replay a meeting
         // whose window came from this build's default rather than from the evening's host.
         append("|voteWindow=").append(num(state.voteWindowSeconds))
+        // The other three host settings, locked at arming (D-317), for the ballot's reason above.
+        append("|discussion=").append(num(state.discussionSeconds))
+        append("|egressTimer=").append(num(state.egressTimerSeconds))
+        append("|revokeCooldown=").append(num(state.revokeCooldownSeconds))
         // The host's own seat (D-289), locked at arming: the notice's one exception (D-283).
         append("|host=").append(state.host?.let { num(it.index) } ?: "none")
         append("|nextEntity=").append(num(state.nextEntity))

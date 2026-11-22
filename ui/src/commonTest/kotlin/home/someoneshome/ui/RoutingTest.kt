@@ -145,7 +145,7 @@ class RoutingTest {
         // And the phase push that follows takes the couch to its own view, which is the row
         // `Flow.housePushes` already held and could never be reached before.
         model.houseSaid(
-            RoundMessage.MeetingPhaseOpened(MeetingPhase.Discussion, voteWindowSeconds = null, haptic = Haptic.Short),
+            RoundMessage.MeetingPhaseOpened(MeetingPhase.Discussion, voteWindowSeconds = null, discussionSeconds = null, haptic = Haptic.Short),
         )
         assertEquals(ScreenId.GhostMeeting, model.state.screen, "the couch never got its view")
     }
@@ -300,7 +300,7 @@ class RoutingTest {
     @Test
     fun `the opening message is heavy and a later text is quiet`() {
         val opening = living()
-        opening.houseSaid(RoundMessage.OpeningMessage(Haptic.Short))
+        opening.houseSaid(RoundMessage.OpeningMessage(Haptic.Short, Balance.REVOKE_COOLDOWN))
         assertEquals(ScreenId.Notify, opening.state.screen, "the round started and nothing arrived")
 
         val later = living()
@@ -324,7 +324,7 @@ class RoutingTest {
     @Test
     fun `an arrival lands under the clock and never over a screen the house is driving`() {
         val locked = living(ScreenId.Lock)
-        locked.houseSaid(RoundMessage.OpeningMessage(Haptic.Short))
+        locked.houseSaid(RoundMessage.OpeningMessage(Haptic.Short, Balance.REVOKE_COOLDOWN))
         assertEquals(ScreenId.LockNotify, locked.state.screen, "it arrived over a phone in a pocket")
 
         for (driven in listOf(ScreenId.Tally, ScreenId.Vote, ScreenId.WinResidents, ScreenId.Revoked)) {

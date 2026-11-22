@@ -1,5 +1,6 @@
 package home.someoneshome.app
 
+import home.someoneshome.model.Balance
 import home.someoneshome.platform.NoRadio
 import home.someoneshome.model.ArmedTouch
 import home.someoneshome.model.AssignedWork
@@ -66,18 +67,18 @@ class HouseBuzzTest {
     /** Every effect that carries a [Haptic], built at both kinds and across several seats. */
     private fun buzzing(haptic: Haptic): List<Effect> = seats.flatMap { seat ->
         listOf(
-            Effect.OpeningMessage(seat, haptic),
+            Effect.OpeningMessage(seat, haptic, Balance.REVOKE_COOLDOWN),
             Effect.MeetingOpened(seat, MeetingTrigger.MeetingCard, haptic),
             Effect.MeetingOpened(seat, MeetingTrigger.RevokeReported(Seat(2)), haptic),
             Effect.StandAndWalkIn(seat, haptic),
-            Effect.MeetingPhaseOpened(MeetingPhase.CheckIn, null, haptic),
-            Effect.MeetingPhaseOpened(MeetingPhase.Discussion, null, haptic),
-            Effect.MeetingPhaseOpened(MeetingPhase.Vote, 45, haptic),
-            Effect.MeetingPhaseOpened(MeetingPhase.Tally, null, haptic),
+            Effect.MeetingPhaseOpened(MeetingPhase.CheckIn, null, null, haptic),
+            Effect.MeetingPhaseOpened(MeetingPhase.Discussion, null, null, haptic),
+            Effect.MeetingPhaseOpened(MeetingPhase.Vote, 45, null, haptic),
+            Effect.MeetingPhaseOpened(MeetingPhase.Tally, null, null, haptic),
             Effect.MeetingResult(seat, voted = 6, living = 6, haptic = haptic),
             Effect.MeetingResult(null, voted = 6, living = 6, haptic = haptic),
             Effect.RestrainedTakeover(seat, haptic),
-            Effect.MeetingEnded(haptic),
+            Effect.MeetingEnded(haptic, Balance.REVOKE_COOLDOWN),
             Effect.EgressOpened(
                 seat, EgressType.Beacon, NODES, 180, haptic,
                 pulseFrom = 86_402_000L,
@@ -160,7 +161,7 @@ class HouseBuzzTest {
             ),
             Effect.StandAndWalkIn(Seat(0), Haptic.Long),
             Effect.RestrainedTakeover(Seat(0), Haptic.Long),
-            Effect.MeetingEnded(Haptic.Long),
+            Effect.MeetingEnded(Haptic.Long, Balance.REVOKE_COOLDOWN),
         ).forEach { effect ->
             val motor = RecordingHaptics()
             HouseBuzzer(motor).heard(effect)
@@ -252,14 +253,14 @@ class HouseBuzzTest {
         val seat = Seat(0)
 
         // What an Insider gets at the reveal: the opening delivery, and then four messages.
-        buzzer.heard(Effect.OpeningMessage(seat, Haptic.Short))
+        buzzer.heard(Effect.OpeningMessage(seat, Haptic.Short, Balance.REVOKE_COOLDOWN))
         listOf("the blackmail", "the house line", "a partner", "another partner")
             .forEach { buzzer.heard(Effect.MessageDelivered(seat, it)) }
         val insider = motor.count
 
         motor.clear()
         // What a Resident gets: the opening delivery, and one message.
-        buzzer.heard(Effect.OpeningMessage(seat, Haptic.Short))
+        buzzer.heard(Effect.OpeningMessage(seat, Haptic.Short, Balance.REVOKE_COOLDOWN))
         buzzer.heard(Effect.MessageDelivered(seat, "the house line"))
         val resident = motor.count
 
@@ -489,7 +490,7 @@ class HouseBuzzTest {
         fun buzzesFor(bodies: List<String>): List<List<HapticStep>> {
             val motor = RecordingHaptics()
             val buzzer = HouseBuzzer(motor)
-            val reveal: List<Effect> = listOf(Effect.OpeningMessage(seat, Haptic.Short)) +
+            val reveal: List<Effect> = listOf(Effect.OpeningMessage(seat, Haptic.Short, Balance.REVOKE_COOLDOWN)) +
                 bodies.map { Effect.MessageDelivered(seat, it) }
             reveal.map(RoundWire::project).forEach(buzzer::heard)
             return motor.played
@@ -920,7 +921,7 @@ class HouseBuzzTest {
                 buzzer.heard(message)
                 flow.houseSaid(message)
             }
-            said(RoundMessage.OpeningMessage(Haptic.Short))
+            said(RoundMessage.OpeningMessage(Haptic.Short, Balance.REVOKE_COOLDOWN))
             said(RoundMessage.RoleRevealed(insider = insider, line = if (insider) "a line" else ""))
             assertEquals(ScreenId.Armed, flow.state.screen, "the opening push did not land ARMED (insider=$insider)")
             val atArmed = motor.played

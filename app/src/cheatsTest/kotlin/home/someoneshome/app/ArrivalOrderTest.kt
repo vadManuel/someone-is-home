@@ -338,6 +338,9 @@ class ArrivalOrderTest {
             voteWindowSeconds = 45,
             readyToArm = true,
             home = BenchHome.home,
+            discussionSeconds = Balance.DISCUSSION_SECONDS,
+            egressTimerSeconds = Balance.EGRESS_TIMER_SECONDS,
+            revokeCooldownSeconds = Balance.REVOKE_COOLDOWN_SECONDS,
         )
         val outbox = Outbox()
         var authority: RoundAuthority? = null

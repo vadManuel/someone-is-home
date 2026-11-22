@@ -554,6 +554,13 @@ data class PanelState(
      */
     val voteWindowSeconds: Int? = null,
     /**
+     * **How long the talk runs, as the house said when it opened it**
+     * (`Effect.MeetingPhaseOpened.discussionSeconds`, D-317). [voteWindowSeconds]' arrangement, one
+     * phase earlier: the host's DISCUSSION row, locked at arming. Null means the house has said
+     * nothing, and the design's ninety stands in.
+     */
+    val discussionSeconds: Int? = null,
+    /**
      * **System Integrity, as a percentage the house pushed** (`Effect.SystemIntegrityLive`,
      * `Effect.SystemIntegrityBatched`).
      *
@@ -1751,7 +1758,7 @@ class PanelVals(
         // The one screen whose clock changes meaning under it: the couch watches every phase of a
         // meeting without moving, so its window is the phase's and not the screen's (D-134).
         ScreenId.GhostMeeting ->
-            Countdowns.onGhostMeeting(meetingPhase, said, state.voteWindowSeconds)
+            Countdowns.onGhostMeeting(meetingPhase, said, state.voteWindowSeconds, state.discussionSeconds)
         // **A window this phone opened is counted by this phone, and it wins here** ([window]).
         //
         // The scan is the only clock in the game of that kind, and it is the one the owner found
@@ -1764,6 +1771,7 @@ class PanelVals(
             state.screen,
             window?.secondsLeft ?: said,
             state.voteWindowSeconds,
+            state.discussionSeconds,
         )
     } ?: Countdown.NONE
 
@@ -1779,7 +1787,7 @@ class PanelVals(
      * and the bar go, because a `0` over an empty bar reads as a clock that has *run out*.
      */
     val hasMeetingClock: Boolean =
-        Countdowns.onGhostMeeting(meetingPhase, window = state.voteWindowSeconds) != null
+        Countdowns.onGhostMeeting(meetingPhase, window = state.voteWindowSeconds, discussion = state.discussionSeconds) != null
 
     // ---- Meters ---------------------------------------------------------------------------
 

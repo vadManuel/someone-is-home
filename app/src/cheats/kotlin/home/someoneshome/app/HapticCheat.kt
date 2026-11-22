@@ -13,6 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.Modifier
+import home.someoneshome.model.Balance
 import home.someoneshome.model.Destination
 import home.someoneshome.model.Effect
 import home.someoneshome.model.EgressType
@@ -111,10 +112,10 @@ class HapticCheat(private val haptics: Haptics) {
             heard(Effect.RestrainedTakeover(seat, Haptic.Long))
         },
         Row("LIGHTS OUT", "LONG · D-135 #5 · MeetingEnded") {
-            heard(Effect.MeetingEnded(Haptic.Long))
+            heard(Effect.MeetingEnded(Haptic.Long, Balance.REVOKE_COOLDOWN))
         },
         Row("OPENING MESSAGE", "SHORT · the ordinary buzz · OpeningMessage") {
-            heard(Effect.OpeningMessage(seat, Haptic.Short))
+            heard(Effect.OpeningMessage(seat, Haptic.Short, Balance.REVOKE_COOLDOWN))
         },
         // **D-160's two words, side by side, which is the only way to check them.** *Yes* and
         // *no* have to be tellable apart through a pocket by somebody who is not looking, and

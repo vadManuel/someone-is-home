@@ -12733,7 +12733,7 @@ python glob): ui 772 (desktop) + 380 (iOS Simulator); app 277 (the default varia
 277 (Playtest). 0 failures, 0 errors, 0 skipped. `PageOneTilesTest` is in the XML and
 `NotesParityTest` is not. `model` and `core` are untouched and were not run.
 
-### D-316 · **The Terminal and the couch draw the home with its counts: the plan goes to every seat at arming, and the counts ride every upload's answer, sealed, to the reader and to the couch — built (recording 47); the timelapse is STOPPED, unruled in five places; a couch on a home of two storeys or more draws the first only, awaiting a design**
+### D-316 · **The Terminal and the couch draw the home with its counts: the plan goes to every seat at arming, and the counts ride every upload's answer, sealed, to the reader and to the couch — built (recording 48); the timelapse is STOPPED, unruled in five places; a couch on a home of two storeys or more draws the first only, awaiting a design**
 
 **The ruling** (owner, 2026-11-21, on the overnight report's first decision): *"Yes, build it next."*
 The ask: **the Terminal and the couch must show the home's map with room counts.** It answers the
@@ -12814,13 +12814,16 @@ reader's included, was 2 059 bytes.
 `occupancyBeat` asks `EmitSchema.permits` for the seat's class before it fills the field with either:
 a row deleted is an empty field on every phone. `PLAN_ISSUED` is the four classes of a running round.
 
-**What a replay can say a phone was shown, and recording 47.** `PlanIssued` is a new effect, so the
-effect rows gain one per seat at arming and a 46 build cannot name it: **recording 47**. The beats
+**What a replay can say a phone was shown, and recording 48.** `PlanIssued` is a new effect, so the
+effect rows gain one per seat at arming and a 46 build cannot name it: **recording 48**. The beats
 are **not** recorded and need not be: `occupancyBeat` is a pure function of the recorded state and
 the house's tick (the captures are recorded through `Sensed`, the lock through the scan and
 `TerminalLeft`), so a replay computes what the reader or the couch was shown at any tick; what it
 cannot say is which tick each answer was built at, which is the upload's arrival and is at most a
 second apart. Events and state rows are unchanged.
+**Set to 48 at integration**: built alone this was 47; D-317 took 47 for its own rows in parallel,
+and the integration that put D-316, D-317 and D-318 on one tree made the combined format 48,
+carrying both.
 
 #### What the phone draws
 
@@ -12931,7 +12934,7 @@ spec's Q3): counts upstairs are not visible from a station downstairs.
   per seat, the same plan on every seat**, and that the map's input still makes no effect.
   `FuzzPropertyTest` names `TrueOccupancy` among the out-only kinds; `HouseBuzzTest` and
   `RoundWireTest` build a `PlanIssued` and leave the two beat kinds out of their effect sweeps; the
-  recording tests pin `recording/47`; `WireDecodeAllocationTest`'s answer ceiling is 6 KB.
+  recording tests pin `recording/48`; `WireDecodeAllocationTest`'s answer ceiling is 6 KB.
 
 **Rendered and looked at** (`ui/build/screens/d316-*.png`, 600 by 1300). **The live view**
 (`d316-terminal-live`): the bench home's GROUND storey with its own gaps between rooms, GROUND filled
@@ -12964,7 +12967,7 @@ before this change**, so the bungalow goes through the new drawing unchanged.
 | `app` cheats `Cheats.kt`, `RoundClient` | (none) | the door wired; a body hook for tests |
 | `ui` `PanelState.plan`, `terminalBeat`, `outsideBeat`; `Flow` | (none) | the plan held; the beats written on change; cleared between rounds; a new claim drops old counts |
 | `ui` `PanelVals.terminalMap`, `trueMap`, `timelapseMap`; `LiveMap`, `LiveRoom`; `KitLivePlan`; `FloorStrip` | the bungalow's `Plan` read directly; GROUND/UPPER typed | one drawing for the fixture and a real home; the plan's storeys |
-| `harness` `Transcript`, `Recording.HEADER` | `recording/46` | `PlanIssued` rows; `recording/47` |
+| `harness` `Transcript`, `Recording.HEADER` | `recording/46` | `PlanIssued` rows; `recording/48` |
 | `gdd.md` M11, M12, the walkthrough | four *(not yet built …)* notes | removed; M12's names the couch's one-storey limit |
 | `phone-session-2026-11-19.md` | *The Terminal and the couch show no counts* | what to check on the Terminal and the couch |
 
@@ -12977,6 +12980,117 @@ errors, 0 skipped; `vocabularyLint`, `redactionLint` and the boundary checks cle
 `OccupancyWireTest`, `HousedMapRenderTest` and `TerminalCountsWiringTest` (default and Playtest) are in
 the XML. **Nothing here has run on a phone**: the counts' fit to who is really where waits on the
 phone session's new line, and no UWB room reach is calibrated (D-272).
+
+### D-317 · **DISCUSSION, EGRESS TIMER and REVOKE COOLDOWN are the host's lobby settings, locked at arming and stamped into the recording; each offers its current number alone until the owner rules a range — built (recording 48)**
+
+**The ruling** (owner, 2026-11-21). *"We should build this"*, of the three lobby rows that were fixed
+text while INSIDERS and VOTING took a press: **DISCUSSION 90S**, **EGRESS TIMER 120S** (a literal on
+the row, `Balance.EGRESS_TIMER` behind it) and **REVOKE COOLDOWN 60S**. D-037 already said what
+happens to them once they are settings: *balance values lock at arming and are stamped into the
+recording*, *or whoever runs the server can shorten their own Revoke cooldown mid-round*.
+
+**The values, and where they come from.**
+
+| row | default and only choice | ruled by | range / step |
+|---|---|---|---|
+| DISCUSSION | **90 s** | `gdd.md:431` (*90s (lobby setting)*), `:930`, `:1186` | **unruled** |
+| EGRESS TIMER | **120 s** | D-014; F-009; `gdd.md:370`, `:382`, `:1184`, A-1 | **unruled** |
+| REVOKE COOLDOWN | **60 s** | the lobby row; `Balance.REVOKE_COOLDOWN`, confirmed 60 s by E-L5-1 (20 Hz); `gdd.md:930` lists it among the host's options | **unruled** |
+
+`gdd.md:1181`'s *Initial 45s* is the opening Revoke cooldown F-004 proposed, which D-132 replaced with
+*half the normal duration*; it is not this row's number and was not used.
+
+**Built as VOTING is built, row for row** (D-117's road):
+
+1. **The control** (`ui`). Each row draws through the same `LobbyRow`, with the same tap and the same
+   look as VOTING: a press on the host's phone, nothing on a guest's. `LobbyModel` holds each number
+   (`discussionSeconds`, `egressTimerSeconds`, `revokeCooldownSeconds`), cycles it through its list
+   (`DISCUSSIONS`, `EGRESS_TIMERS`, `REVOKE_COOLDOWNS`) and hands it to `LobbyLink.setDiscussion`,
+   `setEgressTimer` and `setRevokeCooldown`. **Each list holds the row's current number and nothing
+   else**, because no ruling gives a range or a step: the press reaches the desk, the number does not
+   move, and a range the owner rules is a list that grows and nothing else.
+2. **The desk and the arming** (`platform`, `app`). `LobbyDesk` holds the three beside
+   `voteWindowSeconds`; `LobbyHouse.armingInputs` reads them in the same instant as everything else;
+   `RoundAuthority` hands them to `armingFor`; `Event.RoundArmed` carries `discussionSeconds`,
+   `egressTimerSeconds` and `revokeCooldownSeconds`; `GameState` holds them for the round. **No lobby
+   message**: like VOTING, nothing goes down the lobby wire, and the clients learn each number on the
+   push that starts its clock.
+3. **The rules read the locked value, never `Balance`** (`core`, `app`). An Egress starts at
+   `state.egressTimer`; an arm spends `state.revokeCooldown`; every seat's Revoke opens at half of it at
+   LIGHTS OUT and at every meeting's end (`Balance.opening`, the one `/ 2`); the house's clock closes
+   the talk on `state.discussionSeconds`. `Balance.DISCUSSION_SECONDS`, `EGRESS_TIMER(_SECONDS)` and
+   `REVOKE_COOLDOWN(_SECONDS)` are now only the defaults a round armed without a setting gets.
+4. **The phones draw the locked value** (the wire). Three existing effects widen, the same number to
+   every seat, so there is nothing role-shaped in any of them: `MeetingPhaseOpened` gains
+   `discussionSeconds` (the talk's push only, null elsewhere, `voteWindowSeconds`' shape);
+   `OpeningMessage` and `MeetingEnded` gain `revokeCooldown`, in ticks, which page 2's Revoke bar is half
+   of and an Insider's own arm holds for in full (D-239, D-286). The Egress already arrives as the
+   `remaining` it opened with; the one place a phone fell back to the default timer (an `EgressHeld`
+   for a phone that missed the fire) now draws against the house's number instead. **No new `Effect`**:
+   the schema is per kind, the three kinds keep their audiences (every seat), so nothing fails closed
+   and nothing new opens.
+5. **The recording** (`harness`). **Format 46 → 48**: the arming row and every state row gain
+   `discussion=`, `egressTimer=` and `revokeCooldown=` (seconds), and the parser defaults none of them,
+   so a version 46 arming row is refused; the `MeetingPhaseOpened` effect row gains `discussion=`, and
+   `OpeningMessage` and `MeetingEnded` gain `revokeCooldown=`.
+   **Set to 48 at integration**: built alone this was 47; D-316 took 47 for its `PlanIssued` rows in
+   parallel, and the integration that put D-316, D-317 and D-318 on one tree made the combined format
+   48, carrying both.
+
+**No copy, light, colour or type was added.** The three rows keep their labels and their values; what
+changed is that a press on the host's phone reaches the house.
+
+**Not built, and why.** *The app should propose the default from the map* (D-014, `gdd.md:384`): no
+ruling says how the longest marker-to-marker path becomes seconds (D-014 gives the idea and *a house
+twice the size gets twice the suggested timer*, with no base and no rate), so there is no proposal.
+
+**For the owner to rule** (each row offers its current number alone until then):
+
+- **DISCUSSION**: the range and the step.
+- **EGRESS TIMER**: the range and the step; and whether the map proposes the default, and if so the
+  seconds per cell (or per hop) of the longest marker-to-marker path.
+- **REVOKE COOLDOWN**: the range and the step.
+- **Two bounds a range would have to respect**, written in the code and checked nowhere for a host
+  setting: the Egress cooldown (180 s) must outlive the Egress timer (`egressFired`'s note), and the
+  Revoke cooldown must outlive the 20 s arm window (`Balance.REVOKE_ARM_WINDOW`).
+- **Already true of VOTING, and now of these three**: a guest's lobby row draws its own phone's number,
+  not the host's, because the setting never goes down the lobby wire. With one choice per row the two
+  agree; with a range they would not, until the round starts and the house's pushes take over.
+
+**Guards** (new): `LobbySettingsTest` (`core`): the arming locks all three; a 60 s EGRESS TIMER gives
+an Egress a 60 s deadline and 60 s `remaining` on every phone; a 60 s DISCUSSION is published on the
+talk's push and on no other; a 30 s REVOKE COOLDOWN opens every seat at 15 s, an arm spends 30 s, a
+meeting's end reopens at 15 s, and LIGHTS OUT and the meeting's end carry it. `LobbySettingsArmingTest`
+(`app`): the desk hands the three to the arming; each locks at arming and the desk moving mid-round
+moves nothing; the house closes a 60 s talk at 60 s. `LobbySettingsTest` (`ui`): each row offers the
+ruled number alone; the host's press reaches the house and a guest's reaches nothing; a phone draws
+the Revoke clock, its own arm and the talk's clock from the pushed numbers. `LobbySettingsRecordingTest`
+(`harness`): each is stamped on the arming row and every state row, survives the text form and
+replays; an arming row missing any one is fatal; every seat is sent the same cooldown.
+
+**Proved by injection.** The rules and the house's clock were made to read `Balance`'s defaults instead
+of the locked values (`Balance.EGRESS_TIMER`, `Balance.REVOKE_COOLDOWN`, `Balance.REVOKE_OPENING`,
+`Balance.DISCUSSION_SECONDS`); quoted from the XML:
+*the house armed a 60 s talk and opened a 90 s one expected:<60> but was:<90>*;
+*seat 0's Revoke reopened at the default's half, not the locked cooldown's expected:<Tick(step=500)> but was:<Tick(step=800)>*;
+*the house armed a 60 s Egress timer and ran an Egress to Tick(step=4200) expected:<Tick(step=3000)> but was:<Tick(step=4200)>*;
+*seat 0's Revoke opened at Tick(step=600), not at half of the 30 s the round was armed with expected:<Tick(step=300)> but was:<Tick(step=600)>*;
+*a 60 s talk did not close at sixty seconds, so the house ran its own ninety. Expected <1>, actual <0>.*
+Restored, all green. One test written for the Egress's expiry stayed green under the injection (the
+rules take `EgressExpired` whenever it arrives, so it measured nothing) and was deleted.
+
+**Rendered and looked at** (720×1520). The host's lobby: INSIDERS UNKNOWN, INSIDERS KNOW EACH OTHER ON,
+SUBROUTINES EACH 7, DISCUSSION 90S, VOTING 45S, EGRESS TIMER 120S, REVOKE COOLDOWN 60S, in the rows'
+existing type and rules, unchanged after a press on each of the three; then YOUR ONE LINE, LIGHTS OUT
+and CLOSE THE HOUSE. The guest's: the same seven rows and values, LEAVE THIS HOUSE, no LIGHTS OUT.
+
+**Checked** (on the final tree, `*/build/test-results` cleared first: `./gradlew check --continue`
+with the two variant sweeps excluded, then `:app:variantSweepRelease`, then `:app:variantSweepPlaytest`,
+the app's XML copied out after each, every result XML counted with a python glob): model 356 (JVM) +
+340 (iOS Simulator); core 425 + 423; platform 211; harness 136; ui 778 (desktop) + 386 (iOS
+Simulator); app 280 (the default variant), 173 (Release), 280 (Playtest). 0 failures, 0 errors, 0
+skipped; 3,335 in the default check. The four new suites are in the XML, `LobbySettingsArmingTest` in
+all three app variants.
 
 ### D-318 · **A card read goes up as its id and the house routes it: paper this home never registered is NOT A MARKER, on that phone only, outside the recording — built; answers D-313's stop; the uplink and the downlink changed, the recording did not (46)**
 

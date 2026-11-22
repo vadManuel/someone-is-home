@@ -49,6 +49,9 @@ class RoundAuthorityTest {
         readyToArm = ready,
         // The bench's fixture, hosted as a home would be — see BenchHome.
         home = BenchHome.home,
+        discussionSeconds = Balance.DISCUSSION_SECONDS,
+        egressTimerSeconds = Balance.EGRESS_TIMER_SECONDS,
+        revokeCooldownSeconds = Balance.REVOKE_COOLDOWN_SECONDS,
     )
 
     /** The authority, with the two seams as recorders. */

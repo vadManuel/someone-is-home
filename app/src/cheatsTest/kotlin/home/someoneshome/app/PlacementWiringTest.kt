@@ -1,5 +1,6 @@
 package home.someoneshome.app
 
+import home.someoneshome.model.Balance
 import home.someoneshome.core.ContactGate
 import home.someoneshome.model.ContactWindow
 import home.someoneshome.model.Effect
@@ -41,6 +42,9 @@ class PlacementWiringTest {
         voteWindowSeconds = 45,
         readyToArm = true,
         home = BenchHome.home,
+        discussionSeconds = Balance.DISCUSSION_SECONDS,
+        egressTimerSeconds = Balance.EGRESS_TIMER_SECONDS,
+        revokeCooldownSeconds = Balance.REVOKE_COOLDOWN_SECONDS,
     )
 
     /** **GUARD: an upload from a performer lands a sighting and an observation, and sends nothing.** */

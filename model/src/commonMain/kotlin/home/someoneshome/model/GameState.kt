@@ -309,6 +309,22 @@ class GameState private constructor(
      * second reader is a second place the ballot's length could be decided.
      */
     val voteWindowSeconds: Int,
+    /**
+     * **The talk's length, in seconds — the host's DISCUSSION row, locked at arming** (D-317).
+     * [voteWindowSeconds]' shape: the house's clock closes the talk on it, and the push that opens
+     * the talk publishes it.
+     */
+    val discussionSeconds: Int,
+    /**
+     * **The Egress's length, in seconds — the host's EGRESS TIMER row, locked at arming** (D-014,
+     * D-317). Read through [egressTimer] by the one rule that starts an Egress.
+     */
+    val egressTimerSeconds: Int,
+    /**
+     * **The Revoke's normal cooldown, in seconds — the host's REVOKE COOLDOWN row, locked at
+     * arming** (D-037, D-317). Read through [revokeCooldown] by the arm and by both openings.
+     */
+    val revokeCooldownSeconds: Int,
     val nextEntity: Long,
     val seed: Long,
     /**
@@ -752,6 +768,12 @@ class GameState private constructor(
     fun closeHouse(): GameState =
         copy(closed = true, oneLines = emptyList(), names = emptyList())
 
+    /** [egressTimerSeconds] in ticks: what an Egress of this round starts at. */
+    val egressTimer: Long get() = egressTimerSeconds * Balance.TICKS_PER_SECOND
+
+    /** [revokeCooldownSeconds] in ticks: what an arm spends, and what both openings halve. */
+    val revokeCooldown: Long get() = revokeCooldownSeconds * Balance.TICKS_PER_SECOND
+
     fun copy(
         armed: Boolean = this.armed,
         outcome: Outcome? = this.outcome,
@@ -783,6 +805,9 @@ class GameState private constructor(
         oneLines: List<OneLineHeld> = this.oneLines,
         names: List<SeatNamed> = this.names,
         voteWindowSeconds: Int = this.voteWindowSeconds,
+        discussionSeconds: Int = this.discussionSeconds,
+        egressTimerSeconds: Int = this.egressTimerSeconds,
+        revokeCooldownSeconds: Int = this.revokeCooldownSeconds,
         nextEntity: Long = this.nextEntity,
         seed: Long = this.seed,
         terminal: MarkerId? = this.terminal,
@@ -798,7 +823,8 @@ class GameState private constructor(
         armed, outcome, seats, insiderSeats, revoked, newlyRevoked, reported, restrained, revokeArms,
         touches, unreachable, switchedOff, warned, closed, cooldowns, isolated, systemIntegrity, openSubroutines, workOrders, stations,
         activeMarkers, destinations, presence, staticUntil, meeting, egress, egressReadyAt, oneLines,
-        names, voteWindowSeconds, nextEntity, seed, terminal, reader, plan, terminalRoom, shiftStartedAt,
+        names, voteWindowSeconds, discussionSeconds, egressTimerSeconds, revokeCooldownSeconds,
+        nextEntity, seed, terminal, reader, plan, terminalRoom, shiftStartedAt,
         sightings, observations, nextObservation, host,
     )
 
@@ -873,6 +899,12 @@ class GameState private constructor(
              * room. Forty-five is what the design says a ballot is when nobody has said otherwise.
              */
             voteWindowSeconds: Int = Balance.VOTE_WINDOW_SECONDS,
+            /** The talk's length (D-317). The design's ninety, for [voteWindowSeconds]' reason. */
+            discussionSeconds: Int = Balance.DISCUSSION_SECONDS,
+            /** The Egress's length (D-014, D-317). The design's 120, for [voteWindowSeconds]' reason. */
+            egressTimerSeconds: Int = Balance.EGRESS_TIMER_SECONDS,
+            /** The Revoke's cooldown (D-317). The lobby's 60, for [voteWindowSeconds]' reason. */
+            revokeCooldownSeconds: Int = Balance.REVOKE_COOLDOWN_SECONDS,
             /**
              * The T card (D-199). Defaulted null for [destinations]' reason: a round armed by hand
              * to exercise something else has no station, and every scan in it is work.
@@ -924,6 +956,9 @@ class GameState private constructor(
             oneLines = oneLines.sortedBy { it.seat.index },
             names = names.sortedBy { it.seat.index },
             voteWindowSeconds = voteWindowSeconds,
+            discussionSeconds = discussionSeconds,
+            egressTimerSeconds = egressTimerSeconds,
+            revokeCooldownSeconds = revokeCooldownSeconds,
             nextEntity = 1L,
             seed = seed,
             terminal = terminal,
@@ -971,6 +1006,9 @@ class GameState private constructor(
             oneLines = emptyList(),
             names = emptyList(),
             voteWindowSeconds = Balance.VOTE_WINDOW_SECONDS,
+            discussionSeconds = Balance.DISCUSSION_SECONDS,
+            egressTimerSeconds = Balance.EGRESS_TIMER_SECONDS,
+            revokeCooldownSeconds = Balance.REVOKE_COOLDOWN_SECONDS,
             nextEntity = 1L,
             seed = 0L,
             terminal = null,

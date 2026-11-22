@@ -349,6 +349,10 @@ class RoundAuthority(
             terminalRoom = hosted.map.terminal?.room?.name,
             // The host's own seat (D-289), for the notice's one exception (D-283). No phone is told it.
             host = inputs.host,
+            // The host's three timed rows, read off the desk in the same instant as the rest (D-317).
+            discussionSeconds = inputs.discussionSeconds,
+            egressTimerSeconds = inputs.egressTimerSeconds,
+            revokeCooldownSeconds = inputs.revokeCooldownSeconds,
         ).copy(oneLines = inputs.oneLines)
         home = hosted
         // A new round's radios start from nothing: last round's halves and debounces are about

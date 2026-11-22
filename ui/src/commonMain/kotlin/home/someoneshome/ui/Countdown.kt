@@ -175,13 +175,17 @@ object Countdowns {
      * living player's phone, and two surfaces draining the same ballot over different windows is a
      * defect somebody notices from across a lit room. Where the house has said nothing the two
      * keep their own drawn numbers, which is what reproduces the design's screens.
+     *
+     * [discussion] is the talk's length as the house sent it (D-317), and it replaces the default on
+     * [ScreenId.Discussion], which the couch also counts the talk down on, for [voteWindow]'s reason.
      */
-    fun windowOf(screen: ScreenId, voteWindow: Int? = null): Int? {
+    fun windowOf(screen: ScreenId, voteWindow: Int? = null, discussion: Int? = null): Int? {
         val timed = Flow.autoAdvance[screen]?.let { it.afterMillis / 1000 }
         if (timed != null) return timed
         if (voteWindow != null && (screen == ScreenId.Vote || screen == ScreenId.GhostMeeting)) {
             return voteWindow
         }
+        if (discussion != null && screen == ScreenId.Discussion) return discussion
         return MEETING_WINDOWS[screen]
     }
 
@@ -194,9 +198,9 @@ object Countdowns {
      * phone's reading and the house's deadline cannot be two numbers. [MeetingPhase.CheckIn] has
      * none: the gate closes on a count of phones, not on a clock (D-104).
      */
-    fun windowOfPhase(phase: MeetingPhase, voteWindow: Int? = null): Int? = when (phase) {
+    fun windowOfPhase(phase: MeetingPhase, voteWindow: Int? = null, discussion: Int? = null): Int? = when (phase) {
         MeetingPhase.CheckIn -> null
-        MeetingPhase.Discussion -> windowOf(ScreenId.Discussion)
+        MeetingPhase.Discussion -> windowOf(ScreenId.Discussion, discussion = discussion)
         MeetingPhase.Vote -> windowOf(ScreenId.Vote, voteWindow)
         MeetingPhase.Tally -> windowOf(ScreenId.Tally)
     }
@@ -210,9 +214,9 @@ object Countdowns {
      * honour — and the clamp is what makes a shortened ballot honest: a host who moved the setting
      * to 30 gets a clock that starts at 30 rather than one that starts at 45 and jumps.
      */
-    fun on(screen: ScreenId, said: Int? = null, window: Int? = null): Countdown? {
+    fun on(screen: ScreenId, said: Int? = null, window: Int? = null, discussion: Int? = null): Countdown? {
         val drawn = DRAWN_AT[screen] ?: return null
-        val runs = windowOf(screen, window) ?: return null
+        val runs = windowOf(screen, window, discussion) ?: return null
         return Countdown((said ?: drawn).coerceIn(0, runs), runs)
     }
 
@@ -247,9 +251,11 @@ object Countdowns {
         phase: MeetingPhase,
         said: Int? = null,
         window: Int? = null,
+        /** The talk's length as the house sent it (D-317); see [windowOf]. */
+        discussion: Int? = null,
     ): Countdown? = when (phase) {
         MeetingPhase.CheckIn -> null
-        MeetingPhase.Discussion -> on(ScreenId.Discussion, said, window)
+        MeetingPhase.Discussion -> on(ScreenId.Discussion, said, window, discussion)
         MeetingPhase.Vote -> on(ScreenId.GhostMeeting, said, window)
         MeetingPhase.Tally -> on(ScreenId.Tally, said, window)
     }

@@ -1,5 +1,6 @@
 package home.someoneshome.ui
 
+import home.someoneshome.model.Balance
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
@@ -37,7 +38,7 @@ class EndingRouteTest {
         FlowModel(PanelState(screen = ScreenId.Home), homes = SavedHomesModel(), wallClock = { now }).also { phone ->
             phone.houseAttached(true)
             phone.houseSaid(RoundMessage.RosterIssued(listOf("ALBA", "BRUNO", "CYRUS", "DEVI")))
-            phone.houseSaid(RoundMessage.OpeningMessage(Haptic.Short))
+            phone.houseSaid(RoundMessage.OpeningMessage(Haptic.Short, Balance.REVOKE_COOLDOWN))
             phone.houseSaid(RoundMessage.RoleRevealed(insider = insider, line = if (insider) "the cake" else ""))
             phone.houseSaid(RoundMessage.RoundEnded(winnerOf(by), by, Haptic.Short, integrity = 60))
         }
@@ -93,7 +94,7 @@ class EndingRouteTest {
     @Test
     fun theRouteIsThisRounds() {
         val phone = endedBy(WinRoute.Parity, insider = true)
-        phone.houseSaid(RoundMessage.OpeningMessage(Haptic.Short))
+        phone.houseSaid(RoundMessage.OpeningMessage(Haptic.Short, Balance.REVOKE_COOLDOWN))
         assertNull(phone.state.endedBy, "a new round kept the last one's route")
         assertNull(endedBy(WinRoute.Parity, insider = false).state.betweenRounds().endedBy, "NEW ROUND kept the route")
         // A housed ending the house gave no route draws neither design line.

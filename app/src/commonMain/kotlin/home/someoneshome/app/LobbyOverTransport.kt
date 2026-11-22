@@ -709,6 +709,15 @@ class LobbyHouse(
     fun setVoteWindow(seconds: Int) = desk.setVoteWindow(seconds)
 
     /**
+     * **The host's DISCUSSION, EGRESS TIMER and REVOKE COOLDOWN rows, to the desk — and not to the
+     * standing** (D-317). [setVoteWindow]'s shape and its reason, and its absent `publish()`: each
+     * reaches the round by the arming event and the clients by the push that starts its clock.
+     */
+    fun setDiscussion(seconds: Int) = desk.setDiscussion(seconds)
+    fun setEgressTimer(seconds: Int) = desk.setEgressTimer(seconds)
+    fun setRevokeCooldown(seconds: Int) = desk.setRevokeCooldown(seconds)
+
+    /**
      * **One effect, to every seat the allowlist permits it to and no other** (rule 2, D-079).
      *
      * The authority's whole exit to the phones. It takes the state *after* the event, because the
@@ -779,6 +788,9 @@ class LobbyHouse(
             oneLines = named.mapNotNull { n -> desk.lineOf(n.seat)?.let { OneLineHeld(n.seat, it) } },
             chosenInsiders = desk.insiders,
             voteWindowSeconds = desk.voteWindowSeconds,
+            discussionSeconds = desk.discussionSeconds,
+            egressTimerSeconds = desk.egressTimerSeconds,
+            revokeCooldownSeconds = desk.revokeCooldownSeconds,
             readyToArm = desk.readyToArm(),
             // Read in the same instant as the seats and the lines, which is this method's whole
             // reason: the home is what the work orders are drawn from, and a home read a moment
@@ -1357,6 +1369,10 @@ data class ArmingInputs(
     val oneLines: List<OneLineHeld>,
     val chosenInsiders: Int?,
     val voteWindowSeconds: Int,
+    /** The host's DISCUSSION, EGRESS TIMER and REVOKE COOLDOWN rows, in seconds (D-317). */
+    val discussionSeconds: Int,
+    val egressTimerSeconds: Int,
+    val revokeCooldownSeconds: Int,
     val readyToArm: Boolean,
     /**
      * **The home this house is hosting, which IS the round's home** (E-PAY-3, the owner's ruling).
@@ -1857,6 +1873,11 @@ class LobbyOverTransport(
 
     /** The host's ballot length, to the desk beside this phone. See [LobbyHouse.setVoteWindow]. */
     override fun setVoteWindow(seconds: Int) = house.setVoteWindow(seconds)
+
+    /** The host's three timed rows, to the desk beside this phone (D-317). See [LobbyHouse.setDiscussion]. */
+    override fun setDiscussion(seconds: Int) = house.setDiscussion(seconds)
+    override fun setEgressTimer(seconds: Int) = house.setEgressTimer(seconds)
+    override fun setRevokeCooldown(seconds: Int) = house.setRevokeCooldown(seconds)
 
     /**
      * **The round ended: the desk drops every line, and this phone stays in the lobby** (D-116,

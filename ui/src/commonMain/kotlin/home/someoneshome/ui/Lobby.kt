@@ -196,6 +196,16 @@ interface LobbyLink {
     fun setVoteWindow(seconds: Int)
 
     /**
+     * **The host's DISCUSSION, EGRESS TIMER and REVOKE COOLDOWN rows, in seconds** (D-317).
+     * [setVoteWindow]'s shape exactly, and its restriction: on a phone that is not hosting each does
+     * nothing, and the lobby offers the controls nowhere else. Nothing about them goes down the wire:
+     * the clients learn each on the push that starts its clock.
+     */
+    fun setDiscussion(seconds: Int)
+    fun setEgressTimer(seconds: Int)
+    fun setRevokeCooldown(seconds: Int)
+
+    /**
      * **The round ended: the house drops every line it is holding, and the connection stays up**
      * (D-116, D-157).
      *
@@ -383,6 +393,23 @@ class MemoryLobbyLink(
         windows += seconds
     }
 
+    /** The three timed rows this fixture has been told (D-317), unpublished for [windows]' reason. */
+    val discussions = mutableListOf<Int>()
+    val egressTimers = mutableListOf<Int>()
+    val revokeCooldowns = mutableListOf<Int>()
+
+    override fun setDiscussion(seconds: Int) {
+        discussions += seconds
+    }
+
+    override fun setEgressTimer(seconds: Int) {
+        egressTimers += seconds
+    }
+
+    override fun setRevokeCooldown(seconds: Int) {
+        revokeCooldowns += seconds
+    }
+
     /**
      * **This phone left: the seat and the line go with it, and the desk republishes.**
      *
@@ -456,6 +483,9 @@ class RefusingLobbyLink(private val why: HostRefusal = HostRefusal.NameAlreadyOn
     override fun handOver(line: String) = Unit
     override fun setInsiders(chosen: Int?) = Unit
     override fun setVoteWindow(seconds: Int) = Unit
+    override fun setDiscussion(seconds: Int) = Unit
+    override fun setEgressTimer(seconds: Int) = Unit
+    override fun setRevokeCooldown(seconds: Int) = Unit
     override fun roundEnded() = Unit
     override fun leave() = Unit
     override fun terminate() = Unit
@@ -1044,6 +1074,56 @@ class LobbyModel(
     }
 
     /**
+     * **DISCUSSION, EGRESS TIMER and REVOKE COOLDOWN: the host's to set, this phone's to echo**
+     * (the owner's 2026-11-21 ruling, D-317).
+     *
+     * [voteWindowSeconds]' arrangement exactly, row for row: a number this phone holds, a cycle
+     * through the choices on the host's press, the choice handed to [LobbyLink] and on to the desk
+     * a round is armed from, and nothing down the wire. On a phone that is not hosting each press
+     * does nothing, and the screen does not draw the row as a control.
+     *
+     * **Each cycle has one choice today**, the row's current number, because no ruling gives a
+     * range or a step for any of them ([DISCUSSIONS], [EGRESS_TIMERS], [REVOKE_COOLDOWNS]). The
+     * press still goes all the way to the desk, so when the owner rules a range it is a list that
+     * grows and nothing else.
+     */
+    var discussionSeconds: Int by mutableStateOf(DISCUSSIONS.first())
+        private set
+    var egressTimerSeconds: Int by mutableStateOf(EGRESS_TIMERS.first())
+        private set
+    var revokeCooldownSeconds: Int by mutableStateOf(REVOKE_COOLDOWNS.first())
+        private set
+
+    /** The rows' right-hand values, in the design's own form: `90S`, `120S`, `60S`. */
+    val discussionLabel: String get() = "${discussionSeconds}S"
+    val egressTimerLabel: String get() = "${egressTimerSeconds}S"
+    val revokeCooldownLabel: String get() = "${revokeCooldownSeconds}S"
+
+    /** The DISCUSSION control: [cycleVoteWindow]'s, over [DISCUSSIONS]. */
+    fun cycleDiscussion() {
+        if (!hosting) return
+        discussionSeconds = nextOf(DISCUSSIONS, discussionSeconds)
+        link.setDiscussion(discussionSeconds)
+    }
+
+    /** The EGRESS TIMER control: [cycleVoteWindow]'s, over [EGRESS_TIMERS]. */
+    fun cycleEgressTimer() {
+        if (!hosting) return
+        egressTimerSeconds = nextOf(EGRESS_TIMERS, egressTimerSeconds)
+        link.setEgressTimer(egressTimerSeconds)
+    }
+
+    /** The REVOKE COOLDOWN control: [cycleVoteWindow]'s, over [REVOKE_COOLDOWNS]. */
+    fun cycleRevokeCooldown() {
+        if (!hosting) return
+        revokeCooldownSeconds = nextOf(REVOKE_COOLDOWNS, revokeCooldownSeconds)
+        link.setRevokeCooldown(revokeCooldownSeconds)
+    }
+
+    /** The choice after [at] in [choices], and back to the first: the list *is* the cycle. */
+    private fun nextOf(choices: List<Int>, at: Int): Int = choices[(choices.indexOf(at) + 1) % choices.size]
+
+    /**
      * **Whether LIGHTS OUT may be offered: enough people, and everybody's line in.**
      *
      * Two conditions, and they fail differently on purpose — see [waitingFor], which is what the
@@ -1287,6 +1367,35 @@ class LobbyModel(
          * Ordered, and read by index — the list *is* the cycle.
          */
         val VOTE_WINDOWS: List<Int> = listOf(45, 60, 90, 30)
+
+        /**
+         * **The DISCUSSION row's choices: the design's ninety and nothing else** (D-317).
+         *
+         * `gdd.md:431` gives *90s (lobby setting)* and `:930` lists *discussion time* among the
+         * host's options; neither, nor any decision, gives a range or a step. So the row's
+         * current number is its only choice, and **the owner sets the rest**. Ordered, and read
+         * by index, like [VOTE_WINDOWS].
+         */
+        val DISCUSSIONS: List<Int> = listOf(Balance.DISCUSSION_SECONDS)
+
+        /**
+         * **The EGRESS TIMER row's choices: D-014's 120 and nothing else** (D-317).
+         *
+         * D-014 and `gdd.md:382`, `:1184` make it host-configurable with a 120s default and give no
+         * range or step. The proposal from the map (D-014, `gdd.md:384`) is not built either: no
+         * ruling says how the longest marker-to-marker path becomes seconds. **The owner sets
+         * both.**
+         */
+        val EGRESS_TIMERS: List<Int> = listOf(Balance.EGRESS_TIMER_SECONDS)
+
+        /**
+         * **The REVOKE COOLDOWN row's choices: the lobby's 60 and nothing else** (D-317).
+         *
+         * `gdd.md:930` lists *Revoke cooldown* among the host's options and D-037 says it locks at
+         * arming; nothing gives a range or a step (`gdd.md:1181`'s *initial 45s* is the opening
+         * cooldown D-132 replaced with half). **The owner sets them.**
+         */
+        val REVOKE_COOLDOWNS: List<Int> = listOf(Balance.REVOKE_COOLDOWN_SECONDS)
 
         /**
          * The bound on a name, which is [LobbyBody.Naming.LIMIT] and not a second opinion about
