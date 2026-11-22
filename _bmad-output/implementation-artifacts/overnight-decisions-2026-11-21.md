@@ -235,3 +235,21 @@ D-311 and D-313 were also run together in a full check before pushing: 3,312 tes
 ## Night of 2026-11-22
 
 - **The design mockup (Claude Design project) is updated:** the Notes tile and screen are gone, MESSAGES moves up a slot, and the gallery entry and the "RESEED BACKLOG AND NOTES" label are cleaned. Previewed before publishing (version 18). Generator changes are in `f308821`.
+- **Merged tonight, as one integration (`ceca1ea`):**
+  - **D-321:** the motion budget.
+  - **D-324:** chains among Residents only, with fake holds for Insiders and the "you're up" buzz.
+  - **D-325:** Memory Dump from the approved draft, now dealt, plus the Array Wipe briefing.
+  - **D-326:** Notifications removed, NEARBY DEVICES probed on a return to the lobby, the poll replaced by events.
+- **Proof:**
+  - recording format 52;
+  - 3,618 tests in the default check, 4,113 across the three builds, 0 failures;
+  - buildSrc 35;
+  - the rehearsal 21/21;
+  - e2e 3/3;
+  - the iPhone Playtest build succeeds.
+- **The design mockup, republished as version 19:** Notes removed, and PERMISSIONS shows the app's four rows (it still had LOCAL NETWORK and no NEARBY DEVICES).
+- **For you:**
+  1. **Lazy linking (GDD M5) is not built:** five questions are open (D-324). Chains stay two players long and are fixed at lights out.
+  2. **The motion budget's numbers are guesses to tune on phones:** about 2 s of walking away on a short Subroutine. The "too little motion fails" rule needs a stillness measurement on both phones (D-321).
+  3. **The motion budget meets Memory Dump:** walking to the target counts as motion, so the screen closes to the work order on the way. The pattern stays held and the row still reads TO <ROOM>. Is that close OK, or should the TO <ROOM> screen be exempt?
+  4. **The NEARBY DEVICES probe on return:** if LIGHTS OUT lands within about 2 s of a guest's return, the probe can overlap the round's first UWB sessions (D-326).
