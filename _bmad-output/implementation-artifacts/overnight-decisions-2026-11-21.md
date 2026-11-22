@@ -286,3 +286,16 @@ D-311 and D-313 were also run together in a full check before pushing: 3,312 tes
   - whether walking during Memory Dump should close its screen;
   - the lobby probe gap and the changed D-326 trigger (D-327).
 - **Ready for the phone test:** `phone-session-2026-11-19.md` has a line for each new piece. Use the Playtest build on three phones, plus a fourth for the mid-round join.
+
+## Owner's rulings, 2026-11-23
+
+- **Chains:** not everyone is chained. A third of the players, rounded to the nearest even number, with exact halves rounding up (5-8 players give 2, 9-13 give 4, 18 gives 6). They are drawn at lights out with no lazy linking. Insiders get fake locks at the same odds. A Revoked or Restrained upstream player strands the line, as before.
+- **The motion budget:** the "too still fails" rule is dropped.
+- **PROCEED:**
+  - on every Subroutine, the bottom STOP NOW becomes PROCEED once the house has answered (accepted or rejected);
+  - Memory Dump's TO <ROOM> screen uses PROCEED too;
+  - PROCEED replaces CONTINUE on PERMISSIONS and PERIMETER ARMED.
+- **Memory Dump:** after the pattern, TO <ROOM> shows. PROCEED or walking away goes to the work order. While the pattern is carried, other cards are refused (the meeting card and the Terminal still work).
+- **Wrong card while carrying** (pattern or disk): "CARRYING . GO TO <ROOM>".
+- **Building:** D-328.
+- **Still to answer:** the lobby permission check (the changed D-326 trigger and the tiny pre-arming gap, D-327).
