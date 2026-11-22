@@ -579,10 +579,18 @@ fun ScanCaughtScreen(vals: PanelVals) {
  * statement about a player who is not standing there. D-124's second half is why the *other*
  * refusal keeps its own words: collapsing the two would let a Resident sweeping cards separate
  * *registered but not mine* from *not registered at all*, which is a detector.
+ *
+ * ### While carrying it says where to go instead (the owner's 2026-11-23 ruling, D-328)
+ *
+ * A card refused while a disk is in hand or a Memory Dump pattern is held reads **CARRYING . GO TO
+ * <ROOM>**, the next stop's room ([carryingTo]: the disk's station, the pattern's target), in this
+ * frame and this type; the buzz is the same *no* (D-320). It replaces NOTHING FOR YOU HERE in that
+ * case only. What it names is the phone's own carry and its own order's room, both already on this
+ * phone, so it is nothing about anybody else.
  */
 @Composable
-fun ScanBadScreen() {
-    ScanRefusal(headline = "NOTHING FOR\nYOU HERE")
+fun ScanBadScreen(carryingTo: String? = null) {
+    ScanRefusal(headline = carryingTo?.let { carryingGoTo(it) } ?: "NOTHING FOR\nYOU HERE")
 }
 
 /**

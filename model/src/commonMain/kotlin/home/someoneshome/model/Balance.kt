@@ -660,11 +660,27 @@ object Balance {
      *
      * The design's bound, built as written: *tight — one more would generate a Subroutine that
      * becomes literally unstaffable while the game is still running*. Read at arming, where every
-     * Insider is living. The draw links Residents in pairs (D-324), so every lawful round, whose
+     * Insider is living. The draw links Residents in pairs (D-324, D-328), so every lawful round, whose
      * band never falls below one Insider, has room for its chains; a hand-built round with no
      * Insider has a bound of one and draws no chain at all.
      */
     fun chainBound(livingInsiders: Int): Int = livingInsiders + 1
+
+    /**
+     * **How many seats of a round are chained: a third of the seats, rounded to the nearest even
+     * number, an exact half rounding up** (the owner's 2026-11-23 ruling, D-328: *not every player
+     * is chained*).
+     *
+     * A third of the seats is `seats ÷ 3`; the nearest even number to it is twice the nearest whole
+     * number to `seats ÷ 6`, and an exact half rounds up, so it is `2 × ⌊(seats + 3) ÷ 6⌋`, integer
+     * only. 3 and 4 seats are 2 (1 and 1.33 both round to 2), 5 to 8 are 2, 9 to 14 are 4, 15 to 18
+     * are 6. Even because the chained seats are drawn in pairs (D-328), each seat of a pair
+     * upstream of the other's locked line.
+     *
+     * **No role is an input**: the count is a public fact of the lobby, and which seats are chained
+     * is drawn without the role (an Insider is as likely to hold a lock as a Resident).
+     */
+    fun chainedSeats(seats: Int): Int = if (seats <= 0) 0 else 2 * ((seats + 3) / 6)
 
     /**
      * **Two damaged disks to an Array Wipe** (`gdd.md:660`): *two damaged disks → four traverses*,

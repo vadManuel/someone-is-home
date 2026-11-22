@@ -50,6 +50,14 @@ class Recording(
     }
 
     companion object {
+        // 53 (D-328): not every seat is chained (the owner's 2026-11-23 ruling). A third of the seats,
+        // rounded to the nearest even number, are drawn role-blind off the same cycle and paired, and
+        // a pair the draw gave an Insider is two fake holds, so the same seed holds different lines
+        // and draws different links: a version 52 round would replay to different orders and
+        // releases. And a held Memory Dump pattern now refuses every card but its target, so the same
+        // scans answer differently. No event, effect, field or row changed shape. A version 52
+        // recording is refused here as every older one is.
+        //
         // 52 (D-325): Memory Dump is dealt (its screens are built), so the same seed draws a long into
         // every order again, and its pattern is four elements drawn without a length draw, so a
         // version 51 round replays to different work. One event a 51 build cannot construct,
@@ -435,7 +443,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/52"
+        const val HEADER = "someone-is-home/recording/53"
     }
 }
 

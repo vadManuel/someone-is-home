@@ -33,7 +33,7 @@ def build():
     <div style="font-size:72px;line-height:.85;letter-spacing:.04em">PERIMETER<br>ARMED</div>
     <div aria-hidden="true" style="width:48px;height:2px;background:#8A5C12"></div>
     <div style="font-size:26px;line-height:1.1;color:#C08A2E">6 RESIDENTS<br>ACCOUNTED FOR</div>
-    {secondary("CONTINUE", "goHome", D, extra="margin-top:20px;min-width:200px;color:#E39A22")}
+    {secondary("PROCEED", "goHome", D, extra="margin-top:20px;min-width:200px;color:#E39A22")}
   </div>''', D, "PERIMETER ARMED. The lights have just gone out: outline only, nothing that flares.")
 
     # MESSAGES (D-105: no read state, so no unread count and no NEW tag)

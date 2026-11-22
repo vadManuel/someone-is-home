@@ -26,7 +26,7 @@ import kotlin.test.assertEquals
 
 /**
  * **A viewer, not an assertion: the PERMISSIONS walk with its NEARBY DEVICES row** (D-303), in the
- * row's states (ASKED among them, which holds the phone here, D-309), and the screen CONTINUE reaches now the NameDrop step is gone. Writes
+ * row's states (ASKED among them, which holds the phone here, D-309), and the screen PROCEED reaches now the NameDrop step is gone. Writes
  * `build/screens/perms-*.png` at the mockup's 720×1520 with its camera band, so the row can be laid
  * beside BLUETOOTH and the rest. The tallest state is drawn twice, at the top of its scroll and at
  * the end of it (D-305).
@@ -76,9 +76,9 @@ class PermsWalkRender {
         render("perms-tallest-scrolled", at(ScreenId.Perms, PermsModel(read = { tallest.getValue(it) }).also { it.refresh() })) {
             onNodeWithTag(PERMS_SCROLL).performScrollToNode(hasText("THIS PHONE CANNOT TAKE A SEAT YET", substring = true))
         }
-        // CONTINUE on a phone that has granted everything: straight to JOIN A HOME, no step between.
+        // PROCEED on a phone that has granted everything: straight to JOIN A HOME, no step between.
         val walked = at(ScreenId.Perms, perms(Grant.Granted))
-        render("perms-continue", walked) { onNodeWithText("CONTINUE").performClick() }
-        assertEquals(ScreenId.Join, walked.state.screen, "CONTINUE did not reach the join screen")
+        render("perms-continue", walked) { onNodeWithText("PROCEED").performClick() }
+        assertEquals(ScreenId.Join, walked.state.screen, "PROCEED did not reach the join screen")
     }
 }

@@ -150,7 +150,7 @@ class LobbyPermissionCheckTest {
 
     /**
      * **GUARD: the host cannot leave, so it is shown PERMISSIONS, cannot press LIGHTS OUT, and the
-     * lobby survives** (D-311, provisional). Back on, its CONTINUE goes back to its own lobby.
+     * lobby survives** (D-311, provisional). Back on, its PROCEED goes back to its own lobby.
      */
     @Test
     fun theHostIsShownPermissionsAndTheLobbySurvives() {

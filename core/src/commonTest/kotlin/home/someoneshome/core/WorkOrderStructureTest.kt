@@ -43,7 +43,8 @@ private fun armed(
     insiders: List<Seat> = listOf(Seat(1)),
     seed: Long = 20261121L,
     cards: List<MarkerId> = CARDS,
-) = reduce(GameState.EMPTY, Event.RoundArmed(Tick(0), seed, seatsOf(seats), insiders, null, placed(cards)))
+    terminal: MarkerId? = null,
+) = reduce(GameState.EMPTY, Event.RoundArmed(Tick(0), seed, seatsOf(seats), insiders, null, placed(cards), terminal = terminal))
 
 /** A clock a test advances by hand, one tick per event. */
 private class Clock(var t: Long = 1L) {
@@ -247,12 +248,20 @@ class OrderMixTest {
 
 class CrossPlayerChainTest {
 
-    /** Every lawful round over [seeds] at five to twelve seats, the Insiders as the house draws them. */
-    private fun rounds(seeds: LongRange = 1L..30L): List<GameState> = seeds.flatMap { seed ->
-        (5..12).map { n -> armed(seats = n, insiders = insidersFor(seed, seatsOf(n), null), seed = seed).state }
+    /** Every lawful round over [seeds] at five to eighteen seats, the Insiders as the house draws them. */
+    private fun rounds(seeds: LongRange = 1L..30L, sizes: IntRange = 5..18): List<GameState> = seeds.flatMap { seed ->
+        sizes.map { n -> armed(seats = n, insiders = insidersFor(seed, seatsOf(n), null), seed = seed).state }
     }
 
     private fun GameState.isInsider(seat: Seat) = roleOf(seat) == Role.Insider
+
+    /** The seats whose order holds a locked line, each with how many. */
+    private fun GameState.locks(): Map<Int, Int> =
+        workOrders.associate { o -> o.seat.index to o.entries.count { it.held } }.filterValues { it > 0 }
+
+    /** The first seed at [seats] with [insiders] whose round satisfies [want]. */
+    private fun seedWhere(seats: Int = 6, insiders: List<Seat> = listOf(Seat(1)), want: (GameState) -> Boolean): Long =
+        (1L..2_000L).first { want(armed(seats = seats, insiders = insiders, seed = it).state) }
 
     /** The players each chain links, following a release on to whatever the released line holds. */
     private fun chainLengths(state: GameState): List<Int> {
@@ -265,25 +274,69 @@ class CrossPlayerChainTest {
     }
 
     @Test
-    fun `every real chain links two plain Residents and no Insider is ever upstream`() {
+    fun `the chained count is a third of the seats rounded to the nearest even number with halves up`() {
+        // The owner's table (2026-11-23, D-328), and 3 and 4 seats: 1 and 1.33 both round to 2.
+        val table = mapOf(3 to 2, 4 to 2, 5 to 2, 6 to 2, 7 to 2, 8 to 2, 9 to 4, 10 to 4, 12 to 4, 13 to 4, 18 to 6)
+        for ((seats, chained) in table) assertEquals(chained, Balance.chainedSeats(seats), "$seats seats")
+        // And every count against its own definition: the even number nearest a third, halves up.
+        for (seats in 1..60) {
+            val third = seats / 3.0
+            val nearest = (0..seats step 2).minWith(compareBy<Int>({ kotlin.math.abs(it - third) }, { -it }))
+            assertEquals(nearest, Balance.chainedSeats(seats), "$seats seats: a third is $third")
+        }
+    }
+
+    @Test
+    fun `only that many seats hold a lock and one each and an unchained seat holds none`() {
         for (state in rounds()) {
-            val residents = state.seats.filterNot { state.isInsider(it) }
-            val real = state.links.filterNot { it.fake }
-            for (link in real) {
-                assertTrue(!state.isInsider(link.up), "an Insider is upstream of a real chain: ${link.up}")
-                assertTrue(!state.isInsider(link.down), "an Insider is downstream of a real chain: ${link.down}")
-                assertNotEquals(link.up.index, link.down.index, "a dependency joined a seat to itself")
-            }
-            assertTrue(state.links.none { state.isInsider(it.up) }, "an Insider's work holds somebody's line")
-            for (link in state.links.filter { it.fake }) assertTrue(state.isInsider(link.down), "a fake hold on a Resident")
-            assertEquals(residents.map { it.index }, real.map { it.up.index }.sorted(), "a Resident is upstream twice or never")
-            assertEquals(residents.map { it.index }, real.map { it.down.index }.sorted(), "a Resident is downstream twice or never")
+            val n = state.seats.size
+            val locks = state.locks()
+            assertEquals(Balance.chainedSeats(n), locks.size, "$n seats: ${locks.size} seats locked, not ${Balance.chainedSeats(n)}")
+            assertTrue(locks.values.all { it == 1 }, "$n seats: a chained seat holds more than one locked line: $locks")
+            assertEquals(locks.keys.sorted(), state.links.map { it.down.index }.sorted(), "a locked line with no link, or a link with no lock")
             for (link in state.links) {
                 assertTrue(state.workOrderFor(link.down)!!.entries[link.downEntry].held, "the downstream line is not held")
                 val seconds = link.delay / Balance.TICKS_PER_SECOND
                 assertTrue(seconds in 20L..120L, "an unlock delay of ${seconds}s is outside gdd.md's 20–120 s")
             }
         }
+    }
+
+    @Test
+    fun `every real chain links two plain Residents and no Insider is ever upstream`() {
+        for (state in rounds()) {
+            val real = state.links.filterNot { it.fake }
+            for (link in real) {
+                assertTrue(!state.isInsider(link.up), "an Insider is upstream of a real chain: ${link.up}")
+                assertTrue(!state.isInsider(link.down), "an Insider is downstream of a real chain: ${link.down}")
+                assertNotEquals(link.up.index, link.down.index, "a dependency joined a seat to itself")
+                // Real links come in pairs: each Resident upstream of the other's locked line.
+                assertTrue(real.any { it.up == link.down && it.down == link.up }, "a real link without its pair: $link")
+            }
+            assertTrue(state.links.none { state.isInsider(it.up) }, "an Insider's work holds somebody's line")
+            for (link in state.links.filter { it.fake }) {
+                assertNotEquals(link.up.index, link.down.index, "a fake hold is timed off its own seat's work")
+            }
+            for (link in state.links.filter { state.isInsider(it.down) }) assertTrue(link.fake, "an Insider holds a real lock")
+        }
+    }
+
+    @Test
+    fun `a Resident the draw paired with an Insider holds a fake lock timed off another Resident`() {
+        var seen = 0
+        for (state in rounds(1L..60L)) {
+            val locked = state.locks().keys.map { Seat(it) }
+            for (resident in locked.filterNot { state.isInsider(it) }) {
+                val link = state.links.single { it.down == resident }
+                if (!link.fake) continue
+                seen++
+                assertTrue(!state.isInsider(link.up), "a Resident's fake lock is timed off an Insider")
+                assertNotEquals(resident.index, link.up.index, "a Resident's fake lock is timed off its own work")
+                // Its pair holds an Insider, which is why it is fake: nothing real is left to hold it.
+                assertTrue(state.links.filter { it.fake }.any { state.isInsider(it.down) }, "a fake lock on a Resident with no Insider chained")
+            }
+        }
+        assertTrue(seen > 50, "too few Residents paired with an Insider to say anything: $seen")
     }
 
     @Test
@@ -298,35 +351,68 @@ class CrossPlayerChainTest {
     }
 
     @Test
-    fun `an Insider's order is locked in the same number and at the same place a Resident's would be`() {
+    fun `which seats are locked and which line and its delay do not move with the role`() {
         for (seed in 1L..30L) {
-            val seat = Seat(4)
-            val residentRound = armed(seats = 8, insiders = listOf(Seat(1)), seed = seed)
-            for (other in listOf(listOf(seat), listOf(seat, Seat(6)))) {
-                val insiderRound = armed(seats = 8, insiders = other, seed = seed)
-                fun holds(r: Reduction<GameState, Effect>) = r.state.links.filter { it.down == seat }.map { it.downEntry to it.delay }
-                assertEquals(holds(residentRound), holds(insiderRound), "seat 4's locked line or its delay moved with its role (seed $seed)")
-                assertEquals(1, holds(insiderRound).size, "seat 4 holds ${holds(insiderRound).size} locked lines")
-                fun lines(r: Reduction<GameState, Effect>) = r.effects.filterIsInstance<Effect.WorkOrderIssued>().single { it.seat == seat }.lines
-                assertEquals(lines(residentRound), lines(insiderRound), "seat 4's order reached its phone differently by role (seed $seed)")
+            for (n in listOf(6, 8, 12)) {
+                val baseline = armed(seats = n, insiders = listOf(Seat(1)), seed = seed)
+                fun holds(r: Reduction<GameState, Effect>) =
+                    r.state.links.map { Triple(it.down.index, it.downEntry, it.delay) }.sortedBy { it.first }
+                fun lines(r: Reduction<GameState, Effect>) =
+                    r.effects.filterIsInstance<Effect.WorkOrderIssued>().sortedBy { it.seat.index }.map { it.lines }
+                for (other in listOf(listOf(Seat(4)), listOf(Seat(4), Seat(n - 1)))) {
+                    val exchanged = armed(seats = n, insiders = other, seed = seed)
+                    assertEquals(holds(baseline), holds(exchanged), "$n seats, seed $seed: a lock moved with the role")
+                    assertEquals(lines(baseline), lines(exchanged), "$n seats, seed $seed: an order reached its phone differently by role")
+                }
             }
         }
     }
 
     @Test
-    fun `an Insider's locked line unlocks on the same distribution as a Resident's`() {
+    fun `an Insider is as likely to hold a lock as a Resident`() {
+        var insiderSeats = 0
+        var insiderLocked = 0
+        var residentSeats = 0
+        var residentLocked = 0
+        for (seed in 1L..400L) {
+            val state = armed(seats = 9, insiders = insidersFor(seed, seatsOf(9), 2), seed = seed).state
+            val locked = state.locks().keys
+            for (seat in state.seats) {
+                if (state.isInsider(seat)) {
+                    insiderSeats++
+                    if (seat.index in locked) insiderLocked++
+                } else {
+                    residentSeats++
+                    if (seat.index in locked) residentLocked++
+                }
+            }
+        }
+        val insiderRate = insiderLocked.toDouble() / insiderSeats
+        val residentRate = residentLocked.toDouble() / residentSeats
+        // 4 of 9 seats are locked at nine seats, whatever the role: both rates sit near 0.44.
+        assertTrue(kotlin.math.abs(insiderRate - 4.0 / 9) < 0.06, "an Insider holds a lock at $insiderRate, not 4/9")
+        assertTrue(kotlin.math.abs(insiderRate - residentRate) < 0.06, "Insider $insiderRate against Resident $residentRate")
+    }
+
+    @Test
+    fun `a fake lock unlocks on the same distribution as a real one`() {
         val real = mutableListOf<Long>()
         val fake = mutableListOf<Long>()
         for (seed in 1L..300L) {
-            val state = armed(seats = 8, insiders = insidersFor(seed, seatsOf(8), 2), seed = seed).state
+            val state = armed(seats = 12, insiders = insidersFor(seed, seatsOf(12), 2), seed = seed).state
             for (link in state.links) (if (link.fake) fake else real) += link.delay / Balance.TICKS_PER_SECOND
+            // Both are a Resident's completion of the line the role-free draw made its upstream one.
+            for (link in state.links) {
+                assertTrue(!state.isInsider(link.up), "a lock timed off an Insider's work")
+                assertTrue(link.upEntry < state.workOrderFor(link.up)!!.entries.size)
+            }
         }
         for (d in real + fake) assertTrue(d in 20L..120L)
         // One draw makes both: the delay is the downstream seat's whatever its role (the test
         // above), so the two samples differ only by chance and their means sit together.
         val gap = kotlin.math.abs(real.average() - fake.average())
         assertTrue(gap < 8.0, "a fake hold's delay is drawn differently: real ${real.average()} against fake ${fake.average()}")
-        assertTrue(fake.size >= 600, "the sample of fake holds is too small: ${fake.size}")
+        assertTrue(fake.size >= 200 && real.size >= 200, "the samples are too small: ${real.size} real, ${fake.size} fake")
     }
 
     @Test
@@ -344,12 +430,16 @@ class CrossPlayerChainTest {
         }
     }
 
+    /** A real link whose downstream line nothing of its own order is chained before. */
+    private fun GameState.freeRealLink(): ChainLink? =
+        links.firstOrNull { !it.fake && workOrderFor(it.down)!!.entries[it.downEntry].blockedBy.isEmpty() }
+
     @Test
     fun `a chain unlocks across players after its delay and not a tick before`() {
-        var state = armed(seats = 6).state
+        var state = armed(seats = 6, seed = seedWhere { it.freeRealLink() != null }).state
         // A downstream line nothing of its own order is chained before, so the release alone names
         // it on the wire (a line still behind its own earlier work is rightly Blocked after it too).
-        val link = state.links.first { !it.fake && state.workOrderFor(it.down)!!.entries[it.downEntry].blockedBy.isEmpty() }
+        val link = state.freeRealLink()!!
         val clock = Clock()
         state = finish(state, link.up, link.upEntry, clock)
         val started = state.links.single { it.isDown(link.down, link.downEntry) }
@@ -373,26 +463,49 @@ class CrossPlayerChainTest {
         assertEquals(Admission.Refused(RefusalReason.ChainNotDue), twice, "a released line was released again")
     }
 
-    @Test
-    fun `a Revoke strands downstream work and nothing ever releases it`() {
-        val armedState = armed(seats = 6).state
-        val link = armedState.links.first { !it.fake }
-        // The upstream seat is out before it finishes: revoked, as the touch would leave it.
-        var state = armedState.copy(revoked = listOf(link.up))
+    /** The upstream seat taken out by [out] before it finishes; the downstream line never comes free. */
+    private fun assertStranded(out: (GameState, Seat) -> GameState, how: String) {
+        // A real link whose upstream line is a Subroutine its seat can finish alone.
+        fun GameState.walkable() = links.firstOrNull { l ->
+            !l.fake && workOrderFor(l.up)!!.entries[l.upEntry].let { it.work is AssignedWork.Subroutine && it.blockedBy.isEmpty() && !it.held }
+        }
+        val armedState = armed(seats = 6, seed = seedWhere { it.walkable() != null }).state
+        val link = armedState.walkable()!!
+        // The control: the same seat, living, finishing the same line, starts the delay.
+        val living = finish(armedState, link.up, link.upEntry, Clock())
+        assertNotNull(living.links.single { it.isDown(link.down, link.downEntry) }.dueAt, "the control never started the delay")
+
+        var state = out(armedState, link.up)
+        assertTrue(state.isOut(link.up), "the upstream seat is not out after a $how")
         val clock = Clock()
-        val line = state.workOrderFor(link.up)!!.entries[link.upEntry]
-        val card = line.anchor!!
+        val card = state.workOrderFor(link.up)!!.entries[link.upEntry].anchor!!
+        // The right answer, off the same scan of the same state while living: the question is the
+        // scan's minted id's, so it is the one the out seat would be asked.
+        val answer = scan(armedState, link.up, card, Clock()).state.openSubroutineFor(link.up)!!.expected
         state = scan(state, link.up, card, clock).state
-        state = hand(state, link.up, card, listOf(0), clock).state
-        assertNull(state.links.single { it.isDown(link.down, link.downEntry) }.dueAt, "an out seat's work started a delay")
+        state = hand(state, link.up, card, answer, clock).state
+        assertTrue(!state.workOrderFor(link.up)!!.entries[link.upEntry].done, "an out seat completed its line")
+        assertNull(state.links.single { it.isDown(link.down, link.downEntry) }.dueAt, "a $how seat's work started a delay")
         for (later in listOf(20L, 2_400L, 1_000_000L).map { Tick(it * Balance.TICKS_PER_SECOND) }) {
             assertEquals(
                 Admission.Refused(RefusalReason.ChainNotDue),
                 admit(state, Event.ChainUnlocked(later, link.down, link.downEntry)),
-                "a stranded line was released at $later — nothing auto-satisfies (D-146)",
+                "a line stranded by a $how was released at $later — nothing auto-satisfies (D-146)",
             )
         }
         assertIs<OrderLine.Blocked>(state.workOrderFor(link.down)!!.asLines(state.destinations)[link.downEntry])
+    }
+
+    @Test
+    fun `a Revoke of the upstream player strands the downstream line and nothing ever releases it`() {
+        // Revoked, as the touch would leave it.
+        assertStranded({ state, up -> state.copy(revoked = listOf(up)) }, "Revoke")
+    }
+
+    @Test
+    fun `a Restrain of the upstream player strands the downstream line and nothing ever releases it`() {
+        // Restrained, as a meeting's tally would leave it (D-144).
+        assertStranded({ state, up -> state.copy(restrained = listOf(up)) }, "Restrain")
     }
 
     @Test
@@ -407,9 +520,11 @@ class CrossPlayerChainTest {
     }
 
     @Test
-    fun `an Insider's fake hold is released off a Resident's completion with a Resident's effects`() {
+    fun `a fake hold is released off a Resident's completion with a real one's effects`() {
+        // A seed where seat 3 is chained, so it holds a lock as an Insider and as a Resident.
+        val seed = seedWhere(insiders = listOf(Seat(3))) { s -> s.links.any { it.down == Seat(3) } }
         fun run(insiders: List<Seat>): Pair<Long, List<Effect>> {
-            var state = armed(seats = 6, insiders = insiders).state
+            var state = armed(seats = 6, insiders = insiders, seed = seed).state
             val link = state.links.single { it.down == Seat(3) }
             state = finish(state, link.up, link.upEntry, Clock())
             val started = state.links.single { it.isDown(link.down, link.downEntry) }
@@ -417,12 +532,18 @@ class CrossPlayerChainTest {
             return started.delay to deliveredTo(link.down, released.effects, released.state)
         }
         val asInsider = run(listOf(Seat(3)))
-        val asResident = run(listOf(Seat(1)))
+        val asResident = run(listOf(Seat(unchainedOther(seed))))
         assertEquals(asResident, asInsider, "seat 3's release differed by its role")
         assertTrue(
             asInsider.second.any { it is Effect.WorkUnblocked && it.haptic == HOUSE_TEXT_BUZZ },
             "the fake's `you're up` did not buzz as a house text",
         )
+    }
+
+    /** An Insider for the Resident run that is not seat 3 and not chained with it, so seat 3's lock is real. */
+    private fun unchainedOther(seed: Long): Int {
+        val chained = armed(seats = 6, insiders = listOf(Seat(3)), seed = seed).state.locks().keys
+        return (0 until 6).first { it != 3 && it !in chained }
     }
 }
 
@@ -486,6 +607,7 @@ class ArrayWipeTest {
         val blocked = scan(state, seat, other.anchor!!, clock)
         val answer = blocked.effects.filterIsInstance<Effect.ScanAnswered>().single()
         assertNull(answer.opened, "a Subroutine opened while a disk was in hand")
+        assertEquals(home.someoneshome.model.Haptic.Double, answer.haptic, "the refusal while carrying did not say no (D-320, D-328)")
         assertEquals(DiskInHand(1, CircuitStation.Rack), answer.carrying, "the disk changed at another card")
         assertNull(blocked.state.openSubroutineFor(seat)?.takeIf { it.armed }, "something is armed while a disk is in hand")
 
@@ -558,8 +680,8 @@ class MemoryDumpTest {
         state.workOrderFor(seat)!!.entries.first { it.work == AssignedWork.MemoryDump }
 
     // The dealt line (D-325): the first seat whose Memory Dump nothing of another seat holds.
-    private fun ready(): Triple<GameState, Seat, Clock> {
-        val start = armed(seats = 6).state
+    private fun ready(terminal: MarkerId? = null): Triple<GameState, Seat, Clock> {
+        val start = armed(seats = 6, terminal = terminal).state
         val seat = seatsOf(6).first { start.alone(it, dumpOf(start, it).index) }
         var state = start
         val clock = Clock()
@@ -603,6 +725,51 @@ class MemoryDumpTest {
         assertNull(graded.state.patternOf(seat, dump.index), "the pattern outlived its hand-over")
         val after = graded.effects.filterIsInstance<Effect.WorkOrderIssued>().single().lines[dump.index]
         assertEquals(0, assertIs<OrderLine.Known>(after).pattern, "the order still says a pattern is held")
+    }
+
+    @Test
+    fun `while a pattern is held every card but its target is refused and the meeting card and the Terminal are still answered`() {
+        // The owner's 2026-11-23 ruling (D-328), replacing D-322's *a held pattern does not block other scans*.
+        val terminal = MarkerId("t")
+        var (state, seat, clock) = ready(terminal)
+        val dump = dumpOf(state, seat)
+        val (source, target) = dump.markers
+        state = scan(state, seat, source, clock).state
+        state = begin(state, seat, clock).state
+        val held = assertNotNull(state.patternOf(seat, dump.index), "BEGIN held no pattern").elements
+
+        // Every other card of the home, the source again included: refused, with D-320's *no*.
+        for (card in CARDS.filter { it != target }) {
+            val refused = scan(state, seat, card, clock)
+            val answer = refused.effects.filterIsInstance<Effect.ScanAnswered>().single()
+            assertNull(answer.opened, "${card.value} opened something while a pattern was held")
+            assertEquals(home.someoneshome.model.Haptic.Double, answer.haptic, "${card.value} refused without the *no*")
+            assertNull(answer.carrying, "a held pattern rode the carry: Files must never show it (F-015)")
+            assertNull(refused.state.openSubroutineFor(seat)?.takeIf { it.armed }, "${card.value} armed something while a pattern was held")
+            assertEquals(held, refused.state.patternOf(seat, dump.index)?.elements, "${card.value} let go of the pattern")
+            val line = refused.effects.filterIsInstance<Effect.WorkOrderIssued>().single().lines[dump.index]
+            assertEquals(1, assertIs<OrderLine.Known>(line).pattern, "the order stopped saying the pattern is held")
+            state = refused.state
+        }
+
+        // The Terminal is still read, and the pattern is still held.
+        val read = scan(state, seat, terminal, clock)
+        assertEquals(listOf(true), read.effects.filterIsInstance<Effect.TerminalAnswered>().map { it.reading }, "the Terminal refused a carrier")
+        assertEquals(held, read.state.patternOf(seat, dump.index)?.elements, "reading the Terminal let go of the pattern")
+        state = read.state
+
+        // The meeting card still calls a meeting, and the pattern persists through it (F-014).
+        val called = assertIs<Admission.Admitted>(
+            admit(state.withReader(null), Event.MeetingCalled(clock.next(), seat, home.someoneshome.model.MeetingTrigger.MeetingCard)),
+            "the meeting card was refused to a carrier",
+        )
+        assertNotNull(called.reduction.state.meeting, "no meeting started")
+        assertEquals(held, called.reduction.state.patternOf(seat, dump.index)?.elements, "the meeting let go of the pattern")
+
+        // And the target opens, taking the pattern back.
+        val asked = scan(state, seat, target, clock)
+        val entry = MemoryPattern.of(assertNotNull(asked.effects.filterIsInstance<Effect.ScanAnswered>().single().opened).parameters)
+        assertTrue(!entry.shown && entry.length == held.size, "the target did not ask for the pattern back")
     }
 
     @Test
@@ -699,14 +866,26 @@ class OrderParityTest {
             val order = state.workOrderFor(seat)!!
             return listOf(
                 lines.size,
-                lines.count { it is OrderLine.Blocked } - order.entries.count { !it.held && !order.isActionable(it) },
                 order.entries.count { it.markers.size == 3 },
                 order.entries.count { it.markers.size == 2 },
+            )
+        }
+        // A chained seat holds one lock and an unchained seat none (D-328), whatever its role: the
+        // lock is the one thing about an order's shape the chain draw decides, and it is role-blind.
+        fun locks(seat: Seat): List<Int> {
+            val lines = reduction.effects.filterIsInstance<Effect.WorkOrderIssued>().single { it.seat == seat }.lines
+            val order = state.workOrderFor(seat)!!
+            return listOf(
+                lines.count { it is OrderLine.Blocked } - order.entries.count { !it.held && !order.isActionable(it) },
                 order.entries.count { it.held },
             )
         }
         val resident = shape(Seat(0))
-        for (seat in seatsOf(8)) assertEquals(resident, shape(seat), "seat ${seat.index} (${state.roleOf(seat)}) has a different shape")
+        for (seat in seatsOf(8)) {
+            assertEquals(resident, shape(seat), "seat ${seat.index} (${state.roleOf(seat)}) has a different shape")
+            assertTrue(locks(seat) == listOf(0, 0) || locks(seat) == listOf(1, 1), "seat ${seat.index} holds ${locks(seat)} locks")
+        }
+        assertEquals(Balance.chainedSeats(8), seatsOf(8).count { locks(it) == listOf(1, 1) }, "the wrong number of seats are locked")
     }
 
     @Test

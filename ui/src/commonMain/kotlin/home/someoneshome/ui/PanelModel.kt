@@ -43,7 +43,7 @@ enum class ScreenId {
 
     // Arming — the host turns the lights off and the house does the rest.
     //
-    // PERIMETER ARMED's CONTINUE walks to `Notify`, the house's opening text over the springboard
+    // PERIMETER ARMED's PROCEED walks to `Notify`, the house's opening text over the springboard
     // (D-293): the heavy banner and its dim arrive on that phone at its own tap.
     Secret, Armed, Notify, Reveal, RevealThread,
 
@@ -1490,6 +1490,13 @@ class PanelVals(
 
     /** What this phone is carrying, if anything (D-168). See [PanelState.carrying]. */
     val carrying: Carried? = state.carrying
+
+    /**
+     * **The room a card refused while carrying names: CARRYING . GO TO <ROOM>** (D-328), or null,
+     * which is NOTHING FOR YOU HERE. The disk's next station or the held pattern's target, off the
+     * house's carry and order ([Flow.carryingTo]).
+     */
+    val carryingTo: String? = Flow.carryingTo(state.carrying, state.order)
 
     /**
      * **What FILES holds: this phone's carry, and nothing on a housed phone that carries nothing**

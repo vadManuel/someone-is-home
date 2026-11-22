@@ -21,12 +21,12 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * **PERIMETER ARMED's CONTINUE raises the house's opening banner, with its dim, on that phone, at
+ * **PERIMETER ARMED's PROCEED raises the house's opening banner, with its dim, on that phone, at
  * its own tap** (D-293, the owner's Q6 on D-234; D-118, D-119, D-102).
  *
  * D-254 landed the opening banner over ARMED in the frame ARMED did, one dim for the whole house at
  * one moment. The owner chose the tap instead, knowing the room sees separate dims. So the opening
- * push lands plain ARMED, undimmed, on every phone, and CONTINUE walks that phone to the opening text
+ * push lands plain ARMED, undimmed, on every phone, and PROCEED walks that phone to the opening text
  * over the springboard ([ScreenId.Notify]): dimmed, cleared by a swipe or D-119's ten seconds. The
  * tap is a walk on this phone and nothing else: every way this model has of reaching the house is
  * captured here and must stay empty.
@@ -71,7 +71,7 @@ class ArmedContinueTest {
     private class Drawn(val texts: List<String>, val pixels: IntArray, val image: java.awt.image.BufferedImage)
 
     /**
-     * What [phone] draws, the way `FlowHost` draws it; with [tap], CONTINUE is tapped on the drawn
+     * What [phone] draws, the way `FlowHost` draws it; with [tap], PROCEED is tapped on the drawn
      * screen first and what is captured is the frame after it.
      */
     private fun drawn(phone: FlowModel, tap: Boolean = false): Drawn {
@@ -87,7 +87,7 @@ class ArmedContinueTest {
                 }
             }
             if (tap) {
-                onNodeWithText("CONTINUE").performClick()
+                onNodeWithText("PROCEED").performClick()
                 waitForIdle()
             }
             texts = onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.Text), useUnmergedTree = true)
@@ -119,7 +119,7 @@ class ArmedContinueTest {
             assertFalse(Notifications.dims(phone.state.screen), "$who's phone dimmed at the push, before any tap")
             val frame = drawn(phone)
             assertTrue(frame.texts.any { "PERIMETER" in it }, "$who's phone drew no PERIMETER ARMED: ${frame.texts}")
-            assertTrue("CONTINUE" in frame.texts, "$who's PERIMETER ARMED has no CONTINUE: ${frame.texts}")
+            assertTrue("PROCEED" in frame.texts, "$who's PERIMETER ARMED has no PROCEED: ${frame.texts}")
             assertFalse(Notifications.opening.body in frame.texts, "$who's phone drew the opening text before its tap")
             who to frame
         }
@@ -127,7 +127,7 @@ class ArmedContinueTest {
     }
 
     /**
-     * **GUARD: CONTINUE, tapped on the drawn screen, raises the opening banner and its dim on this
+     * **GUARD: PROCEED, tapped on the drawn screen, raises the opening banner and its dim on this
      * phone, sends nothing, and draws the same frame on every phone whatever its role.**
      */
     @Test
@@ -138,22 +138,22 @@ class ArmedContinueTest {
             val frame = drawn(phone, tap = true)
             assertEquals(
                 ScreenId.Notify, phone.state.screen,
-                "CONTINUE did not raise the opening banner on $who's phone",
+                "PROCEED did not raise the opening banner on $who's phone",
             )
             assertEquals(
                 NotificationKind.Opening, PanelVals(phone.state).arrival?.notification?.kind,
-                "the banner CONTINUE raised on $who's phone is not the house's opening text",
+                "the banner PROCEED raised on $who's phone is not the house's opening text",
             )
             assertTrue(Notifications.dims(phone.state.screen), "the opening banner did not dim $who's phone (D-118)")
             assertTrue(Notifications.opening.body in frame.texts, "$who's phone drew no opening banner: ${frame.texts}")
-            assertEquals(emptyList(), out.said, "$who's CONTINUE sent something outward")
+            assertEquals(emptyList(), out.said, "$who's PROCEED sent something outward")
             who to frame
         }
-        assertSameFrame(frames, "after CONTINUE")
+        assertSameFrame(frames, "after PROCEED")
     }
 
     /**
-     * **GUARD: the banner CONTINUE raised clears to the springboard**, by the swipe or by D-119's ten
+     * **GUARD: the banner PROCEED raised clears to the springboard**, by the swipe or by D-119's ten
      * seconds, on a housed phone too, and the light comes back up with it. Nothing walks back to
      * ARMED, so a phone raises the banner once.
      */
@@ -180,7 +180,7 @@ class ArmedContinueTest {
      * **A second opening moves nothing**, on ARMED or under the banner: a duplicate on the wire
      * neither raises the banner early nor raises it twice. And **a relaunched phone**, a fresh
      * process seated again on its lobby and replayed the round from its first push (D-268), stands
-     * on ARMED again, undimmed, with CONTINUE to tap, as any phone does at arming.
+     * on ARMED again, undimmed, with PROCEED to tap, as any phone does at arming.
      */
     @Test
     fun aSecondOpeningMovesNothingAndARelaunchedPhoneStandsOnArmedAgain() {
@@ -203,7 +203,7 @@ class ArmedContinueTest {
     /**
      * **NEW ROUND, and the second round's ARMED is the first's** (D-157): a phone that tapped through
      * the first round's banner is walked to the lobby, the second opening lands it on plain ARMED,
-     * and its CONTINUE raises the banner and the dim again. Nothing from the first tap is carried.
+     * and its PROCEED raises the banner and the dim again. Nothing from the first tap is carried.
      */
     @Test
     fun aSecondRoundsContinueRaisesTheBannerAgain() {
@@ -218,13 +218,13 @@ class ArmedContinueTest {
             assertEquals(ScreenId.Armed, phone.state.screen, "the second round's opening did not land ARMED (insider=$insider)")
             assertFalse(Notifications.dims(phone.state.screen), "the second round's ARMED dimmed before the tap")
             phone.go(ScreenGraph.exitsOf(ScreenId.Armed).single())
-            assertEquals(ScreenId.Notify, phone.state.screen, "the second round's CONTINUE raised no banner (insider=$insider)")
+            assertEquals(ScreenId.Notify, phone.state.screen, "the second round's PROCEED raised no banner (insider=$insider)")
             assertTrue(Notifications.dims(phone.state.screen), "the second round's banner did not dim")
         }
     }
 
     /**
-     * **A viewer, not an assertion**: PERIMETER ARMED with CONTINUE, and the frame just after the
+     * **A viewer, not an assertion**: PERIMETER ARMED with PROCEED, and the frame just after the
      * tap, written to `build/screens/d293-*.png` to be looked at.
      */
     @Test

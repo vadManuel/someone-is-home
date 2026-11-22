@@ -1172,6 +1172,11 @@ private fun SubroutineFrame(
     submit: (@Composable () -> Unit)? = null,
     /** What a REJECTED says: [RESCAN] everywhere but Memory Dump's target (D-325). */
     rejected: String = RESCAN,
+    /**
+     * **Whether the house has answered, so the foot reads PROCEED** (D-328): once a verdict is in,
+     * and on Memory Dump's TO <ROOM>, which counts as after it.
+     */
+    answered: Boolean = verdict != null,
     body: @Composable ColumnScope.() -> Unit,
 ) {
     KitScreen(gap = 10.dp) {
@@ -1192,7 +1197,7 @@ private fun SubroutineFrame(
         ReturnLine(handedOver, verdict, p.dim, rejected)
         KitBudgetRow(p, height = 44.dp)
         submit?.invoke()
-        StopNow(p)
+        StopNow(p, answered)
     }
 }
 
@@ -1403,14 +1408,22 @@ const val HOUSE_WEAKER: String = "THE HOUSE GROWS WEAKER"
 const val RESCAN: String = "REJECTED . RESCAN THE MARKER"
 
 /**
- * **STOP NOW -- the same words, in the same place, on every Subroutine screen.**
+ * **STOP NOW while the player works or waits, PROCEED once the house has answered -- one control,
+ * in the same place, on every Subroutine screen** (the owner's 2026-11-23 ruling, D-328).
  *
  * Somebody walked in. The player is heads-down, lit or blind, both hands occupied, and needs to be
- * out of this screen without reading it: so the control is constant across all ten, keeps its
- * words whether or not the entry has gone back, and sits at the foot where the scan's own STOP NOW
- * sits. In the dark that is muscle memory, and muscle memory is the only interface that works when
- * you are not looking at the phone. On Sniff before the answer it is drawn in black and is live
- * all the same: in the dark that is what it already was.
+ * out of this screen without reading it: so the control is constant across every Subroutine, sits
+ * at the foot where the scan's own STOP NOW sits, and does the same thing whatever it says. In the
+ * dark that is muscle memory, and muscle memory is the only interface that works when you are not
+ * looking at the phone. On Sniff before the answer it is drawn in black and is live all the same:
+ * in the dark that is what it already was.
+ *
+ * **Its words follow the house, never the player's progress.** It reads STOP NOW while the player
+ * works and while the entry has gone back and waits (RETURNED . WAITING), and **PROCEED once the
+ * house has answered, ACCEPTED or REJECTED alike**, and on Memory Dump's TO <ROOM> after the pattern
+ * has played ([answered]). The same word for both verdicts and both roles, so the word is no second
+ * verdict; the verdict line above it is the house's answer and nothing here repeats it. Walking away
+ * (the motion budget, D-321) leaves by the same action in every state.
  *
  * It goes to the work order rather than the springboard -- you came from the list and the list is
  * where the next decision is -- which is where NOT THIS ONE goes from the screen before this one.
@@ -1425,10 +1438,14 @@ const val RESCAN: String = "REJECTED . RESCAN THE MARKER"
  * separating a real Subroutine from a fake.
  */
 @Composable
-private fun StopNow(p: Palette) {
+private fun StopNow(p: Palette, answered: Boolean) {
     val actions = LocalActions.current
-    KitQuiet("STOP NOW", p.copy(mid = p.dim), onClick = actions.stopSubroutine)
+    KitQuiet(footOf(answered), p.copy(mid = p.dim), onClick = actions.stopSubroutine)
 }
+
+/** **The foot's words** (D-328): STOP NOW until the house has answered, PROCEED after. One decision. */
+internal fun footOf(answered: Boolean): String = if (answered) PROCEED else "STOP NOW"
+
 
 // ================================================================================================
 // MEMORY DUMP (D-325): the owner's approved draft (`abac9b9`), built into the shipping frame.
@@ -1477,7 +1494,8 @@ data class MemoryDumpRooms(val source: String?, val target: String?, val targetM
  * names where the pattern goes: the target's glyph and TO <ROOM>. **At the target** it is Replay's
  * input exactly: a tapped dot stays lit, the cells count, the last tap hands it over and the line
  * reads RETURNED . WAITING; ACCEPTED is the usual THE HOUSE GROWS WEAKER and a mismatch REJECTED .
- * BACK TO <SOURCE>. STOP NOW is the one exit, as everywhere.
+ * BACK TO <SOURCE>. The foot is the one exit, as everywhere: STOP NOW while the pattern plays and
+ * while the entry is made, PROCEED on TO <ROOM> and after the verdict (D-328), to the work order.
  *
  * The pattern is never kept anywhere but [SubroutineModel.dump] while the screen plays it; the
  * phone's Files never holds it (F-015). No role reaches this function.
@@ -1508,7 +1526,8 @@ internal fun MemoryDumpBody(
     if (dump.shown) {
         val playing = elapsed < memoryDumpShownMillis(dump.elements)
         val flashing = memoryDumpFlashing(dump.elements, elapsed)
-        SubroutineFrame(Subroutine.MemoryDump, p, handedOver = false, verdict = null) {
+        // The TO <ROOM> after the pattern counts as after the verdict (D-328): its foot is PROCEED.
+        SubroutineFrame(Subroutine.MemoryDump, p, handedOver = false, verdict = null, answered = !playing) {
             if (playing) {
                 DotGrid(dump.length, lit = { it == flashing }, p, onTap = null)
             } else {

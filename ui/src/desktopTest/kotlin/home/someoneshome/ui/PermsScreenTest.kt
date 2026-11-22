@@ -96,7 +96,7 @@ class PermsScreenTest {
         gives = { Grant.Refused },
     ) { asked, went ->
         onAllNodesWithText("REQUEST MOTION ACCESS").assertCountEquals(0)
-        onAllNodesWithText("CONTINUE").assertCountEquals(0)
+        onAllNodesWithText("PROCEED").assertCountEquals(0)
         onAllNodesWithText("REQUEST WHAT IS MISSING").assertCountEquals(1)
 
         onNodeWithText("REQUEST WHAT IS MISSING").performClick()
@@ -131,7 +131,7 @@ class PermsScreenTest {
 
     /**
      * **D-309: NEARBY DEVICES at ASKED keeps the phone here**, named in the gate's sentence, with no
-     * CONTINUE; REQUEST WHAT IS MISSING probes it again, and a probe that answers GRANTED lets the
+     * PROCEED; REQUEST WHAT IS MISSING probes it again, and a probe that answers GRANTED lets the
      * phone continue.
      */
     @Test
@@ -140,7 +140,7 @@ class PermsScreenTest {
             mapOf(DevicePermission.NearbyDevices to Grant.Asked),
     ) { asked, went ->
         onAllNodesWithText(Grant.Asked.label).assertCountEquals(1)
-        onAllNodesWithText("CONTINUE").assertCountEquals(0)
+        onAllNodesWithText("PROCEED").assertCountEquals(0)
         onAllNodesWithText("OPEN SETTINGS").assertCountEquals(0)
         onAllNodesWithText(
             "THIS PHONE CANNOT TAKE A SEAT YET\n${DevicePermission.NearbyDevices.label}",
@@ -150,7 +150,7 @@ class PermsScreenTest {
 
         assertEquals(listOf(DevicePermission.NearbyDevices), asked, "NEARBY DEVICES was not probed again")
         onAllNodesWithText(Grant.Asked.label).assertCountEquals(0)
-        onNodeWithText("CONTINUE").performClick()
+        onNodeWithText("PROCEED").performClick()
         assertEquals(listOf(ScreenId.Join), went, "NEARBY DEVICES answered GRANTED and the phone could not continue")
     }
 
@@ -161,7 +161,7 @@ class PermsScreenTest {
     ) { _, went ->
         onAllNodesWithText("REQUEST WHAT IS MISSING").assertCountEquals(0)
         onAllNodesWithText("OPEN SETTINGS").assertCountEquals(0)
-        onNodeWithText("CONTINUE").performClick()
+        onNodeWithText("PROCEED").performClick()
 
         assertEquals(listOf(ScreenId.Join), went, "a complete phone could not get off the screen")
     }

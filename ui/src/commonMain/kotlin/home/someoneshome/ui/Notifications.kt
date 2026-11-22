@@ -361,7 +361,7 @@ object Notifications {
      * frozen, so it stays a fixture.
      */
     val arrivals: Map<ScreenId, Arrival> = mapOf(
-        // The opening text over the springboard, where PERIMETER ARMED's CONTINUE lands each phone
+        // The opening text over the springboard, where PERIMETER ARMED's PROCEED lands each phone
         // at its own tap (D-293), and where the house's push lands a phone it catches up.
         ScreenId.Notify to Arrival(opening, under = ScreenId.Home),
         ScreenId.Banner to Arrival(egress, under = ScreenId.Home),

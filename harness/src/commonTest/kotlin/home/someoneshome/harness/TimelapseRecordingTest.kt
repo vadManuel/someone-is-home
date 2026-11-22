@@ -44,7 +44,7 @@ class TimelapseRecordingTest {
         val events = withPlaybacks()
         val (_, recording) = record(GameState.EMPTY, events)
         val text = recording.toText()
-        assertTrue(text.startsWith("someone-is-home/recording/52\n"), "the format was not bumped: ${text.lineSequence().first()}")
+        assertTrue(text.startsWith("someone-is-home/recording/53\n"), "the format was not bumped: ${text.lineSequence().first()}")
         assertTrue(text.lines().any { it.startsWith("E TimelapsePlayed") }, "no TIMELAPSE was recorded")
         assertTrue(text.lines().any { it.startsWith("E TimelapseStopped") }, "no STOP was recorded")
         assertTrue(recording.stateTranscript.all { "|timelapse=" in it }, "a state row does not carry the station's timelapse")

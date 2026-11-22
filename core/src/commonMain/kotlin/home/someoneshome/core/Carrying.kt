@@ -31,7 +31,10 @@ import home.someoneshome.model.Tick
 /** **Which step of this seat's work a scan of one card is.** Exactly one, always. */
 internal sealed interface ScanStep {
 
-    /** D-124's NOTHING FOR YOU HERE — and, while a disk is in hand, every card but its station. */
+    /**
+     * D-124's NOTHING FOR YOU HERE — and, while a disk is in hand, every card but its station, and
+     * while a pattern is held, every card but its target (D-328).
+     */
     data object Nothing : ScanStep
 
     /** A Subroutine at its card: the house draws the question and opens the screen. */
@@ -69,6 +72,14 @@ internal sealed interface ScanStep {
  * Dump's, Spares again — is NOTHING FOR YOU HERE. The meeting card and the Terminal are not routed
  * here at all (`routeScan`, D-121, D-199), so a disk in hand never stops a meeting being called.
  *
+ * ### Then a pattern held, and only at its target (D-328)
+ *
+ * **While a Memory Dump pattern is held, every card but its target is refused, as a disk is** (the
+ * owner's 2026-11-23 ruling, replacing D-322's *a held pattern does not block other scans*): the
+ * target opens the entry and every other card, the source again included, is NOTHING FOR YOU HERE
+ * at the house (the phone draws it as CARRYING . GO TO <ROOM>, off the order line it already holds).
+ * The meeting card and the Terminal stay allowed, for the disk's reason.
+ *
  * ### Empty-handed, the first actionable entry with a step at this card wins
  *
  * In order, which is what makes the work order a menu walked one card at a time (D-114, D-123): a
@@ -89,6 +100,11 @@ internal fun stepAt(state: GameState, seat: Seat, marker: MarkerId): ScanStep {
             disk.damaged -> ScanStep.DisposeDisk(entry, disk)
             else -> ScanStep.SwapDisk(disk)
         }
+    }
+    val pattern = state.patternHeldBy(seat)
+    if (pattern != null) {
+        val entry = order.entries.getOrNull(pattern.entry) ?: return ScanStep.Nothing
+        return if (entry.markers.getOrNull(TARGET)?.value == marker.value) ScanStep.EnterPattern(entry, pattern) else ScanStep.Nothing
     }
     for (entry in order.entries) {
         if (!order.isActionable(entry)) continue

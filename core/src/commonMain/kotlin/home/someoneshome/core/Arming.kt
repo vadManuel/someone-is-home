@@ -280,54 +280,70 @@ internal fun structuresFor(size: Int, circuit: Boolean, long: Boolean): List<Sub
 }
 
 /**
- * **The round's cross-player dependencies: chains of plain Residents, and a fake hold on every
- * Insider's order** (D-146, D-322, D-324).
+ * **The round's cross-player dependencies: a third of the seats chained, in pairs, drawn without
+ * the role; real links between two plain Residents, and a fake hold on every other chained seat**
+ * (D-146, D-322, D-324, D-328).
  *
  * *Work-order dependencies are cross-player*: one seat's entry holds another seat's until it is
  * completed, and then a random 20–120 s later (`gdd.md:284`). **Chains are composed entirely of
- * Residents** (`gdd.md:271`; the owner, 2026-11-22: *insiders don't have real tasks … an insider
- * cannot be included in the chain*).
+ * Residents** (`gdd.md:271`; the owner, 2026-11-22: *an insider cannot be included in the chain*).
+ * **Not every player is chained** (the owner, 2026-11-23): [Balance.chainedSeats] of the seats are,
+ * drawn here at lights out and never added to mid-round.
  *
- * ### The draw: one role-free cycle, then the Residents in its order
+ * ### The draw: which seats, role-blind, then the pairs
  *
  * The seats with an order of two entries or more are shuffled into one cycle ([SeedPurpose.Links]),
  * and each seat's two entries are drawn ([SeedPurpose.LinkEntries]): the **earlier** is its upstream
- * entry, the **later** its downstream one. Neither draw reads a role, so **which line of every order
- * is locked does not move with the role** — an Insider's order is locked at the same place and in
- * the same number as it would be were the seat a Resident's (D-114, D-129).
+ * entry, the **later** its downstream one. **The first [Balance.chainedSeats] of the cycle are the
+ * chained seats**, taken in pairs (the first and second, the third and fourth, ...), and in a pair
+ * each seat's upstream entry holds the other's downstream entry. None of this reads a role, so
+ * **which seats hold a lock, which line it is and its delay do not move with the role**: an
+ * Insider is as likely to hold a lock as a Resident, and holds it at the same place. Every chained
+ * seat holds exactly one locked line; an unchained seat holds none.
  *
- * Then the role, once: walking the cycle and **skipping the Insiders**, each Resident's upstream
- * entry holds the downstream entry of the next Resident, the last's holding the first's. Every
- * Resident is upstream of exactly one Resident and downstream of exactly one, never of itself, and
- * no Insider is either (`fake` false on every one of these).
+ * ### Then the role, once: a pair of two Residents is real, and any other pair is two fakes
  *
- * **Every Insider's downstream entry is held too, by a fake** (`fake` true): timed off the upstream
- * entry of the Resident before it in the cycle, with its own delay from the same draw. So the
- * Insider's LOCKED · WAITING UPSTREAM row unlocks *as if an upstream Resident had finished*, because
- * one did, and a stranded one strands exactly as a Resident's does. Nothing of the Resident's waits
- * on it, so an Insider's fake work progresses nothing.
+ * A pair of two plain Residents is two **real** links (`fake` false), each upstream of the other's
+ * later line. **A pair the draw gave an Insider is two fake holds** (`fake` true): the Insider's
+ * own lock, as D-324 built, and the lock of the Resident it would have linked to (an Insider is
+ * never upstream of a real line, so that Resident's line can be held only by a fake). Both seats
+ * still show their one LOCKED · WAITING UPSTREAM line in the same place. A pair of two Insiders is
+ * two fakes too.
+ *
+ * **A fake is timed off a Resident's real completion**: the nearest Resident before the locked seat
+ * in the cycle, never the seat itself (`timedOff`), its drawn upstream entry, plus the locked seat's
+ * own delay drawn by the one [SeedPurpose.UnlockDelay] draw a real link uses. So a fake unlocks *as
+ * if an upstream Resident had finished*, because one did: a Resident's completion of its drawn
+ * earlier line plus a 20–120 s draw, the distribution of a real unlock by construction. It holds
+ * nothing of that Resident's, and a Revoke or Restrain that takes that Resident out first strands
+ * it as it would a real one. The source is never the locked seat itself, so a Resident whose lock
+ * is a fake cannot release it by its own work (its release would otherwise follow its own hand, a
+ * correlation a real lock never has).
  *
  * ### `L ≤ living Insiders + 1` (`gdd.md:273`)
  *
- * Every chain here is two players long: a Resident's upstream entry is earlier in its own order
- * than its downstream one, so the line a Resident is released on never holds anybody's, and no chain
- * runs on through it. The bound is [Balance.chainBound] of the Insiders, all living at arming; a
- * round whose bound is under two (no Insider, which no lawful round draws) gets no chain, and so,
- * to keep every order's shape, no fake either.
+ * Every chain here is two players long: a seat's upstream entry is earlier in its own order than
+ * its downstream one, so the line a seat is released on never holds anybody's, and no chain runs on
+ * through it. The bound is [Balance.chainBound] of the Insiders, all living at arming; a round whose
+ * bound is under two (no Insider, which no lawful round draws) gets no chain, and so, to keep every
+ * order's shape, no fake either.
  *
- * ### Lazy linking is not built (D-324, STOPPED)
+ * ### Drawn at lights out; nothing is linked later (D-328, replacing lazy linking)
  *
- * `gdd.md:274`'s sliding window — *when A is completed, B unlocks and C is assigned* — leaves what
- * C's assignment does to C's order unruled; see D-324. Without it no chain grows past two.
+ * `gdd.md:274`'s sliding window is replaced by the owner's 2026-11-23 ruling: *chains are drawn at
+ * lights out … never assigned mid-round.*
  *
- * Fewer than two Residents with orders of two entries draw no chain and no fake.
+ * Fewer than two Residents with orders of two entries, or fewer than two chained seats, draw no
+ * chain and no fake.
  */
 internal fun linksFor(seed: Long, orders: List<WorkOrder>, insiders: List<Seat>): Pair<List<WorkOrder>, List<ChainLink>> {
     val eligible = orders.filter { it.entries.size >= 2 }
     val cycle = eligible.shuffledBy(Draw(seed, SeedPurpose.Links))
     fun insider(seat: Seat) = insiders.any { it.index == seat.index }
     val residents = cycle.filterNot { insider(it.seat) }
-    if (residents.size < 2 || Balance.chainBound(insiders.size) < 2) return orders to emptyList()
+    // Role-blind: a count off the seats, and the first of the shuffled cycle. Pairs, so even.
+    val chained = cycle.take(minOf(Balance.chainedSeats(orders.size), cycle.size) / 2 * 2)
+    if (chained.size < 2 || residents.size < 2 || Balance.chainBound(insiders.size) < 2) return orders to emptyList()
     val picks = cycle.associate { order ->
         val draw = Draw(seed, SeedPurpose.LinkEntries, order.seat.index.toLong())
         val size = order.entries.size
@@ -349,13 +365,18 @@ internal fun linksFor(seed: Long, orders: List<WorkOrder>, insiders: List<Seat>)
         dueAt = null,
         fake = fake,
     )
-    val real = residents.indices.map { k -> link(residents[k].seat, residents[(k + 1) % residents.size].seat, fake = false) }
-    // The Resident before each Insider in the cycle, wrapping: the one whose completion it is timed off.
-    val fakes = cycle.indices.filter { insider(cycle[it].seat) }.map { k ->
-        val before = (1..cycle.size).map { cycle[(k - it + cycle.size) % cycle.size] }.first { !insider(it.seat) }
-        link(before.seat, cycle[k].seat, fake = true)
+    // The Resident a fake hold on [down] is timed off: the nearest before it in the cycle, never itself.
+    fun timedOff(down: Seat): Seat {
+        val at = cycle.indexOfFirst { it.seat.index == down.index }
+        return (1 until cycle.size).map { cycle[(at - it + cycle.size) % cycle.size].seat }.first { !insider(it) }
     }
-    val links = (real + fakes).sortedBy { it.down.index }
+    val links = chained.chunked(2).flatMap { (a, b) ->
+        if (!insider(a.seat) && !insider(b.seat)) {
+            listOf(link(a.seat, b.seat, fake = false), link(b.seat, a.seat, fake = false))
+        } else {
+            listOf(link(timedOff(b.seat), b.seat, fake = true), link(timedOff(a.seat), a.seat, fake = true))
+        }
+    }.sortedBy { it.down.index }
     val held = orders.map { order ->
         val holds = links.filter { it.down.index == order.seat.index }.map { it.downEntry }
         if (holds.isEmpty()) {
@@ -437,9 +458,9 @@ internal enum class SeedPurpose(val label: String) {
     Structures("someone-is-home/draw/structures/1"),
 
     /**
-     * The cycle the cross-player dependencies are drawn from, over every seat (D-146, D-322); the
-     * Residents are linked in its order and each Insider's fake hold is timed off the Resident
-     * before it (D-324). Never reaches a phone.
+     * The cycle the cross-player dependencies are drawn from, over every seat (D-146, D-322): its
+     * first [Balance.chainedSeats] are the chained seats, in pairs (D-328), and each fake hold is
+     * timed off the Resident before its seat (D-324). Never reaches a phone.
      */
     Links("someone-is-home/draw/links/1"),
 

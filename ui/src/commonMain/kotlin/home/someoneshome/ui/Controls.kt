@@ -236,14 +236,14 @@ class PanelActions(
      * whole correction: the button they replace called nothing and went to the join screen anyway.
      *
      * They are not in [ScreenGraph] and not in [Flow.viaActions] because they walk no edge —
-     * CONTINUE is a separate control and appears only once the gate is open.
+     * PROCEED is a separate control and appears only once the gate is open.
      */
     val requestGrant: (DevicePermission) -> Unit = {},
     val requestMissingGrants: () -> Unit = {},
     /**
-     * **CONTINUE, once the gate is open** (D-311): `FlowModel.permissionsDone`, which takes a hosting
+     * **PROCEED, once the gate is open** (D-311): `FlowModel.permissionsDone`, which takes a hosting
      * phone back to its own lobby and every other phone to JOIN A HOME. Null where no flow is behind
-     * the screen, and then CONTINUE goes to JOIN A HOME as it always did, which is the edge
+     * the screen, and then PROCEED goes to JOIN A HOME as it always did, which is the edge
      * [ScreenGraph] reads off the screen; the hosting phone's edge is in [Flow.viaActions].
      */
     val permissionsDone: (() -> Unit)? = null,

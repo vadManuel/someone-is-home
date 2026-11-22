@@ -13726,6 +13726,10 @@ must stay under it, and whether that drains the bar or fails at once. It is the 
 fails an honest player if it is wrong, in the dark, with nothing on the screen to say why, so it
 waits for a measurement on both phones (the phone session's D-321 lines) and a ruling.
 
+**Closed by D-328 (the owner, 2026-11-23): the lower bound is dropped.** *The motion budget's "too
+still fails" rule is dropped.* Nothing judges a phone too still, and nothing will; only too much
+motion fails. Recorded in the GDD's M2.
+
 **The recording is unchanged at 50.** The cancel is STOP NOW's `StopSubroutine` and the station's
 `LeaveTerminal`, both already recorded; no event, effect, message or balance value changed.
 
@@ -14063,6 +14067,10 @@ are in the XML: `OrderMixTest` 4, `CrossPlayerChainTest` 5, `ArrayWipeTest` 3, `
 evenings (seeds 2, 15, 20): the mix deals the Insider's one order two shorts, and the first three
 evenings no longer dealt it Parity Check, Deallocate, Short or Sniff.
 
+**Amended by D-328** (the owner, 2026-11-23): not every seat is chained (a third of the seats,
+role-blind, in pairs), and a held pattern now refuses every card but its target, as a disk does,
+which replaces *a held pattern does not block other scans* above.
+
 **Set to 50 at integration** (D-323), with D-319 and D-320. Combined with D-320's *no*, an Array Wipe station step (Spares, the Rack, Disposal) is not NOTHING FOR YOU HERE and answers with no buzz, as an opened scan does (`ScanStep.isStationStep`, read beside `opened` and never the role); a refusal while carrying is NOTHING FOR YOU HERE and says *no*.
 
 **⚠️ Memory Dump is not dealt: provisional, owner-pending** (D-323 A, the owner, 2026-11-22). Until its screens are designed, `Balance.MEMORY_DUMP_DEALT` is false and `Balance.orderMix` gives the long's share to medium (`designMix` is the mix above, dealt again when the switch is turned on), so no order holds a line no phone can open and the meter can reach 0 again. The house half stays built; `MemoryDumpTest`, `OrderParityTest` and `WorkOrderDeterminismTest` plant a Memory Dump line by hand rather than finding a dealt one, and *What this does to a real round* above no longer applies while the switch is off.
@@ -14223,6 +14231,10 @@ phone shows:
 
 Built without it, every chain is the two players D-322 drew, now both Residents.
 
+**Replaced by D-328** (the owner, 2026-11-23): *chains are drawn at lights out, deterministically
+from the seed; they are never assigned mid-round.* The five questions above no longer arise, and only
+a third of the seats are chained, drawn role-blind.
+
 **4 · The Insider's order (the owner: *fake locked entries that unlock on a plausible delay*).** Which
 line of every order is locked is the role-free `LinkEntries` draw, so **an Insider's order holds one
 LOCKED · WAITING UPSTREAM line, at the same index it would hold as a Resident**, and the work order
@@ -14370,7 +14382,8 @@ Replay's dot grid is now one function both screens draw (`DotGrid`, Replay's pix
   screen shows the target's glyph and TO <ROOM> (screen 3). At the target: Replay's dots and cells, the
   last tap hands it over (`SequenceEntry`), RETURNED . WAITING, then THE HOUSE GROWS WEAKER or REJECTED .
   BACK TO <SOURCE ROOM> (`SubroutineFrame`'s new `rejected`, which every other Subroutine leaves at
-  REJECTED . RESCAN THE MARKER). STOP NOW is the one exit, to the order. The screen is handed the
+  REJECTED . RESCAN THE MARKER). STOP NOW is the one exit, to the order. *(D-328: the exit reads
+  PROCEED on TO <ROOM> and after a verdict.)* The screen is handed the
   verdict and `MemoryDumpRooms` (its own line's two rooms and the target's glyph), never `PanelVals`.
 - **Landing**, as the draft's report lists it: the source briefing's BEGIN goes to the pattern and
   sends `BeginCarry`, NOT THIS ONE goes to the order; the pattern walks on to screen 3 by itself; STOP
@@ -14861,6 +14874,250 @@ The phone session's checklist gains those lines.
 2. **The motor's tail is 150 ms**, and a rest longer than it is measured.
 3. **A seat that holds any push of a round is the round's**, a later round's push included; the
    in-flight arming is raised above.
+
+### D-328 · **Not every player is chained: a third of the seats, rounded to the nearest even number, drawn role-blind at lights out, in pairs; a pair with an Insider is two fake holds. The foot of every Subroutine reads PROCEED once the house has answered, and PERMISSIONS and PERIMETER ARMED read PROCEED; Memory Dump's TO <ROOM> is after the verdict; a held pattern refuses every card but its target, and a card refused while carrying says CARRYING . GO TO <ROOM>; M2's lower bound is dropped — built (recording 53)**
+
+**The rulings** (owner, 2026-11-23). The owner's threat model stands: what a phone knows is not a
+leak; only what a person can see, hear or feel counts.
+
+1. **Not every player is chained.** *The number of chained players is one third of the seats,
+   rounded to the nearest even number, with exact halves rounding up* (5, 6, 7, 8 seats → 2; 9, 10,
+   12, 13 → 4; 18 → 6; and 3 and 4 → 2, since 1 and 1.33 both round to 2). *Chains are drawn at
+   lights out, deterministically from the seed. They are never assigned mid-round*, which replaces
+   the GDD's lazy linking. Real chains link plain Residents only (D-324), each two players long,
+   upstream → downstream, within `L ≤ living Insiders + 1`. **Parity:** *which seats get a lock is
+   drawn role-blind, so an Insider is as likely to have a lock as a Resident.* An Insider drawn as
+   chained gets a fake hold, as D-324 built. *If the role-blind draw would put an Insider into a
+   real link, that slot becomes a fake hold, and the Resident it would have linked to also gets a
+   fake hold* (the build's choice, below). *Every chained seat shows exactly one LOCKED · WAITING
+   UPSTREAM line. Unchained seats show none.* Timing distributions stay identical between real and
+   fake. A Revoke or Restrain of the upstream player strands the downstream line (D-146), unchanged.
+2. **PROCEED.** *On every Subroutine screen, the bottom control reads STOP NOW while the player works
+   or waits for the house's answer. Once the house has answered, ACCEPTED or REJECTED, the same
+   control in the same place reads PROCEED, and it still goes to the work order.* The same for both
+   verdicts and both roles; walking away via the motion budget still goes to the work order.
+   **CONTINUE becomes PROCEED** on PERMISSIONS (the all-granted button) and on PERIMETER ARMED
+   (D-293's CONTINUE).
+3. **Memory Dump after the pattern** (replaces D-325's landing): *after the pattern plays twice at
+   the source, the screen shows the target's glyph and "TO <ROOM>" (screen 3), counted as "after the
+   verdict", with PROCEED.* PROCEED, or walking away, goes to the work order; the row reads MEMORY
+   DUMP · TO <ROOM>.
+4. **While a Memory Dump pattern is held**, scanning any card other than the target is refused, as a
+   disk is (D-322); the meeting card and the Terminal stay allowed. This changes D-322's *a held
+   pattern does not block other scans*.
+5. **The wrong card while carrying**, a Memory Dump pattern or an Array Wipe disk, shows **CARRYING .
+   GO TO <ROOM>**, the next stop's room, in place of NOTHING FOR YOU HERE in that case only, with
+   D-320's *no* (Double). The room comes from the house's carry, which every phone already holds; the
+   existing refusal frame and type.
+6. **M2's lower bound, *too little motion also fails*, is dropped.** D-321 never built it.
+
+**1 · The chain draw (`linksFor`, `core/Arming.kt`; `Balance.chainedSeats`).**
+
+- **The count** is `Balance.chainedSeats(seats) = 2 × ⌊(seats + 3) ÷ 6⌋`, integer only: twice the
+  nearest whole number to `seats ÷ 6`, an exact half up, which is the even number nearest a third.
+  Pinned by the owner's table and, for 1 to 60 seats, against its own definition.
+- **Which seats, role-blind.** D-322's role-free cycle over every seat with two entries or more
+  (`SeedPurpose.Links`) is unchanged, and so is each seat's pair of entries (`LinkEntries`, the
+  earlier upstream, the later downstream) and each seat's delay (`UnlockDelay`, indexed by the
+  downstream seat). **The chained seats are the first `chainedSeats` of that cycle, taken in pairs**
+  (first and second, third and fourth, …); in a pair, each seat's upstream entry holds the other's
+  downstream entry. Nothing here reads a role, so which seats hold a lock, which line and its delay
+  are the same under a role exchange, and every chained seat holds exactly one locked line.
+- **Pairs, not D-324's cycle**: the ruling's even count and *the Resident it would have linked to*
+  (one partner) both read as pairs, and a pair makes the Insider's case one rule. Each chain is still
+  two players long: a seat's upstream entry is earlier in its own order than its downstream one, so
+  a released line never holds anybody's, and `L ≤ living Insiders + 1` holds (`chainBound` ≥ 2 in
+  every lawful round).
+- **Then the role, once.** A pair of two plain Residents is two real links. **A pair the draw gave an
+  Insider is two fake holds**: the Insider's own (D-324) and its partner Resident's.
+
+**The Insider-in-a-link choice, and why.** The Resident paired with an Insider would have been
+released by the Insider's upstream line; an Insider is never upstream of a real line (D-324), so its
+lock can only be a fake. **Every fake, the Insider's and the Resident's alike, is timed off the
+nearest Resident before its seat in the role-free cycle, never the seat itself** (`timedOff`), that
+Resident's drawn upstream entry plus the locked seat's own drawn delay. Why that source:
+
+- **The timing distribution is a real one by construction**: a Resident's completion of its
+  role-free drawn earlier line plus a uniform 20–120 s delay, exactly what releases a real lock. The
+  source may be an unchained Resident: it is told nothing either way (D-324), so being a source is
+  invisible to it.
+- **Never the seat itself.** Timing a Resident's fake off its own upstream line would make its lock
+  open 20–120 s after its own hand finished something, a correlation a real lock never has and a
+  player could feel over an evening. Never the Insider: its work would then release a Resident, which
+  is the Insider-upstream the owner ruled out.
+- **Strands as a real one does**: a Revoke or Restrain of the source before it finishes strands the
+  fake, so a stranded lock is no evidence about the pair.
+- **What the Resident can see**: one LOCKED · WAITING UPSTREAM line that opens 20–120 s after some
+  Resident's work, the same as a real one. What it cannot know is that its partner is an Insider:
+  that is the house's (rule 3), and no frame, light or buzz differs.
+
+Consequences, stated: a pair with an Insider holds no real chain, so fewer real dependencies run in a
+round with Insiders chained (at five to eight seats, two chained seats, so a round has one real pair or
+none); and a Resident may be the timing source of more than one fake (D-324 already allowed it).
+
+**A Revoke or a Restrain strands the downstream line (D-146), confirmed for Restrain.** Both put the
+seat out (`isOut`), and an out seat's hand-over is never accepted, so it completes nothing and starts
+no delay; the gate refuses any release at any later tick.
+
+**2 · PROCEED (`ui` `ScreensSubroutines.kt`).** `SubroutineFrame` gains `answered` (by default
+`verdict != null`) and `StopNow` draws `footOf(answered)`: **STOP NOW until the house has answered,
+PROCEED after**, ACCEPTED and REJECTED alike, in the same place, the same `KitQuiet`, the same
+action (`stopSubroutine`: the window reported shut, actor only, then the work order). It never reads
+the role and never the player's progress: RETURNED . WAITING still says STOP NOW. The motion budget's
+close (D-321) is that same action, so walking away goes to the work order in every state.
+`StopNow`'s KDoc states the new rule. `PROCEED` is one named constant (`Subroutines.kt`), drawn by the
+foot, by PERMISSIONS' all-granted button (`ScreensColdStart.kt`) and by PERIMETER ARMED's control
+(`ScreensArming.kt`, D-293's edge to `Notify` unchanged). Comments naming those two controls as
+CONTINUE now say PROCEED.
+
+**3 · Memory Dump's TO <ROOM>.** The source's playback frame passes `answered = !playing`: STOP NOW
+while the dots flash, **PROCEED on TO <ROOM>**, to the work order, whose row reads MEMORY DUMP · TO
+<ROOM> (D-325's held digit). Walking away from it is the same action.
+
+**4 · A held pattern blocks (`stepAt`, `core/Carrying.kt`; `GameState.patternHeldBy`).** After the
+disk: while the house holds a pattern for the seat, the target opens the entry and **every other
+card, the source again included, is `ScanStep.Nothing`**, which answers with the same three effects
+as every scan and D-320's *no*. The meeting card and the Terminal are routed before `stepAt` (the
+meeting card to `MeetingCalled`, the T card to `stationScanned`), so they stay allowed, and neither
+lets go of the pattern. **A consequence, stated:** a player who forgets the pattern cannot fetch a
+fresh one from the source while holding it; the target's hand-over (wrong or right) lets it go, and
+then the source draws a new one. That is the ruling's *any card other than the target*, read as the
+disk's *Spares again included*.
+
+**5 · CARRYING . GO TO <ROOM> (`ui`).** The house's answer is unchanged (`ScanAnswered` with no
+opened work and the *no* digit). The phone names the room off what it already holds
+(`Flow.carryingTo`): a disk's next station (`DiskInHand.to`, read back through `carriedOf`'s one
+mapping by `Flow.stationOf`) on the circuit line's destinations (one station set per round, D-122),
+or the held pattern's target on the Memory Dump line marked held. `PanelVals.carryingTo` is handed to
+`ScanBadScreen` alone (never `vals`), which draws `carryingGoTo(room)`, *CARRYING .* / *GO TO <ROOM>*,
+in `ScanRefusal`'s frame and type, the break the frame's as NOTHING FOR / YOU HERE's is. Carrying
+nothing, or with no room named, it is NOTHING FOR YOU HERE as before. No role is read.
+
+**6 · M2's lower bound: dropped.** Nothing built changes (D-321 never built it); D-321's STOPPED item
+is closed and M2's row says so.
+
+**The recording: 52 → 53.** Justified: the same seed now holds different lines and draws different
+links (only a third of the seats chained, in pairs, pairs with an Insider two fakes), so a version 52
+round would replay to different orders and releases; and a held pattern now refuses cards it used to
+let through, so the same scans answer differently. No event, effect, field or row changed shape.
+
+| site | before | after |
+|---|---|---|
+| `model` `Balance.kt` | `chainBound` | + `chainedSeats` |
+| `model` `GameState.kt` | `patternOf(seat, entry)` | + `patternHeldBy(seat)` |
+| `model` `Carrying.kt` | KDoc: every seat linked; a pattern does not block | a third chained, fakes on Insider pairs; a pattern blocks |
+| `core` `Arming.kt` | one cycle over every seat, Residents linked in its order | the first `chainedSeats` of the cycle, in pairs; a pair with an Insider is two fakes timed off a Resident, never the seat |
+| `core` `Carrying.kt` | a held pattern blocks nothing | every card but the target is NOTHING |
+| `harness` `Recording.kt` and five recording tests, `RecordingTextTest` | 52 | 53 |
+| `ui` `ScreensSubroutines.kt` | STOP NOW always | `footOf`: STOP NOW, then PROCEED; `answered` on TO <ROOM> |
+| `ui` `Subroutines.kt` | | `PROCEED`, `carryingGoTo` |
+| `ui` `ScreensColdStart.kt`, `ScreensArming.kt` | CONTINUE | PROCEED |
+| `ui` `Flow.kt`, `PanelModel.kt`, `Screen.kt`, `ScreensWork.kt` | NOTHING FOR YOU HERE while carrying | `Flow.stationOf`, `Flow.carryingTo`, `PanelVals.carryingTo`, `ScanBadScreen(carryingTo)` |
+| `tools/design-mockup` `s_play.py` | ARMED's CONTINUE | PROCEED (built locally, not published) |
+
+**Every CONTINUE left in `ui`, listed and not changed** (the owner's words cover only PERMISSIONS and
+PERIMETER ARMED): **UNREGISTER AND CONTINUE**, StairsWarn's two-second hold (`ScreensHost.kt`,
+D-141), and the comments that name it (`ScreensHost.kt`, `Controls.kt`, `Flow.kt`). It is also in the
+mockup's `s_setup.py` and the e2e suite's `HumanMock.swift`, unchanged. No other CONTINUE label exists
+in the ui.
+
+**Guards.** Core (`WorkOrderStructureTest`), `CrossPlayerChainTest` rewritten, 14: *the chained count
+is a third of the seats rounded to the nearest even number with halves up* (the owner's table, 3 and
+4 seats, and 1 to 60 against the definition); *only that many seats hold a lock and one each and an
+unchained seat holds none* (seeds 1–30 at five to eighteen seats); *every real chain links two plain
+Residents and no Insider is ever upstream* (and every real link has its pair; a fake is never timed
+off its own seat; every Insider's lock is fake); *a Resident the draw paired with an Insider holds a
+fake lock timed off another Resident*; *the length bound holds and a round with no Insider draws no
+chain*; *which seats are locked and which line and its delay do not move with the role* (six, eight
+and twelve seats, one and two Insiders exchanged: the same locks, lines and delays, and the same
+`WorkOrderIssued` on every seat's wire); *an Insider is as likely to hold a lock as a Resident* (400
+nine-seat rounds with two Insiders: both rates within 0.06 of 4/9 and of each other); *a fake lock
+unlocks on the same distribution as a real one* (300 twelve-seat rounds: every delay in 20–120 s,
+means within 8 s, every lock timed off a Resident's drawn upstream line); *no seat is told anyone is
+waiting at lights out*; *a chain unlocks across players after its delay and not a tick before*; *a
+Revoke of the upstream player strands…* and **a Restrain of the upstream player strands the
+downstream line and nothing ever releases it** (each against a control: the same seat, living,
+finishing the same line with the right answer, starts the delay); *an Insider's work releases
+nobody*; *a fake hold is released off a Resident's completion with a real one's effects*.
+`MemoryDumpTest` *while a pattern is held every card but its target is refused and the meeting card
+and the Terminal are still answered* (every other card of the home, the source included: nothing
+opened, D-320's `Double`, nothing armed, the pattern held, the order still marked; the T card read;
+the meeting card admitted and the pattern kept through it; the target then opens). `ArrayWipeTest`
+now asserts the refusal's `Double`. `OrderParityTest`'s shape compares length, circuits and longs on
+every seat, and holds every seat to zero or one lock, `chainedSeats(8)` of them. Ui (desktop),
+`ProceedRender`, 6: *a Subroutine says STOP NOW until the house answers and PROCEED after either
+verdict* (Jam through `FlowHost`, working, RETURNED . WAITING, ACCEPTED and REJECTED, both roles; PROCEED
+is one tap, goes to the work order and sends `StopSubroutine` alone); *every Subroutine says PROCEED
+after either verdict and STOP NOW before, for both roles* (all eleven built screens, four states,
+pixels compared by role); *the TO <ROOM> screen says PROCEED and goes to the work order* (STOP NOW
+while the dots play; PROCEED on TO HALL; tapped, the work order with MEMORY DUMP · TO HALL);
+*a card refused while carrying says where to go* (the held pattern: CARRYING . GO TO HALL; a good
+disk: GO TO BED 2, the Rack's; a damaged one: GO TO KITCHEN, Disposal's; carrying nothing: NOTHING FOR
+YOU HERE); *PERMISSIONS all granted and PERIMETER ARMED say PROCEED*; *the work order of a chained and
+an unchained player*. App (`StructuredWorkBenchTest`, the bench through `RoundAuthority.cardRead`):
+**aHeldPatternRefusesEveryOtherCardWithWhereToGo** (another card and the source: ScanBad, `carryingTo`
+the target's room, the wire's `Double`, nothing in Files, the house still holding; the target opens),
+and the Array Wipe walk now asserts the Rack's room and the `Double`. Moved with the change:
+`MemoryDumpRender` (3-carry PROCEED, 6-returned STOP NOW, 7 and 8 PROCEED), `StructuredWorkRender`
+(the refusal while carrying reads CARRYING . GO TO BED 2), `ArmedContinueTest`, `PermsScreenTest`,
+`PermsWalkRender` (PROCEED), and CONTINUE in the messages of `PermsModelTest`, `HouseBuzzTest`,
+`ArmedForEveryPhoneTest`; the five recording tests and `RecordingTextTest` pin 53.
+
+**Proved red by injection**, each restored and green again, quoted from the XML.
+- **Everyone chained again** (`linksFor`'s `chained = cycle.take(cycle.size / 2 * 2)`),
+  `:core:jvmTest`: `CrossPlayerChainTest` 3 of 14 red and `OrderParityTest` 1 of 3. *only that many
+  seats hold a lock…: java.lang.AssertionError: 5 seats: 4 seats locked, not 2 expected:<2> but
+  was:<4>*; *an Insider is as likely to hold a lock as a Resident: java.lang.AssertionError: an
+  Insider holds a lock at 0.90375, not 4/9*; *a fake hold is released off a Resident's completion…:
+  java.util.NoSuchElementException* (seat 3 held two locks); *the Insider's fake order has the shape
+  every Resident's has: java.lang.AssertionError: the wrong number of seats are locked expected:<2> but
+  was:<8>*.
+- **STOP NOW kept after a verdict** (`footOf` returning STOP NOW always), `:ui:desktopTest`:
+  `ProceedRender` 3 of 6 red and `MemoryDumpRender` 1 of 2. *aSubroutineSaysStopNow…:
+  java.lang.AssertionError: Resident: 'PROCEED' is not on SubJam*; *theToRoomScreenSaysProceed…:
+  Resident: 'PROCEED' is not on SubMemory*; *everySubroutineSaysProceed…: expected:<[]> but
+  was:<[REPLAY accepted (Resident): no PROCEED, REPLAY accepted (Resident): STOP NOW is drawn, …]>*;
+  *renderEveryScreenForBothRoles: Resident: 'PROCEED' is not on SubMemory*.
+
+**Rendered and looked at** (`ProceedRender`, 720×1520 with the 36 px camera band, through `FlowHost`
+on a housed phone fed only house messages, `ui/build/screens/d328/<scene>-<role>.png`; every
+Resident's and Insider's pair `cmp`-identical, 14 of 14). *jam-1-working*: JAM, the MEDIUM mark, the
+two rings, − and +, MOTION BUDGET HOLDING, SUBMIT, STOP NOW. *jam-2-returned*: RETURNED . WAITING,
+STOP NOW. *jam-3-accepted*: THE HOUSE GROWS WEAKER, SUBMITTED, **PROCEED** where STOP NOW stood, the
+same ink and size. *jam-4-rejected*: REJECTED . RESCAN THE MARKER, SUBMITTED, PROCEED.
+*memory-dump-1-playing*: the dots, STOP NOW. *memory-dump-2-to-hall*: MEMORY DUMP, the diamond, TO
+HALL, the budget row, PROCEED. *carrying-pattern-go-to-hall*: SCAN, the refusal ring, CARRYING . / GO
+TO HALL in NOTHING FOR YOU HERE's 52-size type over two lines, SCAN ANOTHER, SEE MY SUBROUTINES.
+*carrying-disk-to-rack*: the same frame, CARRYING . / GO TO BED 2, the padlock on the strip.
+*carrying-disk-to-disposal*: GO TO KITCHEN. *carrying-nothing*: NOTHING FOR / YOU HERE.
+*permissions-all-granted*: CAMERA, BLUETOOTH, NEARBY DEVICES, MOTION & FITNESS, each GRANTED, and the
+solid PROCEED at the foot. *perimeter-armed*: PERIMETER ARMED, the rule, 6 RESIDENTS ACCOUNTED FOR,
+the outlined PROCEED. *order-chained*: SUBROUTINES 1 OF 8 DONE, eight rows, one hatched LOCKED ·
+WAITING UPSTREAM. *order-unchained*: the same eight rows with DRIFT · HALL where the lock was, no
+hatched row. **Seen and not changed:** the strip's padlock shows for a disk and not for a held pattern
+(D-204's padlock is the disk's and Files'; nothing rules it for a pattern).
+
+**Not on a phone.** None of this has run on one. The phone session's checklist gains the lines.
+
+**Checked** (on the final tree, `*/build/test-results` cleared first: `./gradlew check --continue`
+with the two variant sweeps excluded, then `:app:variantSweepRelease`, then `:app:variantSweepPlaytest`,
+each BUILD SUCCESSFUL, the app's XML copied out after each, every result XML counted with a python
+glob): model 369 (JVM) + 350 (iOS Simulator); core 475 + 473; platform 218; harness 138; ui 879
+(desktop) + 448 (iOS Simulator); cards 17; app 318 (the default variant), 192 (Release), 318
+(Playtest). **3,685 in the default check, 4,195 across the three, 0 failures, 0 errors, 0 skipped.**
+This entry's own: core 6 more on each target, ui 6 more on the desktop, app 1 more in the variants
+that carry cheats. `vocabularyLint`, `redactionLint` and `boundaryCheck` ran in it, clean. Neither known
+load flake fired. buildSrc's own tests (`./gradlew -p buildSrc test --rerun-tasks`): 35, 0 failures.
+An earlier full run on this tree found the one test the ruling moved and nothing else:
+`StructuredWorkRender.renderAScanRefusedWhileCarrying` still expected NOTHING FOR YOU HERE.
+
+**The rehearsal, on the final tree.** `rehearse.sh` (from a copy, `REPO` set, seed 20260822), five
+seats: the round ran ARMED to ENDING (a Revoke, a meeting through the gate, the vote, Static, an Egress
+that resolved; the round ended on the first Egress, so the second never arrived, as in D-323 to
+D-327). `rehearse-check.py`: 21 of 21.
+
+**The e2e suite** (`./e2e.sh`, once): 3 test cases, 1 of 1 runs green. Its cold-start walk taps no
+CONTINUE (it stops at the permissions gate the simulator refuses), so nothing in it changed.
 
 ## State after revision 12
 

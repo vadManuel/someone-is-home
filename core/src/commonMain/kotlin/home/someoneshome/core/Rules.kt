@@ -336,9 +336,10 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
     val active = activeFor(event.seed, cards, stations, seats.size)
     val size = Balance.orderSize(seats.size, event.chosenInsiders)
     // The mix, the anchors and the self-chains per seat, then the cross-player holds over all of
-    // them (D-322). The orders never read a role. The holds read it once (D-324): chains link plain
-    // Residents only, and an Insider's locked line is a fake hold, at the place the role-free draw
-    // put it, so every order still has the same shape.
+    // them (D-322). The orders never read a role. Which seats are chained, a third of them in pairs,
+    // is drawn without it (D-328); the holds read it once (D-324): chains link plain Residents only,
+    // and any pair the draw gave an Insider is two fake holds, at the places the role-free draw put
+    // them, so every order still has the same shape.
     val (orders, links) = linksFor(event.seed, seats.map { workOrderFor(event.seed, it, size, active, stations) }, insiders)
 
     val state = GameState.armedRound(

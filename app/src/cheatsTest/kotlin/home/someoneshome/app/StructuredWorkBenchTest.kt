@@ -6,6 +6,7 @@ import home.someoneshome.model.Effect
 import home.someoneshome.model.EmitSchema
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
+import home.someoneshome.model.Haptic
 import home.someoneshome.model.Intent
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.OneLineHeld
@@ -19,6 +20,7 @@ import home.someoneshome.model.protocol.RoundWire
 import home.someoneshome.ui.Carried
 import home.someoneshome.ui.FlowModel
 import home.someoneshome.ui.NotificationKind
+import home.someoneshome.ui.PanelVals
 import home.someoneshome.ui.PanelState
 import home.someoneshome.ui.ScreenId
 import home.someoneshome.ui.SubroutineModel
@@ -98,6 +100,9 @@ class StructuredWorkBenchTest {
             house.cardRead(seat, card)
             while (pending.isNotEmpty()) house.heard(pending.removeAt(0))
         }
+
+        /** The last scan answer [seat] was sent, as it went down the wire. */
+        fun lastAnswer(seat: Seat): RoundMessage = said.last { it.first == seat && it.second is RoundMessage.ScanAnswered }.second
 
         /** BEGIN on the phone's caught scan, and whatever it sent up heard by the house (D-325). */
         suspend fun begin(seat: Seat) {
@@ -179,6 +184,9 @@ class StructuredWorkBenchTest {
         assertEquals(ScreenId.ScanBad, phone.state.screen, "a Subroutine opened while a disk was in hand")
         assertEquals(Carried("DISK 01", "RACK"), phone.state.carrying, "the disk moved at another card")
         assertNull(bench.house.state.openSubroutineFor(seat)?.takeIf { it.armed }, "the house armed work behind the disk")
+        // D-328: the refusal names the Rack's room, CARRYING . GO TO <ROOM>, and still says *no*.
+        assertEquals(bench.house.state.destinations.single { it.marker == rack }.room, PanelVals(phone.state).carryingTo, "the refusal does not name the Rack's room")
+        assertEquals(Haptic.Double, bench.lastAnswer(seat).haptic(), "the refusal while carrying did not say no (D-320)")
 
         bench.read(seat, rack)
         assertEquals(Carried("DISK 01", "DISPOSAL"), phone.state.carrying)
@@ -189,6 +197,48 @@ class StructuredWorkBenchTest {
         val line = phone.state.order!!.filterIsInstance<OrderLine.Known>().single { it.index == wipe.index }
         assertTrue(line.done, "four traverses did not strike the circuit off this phone's order")
         assertTrue(bench.house.state.workOrderFor(seat)!!.entries[wipe.index].done)
+    }
+
+    /**
+     * **GUARD (D-328): while a Memory Dump pattern is held, every card but its target is refused on
+     * the phone as CARRYING . GO TO <the target's room>, with the *no*; the target still opens.** The
+     * owner's 2026-11-23 ruling, on a phone's real model through the house's own card-read path.
+     */
+    @Test
+    fun aHeldPatternRefusesEveryOtherCardWithWhereToGo() = bench { bench ->
+        assertTrue(bench.house.arm(RoundCheat.SEED), "the bench never armed a round")
+        val state = bench.house.state
+        fun dumpOf(s: Seat) = state.workOrderFor(s)!!.entries.first { it.work == AssignedWork.MemoryDump }
+        val seat = seats.first { s -> state.alone(s, dumpOf(s).index) }
+        val dump = dumpOf(seat)
+        bench.clear(seat, dump.index)
+        val phone = bench.phones.getValue(seat)
+        val (source, target) = dump.markers
+
+        bench.read(seat, source)
+        bench.begin(seat)
+        assertNotNull(bench.house.state.patternOf(seat, dump.index), "BEGIN at the source held no pattern")
+        phone.stopSubroutine()
+        val targetRoom = state.destinations.single { it.marker == target }.room
+
+        // Another card with work on it, and the source again: both refused, naming the target's room.
+        val order = bench.house.state.workOrderFor(seat)!!
+        val other = assertNotNull(
+            order.entries.firstOrNull { it.work is AssignedWork.Subroutine && order.isActionable(it) && it.anchor != target },
+            "the seed left this seat no Subroutine to try while the pattern is held",
+        )
+        for (card in listOf(other.anchor!!, source)) {
+            bench.read(seat, card)
+            assertEquals(ScreenId.ScanBad, phone.state.screen, "${card.value} opened while a pattern was held")
+            assertEquals(targetRoom, PanelVals(phone.state).carryingTo, "${card.value}'s refusal does not name the target's room")
+            assertEquals(Haptic.Double, bench.lastAnswer(seat).haptic(), "${card.value}'s refusal did not say no (D-320)")
+            assertNull(phone.state.carrying, "a held pattern reached Files (F-015)")
+            assertNotNull(bench.house.state.patternOf(seat, dump.index), "${card.value} let go of the pattern")
+        }
+
+        // The target still opens.
+        bench.read(seat, target)
+        assertEquals(ScreenId.ScanCaught, phone.state.screen, "the target did not open while the pattern was held")
     }
 
     /**

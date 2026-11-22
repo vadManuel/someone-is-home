@@ -129,7 +129,7 @@ class StructuredWorkRender {
 
     @Test
     fun renderAScanRefusedWhileCarrying() =
-        bothRoles("refused", listOf("NOTHING FOR"), ScreenId.ScanBad) {
+        bothRoles("refused", listOf("CARRYING", "GO TO ${bed.room}"), ScreenId.ScanBad) { // D-328: the Rack's room, not NOTHING FOR YOU HERE
             tookADisk(it)
             it.go(ScreenId.Scan)
             it.scanning(garage.marker)

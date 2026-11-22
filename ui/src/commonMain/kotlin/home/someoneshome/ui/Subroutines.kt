@@ -1509,6 +1509,22 @@ private val unhandedOrigin = TimeSource.Monotonic.markNow()
 /** The standard library's monotonic clock, in milliseconds, for a [SubroutineModel] handed none. */
 private fun unhandedMillis(): Long = unhandedOrigin.elapsedNow().inWholeMilliseconds
 
+// ---- The owner's 2026-11-23 words (D-328) ------------------------------------------------------
+
+/**
+ * **PROCEED: the control that says the house has answered and the next step is yours** (D-328).
+ * Every Subroutine's foot once its verdict is in (STOP NOW until then), Memory Dump's TO <ROOM>
+ * after its pattern, PERMISSIONS once every row is granted, and PERIMETER ARMED (D-293's control).
+ */
+const val PROCEED: String = "PROCEED"
+
+/**
+ * **The refusal of a card while carrying** (D-328), in NOTHING FOR YOU HERE's frame and type: the
+ * disk's next station's room, or the held pattern's target's. The break is the frame's, as NOTHING
+ * FOR / YOU HERE's is.
+ */
+fun carryingGoTo(room: String): String = "CARRYING .\nGO TO $room"
+
 // ---- Memory Dump's words, as the owner approved them (the draft, 2026-11-22, D-325) ------------
 
 /** The briefing at the source card. */

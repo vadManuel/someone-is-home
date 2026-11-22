@@ -15,14 +15,18 @@ package home.someoneshome.model
  * the chain* (the owner, 2026-11-22). So when [fake] is false, [up] and [down] are both Residents,
  * always: an Insider is never upstream of anybody's real line and never downstream of one.
  *
- * When [fake] is true the link is **an Insider's fake hold**: [down] is the Insider and [downEntry]
- * the locked line their order shows, so it has the same LOCKED · WAITING UPSTREAM a Resident's has.
- * It is timed off a Resident's real completion ([up], [upEntry] — the Resident before the Insider in
- * the draw's cycle) plus its own drawn [delay], which is exactly *as if an upstream Resident had
- * finished*, because one did. It holds nothing of the Resident's and changes nothing for them; it is
- * the fake list faking a chain (M8), and the release reaches the Insider's phone as a Resident's
- * does. It lives in the house, beside the real links, because the clock, the gate and the release
- * are then the same code for both.
+ * When [fake] is true the link is **a fake hold**: [down]'s locked line [downEntry] shows the same
+ * LOCKED · WAITING UPSTREAM a real one does. It is an Insider's lock (D-324), or the lock of a
+ * Resident the role-blind draw paired with an Insider (D-328: an Insider is never upstream of a real
+ * line, so that Resident's lock can only be a fake). It is timed off a Resident's real completion
+ * ([up], [upEntry] — the nearest Resident before [down] in the draw's cycle, never [down] itself)
+ * plus its own drawn [delay], which is exactly *as if an upstream Resident had finished*, because one
+ * did. It holds nothing of that Resident's and changes nothing for them; it is the fake list faking a
+ * chain (M8), and the release reaches the phone as a real one does. It lives in the house, beside the
+ * real links, because the clock, the gate and the release are then the same code for both.
+ *
+ * **Only a third of the seats hold a link at all** (D-328, [Balance.chainedSeats]), drawn without the
+ * role at lights out and never added to mid-round.
  *
  * ### The delay is drawn at arming and starts when the upstream entry is completed
  *
@@ -88,12 +92,14 @@ sealed interface Carry {
      *
      * The house holds the pattern so that it can grade the target. **No client type carries it**
      * after the source scan that showed it: the phone may not keep it (*only your head is
-     * off-network*), and Files never shows it (F-015). A fresh scan of the source replaces it; a
-     * hand-over at the target consumes it, matched or not, which is what *a mismatch sends you
-     * back to the source* is.
+     * off-network*), and Files never shows it (F-015). A hand-over at the target consumes it,
+     * matched or not, which is what *a mismatch sends you back to the source* is; while it is held
+     * the source itself is refused like every other card (D-328), so a fresh pattern is drawn only
+     * once the target has taken this one.
      *
-     * ⚠️ It does **not** block other scans (D-322): F-014 says the Array Wipe flag blocks every other
-     * scan, and no ruling says a pattern held in memory does. Flagged for the owner.
+     * **While one is held, every card but its target is refused, as a disk is** (the owner's
+     * 2026-11-23 ruling, D-328, replacing D-322's *a held pattern does not block other scans*); the
+     * meeting card and the Terminal are routed before the rules and stay allowed.
      */
     class Pattern(override val seat: Seat, override val entry: Int, val elements: List<Int>) : Carry
 

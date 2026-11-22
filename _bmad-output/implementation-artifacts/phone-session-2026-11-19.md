@@ -40,11 +40,11 @@ Tick each line as you see it.
 
 **Setup**
 - [ ] PERMISSIONS has a NEARBY DEVICES row under BLUETOOTH. Tapping it raises iOS's question,
-      and the row then reads GRANTED. CONTINUE goes straight to JOIN A HOME, with no NameDrop
-      step. (D-303)
-- [ ] Refuse NEARBY DEVICES on one phone: it cannot get past PERMISSIONS (no CONTINUE, the gate's
+      and the row then reads GRANTED. PROCEED goes straight to JOIN A HOME, with no NameDrop
+      step. (D-303; the button read CONTINUE until D-328)
+- [ ] Refuse NEARBY DEVICES on one phone: it cannot get past PERMISSIONS (no PROCEED, the gate's
       sentence names NEARBY DEVICES, OPEN SETTINGS shows) until it is granted in Settings; back in
-      the app the row reads GRANTED and CONTINUE appears. PERMISSIONS has no LOCAL NETWORK row;
+      the app the row reads GRANTED and PROCEED appears. PERMISSIONS has no LOCAL NETWORK row;
       iOS asks for it on JOIN A HOME or when hosting. (D-309)
 - [ ] PERMISSIONS has four rows: CAMERA, BLUETOOTH, NEARBY DEVICES, MOTION & FITNESS. There is no
       NOTIFICATIONS row, and no iOS notification prompt appears anywhere in setup. In Settings, the
@@ -63,8 +63,8 @@ Tick each line as you see it.
 - [ ] A third phone joining **during** a round is refused, and reads "ROUND IN PROGRESS / YOU JOIN
       THE NEXT ONE". (D-287)
 - [ ] Typing a name another phone already has, in any case, shows "NAME TAKEN". (D-288)
-- [ ] At lights out, each phone stands on plain PERIMETER ARMED. CONTINUE raises the house's
-      message and the dim **on that phone only**, with no buzz. (D-293)
+- [ ] At lights out, each phone stands on plain PERIMETER ARMED. PROCEED (it read CONTINUE until
+      D-328) raises the house's message and the dim **on that phone only**, with no buzz. (D-293)
 
 **Revoke, on the Insider's phone**
 - [ ] Page 2 after arming: ARMED, then 20 s later **COOLING DOWN, dimmed**, then READY about 61 s
@@ -198,19 +198,22 @@ Tick each line as you see it.
 
 **The work order and carrying** *(D-322)*
 - [ ] **The mix**: open SUBROUTINES at LIGHTS OUT. Every phone's list is the same length and holds
-      one ARRAY WIPE, one MEMORY DUMP (D-325) and short and medium Subroutines, plus one LOCKED ·
-      WAITING UPSTREAM line. An Insider's list looks the same.
+      one ARRAY WIPE, one MEMORY DUMP (D-325) and short and medium Subroutines. **Only some lists
+      hold a LOCKED · WAITING UPSTREAM line** (D-328): a third of the seats, rounded to the nearest
+      even number (two at five to eight phones, four at nine to fourteen), one line each, and every
+      other list none. An Insider's list is as likely to hold one as a Resident's, and looks the same.
 - [ ] **Array Wipe**: scan the ARRAY WIPE's first card (Spares). The caught scan says CARRY ONE
       DISK AT A TIME. / NOTHING ELSE OPENS UNTIL IT IS DELIVERED. (D-325). Press NOT THIS ONE once
       and scan the Rack: nothing happens. Scan Spares again and press BEGIN: the phone goes to page 1
       and the widget says CARRYING · DISK 01 · TO RACK · NOTHING ELSE OPENS UNTIL IT IS DELIVERED, with the
       padlock on the strip; FILES shows DISK 01, IN HAND, DESTINATION · RACK. Scan any other card of
-      yours: NOTHING FOR YOU HERE, and the disk stays. Scan the Rack: TO DISPOSAL. Scan Disposal: the
+      yours: **CARRYING . GO TO <the Rack's room>** with the two buzzes (D-328; it said NOTHING FOR
+      YOU HERE until then), and the disk stays. Scan the Rack: TO DISPOSAL. Scan Disposal: the
       widget goes back to the list. Do it twice and the line is struck off. Say whether landing on
       page 1 after each step is right (provisional), and whether the widget's words read.
 - [ ] **Two phones on one circuit**: two players carry disks to the same Rack at once. Both finish.
 - [ ] **A disk through a meeting**: call a meeting while carrying. After it, the widget still says
-      CARRYING and other cards still answer NOTHING FOR YOU HERE (F-014).
+      CARRYING and other cards still answer CARRYING . GO TO <ROOM> (F-014, D-328).
 - [ ] **you're up**: finish a Subroutine and wait. Somewhere in the house, 20 s to 2 min later, a
       phone that had a LOCKED line gets the NUMBER WITHHELD · you're up banner **with the same buzz
       as the house's opening text** (D-324), and the line now names its Subroutine. Nobody else's
@@ -220,14 +223,23 @@ Tick each line as you see it.
       Insider finishing their own work never unlocks anybody's line. Say whether an Insider's unlock
       ever feels different.
 - [ ] **A Revoke strands a line**: if a Revoked player held your LOCKED line, it never opens. Note
-      whether that is what happens and how it feels at the next meeting (D-146).
+      whether that is what happens and how it feels at the next meeting (D-146). The same if they were
+      Restrained before they finished it (D-328).
+- [ ] **Not everyone is chained** *(D-328)*: count the phones with a LOCKED line at lights out (two at
+      five to eight players). Over a few rounds, say whether an Insider seems to get one as often as
+      a Resident, and whether a LOCKED line ever looks or opens differently by role. A Resident whose
+      partner is an Insider gets a lock that opens like any other.
 - [ ] **Memory Dump** *(D-325)*: scan its first card. The caught scan says DOTS WILL FLASH IN
       ORDER. / CARRY THE ORDER IN YOUR HEAD. BEGIN: four dots in a 2×2 grid flash in order, twice
-      (about 9 s), then the screen shows the target's shape and TO <ROOM>. The SUBROUTINES row now
-      reads TO <ROOM>. Walk there and scan: THE DOTS WILL NOT FLASH. / TAP THEM BACK FROM MEMORY.
-      Tap the four back: RETURNED . WAITING, then THE HOUSE GROWS WEAKER (short buzz) and the row is
-      struck off. Do it once wrong on purpose: REJECTED . BACK TO <SOURCE ROOM> (double buzz), and
-      the target opens nothing until you rescan the source, which shows a new pattern. NOT THIS ONE
+      (about 9 s), with STOP NOW at the foot, then the screen shows the target's shape and TO <ROOM>
+      with **PROCEED** at the foot (D-328); PROCEED goes to SUBROUTINES, where the row now reads
+      MEMORY DUMP · TO <ROOM>. **While you hold the pattern, every other card, the source again
+      included, says CARRYING . GO TO <the target's room> with two buzzes** (D-328); the meeting card
+      and the Terminal still work. Walk to the target and scan: THE DOTS WILL NOT FLASH. / TAP THEM BACK FROM MEMORY.
+      Tap the four back: RETURNED . WAITING, then THE HOUSE GROWS WEAKER (short buzz), the foot now
+      PROCEED, and the row is struck off. Do it once wrong on purpose: REJECTED . BACK TO <SOURCE
+      ROOM> (double buzz, PROCEED at the foot), and the target opens nothing until you rescan the
+      source, which shows a new pattern. NOT THIS ONE
       at the source holds nothing. FILES never shows the pattern. Say whether 9 s is enough and
       whether the screen is too bright for MEDIUM. Then say whether the meter reaches 0 when
       everyone finishes.
@@ -240,6 +252,11 @@ Tick each line as you see it.
       and nobody else can read it) and on a caught scan (BEGIN still opens the work). On page 1 or 2
       it still lands as the banner over page 1. Say whether a banner over the work's top is right, or
       whether it covers something you needed. Both roles alike.
+
+- [ ] **PROCEED after the verdict** *(D-328)*: on every Subroutine the foot reads STOP NOW while you
+      work and while RETURNED . WAITING shows, and PROCEED once THE HOUSE GROWS WEAKER or REJECTED
+      shows, in the same place, the same for both roles; PROCEED goes to SUBROUTINES. Say whether the
+      word change is noticed in the dark, and whether it ever reads as a second verdict.
 
 **The motion budget** *(D-321; every number is provisional, so these lines are where they are first felt)*
 - [ ] **Still is free**: open a Subroutine and hold the phone as you naturally would for its whole
@@ -256,8 +273,10 @@ Tick each line as you see it.
       the timelapse while it plays.
 - [ ] **Memory Dump and the walk** *(D-321 with D-325)*: after the source's playback, walk to the
       target with TO <ROOM> still on the screen. The budget closes it to the work order on the way,
-      as STOP NOW would, and the row still reads TO <ROOM>. Say whether that close feels like a
-      failure when the walk is the Subroutine.
+      as PROCEED would (D-328), and the row still reads TO <ROOM>. Say whether that close feels like
+      a failure when the walk is the Subroutine.
+- [ ] **No "too still" failure** *(D-328)*: put a phone face-up on a table mid-Subroutine and leave
+      it. Nothing drains and nothing closes: the owner dropped M2's *too little motion also fails*.
 - [ ] **Both roles feel the same**: the Insider's phone drains and closes exactly as a Resident's.
 - [ ] **MOTION & FITNESS off**: switch it off in Settings, come back, open a Subroutine and walk
       off. Nothing drains and nothing closes (and the permission warning is the house's, as before).

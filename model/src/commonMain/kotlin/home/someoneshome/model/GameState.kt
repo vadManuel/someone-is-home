@@ -605,6 +605,14 @@ class GameState private constructor(
         carries.firstOrNull { it.seat.index == seat.index && it.entry == entry && it is Carry.Pattern } as Carry.Pattern?
 
     /**
+     * The pattern this seat holds, for whichever Memory Dump line, or null (D-328). At most one in a
+     * round played by the rules: while one is held every card but its target is refused, so no
+     * second source can be scanned.
+     */
+    fun patternHeldBy(seat: Seat): Carry.Pattern? =
+        carries.firstOrNull { it.seat.index == seat.index && it is Carry.Pattern } as Carry.Pattern?
+
+    /**
      * Put [carry] in its seat's hands, replacing whatever that seat carried for the same entry, or
      * any disk if it is a disk. Kept in seat order, then entry order.
      */

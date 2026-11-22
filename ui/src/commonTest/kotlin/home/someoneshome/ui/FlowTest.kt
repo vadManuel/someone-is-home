@@ -698,7 +698,7 @@ class FlowTest {
         )
         assertEquals(Flow.viaActions.getValue(ScreenId.Lobby), lobbyExits)
 
-        // **CONTINUE on a hosting phone's PERMISSIONS goes back to its lobby** (D-311).
+        // **PROCEED on a hosting phone's PERMISSIONS goes back to its lobby** (D-311).
         var radio = Grant.Refused
         val held = FlowModel(
             PanelState(screen = ScreenId.Lobby),
@@ -869,7 +869,7 @@ class FlowTest {
                 ScreenId.Secret, ScreenId.Lobby, ScreenId.ScanCaught, ScreenId.Disconnect,
                 // TIMELAPSE, answered by the house's frames (D-319).
                 ScreenId.TermLive,
-                // A hosting phone's CONTINUE back to the lobby it was shown PERMISSIONS from (D-311).
+                // A hosting phone's PROCEED back to the lobby it was shown PERMISSIONS from (D-311).
                 ScreenId.Perms,
                 ScreenId.WinInsiders, ScreenId.WinResidents,
                 // Page 2's three holds, and the two pickers a row fires off. The third hold fires

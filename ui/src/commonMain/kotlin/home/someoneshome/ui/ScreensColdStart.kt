@@ -253,8 +253,9 @@ fun PermsScreen() {
                 }
                 if (perms.complete) {
                     // **A hosting phone goes back to its own lobby** (D-311): the house stayed on the
-                    // air while it was shown this screen for something switched off.
-                    KitPrimary("CONTINUE", p) { actions.permissionsDone?.invoke() ?: go(ScreenId.Join) }
+                    // air while it was shown this screen for something switched off. It reads
+                    // PROCEED (the owner's 2026-11-23 ruling, D-328; it read CONTINUE until then).
+                    KitPrimary(PROCEED, p) { actions.permissionsDone?.invoke() ?: go(ScreenId.Join) }
                 } else {
                     // It asks, and it stays here. The one screen where a control that navigated
                     // without doing anything cost an evening.
@@ -319,7 +320,7 @@ fun JoinScreen() {
         }
     }
     KitScreen {
-        // **The page name, and the way back to the permissions walk beside it** (E-PAY-6). CONTINUE
+        // **The page name, and the way back to the permissions walk beside it** (E-PAY-6). PROCEED
         // is a real `go` from `Perms`, so the trail is often there. **And PERMISSIONS is named as
         // the fallback** (D-248, kept by D-303): since D-235 a set-up phone skips that screen and
         // arrives here with nothing behind it, and that screen is the way back to the permission walk.

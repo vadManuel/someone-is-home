@@ -141,8 +141,8 @@ object ScreenGraph {
         // arrow's target here is the *fallback* the graph transcribes — on a phone the trail decides
         // — but the lobby is the only screen this one is ever reached from, so the two agree.
         ScreenId.Secret -> setOf(ScreenId.Lobby)
-        // **CONTINUE raises the house's opening banner, with its dim, on this phone at this tap**
-        // (D-293, the owner's Q6 on D-234). It lands where CONTINUE always went, the springboard,
+        // **PROCEED raises the house's opening banner, with its dim, on this phone at this tap**
+        // (D-293, the owner's Q6 on D-234). It lands where PROCEED always went, the springboard,
         // with the opening text over it: [ScreenId.Notify], which clears itself to the springboard
         // after D-119's ten seconds. Nothing goes to the house, and nothing buzzes (D-102: a screen
         // you tapped into does not). There is no way back to ARMED from there, so a phone raises
@@ -333,6 +333,31 @@ object Flow {
             CircuitStation.Disposal -> "DISPOSAL"
         },
     )
+
+    /**
+     * **The station a carried disk goes to, read back off the widget's words** ([carriedOf]'s one
+     * mapping, so the two cannot disagree), or null for words no station has (D-328).
+     */
+    fun stationOf(carried: Carried): CircuitStation? =
+        CircuitStation.entries.firstOrNull { carriedOf(DiskInHand(0, it)).to == carried.to }
+
+    /**
+     * **Where a card refused while carrying sends the player: the next stop's room, or null** (the
+     * owner's 2026-11-23 ruling, D-328: *CARRYING . GO TO <ROOM>*). Off the house's carry, which this
+     * phone already holds: a disk in hand goes to its station's room on the circuit's own line (one
+     * station set per round, D-122, so any circuit line names it); a held pattern goes to its
+     * target's room, on the Memory Dump line the house marked held (D-325). Null carrying nothing, or
+     * where the house named no room, which leaves NOTHING FOR YOU HERE. Two pushed facts read side
+     * by side; it decides nothing, and no role is read.
+     */
+    fun carryingTo(carrying: Carried?, order: List<OrderLine>?): String? {
+        val known = order.orEmpty().filterIsInstance<OrderLine.Known>()
+        if (carrying != null) {
+            val station = stationOf(carrying) ?: return null
+            return known.firstOrNull { it.work == AssignedWork.ArrayWipe }?.at?.getOrNull(station.ordinal)?.room
+        }
+        return known.firstOrNull { it.work == AssignedWork.MemoryDump && it.pattern == 1 }?.at?.getOrNull(1)?.room
+    }
 
     /**
      * **Whether an answer that opened nothing was an Array Wipe station step** (D-322): the disk in
@@ -711,14 +736,14 @@ object Flow {
     /**
      * **Where a seated phone stands when the lights go out**: the lobby, and the one-line screen it
      * opens. The house's opening push walks a phone on either to [ScreenId.Armed] (D-234), and the
-     * opening banner waits for that phone's CONTINUE (D-293).
+     * opening banner waits for that phone's PROCEED (D-293).
      */
     val seatedBeforeArming: Set<ScreenId> = setOf(ScreenId.Lobby, ScreenId.Secret)
 
     /**
-     * **Where that push lands a seated phone, and where its CONTINUE takes it: PERIMETER ARMED, and
+     * **Where that push lands a seated phone, and where its PROCEED takes it: PERIMETER ARMED, and
      * the opening banner over the springboard** (D-234, D-293). Anything that waits for a phone to
-     * have armed asks this set rather than one id: a thumb quick enough on CONTINUE leaves ARMED
+     * have armed asks this set rather than one id: a thumb quick enough on PROCEED leaves ARMED
      * before a poll sees it, and a wait on plain ARMED alone would then never end.
      */
     val armedOn: Set<ScreenId> = setOf(ScreenId.Armed, ScreenId.Notify)
@@ -739,7 +764,7 @@ object Flow {
         // the house nothing. It is `EgressOpened`'s now, on every phone alike, the actor's included.
         //
         // **The opening text over the springboard ([ScreenId.Notify]) left this set with D-293**:
-        // PERIMETER ARMED's CONTINUE walks to it, on every phone alike. The house still pushes it
+        // PERIMETER ARMED's PROCEED walks to it, on every phone alike. The house still pushes it
         // to a phone it catches up after a gap ([FlowModel.roundOpened]'s other branch).
         ScreenId.LockNotify, ScreenId.Quiet, ScreenId.Banner,
         ScreenId.Call, ScreenId.Found,
@@ -971,7 +996,7 @@ object Flow {
         // **And PERMISSIONS** (D-311): something this game needs switched off in the lobby walks a
         // guest out and the host aside to it, and LIGHTS OUT held by a host missing one lands there.
         ScreenId.Lobby to setOf(ScreenId.Armed, ScreenId.Join, ScreenId.Perms),
-        // **CONTINUE on a hosting phone goes back to its own lobby** (D-311, `FlowModel.permissionsDone`): whether a phone is hosting is not a fact a screen graph holds.
+        // **PROCEED on a hosting phone goes back to its own lobby** (D-311, `FlowModel.permissionsDone`): whether a phone is hosting is not a fact a screen graph holds.
         ScreenId.Perms to setOf(ScreenId.Lobby),
         // **LEAVE THIS HOUSE, off the disconnect screen** (D-260): the lobby's own way out, for a
         // guest whose house has been out of reach long enough to be shown it. A hold, like the
@@ -2628,11 +2653,11 @@ class FlowModel(
      *
      * - **A guest leaves the lobby and lands on PERMISSIONS**, the missing rows read in place so they
      *   show as refused on arrival: it hangs up as LEAVE does, and keeps its seat token and its name,
-     *   so with everything back on, CONTINUE and a tap on the home take it back in as usual. The house
+     *   so with everything back on, PROCEED and a tap on the home take it back in as usual. The house
      *   drops it from the standing, so the round armed at LIGHTS OUT does not include it.
      * - **The host is the house, so it cannot leave** (D-311, provisional): it is shown PERMISSIONS
      *   with the house still on the air and every guest still seated; it cannot press LIGHTS OUT from
-     *   there, and [lightsOut] asks the same question again. With everything back on, its CONTINUE
+     *   there, and [lightsOut] asks the same question again. With everything back on, its PROCEED
      *   goes back to its own lobby ([permissionsDone]).
      *
      * **A phone seated in a running round is never sent here** (the overnight review's finding 2):
@@ -2699,11 +2724,11 @@ class FlowModel(
     }
 
     /**
-     * **CONTINUE on PERMISSIONS** (D-161, D-311): to JOIN A HOME, as it always went, or for a phone
+     * **PROCEED on PERMISSIONS** (D-161, D-311): to JOIN A HOME, as it always went, or for a phone
      * that is hosting, back to its own lobby, which it was shown PERMISSIONS from with its house
      * still on the air.
      */
-    /** **The host was shown PERMISSIONS from its own lobby** (D-311), so its CONTINUE goes back there. */
+    /** **The host was shown PERMISSIONS from its own lobby** (D-311), so its PROCEED goes back there. */
     private var hostHeldAtPermissions = false
 
     fun permissionsDone() {
@@ -3456,7 +3481,7 @@ class FlowModel(
             // be a second copy of one sentence.
             //
             // **And it is what walks every phone in the lobby to PERIMETER ARMED** (D-234). The
-            // banner waits there for that phone's own CONTINUE (D-293). See [roundOpened].
+            // banner waits there for that phone's own PROCEED (D-293). See [roundOpened].
             //
             // **And it is the first shift beginning, on every phone at once** (D-132, D-239): page
             // 2's clocks start here, at half, the same on an Insider's phone and a Resident's.
@@ -4325,14 +4350,14 @@ class FlowModel(
      * it opens, which is where a seated phone stands when the lights go out. Anywhere else (a phone
      * the house is catching up after a gap) the message is what it always was, the banner.
      *
-     * ### And the banner waits for the phone's own CONTINUE (D-293, the owner's Q6 on D-234)
+     * ### And the banner waits for the phone's own PROCEED (D-293, the owner's Q6 on D-234)
      *
      * D-254 landed the opening banner over ARMED in the frame ARMED did, one dim on every phone at
-     * one moment. The owner ruled otherwise: PERIMETER ARMED's CONTINUE raises the opening banner
+     * one moment. The owner ruled otherwise: PERIMETER ARMED's PROCEED raises the opening banner
      * with its dim (D-118, D-119) on that phone, at whatever moment its player taps, and the tap
      * does not buzz (D-102). The room sees separate dims, and the owner chose that knowing it. So
      * the push lands plain ARMED on every phone, whatever its role, and the edge that raises the
-     * banner is ARMED's CONTINUE ([ScreenGraph]), a walk on this phone that sends nothing.
+     * banner is ARMED's PROCEED ([ScreenGraph]), a walk on this phone that sends nothing.
      *
      * A second opening on a phone already on ARMED, or already past it on the banner, moves
      * nothing: both are screens the house drives, and [arrived] lands nothing on one.

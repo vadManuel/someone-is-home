@@ -189,7 +189,7 @@ fun Screen(
                 ScreenId.Lobby -> LobbyScreen(vals)
 
                 ScreenId.Secret -> SecretScreen()
-                // ARMED. Its CONTINUE raises the opening banner over the springboard (D-293).
+                // ARMED. Its PROCEED raises the opening banner over the springboard (D-293).
                 ScreenId.Armed -> ArmedScreen(vals)
                 // Every banner screen draws the springboard it interrupted and hands the banner
                 // itself up as an overlay. "A banner, not a takeover" is only true if what was
@@ -215,7 +215,8 @@ fun Screen(
                 ScreenId.Work -> WorkScreen(vals)
                 ScreenId.Scan -> ScanScreen(vals)
                 ScreenId.ScanCaught -> ScanCaughtScreen(vals)
-                ScreenId.ScanBad -> ScanBadScreen()
+                // The one room it may name while carrying (D-328), and DELIBERATELY NOT `vals`.
+                ScreenId.ScanBad -> ScanBadScreen(vals.carryingTo)
                 ScreenId.ScanUnknown -> ScanUnknownScreen()
                 ScreenId.TermBusy -> TermBusyScreen()
                 // The verdict, and DELIBERATELY NOT `vals`. Every other screen that needs

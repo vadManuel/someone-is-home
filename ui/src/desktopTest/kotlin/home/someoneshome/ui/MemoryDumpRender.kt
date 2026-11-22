@@ -169,7 +169,7 @@ class MemoryDumpRender {
             caughtTheSource(it)
             it.beginSubroutine()
         }
-        bothRoles("3-carry", listOf("MEMORY DUMP", "TO HALL", "STOP NOW"), ScreenId.SubMemory, after = 9_000L) {
+        bothRoles("3-carry", listOf("MEMORY DUMP", "TO HALL", PROCEED), ScreenId.SubMemory, after = 9_000L) {
             caughtTheSource(it)
             it.beginSubroutine()
         }
@@ -177,12 +177,12 @@ class MemoryDumpRender {
             caughtTheTarget(it)
         }
         bothRoles("5-entry", listOf("MEMORY DUMP", "STOP NOW"), ScreenId.SubMemory) { entered(it, listOf(2, 0)) }
-        bothRoles("6-returned", listOf("RETURNED . WAITING"), ScreenId.SubMemory) { entered(it, pattern) }
-        bothRoles("7-accepted", listOf(HOUSE_WEAKER), ScreenId.SubMemory) {
+        bothRoles("6-returned", listOf("RETURNED . WAITING", "STOP NOW"), ScreenId.SubMemory) { entered(it, pattern) }
+        bothRoles("7-accepted", listOf(HOUSE_WEAKER, PROCEED), ScreenId.SubMemory) {
             entered(it, pattern)
             it.houseSaid(RoundMessage.SubroutineGraded(accepted = true))
         }
-        bothRoles("8-mismatch", listOf("REJECTED . BACK TO BED 2"), ScreenId.SubMemory) {
+        bothRoles("8-mismatch", listOf("REJECTED . BACK TO BED 2", PROCEED), ScreenId.SubMemory) {
             entered(it, listOf(2, 3, 0, 1))
             it.houseSaid(RoundMessage.SubroutineGraded(accepted = false))
         }

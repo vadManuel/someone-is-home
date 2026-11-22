@@ -149,7 +149,7 @@ class PermsModelTest {
             listOf(DevicePermission.NearbyDevices), model.missing,
             "the screen and the gate disagree about a phone whose NEARBY DEVICES reads ASKED",
         )
-        assertTrue(!model.complete, "NEARBY DEVICES reads ASKED and the screen offers CONTINUE")
+        assertTrue(!model.complete, "NEARBY DEVICES reads ASKED and the screen offers PROCEED")
     }
 
     /**
