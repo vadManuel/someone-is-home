@@ -315,7 +315,7 @@ internal fun structuresFor(size: Int, circuit: Boolean, long: Boolean): List<Sub
  * round whose bound is under two (no Insider, which no lawful round draws) gets no chain, and so,
  * to keep every order's shape, no fake either.
  *
- * ### ⚠️ Lazy linking is not built (D-324, STOPPED)
+ * ### Lazy linking is not built (D-324, STOPPED)
  *
  * `gdd.md:274`'s sliding window — *when A is completed, B unlocks and C is assigned* — leaves what
  * C's assignment does to C's order unruled; see D-324. Without it no chain grows past two.

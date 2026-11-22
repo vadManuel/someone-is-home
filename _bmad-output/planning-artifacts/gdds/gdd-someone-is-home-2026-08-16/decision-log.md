@@ -14381,7 +14381,7 @@ Replay's dot grid is now one function both screens draw (`DotGrid`, Replay's pix
   Memory Dump plays no script (`HouseBuzzer`'s `script()` is null for it). The game makes no sound.
 - **The words** are named constants in `Subroutines.kt`: `MEMORY_DUMP_SOURCE_BRIEFING`,
   `MEMORY_DUMP_TARGET_BRIEFING`, `memoryDumpTo`, `memoryDumpRejected`, `ARRAY_WIPE_BRIEFING`. No other
-  copy, light or timing was added. ⚠️ At 720 points the circuit's second line wraps: NOTHING ELSE OPENS
+  copy, light or timing was added. **Note:** at 720 points the circuit's second line wraps: NOTHING ELSE OPENS
   UNTIL IT IS / DELIVERED. (the words are the owner's, verbatim).
 - **The bench's Memory Dump is the target** (`SubroutineModel.MEMORY_DUMP_TARGET`), so a phone with no
   house draws the half that takes input and every guard that taps every screen reaches it.
