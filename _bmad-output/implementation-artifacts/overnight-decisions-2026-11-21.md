@@ -253,3 +253,11 @@ D-311 and D-313 were also run together in a full check before pushing: 3,312 tes
   2. **The motion budget's numbers are guesses to tune on phones:** about 2 s of walking away on a short Subroutine. The "too little motion fails" rule needs a stillness measurement on both phones (D-321).
   3. **The motion budget meets Memory Dump:** walking to the target counts as motion, so the screen closes to the work order on the way. The pattern stays held and the row still reads TO <ROOM>. Is that close OK, or should the TO <ROOM> screen be exempt?
   4. **The NEARBY DEVICES probe on return:** if LIGHTS OUT lands within about 2 s of a guest's return, the probe can overlap the round's first UWB sessions (D-326).
+- **Overnight review of today's changes (D-316 to D-326).** Most of it is sound: the timelapse, chains, carries, Memory Dump grading, NOT A MARKER, the lobby settings, Surge, the resets between rounds, the Insider count and determinism. Two confirmed bugs and three likely ones are being fixed as D-327:
+  1. **Confirmed:** the "you're up" banner walked a busy player off their Subroutine (losing the attempt) and off the Terminal (freeing the station and charging the timelapse). It also closed a briefing or the camera.
+     - **Decision 1 (provisional):** quiet house texts stand over the current screen, as MONITORING JAMMED does.
+  2. **Confirmed:** a narrow race let a chain unlock during a meeting. The rules now refuse it during a meeting as well.
+  3. **Likely:** the phone's own vibration could spend the motion budget.
+     - **Decision 2 (provisional):** motion isn't charged while this phone is buzzing, plus a short tail.
+  4. **Likely:** a reconnecting phone could forget the disk it carries. To be checked, and fixed if real.
+  5. **Likely:** the lobby's NEARBY DEVICES check could let go a seat that was just armed. A late answer now goes to the round.
