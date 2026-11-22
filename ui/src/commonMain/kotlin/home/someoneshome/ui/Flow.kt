@@ -2952,9 +2952,8 @@ class FlowModel(
             // one-second flare is a startle. Five is a person standing in the dark holding a defunct
             // rectangle while everybody in the building walks toward the light they just saw.
             //
-            // ⚠️ **The sound still has no route and nothing to route TO**: `Speaker` is a stub for
-            // the device pass and every actual of it is silent. The loudest half of the loudest
-            // ability in the game is a decision taken with two phones in a dark room. Flagged.
+            // **No sound**: the game makes none (the owner's 2026-11-21 ruling, D-320, reversing
+            // D-176), so the Surge is the light alone and the message carries nothing else to route.
             is RoundMessage.Surged -> surged(peak = message.peak, black = message.black)
 
             // **The Isolate picker's list, straight onto the panel.** Copied and never filtered: the
@@ -3217,7 +3216,14 @@ class FlowModel(
                 // offers, and never the same thing as a blank, which is somebody with no name.
                 val roster = message.roster
                 meeting.houseNamed(roster)
-                state = state.copy(roster = roster, seats = roster.count { it != null })
+                // **And the host's INSIDERS setting, as this phone's lobby drew it** (D-320): with the
+                // party's size it settles whether page 2's EGRESS line says the clock is shared. A
+                // public lobby fact, copied at arming; see [PanelState.insidersChosen].
+                state = state.copy(
+                    roster = roster,
+                    seats = roster.count { it != null },
+                    insidersChosen = lobby.standing.insiders,
+                )
             }
 
             // **The ring — and this is the push that makes a round visible at all** (the owner's

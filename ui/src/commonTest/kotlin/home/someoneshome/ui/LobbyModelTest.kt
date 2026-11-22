@@ -448,22 +448,22 @@ class LobbyModelTest {
     }
 
     /**
-     * **The setting reaches the desk and never the standing, and that is a decision.**
+     * **The setting reaches the desk and comes back on the standing, and nothing else on it moves**
+     * (D-320, reversing D-117's *never the standing*).
      *
-     * [LobbyLink] carries the Insider count *back* because the house clamps it, and a host who
-     * could not see the clamped value would be reading a setting the house is not holding. The
-     * ballot's length is clamped by nobody and read by nobody until the vote opens, so it stays off
-     * the surface every phone in the lobby is shown: it rides the arming event into the round and
-     * arrives on `Effect.MeetingPhaseOpened`. A `LobbyBody` case for it would widen the wire for a
-     * number already travelling by a better road — this is what holds that shut.
+     * It stayed off the standing because nothing clamps it and nobody reads it until the vote
+     * opens, and that left a guest's VOTING row drawing its own phone's 45 whatever the host chose.
+     * The owner's ranges made that wrong on every guest, so the standing carries the ballot's
+     * length to every phone, as it carries the Insider count; the round still learns it on the
+     * arming event and the ballot's push.
      */
     @Test
-    fun `moving the vote window changes nothing the house published`() {
+    fun `moving the vote window moves the standing's window and nothing else`() {
         val (model, _) = lobbyOf(joined = 6, linesIn = 4)
         val before = model.standing
         repeat(3) { model.cycleVoteWindow() }
         assertEquals(30, model.voteWindowSeconds, "the control did not move at all")
-        assertEquals(before, model.standing, "the vote window reached the house's standing")
+        assertEquals(before.copy(voteWindowSeconds = 30), model.standing, "the vote window moved something else on the standing")
     }
 
     // ---- The gate ---------------------------------------------------------------------------

@@ -190,16 +190,17 @@ interface LobbyLink {
      *
      * It exists because the setting had nowhere to go. The VOTING row moved a number `LobbyModel`
      * held and the round could not read — and the round is armed off the desk, so the desk is where
-     * it has to land. **Nothing about it goes down the wire**: the clients learn the window when
-     * the ballot opens, on the push that opens it.
+     * it has to land. **The house publishes it on the standing** (D-320), so every phone's VOTING
+     * row draws the host's number; the clients' clocks still learn the window on the push that
+     * opens the ballot.
      */
     fun setVoteWindow(seconds: Int)
 
     /**
      * **The host's DISCUSSION, EGRESS TIMER and REVOKE COOLDOWN rows, in seconds** (D-317).
      * [setVoteWindow]'s shape exactly, and its restriction: on a phone that is not hosting each does
-     * nothing, and the lobby offers the controls nowhere else. Nothing about them goes down the wire:
-     * the clients learn each on the push that starts its clock.
+     * nothing, and the lobby offers the controls nowhere else. The house publishes each on the
+     * standing (D-320); in the round the clients learn each on the push that starts its clock.
      */
     fun setDiscussion(seconds: Int)
     fun setEgressTimer(seconds: Int)
@@ -382,32 +383,59 @@ class MemoryLobbyLink(
     /**
      * The windows this fixture has been told, so a test can prove the setting left the screen.
      *
-     * **Nothing is published**, which is the fixture answering the way the real link answers: the
-     * ballot's length is not part of the standing and never goes down the wire — a client learns
-     * it when the ballot opens. A stand-in that echoed it into [LobbyBody.Standing] would let a
-     * screen be written against a field the protocol does not have.
+     * **And the standing carries it back**, which is the fixture answering the way the real desk
+     * answers (D-320): the ballot's length rides [LobbyBody.Standing] to every phone, so the row a
+     * phone draws is the number that came back, never one it kept.
      */
     val windows = mutableListOf<Int>()
 
     override fun setVoteWindow(seconds: Int) {
         windows += seconds
+        standing = standing.copy(voteWindowSeconds = seconds)
+        publish()
     }
 
-    /** The three timed rows this fixture has been told (D-317), unpublished for [windows]' reason. */
+    /** The three timed rows this fixture has been told (D-317), published for [windows]' reason. */
     val discussions = mutableListOf<Int>()
     val egressTimers = mutableListOf<Int>()
     val revokeCooldowns = mutableListOf<Int>()
 
     override fun setDiscussion(seconds: Int) {
         discussions += seconds
+        standing = standing.copy(discussionSeconds = seconds)
+        publish()
     }
 
     override fun setEgressTimer(seconds: Int) {
         egressTimers += seconds
+        standing = standing.copy(egressTimerSeconds = seconds)
+        publish()
     }
 
     override fun setRevokeCooldown(seconds: Int) {
         revokeCooldowns += seconds
+        standing = standing.copy(revokeCooldownSeconds = seconds)
+        publish()
+    }
+
+    /**
+     * **Another phone's house moved a timed row** (D-320): what a guest's link hears when the host
+     * presses one. The fixture's stand-in for a standing from somebody else's desk, so a test can
+     * put a guest in front of numbers its own phone never chose.
+     */
+    fun hostMoved(
+        voteWindowSeconds: Int = standing.voteWindowSeconds,
+        discussionSeconds: Int = standing.discussionSeconds,
+        egressTimerSeconds: Int = standing.egressTimerSeconds,
+        revokeCooldownSeconds: Int = standing.revokeCooldownSeconds,
+    ) {
+        standing = standing.copy(
+            voteWindowSeconds = voteWindowSeconds,
+            discussionSeconds = discussionSeconds,
+            egressTimerSeconds = egressTimerSeconds,
+            revokeCooldownSeconds = revokeCooldownSeconds,
+        )
+        publish()
     }
 
     /**
@@ -1032,28 +1060,21 @@ class LobbyModel(
     }
 
     /**
-     * **The vote window, in seconds. The host's to set; this phone's to echo.**
+     * **The vote window, in seconds. The host's to set; every phone's to draw off the standing.**
      *
      * The design makes it a lobby setting and gives 45 as the default (`gdd.md:412`, restated at
      * `:1006`). What it does not give is a *range*, so [VOTE_WINDOWS] is this control's shape
      * rather than the design's number, and it is playtest's to rule on — the same standing this
-     * screen's `7` and `120S` have.
+     * screen's `7` has.
      *
-     * ### It reaches the desk, and it goes no further than the host's own phone
+     * ### It reaches the desk, and it comes back on the standing to every phone (D-320)
      *
-     * It reaches [LobbyLink] now, exactly as [cycleInsiders] does, and lands on the desk a round is
-     * armed from — which is what closes the gap where the row moved a number nothing read. **It
-     * does not go down the wire in either direction.** The Insider count travels because the house
-     * clamps it and every phone draws the clamped value; a ballot length needs neither, and the
-     * clients learn it when the ballot opens, on the push that opens it.
-     *
-     * The value shown is therefore this phone's own rather than one that came back from the house,
-     * which is the one asymmetry with the row above it. That is honest here and would not be there:
-     * nothing clamps a ballot length (D-125 — it is a number the whole room watches run out), so
-     * there is no second opinion for the screen to be waiting on.
+     * It reaches [LobbyLink] exactly as [cycleInsiders] does, and lands on the desk a round is armed
+     * from. **The number on the row is the one that came back**, on the host's phone and a guest's
+     * alike: until D-320 it was this phone's own, and a guest's row drew its own phone's default
+     * however the host had set it, which a range would have made wrong on every guest.
      */
-    var voteWindowSeconds: Int by mutableStateOf(VOTE_WINDOWS.first())
-        private set
+    val voteWindowSeconds: Int get() = standing.voteWindowSeconds
 
     /** The row's right-hand value, in the design's own form: `45S`. */
     val voteWindowLabel: String get() = "${voteWindowSeconds}S"
@@ -1068,31 +1089,22 @@ class LobbyModel(
      */
     fun cycleVoteWindow() {
         if (!hosting) return
-        val at = VOTE_WINDOWS.indexOf(voteWindowSeconds)
-        voteWindowSeconds = VOTE_WINDOWS[(at + 1) % VOTE_WINDOWS.size]
-        link.setVoteWindow(voteWindowSeconds)
+        link.setVoteWindow(nextOf(VOTE_WINDOWS, voteWindowSeconds))
     }
 
     /**
-     * **DISCUSSION, EGRESS TIMER and REVOKE COOLDOWN: the host's to set, this phone's to echo**
-     * (the owner's 2026-11-21 ruling, D-317).
+     * **DISCUSSION, EGRESS TIMER and REVOKE COOLDOWN: the host's to set, every phone's to draw off
+     * the standing** (the owner's 2026-11-21 rulings, D-317, D-320).
      *
-     * [voteWindowSeconds]' arrangement exactly, row for row: a number this phone holds, a cycle
-     * through the choices on the host's press, the choice handed to [LobbyLink] and on to the desk
-     * a round is armed from, and nothing down the wire. On a phone that is not hosting each press
-     * does nothing, and the screen does not draw the row as a control.
-     *
-     * **Each cycle has one choice today**, the row's current number, because no ruling gives a
-     * range or a step for any of them ([DISCUSSIONS], [EGRESS_TIMERS], [REVOKE_COOLDOWNS]). The
-     * press still goes all the way to the desk, so when the owner rules a range it is a list that
-     * grows and nothing else.
+     * [voteWindowSeconds]' arrangement exactly, row for row: a cycle through the ruled choices on the
+     * host's press ([DISCUSSIONS], [EGRESS_TIMERS], [REVOKE_COOLDOWNS]), the choice handed to
+     * [LobbyLink] and on to the desk a round is armed from, and the number the desk holds drawn off
+     * the standing on every phone. On a phone that is not hosting each press does nothing, and the
+     * screen does not draw the row as a control.
      */
-    var discussionSeconds: Int by mutableStateOf(DISCUSSIONS.first())
-        private set
-    var egressTimerSeconds: Int by mutableStateOf(EGRESS_TIMERS.first())
-        private set
-    var revokeCooldownSeconds: Int by mutableStateOf(REVOKE_COOLDOWNS.first())
-        private set
+    val discussionSeconds: Int get() = standing.discussionSeconds
+    val egressTimerSeconds: Int get() = standing.egressTimerSeconds
+    val revokeCooldownSeconds: Int get() = standing.revokeCooldownSeconds
 
     /** The rows' right-hand values, in the design's own form: `90S`, `120S`, `60S`. */
     val discussionLabel: String get() = "${discussionSeconds}S"
@@ -1102,25 +1114,25 @@ class LobbyModel(
     /** The DISCUSSION control: [cycleVoteWindow]'s, over [DISCUSSIONS]. */
     fun cycleDiscussion() {
         if (!hosting) return
-        discussionSeconds = nextOf(DISCUSSIONS, discussionSeconds)
-        link.setDiscussion(discussionSeconds)
+        link.setDiscussion(nextOf(DISCUSSIONS, discussionSeconds))
     }
 
     /** The EGRESS TIMER control: [cycleVoteWindow]'s, over [EGRESS_TIMERS]. */
     fun cycleEgressTimer() {
         if (!hosting) return
-        egressTimerSeconds = nextOf(EGRESS_TIMERS, egressTimerSeconds)
-        link.setEgressTimer(egressTimerSeconds)
+        link.setEgressTimer(nextOf(EGRESS_TIMERS, egressTimerSeconds))
     }
 
     /** The REVOKE COOLDOWN control: [cycleVoteWindow]'s, over [REVOKE_COOLDOWNS]. */
     fun cycleRevokeCooldown() {
         if (!hosting) return
-        revokeCooldownSeconds = nextOf(REVOKE_COOLDOWNS, revokeCooldownSeconds)
-        link.setRevokeCooldown(revokeCooldownSeconds)
+        link.setRevokeCooldown(nextOf(REVOKE_COOLDOWNS, revokeCooldownSeconds))
     }
 
-    /** The choice after [at] in [choices], and back to the first: the list *is* the cycle. */
+    /**
+     * The choice after [at] in [choices], and back to the first: the list *is* the cycle. A number
+     * the list does not hold (a body from an older house) steps to the first.
+     */
     private fun nextOf(choices: List<Int>, at: Int): Int = choices[(choices.indexOf(at) + 1) % choices.size]
 
     /**
@@ -1369,33 +1381,29 @@ class LobbyModel(
         val VOTE_WINDOWS: List<Int> = listOf(45, 60, 90, 30)
 
         /**
-         * **The DISCUSSION row's choices: the design's ninety and nothing else** (D-317).
+         * **The DISCUSSION row's choices: 60, 90 and 120 seconds, 90 the default** (the owner's
+         * 2026-11-21 ruling, D-320; `gdd.md:431`'s *90s (lobby setting)*).
          *
-         * `gdd.md:431` gives *90s (lobby setting)* and `:930` lists *discussion time* among the
-         * host's options; neither, nor any decision, gives a range or a step. So the row's
-         * current number is its only choice, and **the owner sets the rest**. Ordered, and read
-         * by index, like [VOTE_WINDOWS].
+         * Ordered, and read by index — the list *is* the cycle — so a press from the default goes
+         * up to 120, round to 60, and back to 90.
          */
-        val DISCUSSIONS: List<Int> = listOf(Balance.DISCUSSION_SECONDS)
+        val DISCUSSIONS: List<Int> = listOf(60, Balance.DISCUSSION_SECONDS, 120)
 
         /**
-         * **The EGRESS TIMER row's choices: D-014's 120 and nothing else** (D-317).
-         *
-         * D-014 and `gdd.md:382`, `:1184` make it host-configurable with a 120s default and give no
-         * range or step. The proposal from the map (D-014, `gdd.md:384`) is not built either: no
-         * ruling says how the longest marker-to-marker path becomes seconds. **The owner sets
-         * both.**
+         * **The EGRESS TIMER row's choices: 90, 120 and 150 seconds, D-014's 120 the default**
+         * (D-320). Every one is under the 180 s Egress cooldown, which must outlive the timer
+         * (`egressFired`'s note, D-317's first bound), and `LobbySettingsTest` holds it there. The
+         * proposal from the map (D-014, `gdd.md:384`) is not built: no ruling says how the longest
+         * marker-to-marker path becomes seconds.
          */
-        val EGRESS_TIMERS: List<Int> = listOf(Balance.EGRESS_TIMER_SECONDS)
+        val EGRESS_TIMERS: List<Int> = listOf(90, Balance.EGRESS_TIMER_SECONDS, 150)
 
         /**
-         * **The REVOKE COOLDOWN row's choices: the lobby's 60 and nothing else** (D-317).
-         *
-         * `gdd.md:930` lists *Revoke cooldown* among the host's options and D-037 says it locks at
-         * arming; nothing gives a range or a step (`gdd.md:1181`'s *initial 45s* is the opening
-         * cooldown D-132 replaced with half). **The owner sets them.**
+         * **The REVOKE COOLDOWN row's choices: 45, 60 and 90 seconds, the lobby's 60 the default**
+         * (D-320). Every one is over the 20 s arm window, which the cooldown must outlive (D-317's
+         * second bound), and `LobbySettingsTest` holds it there.
          */
-        val REVOKE_COOLDOWNS: List<Int> = listOf(Balance.REVOKE_COOLDOWN_SECONDS)
+        val REVOKE_COOLDOWNS: List<Int> = listOf(45, Balance.REVOKE_COOLDOWN_SECONDS, 90)
 
         /**
          * The bound on a name, which is [LobbyBody.Naming.LIMIT] and not a second opinion about

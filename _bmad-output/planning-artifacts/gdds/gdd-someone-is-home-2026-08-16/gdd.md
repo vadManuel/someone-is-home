@@ -136,7 +136,7 @@ Themes were scored against a constraint list, and **the discriminating row was t
 - Anonymous room-level tracking was invented because BLE cannot do better. Occupancy sensors work exactly that way.
 - Error injection was invented for balance. Degraded sensors do that.
 - Insider-only door control was invented to make Insider-only routes work. Admin access does that.
-- The entire Insider ability list — flare a lamp, black out a light, make a phone emit sound, forge a check-in — is *precisely* the capability set of someone with root on a smart home and its client app. **Nothing on that list needed reflavouring; it was already correct.**
+- The entire Insider ability list — flare a lamp, black out a light, forge a check-in — is *precisely* the capability set of someone with root on a smart home and its client app. **Nothing on that list needed reflavouring; it was already correct.**
 
 **When a theme explains choices made before it existed, it is the right theme.**
 
@@ -310,7 +310,7 @@ The binding constraint is not balance — it is that an Insider operates the pan
 |---|---|---|
 | **Revoke** | Arm in-app (silent, invisible), then **touch your phone to the target's phone** within the arm window | Physical contact |
 | **Egress** | The house attempts to leave the LAN. Global timer. Uncontained = Insiders win outright | Global |
-| **Surge** | Target's lamp slams to full, then to black — **and** their phone emits sound. One event. **The device is then out for five seconds and any open Subroutine is lost** (D-182) | Ranged |
+| **Surge** | Target's lamp slams to full, then to black. One event, **and it is light only: the phone makes no sound** (owner ruling, 2026-11-21: *we can't control sound on the phone*; D-320, reversing D-176). **The device is then out for five seconds and any open Subroutine is lost** (D-182) | Ranged |
 | **Static** | **A ten-second house-wide jam of every monitoring surface the living can read.** No target, no picker — self-fired. Tracking keeps recording the truth (D-186) | House-wide |
 | **Isolate** | Take a marker — or the Terminal — offline temporarily | Ranged |
 | **Override** | The doors of rooms the host declared Insider-only. Only Insiders may open or close them | Physical |
@@ -339,7 +339,7 @@ The binding constraint is not balance — it is that an Insider operates the pan
 
 **A trap this creates, for free:** any "let's touch phones to prove we are both Residents" trust ritual is a trap, because an armed Insider simply accepts the offer. Emergent, correct, no design needed.
 
-**Surge is a commitment, not a tool.** It absorbs what were separately a light ability and a sound ability. Either half alone was a nudge; together it is the loudest, brightest thing that can happen in a silent dark house, and everyone converges on that person immediately. **Longest cooldown in the Access pool.** Self-surge is the premium alibi play — you appear to be attacked in the most dramatic way available, but it burns your longest cooldown and pulls the whole house to your location, which is a disaster if you are standing near someone you just revoked.
+**Surge is a commitment, not a tool.** It absorbed what were separately a light ability and a sound ability, and since the owner's 2026-11-21 ruling it is the light alone (D-320): still the brightest thing that can happen in a silent dark house, and everyone converges on that person immediately. **Longest cooldown in the Access pool.** Self-surge is the premium alibi play — you appear to be attacked in the most dramatic way available, but it burns your longest cooldown and pulls the whole house to your location, which is a disaster if you are standing near someone you just revoked.
 
 **The malfunction sequence (D-182).** The fiction is the phone malfunctioning and rebooting, and the timings are owner-set rather than placeholders:
 
@@ -416,7 +416,7 @@ Light and sound are perceptible to *bystanders*, unlike a screen. That makes the
 - **No revoke ping.** The Insider's phone produces no sound, no light change, no visible animation when arming or landing a Revoke. Any such cue is unfalsifiable proof of alignment to every bystander — the single worst mistake available in this design. *The one exception is touch, which no bystander can see or hear: a landed Revoke buzzes both phones with one Long, and the Insider's second page goes to COOLING DOWN (D-290).*
 - **No actor-side feedback on firing any ability.** The attacker's device stays inert. All observable effect happens on the target.
 - **Audio modulation only on global events.** A cue firing for a subset — a cooldown expiring, an ability recharging — leaks role through a channel every person in the house can hear. Light is safe here because each lamp is private; sound is not.
-- **The one permitted phone-emitted sound is the Surge, and the meeting ring is not a sound at all** *(superseded by the owner's 2026-08-22 sound reversal and D-160; this row reserved the slot for the ring)*. The call **vibrates** — LONG–pause–LONG, repeating until answered — and emits nothing anybody can hear. The slot goes to **Surge**, which survives the rule by being **self-inflictable**: an Insider can Surge themselves at the cost of the pool's longest cooldown, so being audibly attacked is not evidence of innocence. **This is not a precedent for audio anywhere else.** Subroutines stay silent or haptic-only; every other ability stays silent; nothing that fires for a subset ever makes a sound.
+- **No phone emits a sound, and the meeting ring is not a sound at all** *(owner ruling, 2026-11-21: “we can't control sound on the phone”; D-320. This reverses D-176, which gave the one permitted sound to the Surge after the owner's 2026-08-22 reversal and D-160 took it from the ring)*. The call **vibrates** — LONG–pause–LONG, repeating until answered — and emits nothing anybody can hear. **The Surge is light only.** Subroutines stay silent or haptic-only; every ability is silent; nothing that fires for a subset ever makes a sound.
 - **Self-targeting shares the ability's cooldown.** Otherwise self-sabotage is a free alibi generator. Buying cover must cost offensive capability.
 
 *Accepted residue:* Residents are targeted involuntarily and for free while Insiders must spend a cooldown, so being visibly targeted leans very slightly Resident in expectation. That is a soft statistical lean, not proof, and it is exactly the texture of evidence this game wants.
@@ -429,7 +429,7 @@ Designed under one constraint: **minimal phone interaction for anything social.*
 |---|---|---|
 | **Trigger** | Rendered as an **incoming call with the caller named, and it rings in the hand and nowhere else** — LONG–pause–LONG, repeating until answered (D-160). All lamps snap to full white simultaneously off a scheduled timestamp; masking audio cuts to total silence; **no phone makes a sound** *(the ringtone is superseded — see the sound corollary above)* | — |
 | **1. Discussion** | Starts once every living and every out player has checked in at the meeting area (D-104). Phone shows a timer and one control. **Unanimous "Ready to vote" skips ahead**, counting living players only (D-147) | **90s** (lobby setting) |
-| **2. Vote** | Names plus **Skip**. Select a row, then a two-second hold locks it **irrevocably** and the control reads **VOTE CAST** (D-117, D-141); the buzzer locks whatever is selected, and the window closes early once every vote is locked (D-117). You see **how many** have voted, never what. **Not voting is an abstention** *(disputed, owner to rule: D-075 and D-117 count a player who selected nothing as a Skip; D-144 counts an abstention as nothing; the code counts it as a Skip)* | **45s** (lobby setting) |
+| **2. Vote** | Names plus **Skip**. Select a row, then a two-second hold locks it **irrevocably** and the control reads **VOTE CAST** (D-117, D-141); the buzzer locks whatever is selected, and the window closes early once every vote is locked (D-117). You see **how many** have voted, never what. **Not voting counts as a Skip**: a player who selected nothing for the whole window is counted for Skip (D-075, D-117; owner ruling, 2026-11-21, D-320, superseding D-144's abstention line) | **45s** (lobby setting) |
 | **3. Result** | **Most votes is restrained; ties resolve to Skip** (D-144). The living see the count and who was Restrained, never who voted for whom and never a per-candidate total; only the out see the ballot with names against it, live (D-075, D-195). Then nothing: no role, no confirmation, no reveal | ~15s |
 
 **A correct revoke and a catastrophic one look identical.** The count is consistent with *the app supplies constraints, the players supply the accusations* — the tally is a constraint, and what it means is the players' problem. *(Attribution was shown here until D-075 reversed it.)*
@@ -1065,7 +1065,7 @@ Speech is now permitted, **for living players only**.
 
 **Discussion — 90s.** The phone shows a timer and one control. **Unanimous "Ready to vote" skips ahead.** Minimal phone interaction for anything social: the phone's job here is to hold a clock and get out of the way.
 
-**Vote — 45s.** Names plus **Skip**. A two-second hold locks the vote irrevocably, and the buzzer locks whatever is selected (D-117, D-141). You see **how many** have voted, never what. **Not voting is an abstention** *(disputed, owner to rule: D-075 and D-117 count a player who selected nothing as a Skip; D-144 counts an abstention as nothing)*. **Ghosts cast nothing** — a vote is a channel, and the tally leaks even when secret.
+**Vote — 45s.** Names plus **Skip**. A two-second hold locks the vote irrevocably, and the buzzer locks whatever is selected (D-117, D-141). You see **how many** have voted, never what. **Not voting counts as a Skip**: a player who selected nothing for the whole window is counted for Skip (D-075, D-117; owner ruling, 2026-11-21, D-320, superseding D-144's abstention line). **Ghosts cast nothing** — a vote is a channel, and the tally leaks even when secret.
 
 **Result.** Most votes is **restrained**; **ties resolve to Skip**. **The living see the count and who was Restrained, never who voted for whom**; only the out see the ballot with names against it (D-075, D-195). Then **nothing**: no role, no confirmation, no reveal. **A correct restraint and a catastrophic one look identical.**
 
@@ -1284,7 +1284,7 @@ Everything else in this design — anonymous counts, injected error, staleness b
 
 **Why the sound was reversed rather than tuned.** The old argument was that at a meeting call localization is already total, so a chirp adds no information the white lamps had not already broadcast. That was true and it was not the whole account: **a sound is heard by the room, and a room contains people who are not in it.** The two things the ring was solving are solved by the two things that replaced it — the summons reaches a player who is not looking at their phone because it **repeats until answered**, and it reaches a player two storeys up because it is **in their hand**, which is where the house rule already requires the phone to be. What is gone is the half nobody needed: a channel the whole building shares, in a game whose discipline is that the only private channel is the one against your palm.
 
-**Which leaves exactly one sound in the game, and it is not this one.** The Surge, and its licence is that it is **self-inflictable** — see the sound corollary in M2.
+**Which leaves no phone-emitted sound in the game at all** *(D-320)*. The Surge held the one slot (D-176) and is light only since the owner's 2026-11-21 ruling — see the sound corollary in M2.
 
 **Only ever modulate on global events.** A cue firing for a subset of players leaks role through a channel every person in the house can hear. Light is safe here because each lamp is private; sound is not.
 
@@ -1388,7 +1388,7 @@ Fourteen epics. Detailed story breakdown in `epics.md`.
 
 All of the performance targets above, plus:
 
-- **Zero role leaks through light or sound.** Verified by a dedicated adversarial pass: no cue fires on the actor's device for any ability; no cue fires for a subset of players over audio; targeting a revoked player is indistinguishable from targeting a live one. *(Disputed, owner to rule, for an armed pass at a phone already Revoked: this line says it looks the same as one at a live phone; D-290 tells the armed phone whether its Revoke landed, a Long buzz when it lands and none when the other phone was already out.)*
+- **Zero role leaks through light or sound.** Verified by a dedicated adversarial pass: no cue fires on the actor's device for any ability; no cue fires for a subset of players over audio; targeting a revoked player with Surge, Static or Isolate is indistinguishable from targeting a live one. **An armed Revoke is the one exception, and it is ruled:** a landed Revoke tells the armed phone, with one Long buzz on both phones and the tile straight to COOLING DOWN (D-290); an armed pass at a phone already Revoked does **nothing** — no buzz, the tile stays ARMED and the Revoke is not spent, because the house reads no distance of a phone that is out and so no touch is made (D-301; owner ruling, 2026-11-21, D-320). The room already sees the Revoked phone's dark lamp.
 - **Zero alignment confirmations.** No screen, at any point, confirms anyone's alignment to anyone.
 - **The denominator never moves.** System Integrity's displayed total is identical at arming and at the final meeting, in every round, including rounds with orphaned subroutines.
 

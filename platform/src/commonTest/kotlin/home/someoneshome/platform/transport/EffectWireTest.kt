@@ -122,7 +122,7 @@ class EffectWireTest {
                 for (seat in seats) {
                     wire.emit(Effect.AbilityFired(seat, cooldownStarted = true), state)
                     wire.emit(Effect.SubroutineGraded(seat, accepted = true), state)
-                    wire.emit(Effect.ScanAnswered(seat, opened = null), state)
+                    wire.emit(Effect.ScanAnswered(seat, opened = null, haptic = Haptic.Double), state)
                 }
                 wire.emit(Effect.SystemIntegrityBatched(percent = 87), state)
             }

@@ -197,11 +197,10 @@ class LobbyDesk {
      * the arming cannot read is a control that moves a number nothing follows — which is exactly
      * what this one was.
      *
-     * **It does not go down the wire and does not need to.** A client draws the ballot's clock from
-     * `Effect.MeetingPhaseOpened`, which carries the window the house locked at arming; the lobby
-     * row is the host's own screen, on the host's own phone, and `LobbyModel` already refuses the
-     * control to anybody else. So there is no [LobbyBody] case for it and adding one would widen
-     * the wire for a number that is about to travel by a better road.
+     * **It goes down the lobby wire, on the [standing]** (D-320). A client draws the ballot's clock
+     * from `Effect.MeetingPhaseOpened`, which carries the window the house locked at arming; before
+     * the round, every phone's VOTING row draws the host's number off the standing, because a
+     * guest's row drew its own phone's number while the setting stayed on the host's phone.
      *
      * Unclamped, unlike [insiders]: D-125's sorting rule clamps what players cannot perceive, and
      * a ballot's length is a number the whole room watches run out.
@@ -219,9 +218,11 @@ class LobbyDesk {
      *
      * [voteWindowSeconds]' shape exactly, and for each of its reasons: held here because this desk
      * is what a round is armed from, unclamped because each is a number the room watches run, and
-     * **not on the wire** — the clients learn each from the push that starts its clock (the talk's
-     * phase, the Egress's opening, LIGHTS OUT and every meeting's end). Each starts at its design
-     * default.
+     * **on the [standing]**, so every lobby row draws the host's number (D-320); in the round the
+     * clients learn each from the push that starts its clock (the talk's phase, the Egress's
+     * opening, LIGHTS OUT and every meeting's end). Each starts at its design default. The host's
+     * choices are `LobbyModel`'s ranges, which keep the Egress timer under the Egress cooldown and
+     * the Revoke cooldown over the arm window (D-317's two bounds, D-320).
      */
     var discussionSeconds: Int = Balance.DISCUSSION_SECONDS
         private set
@@ -262,6 +263,17 @@ class LobbyDesk {
         linesIn = lines.size,
         names = seats.map { names[it].orEmpty() },
         insiders = insiders,
+    ).let(::withSettings)
+
+    /**
+     * **The host's four timed rows on a standing** (D-320): the one place they are copied onto a
+     * body, so the lobby's standing and a running round's carry the same numbers.
+     */
+    fun withSettings(body: LobbyBody.Standing): LobbyBody.Standing = body.copy(
+        voteWindowSeconds = voteWindowSeconds,
+        discussionSeconds = discussionSeconds,
+        egressTimerSeconds = egressTimerSeconds,
+        revokeCooldownSeconds = revokeCooldownSeconds,
     )
 
     /**

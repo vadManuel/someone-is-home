@@ -112,17 +112,24 @@ sealed interface Effect {
      * The single asymmetry lives where no player can stand: an Insider's [accepted] verdict does
      * not move `SystemIntegrity`. Nothing here carries that, and nothing on any screen can read it.
      */
-    data class SubroutineGraded(val seat: Seat, val accepted: Boolean) : Effect
+    data class SubroutineGraded(val seat: Seat, val accepted: Boolean) : Effect {
+        /**
+         * **D-160's *yes* on ACCEPTED, its *no* on REJECTED** (the owner's 2026-11-21 ruling,
+         * D-320): one Short, or two vibrates ([Haptic.Double], NOT A MARKER's, D-318), on this
+         * phone only. Read off [accepted] and nothing else, so an Insider's graded fake buzzes
+         * exactly as a Resident's real entry does for the same verdict (D-102, D-109).
+         */
+        val haptic: Haptic get() = if (accepted) Haptic.Short else Haptic.Double
+    }
 
     /**
-     * **The Surge, landing on the seat it was fired at — one event, and it is loud**
+     * **The Surge, landing on the seat it was fired at — one event, and it is light**
      * (`gdd.md:313`, `:342`).
      *
-     * *Target's lamp slams to full, then to black — **and** their phone emits sound. One event.*
-     * That sentence is this type: one effect carrying both halves, because the design says **one
-     * event** and two effects would be two things a build could deliver separately. Either half
-     * alone was a nudge; together it is the loudest, brightest thing that can happen in a silent
-     * dark house.
+     * *Target's lamp slams to full, then to black. One event.* **There is no sound**: the owner
+     * ruled on 2026-11-21 that the game makes none (*we can't control sound on the phone*), which
+     * reverses D-176's *the one sound in the game is the Surge* (D-320). What was a light and a
+     * sound is the light alone, the brightest thing that can happen in a silent dark house.
      *
      * ### The lamp values are on the effect, and rule 5 is why
      *
@@ -160,11 +167,11 @@ sealed interface Effect {
      * are revoked with no panel involved (`gdd.md:346`). Accepted, because a Insider usually does not
      * know where their target is.
      *
-     * ### [sound] is the one real sound in the game and [haptic] is Short
+     * ### No sound, and [haptic] is Short
      *
-     * See [Sound], which carries the ruling and the licence. The haptic is a ruling rather than a
-     * default, exactly as [OpeningMessage]'s is: D-135 closes the long buzz to five events and this
-     * is not one of them, however loud the rest of it is.
+     * The game makes no sound (D-320). The haptic is a ruling rather than a default, exactly as
+     * [OpeningMessage]'s is: D-135 closes the long buzz to five events and this is not one of them,
+     * however bright the rest of it is.
      */
     data class Surged(
         val seat: Seat,
@@ -172,7 +179,6 @@ sealed interface Effect {
         val peak: Int,
         /** Black. Where the slam lands before the phone returns to its last authorised [LampSet]. */
         val black: Int,
-        val sound: Sound,
         val haptic: Haptic,
     ) : Effect
 
@@ -286,9 +292,9 @@ sealed interface Effect {
      * HMAC, never arithmetic** (D-214): every living phone holds this value, and one that could be
      * divided back to the round's seed would redraw the Insiders.
      *
-     * ### It has no [Sound] and no [Haptic], and both are rulings rather than omissions
+     * ### It has no sound and no [Haptic], and both are rulings rather than omissions
      *
-     * D-176: **the one sound in the game is the Surge.** D-135 closes the long haptic to five
+     * **The game makes no sound** (D-320, reversing D-176). D-135 closes the long haptic to five
      * events and this is not one of them. The announcement is what the surfaces look like, and a
      * buzz in every pocket the moment an Insider fired would be a timer telling a dark house that
      * *now* was the moment somebody chose.
@@ -412,8 +418,33 @@ sealed interface Effect {
      * **Addressed to the scanning seat and to nobody else.** Broadcast, it would publish who is
      * standing where and finding work, which is the whole read the meter is quantised into a
      * percentage to prevent, arriving one player at a time.
+     *
+     * ### [haptic]: NOTHING FOR YOU HERE says *no*, and a node of the Egress says nothing (D-320)
+     *
+     * The owner's 2026-11-21 ruling: NOTHING FOR YOU HERE gives D-160's *no*, two vibrates
+     * ([Haptic.Double]), the buzz NOT A MARKER already gives (D-318). The acquire's *yes* before it
+     * is the scan window's and is unchanged. An opened scan stays quiet: the acquire said *yes* and
+     * the caught screen is the answer.
+     *
+     * **A scan of a node of the Egress is null here too and is not NOTHING FOR YOU HERE**: every
+     * phone routes it to the tap control (D-295, D-297), so a *no* there would be the house refusing
+     * a scan the phone is showing as the containment's. So the rules set the buzz, beside [opened],
+     * from the same facts that chose it: [Haptic.Double] for a null at any other card, nothing at a
+     * node or on an opened scan. The node is public (`EgressOpened` names both cards to every
+     * phone) and no role is read, so the same card buzzes the same on an Insider's phone and a
+     * Resident's. Only `null` or [Haptic.Double] can be constructed. On the wire it is one digit
+     * that is always sent, so a node's answer and an empty card's stay one length (D-297).
      */
-    data class ScanAnswered(val seat: Seat, val opened: SubroutineInstance?) : Effect
+    data class ScanAnswered(
+        val seat: Seat,
+        val opened: SubroutineInstance?,
+        val haptic: Haptic?,
+    ) : Effect {
+        init {
+            require(haptic == null || haptic == Haptic.Double) { "a scan's answer says no or nothing, never $haptic" }
+            require(opened == null || haptic == null) { "a scan that opened work does not say no" }
+        }
+    }
 
     /**
      * **The house's answer to a scan of the T card: you are reading, or somebody else is** (D-199).

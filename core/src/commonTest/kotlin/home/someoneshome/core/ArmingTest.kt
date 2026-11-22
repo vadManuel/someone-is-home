@@ -338,7 +338,7 @@ class WorkOrderDrawTest {
         for (card in listOf(dark, elsewhere)) {
             val scanned = reduce(state, Event.MarkerScanned(Tick(1), seat, card))
             assertEquals(
-                listOf(Effect.ScanAnswered(seat, opened = null)),
+                listOf(Effect.ScanAnswered(seat, opened = null, haptic = Haptic.Double)),
                 scanned.effects.filterIsInstance<Effect.ScanAnswered>(),
                 "a scan that found nothing said something other than NOTHING FOR YOU HERE",
             )

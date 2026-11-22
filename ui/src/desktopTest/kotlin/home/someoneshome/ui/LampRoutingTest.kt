@@ -5,7 +5,6 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import home.someoneshome.model.Haptic
-import home.someoneshome.model.Sound
 import home.someoneshome.model.SubroutineKind
 import home.someoneshome.model.protocol.RoundMessage
 import kotlin.test.Test
@@ -88,7 +87,7 @@ class LampRoutingTest {
         mainClock.autoAdvance = false
         setContent { DeviceCanvas(insets = PanelInsets()) { FlowHost(model) } }
 
-        model.houseSaid(RoundMessage.Surged(peak = 100, black = 0, sound = Sound.Surge, haptic = Haptic.Short))
+        model.houseSaid(RoundMessage.Surged(peak = 100, black = 0, haptic = Haptic.Short))
         assertEquals(
             lampArgb(100), model.lamp.slam.intValue,
             "the slam waited for a frame — it has to be on the glass in the frame it arrived",
@@ -145,7 +144,7 @@ class LampRoutingTest {
         mainClock.autoAdvance = false
         setContent { DeviceCanvas(insets = PanelInsets()) { FlowHost(model) } }
 
-        model.houseSaid(RoundMessage.Surged(peak = 100, black = 0, sound = Sound.Surge, haptic = Haptic.Short))
+        model.houseSaid(RoundMessage.Surged(peak = 100, black = 0, haptic = Haptic.Short))
 
         // **Stepped rather than jumped, because the fall-through is transient.** `Boot` walks to
         // `Perms` after 2.4s and the Surge holds it for 2.5, so a build that left the screen's own
@@ -190,7 +189,7 @@ class LampRoutingTest {
         model.tapSubroutine(Subroutine.Replay, 2)
         assertTrue(model.subroutines.replay.touched, "the fixture entered nothing to lose")
 
-        model.houseSaid(RoundMessage.Surged(peak = 100, black = 0, sound = Sound.Surge, haptic = Haptic.Short))
+        model.houseSaid(RoundMessage.Surged(peak = 100, black = 0, haptic = Haptic.Short))
         mainClock.advanceTimeBy(SURGE_PEAK_MS + SURGE_BLACK_MS + 100L)
 
         assertEquals(
@@ -217,7 +216,7 @@ class LampRoutingTest {
         mainClock.autoAdvance = false
         setContent { DeviceCanvas(insets = PanelInsets()) { FlowHost(model) } }
 
-        val surge = RoundMessage.Surged(peak = 100, black = 0, sound = Sound.Surge, haptic = Haptic.Short)
+        val surge = RoundMessage.Surged(peak = 100, black = 0, haptic = Haptic.Short)
         model.houseSaid(surge)
         mainClock.advanceTimeBy(SURGE_PEAK_MS + SURGE_BLACK_MS - 100L)
 

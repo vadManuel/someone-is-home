@@ -20,7 +20,6 @@ import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.OrderLine
 import home.someoneshome.model.Role
 import home.someoneshome.model.Seat
-import home.someoneshome.model.Sound
 import home.someoneshome.model.SubroutineInstance
 import home.someoneshome.model.SubroutineKind
 import home.someoneshome.model.Tick
@@ -50,7 +49,7 @@ class RoundWireTest {
         Effect.LampSet(Seat(3), luminance = 1),
         Effect.AbilityFired(Seat(3), cooldownStarted = true),
         Effect.AbilityBlanked(Seat(3)),
-        Effect.Surged(Seat(3), peak = 100, black = 0, sound = Sound.Surge, haptic = Haptic.Short),
+        Effect.Surged(Seat(3), peak = 100, black = 0, haptic = Haptic.Short),
         Effect.IsolateTargetsOffered(
             Seat(3),
             listOf(Destination(MarkerId("M-1"), shape = "diamond", room = "KITCHEN")),
@@ -87,6 +86,7 @@ class RoundWireTest {
         Effect.ScanAnswered(
             Seat(3),
             SubroutineInstance(entry = 0, subroutine = SubroutineKind.Handshake, parameters = listOf(2, 5)),
+            haptic = null,
         ),
         Effect.TerminalAnswered(Seat(3), reading = true),
         Effect.CardUnregistered(Seat(3)),
@@ -211,7 +211,7 @@ class RoundWireTest {
         bothWays { Effect.SubroutineGraded(it, accepted = true) }
         bothWays { Effect.MessageDelivered(it, body = "x") }
         bothWays { Effect.WorkOrderIssued(it, emptyList()) }
-        bothWays { Effect.ScanAnswered(it, opened = null) }
+        bothWays { Effect.ScanAnswered(it, opened = null, haptic = Haptic.Double) }
         bothWays { Effect.TerminalAnswered(it, reading = false) }
         bothWays { Effect.CardUnregistered(it) }
         bothWays { Effect.PresenceChanged(it, at = null, open = false) }

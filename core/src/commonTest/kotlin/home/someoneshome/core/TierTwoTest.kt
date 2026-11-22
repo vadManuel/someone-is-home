@@ -14,7 +14,6 @@ import home.someoneshome.model.MeetingPhase
 import home.someoneshome.model.MeetingTrigger
 import home.someoneshome.model.OrderEntry
 import home.someoneshome.model.AssignedWork
-import home.someoneshome.model.Sound
 import home.someoneshome.model.SubroutineKind
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
@@ -329,11 +328,10 @@ class SurgeTest {
      * split them into two could deliver one without the other and nothing would say so.
      */
     @Test
-    fun `a surge is one effect on the target carrying light and sound together`() {
+    fun `a surge is one effect on the target carrying the light`() {
         val effects = T2Walk(t2Armed()).feed(Event.SurgeFired(Tick(10), INSIDER, Seat(3))).drain()
         val surged = effects.filterIsInstance<Effect.Surged>().single()
         assertEquals(Seat(3).index, surged.seat.index, "the surge landed on somebody else")
-        assertEquals(Sound.Surge, surged.sound)
         assertTrue(surged.peak > surged.black, "the lamp did not slam to full and then to black")
 
         // **The actor is told the ability fired and nothing else** (`gdd.md:398`). No second effect

@@ -23,6 +23,9 @@ import home.someoneshome.model.SavedHome
 import home.someoneshome.model.Seat
 import home.someoneshome.model.SeatNamed
 import home.someoneshome.model.Tick
+import home.someoneshome.model.protocol.LobbyWire
+import home.someoneshome.platform.transport.LobbyDesk
+import home.someoneshome.ui.LobbyModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -122,6 +125,57 @@ class LobbySettingsArmingTest {
         held = inputs(discussion = 15, egress = 15, revoke = 5)
         authority.at(5)
         assertLocked("after the desk moved mid-round")
+    }
+
+    /**
+     * **GUARD (D-320): every choice in the owner's ranges reaches the arming and locks there.** The
+     * host's press is the lobby's (`LobbyModel`'s lists, the ones the rows cycle through); for each
+     * choice the desk hands it to the arming, the round holds it, and the desk moving afterwards
+     * moves nothing.
+     */
+    @Test
+    fun everyChoiceInTheRangesLocksAtArming() = runBlocking<Unit> {
+        val house = LobbyHouse(CoroutineScope(Dispatchers.Unconfined))
+        val ranges = listOf(LobbyModel.DISCUSSIONS, LobbyModel.EGRESS_TIMERS, LobbyModel.REVOKE_COOLDOWNS)
+        for (at in 0 until ranges.maxOf { it.size }) {
+            val (discussion, egress, revoke) = ranges.map { it[at % it.size] }
+            house.setDiscussion(discussion)
+            house.setEgressTimer(egress)
+            house.setRevokeCooldown(revoke)
+            val read = house.armingInputs()
+            assertEquals(listOf(discussion, egress, revoke), listOf(read.discussionSeconds, read.egressTimerSeconds, read.revokeCooldownSeconds))
+            var held = inputs(read.discussionSeconds, read.egressTimerSeconds, read.revokeCooldownSeconds)
+            val authority = RoundAuthority(inputs = { held }, emit = { _: Effect, _: GameState -> }, note = {})
+            assertTrue(authority.arm(SEED + at), "the round did not arm with $discussion/$egress/$revoke")
+            fun locked() = listOf(authority.state.discussionSeconds, authority.state.egressTimerSeconds, authority.state.revokeCooldownSeconds)
+            assertEquals(listOf(discussion, egress, revoke), locked(), "the round did not lock the host's choice")
+            house.setDiscussion(ranges[0].first { it != discussion })
+            house.setEgressTimer(ranges[1].first { it != egress })
+            house.setRevokeCooldown(ranges[2].first { it != revoke })
+            held = house.armingInputs().let { inputs(it.discussionSeconds, it.egressTimerSeconds, it.revokeCooldownSeconds) }
+            authority.at(5)
+            assertEquals(listOf(discussion, egress, revoke), locked(), "the desk moved mid-round and the round moved with it")
+        }
+    }
+
+    /**
+     * **GUARD (D-320): the standing carries all four timed rows**, so every phone's lobby draws the
+     * host's numbers. VOTING too, which had the same gap.
+     */
+    @Test
+    fun theStandingCarriesTheHostsFourRows() {
+        val desk = LobbyDesk()
+        desk.setVoteWindow(90)
+        desk.setDiscussion(120)
+        desk.setEgressTimer(150)
+        desk.setRevokeCooldown(45)
+        val standing = desk.standing()
+        assertEquals(
+            listOf(90, 120, 150, 45),
+            listOf(standing.voteWindowSeconds, standing.discussionSeconds, standing.egressTimerSeconds, standing.revokeCooldownSeconds),
+            "the lobby's standing does not carry the host's rows",
+        )
+                assertEquals<Any?>(standing, LobbyWire.decodeOrNull(LobbyWire.encode(standing)), "the four rows do not survive the lobby wire")
     }
 
     /**

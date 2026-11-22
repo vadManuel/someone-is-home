@@ -163,11 +163,12 @@ class EmitSchemaTest {
             EmitSchema.classesFor(EmitSchema.SCAN_ANSWERED),
         )
         assertEquals(
-            EmitSchema.kindOf(Effect.ScanAnswered(Seat(0), opened = null)),
+            EmitSchema.kindOf(Effect.ScanAnswered(Seat(0), opened = null, haptic = Haptic.Double)),
             EmitSchema.kindOf(
                 Effect.ScanAnswered(
                     Seat(0),
                     SubroutineInstance(0, SubroutineKind.Sniff, listOf(1, 2, 3)),
+                    haptic = null,
                 ),
             ),
             "NOTHING FOR YOU HERE and a real opening became two kinds, so the allowlist can now " +
@@ -180,7 +181,7 @@ class EmitSchemaTest {
     fun `a scan answer is addressed to its own seat only`() {
         assertEquals(
             listOf(Seat(3)),
-            EmitSchema.deliveries(Effect.ScanAnswered(Seat(3), opened = null), live())
+            EmitSchema.deliveries(Effect.ScanAnswered(Seat(3), opened = null, haptic = Haptic.Double), live())
                 .map { it.seat },
         )
     }
@@ -378,7 +379,7 @@ class EmitSchemaTest {
     fun `a surge addressed to a seat that is out is denied`() {
         val out = live().copy(revoked = listOf(Seat(3)))
         val surge =
-            Effect.Surged(Seat(3), peak = 100, black = 0, sound = Sound.Surge, haptic = Haptic.Short)
+            Effect.Surged(Seat(3), peak = 100, black = 0, haptic = Haptic.Short)
         assertEquals(emptyList(), EmitSchema.deliveries(surge, out))
 
         // And the actor's answer is delivered regardless, which is the half that makes the denial

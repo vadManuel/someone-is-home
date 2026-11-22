@@ -21,7 +21,6 @@ import home.someoneshome.model.OrderLine
 import home.someoneshome.model.Role
 import home.someoneshome.model.Seat
 import home.someoneshome.model.SniffGroups
-import home.someoneshome.model.Sound
 import home.someoneshome.model.SubroutineInstance
 import home.someoneshome.model.SubroutineKind
 import home.someoneshome.model.Tick
@@ -278,11 +277,10 @@ class HouseBuzzTest {
         return listOf(
             Effect.LampSet(seat, luminance = 200),
             Effect.AbilityFired(seat, cooldownStarted = true),
-            Effect.SubroutineGraded(seat, accepted = true),
-            Effect.SubroutineGraded(seat, accepted = false),
             Effect.SubroutineProgressed(remaining = 12),
             Effect.MessageDelivered(seat, "a line"),
-            Effect.ScanAnswered(seat, opened = null),
+            // A node of the Egress: the rules answer it with nothing and no buzz (D-297, D-320).
+            Effect.ScanAnswered(seat, opened = null, haptic = null),
             Effect.TerminalAnswered(seat, reading = true),
             Effect.TerminalAnswered(seat, reading = false),
             Effect.PresenceChanged(seat, at = MarkerId("SEED001"), open = true),
@@ -326,7 +324,7 @@ class HouseBuzzTest {
     private fun everyKind(): List<Effect> = everyEffect() + listOf(
         // The failed answer, which buzzes the lockout's 3 s (O4, D-298): walked by the wire sweep.
         Effect.SyncPulseAnswered(Seat(1), held = false),
-        Effect.Surged(Seat(1), peak = 100, black = 0, sound = Sound.Surge, haptic = Haptic.Short),
+        Effect.Surged(Seat(1), peak = 100, black = 0, haptic = Haptic.Short),
         Effect.IsolateTargetsOffered(Seat(1), emptyList()),
         Effect.IsolateTargetsBlanked(Seat(1), emptyList()),
         Effect.AbilityBlanked(Seat(1)),
@@ -357,7 +355,47 @@ class HouseBuzzTest {
         Effect.NoticeIssued(listOf(Seat(2)), switchedOff = emptyList()),
         // NOT A MARKER (D-318): D-160's *no*, which is the kind's own and the same for every seat.
         Effect.CardUnregistered(Seat(1)),
+        // D-320: the verdict's *yes* and *no*, and NOTHING FOR YOU HERE's *no*.
+        Effect.SubroutineGraded(Seat(1), accepted = true),
+        Effect.SubroutineGraded(Seat(1), accepted = false),
+        Effect.ScanAnswered(Seat(1), opened = null, haptic = Haptic.Double),
     )
+
+    /**
+     * **GUARD (D-320): ACCEPTED says *yes*, REJECTED and NOTHING FOR YOU HERE say *no*** (the
+     * owner's 2026-11-21 ruling: *add the yes / no buzz. I think the no buzz should be something
+     * like two buzzes*).
+     *
+     * In process and off the wire alike: ACCEPTED is one Short, REJECTED and NOTHING FOR YOU HERE
+     * are NOT A MARKER's two vibrates, and the two answers the rules leave quiet, an opened scan and
+     * a node of the Egress, play nothing. Every seat feels the same: nothing in either effect names
+     * a role, and the value is read off the verdict and the card alone.
+     */
+    @Test
+    fun theVerdictSaysYesOrNoAndNothingForYouHereSaysNo() {
+        val yes = listOf(HouseBuzz.script(Haptic.Short))
+        val no = listOf(HouseBuzz.script(Haptic.Double))
+        val opened = SubroutineInstance(entry = 0, subroutine = SubroutineKind.Jam, parameters = listOf(3, 1, 2))
+        for (seat in seats) {
+            val cases = listOf(
+                Effect.SubroutineGraded(seat, accepted = true) to yes,
+                Effect.SubroutineGraded(seat, accepted = false) to no,
+                Effect.ScanAnswered(seat, opened = null, haptic = Haptic.Double) to no,
+                Effect.ScanAnswered(seat, opened = opened, haptic = null) to emptyList(),
+                Effect.ScanAnswered(seat, opened = null, haptic = null) to emptyList(),
+            )
+            for ((effect, expected) in cases) {
+                val motor = RecordingHaptics()
+                HouseBuzzer(motor).heard(effect)
+                assertEquals(expected, motor.played, "in process, seat ${seat.index}: $effect")
+                val wire = RecordingHaptics()
+                HouseBuzzer(wire).heard(RoundWire.project(effect))
+                assertEquals(expected, wire.played, "off the wire, seat ${seat.index}: $effect")
+            }
+        }
+        // The no is NOT A MARKER's, to the step (D-318): one *no* in the game, not two.
+        assertEquals(Effect.CardUnregistered(Seat(0)).haptic, Effect.SubroutineGraded(Seat(0), accepted = false).haptic)
+    }
 
     /**
      * The fixture really is every kind, checked against a hand-written list.
@@ -563,21 +601,22 @@ class HouseBuzzTest {
     }
 
     /**
-     * **Whether an effect was accepted never changes what the phone does.**
+     * **Whether an ability took never changes what the phone does.**
      *
-     * Rule 1's shape, at the motor: `SubroutineGraded(accepted = true)` and `accepted = false`
-     * are the same silence, and a Revoke that landed on a Revoked player buzzes what a Revoke
-     * that landed buzzes. An asymmetry here would be a verdict delivered through the hand.
+     * Rule 1's shape, at the motor: an ability that took and one that did not are the same, and the
+     * tally buzzes the same whether the room Restrained anybody. An asymmetry here would be a fact
+     * the house hides, delivered through the hand.
+     *
+     * **The verdict on an entry is no longer here** (the owner's 2026-11-21 ruling, D-320): ACCEPTED
+     * says *yes* and REJECTED *no*, as D-160 lists them (*graded*, *reject*). The verdict is what the
+     * player's own screen says, both roles are graded for real (D-109), and the buzz is read off the
+     * verdict alone, so it tells the hand what the glass already shows and nothing about a role.
+     * [theVerdictSaysYesOrNoAndNothingForYouHereSaysNo] holds it.
      */
     @Test
     fun successAndRefusalAreIndistinguishableToTheHand() {
         fun recordOf(effect: Effect) = RecordingHaptics().also { HouseBuzzer(it).heard(effect) }.played
 
-        assertEquals(
-            recordOf(Effect.SubroutineGraded(Seat(0), accepted = true)),
-            recordOf(Effect.SubroutineGraded(Seat(0), accepted = false)),
-            "a graded Subroutine buzzes differently depending on whether it was accepted",
-        )
         assertEquals(
             recordOf(Effect.AbilityFired(Seat(0), cooldownStarted = true)),
             recordOf(Effect.AbilityFired(Seat(0), cooldownStarted = false)),
@@ -676,6 +715,7 @@ class HouseBuzzTest {
                 Effect.ScanAnswered(
                     Seat(0),
                     SubroutineInstance(entry = 2, subroutine = SubroutineKind.Handshake, parameters = dealt),
+                    haptic = null,
                 ),
             ),
         )
@@ -886,6 +926,7 @@ class HouseBuzzTest {
                 Effect.ScanAnswered(
                     Seat(0),
                     SubroutineInstance(0, SubroutineKind.Handshake, dealt),
+                    haptic = null,
                 ),
             ),
         )
@@ -940,7 +981,7 @@ class HouseBuzzTest {
         buzzer.heard(
             RoundWire.project(
                 Effect.ScanAnswered(
-                    Seat(0), SubroutineInstance(entry = 0, subroutine = kind, parameters = parameters),
+                    Seat(0), SubroutineInstance(entry = 0, subroutine = kind, parameters = parameters), haptic = null,
                 ),
             ),
         )

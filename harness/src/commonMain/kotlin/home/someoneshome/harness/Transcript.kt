@@ -261,7 +261,7 @@ object Transcript {
         // only `Surged|seat=` could not tell a replayed slam from one that lit nothing.
         is Effect.Surged ->
             "Surged|seat=${effect.seat.index}|peak=${num(effect.peak)}" +
-                "|black=${num(effect.black)}|sound=${effect.sound}|haptic=${effect.haptic}"
+                "|black=${num(effect.black)}|haptic=${effect.haptic}"
         // The picker, as the seat receives it -- the same destinations, in the same order. The
         // Egress-node exclusion is therefore VISIBLE in the recording as two fewer cards on the
         // rows during an Egress, which is the only artifact that can show D-150 holding.
@@ -317,11 +317,14 @@ object Transcript {
         //
         // `parameters` is on the row and the answer is NOT -- this renders the client-facing
         // SubroutineInstance, so the transcript is exactly as narrow here as the wire is.
+        //
+        // `haptic=` (D-320): `Double` on NOTHING FOR YOU HERE, `none` at a node of the Egress and on
+        // an opened scan. The rules choose it from the same facts as `opened`, so the row carries it.
         is Effect.ScanAnswered ->
             "ScanAnswered|seat=${effect.seat.index}|opened=" +
                 (effect.opened?.let {
                     "${it.entry}:${it.subroutine}:${it.parameters.joinToString(".") { p -> num(p) }}"
-                } ?: "none")
+                } ?: "none") + "|haptic=${effect.haptic ?: "none"}"
         // Open and held are one kind and one row shape, for ScanAnswered's reason (D-199).
         is Effect.TerminalAnswered ->
             "TerminalAnswered|seat=${effect.seat.index}|reading=${effect.reading}"

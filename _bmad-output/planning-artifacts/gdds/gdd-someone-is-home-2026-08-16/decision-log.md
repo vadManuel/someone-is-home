@@ -2297,6 +2297,10 @@ can always force at least a tie, and a tie resolves to Skip.** Half the room vot
 Skip denies every name a plurality over it. The implication D-131 rests on is unchanged; only the
 word describing the tally was wrong.
 
+**Amended by D-320** (the owner, 2026-11-21): *not voting counts as a Skip*. D-075 and D-117 stand,
+and this entry's *abstention counting as nothing* is superseded: a player who selected nothing for
+the whole window is one more vote for Skip, as the code has always counted it.
+
 ### D-145 · **The out watch everything live, and the correlation they can build is theirs to keep — decided**
 
 Closes **E-L1-1** by accepting what it named rather than narrowing it. **Option (a): the out see the
@@ -3353,6 +3357,10 @@ full — this is the one moment the game wants to be loud.*
 sweep rather than a repair: `Effect.MeetingOpened` has only ever carried a `Haptic`, `Sound` has only
 ever had `Surge` in it, and `platform`'s `Speaker` has no production call site at all. The documents
 were the only place the ringtone still existed.
+
+**Reversed by D-320** (the owner, 2026-11-21: *we can't control sound on the phone. so lets just
+exclude this*). The Surge makes no sound either, and no phone in the game makes one: the Surge is
+light only. `Sound`, `Speaker`, `deviceSpeaker` and `SilentSpeaker` are deleted.
 
 ### D-177 · **NEW ROUND is the label — confirmed**
 
@@ -9796,6 +9804,8 @@ armed at the scan before.
 **On the wire, the same.** A node scan's answer is byte-identical to an empty card's for both roles:
 114 bytes at sequence 4 321 through `RoundWire` and `TransportWire`. No message, field or schema row
 was added; `ScanAnswered` already reached only the scanning seat.
+**Amended by D-320:** NOTHING FOR YOU HERE now says D-160's *no* and a node scan says nothing, in one
+digit that is always sent, so the two answers are one length on the wire and differ in that digit.
 
 **Recording 42** (41 when written; renumbered when combined with D-298, which also took 41). No row changed shape, and the same events reduce differently (D-282's case): a
 node scan during an Egress records `opened=none` and leaves no fresh `open` instance where version 40
@@ -13153,6 +13163,8 @@ it; and `routeScan` was called by nothing but its own test, because a phone has 
    `CardUnregistered` (the per-client transcripts read every effect a phone is sent), but no
    recording can hold that row, because the rules never emit it. A version 46 recording made before
    this change, unregistered `MarkerScanned` and all, replays exactly as it did.
+   **In the combined tree the format is 48** (D-316 and D-317, integrated with this entry); D-318
+   moved nothing in it either way (D-320).
 7. **No new copy, light, colour or type.** NOT A MARKER and its screen already existed (D-124);
    nothing on it was touched.
 
@@ -13209,6 +13221,166 @@ held (`build/screens/notamarker-in-round-*.png`).
 **Checked** (on the final tree, `*/build/test-results` cleared first: `./gradlew check --continue`
 with the two variant sweeps excluded, then `:app:variantSweepRelease`, then `:app:variantSweepPlaytest`,
 the app's XML copied out after each, every result XML counted with a python glob): model 358 (JVM) + 342 (iOS Simulator); core 419 + 417; platform 211; ui 773 (desktop) + 380; harness 132; cards 17; app 280 (the default variant), 170 (Release), 280 (Playtest). 3,779 in all. 0 errors, 0 skipped, and one failure, `OutboundQueueTest.aSeatThatStopsDrainingDelaysNobodyAndIsDroppedWhenItsQueueIsFull`, a known load flake: rerun alone it passes (1 test, 0 failures). The vocabulary lints, `redactionLint` and the cordons ran and passed. `CardReadTest`, `NotAMarkerRender` and the new `ScanRoutingTest`, `EmitSchemaTest` and `IntentWireTest` cases are in the XML.
+
+### D-320 · **The verdict buzzes, the EGRESS line follows the Insider count, the lobby's three timed rows get the owner's ranges and every guest draws the host's numbers, and the game makes no sound — built (recording 49); the EGRESS line is STOPPED for one case: INSIDERS left UNKNOWN at seven to eleven seats, where no phone holds the count**
+
+**The rulings** (owner, 2026-11-21, *Owner's review, 2026-11-21 morning* in
+`overnight-decisions-2026-11-21.md`):
+
+- **Verdict buzz:** *"Add the yes / no buzz. I think the no buzz should be something like two
+  buzzes."* ACCEPTED gives the short *yes*; REJECTED and NOTHING FOR YOU HERE give the two-pulse
+  *no*.
+- **Page 2's SHARED WITH THE OTHER INSIDER:** hidden when the round has one Insider.
+- **Lobby settings:** DISCUSSION 60/90/120 s, EGRESS TIMER 90/120/150 s, REVOKE COOLDOWN 45/60/90 s,
+  defaults unchanged (90, 120, 60).
+- **Armed pass at a Revoked phone:** keep *nothing happens*; correct the GDD.
+- **Not voting:** counts as a Skip (D-075, D-117 stand; D-144's abstention line is superseded).
+- **Sound:** *"we can't control sound on the phone. so lets just exclude this"*. Surge is light only.
+  This reverses D-176.
+
+1. **The verdict and NOTHING FOR YOU HERE buzz** (`model`, `core`, `app`). `Effect.SubroutineGraded`
+   and its message carry `haptic`, read off `accepted` alone: `Haptic.Short` on ACCEPTED, `Haptic.Double`
+   on REJECTED, NOT A MARKER's two vibrates (D-318), so the game has one *no*. Nothing in it names a
+   role, and both roles are graded for real (D-109), so an Insider's fake and a Resident's entry buzz
+   the same for the same verdict. `Effect.ScanAnswered` gains `haptic`, **set by the rules beside
+   `opened`**: `Double` on a null answer, nothing on an opened scan (the acquire's *yes* was the
+   scan window's) **and nothing at a node of the Egress**. A node scan is answered with the empty
+   card's null (D-297), and every phone routes it to the tap control (D-295); a *no* read off the null
+   alone would have refused the scan the phone shows as the containment's, so the rules decide it
+   from the node, a public fact (`EgressOpened` names both cards), and never from a role. Only `null`
+   or `Double` can be constructed. **On the wire it is one digit, always sent** (`RoundMessage.ScanAnswered.no`,
+   0 or 1), so a node's answer and an empty card's stay one length, as D-297 had them; they now differ
+   in that digit, and `EgressNodeScanTest` checks the length and the two buzzes where it checked the
+   bytes. D-297 carries a line saying so. `HouseBuzzer` reads both off the effect and the message (D-134);
+   both reach the one phone that asked, as before.
+   **What a hand feels now** (for the owner, not a defect): NOTHING FOR YOU HERE is the acquire's
+   *yes* then the *no*, the same as NOT A MARKER; **REJECTED's *no* and the scan window running out
+   are the same two vibrates, step for step**, told apart only by when they come (a timeout on the
+   scan screen, a verdict after a hand-over); ACCEPTED's *yes* is the acquire's Short. Drift handed
+   over early is REJECTED (D-165) and now says *no*. Nothing else on a verdict screen buzzes: the Sync
+   Pulse's lockout is the Egress widget's (D-298), and a Subroutine's own question (Handshake, Sniff,
+   Drift) has played and stopped before a hand-over.
+   `HouseBuzzTest.successAndRefusalAreIndistinguishableToTheHand` held the old silence (*an asymmetry
+   here would be a verdict delivered through the hand*); its verdict assertion is removed by this
+   ruling, which D-160 already wrote (*one vibrate = yes: graded; two = no: reject*), and its ability
+   and tally assertions stand.
+2. **Page 2's EGRESS line** (`ui`). The Insider's line under EGRESS reads SHARED WITH THE OTHER
+   INSIDER when the round has two or more Insiders and is **blank in the same slot** with one, so the
+   tile keeps its height and page 2 its structure (D-286). A Resident's tile is unchanged.
+   **Where the phone gets the count, and where it cannot.** No new disclosure: the role reveal
+   carries self-knowledge only (D-193, D-249), INSIDERS KNOW EACH OTHER is a fixed reading on the
+   lobby and no phone is told about a fellow Insider. The phone reads two public lobby facts it
+   already holds, the round's party (the roster's size) and the host's INSIDERS setting (the
+   standing, copied into `PanelState.insidersChosen` at arming), and `egressSharedBy` resolves them
+   as the house's draw does (`InsiderBand`): a chosen number is the count; UNKNOWN at three to six
+   seats is one; UNKNOWN at twelve seats or more is two or more. **STOPPED: UNKNOWN at seven to eleven
+   seats.** There the count is hidden from every phone, the Insider's included (D-103), and saying
+   it would be new information to an Insider, so the line stays shown, as before, until the owner
+   rules (one named function; a ruling that tells an Insider the count swaps its question and nothing
+   else). A phone resumed mid-round before its lobby standing arrives reads the setting as UNKNOWN,
+   which changes only that band.
+3. **The lobby's ranges, and every guest draws the host's numbers** (`model`, `platform`, `app`,
+   `ui`). `LobbyModel.DISCUSSIONS` is 60, 90, 120; `EGRESS_TIMERS` 90, 120, 150; `REVOKE_COOLDOWNS`
+   45, 60, 90; VOTING keeps 45, 60, 90, 30. A press steps up from the default and wraps: 90 → 120 →
+   60 → 90. **D-317's two bounds hold for every choice**: every Egress timer ends before the 180 s
+   Egress cooldown, and every Revoke cooldown outlives the 20 s arm window (45 s opens at 22.5 s).
+   **D-317's gap is closed by the road INSIDERS already takes**: `LobbyBody.Standing` gains
+   `voteWindowSeconds`, `discussionSeconds`, `egressTimerSeconds` and `revokeCooldownSeconds`, the
+   desk puts them on every standing (`LobbyDesk.withSettings`, the lobby's and a running round's), the
+   house publishes on each press, and **every phone's row draws the standing's number**, the host's
+   included, as INSIDERS does. The host's phone no longer keeps a number of its own. Each field
+   defaults to its design number for a body from no house. No `RoundMessage`, effect or schema row
+   moved; the arming still reads the desk once and locks (D-037, D-317), and the round's pushes still
+   carry the locked numbers. VOTING had the same gap and is closed the same way; this reverses
+   D-117's *the setting reaches the desk and never the standing* (`LobbyModelTest` now asserts the
+   reverse).
+4. **The documents.**
+   - **The armed pass at a Revoked phone** (`gdd.md`, the zero-leaks criterion): the dispute flag is
+     gone. Surge, Static and Isolate at a Revoked player look as they do at a live one; an armed
+     Revoke is the ruled exception: a landed one buzzes Long on both phones and drops ARMED (D-290),
+     and **a pass at a phone already Revoked does nothing**, no buzz, the tile stays ARMED and the
+     Revoke is not spent, because the house reads no distance of a phone that is out, so no touch is
+     made (D-301). `Rules.contact`'s `Spent` answer for an out target is never minted.
+   - **Not voting counts as a Skip** (`gdd.md`'s meeting table and round trace): both dispute flags
+     gone; D-144 carries a line saying its abstention clause is superseded. The code already counted
+     it as a Skip; nothing moved.
+   - **D-318** carries one line: in the combined tree the format is 48 (D-316, D-317).
+   - **Surge is light only** (`gdd.md`'s ability row, *a commitment, not a tool*, the sound corollary
+     and the audio section; D-176 carries the reversal). **Removed, nothing else called them**:
+     `model`'s `Sound` (one member, `Surge`), `platform`'s `Speaker`, `deviceSpeaker` and
+     `SilentSpeaker` (`Speaker.kt`, `Speaker.ios.kt`), the `sound` field on `Effect.Surged` and
+     `RoundMessage.Surged` (the one `Flow.kt` dropped), and the transcript's `sound=`. The masking
+     track on a household speaker (E13) is not a phone's sound and is untouched; whether the ruling
+     reaches it is the owner's.
+5. **Recording format 48 → 49**, needed twice over: the `ScanAnswered` effect row gains `haptic=`
+   (`Double` or `none`), because the rules choose it from facts a replay must see, and the `Surged`
+   row loses `sound=`. No event or state row moved; a version 48 recording is refused as every older
+   one is. **D-319 and D-322 are building in parallel; whoever integrates after this sets the
+   combined number, as D-317's integration did.**
+6. **No new copy, light, colour or type.** The EGRESS line is the existing line or nothing; the
+   lobby rows keep their labels and draw other numbers of the same form.
+
+**Guards.** `HouseBuzzTest` (app): *theVerdictSaysYesOrNoAndNothingForYouHereSaysNo* (ACCEPTED Short,
+REJECTED and NOTHING FOR YOU HERE Double, an opened scan and a node silent, on three seats, in
+process and off the wire), and the wire sweep now walks the verdict's two values and the scan's
+*no*. `VerdictBuzzTest` (app cheats, new, the real `RoundAuthority` in the bench's home through the
+real schema): *theVerdictAndNothingForYouHereBuzzTheSameOnBothRoles* (an Insider and a Resident each
+scan a card holding nothing for them, *no*; scan their work and hand over a wrong entry, REJECTED,
+*no*; scan again and hand over the answer, ACCEPTED, *yes*; the two roles' hands the same);
+*aNodeOfTheEgressSaysNothing*; *whatTheHandFeelsAroundTheScan* (acquire then *no*; REJECTED and the
+window's timeout the same steps). `EgressSharedLineTest` (ui, new): hidden with one Insider (three to
+six seats, or the host's one), shown with two or more, the unsettled band left shown, a Resident's
+page 2 unmoved, and the setting copied from the lobby at arming. `LobbySettingsWireTest` (app cheats,
+new, phones over loopback): *everyGuestsLobbyDrawsTheHostsNumbers*, *aRoundWithOneInsiderHidesTheSharedLine*
+(five phones), *aRoundWithTwoInsidersShowsTheSharedLine* (seven phones, the host's two).
+`LobbySettingsTest` (ui): the owner's ranges from the unchanged defaults; *noChoiceBreaksTheTwoBounds*;
+the host's press cycles each row and the house is told each choice; a guest's press reaches nothing;
+*aGuestsRowsDrawTheHostsNumbers*. `LobbySettingsArmingTest` (app): *everyChoiceInTheRangesLocksAtArming*
+and *theStandingCarriesTheHostsFourRows* (and survives the lobby wire). `NoSoundTest` (model, JVM,
+new): the Surge's effect and message hold no sound, the type does not load, the frame names none, and
+no `.kt` or `.swift` source names the speaker, its stub or the type.
+
+**Proved red by injection**, each restored and green again, quoted from the XML:
+- **REJECTED's buzz dropped** (`SubroutineGraded.haptic` made `null` on a refusal, effect and
+  message): three tests red. *in process, seat 0: SubroutineGraded(seat=Seat(index=0),
+  accepted=false). Expected <[[Buzz(millis=90), Rest(millis=140), Buzz(millis=90)]]>, actual <[]>*;
+  *Insider: REJECTED did not say no. Expected <[[Buzz(millis=90), Rest(millis=140), Buzz(millis=90)]]>,
+  actual <[]>*; *REJECTED and a timed-out scan no longer feel the same.*
+- **The line shown with one Insider** (`egressSharedBy` returning `count >= 1`): three tests red.
+  *one Insider at 3 seats (setting UNKNOWN), and page 2 still says the Egress is shared
+  expected:<[]> but was:<[SHARED WITH THE OTHER INSIDER]>*; *the host chose one Insider of eight and
+  the line stayed*; and over the wire, *the only Insider's page 2 still says the Egress is shared.
+  Expected <>, actual <SHARED WITH THE OTHER INSIDER>.*
+
+**Rendered and looked at** (600×1300, an iPhone 16 Pro's insets, through `FlowHost`). Page 2 of an
+Insider in a round of five, UNKNOWN: REVOKE READY . HOLD TO ARM; EGRESS with no line under it and its
+bar, the tile the same height as with the line; SURGE, STATIC, ISOLATE and their shared line. The
+same page in a round of eight the host set to two: EGRESS / SHARED WITH THE OTHER INSIDER, every
+other pixel of the layout in place. A Resident's page 2 in the round of five: POWER, SUBSYS / ALL
+SYSTEMS RESPONDING, BUS, THERMAL, CACHE, unchanged. The host's lobby after one press on each timed
+row: DISCUSSION 120S, VOTING 60S, EGRESS TIMER 150S, REVOKE COOLDOWN 90S, then YOUR ONE LINE, LIGHTS
+OUT and CLOSE THE HOUSE. A guest's lobby after the host's standing moved: the same four numbers, LEAVE
+THIS HOUSE, no LIGHTS OUT.
+
+| site | before | after |
+|---|---|---|
+| `model` `Effect.kt`, `RoundWire.kt` | `SubroutineGraded` silent; `ScanAnswered(opened)`; `Surged(…, sound, haptic)` | `haptic` on both (yes/no; no or nothing); `Surged(…, haptic)` |
+| `model` `Sound.kt` | `Sound.Surge` | deleted |
+| `model` `LobbyWire.kt` | `Standing` without the four timed rows | + `voteWindowSeconds`, `discussionSeconds`, `egressTimerSeconds`, `revokeCooldownSeconds` |
+| `core` `Rules.kt` | `ScanAnswered(seat, opened)`; `Surged(sound = Sound.Surge)` | `haptic = Double` unless opened or a node; no sound |
+| `platform` `Speaker.kt`, `Speaker.ios.kt` | `Speaker`, `deviceSpeaker`, `SilentSpeaker` | deleted |
+| `platform` `LobbyDesk.kt` | standing without the four | `withSettings` |
+| `app` `HouseBuzzer.kt` | verdict and scan quiet | both read off the effect and the message |
+| `app` `LobbyOverTransport.kt` | four setters unpublished | each publishes; the round's standing carries them |
+| `ui` `Lobby.kt` | one choice each; host's own numbers | the owner's ranges; every row off the standing |
+| `ui` `PanelModel.kt`, `Flow.kt` | the line always | `egressSharedBy`; `insidersChosen` copied at arming |
+| `harness` `Recording.kt`, `Transcript.kt` | 48 | 49: `ScanAnswered` `haptic=`, `Surged` without `sound=` |
+| `gdd.md` | four dispute flags; Surge with sound | ruled; light only |
+| `phone-session-2026-11-19.md` | verdict silent; the line unmentioned; the pass unruled | the yes/no buzzes; the EGRESS line; the pass ruled |
+
+**Checked** (on the final tree, `*/build/test-results` cleared first: `./gradlew check --continue`
+with the two variant sweeps excluded, then `:app:variantSweepRelease`, then `:app:variantSweepPlaytest`,
+the app's XML copied out after each, every result XML counted with a python glob): model 365 (JVM) + 346 (iOS Simulator); core 433 + 431; platform 211; ui 790 (desktop) + 393; harness 136; cards 17; app 293 (the default variant), 176 (Release), 293 (Playtest). 3,415 in the default check, 0 errors, 0 skipped, and two failures, each rerun alone and passing: `OutboundQueueTest.aSeatThatStopsDrainingDelaysNobodyAndIsDroppedWhenItsQueueIsFull`, the known load flake (1 test, 0 failures alone), and in the Release sweep `HouseGoneTest.aGuestWhoLeavesKeepsHerSeatAndAGuestWhoStaysIsSeatedAgain` (*ROSE came back to somebody else's chair*), which passed in the default and Playtest sweeps and alone in Release (4 tests, 0 failures); it is not on the known list and is recorded here rather than dismissed. The vocabulary lints, `redactionLint`, the cordons and `boundaryCheck` ran and passed. `VerdictBuzzTest`, `LobbySettingsWireTest`, `EgressSharedLineTest` and `NoSoundTest` are in the XML, the two app suites in the default and Playtest sweeps (Release does not compile the cheats' tests).
 
 ## State after revision 12
 

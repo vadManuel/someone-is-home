@@ -50,6 +50,14 @@ class Recording(
     }
 
     companion object {
+        // 49: two effect rows changed shape (the owner's 2026-11-21 rulings, D-320). `ScanAnswered`
+        // gains `haptic=`, `Double` on NOTHING FOR YOU HERE and `none` at a node of the Egress and on
+        // an opened scan: the rules choose the buzz from the facts that chose `opened`, and a
+        // replay that could not see it would certify a build that buzzed a node scan *no*. `Surged`
+        // loses `sound=`: the game makes no sound, and the effect no longer carries one. A version
+        // 48 recording's rows cannot be compared with what this build emits, so it is refused here
+        // as every older one is. No event or state row moved.
+        //
         // 48: two changes built in parallel and integrated together, each of which alone was 47.
         // The home's plan goes to every seat at arming (D-316): a new effect, `PlanIssued`, one per
         // seat at the end of the arming burst, which an older build cannot name. The Terminal's
@@ -383,7 +391,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/48"
+        const val HEADER = "someone-is-home/recording/49"
     }
 }
 

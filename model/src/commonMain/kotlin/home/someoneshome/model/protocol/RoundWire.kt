@@ -18,7 +18,6 @@ import home.someoneshome.model.OrderLine
 import home.someoneshome.model.RadioCause
 import home.someoneshome.model.Role
 import home.someoneshome.model.Seat
-import home.someoneshome.model.Sound
 import home.someoneshome.model.SubroutineInstance
 import home.someoneshome.model.WinRoute
 import home.someoneshome.model.Winner
@@ -199,7 +198,7 @@ sealed class RoundMessage {
      * **The Surge, landing on this phone** (`gdd.md:313`, `:342`).
      *
      * The seat goes: it was the recipient's, and the socket is the address. What is left is the
-     * gesture the rules authored — two luminances, the one sound this game has, and a buzz.
+     * gesture the rules authored — two luminances and a buzz. The game makes no sound (D-320).
      *
      * **[peak] and [black] are on the wire because the lamp is a pure function of state** (rule 5):
      * a device handed a bare *you were surged* token would be a device inventing an animation, and a
@@ -216,7 +215,6 @@ sealed class RoundMessage {
     data class Surged(
         val peak: Int,
         val black: Int,
-        val sound: Sound,
         val haptic: Haptic,
     ) : RoundMessage()
 
@@ -319,7 +317,10 @@ sealed class RoundMessage {
     @ClientFacing
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("SubroutineGraded")
-    data class SubroutineGraded(val accepted: Boolean) : RoundMessage()
+    data class SubroutineGraded(val accepted: Boolean) : RoundMessage() {
+        /** ACCEPTED's *yes*, REJECTED's *no* (D-320): [Effect.SubroutineGraded]'s own, read off [accepted]. */
+        val haptic: Haptic get() = if (accepted) Haptic.Short else Haptic.Double
+    }
 
     /** The ledger's raw remaining count, to the two classes outside the system. */
     @ClientFacing
@@ -363,11 +364,34 @@ sealed class RoundMessage {
      * One kind and one message per scan, exactly as [Effect.ScanAnswered] argues: split in two on
      * the wire, a reader who never sees either payload could separate *this card holds nothing for
      * you* from *this card opened work*.
+     *
+     * ### [no]: the rules' buzz, one digit, so a node and an empty card are one length (D-320)
+     *
+     * NOTHING FOR YOU HERE says D-160's *no*, and an opened scan or a node of the Egress says
+     * nothing; the effect carries the choice and this copies it. **One digit, always on the wire**
+     * ([NO] or [QUIET]), never a field the encoder leaves out: a node scan's answer and an empty
+     * card's stay the same length on the Wi-Fi (D-297), differing in that digit alone. A message
+     * built with no buzz named is quiet, the fail-quiet direction.
      */
     @ClientFacing
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("ScanAnswered")
-    data class ScanAnswered(val opened: SubroutineInstance?) : RoundMessage()
+    data class ScanAnswered(val opened: SubroutineInstance?, val no: Int) : RoundMessage() {
+        init {
+            require(no == NO || no == QUIET) { "a scan's answer says no or nothing, never $no" }
+        }
+
+        /** The answer with the rules' buzz: [Haptic.Double] or nothing. */
+        constructor(opened: SubroutineInstance?, haptic: Haptic? = null) : this(opened, if (haptic == Haptic.Double) NO else QUIET)
+
+        /** D-160's *no* on NOTHING FOR YOU HERE, nothing otherwise: the effect's own value. */
+        val haptic: Haptic? get() = if (no == NO) Haptic.Double else null
+
+        companion object {
+            const val QUIET: Int = 0
+            const val NO: Int = 1
+        }
+    }
 
     /**
      * The answer to a scan of the T card: the live view opens, or ONE READER AT A TIME (D-199).
@@ -1402,7 +1426,7 @@ object RoundWire {
         // The seat comes off; the pad is what makes this frame an armed Insider's length.
         is Effect.ContactAnswered -> RoundMessage.ContactAnswered(RoundMessage.ContactAnswered.PAD)
         is Effect.Surged ->
-            RoundMessage.Surged(effect.peak, effect.black, effect.sound, effect.haptic)
+            RoundMessage.Surged(effect.peak, effect.black, effect.haptic)
         is Effect.IsolateTargetsOffered -> RoundMessage.IsolateTargetsOffered(effect.targets)
         // The targets do not cross: only the width of the offer they make does (D-258).
         is Effect.IsolateTargetsBlanked -> RoundMessage.IsolateTargetsBlanked.over(effect.targets)
@@ -1413,7 +1437,7 @@ object RoundWire {
         is Effect.SystemIntegrityBatched -> RoundMessage.SystemIntegrityBatched(effect.percent)
         is Effect.MessageDelivered -> RoundMessage.MessageDelivered(effect.body)
         is Effect.WorkOrderIssued -> RoundMessage.WorkOrderIssued(effect.lines)
-        is Effect.ScanAnswered -> RoundMessage.ScanAnswered(effect.opened)
+        is Effect.ScanAnswered -> RoundMessage.ScanAnswered(effect.opened, effect.haptic)
         is Effect.TerminalAnswered -> RoundMessage.TerminalAnswered(effect.reading)
         // The seat comes off and nothing is left: the socket is the address (D-318).
         is Effect.CardUnregistered -> RoundMessage.CardUnregistered
@@ -1482,8 +1506,6 @@ object RoundWire {
 //   Haptic, MeetingPhase,    -- every value of every one of them is a fact the whole house
 //   MeetingTrigger,             watched happen, at the moment it happened.
 //   EgressType, Winner, WinRoute
-//   Sound                    -- one member, and the licence for it is that Surge is
-//                               self-inflictable (gdd.md:393). See the type.
 //   MarkerId, Destination,   -- the client-facing halves the rules already construct, and the
 //   AssignedWork, OrderLine,    narrowing that made them so is D-114's and D-112's rather than
 //   SubroutineInstance          anything this file decided.

@@ -66,6 +66,11 @@ Tick each line as you see it.
 **Revoke, on the Insider's phone**
 - [ ] Page 2 after arming: ARMED, then 20 s later **COOLING DOWN, dimmed**, then READY about 61 s
       after the hold. It never says READY early. (D-286)
+- [ ] Page 2's EGRESS tile, on the Insider's phone: in a round with **one** Insider (any party of
+      three to six, or the host set INSIDERS to 1) the line under EGRESS is blank; with **two or
+      more** it reads SHARED WITH THE OTHER INSIDER. A Resident's tile reads ALL SYSTEMS RESPONDING
+      either way. Not settled yet: INSIDERS left UNKNOWN with seven to eleven phones, where the
+      line still shows. (D-320)
 - [ ] While armed, pass the Insider's phone within 10 cm of the other phone (a pass is enough;
       Ultra Wideband measures it): **both phones give one Long buzz**, and the Insider's tile goes
       straight to COOLING DOWN. (D-290, D-301)
@@ -121,7 +126,7 @@ Tick each line as you see it.
 
 **Abilities and meetings** *(overnight)*
 - [ ] **Surge** on another phone: its lamp slams bright, goes dark, reboots, and any open
-      Subroutine is lost. **No sound plays** (not built yet), and **no tap does anything** during the
+      Subroutine is lost. **No sound plays**, by ruling: the game makes none (D-320), and **no tap does anything** during the
       whole sequence, STOP NOW included (D-182, D-313).
 - [ ] **Static**: expect it to show only to someone at the Terminal. Nobody else is told yet
       (D-186; not built).
@@ -144,16 +149,19 @@ Tick each line as you see it.
 - [ ] **Endings**: play one round to an ending and check the route it names.
 
 **Scanning and Subroutines** *(overnight)*
-- [ ] A card's verdict gives **no buzz**, and NOTHING FOR YOU HERE gives no buzz. D-160 lists a yes
-      and a no buzz: say whether silence is what you want.
+- [ ] A card's verdict buzzes: **ACCEPTED one short buzz** ("yes"), **REJECTED two** ("no"). A
+      card with nothing for you: the scan's "yes", then NOTHING FOR YOU HERE with two buzzes. The
+      same on an Insider's phone and a Resident's, and on that phone only. Scanning one of the
+      Egress's two cards gives the scan's "yes" and no "no". REJECTED's two buzzes feel the same as
+      a scan that runs out of time. (D-320)
 - [ ] Scan a QR code that is not a game card: a "yes" buzz, then nothing. Scan a game card this
       home never registered (one from another home, a spare from the deck, or a spare meeting
       card): a "yes" buzz, then NOT A MARKER with a "no" buzz (two vibrates), on that phone only.
       No other phone reacts and no meeting is called. The "no" buzz is provisional (D-318).
 - [ ] **Drift**: tap before the buzz. It is handed over and REJECTED, and the attempt is gone
       (D-165, D-313).
-- [ ] An **armed pass at an already-Revoked phone**: today nothing happens, no buzz and the tile
-      stays ARMED. Say whether that is right (D-290).
+- [ ] An **armed pass at an already-Revoked phone**: nothing happens, no buzz, the tile stays ARMED
+      and the Revoke is not spent. The owner kept this (D-290, D-320).
 - [ ] **Page 1** has four tiles, FILES, MESSAGES, SETTINGS and CAMERA, and no NOTES, on an
       Insider's phone and a Resident's alike (D-315).
 

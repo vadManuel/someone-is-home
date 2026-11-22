@@ -5,6 +5,7 @@ import home.someoneshome.model.EgressType
 import home.someoneshome.model.EmitSchema
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
+import home.someoneshome.model.Haptic
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
@@ -99,10 +100,15 @@ class EgressNodeScanTest {
                 empty.effects.map { it::class.simpleName }, atNode.effects.map { it::class.simpleName },
                 "$role: a node scan answered in a different shape from an empty card",
             )
+            // **One length on the wire, not one set of bytes** (D-320): the empty card's answer says
+            // D-160's *no* and the node's says nothing, in one digit, because every phone shows the
+            // node's answer as the tap control (D-295). The length is still the empty card's.
             assertEquals(
-                frame(answerOf(empty.effects)), frame(answerOf(atNode.effects)),
-                "$role: a node scan's answer is not an empty card's on the wire",
+                frame(answerOf(empty.effects)).length, frame(answerOf(atNode.effects)).length,
+                "$role: a node scan's answer is not an empty card's length on the wire",
             )
+            assertEquals(Haptic.Double, answerOf(empty.effects).haptic, "$role: NOTHING FOR YOU HERE did not say no")
+            assertNull(answerOf(atNode.effects).haptic, "$role: a node scan said no over the tap control")
             assertEquals(
                 listOf(seat), EmitSchema.deliveries(answerOf(atNode.effects), atNode.state).map { it.seat },
                 "$role: the node scan's answer reached somebody else",

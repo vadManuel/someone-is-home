@@ -4,6 +4,7 @@ import home.someoneshome.model.CardPayload
 import home.someoneshome.model.Effect
 import home.someoneshome.model.Event
 import home.someoneshome.model.GameState
+import home.someoneshome.model.Haptic
 import home.someoneshome.model.HouseMap
 import home.someoneshome.model.MarkerCard
 import home.someoneshome.model.MarkerId
@@ -340,7 +341,7 @@ class RevokedSeatScanTest {
         assertEquals(
             emptyList(),
             home.someoneshome.model.EmitSchema.deliveries(
-                Effect.ScanAnswered(Seat(0), opened = null), out,
+                Effect.ScanAnswered(Seat(0), opened = null, haptic = Haptic.Double), out,
             ),
         )
     }

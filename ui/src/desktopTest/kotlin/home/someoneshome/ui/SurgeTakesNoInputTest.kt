@@ -11,7 +11,6 @@ import home.someoneshome.model.Destination
 import home.someoneshome.model.Haptic
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.OrderLine
-import home.someoneshome.model.Sound
 import home.someoneshome.model.SubroutineInstance
 import home.someoneshome.model.SubroutineKind
 import home.someoneshome.model.protocol.IntentMessage
@@ -53,7 +52,7 @@ class SurgeTakesNoInputTest {
         ),
     )
 
-    private val surge = RoundMessage.Surged(peak = 100, black = 0, sound = Sound.Surge, haptic = Haptic.Short)
+    private val surge = RoundMessage.Surged(peak = 100, black = 0, haptic = Haptic.Short)
 
     /** A phone standing at [hall] with the house's Drift open in front of it, and its wire. */
     private fun holdingADrift(wire: MutableList<IntentMessage>): FlowModel {

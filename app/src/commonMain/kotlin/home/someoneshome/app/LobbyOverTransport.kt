@@ -694,28 +694,39 @@ class LobbyHouse(
     }
 
     /**
-     * **The host's ballot length, to the desk — and deliberately not to the standing** (D-117).
+     * **The host's ballot length, to the desk and to every phone's lobby** (D-117, D-320).
      *
-     * [setInsiders] publishes because the Insider count is part of what every phone in the lobby is
-     * shown: the desk clamps it into D-103's band and the clamped value has to come back, or the
-     * host reads a setting the house is not holding. **The ballot's length is not on that surface at
-     * all.** It reaches the round by the arming event, and it reaches the clients on the push that
-     * opens the vote — so publishing it here would widen the wire for a number already travelling
-     * by a better road, and would put it on six phones a whole round before anybody may act on it.
-     *
-     * The absence of `publish()` is therefore the decision, not an omission, which is why it is
-     * written down beside the one call that has it. See `LobbyDesk.voteWindowSeconds`.
+     * It reaches the round by the arming event and the clients' clocks on the push that opens the
+     * vote, as before. **It is published now**, as [setInsiders] is: the VOTING row on a guest's
+     * lobby drew that phone's own number, because the setting never went down the lobby wire, and
+     * with a range the guest's row would read a number the house is not holding. The standing is
+     * the road every lobby number already takes, so the row is drawn off it on every phone.
      */
-    fun setVoteWindow(seconds: Int) = desk.setVoteWindow(seconds)
+    fun setVoteWindow(seconds: Int) {
+        desk.setVoteWindow(seconds)
+        publish()
+    }
 
     /**
-     * **The host's DISCUSSION, EGRESS TIMER and REVOKE COOLDOWN rows, to the desk — and not to the
-     * standing** (D-317). [setVoteWindow]'s shape and its reason, and its absent `publish()`: each
-     * reaches the round by the arming event and the clients by the push that starts its clock.
+     * **The host's DISCUSSION, EGRESS TIMER and REVOKE COOLDOWN rows, to the desk and to every
+     * phone's lobby** (D-317, D-320). [setVoteWindow]'s shape and its reason: each reaches the round
+     * by the arming event and the clients' clocks by the push that starts it, and every lobby row
+     * by the standing.
      */
-    fun setDiscussion(seconds: Int) = desk.setDiscussion(seconds)
-    fun setEgressTimer(seconds: Int) = desk.setEgressTimer(seconds)
-    fun setRevokeCooldown(seconds: Int) = desk.setRevokeCooldown(seconds)
+    fun setDiscussion(seconds: Int) {
+        desk.setDiscussion(seconds)
+        publish()
+    }
+
+    fun setEgressTimer(seconds: Int) {
+        desk.setEgressTimer(seconds)
+        publish()
+    }
+
+    fun setRevokeCooldown(seconds: Int) {
+        desk.setRevokeCooldown(seconds)
+        publish()
+    }
 
     /**
      * **One effect, to every seat the allowlist permits it to and no other** (rule 2, D-079).
@@ -1194,11 +1205,13 @@ class LobbyHouse(
     private fun publish() {
         val server = host ?: return
         val inRound = playing
-        val standing = if (inRound == null) desk.standing() else LobbyBody.Standing(
-            joined = inRound.size,
-            linesIn = inRound.size,
-            names = inRound.map { it.name },
-            insiders = desk.insiders,
+        val standing = if (inRound == null) desk.standing() else desk.withSettings(
+            LobbyBody.Standing(
+                joined = inRound.size,
+                linesIn = inRound.size,
+                names = inRound.map { it.name },
+                insiders = desk.insiders,
+            ),
         )
         val body = TransportFrame.Carry(LobbyWire.encode(standing.copy(round = round)))
         if (inRound == null) return announce(body)

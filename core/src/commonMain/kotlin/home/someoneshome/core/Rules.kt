@@ -24,7 +24,6 @@ import home.someoneshome.model.Role
 import home.someoneshome.model.Tick
 import home.someoneshome.model.Touch
 import home.someoneshome.model.Seat
-import home.someoneshome.model.Sound
 import home.someoneshome.model.SubroutineInstance
 import home.someoneshome.model.WinRoute
 import home.someoneshome.model.Winner
@@ -615,13 +614,19 @@ private fun markerScanned(state: GameState, event: Event.MarkerScanned): Reducti
     // The instance the client is shown is the NARROWED one: it carries the parameters and cannot
     // carry the answer, because it is a different type rather than the same type with a field
     // blanked (rule 3). The answer never leaves `next`.
+    val opened = if (entry != null && instance != null) {
+        SubroutineInstance(entry.index, instance.subroutine, instance.parameters)
+    } else {
+        null
+    }
     val answered = Effect.ScanAnswered(
         seat = event.actor,
-        opened = if (entry != null && instance != null) {
-            SubroutineInstance(entry.index, instance.subroutine, instance.parameters)
-        } else {
-            null
-        },
+        opened = opened,
+        // **NOTHING FOR YOU HERE says *no*** (the owner's 2026-11-21 ruling, D-320): D-160's two
+        // vibrates, NOT A MARKER's. Not at a node of the Egress, where every phone shows the tap
+        // control (D-295), and not on an opened scan. Read off the card and the opened work,
+        // never the role, so the same card buzzes the same on either phone.
+        haptic = if (opened == null && !node) Haptic.Double else null,
     )
     val placed = Effect.PresenceChanged(event.actor, event.marker, open = instance != null)
     return Reduction(next, listOf(answered, placed))
@@ -832,14 +837,14 @@ private fun surgeFired(state: GameState, event: Event.SurgeFired): Reduction<Gam
         // are the same seat this arrives once, as the target's, which is what makes the self-surge
         // alibi indistinguishable from being attacked (`gdd.md:342`).
         //
-        // D-135's long haptic is closed at five and this is not one of them, however loud the rest
-        // of it is. A ruling rather than a default.
+        // D-135's long haptic is closed at five and this is not one of them, however bright the
+        // rest of it is. A ruling rather than a default. **No sound**: the game makes none (the
+        // owner's 2026-11-21 ruling, D-320, reversing D-176).
         listOf(
             Effect.Surged(
                 seat = event.target,
                 peak = LAMP_FULL,
                 black = LAMP_BLACK,
-                sound = Sound.Surge,
                 haptic = Haptic.Short,
             ),
         )

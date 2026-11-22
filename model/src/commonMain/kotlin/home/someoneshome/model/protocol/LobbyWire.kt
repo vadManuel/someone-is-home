@@ -1,5 +1,6 @@
 package home.someoneshome.model.protocol
 
+import home.someoneshome.model.Balance
 import home.someoneshome.model.ClientFacing
 import kotlinx.serialization.json.Json
 
@@ -146,6 +147,16 @@ sealed class LobbyBody {
      * ROUND, so the phone still waits — but a phone told only that it waits said ROUND IN PROGRESS
      * over a room standing in the lights at the ending. Set on the waiting phone's body from the
      * round's ending to NEW ROUND, and nowhere else; the room watched the lights come on.
+     *
+     * ### The host's four timed rows ride here too, so a guest draws the host's numbers (D-320)
+     *
+     * [voteWindowSeconds], [discussionSeconds], [egressTimerSeconds] and [revokeCooldownSeconds] are
+     * the host's VOTING, DISCUSSION, EGRESS TIMER and REVOKE COOLDOWN, as the desk holds them. They
+     * were the host's phone's alone (D-117, D-317), so a guest's row drew its own phone's number; with
+     * the ranges the owner ruled on 2026-11-21 the two would disagree. **Every phone draws these**,
+     * the host's included, as every phone draws [insiders]. Each is public: the host sets it in a lit
+     * room in front of everybody, and the round's pushes carry the same numbers once it runs. Each
+     * defaults to its design number, for a body from no house.
      */
     @ClientFacing
     @kotlinx.serialization.Serializable
@@ -158,6 +169,10 @@ sealed class LobbyBody {
         val round: Int = 0,
         val waitingForNextRound: Boolean = false,
         val roundOver: Boolean = false,
+        val voteWindowSeconds: Int = Balance.VOTE_WINDOW_SECONDS,
+        val discussionSeconds: Int = Balance.DISCUSSION_SECONDS,
+        val egressTimerSeconds: Int = Balance.EGRESS_TIMER_SECONDS,
+        val revokeCooldownSeconds: Int = Balance.REVOKE_COOLDOWN_SECONDS,
     ) : LobbyBody()
 
     /**

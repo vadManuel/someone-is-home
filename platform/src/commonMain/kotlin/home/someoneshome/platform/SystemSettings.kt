@@ -4,7 +4,7 @@ package home.someoneshome.platform
  * **The OS's own settings page for this app, opened from inside it** (D-173, and the owner's
  * 2026-08-24 ruling that the hosting refusal gain a control that opens it).
  *
- * One door and one verb, for [Speaker]'s reason. A home that will not go on the air is almost
+ * One door and one verb, so a second screen cannot reach the OS by a road of its own. A home that will not go on the air is almost
  * always a Local Network grant the host has not given, and the fix is two taps away in a place the
  * app cannot reach and the host cannot be told to find in the dark — except that this is the one
  * moment in the evening when nobody is in the dark. **Host setup happens in a lit room with the
@@ -35,7 +35,7 @@ interface SystemSettings {
 expect fun deviceSystemSettings(): SystemSettings
 
 /**
- * **A door that opens nothing and says so where only a developer reads** — [SilentSpeaker]'s shape.
+ * **A door that opens nothing and says so where only a developer reads.**
  *
  * The honest form of *there is no OS here*: the call goes through, the control is exercised, and no
  * page opens. [opened] is what a test reads, because *the host asked for the settings page* is

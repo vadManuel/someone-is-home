@@ -1216,12 +1216,12 @@ fun DeleteScreen() {
  *
  * ### Five rows are the host's, and the other two are readings
  *
- * INSIDERS (D-103) is sent, clamped and echoed back; VOTING moves a number this phone holds alone
- * (D-117), and since D-317 so do DISCUSSION, EGRESS TIMER and REVOKE COOLDOWN, the same way: each
+ * INSIDERS (D-103) is sent, clamped and echoed back; VOTING (D-117), DISCUSSION, EGRESS TIMER and
+ * REVOKE COOLDOWN (D-317) are sent and echoed back the same way, on the standing (D-320), and each
  * rides `ArmingInputs` and `Event.RoundArmed` into `GameState`, the shape `voteWindowSeconds` took.
- * On a phone that is not hosting all five are readings. Those three each offer one choice until the
- * owner rules a range (see `LobbyModel.DISCUSSIONS`). INSIDERS KNOW EACH OTHER and SUBROUTINES
- * EACH are readings on every phone.
+ * On a phone that is not hosting all five are readings of the host's numbers. The three timed rows
+ * cycle through the owner's ranges (see `LobbyModel.DISCUSSIONS`). INSIDERS KNOW EACH OTHER and
+ * SUBROUTINES EACH are readings on every phone.
  */
 @Composable
 fun LobbyScreen(vals: PanelVals) {
@@ -1255,7 +1255,7 @@ fun LobbyScreen(vals: PanelVals) {
             LobbyRow("SUBROUTINES EACH", lobby.orderSizeLabel)
             // The host's, VOTING's way (D-317): see LobbyModel.cycleDiscussion.
             LobbyRow("DISCUSSION", lobby.discussionLabel, if (lobby.hosting) actions.cycleDiscussion else null)
-            // The tap goes no further than this phone: see LobbyModel.cycleVoteWindow.
+            // The host's, echoed back on the standing to every phone: see LobbyModel.cycleVoteWindow.
             LobbyRow("VOTING", lobby.voteWindowLabel, if (lobby.hosting) actions.cycleVoteWindow else null)
             LobbyRow("EGRESS TIMER", lobby.egressTimerLabel, if (lobby.hosting) actions.cycleEgressTimer else null)
             LobbyRow("REVOKE COOLDOWN", lobby.revokeCooldownLabel, if (lobby.hosting) actions.cycleRevokeCooldown else null)
