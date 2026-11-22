@@ -107,7 +107,7 @@ class ContainmentDriftTest {
             val answeredAt = heardAt + bench.random.nextLong(0, 61)
             bench.at(answeredAt) {
                 val down = RoundWire.encode(
-                    RoundBody.UploadHeard.of("0123456789abcdef", heard.probe, house(heardAt), house(answeredAt), RangingWire.NO_PLAN),
+                    RoundBody.UploadHeard.of("0123456789abcdef", heard.probe, house(heardAt), house(answeredAt), RangingWire.NO_PLAN, home.someoneshome.model.protocol.OccupancyWire.blank(ByteArray(home.someoneshome.model.protocol.OccupancyWire.FIELD_BYTES))),
                 )
                 bench.at(answeredAt + bench.hop()) {
                     val answer = RoundWire.decodeOrNull(down) as RoundBody.UploadHeard

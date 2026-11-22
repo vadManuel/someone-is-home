@@ -35,7 +35,7 @@ class WireDecodeAllocationTest {
 
     @Test
     fun `a round body offered to the lobby's decoder is turned away without allocating`() {
-        val answer = RoundWire.encode(RoundBody.UploadHeard.of("0123456789abcdef", UploadProbe.NONE, 0L, 0L, RangingWire.NO_PLAN))
+        val answer = RoundWire.encode(RoundBody.UploadHeard.of("0123456789abcdef", UploadProbe.NONE, 0L, 0L, RangingWire.NO_PLAN, home.someoneshome.model.protocol.OccupancyWire.blank(ByteArray(home.someoneshome.model.protocol.OccupancyWire.FIELD_BYTES))))
         val push = RoundWire.encode(RoundBody.Push(9, RoundMessage.MeetingCalling, round = 1))
         assertNull(LobbyWire.decodeOrNull(answer))
         assertUnder(64, perCall { LobbyWire.decodeOrNull(answer) }, "the lobby's decode of an upload's answer")
@@ -69,15 +69,20 @@ class WireDecodeAllocationTest {
      * seat's sealed plan, [RangingWire.PLAN_CHARS] characters. The body and the frame are each built
      * and each the plan's width again: 4.4 KB measured, against 0.5 KB for an answer with no plan
      * (a `FaultHeard`), and 7.3 KB for D-300's first draft's six token slots.
+     *
+     * **D-316 adds the occupancy field**, [OccupancyWire.CHARS] characters more in the body and again
+     * in the frame: 5.6 KB measured, so the ceiling rises from 5 KB to 6 KB. The field itself is
+     * sealed beside this, by the codec, and costs its own string.
      */
     @Test
     fun `writing an upload's answer costs the frame and little else`() {
         val plan = RangingWire.NO_PLAN
+        val map = OccupancyWire.blank(ByteArray(OccupancyWire.FIELD_BYTES))
         val written = perCall {
-            TransportWire.encode(TransportFrame.Carry(RoundWire.encode(RoundBody.UploadHeard.of("0123456789abcdef", UploadProbe.NONE, 5L, 6L, plan))))
+            TransportWire.encode(TransportFrame.Carry(RoundWire.encode(RoundBody.UploadHeard.of("0123456789abcdef", UploadProbe.NONE, 5L, 6L, plan, map))))
         }
         println("D-300 WRITING AN UPLOAD'S ANSWER — $written B")
-        assertUnder(5_120, written, "writing an upload's answer")
+        assertUnder(6_144, written, "writing an upload's answer")
     }
 
     @Test

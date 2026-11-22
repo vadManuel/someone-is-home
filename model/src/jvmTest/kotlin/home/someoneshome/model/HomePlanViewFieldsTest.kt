@@ -4,6 +4,7 @@ import java.lang.reflect.Modifier
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 /**
  * **GUARD (rule 3, O2): the plan view's type IS its field list, and a card cannot be expressed in
@@ -50,16 +51,18 @@ class HomePlanViewFieldsTest {
     }
 
     /**
-     * **And it is not wire-serialisable**: marking it so is the owner's Q1, not this unit's. (The
-     * `@ClientFacing` marker has binary retention, so the redaction lint, which reads source, is
-     * what refuses a `@Serializable` on an unmarked type; this checks the compiled result.)
+     * **And since D-316 it is wire-serialisable, with exactly the fields above** (the plan goes to
+     * every seat at arming). The serializer's own descriptor is the wire's field list, so a field
+     * added to the view that could hold a card would show here as well as above.
      */
     @Test
-    fun `the plan view has no serializer`() {
+    fun `the plan view's serializer carries the field list and nothing more`() {
         for (type in listOf(HomePlanView::class.java, StoreyView::class.java, RoomView::class.java)) {
-            assertFalse(type.declaredClasses.any { it.simpleName == "\$serializer" }, "${type.simpleName} has a generated serializer")
+            assertTrue(type.declaredClasses.any { it.simpleName == "\$serializer" }, "${type.simpleName} has no generated serializer")
         }
-        // The check can see one: the client-facing view beside it has its serializer.
-        assertEquals(true, ObservationView::class.java.declaredClasses.any { it.simpleName == "\$serializer" })
+        val names = { d: kotlinx.serialization.descriptors.SerialDescriptor -> (0 until d.elementsCount).map { d.getElementName(it) } }
+        assertEquals(listOf("storeys", "rooms"), names(HomePlanView.serializer().descriptor))
+        assertEquals(listOf("name", "cols", "rows", "cells"), names(StoreyView.serializer().descriptor))
+        assertEquals(listOf("name", "kind"), names(RoomView.serializer().descriptor))
     }
 }

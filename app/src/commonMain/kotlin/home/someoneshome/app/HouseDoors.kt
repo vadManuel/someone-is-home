@@ -38,6 +38,9 @@ class HouseDoors(private val rules: () -> RoundAuthority?) {
      */
     suspend fun sighted(seat: Seat, upload: RoundBody.Sighted): String? = rules()?.sighted(seat, upload)
 
+    /** What [seat] may draw of the map this beat, sealed for it (D-316). Null when there is no authority to ask. */
+    suspend fun mapped(seat: Seat): String? = rules()?.mapped(seat)
+
     /** A phone's radio went down, and why; heard once per onset (D-245). */
     suspend fun faulted(seat: Seat, report: RoundBody.RadioFaulted) {
         rules()?.radioFaulted(seat, report.cause, report.onset)

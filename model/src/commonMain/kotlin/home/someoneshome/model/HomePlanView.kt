@@ -20,18 +20,22 @@ package home.someoneshome.model
  * Cells rather than strokes, as the plan view in `fddd6d0` chose: strokes are the host's gestures,
  * and a cell grid is what any reader of the plan needs.
  *
- * ### ⚠️ It reaches NO client, and it is deliberately not `@Serializable` or `@ClientFacing`
+ * ### It reaches every phone in the round, byte for byte the same (D-316)
  *
- * D-186 sends the plan to no client, and whether that changes is the owner's question Q1 in the
- * occupancy spec (D-186 against M11/M12). So this type is **not wire-serialisable**: the redaction
- * lint permits `@Serializable` only on `@ClientFacing` types, and marking it client-facing is the
- * ruling Q1 has not made. No `RoundMessage` carries it and no `Effect` names it, so the emit
- * schema has nothing to permit. The unit that answers Q1 adds the marker, the message and the row
- * together, and until then the fail-closed state is the only one this file can express.
+ * D-186 sent the plan to no client, and D-271 kept it off the wire until the owner answered the
+ * occupancy spec's Q1. The owner's 2026-11-21 ruling (*the Terminal and the couch must show the
+ * home's map with room counts*) needs a plan on the reader's phone and on the couch, and D-316
+ * sends it to **every seat at arming, identical**, on `Effect.PlanIssued`: one frame of one length
+ * per phone, so no phone is told by the plan's arrival that it is the reader, out, or an Insider.
+ * D-186's harm was a row one class wide; this one is four classes wide and carries no card, so the
+ * answer key to every work order (`Destination.kt`) still cannot cross. What it says is what every
+ * player learns by walking the house: the rooms, their names and the storeys.
  *
  * Recorded and replayed, though (rule 4): it rides `Event.RoundArmed.plan`, and the recording
  * writes it out in full, so a replay knows the same adjacency the evening did.
  */
+@ClientFacing
+@kotlinx.serialization.Serializable
 data class HomePlanView(
     val storeys: List<StoreyView>,
     val rooms: List<RoomView>,
@@ -96,6 +100,8 @@ data class HomePlanView(
  * started in a corner; where on the editor's unbounded grid it was painted is a gesture, and it is
  * not kept.
  */
+@ClientFacing
+@kotlinx.serialization.Serializable
 data class StoreyView(
     val name: String,
     val cols: Int,
@@ -118,6 +124,8 @@ data class StoreyView(
 }
 
 /** **One painted area: a name and whether it is a room or stairs.** Its storey is in its cells. */
+@ClientFacing
+@kotlinx.serialization.Serializable
 data class RoomView(val name: String, val kind: RoomKind)
 
 /**

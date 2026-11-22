@@ -342,6 +342,8 @@ class HouseBuzzTest {
         Effect.RoleRevealed(Seat(1), Role.Resident),
         Effect.MeetingCalling(Seat(1)),
         Effect.RosterIssued(Seat(1), emptyList()),
+        // The plan (D-316): silent, for the roster's reason.
+        Effect.PlanIssued(Seat(1), home.someoneshome.model.HomePlanView.EMPTY),
         Effect.ContactSeedIssued(Seat(1), ContactSeed("0123456789abcdef0123456789abcdef")),
         Effect.RevokeLanded(Seat(1), haptic = null),
         // D-290: the two halves of a landed Revoke, which buzz Long, and the armed answer that does not.
@@ -381,7 +383,9 @@ class HouseBuzzTest {
         // the gap. The two row-less kinds are named the way it names them: they are permitted to
         // nobody, so they are not in `knownKinds`, and a fixture that skipped them would leave two
         // branches of both exhaustive `when`s in `HouseBuzzer.kt` unrun.
-        val known = EmitSchema.knownKinds().map { it.name }.toSet() +
+        // The map's two beat kinds (D-316) have rows and no effect: they ride the upload's answer
+        // and reach neither the motor nor a push.
+        val known = EmitSchema.knownKinds().filterNot { it in EmitSchema.BEAT_KINDS }.map { it.name }.toSet() +
             EmitSchema.PRESENCE_CHANGED.name + EmitSchema.EGRESS_SUCCEEDED.name
         assertEquals(
             emptySet(), known - walked,
@@ -522,7 +526,7 @@ class HouseBuzzTest {
             "RestrainedTakeover", "MeetingEnded", "EgressOpened", "EgressHeld",
             "SyncPulseAnswered", "SyncPulseBlanked", "EgressContained", "EgressSucceeded", "RoundEnded",
             "InsidersRevealed", "HouseSignedOff", "HouseClosedOnPermission",
-            "RoleRevealed", "MeetingCalling", "RosterIssued", "RevokeLanded",
+            "RoleRevealed", "MeetingCalling", "RosterIssued", "PlanIssued", "RevokeLanded",
             "ContactSeedIssued",
             "ContactAnswered",
             "NoticeIssued",

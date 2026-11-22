@@ -50,6 +50,13 @@ class Recording(
     }
 
     companion object {
+        // 47: the home's plan goes to every seat at arming (D-316): a new effect, `PlanIssued`, one
+        // per seat at the end of the arming burst, which a version 46 build cannot name, so a 46
+        // recording's effect rows stop one row per seat short of what this build emits. Events and
+        // state rows are unchanged. The Terminal's counts and the couch's true occupancy ride the
+        // upload's answer (`UploadHeard.map`), are no effect and add no row: what a phone was shown
+        // at a tick is `occupancyBeat` of the recorded state at that tick.
+        //
         // 46: the notice names who switched something off apart from who only left the app (the
         // owner's 2026-11-21 rulings, D-311). The `NoticeIssued` effect row's `unreachable=` now lists
         // the leavers alone and its `switchedOff=` is a list of seats where it was `true`/`false`, so a
@@ -369,7 +376,7 @@ class Recording(
         //
         // 5: the verdict spine. `SubroutineCompleted` became `SubroutineReturned` and carries the
         // entry; the state row gained the work order.
-        const val HEADER = "someone-is-home/recording/46"
+        const val HEADER = "someone-is-home/recording/47"
     }
 }
 

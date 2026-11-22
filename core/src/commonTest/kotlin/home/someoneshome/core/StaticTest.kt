@@ -330,7 +330,7 @@ class StaticTest {
      * sent. The plan this burst no longer holds was rooms, and nothing here brings one back.
      */
     @Test
-    fun `the arming burst is eight runs and none of them is a plan`() {
+    fun `the arming burst is nine runs and the plan is the last and the same for every seat`() {
         val reduction = reduce(
             GameState.EMPTY,
             armingFor(Tick(1), 20260823L, ST_SEATS, null, placed(ST_ACTIVE)),
@@ -340,11 +340,15 @@ class StaticTest {
         assertEquals(
             listOf(
                 "LampSet", "WorkOrderIssued", "OpeningMessage", "RosterIssued", "RoleRevealed",
-                "ContactSeedIssued", "IsolateTargetsOffered", "IsolateTargetsBlanked",
+                "ContactSeedIssued", "IsolateTargetsOffered", "IsolateTargetsBlanked", "PlanIssued",
             ),
             runs,
             "the arming burst gained or lost a run",
         )
+        // D-316: the plan is back in the burst, one per seat, and every copy is the same plan.
+        val plans = reduction.effects.filterIsInstance<Effect.PlanIssued>()
+        assertEquals(ST_SEATS.map { it.index }, plans.map { it.seat.index }, "the plan is not one per seat in seat order")
+        assertEquals(1, plans.map { it.plan }.distinct().size, "two seats were sent two different plans")
         assertTrue(
             reduction.effects.size == runs.size * ST_SEATS.size,
             "a run is not one effect per seat, so the burst is no longer role-independent",

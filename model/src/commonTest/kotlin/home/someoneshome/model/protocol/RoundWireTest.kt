@@ -7,6 +7,10 @@ import home.someoneshome.model.Destination
 import home.someoneshome.model.Effect
 import home.someoneshome.model.EgressType
 import home.someoneshome.model.EmitSchema
+import home.someoneshome.model.HomePlanView
+import home.someoneshome.model.RoomKind
+import home.someoneshome.model.RoomView
+import home.someoneshome.model.StoreyView
 import home.someoneshome.model.Haptic
 import home.someoneshome.model.InsiderNamed
 import home.someoneshome.model.MarkerId
@@ -55,6 +59,13 @@ class RoundWireTest {
             listOf(Destination(MarkerId("M-1"), shape = "diamond", room = "KITCHEN")),
         ),
         Effect.StaticOpened(seconds = 10, seed = 4242L),
+        Effect.PlanIssued(
+            Seat(3),
+            HomePlanView(
+                listOf(StoreyView("GROUND", 2, 1, listOf(0, 1))),
+                listOf(RoomView("KITCHEN", RoomKind.Room), RoomView("HALL", RoomKind.Room)),
+            ),
+        ),
         Effect.SubroutineGraded(Seat(3), accepted = true),
         Effect.SubroutineProgressed(remaining = 41),
         Effect.SystemIntegrityLive(percent = 87),
@@ -132,7 +143,8 @@ class RoundWireTest {
     fun theFixtureCarriesOneOfEveryEffect() {
         val covered = everyEffect.map { EmitSchema.kindOf(it) }
         assertEquals(covered.size, covered.distinct().size, "the fixture repeats a kind")
-        val missing = EmitSchema.knownKinds().filterNot { it in covered }
+        // The map's beat kinds (D-316) have rows and no effect: they ride the upload's answer.
+        val missing = EmitSchema.knownKinds().filterNot { it in covered || it in EmitSchema.BEAT_KINDS }
         assertEquals(emptyList(), missing, "the fixture has no effect for $missing")
         assertTrue(EmitSchema.PRESENCE_CHANGED in covered, "the row-less presence kind is unswept")
         assertTrue(EmitSchema.EGRESS_SUCCEEDED in covered, "the row-less egress kind is unswept")

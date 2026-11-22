@@ -2,6 +2,7 @@ package home.someoneshome.ui
 
 import home.someoneshome.model.AssignedWork
 import home.someoneshome.model.Destination
+import home.someoneshome.model.HomePlanView
 import home.someoneshome.model.HomeReview
 import home.someoneshome.model.MarkerId
 import home.someoneshome.model.MarkerShape
@@ -11,6 +12,8 @@ import home.someoneshome.model.OrderLine
 import home.someoneshome.model.RoomKind
 import home.someoneshome.model.Seat
 import home.someoneshome.model.WinRoute
+import home.someoneshome.model.protocol.OccupancyBeat
+import home.someoneshome.model.protocol.OccupancyWire
 
 import androidx.compose.ui.graphics.Color
 
@@ -664,6 +667,19 @@ data class PanelState(
      * says so.
      */
     val staticJam: StaticJam? = null,
+    /**
+     * **The home's plan, as the house sent it at arming** (D-316, `Effect.PlanIssued`): the same
+     * plan on every phone. Null until a house has armed a round here; cleared between rounds.
+     */
+    val plan: HomePlanView? = null,
+    /**
+     * **The Terminal's counts, as the house last said them to this phone** (D-316): set only while
+     * this phone holds the station, off the field every upload's answer carries, and null the beat
+     * the house stops saying them (the reader left, a meeting, out, or the connection gone; D-203).
+     */
+    val terminalBeat: OccupancyBeat.Terminal? = null,
+    /** **True occupancy, as the house last said it to this phone on the couch** (D-316, M12). */
+    val outsideBeat: OccupancyBeat.Outside? = null,
     /**
      * **Page 2's three clocks, as every phone was told they restarted** (D-239). See
      * [PublicCooldown]. Null means no house has armed a round on this phone, and the port's drawn
@@ -1422,6 +1438,49 @@ class PanelVals(
 
     /** The couch's true occupancy, for [terminalCounts]' reason. */
     val trueCounts: List<Plan.RoomCount>? = housed(null, Plan.trueCounts, nothing = null)
+
+    /**
+     * **The Terminal's live plan as drawn** (D-316): the home the house sent with the counts the
+     * house last said to this phone, the reader, each in its band's ink (fresh, stale and cold are
+     * [Ramp.Ink], [Ramp.Mid] and [Ramp.Dim], D-209), and the station's own room outlined; the
+     * bungalow in the harness; the empty frame on a housed phone that holds no plan or no reading.
+     */
+    val terminalMap: LiveMap? = housed(
+        state.plan?.let { plan ->
+            state.terminalBeat?.let { beat ->
+                LiveMap.of(plan, beat.here) { i ->
+                    val count = beat.counts.getOrElse(i) { 0 }
+                    count to when (beat.bands.getOrElse(i) { OccupancyWire.COLD }) {
+                        OccupancyWire.FRESH -> Ramp.Ink
+                        OccupancyWire.STALE -> Ramp.Mid
+                        else -> Ramp.Dim
+                    }
+                }
+            }
+        },
+        terminalCounts?.let(LiveMap::ofFixture),
+        nothing = null,
+    )
+
+    /**
+     * **The playback's plan as drawn**: the bungalow in the harness, and nothing on a housed phone,
+     * because the timelapse is not built (D-316 stops on it: its history, its cooldown's holder and
+     * its screen states are unruled).
+     */
+    val timelapseMap: LiveMap? = timelapseCounts?.let(LiveMap::ofFixture)
+
+    /**
+     * **The couch's plan as drawn** (D-316, M12): the home with true occupancy in full ink, no band
+     * and no outline (a seat on the couch has no room of its own in the house's system); the
+     * bungalow in the harness; the empty frame on a housed phone not told it.
+     */
+    val trueMap: LiveMap? = housed(
+        state.plan?.let { plan ->
+            state.outsideBeat?.let { beat -> LiveMap.of(plan, -1) { i -> beat.counts.getOrElse(i) { 0 } to Amber.Bright } }
+        },
+        trueCounts?.let(LiveMap::ofFixture),
+        nothing = null,
+    )
 
     /**
      * **How far back the playback is, and how much of it has played** — the port's `-1:12` and

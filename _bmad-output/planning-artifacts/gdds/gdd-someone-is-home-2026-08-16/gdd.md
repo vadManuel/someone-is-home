@@ -489,7 +489,7 @@ The system logs and localizes voices, so **speaking tells the Insiders where you
 
 Viewing is treated as an **uncompletable Subroutine**, so the motion budget applies: standing still, glowing, attention-captured, at a fixed location everyone knows about. Exceed the budget and the view closes — no time limit needed, **the exposure is the limit**. The station generates its own check-in, so using the surveillance system is itself surveilled.
 
-**What it shows: counts per room, never dots.** (not yet built: the house computes counts but sends none to a phone, as of 2026-11-21)
+**What it shows: counts per room, never dots.**
 
 > A dot implies a trackable individual, and no such thing exists in this system. You learn that *four people* were in the living room, never which four — and a numeral says exactly that and nothing more.
 
@@ -557,7 +557,7 @@ Viewing is treated as an **uncompletable Subroutine**, so the motion budget appl
 **So ghosts get what the whole house is denied:**
 
 - **Both bars, as exact percentages** — Resident System Integrity *and* the Egress's progress. Living phones see the Egress as a countdown and a draining bar; the couch reads the exact number behind it (owner ruling Q3, 2026-11-18).
-- **True occupancy** — live, every storey, no injected error, no staleness bands. **Still counts, never identities.** (not yet built: the house computes counts but sends none to a phone, as of 2026-11-21)
+- **True occupancy** — live, every storey, no injected error, no staleness bands. **Still counts, never identities.** (built by D-316; the couch draws one storey of a home with two or more until the couch has a design for every storey)
 - **Not alignments.** The tools to deduce, never the answer. A ghost is still solving, from outside.
 
 **No channel of any kind.** Cannot act, cannot speak, cannot vote, and **cannot message other ghosts.** Several people watch the same truth side by side, unable to share one thought about it.
@@ -1007,7 +1007,7 @@ The target's lamp goes dark at the instant of contact. **No confirmation is aske
 
 The revoked player's device goes dark and inert **to them** — but **the radio stays up so they can be found, and nothing it senses counts** (see Ghost mode). They sit down where they are, phone in their lap. **Ghost phase 1**: findable in the dark, leaking nothing, because they genuinely have nothing.
 
-**Around T+3:00 a Resident camps the Terminal.** The station **locks exclusively**. The live count view is free, limited only by the motion budget; their own room is outlined as an anchor; counts dim through three staleness bands (not yet built: the house computes counts but sends none to a phone, as of 2026-11-21). Their arrival **generates its own check-in**, so using the surveillance system is itself surveilled. They trigger the **timelapse**: 2:00 of history at 6×, twenty seconds, oldest→newest, plays once.
+**Around T+3:00 a Resident camps the Terminal.** The station **locks exclusively**. The live count view is free, limited only by the motion budget; their own room is outlined as an anchor; counts dim through three staleness bands. Their arrival **generates its own check-in**, so using the surveillance system is itself surveilled. They trigger the **timelapse**: 2:00 of history at 6×, twenty seconds, oldest→newest, plays once.
 
 > **`GAP` F-006 — the Egress widget takeover costs less than the design claims.** The pitch is that converting the System Integrity widget into an Egress countdown "costs the Residents their only number at exactly the moment they most want it." But System Integrity **updates only at meetings and is frozen between them**. Between meetings the widget shows a stale number that has not moved and will not move. Taking it over costs a stale anchor, not live information.
 >
@@ -1073,7 +1073,7 @@ The group holds them; **the house deauthorises them moments later**, because a r
 
 **Meeting ends. All lamps drop back to dim in unison — the "go" signal.** Masking resumes. **The timelapse history floor resets to now**, wiping everything. Any Insider who did something risky at T+5:30 has just had it erased, and calling the meeting was a real play with real odds.
 
-**Ghost mode appears — phase 3 — only now**, for everyone on the couch. Both bars as exact percentages, the Egress's included (living phones see it as a countdown and a draining bar; owner ruling Q3, 2026-11-18). True occupancy, live, every storey, no injected error, no staleness (not yet built: the house computes counts but sends none to a phone, as of 2026-11-21). **Never alignments.** **No channel of any kind** — cannot act, cannot speak, cannot vote, cannot message each other. Several people watching the same truth side by side, unable to share one thought about it.
+**Ghost mode appears — phase 3 — only now**, for everyone on the couch. Both bars as exact percentages, the Egress's included (living phones see it as a countdown and a draining bar; owner ruling Q3, 2026-11-18). True occupancy, live, every storey, no injected error, no staleness. **Never alignments.** **No channel of any kind** — cannot act, cannot speak, cannot vote, cannot message each other. Several people watching the same truth side by side, unable to share one thought about it.
 
 > **`COMPOSES` F-012 — post-meeting Terminal blindness is intent, not a bug.** *A seam explicitly flagged as worth watching.* For the first two minutes after every meeting the timelapse has almost no history. Traced: the **cooldown scales to available history**, so a camper gets a short timelapse early rather than nothing, and the **live count view remains free**. More importantly, this window is *supposed* to be the most dangerous stretch of the round — the surveillance system is blind at exactly the moment everyone has just learned where everyone else is and dispersed from one place. **Record it as designed behaviour so nobody "fixes" it.**
 

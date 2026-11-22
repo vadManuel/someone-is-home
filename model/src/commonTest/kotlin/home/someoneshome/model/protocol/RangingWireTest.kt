@@ -107,7 +107,7 @@ class RangingWireTest {
         assertEquals(setOf(RangingWire.PLAN_CHARS), fields.map { it.length }.toSet(), "a plan's width moved with what it said")
         val answers = fields.map {
             TransportWire.encode(
-                TransportFrame.Carry(RoundWire.encode(RoundBody.UploadHeard.of("0123456789abcdef", UploadProbe.NONE, 5L, 6L, it))),
+                TransportFrame.Carry(RoundWire.encode(RoundBody.UploadHeard.of("0123456789abcdef", UploadProbe.NONE, 5L, 6L, it, home.someoneshome.model.protocol.OccupancyWire.blank(ByteArray(home.someoneshome.model.protocol.OccupancyWire.FIELD_BYTES))))),
             ).encodeToByteArray().size
         }
         assertEquals(1, answers.toSet().size, "answers differ in length by their plan: ${answers.toSet()}")

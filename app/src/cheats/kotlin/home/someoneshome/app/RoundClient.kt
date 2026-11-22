@@ -144,6 +144,8 @@ class RoundClient(
      * [RoundOverTransport]: `Permissions.refusedGrants` on a phone.
      */
     private val refusedGrants: () -> Int = { 0 },
+    /** **Every body that arrives, for a test that measures them** (D-316). Empty on every phone. */
+    private val onBody: (String) -> Unit = {},
     private val note: (String) -> Unit,
 ) : RoundSeam {
 
@@ -182,6 +184,7 @@ class RoundClient(
             // The probe first, on the raw bytes, before anything has decided what they are — a
             // decoder that dropped an unrecognised body would hide exactly the frame worth seeing.
             watch.saw(body)
+            onBody(body)
             read(body)
         },
         // The upward sweep: what goes up is composed on a phone that holds a name and a one line

@@ -9,6 +9,7 @@ import home.someoneshome.core.rangingDeskFor
 import home.someoneshome.core.admit
 import home.someoneshome.core.resolveContacts
 import home.someoneshome.core.resolvePlacements
+import home.someoneshome.core.occupancyBeat
 import home.someoneshome.core.armingFor
 import home.someoneshome.core.egressFor
 import home.someoneshome.core.closesTheHouse
@@ -26,6 +27,7 @@ import home.someoneshome.model.Seat
 import home.someoneshome.model.Tick
 import home.someoneshome.model.toView
 import home.someoneshome.model.protocol.MainViewField
+import home.someoneshome.model.protocol.OccupancyWire
 import home.someoneshome.model.protocol.RangingWire
 import home.someoneshome.model.protocol.ReportSlot
 import home.someoneshome.model.protocol.RoundBody
@@ -540,6 +542,25 @@ class RoundAuthority(
         )
             ?: blankPlan()
     }
+
+    /**
+     * **What [seat] may draw of the map this beat, sealed** (D-316): the field every upload's answer
+     * carries (`RoundBody.UploadHeard.map`). Built by `occupancyBeat` off the round as it stands
+     * now, so the Terminal's reader is answered with the house's captures, a seat on the couch with
+     * true occupancy, and every other seat with nothing, all sealed under that seat's seed at one
+     * width. A round not armed, or a seat it does not hold, is answered with random bytes of the
+     * same width, which open on no phone.
+     */
+    suspend fun mapped(seat: Seat): String = turn.withLock { mapFor(seat, stamp()) }
+
+    private fun mapFor(seat: Seat, at: Tick): String {
+        val desk = rangingDesk ?: return blankMap()
+        if (!state.armed) return blankMap()
+        return desk.sealMap(seat, occupancyBeat(state, seat, at), rangingRandom(RangingWire.NONCE_BYTES)) ?: blankMap()
+    }
+
+    /** An occupancy field's width of random bytes: opens on no phone (D-316). */
+    private fun blankMap(): String = OccupancyWire.blank(rangingRandom(OccupancyWire.FIELD_BYTES))
 
     /** A plan's width of random bytes: opens on no phone, and looks like every sealed plan (D-300). */
     private fun blankPlan(): String = RangingWire.blankPlan(rangingRandom(RangingWire.PLAN_FIELD_BYTES))

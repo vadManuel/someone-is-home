@@ -343,6 +343,10 @@ class RoundOverTransport(
                 // its circle, from page 1 or 2 only, back to the page on a cancel. Every answer on
                 // every phone; on a phone that is not holding one it is idle and moves nothing.
                 flow.reportSaid(contacts.report)
+                // **And the map's field, to the panel** (D-316): the Terminal's counts on the reader's
+                // phone, true occupancy on the couch, nothing on every other phone. Every answer, on
+                // every phone; nothing moves a screen, it only feeds the plan the screen draws.
+                flow.occupancySaid(contacts.mapped(body.map))
                 uploadClock.answered(body, arrivedAtMillis) { sent, heard, answered, received ->
                     clock(sent, heard, answered, received)
                 }

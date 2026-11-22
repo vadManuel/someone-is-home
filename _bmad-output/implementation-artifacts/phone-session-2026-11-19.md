@@ -125,8 +125,15 @@ Tick each line as you see it.
       whole sequence, STOP NOW included (D-182, D-313).
 - [ ] **Static**: expect it to show only to someone at the Terminal. Nobody else is told yet
       (D-186; not built).
-- [ ] **The Terminal and the couch show no counts**: scanning T claims the station and shows an
-      empty map. Expected for now; the house computes counts but sends none (not built).
+- [ ] **The Terminal and the couch show the home with counts** (D-316): every phone gets the
+      plan at LIGHTS OUT. Scan T: within a second the home's own rooms appear with a number in each,
+      the station's room outlined, the station's storey on the strip, bright where somebody performed
+      in the last 15 s, dimmer to 45 s, dimmest after (and 0 where nobody has worked). Walk away from
+      T: the counts go. Another phone scanning T meanwhile gets ONE READER AT A TIME and no counts.
+      On the couch (after the meeting that follows a Revoke): the same plan, every count in full
+      ink, no outline, live; a Static changes nothing there. Note how close the counts come to who is
+      really where: bleed into the next room and a missed person are the design. The timelapse is
+      still the empty frame (not built). A home of two storeys shows only the first on the couch.
 - [ ] **The meeting ring** on a real phone: LONG, pause, LONG, repeating until answered, felt in a
       pocket and heard by nobody (D-160).
 - [ ] **Meeting light**: does the room go bright together at the call and back to dim together at

@@ -285,6 +285,10 @@ class FuzzPropertyTest {
      * the failure a literal list would otherwise have.
      */
     private val OUT_ONLY: List<String> = listOf(
+        // The couch's true occupancy (D-316, M12). A beat kind with no effect: it rides the upload's
+        // answer, sealed, so no transcript line carries it, and named here so a widening of its row
+        // to a living class fails the sweep below rather than passing it.
+        "TrueOccupancy",
         // The live SystemIntegrity decrement. A continuous rate signal nobody living may read.
         "SubroutineProgressed",
         // The same movement as a percentage, which is the form a bar is drawn from (D-103, D-134).

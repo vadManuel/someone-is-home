@@ -433,7 +433,12 @@ private fun armed(event: Event.RoundArmed): Reduction<GameState, Effect> {
             // Isolate picks from one. Grouped by kind like the three runs above it, and the same
             // length as them, which is what keeps the arming burst role-independent — see
             // [isolateOffers], where the differential harness's finding is written down.
-            isolateOffers(state),
+            isolateOffers(state) +
+            // **The home's plan, one per seat, every copy the same plan** (D-316). Last, so every
+            // message above keeps the place in the burst it had. The Terminal and the couch draw
+            // it; sent to every seat at once, it says nothing about who will read or who will be
+            // out, and no role is read.
+            seats.map { Effect.PlanIssued(it, state.plan) },
     )
 }
 

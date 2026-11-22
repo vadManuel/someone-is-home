@@ -82,7 +82,7 @@ class OccupancyRecordingTest {
         assertTrue(end.observations.isNotEmpty() && end.sightings.isNotEmpty(), "the round placed and observed nothing")
 
         val text = recording.toText()
-        assertTrue(text.startsWith("someone-is-home/recording/46\n"), "the format was not bumped: ${text.lineSequence().first()}")
+        assertTrue(text.startsWith("someone-is-home/recording/47\n"), "the format was not bumped: ${text.lineSequence().first()}")
         val parsed = RecordingText.parse(text)
         assertEquals(sensing, parsed.events, "an event did not survive the text form")
         assertEquals(plan, (parsed.events.first() as Event.RoundArmed).plan)
@@ -114,22 +114,32 @@ class OccupancyRecordingTest {
     }
 
     /**
-     * **GUARD (rule 2): the plan and the map put NOTHING on any client's wire.** Every seat's
-     * transcript, built by the allowlist itself (`recordPerClient`), is byte-identical between the
-     * round with the plan and the map's input in it and the same round without them.
+     * **GUARD (rule 2): the plan and the map put nothing on any client's wire but the plan itself**
+     * (D-316). Every seat's transcript, built by the allowlist itself (`recordPerClient`), is
+     * byte-identical between the round with the plan and the map's input in it and the same round
+     * without them, **except one `PlanIssued` row per seat at arming**, which is the plan reaching
+     * every seat alike. The map's input (`Sensed`) still puts nothing anywhere: the counts ride the
+     * upload's answer, sealed, and are no effect.
      */
     @Test
-    fun `no client is sent one byte more for the plan or the map`() {
+    fun `no client is sent one byte more for the plan or the map than the plan itself`() {
         val withMap = recordPerClient(GameState.EMPTY, sensing)
         val without = recordPerClient(GameState.EMPTY, blind)
         assertEquals(SEATS.size, withMap.perClient.size)
+        val plan = { lines: List<String> -> lines.filter { "PlanIssued|" in it } }
         for (seat in SEATS) {
-            assertEquals(without.linesFor(seat), withMap.linesFor(seat), "seat ${seat.index} was sent something new")
+            assertEquals(
+                without.linesFor(seat).filterNot { "PlanIssued|" in it },
+                withMap.linesFor(seat).filterNot { "PlanIssued|" in it },
+                "seat ${seat.index} was sent something new",
+            )
+            assertEquals(1, plan(withMap.linesFor(seat)).size, "seat ${seat.index} was not sent the plan once")
         }
+        assertEquals(1, SEATS.map { plan(withMap.linesFor(it)).single().substringAfter("|storeys=") }.distinct().size, "two seats were sent two plans")
         assertEquals(
-            effectsOf(GameState.EMPTY, blind).map { Transcript.render(it) },
-            effectsOf(GameState.EMPTY, sensing).map { Transcript.render(it) },
-            "the authority produced an effect for the plan or the map",
+            effectsOf(GameState.EMPTY, blind).map { Transcript.render(it) }.filterNot { it.startsWith("PlanIssued|") },
+            effectsOf(GameState.EMPTY, sensing).map { Transcript.render(it) }.filterNot { it.startsWith("PlanIssued|") },
+            "the authority produced an effect for the map's input",
         )
         // And the comparison measured something: the two rounds' states differ.
         assertNotEquals(record(GameState.EMPTY, blind).second.stateTranscript.last(), record(GameState.EMPTY, sensing).second.stateTranscript.last())

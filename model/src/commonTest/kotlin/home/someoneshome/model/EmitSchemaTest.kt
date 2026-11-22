@@ -414,13 +414,39 @@ class EmitSchemaTest {
      * back: **a disclosure that shrinks deserves the same ceremony as one that grows.**
      */
     @Test
-    fun `no kind in the table carries the home's plan`() {
+    fun `one kind in the table carries the home's plan and it reaches every seat in the round alike`() {
+        // D-186 removed the plan's only row, which was one class wide. D-316 brings one back, four
+        // classes wide and never more: every seat in a round is sent the same plan at arming, so its
+        // arrival says nothing about the phone it lands on. Never the ended or pre-arm classes.
         val geography = EmitSchema.knownKinds().filter {
             it.name.contains("Plan") || it.name.contains("Home")
         }
+        assertEquals(listOf(EmitSchema.PLAN_ISSUED), geography, "a second kind carrying the home's geometry is in the table")
         assertEquals(
-            emptyList(), geography,
-            "a kind carrying the home's geometry is back in the table (D-186 removed the only one)",
+            listOf(
+                ClientClass(Role.Resident, RoundState.Live), ClientClass(Role.Insider, RoundState.Live),
+                ClientClass(Role.Resident, RoundState.Out), ClientClass(Role.Insider, RoundState.Out),
+            ).sortedBy { it.toString() },
+            EmitSchema.classesFor(EmitSchema.PLAN_ISSUED).sortedBy { it.toString() },
+            "the plan's row is not every class in a running round",
+        )
+    }
+
+    /**
+     * **The map's two beat kinds (D-316): the Terminal's counts to both living classes and no out
+     * class, true occupancy to both out classes and no living class.** Either narrowed to one role
+     * is an alignment test; either widened across the round-state axis hands the living the map
+     * without its error, or the couch a reading it has no station for.
+     */
+    @Test
+    fun `the Terminal's counts reach both living classes and true occupancy both out classes`() {
+        assertEquals(
+            listOf(ClientClass(Role.Resident, RoundState.Live), ClientClass(Role.Insider, RoundState.Live)).sortedBy { it.toString() },
+            EmitSchema.classesFor(EmitSchema.TERMINAL_READING).sortedBy { it.toString() },
+        )
+        assertEquals(
+            listOf(ClientClass(Role.Resident, RoundState.Out), ClientClass(Role.Insider, RoundState.Out)).sortedBy { it.toString() },
+            EmitSchema.classesFor(EmitSchema.TRUE_OCCUPANCY).sortedBy { it.toString() },
         )
     }
 

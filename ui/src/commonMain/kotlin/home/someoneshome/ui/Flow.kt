@@ -21,6 +21,7 @@ import home.someoneshome.model.Cell
 import home.someoneshome.model.RegisterResult
 import home.someoneshome.model.RoomKind
 import home.someoneshome.model.protocol.IntentMessage
+import home.someoneshome.model.protocol.OccupancyBeat
 import home.someoneshome.model.protocol.ReportSlot
 import home.someoneshome.model.protocol.RoundMessage
 
@@ -3057,8 +3058,16 @@ class FlowModel(
             // the house's word about this phone's own scan, and the phone moves on it and decides
             // nothing. The station screen is not a Subroutine and has no BEGIN: reading starts the
             // moment the house says this phone is the reader.
-            is RoundMessage.TerminalAnswered ->
+            // A reading from an earlier visit is dropped first (D-316), so the live view opens on the
+            // empty frame for the beat before the house's first count, never on old counts.
+            is RoundMessage.TerminalAnswered -> {
+                state = state.copy(terminalBeat = null)
                 push(if (message.reading) ScreenId.TermLive else ScreenId.TermBusy)
+            }
+
+            // **The home's plan, the same on every phone** (D-316). Held for the Terminal and the
+            // couch to draw, and moves nothing: no screen, no buzz, no light.
+            is RoundMessage.PlanIssued -> state = state.copy(plan = message.plan)
 
             // **A node of the running Egress: the tap control, whatever the card held** (D-295,
             // the owner's Q2 ruling: *a tap control after the node scan*). Read off two public facts,
@@ -3775,6 +3784,22 @@ class FlowModel(
      *
      * The house decides; this only follows. Only the screen is asked, never the role.
      */
+    /**
+     * **What the house says this phone may draw of the map, this beat** (D-316): the field on every
+     * upload's answer, opened. The Terminal's counts while this phone holds the station, true
+     * occupancy on the couch, nothing otherwise; nothing clears both, so the frame empties the beat
+     * the house stops saying them. Written only when it changed, so a steady second costs nothing.
+     * It moves no screen and no light: it is what the plan on the screen already showing is drawn
+     * with.
+     */
+    fun occupancySaid(beat: OccupancyBeat) {
+        val terminal = beat as? OccupancyBeat.Terminal
+        val outside = beat as? OccupancyBeat.Outside
+        if (terminal != state.terminalBeat || outside != state.outsideBeat) {
+            state = state.copy(terminalBeat = terminal, outsideBeat = outside)
+        }
+    }
+
     fun reportSaid(slot: ReportSlot) {
         when (slot) {
             is ReportSlot.Pending -> reportHeld(slot.elapsedMillis)

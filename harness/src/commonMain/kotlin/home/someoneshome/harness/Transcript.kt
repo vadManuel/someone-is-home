@@ -340,6 +340,11 @@ object Transcript {
         // non-null slots: the list is indexed by seat, null where no seat sits (D-274).
         is Effect.RosterIssued ->
             "RosterIssued|seat=${effect.seat.index}|seats=${num(effect.roster.count { it != null })}"
+        // **The seat and the plan's shape** (D-316). The plan itself is on the arming row already
+        // (`RoundArmed|rooms=`, D-271), and every copy is that plan, so the row says how much went
+        // down and to whom: the same on both sides of a role swap.
+        is Effect.PlanIssued ->
+            "PlanIssued|seat=${effect.seat.index}|storeys=${num(effect.plan.storeys.size)}|rooms=${num(effect.plan.rooms.size)}"
         // **The seat and the seed itself** (D-212). The recording is the authority's artifact and
         // already holds the round's seed every contact seed is derived from, so the hex adds nothing
         // a replay could not re-derive -- and rendering it is what lets the differential harness see

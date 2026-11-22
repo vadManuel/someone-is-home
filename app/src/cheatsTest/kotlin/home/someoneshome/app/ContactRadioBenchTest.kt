@@ -162,7 +162,7 @@ class ContactRadioBenchTest {
                     // `UploadHeard` for every upload, its slot's id and the house's plan for the
                     // phone, report slot and all, down that phone's own socket.
                     RequestSlot.read(body.ask)?.let { slot ->
-                        val answer = RoundBody.UploadHeard.of(slot.id, UploadProbe.NONE, 0L, 0L, plan)
+                        val answer = RoundBody.UploadHeard.of(slot.id, UploadProbe.NONE, 0L, 0L, plan, home.someoneshome.model.protocol.OccupancyWire.blank(ByteArray(home.someoneshome.model.protocol.OccupancyWire.FIELD_BYTES)))
                         host.send(seat, TransportFrame.Carry(RoundWire.encode(answer)))
                     }
                     taken++

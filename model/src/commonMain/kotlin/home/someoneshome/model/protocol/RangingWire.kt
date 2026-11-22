@@ -462,6 +462,9 @@ object RangingWire {
     /** Whether [text] is a plan field's shape: the width, and URL-safe base64. Not whether it reads. */
     fun isPlanField(text: String): Boolean = text.length == PLAN_CHARS && isBase64(text)
 
+    /** Whether every character of [text] is URL-safe base64 (the occupancy field's check too, D-316). */
+    internal fun isBase64Text(text: String): Boolean = isBase64(text)
+
     private fun isBase64(text: String): Boolean {
         for (i in text.indices) if (Base64Url.valueOf(text[i]) < 0) return false
         return true
@@ -623,6 +626,7 @@ class RangingCodec : RangingReportView {
         val stream = Hmac.Keyed(seed)
         val reportTag = Hmac.Keyed(stream.mac(byteArrayOf(RangingWire.DOMAIN_REPORT_TAG)))
         val planTag = Hmac.Keyed(stream.mac(byteArrayOf(RangingWire.DOMAIN_PLAN_TAG)))
+        val mapTag = Hmac.Keyed(stream.mac(byteArrayOf(OccupancyWire.DOMAIN_MAP_TAG)))
 
         fun tagFor(domain: Byte): Hmac.Keyed = if (domain == RangingWire.DOMAIN_REPORT_TAG) reportTag else planTag
     }
@@ -851,6 +855,33 @@ class RangingCodec : RangingReportView {
         },
         ReportSlot.of(planReportKind, planReportMillis)!!,
     )
+
+    // ---- The map (D-316) ------------------------------------------------------------------------
+
+    private val mapPlain = ByteArray(OccupancyWire.PLAIN_BYTES)
+
+    /**
+     * **[beat], sealed under the receiving seat's [seed] with [nonce]**: always [OccupancyWire.CHARS]
+     * characters, written, sealed and encoded in place, so the one allocation is the string (rule 7).
+     */
+    fun packMap(seed: ContactSeed, nonce: ByteArray, beat: OccupancyBeat): String {
+        OccupancyWire.write(beat, mapPlain)
+        field.fill(0, 0, OccupancyWire.FIELD_BYTES)
+        mapPlain.copyInto(field, RangingWire.NONCE_BYTES)
+        val keys = keysFor(seed)
+        sealInPlace(keys.stream, keys.mapTag, OccupancyWire.DOMAIN_MAP, nonce, OccupancyWire.PLAIN_BYTES)
+        return Base64Url.encode(field, OccupancyWire.FIELD_BYTES, chars)
+    }
+
+    /** **An occupancy field, opened under [seed]**, or null for anything that is not exactly one. */
+    fun openMap(seed: ContactSeed, text: String): OccupancyBeat? {
+        if (!OccupancyWire.isField(text)) return null
+        if (!Base64Url.decodeInto(text, field, OccupancyWire.FIELD_BYTES)) return null
+        val keys = keysFor(seed)
+        if (!openInPlace(keys.stream, keys.mapTag, OccupancyWire.DOMAIN_MAP, OccupancyWire.PLAIN_BYTES)) return null
+        field.copyInto(mapPlain, 0, RangingWire.NONCE_BYTES, RangingWire.NONCE_BYTES + OccupancyWire.PLAIN_BYTES)
+        return OccupancyWire.read(mapPlain)
+    }
 
     // ---- Sealing ---------------------------------------------------------------------------------
 

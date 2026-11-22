@@ -533,6 +533,16 @@ sealed class RoundMessage {
     data class RosterIssued(val roster: List<String?>) : RoundMessage()
 
     /**
+     * **The home's plan, the same on every phone** (D-316, [Effect.PlanIssued]). Storeys, cells,
+     * room names and kinds, and nothing a card could be read off: the Terminal and the couch draw
+     * it, and every other screen ignores it.
+     */
+    @ClientFacing
+    @kotlinx.serialization.Serializable
+    @kotlinx.serialization.SerialName("PlanIssued")
+    data class PlanIssued(val plan: home.someoneshome.model.HomePlanView) : RoundMessage()
+
+    /**
      * **This phone's contact seed, and nothing else** (D-212, [Effect.ContactSeedIssued]).
      *
      * The seat comes off like every addressed kind here: the socket is the address, and a seat
@@ -948,6 +958,7 @@ sealed class RoundMessage {
             is OpeningMessage -> EmitSchema.OPENING_MESSAGE
             is RoleRevealed -> EmitSchema.ROLE_REVEALED
             is RosterIssued -> EmitSchema.ROSTER_ISSUED
+            is PlanIssued -> EmitSchema.PLAN_ISSUED
             is ContactSeedIssued -> EmitSchema.CONTACT_SEED_ISSUED
             is MeetingOpened -> EmitSchema.MEETING_OPENED
             is MeetingCalling -> EmitSchema.MEETING_CALLING
@@ -1224,11 +1235,20 @@ sealed class RoundBody {
      * stop it, padded to [RangingWire.MAX_PEERS] steps and sealed under this seat's contact seed. A
      * phone the house has nothing to say to is sent the same width, so every phone gets one plan a
      * second, of one length, whatever changed. A handle names a pair and never a seat.
+     *
+     * ### And what this phone may draw of the map, this beat (D-316)
+     *
+     * [map] is [OccupancyWire.CHARS] characters in every answer to every upload, sealed under this
+     * seat's contact seed like [plan]: the Terminal's counts to the phone holding the station's
+     * lock, true occupancy to a phone on the couch, and nothing to every other phone, all at one
+     * width. Without the seed a reading and nothing are the same uniform bytes, so the Wi-Fi cannot
+     * tell who is reading the Terminal or who is out (D-217, D-306). A phone the house has no seed
+     * for is sent random bytes of the same width, which open on no phone.
      */
     @ClientFacing
     @kotlinx.serialization.Serializable
     @kotlinx.serialization.SerialName("uploadHeard")
-    data class UploadHeard(val id: String, val probe: String, val heard: String, val answered: String, val plan: String) : RoundBody() {
+    data class UploadHeard(val id: String, val probe: String, val heard: String, val answered: String, val plan: String, val map: String) : RoundBody() {
         init {
             require(RequestSlot.isId(id)) { "an upload's id is ${RequestSlot.ID_CHARS} lowercase hex characters" }
             require(UploadProbe.isProbe(probe)) { "an upload's probe is ${UploadProbe.CHARS} lowercase hex characters" }
@@ -1236,6 +1256,7 @@ sealed class RoundBody {
                 "the house's clock is ${UploadProbe.CHARS} lowercase hex characters"
             }
             require(RangingWire.isPlanField(plan)) { "a ranging plan is ${RangingWire.PLAN_CHARS} characters of URL-safe base64" }
+            require(OccupancyWire.isField(map)) { "an occupancy field is ${OccupancyWire.CHARS} characters of URL-safe base64" }
         }
 
         /** [heard], as the house's monotonic milliseconds. */
@@ -1245,9 +1266,9 @@ sealed class RoundBody {
         val answeredAtMillis: Long get() = UploadProbe.millisOf(answered)
 
         companion object {
-            /** The answer to the upload whose slot was [id] and whose probe was [probe], stamped, with [plan]. */
-            fun of(id: String, probe: String, heardAtMillis: Long, answeredAtMillis: Long, plan: String): UploadHeard =
-                UploadHeard(id, probe, UploadProbe.hexOf(heardAtMillis), UploadProbe.hexOf(answeredAtMillis), plan)
+            /** The answer to the upload whose slot was [id] and whose probe was [probe], stamped, with [plan] and [map]. */
+            fun of(id: String, probe: String, heardAtMillis: Long, answeredAtMillis: Long, plan: String, map: String): UploadHeard =
+                UploadHeard(id, probe, UploadProbe.hexOf(heardAtMillis), UploadProbe.hexOf(answeredAtMillis), plan, map)
         }
     }
 
@@ -1380,6 +1401,8 @@ object RoundWire {
         is Effect.RoleRevealed -> RoundMessage.RoleRevealed(effect.role == Role.Insider, effect.line)
         // The seat comes off; the list is the same list on every wire it goes down.
         is Effect.RosterIssued -> RoundMessage.RosterIssued(effect.roster)
+        // The seat comes off; the plan is the same plan on every wire it goes down (D-316).
+        is Effect.PlanIssued -> RoundMessage.PlanIssued(effect.plan)
         // The seat comes off; the seed is the message.
         is Effect.ContactSeedIssued -> RoundMessage.ContactSeedIssued(effect.seed)
         is Effect.MeetingOpened ->

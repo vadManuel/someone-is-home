@@ -24,7 +24,7 @@ class CarryReadTest {
         "",
         "x",
         RoundWire.encode(RoundBody.Sighted("0".repeat(SightingUpload.BODY_CHARS), SightingUpload.EMPTY_ASK, UploadProbe.NONE, RangingWire.NO_REPORT, MainViewField.OFF)),
-        RoundWire.encode(RoundBody.UploadHeard.of("0123456789abcdef", UploadProbe.NONE, 0L, 0L, RangingWire.NO_PLAN)),
+        RoundWire.encode(RoundBody.UploadHeard.of("0123456789abcdef", UploadProbe.NONE, 0L, 0L, RangingWire.NO_PLAN, home.someoneshome.model.protocol.OccupancyWire.blank(ByteArray(home.someoneshome.model.protocol.OccupancyWire.FIELD_BYTES)))),
         RoundWire.encode(RoundBody.Push(9, RoundMessage.MeetingCalling, round = 1)),
         LobbyWire.encode(LobbyBody.Standing(joined = 6, linesIn = 4, names = listOf("ÉLODIE", "TOMÁS", "李"), insiders = 2)),
         LobbyWire.encode(LobbyBody.Handover("a line with \"quotes\", a back\\slash, a tab\t, a newline\n and \u0001")),

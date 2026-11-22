@@ -5,6 +5,7 @@ import home.someoneshome.model.GameState
 import home.someoneshome.model.Seat
 import home.someoneshome.model.Sighting
 import home.someoneshome.model.Tick
+import home.someoneshome.model.protocol.OccupancyBeat
 import home.someoneshome.model.protocol.RangingCodec
 import home.someoneshome.model.protocol.RangingHandle
 import home.someoneshome.model.protocol.RangingPlan
@@ -1106,6 +1107,17 @@ class RangingDesk(roundSeed: Long, seats: List<Seat>) {
         sealing.kind = report.kind
         sealing.millis = report.millis
         return codec.packPlan(seed, nonce, sealing)
+    }
+
+    /**
+     * **[beat], sealed under [seat]'s own seed with [nonce]**, for the upload's answer (D-316): one
+     * width whatever it holds. Null for a seat that is not the round's, which has no seed here. On
+     * the desk's codec and its kept keys, so a beat costs its string (rule 7); never between a
+     * [read] and its [answer], which the authority's one lock already orders.
+     */
+    fun sealMap(seat: Seat, beat: OccupancyBeat, nonce: ByteArray): String? {
+        val seed = seeds.getOrNull(seat.index) ?: return null
+        return codec.packMap(seed, nonce, beat)
     }
 
     private companion object {

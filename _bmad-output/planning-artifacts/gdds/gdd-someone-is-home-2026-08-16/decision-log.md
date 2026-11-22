@@ -12733,6 +12733,251 @@ python glob): ui 772 (desktop) + 380 (iOS Simulator); app 277 (the default varia
 277 (Playtest). 0 failures, 0 errors, 0 skipped. `PageOneTilesTest` is in the XML and
 `NotesParityTest` is not. `model` and `core` are untouched and were not run.
 
+### D-316 · **The Terminal and the couch draw the home with its counts: the plan goes to every seat at arming, and the counts ride every upload's answer, sealed, to the reader and to the couch — built (recording 47); the timelapse is STOPPED, unruled in five places; a couch on a home of two storeys or more draws the first only, awaiting a design**
+
+**The ruling** (owner, 2026-11-21, on the overnight report's first decision): *"Yes, build it next."*
+The ask: **the Terminal and the couch must show the home's map with room counts.** It answers the
+overnight audit's item 1 (`rules-audit-2026-11-21.md`): the house built placements and captured each
+room's count with its error (D-272) and sent none of it, so the Terminal and the couch drew D-257's
+empty frame and a dash.
+
+**Read before designing, and what each one decided here.** M11 and M12 (`gdd.md`), D-136 (inference,
+knowledge first, bleed accepted), D-155 (the out are in no count, filtered by state), D-178 (the
+couch's plan under a frame that keeps its height), D-186 (Static over the Terminal, ghosts exempt;
+*the home plan returns to crossing to NO client*), D-199 and D-203 (the scan claims the lock; four
+ways it comes free; nothing announces them), D-209 (fresh, stale and cold are Ink, Mid and Dim),
+D-257, D-271 and D-272 (the plan held by the house, the captures, every tunable provisional), D-285
+(nothing about counts at the couch's vote; untouched), D-145 (the couch's correlations accepted), the
+occupancy spec's O3, O5, O6 and its Q1-Q5, and the owner's threat model (D-306, 2026-11-20: *what
+sits only inside a player's own phone is not a leak*; what a person can see, hear or feel, and the
+wire's one size and one cadence, are what is guarded).
+
+#### Who gets what, and why
+
+1. **The plan: every seat in the round, at arming, the same bytes** (`Effect.PlanIssued`, one per
+   seat in seat order, the last run of the arming burst; `RoundMessage.PlanIssued(HomePlanView)`).
+   **This amends D-186's sentence and D-271 item 2, and `epics.md:292`**: the plan now crosses, to
+   everybody. Why every seat and not the reader on claiming the station, or the couch on going out:
+   either of those is one frame on one phone at the moment it became the reader or left the round,
+   and the frame says so on the Wi-Fi; sent to everybody at the moment everybody is sent the roster,
+   it says nothing about the phone holding it. D-186's harm was a row **one class wide** (the Insider
+   picker's) and the largest single disclosure in the table; this row is all four classes of a
+   running round, written out, and carries rooms, names, kinds and storeys, which every player learns
+   by walking the house. **It carries no card**: `HomePlanView` is still the field list (rule 3), so
+   which card is in which room, the answer key to every work order (`Destination.kt`), still cannot
+   cross, and nor can the stations or the T card's room. Under the owner's threat model the plan
+   sitting unread in a non-reader's phone is not a leak. `HomePlanView`, `StoreyView` and `RoomView`
+   become `@ClientFacing @Serializable` (D-271 said the unit answering Q1 would add the marker, the
+   message and the row together; this is that unit).
+2. **The Terminal's counts: the seat holding the station's lock and nobody else, while it holds it**
+   (`GameState.readerHolding`, D-199, D-203). Per room in plan order, the room's latest capture this
+   shift through `Observation.toView`, which cannot carry a true count: **the reported count, its
+   error rolled once at capture and stored** (D-272: 15 % a missed occupant in an occupied room,
+   otherwise 5 % a phantom beside an occupied room), and **the band at that beat**, from the stored
+   ±5 s jitter (fresh under 15 s, stale under 45 s, cold after). A room nobody has sensed in this
+   shift is **0, cold** (`gdd.md:524`: a hole and an empty room are one fact; the fixture's KDoc says
+   the same). Stairs carry no count (`gdd.md:485`). **Revoked and Restrained seats are in no count**,
+   because the capture counts living placed seats only (D-155); a capture taken before a Revoke still
+   holds the seat, and ages out, which is `gdd.md:489`'s deniability. **The outline is the station's
+   room** (`gdd.md:482`), sent as an index inside the sealed field, so no phone but the reader is
+   told which room the station is in. **Released any of D-203's four ways** (the reader leaves, a
+   meeting, the reader goes out, the connection drops), the next beat is nothing and the reader's
+   phone drops the counts; a new claim drops any earlier visit's counts at `TerminalAnswered`, so the
+   live view opens on the empty frame for up to a beat, never on old counts. **Either role, the same
+   counts**: nothing in the beat reads a role, and the row is both living classes.
+3. **The couch: a seat out and through a meeting since** (never a newly Revoked phone, `gdd.md:537`;
+   never while a meeting runs). Per room in plan order, **the living seats the house places there at
+   that beat** (`GameState.placedRoomOf`, D-136): no injected error and no band (`gdd.md:546`), so it
+   is drawn in full ink. **"True" is read as the occupancy spec's Q2 reading, provisional**: the
+   house's own placements, with D-136's bleed, holes and expiry, which the house cannot see past (and
+   D-136 rejects a couch that reads the house perfectly); not the house's error. A Restrained seat
+   is on the couch as a Revoked one is. **Static changes nothing there** (D-186).
+4. **Every other phone: nothing.** Every living phone that is not the reader, every newly Revoked
+   phone, every phone at a meeting.
+
+#### How it travels: every upload's answer, one more sealed field
+
+**No frame is added, none changes length, none changes cadence.** Every phone in a round is answered
+once a beat (`RoundBody.UploadHeard`, D-263); each answer now carries **`map`**, one
+`OccupancyWire` field of **196 characters**, built by `core`'s `occupancyBeat` for that seat at that
+moment and **sealed under that seat's own contact seed** exactly as D-300's ranging plan is
+(keystream and tag under their own domain bytes, `M` and `m`, on `RangingCodec` and its kept keys).
+Without the seed the reader's counts, the couch's and nothing are the same uniform bytes, so the Wi-Fi
+cannot tell who reads the Terminal or who is out, and a phone that does not open the field (another
+seat's, a blank, a damaged one) draws nothing, never a partial map. A seat with no seed, or a seam
+left at its default, is sent random bytes of the width, which open on no phone. **Measured over real
+sockets** (`TerminalCountsWiringTest`, four phones): every upload's answer on every phone, the
+reader's included, was 2 059 bytes.
+
+**The emit schema is still the gate (rule 2).** Two kinds with rows and no effect,
+`TERMINAL_READING` (both living classes, written out) and `TRUE_OCCUPANCY` (both out classes), and
+`occupancyBeat` asks `EmitSchema.permits` for the seat's class before it fills the field with either:
+a row deleted is an empty field on every phone. `PLAN_ISSUED` is the four classes of a running round.
+
+**What a replay can say a phone was shown, and recording 47.** `PlanIssued` is a new effect, so the
+effect rows gain one per seat at arming and a 46 build cannot name it: **recording 47**. The beats
+are **not** recorded and need not be: `occupancyBeat` is a pure function of the recorded state and
+the house's tick (the captures are recorded through `Sensed`, the lock through the scan and
+`TerminalLeft`), so a replay computes what the reader or the couch was shown at any tick; what it
+cannot say is which tick each answer was built at, which is the upload's arrival and is at most a
+second apart. Events and state rows are unchanged.
+
+#### What the phone draws
+
+**No new copy, light, colour or type.** The plan, the labels, the counts, the outline, the stairs
+hatch and the floor strip are the fixture's, fed real data: `KitLivePlan` now draws a `LiveMap`, and
+the render harness's bungalow goes through the same drawing (`LiveMap.ofFixture`) at the same
+geometry. **Judgement calls where the fixture had one case and a real home has more, all provisional
+and listed below**: a storey is drawn on the design's 10 by 12 cells (or its own box where larger),
+centred; a count sits at the middle of its room's cells, or on the room's own cell nearest it when the
+middle falls outside (an L); a label sits at the room's first cell and, for a real home, is held inside
+its own run of cells and ellipsised (`EditorLabels`' rule), so a narrow room's name
+never reads as the next room's; the floor strip names the plan's own storeys, one cell each, the
+drawn one on the room fill. Band inks are D-209's; the couch's counts are the fixture's
+`Amber.Bright`. **The couch has no outline**: a seat on the couch has no room of its own in the
+house's system (D-155), and the fixture's outline there was the bungalow's.
+
+**Allocation (rule 7), measured where it could be.** Writing an upload's answer grew from 4.4 KB to
+5.6 KB (`WireDecodeAllocationTest`; its ceiling rises from 5 KB to 6 KB). The beat itself is two small
+lists per answered seat and a seal in place on the desk's codec; at 18 seats that is about
+18 × 1.5 KB ≈ 27 KB/s on the host, about 5 % of 0.5 MB/s, estimated by counting, not measured on a
+phone. The phone opens one field a beat in place and writes its panel only when the counts change.
+
+#### STOPPED: the timelapse, on five unruled points
+
+The GDD's table rules the history (2:00), the speed (6×), plays once, the cooldown (2:00 from
+playback end, equal to the history), the linear early-cancel cut, oldest to newest, the floor (the
+round's start or the last meeting's end) and the jam's ~1.7 s of noise. **Five things it needs are
+not ruled, so it is not built** and the playback stays D-257's empty frame on a housed phone:
+
+1. **Whose cooldown**: the station's (anybody's next playback waits) or the reader's. `gdd.md:513`
+   says *the only gated resource at the station*; the occupancy spec read it as the station's, unruled.
+2. **What a playback frame is**: the counts as the reader would have seen them at that second, bands
+   and all, or bare counts (the fixture draws every playback count in the cold ink), and how often the
+   history is sampled (each second, or each capture).
+3. **The TIMELAPSE control while it cools or has no history**: the live view's button reads
+   *TIMELAPSE . 2:00 AT 6X* and has no designed state, words or light for a cooldown, for a history
+   of a few seconds after a meeting, or for a refusal.
+4. **F-008's numeral count-up** (`gdd.md:996`) against rule 5 and D-202's *no local animation*
+   (the occupancy spec's Q4).
+5. **What ends a playback early**: D-203 frees the station at a meeting, so a meeting stops a
+   playback; whether that counts as an early cancel (and cuts the cooldown) is not said.
+
+**Also STOPPED, smaller: a couch on a home of two storeys or more.** `gdd.md:546` says *every
+storey*; the fixture draws one storey under a strip that takes no taps, and nothing designs two on
+the couch. The couch draws the **first storey**, the strip naming them all; every storey's counts are
+already in the field, so only the drawing waits. **And the Terminal draws the station's storey**,
+which the fixture's layout says (the floor you are on, filled) and the GDD does not (the occupancy
+spec's Q3): counts upstairs are not visible from a station downstairs.
+
+#### Judgement calls, all provisional, owner to confirm
+
+- The plan to **every** seat at arming (above), amending D-186, D-271 item 2 and `epics.md:292`.
+- "True occupancy" is the house's placements without the error (the spec's Q2 reading).
+- A hole is 0 in the cold ink.
+- The couch draws no outline.
+- The live view shows the empty frame for up to one beat after the scan, before the first counts.
+- Real homes' labels are held inside their room and ellipsised (the editor's rule); counts sit in
+  their own room's cells; storeys draw at the design's cell size, centred.
+- `OccupancyWire.MAX_ROOMS` is 128: a home with more rooms draws its later rooms empty (a home
+  painted in the editor's 10 by 12 grid has at most 120 squares a storey).
+- The reader is still not a sensor while reading (D-272 item 6, unchanged): only its 3 s sweep on the
+  T scan captures the station's room.
+
+#### Guards, each proven by breaking it
+
+- `OccupancyBeatTest` (core, the real pipeline): only the reader is sent counts; the counts are the
+  stored capture's reported count and its band through fresh, stale and cold, asked twice the same; a
+  hole is 0 cold and the outline is the station's room; over 200 captures the reader's counts carry
+  the injected error; a Revoked seat is in no capture, the couch is shown the house's placements live
+  and loses an expired sighting, a newly Revoked phone and a meeting are shown nothing, a Restrained
+  seat is on the couch; leaving the station, a meeting or a Revoke stops the counts; a Static changes
+  neither the reader's beat nor the couch's; an Insider reader and a Resident reader get the same beat
+  and the same sealed bytes, and every kind is one width.
+  **Injected: the counts sent to every living seat** (`reads = running && !state.isOut(seat) && …`):
+  *seat 0, not the reader, was sent Terminal(here=0, counts=[0, 3, 0, 0, 0, 0, 0], bands=[2, 0, 2, 2,
+  2, 2, 2]) expected:<Nothing> but was:<Terminal(…)>* and *the reader left and was still sent counts*.
+  **Injected: the `TERMINAL_READING` row deleted from the schema**: five of the seven fail, the first
+  *the reader was sent no counts. Expected value to be of type <…OccupancyBeat$Terminal>, actual
+  <…OccupancyBeat$Nothing>*: the schema fails closed.
+- `OccupancyWireTest` (model): every kind seals to one width and opens to itself; another seat's seed,
+  a blank and one flipped character open to nothing; a band past cold, an unknown kind, a byte past
+  the rooms, an outline on the couch's and anything in a nothing all read as nothing.
+- `TerminalCountsWiringTest` (app, four phones over real sockets, `SimulatedAir`): the plan reaches
+  every phone, the same plan, the house's; BRUNO performs with DEVI a metre away, CYRUS scans T and
+  holds the station, and CYRUS's panel holds the house's counts (STUDY: capture true 2, reported 2,
+  sent 2; HALL 1 from the T scan's sweep; the outline HALL); no other phone holds the Terminal's or
+  the couch's counts; every upload's answer on every phone is 2 059 bytes; leaving the station clears
+  CYRUS's counts. **Injected
+  over the sockets, the counts sent to every living seat**: *ALBA, not the reader, holds the
+  Terminal's counts. Expected value to be null, but was: <Terminal(here=2, counts=[0, 0, 1, 0, 2, 0, 0,
+  0, 0, 0, 0], bands=[2, 2, 0, 2, 0, 2, 2, 2, 2, 2, 2])>.* The answer lengths stayed equal under the
+  injection, which is the seal doing its job: on the Wi-Fi a leaked reading and nothing look alike, so
+  the panel is what the guard reads.
+- `EmitSchemaTest`: `PLAN_ISSUED` is the one plan kind and the four classes of a running round;
+  `TERMINAL_READING` both living, `TRUE_OCCUPANCY` both out. It replaces *no kind in the table
+  carries the home's plan*, which D-186 wrote and this entry overrules.
+- `StaticTest`: the arming burst is nine runs, the plan last, one per seat and one plan.
+- `HomePlanViewFieldsTest`: the serializer's fields are exactly the view's (`storeys, rooms`;
+  `name, cols, rows, cells`; `name, kind`); it replaces *the plan view has no serializer*.
+- `HousedMapRenderTest` (ui): through `houseSaid(PlanIssued)` and `occupancySaid`, the housed Terminal
+  draws the bench home with the bench reader's counts and inks; a jam veils it with the plan still
+  under; the couch draws true occupancy clean under a jam with no outline; a one-storey home with an
+  L-shaped room draws its own names, its count inside the L, and none of the bungalow's.
+
+- **Guards this entry overrules, rewritten rather than deleted.** `OccupancyRecordingTest` held that
+  *no client is sent one byte more for the plan or the map*; it now holds that every seat's
+  transcript is the same with and without the plan and the map's input **but for one `PlanIssued` row
+  per seat, the same plan on every seat**, and that the map's input still makes no effect.
+  `FuzzPropertyTest` names `TrueOccupancy` among the out-only kinds; `HouseBuzzTest` and
+  `RoundWireTest` build a `PlanIssued` and leave the two beat kinds out of their effect sweeps; the
+  recording tests pin `recording/47`; `WireDecodeAllocationTest`'s answer ceiling is 6 KB.
+
+**Rendered and looked at** (`ui/build/screens/d316-*.png`, 600 by 1300). **The live view**
+(`d316-terminal-live`): the bench home's GROUND storey with its own gaps between rooms, GROUND filled
+on the strip and UPPER beside it; HALL outlined in two-unit ink on the room fill with its name in ink
+and **1**; STUDY **2** in ink; KITCHEN, LIVING and GARAGE **0** in the dim ink; STAIRS hatched with
+no number; the motion budget and the TIMELAPSE button below, as before. **Jammed**
+(`d316-terminal-jammed`): the noise field over the plan, fragments of the labels and the stairs hatch
+showing through, the strip and the foot clean. **The couch** (`d316-couch`, handed a jam it may not
+receive): the two meters (SYSTEM INTEGRITY with no number pushed, the Egress box empty), the strip,
+the same plan with HALL **1**, STUDY **2** and the rest **0**, every count in full ink, no outline,
+no noise. **A home that is not the bungalow** (`d316-terminal-other-home`): ONLY FLOOR on a one-cell
+strip, a 6 by 5 storey at the design's cell size centred in the frame, the L-shaped PANTRY with its
+name cut to *P…* inside its one-cell column and its **3** in the stale ink inside the L's foot,
+HALLWAY outlined with **1**, STAIRS hatched. **Every one of the 219 fixture renders of the screenshot
+sweep (`termlive`, `timelapse` and `ghost3` in both roles among them) is byte-identical to the tree
+before this change**, so the bungalow goes through the new drawing unchanged.
+
+| site | what it said | what it says now |
+|---|---|---|
+| `model` `HomePlanView`, `StoreyView`, `RoomView` | not serialisable, crosses to no client (D-271) | `@ClientFacing @Serializable`; to every seat at arming |
+| `model` `Effect.PlanIssued`, `RoundMessage.PlanIssued`, `EmitSchema.PLAN_ISSUED` | (none) | one per seat at arming; row: the four classes of a running round |
+| `model` `EmitSchema.TERMINAL_READING`, `TRUE_OCCUPANCY`, `BEAT_KINDS` | (none) | the beat's two kinds: both living; both out |
+| `model/protocol` `OccupancyWire`, `OccupancyBeat`; `RangingCodec.packMap`, `openMap` | (none) | the sealed field, 196 characters; nothing, the reader's, the couch's |
+| `model/protocol` `RoundBody.UploadHeard` | `id, probe, heard, answered, plan` | and `map` |
+| `core` `Occupancy.kt` `occupancyBeat` | (none) | the beat for a seat at a tick, schema-gated |
+| `core` `Rules` arming | eight runs | nine: `PlanIssued` last |
+| `core` `RangingDesk.sealMap` | (none) | the beat sealed under the seat's seed |
+| `app` `RoundAuthority.mapped`, `HouseDoors.mapped`, `LobbyHouse`/`LobbyOverTransport` `onMapped` | (none) | the map door; every answer carries the field |
+| `app` `ContactUploader.mapped`, `RoundOverTransport` | (none) | the field opened, to `FlowModel.occupancySaid` |
+| `app` cheats `Cheats.kt`, `RoundClient` | (none) | the door wired; a body hook for tests |
+| `ui` `PanelState.plan`, `terminalBeat`, `outsideBeat`; `Flow` | (none) | the plan held; the beats written on change; cleared between rounds; a new claim drops old counts |
+| `ui` `PanelVals.terminalMap`, `trueMap`, `timelapseMap`; `LiveMap`, `LiveRoom`; `KitLivePlan`; `FloorStrip` | the bungalow's `Plan` read directly; GROUND/UPPER typed | one drawing for the fixture and a real home; the plan's storeys |
+| `harness` `Transcript`, `Recording.HEADER` | `recording/46` | `PlanIssued` rows; `recording/47` |
+| `gdd.md` M11, M12, the walkthrough | four *(not yet built …)* notes | removed; M12's names the couch's one-storey limit |
+| `phone-session-2026-11-19.md` | *The Terminal and the couch show no counts* | what to check on the Terminal and the couch |
+
+**Checked** (on the final tree, `*/build/test-results` cleared first: `./gradlew check --continue`
+with the two variant sweeps excluded, then `:app:variantSweepRelease`, then `:app:variantSweepPlaytest`,
+the app's XML copied out after each, every result XML counted with a python glob): model 360 (JVM) +
+344 (iOS Simulator); core 425 + 423; platform 211; harness 132; ui 776 (desktop) + 380 (iOS
+Simulator); cards 17; app 278 (the default variant), 170 (Release), 278 (Playtest). 0 failures, 0
+errors, 0 skipped; `vocabularyLint`, `redactionLint` and the boundary checks clean. `OccupancyBeatTest`,
+`OccupancyWireTest`, `HousedMapRenderTest` and `TerminalCountsWiringTest` (default and Playtest) are in
+the XML. **Nothing here has run on a phone**: the counts' fit to who is really where waits on the
+phone session's new line, and no UWB room reach is calibrated (D-272).
+
 ## State after revision 12
 
 **Name:** *Someone's Home* · **Roles:** Resident / Insider · **Verbs:** Revoke (Insider) / Restrain (group).

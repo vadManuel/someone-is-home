@@ -239,6 +239,9 @@ fun CheatRoot(uwb: Boolean) {
             // **The third door: what another phone's radio heard** (D-217). The house judges it
             // with the resolver and puts whatever it concludes to the rules.
             onSighted = uploadDoor::sighted,
+            // **And what each phone may draw of the map this beat** (D-316): the Terminal's counts to
+            // its reader, true occupancy to the couch, nothing to everybody else, sealed per seat.
+            onMapped = doors::mapped,
             // **The fourth: a phone saying its radio went down, and why** (T2, D-222; D-223). A
             // person's act is named to the room at the next meeting; a reset is recorded only.
             onRadioFaulted = doors::faulted,

@@ -297,7 +297,7 @@ internal fun Effect.ringing(): Boolean = when (this) {
     // The Revoke landing says its thing once, like the takeover it mirrors: a single Long on the
     // touch that Revoked this phone (D-290), and the armed phone's answer says its single Long the
     // same way. The roster is silent entirely and is one of the `null` rows in [haptic] below.
-    is Effect.RevokeLanded, is Effect.RosterIssued, is Effect.ContactSeedIssued,
+    is Effect.RevokeLanded, is Effect.RosterIssued, is Effect.PlanIssued, is Effect.ContactSeedIssued,
     is Effect.WorkOrderIssued, is Effect.ScanAnswered, is Effect.TerminalAnswered,
     is Effect.PresenceChanged,
     is Effect.CheckInProgressed, is Effect.ReadyProgressed, is Effect.VoteProgressed,
@@ -413,6 +413,8 @@ internal fun Effect.haptic(): Haptic? = when (this) {
     // one moment nobody has dispersed -- and a list of names is not an event, it is the thing four
     // later screens are drawn from.
     is Effect.RosterIssued -> null
+    // **Silent, for the roster's reason** (D-316): the plan rides the same arming burst.
+    is Effect.PlanIssued -> null
     // **Silent, for the roster's reason** (D-212). The radio's key rides the same arming burst, and
     // a buzz here is a second vibration on every phone at the one moment nobody has dispersed.
     is Effect.ContactSeedIssued -> null
@@ -499,7 +501,7 @@ internal fun RoundMessage.ringing(): Boolean = when (this) {
     is RoundMessage.VoteProgressed, is RoundMessage.VoteHeld,
     is RoundMessage.VoteSelectionShown, is RoundMessage.MeetingResolved,
     is RoundMessage.SyncPulseAnswered, is RoundMessage.SyncPulseBlanked, is RoundMessage.InsidersRevealed,
-    is RoundMessage.RoleRevealed, is RoundMessage.RevokeLanded, is RoundMessage.RosterIssued,
+    is RoundMessage.RoleRevealed, is RoundMessage.RevokeLanded, is RoundMessage.RosterIssued, is RoundMessage.PlanIssued,
     is RoundMessage.ContactSeedIssued,
     is RoundMessage.Surged, is RoundMessage.IsolateTargetsOffered, is RoundMessage.IsolateTargetsBlanked,
     is RoundMessage.StaticOpened, is RoundMessage.MeetingCalling, is RoundMessage.HouseClosedOnPermission,
@@ -552,6 +554,7 @@ internal fun RoundMessage.haptic(): Haptic? = when (this) {
     // F-003, on the receiving side. See the effect-side branch.
     is RoundMessage.RoleRevealed -> null
     is RoundMessage.RosterIssued -> null
+    is RoundMessage.PlanIssued -> null
     is RoundMessage.ContactSeedIssued -> null
     is RoundMessage.SubroutineGraded -> null
     is RoundMessage.SubroutineProgressed -> null

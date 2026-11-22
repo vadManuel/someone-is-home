@@ -33,7 +33,7 @@ class ForeignBodyTest {
         RoundBody.Act(3, IntentMessage.ArmRevoke),
         RoundBody.Fire(4),
         RoundBody.Sighted("0".repeat(SightingUpload.BODY_CHARS), SightingUpload.EMPTY_ASK, UploadProbe.NONE, RangingWire.NO_REPORT, MainViewField.OFF),
-        RoundBody.UploadHeard.of("0123456789abcdef", UploadProbe.NONE, 0L, 0L, RangingWire.NO_PLAN),
+        RoundBody.UploadHeard.of("0123456789abcdef", UploadProbe.NONE, 0L, 0L, RangingWire.NO_PLAN, home.someoneshome.model.protocol.OccupancyWire.blank(ByteArray(home.someoneshome.model.protocol.OccupancyWire.FIELD_BYTES))),
         RoundBody.FaultHeard("0123456789abcdef"),
         RoundBody.RadioFaulted(RadioCause.Person, "0".repeat(RoundBody.RadioFaulted.ONSET_CHARS)),
     )

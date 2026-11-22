@@ -130,10 +130,10 @@ class RequestSlotTest {
     fun `an id is sixteen lowercase hex characters on the slot and on the answer`() {
         assertFailsWith<IllegalArgumentException> { RequestSlot.empty("0123") }
         assertFailsWith<IllegalArgumentException> { RequestSlot.empty("0123456789ABCDEF") }
-        assertFailsWith<IllegalArgumentException> { RoundBody.UploadHeard("xyz", UploadProbe.NONE, UploadProbe.NONE, UploadProbe.NONE, RangingWire.NO_PLAN) }
+        assertFailsWith<IllegalArgumentException> { RoundBody.UploadHeard("xyz", UploadProbe.NONE, UploadProbe.NONE, UploadProbe.NONE, RangingWire.NO_PLAN, home.someoneshome.model.protocol.OccupancyWire.blank(ByteArray(home.someoneshome.model.protocol.OccupancyWire.FIELD_BYTES))) }
         // The answer is one length whatever id it carries.
         val answers = listOf("0000000000000000", "ffffffffffffffff", "0123456789abcdef").map {
-            TransportWire.encode(TransportFrame.Carry(RoundWire.encode(RoundBody.UploadHeard.of(it, UploadProbe.NONE, 0L, 0L, RangingWire.NO_PLAN)))).encodeToByteArray().size
+            TransportWire.encode(TransportFrame.Carry(RoundWire.encode(RoundBody.UploadHeard.of(it, UploadProbe.NONE, 0L, 0L, RangingWire.NO_PLAN, home.someoneshome.model.protocol.OccupancyWire.blank(ByteArray(home.someoneshome.model.protocol.OccupancyWire.FIELD_BYTES)))))).encodeToByteArray().size
         }
         assertEquals(1, answers.toSet().size, "the answer's length follows its id: $answers")
     }

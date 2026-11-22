@@ -1,6 +1,7 @@
 package home.someoneshome.ui
 
 import home.someoneshome.model.CellRect
+import home.someoneshome.model.HomePlanView
 import home.someoneshome.model.MarkerShape
 import home.someoneshome.model.MarkerShapes
 import home.someoneshome.model.RoomKind
@@ -229,7 +230,7 @@ fun LivePlan(cells: List<MapCell>, modifier: Modifier = Modifier) {
  * because the ghost map still draws through those until its own family is restyled.
  */
 @Composable
-fun KitLivePlan(counts: List<Plan.RoomCount>, modifier: Modifier = Modifier) {
+fun KitLivePlan(map: LiveMap, modifier: Modifier = Modifier) {
     BoxWithConstraints(modifier) {
         val w = maxWidth
         val h = maxHeight
@@ -238,10 +239,12 @@ fun KitLivePlan(counts: List<Plan.RoomCount>, modifier: Modifier = Modifier) {
             val bold = 2.dp.toPx()
             // The CSS stripe: 45 degrees, one unit of line in every six measured across it.
             val period = 6.dp.toPx() * kotlin.math.sqrt(2f)
-            for (row in 0 until Plan.ROWS) for (col in 0 until Plan.COLS) {
-                val room = Plan.roomAt(row, col) ?: continue
-                val mine = room.name == Plan.HERE
-                val b = cellBounds(col, row, size.width, size.height)
+            for (row in 0 until map.rows) for (col in 0 until map.cols) {
+                val index = map.roomAt(row, col)
+                if (index < 0) continue
+                val room = map.rooms[index]
+                val mine = index == map.here
+                val b = cellBounds(col, row, size.width, size.height, map.cols, map.rows)
                 if (room.transit) {
                     clipRect(b.x, b.y, b.x + b.w, b.y + b.h) {
                         var d = -b.h
@@ -258,35 +261,178 @@ fun KitLivePlan(counts: List<Plan.RoomCount>, modifier: Modifier = Modifier) {
                 }
                 val ink = if (mine) Ramp.Ink else Ramp.Line
                 val t = if (mine) bold else hair
-                if (Plan.roomAt(row - 1, col) !== room) drawRect(ink, Offset(b.x, b.y), Size(b.w, t))
-                if (Plan.roomAt(row + 1, col) !== room) drawRect(ink, Offset(b.x, b.y + b.h - t), Size(b.w, t))
-                if (Plan.roomAt(row, col - 1) !== room) drawRect(ink, Offset(b.x, b.y), Size(t, b.h))
-                if (Plan.roomAt(row, col + 1) !== room) drawRect(ink, Offset(b.x + b.w - t, b.y), Size(t, b.h))
+                if (map.roomAt(row - 1, col) != index) drawRect(ink, Offset(b.x, b.y), Size(b.w, t))
+                if (map.roomAt(row + 1, col) != index) drawRect(ink, Offset(b.x, b.y + b.h - t), Size(b.w, t))
+                if (map.roomAt(row, col - 1) != index) drawRect(ink, Offset(b.x, b.y), Size(t, b.h))
+                if (map.roomAt(row, col + 1) != index) drawRect(ink, Offset(b.x + b.w - t, b.y), Size(t, b.h))
             }
         }
-        Plan.rooms.forEach { room ->
+        map.rooms.forEachIndexed { index, room ->
+            if (!room.drawn) return@forEachIndexed
+            val at = Modifier.offset(x = w * (room.labelCol.toFloat() / map.cols), y = h * (room.labelRow.toFloat() / map.rows))
+            // **A home's name is held inside its own room** (`EditorLabels`' rule): bounded by the run
+            // of cells it sits on and ellipsised, so a narrow room's name never reads as the next
+            // room's. The bungalow's labels are drawn as the fixture always drew them.
+            val bounded = if (room.labelSpan > 0) at.widthIn(max = w * (room.labelSpan.toFloat() / map.cols)) else at
             Words(
                 room.name,
-                Modifier.offset(x = w * (room.c0.toFloat() / Plan.COLS), y = h * (room.r0.toFloat() / Plan.ROWS))
-                    .padding(horizontal = 7.dp, vertical = 5.dp),
-                size = 18, color = if (room.name == Plan.HERE) Ramp.Ink else Ramp.Dim, lineHeight = 1.0,
+                bounded.padding(horizontal = 7.dp, vertical = 5.dp),
+                size = 18, color = if (index == map.here) Ramp.Ink else Ramp.Dim, lineHeight = 1.0,
+                maxLines = if (room.labelSpan > 0) 1 else Int.MAX_VALUE,
+                overflow = if (room.labelSpan > 0) TextOverflow.Ellipsis else TextOverflow.Clip,
             )
         }
-        counts.forEach { rc ->
-            val cx = (rc.room.c0 + rc.room.c1 + 1) / 2f / Plan.COLS
-            val cy = (rc.room.r0 + rc.room.r1 + 1) / 2f / Plan.ROWS
+        map.rooms.forEach { room ->
+            val count = room.count ?: return@forEach
             Words(
-                rc.count.toString(),
+                count.toString(),
                 // The mockup's translate(-50%, -40%): centred across, a little below centre down.
-                Modifier.offset(x = w * cx, y = h * cy).layout { measurable, constraints ->
+                Modifier.offset(x = w * (room.centreCol / map.cols), y = h * (room.centreRow / map.rows)).layout { measurable, constraints ->
                     val p = measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
                     layout(p.width, p.height) { p.place(-p.width / 2, -(p.height * 0.4f).roundToInt()) }
                 },
-                size = 44, color = rc.ink, lineHeight = 1.0,
+                size = 44, color = room.ink, lineHeight = 1.0,
             )
         }
     }
 }
+
+/**
+ * **A plan to draw with its counts: the design's bungalow, or the home the house sent** (D-316).
+ *
+ * [KitLivePlan] draws this and nothing else, so the render harness's bungalow ([Plan], through
+ * [LiveMap.ofFixture]) and a housed phone's home ([LiveMap.of]) go through one drawing. One storey
+ * at a time, on a grid of [cols] by [rows] cells; [cells] holds a room's index in [rooms] or -1,
+ * row-major. [here] is the room outlined, the reader's own (`gdd.md:482`), or -1 for none.
+ * [storeys] and [storey] are what the floor strip reads.
+ */
+class LiveMap(
+    val cols: Int,
+    val rows: Int,
+    private val cells: IntArray,
+    val rooms: List<LiveRoom>,
+    val here: Int,
+    val storeys: List<String>,
+    val storey: Int,
+) {
+    /** The room index at [row], [col], or -1 for an unpainted square or one off the grid. */
+    fun roomAt(row: Int, col: Int): Int =
+        if (row !in 0 until rows || col !in 0 until cols) -1 else cells[row * cols + col]
+
+    override fun equals(other: Any?): Boolean =
+        other is LiveMap && cols == other.cols && rows == other.rows && cells.contentEquals(other.cells) &&
+            rooms == other.rooms && here == other.here && storeys == other.storeys && storey == other.storey
+
+    override fun hashCode(): Int = (cells.contentHashCode() * 31 + rooms.hashCode()) * 31 + here
+
+    companion object {
+        /** The design's grid, the editor's viewport: every storey is drawn on at least this many cells. */
+        const val COLS: Int = Plan.COLS
+        const val ROWS: Int = Plan.ROWS
+
+        /**
+         * **The design's bungalow, with [counts]** — the render harness's plan, drawn exactly as
+         * the fixture always was: [Plan.rooms] on [Plan.COLS] by [Plan.ROWS], [Plan.HERE] outlined,
+         * a label at each rectangle's top-left and a count at its centre, GROUND shown of GROUND
+         * and UPPER.
+         */
+        fun ofFixture(counts: List<Plan.RoomCount>): LiveMap {
+            val cells = IntArray(Plan.COLS * Plan.ROWS) { i ->
+                val r = Plan.roomAt(i / Plan.COLS, i % Plan.COLS)
+                if (r == null) -1 else Plan.rooms.indexOf(r)
+            }
+            val rooms = Plan.rooms.map { r ->
+                val count = counts.firstOrNull { it.room == r }
+                LiveRoom(
+                    r.name, r.transit, drawn = true, labelCol = r.c0, labelRow = r.r0, labelSpan = 0,
+                    centreCol = (r.c0 + r.c1 + 1) / 2f, centreRow = (r.r0 + r.r1 + 1) / 2f,
+                    count = count?.count, ink = count?.ink ?: Ramp.Dim,
+                )
+            }
+            return LiveMap(Plan.COLS, Plan.ROWS, cells, rooms, Plan.rooms.indexOfFirst { it.name == Plan.HERE }, listOf("GROUND", "UPPER"), 0)
+        }
+
+        /**
+         * **The home the house sent, with the counts the house last said** (D-316): [plan] from
+         * `Effect.PlanIssued`, one count and its ink per room in plan order from [counts]. The
+         * storey drawn is the one holding [here] (the Terminal: the station's storey), or the first
+         * (the couch, which has no room of its own; D-316 raises that a home of two storeys or more
+         * needs a design for the couch's every storey). Stairs carry no count (`gdd.md:485`).
+         *
+         * Cells keep the design's size: a storey is drawn on [COLS] by [ROWS] cells, or on its own
+         * box where that is larger, centred. A label sits at a room's first cell, the editor's rule
+         * (`EditorLabels`); a count at the middle of its cells, which for a rectangle is the
+         * fixture's centre, and for any other shape is the room's own cell nearest that middle, so
+         * a count never sits in a room it does not count.
+         */
+        fun of(plan: HomePlanView, here: Int, counts: (Int) -> Pair<Int, Color>?): LiveMap {
+            val shown = plan.storeys.indices.firstOrNull { s -> here >= 0 && plan.storeys[s].cells.contains(here) }
+                ?: 0
+            val storey = plan.storeys.getOrNull(shown)
+            val sCols = storey?.cols ?: 0
+            val sRows = storey?.rows ?: 0
+            val cols = maxOf(COLS, sCols)
+            val rows = maxOf(ROWS, sRows)
+            val ox = (cols - sCols) / 2
+            val oy = (rows - sRows) / 2
+            val cells = IntArray(cols * rows) { -1 }
+            if (storey != null) {
+                for (y in 0 until sRows) for (x in 0 until sCols) cells[(y + oy) * cols + (x + ox)] = storey.cellAt(x, y)
+            }
+            val rooms = plan.rooms.mapIndexed { index, room ->
+                val mine = ArrayList<Int>()
+                for (i in cells.indices) if (cells[i] == index) mine += i
+                val transit = room.kind == RoomKind.Stairs
+                if (mine.isEmpty()) {
+                    LiveRoom(room.name, transit, drawn = false, labelCol = 0, labelRow = 0, labelSpan = 0, centreCol = 0f, centreRow = 0f, count = null, ink = Ramp.Dim)
+                } else {
+                    val first = mine.first()
+                    val mx = mine.sumOf { it % cols } / mine.size.toFloat() + 0.5f
+                    val my = mine.sumOf { it / cols } / mine.size.toFloat() + 0.5f
+                    // The square the middle falls in: the room's own, for any rectangle.
+                    val col = mx.toInt().coerceIn(0, cols - 1)
+                    val row = my.toInt().coerceIn(0, rows - 1)
+                    val inside = cells[row * cols + col] == index
+                    val (cx, cy) = if (inside) mx to my else {
+                        val near = mine.minBy { i ->
+                            val dx = i % cols + 0.5f - mx
+                            val dy = i / cols + 0.5f - my
+                            dx * dx + dy * dy
+                        }
+                        (near % cols + 0.5f) to (near / cols + 0.5f)
+                    }
+                    val said = if (transit) null else counts(index)
+                    var span = 0
+                    while (first % cols + span < cols && cells[first + span] == index) span++
+                    LiveRoom(
+                        room.name, transit, drawn = true, labelCol = first % cols, labelRow = first / cols, labelSpan = span,
+                        centreCol = cx, centreRow = cy, count = said?.first, ink = said?.second ?: Ramp.Dim,
+                    )
+                }
+            }
+            return LiveMap(cols, rows, cells, rooms, if (rooms.getOrNull(here)?.drawn == true) here else -1, plan.storeys.map { it.name }, shown)
+        }
+    }
+}
+
+/**
+ * **One room of a [LiveMap]**: its name, whether it is stairs, whether it is on the storey drawn,
+ * where its label and count sit in cells and how far its label may run, and its count and the ink that carries its band, or no
+ * count (stairs, and the fixture's rooms it gives none).
+ */
+data class LiveRoom(
+    val name: String,
+    val transit: Boolean,
+    val drawn: Boolean,
+    val labelCol: Int,
+    val labelRow: Int,
+    /** How many cells the label may run across, its room's run from the label's cell; 0 is unbounded (the fixture's). */
+    val labelSpan: Int,
+    val centreCol: Float,
+    val centreRow: Float,
+    val count: Int?,
+    val ink: Color,
+)
 
 /**
  * Room names, at each room's top-left corner.

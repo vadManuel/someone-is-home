@@ -7,6 +7,7 @@ import home.someoneshome.model.DevicePermission
 import home.someoneshome.model.RadioCause
 import home.someoneshome.model.outranking
 import home.someoneshome.model.Sighting
+import home.someoneshome.model.protocol.OccupancyBeat
 import home.someoneshome.model.protocol.RangingCodec
 import home.someoneshome.model.protocol.RangingHandle
 import home.someoneshome.model.protocol.RangingWire
@@ -383,6 +384,16 @@ class ContactUploader(
                 ranging.start(RangingHandle(codec.planHandle(i)), SpareKey(codec.planOwn(i)), codec.planPeer(i))
             }
         }
+    }
+
+    /**
+     * **What this phone may draw of the map this beat** (`RoundBody.UploadHeard.map`, D-316): the
+     * field opened under this phone's seed. A field that does not open (a blank, another round's, a
+     * field damaged on the way), or no seed yet, is nothing: the empty frame, never a partial map.
+     */
+    fun mapped(field: String): OccupancyBeat {
+        val key = seed ?: return OccupancyBeat.Nothing
+        return codec.openMap(key, field) ?: OccupancyBeat.Nothing
     }
 
     /**

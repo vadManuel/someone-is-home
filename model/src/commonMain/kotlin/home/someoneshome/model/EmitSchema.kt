@@ -84,6 +84,7 @@ object EmitSchema {
         is Effect.OpeningMessage -> OPENING_MESSAGE
         is Effect.RoleRevealed -> ROLE_REVEALED
         is Effect.RosterIssued -> ROSTER_ISSUED
+        is Effect.PlanIssued -> PLAN_ISSUED
         is Effect.ContactSeedIssued -> CONTACT_SEED_ISSUED
         is Effect.MeetingOpened -> MEETING_OPENED
         is Effect.MeetingCalling -> MEETING_CALLING
@@ -139,6 +140,24 @@ object EmitSchema {
     val OPENING_MESSAGE = MessageKind("OpeningMessage")
     val ROLE_REVEALED = MessageKind("RoleRevealed")
     val ROSTER_ISSUED = MessageKind("RosterIssued")
+    val PLAN_ISSUED = MessageKind("PlanIssued")
+
+    /**
+     * **Two kinds no [Effect] has: what an upload's answer says about the map** (D-316).
+     *
+     * Every phone in a round is answered once a beat (`RoundBody.UploadHeard`, D-263), and since
+     * D-316 every answer carries one sealed occupancy field of one width
+     * (`OccupancyWire`). What fills it is one of these two kinds or nothing, chosen by
+     * `core`'s `occupancyBeat` for that seat at that moment, and **this table is still the gate**:
+     * the beat asks [permits] for the seat's class before it fills the field, so a kind with no row
+     * here fills nobody's field and every phone draws the empty frame. [kindOf] does not name them,
+     * because no effect carries them; [knownKinds] does, because they have rows.
+     */
+    val TERMINAL_READING = MessageKind("TerminalReading")
+    val TRUE_OCCUPANCY = MessageKind("TrueOccupancy")
+
+    /** The two kinds above: rows with no effect behind them, for a sweep over [kindOf] to leave out. */
+    val BEAT_KINDS: List<MessageKind> = listOf(TERMINAL_READING, TRUE_OCCUPANCY)
     val CONTACT_SEED_ISSUED = MessageKind("ContactSeedIssued")
     val MEETING_OPENED = MessageKind("MeetingOpened")
     val MEETING_CALLING = MessageKind("MeetingCalling")
@@ -392,6 +411,43 @@ object EmitSchema {
         // Not the out classes. A player outside the system reads no map (`gdd.md:495`: ghosts see
         // the couch's true occupancy instead), and the rules hold no reader who is out.
         TERMINAL_ANSWERED to LIVING,
+        // **The home's plan, to every seat in the round, all four classes, and never narrowed**
+        // (D-316). It is sent once, at arming, one per seat, byte for byte the same, so that its
+        // arrival says nothing about the phone it arrives on: not the role, not who will read the
+        // Terminal, not who will be on the couch. Narrowed to the out classes it would be one frame
+        // on a phone the moment it went out; narrowed to one role it would be D-186's harm again,
+        // the largest row in the table one class wide. It carries no card, so the answer key to
+        // the work orders cannot ride it. Written out as a four-class set for ABILITY_FIRED's
+        // reason: a form that could widen itself the day somebody adds a class is a form that will.
+        PLAN_ISSUED to setOf(
+            ClientClass(Role.Resident, RoundState.Live),
+            ClientClass(Role.Insider, RoundState.Live),
+            ClientClass(Role.Resident, RoundState.Out),
+            ClientClass(Role.Insider, RoundState.Out),
+        ),
+        // **The Terminal's live counts, both living classes, and this row must never be narrowed
+        // to one of them** (D-316, M11, `gdd.md:493`). The station is open to either role on the
+        // same terms (TERMINAL_ANSWERED's reason), so a row of `Resident/Live` would be an Insider
+        // whose every read of the map came back empty. The beat fills it for the seat holding the
+        // station's lock and for nobody else, and what it carries is `ObservationView`s, which
+        // cannot hold a true count: the house's error, rolled once at capture, and the band.
+        //
+        // Not the out classes: a player outside the system reads no map, and the rules hold no
+        // reader who is out (D-203).
+        TERMINAL_READING to setOf(
+            ClientClass(Role.Resident, RoundState.Live),
+            ClientClass(Role.Insider, RoundState.Live),
+        ),
+        // **True occupancy, the couch's, and the out are the only readers** (D-316, M12,
+        // `gdd.md:543-547`, D-134, D-145). *Live, every storey, no injected error, no staleness
+        // bands. Still counts, never identities.* Never widened to a living class: true counts on
+        // a living phone are the map without the house's error, which is the alignment oracle the
+        // error exists to deny. The beat fills it only for a seat out since a meeting ended (never
+        // a newly Revoked phone, `gdd.md:537`), and never while a meeting runs.
+        TRUE_OCCUPANCY to setOf(
+            ClientClass(Role.Resident, RoundState.Out),
+            ClientClass(Role.Insider, RoundState.Out),
+        ),
 
         // **PRESENCE_CHANGED HAS NO ROW, DELIBERATELY, AND THAT IS THE DECISION** (D-111, D-136).
         //
@@ -759,6 +815,7 @@ object EmitSchema {
             // reason. Nothing is narrowed by the addressing here and nothing could be: every
             // recipient is sent the same list, and the seat on the effect is the recipient's.
             is Effect.RosterIssued -> listOf(effect.seat)
+            is Effect.PlanIssued -> listOf(effect.seat)
             // **The seed's own seat, and no other phone** (D-212). Two living phones are one class,
             // so this addressing is the only thing that keeps seat 3's key off seat 5's phone -- and
             // a phone holding another seat's key can follow that player through the house by radio.

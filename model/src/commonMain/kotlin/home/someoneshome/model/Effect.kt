@@ -602,6 +602,25 @@ sealed interface Effect {
     data class RosterIssued(val seat: Seat, val roster: List<String?>) : Effect
 
     /**
+     * **The home's plan, said once, at arming, to every seat, and every copy is the same plan**
+     * (D-316).
+     *
+     * The Terminal and the couch draw the home with its counts, and a phone cannot draw a plan it
+     * was never sent. So the plan goes to **every seat in the round, in seat order, at arming**,
+     * rather than to the reader when it claims the station or to a seat when it goes out: either of
+     * those would put one frame on one phone's socket at the moment that phone became the reader or
+     * left the round, and the frame would say so. Sent to everybody at the one moment everybody is
+     * sent the roster, it says nothing about the phone holding it (the owner's threat model,
+     * 2026-11-20: what sits only inside a player's own phone is not a leak).
+     *
+     * [HomePlanView] is the field list: storeys, cells, room names and kinds, and no card, no
+     * station and no seat, so which card is in which room (`Destination.kt`, the answer key to every
+     * work order) cannot ride it. The rules read nothing from it to emit this; it is
+     * `GameState.plan`, recorded on `Event.RoundArmed` since D-271.
+     */
+    data class PlanIssued(val seat: Seat, val plan: HomePlanView) : Effect
+
+    /**
      * **This seat's contact seed, said once, at arming, to the one phone it belongs to** (D-212).
      *
      * The radio's key. The phone advertises `ContactTokens.of(seed, window)` and nothing else, so

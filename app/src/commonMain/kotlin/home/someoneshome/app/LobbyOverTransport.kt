@@ -10,6 +10,7 @@ import home.someoneshome.model.Seat
 import home.someoneshome.model.SeatNamed
 import home.someoneshome.model.protocol.LobbyBody
 import home.someoneshome.model.protocol.LobbyWire
+import home.someoneshome.model.protocol.OccupancyWire
 import home.someoneshome.model.protocol.RangingWire
 import home.someoneshome.model.protocol.RequestSlot
 import home.someoneshome.model.protocol.RoundBody
@@ -359,6 +360,13 @@ class LobbyHouse(
      * with, and what every upload's answer is stamped with twice. A test may skew it.
      */
     private val houseMillis: () -> Long = ::monotonicMillis,
+    /**
+     * **What one phone may draw of the map this beat, sealed for it** (D-316): the occupancy field
+     * every upload's answer carries. `RoundAuthority.mapped` fills it; null (no authority, or a seam
+     * left at its default) is answered with random bytes of the same width, which open on no phone:
+     * the empty frame, the fail-closed direction.
+     */
+    private val onMapped: suspend (Seat) -> String? = { null },
 ) {
 
     private val desk = LobbyDesk()
@@ -1027,7 +1035,10 @@ class LobbyHouse(
                     }
                     // The house's ranging plan for this phone comes back from the same door (D-300).
                     val plan = onSighted(arrival.seat, arrival.upload)
-                    if (slot != null) answerUpload(arrival.seat, slot.id, arrival.upload.probe, arrival.heardAtMillis, plan)
+                    // And what this phone may draw of the map this beat (D-316), after the rules are
+                    // done with its upload: the reader's counts, the couch's, or nothing, one width.
+                    val map = onMapped(arrival.seat)
+                    if (slot != null) answerUpload(arrival.seat, slot.id, arrival.upload.probe, arrival.heardAtMillis, plan, map)
                 }
                 // **The radio fault, to the rules, then answered** (T2, D-222; D-245). Not through
                 // the desk: the body has no sequence. A phone keeps a report until it is answered
@@ -1208,12 +1219,14 @@ class LobbyHouse(
      * when there is none (no authority, or one that answered something that is not a plan's shape), a
      * blank of random bytes at the same width, which opens on no phone. Every answer carries one.
      */
-    private suspend fun answerUpload(seat: Seat, id: String, probe: String, heardAtMillis: Long, plan: String?) {
+    private suspend fun answerUpload(seat: Seat, id: String, probe: String, heardAtMillis: Long, plan: String?, map: String?) {
         val server = host ?: return
         val echoed = if (UploadProbe.isProbe(probe)) probe else UploadProbe.NONE
         val sealed = plan?.takeIf(RangingWire::isPlanField) ?: RangingWire.blankPlan(secureRandomBytes(RangingWire.PLAN_FIELD_BYTES))
+        // The map field (D-316), as the authority sealed it or a blank of its width: every answer carries one.
+        val mapped = map?.takeIf(OccupancyWire::isField) ?: OccupancyWire.blank(secureRandomBytes(OccupancyWire.FIELD_BYTES))
         try {
-            val answer = RoundBody.UploadHeard.of(id, echoed, heardAtMillis, houseMillis(), sealed)
+            val answer = RoundBody.UploadHeard.of(id, echoed, heardAtMillis, houseMillis(), sealed, mapped)
             server.send(seat, TransportFrame.Carry(RoundWire.encode(answer)))
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
             throw cancelled
@@ -1490,6 +1503,8 @@ class LobbyOverTransport(
     private val onClockFix: (ClockFix) -> Unit = {},
     /** **The house's clock, when this phone hosts** (D-295): see [LobbyHouse.houseMillis]. */
     private val houseMillis: () -> Long = ::monotonicMillis,
+    /** [LobbyHouse.onMapped], threaded through: what each phone may draw of the map this beat (D-316). */
+    private val onMapped: suspend (Seat) -> String? = { null },
 ) : LobbyLink {
 
     /**
@@ -1524,7 +1539,7 @@ class LobbyOverTransport(
      * at all. `emit` and `armingInputs` are what it is reached for, and both are the authority's
      * own calls rather than a screen's.
      */
-    internal val house = LobbyHouse(scope, onEvent, onIntent, onEgressFired, onSighted, onRadioFaulted, advertising, houseMillis)
+    internal val house = LobbyHouse(scope, onEvent, onIntent, onEgressFired, onSighted, onRadioFaulted, advertising, houseMillis, onMapped)
     private var session: ClientSession? = null
     private var client: TransportClient? = null
     private var clientJob: Job? = null

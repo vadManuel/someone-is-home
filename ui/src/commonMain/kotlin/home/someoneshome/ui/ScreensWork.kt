@@ -716,7 +716,7 @@ fun FilesScreen(vals: PanelVals) {
 @Composable
 fun TermLiveScreen(vals: PanelVals) {
     val go = navigator()
-    TerminalView("TERMINAL . LIVE", ScreenId.Home, vals.terminalCounts, vals) {
+    TerminalView("TERMINAL . LIVE", ScreenId.Home, vals.terminalMap, vals) {
         // **Reading is an uncompletable task, so the motion budget applies** (`gdd.md:476`, D-199).
         // Standing still, glowing, at a place everybody knows: move too much and the view closes,
         // and *the exposure is the limit* rather than a timer.
@@ -747,7 +747,7 @@ fun TermLiveScreen(vals: PanelVals) {
 @Composable
 fun TimelapseScreen(vals: PanelVals) {
     val go = navigator()
-    TerminalView("TERMINAL . ${vals.timelapseAt}", ScreenId.TermLive, vals.timelapseCounts, vals) {
+    TerminalView("TERMINAL . ${vals.timelapseAt}", ScreenId.TermLive, vals.timelapseMap, vals) {
         // How far through the two minutes the playback is. A fixture, like the counts, and empty on
         // a housed phone (D-257).
         Box(Modifier.fillMaxWidth().height(8.dp).border(1.dp, Ramp.Faint)) {
@@ -771,17 +771,18 @@ fun TimelapseScreen(vals: PanelVals) {
 private fun TerminalView(
     title: String,
     back: ScreenId,
-    counts: List<Plan.RoomCount>?,
+    map: LiveMap?,
     vals: PanelVals,
     foot: @Composable ColumnScope.() -> Unit,
 ) {
     val p = Palette.DARK
     KitScreen(gap = 10.dp) {
         KitHeader(title, p, back = back)
-        // The port's floors go with the port's plan: GROUND and UPPER are the bungalow's (D-257).
-        if (counts != null) FloorStrip(p)
+        // The plan's floors go with the plan: the bungalow's GROUND and UPPER in the harness, the
+        // home's own storeys on a housed phone (D-257, D-316).
+        if (map != null) FloorStrip(p, map.storeys, map.storey)
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            if (counts != null) KitLivePlan(counts, Modifier.fillMaxSize()) else NoPlan(Modifier.fillMaxSize())
+            if (map != null) KitLivePlan(map, Modifier.fillMaxSize()) else NoPlan(Modifier.fillMaxSize())
             vals.staticJam?.let { StaticNoise(it, Modifier.fillMaxSize()) }
         }
         foot()
@@ -804,19 +805,21 @@ internal fun NoPlan(modifier: Modifier = Modifier) {
 }
 
 /**
- * GROUND / UPPER: **a reading, not a control** (`kit.py`'s `floor_strip`). The floor you are on
- * sits on the room fill; the shipped strip takes no taps.
+ * GROUND / UPPER: **a reading, not a control** (`kit.py`'s `floor_strip`). The floor drawn sits on
+ * the room fill; the shipped strip takes no taps. [storeys] are the plan's own, in plan order, one
+ * cell each (the bungalow's two in the harness, the home's on a housed phone, D-316), and [shown]
+ * is the one the plan below draws.
  */
 @Composable
-internal fun FloorStrip(p: Palette) {
+internal fun FloorStrip(p: Palette, storeys: List<String>, shown: Int) {
     Row(Modifier.fillMaxWidth().height(44.dp).border(1.dp, p.line)) {
-        Box(
-            Modifier.weight(1f).fillMaxHeight().background(Ramp.Fill)
-                .edgeLine(PanelSide.End, p.line, 1.dp),
-            contentAlignment = Alignment.Center,
-        ) { Words("GROUND", size = 24, color = p.ink, lineHeight = 1.0) }
-        Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
-            Words("UPPER", size = 24, color = p.dim, lineHeight = 1.0)
+        storeys.forEachIndexed { i, name ->
+            var cell = Modifier.weight(1f).fillMaxHeight()
+            if (i == shown) cell = cell.background(Ramp.Fill)
+            if (i < storeys.lastIndex) cell = cell.edgeLine(PanelSide.End, p.line, 1.dp)
+            Box(cell, contentAlignment = Alignment.Center) {
+                Words(name, size = 24, color = if (i == shown) p.ink else p.dim, lineHeight = 1.0)
+            }
         }
     }
 }
