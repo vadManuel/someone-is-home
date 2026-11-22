@@ -299,3 +299,11 @@ D-311 and D-313 were also run together in a full check before pushing: 3,312 tes
 - **Wrong card while carrying** (pattern or disk): "CARRYING . GO TO <ROOM>".
 - **Building:** D-328.
 - **Lobby permission check:** the changed D-326 trigger (a later round's push counts as armed) stays. For the gap just before lights out, the owner chose: "report at the next meeting instead of kicking out a player". A lobby let-go now asks the house first. If the round is already armed, the seat is kept and the switch-off is named at the first meeting. Build as D-329 after D-328.
+- **D-328 merged** (`60c5caa`). 3,685 tests in the default check, 4,195 across the three builds, 0 failures; rehearsal 21/21; e2e green; recording format 53.
+  - **Chains:** chained players come in pairs, a third of the seats rounded to the nearest even number, drawn role-blind. A pair that contains an Insider gets two fake holds, timed like a real unlock.
+  - **PROCEED** replaces STOP NOW after a verdict, and replaces CONTINUE on PERMISSIONS and PERIMETER ARMED. The only CONTINUE left in the app is the stairs warning's two-second hold, UNREGISTER AND CONTINUE. Should that become PROCEED too?
+  - **Memory Dump's TO <ROOM> screen** has PROCEED.
+  - **A held pattern refuses every other card, the source included.** A player who forgets the pattern can't fetch a fresh one until they hand over (wrong) at the target. Is that what you want? Allowing a re-scan of the source to restart is a small change.
+  - **Wrong card while carrying:** "CARRYING . GO TO <ROOM>".
+  - **The padlock** on the status strip shows for a disk but not for a held pattern. Nothing rules it.
+- **Building:** D-329, the lobby let-go asks the house first; if the round is armed, the switch-off is reported at the meeting.
